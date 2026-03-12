@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import Any
 
 from .config import RenameConfig, RenameResult
-from .safety import check_directory_safety, create_backup, has_uncommitted_changes
+from .safety import (
+    check_directory_safety,
+    create_backup,
+    has_uncommitted_changes,
+)
 from .steps import (
     rename_directory_names,
     rename_file_contents,
@@ -198,6 +202,16 @@ def bulk_rename(config: RenameConfig) -> RenameResult:
                 f"Collisions detected: {len(non_dir_collisions)} target(s) already exist. "
                 "Run dry-run to inspect.",
             )
+        # Block execution if permission errors detected
+        if preview.permission_errors:
+            paths = [e["path"] for e in preview.permission_errors[:5]]
+            return _make_error_result(
+                config.pattern,
+                config.replacement,
+                directory,
+                f"Permission denied: {len(preview.permission_errors)} path(s) not writable. "
+                f"First: {', '.join(paths)}. Run dry-run to inspect all.",
+            )
 
     # Execute in order (critical for path integrity)
     contents = rename_file_contents(config, directory)
@@ -233,6 +247,24 @@ def bulk_rename(config: RenameConfig) -> RenameResult:
                 "Model class renames need separate RenameModel migrations."
             )
 
+    # Check permissions during dry run
+    from .safety import check_permissions as _check_perms
+
+    result_for_perms = RenameResult(
+        dry_run=config.dry_run,
+        pattern=config.pattern,
+        replacement=config.replacement,
+        directory=directory,
+        contents=contents,
+        symlink_targets=symlink_targets,
+        symlink_names=symlink_names,
+        file_names=file_names,
+        dir_names=dir_names,
+        summary={},
+        collisions=collisions,
+    )
+    permission_errors = _check_perms(result_for_perms)
+
     summary: dict[str, Any] = {
         "content_files": len(contents),
         "content_matches": sum(c.get("matches", 0) for c in contents),
@@ -243,6 +275,7 @@ def bulk_rename(config: RenameConfig) -> RenameResult:
         "files_renamed": len(file_names),
         "dirs_renamed": len(dir_names),
         "collisions": len(collisions),
+        "permission_errors": len(permission_errors),
     }
     if warnings:
         summary["warnings"] = warnings
@@ -259,6 +292,7 @@ def bulk_rename(config: RenameConfig) -> RenameResult:
         dir_names=dir_names,
         summary=summary,
         collisions=collisions,
+        permission_errors=permission_errors,
     )
 
 

@@ -109,4 +109,102 @@ def create_backup(directory: str, pattern: str, replacement: str) -> Path:
     return backup_dir
 
 
+def check_permissions(result: Any) -> list[dict[str, str]]:
+    """Check write permissions for all paths that would be modified.
+
+    Examines the dry-run RenameResult and checks whether each file/directory
+    is writable. Returns a list of permission errors found.
+
+    Parameters
+    ----------
+    result : RenameResult
+        A dry-run result from bulk_rename().
+
+    Returns
+    -------
+    list of dict
+        Each dict has 'path', 'operation', and 'reason' keys.
+    """
+    import os
+
+    errors: list[dict[str, str]] = []
+
+    # Check files whose contents would be modified
+    for item in result.contents:
+        path = Path(item["file"])
+        if path.exists() and not os.access(path, os.W_OK):
+            errors.append(
+                {
+                    "path": str(path),
+                    "operation": "content_replace",
+                    "reason": "file not writable",
+                }
+            )
+
+    # Check files that would be renamed (need write on parent dir)
+    for item in result.file_names:
+        old_path = Path(item["old_path"])
+        if old_path.exists():
+            parent = old_path.parent
+            if not os.access(parent, os.W_OK):
+                errors.append(
+                    {
+                        "path": str(old_path),
+                        "operation": "file_rename",
+                        "reason": f"parent directory not writable: {parent}",
+                    }
+                )
+            if not os.access(old_path, os.R_OK):
+                errors.append(
+                    {
+                        "path": str(old_path),
+                        "operation": "file_rename",
+                        "reason": "file not readable",
+                    }
+                )
+
+    # Check directories that would be renamed
+    for item in result.dir_names:
+        old_path = Path(item["old_path"])
+        if old_path.exists():
+            parent = old_path.parent
+            if not os.access(parent, os.W_OK):
+                errors.append(
+                    {
+                        "path": str(old_path),
+                        "operation": "dir_rename",
+                        "reason": f"parent directory not writable: {parent}",
+                    }
+                )
+
+    # Check symlinks that would be modified
+    for item in result.symlink_targets:
+        link_path = Path(item["link"])
+        if link_path.exists():
+            parent = link_path.parent
+            if not os.access(parent, os.W_OK):
+                errors.append(
+                    {
+                        "path": str(link_path),
+                        "operation": "symlink_update",
+                        "reason": f"parent directory not writable: {parent}",
+                    }
+                )
+
+    for item in result.symlink_names:
+        old_path = Path(item["old_name"])
+        if old_path.exists():
+            parent = old_path.parent
+            if not os.access(parent, os.W_OK):
+                errors.append(
+                    {
+                        "path": str(old_path),
+                        "operation": "symlink_rename",
+                        "reason": f"parent directory not writable: {parent}",
+                    }
+                )
+
+    return errors
+
+
 # EOF

@@ -1156,4 +1156,120 @@ class TestSudoPropagation:
             mock_sudo.assert_not_called()
 
 
+# ===========================================================================
+# Permission checking
+# ===========================================================================
+
+
+class TestCheckPermissions:
+    """Tests for check_permissions() predicting permission-denied errors."""
+
+    def test_writable_files_no_errors(self, tmp_path):
+        """Writable files produce no permission errors."""
+        (tmp_path / "hello.py").write_text("old_name = 1\n")
+        result = preview_rename("old_name", "new_name", directory=str(tmp_path))
+        assert result.permission_errors == []
+        assert result.summary["permission_errors"] == 0
+
+    def test_readonly_file_content_detected(self, tmp_path):
+        """Read-only file that needs content replacement is flagged."""
+        f = tmp_path / "readonly.py"
+        f.write_text("old_name = 1\n")
+        f.chmod(0o444)
+        try:
+            result = preview_rename("old_name", "new_name", directory=str(tmp_path))
+            assert len(result.permission_errors) >= 1
+            assert result.permission_errors[0]["operation"] == "content_replace"
+            assert result.permission_errors[0]["reason"] == "file not writable"
+            assert result.summary["permission_errors"] >= 1
+        finally:
+            f.chmod(0o644)
+
+    def test_readonly_parent_file_rename_detected(self, tmp_path):
+        """File rename in a read-only parent directory is flagged."""
+        subdir = tmp_path / "sub"
+        subdir.mkdir()
+        f = subdir / "old_name.py"
+        f.write_text("content\n")
+        subdir.chmod(0o555)
+        try:
+            result = preview_rename("old_name", "new_name", directory=str(tmp_path))
+            perm_ops = [e["operation"] for e in result.permission_errors]
+            assert "file_rename" in perm_ops
+        finally:
+            subdir.chmod(0o755)
+
+    def test_readonly_parent_dir_rename_detected(self, tmp_path):
+        """Directory rename in a read-only parent is flagged."""
+        parent = tmp_path / "parent"
+        parent.mkdir()
+        child = parent / "old_name"
+        child.mkdir()
+        (child / "file.txt").write_text("data\n")
+        parent.chmod(0o555)
+        try:
+            result = preview_rename(
+                "old_name", "new_name", directory=str(tmp_path), django_safe=False
+            )
+            perm_ops = [e["operation"] for e in result.permission_errors]
+            assert "dir_rename" in perm_ops
+        finally:
+            parent.chmod(0o755)
+
+    def test_permission_errors_in_result_dataclass(self, tmp_path):
+        """RenameResult.permission_errors defaults to empty list."""
+        result = RenameResult(
+            dry_run=True,
+            pattern="a",
+            replacement="b",
+            directory=str(tmp_path),
+            contents=[],
+            symlink_targets=[],
+            symlink_names=[],
+            file_names=[],
+            dir_names=[],
+            summary={},
+        )
+        assert result.permission_errors == []
+
+    def test_check_permissions_function_directly(self, tmp_path):
+        """check_permissions() works directly on a RenameResult."""
+        from scitex_dev.rename.safety import check_permissions
+
+        f = tmp_path / "test.py"
+        f.write_text("old = 1\n")
+        f.chmod(0o444)
+        try:
+            result = RenameResult(
+                dry_run=True,
+                pattern="old",
+                replacement="new",
+                directory=str(tmp_path),
+                contents=[{"file": str(f), "matches": 1}],
+                symlink_targets=[],
+                symlink_names=[],
+                file_names=[],
+                dir_names=[],
+                summary={},
+            )
+            errors = check_permissions(result)
+            assert len(errors) == 1
+            assert errors[0]["path"] == str(f)
+            assert errors[0]["operation"] == "content_replace"
+        finally:
+            f.chmod(0o644)
+
+    def test_execute_blocked_by_permission_errors(self, tmp_path):
+        """execute_rename blocks when permission errors detected in dry-run."""
+        f = tmp_path / "readonly.py"
+        f.write_text("old_name = 1\n")
+        f.chmod(0o444)
+        try:
+            result = _safe_execute("old_name", "new_name", tmp_path)
+            assert result.error is not None
+            assert "Permission denied" in result.error
+        finally:
+            f.chmod(0o644)
+
+
 # EOF

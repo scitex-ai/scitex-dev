@@ -49,6 +49,7 @@ class RenameResult:
     dir_names: list[dict[str, Any]]
     summary: dict[str, Any]
     collisions: list[dict[str, Any]] = field(default_factory=list)
+    permission_errors: list[dict[str, str]] = field(default_factory=list)
     error: str | None = None
 
 
