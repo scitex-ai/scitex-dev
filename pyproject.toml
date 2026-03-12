@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scitex-dev"
+version = "0.1.0"
+description = "Shared developer utilities for the SciTeX ecosystem"
+readme = "README.md"
+license = {text = "AGPL-3.0"}
+requires-python = ">=3.9"
+authors = [{name = "Yusuke Watanabe", email = "ywatanabe@alumni.u-tokyo.ac.jp"}]
+keywords = ["scitex", "developer-tools", "documentation", "llm-friendly"]
+
+# Zero runtime dependencies — stdlib only
+dependencies = []
+
+[project.optional-dependencies]
+sphinx = ["sphinx", "sphinx-rtd-theme", "myst-parser", "sphinx-copybutton"]
+dev = ["pytest", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/ywatanabe1989/scitex-dev"
+Repository = "https://github.com/ywatanabe1989/scitex-dev"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
