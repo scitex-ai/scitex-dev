@@ -29,12 +29,20 @@ Public API (20 functions)::
 __version__ = "0.2.0"
 
 # --- Public API: LLM-friendly types and utilities ---
-from .cli_utils import handle_result, run_as_cli, wrap_as_cli
+from .cli_utils import (
+    add_dry_run_argument,
+    add_json_argument,
+    dry_run_option,
+    handle_result,
+    json_option,
+    run_as_cli,
+    wrap_as_cli,
+)
 from .decorators import supports_return_as
 from .errors import ErrorCode, classify_exception
 from .mcp_utils import async_wrap_as_mcp, result_to_mcp, run_as_mcp, wrap_as_mcp
 from .side_effects import SideEffect
-from .types import Result
+from .types import RESULT_SCHEMA, Result
 
 # --- Public API: Docs aggregation ---
 from .docs import build_docs, get_docs, search_docs
@@ -141,6 +149,7 @@ __all__ = [
     "fix_mismatches",
     # LLM-friendly types
     "Result",
+    "RESULT_SCHEMA",
     "ErrorCode",
     "classify_exception",
     "supports_return_as",
@@ -152,4 +161,9 @@ __all__ = [
     "wrap_as_mcp",
     "async_wrap_as_mcp",
     "result_to_mcp",
+    # CLI option factories
+    "json_option",
+    "dry_run_option",
+    "add_json_argument",
+    "add_dry_run_argument",
 ]

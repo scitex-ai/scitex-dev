@@ -71,6 +71,50 @@ class Result(Generic[T]):
             return 0
         return _error_code_to_exit(self.error_code)
 
+    @classmethod
+    def json_schema(cls) -> dict:
+        """Return JSON Schema describing the Result envelope."""
+        return dict(RESULT_SCHEMA)
+
+
+RESULT_SCHEMA: dict = {
+    "type": "object",
+    "description": "Standardized Result envelope returned by all SciTeX MCP tools.",
+    "properties": {
+        "success": {
+            "type": "boolean",
+            "description": "Whether the operation succeeded.",
+        },
+        "data": {"description": "Tool-specific return value (any JSON type)."},
+        "error": {
+            "type": ["string", "null"],
+            "description": "Human-readable error message.",
+        },
+        "error_code": {
+            "type": ["string", "null"],
+            "pattern": "^E\\d{3}$",
+            "description": "Machine-readable error code (E001-E999).",
+        },
+        "context": {
+            "type": "object",
+            "description": "Additional context (file paths, params).",
+        },
+        "side_effects": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Mutations performed (file writes, network calls).",
+        },
+        "next_steps": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Suggested follow-up actions.",
+        },
+        "idempotent": {"type": "boolean", "description": "Safe to retry?"},
+        "version": {"type": ["string", "null"], "description": "API version."},
+    },
+    "required": ["success"],
+}
+
 
 def _error_code_to_exit(error_code: str | None) -> int:
     """Map an error code string to a CLI exit code."""

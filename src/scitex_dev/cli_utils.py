@@ -121,4 +121,58 @@ def wrap_as_cli(
     sys.exit(code)
 
 
+# --- Reusable CLI option factories ---
+
+
+def json_option(fn: Callable) -> Callable:
+    """Click decorator: adds ``--json`` flag as ``as_json`` parameter.
+
+    Uses lazy ``import click`` so scitex-dev stays stdlib-only.
+    """
+    import click
+
+    return click.option(
+        "--json",
+        "as_json",
+        is_flag=True,
+        help="Output as structured JSON (Result envelope).",
+    )(fn)
+
+
+def dry_run_option(fn: Callable) -> Callable:
+    """Click decorator: adds ``--dry-run`` flag.
+
+    Uses lazy ``import click`` so scitex-dev stays stdlib-only.
+    """
+    import click
+
+    return click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Preview changes without executing.",
+    )(fn)
+
+
+def add_json_argument(parser: Any) -> None:
+    """Add ``--json`` flag to an argparse parser."""
+    parser.add_argument(
+        "--json",
+        dest="as_json",
+        action="store_true",
+        default=False,
+        help="Output as structured JSON (Result envelope).",
+    )
+
+
+def add_dry_run_argument(parser: Any) -> None:
+    """Add ``--dry-run`` flag to an argparse parser."""
+    parser.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        default=False,
+        help="Preview changes without executing.",
+    )
+
+
 # EOF
