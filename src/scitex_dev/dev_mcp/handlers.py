@@ -1,46 +1,37 @@
 #!/usr/bin/env python3
-# Timestamp: 2026-02-02
-# File: scitex/_dev/_mcp/handlers.py
+# Timestamp: 2026-03-13
+# File: scitex_dev/dev_mcp/handlers.py
 
-"""MCP handler implementations for developer utilities."""
+"""MCP handler implementations for developer utilities.
+
+All handlers return structured Result JSON via wrap_as_mcp.
+"""
 
 from __future__ import annotations
 
-from typing import Any
+
+from ..mcp_utils import wrap_as_mcp
+from ..types import Result
 
 
 async def list_versions_handler(
     packages: list[str] | None = None,
-) -> dict[str, Any]:
-    """List versions across the scitex ecosystem.
+) -> str:
+    """List versions across the scitex ecosystem."""
+    from ..versions import list_versions
 
-    Parameters
-    ----------
-    packages : list[str] | None
-        List of package names to check. If None, checks all ecosystem packages.
-
-    Returns
-    -------
-    dict
-        Version information for each package.
-    """
-    from scitex_dev import list_versions
-
-    return list_versions(packages)
+    return wrap_as_mcp(list_versions, packages=packages)
 
 
-async def get_config_handler() -> dict[str, Any]:
-    """Get current developer configuration.
+async def get_config_handler() -> str:
+    """Get current developer configuration."""
+    from ..config import config_to_dict, get_config_path, load_config
 
-    Returns
-    -------
-    dict
-        Configuration including packages, hosts, remotes, branches.
-    """
-    from scitex_dev.config import config_to_dict, get_config_path, load_config
+    def _get_config():
+        config = load_config()
+        return config_to_dict(config, config_path=get_config_path())
 
-    config = load_config()
-    return config_to_dict(config, config_path=get_config_path())
+    return wrap_as_mcp(_get_config)
 
 
 async def test_run_handler(
@@ -50,41 +41,23 @@ async def test_run_handler(
     exitfirst: bool = True,
     pattern: str = "",
     parallel: str = "auto",
-) -> dict[str, Any]:
-    """Run tests locally.
+) -> str:
+    """Run tests locally."""
+    from ..test_runner import TestConfig, run_local
 
-    Parameters
-    ----------
-    module : str
-        Module to test (e.g., "stats", "io"). Empty for all.
-    fast : bool
-        Skip slow tests.
-    coverage : bool
-        Enable coverage.
-    exitfirst : bool
-        Stop on first failure.
-    pattern : str
-        Test name filter pattern.
-    parallel : str
-        Parallel workers ("auto", "0", or number).
+    def _run():
+        config = TestConfig(
+            module=module,
+            fast=fast,
+            coverage=coverage,
+            exitfirst=exitfirst,
+            pattern=pattern,
+            parallel=parallel,
+        )
+        exit_code = run_local(config)
+        return {"exit_code": exit_code}
 
-    Returns
-    -------
-    dict
-        {"exit_code": int}
-    """
-    from scitex_dev.test_runner import TestConfig, run_local
-
-    config = TestConfig(
-        module=module,
-        fast=fast,
-        coverage=coverage,
-        exitfirst=exitfirst,
-        pattern=pattern,
-        parallel=parallel,
-    )
-    exit_code = run_local(config)
-    return {"exit_code": exit_code}
+    return wrap_as_mcp(_run)
 
 
 async def test_hpc_run_handler(
@@ -95,33 +68,9 @@ async def test_hpc_run_handler(
     hpc_time: str = "00:10:00",
     hpc_mem: str = "16G",
     async_mode: bool = False,
-) -> dict[str, Any]:
-    """Run tests on HPC via Slurm.
-
-    Parameters
-    ----------
-    module : str
-        Module to test.
-    fast : bool
-        Skip slow tests.
-    hpc_cpus : int
-        CPUs per task.
-    hpc_partition : str
-        Slurm partition.
-    hpc_time : str
-        Time limit.
-    hpc_mem : str
-        Memory limit.
-    async_mode : bool
-        If True, submit via sbatch (returns job ID).
-        If False, run blocking via srun.
-
-    Returns
-    -------
-    dict
-        {"exit_code": int} for srun, {"job_id": str} for sbatch.
-    """
-    from scitex_dev.test_runner import (
+) -> str:
+    """Run tests on HPC via Slurm."""
+    from ..test_runner import (
         TestConfig,
         _check_ssh,
         _get_hpc_config,
@@ -142,60 +91,62 @@ async def test_hpc_run_handler(
     host = hpc_cfg["host"]
 
     if not _check_ssh(host):
-        return {"error": f"Cannot connect to {host}"}
+        return Result(
+            success=False,
+            error=f"Cannot connect to {host}",
+            error_code="E007",
+            next_steps=[f"Check SSH connectivity to {host}"],
+        ).to_json()
 
     if not sync_to_hpc(config):
-        return {"error": "rsync failed"}
+        return Result(
+            success=False,
+            error="rsync failed",
+            error_code="E007",
+            next_steps=["Check rsync and SSH configuration"],
+        ).to_json()
 
     if async_mode:
         job_id = run_hpc_sbatch(config)
         if job_id:
-            return {"job_id": job_id, "host": host}
-        return {"error": "Failed to submit job"}
+            return Result(
+                success=True,
+                data={"job_id": job_id, "host": host},
+                next_steps=["Use dev_test_hpc_poll to check job status"],
+            ).to_json()
+        return Result(
+            success=False,
+            error="Failed to submit job",
+            error_code="E999",
+        ).to_json()
     else:
         exit_code = run_hpc_srun(config)
-        return {"exit_code": exit_code, "host": host}
+        return Result(
+            success=exit_code == 0,
+            data={"exit_code": exit_code, "host": host},
+        ).to_json()
 
 
 async def test_hpc_poll_handler(
     job_id: str | None = None,
-) -> dict[str, Any]:
-    """Poll HPC job status.
+) -> str:
+    """Poll HPC job status."""
+    from ..test_runner import poll_hpc_job
 
-    Parameters
-    ----------
-    job_id : str, optional
-        Job ID. If None, uses last submitted job.
-
-    Returns
-    -------
-    dict
-        {"state": str, "output": str or None, "job_id": str}
-    """
-    from scitex_dev.test_runner import poll_hpc_job
-
-    return poll_hpc_job(job_id=job_id)
+    return wrap_as_mcp(poll_hpc_job, job_id=job_id)
 
 
 async def test_hpc_result_handler(
     job_id: str | None = None,
-) -> dict[str, Any]:
-    """Fetch full HPC test output.
+) -> str:
+    """Fetch full HPC test output."""
+    from ..test_runner import fetch_hpc_result
 
-    Parameters
-    ----------
-    job_id : str, optional
-        Job ID. If None, uses last submitted job.
+    def _fetch():
+        output = fetch_hpc_result(job_id=job_id)
+        return {"output": output, "job_id": job_id or "last"}
 
-    Returns
-    -------
-    dict
-        {"output": str or None, "job_id": str}
-    """
-    from scitex_dev.test_runner import fetch_hpc_result
-
-    output = fetch_hpc_result(job_id=job_id)
-    return {"output": output, "job_id": job_id or "last"}
+    return wrap_as_mcp(_fetch)
 
 
 async def sync_handler(
@@ -203,80 +154,37 @@ async def sync_handler(
     packages: list[str] | None = None,
     install: bool = True,
     confirm: bool = False,
-) -> dict[str, Any]:
-    """Sync ecosystem packages to remote hosts.
+) -> str:
+    """Sync ecosystem packages to remote hosts."""
+    from ..sync import sync_all
 
-    Safety: defaults to preview only. Pass confirm=True to execute.
-
-    Parameters
-    ----------
-    hosts : list[str] | None
-        Host names to sync. None = all enabled hosts.
-    packages : list[str] | None
-        Package names. None = host-specific defaults.
-    install : bool
-        Pip install after pull (default True).
-    confirm : bool
-        If False (default), preview only (dry run).
-        If True, execute the sync operation.
-
-    Returns
-    -------
-    dict
-        {host_name: {package: result}}.
-    """
-    from scitex_dev.sync import sync_all
-
-    return sync_all(hosts=hosts, packages=packages, install=install, confirm=confirm)
+    return wrap_as_mcp(
+        sync_all,
+        hosts=hosts,
+        packages=packages,
+        install=install,
+        confirm=confirm,
+    )
 
 
 async def sync_local_handler(
     packages: list[str] | None = None,
     confirm: bool = False,
-) -> dict[str, Any]:
-    """Install all local editable packages.
+) -> str:
+    """Install all local editable packages."""
+    from ..sync import sync_local
 
-    Safety: defaults to preview only. Pass confirm=True to execute.
-
-    Parameters
-    ----------
-    packages : list[str] | None
-        Package names. None = all configured packages.
-    confirm : bool
-        If False (default), preview only.
-        If True, execute pip install -e.
-
-    Returns
-    -------
-    dict
-        {package: {status, output}}.
-    """
-    from scitex_dev.sync import sync_local
-
-    return sync_local(packages=packages, confirm=confirm)
+    return wrap_as_mcp(sync_local, packages=packages, confirm=confirm)
 
 
 async def remote_diff_handler(
     host: str | None = None,
     packages: list[str] | None = None,
-) -> dict[str, Any]:
-    """Show git diff on remote host(s). Read-only operation.
+) -> str:
+    """Show git diff on remote host(s)."""
+    from ..sync_remote import remote_diff
 
-    Parameters
-    ----------
-    host : str | None
-        Host name. None = first enabled host.
-    packages : list[str] | None
-        Package names. None = host-configured defaults.
-
-    Returns
-    -------
-    dict
-        {host_name: {package: {status, files, diff_stat, diff}}}.
-    """
-    from scitex_dev.sync_remote import remote_diff
-
-    return remote_diff(host=host, packages=packages)
+    return wrap_as_mcp(remote_diff, host=host, packages=packages)
 
 
 async def remote_commit_handler(
@@ -285,33 +193,17 @@ async def remote_commit_handler(
     message: str | None = None,
     push: bool = True,
     confirm: bool = False,
-) -> dict[str, Any]:
-    """Commit dirty changes on a remote host and optionally push to origin.
+) -> str:
+    """Commit dirty changes on a remote host."""
+    from ..sync_remote import remote_commit
 
-    Safety: defaults to preview only. Pass confirm=True to execute.
-
-    Parameters
-    ----------
-    host : str
-        Host name (required).
-    packages : list[str] | None
-        Package names. None = host-configured defaults.
-    message : str | None
-        Commit message. Auto-generated if not provided.
-    push : bool
-        Push to origin after commit (default True).
-    confirm : bool
-        If False (default), preview only.
-
-    Returns
-    -------
-    dict
-        {package: {status, commands|output}}.
-    """
-    from scitex_dev.sync_remote import remote_commit
-
-    return remote_commit(
-        host=host, packages=packages, message=message, push=push, confirm=confirm
+    return wrap_as_mcp(
+        remote_commit,
+        host=host,
+        packages=packages,
+        message=message,
+        push=push,
+        confirm=confirm,
     )
 
 
@@ -319,28 +211,16 @@ async def pull_local_handler(
     packages: list[str] | None = None,
     confirm: bool = False,
     stash: bool = True,
-) -> dict[str, Any]:
-    """Pull latest from origin to local repos.
+) -> str:
+    """Pull latest from origin to local repos."""
+    from ..sync_remote import pull_local
 
-    Safety: defaults to preview only. Pass confirm=True to execute.
-
-    Parameters
-    ----------
-    packages : list[str] | None
-        Package names. None = all configured packages.
-    confirm : bool
-        If False (default), preview only.
-    stash : bool
-        If True (default), stash local changes before pull and pop after.
-
-    Returns
-    -------
-    dict
-        {package: {status, output|commands, stashed}}.
-    """
-    from scitex_dev.sync_remote import pull_local
-
-    return pull_local(packages=packages, confirm=confirm, stash=stash)
+    return wrap_as_mcp(
+        pull_local,
+        packages=packages,
+        confirm=confirm,
+        stash=stash,
+    )
 
 
 async def rename_handler(
@@ -354,72 +234,50 @@ async def rename_handler(
     skip_ids: list[str] | None = None,
     use_sudo: bool = False,
     sudo_password: str | None = None,
-) -> dict[str, Any]:
-    """Bulk rename files, contents, directories, and symlinks.
-
-    Two-step safety: call first without confirm to preview,
-    then with confirm=True to execute.
-
-    Parameters
-    ----------
-    pattern : str
-        Pattern to search for.
-    replacement : str
-        String to replace matches with.
-    directory : str
-        Target directory.
-    confirm : bool
-        If False (default), dry-run preview. If True, execute.
-    django_safe : bool
-        Enable Django-safe mode.
-    extra_excludes : list of str, optional
-        Additional exclude patterns.
-    force : bool
-        Skip uncommitted changes check (default False).
-    skip_ids : list of str, optional
-        IDs of changes to skip (from preview output).
-    use_sudo : bool
-        Use sudo for file operations (default False).
-    sudo_password : str, optional
-        Password for non-interactive sudo -S. Required when use_sudo=True
-        on systems without NOPASSWD configured.
-
-    Returns
-    -------
-    dict
-        Rename results with summary.
-    """
+) -> str:
+    """Bulk rename files, contents, directories, and symlinks."""
     from dataclasses import asdict
 
-    from scitex_dev.rename import RenameConfig, bulk_rename
-    from scitex_dev.rename.safety import has_uncommitted_changes
+    from ..rename import RenameConfig, bulk_rename
+    from ..rename.safety import has_uncommitted_changes
 
     if confirm and not force and has_uncommitted_changes(directory):
-        return {"error": "Uncommitted changes detected. Commit or stash first."}
+        return Result(
+            success=False,
+            error="Uncommitted changes detected. Commit or stash first.",
+            error_code="E009",
+            next_steps=[
+                "Run 'git commit' or 'git stash' first",
+                "Or pass force=True to skip this check",
+            ],
+        ).to_json()
 
     if use_sudo and sudo_password:
-        from scitex_dev.rename.io import set_sudo_password
+        from ..rename.io import set_sudo_password
 
         set_sudo_password(sudo_password)
 
-    config = RenameConfig(
-        pattern=pattern,
-        replacement=replacement,
-        directory=directory,
-        dry_run=not confirm,
-        django_safe=django_safe,
-        extra_excludes=extra_excludes or [],
-        skip_ids=skip_ids or [],
-        use_sudo=use_sudo,
-    )
-    result = bulk_rename(config)
+    def _rename():
+        config = RenameConfig(
+            pattern=pattern,
+            replacement=replacement,
+            directory=directory,
+            dry_run=not confirm,
+            django_safe=django_safe,
+            extra_excludes=extra_excludes or [],
+            skip_ids=skip_ids or [],
+            use_sudo=use_sudo,
+        )
+        result = bulk_rename(config)
+        return asdict(result)
 
-    if use_sudo and sudo_password:
-        from scitex_dev.rename.io import set_sudo_password
+    try:
+        return wrap_as_mcp(_rename)
+    finally:
+        if use_sudo and sudo_password:
+            from ..rename.io import set_sudo_password
 
-        set_sudo_password(None)
-
-    return asdict(result)
+            set_sudo_password(None)
 
 
 async def fix_mismatches_handler(
@@ -428,35 +286,12 @@ async def fix_mismatches_handler(
     local: bool = True,
     remote: bool = True,
     confirm: bool = False,
-) -> dict[str, Any]:
-    """Detect and fix version mismatches across the ecosystem.
+) -> str:
+    """Detect and fix version mismatches across the ecosystem."""
+    from ..fix import fix_mismatches
 
-    Combines mismatch detection with sync: pip install locally,
-    git pull + pip install on remote hosts.
-
-    Safety: defaults to preview only. Pass confirm=True to execute.
-
-    Parameters
-    ----------
-    hosts : list[str] | None
-        Host names. None = all enabled hosts.
-    packages : list[str] | None
-        Package names. None = all with mismatches.
-    local : bool
-        Fix local mismatches (default True).
-    remote : bool
-        Fix remote mismatches (default True).
-    confirm : bool
-        If False (default), preview only.
-
-    Returns
-    -------
-    dict
-        {detected, local_fixes, remote_fixes, summary}
-    """
-    from scitex_dev.fix import fix_mismatches
-
-    return fix_mismatches(
+    return wrap_as_mcp(
+        fix_mismatches,
         hosts=hosts,
         packages=packages,
         local=local,
