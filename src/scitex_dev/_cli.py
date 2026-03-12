@@ -339,7 +339,10 @@ else:
         total = len(tools)
 
         if as_json:
+            from .types import RESULT_SCHEMA
+
             output = {
+                "result_envelope": RESULT_SCHEMA,
                 "total": total,
                 "tools": [
                     {"name": t.name, "description": t.description or ""} for t in tools
@@ -349,6 +352,9 @@ else:
             return
 
         click.secho(f"scitex-dev MCP: {total} tools", fg="cyan", bold=True)
+        click.echo(
+            "Returns: Result{success, data, error, error_code, context, next_steps}"
+        )
         click.echo()
 
         for tool in sorted(tools, key=lambda t: t.name):
@@ -359,6 +365,7 @@ else:
                 if tool.description:
                     desc = tool.description.split("\n")[0].strip()
                     click.echo(f"    {desc}")
+                click.echo(f"    -> Result")
                 click.echo()
 
     # -------------------------------------------------------------------
