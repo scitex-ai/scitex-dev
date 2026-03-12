@@ -190,18 +190,9 @@ else:
     # Documentation commands
     # -------------------------------------------------------------------
 
-    @main.command()
-    @click.option("--package", "-p", default=None, help="Specific package.")
-    @click.option("--format", "fmt", type=click.Choice(["html", "json"]), default=None)
-    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def docs(package, fmt, as_json):
-        """View documentation for SciTeX packages."""
-        from . import get_docs
-        from .cli_utils import wrap_as_cli
+    from .cli import docs_click_group
 
-        if as_json and fmt is None:
-            fmt = "json"
-        wrap_as_cli(get_docs, as_json=as_json, package=package, format=fmt)
+    main.add_command(docs_click_group(package="scitex-dev"))
 
     @main.command()
     @click.argument("query")
