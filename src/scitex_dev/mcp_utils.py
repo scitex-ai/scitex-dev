@@ -28,7 +28,14 @@ def run_as_mcp(fn: Callable, **kwargs: Any) -> str:
     return result.to_json()
 
 
-def wrap_as_mcp(fn: Callable, **kwargs: Any) -> str:
+def wrap_as_mcp(
+    fn: Callable,
+    *,
+    side_effects: list[str] | None = None,
+    next_steps: list[str] | None = None,
+    idempotent: bool = False,
+    **kwargs: Any,
+) -> str:
     """Call any function and wrap its return in Result JSON.
 
     Unlike ``run_as_mcp`` (which requires ``@supports_return_as``),
@@ -39,6 +46,12 @@ def wrap_as_mcp(fn: Callable, **kwargs: Any) -> str:
     ----------
     fn : Callable
         Any callable returning data or raising exceptions.
+    side_effects : list[str], optional
+        Declared side effects (e.g. ``["file_create: /tmp/out.csv"]``).
+    next_steps : list[str], optional
+        Suggested follow-up actions on success.
+    idempotent : bool
+        Whether the operation is safe to retry.
     **kwargs
         Arguments to pass to ``fn``.
 
@@ -51,27 +64,40 @@ def wrap_as_mcp(fn: Callable, **kwargs: Any) -> str:
 
     try:
         data = fn(**kwargs)
-        return Result(success=True, data=data).to_json()
+        return Result(
+            success=True,
+            data=data,
+            side_effects=side_effects or [],
+            next_steps=next_steps or [],
+            idempotent=idempotent,
+        ).to_json()
     except Exception as exc:
         error_code = classify_exception(exc)
-        next_steps = []
+        err_next_steps = []
         suggestion = getattr(exc, "suggestion", None)
         if suggestion:
-            next_steps.append(suggestion)
+            err_next_steps.append(suggestion)
         suggestions = getattr(exc, "suggestions", None)
         if suggestions and isinstance(suggestions, list):
-            next_steps.extend(suggestions)
+            err_next_steps.extend(suggestions)
         context = getattr(exc, "context", {})
         return Result(
             success=False,
             error=str(exc),
             error_code=error_code.value,
             context=context if isinstance(context, dict) else {},
-            next_steps=next_steps,
+            next_steps=err_next_steps,
         ).to_json()
 
 
-async def async_wrap_as_mcp(coro_fn: Callable, **kwargs: Any) -> str:
+async def async_wrap_as_mcp(
+    coro_fn: Callable,
+    *,
+    side_effects: list[str] | None = None,
+    next_steps: list[str] | None = None,
+    idempotent: bool = False,
+    **kwargs: Any,
+) -> str:
     """Async version of ``wrap_as_mcp`` for async handlers.
 
     Parameters
@@ -79,6 +105,12 @@ async def async_wrap_as_mcp(coro_fn: Callable, **kwargs: Any) -> str:
     coro_fn : Callable
         Any async callable (coroutine function) returning data
         or raising exceptions.
+    side_effects : list[str], optional
+        Declared side effects.
+    next_steps : list[str], optional
+        Suggested follow-up actions on success.
+    idempotent : bool
+        Whether the operation is safe to retry.
     **kwargs
         Arguments to pass to ``coro_fn``.
 
@@ -91,23 +123,29 @@ async def async_wrap_as_mcp(coro_fn: Callable, **kwargs: Any) -> str:
 
     try:
         data = await coro_fn(**kwargs)
-        return Result(success=True, data=data).to_json()
+        return Result(
+            success=True,
+            data=data,
+            side_effects=side_effects or [],
+            next_steps=next_steps or [],
+            idempotent=idempotent,
+        ).to_json()
     except Exception as exc:
         error_code = classify_exception(exc)
-        next_steps = []
+        err_next_steps = []
         suggestion = getattr(exc, "suggestion", None)
         if suggestion:
-            next_steps.append(suggestion)
+            err_next_steps.append(suggestion)
         suggestions = getattr(exc, "suggestions", None)
         if suggestions and isinstance(suggestions, list):
-            next_steps.extend(suggestions)
+            err_next_steps.extend(suggestions)
         context = getattr(exc, "context", {})
         return Result(
             success=False,
             error=str(exc),
             error_code=error_code.value,
             context=context if isinstance(context, dict) else {},
-            next_steps=next_steps,
+            next_steps=err_next_steps,
         ).to_json()
 
 
