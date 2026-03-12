@@ -71,6 +71,46 @@ def wrap_as_mcp(fn: Callable, **kwargs: Any) -> str:
         ).to_json()
 
 
+async def async_wrap_as_mcp(coro_fn: Callable, **kwargs: Any) -> str:
+    """Async version of ``wrap_as_mcp`` for async handlers.
+
+    Parameters
+    ----------
+    coro_fn : Callable
+        Any async callable (coroutine function) returning data
+        or raising exceptions.
+    **kwargs
+        Arguments to pass to ``coro_fn``.
+
+    Returns
+    -------
+    str
+        JSON string with Result structure.
+    """
+    from .errors import classify_exception
+
+    try:
+        data = await coro_fn(**kwargs)
+        return Result(success=True, data=data).to_json()
+    except Exception as exc:
+        error_code = classify_exception(exc)
+        next_steps = []
+        suggestion = getattr(exc, "suggestion", None)
+        if suggestion:
+            next_steps.append(suggestion)
+        suggestions = getattr(exc, "suggestions", None)
+        if suggestions and isinstance(suggestions, list):
+            next_steps.extend(suggestions)
+        context = getattr(exc, "context", {})
+        return Result(
+            success=False,
+            error=str(exc),
+            error_code=error_code.value,
+            context=context if isinstance(context, dict) else {},
+            next_steps=next_steps,
+        ).to_json()
+
+
 def result_to_mcp(result: Result) -> str:
     """Convert an existing Result to MCP-ready JSON."""
     return result.to_json()

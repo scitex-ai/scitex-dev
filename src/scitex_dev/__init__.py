@@ -32,7 +32,7 @@ __version__ = "0.2.0"
 from .cli_utils import handle_result, run_as_cli, wrap_as_cli
 from .decorators import supports_return_as
 from .errors import ErrorCode, classify_exception
-from .mcp_utils import result_to_mcp, run_as_mcp, wrap_as_mcp
+from .mcp_utils import async_wrap_as_mcp, result_to_mcp, run_as_mcp, wrap_as_mcp
 from .side_effects import SideEffect
 from .types import Result
 
@@ -150,5 +150,6 @@ __all__ = [
     "wrap_as_cli",
     "run_as_mcp",
     "wrap_as_mcp",
+    "async_wrap_as_mcp",
     "result_to_mcp",
 ]

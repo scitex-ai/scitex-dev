@@ -66,6 +66,49 @@ class TestWrapAsMcp:
         assert parsed["context"]["key"] == "val"
 
 
+class TestAsyncWrapAsMcp:
+    def test_async_success(self):
+        import asyncio
+
+        from scitex_dev.mcp_utils import async_wrap_as_mcp
+
+        async def async_add(a, b):
+            return a + b
+
+        out = asyncio.run(async_wrap_as_mcp(async_add, a=2, b=3))
+        parsed = json.loads(out)
+        assert parsed["success"] is True
+        assert parsed["data"] == 5
+
+    def test_async_failure(self):
+        import asyncio
+
+        from scitex_dev.mcp_utils import async_wrap_as_mcp
+
+        async def async_fail():
+            raise FileNotFoundError("missing.csv")
+
+        out = asyncio.run(async_wrap_as_mcp(async_fail))
+        parsed = json.loads(out)
+        assert parsed["success"] is False
+        assert "missing.csv" in parsed["error"]
+        assert parsed["error_code"] == "E002"
+
+    def test_async_duck_typed_suggestions(self):
+        import asyncio
+
+        from scitex_dev.mcp_utils import async_wrap_as_mcp
+
+        async def async_fail_hints():
+            exc = RuntimeError("broke")
+            exc.suggestion = "Retry"
+            raise exc
+
+        out = asyncio.run(async_wrap_as_mcp(async_fail_hints))
+        parsed = json.loads(out)
+        assert "Retry" in parsed["next_steps"]
+
+
 class TestResultToMcp:
     def test_manual_result(self):
         r = Result(success=True, data={"count": 5})
