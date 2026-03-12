@@ -276,7 +276,7 @@ def _get_one(
         docs_dir = pkg_root / "_docs"
         result = _resolve_from_built(docs_dir, format=format, page=page)
         if result is not None:
-            return result
+            return _enrich_manifest(result, package)
 
     # 2. Try Sphinx _build/
     sphinx_src = get_sphinx_source(module_name)
@@ -286,7 +286,7 @@ def _get_one(
             build_dir / "html", format=format, page=page, json_dir=build_dir / "json"
         )
         if result is not None:
-            return result
+            return _enrich_manifest(result, package)
 
     # 3. Fallback: introspect
     from ._introspect import introspect_package
@@ -361,3 +361,24 @@ def _resolve_from_built(
         return None
 
     raise ValueError(f"Unknown format: {format!r}. Use None, 'html', or 'json'.")
+
+
+def _enrich_manifest(result: Any, package: str) -> Any:
+    """Fill in version/description from importlib.metadata if missing."""
+    if not isinstance(result, dict):
+        return result
+    if result.get("version") is not None and result.get("description") is not None:
+        return result
+    try:
+        from importlib.metadata import metadata
+
+        meta = metadata(package)
+        if result.get("version") is None:
+            result["version"] = meta.get("Version")
+        if result.get("description") is None:
+            summary = meta.get("Summary")
+            if summary:
+                result["description"] = summary
+    except Exception:
+        pass
+    return result
