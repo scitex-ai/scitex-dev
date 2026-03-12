@@ -74,4 +74,51 @@ def run_as_cli(
     sys.exit(code)
 
 
+def wrap_as_cli(
+    fn: Callable,
+    as_json: bool = False,
+    **kwargs: Any,
+) -> None:
+    """Call any function and display its result via CLI.
+
+    Like ``wrap_as_mcp`` but for terminal output. Wraps any plain
+    function in Result, formats based on ``as_json``, and exits
+    with proper exit code.
+
+    Parameters
+    ----------
+    fn : Callable
+        Any callable returning data or raising exceptions.
+    as_json : bool
+        If True, output full JSON Result. If False, human-friendly text.
+    **kwargs
+        Arguments to pass to ``fn``.
+    """
+    from .errors import classify_exception
+
+    try:
+        data = fn(**kwargs)
+        result = Result(success=True, data=data)
+    except Exception as exc:
+        error_code = classify_exception(exc)
+        next_steps = []
+        suggestion = getattr(exc, "suggestion", None)
+        if suggestion:
+            next_steps.append(suggestion)
+        suggestions = getattr(exc, "suggestions", None)
+        if suggestions and isinstance(suggestions, list):
+            next_steps.extend(suggestions)
+        context = getattr(exc, "context", {})
+        result = Result(
+            success=False,
+            error=str(exc),
+            error_code=error_code.value,
+            context=context if isinstance(context, dict) else {},
+            next_steps=next_steps,
+        )
+
+    code = handle_result(result, as_json=as_json)
+    sys.exit(code)
+
+
 # EOF

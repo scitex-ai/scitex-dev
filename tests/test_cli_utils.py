@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Tests for scitex_dev.cli_utils — handle_result, run_as_cli."""
+"""Tests for scitex_dev.cli_utils — handle_result, run_as_cli, wrap_as_cli."""
 
 import io
+import json
+
 
 from scitex_dev.cli_utils import handle_result
 from scitex_dev.types import Result
@@ -44,7 +46,6 @@ class TestHandleResult:
         buf = io.StringIO()
         r = Result(success=True, data=42)
         handle_result(r, as_json=True, file=buf)
-        import json
 
         parsed = json.loads(buf.getvalue())
         assert parsed["success"] is True
@@ -54,8 +55,80 @@ class TestHandleResult:
         buf = io.StringIO()
         r = Result(success=False, error="err", error_code="E001")
         handle_result(r, as_json=True, file=buf)
-        import json
 
         parsed = json.loads(buf.getvalue())
         assert parsed["success"] is False
         assert parsed["error_code"] == "E001"
+
+
+class TestWrapAsCli:
+    def test_success_exits_zero(self):
+        import pytest
+
+        from scitex_dev.cli_utils import wrap_as_cli
+
+        def add(a, b):
+            return a + b
+
+        with pytest.raises(SystemExit) as exc_info:
+            wrap_as_cli(add, as_json=False, a=2, b=3)
+        assert exc_info.value.code == 0
+
+    def test_failure_exits_nonzero(self):
+        import pytest
+
+        from scitex_dev.cli_utils import wrap_as_cli
+
+        def fail():
+            raise FileNotFoundError("missing.csv")
+
+        with pytest.raises(SystemExit) as exc_info:
+            wrap_as_cli(fail, as_json=False)
+        assert exc_info.value.code != 0
+
+    def test_json_output_on_success(self, capsys):
+        import pytest
+
+        from scitex_dev.cli_utils import wrap_as_cli
+
+        def get_data():
+            return {"count": 42}
+
+        with pytest.raises(SystemExit):
+            wrap_as_cli(get_data, as_json=True)
+        captured = capsys.readouterr()
+        parsed = json.loads(captured.out)
+        assert parsed["success"] is True
+        assert parsed["data"]["count"] == 42
+
+    def test_json_output_on_error(self, capsys):
+        import pytest
+
+        from scitex_dev.cli_utils import wrap_as_cli
+
+        def fail():
+            raise ValueError("bad input")
+
+        with pytest.raises(SystemExit):
+            wrap_as_cli(fail, as_json=True)
+        captured = capsys.readouterr()
+        parsed = json.loads(captured.out)
+        assert parsed["success"] is False
+        assert "bad input" in parsed["error"]
+        assert parsed["error_code"] == "E001"
+
+    def test_duck_typed_suggestions(self, capsys):
+        import pytest
+
+        from scitex_dev.cli_utils import wrap_as_cli
+
+        def fail_with_hints():
+            exc = RuntimeError("broke")
+            exc.suggestion = "Try again"
+            raise exc
+
+        with pytest.raises(SystemExit):
+            wrap_as_cli(fail_with_hints, as_json=True)
+        captured = capsys.readouterr()
+        parsed = json.loads(captured.out)
+        assert "Try again" in parsed["next_steps"]
