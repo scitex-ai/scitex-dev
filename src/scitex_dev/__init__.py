@@ -43,6 +43,9 @@ from .versions import check_versions, get_mismatches, list_versions
 # Fix
 from .fix import fix_mismatches
 
+# RTD
+from .rtd import check_all_rtd, check_rtd_status
+
 # GitHub
 from .github import (
     check_all_remotes,
@@ -116,6 +119,9 @@ __all__ = [
     "get_mismatches",
     # Fix
     "fix_mismatches",
+    # RTD
+    "check_rtd_status",
+    "check_all_rtd",
     # GitHub
     "check_all_remotes",
     "compare_with_local",

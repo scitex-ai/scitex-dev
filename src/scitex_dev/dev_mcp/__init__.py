@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Timestamp: 2026-02-02
-# File: scitex/_dev/_mcp/__init__.py
+# File: scitex_dev/dev_mcp/__init__.py
 
 """MCP handlers for developer utilities."""
 
