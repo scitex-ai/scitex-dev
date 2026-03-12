@@ -13,3 +13,7 @@ build/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+logs/
+GITIGNORED/
+.env
+.last-hpc-job
