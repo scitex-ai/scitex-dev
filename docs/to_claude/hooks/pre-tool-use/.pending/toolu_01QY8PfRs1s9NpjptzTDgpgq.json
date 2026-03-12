@@ -1,0 +1,4 @@
+{
+  "stage": "git -C /home/ywatanabe/proj/scitex-dev remote -v",
+  "cwd": "/home/ywatanabe/proj/scitex-dev"
+}

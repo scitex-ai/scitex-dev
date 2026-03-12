@@ -1,0 +1,4 @@
+{
+  "stage": "gh repo edit ywatanabe1989/scitex-dev --description \"Shared developer utilities for the SciTeX ecosystem\" --homepage \"https://scitex-dev.readthedocs.io/\" --add-topic scitex --add-topic developer-tools --add-topic documentation --add-topic llm-friendly --add-topic mcp --add-topic python",
+  "cwd": "/home/ywatanabe/proj/scitex-dev"
+}

@@ -1,0 +1,4 @@
+{
+  "stage": "*.pyc",
+  "cwd": "/home/ywatanabe/proj/scitex-dev"
+}

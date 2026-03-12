@@ -1,0 +1,4 @@
+{
+  "stage": "scitex-dev --help-recursive",
+  "cwd": "/home/ywatanabe/proj/scitex-dev"
+}
