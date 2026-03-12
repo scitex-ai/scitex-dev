@@ -4,24 +4,42 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scitex-dev"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared developer utilities for the SciTeX ecosystem"
 readme = "README.md"
-license = {text = "AGPL-3.0"}
+license = "AGPL-3.0-only"
 requires-python = ">=3.9"
-authors = [{name = "Yusuke Watanabe", email = "ywatanabe@alumni.u-tokyo.ac.jp"}]
-keywords = ["scitex", "developer-tools", "documentation", "llm-friendly"]
+authors = [{name = "Yusuke Watanabe", email = "ywatanabe@scitex.ai"}]
+keywords = ["scitex", "developer-tools", "documentation", "llm-friendly", "mcp"]
 
 # Zero runtime dependencies — stdlib only
 dependencies = []
 
 [project.optional-dependencies]
-sphinx = ["sphinx", "sphinx-rtd-theme", "myst-parser", "sphinx-copybutton"]
-dev = ["pytest", "pytest-cov"]
+cli = ["click>=8.0.0"]
+mcp = ["fastmcp>=2.0.0"]
+dev = ["pytest>=7.0.0", "pytest-cov>=4.0.0"]
+docs = [
+    "sphinx>=7.0",
+    "sphinx-rtd-theme>=2.0",
+    "myst-parser>=2.0",
+    "sphinx-copybutton>=0.5",
+    "sphinx-autodoc-typehints>=1.25",
+]
+all = [
+    "scitex-dev[cli]",
+    "scitex-dev[mcp]",
+    "scitex-dev[dev]",
+    "scitex-dev[docs]",
+]
+
+[project.scripts]
+scitex-dev = "scitex_dev._cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ywatanabe1989/scitex-dev"
 Repository = "https://github.com/ywatanabe1989/scitex-dev"
+Documentation = "https://scitex-dev.readthedocs.io/"
 
 [tool.setuptools.packages.find]
 where = ["src"]
