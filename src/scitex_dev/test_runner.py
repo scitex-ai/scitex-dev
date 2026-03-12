@@ -25,7 +25,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from scitex.config import PriorityConfig  # noqa: E402
+try:
+    from scitex.config import PriorityConfig
+except ImportError:
+
+    class PriorityConfig:
+        """Minimal fallback when scitex is not installed."""
+
+        def __init__(self, env_prefix: str = "") -> None:
+            self._prefix = env_prefix
+
+        def resolve(
+            self, key: str, direct: Any = None, default: Any = None, type: type = str
+        ) -> Any:
+            if direct is not None:
+                return direct
+            env_val = os.environ.get(f"{self._prefix}{key.upper()}")
+            if env_val is not None:
+                return type(env_val)
+            return default
+
 
 _RSYNC_EXCLUDES = [
     ".git",
@@ -192,7 +211,10 @@ def _emit_test_event(
     Delegates to the general-purpose event bus which handles
     state files (~/.scitex/events/) and optional webhook delivery.
     """
-    from scitex.events import emit
+    try:
+        from scitex.events import emit
+    except ImportError:
+        return
 
     emit(
         "test_complete",
