@@ -11,7 +11,15 @@ Zero-dependency package providing:
 - CLI and MCP utilities for LLM-friendly interfaces
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
+
+# LLM-friendly types and utilities
+from .cli_utils import handle_result, run_as_cli
+from .decorators import supports_return_as
+from .errors import ErrorCode, classify_exception
+from .mcp_utils import result_to_mcp, run_as_mcp
+from .side_effects import SideEffect
+from .types import Result
 
 # Docs aggregation
 from .docs import build_docs, get_docs, search_docs
@@ -156,4 +164,14 @@ __all__ = [
     "watch_hpc_job",
     "sync_to_hpc",
     "TestConfig",
+    # LLM-friendly types
+    "Result",
+    "ErrorCode",
+    "classify_exception",
+    "supports_return_as",
+    "SideEffect",
+    "handle_result",
+    "run_as_cli",
+    "run_as_mcp",
+    "result_to_mcp",
 ]
