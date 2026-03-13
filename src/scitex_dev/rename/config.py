@@ -18,6 +18,7 @@ class RenameConfig:
     replacement: str
     directory: str = "."
     dry_run: bool = True
+    regex: bool = False
     django_safe: bool = True
     create_backup: bool = False
     # PATH-level filtering

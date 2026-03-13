@@ -80,7 +80,10 @@ def find_matching_files(
         if need_content_match:
             try:
                 content = path.read_text(errors="replace")
-                if config.pattern not in content:
+                if config.regex:
+                    if not re.search(config.pattern, content, re.DOTALL):
+                        continue
+                elif config.pattern not in content:
                     continue
             except (OSError, UnicodeDecodeError):
                 continue
