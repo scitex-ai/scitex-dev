@@ -142,17 +142,30 @@ scitex-dev mcp list-tools
 scitex-dev mcp installation
 ```
 
-Add to your MCP client configuration:
+**Claude Code Setup** — add `.mcp.json` to your project root. Use `SCITEX_DEV_ENV_SRC` to load configuration from a `.src` file:
 
 ```json
 {
   "mcpServers": {
     "scitex-dev": {
       "command": "scitex-dev",
-      "args": ["mcp", "start"]
+      "args": ["mcp", "start"],
+      "env": {
+        "SCITEX_DEV_ENV_SRC": "${SCITEX_DEV_ENV_SRC}"
+      }
     }
   }
 }
+```
+
+Switch environments via your shell profile:
+
+```bash
+# Local machine
+export SCITEX_DEV_ENV_SRC=~/.scitex/dev/local.src
+
+# Remote server
+export SCITEX_DEV_ENV_SRC=~/.scitex/dev/remote.src
 ```
 
 </details>
@@ -172,16 +185,16 @@ mismatches = scitex_dev.get_mismatches()
 scitex_dev.search("statistical test")
 ```
 
-The SciTeX ecosystem follows the **Four Freedoms** for researchers:
+The SciTeX system follows the Four Freedoms for Research below, inspired by [the Free Software Definition](https://www.gnu.org/philosophy/free-sw.en.html):
 
-- **Freedom 0** — Run the software for any research purpose
-- **Freedom 1** — Study and modify the source code
-- **Freedom 2** — Share copies with colleagues
-- **Freedom 3** — Share your modifications with the community
-
-## License
-
-AGPL-3.0-only. See [LICENSE](LICENSE).
+>Four Freedoms for Research
+>
+>0. The freedom to **run** your research anywhere — your machine, your terms.
+>1. The freedom to **study** how every step works — from raw data to final manuscript.
+>2. The freedom to **redistribute** your workflows, not just your papers.
+>3. The freedom to **modify** any module and share improvements with the community.
+>
+>AGPL-3.0 — because we believe research infrastructure deserves the same freedoms as the software it runs on.
 
 ---
 

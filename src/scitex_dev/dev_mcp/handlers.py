@@ -269,6 +269,8 @@ async def rename_handler(
     skip_ids: list[str] | None = None,
     use_sudo: bool = False,
     sudo_password: str | None = None,
+    scope: str = "",
+    recursive: bool = True,
 ) -> str:
     """Bulk rename files, contents, directories, and symlinks."""
     from dataclasses import asdict
@@ -300,6 +302,8 @@ async def rename_handler(
             dry_run=not confirm,
             regex=regex,
             django_safe=django_safe,
+            scope=scope,
+            recursive=recursive,
             extra_excludes=extra_excludes or [],
             skip_ids=skip_ids or [],
             use_sudo=use_sudo,
