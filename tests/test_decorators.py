@@ -63,8 +63,8 @@ class TestSupportsReturnAs:
     def test_duck_typed_suggestion(self):
         r = fail_with_suggestion("x", return_as="result")
         assert r.success is False
-        assert "Try restarting" in r.next_steps
-        assert "Check logs" in r.next_steps
+        assert "Try restarting" in r.hints_on_error
+        assert "Check logs" in r.hints_on_error
         assert r.context == {"input": "x"}
 
     def test_preserves_name(self):

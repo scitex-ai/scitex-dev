@@ -51,19 +51,19 @@ def supports_return_as(fn: Callable) -> Callable:
             error_code = classify_exception(exc)
             suggestion = getattr(exc, "suggestion", None)
             context = getattr(exc, "context", {})
-            next_steps = []
+            hints_on_error = []
             if suggestion:
-                next_steps.append(suggestion)
+                hints_on_error.append(suggestion)
             suggestions = getattr(exc, "suggestions", None)
             if suggestions and isinstance(suggestions, list):
-                next_steps.extend(suggestions)
+                hints_on_error.extend(suggestions)
 
             return Result(
                 success=False,
                 error=str(exc),
                 error_code=error_code.value,
                 context=context if isinstance(context, dict) else {},
-                next_steps=next_steps,
+                hints_on_error=hints_on_error,
             )
 
     return wrapper

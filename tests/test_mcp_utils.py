@@ -62,7 +62,7 @@ class TestWrapAsMcp:
 
         out = wrap_as_mcp(fail_with_hints)
         parsed = json.loads(out)
-        assert "Try again" in parsed["next_steps"]
+        assert "Try again" in parsed["hints_on_error"]
         assert parsed["context"]["key"] == "val"
 
 
@@ -106,7 +106,7 @@ class TestAsyncWrapAsMcp:
 
         out = asyncio.run(async_wrap_as_mcp(async_fail_hints))
         parsed = json.loads(out)
-        assert "Retry" in parsed["next_steps"]
+        assert "Retry" in parsed["hints_on_error"]
 
 
 class TestResultToMcp:

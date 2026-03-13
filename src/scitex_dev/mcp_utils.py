@@ -32,7 +32,7 @@ def wrap_as_mcp(
     fn: Callable,
     *,
     side_effects: list[str] | None = None,
-    next_steps: list[str] | None = None,
+    hints_on_error: list[str] | None = None,
     idempotent: bool = False,
     **kwargs: Any,
 ) -> str:
@@ -48,8 +48,8 @@ def wrap_as_mcp(
         Any callable returning data or raising exceptions.
     side_effects : list[str], optional
         Declared side effects (e.g. ``["file_create: /tmp/out.csv"]``).
-    next_steps : list[str], optional
-        Suggested follow-up actions on success.
+    hints_on_error : list[str], optional
+        Recovery guidance for expected failures (FAQ-style).
     idempotent : bool
         Whether the operation is safe to retry.
     **kwargs
@@ -67,26 +67,25 @@ def wrap_as_mcp(
         return Result(
             success=True,
             data=data,
-            side_effects=side_effects or [],
-            next_steps=next_steps or [],
+            side_effects=side_effects,
             idempotent=idempotent,
         ).to_json()
     except Exception as exc:
         error_code = classify_exception(exc)
-        err_next_steps = []
+        err_hints = list(hints_on_error or [])
         suggestion = getattr(exc, "suggestion", None)
         if suggestion:
-            err_next_steps.append(suggestion)
+            err_hints.append(suggestion)
         suggestions = getattr(exc, "suggestions", None)
         if suggestions and isinstance(suggestions, list):
-            err_next_steps.extend(suggestions)
+            err_hints.extend(suggestions)
         context = getattr(exc, "context", {})
         return Result(
             success=False,
             error=str(exc),
             error_code=error_code.value,
             context=context if isinstance(context, dict) else {},
-            next_steps=err_next_steps,
+            hints_on_error=err_hints,
         ).to_json()
 
 
@@ -94,7 +93,7 @@ async def async_wrap_as_mcp(
     coro_fn: Callable,
     *,
     side_effects: list[str] | None = None,
-    next_steps: list[str] | None = None,
+    hints_on_error: list[str] | None = None,
     idempotent: bool = False,
     **kwargs: Any,
 ) -> str:
@@ -107,8 +106,8 @@ async def async_wrap_as_mcp(
         or raising exceptions.
     side_effects : list[str], optional
         Declared side effects.
-    next_steps : list[str], optional
-        Suggested follow-up actions on success.
+    hints_on_error : list[str], optional
+        Recovery guidance for expected failures (FAQ-style).
     idempotent : bool
         Whether the operation is safe to retry.
     **kwargs
@@ -126,26 +125,25 @@ async def async_wrap_as_mcp(
         return Result(
             success=True,
             data=data,
-            side_effects=side_effects or [],
-            next_steps=next_steps or [],
+            side_effects=side_effects,
             idempotent=idempotent,
         ).to_json()
     except Exception as exc:
         error_code = classify_exception(exc)
-        err_next_steps = []
+        err_hints = list(hints_on_error or [])
         suggestion = getattr(exc, "suggestion", None)
         if suggestion:
-            err_next_steps.append(suggestion)
+            err_hints.append(suggestion)
         suggestions = getattr(exc, "suggestions", None)
         if suggestions and isinstance(suggestions, list):
-            err_next_steps.extend(suggestions)
+            err_hints.extend(suggestions)
         context = getattr(exc, "context", {})
         return Result(
             success=False,
             error=str(exc),
             error_code=error_code.value,
             context=context if isinstance(context, dict) else {},
-            next_steps=err_next_steps,
+            hints_on_error=err_hints,
         ).to_json()
 
 

@@ -4,7 +4,7 @@
 
 The Result type wraps function return values with metadata needed by
 CLI and MCP consumers: success status, error codes, side effects,
-next steps, and idempotency hints.
+error hints, and idempotency flags.
 
 Python API users never see this type by default -- it is opt-in via
 the ``return_as="result"`` parameter added by ``@supports_return_as``.
@@ -17,6 +17,17 @@ from dataclasses import asdict, dataclass, field
 from typing import Generic, Optional, TypeVar
 
 T = TypeVar("T")
+
+
+def _normalize_hints(value) -> list[str]:
+    """Normalize hint values: None, "", and [] all become []."""
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        return [value] if value else []
+    if isinstance(value, list):
+        return [s for s in value if s]  # filter out None/"" items
+    return []
 
 
 @dataclass
@@ -37,8 +48,15 @@ class Result(Generic[T]):
         Additional context (file paths, parameters, etc.).
     side_effects : list[str]
         Description of mutations performed.
-    next_steps : list[str]
-        Suggested follow-up actions for the consumer.
+    hints_on_success : list[str]
+        Related tools the consumer might want (light, "see also" style).
+        Reserved for future use — currently empty.
+    hints_on_warning : list[str]
+        Hints for partial success, deprecation, or approaching limits.
+        Reserved for future use — currently empty.
+    hints_on_error : list[str]
+        Recovery guidance for expected failures (FAQ-style).
+        Accepts None, "", a single string, or a list.
     idempotent : bool
         Whether the operation is safe to retry.
     version : str | None
@@ -51,9 +69,18 @@ class Result(Generic[T]):
     error_code: Optional[str] = None
     context: dict = field(default_factory=dict)
     side_effects: list[str] = field(default_factory=list)
-    next_steps: list[str] = field(default_factory=list)
+    hints_on_success: list[str] = field(default_factory=list)
+    hints_on_warning: list[str] = field(default_factory=list)
+    hints_on_error: list[str] = field(default_factory=list)
     idempotent: bool = False
     version: Optional[str] = None
+
+    def __post_init__(self):
+        """Normalize hint fields (accept None, "", single string, or list)."""
+        self.side_effects = _normalize_hints(self.side_effects)
+        self.hints_on_success = _normalize_hints(self.hints_on_success)
+        self.hints_on_warning = _normalize_hints(self.hints_on_warning)
+        self.hints_on_error = _normalize_hints(self.hints_on_error)
 
     def to_dict(self) -> dict:
         """Convert to a plain dictionary, stripping None values."""
@@ -104,10 +131,20 @@ RESULT_SCHEMA: dict = {
             "items": {"type": "string"},
             "description": "Mutations performed (file writes, network calls).",
         },
-        "next_steps": {
+        "hints_on_success": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Suggested follow-up actions.",
+            "description": "Related tools or actions (reserved, currently empty).",
+        },
+        "hints_on_warning": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Hints for partial success, deprecation (reserved, currently empty).",
+        },
+        "hints_on_error": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Recovery guidance for expected failures (FAQ-style).",
         },
         "idempotent": {"type": "boolean", "description": "Safe to retry?"},
         "version": {"type": ["string", "null"], "description": "API version."},
