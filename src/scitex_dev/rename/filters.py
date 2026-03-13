@@ -2,14 +2,21 @@
 # Timestamp: 2026-02-14
 # File: scitex_dev/rename/filters.py
 
-"""Filtering logic for bulk rename operations (PATH and SRC level)."""
+"""Filtering logic for bulk rename operations (PATH and SRC level).
+
+Uses ripgrep (rg) when available for fast content matching,
+falls back to Python glob + read_text otherwise.
+"""
 
 from __future__ import annotations
 
 import re
+import shutil
 from pathlib import Path
 
 from .config import RenameConfig
+
+_RG_PATH: str | None = shutil.which("rg")
 
 
 def parse_csv_config(value: str) -> list[str]:
@@ -63,19 +70,92 @@ def matches_include_extensions(path: Path, config: RenameConfig) -> bool:
     return False
 
 
+def matches_scope(path: Path, config: RenameConfig) -> bool:
+    """Check if a file matches the scope glob pattern."""
+    if not config.scope:
+        return True
+    import fnmatch
+
+    return fnmatch.fnmatch(path.name, config.scope)
+
+
+def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path] | None:
+    """Use ripgrep to find files containing the pattern. Returns None on failure."""
+
+    if not _RG_PATH:
+        return None
+
+    cmd = [_RG_PATH, "--files-with-matches", "--no-messages"]
+
+    # Scope as glob filter
+    if config.scope:
+        cmd += ["--glob", config.scope]
+
+    # Depth control
+    if not config.recursive:
+        cmd += ["--max-depth", "1"]
+
+    # Regex vs fixed string
+    if config.regex:
+        cmd += ["--multiline", "--multiline-dotall", config.pattern]
+    else:
+        cmd += ["--fixed-strings", config.pattern]
+
+    # Exclude patterns
+    for exc in parse_csv_config(config.path_excludes):
+        cmd += ["--glob", f"!{exc}"]
+    for exc in parse_csv_config(config.path_must_excludes):
+        cmd += ["--glob", f"!{exc}"]
+    for exc in config.extra_excludes:
+        cmd += ["--glob", f"!*{exc}*"]
+
+    cmd.append(directory)
+
+    import subprocess  # noqa: E402 — local import to survive auto-linter
+
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if proc.returncode > 1:  # 1 = no matches (ok), >1 = error
+            return None
+        paths = [Path(line) for line in proc.stdout.strip().splitlines() if line]
+        return paths
+    except (subprocess.TimeoutExpired, OSError):
+        return None
+
+
 def find_matching_files(
     directory: str, config: RenameConfig, need_content_match: bool = False
 ) -> list[Path]:
-    """Find files matching the filtering criteria."""
+    """Find files matching the filtering criteria.
+
+    Uses ripgrep for content matching when available (much faster),
+    falls back to Python glob + read_text.
+    """
+    # Fast path: ripgrep for content matching
+    if need_content_match:
+        rg_results = _rg_find_content_matches(directory, config)
+        if rg_results is not None:
+            # Apply Python-level filters rg can't handle
+            return [
+                p
+                for p in rg_results
+                if not p.is_symlink() and not should_exclude_path(p, config)
+            ]
+
+    # Fallback: Python glob
     root = Path(directory)
     matching = []
 
-    for path in root.rglob("*"):
+    glob_pattern = config.scope or "*"
+    glob_iter = (
+        root.rglob(glob_pattern) if config.recursive else root.glob(glob_pattern)
+    )
+    for path in glob_iter:
         if not path.is_file() or path.is_symlink():
             continue
         if should_exclude_path(path, config):
             continue
-        if not matches_include_extensions(path, config):
+        if not config.scope and not matches_include_extensions(path, config):
             continue
         if need_content_match:
             try:
