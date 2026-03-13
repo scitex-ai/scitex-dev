@@ -1272,4 +1272,93 @@ class TestCheckPermissions:
             f.chmod(0o644)
 
 
+# ===========================================================================
+# Regex support
+# ===========================================================================
+
+
+class TestRegex:
+    def test_regex_single_line_replace(self, tmp_path):
+        """Regex pattern replaces single-line matches."""
+        (tmp_path / "test.py").write_text("old_name = 1\nold_value = 2\n")
+        result = preview_rename(
+            r"old_\w+", "new_thing", directory=str(tmp_path), regex=True
+        )
+        assert result.summary["content_matches"] == 2
+
+    def test_regex_multiline_replace(self, tmp_path):
+        """Regex with re.DOTALL matches across lines."""
+        content = 'func(\n    next_steps=[\n        "hint1",\n        "hint2",\n    ],\n    other=True,\n)\n'
+        (tmp_path / "test.py").write_text(content)
+        result = preview_rename(
+            r"\s*next_steps=\[.*?\],\n",
+            "",
+            directory=str(tmp_path),
+            regex=True,
+        )
+        assert result.summary["content_matches"] == 1
+        # Check dry-run shows before/after
+        assert len(result.contents[0]["lines"]) >= 1
+        snippet = result.contents[0]["lines"][0]
+        assert snippet["action"] == "replace"
+        assert "next_steps" in snippet["before"]
+
+    def test_regex_execute(self, tmp_path):
+        """Regex actually modifies file content."""
+        content = "value = old_123\nother = old_456\n"
+        (tmp_path / "test.py").write_text(content)
+        _safe_execute(r"old_(\d+)", r"new_\1", tmp_path, regex=True)
+        text = (tmp_path / "test.py").read_text()
+        assert "new_123" in text
+        assert "new_456" in text
+
+    def test_regex_backreference(self, tmp_path):
+        """Regex backreferences work in replacement."""
+        (tmp_path / "test.py").write_text("def foo_bar(): pass\n")
+        _safe_execute(r"(\w+)_(\w+)", r"\2_\1", tmp_path, regex=True)
+        text = (tmp_path / "test.py").read_text()
+        assert "bar_foo" in text
+
+    def test_regex_no_match(self, tmp_path):
+        """Regex with no matches produces empty result."""
+        (tmp_path / "test.py").write_text("nothing here\n")
+        result = preview_rename(
+            r"nonexistent_\d+", "replacement", directory=str(tmp_path), regex=True
+        )
+        assert result.summary["content_matches"] == 0
+
+    def test_regex_file_name_rename(self, tmp_path):
+        """Regex renames file names."""
+        (tmp_path / "old_123.py").write_text("pass\n")
+        result = preview_rename(
+            r"old_\d+", "new_file", directory=str(tmp_path), regex=True
+        )
+        assert len(result.file_names) == 1
+        assert "new_file.py" in result.file_names[0]["new_path"]
+
+    def test_regex_multiline_block_removal(self, tmp_path):
+        """Real-world: remove a multiline keyword argument block."""
+        content = """return wrap_as_mcp(
+    some_func,
+    side_effects=["file_create"],
+    next_steps=[
+        "tool_a to do X",
+        "tool_b to do Y",
+    ],
+    idempotent=True,
+)
+"""
+        (tmp_path / "handler.py").write_text(content)
+        _safe_execute(
+            r"\s*next_steps=\[.*?\],\n",
+            "",
+            tmp_path,
+            regex=True,
+        )
+        text = (tmp_path / "handler.py").read_text()
+        assert "next_steps" not in text
+        assert "side_effects" in text
+        assert "idempotent" in text
+
+
 # EOF

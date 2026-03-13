@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -42,8 +43,34 @@ def _should_skip(item_id: str, skip_ids: list[str]) -> bool:
     return item_id in skip_ids
 
 
+def _contains(text: str, config: RenameConfig) -> bool:
+    """Check if text contains the pattern (literal or regex)."""
+    if config.regex:
+        return re.search(config.pattern, text, re.DOTALL) is not None
+    return config.pattern in text
+
+
+def _replace(text: str, config: RenameConfig) -> str:
+    """Replace pattern in text (literal or regex)."""
+    if config.regex:
+        return re.sub(config.pattern, config.replacement, text, flags=re.DOTALL)
+    return text.replace(config.pattern, config.replacement)
+
+
+def _count(text: str, config: RenameConfig) -> int:
+    """Count pattern occurrences in text (literal or regex)."""
+    if config.regex:
+        return len(re.findall(config.pattern, text, re.DOTALL))
+    return text.count(config.pattern)
+
+
 def rename_file_contents(config: RenameConfig, directory: str) -> list[dict[str, Any]]:
-    """Step 0: Replace pattern in file contents."""
+    """Step 0: Replace pattern in file contents.
+
+    When regex=True, operates on the whole file content (supports multiline
+    patterns with re.DOTALL). When regex=False, operates line-by-line with
+    Django-safe and SRC-level protection.
+    """
     files = find_matching_files(directory, config, need_content_match=True)
     results = []
 
@@ -55,89 +82,154 @@ def rename_file_contents(config: RenameConfig, directory: str) -> list[dict[str,
         except (OSError, UnicodeDecodeError):
             continue
 
-        # Skip entire file if file-level ID is in skip_ids
         skip_entire_file = _should_skip(file_id, config.skip_ids)
 
-        lines = content.split("\n")
-        matches = 0
-        protected = 0
-        new_lines = []
-        line_details: list[dict[str, Any]] = []
+        if config.regex:
+            # Regex mode: whole-file replacement (supports multiline)
+            entry = _regex_replace_content(
+                config, file_path, content, file_id, skip_entire_file
+            )
+        else:
+            # Literal mode: line-by-line with protection
+            entry = _literal_replace_content(
+                config, file_path, content, file_id, skip_entire_file
+            )
 
-        for line_num, line in enumerate(lines, 1):
-            if config.pattern in line:
-                line_id = f"{file_id}-L{line_num}"
-                skip_this_line = skip_entire_file or _should_skip(
-                    line_id, config.skip_ids
-                )
-
-                should_protect = False
-                if config.django_safe and is_django_protected_line(
-                    line, config.pattern
-                ):
-                    should_protect = True
-                if is_src_excluded(line, config):
-                    should_protect = True
-
-                if should_protect:
-                    protected += 1
-                    new_lines.append(line)
-                    if config.dry_run and len(line_details) < 20:
-                        line_details.append(
-                            {
-                                "id": line_id,
-                                "line_num": line_num,
-                                "action": "protect",
-                                "before": line,
-                                "after": line,
-                            }
-                        )
-                elif skip_this_line:
-                    # Skipped by skip_ids -- keep original line
-                    new_lines.append(line)
-                    if config.dry_run and len(line_details) < 20:
-                        line_details.append(
-                            {
-                                "id": line_id,
-                                "line_num": line_num,
-                                "action": "skip",
-                                "before": line,
-                                "after": line,
-                            }
-                        )
-                else:
-                    matches += line.count(config.pattern)
-                    replaced = line.replace(config.pattern, config.replacement)
-                    new_lines.append(replaced)
-                    if config.dry_run and len(line_details) < 20:
-                        line_details.append(
-                            {
-                                "id": line_id,
-                                "line_num": line_num,
-                                "action": "replace",
-                                "before": line,
-                                "after": replaced,
-                            }
-                        )
-            else:
-                new_lines.append(line)
-
-        if matches > 0:
-            if not config.dry_run and not skip_entire_file:
-                _write_text(file_path, "\n".join(new_lines), config.use_sudo)
-
-            entry: dict[str, Any] = {
-                "id": file_id,
-                "file": str(file_path),
-                "matches": matches,
-                "protected": protected,
-            }
-            if config.dry_run:
-                entry["lines"] = line_details
-
+        if entry is not None:
             results.append(entry)
 
     return results
+
+
+def _regex_replace_content(
+    config: RenameConfig,
+    file_path: Path,
+    content: str,
+    file_id: str,
+    skip_entire_file: bool,
+) -> dict[str, Any] | None:
+    """Regex-based whole-file content replacement."""
+    matches = _count(content, config)
+    if matches == 0:
+        return None
+
+    new_content = _replace(content, config)
+
+    if not config.dry_run and not skip_entire_file:
+        _write_text(file_path, new_content, config.use_sudo)
+
+    entry: dict[str, Any] = {
+        "id": file_id,
+        "file": str(file_path),
+        "matches": matches,
+        "protected": 0,
+    }
+    if config.dry_run:
+        # Show before/after snippets for each match
+        snippets = []
+        for m in re.finditer(config.pattern, content, re.DOTALL):
+            if len(snippets) >= 20:
+                break
+            matched_text = m.group()
+            replaced_text = re.sub(
+                config.pattern, config.replacement, matched_text, flags=re.DOTALL
+            )
+            snippets.append(
+                {
+                    "id": f"{file_id}-M{len(snippets)}",
+                    "action": "skip" if skip_entire_file else "replace",
+                    "before": matched_text[:200],
+                    "after": replaced_text[:200],
+                }
+            )
+        entry["lines"] = snippets
+
+    return entry
+
+
+def _literal_replace_content(
+    config: RenameConfig,
+    file_path: Path,
+    content: str,
+    file_id: str,
+    skip_entire_file: bool,
+) -> dict[str, Any] | None:
+    """Literal string line-by-line content replacement with protection."""
+    lines = content.split("\n")
+    matches = 0
+    protected = 0
+    new_lines = []
+    line_details: list[dict[str, Any]] = []
+
+    for line_num, line in enumerate(lines, 1):
+        if config.pattern in line:
+            line_id = f"{file_id}-L{line_num}"
+            skip_this_line = skip_entire_file or _should_skip(line_id, config.skip_ids)
+
+            should_protect = False
+            if config.django_safe and is_django_protected_line(line, config.pattern):
+                should_protect = True
+            if is_src_excluded(line, config):
+                should_protect = True
+
+            if should_protect:
+                protected += 1
+                new_lines.append(line)
+                if config.dry_run and len(line_details) < 20:
+                    line_details.append(
+                        {
+                            "id": line_id,
+                            "line_num": line_num,
+                            "action": "protect",
+                            "before": line,
+                            "after": line,
+                        }
+                    )
+            elif skip_this_line:
+                new_lines.append(line)
+                if config.dry_run and len(line_details) < 20:
+                    line_details.append(
+                        {
+                            "id": line_id,
+                            "line_num": line_num,
+                            "action": "skip",
+                            "before": line,
+                            "after": line,
+                        }
+                    )
+            else:
+                matches += line.count(config.pattern)
+                replaced = line.replace(config.pattern, config.replacement)
+                new_lines.append(replaced)
+                if config.dry_run and len(line_details) < 20:
+                    line_details.append(
+                        {
+                            "id": line_id,
+                            "line_num": line_num,
+                            "action": "replace",
+                            "before": line,
+                            "after": replaced,
+                        }
+                    )
+        else:
+            new_lines.append(line)
+
+    if matches == 0:
+        return None
+
+    if not config.dry_run and not skip_entire_file:
+        _write_text(file_path, "\n".join(new_lines), config.use_sudo)
+
+    entry: dict[str, Any] = {
+        "id": file_id,
+        "file": str(file_path),
+        "matches": matches,
+        "protected": protected,
+    }
+    if config.dry_run:
+        entry["lines"] = line_details
+
+    return entry
 
 
 def update_symlink_targets(
@@ -155,9 +247,9 @@ def update_symlink_targets(
             continue
 
         target = os.readlink(str(path))
-        if config.pattern in target:
+        if _contains(target, config):
             item_id = f"st-{idx:03d}"
-            new_target = target.replace(config.pattern, config.replacement)
+            new_target = _replace(target, config)
 
             if not config.dry_run and not _should_skip(item_id, config.skip_ids):
                 _unlink_path(path, config.use_sudo)
@@ -189,9 +281,9 @@ def rename_symlink_names(config: RenameConfig, directory: str) -> list[dict[str,
             continue
 
         name = path.name
-        if config.pattern in name:
+        if _contains(name, config):
             item_id = f"sn-{idx:03d}"
-            new_name = name.replace(config.pattern, config.replacement)
+            new_name = _replace(name, config)
             new_path = path.parent / new_name
             target_exists = new_path.exists() and new_path != path
 
@@ -219,9 +311,9 @@ def rename_file_names(config: RenameConfig, directory: str) -> list[dict[str, An
 
     for file_path in files:
         name = file_path.name
-        if config.pattern in name:
+        if _contains(name, config):
             item_id = f"f-{idx:03d}"
-            new_name = name.replace(config.pattern, config.replacement)
+            new_name = _replace(name, config)
             new_path = file_path.parent / new_name
             target_exists = new_path.exists() and new_path != file_path
 
@@ -283,7 +375,7 @@ def rename_directory_names(
             if should_exclude_path(path, config):
                 continue
             rel_path = str(path.relative_to(root))
-            if config.pattern in path.name or config.pattern in rel_path:
+            if _contains(path.name, config) or _contains(rel_path, config):
                 dirs.append(path)
 
     dirs.sort(key=lambda p: len(p.parts), reverse=True)
@@ -293,12 +385,12 @@ def rename_directory_names(
 
         if not dir_path.exists():
             continue  # already moved by parent merge
-        if config.pattern in dir_path.name:
-            new_name = dir_path.name.replace(config.pattern, config.replacement)
+        if _contains(dir_path.name, config):
+            new_name = _replace(dir_path.name, config)
             new_path = dir_path.parent / new_name
         else:
             rel = str(dir_path.relative_to(root))
-            new_rel = rel.replace(config.pattern, config.replacement)
+            new_rel = _replace(rel, config)
             new_path = root / new_rel
         target_exists = new_path.exists() and new_path != dir_path
 
