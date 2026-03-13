@@ -76,6 +76,63 @@ def get_package_root(module_name: str) -> Optional[Path]:
     return None
 
 
+_CORE_PACKAGES = {"scitex", "scitex-cloud"}
+
+
+def get_package_metadata(pip_name: str) -> Optional[dict]:
+    """Get display metadata for a package from importlib.metadata.
+
+    Returns:
+        Dict with keys: pip_name, module_name, description, version,
+        github_url, github_repo, is_core. None if package not found.
+    """
+    discovered = discover_packages()
+    module_name = discovered.get(pip_name)
+
+    try:
+        from importlib.metadata import metadata as get_metadata
+
+        meta = get_metadata(pip_name)
+    except Exception:
+        if module_name is None:
+            return None
+        # Package registered but metadata not available
+        return {
+            "pip_name": pip_name,
+            "module_name": module_name,
+            "description": "",
+            "version": "",
+            "github_url": "",
+            "github_repo": pip_name,
+            "is_core": pip_name in _CORE_PACKAGES,
+        }
+
+    # Extract Repository URL from Project-URL fields
+    github_url = ""
+    github_repo = pip_name
+    urls = meta.get_all("Project-URL") or []
+    for url_entry in urls:
+        label, _, url = url_entry.partition(",")
+        url = url.strip()
+        if label.strip().lower() in ("repository", "homepage"):
+            github_url = url
+            # Extract repo name from github URL
+            parts = url.rstrip("/").rstrip(".git").rsplit("/", 1)
+            if len(parts) == 2:
+                github_repo = parts[1]
+            break
+
+    return {
+        "pip_name": pip_name,
+        "module_name": module_name or pip_name.replace("-", "_"),
+        "description": meta.get("Summary", ""),
+        "version": meta.get("Version", ""),
+        "github_url": github_url,
+        "github_repo": github_repo,
+        "is_core": pip_name in _CORE_PACKAGES,
+    }
+
+
 def get_sphinx_source(module_name: str) -> Optional[Path]:
     """Find the Sphinx source directory for a package (dev environment only).
 
