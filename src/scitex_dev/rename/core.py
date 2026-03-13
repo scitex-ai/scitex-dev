@@ -127,7 +127,9 @@ def execute_rename(
             pattern,
             replacement,
             directory,
-            "Uncommitted changes detected. Commit or stash first.",
+            "Uncommitted changes detected. "
+            "Run 'git stash --include-untracked' or 'git commit' first, "
+            "then retry. This ensures 'git checkout' can revert the rename.",
         )
 
     config = RenameConfig(
