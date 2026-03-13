@@ -29,10 +29,6 @@ def docs_list() -> str:
             {
                 "success": True,
                 "data": result,
-                "next_steps": [
-                    "Use docs_get(package='<name>') for specific package docs",
-                    "Use docs_get(package='<name>', format='json') for structured docs",
-                ],
             },
             default=str,
         )
@@ -41,7 +37,7 @@ def docs_list() -> str:
             {
                 "success": False,
                 "error": str(e),
-                "next_steps": ["Check that scitex packages are installed"],
+                "hints_on_error": ["Check that scitex packages are installed"],
             }
         )
 
@@ -71,7 +67,6 @@ def docs_get(
                 "data": result if not isinstance(result, type(None)) else None,
                 "package": package,
                 "format": format,
-                "next_steps": _next_steps_for(result, package, format),
             },
             default=str,
         )
@@ -84,7 +79,7 @@ def docs_get(
                 "success": False,
                 "error": str(e),
                 "available_packages": available,
-                "next_steps": [
+                "hints_on_error": [
                     f"Available packages: {', '.join(available) or 'none'}",
                     "Check package is installed with scitex_dev.docs entry point",
                 ],
@@ -95,7 +90,7 @@ def docs_get(
             {
                 "success": False,
                 "error": str(e),
-                "next_steps": ["Check error details and retry"],
+                "hints_on_error": ["Check error details and retry"],
             }
         )
 
@@ -122,7 +117,6 @@ def docs_build(
                 "success": True,
                 "data": result,
                 "side_effects": ["file_create: Sphinx build output"],
-                "next_steps": ["Use docs_get() to view the built documentation"],
             },
             default=str,
         )
@@ -131,7 +125,7 @@ def docs_build(
             {
                 "success": False,
                 "error": str(e),
-                "next_steps": [
+                "hints_on_error": [
                     "Ensure Sphinx is installed: pip install scitex-dev[sphinx]",
                     "Check that the package has docs/sphinx/conf.py",
                 ],
@@ -168,10 +162,6 @@ def docs_search(
                 "data": results,
                 "query": query,
                 "count": len(results),
-                "next_steps": [
-                    f"docs_get(package='{r['package']}', page='{r['name']}') for details"
-                    for r in results[:3]
-                ],
             },
             default=str,
         )
@@ -180,7 +170,7 @@ def docs_search(
             {
                 "success": False,
                 "error": str(e),
-                "next_steps": ["Check query and retry"],
+                "hints_on_error": ["Check query and retry"],
             }
         )
 
@@ -222,22 +212,3 @@ def register_docs_tools(mcp: Any) -> None:
     ) -> str:
         """Search documentation across SciTeX packages."""
         return docs_search(query=query, package=package, max_results=max_results)
-
-
-def _next_steps_for(result: Any, package: str, format: Optional[str]) -> list[str]:
-    """Generate contextual next_steps hints."""
-    steps = []
-    if format is None:
-        steps.append(
-            f"docs_get(package='{package}', format='json') for structured docs"
-        )
-        steps.append(f"docs_get(package='{package}', format='html') for HTML path")
-    elif format == "json" and isinstance(result, dict) and "pages" in result:
-        pages = result["pages"]
-        if pages:
-            steps.append(
-                f"docs_get(package='{package}', format='json', page='{pages[0]}') for page content"
-            )
-    elif format == "html":
-        steps.append("Serve the HTML directory or embed in iframe")
-    return steps

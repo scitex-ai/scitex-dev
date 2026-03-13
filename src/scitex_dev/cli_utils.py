@@ -45,10 +45,10 @@ def handle_result(
     else:
         out = file or sys.stderr
         print(f"Error: {result.error}", file=out)
-        if result.next_steps:
+        if result.hints_on_error:
             print("", file=out)
-            for step in result.next_steps:
-                print(f"  - {step}", file=out)
+            for hint in result.hints_on_error:
+                print(f"  - {hint}", file=out)
 
     return result.exit_code
 
@@ -101,20 +101,20 @@ def wrap_as_cli(
         result = Result(success=True, data=data)
     except Exception as exc:
         error_code = classify_exception(exc)
-        next_steps = []
+        hints_on_error = []
         suggestion = getattr(exc, "suggestion", None)
         if suggestion:
-            next_steps.append(suggestion)
+            hints_on_error.append(suggestion)
         suggestions = getattr(exc, "suggestions", None)
         if suggestions and isinstance(suggestions, list):
-            next_steps.extend(suggestions)
+            hints_on_error.extend(suggestions)
         context = getattr(exc, "context", {})
         result = Result(
             success=False,
             error=str(exc),
             error_code=error_code.value,
             context=context if isinstance(context, dict) else {},
-            next_steps=next_steps,
+            hints_on_error=hints_on_error,
         )
 
     code = handle_result(result, as_json=as_json)

@@ -23,10 +23,6 @@ async def list_versions_handler(
     return wrap_as_mcp(
         list_versions,
         idempotent=True,
-        next_steps=[
-            "dev_fix_mismatches to resolve version differences",
-            "dev_versions_sync to sync packages to remote hosts",
-        ],
         packages=packages,
     )
 
@@ -42,7 +38,6 @@ async def get_config_handler() -> str:
     return wrap_as_mcp(
         _get_config,
         idempotent=True,
-        next_steps=["dev_versions_list to check package versions"],
     )
 
 
@@ -72,7 +67,6 @@ async def test_run_handler(
     return wrap_as_mcp(
         _run,
         idempotent=True,
-        next_steps=["dev_test_hpc to run tests on HPC cluster"],
     )
 
 
@@ -111,7 +105,7 @@ async def test_hpc_run_handler(
             success=False,
             error=f"Cannot connect to {host}",
             error_code="E007",
-            next_steps=[f"Check SSH connectivity to {host}"],
+            hints_on_error=[f"Check SSH connectivity to {host}"],
         ).to_json()
 
     if not sync_to_hpc(config):
@@ -119,7 +113,7 @@ async def test_hpc_run_handler(
             success=False,
             error="rsync failed",
             error_code="E007",
-            next_steps=["Check rsync and SSH configuration"],
+            hints_on_error=["Check rsync and SSH configuration"],
         ).to_json()
 
     if async_mode:
@@ -129,10 +123,6 @@ async def test_hpc_run_handler(
                 success=True,
                 data={"job_id": job_id, "host": host},
                 side_effects=["hpc_job: submits Slurm job on remote HPC"],
-                next_steps=[
-                    "dev_test_hpc_poll to check job status",
-                    "dev_test_hpc_result to fetch output",
-                ],
             ).to_json()
         return Result(
             success=False,
@@ -145,10 +135,6 @@ async def test_hpc_run_handler(
             success=exit_code == 0,
             data={"exit_code": exit_code, "host": host},
             side_effects=["hpc_job: submits Slurm job on remote HPC"],
-            next_steps=[
-                "dev_test_hpc_poll to check job status",
-                "dev_test_hpc_result to fetch output",
-            ],
         ).to_json()
 
 
@@ -161,10 +147,6 @@ async def test_hpc_poll_handler(
     return wrap_as_mcp(
         poll_hpc_job,
         idempotent=True,
-        next_steps=[
-            "dev_test_hpc_result if job completed",
-            "dev_test_hpc_poll to check again if still running",
-        ],
         job_id=job_id,
     )
 
@@ -182,7 +164,6 @@ async def test_hpc_result_handler(
     return wrap_as_mcp(
         _fetch,
         idempotent=True,
-        next_steps=["dev_test_local to run locally for comparison"],
     )
 
 
@@ -198,7 +179,6 @@ async def sync_handler(
     return wrap_as_mcp(
         sync_all,
         side_effects=["remote_exec: git pull + pip install on remote hosts"],
-        next_steps=["dev_versions_list to verify sync results"],
         hosts=hosts,
         packages=packages,
         install=install,
@@ -216,7 +196,6 @@ async def sync_local_handler(
     return wrap_as_mcp(
         sync_local,
         side_effects=["pip_install: installs packages in editable mode"],
-        next_steps=["dev_versions_list to verify installed versions"],
         packages=packages,
         confirm=confirm,
     )
@@ -232,10 +211,6 @@ async def remote_diff_handler(
     return wrap_as_mcp(
         remote_diff,
         idempotent=True,
-        next_steps=[
-            "dev_versions_commit to commit changes",
-            "dev_versions_sync to sync without committing",
-        ],
         host=host,
         packages=packages,
     )
@@ -257,7 +232,6 @@ async def remote_commit_handler(
             "git_commit: commits changes on remote host",
             "git_push: pushes to origin",
         ],
-        next_steps=["dev_versions_pull to pull changes locally"],
         host=host,
         packages=packages,
         message=message,
@@ -277,7 +251,6 @@ async def pull_local_handler(
     return wrap_as_mcp(
         pull_local,
         side_effects=["git_pull: pulls from origin to local repos"],
-        next_steps=["dev_versions_list to verify state"],
         packages=packages,
         confirm=confirm,
         stash=stash,
@@ -289,6 +262,7 @@ async def rename_handler(
     replacement: str,
     directory: str = ".",
     confirm: bool = False,
+    regex: bool = False,
     django_safe: bool = True,
     extra_excludes: list[str] | None = None,
     force: bool = False,
@@ -307,7 +281,7 @@ async def rename_handler(
             success=False,
             error="Uncommitted changes detected. Commit or stash first.",
             error_code="E009",
-            next_steps=[
+            hints_on_error=[
                 "Run 'git commit' or 'git stash' first",
                 "Or pass force=True to skip this check",
             ],
@@ -324,6 +298,7 @@ async def rename_handler(
             replacement=replacement,
             directory=directory,
             dry_run=not confirm,
+            regex=regex,
             django_safe=django_safe,
             extra_excludes=extra_excludes or [],
             skip_ids=skip_ids or [],
@@ -336,7 +311,6 @@ async def rename_handler(
         return wrap_as_mcp(
             _rename,
             side_effects=["file_modify: renames files, directories, and content"],
-            next_steps=["dev_versions_list to check ecosystem state"],
         )
     finally:
         if use_sudo and sudo_password:
@@ -361,7 +335,6 @@ async def fix_mismatches_handler(
             "pip_install: fixes mismatched package versions",
             "remote_exec: git pull on remote hosts",
         ],
-        next_steps=["dev_versions_list to verify all versions match"],
         hosts=hosts,
         packages=packages,
         local=local,

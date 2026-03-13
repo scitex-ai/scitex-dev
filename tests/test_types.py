@@ -60,15 +60,15 @@ class TestResult:
     def test_exit_code_no_code(self):
         assert Result(success=False, error="generic").exit_code == 1
 
-    def test_next_steps_and_side_effects(self):
+    def test_hints_and_side_effects(self):
         r = Result(
             success=True,
             data="done",
             side_effects=["file_create: /tmp/out.csv"],
-            next_steps=["Run validation"],
+            hints_on_error=["Run validation"],
         )
         assert len(r.side_effects) == 1
-        assert len(r.next_steps) == 1
+        assert len(r.hints_on_error) == 1
 
     def test_idempotent_flag(self):
         assert Result(success=True, data="ok", idempotent=True).idempotent is True

@@ -94,14 +94,22 @@ async def dev_fix_mismatches(dry_run: bool = True) -> str:
 
 @mcp.tool()
 async def dev_bulk_rename(
-    old_name: str = "",
-    new_name: str = "",
-    root: str = ".",
+    pattern: str = "",
+    replacement: str = "",
+    directory: str = ".",
     confirm: bool = False,
+    regex: bool = False,
 ) -> str:
-    """Bulk rename with cross-reference updates."""
+    """Bulk rename files, directories, and content. Supports literal strings and regex.
+
+    When regex=True, pattern is a Python regex and replacement can use \\1, \\2 backreferences.
+    """
     from .dev_mcp.handlers import rename_handler
 
     return await rename_handler(
-        old_name=old_name, new_name=new_name, root=root, confirm=confirm
+        pattern=pattern,
+        replacement=replacement,
+        directory=directory,
+        confirm=confirm,
+        regex=regex,
     )

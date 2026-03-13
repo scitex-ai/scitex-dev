@@ -30,12 +30,12 @@ class TestHandleResult:
         assert code == 1
         assert "Error: something broke" in buf.getvalue()
 
-    def test_failure_with_next_steps(self):
+    def test_failure_with_hints_on_error(self):
         buf = io.StringIO()
         r = Result(
             success=False,
             error="fail",
-            next_steps=["Try A", "Try B"],
+            hints_on_error=["Try A", "Try B"],
         )
         handle_result(r, file=buf)
         output = buf.getvalue()
@@ -131,4 +131,4 @@ class TestWrapAsCli:
             wrap_as_cli(fail_with_hints, as_json=True)
         captured = capsys.readouterr()
         parsed = json.loads(captured.out)
-        assert "Try again" in parsed["next_steps"]
+        assert "Try again" in parsed["hints_on_error"]
