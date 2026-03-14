@@ -109,9 +109,11 @@ result = my_function(5, return_as="result")
 <summary><b>CLI Commands</b></summary>
 
 ```bash
-# Version management
-scitex-dev versions
-scitex-dev fix-mismatches --dry-run
+# Ecosystem management
+scitex-dev ecosystem list
+scitex-dev ecosystem list --versions
+scitex-dev ecosystem fix-mismatches --dry-run
+scitex-dev ecosystem sync
 
 # Documentation
 scitex-dev docs --package scitex-writer
