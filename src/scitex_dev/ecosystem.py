@@ -127,6 +127,42 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/scitex-tunnel",
         "import_name": "scitex_tunnel",
     },
+    "scitex-ui": {
+        "local_path": "~/proj/scitex-ui",
+        "pypi_name": "scitex-ui",
+        "github_repo": "ywatanabe1989/scitex-ui",
+        "import_name": "scitex_ui",
+    },
+    "scitex-app": {
+        "local_path": "~/proj/scitex-app",
+        "pypi_name": "scitex-app",
+        "github_repo": "ywatanabe1989/scitex-app",
+        "import_name": "scitex_app",
+    },
+    "scitex-audio": {
+        "local_path": "~/proj/scitex-audio",
+        "pypi_name": "scitex-audio",
+        "github_repo": "ywatanabe1989/scitex-audio",
+        "import_name": "scitex_audio",
+    },
+    "scitex-scholar": {
+        "local_path": "~/proj/scitex-scholar",
+        "pypi_name": "scitex-scholar",
+        "github_repo": "ywatanabe1989/scitex-scholar",
+        "import_name": "scitex_scholar",
+    },
+    "scitex-dev": {
+        "local_path": "~/proj/scitex-dev",
+        "pypi_name": "scitex-dev",
+        "github_repo": "ywatanabe1989/scitex-dev",
+        "import_name": "scitex_dev",
+    },
+    "scitex-plt": {
+        "local_path": "~/proj/scitex-plt",
+        "pypi_name": "scitex-plt",
+        "github_repo": "ywatanabe1989/scitex-plt",
+        "import_name": "scitex_plt",
+    },
     "singularity-template": {
         "local_path": "~/proj/singularity-template",
         "pypi_name": "singularity-template",
