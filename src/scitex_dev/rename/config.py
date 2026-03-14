@@ -21,6 +21,9 @@ class RenameConfig:
     regex: bool = False
     django_safe: bool = True
     create_backup: bool = False
+    # Scope filtering
+    scope: str = ""  # Glob pattern for file names (e.g., "README.md", "*.py")
+    recursive: bool = True  # Recurse into subdirectories
     # PATH-level filtering
     path_includes: str = (
         "py,txt,sh,md,yaml,toml,cfg,ini,json,html,css,ts,js,tsx,jsx,scss,less,svg,xml"
