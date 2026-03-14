@@ -6,10 +6,12 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
 from .config import RenameConfig, RenameResult
+from .filters import find_matching_files, should_exclude_path
 from .safety import (
     check_directory_safety,
     create_backup,
@@ -22,6 +24,99 @@ from .steps import (
     rename_symlink_names,
     update_symlink_targets,
 )
+
+
+def _pre_check_safety(
+    config: RenameConfig, directory: str
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """Lightweight pre-check for collisions and permissions.
+
+    Instead of running a full dry-run (which re-scans all file contents),
+    this only checks:
+    - Path-based collisions (file/symlink/dir renames)
+    - Write permissions on content files and rename parents
+    """
+    from .steps import _contains, _iter_paths, _replace
+
+    collisions: list[dict[str, Any]] = []
+    permission_errors: list[dict[str, str]] = []
+
+    root = Path(directory)
+
+    # Check content files: only need file list + write permission
+    content_files = find_matching_files(directory, config, need_content_match=True)
+    for f in content_files:
+        if f.exists() and not os.access(f, os.W_OK):
+            permission_errors.append(
+                {
+                    "path": str(f),
+                    "operation": "content_replace",
+                    "reason": "file not writable",
+                }
+            )
+
+    # Check file name collisions + parent permissions
+    all_files = find_matching_files(directory, config)
+    for file_path in all_files:
+        if _contains(file_path.name, config):
+            new_name = _replace(file_path.name, config)
+            new_path = file_path.parent / new_name
+            if new_path.exists() and new_path != file_path:
+                collisions.append({"type": "file", "path": str(new_path)})
+            parent = file_path.parent
+            if not os.access(parent, os.W_OK):
+                permission_errors.append(
+                    {
+                        "path": str(file_path),
+                        "operation": "file_rename",
+                        "reason": f"parent not writable: {parent}",
+                    }
+                )
+
+    # Check symlink collisions + permissions
+    for path in _iter_paths(root, config):
+        if not path.is_symlink():
+            continue
+        if should_exclude_path(path, config):
+            continue
+        if _contains(path.name, config):
+            new_name = _replace(path.name, config)
+            new_path = path.parent / new_name
+            if new_path.exists() and new_path != path:
+                collisions.append({"type": "symlink", "path": str(new_path)})
+            parent = path.parent
+            if not os.access(parent, os.W_OK):
+                permission_errors.append(
+                    {
+                        "path": str(path),
+                        "operation": "symlink_rename",
+                        "reason": f"parent not writable: {parent}",
+                    }
+                )
+
+    # Check directory rename collisions + permissions
+    glob_iter = root.rglob("*") if config.recursive else root.glob("*")
+    for path in glob_iter:
+        if not path.is_dir() or path.is_symlink():
+            continue
+        if should_exclude_path(path, config):
+            continue
+        if _contains(path.name, config):
+            new_name = _replace(path.name, config)
+            new_path = path.parent / new_name
+            if new_path.exists() and new_path != path:
+                collisions.append({"type": "directory", "path": str(new_path)})
+            parent = path.parent
+            if not os.access(parent, os.W_OK):
+                permission_errors.append(
+                    {
+                        "path": str(path),
+                        "operation": "dir_rename",
+                        "reason": f"parent not writable: {parent}",
+                    }
+                )
+
+    return collisions, permission_errors
 
 
 def _make_error_result(
@@ -175,30 +270,11 @@ def bulk_rename(config: RenameConfig) -> RenameResult:
     if config.create_backup and not config.dry_run:
         create_backup(directory, config.pattern, config.replacement)
 
-    # Dry-run pass to detect collisions before any changes
+    # Lightweight pre-check for collisions and permissions
+    # (avoids expensive full dry-run that re-scans all file contents)
     if not config.dry_run:
-        dry_config = RenameConfig(
-            pattern=config.pattern,
-            replacement=config.replacement,
-            directory=config.directory,
-            dry_run=True,
-            regex=config.regex,
-            django_safe=config.django_safe,
-            scope=config.scope,
-            recursive=config.recursive,
-            path_includes=config.path_includes,
-            path_excludes=config.path_excludes,
-            path_must_excludes=config.path_must_excludes,
-            src_excludes=config.src_excludes,
-            src_must_excludes=config.src_must_excludes,
-            extra_excludes=config.extra_excludes,
-            skip_ids=config.skip_ids,
-        )
-        preview = bulk_rename(dry_config)
-        # Block file/symlink collisions; directory collisions are handled via merge
-        non_dir_collisions = [
-            c for c in preview.collisions if c.get("type") != "directory"
-        ]
+        collisions, perm_errors = _pre_check_safety(config, directory)
+        non_dir_collisions = [c for c in collisions if c.get("type") != "directory"]
         if non_dir_collisions:
             return _make_error_result(
                 config.pattern,
@@ -207,14 +283,13 @@ def bulk_rename(config: RenameConfig) -> RenameResult:
                 f"Collisions detected: {len(non_dir_collisions)} target(s) already exist. "
                 "Run dry-run to inspect.",
             )
-        # Block execution if permission errors detected
-        if preview.permission_errors:
-            paths = [e["path"] for e in preview.permission_errors[:5]]
+        if perm_errors:
+            paths = [e["path"] for e in perm_errors[:5]]
             return _make_error_result(
                 config.pattern,
                 config.replacement,
                 directory,
-                f"Permission denied: {len(preview.permission_errors)} path(s) not writable. "
+                f"Permission denied: {len(perm_errors)} path(s) not writable. "
                 f"First: {', '.join(paths)}. Run dry-run to inspect all.",
             )
 

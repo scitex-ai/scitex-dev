@@ -219,10 +219,17 @@ else:
     @click.option("--root", default=".", help="Root directory for rename.")
     @click.option("--dry-run", is_flag=True, help="Preview without renaming.")
     @click.option("--regex", is_flag=True, help="Treat pattern as Python regex.")
+    @click.option(
+        "--exclude",
+        multiple=True,
+        help="Exclude paths containing this substring. Repeatable.",
+    )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def rename(old_name, new_name, root, dry_run, regex, as_json):
+    def rename(old_name, new_name, root, dry_run, regex, exclude, as_json):
         """Bulk rename with cross-reference updates. Supports --regex for regex patterns."""
         from .cli_utils import wrap_as_cli
+
+        extra_excludes = list(exclude) if exclude else []
 
         if dry_run:
             from . import preview_rename
@@ -234,6 +241,7 @@ else:
                 replacement=new_name,
                 directory=root,
                 regex=regex,
+                extra_excludes=extra_excludes,
             )
         else:
             from . import execute_rename
@@ -245,6 +253,7 @@ else:
                 replacement=new_name,
                 directory=root,
                 regex=regex,
+                extra_excludes=extra_excludes,
             )
 
     # -------------------------------------------------------------------
