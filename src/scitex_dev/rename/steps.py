@@ -232,6 +232,11 @@ def _literal_replace_content(
     return entry
 
 
+def _iter_paths(root: Path, config: RenameConfig):
+    """Iterate paths respecting recursive setting."""
+    return sorted(root.rglob("*")) if config.recursive else sorted(root.glob("*"))
+
+
 def update_symlink_targets(
     config: RenameConfig, directory: str
 ) -> list[dict[str, Any]]:
@@ -240,7 +245,7 @@ def update_symlink_targets(
     results = []
     idx = 0
 
-    for path in sorted(root.rglob("*")):
+    for path in _iter_paths(root, config):
         if not path.is_symlink():
             continue
         if should_exclude_path(path, config):
@@ -274,7 +279,7 @@ def rename_symlink_names(config: RenameConfig, directory: str) -> list[dict[str,
     results = []
     idx = 0
 
-    for path in sorted(root.rglob("*")):
+    for path in _iter_paths(root, config):
         if not path.is_symlink():
             continue
         if should_exclude_path(path, config):
@@ -370,7 +375,8 @@ def rename_directory_names(
     results = []
 
     dirs = []
-    for path in root.rglob("*"):
+    glob_iter = root.rglob("*") if config.recursive else root.glob("*")
+    for path in glob_iter:
         if path.is_dir() and not path.is_symlink():
             if should_exclude_path(path, config):
                 continue

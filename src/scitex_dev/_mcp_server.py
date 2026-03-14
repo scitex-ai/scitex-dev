@@ -17,9 +17,9 @@ mcp = FastMCP(
         "Shared developer utilities for the SciTeX ecosystem. "
         "Use dev_docs_list to browse package documentation, "
         "dev_docs_search to search across docs, "
-        "dev_versions to check ecosystem versions, "
+        "dev_ecosystem_list to check ecosystem versions, "
         "dev_config to view configuration, "
-        "dev_rename for bulk renaming with cross-reference updates."
+        "dev_bulk_rename for bulk renaming with cross-reference updates."
     ),
 )
 
@@ -29,7 +29,7 @@ register_docs_tools(mcp)
 
 # Register dev tools from dev_mcp handlers
 @mcp.tool()
-async def dev_versions(packages: list[str] | None = None) -> str:
+async def dev_ecosystem_list(packages: list[str] | None = None) -> str:
     """List versions across the SciTeX ecosystem."""
     from .dev_mcp.handlers import list_versions_handler
 
@@ -37,7 +37,15 @@ async def dev_versions(packages: list[str] | None = None) -> str:
 
 
 @mcp.tool()
-async def dev_config() -> str:
+async def dev_ecosystem_fix_mismatches(dry_run: bool = True) -> str:
+    """Detect and fix version mismatches across ecosystem."""
+    from .dev_mcp.handlers import fix_mismatches_handler
+
+    return await fix_mismatches_handler(dry_run=dry_run)
+
+
+@mcp.tool()
+async def dev_config_show() -> str:
     """Get dev configuration."""
     from .dev_mcp.handlers import get_config_handler
 
@@ -82,14 +90,6 @@ async def dev_test_hpc_result(job_id: str | None = None) -> str:
     from .dev_mcp.handlers import test_hpc_result_handler
 
     return await test_hpc_result_handler(job_id=job_id)
-
-
-@mcp.tool()
-async def dev_fix_mismatches(dry_run: bool = True) -> str:
-    """Detect and fix version mismatches across ecosystem."""
-    from .dev_mcp.handlers import fix_mismatches_handler
-
-    return await fix_mismatches_handler(dry_run=dry_run)
 
 
 @mcp.tool()
