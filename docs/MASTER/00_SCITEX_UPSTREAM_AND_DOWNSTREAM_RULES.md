@@ -132,6 +132,72 @@ except ImportError:
         ...
 ```
 
+## Special IO Pattern (Cascade Direction)
+
+### Downstream packages define their own IO
+```python
+# figrecipe defines its own save/load for .yaml + .png
+# In figrecipe/io.py:
+def save(fig, path, **kwargs):
+    """Save figure as recipe YAML + PNG."""
+    # figrecipe-specific logic
+    ...
+
+def load(path):
+    """Load recipe from YAML."""
+    ...
+
+# Register with scitex-io's plugin registry (if available)
+FIGRECIPE_IO_SPEC = {
+    "extensions": [".yaml", ".yml"],
+    "save": save,
+    "load": load,
+    "description": "FigRecipe YAML recipe format",
+}
+```
+
+### scitex-io detects and handles as downstream intended
+```python
+# scitex-io auto-discovers downstream IO plugins
+# In scitex_io/__init__.py:
+def save(obj, path, **kwargs):
+    """Universal save — detects format, delegates to downstream plugin."""
+    ext = Path(path).suffix
+    plugin = _registry.get(ext)
+    if plugin:
+        return plugin.save(obj, path, **kwargs)  # Cascade to downstream
+    # Fallback: standard formats (CSV, NPY, PKL, etc.)
+    ...
+```
+
+### scitex-python re-exposes without modification
+```python
+# scitex/__init__.py or scitex/io/__init__.py:
+# Just re-export from scitex-io — no additional logic
+from scitex_io import save, load  # Re-expose as stx.io.save()
+```
+
+### The cascade flows through 3 interfaces
+
+```
+                    Python API          CLI Command           MCP Server
+                    ----------          -----------           ----------
+figrecipe           fr.save()           figrecipe save        plt_plot (MCP)
+                        ↑                    ↑                    ↑
+scitex-io           stx.io.save()       scitex io save        io_save (MCP)
+                        ↑                    ↑                    ↑
+scitex               stx.io.save()      scitex io save        io_save (MCP)
+                    (re-exposed)        (re-exposed)          (re-exposed)
+```
+
+### Rules for cascade
+1. **Downstream defines** — figrecipe implements `save()` and `load()` for its formats
+2. **scitex-io detects** — discovers downstream plugins via entry points or registry
+3. **scitex re-exposes** — no additional wrapping, just re-export
+4. **Type checking** — scitex-io validates input/output types during cascade
+5. **All 3 interfaces** — Python API, CLI, and MCP server must cascade in the same direction
+6. **Never reverse** — scitex should never import from figrecipe directly; only through scitex-io's plugin system
+
 ## Version Compatibility
 
 - figrecipe specifies: `scitex-io >= X.Y` as optional dependency
