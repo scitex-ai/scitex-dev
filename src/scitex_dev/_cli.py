@@ -22,7 +22,7 @@ else:
     COMMAND_CATEGORIES = [
         ("Ecosystem", ["ecosystem"]),
         ("Development", ["config", "rename"]),
-        ("Documentation", ["docs", "search"]),
+        ("Documentation", ["docs", "search", "skills"]),
         ("Integration", ["mcp", "list-python-apis"]),
     ]
 
@@ -263,6 +263,10 @@ else:
     from .cli import docs_click_group
 
     main.add_command(docs_click_group(package="scitex-dev"))
+
+    from ._cli_skills import register_skills_commands
+
+    register_skills_commands(main)
 
     @main.command()
     @click.argument("query")
