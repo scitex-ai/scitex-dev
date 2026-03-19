@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""CLI commands for skills aggregation — registered on main CLI group."""
+"""CLI commands for skills aggregation -- registered on main CLI group."""
 
 import json
 
@@ -34,18 +34,20 @@ def register_skills_commands(main_group):
             for pkg, items in result.items():
                 click.echo(f"\n{pkg}:")
                 for s in items:
-                    click.echo(f"  {s['name']}: {s['description']}")
+                    desc = f" -- {s['description']}" if s["description"] else ""
+                    click.echo(f"  {s['name']}{desc}")
 
     @skills.command("get")
     @click.argument("package")
-    @click.argument("name")
+    @click.argument("name", required=False, default=None)
     def skills_get(package, name):
-        """Get content of a specific skill."""
+        """Get content of a skill. Without NAME, shows main SKILL.md."""
         from .skills import get_skill
 
         content = get_skill(package=package, name=name)
         if content:
             click.echo(content)
         else:
-            click.echo(f"Skill '{name}' not found in package '{package}'.", err=True)
+            target = f"'{name}' in " if name else ""
+            click.echo(f"Skill {target}package '{package}' not found.", err=True)
             raise SystemExit(1)
