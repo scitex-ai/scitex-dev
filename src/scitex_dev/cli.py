@@ -251,14 +251,9 @@ def register_skills_subcommand(
     get_p.add_argument("--json", action="store_true", dest="as_json")
     get_p.set_defaults(func=lambda args: _skills_get(args, package))
 
-    # bare `skills` → show main SKILL.md
+    # bare `skills` → show help
     parser.set_defaults(
-        func=lambda args: _skills_get(
-            argparse.Namespace(name=None, as_json=False),
-            package,
-        )
-        if args.skills_command is None
-        else None
+        func=lambda args: parser.print_help() if args.skills_command is None else None
     )
     return parser
 
