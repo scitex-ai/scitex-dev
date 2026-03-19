@@ -298,12 +298,35 @@ def register_skills_subcommand(
     get_p.add_argument("--json", action="store_true", dest="as_json")
     get_p.set_defaults(func=lambda args: _skills_get(args, package))
 
+    # skills export
+    export_p = skills_sub.add_parser(
+        "export",
+        help="Export skills to Claude Code's expected location",
+    )
+    export_p.add_argument(
+        "--level",
+        choices=["personal", "project"],
+        default="project",
+        help="personal (~/.claude/skills/) or project (.claude/skills/)",
+    )
+    export_p.add_argument(
+        "--target",
+        default=None,
+        help="Override target directory",
+    )
+    export_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be copied without doing it",
+    )
+    export_p.set_defaults(func=lambda args: _skills_export(args, package))
+
     # bare `skills` → show help; --help-recursive → show all subcommand help
     def _default_handler(args):
         if getattr(args, "help_recursive", False):
             parser.print_help()
             print()
-            for name, sub_p in [("list", list_p), ("get", get_p)]:
+            for name, sub_p in [("list", list_p), ("get", get_p), ("export", export_p)]:
                 print(f"--- {name} ---")
                 sub_p.print_help()
                 print()
@@ -337,6 +360,54 @@ def _skills_list(args: argparse.Namespace, package: str) -> None:
                 print(f"    {s['description']}")
         prog = package.replace("_", "-")
         print(f"\nUsage: {prog} skills get <name>")
+
+
+def _skills_export(args: argparse.Namespace, package: str) -> None:
+    import logging
+    import shutil
+
+    logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
+    from .skills import get_skill_dir
+
+    src_dir = get_skill_dir(package)
+    if src_dir is None:
+        print(f"No skills found for {package}.", file=sys.stderr)
+        sys.exit(2)
+
+    # Determine target
+    skill_name = package.replace("_", "-")
+    if args.target:
+        target = Path(args.target) / skill_name
+    elif args.level == "personal":
+        target = Path.home() / ".claude" / "skills" / skill_name
+    else:
+        target = Path(".claude") / "skills" / skill_name
+
+    if args.dry_run:
+        print(f"Would copy: {src_dir} -> {target}")
+        for f in sorted(src_dir.rglob("*.md")):
+            rel = f.relative_to(src_dir)
+            print(f"  {rel} -> {target / rel}")
+        return
+
+    target.mkdir(parents=True, exist_ok=True)
+
+    # Copy SKILL.md
+    skill_md = src_dir / "SKILL.md"
+    if skill_md.exists():
+        shutil.copy2(skill_md, target / "SKILL.md")
+
+    # Copy references/
+    refs_src = src_dir / "references"
+    if refs_src.is_dir():
+        refs_dst = target / "references"
+        if refs_dst.exists():
+            shutil.rmtree(refs_dst)
+        shutil.copytree(refs_src, refs_dst)
+
+    print(f"Exported {package} skills to {target}")
+    for f in sorted(target.rglob("*.md")):
+        print(f"  {f.relative_to(target)}")
 
 
 def _skills_get(args: argparse.Namespace, package: str) -> None:
