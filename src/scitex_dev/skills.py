@@ -3,8 +3,8 @@
 """Skills aggregation across the SciTeX ecosystem.
 
 Each package places skills as markdown files inside its source tree:
-    src/<import_name>/skills/<package-name>/SKILL.md
-    src/<import_name>/skills/<package-name>/references/*.md
+    src/<import_name>/skills/SKILL.md
+    src/<import_name>/skills/references/*.md
 
 Discovery uses entry points (scitex_dev.skills), falling back to
 the ECOSYSTEM registry — same pattern as docs discovery.
@@ -42,7 +42,7 @@ def _find_skills_dir(module_name: str, pip_name: str) -> Optional[Path]:
     """Find the skills directory for a package.
 
     Resolution chain:
-        1. Installed package: <pkg_root>/skills/<pip-name>/
+        1. Installed package: <pkg_root>/skills/  (flat, no package-name subdir)
         2. Legacy location: <pkg_root>/docs/MASTER/skills/
     """
     root = get_package_root(module_name)
@@ -50,7 +50,7 @@ def _find_skills_dir(module_name: str, pip_name: str) -> Optional[Path]:
         return None
 
     # Primary: inside the package (ships with pip install)
-    skills_dir = root / "skills" / pip_name
+    skills_dir = root / "skills"
     if skills_dir.is_dir() and (skills_dir / "SKILL.md").exists():
         return skills_dir
 
