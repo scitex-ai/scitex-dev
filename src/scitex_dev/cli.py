@@ -212,8 +212,45 @@ def docs_click_group(package: str, name: str = "docs"):
     return docs_cmd
 
 
+def skills_click_group(package: str, name: str = "skills"):
+    """Create a Click command group for skills (requires Click installed).
+
+    Usage::
+        from scitex_dev.cli import skills_click_group
+        cli.add_command(skills_click_group(package="scitex-app"))
+    """
+    try:
+        import click
+    except ImportError:
+        raise ImportError("Click is required. pip install click")
+
+    @click.group(name=name, invoke_without_command=True)
+    @click.pass_context
+    def skills_grp(ctx):
+        """View package skills (workflow-oriented guides)."""
+        if ctx.invoked_subcommand is None:
+            click.echo(ctx.get_help())
+
+    @skills_grp.command("list")
+    @click.option("--json", "as_json", is_flag=True, help="JSON output")
+    def skills_list(as_json):
+        """List available skill pages."""
+        ns = argparse.Namespace(as_json=as_json)
+        _skills_list(ns, package=package)
+
+    @skills_grp.command("get")
+    @click.argument("skill_name")
+    @click.option("--json", "as_json", is_flag=True, help="JSON output")
+    def skills_get(skill_name, as_json):
+        """Show a specific skill page."""
+        ns = argparse.Namespace(name=skill_name, as_json=as_json)
+        _skills_get(ns, package=package)
+
+    return skills_grp
+
+
 # =============================================================================
-# Skills subcommand
+# Skills subcommand (argparse)
 # =============================================================================
 
 
@@ -240,13 +277,11 @@ def register_skills_subcommand(
     list_p.add_argument("--json", action="store_true", dest="as_json")
     list_p.set_defaults(func=lambda args: _skills_list(args, package))
 
-    # skills get [name]
+    # skills get <name>
     get_p = skills_sub.add_parser("get", help="Show a skill page")
     get_p.add_argument(
         "name",
-        nargs="?",
-        default=None,
-        help="Reference name (omit for main SKILL.md)",
+        help="Skill name from 'skills list' (e.g. SKILL, test-selection)",
     )
     get_p.add_argument("--json", action="store_true", dest="as_json")
     get_p.set_defaults(func=lambda args: _skills_get(args, package))
@@ -259,6 +294,9 @@ def register_skills_subcommand(
 
 
 def _skills_list(args: argparse.Namespace, package: str) -> None:
+    import logging
+
+    logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
     from .skills import list_skills
 
     result = list_skills(package=package)
@@ -275,6 +313,9 @@ def _skills_list(args: argparse.Namespace, package: str) -> None:
 
 
 def _skills_get(args: argparse.Namespace, package: str) -> None:
+    import logging
+
+    logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
     from .skills import get_skill
 
     content = get_skill(package=package, name=args.name)
