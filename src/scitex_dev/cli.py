@@ -277,11 +277,13 @@ def register_skills_subcommand(
     list_p.add_argument("--json", action="store_true", dest="as_json")
     list_p.set_defaults(func=lambda args: _skills_list(args, package))
 
-    # skills get <name>
+    # skills get [name]
     get_p = skills_sub.add_parser("get", help="Show a skill page")
     get_p.add_argument(
         "name",
-        help="Skill name from 'skills list' (e.g. SKILL, test-selection)",
+        nargs="?",
+        default=None,
+        help="Skill name (see 'skills list')",
     )
     get_p.add_argument("--json", action="store_true", dest="as_json")
     get_p.set_defaults(func=lambda args: _skills_get(args, package))
@@ -307,15 +309,26 @@ def _skills_list(args: argparse.Namespace, package: str) -> None:
         if not items:
             print(f"No skills found for {package}.")
             return
+        print(f"Available skills for {package}:\n")
         for s in items:
-            desc = f" -- {s['description']}" if s["description"] else ""
-            print(f"  {s['name']}{desc}")
+            desc = f"  {s['description']}" if s["description"] else ""
+            print(f"  {s['name']}")
+            if desc:
+                print(f"    {s['description']}")
+        prog = package.replace("_", "-")
+        print(f"\nUsage: {prog} skills get <name>")
 
 
 def _skills_get(args: argparse.Namespace, package: str) -> None:
     import logging
 
     logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
+
+    # No name given → show available names
+    if args.name is None:
+        _skills_list(argparse.Namespace(as_json=False), package)
+        return
+
     from .skills import get_skill
 
     content = get_skill(package=package, name=args.name)
@@ -327,6 +340,6 @@ def _skills_get(args: argparse.Namespace, package: str) -> None:
         else:
             print(content)
     else:
-        target = f"'{args.name}' in " if args.name else ""
-        print(f"Skill {target}package '{package}' not found.", file=sys.stderr)
+        print(f"Skill '{args.name}' not found in {package}.", file=sys.stderr)
+        print(f"Run: {package} skills list", file=sys.stderr)
         sys.exit(2)
