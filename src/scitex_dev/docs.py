@@ -307,6 +307,10 @@ def _resolve_from_built(
     if not html_dir.exists():
         return None
 
+    # If page requested but no format, default to html
+    if page is not None and format is None:
+        format = "html"
+
     # No format requested → return manifest
     if format is None:
         from ._manifest import read_manifest, generate_manifest
