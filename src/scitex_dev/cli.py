@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 
 def register_docs_subcommand(
@@ -111,6 +112,9 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
         print(json.dumps(result, indent=2, default=str))
     elif isinstance(result, dict):
         print(json.dumps(result, indent=2, default=str))
+    elif isinstance(result, Path) and result.is_file():
+        # --page returns a file path — print its content
+        print(result.read_text(encoding="utf-8"))
     else:
         print(result)
 
