@@ -50,5 +50,8 @@ Documentation = "https://scitex-dev.readthedocs.io/"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+scitex_dev = ["skills/*.md", "skills/references/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
