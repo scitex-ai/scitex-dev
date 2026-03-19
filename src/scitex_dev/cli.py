@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Reusable CLI mixin for the ``docs`` subcommand.
+"""Reusable CLI mixins for ``docs`` and ``skills`` subcommands.
 
-Each package adds a ``docs`` subcommand with minimal boilerplate::
+Each package adds subcommands with minimal boilerplate::
 
     # In scitex_writer/_cli/__init__.py (argparse)
-    from scitex_dev.cli import register_docs_subcommand
+    from scitex_dev.cli import register_docs_subcommand, register_skills_subcommand
     register_docs_subcommand(subparsers, package="scitex-writer")
+    register_skills_subcommand(subparsers, package="scitex-writer")
 
     # Or with Click
     from scitex_dev.cli import docs_click_group
@@ -209,3 +210,87 @@ def docs_click_group(package: str, name: str = "docs"):
         _run_docs_command(ns, package=package)
 
     return docs_cmd
+
+
+# =============================================================================
+# Skills subcommand
+# =============================================================================
+
+
+def register_skills_subcommand(
+    subparsers: argparse._SubParsersAction,
+    package: str,
+) -> argparse.ArgumentParser:
+    """Register ``skills`` with ``list`` and ``get`` verb subcommands.
+
+    Usage::
+        scitex-stats skills list              # List skill pages
+        scitex-stats skills get               # Show main SKILL.md
+        scitex-stats skills get test-selection # Show a reference page
+    """
+    parser = subparsers.add_parser(
+        "skills",
+        help=f"View skills for {package}",
+        description=f"Browse {package} skills (workflow-oriented guides).",
+    )
+    skills_sub = parser.add_subparsers(dest="skills_command", title="Commands")
+
+    # skills list
+    list_p = skills_sub.add_parser("list", help="List available skill pages")
+    list_p.add_argument("--json", action="store_true", dest="as_json")
+    list_p.set_defaults(func=lambda args: _skills_list(args, package))
+
+    # skills get [name]
+    get_p = skills_sub.add_parser("get", help="Show a skill page")
+    get_p.add_argument(
+        "name",
+        nargs="?",
+        default=None,
+        help="Reference name (omit for main SKILL.md)",
+    )
+    get_p.add_argument("--json", action="store_true", dest="as_json")
+    get_p.set_defaults(func=lambda args: _skills_get(args, package))
+
+    # bare `skills` → show main SKILL.md
+    parser.set_defaults(
+        func=lambda args: _skills_get(
+            argparse.Namespace(name=None, as_json=False),
+            package,
+        )
+        if args.skills_command is None
+        else None
+    )
+    return parser
+
+
+def _skills_list(args: argparse.Namespace, package: str) -> None:
+    from .skills import list_skills
+
+    result = list_skills(package=package)
+    if args.as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        items = result.get(package, [])
+        if not items:
+            print(f"No skills found for {package}.")
+            return
+        for s in items:
+            desc = f" -- {s['description']}" if s["description"] else ""
+            print(f"  {s['name']}{desc}")
+
+
+def _skills_get(args: argparse.Namespace, package: str) -> None:
+    from .skills import get_skill
+
+    content = get_skill(package=package, name=args.name)
+    if content:
+        if args.as_json:
+            print(
+                json.dumps({"package": package, "name": args.name, "content": content})
+            )
+        else:
+            print(content)
+    else:
+        target = f"'{args.name}' in " if args.name else ""
+        print(f"Skill {target}package '{package}' not found.", file=sys.stderr)
+        sys.exit(2)
