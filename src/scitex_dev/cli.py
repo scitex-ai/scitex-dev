@@ -239,10 +239,15 @@ def skills_click_group(package: str, name: str = "skills"):
         _skills_list(ns, package=package)
 
     @skills_grp.command("get")
-    @click.argument("skill_name")
+    @click.argument("skill_name", required=False, default=None)
     @click.option("--json", "as_json", is_flag=True, help="JSON output")
     def skills_get(skill_name, as_json):
         """Show a specific skill page."""
+        if skill_name is None:
+            # No name given — show available skills
+            ns = argparse.Namespace(as_json=as_json)
+            _skills_list(ns, package=package)
+            return
         ns = argparse.Namespace(name=skill_name, as_json=as_json)
         _skills_get(ns, package=package)
 
@@ -270,6 +275,11 @@ def register_skills_subcommand(
         help=f"View skills for {package}",
         description=f"Browse {package} skills (workflow-oriented guides).",
     )
+    parser.add_argument(
+        "--help-recursive",
+        action="store_true",
+        help="Show help for all subcommands",
+    )
     skills_sub = parser.add_subparsers(dest="skills_command", title="Commands")
 
     # skills list
@@ -288,10 +298,20 @@ def register_skills_subcommand(
     get_p.add_argument("--json", action="store_true", dest="as_json")
     get_p.set_defaults(func=lambda args: _skills_get(args, package))
 
-    # bare `skills` → show help
-    parser.set_defaults(
-        func=lambda args: parser.print_help() if args.skills_command is None else None
-    )
+    # bare `skills` → show help; --help-recursive → show all subcommand help
+    def _default_handler(args):
+        if getattr(args, "help_recursive", False):
+            parser.print_help()
+            print()
+            for name, sub_p in [("list", list_p), ("get", get_p)]:
+                print(f"--- {name} ---")
+                sub_p.print_help()
+                print()
+            return
+        if args.skills_command is None:
+            parser.print_help()
+
+    parser.set_defaults(func=_default_handler)
     return parser
 
 
