@@ -39,6 +39,9 @@ scitex-dev = "scitex_dev._cli:main"
 [project.entry-points."scitex_dev.docs"]
 scitex-dev = "scitex_dev"
 
+[project.entry-points."scitex_dev.skills"]
+scitex-dev = "scitex_dev"
+
 [project.urls]
 Homepage = "https://github.com/ywatanabe1989/scitex-dev"
 Repository = "https://github.com/ywatanabe1989/scitex-dev"
