@@ -26,61 +26,103 @@ def register_docs_subcommand(
     subparsers: argparse._SubParsersAction,
     package: str,
 ) -> argparse.ArgumentParser:
-    """Register a ``docs`` subcommand on an argparse subparser group.
+    """Register ``docs`` with ``list`` and ``get`` verb subcommands.
 
-    Args:
-        subparsers: The subparsers action from the parent parser.
-        package: Package name this CLI belongs to.
-
-    Returns:
-        The created subparser (for further customization).
+    Usage::
+        scitex-stats docs list            # List doc pages
+        scitex-stats docs get             # Show available pages
+        scitex-stats docs get api         # Show specific page
     """
+    prog = package.replace("_", "-")
     parser = subparsers.add_parser(
         "docs",
         help=f"View documentation for {package}",
         description=f"Browse and query {package} documentation.",
+        epilog=(
+            f"Examples:\n"
+            f"  {prog} docs list            # List doc pages\n"
+            f"  {prog} docs list --json     # JSON output\n"
+            f"  {prog} docs get             # Show available pages\n"
+            f"  {prog} docs get api         # Show specific page\n"
+            f"  {prog} docs get api --json  # Page as JSON\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    _add_docs_arguments(parser)
-    parser.set_defaults(func=lambda args: _run_docs_command(args, package=package))
+    parser.add_argument(
+        "--help-recursive",
+        action="store_true",
+        help="Show help for all subcommands",
+    )
+    docs_sub = parser.add_subparsers(dest="docs_command", title="Commands")
+
+    # docs list
+    list_p = docs_sub.add_parser("list", help="List available documentation pages")
+    list_p.add_argument("--json", action="store_true", dest="as_json")
+    list_p.set_defaults(
+        func=lambda args: _run_docs_command(
+            argparse.Namespace(
+                list_pages=True,
+                page=None,
+                as_json=args.as_json,
+                tldr=False,
+                format=None,
+            ),
+            package=package,
+        )
+    )
+
+    # docs get [page]
+    get_p = docs_sub.add_parser("get", help="Show a documentation page")
+    get_p.add_argument(
+        "name", nargs="?", default=None, help="Page name (see 'docs list')"
+    )
+    get_p.add_argument("--json", action="store_true", dest="as_json")
+    get_p.add_argument("--format", type=str, default=None, choices=["html", "json"])
+    get_p.set_defaults(func=lambda args: _run_docs_get(args, package=package))
+
+    # bare `docs` → show help
+    def _default_handler(args):
+        if getattr(args, "help_recursive", False):
+            parser.print_help()
+            print()
+            for sub_name, sub_p in [("list", list_p), ("get", get_p)]:
+                print(f"--- {sub_name} ---")
+                sub_p.print_help()
+                print()
+            return
+        if args.docs_command is None:
+            parser.print_help()
+
+    parser.set_defaults(func=_default_handler)
     return parser
 
 
-def _add_docs_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add standard docs arguments to a parser."""
-    parser.add_argument(
-        "--list",
-        action="store_true",
-        dest="list_pages",
-        help="List available documentation pages",
-    )
-    parser.add_argument(
-        "--page",
-        type=str,
-        default=None,
-        help="Show a specific documentation page",
-    )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        dest="as_json",
-        help="Output as structured JSON (LLM-friendly)",
-    )
-    parser.add_argument(
-        "--tldr",
-        action="store_true",
-        help="Show a concise quick-start summary (< 20 lines)",
-    )
-    parser.add_argument(
-        "--format",
-        type=str,
-        default=None,
-        choices=["html", "json"],
-        help="Documentation format to retrieve",
-    )
+def _run_docs_get(args: argparse.Namespace, package: str) -> None:
+    """Handle 'docs get [name]' — show page or list available pages."""
+    if args.name is None:
+        ns = argparse.Namespace(
+            list_pages=True,
+            page=None,
+            as_json=getattr(args, "as_json", False),
+            tldr=False,
+            format=None,
+        )
+    else:
+        ns = argparse.Namespace(
+            list_pages=False,
+            page=args.name,
+            as_json=getattr(args, "as_json", False),
+            tldr=False,
+            format=getattr(args, "format", None),
+        )
+    _run_docs_command(ns, package=package)
 
 
 def _run_docs_command(args: argparse.Namespace, package: str) -> None:
     """Execute the docs subcommand."""
+    import logging
+
+    logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
     from .docs import get_docs
 
     # --tldr: concise quick-start
@@ -178,13 +220,7 @@ def docs_click_group(package: str, name: str = "docs"):
     """Create a Click command group for docs (requires Click installed).
 
     Usage::
-        import click
         from scitex_dev.cli import docs_click_group
-
-        @click.group()
-        def cli():
-            pass
-
         cli.add_command(docs_click_group(package="scitex-writer"))
     """
     try:
@@ -192,24 +228,61 @@ def docs_click_group(package: str, name: str = "docs"):
     except ImportError:
         raise ImportError("Click is required for docs_click_group. pip install click")
 
-    @click.command(name=name)
-    @click.option("--list", "list_pages", is_flag=True, help="List doc pages")
-    @click.option("--page", default=None, help="Specific page")
+    prog = package.replace("_", "-")
+
+    @click.group(name=name, invoke_without_command=True)
+    @click.pass_context
+    def docs_grp(ctx):
+        f"""View package documentation.
+
+        \b
+        Examples:
+          {prog} docs list            # List doc pages
+          {prog} docs get             # Show available pages
+          {prog} docs get api         # Show specific page
+        """
+        if ctx.invoked_subcommand is None:
+            click.echo(ctx.get_help())
+
+    @docs_grp.command("list")
     @click.option("--json", "as_json", is_flag=True, help="JSON output")
-    @click.option("--tldr", is_flag=True, help="Quick-start summary")
-    @click.option("--format", "fmt", type=click.Choice(["html", "json"]), default=None)
-    def docs_cmd(list_pages, page, as_json, tldr, fmt):
-        """View package documentation."""
+    def docs_list(as_json):
+        """List available documentation pages."""
         ns = argparse.Namespace(
-            list_pages=list_pages,
-            page=page,
+            list_pages=True,
+            page=None,
             as_json=as_json,
-            tldr=tldr,
-            format=fmt,
+            tldr=False,
+            format=None,
         )
         _run_docs_command(ns, package=package)
 
-    return docs_cmd
+    @docs_grp.command("get")
+    @click.argument("page_name", required=False, default=None)
+    @click.option("--json", "as_json", is_flag=True, help="JSON output")
+    @click.option("--format", "fmt", type=click.Choice(["html", "json"]), default=None)
+    def docs_get(page_name, as_json, fmt):
+        """Show documentation. Without PAGE_NAME, shows package overview."""
+        if page_name is None:
+            # No page given — show available pages
+            ns = argparse.Namespace(
+                list_pages=True,
+                page=None,
+                as_json=as_json,
+                tldr=False,
+                format=None,
+            )
+        else:
+            ns = argparse.Namespace(
+                list_pages=False,
+                page=page_name,
+                as_json=as_json,
+                tldr=False,
+                format=fmt,
+            )
+        _run_docs_command(ns, package=package)
+
+    return docs_grp
 
 
 def skills_click_group(package: str, name: str = "skills"):
