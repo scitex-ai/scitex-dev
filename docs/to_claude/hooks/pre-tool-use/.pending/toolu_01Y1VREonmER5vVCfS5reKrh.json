@@ -1,4 +1,0 @@
-{
-  "stage": "print(f'Version: {scitex_dev.__version__}')",
-  "cwd": "/home/ywatanabe/proj/scitex-dev"
-}

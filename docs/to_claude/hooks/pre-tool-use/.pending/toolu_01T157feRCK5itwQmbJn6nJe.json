@@ -1,4 +1,0 @@
-{
-  "stage": "git -C /home/ywatanabe/proj/scitex-dev ls-files logs/",
-  "cwd": "/home/ywatanabe/proj/scitex-dev"
-}

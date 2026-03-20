@@ -57,6 +57,11 @@ def discover_packages() -> dict[str, str]:
         for pip_name, info in ECOSYSTEM.items():
             if pip_name not in packages:
                 import_name = info.get("import_name", pip_name.replace("-", "_"))
+                # Only add (and warn) if the package is actually installed
+                try:
+                    importlib.import_module(import_name)
+                except ImportError:
+                    continue
                 packages[pip_name] = import_name
                 logger.warning(
                     "Package '%s' missing scitex_dev.docs entry point — "
