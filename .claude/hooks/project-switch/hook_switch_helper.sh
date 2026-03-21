@@ -42,6 +42,12 @@ is_hook_enabled() {
 # Usage: check_hook_enabled_or_exit "script_name.sh" [switch_file_path]
 # If no switch_file_path provided, uses centralized project-switch/switch.yaml
 check_hook_enabled_or_exit() {
+    # Global kill switch: CLAUDE_CODE_DISABLE_HOOKS=1|true|True disables all hooks
+    # Useful when working on other projects (PRs, forks) that have their own conventions
+    case "${CLAUDE_CODE_DISABLE_HOOKS:-}" in
+    1 | true | True) exit 0 ;;
+    esac
+
     local hook_name="$1"
     local switch_file="${2:-}"
 

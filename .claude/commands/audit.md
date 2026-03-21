@@ -28,11 +28,15 @@ Is everything clean and professional? For example:
   - [ ] Actual actions must be in verb form
   - [ ] Use noun to organize hierarchy
   - [ ] Noun forms for categorization, verb forms for actions
-- [ ] Always have --dry-run and --json options
+- [ ] Always have --json option
+- [ ] Always have --dry-run option except for read-only commands
 - [ ] Must support tab completion
-- [ ] CLI commands should have examples
-- [ ] CLI commands outputs must be readable
+- [ ] Must have examples in their help
+- [ ] Must have readable outputs
   - [ ] Use indents, spaces, column-alignment, additional newlines for logical chunks
+- [ ] Must have these commands: mcp, docs, skills
+  - [ ] Learn how to write skills from ~/proj/scitex-stats
+  - [ ] Learn the codebase of the target project and write skills with working examples
     
 ### HTTP Service API
 - [ ] No original logic - always delegate to CLI commands
@@ -186,5 +190,11 @@ Read /home/ywatanabe/proj/scitex-dev/docs/MASTER/00_SCITEX_UPSTREAM_AND_DOWNSTRE
 ### Unified MCP response format across all mounted MCP servers
 ### Wire `docs` entry points in all packages
 
+## No fallbacks and No silent failures
+- [ ] Do never allow for silent failures.
+- [ ] Do never implement fallbacks unless user explicitly requests
+- [ ] This is crucial to show errors as errros without hiding actual problems.
+  - [ ] For fallbacks user confirmed, please comment it in source code.
+  - [ ] Otherwise, no fallbacks accepted.
 
 If you find room for improvement, do not hesitate but keep on working the remaining tasks
