@@ -113,3 +113,19 @@ async def dev_bulk_rename(
         confirm=confirm,
         regex=regex,
     )
+
+
+@mcp.tool()
+async def dev_skills_list(package: str | None = None) -> str:
+    """List skills across the SciTeX ecosystem."""
+    from .dev_mcp.handlers import skills_list_handler
+
+    return await skills_list_handler(package=package)
+
+
+@mcp.tool()
+async def dev_skills_get(package: str, name: str) -> str:
+    """Get content of a specific skill from a package."""
+    from .dev_mcp.handlers import skills_get_handler
+
+    return await skills_get_handler(package=package, name=name)

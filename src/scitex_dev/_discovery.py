@@ -25,7 +25,10 @@ _cache: Optional[dict[str, str]] = None
 
 
 def discover_packages() -> dict[str, str]:
-    """Discover all installed packages with scitex_dev.docs entry points.
+    """Discover all ecosystem packages, merging entry points with ECOSYSTEM.
+
+    Uses entry points as primary source, then fills in missing packages
+    from ECOSYSTEM dict with a warning for each missing entry point.
 
     Returns:
         Dict mapping package name → Python module name.
@@ -36,15 +39,37 @@ def discover_packages() -> dict[str, str]:
         return _cache
 
     packages = {}
+
+    # 1. Entry points (primary — these packages registered correctly)
     try:
         from importlib.metadata import entry_points
 
-        # Python 3.12+ returns SelectableGroups; 3.9+ needs group= kwarg
         eps = entry_points(group=_ENTRY_POINT_GROUP)
         for ep in eps:
             packages[ep.name] = ep.value
     except Exception:
         logger.debug("Failed to discover entry points for %s", _ENTRY_POINT_GROUP)
+
+    # 2. Fill in from ECOSYSTEM (source of truth for all packages)
+    try:
+        from .ecosystem import ECOSYSTEM
+
+        for pip_name, info in ECOSYSTEM.items():
+            if pip_name not in packages:
+                import_name = info.get("import_name", pip_name.replace("-", "_"))
+                # Only add (and warn) if the package is actually installed
+                try:
+                    importlib.import_module(import_name)
+                except ImportError:
+                    continue
+                packages[pip_name] = import_name
+                logger.warning(
+                    "Package '%s' missing scitex_dev.docs entry point — "
+                    'add [project.entry-points."scitex_dev.docs"] to its pyproject.toml',
+                    pip_name,
+                )
+    except ImportError:
+        logger.debug("ECOSYSTEM not available for fallback discovery")
 
     _cache = packages
     return packages
