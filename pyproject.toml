@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scitex-dev"
-version = "0.2.1"
+version = "0.3.1"
 description = "Shared developer utilities for the SciTeX ecosystem"
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -39,6 +39,9 @@ scitex-dev = "scitex_dev._cli:main"
 [project.entry-points."scitex_dev.docs"]
 scitex-dev = "scitex_dev"
 
+[project.entry-points."scitex_dev.skills"]
+scitex-dev = "scitex_dev"
+
 [project.urls]
 Homepage = "https://github.com/ywatanabe1989/scitex-dev"
 Repository = "https://github.com/ywatanabe1989/scitex-dev"
@@ -46,6 +49,9 @@ Documentation = "https://scitex-dev.readthedocs.io/"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+scitex_dev = ["skills/*.md", "skills/references/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

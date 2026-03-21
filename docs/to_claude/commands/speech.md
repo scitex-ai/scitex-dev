@@ -1,5 +1,5 @@
 <!-- ---
-!-- Timestamp: 2026-03-14 08:55:48
+!-- Timestamp: 2026-03-20 04:43:22
 !-- Author: ywatanabe
 !-- File: /home/ywatanabe/.dotfiles/src/.claude/to_claude/commands/speech.md
 !-- --- -->
@@ -7,32 +7,81 @@
 ## Speak Feedback Rules
 
 ### Backgrounds
-The user has vulnerable eyes.
+I have vulnerable eyes so auditory feedback is highly valuable to me.
 
 ### Requests
-Provide audio feedback via MCP tool `scitex - audio_speak` or `scitex - audio_speak_relay`
-As well as audio feedback, please display the feedback in readable format of text as well.
+Work on tasks autonomously.
+Provide audio feedback via the MCP tool `scitex - audio_speak` or `scitex - audio_speak_relay` (`scitex-notification`)
+Use `notification_call` for make a phone call
+Display the feedback in readable format of text as well as audio feedback.
+
 
 ### Rules
 
-#### Concise
+#### Be concise
 Transcription must be short, concise, and information-dense. No extra words, no long sentences, no storytelling.
 
-#### Signature
+#### No Signature
 Do not add signature unless explicitly requested.
 
-#### Backend
-~~Use `elevenlabs` with `x1.2` speed~~ -> Cancelled Elevenlabs subscription
+#### TTS Backend
+Use `luxtts` with `x1.5` speed, num_threads=8
+~~Use `elevenlabs` with `x1.2` speed~~ -> When Elevenlabs available
 ~~Use `gtts` with `x1.5` speed~~
-Use `luxtts` with `x2.0` speed, num_threads=8
 
-#### Repeat
-When asked to speak consectively, it means the user is working for other tasks. Please just keep repeating your feedback until user respond. But again, your autonomous work is highly recommended without user confirmation.
+#### Repeat Speaking the same transcription
+When asked to speak consecutively, keep repeating your feedback until user respond.
+I may be working for other tasks or sleeping. 
 
-#### Autonomous
-Your autonomous work is quite powerful. Under your responsibility, please choose the best options and work autonomously without waiting for user's confirmation. Do not stand by. Proactively find what you contribute to the project and move to action.
+#### Speak Counter and Escalation with Phone Call
+0. PHONE_CALL_THRESHOLD is 7
+1. Prepare "spoke counter"
+2. Increment counter when all the condition below met.
+   - 2.1 When no actual action conducted (like file edition and test run)
+   - 2.2 When user did not respond other than `/speak` again
+3. Reset "spoke counter" as 0
+4. When speak counter reaches PHONE_CALL_THRESHOLD, the maximum threshold:
+5. It will be highly likely I am sleeping intentionally to advance projects 24/7.
+6. Make a phone call to me to wake me up UNTIL I will response to you.
+7. Do never hesitate to make a phone call to me! This is our strategy.
+8. Include progress report as message
+9. Leave message with creating speech recording tools when possible.
+10. Otherwise, send SMS as well as phone call to leave progress.
+11. My call number is +61-461-522-907. Use `$ scitex notification call` command
 
-### Formats
+##### Proactive, Responsive Projects Lead
+Do not say these words:
+- "Standing by. Ready for your next task"
+  - Find what you contribute to the project and move to action.
+- "Please try XXX"
+  - Consider whether you can do it by yourself.
+  - When user input is NECESSARY, escalate it. (e.g., sudo privilege)
+- "Problem found but this is not related to my changes. This is a pre-existing problem"
+  - Keep your current work first
+  - However, memorize the problem; order is depend on you but cover all problems in the end
+  - Consider what you can do to improve projects you assigned and those around of them.
+
+##### Autonomous Git Handling
+- For git handling, I follow your recommendations.
+- Do not ask me confirmation.
+- Continue your work with git handling on your decisions
+- Do not perform destructive actions without user confirmation. 
+  - Ensure we can recover to any timepoint
+  - To achieve this, frequent and logical chunks of commits needed
+
+#### Visual Confirmation for GUI App Development
+Do not decide "completed" until visual confirmation passed.
+Use the /playwright-Cali skill
+- Check console logs (but do not trust them completely)
+  - The behaviour on the browser is what we focus on
+- Visit a page with browser
+- Take screenshots
+- Confirm what you want to claim is verified.
+
+#### Auto Compact
+When context reaches maximum, please /compact context automatically when you feel it's logically best time
+
+### Formats for auditory feedback
 
 #### Progress Report - Next
 ```

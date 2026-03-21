@@ -26,7 +26,7 @@ Public API (20 functions)::
     result_to_mcp, wrap_as_mcp
 """
 
-__version__ = "0.2.1"
+__version__ = "0.3.1"
 
 # --- Public API: LLM-friendly types and utilities ---
 from .cli_utils import (
@@ -40,6 +40,7 @@ from .cli_utils import (
 )
 from .decorators import supports_return_as
 from .errors import ErrorCode, classify_exception
+from ._mcp_compat import get_tools_sync
 from .mcp_utils import async_wrap_as_mcp, result_to_mcp, run_as_mcp, wrap_as_mcp
 from .side_effects import SideEffect
 from .types import RESULT_SCHEMA, Result

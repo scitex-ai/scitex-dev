@@ -54,6 +54,8 @@
    4. Plan D: **Merge the PR**
      `gh pr merge --auto --merge
 
-   6. Plan X: **Revert to the last stable commit**
+   99. Destructive Plan X: **Desctructive** **Revert to the last stable commit**
      `Since the changes disrupted important functionality XXX and reverting will be more reliable and straightforward, I recommend to checkout to `COMMIT HASH: COMMIT MESSAGE``
    ```
+
+8. When user does not reply for 7 seconds, then, please proceed until push to origin automatically and keep on working on other tasks

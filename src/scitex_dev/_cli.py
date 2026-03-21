@@ -22,7 +22,7 @@ else:
     COMMAND_CATEGORIES = [
         ("Ecosystem", ["ecosystem"]),
         ("Development", ["config", "rename"]),
-        ("Documentation", ["docs", "search"]),
+        ("Documentation", ["docs", "search", "skills"]),
         ("Integration", ["mcp", "list-python-apis"]),
     ]
 
@@ -182,7 +182,7 @@ else:
         from . import fix_mismatches
         from .cli_utils import wrap_as_cli
 
-        wrap_as_cli(fix_mismatches, as_json=as_json, dry_run=dry_run)
+        wrap_as_cli(fix_mismatches, as_json=as_json, confirm=not dry_run)
 
     @ecosystem.command("sync")
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
@@ -219,10 +219,17 @@ else:
     @click.option("--root", default=".", help="Root directory for rename.")
     @click.option("--dry-run", is_flag=True, help="Preview without renaming.")
     @click.option("--regex", is_flag=True, help="Treat pattern as Python regex.")
+    @click.option(
+        "--exclude",
+        multiple=True,
+        help="Exclude paths containing this substring. Repeatable.",
+    )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def rename(old_name, new_name, root, dry_run, regex, as_json):
+    def rename(old_name, new_name, root, dry_run, regex, exclude, as_json):
         """Bulk rename with cross-reference updates. Supports --regex for regex patterns."""
         from .cli_utils import wrap_as_cli
+
+        extra_excludes = list(exclude) if exclude else []
 
         if dry_run:
             from . import preview_rename
@@ -234,6 +241,7 @@ else:
                 replacement=new_name,
                 directory=root,
                 regex=regex,
+                extra_excludes=extra_excludes,
             )
         else:
             from . import execute_rename
@@ -245,6 +253,7 @@ else:
                 replacement=new_name,
                 directory=root,
                 regex=regex,
+                extra_excludes=extra_excludes,
             )
 
     # -------------------------------------------------------------------
@@ -254,6 +263,10 @@ else:
     from .cli import docs_click_group
 
     main.add_command(docs_click_group(package="scitex-dev"))
+
+    from ._cli_skills import register_skills_commands
+
+    register_skills_commands(main)
 
     @main.command()
     @click.argument("query")

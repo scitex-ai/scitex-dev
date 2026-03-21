@@ -347,4 +347,23 @@ async def fix_mismatches_handler(
     )
 
 
+async def skills_list_handler(
+    package: str | None = None,
+) -> str:
+    """List skills across the SciTeX ecosystem."""
+    from ..skills import list_skills
+
+    return wrap_as_mcp(list_skills, idempotent=True, package=package)
+
+
+async def skills_get_handler(
+    package: str,
+    name: str,
+) -> str:
+    """Get content of a specific skill."""
+    from ..skills import get_skill
+
+    return wrap_as_mcp(get_skill, idempotent=True, package=package, name=name)
+
+
 # EOF
