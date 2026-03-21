@@ -24,6 +24,7 @@ else:
         ("Development", ["config", "rename"]),
         ("Documentation", ["docs", "search", "skills"]),
         ("Integration", ["mcp", "list-python-apis"]),
+        ("Shell", ["completion"]),
     ]
 
     class CategorizedGroup(click.Group):
@@ -267,6 +268,10 @@ else:
     from ._cli_skills import register_skills_commands
 
     register_skills_commands(main)
+
+    from ._cli_completion import register_completion_command
+
+    register_completion_command(main)
 
     @main.command()
     @click.argument("query")
