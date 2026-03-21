@@ -44,14 +44,25 @@ class TestDiscoverPackages:
         ep.name = "test-pkg"
         ep.value = "test_pkg"
 
-        with patch("importlib.metadata.entry_points", return_value=[ep]):
+        with (
+            patch("importlib.metadata.entry_points", return_value=[ep]),
+            patch("scitex_dev._discovery.ECOSYSTEM", {}, create=True),
+            patch.dict(
+                "sys.modules", {"scitex_dev.ecosystem": MagicMock(ECOSYSTEM={})}
+            ),
+        ):
             result = discover_packages()
 
         assert result == {"test-pkg": "test_pkg"}
 
     def test_handles_entry_point_error(self):
         """Should return empty dict on error, not raise."""
-        with patch("importlib.metadata.entry_points", side_effect=Exception("fail")):
+        with (
+            patch("importlib.metadata.entry_points", side_effect=Exception("fail")),
+            patch.dict(
+                "sys.modules", {"scitex_dev.ecosystem": MagicMock(ECOSYSTEM={})}
+            ),
+        ):
             result = discover_packages()
 
         assert result == {}
