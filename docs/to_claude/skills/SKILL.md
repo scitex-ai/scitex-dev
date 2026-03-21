@@ -22,6 +22,7 @@ Personal skills collection for software development, scientific computing, and p
 
 ### Project & Workflow
 - **project-management**: Project organization, bug reports, feature requests, multi-agent coordination
+- **pull-request**: PR workflow for external and internal projects (fork, branch, style matching, hook management)
 - **shell-scripting**: Shell/bash scripting best practices
 - **command-line-tools**: Unix CLI tools (rm, tree, etc.)
 
@@ -37,6 +38,7 @@ Personal skills collection for software development, scientific computing, and p
 | Writing Emacs Lisp | elisp-development |
 | Starting a new project | development-philosophy |
 | Managing tasks/bugs | project-management |
+| Contributing PRs | pull-request |
 | Writing papers | scientific-writing |
 | Shell scripts | shell-scripting |
 | CLI tool usage | command-line-tools |
