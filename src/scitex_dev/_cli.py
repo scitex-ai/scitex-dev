@@ -182,7 +182,7 @@ else:
         from . import fix_mismatches
         from .cli_utils import wrap_as_cli
 
-        wrap_as_cli(fix_mismatches, as_json=as_json, dry_run=dry_run)
+        wrap_as_cli(fix_mismatches, as_json=as_json, confirm=not dry_run)
 
     @ecosystem.command("sync")
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
