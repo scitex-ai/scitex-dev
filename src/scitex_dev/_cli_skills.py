@@ -51,3 +51,35 @@ def register_skills_commands(main_group):
             target = f"'{name}' in " if name else ""
             click.echo(f"Skill {target}package '{package}' not found.", err=True)
             raise SystemExit(1)
+
+    @skills.command("export")
+    @click.option(
+        "--dest",
+        type=click.Path(),
+        default=None,
+        help="Destination directory (default: .claude/skills/).",
+    )
+    @click.option("--package", default=None, help="Export only this package.")
+    @click.option("--clean", is_flag=True, help="Remove destination before exporting.")
+    def skills_export(dest, package, clean):
+        """Export skills to .claude/skills/ for Claude Code discovery."""
+        from pathlib import Path
+
+        from .skills import export_skills
+
+        dest_path = Path(dest) if dest else None
+        exported = export_skills(dest=dest_path, package=package, clean=clean)
+
+        if not exported:
+            click.echo("No skills found to export.")
+            return
+
+        total = 0
+        for pkg_name, files in sorted(exported.items()):
+            click.echo(f"  {pkg_name}/")
+            for f in files:
+                click.echo(f"    {f}")
+                total += 1
+
+        target = dest_path or Path(".claude/skills/")
+        click.echo(f"\nExported {total} files to {target}")
