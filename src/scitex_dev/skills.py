@@ -202,6 +202,63 @@ def get_skill_dir(package: str) -> Optional[Path]:
     return _find_skills_dir(module_name, package)
 
 
+def export_skills(
+    dest: Optional[Path] = None,
+    package: Optional[str] = None,
+    clean: bool = False,
+) -> dict[str, list[Path]]:
+    """Export skills to a directory (default: .claude/skills/).
+
+    Copies SKILL.md and references/ from each package into
+    ``dest/<package-name>/``.
+
+    Args:
+        dest: Target directory. Defaults to ``.claude/skills/``.
+        package: Export only this package. None exports all.
+        clean: Remove dest before exporting.
+
+    Returns:
+        Dict mapping package name -> list of exported file paths.
+    """
+    import shutil
+
+    if dest is None:
+        dest = Path(".claude") / "skills"
+
+    if clean and dest.is_dir():
+        shutil.rmtree(dest)
+
+    all_skills = list_skills(package=package)
+    exported: dict[str, list[Path]] = {}
+
+    for pkg_name, entries in all_skills.items():
+        pkg_dest = dest / pkg_name
+        pkg_dest.mkdir(parents=True, exist_ok=True)
+
+        pkg_files: list[Path] = []
+        for entry in entries:
+            src_path = Path(entry["path"])
+            if not src_path.exists():
+                continue
+
+            # Determine relative structure
+            name = entry["name"]
+            if name == "SKILL":
+                out_file = pkg_dest / "SKILL.md"
+            else:
+                refs_dir = pkg_dest / "references"
+                refs_dir.mkdir(parents=True, exist_ok=True)
+                out_file = refs_dir / f"{name}.md"
+
+            shutil.copy2(src_path, out_file)
+            pkg_files.append(out_file)
+
+        if pkg_files:
+            exported[pkg_name] = pkg_files
+
+    return exported
+
+
 def _parse_frontmatter(path: Path) -> dict[str, str]:
     """Parse YAML frontmatter from a markdown file.
 
