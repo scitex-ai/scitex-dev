@@ -54,13 +54,22 @@ def discover_packages() -> dict[str, str]:
     try:
         from .ecosystem import ECOSYSTEM
 
+        from importlib.metadata import PackageNotFoundError, distribution
+
         for pip_name, info in ECOSYSTEM.items():
             if pip_name not in packages:
                 import_name = info.get("import_name", pip_name.replace("-", "_"))
-                # Only add (and warn) if the package is actually installed
-                try:
-                    importlib.import_module(import_name)
-                except ImportError:
+                # Check if installed via metadata (no module import needed)
+                dist_name = import_name.replace("_", "-")
+                installed = False
+                for name in [dist_name, import_name, pip_name]:
+                    try:
+                        distribution(name)
+                        installed = True
+                        break
+                    except PackageNotFoundError:
+                        continue
+                if not installed:
                     continue
                 packages[pip_name] = import_name
                 logger.warning(
@@ -84,12 +93,23 @@ def invalidate_cache() -> None:
 def get_package_root(module_name: str) -> Optional[Path]:
     """Get the installed root directory of a Python package.
 
+    Uses importlib.metadata to resolve the path WITHOUT importing the module.
+    This avoids triggering heavy module initialization (numpy, torch, etc.)
+    which can take seconds per package.
+
+    Falls back to importlib.import_module only if metadata resolution fails.
+
     Args:
         module_name: Python import name (e.g. "scitex_writer")
 
     Returns:
-        Path to the package directory, or None if not importable.
+        Path to the package directory, or None if not found.
     """
+    root = _get_package_root_fast(module_name)
+    if root is not None:
+        return root
+
+    # Slow fallback: actually import the module
     try:
         mod = importlib.import_module(module_name)
         if hasattr(mod, "__path__"):
@@ -98,6 +118,55 @@ def get_package_root(module_name: str) -> Optional[Path]:
             return Path(mod.__file__).parent
     except ImportError:
         pass
+    return None
+
+
+def _get_package_root_fast(module_name: str) -> Optional[Path]:
+    """Resolve package root via importlib.metadata — no module import needed.
+
+    Handles both regular installs (site-packages) and editable installs
+    (pip install -e, using direct_url.json).
+    """
+    import json as _json
+
+    from importlib.metadata import PackageNotFoundError, distribution
+
+    dist_name = module_name.replace("_", "-")
+    dist = None
+    for name in [dist_name, module_name]:
+        try:
+            dist = distribution(name)
+            break
+        except PackageNotFoundError:
+            continue
+    if dist is None:
+        return None
+
+    # Method 1: Regular install — dist._path.parent / module_name
+    if hasattr(dist, "_path") and dist._path:
+        pkg_dir = dist._path.parent / module_name
+        if pkg_dir.is_dir():
+            return pkg_dir
+
+    # Method 2: Editable install — read direct_url.json for source path
+    try:
+        du_text = dist.read_text("direct_url.json")
+        if du_text:
+            du = _json.loads(du_text)
+            url = du.get("url", "")
+            if url.startswith("file:///"):
+                project_root = Path(url[7:])
+                # Standard layout: src/<module_name>/
+                src_dir = project_root / "src" / module_name
+                if src_dir.is_dir():
+                    return src_dir
+                # Flat layout: <module_name>/ at project root
+                flat_dir = project_root / module_name
+                if flat_dir.is_dir():
+                    return flat_dir
+    except Exception:
+        pass
+
     return None
 
 
