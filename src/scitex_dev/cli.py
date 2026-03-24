@@ -437,50 +437,34 @@ def _skills_list(args: argparse.Namespace, package: str) -> None:
 
 def _skills_export(args: argparse.Namespace, package: str) -> None:
     import logging
-    import shutil
 
     logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
-    from .skills import get_skill_dir
+    from .skills import export_skills
 
-    src_dir = get_skill_dir(package)
-    if src_dir is None:
-        print(f"No skills found for {package}.", file=sys.stderr)
-        sys.exit(2)
-
-    # Determine target
-    skill_name = package.replace("_", "-")
-    if args.target:
-        target = Path(args.target) / skill_name
-    elif args.level == "personal":
-        target = Path.home() / ".claude" / "skills" / skill_name
-    else:
-        target = Path(".claude") / "skills" / skill_name
+    mode = getattr(args, "mode", "export")
+    target = Path(args.target) if getattr(args, "target", None) else None
 
     if args.dry_run:
-        print(f"Would copy: {src_dir} -> {target}")
+        from .skills import get_skill_dir
+
+        src_dir = get_skill_dir(package)
+        if src_dir is None:
+            print(f"No skills found for {package}.", file=sys.stderr)
+            sys.exit(2)
+        dest = target or (Path(".claude") / "skills" / "scitex")
+        print(f"Would copy: {src_dir} -> {dest / package}")
         for f in sorted(src_dir.rglob("*.md")):
-            rel = f.relative_to(src_dir)
-            print(f"  {rel} -> {target / rel}")
+            print(f"  {f.name} -> {dest / package / f.name}")
         return
 
-    target.mkdir(parents=True, exist_ok=True)
-
-    # Copy SKILL.md
-    skill_md = src_dir / "SKILL.md"
-    if skill_md.exists():
-        shutil.copy2(skill_md, target / "SKILL.md")
-
-    # Copy references/
-    refs_src = src_dir / "references"
-    if refs_src.is_dir():
-        refs_dst = target / "references"
-        if refs_dst.exists():
-            shutil.rmtree(refs_dst)
-        shutil.copytree(refs_src, refs_dst)
-
-    print(f"Exported {package} skills to {target}")
-    for f in sorted(target.rglob("*.md")):
-        print(f"  {f.relative_to(target)}")
+    exported = export_skills(dest=target, package=package, mode=mode)
+    if not exported:
+        print(f"No skills found for {package}.", file=sys.stderr)
+        sys.exit(2)
+    for pkg_name, files in exported.items():
+        print(f"Exported {pkg_name} skills:")
+        for f in files:
+            print(f"  {Path(f).name}")
 
 
 def _skills_get(args: argparse.Namespace, package: str) -> None:
