@@ -1,100 +1,73 @@
 ---
 name: scitex-dev
-description: Development tools for the SciTeX ecosystem - package discovery, docs/skills aggregation, testing, linting, and ecosystem management. Use when managing SciTeX packages or coordinating ecosystem-wide operations.
+package: scitex-dev
+version: "0.3.2"
+description: >
+  Shared developer utilities for the SciTeX ecosystem. Zero runtime
+  dependencies (stdlib only). Provides ecosystem management, version
+  checking, bulk rename, docs aggregation, LLM-friendly Result types,
+  and HPC test runner.
 allowed-tools: mcp__scitex__dev_*
+skill_files:
+  - result-types.md
+  - cli-mcp-utils.md
+  - versions.md
+  - ecosystem.md
+  - rename.md
+  - docs-search.md
+  - test-runner.md
+  - config.md
 ---
 
-# SciTeX Ecosystem Management with scitex-dev
+# scitex-dev Skills Index
 
-## Quick Start
+This file is an **index only**. Detailed usage is in the sub-skill files.
+
+## Sub-skills
+
+| File | Topic |
+|---|---|
+| result-types.md | Result envelope, ErrorCode, @supports_return_as, SideEffect |
+| cli-mcp-utils.md | Adapters: CLI exit codes, MCP JSON, option factories |
+| versions.md | list_versions, check_versions, get_mismatches, fix_mismatches |
+| ecosystem.md | Package registry, sync_local, sync_all, sync_host, pull_local |
+| rename.md | bulk_rename, preview_rename, execute_rename |
+| docs-search.md | get_docs, build_docs, search_docs, search |
+| test-runner.md | run_local, run_hpc_sbatch, poll_hpc_job, fetch_hpc_result |
+| config.md | DevConfig, HostConfig, load_config, create_default_config |
+
+## Quick Reference
 
 ```bash
-scitex-dev ecosystem list           # See all SciTeX packages
-scitex-dev ecosystem sync           # Sync all to remote hosts
-scitex-dev docs list                # Browse aggregated docs
-scitex-dev skills list              # Browse aggregated skills
-scitex-dev skills export --level project  # Export to .claude/skills/
-```
-
-## Common Workflows
-
-### "See all SciTeX packages"
-
-```bash
+# CLI
 scitex-dev ecosystem list
-scitex-dev ecosystem diff           # Show uncommitted changes
+scitex-dev ecosystem fix-mismatches --dry-run
+scitex-dev rename old_name new_name --root . --dry-run
+scitex-dev search "save figure"
+scitex-dev mcp start
 ```
 
-### "Sync ecosystem"
-
-```bash
-scitex-dev ecosystem sync           # Preview (dry run)
-scitex-dev ecosystem sync --confirm # Execute
-scitex-dev ecosystem sync-local     # Reinstall locally
-scitex-dev ecosystem pull           # Git pull all
-scitex-dev ecosystem commit         # Commit across all packages
+```python
+import scitex_dev as dev
+dev.check_versions()
+dev.fix_mismatches(confirm=False)   # dry-run by default
+dev.preview_rename(pattern="old", replacement="new", directory=".")
 ```
 
-### "Browse documentation"
-
-```bash
-scitex-dev docs list
-scitex-dev docs get scitex-io api
-scitex-dev docs get figrecipe cheatsheet
-scitex-dev docs search "session"
-```
-
-### "Browse and export skills"
-
-```bash
-scitex-dev skills list
-scitex-dev skills get scitex-stats SKILL
-scitex-dev skills export --level project --dry-run  # Dest: $SCITEX_DEV_SKILLS_DEFAULT_EXPORT_DIR
-```
-
-### "Run tests"
-
-```bash
-scitex-dev test local scitex-stats
-scitex-dev test hpc scitex-stats         # Submit to SLURM
-scitex-dev test hpc-poll <job-id>        # Check status
-scitex-dev test hpc-result <job-id>      # Get results
-```
-
-## CLI Commands
-
-```bash
-# Ecosystem management
-scitex-dev ecosystem list|sync|sync-local|pull|commit|diff|fix-mismatches
-
-# Documentation aggregation
-scitex-dev docs list|get|search|build
-
-# Skills aggregation
-scitex-dev skills list|get|export|update|upgrade
-
-# Testing
-scitex-dev test local|hpc|hpc-poll|hpc-result
-
-# Configuration
-scitex-dev config show
-scitex-dev bulk-rename
-```
-
-## MCP Tools (for AI agents)
+## MCP Tools
 
 | Tool | Purpose |
-|------|---------|
+|---|---|
 | `dev_ecosystem_list` | List all ecosystem packages |
-| `dev_ecosystem_sync` | Sync all packages to remote hosts |
-| `dev_ecosystem_sync_local` | Reinstall local packages |
+| `dev_ecosystem_sync` | Sync packages to remote hosts |
+| `dev_ecosystem_sync_local` | Reinstall local packages (pip install -e .) |
 | `dev_ecosystem_pull` | Git pull all packages |
 | `dev_ecosystem_commit` | Commit across all packages |
 | `dev_ecosystem_diff` | Show uncommitted changes |
-| `dev_ecosystem_fix_mismatches` | Fix version mismatches |
+| `dev_ecosystem_fix_mismatches` | Detect and fix version mismatches |
 | `dev_config_show` | Show ecosystem configuration |
 | `dev_bulk_rename` | Bulk rename across ecosystem |
-| `dev_test_local` | Run local tests |
-| `dev_test_hpc` | Submit HPC test job |
+| `dev_test_local` | Run local pytest |
+| `dev_test_hpc` | Submit HPC Slurm test job |
 | `dev_test_hpc_poll` | Poll HPC job status |
-| `dev_test_hpc_result` | Get HPC test results |
+| `dev_test_hpc_result` | Fetch HPC test output |
