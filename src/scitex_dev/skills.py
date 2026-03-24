@@ -317,7 +317,13 @@ def export_skills(
                     pkg_files.append(out_file)
                     continue
 
-            shutil.copy2(src_path, out_file)
+            # Copy and flatten references/ paths in content
+            content = src_path.read_text(encoding="utf-8")
+            if name == "SKILL" and "references/" in content:
+                import re
+
+                content = re.sub(r"references/", "", content)
+            out_file.write_text(content, encoding="utf-8")
             pkg_files.append(out_file)
 
         if pkg_files:
