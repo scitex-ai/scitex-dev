@@ -51,7 +51,10 @@ Documentation = "https://scitex-dev.readthedocs.io/"
 where = ["src"]
 
 [tool.setuptools.package-data]
-scitex_dev = ["skills/*.md", "skills/references/*.md"]
+scitex_dev = ["skills/*.md", "skills/references/*.md", "_skills/**/*"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/scitex_dev/_skills" = "scitex_dev/_skills"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
