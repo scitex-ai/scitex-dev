@@ -142,13 +142,7 @@ def _get_package_root_fast(module_name: str) -> Optional[Path]:
     if dist is None:
         return None
 
-    # Method 1: Regular install — dist._path.parent / module_name
-    if hasattr(dist, "_path") and dist._path:
-        pkg_dir = dist._path.parent / module_name
-        if pkg_dir.is_dir():
-            return pkg_dir
-
-    # Method 2: Editable install — read direct_url.json for source path
+    # Method 1: Editable install — read direct_url.json for source path (check FIRST)
     try:
         du_text = dist.read_text("direct_url.json")
         if du_text:
@@ -166,6 +160,12 @@ def _get_package_root_fast(module_name: str) -> Optional[Path]:
                     return flat_dir
     except Exception:
         pass
+
+    # Method 2: Regular install — dist._path.parent / module_name
+    if hasattr(dist, "_path") and dist._path:
+        pkg_dir = dist._path.parent / module_name
+        if pkg_dir.is_dir():
+            return pkg_dir
 
     return None
 

@@ -62,13 +62,28 @@ def register_skills_commands(main_group):
         help="Destination directory (default: .claude/skills/scitex/).",
     )
     @click.option("--package", default=None, help="Export only this package.")
-    def skills_export(dest, package):
+    @click.option("--dry-run", is_flag=True, help="Preview without copying.")
+    def skills_export(dest, package, dry_run):
         """Export skills to .claude/skills/scitex/ for Claude Code discovery."""
         from pathlib import Path
 
         from .skills import export_skills
 
         dest_path = Path(dest) if dest else None
+        if dry_run:
+            from .skills import list_skills, _get_default_export_dest
+
+            target = dest_path or _get_default_export_dest()
+            if target.name != "scitex":
+                target = target / "scitex"
+            all_skills = list_skills(package=package)
+            for pkg_name, entries in sorted(all_skills.items()):
+                click.echo(f"  {pkg_name}/")
+                for e in entries:
+                    click.echo(
+                        f"    {e['name']}.md -> {target / pkg_name / (e['name'] + '.md')}"
+                    )
+            return
         exported = export_skills(dest=dest_path, package=package, mode="export")
         _print_export_result(exported, dest_path)
 

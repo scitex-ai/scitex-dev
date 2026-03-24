@@ -71,14 +71,26 @@ def _find_skills_dir(module_name: str, pip_name: str) -> Optional[Path]:
     if new_dir.is_dir() and (new_dir / "SKILL.md").exists():
         return new_dir
 
-    # 2. Legacy: skills/ (flat, no package-name subdir)
+    # 2. DEPRECATED: skills/ (flat, no package-name subdir)
     legacy_dir = root / "skills"
     if legacy_dir.is_dir() and (legacy_dir / "SKILL.md").exists():
+        logger.warning(
+            "Package '%s' uses deprecated skills/ layout — "
+            "migrate to _skills/%s/SKILL.md",
+            pip_name,
+            pip_name,
+        )
         return legacy_dir
 
-    # 3. Legacy docs/MASTER/skills/
+    # 3. DEPRECATED: docs/MASTER/skills/
     docs_dir = root / "docs" / "MASTER" / "skills"
     if docs_dir.is_dir():
+        logger.warning(
+            "Package '%s' uses deprecated docs/MASTER/skills/ layout — "
+            "migrate to _skills/%s/SKILL.md",
+            pip_name,
+            pip_name,
+        )
         return docs_dir
 
     return None
@@ -92,6 +104,48 @@ def _get_package_version(pip_name: str) -> str:
         return version(pip_name)
     except Exception:
         return "unknown"
+
+
+def _collect_skills_from_dir(
+    skills_dir: Path,
+    version: str,
+) -> list[dict[str, str]]:
+    """Collect skill entries from a single skills directory."""
+    skills = []
+    for md_file in sorted(skills_dir.glob("*.md")):
+        meta = _parse_frontmatter(md_file)
+        name = "SKILL" if md_file.name == "SKILL.md" else md_file.stem
+        desc = meta.get("description", "")
+        if not desc and md_file.name != "SKILL.md":
+            try:
+                first_line = md_file.read_text().split("\n", 1)[0].strip()
+                if first_line.startswith("#"):
+                    desc = first_line.lstrip("#").strip()
+            except Exception:
+                pass
+        skills.append(
+            {
+                "name": name,
+                "path": str(md_file),
+                "description": desc,
+                "version": version,
+            }
+        )
+
+    # DEPRECATED: also check references/ subdir
+    refs_dir = skills_dir / "references"
+    if refs_dir.is_dir():
+        for md_file in sorted(refs_dir.glob("*.md")):
+            meta = _parse_frontmatter(md_file)
+            skills.append(
+                {
+                    "name": md_file.stem,
+                    "path": str(md_file),
+                    "description": meta.get("description", ""),
+                    "version": version,
+                }
+            )
+    return skills
 
 
 def list_skills(
@@ -113,50 +167,31 @@ def list_skills(
     result: dict[str, list[dict[str, str]]] = {}
 
     for pkg_name, module_name in packages.items():
+        # 1. Standard per-package skills
         skills_dir = _find_skills_dir(module_name, pkg_name)
-        if skills_dir is None:
-            continue
+        if skills_dir is not None:
+            version = _get_package_version(pkg_name)
+            skills = _collect_skills_from_dir(skills_dir, version)
+            if skills:
+                result[pkg_name] = skills
 
-        version = _get_package_version(pkg_name)
-        skills = []
-
-        # Collect all .md files in skills dir (flat — no references/ subdir needed)
-        for md_file in sorted(skills_dir.glob("*.md")):
-            meta = _parse_frontmatter(md_file)
-            name = "SKILL" if md_file.name == "SKILL.md" else md_file.stem
-            desc = meta.get("description", "")
-            if not desc and md_file.name != "SKILL.md":
-                # Extract from first heading
-                try:
-                    first_line = md_file.read_text().split("\n", 1)[0].strip()
-                    if first_line.startswith("#"):
-                        desc = first_line.lstrip("#").strip()
-                except Exception:
-                    pass
-            skills.append(
-                {
-                    "name": name,
-                    "path": str(md_file),
-                    "description": desc,
-                    "version": version,
-                }
-            )
-
-        # Legacy: also check references/ subdir
-        refs_dir = skills_dir / "references"
-        if refs_dir.is_dir():
-            for md_file in sorted(refs_dir.glob("*.md")):
-                meta = _parse_frontmatter(md_file)
-                skills.append(
-                    {
-                        "name": md_file.stem,
-                        "path": str(md_file),
-                        "description": meta.get("description", ""),
-                        "version": version,
-                    }
-                )
-
-        if skills:
+        # 2. Extra skill namespaces (e.g., _skills/general/ in scitex-python)
+        root = get_package_root(module_name)
+        if root is not None:
+            extra_skills_root = root / "_skills"
+            if extra_skills_root.is_dir():
+                version = _get_package_version(pkg_name)
+                for sub_dir in sorted(extra_skills_root.iterdir()):
+                    if not sub_dir.is_dir():
+                        continue
+                    ns_name = sub_dir.name
+                    # Skip the package's own name (already handled above)
+                    if ns_name == pkg_name:
+                        continue
+                    if (sub_dir / "SKILL.md").exists():
+                        extra = _collect_skills_from_dir(sub_dir, version)
+                        if extra:
+                            result[ns_name] = extra
             result[pkg_name] = skills
 
     return result
@@ -246,6 +281,10 @@ def export_skills(
     """
     if dest is None:
         dest = _get_default_export_dest()
+    else:
+        # Ensure scitex namespace even with custom --dest
+        if dest.name != "scitex":
+            dest = dest / "scitex"
 
     if mode == "upgrade" and dest.is_dir():
         # Clean the target packages (not the whole dest)
@@ -284,7 +323,45 @@ def export_skills(
         if pkg_files:
             exported[pkg_name] = pkg_files
 
+    # Generate root SKILL.md index for scitex/ directory
+    _generate_root_skill_md(dest, exported)
+
     return exported
+
+
+def _generate_root_skill_md(dest: Path, exported: dict[str, list[Path]]) -> None:
+    """Generate a SKILL.md at the scitex/ root that indexes all sub-packages."""
+    if not exported:
+        return
+
+    lines = [
+        "---",
+        "name: scitex",
+        "description: SciTeX ecosystem skills — general standards, package-specific guides, and workflow references. Use when working on any SciTeX package.",
+        "user-invocable: false",
+        "---",
+        "",
+        "# SciTeX Ecosystem Skills",
+        "",
+    ]
+
+    # Group: general first, then packages alphabetically
+    if "general" in exported:
+        lines.append("## General Standards")
+        lines.append(
+            "- For ecosystem-wide standards, see [general/SKILL.md](general/SKILL.md)"
+        )
+        lines.append("")
+
+    pkg_names = sorted(k for k in exported if k != "general")
+    if pkg_names:
+        lines.append("## Package Skills")
+        for pkg in pkg_names:
+            lines.append(f"- [{pkg}]({pkg}/SKILL.md)")
+        lines.append("")
+
+    skill_md = dest / "SKILL.md"
+    skill_md.write_text("\n".join(lines))
 
 
 def _parse_frontmatter(path: Path) -> dict[str, str]:
