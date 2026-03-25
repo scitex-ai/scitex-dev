@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-09-01 08:15:57
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/USER_PHILOSOPHY/02_NAMING_CONVENSIONS.md
-!-- --- -->
-
 # Naming Conventions
 
 ## 1. Explicit is better than implicit
@@ -87,5 +81,3 @@
 
 -   **Separate enum files**: `_DocumentType.py`, `_ChunkingStrategy.py`, etc.
 -   **Utility functions**: `_DocumentTypeUtils.py` for related functions
-
-<!-- EOF -->

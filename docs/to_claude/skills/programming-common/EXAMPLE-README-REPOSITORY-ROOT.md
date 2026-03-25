@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-07-02 07:33:56
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.claude/to_claude/guidelines/python/HOW-TO-WRITE-README.md
-!-- --- -->
-
 # REPOSITORY NAME HERE
 
 One line explanation of the repository here.
@@ -56,5 +50,3 @@ REFERENCES HERE
 
 ## 📧 Contact
 Yusuke Watanabe (ywatanabe@alumni.u-tokyo.ac.jp)
-
-<!-- EOF -->

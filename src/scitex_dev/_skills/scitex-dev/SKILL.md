@@ -7,6 +7,9 @@ allowed-tools: mcp__scitex__dev_*
 
 This file is an **index only**. Detailed usage is in the sub-skill files.
 
+> These skills are distributed with the **scitex-dev** package.
+> Local edits may be overwritten on update. See [MANIFEST.md](MANIFEST.md) for version and update instructions.
+
 ## Sub-skills
 
 | File | Topic |

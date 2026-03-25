@@ -53,6 +53,14 @@ if [[ -f "$HELPER_SCRIPT" ]]; then
     check_hook_enabled_or_exit "$(basename "$0")"
 fi
 
+# Read input early for bypass check
+INPUT="$(cat)"
+
+# Allow bypass with comment in content: hook-bypass: line-limit
+if echo "$INPUT" | grep -qF 'hook-bypass: line-limit'; then
+    exit 0
+fi
+
 # Thresholds (in lines)
 THRESHOLD_TS=512
 THRESHOLD_PY=512
@@ -60,9 +68,6 @@ THRESHOLD_CSS=512
 THRESHOLD_HTML=1024
 THRESHOLD_MARKDOWN=512
 REFACTORING_MD="./GITIGNORED/REFACTORING.md"
-
-# Read input from stdin
-INPUT="$(cat)"
 
 # Parse JSON using Python - outputs tab-separated values with line counts
 # Capture output and exit code separately to properly handle parse failures

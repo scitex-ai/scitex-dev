@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-06-01 00:00:28
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/programming_common/.refactoring.md
-!-- --- -->
-
 ## Refactoring Rules
 - During development, do not change names of files, variables, functions, and so on
 - Refactoring will be separately requested
@@ -28,5 +22,3 @@ See `~/.claude/bin`
 ## Your Understanding Check
 Did you understand the guideline? If yes, please say:
 `CLAUDE UNDERSTOOD: <THIS FILE PATH HERE>`
-
-<!-- EOF -->

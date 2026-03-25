@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-30 08:20:45
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/elisp/.ELISP-05-testing-guide.md
-!-- --- -->
-
 # Elisp Testing Guidelines
 
 ## Elisp Testing Rules
@@ -183,8 +177,39 @@ Check loadability in THE ENTRY FILE OF THE ENTRY OF UMBRELLA DIRECTORY.
 (provide 'test-etm-buffer-checkers)
 ```
 
+## Require Integrity Testing
+
+Every elisp project should include a **require integrity test** to prevent missing-file bugs (where `(require 'foo)` references a file not committed to git).
+
+#### What to test:
+1. **All `(require 'pkg-*)` have matching `.el` files** — scan source files for require statements and verify the target file exists
+2. **`(provide 'foo)` matches filename** — every `foo.el` should `(provide 'foo)`, not something else
+3. **No `.el` files are gitignored** — catch `.gitignore` rules (e.g., LaTeX `*.el` for "edited log") that silently block elisp files
+
+#### Shell pre-check (no Emacs needed):
+A fast shell script (`check_requires.sh`) can validate require integrity in CI before the full ERT suite runs, failing fast on missing files.
+
+#### CI integration:
+Add a `require-integrity` job that runs before the test matrix:
+```yaml
+jobs:
+  require-integrity:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check require integrity
+        run: ./tests/check_requires.sh
+  test:
+    needs: require-integrity
+    # ... normal test matrix
+```
+
+## Test Coverage Target
+
+- **100% file coverage**: every source `.el` file must have a corresponding `test-*.el` file
+- **Meaningful tests**: not just loadability — test configuration defaults, function existence, edge cases (dead buffers, nil inputs), and core logic
+- Test reports should be generated as `ELISP-TEST-REPORT-{timestamp}-{passed}-PASSED-{total}-TOTAL-{percent}-PERCENT.org`
+
 ## Your Understanding Check
 Did you understand the guideline? If yes, please say:
 `CLAUDE UNDERSTOOD: <THIS FILE PATH HERE>`
-
-<!-- EOF -->

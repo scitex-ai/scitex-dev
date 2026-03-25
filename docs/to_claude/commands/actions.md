@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2026-01-30 11:56:06
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/src/.claude/to_claude/commands/actions.md
-!-- --- -->
-
 # Check GitHub actions and suggest how we can improve the quality of this project
 ```bash
 gh repo set-default <github-username>/<repository-name>
@@ -32,5 +26,3 @@ https://app.readthedocs.org/projects/<package-name>/builds/<build-id>/
 
 ## Full Log
 https://app.readthedocs.org/api/v2/build/<build-id>.txt
-
-<!-- EOF -->

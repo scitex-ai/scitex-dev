@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-31 23:59:07
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/programming_common/.test-driven-workflow.md
-!-- --- -->
-
 ## !!! IMPORTANT !!! Test-Driven Development (TDD) Workflow !!! IMPORTANT !!!
 The most important guideline in this document is that we adopt test-driven development workflow explained below.
 
@@ -76,5 +70,3 @@ The most important guideline in this document is that we adopt test-driven devel
 ## Your Understanding Check
 Did you understand the guideline? If yes, please say:
 `CLAUDE UNDERSTOOD: <THIS FILE PATH HERE>`
-
-<!-- EOF -->

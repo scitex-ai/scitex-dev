@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-30 08:19:08
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/elisp/.ELISP-01-basic.md
-!-- --- -->
-
 # Elisp Troubleshooting Guidelines
 
 ## Parentheses Mismatch
@@ -61,5 +55,3 @@ Example:
 ========================================
 Did you understand the guideline? If yes, please say:
 `CLAUDE UNDERSTOOD: <THIS FILE PATH HERE>`
-
-<!-- EOF -->

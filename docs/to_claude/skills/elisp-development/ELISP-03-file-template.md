@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-30 08:20:03
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/elisp/.ELISP-03-file-template.md
-!-- --- -->
-
 # Elisp File Template Guidelines
 
 ## Elisp Header Rules
@@ -66,5 +60,3 @@ In general, they are handled by an automatic script by the `ehf-update-header-an
 ## Your Understanding Check
 Did you understand the guideline? If yes, please say:
 `CLAUDE UNDERSTOOD: <THIS FILE PATH HERE>`
-
-<!-- EOF -->

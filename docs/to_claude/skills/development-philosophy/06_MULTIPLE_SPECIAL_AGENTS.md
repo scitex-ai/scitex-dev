@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-09-01 08:35:19
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/USER_PHILOSOPHY/06_MULTIPLE_SPECIAL_AGENTS.md
-!-- --- -->
-
 # Agent Overview
 
 Multi-agent system can be beneficial for asynchronous work, context preservation, specialized expertise, reusability, and flexible permissions.
@@ -31,5 +25,3 @@ SourceDeveloperAgent.md
 TestDeveloperAgent.md
 TestResultsReportAgent.md
 TestRunnerAgent.md
-
-<!-- EOF -->

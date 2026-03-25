@@ -57,6 +57,11 @@ CRITERIA_FILE="$(dirname "$THIS_DIR")/project-switch/project-root-pollution-crit
 # Read input from stdin
 INPUT="$(cat)"
 
+# Allow bypass with comment in content: hook-bypass: root-pollution
+if echo "$INPUT" | grep -qF 'hook-bypass: root-pollution'; then
+    exit 0
+fi
+
 # Parse file_path from JSON input
 FILE_PATH=$(echo "$INPUT" | python3 -c '
 import json, sys

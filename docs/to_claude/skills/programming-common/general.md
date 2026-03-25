@@ -1,10 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-25 23:21:35
-!-- Author: ywatanabe
-!-- File: /ssh:sp:/home/ywatanabe/.claude/to_claude/guidelines/programming_common/general.md
-!-- --- -->
-
-
 ## General Programming Rules
 - **Focus on code clarity and maintainability**
   - Do Not Repeat Yourself (DRY principle)
@@ -152,5 +145,3 @@
 ## Your Understanding Check
 Did you understand the guideline? If yes, please say:
 `CLAUDE UNDERSTOOD: <THIS FILE PATH HERE>`
-
-<!-- EOF -->

@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2026-03-20 12:49:52
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.claude/skills/pull-request/SKILL.md
-!-- --- -->
-
 ---
 name: pull-request
 description: Create pull requests for external and internal projects. Handles fork setup, branch conventions, commit style matching, and hook management. Use when contributing to any repository via PR.
@@ -185,5 +179,3 @@ When PR template does not exist in target project, use this as an template.
 - [ ] Tests pass
 - [ ] Documentation updated (if applicable)
 ```
-
-<!-- EOF -->

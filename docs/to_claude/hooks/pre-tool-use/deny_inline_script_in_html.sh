@@ -35,6 +35,17 @@ if [[ "${1:-}" == "--self-test" ]]; then
         echo "  FAIL: inline script should block (exit $rc)"
     fi
 
+    # Test 3: inline script with hook-bypass should pass (exit 0)
+    # shellcheck disable=SC2034
+    result=$(printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"/tmp/test.html","content":"<!-- hook-bypass: inline-script -->\n<html><script>var x=1</script></html>"},"cwd":"/tmp","session_id":"test","tool_use_id":"test-3"}' | "$0" 2>&1) && rc=$? || rc=$?
+    if [[ $rc -eq 0 ]]; then
+        ((pass++))
+        echo "  PASS: hook-bypass allowed (exit $rc)"
+    else
+        ((fail++))
+        echo "  FAIL: hook-bypass should pass (exit $rc)"
+    fi
+
     echo "Results: $pass passed, $fail failed"
     [[ $fail -eq 0 ]] && exit 0 || exit 1
 fi
@@ -82,6 +93,12 @@ case "$FILE_PATH" in
 *) exit 0 ;;
 esac
 
+# Allow bypass with explicit comment: <!-- hook-bypass: inline-script -->
+# Use for legitimate cases like critical JS (feature detection, polyfills)
+if echo "$CONTENT" | grep -qF 'hook-bypass: inline-script'; then
+    exit 0
+fi
+
 # Check for inline script tags (script tags with content, not just src references)
 # Pattern: <script> followed by anything other than just whitespace and </script>
 if echo "$CONTENT" | grep -qiE '<script[^>]*>[^<]+</script>'; then
@@ -95,6 +112,9 @@ if echo "$CONTENT" | grep -qiE '<script[^>]*>[^<]+</script>'; then
     echo "" >&2
     echo "Why: Separation of concerns improves maintainability," >&2
     echo "     enables caching, and follows Django/web best practices." >&2
+    echo "" >&2
+    echo "Bypass: Add <!-- hook-bypass: inline-script --> to the file" >&2
+    echo "        if this is critical JS (feature detection, polyfills)." >&2
     exit 2
 fi
 
