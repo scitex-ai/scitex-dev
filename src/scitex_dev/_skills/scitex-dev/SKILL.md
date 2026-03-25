@@ -1,22 +1,6 @@
 ---
-name: scitex-dev
-package: scitex-dev
-version: "0.3.2"
-description: >
-  Shared developer utilities for the SciTeX ecosystem. Zero runtime
-  dependencies (stdlib only). Provides ecosystem management, version
-  checking, bulk rename, docs aggregation, LLM-friendly Result types,
-  and HPC test runner.
+description: Shared developer utilities for the SciTeX ecosystem — ecosystem management, version checking, bulk rename, docs aggregation, Result types, and HPC test runner.
 allowed-tools: mcp__scitex__dev_*
-skill_files:
-  - result-types.md
-  - cli-mcp-utils.md
-  - versions.md
-  - ecosystem.md
-  - rename.md
-  - docs-search.md
-  - test-runner.md
-  - config.md
 ---
 
 # scitex-dev Skills Index
