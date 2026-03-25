@@ -82,7 +82,7 @@ def register_ecosystem_commands(main_group):
         from .sync import sync_local
 
         pkgs = list(package) if package else None
-        wrap_as_cli(sync_local, as_json=as_json, packages=pkgs, dry_run=dry_run)
+        wrap_as_cli(sync_local, as_json=as_json, packages=pkgs, confirm=not dry_run)
 
     @ecosystem.command("dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")
