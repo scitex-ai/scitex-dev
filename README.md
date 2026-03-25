@@ -68,7 +68,7 @@ mismatches = scitex_dev.get_mismatches()
 docs = scitex_dev.get_docs(package="scitex-writer", format="json")
 ```
 
-## Three Interfaces
+## Four Interfaces
 
 <details>
 <summary><b>Python API</b></summary>
@@ -169,6 +169,32 @@ export SCITEX_DEV_ENV_SRC=~/.scitex/dev/local.src
 # Remote server
 export SCITEX_DEV_ENV_SRC=~/.scitex/dev/remote.src
 ```
+
+</details>
+
+<details>
+<summary><strong>Skills — for AI Agent Discovery</strong></summary>
+
+<br>
+
+Skills provide workflow-oriented guides that AI agents query to discover capabilities and usage patterns.
+
+```bash
+scitex-dev skills list              # List available skill pages
+scitex-dev skills get SKILL         # Show main skill page
+scitex-dev skills export --package scitex-dev  # Export to Claude Code
+```
+
+| Skill | Content |
+|-------|---------|
+| `result-types` | `Result`, `ErrorCode`, `@supports_return_as` for LLM-friendly responses |
+| `cli-mcp-utils` | CLI and MCP utility helpers |
+| `versions` | Version management, mismatch detection and fixing |
+| `ecosystem` | Ecosystem list, sync, and commit workflows |
+| `rename` | Safe bulk rename with cross-reference updates |
+| `docs-search` | Documentation aggregation and unified search |
+| `test-runner` | Local and HPC test execution |
+| `config` | Package configuration and priority config patterns |
 
 </details>
 

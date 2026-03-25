@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Fallback docs generation from Python docstrings and signatures.
 
-Used when neither pre-built _docs/ nor Sphinx source is available.
+Used when neither pre-built _sphinx_html/ nor Sphinx source is available.
 Generates a minimal JSON doc structure by introspecting the installed package.
 """
 

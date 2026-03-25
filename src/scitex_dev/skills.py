@@ -322,6 +322,15 @@ def export_skills(
                 import re
 
                 content = re.sub(r"references/", "", content)
+
+            # Stamp version into MANIFEST.md at export time
+            if name == "MANIFEST":
+                version = entry.get("version", "unknown")
+                content = _stamp_manifest_version(content, version)
+
+            # Ensure writable before overwriting
+            if out_file.exists():
+                out_file.chmod(0o644)
             out_file.write_text(content, encoding="utf-8")
             pkg_files.append(out_file)
 
@@ -366,7 +375,22 @@ def _generate_root_skill_md(dest: Path, exported: dict[str, list[Path]]) -> None
         lines.append("")
 
     skill_md = dest / "SKILL.md"
+    if skill_md.exists():
+        skill_md.chmod(0o644)
     skill_md.write_text("\n".join(lines))
+
+
+def _stamp_manifest_version(content: str, version: str) -> str:
+    """Replace the version field in MANIFEST.md frontmatter with the installed version."""
+    import re
+
+    return re.sub(
+        r"^(version:\s*).*$",
+        rf"\g<1>{version}",
+        content,
+        count=1,
+        flags=re.MULTILINE,
+    )
 
 
 def _parse_frontmatter(path: Path) -> dict[str, str]:
