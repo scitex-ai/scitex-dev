@@ -43,8 +43,26 @@ def register_skills_commands(main_group):
     @click.argument("package")
     @click.argument("name", required=False, default=None)
     def skills_get(package, name):
-        """Get content of a skill. Without NAME, shows main SKILL.md."""
-        from .skills import get_skill
+        """Get content of a skill. Use 'all' to dump every skill across the ecosystem."""
+        from .skills import get_skill, list_skills
+
+        if package == "all":
+            all_skills = list_skills()
+            if not all_skills:
+                click.echo("No skills found.", err=True)
+                raise SystemExit(1)
+            for pkg_name, entries in sorted(all_skills.items()):
+                for entry in entries:
+                    content = get_skill(
+                        package=pkg_name,
+                        name=entry["name"] if entry["name"] != "SKILL" else None,
+                    )
+                    if content:
+                        click.echo(f"\n{'=' * 60}")
+                        click.echo(f"# {pkg_name}/{entry['name']}")
+                        click.echo(f"{'=' * 60}\n")
+                        click.echo(content)
+            return
 
         content = get_skill(package=package, name=name)
         if content:
