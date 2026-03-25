@@ -192,7 +192,6 @@ def list_skills(
                         extra = _collect_skills_from_dir(sub_dir, version)
                         if extra:
                             result[ns_name] = extra
-            result[pkg_name] = skills
 
     return result
 
