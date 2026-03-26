@@ -75,10 +75,19 @@ def export_from_pypi(
                 for name in zf.namelist():
                     if "/_skills/" not in name or not name.endswith(".md"):
                         continue
-                    parts = name.split("/_skills/", 1)
-                    if len(parts) != 2:
+                    # Only extract from top-level _skills/:
+                    # e.g. "scitex/_skills/general/SKILL.md" (YES)
+                    # NOT "scitex/ai/_skills/SKILL.md" (submodule, skip)
+                    path_parts = name.split("/")
+                    if len(path_parts) < 3:
                         continue
-                    rel_path = parts[1]
+                    skills_idx = (
+                        path_parts.index("_skills") if "_skills" in path_parts else -1
+                    )
+                    if skills_idx != 1:
+                        # _skills is not at the second level — it's a submodule
+                        continue
+                    rel_path = "/".join(path_parts[skills_idx + 1 :])
                     out_path = dest / rel_path
                     out_path.parent.mkdir(parents=True, exist_ok=True)
                     if out_path.exists():
