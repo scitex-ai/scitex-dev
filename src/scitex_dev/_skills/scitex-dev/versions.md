@@ -134,12 +134,34 @@ print(result["summary"])
 # Show all packages with version info
 scitex-dev ecosystem list --versions
 
-# Preview fixes
-scitex-dev ecosystem fix-mismatches --dry-run
-
-# Execute fixes
+# Preview fixes (dry run, no changes made)
 scitex-dev ecosystem fix-mismatches
+
+# Execute fixes (actually applies changes)
+scitex-dev ecosystem fix-mismatches --confirm
 
 # JSON output
 scitex-dev ecosystem list --versions --json
 ```
+
+## MCP Tools
+
+| Tool | Purpose |
+|------|---------|
+| `mcp__scitex__dev_ecosystem_list` | Read-only: list all ecosystem packages with version status |
+| `mcp__scitex__dev_ecosystem_fix_mismatches` | Auto-fix installed vs pyproject.toml mismatches (confirm=False for preview) |
+
+## Full Ecosystem Update Workflow
+
+When performing a full update across all packages, follow this order:
+
+1. **Check CI** — verify GitHub Actions pass for each package (`gh run list -R ywatanabe1989/PACKAGE`)
+2. **Check status** — `mcp__scitex__dev_ecosystem_list` or `scitex-dev ecosystem list --versions`
+3. **Bump versions** — edit pyproject.toml, classify changes (feat → minor, fix → patch)
+4. **Commit + tag** — `git commit` + `git tag vX.Y.Z`
+5. **Push** — `git push origin develop --tags`
+6. **GitHub Release** — `gh release create vX.Y.Z --generate-notes`
+7. **Wait for PyPI** — verify `publish-pypi.yml` workflow completes
+8. **Local reinstall** — `pip install -e .` in each updated repo
+9. **Fix mismatches** — `scitex-dev ecosystem fix-mismatches --confirm` or `mcp__scitex__dev_ecosystem_fix_mismatches`
+10. **Sync to NAS** — `scitex dev versions sync --confirm`
