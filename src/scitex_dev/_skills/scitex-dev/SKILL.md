@@ -22,6 +22,7 @@ This file is an **index only**. Detailed usage is in the sub-skill files.
 | docs-search.md | get_docs, build_docs, search_docs, search |
 | test-runner.md | run_local, run_hpc_sbatch, poll_hpc_job, fetch_hpc_result |
 | config.md | DevConfig, HostConfig, load_config, create_default_config |
+| full-update.md | Full ecosystem release pipeline — audit, bump, release, sync |
 
 ## Quick Reference
 
