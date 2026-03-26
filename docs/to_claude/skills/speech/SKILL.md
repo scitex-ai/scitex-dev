@@ -1,11 +1,12 @@
 ---
 name: speech
-description: Audio feedback via MCP, speak signatures, and phone call escalation. Use when providing auditory feedback to the user.
+description: Audio feedback (TTS), voice transcription (STT), speak signatures, and phone call escalation.
 ---
 
-# Speech & Audio Feedback
+# Speech & Audio
 
 ## Sub-files
-- [speech.md](speech.md) — Speak feedback rules and backgrounds
+- [speech.md](speech.md) — Speak feedback rules and backgrounds (TTS)
+- [stt.md](stt.md) — Voice message transcription (STT)
 - [speak-signature.md](speak-signature.md) — Speak with signature
 - [call.md](call.md) — Alarm call escalation

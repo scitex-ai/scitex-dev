@@ -27,7 +27,7 @@ Use `luxtts` with `x1.5` speed, num_threads=8
 When asked to speak consecutively, keep repeating your feedback until user respond.
 I may be working for other tasks or sleeping. 
 
-#### Speak Counter and Escalation with Phone Call
+#### Speak Counter and Escalation with Phone Call + SMS
 0. PHONE_CALL_THRESHOLD is 7
 1. Prepare "spoke counter"
 2. Increment counter when all the condition below met.
@@ -40,8 +40,20 @@ I may be working for other tasks or sleeping.
 7. Do never hesitate to make a phone call to me! This is our strategy.
 8. Include progress report as message
 9. Leave message with creating speech recording tools when possible.
-10. Otherwise, send SMS as well as phone call to leave progress.
-11. My call number is +61-461-522-907. Use `$ scitex notification call` command
+10. **ALWAYS send SMS together with phone call** — user may not hear voice but will see SMS
+11. My call number is +61-461-522-907
+12. Phone: `scitex notification call` or MCP `notification_call`
+13. SMS: MCP `notification_sms` (Twilio, to: +61-461-522-907)
+14. SMS should include: what happened, what action is needed from user
+
+#### Physical Action Escalation (NAS reboot, etc.)
+When a situation requires physical user intervention (e.g., NAS hard reboot):
+1. Attempt all remote fixes first (SSH, Docker restart, etc.)
+2. If remote fix impossible → escalate immediately
+3. Send **both** phone call AND SMS simultaneously
+4. SMS content: "[SCITEX ALERT] {problem}. Action needed: {what user must do physically}"
+5. Continue calling every 5 minutes until user responds
+6. After user confirms action taken → verify system recovery
 
 ##### Proactive, Responsive Projects Lead
 Do not say these words:
