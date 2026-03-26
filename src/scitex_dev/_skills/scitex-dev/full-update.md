@@ -238,7 +238,7 @@ All packages must show "ok" before proceeding.
 
 ## Phase 5: Verification
 
-**Goal:** Confirm everything is consistent and working.
+**Goal:** Confirm everything is consistent and working. Every check must PASS.
 
 ### 18. verify_versions — Final ecosystem status check
 
@@ -247,19 +247,53 @@ All packages must show "ok" before proceeding.
 - **CLI**: `scitex-dev ecosystem fix-mismatches --dry-run`
 - **MCP**: `mcp__scitex__dev_ecosystem_list`
 
-### 19. verify_production — [Custom] Visual verification
+### 19. check_readme — Verify READMEs reflect current codebase
+
+For each released package, confirm README.md contains:
+- Correct version number (matches pyproject.toml)
+- Four Interfaces section (Python API, CLI, MCP Server, Skills)
+- Installation instructions with current package name
+- No stale API examples referencing removed functions
+
+```bash
+# Quick check: version in README
+for repo in scitex-python figrecipe crossref-local scitex-writer scitex-dataset scitex-dev; do
+  dir=~/proj/$repo
+  ver=$(grep '^version' "$dir/pyproject.toml" | head -1 | sed 's/.*"\(.*\)"/\1/')
+  in_readme=$(grep -c "$ver" "$dir/README.md" 2>/dev/null || echo 0)
+  printf "%-20s ver=%s in_readme=%s\n" "$repo" "$ver" "$in_readme"
+done
+```
+
+### 20. check_rtd — Verify Read the Docs builds
+
+- **Python**: `from scitex_dev.rtd import check_all_rtd`
+  - `check_all_rtd()` → `{pkg: {status, url, build_status}}`
+- **CLI**: `scitex-dev rtd check`
+- **MCP**: `mcp__scitex__docs_list`
+
+All RTD builds must show "passing". If failing, check build logs and fix.
+
+### 21. check_dashboard — Verify version dashboard loads
+
+- **CLI**: `curl -s http://127.0.0.1:5000/api/versions | python3 -m json.tool | head -5`
+- **MCP**: `mcp__scitex__capture_screenshot(url="http://127.0.0.1:5000/")`
+
+Dashboard must show all packages with correct versions, no "Loading..." stuck state.
+
+### 22. verify_production — [Custom] Visual verification
 
 - **CLI**: `playwright-cli screenshot https://scitex.ai --viewport 1920x1080`
 - **MCP**: `mcp__scitex__capture_screenshot(url="https://scitex.ai")`
 
 Desktop + mobile viewport. Screenshot as proof.
 
-### 20. report_summary — Generate summary table
+### 23. report_summary — Generate summary table
 
 ```
-Package             Old     New     PyPI    NAS     Status
-scitex-python       2.27.0  2.28.0  ok      ok      PASS
-figrecipe           0.28.0  0.28.1  ok      ok      PASS
+Package             Old     New     PyPI    NAS     README  RTD     Status
+scitex-python       2.27.0  2.27.1  ok      ok      ok      ok      PASS
+figrecipe           0.28.0  0.28.1  ok      ok      ok      ok      PASS
 ...
 ```
 
