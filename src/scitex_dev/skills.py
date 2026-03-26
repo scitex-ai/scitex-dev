@@ -51,7 +51,7 @@ def _get_default_export_dest() -> Path:
     env_val = os.environ.get(_DEFAULT_EXPORT_DIR_ENV)
     if env_val:
         return Path(env_val)
-    return Path(".claude") / "skills" / "scitex"
+    return Path.home() / ".claude" / "skills" / "scitex"
 
 
 def _find_skills_dir(module_name: str, pip_name: str) -> Optional[Path]:
@@ -278,6 +278,11 @@ def export_skills(
     Returns:
         Dict mapping package name -> list of exported file paths.
     """
+    # Clean stale dist-info to prevent importlib.metadata confusion
+    from ._dist_info import clean_stale_dist_info
+
+    clean_stale_dist_info()
+
     if dest is None:
         dest = _get_default_export_dest()
     else:
