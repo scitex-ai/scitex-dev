@@ -26,7 +26,7 @@ Public API (20 functions)::
     result_to_mcp, wrap_as_mcp
 """
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 # --- Public API: LLM-friendly types and utilities ---
 from .cli_utils import (
@@ -53,7 +53,16 @@ from .search import search
 
 # --- Public API: Versions ---
 from .versions import check_versions, get_mismatches, list_versions
-from .fix import fix_mismatches
+from .fix import (
+    bump_version as bump_version,
+    detect_mismatches as detect_mismatches,
+    determine_bump_type as determine_bump_type,
+    fix_init_version as fix_init_version,
+    fix_local as fix_local,
+    fix_mismatches as fix_mismatches,
+    fix_remote as fix_remote,
+    verify_versions as verify_versions,
+)
 
 # --- Accessible but not in __all__ (advanced/internal use) ---
 
@@ -120,6 +129,29 @@ from .sync_remote import (
     remote_commit as remote_commit,
     remote_diff as remote_diff,
 )
+
+# CI
+from .ci import (
+    CIStatus as CIStatus,
+    WorkflowRun as WorkflowRun,
+    check_ci as check_ci,
+    check_pypi_publish as check_pypi_publish,
+    create_github_release as create_github_release,
+    get_failing_packages as get_failing_packages,
+    verify_all_pypi_configs as verify_all_pypi_configs,
+    verify_pypi_config as verify_pypi_config,
+    wait_all_pypi as wait_all_pypi,
+    wait_for_workflow as wait_for_workflow,
+)
+
+# Deploy
+from .deploy import (
+    deploy_scitex_cloud as deploy_scitex_cloud,
+    verify_production as verify_production,
+)
+
+# Skills verification
+from .skills import verify_docs_and_skills as verify_docs_and_skills
 
 # Test runner
 from .test_runner import (
