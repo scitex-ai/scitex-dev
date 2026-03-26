@@ -1,6 +1,41 @@
 API Reference
 =============
 
+Skills
+------
+
+.. automodule:: scitex_dev.skills
+   :members:
+   :undoc-members:
+
+Fix (Version Management)
+-------------------------
+
+.. automodule:: scitex_dev.fix
+   :members:
+   :undoc-members:
+
+CI (GitHub Actions)
+-------------------
+
+.. automodule:: scitex_dev.ci
+   :members:
+   :undoc-members:
+
+Deploy
+------
+
+.. automodule:: scitex_dev.deploy
+   :members:
+   :undoc-members:
+
+Versions
+--------
+
+.. automodule:: scitex_dev.versions
+   :members:
+   :undoc-members:
+
 Docs Module
 -----------
 
