@@ -26,7 +26,7 @@ Public API (20 functions)::
     result_to_mcp, wrap_as_mcp
 """
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 # --- Public API: LLM-friendly types and utilities ---
 from .cli_utils import (
