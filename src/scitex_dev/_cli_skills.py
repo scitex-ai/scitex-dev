@@ -102,73 +102,10 @@ def register_skills_commands(main_group):
                         f"    {e['name']}.md -> {target / pkg_name / (e['name'] + '.md')}"
                     )
             return
-        exported = export_skills(dest=dest_path, package=package, mode="export")
-        _print_export_result(exported, dest_path)
+        from .skills import _get_default_export_dest
 
-    @skills.command("update")
-    @click.option(
-        "--dest",
-        type=click.Path(),
-        default=None,
-        help="Destination directory (default: $SCITEX_DEV_SKILLS_DEFAULT_EXPORT_DIR, or .claude/skills/scitex/).",
-    )
-    @click.option("--package", default=None, help="Update only this package.")
-    @click.option("--dry-run", is_flag=True, help="Preview without copying.")
-    def skills_update(dest, package, dry_run):
-        """Update skills (rsync-like, preserves local changes)."""
-        from pathlib import Path
-
-        from .skills import export_skills
-
-        if dry_run:
-            from .skills import list_skills, _get_default_export_dest
-
-            target = Path(dest) if dest else _get_default_export_dest()
-            if target.name != "scitex":
-                target = target / "scitex"
-            all_skills = list_skills(package=package)
-            for pkg_name, entries in sorted(all_skills.items()):
-                click.echo(f"  {pkg_name}/")
-                for e in entries:
-                    click.echo(
-                        f"    {e['name']}.md -> {target / pkg_name / (e['name'] + '.md')}"
-                    )
-            return
-        dest_path = Path(dest) if dest else None
-        exported = export_skills(dest=dest_path, package=package, mode="update")
-        _print_export_result(exported, dest_path)
-
-    @skills.command("upgrade")
-    @click.option(
-        "--dest",
-        type=click.Path(),
-        default=None,
-        help="Destination directory (default: $SCITEX_DEV_SKILLS_DEFAULT_EXPORT_DIR, or .claude/skills/scitex/).",
-    )
-    @click.option("--package", default=None, help="Upgrade only this package.")
-    @click.option("--dry-run", is_flag=True, help="Preview without copying.")
-    def skills_upgrade(dest, package, dry_run):
-        """Upgrade skills (clean replacement, removes local changes)."""
-        from pathlib import Path
-
-        from .skills import export_skills
-
-        if dry_run:
-            from .skills import list_skills, _get_default_export_dest
-
-            target = Path(dest) if dest else _get_default_export_dest()
-            if target.name != "scitex":
-                target = target / "scitex"
-            all_skills = list_skills(package=package)
-            for pkg_name, entries in sorted(all_skills.items()):
-                click.echo(f"  {pkg_name}/")
-                for e in entries:
-                    click.echo(
-                        f"    {e['name']}.md -> {target / pkg_name / (e['name'] + '.md')}"
-                    )
-            return
-        dest_path = Path(dest) if dest else None
-        exported = export_skills(dest=dest_path, package=package, mode="upgrade")
+        dest_path = dest_path or _get_default_export_dest()
+        exported = export_skills(dest_path, package=package)
         _print_export_result(exported, dest_path)
 
 

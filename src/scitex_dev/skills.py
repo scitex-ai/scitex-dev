@@ -14,8 +14,8 @@ Each package places skills as markdown files inside its source tree::
 
 Export target (scitex namespace)::
 
-    .claude/skills/scitex/<pip-name>/SKILL.md
-    .claude/skills/scitex/<pip-name>/sub-skill.md
+    ~/.claude/skills/scitex/<pip-name>/SKILL.md
+    ~/.claude/skills/scitex/<pip-name>/sub-skill.md
 
 Usage::
 
@@ -25,8 +25,8 @@ Usage::
     list_skills(package="scitex-stats")
     get_skill(package="scitex-stats")
     get_skill(package="scitex-stats", name="test-selection")
-    export_skills()                        # -> .claude/skills/scitex/
-    export_skills(mode="upgrade")          # clean replacement
+    export_skills(Path.home() / ".claude/skills/scitex")
+    export_skills(Path("skills"), source="pypi", clean=True)
 """
 
 from __future__ import annotations
@@ -258,58 +258,44 @@ def get_skill_dir(package: str) -> Optional[Path]:
 
 
 def export_skills(
-    dest: Optional[Path] = None,
+    dest: Path,
+    *,
     package: Optional[str] = None,
-    mode: str = "export",
-    source: str = "local",
+    clean: bool = False,
+    source: str = "installed",
 ) -> dict[str, list[Path]]:
-    """Export skills to a directory under scitex namespace.
-
-    Target layout::
-        <dest>/scitex/<pkg-name>/SKILL.md
-        <dest>/scitex/<pkg-name>/sub-skill.md
+    """Export skills to dest. Files are written as ``<dest>/<pkg-name>/SKILL.md``.
 
     Args:
-        dest: Target directory. Default from SCITEX_DEV_SKILLS_DEFAULT_EXPORT_DIR
-              env var, or ``.claude/skills/scitex``.
+        dest: Exact target directory. Required, no default.
         package: Export only this package. None exports all.
-        mode: "export" (default, copy new/changed), "update" (rsync-like,
-              preserve local changes), or "upgrade" (clean replacement).
-        source: "local" (default, from installed packages) or "pypi"
+        clean: If True, delete each package subdirectory in dest before
+               exporting. Default False (overwrite in place).
+        source: "installed" (from locally installed packages) or "pypi"
                 (download wheels from PyPI and extract _skills/).
 
     Returns:
         Dict mapping package name -> list of exported file paths.
     """
+
     if source == "pypi":
         from ._skills_pypi import export_from_pypi
 
-        _dest = dest if dest else _get_default_export_dest()
-        if _dest.name != "scitex":
-            _dest = _dest / "scitex"
-        return export_from_pypi(dest=_dest, package=package)
+        return export_from_pypi(dest=dest, package=package)
 
     # Clean stale dist-info to prevent importlib.metadata confusion
     from ._dist_info import clean_stale_dist_info
 
     clean_stale_dist_info()
 
-    if dest is None:
-        dest = _get_default_export_dest()
-    else:
-        # Ensure scitex namespace even with custom --dest
-        if dest.name != "scitex":
-            dest = dest / "scitex"
+    all_skills = list_skills(package=package)
 
-    if mode == "upgrade" and dest.is_dir():
-        # Clean the target packages (not the whole dest)
-        all_skills = list_skills(package=package)
+    if clean:
         for pkg_name in all_skills:
             pkg_dir = dest / pkg_name
             if pkg_dir.is_dir():
                 shutil.rmtree(pkg_dir)
 
-    all_skills = list_skills(package=package)
     exported: dict[str, list[Path]] = {}
 
     for pkg_name, entries in all_skills.items():
@@ -322,15 +308,8 @@ def export_skills(
             if not src_path.exists():
                 continue
 
-            # Flat output: all files directly in pkg_dest (no references/ subdir)
             name = entry["name"]
             out_file = pkg_dest / ("SKILL.md" if name == "SKILL" else f"{name}.md")
-
-            if mode == "update" and out_file.exists():
-                # Only overwrite if source is newer
-                if src_path.stat().st_mtime <= out_file.stat().st_mtime:
-                    pkg_files.append(out_file)
-                    continue
 
             # Copy and flatten references/ paths in content
             content = src_path.read_text(encoding="utf-8")
@@ -339,12 +318,12 @@ def export_skills(
 
                 content = re.sub(r"references/", "", content)
 
-            # Stamp version into MANIFEST.md at export time
+            # Stamp version and source into MANIFEST.md at export time
             if name == "MANIFEST":
                 version = entry.get("version", "unknown")
                 content = _stamp_manifest_version(content, version)
+                content = _stamp_manifest_field(content, "exported_via", source)
 
-            # Ensure writable before overwriting
             if out_file.exists():
                 out_file.chmod(0o644)
             out_file.write_text(content, encoding="utf-8")
@@ -353,7 +332,7 @@ def export_skills(
         if pkg_files:
             exported[pkg_name] = pkg_files
 
-    # Generate root SKILL.md index for scitex/ directory
+    # Generate root SKILL.md index
     _generate_root_skill_md(dest, exported)
 
     return exported
@@ -407,6 +386,22 @@ def _stamp_manifest_version(content: str, version: str) -> str:
         count=1,
         flags=re.MULTILINE,
     )
+
+
+def _stamp_manifest_field(content: str, key: str, value: str) -> str:
+    """Set or insert a field in MANIFEST.md frontmatter."""
+    import re
+
+    if re.search(rf"^{key}:", content, re.MULTILINE):
+        return re.sub(
+            rf"^({key}:\s*).*$",
+            rf"\g<1>{value}",
+            content,
+            count=1,
+            flags=re.MULTILINE,
+        )
+    # Insert before closing ---
+    return content.replace("---\n\n", f"{key}: {value}\n---\n\n", 1)
 
 
 def _parse_frontmatter(path: Path) -> dict[str, str]:
