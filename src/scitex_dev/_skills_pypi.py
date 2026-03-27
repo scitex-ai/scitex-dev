@@ -26,7 +26,7 @@ def export_from_pypi(
     """Download wheels from PyPI and extract _skills/ markdown files.
 
     Args:
-        dest: Target directory (should end with ``scitex/``).
+        dest: Exact target directory. Files written as ``<dest>/<pkg>/SKILL.md``.
         package: Export only this package. None exports all known packages.
 
     Returns:
@@ -92,7 +92,15 @@ def export_from_pypi(
                     out_path.parent.mkdir(parents=True, exist_ok=True)
                     if out_path.exists():
                         out_path.chmod(0o644)
-                    out_path.write_bytes(zf.read(name))
+                    content = zf.read(name)
+                    # Stamp exported_via into MANIFEST.md
+                    if rel_path.endswith("MANIFEST.md"):
+                        from .skills import _stamp_manifest_field
+
+                        text = content.decode("utf-8")
+                        text = _stamp_manifest_field(text, "exported_via", "pypi")
+                        content = text.encode("utf-8")
+                    out_path.write_bytes(content)
                     pkg_files.append(out_path)
 
             if pkg_files:

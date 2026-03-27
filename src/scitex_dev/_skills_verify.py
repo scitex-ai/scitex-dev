@@ -39,7 +39,9 @@ def verify_docs_and_skills(
     # 1. Check if skills export would change anything
     skills_stale = False
     try:
-        export_skills(dest=None, mode="export")
+        from .skills import _get_default_export_dest
+
+        export_skills(_get_default_export_dest())
         skills_dirs = list(path.glob("src/**/_skills"))
         if skills_dirs:
             skills_stale = False  # can't detect without actual export diff

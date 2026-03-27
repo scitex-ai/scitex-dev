@@ -374,23 +374,23 @@ def register_skills_subcommand(
     # skills export
     export_p = skills_sub.add_parser(
         "export",
-        help="Export skills to Claude Code's expected location",
+        help="Export skills to ~/.claude/skills/scitex/",
     )
     export_p.add_argument(
-        "--level",
-        choices=["personal", "project"],
-        default="project",
-        help="personal (~/.claude/skills/) or project (.claude/skills/)",
-    )
-    export_p.add_argument(
-        "--target",
+        "--dest",
         default=None,
-        help="Override target directory",
+        help="Exact target directory (default: ~/.claude/skills/scitex/)",
     )
     export_p.add_argument(
-        "--dry-run",
+        "--source",
+        choices=["installed", "pypi"],
+        default="installed",
+        help="local (installed packages) or pypi (download wheels)",
+    )
+    export_p.add_argument(
+        "--clean",
         action="store_true",
-        help="Show what would be copied without doing it",
+        help="Delete package subdirs before exporting",
     )
     export_p.set_defaults(func=lambda args: _skills_export(args, package))
 
@@ -441,30 +441,27 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
     logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
     from .skills import export_skills
 
-    mode = getattr(args, "mode", "export")
-    target = Path(args.target) if getattr(args, "target", None) else None
+    from .skills import _get_default_export_dest
 
-    if args.dry_run:
-        from .skills import get_skill_dir
+    dest = (
+        Path(args.dest) if getattr(args, "dest", None) else _get_default_export_dest()
+    )
+    source = getattr(args, "source", "installed")
+    clean = getattr(args, "clean", False)
 
-        src_dir = get_skill_dir(package)
-        if src_dir is None:
-            print(f"No skills found for {package}.", file=sys.stderr)
-            sys.exit(2)
-        dest = target or (Path(".claude") / "skills" / "scitex")
-        print(f"Would copy: {src_dir} -> {dest / package}")
-        for f in sorted(src_dir.rglob("*.md")):
-            print(f"  {f.name} -> {dest / package / f.name}")
-        return
-
-    exported = export_skills(dest=target, package=package, mode=mode)
+    exported = export_skills(
+        dest,
+        package=package,
+        clean=clean,
+        source=source,
+    )
     if not exported:
         print(f"No skills found for {package}.", file=sys.stderr)
         sys.exit(2)
+    total = sum(len(v) for v in exported.values())
+    print(f"Exported {total} files across {len(exported)} packages")
     for pkg_name, files in exported.items():
-        print(f"Exported {pkg_name} skills:")
-        for f in files:
-            print(f"  {Path(f).name}")
+        print(f"  {pkg_name}: {len(files)} files")
 
 
 def _skills_get(args: argparse.Namespace, package: str) -> None:
