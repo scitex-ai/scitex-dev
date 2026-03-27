@@ -392,22 +392,22 @@ def register_skills_subcommand(
         action="store_true",
         help="Delete package subdirs before exporting",
     )
+    export_p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview what would be exported without writing",
+    )
+    export_p.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Output as JSON",
+    )
     export_p.set_defaults(func=lambda args: _skills_export(args, package))
 
-    # bare `skills` → show help; --help-recursive → show all subcommand help
-    def _default_handler(args):
-        if getattr(args, "help_recursive", False):
-            parser.print_help()
-            print()
-            for name, sub_p in [("list", list_p), ("get", get_p), ("export", export_p)]:
-                print(f"--- {name} ---")
-                sub_p.print_help()
-                print()
-            return
-        if args.skills_command is None:
-            parser.print_help()
-
-    parser.set_defaults(func=_default_handler)
+    parser.set_defaults(
+        func=lambda args: parser.print_help() if args.skills_command is None else None
+    )
     return parser
 
 
@@ -448,20 +448,38 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
     )
     source = getattr(args, "source", "installed")
     clean = getattr(args, "clean", False)
+    if getattr(args, "dry_run", False):
+        from .skills import list_skills
 
-    exported = export_skills(
-        dest,
-        package=package,
-        clean=clean,
-        source=source,
-    )
+        result = {
+            k: [e["name"] + ".md" for e in v]
+            for k, v in list_skills(package=package).items()
+        }
+        total = sum(len(v) for v in result.values())
+        if getattr(args, "as_json", False):
+            print(
+                json.dumps(
+                    {"dest": str(dest), "source": source, "packages": result}, indent=2
+                )
+            )
+        else:
+            print(f"Would export {total} files to {dest}/ (source={source})")
+            for k, v in sorted(result.items()):
+                print(f"  {k}/: {len(v)} files")
+        return
+    exported = export_skills(dest, package=package, clean=clean, source=source)
     if not exported:
         print(f"No skills found for {package}.", file=sys.stderr)
         sys.exit(2)
-    total = sum(len(v) for v in exported.values())
-    print(f"Exported {total} files across {len(exported)} packages")
-    for pkg_name, files in exported.items():
-        print(f"  {pkg_name}: {len(files)} files")
+    if getattr(args, "as_json", False):
+        print(
+            json.dumps({k: [str(f) for f in v] for k, v in exported.items()}, indent=2)
+        )
+    else:
+        total = sum(len(v) for v in exported.values())
+        print(f"Exported {total} files across {len(exported)} packages")
+        for k, v in exported.items():
+            print(f"  {k}: {len(v)} files")
 
 
 def _skills_get(args: argparse.Namespace, package: str) -> None:

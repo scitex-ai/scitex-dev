@@ -77,54 +77,68 @@ def register_skills_commands(main_group):
         "--dest",
         type=click.Path(),
         default=None,
-        help="Destination directory (default: $SCITEX_DEV_SKILLS_DEFAULT_EXPORT_DIR, or .claude/skills/scitex/).",
+        help="Exact target directory (default: ~/.claude/skills/scitex/).",
     )
     @click.option("--package", default=None, help="Export only this package.")
+    @click.option(
+        "--source",
+        type=click.Choice(["installed", "pypi"]),
+        default="installed",
+        help="installed or pypi.",
+    )
+    @click.option(
+        "--clean", is_flag=True, help="Delete package subdirs before exporting."
+    )
     @click.option("--dry-run", is_flag=True, help="Preview without copying.")
-    def skills_export(dest, package, dry_run):
-        """Export skills to .claude/skills/scitex/ for Claude Code discovery."""
+    @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+    def skills_export(dest, package, source, clean, dry_run, as_json):
+        """Export skills to ~/.claude/skills/scitex/."""
+        import json as json_mod
         from pathlib import Path
+        from .skills import _get_default_export_dest, export_skills
 
-        from .skills import export_skills
-
-        dest_path = Path(dest) if dest else None
+        target = Path(dest) if dest else _get_default_export_dest()
         if dry_run:
-            from .skills import list_skills, _get_default_export_dest
+            from .skills import list_skills
 
-            target = dest_path or _get_default_export_dest()
-            if target.name != "scitex":
-                target = target / "scitex"
-            all_skills = list_skills(package=package)
-            for pkg_name, entries in sorted(all_skills.items()):
-                click.echo(f"  {pkg_name}/")
-                for e in entries:
-                    click.echo(
-                        f"    {e['name']}.md -> {target / pkg_name / (e['name'] + '.md')}"
+            result = {
+                k: [e["name"] + ".md" for e in v]
+                for k, v in list_skills(package=package).items()
+            }
+            if as_json:
+                click.echo(
+                    json_mod.dumps(
+                        {"dest": str(target), "source": source, "packages": result},
+                        indent=2,
                     )
+                )
+            else:
+                total = sum(len(v) for v in result.values())
+                click.echo(f"Would export {total} files to {target}/ (source={source})")
+                for k, v in sorted(result.items()):
+                    click.echo(f"  {k}/: {len(v)} files")
             return
-        from .skills import _get_default_export_dest
-
-        dest_path = dest_path or _get_default_export_dest()
-        exported = export_skills(dest_path, package=package)
-        _print_export_result(exported, dest_path)
+        exported = export_skills(target, package=package, clean=clean, source=source)
+        _print_export_result(exported, target, as_json)
 
 
-def _print_export_result(exported, dest_path):
-    """Print export/update/upgrade results."""
-    from pathlib import Path
-
-    from .skills import _get_default_export_dest
+def _print_export_result(exported, dest_path, as_json=False):
+    """Print export results."""
+    import json as json_mod
 
     if not exported:
         click.echo("No skills found to export.")
         return
-
-    total = 0
-    for pkg_name, files in sorted(exported.items()):
-        click.echo(f"  {pkg_name}/")
-        for f in files:
-            click.echo(f"    {Path(f).name}")
-            total += 1
-
-    target = dest_path or _get_default_export_dest()
-    click.echo(f"\nExported {total} files to {target}")
+    if as_json:
+        click.echo(
+            json_mod.dumps(
+                {k: [str(f) for f in v] for k, v in exported.items()}, indent=2
+            )
+        )
+    else:
+        total = sum(len(v) for v in exported.values())
+        click.echo(
+            f"Exported {total} files across {len(exported)} packages to {dest_path}"
+        )
+        for k, v in sorted(exported.items()):
+            click.echo(f"  {k}: {len(v)} files")
