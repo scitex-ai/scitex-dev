@@ -20,7 +20,7 @@ else:
     CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
     COMMAND_CATEGORIES = [
-        ("Ecosystem", ["ecosystem"]),
+        ("Ecosystem", ["ecosystem", "stats"]),
         ("Development", ["config", "rename"]),
         ("Documentation", ["docs", "search", "skills"]),
         ("Integration", ["mcp", "list-python-apis"]),
@@ -126,6 +126,10 @@ else:
     from ._cli_ecosystem import register_ecosystem_commands
 
     register_ecosystem_commands(main)
+
+    from ._cli_stats import register_stats_command
+
+    register_stats_command(main)
 
     # -------------------------------------------------------------------
     # Development commands
