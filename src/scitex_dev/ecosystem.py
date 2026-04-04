@@ -229,6 +229,30 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/singularity-template",
         "import_name": "singularity_template",
     },
+    "scitex-str": {
+        "local_path": "~/proj/scitex-str",
+        "pypi_name": "scitex-str",
+        "github_repo": "ywatanabe1989/scitex-str",
+        "import_name": "scitex_str",
+    },
+    "scitex-logging": {
+        "local_path": "~/proj/scitex-logging",
+        "pypi_name": "scitex-logging",
+        "github_repo": "ywatanabe1989/scitex-logging",
+        "import_name": "scitex_logging",
+    },
+    "scitex-dict": {
+        "local_path": "~/proj/scitex-dict",
+        "pypi_name": "scitex-dict",
+        "github_repo": "ywatanabe1989/scitex-dict",
+        "import_name": "scitex_dict",
+    },
+    "scitex-browser": {
+        "local_path": "~/proj/scitex-browser",
+        "pypi_name": "scitex-browser",
+        "github_repo": "ywatanabe1989/scitex-browser",
+        "import_name": "scitex_browser",
+    },
 }
 
 
