@@ -105,11 +105,37 @@ else:
     )
     @click.option("--version", "-V", is_flag=True, help="Show version and exit.")
     @click.option("--help-recursive", is_flag=True, help="Show help for all commands.")
+    @click.option(
+        "--json",
+        "as_json",
+        is_flag=True,
+        default=False,
+        help="Emit structured JSON output (propagates to subcommands that honour it).",
+    )
     @click.pass_context
-    def main(ctx: click.Context, version: bool, help_recursive: bool) -> None:
+    def main(
+        ctx: click.Context,
+        version: bool,
+        help_recursive: bool,
+        as_json: bool,
+    ) -> None:
         """scitex-dev - Shared developer utilities for the SciTeX ecosystem."""
+        # Expose the root-level --json flag to subcommands via ctx.obj so
+        # commands that already honour `--json` can read the inherited
+        # setting and default to structured output without the user
+        # repeating the flag at each level.
+        ctx.ensure_object(dict)
+        ctx.obj["json"] = as_json
+
         if version:
-            click.echo(f"scitex-dev {_get_version()}")
+            if as_json:
+                import json as _json
+                click.echo(_json.dumps({
+                    "name": "scitex-dev",
+                    "version": _get_version(),
+                }))
+            else:
+                click.echo(f"scitex-dev {_get_version()}")
             ctx.exit(0)
 
         if help_recursive:
