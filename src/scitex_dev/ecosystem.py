@@ -55,12 +55,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/figrecipe",
         "import_name": "figrecipe",
     },
-    "scitex-plt": {
-        "local_path": "~/proj/scitex-plt",
-        "pypi_name": "scitex-plt",
-        "github_repo": "ywatanabe1989/scitex-plt",
-        "import_name": "scitex_plt",
-    },
     "openalex-local": {
         "local_path": "~/proj/openalex-local",
         "pypi_name": "openalex-local",
@@ -217,11 +211,17 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/scitex-dev",
         "import_name": "scitex_dev",
     },
-    "scitex-plt": {
-        "local_path": "~/proj/scitex-plt",
-        "pypi_name": "scitex-plt",
-        "github_repo": "ywatanabe1989/scitex-plt",
-        "import_name": "scitex_plt",
+    "scitex-agent-container": {
+        "local_path": "~/proj/scitex-agent-container",
+        "pypi_name": "scitex-agent-container",
+        "github_repo": "ywatanabe1989/scitex-agent-container",
+        "import_name": "scitex_agent_container",
+    },
+    "scitex-orochi": {
+        "local_path": "~/proj/scitex-orochi",
+        "pypi_name": "scitex-orochi",
+        "github_repo": "ywatanabe1989/scitex-orochi",
+        "import_name": "scitex_orochi",
     },
     "singularity-template": {
         "local_path": "~/proj/singularity-template",
