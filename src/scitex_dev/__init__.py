@@ -199,4 +199,12 @@ __all__ = [
     "dry_run_option",
     "add_json_argument",
     "add_dry_run_argument",
+    # Sync
+    "sync_all",
+    "sync_host",
+    "sync_local",
+    "sync_tags",
+    "remote_diff",
+    "remote_commit",
+    "pull_local",
 ]

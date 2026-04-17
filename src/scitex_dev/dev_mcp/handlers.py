@@ -171,9 +171,15 @@ async def sync_handler(
     hosts: list[str] | None = None,
     packages: list[str] | None = None,
     install: bool = True,
+    safe: bool = True,
     confirm: bool = False,
 ) -> str:
-    """Sync ecosystem packages to remote hosts."""
+    """Sync ecosystem packages to remote hosts.
+
+    When ``safe`` is True (default), per-package ahead-check skips
+    remote working copies that have unpushed commits so we never
+    clobber work. Pass safe=False to force pull regardless.
+    """
     from ..sync import sync_all
 
     return wrap_as_mcp(
@@ -182,6 +188,7 @@ async def sync_handler(
         hosts=hosts,
         packages=packages,
         install=install,
+        safe=safe,
         confirm=confirm,
     )
 

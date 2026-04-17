@@ -84,6 +84,61 @@ def register_ecosystem_commands(main_group):
         pkgs = list(package) if package else None
         wrap_as_cli(sync_local, as_json=as_json, packages=pkgs, confirm=not dry_run)
 
+    @ecosystem.command("sync-remote")
+    @click.option(
+        "--host",
+        "-h",
+        "hosts",
+        multiple=True,
+        help="Host name(s). Omit or pass 'all' to sync every enabled host.",
+    )
+    @click.option("--package", "-p", multiple=True, help="Specific packages.")
+    @click.option("--dry-run", is_flag=True, help="Preview without syncing.")
+    @click.option(
+        "--unsafe",
+        is_flag=True,
+        help="Disable the ahead-check; allow clobbering unpushed remote commits.",
+    )
+    @click.option(
+        "--no-install", is_flag=True, help="Skip pip install -e . after git pull."
+    )
+    @click.option("--no-stash", is_flag=True, help="Skip git stash / stash pop wrap.")
+    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
+    def ecosystem_sync_remote(
+        hosts, package, dry_run, unsafe, no_install, no_stash, as_json
+    ):
+        """Sync ecosystem packages to remote hosts over SSH.
+
+        Each package on each host is: ahead-check -> git stash -> git
+        pull -> pip install -e . -> git stash pop. Packages whose
+        remote working copy has unpushed commits are skipped by
+        default (safety).
+
+        Examples:
+
+        \b
+            scitex-dev ecosystem sync-remote --dry-run
+            scitex-dev ecosystem sync-remote -h mba -h spartan
+            scitex-dev ecosystem sync-remote -h all -p scitex-db
+        """
+        from .cli_utils import wrap_as_cli
+        from .sync import sync_all
+
+        host_list = list(hosts) if hosts else None
+        if host_list == ["all"]:
+            host_list = None
+        pkgs = list(package) if package else None
+        wrap_as_cli(
+            sync_all,
+            as_json=as_json,
+            hosts=host_list,
+            packages=pkgs,
+            stash=not no_stash,
+            install=not no_install,
+            safe=not unsafe,
+            confirm=not dry_run,
+        )
+
     @ecosystem.command("dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")
     @click.option("--host", default="127.0.0.1", help="Host to bind to.")
