@@ -17,6 +17,13 @@ Export target (scitex namespace)::
     ~/.claude/skills/scitex/<pip-name>/SKILL.md
     ~/.claude/skills/scitex/<pip-name>/sub-skill.md
 
+Private skills (per-machine, symlinked on export)::
+
+    ~/.scitex/<suffix>/skills/<pip-name>-private/
+      -> ~/.claude/skills/scitex/<pip-name>-private/
+
+Where <suffix> is the pip name minus the ``scitex-`` prefix.
+
 Usage::
 
     from scitex_dev.skills import list_skills, get_skill, export_skills
@@ -113,6 +120,8 @@ def _collect_skills_from_dir(
     """Collect skill entries from a single skills directory."""
     skills = []
     for md_file in sorted(skills_dir.glob("*.md")):
+        if md_file.is_symlink():
+            continue
         meta = _parse_frontmatter(md_file)
         name = "SKILL" if md_file.name == "SKILL.md" else md_file.stem
         desc = meta.get("description", "")
@@ -136,6 +145,8 @@ def _collect_skills_from_dir(
     refs_dir = skills_dir / "references"
     if refs_dir.is_dir():
         for md_file in sorted(refs_dir.glob("*.md")):
+            if md_file.is_symlink():
+                continue
             meta = _parse_frontmatter(md_file)
             skills.append(
                 {
@@ -182,7 +193,7 @@ def list_skills(
             if extra_skills_root.is_dir():
                 version = _get_package_version(pkg_name)
                 for sub_dir in sorted(extra_skills_root.iterdir()):
-                    if not sub_dir.is_dir():
+                    if not sub_dir.is_dir() or sub_dir.is_symlink():
                         continue
                     ns_name = sub_dir.name
                     # Skip the package's own name (already handled above)
@@ -332,10 +343,87 @@ def export_skills(
         if pkg_files:
             exported[pkg_name] = pkg_files
 
+    # Symlink private skill directories
+    _link_private_skills(dest, package=package)
+
     # Generate root SKILL.md index
     _generate_root_skill_md(dest, exported)
 
     return exported
+
+
+def _link_private_skills(
+    dest: Path,
+    *,
+    package: Optional[str] = None,
+) -> list[Path]:
+    """Symlink private skill directories into the export destination.
+
+    Convention::
+
+        ~/.scitex/<suffix>/skills/<package>-private/
+          -> ~/.claude/skills/scitex/<package>-private/
+
+    where <suffix> is the package name minus the ``scitex-`` prefix
+    (e.g. ``scitex-orochi`` -> ``orochi``).
+    """
+    scitex_root = Path.home() / ".scitex"
+    if not scitex_root.is_dir():
+        return []
+
+    linked: list[Path] = []
+
+    # Packages like scitex-orochi keep tracked definitions under
+    # `shared/` (separate from per-host `runtime/`), so the private
+    # skills directory may live at either `<sub>/skills/` (simple
+    # layout) or `<sub>/shared/skills/` (dotfiles-tracked layout).
+    skills_subpaths = ("skills", "shared/skills")
+    seen_links: set[Path] = set()
+
+    for sub in sorted(scitex_root.iterdir()):
+        if not sub.is_dir():
+            continue
+        # sub.name is the suffix (e.g. "orochi")
+
+        for subpath in skills_subpaths:
+            private_skills_parent = sub / subpath
+            if not private_skills_parent.is_dir():
+                continue
+
+            for private_dir in sorted(private_skills_parent.iterdir()):
+                if not private_dir.is_dir():
+                    continue
+                if not private_dir.name.endswith("-private"):
+                    continue
+
+                # Filter by package if requested
+                if package:
+                    # e.g. package="scitex-orochi" matches "scitex-orochi-private"
+                    if private_dir.name != f"{package}-private":
+                        continue
+
+                link_path = dest / private_dir.name
+                if link_path in seen_links:
+                    # Same -private name found in both layouts; first
+                    # wins (skills/ before shared/skills/).
+                    continue
+                seen_links.add(link_path)
+
+                # Remove existing symlink or skip existing directory
+                if link_path.is_symlink():
+                    link_path.unlink()
+                elif link_path.is_dir():
+                    logger.warning(
+                        "Skipping private skills symlink: %s already exists as directory",
+                        link_path,
+                    )
+                    continue
+
+                link_path.symlink_to(private_dir)
+                logger.info("Linked private skills: %s -> %s", link_path, private_dir)
+                linked.append(link_path)
+
+    return linked
 
 
 def _generate_root_skill_md(dest: Path, exported: dict[str, list[Path]]) -> None:
@@ -367,6 +455,20 @@ def _generate_root_skill_md(dest: Path, exported: dict[str, list[Path]]) -> None
         lines.append("## Package Skills")
         for pkg in pkg_names:
             lines.append(f"- [{pkg}]({pkg}/SKILL.md)")
+        lines.append("")
+
+    # Private skills (symlinked directories ending with -private)
+    private_dirs = sorted(
+        d.name for d in dest.iterdir() if d.is_dir() and d.name.endswith("-private")
+    )
+    if private_dirs:
+        lines.append("## Private Skills")
+        for name in private_dirs:
+            skill_md_path = dest / name / "SKILL.md"
+            if skill_md_path.exists():
+                lines.append(f"- [{name}]({name}/SKILL.md)")
+            else:
+                lines.append(f"- [{name}]({name}/)")
         lines.append("")
 
     skill_md = dest / "SKILL.md"
