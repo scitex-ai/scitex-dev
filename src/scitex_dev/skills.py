@@ -263,6 +263,7 @@ def export_skills(
     package: Optional[str] = None,
     clean: bool = False,
     source: str = "installed",
+    link: bool = False,
 ) -> dict[str, list[Path]]:
     """Export skills to dest. Files are written as ``<dest>/<pkg-name>/SKILL.md``.
 
@@ -273,10 +274,17 @@ def export_skills(
                exporting. Default False (overwrite in place).
         source: "installed" (from locally installed packages) or "pypi"
                 (download wheels from PyPI and extract _skills/).
+        link: If True, symlink each skill file to its editable source
+              (only valid with ``source="installed"``). Edits to the
+              package source are then reflected in ``dest`` immediately
+              without re-running export. Incompatible with ``source="pypi"``
+              since PyPI wheels are extracted to a temp dir.
 
     Returns:
         Dict mapping package name -> list of exported file paths.
     """
+    if link and source != "installed":
+        raise ValueError("link=True requires source='installed'")
 
     if source == "pypi":
         from ._skills_pypi import export_from_pypi
@@ -324,9 +332,22 @@ def export_skills(
                 content = _stamp_manifest_version(content, version)
                 content = _stamp_manifest_field(content, "exported_via", source)
 
-            if out_file.exists():
-                out_file.chmod(0o644)
-            out_file.write_text(content, encoding="utf-8")
+            if out_file.exists() or out_file.is_symlink():
+                if out_file.is_symlink():
+                    out_file.unlink()
+                else:
+                    out_file.chmod(0o644)
+
+            if link:
+                # For MANIFEST.md we still write the version-stamped copy,
+                # since it differs from the raw source file. Everything else
+                # can be a direct symlink to the editable source.
+                if name == "MANIFEST":
+                    out_file.write_text(content, encoding="utf-8")
+                else:
+                    out_file.symlink_to(src_path.resolve())
+            else:
+                out_file.write_text(content, encoding="utf-8")
             pkg_files.append(out_file)
 
         if pkg_files:
