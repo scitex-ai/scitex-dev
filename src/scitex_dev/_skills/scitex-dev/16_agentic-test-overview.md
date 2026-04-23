@@ -39,41 +39,76 @@ Adapted from Anthropic's `skill-creator` methodology:
 This leaf is the entry point. The two siblings (17, 18) specialise
 Layers 2-4 for skills and MCP respectively.
 
-## Shared substrate — newbie-docker
+## Shared substrate — newbie-docker (generic image + runtime mounts)
 
 All agentic tests (skill + MCP) share the same isolation primitive:
 
-- **Clean container** — `scitex-agentic-test:latest`, built from
-  `scitex-agent-container:latest`. Node + claude CLI baked in.
-- **No host `~/.claude` mount** — the image's `/home/agent/.claude/` is
-  its own clean slate. No host projects, no CLAUDE.md, no memory, no
-  ywatanabe skills.
+- **Generic clean container** — `scitex-agentic-test:latest`, built from
+  `scitex-agent-container:latest`. Node + claude CLI only. **No skills
+  or credentials baked in.** Rebuild only on base-image changes; never
+  on skill edits.
+- **Host `$HOME/.claude/` stays pristine.** Tests never write there.
+  Production conversation history, user CLAUDE.md, and real skill
+  catalog are left alone.
+- **Per-run staging dir** — e.g. `/tmp/evalrun_<id>/` containing just
+  the skills under test and (if desired) an empty `projects/` for
+  in-container history. Teardown = `rm -rf`.
 - **Credentials, not API key** — mount *only*
   `~/.claude/.credentials.json` (copied to a world-readable tmp first
   because container uid ≠ host uid). Claude Code runs under your Max
   plan quota → **$0 real cost** regardless of the `total_cost_usd`
   reported in the JSON envelope.
-- **Skills baked at build time** — the specific test skill (e.g.
-  `kv-lookup` for harness-validation, or `scitex-io/SKILL.md` for a
-  real-skill eval) goes into the image via `COPY` so the container
-  starts with exactly the skill set under test and nothing more.
+- **Skills mounted read-only from the staging dir** — change a skill
+  and re-run immediately, no image rebuild, no tag churn, no
+  combinatorial image explosion.
+
+Rationale for runtime mount (recorded 2026-04-23):
+
+1. Skill bodies change often; `docker build` on every edit kills
+   iteration speed.
+2. For N skills there are 2ⁿ possible scopes to evaluate; one image
+   per scope = combinatorial explosion. One generic image + different
+   mounts = linear.
+3. Production parity: `pip install scitex-<pkg>` places `SKILL.md` on
+   the filesystem at install time; mount-time injection mimics that.
 
 ### Minimal one-shot invocation
 
 ```bash
-# 1. One-time: writable credentials copy for the mount
+# 1. One-time: writable credentials copy (uid mismatch makes 0600 unreadable)
 install -m 644 ~/.claude/.credentials.json /tmp/newbie_creds.json
 
-# 2. Run one query
+# 2. Stage a per-run HOME with just the skills under test
+mkdir -p /tmp/evalrun-$$/skills/<pkg>
+cp -rf <source>/SKILL.md /tmp/evalrun-$$/skills/<pkg>/SKILL.md
+
+# 3. Run
 docker run --rm \
+  -v /tmp/evalrun-$$/skills:/home/agent/.claude/skills:ro \
   -v /tmp/newbie_creds.json:/home/agent/.claude/.credentials.json \
   scitex-agentic-test:latest \
-  -p "What is the value of banana?" \
-  --output-format json --model claude-haiku-4-5 \
+  -p "<query>" --output-format json --model claude-haiku-4-5 \
   --dangerously-skip-permissions
 ```
 
 This is the base primitive. Layers 2-4 parse the returned JSON differently.
+
+### Per-project conversation history (optional)
+
+For iterative debugging, mount `<project-root>/.claude/` (not host
+`$HOME/.claude/`) as the container HOME. Conversation history for that
+project accumulates under `<project-root>/.claude/projects/` while the
+skills mount overlays a clean catalog on top:
+
+```bash
+docker run --rm \
+  -v <project-root>/.claude:/home/agent/.claude \
+  -v /tmp/evalrun-$$/skills:/home/agent/.claude/skills:ro \
+  -v /tmp/newbie_creds.json:/home/agent/.claude/.credentials.json \
+  scitex-agentic-test:latest -p "<query>" ...
+```
+
+`<project-root>/.claude/` should be git-ignored.
 
 ## Why `claude -p`, not the Anthropic API
 
@@ -102,7 +137,7 @@ This is the base primitive. Layers 2-4 parse the returned JSON differently.
 ```
 scitex-agent-container/containers/
 ├── Dockerfile                       # base image (Node + claude CLI)
-└── Dockerfile.agentic-test          # test image (FROM base) + baked skills
+└── Dockerfile.agentic-test          # generic test image (FROM base); no bake
 
 scitex-dev/src/scitex_dev/
 ├── _agentic_testing.py              # HostRunner, NewbieDockerRunner
