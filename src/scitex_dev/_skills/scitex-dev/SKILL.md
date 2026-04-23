@@ -31,7 +31,8 @@ interfaces:
 - [12_rename.md](12_rename.md) — bulk_rename, preview_rename, execute_rename
 - [13_docs-search.md](13_docs-search.md) — get_docs, build_docs, search_docs, search
 - [14_test-runner.md](14_test-runner.md) — run_local, run_hpc_sbatch, poll_hpc_job, fetch_hpc_result
-- [15_full-update.md](15_full-update.md) — Full ecosystem release pipeline — audit, bump, release, sync
+- [15_full-update.md](15_full-update.md) — Full ecosystem release pipeline — pre-flight + release (phases 1–2)
+- [19_full-update-deploy.md](19_full-update-deploy.md) — Full ecosystem release pipeline — local sync, NAS deploy, verification (phases 3–5)
 
 ### Agentic Testing (16–19)
 - [16_agentic-test-overview.md](16_agentic-test-overview.md) — Four-layer testing model + shared newbie-docker substrate (entry point)

@@ -15,6 +15,9 @@ INDEX_SIZE_MAX = 4 * 1024  # §3
 PREFIX_RE = re.compile(r"^(\d{2})_[a-z0-9][a-z0-9-]*\.md$")
 FORBIDDEN_SUBDIRS = {"legacy", ".old"}
 ALIAS_INDEX_NAMES = {"SKILL_INDEX.md", "INDEX.md"}
+# Special system files that sit alongside SKILL.md but are not content leaves.
+# MANIFEST.md carries the version/source stamp written at export time.
+SYSTEM_FILES = {"MANIFEST.md"}
 
 
 @dataclass
@@ -61,11 +64,14 @@ def check_skill_dir(skill_dir: Path) -> SkillReport:
     if idx_size > INDEX_SIZE_MAX:
         add("§3.index-monolith", skill_md, f"{idx_size}B > {INDEX_SIZE_MAX}B")
 
-    # Collect leaves
+    # Collect leaves (exclude SKILL.md and system files like MANIFEST.md)
     leaves = sorted(
         p
         for p in skill_dir.iterdir()
-        if p.is_file() and p.suffix == ".md" and p.name != SKILL_MD
+        if p.is_file()
+        and p.suffix == ".md"
+        and p.name != SKILL_MD
+        and p.name not in SYSTEM_FILES
     )
 
     # §2 prefix format
