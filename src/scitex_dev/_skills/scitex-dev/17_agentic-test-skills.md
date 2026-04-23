@@ -21,32 +21,43 @@ substring-matches the eval's `expected_skill`. Negative cases pass when
 2-of-3 threshold across 3 runs per case — flap tolerance without
 masking real regressions.
 
-## Build the baked test image
-
-The container is the isolation boundary. Bake exactly the skills under
-test, nothing else:
-
-```dockerfile
-# containers/Dockerfile.agentic-test
-FROM scitex-agent-container:latest
-USER root
-RUN mkdir -p /home/agent/.claude/skills/kv-lookup && \
-    chown -R agent:agent /home/agent/.claude
-COPY --chown=agent:agent skills/kv-lookup/SKILL.md \
-     /home/agent/.claude/skills/kv-lookup/SKILL.md
-USER agent
-WORKDIR /home/agent
-ENTRYPOINT ["claude"]
-```
+## Generic image (built once, used for all skill evals)
 
 ```bash
 cd /home/ywatanabe/proj/scitex-agent-container/containers
 docker build -f Dockerfile.agentic-test -t scitex-agentic-test:latest .
 ```
 
-Tag the image with a date (`scitex-agentic-test:2026-04-23`) once a
-baseline trigger rate is measured — that tag becomes the reproducibility
-anchor for papers.
+The image contains only Node + claude CLI. No baked skills, no baked
+credentials. Rebuild only when the base image changes.
+
+## Per-run staging (skills mounted at runtime)
+
+```bash
+# Writable credentials copy once per session
+install -m 644 ~/.claude/.credentials.json /tmp/newbie_creds.json
+
+# Per-eval staging dir — just the skills under test
+run_id=evalrun_$(date +%s)
+mkdir -p /tmp/$run_id/skills/<pkg>
+cp -rf path/to/<pkg>/SKILL.md /tmp/$run_id/skills/<pkg>/SKILL.md
+
+# Fire the query
+docker run --rm \
+  -v /tmp/$run_id/skills:/home/agent/.claude/skills:ro \
+  -v /tmp/newbie_creds.json:/home/agent/.claude/.credentials.json \
+  scitex-agentic-test:latest \
+  -p "<query>" --output-format json --model claude-haiku-4-5 \
+  --dangerously-skip-permissions
+```
+
+Skill edit → rerun immediately; no rebuild. To test a different skill
+scope, change the staging directory contents, not the image.
+
+Reproducibility anchor for papers: record the generic image tag
+(`scitex-agentic-test:<date>`) + the staged skill fileset (content-
+addressable hash of `/tmp/<run_id>/skills/`). Both pinned together
+describe the exact environment measured.
 
 ## MVP — Phase 1 (synthetic kv-lookup)
 
@@ -148,14 +159,16 @@ full eval JSON.
 
 ## Next — from MVP to real packages
 
-Current MVP proves the harness works end-to-end on a synthetic skill.
-To measure a real package:
+Current MVP proves the harness works end-to-end on a synthetic skill
+with runtime-mounted catalog. To measure a real package:
 
-1. Copy the package's `SKILL.md` into
-   `containers/skills/<pkg>/SKILL.md`.
-2. Extend `Dockerfile.agentic-test` with another `COPY` per package.
-3. Rebuild the image.
-4. Author `tests/skill_evals/<pkg>.json` with 3-5 substantive queries +
+1. Stage the package's `SKILL.md` (and any referenced leaves) under
+   `tests/skill_evals/<pkg>_stage/skills/<pkg>/`.
+2. Author `tests/skill_evals/<pkg>.json` with 3-5 substantive queries +
    at least one adjacent negative.
-5. Drop in `tests/test_skill_trigger.py` (snippet above).
-6. Run `pytest -m skill_trigger` to establish baseline.
+3. Drop in `tests/test_skill_trigger.py` (snippet above).
+4. Run the trigger tests and establish baseline — for MCP-enabled
+   packages, a derived image `scitex-agentic-test-<pkg>:latest` with
+   `RUN pip install scitex-<pkg>` may be needed for the Python side
+   (the skill itself still mounts at runtime). Keep the pip set tight
+   — installing all of scitex takes >1 hour.
