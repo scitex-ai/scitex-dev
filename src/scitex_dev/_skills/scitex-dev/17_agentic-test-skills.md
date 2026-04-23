@@ -10,16 +10,53 @@ clean Claude Code instance and exactly one scoped skill catalog, measure
 whether a realistic user query causes Claude to view the expected
 `SKILL.md`.
 
-## What gets measured
+## What gets measured — hard vs soft trigger
 
-Parse the `claude -p --output-format json` envelope; walk recursively
-for every `tool_use` block where `name ∈ {Read, view}`; collect the
-`path` / `file_path` argument. A case **passes** if any collected path
-substring-matches the eval's `expected_skill`. Negative cases pass when
-**no** `SKILL.md` is viewed.
+Per official Claude Code docs (`Extend Claude with skills.md`, 2026-04):
 
-2-of-3 threshold across 3 runs per case — flap tolerance without
-masking real regressions.
+> "In a regular session, skill descriptions are loaded into context so
+> Claude knows what's available, but full skill content only loads
+> when invoked."
+
+Two distinct trigger signals exist:
+
+- **Hard trigger**: a `tool_use` block with `name ∈ {Read, view}` and a
+  path that substring-matches the expected `SKILL.md`. Explicit, easy
+  to extract from the JSON envelope.
+- **Soft trigger**: no explicit `Read`, but the skill body was
+  auto-loaded from description match (standard Claude Code behavior)
+  and the response contains skill-specific content. `tool_use` count
+  is 0 yet the answer is still correct.
+
+**Measuring only hard triggers underestimates true trigger rate.**
+Verified empirically 2026-04-23: with a pushy "ALWAYS invoke this
+skill when... Do not answer from training" description on scitex-io's
+SKILL.md, Claude returned the correct API (`sio.save(df, ...,
+use_caller_path=True)`) with zero `tool_use` — proof that the skill
+body was consulted via auto-load.
+
+### Recommended eval JSON additions
+
+```json
+{
+  "id": "case-1",
+  "query": "<substantive multi-step query>",
+  "expected_skill": "scitex-io/SKILL.md",
+  "answer_contains": ["use_caller_path=True", "stx.io.save"],
+  "complexity": "high"
+}
+```
+
+- **Hard-trigger pass** if the `Read`/`view` tool-use path matches.
+- **Soft-trigger pass** if every string in `answer_contains` appears
+  in `result`.
+- A case passes the run if **either** trigger type passes.
+- 2-of-3 threshold still applies across 3 runs per case.
+
+Author guidance: choose `answer_contains` strings that are authored
+in the skill body and unlikely to appear from model training alone.
+The presence of `use_caller_path=True` in an answer about scitex-io
+is a strong soft-trigger signal because the flag is SciTeX-specific.
 
 ## Generic image (built once, used for all skill evals)
 
@@ -31,33 +68,63 @@ docker build -f Dockerfile.agentic-test -t scitex-agentic-test:latest .
 The image contains only Node + claude CLI. No baked skills, no baked
 credentials. Rebuild only when the base image changes.
 
-## Per-run staging (skills mounted at runtime)
+## Two runtime modes (pick by purpose)
+
+One shared credentials copy (session scope):
 
 ```bash
-# Writable credentials copy once per session
 install -m 644 ~/.claude/.credentials.json /tmp/newbie_creds.json
+```
 
-# Per-eval staging dir — just the skills under test
-run_id=evalrun_$(date +%s)
-mkdir -p /tmp/$run_id/skills/<pkg>
-cp -rf path/to/<pkg>/SKILL.md /tmp/$run_id/skills/<pkg>/SKILL.md
+### Mode A — dev iteration (direct source mount)
 
-# Fire the query
+Fastest feedback loop — edit the source `SKILL.md` in the package
+repo and the next `docker run` reflects it instantly. **No export, no
+staging, no rebuild.**
+
+```bash
 docker run --rm \
-  -v /tmp/$run_id/skills:/home/agent/.claude/skills:ro \
+  -v ~/proj/scitex-io/src/scitex_io/_skills/scitex-io:/home/agent/.claude/skills/scitex-io:ro \
   -v /tmp/newbie_creds.json:/home/agent/.claude/.credentials.json \
   scitex-agentic-test:latest \
   -p "<query>" --output-format json --model claude-haiku-4-5 \
   --dangerously-skip-permissions
 ```
 
-Skill edit → rerun immediately; no rebuild. To test a different skill
-scope, change the staging directory contents, not the image.
+For a multi-skill scope, add one `-v <repo>/.../_skills/<pkg>:/home/agent/.claude/skills/<pkg>:ro` per package. The container sees exactly those
+skills and nothing else.
+
+### Mode B — production test (pip install + export)
+
+Exercises the **real install path** — what a fresh user gets when they
+`pip install scitex-io` and the shipped skill lands in
+`~/.claude/skills/scitex/<pkg>/`. Use this to catch packaging bugs
+(missing `_skills/` in the wheel, export script failures, etc.).
+
+```bash
+# Inside a derived image OR a Python env
+pip install scitex-io
+
+# Export the skill into a staging dir
+scitex-io skills export --dest /tmp/evalrun_io/.claude/skills --clean
+
+# Mount the staged result
+docker run --rm \
+  -v /tmp/evalrun_io/.claude/skills:/home/agent/.claude/skills:ro \
+  -v /tmp/newbie_creds.json:/home/agent/.claude/.credentials.json \
+  scitex-agentic-test:latest \
+  -p "<query>" --output-format json --model claude-haiku-4-5 \
+  --dangerously-skip-permissions
+```
+
+Mode B is the **canonical CI target** — it measures what users
+actually experience. Mode A is for tightening the skill's trigger
+behavior before committing.
 
 Reproducibility anchor for papers: record the generic image tag
-(`scitex-agentic-test:<date>`) + the staged skill fileset (content-
-addressable hash of `/tmp/<run_id>/skills/`). Both pinned together
-describe the exact environment measured.
+(`scitex-agentic-test:<date>`) plus either the mode-A source commit
+SHA or the mode-B exported skill hash. Both forms fully describe
+the measured environment.
 
 ## MVP — Phase 1 (synthetic kv-lookup)
 
