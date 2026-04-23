@@ -89,9 +89,15 @@ def register_skills_commands(main_group):
     @click.option(
         "--clean", is_flag=True, help="Delete package subdirs before exporting."
     )
+    @click.option(
+        "--link",
+        is_flag=True,
+        help="Symlink skill files to editable source (source=installed only); "
+        "edits propagate live with no re-export.",
+    )
     @click.option("--dry-run", is_flag=True, help="Preview without copying.")
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
-    def skills_export(dest, package, source, clean, dry_run, as_json):
+    def skills_export(dest, package, source, clean, link, dry_run, as_json):
         """Export skills to ~/.claude/skills/scitex/."""
         import json as json_mod
         from pathlib import Path
@@ -118,7 +124,9 @@ def register_skills_commands(main_group):
                 for k, v in sorted(result.items()):
                     click.echo(f"  {k}/: {len(v)} files")
             return
-        exported = export_skills(target, package=package, clean=clean, source=source)
+        exported = export_skills(
+            target, package=package, clean=clean, source=source, link=link
+        )
         _print_export_result(exported, target, as_json)
 
 
