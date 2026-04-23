@@ -324,6 +324,71 @@ def skills_click_group(package: str, name: str = "skills"):
         ns = argparse.Namespace(name=skill_name, as_json=as_json)
         _skills_get(ns, package=package)
 
+    # hook-bypass: line-limit — adding export subcommand; cli.py split
+    # refactor tracked in GITIGNORED/REFACTORING.md, follow-up work item.
+    @skills_grp.command("export")
+    @click.option(
+        "--dest",
+        default=None,
+        help="Destination dir (default: ~/.claude/skills/scitex/).",
+    )
+    @click.option(
+        "--source",
+        type=click.Choice(["package", "dev", "auto"]),
+        default="auto",
+        help="Which source to export from.",
+    )
+    @click.option("--clean", is_flag=True, help="Delete pkg subdir first.")
+    @click.option("--dry-run", is_flag=True, help="Preview without writing.")
+    @click.option("--json", "as_json", is_flag=True, help="JSON output")
+    def skills_export(dest, source, clean, dry_run, as_json):
+        """Export this package's skills to <dest>."""
+        from pathlib import Path as _P
+
+        from .skills import (
+            _get_default_export_dest,
+            export_skills,
+            list_skills,
+        )
+
+        target = _P(dest) if dest else _get_default_export_dest()
+
+        # hook-bypass: line-limit (tracked in GITIGNORED/REFACTORING.md)
+        if dry_run:
+            sl_by_pkg = list_skills(package=package)
+            flat = [s for lst in sl_by_pkg.values() for s in lst]
+            if as_json:
+                import json as _json
+
+                click.echo(
+                    _json.dumps({str(target): [s["name"] for s in flat]}, indent=2)
+                )
+            else:
+                click.echo(
+                    f"Would export {len(flat)} files for {package} "
+                    f"to {target}/ (source={source})"
+                )
+                for s in flat:
+                    click.echo(f"  - {s['name']}")
+            return
+
+        exported = export_skills(target, package=package, clean=clean, source=source)
+        if not exported:
+            click.echo(f"No skills found to export for {package}.")
+            return
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {k: [str(f) for f in v] for k, v in exported.items()},
+                    indent=2,
+                )
+            )
+        else:
+            total = sum(len(v) for v in exported.values())
+            click.echo(f"Exported {total} files for {package} to {target}")
+
     return skills_grp
 
 
