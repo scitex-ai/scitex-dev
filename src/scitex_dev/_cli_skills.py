@@ -129,6 +129,79 @@ def register_skills_commands(main_group):
         )
         _print_export_result(exported, target, as_json)
 
+    # scitex-dev#6: explicit-destination alias. `collect` is the recommended
+    # command going forward because the destination is always required —
+    # callers can't be surprised by a hidden default like `export`'s
+    # `~/.claude/skills/scitex/`.
+    @skills.command("collect")
+    @click.argument(
+        "destination",
+        type=click.Path(),
+    )
+    @click.option("--package", default=None, help="Collect only this package.")
+    @click.option(
+        "--source",
+        type=click.Choice(["installed", "pypi"]),
+        default="installed",
+        help="Source of skill files (default: installed packages).",
+    )
+    @click.option(
+        "--clean",
+        is_flag=True,
+        help="Delete package subdirs at destination before collecting.",
+    )
+    @click.option(
+        "--link",
+        is_flag=True,
+        help="Symlink skill files to editable source (source=installed only).",
+    )
+    @click.option("--dry-run", is_flag=True, help="Preview without copying.")
+    @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+    def skills_collect(destination, package, source, clean, link, dry_run, as_json):
+        """Collect skills from installed/PyPI packages into DESTINATION.
+
+        Unlike `export` (which defaults to ~/.claude/skills/scitex/), this
+        command REQUIRES the destination argument so callers always know
+        exactly where skills will land.
+
+        \b
+        Examples:
+          scitex-dev skills collect .claude/skills/scitex/
+          scitex-dev skills collect ~/.claude/skills/scitex/
+          scitex-dev skills collect docs/to_claude/skills/scitex/
+          scitex-dev skills collect /some/path --package scitex-writer
+        """
+        import json as json_mod
+        from pathlib import Path
+
+        from .skills import export_skills, list_skills
+
+        target = Path(destination)
+        if dry_run:
+            result = {
+                k: [e["name"] + ".md" for e in v]
+                for k, v in list_skills(package=package).items()
+            }
+            if as_json:
+                click.echo(
+                    json_mod.dumps(
+                        {"dest": str(target), "source": source, "packages": result},
+                        indent=2,
+                    )
+                )
+            else:
+                total = sum(len(v) for v in result.values())
+                click.echo(
+                    f"Would collect {total} files to {target}/ (source={source})"
+                )
+                for k, v in sorted(result.items()):
+                    click.echo(f"  {k}/: {len(v)} files")
+            return
+        collected = export_skills(
+            target, package=package, clean=clean, source=source, link=link
+        )
+        _print_export_result(collected, target, as_json)
+
 
 def _print_export_result(exported, dest_path, as_json=False):
     """Print export results."""
