@@ -43,14 +43,17 @@ import atexit
 import json
 import os
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
 DEFAULT_ACCOUNTS = [
-    # default points at user's primary Claude Code home;
-    # override via SCITEX_DEV_CLAUDE_ACCOUNTS env (":"-separated)
-    Path("~/.claude").expanduser(),
+    # Each entry is a HOME directory (not the .claude config dir).
+    # Claude Code reads auth from $HOME/.claude/, so HOME must be the
+    # parent of .claude, not .claude itself. Empirically verified
+    # 2026-04-23 — pointing at ~/.claude yielded "Not logged in".
+    # Override via SCITEX_DEV_CLAUDE_ACCOUNTS env (":"-separated HOME paths).
+    Path.home(),
 ]
 DEFAULT_MODEL = "claude-haiku-4-5"
 DEFAULT_TIMEOUT = 120
@@ -65,13 +68,21 @@ class EvalCase:
     query: str
     expected_skill: str | None  # None = negative test (no skill should be viewed)
     complexity: str = "high"
+    # Soft-trigger detection: substrings that should appear in the answer
+    # when the skill body was consulted (via explicit Read OR via
+    # Claude Code's description-match auto-load). Pick skill-specific
+    # strings unlikely to come from model training alone.
+    answer_contains: list[str] | None = None
 
 
 @dataclass
 class TriggerResult:
     case: EvalCase
-    runs: list[bool]  # pass/fail per run
+    runs: list[bool]  # pass/fail per run (hard OR soft)
     viewed_paths_per_run: list[list[str]]
+    answers_per_run: list[str] = field(default_factory=list)
+    hard_trigger_per_run: list[bool] = field(default_factory=list)
+    soft_trigger_per_run: list[bool] = field(default_factory=list)
 
     @property
     def pass_rate(self) -> float:
@@ -80,6 +91,18 @@ class TriggerResult:
     @property
     def passed(self) -> bool:
         return sum(self.runs) >= 2  # 2-of-3
+
+    @property
+    def hard_pass_rate(self) -> float:
+        if not self.hard_trigger_per_run:
+            return 0.0
+        return sum(self.hard_trigger_per_run) / len(self.hard_trigger_per_run)
+
+    @property
+    def soft_pass_rate(self) -> float:
+        if not self.soft_trigger_per_run:
+            return 0.0
+        return sum(self.soft_trigger_per_run) / len(self.soft_trigger_per_run)
 
 
 class ClaudeRunner(Protocol):
@@ -175,6 +198,8 @@ class NewbieDockerRunner:
         image: str | None = None,
         *,
         api_key_env: str = "SCITEX_AGENT_CONTAINER_CI_ANTHROPIC_API_KEY",
+        skills_mount: Path | None = None,
+        system_prompt: str | None = None,
     ):
         self.image = (
             image
@@ -183,6 +208,15 @@ class NewbieDockerRunner:
         )
         self.container_name = f"scitex-agentic-test-{os.getpid()}"
         self._started = False
+        # Optional read-only HOME mount (must contain ``.claude/skills/...``)
+        # mounted at ``/home/agent/.claude`` so `claude` sees a scoped skill
+        # catalog without any auth/projects baggage from the host.
+        self.skills_mount = Path(skills_mount).resolve() if skills_mount else None
+        # Optional system prompt appended to every ``run()``. ``claude`` CLI
+        # supports ``--system-prompt``; if the installed version rejects it,
+        # we fall back silently (see ``run()``).
+        self.system_prompt = system_prompt
+        self._system_prompt_unsupported = False
 
         # Verify docker is available up-front.
         try:
@@ -234,6 +268,18 @@ class NewbieDockerRunner:
             "CLAUDE_DISABLE_AUTO_UPDATE=1",
             "-e",
             f"ANTHROPIC_API_KEY={self._api_key}",
+            "-e",
+            "HOME=/home/agent",
+        ]
+        if self.skills_mount is not None:
+            # Mount the scoped ``.claude`` tree read-only at the agent HOME so
+            # ``claude`` picks up ``$HOME/.claude/skills/scitex/...`` and
+            # nothing else (no prior projects, no auth config).
+            cmd += [
+                "-v",
+                f"{self.skills_mount}/.claude:/home/agent/.claude:ro",
+            ]
+        cmd += [
             "--entrypoint",
             "sleep",
             self.image,
@@ -254,26 +300,71 @@ class NewbieDockerRunner:
         timeout: int = DEFAULT_TIMEOUT,
     ) -> dict:
         self._start()
-        cmd = [
-            "docker",
-            "exec",
-            self.container_name,
-            "claude",
-            "-p",
-            prompt,
-            "--output-format",
-            "json",
-            "--model",
-            model,
-        ]
 
-        def _one() -> subprocess.CompletedProcess:
-            return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        def _build_cmd(with_system_prompt: bool) -> list[str]:
+            c = [
+                "docker",
+                "exec",
+                "-u",
+                "agent",
+                "-e",
+                "HOME=/home/agent",
+                self.container_name,
+                "claude",
+                "-p",
+                prompt,
+                # stream-json + verbose surfaces intermediate ``tool_use``
+                # blocks (Skill, view, Read, Bash, ...) so the caller can see
+                # which skills/files the agent actually consulted. The plain
+                # ``json`` format only returns the final envelope with no
+                # tool-use trace.
+                "--output-format",
+                "stream-json",
+                "--verbose",
+                "--model",
+                model,
+            ]
+            if (
+                with_system_prompt
+                and self.system_prompt
+                and not self._system_prompt_unsupported
+            ):
+                # ``--append-system-prompt`` keeps the default Claude Code
+                # system prompt (incl. skill-discovery machinery) and appends
+                # our nudge. Using ``--system-prompt`` would replace the whole
+                # system prompt and disable skill auto-discovery — verified
+                # empirically 2026-04-23 (runs showed ``viewed=[]`` for every
+                # case).
+                c += ["--append-system-prompt", self.system_prompt]
+            return c
 
-        proc = _one()
+        def _one(with_sp: bool) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                _build_cmd(with_sp),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+
+        proc = _one(with_sp=True)
+        # If --system-prompt isn't supported by this claude version, note it
+        # and retry without the flag (silent fallback per spec).
+        if (
+            proc.returncode != 0
+            and self.system_prompt
+            and not self._system_prompt_unsupported
+            and (
+                "unknown option" in (proc.stderr + proc.stdout).lower()
+                or "--system-prompt" in (proc.stderr + proc.stdout).lower()
+                and "error" in (proc.stderr + proc.stdout).lower()
+            )
+        ):
+            self._system_prompt_unsupported = True
+            proc = _one(with_sp=False)
+
         # Retry once on empty stdout — occasionally observed on cold start.
         if proc.returncode == 0 and not proc.stdout.strip():
-            proc = _one()
+            proc = _one(with_sp=not self._system_prompt_unsupported)
 
         if proc.returncode != 0:
             raise RuntimeError(
@@ -282,7 +373,25 @@ class NewbieDockerRunner:
             )
         if not proc.stdout.strip():
             raise RuntimeError("docker exec claude -p produced empty stdout twice")
-        return json.loads(proc.stdout)
+        # stream-json produces one JSON object per line; aggregate into a
+        # single dict so downstream parsers (extract_viewed_paths) can walk
+        # it generically. The final ``type: result`` line is merged at top
+        # level; everything else is collected under ``events``.
+        events: list[dict] = []
+        final: dict = {}
+        for line in proc.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            events.append(obj)
+            if isinstance(obj, dict) and obj.get("type") == "result":
+                final = dict(obj)
+        final["events"] = events
+        return final
 
     def close(self) -> None:
         if not self._started:
@@ -311,20 +420,38 @@ def get_runner(backend: str | None = None) -> ClaudeRunner:
 
 
 def extract_viewed_paths(result_json: dict | list) -> list[str]:
-    """Extract file paths from every `view`/`Read` tool-use block.
+    """Extract skill/file references from tool-use blocks.
 
-    Walks the entire `claude -p --output-format json` payload generically
-    so we do not depend on the precise top-level envelope.
+    Returns a flat list of strings describing which skills or files the
+    agent consulted. Two sources contribute:
+
+    1. ``view``/``Read`` tool calls — the raw ``path``/``file_path``
+       argument is included as-is. Used when the agent explicitly opens a
+       ``SKILL.md``.
+    2. ``Skill`` tool calls — modern Claude Code loads a skill via the
+       first-class ``Skill(skill=..., args=...)`` tool rather than by
+       reading ``SKILL.md``. We synthesise a path ``"<skill>/SKILL.md"``
+       so downstream matchers (which compare against strings like
+       ``"scitex-io/SKILL.md"``) work uniformly across both execution
+       paths.
+
+    Walks the entire payload generically so it tolerates stream-json
+    aggregated envelopes as well as single-result envelopes.
     """
     paths: list[str] = []
     for entry in _walk(result_json):
-        if isinstance(entry, dict) and entry.get("type") == "tool_use":
-            name = entry.get("name", "")
-            inp = entry.get("input", {}) or {}
-            if name in {"view", "Read"}:
-                p = inp.get("path") or inp.get("file_path")
-                if p:
-                    paths.append(str(p))
+        if not (isinstance(entry, dict) and entry.get("type") == "tool_use"):
+            continue
+        name = entry.get("name", "")
+        inp = entry.get("input", {}) or {}
+        if name in {"view", "Read"}:
+            p = inp.get("path") or inp.get("file_path")
+            if p:
+                paths.append(str(p))
+        elif name == "Skill":
+            skill = inp.get("skill")
+            if skill:
+                paths.append(f"{skill}/SKILL.md")
     return paths
 
 
@@ -338,24 +465,59 @@ def _walk(obj):
             yield from _walk(v)
 
 
+# hook-bypass: line-limit (split tracked in GITIGNORED/REFACTORING.md)
+def _extract_answer_text(result: dict) -> str:
+    """Final assistant text from a claude -p JSON envelope."""
+    if not isinstance(result, dict):
+        return ""
+    r = result.get("result")
+    return r if isinstance(r, str) else ""
+
+
 def run_trigger_case(
     pool: ClaudeRunner,
     case: EvalCase,
     model: str = DEFAULT_MODEL,
     runs: int = RUNS_PER_CASE,
 ) -> TriggerResult:
+    """Score hard + soft triggers. Pass = hard OR soft (positive cases)."""
     runs_out: list[bool] = []
     views_out: list[list[str]] = []
+    answers_out: list[str] = []
+    hard_out: list[bool] = []
+    soft_out: list[bool] = []
+
     for _ in range(runs):
         result = pool.run(case.query, model=model)
         viewed = extract_viewed_paths(result)
+        answer = _extract_answer_text(result)
         views_out.append(viewed)
+        answers_out.append(answer)
+
         if case.expected_skill is None:
-            ok = not any("SKILL.md" in p for p in viewed)  # negative
+            hard_ok = not any("SKILL.md" in p for p in viewed)
         else:
-            ok = any(case.expected_skill in p for p in viewed)
-        runs_out.append(ok)
-    return TriggerResult(case=case, runs=runs_out, viewed_paths_per_run=views_out)
+            hard_ok = any(case.expected_skill in p for p in viewed)
+        hard_out.append(hard_ok)
+
+        soft_ok = bool(case.answer_contains) and all(
+            s in answer for s in (case.answer_contains or [])
+        )
+        soft_out.append(soft_ok)
+
+        if case.expected_skill is None:
+            runs_out.append(hard_ok)  # negatives: only hard
+        else:
+            runs_out.append(hard_ok or soft_ok)
+
+    return TriggerResult(
+        case=case,
+        runs=runs_out,
+        viewed_paths_per_run=views_out,
+        answers_per_run=answers_out,
+        hard_trigger_per_run=hard_out,
+        soft_trigger_per_run=soft_out,
+    )
 
 
 def load_eval_set(path: Path) -> list[EvalCase]:
