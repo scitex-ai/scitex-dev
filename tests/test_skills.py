@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """Tests for the skills export system."""
 
-import os
 import stat
 from unittest.mock import patch
 
@@ -241,10 +240,10 @@ class TestExportSkills:
         dest = tmp_path / "out"
         p1, p2, p3 = self._patch_discovery(skills_tree)
         with p1, p2, p3:
-            exported = export_skills(dest=dest, mode="export")
+            exported = export_skills(dest)
 
         assert "test-pkg" in exported
-        pkg_dir = dest / "scitex" / "test-pkg"
+        pkg_dir = dest / "test-pkg"
         assert pkg_dir.is_dir()
         assert (pkg_dir / "SKILL.md").exists()
         assert (pkg_dir / "sub-skill.md").exists()
@@ -253,9 +252,9 @@ class TestExportSkills:
         dest = tmp_path / "out"
         p1, p2, p3 = self._patch_discovery(skills_tree)
         with p1, p2, p3:
-            export_skills(dest=dest, mode="export")
+            export_skills(dest)
 
-        manifest = (dest / "scitex" / "test-pkg" / "MANIFEST.md").read_text()
+        manifest = (dest / "test-pkg" / "MANIFEST.md").read_text()
         assert "version: 1.0.0" in manifest
         assert "version: 0.0.0" not in manifest
 
@@ -263,7 +262,7 @@ class TestExportSkills:
         dest = tmp_path / "out"
         p1, p2, p3 = self._patch_discovery(skills_tree)
         with p1, p2, p3:
-            exported = export_skills(dest=dest, mode="export")
+            exported = export_skills(dest)
 
         file_names = [f.name for f in exported["test-pkg"]]
         assert "MANIFEST.md" in file_names
@@ -272,53 +271,33 @@ class TestExportSkills:
         dest = tmp_path / "out"
         p1, p2, p3 = self._patch_discovery(skills_tree)
         with p1, p2, p3:
-            export_skills(dest=dest, mode="export")
+            export_skills(dest)
 
-        skill_content = (dest / "scitex" / "test-pkg" / "SKILL.md").read_text()
+        skill_content = (dest / "test-pkg" / "SKILL.md").read_text()
         # references/ prefix should be stripped
         assert "references/" not in skill_content
         # But the link target should remain
         assert "sub-skill.md" in skill_content
 
-    def test_update_skips_newer_dest_files(self, tmp_path, skills_tree):
-        dest = tmp_path / "out" / "scitex" / "test-pkg"
-        dest.mkdir(parents=True)
-        out_file = dest / "sub-skill.md"
-        out_file.write_text("local edit")
-
-        # Make dest file newer than source using os.utime
-        src_file = skills_tree / "_skills" / "test-pkg" / "sub-skill.md"
-        old_time = 1000000.0
-        new_time = 2000000.0
-        os.utime(src_file, (old_time, old_time))
-        os.utime(out_file, (new_time, new_time))
-
-        p1, p2, p3 = self._patch_discovery(skills_tree)
-        with p1, p2, p3:
-            export_skills(dest=tmp_path / "out", mode="update")
-
-        # Local edit should be preserved because dest is newer
-        assert out_file.read_text() == "local edit"
-
-    def test_upgrade_removes_then_copies(self, tmp_path, skills_tree):
+    def test_clean_removes_stale_files(self, tmp_path, skills_tree):
         dest = tmp_path / "out"
-        pkg_dir = dest / "scitex" / "test-pkg"
+        pkg_dir = dest / "test-pkg"
         pkg_dir.mkdir(parents=True)
         stale_file = pkg_dir / "old-removed-skill.md"
         stale_file.write_text("stale content")
 
         p1, p2, p3 = self._patch_discovery(skills_tree)
         with p1, p2, p3:
-            export_skills(dest=dest, mode="upgrade")
+            export_skills(dest, clean=True)
 
-        # Stale file should be gone after upgrade (rmtree then re-copy)
+        # Stale file should be gone after clean=True (rmtree then re-copy)
         assert not stale_file.exists()
         # Fresh files should be present
         assert (pkg_dir / "SKILL.md").exists()
 
     def test_overwrite_read_only_file_succeeds(self, tmp_path, skills_tree):
         dest = tmp_path / "out"
-        pkg_dir = dest / "scitex" / "test-pkg"
+        pkg_dir = dest / "test-pkg"
         pkg_dir.mkdir(parents=True)
         ro_file = pkg_dir / "SKILL.md"
         ro_file.write_text("read-only content")
@@ -327,7 +306,7 @@ class TestExportSkills:
         p1, p2, p3 = self._patch_discovery(skills_tree)
         with p1, p2, p3:
             # Should not raise PermissionError
-            export_skills(dest=dest, mode="export")
+            export_skills(dest)
 
         # File should now contain the fresh export
         assert "read-only content" not in ro_file.read_text()
@@ -336,9 +315,9 @@ class TestExportSkills:
         dest = tmp_path / "out"
         p1, p2, p3 = self._patch_discovery(skills_tree)
         with p1, p2, p3:
-            export_skills(dest=dest, mode="export")
+            export_skills(dest)
 
-        root_skill = dest / "scitex" / "SKILL.md"
+        root_skill = dest / "SKILL.md"
         assert root_skill.exists()
         content = root_skill.read_text()
         assert "test-pkg" in content
@@ -397,32 +376,6 @@ class TestSkillsCLI:
         # No files should have been written
         assert not dest.exists() or not any(dest.rglob("*.md"))
 
-    def test_update_dry_run_writes_nothing(self, cli_group, tmp_path):
-        from click.testing import CliRunner
-
-        runner = CliRunner()
-        dest = tmp_path / "dry"
-        with self._patch_list_skills():
-            result = runner.invoke(
-                cli_group,
-                ["skills", "update", "--dry-run", "--dest", str(dest)],
-            )
-        assert result.exit_code == 0
-        assert not dest.exists() or not any(dest.rglob("*.md"))
-
-    def test_upgrade_dry_run_writes_nothing(self, cli_group, tmp_path):
-        from click.testing import CliRunner
-
-        runner = CliRunner()
-        dest = tmp_path / "dry"
-        with self._patch_list_skills():
-            result = runner.invoke(
-                cli_group,
-                ["skills", "upgrade", "--dry-run", "--dest", str(dest)],
-            )
-        assert result.exit_code == 0
-        assert not dest.exists() or not any(dest.rglob("*.md"))
-
     def test_export_writes_files(self, cli_group, tmp_path, skills_tree):
         from click.testing import CliRunner
 
@@ -447,4 +400,4 @@ class TestSkillsCLI:
                 ["skills", "export", "--dest", str(dest)],
             )
         assert result.exit_code == 0
-        assert (dest / "scitex" / "test-pkg" / "SKILL.md").exists()
+        assert (dest / "test-pkg" / "SKILL.md").exists()
