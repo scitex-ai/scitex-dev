@@ -27,3 +27,32 @@ def test_trigger_result_pass_rate():
         case=case, runs=[True, True, False], viewed_paths_per_run=[[], [], []]
     )
     assert r.pass_rate == 2 / 3 and r.passed
+
+
+def test_eval_case_accepts_answer_contains():
+    c = EvalCase(
+        id="x",
+        query="q",
+        expected_skill="scitex-io/SKILL.md",
+        answer_contains=["use_caller_path=True", "stx.io.save"],
+    )
+    assert c.answer_contains == ["use_caller_path=True", "stx.io.save"]
+
+
+def test_eval_case_defaults_answer_contains_none():
+    c = EvalCase(id="x", query="q", expected_skill=None)
+    assert c.answer_contains is None
+
+
+def test_trigger_result_soft_hard_rates():
+    case = EvalCase(id="x", query="q", expected_skill="y/SKILL.md")
+    r = TriggerResult(
+        case=case,
+        runs=[True, True, True],
+        viewed_paths_per_run=[[], [], []],
+        answers_per_run=["a", "b", "c"],
+        hard_trigger_per_run=[False, True, True],
+        soft_trigger_per_run=[True, False, True],
+    )
+    assert r.hard_pass_rate == 2 / 3
+    assert r.soft_pass_rate == 2 / 3
