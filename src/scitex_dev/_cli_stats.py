@@ -203,11 +203,26 @@ def format_stats_text(stats: Dict[str, Any]) -> str:
 
 
 def register_stats_command(group: click.Group) -> None:
-    """Register the stats command on a Click group."""
+    """Register the stats commands on a Click group."""
 
-    @group.command("stats")
+    @group.command(
+        "stats",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True},
+    )
+    @click.pass_context
+    def stats_deprecated(ctx: click.Context) -> None:
+        """(deprecated) Renamed to `show-stats`."""
+        click.echo(
+            "error: `scitex-dev stats` was renamed to `scitex-dev show-stats`.\n"
+            "Re-run with: scitex-dev show-stats",
+            err=True,
+        )
+        ctx.exit(2)
+
+    @group.command("show-stats")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def stats_cmd(as_json: bool) -> None:
+    def show_stats(as_json: bool) -> None:
         """Show SciTeX ecosystem statistics."""
         stats = collect_stats()
 
