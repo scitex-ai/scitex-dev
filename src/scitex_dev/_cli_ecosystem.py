@@ -171,20 +171,11 @@ def register_ecosystem_commands(main_group):
     def ecosystem_start_dashboard(port, host, debug, no_browser, force, background):
         """Launch the ecosystem dashboard web UI."""
         if background:
-            import subprocess
-            import sys
+            # Delegate to run_background so log + pid land under
+            # ~/.scitex/dev/runtime/ per 01_arch_06_local-state-directories.md.
+            from .dashboard.app import run_background
 
-            code = (
-                "from scitex_dev.dashboard import run_dashboard; "
-                f"run_dashboard(port={port}, host={host!r}, debug={debug}, "
-                f"open_browser={not no_browser}, force={force})"
-            )
-            subprocess.Popen(
-                [sys.executable, "-c", code],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
+            run_background(host=host, port=port, force=force)
             click.echo(f"Dashboard started in background on {host}:{port}")
         else:
             from .dashboard import run_dashboard
