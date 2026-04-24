@@ -170,6 +170,16 @@ CATALOG: dict[str, set[str]] = {
             "pubmed",
             "crossref",
             "openalex",
+            # Plotting / figure-specific nouns
+            "hitmap",
+            "heatmap",
+            "gui",
+            "fonts",
+            "font",
+            "presets",
+            "preset",
+            "backends",
+            "backend",
         ]
     },
     # Transitive verbs — need an object
