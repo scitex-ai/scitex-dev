@@ -201,6 +201,14 @@ else:
 
         raise SystemExit(_cli_audit.audit_cli(package))
 
+    @quality.command("audit-frontmatter")
+    @click.argument("root", type=click.Path(exists=True, file_okay=False))
+    def _quality_audit_frontmatter(root):
+        """Check skill YAML frontmatter (description length, canonical-location, context_tokens drift, group tags). Warn-only."""
+        from ._cli_quality_frontmatter import audit_frontmatter
+
+        raise SystemExit(audit_frontmatter(root))
+
     # -------------------------------------------------------------------
     # Development commands
     # -------------------------------------------------------------------
