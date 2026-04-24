@@ -102,6 +102,10 @@ class Violation:
 
 
 def _walk(cmd: click.BaseCommand, path: list[str], out: list[Violation]) -> None:
+    # Skip hidden commands — they are not part of the public CLI surface
+    # (typically deprecation redirects kept for back-compat).
+    if getattr(cmd, "hidden", False):
+        return
     name = cmd.name or "<root>"
     full = " ".join(path + [name]) if path else name
     is_group = isinstance(cmd, click.Group)
