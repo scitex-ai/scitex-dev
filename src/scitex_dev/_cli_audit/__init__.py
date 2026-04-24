@@ -188,6 +188,8 @@ CATALOG: dict[str, set[str]] = {
             "disable",
             "install",
             "uninstall",
+            "setup",
+            "bootstrap",
             "build",
             "compile",
             "publish",
