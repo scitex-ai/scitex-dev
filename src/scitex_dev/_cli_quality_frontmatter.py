@@ -15,7 +15,7 @@ except ImportError:  # pragma: no cover
     yaml = None
 
 
-KNOWN_GROUPS = {
+KNOWN_TAGS = {
     # Ecosystem-level tags
     "scitex-package",  # rules that apply to every scitex-* repo
     "scitex-general",  # general/ category in scitex-python
@@ -131,20 +131,28 @@ def _audit_file(path: Path, out: list[FrontmatterWarning]) -> None:
                 )
             )
 
-    # group tag sanity
-    groups = fm.get("group") or []
-    if isinstance(groups, str):
-        groups = [groups]
-    for g in groups:
-        if g not in KNOWN_GROUPS:
+    # tags sanity (legacy `group:` also accepted during migration)
+    tags = fm.get("tags") or fm.get("group") or []
+    if isinstance(tags, str):
+        tags = [tags]
+    for t in tags:
+        if t not in KNOWN_TAGS:
             out.append(
                 FrontmatterWarning(
                     str(path),
                     "FM-5",
-                    f"group tag `{g}` not in KNOWN_GROUPS — either document it in "
+                    f"tag `{t}` not in KNOWN_TAGS — either document it in "
                     f"06_skills_06_frontmatter-metadata.md or rename",
                 )
             )
+    if fm.get("group") is not None and fm.get("tags") is None:
+        out.append(
+            FrontmatterWarning(
+                str(path),
+                "FM-6",
+                "legacy `group:` field — rename to `tags:` (YAML-frontmatter convention)",
+            )
+        )
 
 
 def audit_frontmatter(root: Path | str) -> int:
