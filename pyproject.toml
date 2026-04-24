@@ -19,6 +19,7 @@ dependencies = []
 cli = ["click>=8.0.0"]
 mcp = ["fastmcp>=2.0.0"]
 dev = ["click>=8.0.0", "pytest>=7.0.0", "pytest-cov>=4.0.0"]
+cli-audit = ["click>=8.0.0", "pyyaml>=6.0"]
 docs = [
     "sphinx>=7.0",
     "sphinx-rtd-theme>=2.0",
@@ -31,6 +32,7 @@ all = [
     "scitex-dev[mcp]",
     "scitex-dev[dev]",
     "scitex-dev[docs]",
+    "scitex-dev[cli-audit]",
 ]
 
 [project.scripts]
@@ -51,7 +53,7 @@ Documentation = "https://scitex-dev.readthedocs.io/"
 where = ["src"]
 
 [tool.setuptools.package-data]
-scitex_dev = ["skills/*.md", "skills/references/*.md", "_skills/**/*"]
+scitex_dev = ["skills/*.md", "skills/references/*.md", "_skills/**/*", "_cli_audit/data/*"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/scitex_dev/_skills" = "scitex_dev/_skills"
