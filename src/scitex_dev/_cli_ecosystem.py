@@ -63,7 +63,9 @@ def register_ecosystem_commands(main_group):
                 click.echo(f"  {pkg:25s} {repo}")
 
     @ecosystem.command("fix-mismatches")
-    @click.option("--confirm", is_flag=True, help="Apply fixes (default: preview only).")
+    @click.option(
+        "--confirm", is_flag=True, help="Apply fixes (default: preview only)."
+    )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def ecosystem_fix_mismatches(confirm, as_json):
         """Detect and fix version mismatches across ecosystem."""
@@ -139,9 +141,25 @@ def register_ecosystem_commands(main_group):
             confirm=not dry_run,
         )
 
-    @ecosystem.command("dashboard")
+    @ecosystem.command(
+        "dashboard",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    )
+    @click.pass_context
+    def ecosystem_dashboard_deprecated(ctx):
+        """(deprecated) Renamed to `start-dashboard`."""
+        click.echo(
+            "error: `scitex-dev ecosystem dashboard` was renamed to "
+            "`scitex-dev ecosystem start-dashboard`.\n"
+            "Re-run with: scitex-dev ecosystem start-dashboard [...]",
+            err=True,
+        )
+        ctx.exit(2)
+
+    @ecosystem.command("start-dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")
-    @click.option("--host", default="127.0.0.1", help="Host to bind to.")
+    @click.option("--host", default="0.0.0.0", help="Host to bind to.")
     @click.option("--debug", is_flag=True, help="Enable debug/reload mode.")
     @click.option(
         "--no-browser", is_flag=True, help="Do not open browser automatically."
@@ -150,7 +168,7 @@ def register_ecosystem_commands(main_group):
     @click.option(
         "--background", is_flag=True, help="Run dashboard in a background process."
     )
-    def ecosystem_dashboard(port, host, debug, no_browser, force, background):
+    def ecosystem_start_dashboard(port, host, debug, no_browser, force, background):
         """Launch the ecosystem dashboard web UI."""
         if background:
             import subprocess
