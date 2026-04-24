@@ -190,6 +190,17 @@ else:
         """Enforce per-file line limits against the allowlist."""
         raise SystemExit(_cli_quality.audit_lines())
 
+    @quality.command("audit-cli")
+    @click.argument("package")
+    def _quality_audit_cli(package):
+        """Check a package's CLI against the noun-verb convention (warn-only).
+
+        Requires the `cli-audit` extra: pip install 'scitex-dev[cli-audit]'
+        """
+        from . import _cli_audit
+
+        raise SystemExit(_cli_audit.audit_cli(package))
+
     # -------------------------------------------------------------------
     # Development commands
     # -------------------------------------------------------------------
