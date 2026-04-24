@@ -14,7 +14,19 @@ Local edits at `~/.claude/skills/scitex/` may be overwritten on update.
 
 ```bash
 pip install --upgrade scitex-dev
-scitex-dev skills export          # Overwrite all
+scitex-dev skills export          # Overwrite all (+ symlink private skills)
 scitex-dev skills update          # Preserve local changes
 scitex-dev skills upgrade         # Clean replacement
 ```
+
+## Private Skills
+
+Private (per-machine) skills are symlinked into the export destination automatically:
+
+```
+~/.scitex/<suffix>/skills/<package>-private/
+  → ~/.claude/skills/scitex/<package>-private/
+```
+
+Where `<suffix>` is the package name minus the `scitex-` prefix.
+Private skills are never copied or shipped — the symlink keeps edits live.

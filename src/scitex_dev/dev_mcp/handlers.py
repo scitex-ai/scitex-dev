@@ -17,7 +17,7 @@ from ..types import Result
 async def list_versions_handler(
     packages: list[str] | None = None,
 ) -> str:
-    """List versions across the scitex ecosystem."""
+    """Report the installed version of every SciTeX package (scitex, scitex-io, scitex-stats, figrecipe, scitex-writer, scitex-scholar, scitex-notebook, scitex-audio, scitex-clew, scitex-dev, scitex-linter, …). Use when the user asks "what versions of scitex do I have?", "list ecosystem versions", "show every scitex-* version", or before a release to see the current state. Optionally filter to a subset with `packages=[...]`."""
     from ..versions import list_versions
 
     return wrap_as_mcp(
@@ -28,7 +28,7 @@ async def list_versions_handler(
 
 
 async def get_config_handler() -> str:
-    """Get current developer configuration."""
+    """Show the active `DevConfig` — which hosts are configured, which packages are registered in the ecosystem, default HPC partition / time / memory, editable-install paths. Use when the user asks "show my dev config", "what hosts does scitex-dev know?", "dump the config", or is debugging why `sync` / `test_hpc_run` can't find a host."""
     from ..config import config_to_dict, get_config_path, load_config
 
     def _get_config():
@@ -49,7 +49,7 @@ async def test_run_handler(
     pattern: str = "",
     parallel: str = "auto",
 ) -> str:
-    """Run tests locally."""
+    """Run pytest locally against a SciTeX package — `fast` skips slow tests, `coverage` collects coverage, `exitfirst` stops on first failure, `pattern` filters test IDs, `parallel='auto'` uses `pytest-xdist`. Drop-in replacement for hand-typing `cd path/to/pkg && pytest …`. Use when the user asks to "run tests for X", "test scitex-io", "run the test suite", "rerun failing tests fast", or before committing."""
     from ..test_runner import TestConfig, run_local
 
     def _run():
@@ -79,7 +79,7 @@ async def test_hpc_run_handler(
     hpc_mem: str = "16G",
     async_mode: bool = False,
 ) -> str:
-    """Run tests on HPC via Slurm."""
+    """Submit the test suite to a remote HPC cluster via Slurm — rsyncs the repo, then uses `sbatch` (async, returns `job_id`) or `srun` (sync, blocks until done). Drop-in replacement for manually `rsync`-ing + `ssh user@hpc 'sbatch job.sh'`. Use whenever the user asks to "run tests on the HPC", "submit a Slurm job for tests", "sbatch the test suite", or has tests too slow/large for the laptop. Set `async_mode=True` to return immediately with a `job_id` for later polling via `test_hpc_poll`."""
     from ..test_runner import (
         TestConfig,
         _check_ssh,
@@ -141,7 +141,7 @@ async def test_hpc_run_handler(
 async def test_hpc_poll_handler(
     job_id: str | None = None,
 ) -> str:
-    """Poll HPC job status."""
+    """Check the Slurm status of a previously submitted `test_hpc_run` job (PENDING / RUNNING / COMPLETED / FAILED / CANCELLED). Drop-in replacement for `ssh hpc 'squeue -j JOB_ID'`. Use when the user asks "is my HPC job done?", "check my sbatch job", "poll job 12345", or is waiting on an async test run. Omit `job_id` to poll the most recent submission."""
     from ..test_runner import poll_hpc_job
 
     return wrap_as_mcp(
@@ -154,7 +154,7 @@ async def test_hpc_poll_handler(
 async def test_hpc_result_handler(
     job_id: str | None = None,
 ) -> str:
-    """Fetch full HPC test output."""
+    """Retrieve the stdout/stderr log of a completed Slurm test job from the HPC. Use when the user asks "what were the test results?", "show me the output of my HPC job", "fetch job 12345's log", or after `test_hpc_poll` returns `COMPLETED`. Omit `job_id` to grab the last submission."""
     from ..test_runner import fetch_hpc_result
 
     def _fetch():
@@ -174,7 +174,7 @@ async def sync_handler(
     safe: bool = True,
     confirm: bool = False,
 ) -> str:
-    """Sync ecosystem packages to remote hosts.
+    """Push local SciTeX changes to every configured remote host — `git pull` each repo, `pip install -e` if it changed, with an ahead-check safeguard that skips any remote with unpushed commits (so you never clobber someone's in-progress work). Use whenever the user asks to "sync my changes to the lab machines", "update scitex on all my hosts", "deploy these fixes to gpu01/gpu02", "push to HPC", or is rolling out a cross-package change. Set `safe=False` to force, `confirm=True` to actually execute (default is dry-run).
 
     When ``safe`` is True (default), per-package ahead-check skips
     remote working copies that have unpushed commits so we never
@@ -197,7 +197,7 @@ async def sync_local_handler(
     packages: list[str] | None = None,
     confirm: bool = False,
 ) -> str:
-    """Install all local editable packages."""
+    """`pip install -e .` every SciTeX package in the local ecosystem — ensures imports resolve to the working-tree version, not the last PyPI release. Use whenever the user asks to "install all scitex packages in editable mode", "make pip see my local changes", "sync local editable installs", "reinstall after cloning fresh", or is fixing a version mismatch introduced by `pip install scitex`."""
     from ..sync import sync_local
 
     return wrap_as_mcp(
@@ -212,7 +212,7 @@ async def remote_diff_handler(
     host: str | None = None,
     packages: list[str] | None = None,
 ) -> str:
-    """Show git diff on remote host(s)."""
+    """SSH to each configured remote host and run `git status` / `git diff` across every SciTeX repo — surfaces work that still lives only on gpu01 / laptop / HPC. Use when the user asks "is anything uncommitted on my other machines?", "show remote diffs", "what have I changed on the HPC?", or before a sync to check for drift."""
     from ..sync_remote import remote_diff
 
     return wrap_as_mcp(
@@ -230,7 +230,7 @@ async def remote_commit_handler(
     push: bool = True,
     confirm: bool = False,
 ) -> str:
-    """Commit dirty changes on a remote host."""
+    """SSH to a remote host and `git commit` (+ optionally `git push`) dirty changes across SciTeX repos — useful for rescuing work left behind on an HPC session or another machine. Use when the user asks to "commit what's on gpu01", "save the HPC-side changes", "push remote work to origin", "grab that half-finished change I made on the lab server". Pass `confirm=True` to actually commit (default previews)."""
     from ..sync_remote import remote_commit
 
     return wrap_as_mcp(
@@ -252,7 +252,7 @@ async def pull_local_handler(
     confirm: bool = False,
     stash: bool = True,
 ) -> str:
-    """Pull latest from origin to local repos."""
+    """`git pull` every local SciTeX repo from origin — with an optional `git stash` first to survive dirty trees. Drop-in replacement for walking each `~/proj/scitex-*` folder and running `git pull`. Use when the user asks to "update all my local scitex repos", "pull origin on every package", "sync local with GitHub", "stash and pull all scitex", or at session start."""
     from ..sync_remote import pull_local
 
     return wrap_as_mcp(
@@ -279,7 +279,7 @@ async def rename_handler(
     scope: str = "",
     recursive: bool = True,
 ) -> str:
-    """Bulk rename files, contents, directories, and symlinks."""
+    """Rename an identifier across an entire project — updates filenames, directory names, symlink targets, AND file contents in one shot, with git-safety guards (refuses to run if uncommitted changes exist unless `force=True`). Drop-in replacement for `sed -i` + `git mv` + find-and-replace scripting. Use whenever the user asks to "rename foo → bar everywhere", "refactor this symbol globally", "bulk rename in this directory", "search-and-replace across files", or is restructuring naming before a release. Pass `regex=True` for regex patterns. Dry-runs by default; set `confirm=True` to apply."""
     from dataclasses import asdict
 
     from ..rename import RenameConfig, bulk_rename
@@ -337,7 +337,7 @@ async def fix_mismatches_handler(
     remote: bool = True,
     confirm: bool = False,
 ) -> str:
-    """Detect and fix version mismatches across the ecosystem."""
+    """Scan every SciTeX package (locally and on every configured remote host) for installed-version drift against `pyproject.toml`, and restore consistency via `pip install` + `git pull`. Use whenever the user asks "are all my scitex installs in sync?", "fix version mismatches", "why is scitex-io saying 0.3.1 on gpu01 but 0.3.2 here?", "audit and repair ecosystem versions", or before a release/demo where version drift would bite. Defaults to dry-run; pass `confirm=True` to actually install."""
     from ..fix import fix_mismatches
 
     return wrap_as_mcp(
@@ -357,7 +357,7 @@ async def fix_mismatches_handler(
 async def skills_list_handler(
     package: str | None = None,
 ) -> str:
-    """List skills across the SciTeX ecosystem."""
+    """Enumerate every skill page shipped by every SciTeX package — scitex-io's `01_save-and-load`, scitex-stats' `01_test-catalog`, figrecipe's `02_plot-types`, scitex-writer's `13_claims`, etc. Use whenever the user asks "what skill pages exist?", "list all scitex skills", "what docs are shipped with these packages?", or is discovering learning resources. Filter to one package with `package='scitex-io'`."""
     from ..skills import list_skills
 
     return wrap_as_mcp(list_skills, idempotent=True, package=package)
@@ -367,7 +367,7 @@ async def skills_get_handler(
     package: str,
     name: str,
 ) -> str:
-    """Get content of a specific skill."""
+    """Fetch the full Markdown of one skill page — e.g. `package='scitex-io', name='01_save-and-load'` returns that file's contents. Use whenever the user asks "show me the scitex-io quick-start skill", "read the figrecipe composition skill", "get the claims skill page from scitex-writer", or is diving into a specific guide. Pair with `skills_list_handler` to discover names."""
     from ..skills import get_skill
 
     return wrap_as_mcp(get_skill, idempotent=True, package=package, name=name)

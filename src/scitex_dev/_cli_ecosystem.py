@@ -63,14 +63,14 @@ def register_ecosystem_commands(main_group):
                 click.echo(f"  {pkg:25s} {repo}")
 
     @ecosystem.command("fix-mismatches")
-    @click.option("--dry-run", is_flag=True, help="Preview without applying fixes.")
+    @click.option("--confirm", is_flag=True, help="Apply fixes (default: preview only).")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def ecosystem_fix_mismatches(dry_run, as_json):
+    def ecosystem_fix_mismatches(confirm, as_json):
         """Detect and fix version mismatches across ecosystem."""
         from . import fix_mismatches
         from .cli_utils import wrap_as_cli
 
-        wrap_as_cli(fix_mismatches, as_json=as_json, confirm=not dry_run)
+        wrap_as_cli(fix_mismatches, as_json=as_json, confirm=confirm)
 
     @ecosystem.command("sync")
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
