@@ -205,6 +205,12 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/scitex-scholar",
         "import_name": "scitex_scholar",
     },
+    "scitex-template": {
+        "local_path": "~/proj/scitex-template",
+        "pypi_name": "scitex-template",
+        "github_repo": "ywatanabe1989/scitex-template",
+        "import_name": "scitex_template",
+    },
     "scitex-dev": {
         "local_path": "~/proj/scitex-dev",
         "pypi_name": "scitex-dev",
