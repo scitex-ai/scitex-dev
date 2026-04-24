@@ -1,23 +1,22 @@
 ## Skills to Load (Required)
-skill:scitex-versions
+skill:scitex-dev-full-update
 skill:speak-and-signature
 skill:autonomous
+skill:quality-guards
 
 ## Task: Full Ecosystem Release
 
-For each SciTeX package (skip scitex-cloud alpha unless requested):
+Follow the full-update skill strictly — 5 phases, 20 steps, in order.
 
-1. **Check GitHub Actions** — verify latest CI passes before proceeding. If failures exist, report and offer to fix before push.
-2. **Determine version bump** — count commits since last tag, check for `feat:` (minor) vs `fix:` (patch).
-3. **Bump version** — edit pyproject.toml.
-4. **Commit and tag** — `git commit` + `git tag vX.Y.Z`.
-5. **Push** — `git push origin develop --tags`.
-6. **GitHub Release** — `gh release create vX.Y.Z --generate-notes`.
-7. **PyPI** — verify `publish-pypi.yml` triggered (check Actions).
-8. **pip install -e** — local editable install.
-9. **NAS sync** — `scitex dev versions sync --confirm --host nas`.
+1. **Phase 1: Pre-flight** (steps 1–4) — check_ci, detect_mismatches, fix_init_version, verify_pypi_config
+2. **Phase 2: Version Bump + Release** (steps 5–12) — determine_bump_type, bump_version, verify_docs_and_skills, commit_and_tag, check_ci_before_push, push, create_github_release, wait_for_pypi
+3. **Phase 3: Local Sync** (steps 13–14) — fix_local, verify_versions
+4. **Phase 4: Host Sync** (steps 15–17) — fix_remote [Custom], deploy_scitex_cloud [Custom], verify_production [Custom]
+5. **Phase 5: Verification** (steps 18–20) — verify_versions, verify_production [Custom], report_summary
 
-Use parallel subagents for independent packages. Present ecosystem summary table when done.
+Each step has Python API, CLI, and MCP tool — use the most appropriate for the context.
+Use parallel subagents for independent packages within a phase.
+Present ecosystem summary table when done.
 
 ## Arguments
 $ARGUMENTS
