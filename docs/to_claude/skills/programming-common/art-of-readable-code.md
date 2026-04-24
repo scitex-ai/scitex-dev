@@ -1,10 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-25 23:31:54
-!-- Author: ywatanabe
-!-- File: /ssh:sp:/home/ywatanabe/.claude/to_claude/guidelines/programming_common/art-of-readable-code.md
-!-- --- -->
-
-
 Code should minimize the time and effort needed for others to understand it. Readable code directly improves maintainability, reduces bugs, and enhances team productivity.
 _____________________________________
 
@@ -1313,5 +1306,3 @@ def calculate_statistics(values):
 11. **Test interfaces, not implementations**: Write tests that verify behavior from the user's perspective rather than internal implementation details.
 
 12. **Prioritize readability over premature optimization**: Focus on making code correct and clear first. Only optimize after profiling identifies actual bottlenecks.
-
-<!-- EOF -->

@@ -57,7 +57,7 @@ class TestGetDocs:
 
     def test_single_package_html_format(self, tmp_path):
         """HTML format returns a Path."""
-        html_dir = tmp_path / "_docs"
+        html_dir = tmp_path / "_sphinx_html"
         html_dir.mkdir()
         (html_dir / "index.html").write_text("<html></html>")
 
@@ -88,7 +88,7 @@ class TestGetDocs:
         assert "pkg-b" in result
 
     def test_unknown_format(self, tmp_path):
-        html_dir = tmp_path / "_docs"
+        html_dir = tmp_path / "_sphinx_html"
         html_dir.mkdir()
         (html_dir / "index.html").write_text("<html></html>")
 

@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-25 02:41:39
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/guidelines-programming-Debug-Message-Rules.md
-!-- --- -->
-
 # Debug Message Implementation Guidelines
 
 Debugging Message is quite useful, especially with flag and prefixes.
@@ -48,5 +42,3 @@ logger.debug(f"[{self.__class__.__name__}] Processing: {item}")
 - [ ] Context-specific debug states implemented
 - [ ] Consistent message formatting established
 - [ ] User documentation provided especially for flag
-
-<!-- EOF -->

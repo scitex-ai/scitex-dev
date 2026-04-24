@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-09-01 08:23:25
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/USER_PHILOSOPHY/05_PRIORITY_CONFIG.md
-!-- --- -->
-
 # Centraliazed, PriorityConfig
 
 -   **./config**
@@ -18,5 +12,3 @@
 -   **Type conversion**: Automatic type casting
 
 Please see the official documentation (`./docs/to_claude/guidelines/python/official/priority_config-README.md`)
-
-<!-- EOF -->

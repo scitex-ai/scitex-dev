@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-06-14 06:50:01
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/programming_common/.slurm.md
-!-- --- -->
-
 # SLURM Utilities
 
 Simple SLURM workflow for persistent GPU nodes.
@@ -69,5 +63,3 @@ srun.sh nvidia-smi
 - 32 CPU cores (8 per GPU)
 - 256GB RAM
 - 7 days runtime with auto-resubmission
-
-<!-- EOF -->

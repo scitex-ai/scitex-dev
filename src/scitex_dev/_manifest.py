@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Manifest schema for pre-built docs.
 
-Each package can ship a _docs/manifest.json describing its documentation:
+Each package can ship a _sphinx_html/manifest.json describing its documentation:
     {
         "package": "scitex-writer",
         "version": "0.3.0",
@@ -27,10 +27,10 @@ logger = logging.getLogger(__name__)
 
 
 def read_manifest(docs_dir: Path) -> Optional[dict[str, Any]]:
-    """Read manifest.json from a _docs/ directory.
+    """Read manifest.json from a _sphinx_html/ directory.
 
     Args:
-        docs_dir: Path to the _docs/ directory.
+        docs_dir: Path to the _sphinx_html/ directory.
 
     Returns:
         Parsed manifest dict, or None if not found/invalid.

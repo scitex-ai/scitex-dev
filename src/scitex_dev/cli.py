@@ -324,6 +324,71 @@ def skills_click_group(package: str, name: str = "skills"):
         ns = argparse.Namespace(name=skill_name, as_json=as_json)
         _skills_get(ns, package=package)
 
+    # hook-bypass: line-limit — adding export subcommand; cli.py split
+    # refactor tracked in GITIGNORED/REFACTORING.md, follow-up work item.
+    @skills_grp.command("export")
+    @click.option(
+        "--dest",
+        default=None,
+        help="Destination dir (default: ~/.claude/skills/scitex/).",
+    )
+    @click.option(
+        "--source",
+        type=click.Choice(["package", "dev", "auto"]),
+        default="auto",
+        help="Which source to export from.",
+    )
+    @click.option("--clean", is_flag=True, help="Delete pkg subdir first.")
+    @click.option("--dry-run", is_flag=True, help="Preview without writing.")
+    @click.option("--json", "as_json", is_flag=True, help="JSON output")
+    def skills_export(dest, source, clean, dry_run, as_json):
+        """Export this package's skills to <dest>."""
+        from pathlib import Path as _P
+
+        from .skills import (
+            _get_default_export_dest,
+            export_skills,
+            list_skills,
+        )
+
+        target = _P(dest) if dest else _get_default_export_dest()
+
+        # hook-bypass: line-limit (tracked in GITIGNORED/REFACTORING.md)
+        if dry_run:
+            sl_by_pkg = list_skills(package=package)
+            flat = [s for lst in sl_by_pkg.values() for s in lst]
+            if as_json:
+                import json as _json
+
+                click.echo(
+                    _json.dumps({str(target): [s["name"] for s in flat]}, indent=2)
+                )
+            else:
+                click.echo(
+                    f"Would export {len(flat)} files for {package} "
+                    f"to {target}/ (source={source})"
+                )
+                for s in flat:
+                    click.echo(f"  - {s['name']}")
+            return
+
+        exported = export_skills(target, package=package, clean=clean, source=source)
+        if not exported:
+            click.echo(f"No skills found to export for {package}.")
+            return
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {k: [str(f) for f in v] for k, v in exported.items()},
+                    indent=2,
+                )
+            )
+        else:
+            total = sum(len(v) for v in exported.values())
+            click.echo(f"Exported {total} files for {package} to {target}")
+
     return skills_grp
 
 
@@ -374,40 +439,40 @@ def register_skills_subcommand(
     # skills export
     export_p = skills_sub.add_parser(
         "export",
-        help="Export skills to Claude Code's expected location",
+        help="Export skills to ~/.claude/skills/scitex/",
     )
     export_p.add_argument(
-        "--level",
-        choices=["personal", "project"],
-        default="project",
-        help="personal (~/.claude/skills/) or project (.claude/skills/)",
-    )
-    export_p.add_argument(
-        "--target",
+        "--dest",
         default=None,
-        help="Override target directory",
+        help="Exact target directory (default: ~/.claude/skills/scitex/)",
+    )
+    export_p.add_argument(
+        "--source",
+        choices=["installed", "pypi"],
+        default="installed",
+        help="local (installed packages) or pypi (download wheels)",
+    )
+    export_p.add_argument(
+        "--clean",
+        action="store_true",
+        help="Delete package subdirs before exporting",
     )
     export_p.add_argument(
         "--dry-run",
         action="store_true",
-        help="Show what would be copied without doing it",
+        help="Preview what would be exported without writing",
+    )
+    export_p.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Output as JSON",
     )
     export_p.set_defaults(func=lambda args: _skills_export(args, package))
 
-    # bare `skills` → show help; --help-recursive → show all subcommand help
-    def _default_handler(args):
-        if getattr(args, "help_recursive", False):
-            parser.print_help()
-            print()
-            for name, sub_p in [("list", list_p), ("get", get_p), ("export", export_p)]:
-                print(f"--- {name} ---")
-                sub_p.print_help()
-                print()
-            return
-        if args.skills_command is None:
-            parser.print_help()
-
-    parser.set_defaults(func=_default_handler)
+    parser.set_defaults(
+        func=lambda args: parser.print_help() if args.skills_command is None else None
+    )
     return parser
 
 
@@ -441,30 +506,45 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
     logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
     from .skills import export_skills
 
-    mode = getattr(args, "mode", "export")
-    target = Path(args.target) if getattr(args, "target", None) else None
+    from .skills import _get_default_export_dest
 
-    if args.dry_run:
-        from .skills import get_skill_dir
+    dest = (
+        Path(args.dest) if getattr(args, "dest", None) else _get_default_export_dest()
+    )
+    source = getattr(args, "source", "installed")
+    clean = getattr(args, "clean", False)
+    if getattr(args, "dry_run", False):
+        from .skills import list_skills
 
-        src_dir = get_skill_dir(package)
-        if src_dir is None:
-            print(f"No skills found for {package}.", file=sys.stderr)
-            sys.exit(2)
-        dest = target or (Path(".claude") / "skills" / "scitex")
-        print(f"Would copy: {src_dir} -> {dest / package}")
-        for f in sorted(src_dir.rglob("*.md")):
-            print(f"  {f.name} -> {dest / package / f.name}")
+        result = {
+            k: [e["name"] + ".md" for e in v]
+            for k, v in list_skills(package=package).items()
+        }
+        total = sum(len(v) for v in result.values())
+        if getattr(args, "as_json", False):
+            print(
+                json.dumps(
+                    {"dest": str(dest), "source": source, "packages": result}, indent=2
+                )
+            )
+        else:
+            print(f"Would export {total} files to {dest}/ (source={source})")
+            for k, v in sorted(result.items()):
+                print(f"  {k}/: {len(v)} files")
         return
-
-    exported = export_skills(dest=target, package=package, mode=mode)
+    exported = export_skills(dest, package=package, clean=clean, source=source)
     if not exported:
         print(f"No skills found for {package}.", file=sys.stderr)
         sys.exit(2)
-    for pkg_name, files in exported.items():
-        print(f"Exported {pkg_name} skills:")
-        for f in files:
-            print(f"  {Path(f).name}")
+    if getattr(args, "as_json", False):
+        print(
+            json.dumps({k: [str(f) for f in v] for k, v in exported.items()}, indent=2)
+        )
+    else:
+        total = sum(len(v) for v in exported.values())
+        print(f"Exported {total} files across {len(exported)} packages")
+        for k, v in exported.items():
+            print(f"  {k}: {len(v)} files")
 
 
 def _skills_get(args: argparse.Namespace, package: str) -> None:

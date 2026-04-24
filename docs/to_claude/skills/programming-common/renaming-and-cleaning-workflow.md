@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-25 16:15:00
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/guidelines-programming-Renaming-and-Cleaning-Workflow.md
-!-- --- -->
-
 # Renaming and Cleaning Workflow Guidelines
 
 ## Overview
@@ -307,5 +301,3 @@ DRY_RUN=false ~/.claude/to_claude/bin/cleanup-duplicates.sh ./src cleanup-plan.t
 - [ ] Documentation updated
 - [ ] Changes committed with clear message
 - [ ] Team notified of breaking changes
-
-<!-- EOF -->

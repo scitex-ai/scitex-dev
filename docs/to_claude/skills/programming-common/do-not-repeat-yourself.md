@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-25 23:23:48
-!-- Author: ywatanabe
-!-- File: /ssh:sp:/home/ywatanabe/.claude/to_claude/guidelines/programming_common/do-not-repeat-yourself.md
-!-- --- -->
-
 # !!! IMPORTANT !!!! 
 
 ## DON'T REPEAT YOURSELF (DRY)
@@ -23,5 +17,3 @@
 ## Your Understanding Check
 Did you understand the guideline? If yes, please say:
 `CLAUDE UNDERSTOOD: <THIS FILE PATH HERE>`
-
-<!-- EOF -->

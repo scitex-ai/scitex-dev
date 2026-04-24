@@ -21,18 +21,28 @@
 
 ---
 
+## Problem and Solution
+
+
+| # | Problem | Solution |
+|---|---------|----------|
+| 1 | **33 packages get out of sync** -- one package bumps a dep; consumers forget to update minima; users hit runtime errors | **`scitex-dev ecosystem` suite** -- `list`, `diff`, `sync`, `fix-mismatches`, `commit`, `pull`, `push` — fanout tooling for coordinated releases |
+| 2 | **Skills scattered across 33 source repos** -- users can't discover them easily | **`scitex-dev skills export --link`** -- symlink the full skill pack into `~/.claude/skills/scitex/` for live-edit dev loops |
+| 3 | **Testing against a SLURM cluster requires ssh + sbatch dance** -- interrupts local flow | **`scitex-dev test hpc` + `--poll` + `--result`** -- non-blocking submit, query later |
+
 ## Problem
 
 The SciTeX ecosystem spans multiple packages (scitex-clew, scitex-writer, scitex-stats, figrecipe, etc.), each with their own documentation, versions, APIs, and CLI commands. Keeping them in sync, discovering what's available, and maintaining consistency across the ecosystem becomes increasingly difficult as it grows.
 
 ## Solution
 
-`scitex-dev` provides a unified toolkit for developing and maintaining the SciTeX ecosystem:
+`scitex-dev` (v0.5.1) provides a unified toolkit for developing and maintaining the SciTeX ecosystem:
 
-- **Docs aggregation** — discover, build, and search documentation across all packages from a single entry point
-- **Unified search** — search Python APIs, CLI commands, MCP tools, and docs with fuzzy matching and Google-like syntax
-- **Version management** — track, compare, and fix version mismatches across pyproject.toml, `__init__.py`, git tags, PyPI, and RTD
-- **Bulk rename** — safe, preview-able renaming with cross-reference updates across the entire codebase
+- **Version management** — detect and fix version mismatches across pyproject.toml, `__init__.py`, git tags, and PyPI
+- **CI/CD** — check GitHub Actions status, wait for workflows, verify PyPI publish
+- **Deployment** — deploy and verify production on remote hosts
+- **Skills** — aggregate, export, and verify AI agent skill pages across the ecosystem
+- **Docs aggregation** — discover, build, and search documentation across all packages
 - **LLM-friendly types** — `Result`, `ErrorCode`, `@supports_return_as` for consistent structured responses
 
 Zero runtime dependencies. Pure stdlib.
@@ -52,55 +62,72 @@ pip install scitex-dev[mcp]
 pip install scitex-dev[all]
 ```
 
+## Modules
+
+| Module | Functions | Purpose |
+|--------|-----------|---------|
+| `skills` | `list_skills`, `get_skill`, `export_skills`, `verify_docs_and_skills` | AI agent skill discovery and export |
+| `fix` | `detect_mismatches`, `fix_local`, `fix_remote`, `fix_init_version`, `bump_version`, `determine_bump_type`, `verify_versions` | Version mismatch detection and repair |
+| `ci` | `check_ci`, `get_failing_packages`, `verify_pypi_config`, `create_github_release`, `wait_for_workflow`, `check_pypi_publish` | GitHub Actions and PyPI integration |
+| `deploy` | `deploy_scitex_cloud`, `verify_production` | Remote host deployment |
+| `versions` | `get_commits_since_tag` | Commit tracking since last release |
+| `_dist_info` | `clean_stale_dist_info` | Internal: stale dist-info cleanup |
+
 ## Quick Start
 
 ```python
-import scitex_dev
+from scitex_dev.fix import detect_mismatches, fix_local, verify_versions
+from scitex_dev.ci import check_ci, get_failing_packages
+from scitex_dev.skills import list_skills, export_skills
 
-# Unified search across the ecosystem
-results = scitex_dev.search("save figure")
+# Detect version mismatches across the ecosystem
+mismatches = detect_mismatches()
 
-# Version management
-versions = scitex_dev.list_versions()
-mismatches = scitex_dev.get_mismatches()
+# Fix mismatches locally (dry run by default)
+fix_local(packages=["scitex-stats"], confirm=True)
 
-# Documentation aggregation
-docs = scitex_dev.get_docs(package="scitex-writer", format="json")
+# Check CI status
+status = check_ci(packages=["scitex", "figrecipe"])
+failing = get_failing_packages()
+
+# List and export AI agent skills
+skills = list_skills()
+export_skills()
 ```
 
-## Three Interfaces
+## Four Interfaces
 
 <details>
 <summary><b>Python API</b></summary>
 
 ```python
-import scitex_dev
+# Version management
+from scitex_dev.fix import detect_mismatches, fix_local, fix_remote, verify_versions
+mismatches = detect_mismatches()
+fix_local(packages=["scitex-stats"], confirm=True)
+verify_versions()
 
-# Search
-scitex_dev.search("ttest", scope="api")
-scitex_dev.search('+required -excluded "exact phrase"')
+# CI/CD
+from scitex_dev.ci import check_ci, get_failing_packages, check_pypi_publish
+status = check_ci()
+failing = get_failing_packages()
 
-# Docs
-scitex_dev.get_docs()
-scitex_dev.get_docs(package="scitex-writer", format="json")
-scitex_dev.build_docs(package="scitex-writer")
-scitex_dev.search_docs("installation")
+# Skills
+from scitex_dev.skills import list_skills, get_skill, export_skills
+skills = list_skills()
+page = get_skill(package="scitex-stats")
+export_skills()
 
-# Versions
-scitex_dev.list_versions()
-scitex_dev.check_versions(["scitex", "figrecipe"])
-scitex_dev.get_mismatches()
-scitex_dev.fix_mismatches(dry_run=True)
+# Deployment
+from scitex_dev.deploy import deploy_scitex_cloud, verify_production
+deploy_scitex_cloud(host="nas", confirm=True)
+
+# Commit tracking
+from scitex_dev.versions import get_commits_since_tag
+commits = get_commits_since_tag("scitex-stats")
 
 # LLM-friendly types
 from scitex_dev import Result, supports_return_as
-
-@supports_return_as
-def my_function(x: int) -> int:
-    return x * 2
-
-result = my_function(5, return_as="result")
-# Result(success=True, data=10)
 ```
 
 </details>
@@ -172,19 +199,47 @@ export SCITEX_DEV_ENV_SRC=~/.scitex/dev/remote.src
 
 </details>
 
+<details>
+<summary><strong>Skills — for AI Agent Discovery</strong></summary>
+
+<br>
+
+Skills provide workflow-oriented guides that AI agents query to discover capabilities and usage patterns.
+
+```bash
+scitex-dev skills list              # List available skill pages
+scitex-dev skills get SKILL         # Show main skill page
+scitex-dev skills export --package scitex-dev  # Export to Claude Code
+# Private skills (~/.scitex/*/skills/*-private/) are symlinked automatically
+```
+
+| Skill | Content |
+|-------|---------|
+| `result-types` | `Result`, `ErrorCode`, `@supports_return_as` for LLM-friendly responses |
+| `cli-mcp-utils` | CLI and MCP utility helpers |
+| `versions` | Version management, mismatch detection and fixing |
+| `ecosystem` | Ecosystem list, sync, and commit workflows |
+| `rename` | Safe bulk rename with cross-reference updates |
+| `docs-search` | Documentation aggregation and unified search |
+| `test-runner` | Local and HPC test execution |
+| `config` | Package configuration and priority config patterns |
+
+</details>
+
 ## Part of SciTeX
 
-`scitex-dev` is part of [SciTeX](https://scitex.ai). It provides the shared infrastructure that keeps the ecosystem consistent and discoverable. When used with the orchestrator package `scitex`, it enables unified version management and documentation across all modules:
+`scitex-dev` is part of [SciTeX](https://scitex.ai). It provides the shared infrastructure that keeps the ecosystem consistent and discoverable. When used with the orchestrator package `scitex`, it enables unified version management, CI monitoring, and deployment across all modules:
 
 ```python
-import scitex_dev
+from scitex_dev.fix import detect_mismatches, verify_versions
+from scitex_dev.ci import check_ci, get_failing_packages
 
 # See the entire ecosystem at a glance
-versions = scitex_dev.list_versions()
-mismatches = scitex_dev.get_mismatches()
+mismatches = detect_mismatches()
+verify_versions()
 
-# Search across all installed SciTeX packages
-scitex_dev.search("statistical test")
+# Monitor CI across all packages
+failing = get_failing_packages()
 ```
 
 The SciTeX system follows the Four Freedoms for Research below, inspired by [the Free Software Definition](https://www.gnu.org/philosophy/free-sw.en.html):

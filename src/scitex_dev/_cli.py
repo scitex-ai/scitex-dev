@@ -20,7 +20,7 @@ else:
     CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
     COMMAND_CATEGORIES = [
-        ("Ecosystem", ["ecosystem"]),
+        ("Ecosystem", ["doctor", "ecosystem", "stats"]),
         ("Development", ["config", "rename"]),
         ("Documentation", ["docs", "search", "skills"]),
         ("Integration", ["mcp", "list-python-apis"]),
@@ -105,11 +105,42 @@ else:
     )
     @click.option("--version", "-V", is_flag=True, help="Show version and exit.")
     @click.option("--help-recursive", is_flag=True, help="Show help for all commands.")
+    @click.option(
+        "--json",
+        "as_json",
+        is_flag=True,
+        default=False,
+        help="Emit structured JSON output (propagates to subcommands that honour it).",
+    )
     @click.pass_context
-    def main(ctx: click.Context, version: bool, help_recursive: bool) -> None:
+    def main(
+        ctx: click.Context,
+        version: bool,
+        help_recursive: bool,
+        as_json: bool,
+    ) -> None:
         """scitex-dev - Shared developer utilities for the SciTeX ecosystem."""
+        # Expose the root-level --json flag to subcommands via ctx.obj so
+        # commands that already honour `--json` can read the inherited
+        # setting and default to structured output without the user
+        # repeating the flag at each level.
+        ctx.ensure_object(dict)
+        ctx.obj["json"] = as_json
+
         if version:
-            click.echo(f"scitex-dev {_get_version()}")
+            if as_json:
+                import json as _json
+
+                click.echo(
+                    _json.dumps(
+                        {
+                            "name": "scitex-dev",
+                            "version": _get_version(),
+                        }
+                    )
+                )
+            else:
+                click.echo(f"scitex-dev {_get_version()}")
             ctx.exit(0)
 
         if help_recursive:
@@ -123,9 +154,41 @@ else:
     # Ecosystem commands
     # -------------------------------------------------------------------
 
+    from ._cli_doctor import register_doctor_command
+
+    register_doctor_command(main)
+
     from ._cli_ecosystem import register_ecosystem_commands
 
     register_ecosystem_commands(main)
+
+    from ._cli_stats import register_stats_command
+
+    register_stats_command(main)
+
+    # Quality audits (ecosystem-wide doc/test/line-limit scanners)
+    from . import _cli_quality
+
+    @main.group("quality")
+    def quality():
+        """Ecosystem quality audits (docs, test scope, line limits)."""
+
+    @quality.command("audit-docs")
+    @click.option("--projects-root", default=None)
+    def _quality_audit_docs(projects_root):
+        """Scan SKILL.md / docstring examples for drift."""
+        raise SystemExit(_cli_quality.audit_docs(projects_root=projects_root))
+
+    @quality.command("audit-scope")
+    @click.option("--projects-root", default=None)
+    def _quality_audit_scope(projects_root):
+        """Check tests cover the public API surface."""
+        raise SystemExit(_cli_quality.audit_scope(projects_root=projects_root))
+
+    @quality.command("audit-lines")
+    def _quality_audit_lines():
+        """Enforce per-file line limits against the allowlist."""
+        raise SystemExit(_cli_quality.audit_lines())
 
     # -------------------------------------------------------------------
     # Development commands

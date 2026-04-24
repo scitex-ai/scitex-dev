@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2026-02-03 08:47:55
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/proj/.claude/commands/read-the-docs.md
-!-- --- -->
-
 # Check Read the Docs Builds Status and fix if needed
 
 ## Project Build Status Page
@@ -25,5 +19,3 @@ https://app.readthedocs.org/api/v2/build/<build-id>.txt
   python -m pip install --exists-action=w --no-cache-dir -r docs/sphinx/requirements.txt  
   ERROR: Could not open requirements file: [Errno 2] No such file or directory: 'docs/sphinx/requirements.txt'
   ```
-
-<!-- EOF -->

@@ -43,8 +43,26 @@ def register_skills_commands(main_group):
     @click.argument("package")
     @click.argument("name", required=False, default=None)
     def skills_get(package, name):
-        """Get content of a skill. Without NAME, shows main SKILL.md."""
-        from .skills import get_skill
+        """Get content of a skill. Use 'all' to dump every skill across the ecosystem."""
+        from .skills import get_skill, list_skills
+
+        if package == "all":
+            all_skills = list_skills()
+            if not all_skills:
+                click.echo("No skills found.", err=True)
+                raise SystemExit(1)
+            for pkg_name, entries in sorted(all_skills.items()):
+                for entry in entries:
+                    content = get_skill(
+                        package=pkg_name,
+                        name=entry["name"] if entry["name"] != "SKILL" else None,
+                    )
+                    if content:
+                        click.echo(f"\n{'=' * 60}")
+                        click.echo(f"# {pkg_name}/{entry['name']}")
+                        click.echo(f"{'=' * 60}\n")
+                        click.echo(content)
+            return
 
         content = get_skill(package=package, name=name)
         if content:
@@ -59,87 +77,149 @@ def register_skills_commands(main_group):
         "--dest",
         type=click.Path(),
         default=None,
-        help="Destination directory (default: .claude/skills/scitex/).",
+        help="Exact target directory (default: ~/.claude/skills/scitex/).",
     )
     @click.option("--package", default=None, help="Export only this package.")
+    @click.option(
+        "--source",
+        type=click.Choice(["installed", "pypi"]),
+        default="installed",
+        help="installed or pypi.",
+    )
+    @click.option(
+        "--clean", is_flag=True, help="Delete package subdirs before exporting."
+    )
+    @click.option(
+        "--link",
+        is_flag=True,
+        help="Symlink skill files to editable source (source=installed only); "
+        "edits propagate live with no re-export.",
+    )
     @click.option("--dry-run", is_flag=True, help="Preview without copying.")
-    def skills_export(dest, package, dry_run):
-        """Export skills to .claude/skills/scitex/ for Claude Code discovery."""
+    @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+    def skills_export(dest, package, source, clean, link, dry_run, as_json):
+        """Export skills to ~/.claude/skills/scitex/."""
+        import json as json_mod
         from pathlib import Path
+        from .skills import _get_default_export_dest, export_skills
 
-        from .skills import export_skills
-
-        dest_path = Path(dest) if dest else None
+        target = Path(dest) if dest else _get_default_export_dest()
         if dry_run:
-            from .skills import list_skills, _get_default_export_dest
+            from .skills import list_skills
 
-            target = dest_path or _get_default_export_dest()
-            if target.name != "scitex":
-                target = target / "scitex"
-            all_skills = list_skills(package=package)
-            for pkg_name, entries in sorted(all_skills.items()):
-                click.echo(f"  {pkg_name}/")
-                for e in entries:
-                    click.echo(
-                        f"    {e['name']}.md -> {target / pkg_name / (e['name'] + '.md')}"
+            result = {
+                k: [e["name"] + ".md" for e in v]
+                for k, v in list_skills(package=package).items()
+            }
+            if as_json:
+                click.echo(
+                    json_mod.dumps(
+                        {"dest": str(target), "source": source, "packages": result},
+                        indent=2,
                     )
+                )
+            else:
+                total = sum(len(v) for v in result.values())
+                click.echo(f"Would export {total} files to {target}/ (source={source})")
+                for k, v in sorted(result.items()):
+                    click.echo(f"  {k}/: {len(v)} files")
             return
-        exported = export_skills(dest=dest_path, package=package, mode="export")
-        _print_export_result(exported, dest_path)
+        exported = export_skills(
+            target, package=package, clean=clean, source=source, link=link
+        )
+        _print_export_result(exported, target, as_json)
 
-    @skills.command("update")
-    @click.option(
-        "--dest",
+    # scitex-dev#6: explicit-destination alias. `collect` is the recommended
+    # command going forward because the destination is always required —
+    # callers can't be surprised by a hidden default like `export`'s
+    # `~/.claude/skills/scitex/`.
+    @skills.command("collect")
+    @click.argument(
+        "destination",
         type=click.Path(),
-        default=None,
-        help="Destination directory.",
     )
-    @click.option("--package", default=None, help="Update only this package.")
-    def skills_update(dest, package):
-        """Update skills (rsync-like, preserves local changes)."""
+    @click.option("--package", default=None, help="Collect only this package.")
+    @click.option(
+        "--source",
+        type=click.Choice(["installed", "pypi"]),
+        default="installed",
+        help="Source of skill files (default: installed packages).",
+    )
+    @click.option(
+        "--clean",
+        is_flag=True,
+        help="Delete package subdirs at destination before collecting.",
+    )
+    @click.option(
+        "--link",
+        is_flag=True,
+        help="Symlink skill files to editable source (source=installed only).",
+    )
+    @click.option("--dry-run", is_flag=True, help="Preview without copying.")
+    @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+    def skills_collect(destination, package, source, clean, link, dry_run, as_json):
+        """Collect skills from installed/PyPI packages into DESTINATION.
+
+        Unlike `export` (which defaults to ~/.claude/skills/scitex/), this
+        command REQUIRES the destination argument so callers always know
+        exactly where skills will land.
+
+        \b
+        Examples:
+          scitex-dev skills collect .claude/skills/scitex/
+          scitex-dev skills collect ~/.claude/skills/scitex/
+          scitex-dev skills collect docs/to_claude/skills/scitex/
+          scitex-dev skills collect /some/path --package scitex-writer
+        """
+        import json as json_mod
         from pathlib import Path
 
-        from .skills import export_skills
+        from .skills import export_skills, list_skills
 
-        dest_path = Path(dest) if dest else None
-        exported = export_skills(dest=dest_path, package=package, mode="update")
-        _print_export_result(exported, dest_path)
+        target = Path(destination)
+        if dry_run:
+            result = {
+                k: [e["name"] + ".md" for e in v]
+                for k, v in list_skills(package=package).items()
+            }
+            if as_json:
+                click.echo(
+                    json_mod.dumps(
+                        {"dest": str(target), "source": source, "packages": result},
+                        indent=2,
+                    )
+                )
+            else:
+                total = sum(len(v) for v in result.values())
+                click.echo(
+                    f"Would collect {total} files to {target}/ (source={source})"
+                )
+                for k, v in sorted(result.items()):
+                    click.echo(f"  {k}/: {len(v)} files")
+            return
+        collected = export_skills(
+            target, package=package, clean=clean, source=source, link=link
+        )
+        _print_export_result(collected, target, as_json)
 
-    @skills.command("upgrade")
-    @click.option(
-        "--dest",
-        type=click.Path(),
-        default=None,
-        help="Destination directory.",
-    )
-    @click.option("--package", default=None, help="Upgrade only this package.")
-    def skills_upgrade(dest, package):
-        """Upgrade skills (clean replacement, removes local changes)."""
-        from pathlib import Path
 
-        from .skills import export_skills
-
-        dest_path = Path(dest) if dest else None
-        exported = export_skills(dest=dest_path, package=package, mode="upgrade")
-        _print_export_result(exported, dest_path)
-
-
-def _print_export_result(exported, dest_path):
-    """Print export/update/upgrade results."""
-    from pathlib import Path
-
-    from .skills import _get_default_export_dest
+def _print_export_result(exported, dest_path, as_json=False):
+    """Print export results."""
+    import json as json_mod
 
     if not exported:
         click.echo("No skills found to export.")
         return
-
-    total = 0
-    for pkg_name, files in sorted(exported.items()):
-        click.echo(f"  {pkg_name}/")
-        for f in files:
-            click.echo(f"    {Path(f).name}")
-            total += 1
-
-    target = dest_path or _get_default_export_dest()
-    click.echo(f"\nExported {total} files to {target}")
+    if as_json:
+        click.echo(
+            json_mod.dumps(
+                {k: [str(f) for f in v] for k, v in exported.items()}, indent=2
+            )
+        )
+    else:
+        total = sum(len(v) for v in exported.values())
+        click.echo(
+            f"Exported {total} files across {len(exported)} packages to {dest_path}"
+        )
+        for k, v in sorted(exported.items()):
+            click.echo(f"  {k}: {len(v)} files")

@@ -1,10 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-09-01 08:20:12
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/USER_PHILOSOPHY/04_ARCHITECTURE_PREDEFINED.md
-!-- --- -->
-
-
 # Agreed, Predefined Architecture
 
 # External Data Storage
@@ -73,5 +66,3 @@ No need to conventional files such as `setup.py`, `requirements.txt`, `MANIFEST.
 -   `tests/reports/` - Natural location for test outputs
 
 #+END_SRC
-
-<!-- EOF -->

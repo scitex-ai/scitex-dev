@@ -47,7 +47,7 @@ def get_docs(
     """Get documentation for one, several, or all installed SciTeX packages.
 
     Resolution chain per package:
-        1. Pre-built _docs/ in installed package → fastest (production)
+        1. Pre-built _sphinx_html/ in installed package → fastest (production)
         2. Sphinx _build/ available → use existing build
         3. Neither → introspect from docstrings + signatures (always works)
 
@@ -270,10 +270,10 @@ def _get_one(
             f"Package '{package}' not found. Available: {list(discovered.keys())}"
         )
 
-    # 1. Try pre-built _docs/
+    # 1. Try pre-built _sphinx_html/
     pkg_root = get_package_root(module_name)
     if pkg_root is not None:
-        docs_dir = pkg_root / "_docs"
+        docs_dir = pkg_root / "_sphinx_html"
         result = _resolve_from_built(docs_dir, format=format, page=page)
         if result is not None:
             return _enrich_manifest(result, package)

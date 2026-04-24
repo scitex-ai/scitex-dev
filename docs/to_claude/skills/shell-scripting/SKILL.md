@@ -1,26 +1,15 @@
 ---
-name: shell-scripting
-description: Shell scripting best practices for bash and other shells. Use when writing shell scripts, bash functions, or command-line automation.
+name: shell
+description: Shell scripting best practices for bash and other shells. Use when writing shell scripts, bash functions, CLI help text, or command-line automation. Includes env var defaults in help, safe file operations, SLURM templates, and custom tools.
 ---
 
-# Shell Scripting Skill
+# Shell
 
-## When to Use
-- Writing bash scripts
-- Creating shell functions
-- Automating command-line tasks
-- Setting up environment configurations
-- Writing CI/CD scripts
+Best practices for bash scripts, CLI tools, and command-line automation.
 
-## Guidelines
-Comprehensive shell scripting best practices:
-@general.md
+## References
 
-## Key Principles
-- Use shellcheck for validation
-- Handle errors with set -e and set -u
-- Quote variables properly
-- Use meaningful variable names
-- Document complex logic
-- Test scripts thoroughly
-
+- [env-vars-in-help.md](env-vars-in-help.md) — Show env var names in CLI help text defaults
+- [templates.md](templates.md) — Script template, SLURM template, function ordering
+- [safe-ops.md](safe-ops.md) — Safe file removal, cp/rm flags
+- [custom-tools.md](custom-tools.md) — Available tools in ~/.bin/ and tree quick reference

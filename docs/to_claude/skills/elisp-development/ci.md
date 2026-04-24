@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-28 07:23:29
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/elisp/ci.md
-!-- --- -->
-
 # Elisp-CI Framework: Universal CI/CD Guidelines for Emacs Lisp Projects
 
 ## Overview
@@ -646,5 +640,3 @@ Did you understand the Elisp-CI framework guidelines? If yes, please confirm:
 ---
 
 **Elisp-CI Framework** - Bringing modern CI/CD practices to the Emacs Lisp ecosystem, one project at a time! 🚀
-
-<!-- EOF -->

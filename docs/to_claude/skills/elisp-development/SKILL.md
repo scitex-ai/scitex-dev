@@ -37,4 +37,3 @@ Fundamental Elisp concepts:
 ## Examples
 See the example project structure:
 @ELISP-99-example-project.md
-

@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-25 23:21:33
-!-- Author: ywatanabe
-!-- File: /ssh:sp:/home/ywatanabe/.claude/to_claude/guidelines/programming_common/art-of-testing.md
-!-- --- -->
-
 # Testing: Comprehensive Guidelines for Coding Agents
 
 ## Overview
@@ -795,5 +789,3 @@ This guide synthesizes best practices from:
 - "Effective Unit Testing" by Lasse Koskela
 - "xUnit Test Patterns: Refactoring Test Code" by Gerard Meszaros
 - Industry best practices from Google, Microsoft, and other leading software organizations
-
-<!-- EOF -->

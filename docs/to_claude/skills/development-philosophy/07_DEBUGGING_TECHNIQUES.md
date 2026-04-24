@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-09-01 08:32:51
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/USER_PHILOSOPHY/07_DEBUGGING_TECHNIQUES.md
-!-- --- -->
-
 # Debugging Techniques
 
 1.  Basic Tools
@@ -149,5 +143,3 @@ python script.py
         -   Multiple agents can debug same codebase simultaneously
     -   Screen captures show everything human developers can see
         Keep in mind the line number limitation in `~/.screenrc`
-
-<!-- EOF -->

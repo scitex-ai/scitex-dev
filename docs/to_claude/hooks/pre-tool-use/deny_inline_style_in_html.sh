@@ -35,6 +35,17 @@ if [[ "${1:-}" == "--self-test" ]]; then
         echo "  FAIL: inline style should block (exit $rc)"
     fi
 
+    # Test 3: inline style with hook-bypass should pass (exit 0)
+    # shellcheck disable=SC2034
+    result=$(printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"/tmp/test.html","content":"<!-- hook-bypass: inline-style -->\n<html><style>.spinner{color:red}</style></html>"},"cwd":"/tmp","session_id":"test","tool_use_id":"test-3"}' | "$0" 2>&1) && rc=$? || rc=$?
+    if [[ $rc -eq 0 ]]; then
+        ((pass++))
+        echo "  PASS: hook-bypass allowed (exit $rc)"
+    else
+        ((fail++))
+        echo "  FAIL: hook-bypass should pass (exit $rc)"
+    fi
+
     echo "Results: $pass passed, $fail failed"
     [[ $fail -eq 0 ]] && exit 0 || exit 1
 fi
@@ -82,6 +93,12 @@ case "$FILE_PATH" in
 *) exit 0 ;;
 esac
 
+# Allow bypass with explicit comment: <!-- hook-bypass: inline-style -->
+# Use for legitimate cases like critical CSS (FOUC spinners, above-the-fold)
+if echo "$CONTENT" | grep -qF 'hook-bypass: inline-style'; then
+    exit 0
+fi
+
 # Check for <style> tags with content
 if echo "$CONTENT" | grep -qiE '<style[^>]*>[^<]+</style>'; then
     echo "BLOCKED: Inline <style> tags detected in HTML file" >&2
@@ -94,6 +111,9 @@ if echo "$CONTENT" | grep -qiE '<style[^>]*>[^<]+</style>'; then
     echo "" >&2
     echo "Why: Separation of concerns improves maintainability," >&2
     echo "     enables caching, and follows Django/web best practices." >&2
+    echo "" >&2
+    echo "Bypass: Add <!-- hook-bypass: inline-style --> to the file" >&2
+    echo "        if this is critical CSS (FOUC spinner, above-the-fold)." >&2
     exit 2
 fi
 
@@ -109,6 +129,9 @@ if echo "$CONTENT" | grep -qiE 'style\s*=\s*["\x27][^"\x27]+["\x27]'; then
     echo "" >&2
     echo "Why: Separation of concerns improves maintainability," >&2
     echo "     reusability, and follows Django/web best practices." >&2
+    echo "" >&2
+    echo "Bypass: Add <!-- hook-bypass: inline-style --> to the file" >&2
+    echo "        if this is critical CSS (FOUC spinner, above-the-fold)." >&2
     exit 2
 fi
 

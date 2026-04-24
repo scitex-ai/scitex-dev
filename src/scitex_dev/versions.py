@@ -53,6 +53,49 @@ def get_version_installed(package: str) -> str | None:
         return None
 
 
+def get_commits_since_tag(path: Path) -> int | None:
+    """Count commits since latest version tag. Returns None if no tags."""
+    if not path.exists():
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "rev-list", "--count", "HEAD", "--not", "--tags=v*"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return int(result.stdout.strip())
+    except Exception:
+        pass
+
+    # Fallback: count via log
+    try:
+        tag_result = subprocess.run(
+            ["git", "describe", "--tags", "--abbrev=0", "--match", "v*"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if tag_result.returncode != 0:
+            return None
+        tag = tag_result.stdout.strip()
+        log_result = subprocess.run(
+            ["git", "rev-list", "--count", f"{tag}..HEAD"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if log_result.returncode == 0:
+            return int(log_result.stdout.strip())
+    except Exception:
+        pass
+    return None
+
+
 def get_git_latest_tag(path: Path) -> str | None:
     """Get latest git tag (version tags only)."""
     if not path.exists():
@@ -255,8 +298,16 @@ def _determine_status(info: dict[str, Any]) -> tuple[str, list[str]]:
             issues.append(f"local ({toml_ver}) < pypi ({pypi_ver}) - outdated")
             return "outdated", issues
 
-    # Check git worktree status
+    # Check code-version mismatch (commits since last tag)
     git_info = info.get("git", {})
+    commits_since = git_info.get("commits_since_tag")
+    if commits_since and commits_since > 0 and toml_ver and tag_ver:
+        if _pep440_equal(toml_ver, tag_ver):
+            issues.append(
+                f"{commits_since} commit(s) since {tag_ver} but version not bumped"
+            )
+
+    # Check git worktree status
     if git_info.get("dirty"):
         issues.append("uncommitted changes")
     ahead = git_info.get("ahead", 0)
@@ -310,6 +361,7 @@ def list_versions(packages: list[str] | None = None) -> dict[str, Any]:
         if local_path and local_path.exists():
             info["git"]["latest_tag"] = get_git_latest_tag(local_path)
             info["git"]["branch"] = get_git_branch(local_path)
+            info["git"]["commits_since_tag"] = get_commits_since_tag(local_path)
             git_status = get_git_status(local_path)
             if git_status:
                 info["git"]["dirty"] = git_status["dirty"]
@@ -381,6 +433,41 @@ def get_mismatches(packages: list[str] | None = None) -> dict[str, Any]:
         pkg: info
         for pkg, info in versions.items()
         if info.get("status") not in ("ok", "unavailable")
+    }
+
+
+def get_ecosystem_versions(
+    packages: list[str] | None = None,
+) -> dict[str, str | None]:
+    """Return a flat `{pkg_name: installed_version}` dict for the ecosystem.
+
+    Thin wrapper over `list_versions` for consumers that just need the
+    installed-version string (Django health endpoints, Docker HEALTHCHECK
+    scripts, dashboards). Skips all the git / PyPI / pyproject cross-
+    check detail.
+
+    Parameters
+    ----------
+    packages : list[str] | None
+        Package names to check. None = all ecosystem packages.
+
+    Returns
+    -------
+    dict[str, str | None]
+        ``{"scitex": "2.27.3", "figrecipe": "0.28.1", "scitex-io": None}``.
+        None means the package is not installed.
+
+    Examples
+    --------
+    >>> from scitex_dev import get_ecosystem_versions
+    >>> vers = get_ecosystem_versions()
+    >>> vers["scitex"]
+    '2.27.3'
+    """
+    details = list_versions(packages)
+    return {
+        pkg: (info.get("local", {}) or {}).get("installed")
+        for pkg, info in details.items()
     }
 
 

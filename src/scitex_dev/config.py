@@ -191,27 +191,28 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
     # Load YAML
     data = _load_yaml(config_path)
 
-    # Parse packages
-    packages = []
+    # Parse packages: ECOSYSTEM is single source of truth, config overrides
+    from .ecosystem import ECOSYSTEM
+
+    # Start with all ECOSYSTEM packages
+    pkg_map: dict[str, PackageConfig] = {}
+    for name, info in ECOSYSTEM.items():
+        pkg_map[name] = PackageConfig(
+            name=name,
+            local_path=info.get("local_path", ""),
+            pypi_name=info.get("pypi_name", name),
+            github_repo=info.get("github_repo"),
+            import_name=info.get("import_name"),
+        )
+
+    # Override with config file entries (if any)
     if "packages" in data and isinstance(data["packages"], list):
         for pkg_data in data["packages"]:
             if isinstance(pkg_data, dict):
-                packages.append(_parse_package_config(pkg_data))
+                parsed = _parse_package_config(pkg_data)
+                pkg_map[parsed.name] = parsed
 
-    # If no packages in config, use ecosystem defaults
-    if not packages:
-        from .ecosystem import ECOSYSTEM
-
-        for name, info in ECOSYSTEM.items():
-            packages.append(
-                PackageConfig(
-                    name=name,
-                    local_path=info.get("local_path", ""),
-                    pypi_name=info.get("pypi_name", name),
-                    github_repo=info.get("github_repo"),
-                    import_name=info.get("import_name"),
-                )
-            )
+    packages = list(pkg_map.values())
 
     # Parse hosts
     hosts = []

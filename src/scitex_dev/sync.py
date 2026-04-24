@@ -84,10 +84,95 @@ def _build_sync_commands(
     return cmds
 
 
+def _check_ahead_state(host: HostConfig, dir_name: str) -> dict[str, Any]:
+    """Inspect the remote working copy's position vs. its upstream.
+
+    Returns a dict with ``status`` in:
+      - ``clean``: up-to-date or only behind upstream (safe to pull).
+      - ``ahead``: remote-side has unpushed commits — fast-forward pull
+        would be blocked; skip to avoid clobbering local work.
+      - ``diverged``: both ahead and behind — needs human decision.
+      - ``missing``: repo dir or git metadata absent.
+      - ``error``: SSH/git failure; see ``error`` field.
+
+    Also returns ``local_ahead`` (remote-side commits ahead of
+    ``@{u}``) and ``remote_ahead`` (``@{u}`` commits ahead of HEAD).
+    "Local" here is confusingly the *remote host's* working copy —
+    the caller is on some other machine.
+    """
+    base = f"{host.remote_base}/{dir_name}"
+    # Single-line remote script — uses unique sentinels so output parsing
+    # survives line-wrap/colorization from git or shell integrations.
+    remote_cmd = (
+        f"cd {base} 2>/dev/null || {{ echo SACDEV_MISSING; exit 0; }}; "
+        "if [ ! -d .git ]; then echo SACDEV_MISSING; exit 0; fi; "
+        "git fetch -q 2>/dev/null || true; "
+        'la=$(git rev-list --count "@{u}..HEAD" 2>/dev/null || echo 0); '
+        'ra=$(git rev-list --count "HEAD..@{u}" 2>/dev/null || echo 0); '
+        "echo SACDEV_STATE la=$la ra=$ra"
+    )
+    ssh_args = _build_ssh_args(host)
+    ssh_args.append(remote_cmd)
+    try:
+        result = subprocess.run(ssh_args, capture_output=True, text=True, timeout=60)
+        stdout = result.stdout.strip()
+        if result.returncode != 0:
+            return {
+                "status": "error",
+                "error": (result.stderr.strip() or f"exit {result.returncode}"),
+            }
+        if "SACDEV_MISSING" in stdout:
+            return {"status": "missing"}
+        # Parse: "SACDEV_STATE la=X ra=Y"
+        la, ra = 0, 0
+        for tok in stdout.split():
+            if tok.startswith("la="):
+                la = int(tok[3:] or 0)
+            elif tok.startswith("ra="):
+                ra = int(tok[3:] or 0)
+        if la > 0 and ra > 0:
+            status = "diverged"
+        elif la > 0:
+            status = "ahead"
+        else:
+            status = "clean"
+        return {"status": status, "local_ahead": la, "remote_ahead": ra}
+    except subprocess.TimeoutExpired:
+        return {"status": "error", "error": "ahead-check SSH timed out (60s)"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 def _sync_one_package(
-    host: HostConfig, dir_name: str, stash: bool, install: bool
+    host: HostConfig, dir_name: str, stash: bool, install: bool, safe: bool = True
 ) -> dict[str, Any]:
-    """Sync a single package on a remote host."""
+    """Sync a single package on a remote host.
+
+    When ``safe`` is True (default), first check whether the remote
+    working copy has unpushed commits; if so, skip to avoid clobbering.
+    This matches the user instruction: if remote is ahead, compare and
+    skip when a decision is unclear.
+    """
+    if safe:
+        ahead = _check_ahead_state(host, dir_name)
+        if ahead["status"] in {"ahead", "diverged"}:
+            return {
+                "status": f"skipped_{ahead['status']}",
+                "local_ahead": ahead.get("local_ahead", 0),
+                "remote_ahead": ahead.get("remote_ahead", 0),
+                "reason": (
+                    "remote working copy has unpushed commits; resolve manually "
+                    "(push / rebase / reset) then re-run sync"
+                ),
+            }
+        if ahead["status"] == "missing":
+            return {"status": "missing", "reason": "package dir not on remote"}
+        if ahead["status"] == "error":
+            return {
+                "status": "error",
+                "error": ahead.get("error", "ahead-check failed"),
+            }
+
     cmds = _build_sync_commands(host, dir_name, stash, install)
     remote_cmd = " && ".join(cmds)
 
@@ -122,6 +207,7 @@ def sync_host(
     packages: list[str] | None = None,
     stash: bool = True,
     install: bool = True,
+    safe: bool = True,
     confirm: bool = False,
     config: DevConfig | None = None,
 ) -> dict[str, Any]:
@@ -129,7 +215,8 @@ def sync_host(
 
     Safety: defaults to preview only. Pass confirm=True to execute.
 
-    Steps per package: git stash, git pull, pip install -e ., git stash pop.
+    Steps per package: ahead-check (if safe), git stash, git pull,
+    pip install -e ., git stash pop.
 
     Parameters
     ----------
@@ -141,6 +228,10 @@ def sync_host(
         Git stash before pull (default True).
     install : bool
         Pip install after pull (default True).
+    safe : bool
+        If True (default), pre-check each remote working copy and skip
+        packages whose HEAD is ahead of / diverged from upstream so we
+        never clobber unpushed commits.
     confirm : bool
         If False (default), preview only (dry run).
         If True, execute the sync operation.
@@ -151,6 +242,8 @@ def sync_host(
     -------
     dict
         Per-package results: {package: {status, commands|output, error}}.
+        ``status`` includes ``ok``, ``skipped_ahead``, ``skipped_diverged``,
+        ``missing``, ``error``, ``timeout``, or ``dry_run``.
     """
     if config is None:
         config = load_config()
@@ -164,6 +257,7 @@ def sync_host(
             name: {
                 "status": "dry_run",
                 "commands": _build_sync_commands(host, dir_name, stash, install),
+                "safe_check": safe,
             }
             for name, dir_name in host_pkgs
         }
@@ -172,7 +266,9 @@ def sync_host(
     results: dict[str, Any] = {}
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = {
-            executor.submit(_sync_one_package, host, dir_name, stash, install): name
+            executor.submit(
+                _sync_one_package, host, dir_name, stash, install, safe
+            ): name
             for name, dir_name in host_pkgs
         }
         for future in as_completed(futures):
@@ -189,6 +285,7 @@ def sync_all(
     packages: list[str] | None = None,
     stash: bool = True,
     install: bool = True,
+    safe: bool = True,
     confirm: bool = False,
     config: DevConfig | None = None,
 ) -> dict[str, Any]:
@@ -207,6 +304,9 @@ def sync_all(
         Git stash before pull.
     install : bool
         Pip install after pull.
+    safe : bool
+        If True (default), skip packages whose remote working copy is
+        ahead of / diverged from upstream (never clobber unpushed work).
     confirm : bool
         If False (default), preview only (dry run).
         If True, execute the sync operation.
@@ -233,6 +333,7 @@ def sync_all(
                 packages=packages,
                 stash=stash,
                 install=install,
+                safe=safe,
                 confirm=False,
                 config=config,
             )
@@ -249,6 +350,7 @@ def sync_all(
                 packages=packages,
                 stash=stash,
                 install=install,
+                safe=safe,
                 confirm=True,
                 config=config,
             ): host.name

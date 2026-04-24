@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2026-03-20 14:49:39
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/src/.claude/to_claude/commands/no-fallbacks.md
-!-- --- -->
-
 ## No fallbacks and No silent failures
 - [ ] Do never allow for silent failures.
 - [ ] Do never implement fallbacks unless user explicitly requests
@@ -15,5 +9,3 @@
 - [ ] Not working must be not working.
 - [ ] Not complete must be not complete.
 - [ ] Just make everything clear and honest without false information.
-
-<!-- EOF -->

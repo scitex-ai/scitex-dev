@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-06-06 09:05:00
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.claude/to_claude/guidelines/programming_common/.documentation-performance-claims.md
-!-- --- -->
-
 # Performance Claims in Documentation Guidelines
 
 ## Core Principle
@@ -159,5 +153,3 @@ grep -r -i "faster\|speedup\|performance\|benchmark" docs/ README.md
 ## Your Understanding Check
 Did you understand the guideline? If yes, please say:
 `CLAUDE UNDERSTOOD: <THIS FILE PATH HERE>`
-
-<!-- EOF -->

@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-09-02 00:58:41
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/programming_common/screen.md
-!-- --- -->
-
 Agents can use THEIR OWN TERMINAL by using `screen` as follows:
 
 ``` bash
@@ -28,5 +22,3 @@ screen -S "$SCREEN_NAME" -X hardcopy -h "$CAPTURE_FILE" && cat "$CAPTURE_FILE"
 # Cleanup the screen session
 screen -S "$SCREEN_NAME" -X quit
 ```
-
-<!-- EOF -->

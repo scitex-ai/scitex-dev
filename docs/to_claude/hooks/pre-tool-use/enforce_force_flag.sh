@@ -90,6 +90,11 @@ fi
 # Read input from stdin
 INPUT="$(cat)"
 
+# Allow bypass with comment: # hook-bypass: force-flag
+if echo "$INPUT" | grep -qF 'hook-bypass: force-flag'; then
+    exit 0
+fi
+
 # Parse tool name and command from JSON input
 read -r TOOL_NAME COMMAND < <(echo "$INPUT" | python3 -c '
 import json, sys

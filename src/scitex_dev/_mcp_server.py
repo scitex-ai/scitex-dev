@@ -129,3 +129,42 @@ async def dev_skills_get(package: str, name: str) -> str:
     from .dev_mcp.handlers import skills_get_handler
 
     return await skills_get_handler(package=package, name=name)
+
+
+@mcp.tool()
+async def dev_ecosystem_sync_remote(
+    hosts: list[str] | None = None,
+    packages: list[str] | None = None,
+    install: bool = True,
+    safe: bool = True,
+    confirm: bool = False,
+) -> str:
+    """Sync editable installs to remote SSH hosts (mba, spartan, nas, …).
+
+    Steps per package: ahead-check (if safe), git stash, git pull, pip
+    install -e ., git stash pop. Skips packages whose remote working
+    copy has unpushed commits so we never clobber work.
+
+    Parameters match scitex_dev.sync.sync_all. Pass confirm=True to
+    execute; default is dry-run preview.
+    """
+    from .dev_mcp.handlers import sync_handler
+
+    return await sync_handler(
+        hosts=hosts,
+        packages=packages,
+        install=install,
+        safe=safe,
+        confirm=confirm,
+    )
+
+
+@mcp.tool()
+async def dev_ecosystem_sync_local(
+    packages: list[str] | None = None,
+    confirm: bool = False,
+) -> str:
+    """Install all ecosystem packages editable in the local venv."""
+    from .dev_mcp.handlers import sync_local_handler
+
+    return await sync_local_handler(packages=packages, confirm=confirm)

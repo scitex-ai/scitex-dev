@@ -1,10 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-09-01 08:17:28
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/USER_PHILOSOPHY/03_ARCHITECTUAL_AGREEMENT_PROCESS.md
-!-- --- -->
-
-
 # AI-Agent Architectural Agreement Process
 
 ## Phase 1: Large Picture Agreement
@@ -82,5 +75,3 @@
     2. Class relationship diagrams
     3. Service integration patterns
     4. Usage examples and patterns
-
-<!-- EOF -->

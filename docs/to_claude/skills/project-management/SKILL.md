@@ -1,46 +1,21 @@
 ---
 name: project-management
-description: Project organization, multi-agent coordination, bug reporting, feature requests, and documentation practices. Use when managing projects, coordinating work, or organizing development workflows.
+description: Project management — bug reports, feature requests, bulletin board, planning, progress tracking, timelines, and reporting. Use when managing project tasks or communicating status.
 ---
 
-# Project Management Skill
+# Project Management
 
-## When to Use
-- Setting up project structure
-- Managing multi-agent workflows
-- Creating bug reports or feature requests
-- Organizing project documentation
-- Maintaining project cleanliness
-
-## Core Guidelines
-
-### General Principles
-@general.md
-@cleanliness.md
-@communication.md
-
-### Project Structure
-@do-not-create-any-new-file-nor-directory-in-project-root.md
-
-### Multi-Agent Coordination
-@general-multi-agent-coordination.md
-@multi-agent-protocol.md
-
-### Documentation & Planning
-@documentation.md
-@project-management-markdown.md
-@project-management-org.org
-@project-management-bulletin-board.md
-@timeline-gantt-chart.md
-
-### Issue Management
-@bug-report.md
-@feature-request.md
-@report.md
-
-### Workflow
-@tools.md
-@CLAUDE_ID.md
-@understand-message-in-filename.md
-@beyond-control.md
-
+## Sub-files
+- [bug-report.md](bug-report.md) — Filing and handling bug reports
+- [bug-report-solved.md](bug-report-solved.md) — Moving solved bugs
+- [feature-request-check.md](feature-request-check.md) — Checking feature requests
+- [feature-request-create.md](feature-request-create.md) — Creating feature requests
+- [feature-request-reply.md](feature-request-reply.md) — Replying to feature requests
+- [feature-request-solved.md](feature-request-solved.md) — Moving solved feature requests
+- [bulletin-board.md](bulletin-board.md) — Agent bulletin board
+- [communicate.md](communicate.md) — Bulletin board communication
+- [progress.md](progress.md) — Progress tracking
+- [timeline.md](timeline.md) — Gantt chart timelines
+- [plan.md](plan.md) — Interactive planning
+- [advance.md](advance.md) — Advancing the project
+- [reports.md](reports.md) — Org report generation

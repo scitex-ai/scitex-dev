@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-31 23:55:14
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/programming_common/.start-from-small.md
-!-- --- -->
-
 # Start Small: An Iterative Approach to Development
 
 Start development from small, isolated components before integrating them into a large codebase. This iterative approach fosters clearer design, easier debugging, and more robust systems.
@@ -26,5 +20,3 @@ Avoid "big bang" integrations. Gradually combine working, small components into 
 ## Your Understanding Check
 Did you understand the guideline? If yes, please say:
 `CLAUDE UNDERSTOOD: <THIS FILE PATH HERE>`
-
-<!-- EOF -->

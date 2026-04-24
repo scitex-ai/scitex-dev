@@ -1,10 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-05-30 00:24:00
-!-- Author: ywatanabe
-!-- File: /ssh:ywatanabe@sp:/home/ywatanabe/.dotfiles/.claude/commands/understand-guidelines.md
-!-- --- -->
-
-
 0. Check the current worktree is appropriate:
    Follow the version control guideline:
    `./docs/to_claude/guidelines/**/*version*control*.md`
@@ -31,5 +24,3 @@ Read and understand: `/path/to/read/file2`
 ```
 
 8. Summarize what you understood using bullet points
-
-<!-- EOF -->

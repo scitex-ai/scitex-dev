@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-09-01 08:14:57
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/USER_PHILOSOPHY/01_DEVELOPMENT_CYCLE.md
-!-- --- -->
-
 # Key Principles
 
 -   Tests based on **specifications and acceptance criteria**, not just architecture
@@ -43,5 +37,3 @@
 -   No linting errors (ruff)
 -   Type checking passes (mypy)
 -   Documentation updated for API changes
-
-<!-- EOF -->

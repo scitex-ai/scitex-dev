@@ -1,9 +1,3 @@
-<!-- ---
-!-- Timestamp: 2025-06-14 06:21:02
-!-- Author: ywatanabe
-!-- File: /home/ywatanabe/.dotfiles/.claude/to_claude/guidelines/programming_common/.version-control.md
-!-- --- -->
-
 ## Test-Driven Development
 ANY COMMIT MUST BE ASSOCIATED WITH THE LATEST TESTING REPORT
 This ensures the quality of the commited contents
@@ -43,5 +37,3 @@ If the project gets stacked or going not well. Roll back to the recent stable co
 ## Your Understanding Check
 Did you understand the guideline? If yes, please say:
 `CLAUDE UNDERSTOOD: <THIS FILE PATH HERE>`
-
-<!-- EOF -->
