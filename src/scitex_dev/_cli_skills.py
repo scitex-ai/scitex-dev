@@ -133,6 +133,29 @@ def register_skills_commands(main_group):
     # command going forward because the destination is always required —
     # callers can't be surprised by a hidden default like `export`'s
     # `~/.claude/skills/scitex/`.
+    @skills.command("tags-expand")
+    @click.argument("tag")
+    @click.option(
+        "--no-source-tree",
+        is_flag=True,
+        help="Skip ~/proj/scitex-*/src/*/_skills scan; only use installed packages.",
+    )
+    def skills_tags_expand(tag, no_source_tree):
+        """Print absolute paths of skill files whose frontmatter `tags:` includes <tag>.
+
+        \b
+        Examples:
+          scitex-dev skills tags-expand scitex-package
+          scitex-dev skills tags-expand research
+          scitex-dev skills tags-expand scitex-general
+
+        Designed for CLAUDE.md `@<tag>` shorthand resolution. See
+        general/06_skills_06_frontmatter-metadata.md §"CLAUDE.md tag shortcuts".
+        """
+        from ._cli_skills_tags import tags_expand
+
+        raise SystemExit(tags_expand(tag, include_source_tree=not no_source_tree))
+
     @skills.command("collect")
     @click.argument(
         "destination",
