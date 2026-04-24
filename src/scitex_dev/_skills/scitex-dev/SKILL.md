@@ -61,3 +61,8 @@ dev.check_versions()
 dev.fix_mismatches(confirm=False)
 dev.preview_rename(pattern="old", replacement="new", directory=".")
 ```
+
+
+## Environment
+
+- [30_env-vars.md](30_env-vars.md) — SCITEX_* env vars read by scitex-dev at runtime
