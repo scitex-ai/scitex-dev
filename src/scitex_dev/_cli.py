@@ -130,10 +130,15 @@ else:
         if version:
             if as_json:
                 import json as _json
-                click.echo(_json.dumps({
-                    "name": "scitex-dev",
-                    "version": _get_version(),
-                }))
+
+                click.echo(
+                    _json.dumps(
+                        {
+                            "name": "scitex-dev",
+                            "version": _get_version(),
+                        }
+                    )
+                )
             else:
                 click.echo(f"scitex-dev {_get_version()}")
             ctx.exit(0)
@@ -160,6 +165,30 @@ else:
     from ._cli_stats import register_stats_command
 
     register_stats_command(main)
+
+    # Quality audits (ecosystem-wide doc/test/line-limit scanners)
+    from . import _cli_quality
+
+    @main.group("quality")
+    def quality():
+        """Ecosystem quality audits (docs, test scope, line limits)."""
+
+    @quality.command("audit-docs")
+    @click.option("--projects-root", default=None)
+    def _quality_audit_docs(projects_root):
+        """Scan SKILL.md / docstring examples for drift."""
+        raise SystemExit(_cli_quality.audit_docs(projects_root=projects_root))
+
+    @quality.command("audit-scope")
+    @click.option("--projects-root", default=None)
+    def _quality_audit_scope(projects_root):
+        """Check tests cover the public API surface."""
+        raise SystemExit(_cli_quality.audit_scope(projects_root=projects_root))
+
+    @quality.command("audit-lines")
+    def _quality_audit_lines():
+        """Enforce per-file line limits against the allowlist."""
+        raise SystemExit(_cli_quality.audit_lines())
 
     # -------------------------------------------------------------------
     # Development commands
