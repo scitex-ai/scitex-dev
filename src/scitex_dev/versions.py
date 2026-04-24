@@ -436,4 +436,39 @@ def get_mismatches(packages: list[str] | None = None) -> dict[str, Any]:
     }
 
 
+def get_ecosystem_versions(
+    packages: list[str] | None = None,
+) -> dict[str, str | None]:
+    """Return a flat `{pkg_name: installed_version}` dict for the ecosystem.
+
+    Thin wrapper over `list_versions` for consumers that just need the
+    installed-version string (Django health endpoints, Docker HEALTHCHECK
+    scripts, dashboards). Skips all the git / PyPI / pyproject cross-
+    check detail.
+
+    Parameters
+    ----------
+    packages : list[str] | None
+        Package names to check. None = all ecosystem packages.
+
+    Returns
+    -------
+    dict[str, str | None]
+        ``{"scitex": "2.27.3", "figrecipe": "0.28.1", "scitex-io": None}``.
+        None means the package is not installed.
+
+    Examples
+    --------
+    >>> from scitex_dev import get_ecosystem_versions
+    >>> vers = get_ecosystem_versions()
+    >>> vers["scitex"]
+    '2.27.3'
+    """
+    details = list_versions(packages)
+    return {
+        pkg: (info.get("local", {}) or {}).get("installed")
+        for pkg, info in details.items()
+    }
+
+
 # EOF

@@ -52,7 +52,12 @@ from .docs import build_docs, get_docs, search_docs
 from .search import search
 
 # --- Public API: Versions ---
-from .versions import check_versions, get_mismatches, list_versions
+from .versions import (
+    check_versions,
+    get_ecosystem_versions,
+    get_mismatches,
+    list_versions,
+)
 from .fix import (
     bump_version as bump_version,
     detect_mismatches as detect_mismatches,
@@ -180,6 +185,7 @@ __all__ = [
     "check_versions",
     "get_mismatches",
     "fix_mismatches",
+    "get_ecosystem_versions",
     # LLM-friendly types
     "Result",
     "RESULT_SCHEMA",

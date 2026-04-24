@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scitex-dev"
-version = "0.6.1"
+version = "0.7.0"
 description = "Shared developer utilities for the SciTeX ecosystem"
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -58,3 +58,7 @@ scitex_dev = ["skills/*.md", "skills/references/*.md", "_skills/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "skill_quality: structural checklist tests (§1–§4)",
+    "skill_trigger: trigger-rate tests (live claude -p, slow, non-deterministic)",
+]

@@ -21,6 +21,15 @@
 
 ---
 
+## Problem and Solution
+
+
+| # | Problem | Solution |
+|---|---------|----------|
+| 1 | **33 packages get out of sync** -- one package bumps a dep; consumers forget to update minima; users hit runtime errors | **`scitex-dev ecosystem` suite** -- `list`, `diff`, `sync`, `fix-mismatches`, `commit`, `pull`, `push` — fanout tooling for coordinated releases |
+| 2 | **Skills scattered across 33 source repos** -- users can't discover them easily | **`scitex-dev skills export --link`** -- symlink the full skill pack into `~/.claude/skills/scitex/` for live-edit dev loops |
+| 3 | **Testing against a SLURM cluster requires ssh + sbatch dance** -- interrupts local flow | **`scitex-dev test hpc` + `--poll` + `--result`** -- non-blocking submit, query later |
+
 ## Problem
 
 The SciTeX ecosystem spans multiple packages (scitex-clew, scitex-writer, scitex-stats, figrecipe, etc.), each with their own documentation, versions, APIs, and CLI commands. Keeping them in sync, discovering what's available, and maintaining consistency across the ecosystem becomes increasingly difficult as it grows.
@@ -201,6 +210,7 @@ Skills provide workflow-oriented guides that AI agents query to discover capabil
 scitex-dev skills list              # List available skill pages
 scitex-dev skills get SKILL         # Show main skill page
 scitex-dev skills export --package scitex-dev  # Export to Claude Code
+# Private skills (~/.scitex/*/skills/*-private/) are symlinked automatically
 ```
 
 | Skill | Content |
