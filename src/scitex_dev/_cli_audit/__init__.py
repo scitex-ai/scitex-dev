@@ -140,6 +140,21 @@ CATALOG: dict[str, set[str]] = {
             "guidelines",
             "installation",
             "installations",
+            # Domain-specific nouns (container backends, ecosystem jargon)
+            "apptainer",
+            "singularity",
+            "docker",
+            "podman",
+            "sandbox",
+            "backend",
+            "backends",
+            "sms",
+            "template",
+            "templates",
+            "mount",
+            "mounts",
+            "snapshot",
+            "snapshots",
         ]
     },
     # Transitive verbs — need an object
