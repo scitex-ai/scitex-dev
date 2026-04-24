@@ -34,10 +34,13 @@ interfaces:
 - [15_full-update.md](15_full-update.md) — Full ecosystem release pipeline — pre-flight + release (phases 1–2)
 - [19_full-update-deploy.md](19_full-update-deploy.md) — Full ecosystem release pipeline — local sync, NAS deploy, verification (phases 3–5)
 
-### Agentic Testing (16–19)
+### Agentic Testing (16–18)
 - [16_agentic-test-overview.md](16_agentic-test-overview.md) — Four-layer testing model + shared newbie-docker substrate (entry point)
 - [17_agentic-test-skills.md](17_agentic-test-skills.md) — Skill trigger-rate testing (Layer 2 for skills)
 - [18_agentic-test-mcp.md](18_agentic-test-mcp.md) — MCP tool-call evaluation (Layer 2+3 for MCP) — draft spec
+
+### Quality Gates (20+)
+- [20_dynamic-audit.md](20_dynamic-audit.md) — Dynamic-audit design skeleton for release-gate (paired with scitex-python 99_checklist static commit-gate)
 
 ### Metadata
 - [MANIFEST.md](MANIFEST.md) — Package version and skill-export instructions
