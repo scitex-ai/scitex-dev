@@ -16,12 +16,19 @@ except ImportError:  # pragma: no cover
 
 
 KNOWN_GROUPS = {
-    "scitex-package",
+    # Ecosystem-level tags
+    "scitex-package",  # rules that apply to every scitex-* repo
+    "scitex-general",  # general/ category in scitex-python
+    "scitex-python",  # specific to the scitex-python umbrella
+    "scitex-scientific",  # scientific/ category (figures, stats, reproducibility)
+    # Scope tags
     "research",
     "paper",
     "infra",
     "meta",
     "scientific",
+    # External reference material
+    "claude-code",
 }
 
 
