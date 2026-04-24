@@ -155,6 +155,21 @@ CATALOG: dict[str, set[str]] = {
             "mounts",
             "snapshot",
             "snapshots",
+            # Scientific dataset sources (neuro, chem, bio)
+            "openneuro",
+            "dandi",
+            "physionet",
+            "zenodo",
+            "figshare",
+            "openml",
+            "moleculenet",
+            "chembl",
+            "clinicaltrials",
+            "geo",
+            "allen",
+            "pubmed",
+            "crossref",
+            "openalex",
         ]
     },
     # Transitive verbs — need an object
