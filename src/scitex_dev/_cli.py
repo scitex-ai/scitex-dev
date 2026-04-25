@@ -190,11 +190,43 @@ else:
         """Enforce per-file line limits against the allowlist."""
         raise SystemExit(_cli_quality.audit_lines())
 
+    @quality.command("audit-cli")
+    @click.argument("package")
+    def _quality_audit_cli(package):
+        """Check a package's CLI against the noun-verb convention (warn-only).
+
+        Requires the `cli-audit` extra: pip install 'scitex-dev[cli-audit]'
+        """
+        from . import _cli_audit
+
+        raise SystemExit(_cli_audit.audit_cli(package))
+
+    @quality.command("audit-frontmatter")
+    @click.argument("root", type=click.Path(exists=True, file_okay=False))
+    def _quality_audit_frontmatter(root):
+        """Check skill YAML frontmatter (description length, canonical-location, context_tokens drift, group tags). Warn-only."""
+        from ._cli_quality_frontmatter import audit_frontmatter
+
+        raise SystemExit(audit_frontmatter(root))
+
     # -------------------------------------------------------------------
     # Development commands
     # -------------------------------------------------------------------
 
-    @main.command("config")
+    @main.command(
+        "config", hidden=True, context_settings={"ignore_unknown_options": True}
+    )
+    @click.pass_context
+    def config_deprecated(ctx):
+        """(deprecated) Renamed to `show-config`."""
+        click.echo(
+            "error: `scitex-dev config` was renamed to `scitex-dev show-config`.\n"
+            "Re-run with: scitex-dev show-config",
+            err=True,
+        )
+        ctx.exit(2)
+
+    @main.command("show-config")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def config_cmd(as_json):
         """Show dev configuration."""
@@ -207,7 +239,22 @@ else:
 
         wrap_as_cli(_get_config, as_json=as_json)
 
-    @main.command()
+    @main.command(
+        "rename",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    )
+    @click.pass_context
+    def rename_deprecated(ctx):
+        """(deprecated) Renamed to `rename-symbols`."""
+        click.echo(
+            "error: `scitex-dev rename` was renamed to `scitex-dev rename-symbols`.\n"
+            "Re-run with: scitex-dev rename-symbols <old> <new> [...]",
+            err=True,
+        )
+        ctx.exit(2)
+
+    @main.command("rename-symbols")
     @click.argument("old_name")
     @click.argument("new_name")
     @click.option("--root", default=".", help="Root directory for rename.")
@@ -219,7 +266,7 @@ else:
         help="Exclude paths containing this substring. Repeatable.",
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def rename(old_name, new_name, root, dry_run, regex, exclude, as_json):
+    def rename_symbols(old_name, new_name, root, dry_run, regex, exclude, as_json):
         """Bulk rename with cross-reference updates. Supports --regex for regex patterns."""
         from .cli_utils import wrap_as_cli
 
@@ -266,14 +313,29 @@ else:
 
     register_completion_command(main)
 
-    @main.command()
+    @main.command(
+        "search",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    )
+    @click.pass_context
+    def search_deprecated(ctx):
+        """(deprecated) Renamed to `search-docs`."""
+        click.echo(
+            "error: `scitex-dev search` was renamed to `scitex-dev search-docs`.\n"
+            "Re-run with: scitex-dev search-docs <query> [...]",
+            err=True,
+        )
+        ctx.exit(2)
+
+    @main.command("search-docs")
     @click.argument("query")
     @click.option(
         "--scope", default="all", help="Search scope: all, api, cli, mcp, docs."
     )
     @click.option("--max-results", default=10, help="Maximum results.")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def search(query, scope, max_results, as_json):
+    def search_docs(query, scope, max_results, as_json):
         """Search across APIs, CLI, MCP tools, and documentation."""
         from . import search as do_search
         from .cli_utils import wrap_as_cli
@@ -362,8 +424,24 @@ else:
         click.echo("MCP server is ready.")
         click.echo("Run with: scitex-dev mcp start")
 
-    @mcp.command("installation")
-    def mcp_installation():
+    @mcp.command(
+        "installation",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True},
+    )
+    @click.pass_context
+    def mcp_installation_deprecated(ctx):
+        """(deprecated) Renamed to `show-installation`."""
+        click.echo(
+            "error: `scitex-dev mcp installation` was renamed to "
+            "`scitex-dev mcp show-installation`.\n"
+            "Re-run with: scitex-dev mcp show-installation",
+            err=True,
+        )
+        ctx.exit(2)
+
+    @mcp.command("show-installation")
+    def mcp_show_installation():
         """Show installation instructions for MCP server integration."""
         click.echo("Install scitex-dev with MCP support:")
         click.echo()

@@ -360,40 +360,15 @@ def export_skills(
 
 
 def _generate_root_skill_md(dest: Path, exported: dict[str, list[Path]]) -> None:
-    """Generate a SKILL.md at the scitex/ root that indexes all sub-packages."""
-    if not exported:
-        return
+    """Generate a categorized SKILL.md at the scitex/ root.
 
-    lines = [
-        "---",
-        "name: scitex",
-        "description: SciTeX ecosystem skills — general standards, package-specific guides, and workflow references. Use when working on any SciTeX package.",
-        "user-invocable: false",
-        "---",
-        "",
-        "# SciTeX Ecosystem Skills",
-        "",
-    ]
+    Delegated to :mod:`_skills_categories` so the long category map and
+    renderer live in their own module — keeps ``skills.py`` focused on
+    discovery/export and within the project's per-file line budget.
+    """
+    from ._skills_categories import render_root_skill_md
 
-    # Group: general first, then packages alphabetically
-    if "general" in exported:
-        lines.append("## General Standards")
-        lines.append(
-            "- For ecosystem-wide standards, see [general/SKILL.md](general/SKILL.md)"
-        )
-        lines.append("")
-
-    pkg_names = sorted(k for k in exported if k != "general")
-    if pkg_names:
-        lines.append("## Package Skills")
-        for pkg in pkg_names:
-            lines.append(f"- [{pkg}]({pkg}/SKILL.md)")
-        lines.append("")
-
-    skill_md = dest / "SKILL.md"
-    if skill_md.exists():
-        skill_md.chmod(0o644)
-    skill_md.write_text("\n".join(lines))
+    render_root_skill_md(dest, exported)
 
 
 def _stamp_manifest_version(content: str, version: str) -> str:

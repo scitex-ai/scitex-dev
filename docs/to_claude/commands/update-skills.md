@@ -11,6 +11,14 @@ Based on recent experiences, create or update skills.
 ### SciTeX Standalone Packages:
 - ~/proj/<package-name>/src/<package_name>/_skills/<pip-name>/
 
+### Private Skills (per-machine, not shipped):
+- ~/.scitex/<suffix>/skills/<package-name>-private/
+- Symlinked to ~/.claude/skills/scitex/<package-name>-private/ on export
+- Convention: `<suffix>` is the package name minus the `scitex-` prefix
+  (e.g. `scitex-orochi` → `~/.scitex/orochi/skills/scitex-orochi-private/`)
+- Private skills are symlinked (not copied) so edits are live
+- `scitex-dev skills export` handles the symlink automatically
+
 ## SciTeX-Specific Rules
 
 - SKILL.md is an index only — content goes in focused sub-skill files

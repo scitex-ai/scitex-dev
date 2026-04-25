@@ -4,14 +4,14 @@ package: scitex-dev
 description: >
   Configuration management for scitex developer utilities. DevConfig holds
   packages, SSH hosts, GitHub remotes, and PyPI accounts. Config loaded from
-  ~/.scitex/dev_config.yaml with SCITEX_DEV_* environment variable overrides.
+  ~/.scitex/dev/config.yaml with SCITEX_DEV_* environment variable overrides.
 ---
 
 # Configuration
 
 ## Config File Location
 
-Default: `~/.scitex/dev_config.yaml`
+Default: `~/.scitex/dev/config.yaml`
 
 Override via environment variable:
 ```bash
@@ -121,12 +121,12 @@ Get the config file path (may not exist).
 from scitex_dev import get_config_path
 
 path = get_config_path()   # Path object
-print(path)  # /home/user/.scitex/dev_config.yaml
+print(path)  # /home/user/.scitex/dev/config.yaml
 ```
 
 ## create_default_config
 
-Create `~/.scitex/dev_config.yaml` with example entries if it doesn't exist.
+Create `~/.scitex/dev/config.yaml` with example entries if it doesn't exist.
 
 ```python
 from scitex_dev import create_default_config
@@ -159,7 +159,7 @@ remotes = get_enabled_remotes()  # list[GitHubRemote] where enabled=True
 ## Example Config File
 
 ```yaml
-# ~/.scitex/dev_config.yaml
+# ~/.scitex/dev/config.yaml
 
 packages:
   - name: scitex-io

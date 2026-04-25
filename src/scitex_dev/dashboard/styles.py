@@ -103,14 +103,55 @@ button {
 .summary-card.total .number { color: var(--info); }
 .packages { display: grid; gap: 20px; }
 .package-card { background: var(--bg-secondary); border-radius: 10px; overflow: hidden; }
+/* Fixed-grid header — every column has an exact width so contents
+   (name length, badge text, # of source badges) cannot reflow the row.
+   Each child gets a hard-pinned slot via CSS class below. */
 .package-header {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns:
+        24px      /* fold icon  */
+        220px     /* name       */
+        120px     /* status     */
+        320px     /* source bar */
+        1fr       /* spacer     */
+        100px;    /* quick-links */
     align-items: center;
+    gap: 0;
+    column-gap: 12px;
     padding: 15px 20px;
     background: var(--bg-card);
 }
-.package-name { font-size: 1.1rem; font-weight: bold; }
+.package-card .package-header > .fold-icon { grid-column: 1; justify-self: center; }
+.package-card .package-header > .package-name {
+    grid-column: 2;
+    font-size: 1.1rem;
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0; /* allow ellipsis inside grid track */
+}
+.package-card .package-header > .status-badge {
+    grid-column: 3;
+    width: 110px;
+    padding: 5px 0;
+    border-radius: 15px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    text-align: center;
+    box-sizing: border-box;
+    justify-self: start;
+}
+.package-card .package-header > .source-badges {
+    grid-column: 4;
+    justify-self: start;
+}
+.package-card .package-header > .quick-links {
+    grid-column: 6;
+    justify-self: end;
+}
+/* Fallback (older browsers / nested rules without grid-column overrides). */
 .status-badge {
     padding: 5px 12px;
     border-radius: 15px;
@@ -216,12 +257,11 @@ button {
 .rtd-passing a:hover, .rtd-failing a:hover, .rtd-unknown a:hover {
     text-decoration: underline;
 }
-/* Collapsible cards */
+/* Collapsible cards — header layout (display:grid) is set above; only
+   add the cursor here. DO NOT re-set display/align-items/gap or it will
+   override the grid columns. */
 .package-card .package-header {
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 10px;
 }
 .package-card .fold-icon {
     transition: transform 0.2s ease;
@@ -243,10 +283,10 @@ button {
     text-decoration: underline;
 }
 .package-card .quick-links {
-    margin-left: auto;
     display: flex;
     gap: 8px;
     font-size: 1rem;
+    justify-self: end;
 }
 .package-card .quick-links a {
     text-decoration: none;
@@ -300,7 +340,7 @@ button {
 .source-badges {
     display: flex;
     gap: 4px;
-    margin-left: 8px;
+    flex-wrap: wrap;
 }
 .source-badge {
     display: inline-flex;

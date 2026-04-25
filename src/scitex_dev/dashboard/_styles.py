@@ -103,20 +103,37 @@ button {
 .summary-card.total .number { color: var(--info); }
 .packages { display: grid; gap: 20px; }
 .package-card { background: var(--bg-secondary); border-radius: 10px; overflow: hidden; }
+/* Fixed-grid header so columns align across rows regardless of name/badge length. */
 .package-header {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns:
+        16px                 /* fold icon       */
+        minmax(180px, 220px) /* package name    */
+        130px                /* status badge    */
+        1fr                  /* source badges   */
+        auto;                /* quick links     */
     align-items: center;
+    gap: 12px;
     padding: 15px 20px;
     background: var(--bg-card);
 }
-.package-name { font-size: 1.1rem; font-weight: bold; }
+.package-name {
+    font-size: 1.1rem;
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .status-badge {
     padding: 5px 12px;
     border-radius: 15px;
     font-size: 0.75rem;
     font-weight: bold;
     text-transform: uppercase;
+    text-align: center;
+    justify-self: start;        /* badge stays inside its 130px slot, left-aligned */
+    width: 110px;               /* fixed width so MISMATCH/UNRELEASED/OK align */
+    box-sizing: border-box;
 }
 .status-ok { background: rgba(74, 222, 128, 0.2); color: var(--success); }
 .status-unreleased { background: rgba(251, 191, 36, 0.2); color: var(--warning); }
@@ -243,10 +260,10 @@ button {
     text-decoration: underline;
 }
 .package-card .quick-links {
-    margin-left: auto;
     display: flex;
     gap: 8px;
     font-size: 1rem;
+    justify-self: end;
 }
 .package-card .quick-links a {
     text-decoration: none;
@@ -300,7 +317,7 @@ button {
 .source-badges {
     display: flex;
     gap: 4px;
-    margin-left: 8px;
+    flex-wrap: wrap;
 }
 .source-badge {
     display: inline-flex;

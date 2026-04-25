@@ -92,7 +92,7 @@ def _kill_process_on_port(port: int) -> None:
 
 
 def run_dashboard(
-    host: str = "127.0.0.1",
+    host: str = "0.0.0.0",
     port: int = 5000,
     debug: bool = False,
     open_browser: bool = True,
@@ -141,7 +141,7 @@ def run_dashboard(
 
 
 def run_background(
-    host: str = "127.0.0.1",
+    host: str = "0.0.0.0",
     port: int = 5000,
     force: bool = False,
 ) -> None:
@@ -160,11 +160,13 @@ def run_background(
     import sys
     from pathlib import Path
 
-    cache_dir = Path.home() / ".cache" / "scitex"
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    # Runtime-only (per 01_arch_06_local-state-directories.md §1):
+    # logs + pid files go under `runtime/`, never committed to git.
+    runtime_dir = Path.home() / ".scitex" / "dev" / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
 
-    log_path = cache_dir / "dashboard.log"
-    pid_path = cache_dir / "dashboard.pid"
+    log_path = runtime_dir / "dashboard.log"
+    pid_path = runtime_dir / "dashboard.pid"
 
     inline_script = (
         f"from scitex_dev.dashboard.app import run_dashboard; "
@@ -194,7 +196,7 @@ def stop_dashboard() -> bool:
     import signal
     from pathlib import Path
 
-    pid_path = Path.home() / ".cache" / "scitex" / "dashboard.pid"
+    pid_path = Path.home() / ".scitex" / "dev" / "runtime" / "dashboard.pid"
 
     if not pid_path.exists():
         print("No dashboard PID file found. Is the dashboard running in background?")
