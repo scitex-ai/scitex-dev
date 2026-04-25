@@ -257,12 +257,11 @@ button {
 .rtd-passing a:hover, .rtd-failing a:hover, .rtd-unknown a:hover {
     text-decoration: underline;
 }
-/* Collapsible cards */
+/* Collapsible cards — header layout (display:grid) is set above; only
+   add the cursor here. DO NOT re-set display/align-items/gap or it will
+   override the grid columns. */
 .package-card .package-header {
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 10px;
 }
 .package-card .fold-icon {
     transition: transform 0.2s ease;
