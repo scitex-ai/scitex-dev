@@ -145,6 +145,18 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/scitex-parallel",
         "import_name": "scitex_parallel",
     },
+    "scitex-notification": {
+        "local_path": "~/proj/scitex-notification",
+        "pypi_name": "scitex-notification",
+        "github_repo": "ywatanabe1989/scitex-notification",
+        "import_name": "scitex_notification",
+    },
+    "scitex-plt": {
+        "local_path": "~/proj/scitex-plt",
+        "pypi_name": "scitex-plt",
+        "github_repo": "ywatanabe1989/scitex-plt",
+        "import_name": "scitex_plt",
+    },
     "scitex-types": {
         "local_path": "~/proj/scitex-types",
         "pypi_name": "scitex-types",
