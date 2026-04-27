@@ -30,23 +30,6 @@
 | 2 | **Skills scattered across 33 source repos** -- users can't discover them easily | **`scitex-dev skills export --link`** -- symlink the full skill pack into `~/.claude/skills/scitex/` for live-edit dev loops |
 | 3 | **Testing against a SLURM cluster requires ssh + sbatch dance** -- interrupts local flow | **`scitex-dev test hpc` + `--poll` + `--result`** -- non-blocking submit, query later |
 
-## Problem
-
-The SciTeX ecosystem spans multiple packages (scitex-clew, scitex-writer, scitex-stats, figrecipe, etc.), each with their own documentation, versions, APIs, and CLI commands. Keeping them in sync, discovering what's available, and maintaining consistency across the ecosystem becomes increasingly difficult as it grows.
-
-## Solution
-
-`scitex-dev` (v0.5.1) provides a unified toolkit for developing and maintaining the SciTeX ecosystem:
-
-- **Version management** — detect and fix version mismatches across pyproject.toml, `__init__.py`, git tags, and PyPI
-- **CI/CD** — check GitHub Actions status, wait for workflows, verify PyPI publish
-- **Deployment** — deploy and verify production on remote hosts
-- **Skills** — aggregate, export, and verify AI agent skill pages across the ecosystem
-- **Docs aggregation** — discover, build, and search documentation across all packages
-- **LLM-friendly types** — `Result`, `ErrorCode`, `@supports_return_as` for consistent structured responses
-
-Zero runtime dependencies. Pure stdlib.
-
 ## Installation
 
 ```bash
