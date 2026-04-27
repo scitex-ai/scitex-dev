@@ -203,6 +203,7 @@ def publish_via_twine(
     token: str | None = None,
     dry_run: bool = True,
     clean: bool = True,
+    validate_classifiers_first: bool = True,
 ) -> PublishResult:
     """Build wheel + sdist and upload via ``twine``.
 
@@ -213,10 +214,29 @@ def publish_via_twine(
 
     Build artefacts go to ``<package_dir>/dist/``. ``clean=True`` removes any
     existing ``dist/`` before building so stale wheels don't get re-uploaded.
+
+    When ``validate_classifiers_first=True`` (default), invalid trove
+    classifiers in pyproject.toml are caught locally before the build runs —
+    PyPI returns 400 on upload for any unknown classifier, which is a common
+    avoidable failure mode (real example: ``Topic :: Software Development ::
+    Testing :: Benchmark`` looks plausible but isn't in the trove list).
     """
+    from ._pypi_classifiers import validate_classifiers
+
     name = detect_package_name(package_dir)
     version = detect_version(package_dir)
     dist = package_dir / "dist"
+
+    if validate_classifiers_first:
+        bad = validate_classifiers(package_dir)
+        if bad:
+            return PublishResult(
+                package=name,
+                success=False,
+                method="twine",
+                version=version,
+                message=f"invalid trove classifiers (PyPI would reject with 400): {bad}",
+            )
 
     token = token or os.environ.get("PYPI_TOKEN") or os.environ.get("TWINE_PASSWORD")
     if not dry_run and not token:
