@@ -41,15 +41,16 @@ FAST=${FAST:-0}
 for pkg in "${PACKAGES[@]}"; do
     echo "=== ${pkg} on spartan/sapphire ==="
     if ! python3 -c "
-from scitex_dev.test_runner import TestConfig, run_hpc_srun
+from scitex_hpc import JobConfig, srun
 import sys
-cfg = TestConfig(
-    project='${pkg}',
-    host='spartan',
-    coverage=${COVERAGE} == 1,
-    fast=${FAST} == 1,
+pytest_cmd = (
+    'pip install -e \".[dev]\" -q && '
+    'python -m pytest tests/ -n 16 --dist loadfile --tb=short'
+    + (' --cov --cov-report=term-missing' if ${COVERAGE} == 1 else '')
+    + (\" -m 'not slow'\" if ${FAST} == 1 else '')
 )
-sys.exit(run_hpc_srun(cfg))
+cfg = JobConfig(project='${pkg}', command=pytest_cmd, host='spartan')
+sys.exit(srun(cfg))
 "; then
         echo "FAILED: ${pkg}" >&2
     fi
