@@ -102,6 +102,13 @@ from ._pypi_deps import (
     audit_all as audit_all,
     audit_dependencies as audit_dependencies,
 )
+from ._pypi_extras import (
+    DEFAULT_DEV as DEFAULT_DEV,
+    DEFAULT_DOCS as DEFAULT_DOCS,
+    ExtrasAuditReport as ExtrasAuditReport,
+    audit_extras as audit_extras,
+    write_extras_to_pyproject as write_extras_to_pyproject,
+)
 from .pypi import (
     PublishMethod as PublishMethod,
     PublishResult as PublishResult,

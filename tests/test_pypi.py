@@ -328,6 +328,129 @@ def test_audit_filters_umbrella_scitex_reference(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Extras audit
+
+
+def _make_pkg_with_extras(tmp_path: Path, extras_block: str = "") -> Path:
+    pkg = tmp_path / "demo-pkg"
+    src = pkg / "src" / "demo_pkg"
+    src.mkdir(parents=True)
+    (src / "__init__.py").write_text("")
+    (pkg / "pyproject.toml").write_text(
+        '[project]\nname = "demo-pkg"\nversion = "0.1.0"\n'
+        "dependencies = []\n\n" + extras_block
+    )
+    return pkg
+
+
+def test_audit_extras_clean(tmp_path: Path) -> None:
+    pkg = _make_pkg_with_extras(
+        tmp_path,
+        "[project.optional-dependencies]\n"
+        'torch = ["torch"]\n'
+        'dev = ["pytest"]\n'
+        'docs = ["sphinx"]\n'
+        'all = ["demo-pkg[torch]"]\n',
+    )
+    from scitex_dev import audit_extras
+
+    rep = audit_extras(pkg)
+    assert rep.is_clean
+    assert rep.has_all and rep.has_dev and rep.has_docs
+
+
+def test_audit_extras_missing_all(tmp_path: Path) -> None:
+    pkg = _make_pkg_with_extras(
+        tmp_path,
+        '[project.optional-dependencies]\ndev = ["pytest"]\ndocs = ["sphinx"]\n',
+    )
+    from scitex_dev import audit_extras
+
+    rep = audit_extras(pkg)
+    assert not rep.is_clean
+    assert not rep.has_all
+
+
+def test_audit_extras_all_missing_refs(tmp_path: Path) -> None:
+    pkg = _make_pkg_with_extras(
+        tmp_path,
+        "[project.optional-dependencies]\n"
+        'torch = ["torch"]\n'
+        'numpy = ["numpy"]\n'
+        'dev = ["pytest"]\n'
+        'docs = ["sphinx"]\n'
+        'all = ["demo-pkg[torch]"]\n',  # forgot numpy
+    )
+    from scitex_dev import audit_extras
+
+    rep = audit_extras(pkg)
+    assert not rep.is_clean
+    assert "numpy" in rep.all_missing_refs
+
+
+def test_write_extras_adds_missing(tmp_path: Path) -> None:
+    pkg = _make_pkg_with_extras(
+        tmp_path, '[project.optional-dependencies]\ntorch = ["torch"]\n'
+    )
+    from scitex_dev import write_extras_to_pyproject, audit_extras
+
+    changed = write_extras_to_pyproject(pkg)
+    assert changed is True
+    rep = audit_extras(pkg)
+    assert rep.is_clean
+    assert rep.has_all and rep.has_dev and rep.has_docs
+    assert any("[torch]" in spec for spec in rep.extras["all"])
+
+
+def test_write_extras_idempotent(tmp_path: Path) -> None:
+    """Running twice on a clean package returns False (no change)."""
+    pkg = _make_pkg_with_extras(
+        tmp_path, '[project.optional-dependencies]\ntorch = ["torch"]\n'
+    )
+    from scitex_dev import write_extras_to_pyproject
+
+    assert write_extras_to_pyproject(pkg) is True
+    assert write_extras_to_pyproject(pkg) is False
+
+
+def test_write_extras_preserves_existing_dev_contents(tmp_path: Path) -> None:
+    """If dev already exists with custom contents, don't overwrite."""
+    pkg = _make_pkg_with_extras(
+        tmp_path,
+        "[project.optional-dependencies]\n"
+        'torch = ["torch"]\n'
+        'dev = ["pytest", "custom-tool"]\n',
+    )
+    from scitex_dev import write_extras_to_pyproject, audit_extras
+
+    write_extras_to_pyproject(pkg)
+    rep = audit_extras(pkg)
+    assert "custom-tool" in rep.extras["dev"]
+
+
+def test_write_extras_does_not_break_other_sections(tmp_path: Path) -> None:
+    """Sections after [project.optional-dependencies] must survive intact."""
+    pkg = tmp_path / "demo-pkg"
+    src = pkg / "src" / "demo_pkg"
+    src.mkdir(parents=True)
+    (src / "__init__.py").write_text("")
+    (pkg / "pyproject.toml").write_text(
+        '[project]\nname = "demo-pkg"\nversion = "0.1.0"\ndependencies = []\n\n'
+        "[project.optional-dependencies]\n"
+        'torch = ["torch"]\n\n'
+        "[tool.ruff]\nline-length = 88\n"
+    )
+    from scitex_dev import write_extras_to_pyproject
+
+    write_extras_to_pyproject(pkg)
+    text = (pkg / "pyproject.toml").read_text()
+    assert "[tool.ruff]" in text
+    assert "line-length = 88" in text
+    # Should have only one [project.optional-dependencies] section
+    assert text.count("[project.optional-dependencies]") == 1
+
+
+# ---------------------------------------------------------------------------
 # Classifier validation
 
 
