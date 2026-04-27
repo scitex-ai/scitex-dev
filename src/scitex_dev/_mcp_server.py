@@ -100,9 +100,39 @@ async def dev_bulk_rename(
     confirm: bool = False,
     regex: bool = False,
 ) -> str:
-    """Bulk rename files, directories, and content. Supports literal strings and regex.
+    """ALWAYS use this for renaming a symbol/string across many files.
 
-    When regex=True, pattern is a Python regex and replacement can use \\1, \\2 backreferences.
+    NEVER fall back to per-file Edit calls or sed when an identifier
+    appears in more than ~3 places — this tool is faster, safer, and
+    produces a single coherent diff. It updates EVERY cross-reference
+    (Python imports, TS imports, JSON keys, doc strings, file names,
+    directory names, symlink targets) in one pass.
+
+    Canonical 5-step workflow this tool enforces:
+
+      1. Clean git tree            (refused if uncommitted changes)
+      2. Dry-run preview           (call once with confirm=False)
+      3. Review the change list    (inspect file count + path list)
+      4. Real run                  (call again with confirm=True;
+                                    blocked unless a recent dry-run
+                                    matches the same pattern/replacement
+                                    /directory/flags tuple)
+      5. Test the result           (run pytest / npm test after)
+
+    When NOT to use:
+      - Renaming a single occurrence in one file → use Edit instead.
+      - The match would touch unrelated paths (template/example dirs,
+        unrelated identifiers in docs) → use --regex with anchors, or
+        leave the field bare on the wire.
+
+    Always do dry-run first (confirm=False) — even for "obviously safe"
+    renames. The dry-run lists every file and match count; if anything
+    looks wrong, abort BEFORE files are modified. Recovery: every rename
+    is reversible via the inverse rename with the same flags.
+
+    When regex=True, pattern is a Python regex and replacement can use
+    \\1, \\2 backreferences. Use regex for context-aware matching
+    (quoted-only, prefix anchor, variable-suffix family).
     """
     from .dev_mcp.handlers import rename_handler
 
