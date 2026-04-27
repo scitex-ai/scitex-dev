@@ -1,9 +1,17 @@
 """Dry-run gate via temporal lock file.
 
 Systematic guard that rejects ``execute_rename`` unless a matching
-``preview_rename`` (dry-run) has been conducted recently. Lives under
-``$TMPDIR`` (typically ``/tmp/scitex-dev-rename-locks/``) so locks
-auto-expire on reboot — no stale state to clean up by hand.
+``preview_rename`` (dry-run) has been conducted recently.
+
+Lock storage hierarchy (most-specific wins):
+
+    1. ``<project-root>/.scitex/dev/runtime/rename-locks/``
+       Used when ``directory`` is inside a git repo — keeps locks
+       co-located with the codebase they affect, so cross-project
+       state never leaks.
+
+    2. ``~/.scitex/dev/runtime/rename-locks/``
+       Fallback when not in a git repo.
 
 The lock key is the SHA1 of ``(pattern, replacement, abspath(root))``
 plus the matching flag set (``regex``, ``word_boundary``). This means:
@@ -25,7 +33,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import tempfile
 import time
 from pathlib import Path
 
@@ -37,8 +44,26 @@ from .config import RenameConfig
 LOCK_TTL_SECONDS = 600  # 10 minutes
 
 
-def _lock_dir() -> Path:
-    base = Path(tempfile.gettempdir()) / "scitex-dev-rename-locks"
+def _find_project_root(start: Path) -> Path | None:
+    """Walk upward from ``start`` looking for a ``.git`` marker."""
+    cur = start.resolve()
+    for parent in [cur, *cur.parents]:
+        if (parent / ".git").exists():
+            return parent
+    return None
+
+
+def _lock_dir_for(directory: str) -> Path:
+    """Return the rename-locks dir to use for renames rooted at ``directory``.
+
+    Per-project under ``<root>/.scitex/dev/runtime/rename-locks/`` when
+    inside a git repo; otherwise ``~/.scitex/dev/runtime/rename-locks/``.
+    """
+    root = _find_project_root(Path(directory))
+    if root is not None:
+        base = root / ".scitex" / "dev" / "runtime" / "rename-locks"
+    else:
+        base = Path.home() / ".scitex" / "dev" / "runtime" / "rename-locks"
     base.mkdir(parents=True, exist_ok=True)
     return base
 
@@ -62,7 +87,7 @@ def write_dry_run_lock(config: RenameConfig) -> Path:
     Called by ``preview_rename`` after a successful preview so the
     matching ``execute_rename`` can verify the user saw the change list.
     """
-    path = _lock_dir() / f"{_lock_key(config)}.json"
+    path = _lock_dir_for(config.directory) / f"{_lock_key(config)}.json"
     path.write_text(
         json.dumps(
             {
@@ -83,7 +108,7 @@ def write_dry_run_lock(config: RenameConfig) -> Path:
 def find_recent_lock(config: RenameConfig) -> Path | None:
     """Return the lock path if a fresh dry-run record exists for this
     rename signature, else None."""
-    path = _lock_dir() / f"{_lock_key(config)}.json"
+    path = _lock_dir_for(config.directory) / f"{_lock_key(config)}.json"
     if not path.exists():
         return None
     try:
@@ -100,4 +125,4 @@ def find_recent_lock(config: RenameConfig) -> Path | None:
 
 def lock_path_hint(config: RenameConfig) -> str:
     """User-facing hint pointing at the expected lock file."""
-    return str(_lock_dir() / f"{_lock_key(config)}.json")
+    return str(_lock_dir_for(config.directory) / f"{_lock_key(config)}.json")
