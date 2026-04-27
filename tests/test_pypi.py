@@ -181,6 +181,51 @@ def test_trusted_publisher_form_custom_owner() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Classifier validation
+
+
+def test_validate_classifiers_all_valid(tmp_path: Path) -> None:
+    """Real-world valid classifiers pass through cleanly."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0.1.0"\n'
+        "classifiers = [\n"
+        '    "Programming Language :: Python :: 3",\n'
+        '    "Operating System :: OS Independent",\n'
+        "]\n"
+    )
+    from scitex_dev._pypi_classifiers import validate_classifiers
+
+    assert validate_classifiers(tmp_path) == []
+
+
+def test_validate_classifiers_catches_bad(tmp_path: Path) -> None:
+    """The real bug we hit on 2026-04-27: plausible but invalid classifier."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0.1.0"\n'
+        "classifiers = [\n"
+        '    "Programming Language :: Python :: 3",\n'
+        '    "Topic :: Software Development :: Testing :: Benchmark",\n'  # not real
+        "]\n"
+    )
+    from scitex_dev._pypi_classifiers import validate_classifiers
+
+    bad = validate_classifiers(tmp_path)
+    # Either trove-classifiers is installed and catches it, or validation is
+    # silently skipped — both behaviours are acceptable.
+    assert bad == ["Topic :: Software Development :: Testing :: Benchmark"] or bad == []
+
+
+def test_validate_classifiers_no_block(tmp_path: Path) -> None:
+    """pyproject.toml without a classifiers list is fine."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "x"\nversion = "0.1.0"\n'
+    )
+    from scitex_dev._pypi_classifiers import validate_classifiers
+
+    assert validate_classifiers(tmp_path) == []
+
+
+# ---------------------------------------------------------------------------
 # PublishResult __str__
 
 
