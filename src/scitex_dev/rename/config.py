@@ -19,6 +19,21 @@ class RenameConfig:
     directory: str = "."
     dry_run: bool = True
     regex: bool = False
+    word_boundary: bool = False
+    """When True (literal mode only), only match the pattern at word
+    boundaries — treating ``[A-Za-z0-9_]`` as word characters. Prevents
+    the classic double-prefix bug: without this flag, running
+    ``rename-symbols pane_state orochi_pane_state`` a second time would
+    re-match the suffix of the already-renamed ``orochi_pane_state`` and
+    produce ``orochi_orochi_pane_state``. Ignored when ``regex=True``
+    (write the anchors into your regex).
+    """
+    git_mv: bool = False
+    """When True, file renames go through ``git mv`` (when the target is
+    inside a git repo) so the rename is staged automatically. Without
+    this, file renames leave the new path untracked and the old path
+    deleted-but-staged, requiring a follow-up ``git add -A``.
+    """
     django_safe: bool = True
     create_backup: bool = False
     # Scope filtering

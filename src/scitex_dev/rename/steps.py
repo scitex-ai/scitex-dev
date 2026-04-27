@@ -43,17 +43,38 @@ def _should_skip(item_id: str, skip_ids: list[str]) -> bool:
     return item_id in skip_ids
 
 
+def _word_boundary_pattern(literal: str) -> str:
+    """Build a regex that matches ``literal`` only at word boundaries.
+
+    Treats ``[A-Za-z0-9_]`` as the word-character class — matching how
+    Python identifiers are spelled — so renaming ``pane_state`` does NOT
+    re-match inside the already-prefixed ``orochi_pane_state``.
+    """
+    return rf"(?<![A-Za-z0-9_]){re.escape(literal)}(?![A-Za-z0-9_])"
+
+
 def _contains(text: str, config: RenameConfig) -> bool:
     """Check if text contains the pattern (literal or regex)."""
     if config.regex:
         return re.search(config.pattern, text, re.DOTALL) is not None
+    if config.word_boundary:
+        return re.search(_word_boundary_pattern(config.pattern), text) is not None
     return config.pattern in text
+
+
+def _line_has_match(line: str, config: RenameConfig) -> bool:
+    """Cheap per-line presence check honouring ``word_boundary``."""
+    if config.word_boundary:
+        return re.search(_word_boundary_pattern(config.pattern), line) is not None
+    return config.pattern in line
 
 
 def _replace(text: str, config: RenameConfig) -> str:
     """Replace pattern in text (literal or regex)."""
     if config.regex:
         return re.sub(config.pattern, config.replacement, text, flags=re.DOTALL)
+    if config.word_boundary:
+        return re.sub(_word_boundary_pattern(config.pattern), config.replacement, text)
     return text.replace(config.pattern, config.replacement)
 
 
@@ -61,6 +82,8 @@ def _count(text: str, config: RenameConfig) -> int:
     """Count pattern occurrences in text (literal or regex)."""
     if config.regex:
         return len(re.findall(config.pattern, text, re.DOTALL))
+    if config.word_boundary:
+        return len(re.findall(_word_boundary_pattern(config.pattern), text))
     return text.count(config.pattern)
 
 
@@ -162,7 +185,7 @@ def _literal_replace_content(
     line_details: list[dict[str, Any]] = []
 
     for line_num, line in enumerate(lines, 1):
-        if config.pattern in line:
+        if _line_has_match(line, config):
             line_id = f"{file_id}-L{line_num}"
             skip_this_line = skip_entire_file or _should_skip(line_id, config.skip_ids)
 
@@ -198,8 +221,8 @@ def _literal_replace_content(
                         }
                     )
             else:
-                matches += line.count(config.pattern)
-                replaced = line.replace(config.pattern, config.replacement)
+                matches += _count(line, config)
+                replaced = _replace(line, config)
                 new_lines.append(replaced)
                 if config.dry_run and len(line_details) < 20:
                     line_details.append(

@@ -259,43 +259,90 @@ else:
     @click.argument("new_name")
     @click.option("--root", default=".", help="Root directory for rename.")
     @click.option("--dry-run", is_flag=True, help="Preview without renaming.")
-    @click.option("--regex", is_flag=True, help="Treat pattern as Python regex.")
+    @click.option(
+        "--regex",
+        is_flag=True,
+        help=(
+            "Treat OLD_NAME as a Python regex (NEW_NAME may use \\1 \\2 "
+            "backrefs). Enables full context-aware matching — see examples."
+        ),
+    )
+    @click.option(
+        "--word-boundary",
+        "-w",
+        is_flag=True,
+        help=(
+            "Match the literal pattern only at word boundaries (treating "
+            "[A-Za-z0-9_] as word chars). Prevents the double-prefix "
+            "footgun where renaming `pane_state -> orochi_pane_state` "
+            "re-matches inside the already-renamed `orochi_pane_state`. "
+            "Ignored with --regex (write the anchors yourself)."
+        ),
+    )
     @click.option(
         "--exclude",
         multiple=True,
         help="Exclude paths containing this substring. Repeatable.",
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def rename_symbols(old_name, new_name, root, dry_run, regex, exclude, as_json):
-        """Bulk rename with cross-reference updates. Supports --regex for regex patterns."""
-        from .cli_utils import wrap_as_cli
+    def rename_symbols(
+        old_name, new_name, root, dry_run, regex, word_boundary, exclude, as_json
+    ):
+        """Bulk rename with cross-reference updates.
+
+        \b
+        Quick start:
+          # Compound, unambiguous identifier — safe one-shot:
+          scitex-dev rename-symbols pane_state orochi_pane_state
+
+          # Generic word that also appears in unrelated contexts:
+          scitex-dev rename-symbols machine orochi_machine -w   # word-boundary
+          scitex-dev rename-symbols slurm   orochi_slurm   -w
+
+          # Wire-format / dict-key only (--regex with quote anchor):
+          scitex-dev rename-symbols --regex \\
+            "(['\\"])model\\\\1" "\\\\1orochi_model\\\\1"
+
+          # Anchored prefix — only at start of a name:
+          scitex-dev rename-symbols --regex "(?<![A-Za-z0-9_])v1_" "v2_"
+
+        \b
+        Recovery:
+          If a rename produces wrong matches (e.g. double-prefix), run the
+          reverse rename with the same flags — it's deterministic and
+          fully reversible:
+            rename-symbols orochi_orochi_pane_state orochi_pane_state -w
+        """
+        import json as _json
+        import sys as _sys
+
+        from . import execute_rename, preview_rename
 
         extra_excludes = list(exclude) if exclude else []
+        fn = preview_rename if dry_run else execute_rename
+        result = fn(
+            pattern=old_name,
+            replacement=new_name,
+            directory=root,
+            regex=regex,
+            word_boundary=word_boundary,
+            extra_excludes=extra_excludes,
+        )
 
-        if dry_run:
-            from . import preview_rename
+        if as_json:
+            from dataclasses import asdict
 
-            wrap_as_cli(
-                preview_rename,
-                as_json=as_json,
-                pattern=old_name,
-                replacement=new_name,
-                directory=root,
-                regex=regex,
-                extra_excludes=extra_excludes,
-            )
+            print(_json.dumps(asdict(result), indent=2, default=str))
         else:
-            from . import execute_rename
+            print(result)
 
-            wrap_as_cli(
-                execute_rename,
-                as_json=as_json,
-                pattern=old_name,
-                replacement=new_name,
-                directory=root,
-                regex=regex,
-                extra_excludes=extra_excludes,
-            )
+        # Exit non-zero on RenameResult.error so callers (shell loops,
+        # CI, etc.) can detect failures. The most common case is
+        # "Uncommitted changes detected" — pre-checking saves users
+        # from a half-applied rename and points to the fix.
+        if getattr(result, "error", None):
+            print(f"\nError: {result.error}", file=_sys.stderr)
+            _sys.exit(2)
 
     # -------------------------------------------------------------------
     # Documentation commands
