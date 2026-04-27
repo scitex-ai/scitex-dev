@@ -146,8 +146,11 @@ scitex-dev ecosystem sync
 scitex-dev docs --package scitex-writer
 scitex-dev search "save figure"
 
-# Bulk rename
-scitex-dev rename old_name new_name --dry-run
+# Bulk rename — guarded 5-step workflow (clean-git → dry-run → review → execute → test).
+# ALWAYS dry-run first; the execute path refuses to run without a recent matching --dry-run.
+scitex-dev rename-symbols old_name new_name --root . --word-boundary --dry-run
+scitex-dev rename-symbols old_name new_name --root . --word-boundary
+# See ``scitex-dev rename-symbols --help`` for --skip-ids / --regex / --force.
 
 # See all commands
 scitex-dev --help
@@ -219,7 +222,7 @@ scitex-dev skills export --package scitex-dev  # Export to Claude Code
 | `cli-mcp-utils` | CLI and MCP utility helpers |
 | `versions` | Version management, mismatch detection and fixing |
 | `ecosystem` | Ecosystem list, sync, and commit workflows |
-| `rename` | Safe bulk rename with cross-reference updates |
+| `rename` | Bulk rename with cross-reference updates — guarded 5-step workflow (clean-git → dry-run → review → execute → test); supports --word-boundary, --regex, --skip-ids, --force |
 | `docs-search` | Documentation aggregation and unified search |
 | `test-runner` | Local and HPC test execution |
 | `config` | Package configuration and priority config patterns |
