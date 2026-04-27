@@ -97,6 +97,11 @@ from .ecosystem import (
 from .rtd import check_all_rtd as check_all_rtd, check_rtd_status as check_rtd_status
 
 # PyPI publishing
+from ._pypi_deps import (
+    DepAuditReport as DepAuditReport,
+    audit_all as audit_all,
+    audit_dependencies as audit_dependencies,
+)
 from .pypi import (
     PublishMethod as PublishMethod,
     PublishResult as PublishResult,

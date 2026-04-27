@@ -181,6 +181,153 @@ def test_trusted_publisher_form_custom_owner() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Dependency audit
+
+
+def _make_pkg(
+    tmp_path: Path,
+    *,
+    source: str,
+    deps: list[str],
+    version: str = "0.1.0",
+    optional: dict[str, list[str]] | None = None,
+) -> Path:
+    pkg = tmp_path / "demo-pkg"
+    src = pkg / "src" / "demo_pkg"
+    src.mkdir(parents=True)
+    (src / "__init__.py").write_text(source)
+    deps_str = ",\n    ".join(f'"{d}"' for d in deps)
+    optional_block = ""
+    if optional:
+        lines = ["[project.optional-dependencies]"]
+        for name, items in optional.items():
+            lines.append(f"{name} = [{', '.join(repr(i) for i in items)}]")
+        optional_block = "\n".join(lines)
+    (pkg / "pyproject.toml").write_text(
+        f'[project]\nname = "demo-pkg"\nversion = "{version}"\n'
+        f"dependencies = [\n    {deps_str}\n]\n\n{optional_block}\n"
+    )
+    return pkg
+
+
+def test_audit_clean_package(tmp_path: Path) -> None:
+    pkg = _make_pkg(
+        tmp_path, source="import requests\nimport demo_pkg\n", deps=["requests"]
+    )
+    from scitex_dev import audit_dependencies
+
+    rep = audit_dependencies(pkg)
+    assert rep.is_clean
+    assert "requests" in rep.declared_runtime
+    assert "requests" in rep.imported_external
+
+
+def test_audit_catches_missing_external(tmp_path: Path) -> None:
+    pkg = _make_pkg(
+        tmp_path, source="import requests\nimport pandas\n", deps=["requests"]
+    )
+    from scitex_dev import audit_dependencies
+
+    rep = audit_dependencies(pkg)
+    assert not rep.is_clean
+    assert "pandas" in rep.missing_external
+
+
+def test_audit_skips_try_except_imports(tmp_path: Path) -> None:
+    """Imports inside try/except ImportError are optional, not missing."""
+    pkg = _make_pkg(
+        tmp_path,
+        source="try:\n    import torch\nexcept ImportError:\n    torch = None\n",
+        deps=[],
+    )
+    from scitex_dev import audit_dependencies
+
+    rep = audit_dependencies(pkg)
+    assert rep.is_clean
+    assert "torch" not in rep.missing_external
+
+
+def test_audit_skips_main_guard_imports(tmp_path: Path) -> None:
+    """Imports inside if __name__ == '__main__' are example-only."""
+    pkg = _make_pkg(
+        tmp_path,
+        source='if __name__ == "__main__":\n    import sys\n    import scitex\n',
+        deps=[],
+    )
+    from scitex_dev import audit_dependencies
+
+    rep = audit_dependencies(pkg)
+    assert rep.is_clean
+
+
+def test_audit_skips_function_local_imports(tmp_path: Path) -> None:
+    """Imports inside functions are lazy."""
+    pkg = _make_pkg(
+        tmp_path,
+        source="def use_pandas():\n    import pandas\n    return pandas\n",
+        deps=[],
+    )
+    from scitex_dev import audit_dependencies
+
+    rep = audit_dependencies(pkg)
+    assert rep.is_clean
+
+
+def test_audit_flags_scitex_peer_without_min_version(tmp_path: Path) -> None:
+    pkg = _make_pkg(
+        tmp_path, source="import scitex_decorators\n", deps=["scitex-decorators"]
+    )  # no >=
+    from scitex_dev import audit_dependencies
+
+    rep = audit_dependencies(pkg)
+    assert "scitex-decorators" in rep.scitex_peers_without_min_version
+    assert not rep.is_clean
+
+
+def test_audit_accepts_pinned_scitex_peer(tmp_path: Path) -> None:
+    pkg = _make_pkg(
+        tmp_path, source="import scitex_decorators\n", deps=["scitex-decorators>=0.1.1"]
+    )
+    from scitex_dev import audit_dependencies
+
+    rep = audit_dependencies(pkg)
+    assert rep.is_clean
+
+
+def test_audit_normalizes_import_to_dist_names(tmp_path: Path) -> None:
+    """cv2 → opencv-python, yaml → PyYAML, bs4 → beautifulsoup4."""
+    pkg = _make_pkg(
+        tmp_path,
+        source="import cv2\nimport yaml\nimport bs4\n",
+        deps=["opencv-python", "PyYAML", "beautifulsoup4"],
+    )
+    from scitex_dev import audit_dependencies
+
+    rep = audit_dependencies(pkg)
+    assert rep.is_clean
+
+
+def test_audit_accepts_dep_in_optional_extra(tmp_path: Path) -> None:
+    """A dep declared only in [project.optional-dependencies] still counts."""
+    pkg = _make_pkg(
+        tmp_path, source="import torch\n", deps=[], optional={"torch": ["torch"]}
+    )
+    from scitex_dev import audit_dependencies
+
+    rep = audit_dependencies(pkg)
+    assert rep.is_clean
+
+
+def test_audit_filters_umbrella_scitex_reference(tmp_path: Path) -> None:
+    """Bare `import scitex` is the umbrella package — never flag as missing."""
+    pkg = _make_pkg(tmp_path, source="import scitex\n", deps=[])
+    from scitex_dev import audit_dependencies
+
+    rep = audit_dependencies(pkg)
+    assert rep.is_clean
+
+
+# ---------------------------------------------------------------------------
 # Classifier validation
 
 
