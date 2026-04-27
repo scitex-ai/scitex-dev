@@ -1,0 +1,139 @@
+graph LR
+    subgraph foundational
+        scitex_context[scitex-context]
+        scitex_decorators[scitex-decorators]
+        scitex_io[scitex-io]
+        scitex_logging[scitex-logging]
+        scitex_os[scitex-os]
+        scitex_path[scitex-path]
+        scitex_str[scitex-str]
+        scitex_types[scitex-types]
+    end
+    subgraph middle
+        crossref_local[crossref-local]
+        figrecipe[figrecipe]
+        openalex_local[openalex-local]
+        scitex_app[scitex-app]
+        scitex_clew[scitex-clew]
+        scitex_config[scitex-config]
+        scitex_datetime[scitex-datetime]
+        scitex_db[scitex-db]
+        scitex_dev[scitex-dev]
+        scitex_dict[scitex-dict]
+        scitex_dsp[scitex-dsp]
+        scitex_gen[scitex-gen]
+        scitex_linalg[scitex-linalg]
+        scitex_linter[scitex-linter]
+        scitex_nn[scitex-nn]
+        scitex_notification[scitex-notification]
+        scitex_parallel[scitex-parallel]
+        scitex_pd[scitex-pd]
+        scitex_plt[scitex-plt]
+        scitex_repro[scitex-repro]
+        scitex_resource[scitex-resource]
+        scitex_session[scitex-session]
+        scitex_stats[scitex-stats]
+        scitex_tex[scitex-tex]
+        scitex_ui[scitex-ui]
+        scitex_web[scitex-web]
+    end
+    subgraph apps
+        scitex_cloud[scitex-cloud]
+        scitex_scholar[scitex-scholar]
+        scitex_template[scitex-template]
+        scitex_writer[scitex-writer]
+    end
+    subgraph other
+        scitex_agent_container[scitex-agent-container]
+        scitex_audio[scitex-audio]
+        scitex_audit[scitex-audit]
+        scitex_benchmark[scitex-benchmark]
+        scitex_bridge[scitex-bridge]
+        scitex_browser[scitex-browser]
+        scitex_capture[scitex-capture]
+        scitex_chat[scitex-chat]
+        scitex_compat[scitex-compat]
+        scitex_container[scitex-container]
+        scitex_core[scitex-core]
+        scitex_cv[scitex-cv]
+        scitex_dataset[scitex-dataset]
+        scitex_etc[scitex-etc]
+        scitex_events[scitex-events]
+        scitex_gists[scitex-gists]
+        scitex_git[scitex-git]
+        scitex_hpc[scitex-hpc]
+        scitex_introspect[scitex-introspect]
+        scitex_msword[scitex-msword]
+        scitex_notebook[scitex-notebook]
+        scitex_orochi[scitex-orochi]
+        scitex_security[scitex-security]
+        scitex_sh[scitex-sh]
+        scitex_skills[scitex-skills]
+        scitex_tunnel[scitex-tunnel]
+    end
+    crossref_local --> scitex_dev
+    figrecipe -.-> scitex_dev
+    figrecipe -.-> scitex_app
+    figrecipe -.-> scitex_ui
+    openalex_local -.-> scitex_dev
+    scitex_agent_container --> scitex_container
+    scitex_agent_container -.-> scitex_hpc
+    scitex_agent_container -.-> scitex_dev
+    scitex_app -.-> scitex_dev
+    scitex_audit -.-> scitex_dev
+    scitex_browser --> scitex_logging
+    scitex_browser -.-> scitex_dev
+    scitex_clew -.-> scitex_dev
+    scitex_cloud --> scitex_app
+    scitex_cloud --> scitex_writer
+    scitex_cloud -.-> scitex_ui
+    scitex_container --> scitex_dev
+    scitex_core -.-> scitex_dev
+    scitex_dataset --> scitex_dev
+    scitex_db --> scitex_core
+    scitex_db -.-> scitex_dev
+    scitex_dict -.-> scitex_dev
+    scitex_dsp --> scitex_decorators
+    scitex_dsp --> scitex_gen
+    scitex_dsp --> scitex_nn
+    scitex_etc -.-> scitex_dev
+    scitex_gen --> scitex_context
+    scitex_gen --> scitex_decorators
+    scitex_gen --> scitex_dict
+    scitex_gen --> scitex_introspect
+    scitex_gen --> scitex_os
+    scitex_gen --> scitex_session
+    scitex_gen --> scitex_sh
+    scitex_gen --> scitex_stats
+    scitex_gen --> scitex_str
+    scitex_gists -.-> scitex_dev
+    scitex_io --> scitex_dev
+    scitex_linter --> scitex_dev
+    scitex_logging -.-> scitex_dev
+    scitex_nn --> scitex_decorators
+    scitex_nn --> scitex_gen
+    scitex_notebook --> scitex_clew
+    scitex_notebook -.-> scitex_linter
+    scitex_notification -.-> scitex_audio
+    scitex_orochi -.-> scitex_agent_container
+    scitex_path -.-> scitex_dev
+    scitex_pd --> scitex_types
+    scitex_plt --> figrecipe
+    scitex_repro -.-> scitex_dev
+    scitex_resource -.-> scitex_sh
+    scitex_scholar --> scitex_browser
+    scitex_scholar --> scitex_io
+    scitex_scholar --> scitex_logging
+    scitex_scholar -.-> scitex_clew
+    scitex_scholar -.-> scitex_dev
+    scitex_session --> scitex_dict
+    scitex_session --> scitex_logging
+    scitex_session --> scitex_repro
+    scitex_session --> scitex_str
+    scitex_session -.-> figrecipe
+    scitex_stats -.-> figrecipe
+    scitex_stats -.-> scitex_dev
+    scitex_str --> scitex_dict
+    scitex_str -.-> scitex_dev
+    scitex_types -.-> scitex_dev
+    scitex_ui -.-> scitex_dev
