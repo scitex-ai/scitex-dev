@@ -20,15 +20,29 @@ STAMP=$(date +%Y%m%d-%H%M%S)
 RESULTS="${LOG_DIR}/spartan-${STAMP}"
 mkdir -p "${RESULTS}"
 
-# Sync local sources to Spartan first (rsync via scitex-dev sync).
-echo "[$(date)] Syncing local sources to spartan..."
-python3 -c "
-from scitex_dev.sync import sync_host
-from scitex_dev.config import load_config
-cfg = load_config()
-ok = sync_host(cfg, host_name='spartan')
-import sys; sys.exit(0 if ok else 1)
-" || {
+# Sync local sources to Spartan first (rsync via scitex_hpc.sync).
+echo "[$(date)] Syncing heavy packages to spartan..."
+python3 - <<'PY' || {
+import os, sys
+from pathlib import Path
+from scitex_hpc import JobConfig, sync
+
+HEAVY = [
+    "scitex-cloud", "scitex-io", "scitex-scholar", "scitex-nn", "scitex-dsp",
+    "scitex-gen", "scitex-stats", "figrecipe", "scitex-writer", "scitex-db",
+]
+proj_root = Path.home() / "proj"
+failed = []
+for pkg in HEAVY:
+    src = proj_root / pkg
+    if not src.exists():
+        print(f"skip {pkg}: not found at {src}")
+        continue
+    cfg = JobConfig(project=pkg, command="", host="spartan")
+    if not sync(cfg, local_path=str(src)):
+        failed.append(pkg)
+sys.exit(1 if failed else 0)
+PY
     echo "sync to spartan FAILED — aborting nightly run" >&2
     exit 1
 }
