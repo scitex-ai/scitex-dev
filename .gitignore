@@ -31,3 +31,4 @@ src/scitex_dev/app/
 docs/to_claude/hooks/**/*.log
 docs/to_claude/hooks/**/.pending/
 .playwright-cli/
+logs/
