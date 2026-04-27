@@ -96,6 +96,22 @@ from .ecosystem import (
 # RTD
 from .rtd import check_all_rtd as check_all_rtd, check_rtd_status as check_rtd_status
 
+# PyPI publishing
+from .pypi import (
+    PublishMethod as PublishMethod,
+    PublishResult as PublishResult,
+    detect_package_name as detect_package_name,
+    detect_version as detect_version,
+    has_oidc_workflow as has_oidc_workflow,
+    is_published as is_published,
+    publish as publish,
+    publish_all as publish_all,
+    publish_via_tag as publish_via_tag,
+    publish_via_twine as publish_via_twine,
+    select_method as select_method,
+    trusted_publisher_form as trusted_publisher_form,
+)
+
 # GitHub
 from .github import (
     check_all_remotes as check_all_remotes,
