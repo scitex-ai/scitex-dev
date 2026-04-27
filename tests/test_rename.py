@@ -46,7 +46,13 @@ from scitex_dev.rename.safety import (
 
 
 def _safe_execute(pattern, replacement, directory, **kwargs):
-    """Execute rename with safety checks mocked out."""
+    """Execute rename with safety checks mocked out.
+
+    Passes ``force=True`` to bypass the dry-run gate (added 2026-04-27)
+    in addition to the legacy ``has_uncommitted_changes`` /
+    ``check_directory_safety`` mocks.
+    """
+    kwargs.setdefault("force", True)
     with patch("scitex_dev.rename.core.has_uncommitted_changes", return_value=False):
         with patch("scitex_dev.rename.core.check_directory_safety", return_value=None):
             return execute_rename(
