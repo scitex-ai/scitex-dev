@@ -62,6 +62,71 @@ def register_ecosystem_commands(main_group):
                 repo = info.get("github_repo", "")
                 click.echo(f"  {pkg:25s} {repo}")
 
+    @ecosystem.command("graph")
+    @click.option(
+        "--format",
+        "fmt",
+        type=click.Choice(["mermaid", "dot"]),
+        default="mermaid",
+        help="Output format.",
+    )
+    @click.option(
+        "--output",
+        "-o",
+        type=click.Path(dir_okay=False, writable=True),
+        default=None,
+        help="Write graph to FILE instead of stdout.",
+    )
+    @click.option(
+        "--cycles",
+        is_flag=True,
+        help="Detect dependency cycles; exit 1 if any are found.",
+    )
+    @click.option(
+        "--include-extras/--no-extras",
+        default=True,
+        help="Include optional-dependencies in the graph (default: include).",
+    )
+    @click.option(
+        "--group-by-tier/--no-group-by-tier",
+        default=True,
+        help="Group nodes into tier subgraphs (mermaid only).",
+    )
+    @click.pass_context
+    def ecosystem_graph(ctx, fmt, output, cycles, include_extras, group_by_tier):
+        """Emit a current-state ecosystem dependency graph (mermaid/DOT)."""
+        from . import ecosystem_graph as _eg
+
+        pkgs = _eg.discover_packages()
+        graph = _eg.build_graph(pkgs)
+
+        if cycles:
+            found = _eg.find_cycles(graph, include_extras=False)
+            if not found:
+                click.echo("No dependency cycles detected.")
+                ctx.exit(0)
+            click.echo(f"Detected {len(found)} cycle(s):", err=True)
+            for cyc in found:
+                click.echo("  - " + " -> ".join(cyc), err=True)
+            ctx.exit(1)
+
+        if fmt == "mermaid":
+            text = _eg.to_mermaid(
+                graph,
+                group_by_tier=group_by_tier,
+                include_extras=include_extras,
+            )
+        else:
+            text = _eg.to_dot(graph, include_extras=include_extras)
+
+        if output:
+            from pathlib import Path as _P
+
+            _P(output).write_text(text, encoding="utf-8")
+            click.echo(f"Wrote {len(graph)}-node graph to {output}", err=True)
+        else:
+            click.echo(text, nl=False)
+
     @ecosystem.command("fix-mismatches")
     @click.option(
         "--confirm", is_flag=True, help="Apply fixes (default: preview only)."

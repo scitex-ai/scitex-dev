@@ -178,3 +178,15 @@ optional/extra dependencies and are labelled with the extra name.
 
 None detected.
 
+
+---
+
+> **Regeneration:** This document describes the ecosystem at a point in time. To
+> refresh it against the current state of `~/proj/scitex-*`, run:
+>
+> ```bash
+> scitex-dev ecosystem graph --output docs/ecosystem-deps.md
+> ```
+>
+> The graph generator lives in `scitex_dev.ecosystem_graph` and parses every
+> ecosystem `pyproject.toml` on demand — the package list is never hardcoded.
