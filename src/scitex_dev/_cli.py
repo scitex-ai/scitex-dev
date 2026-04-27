@@ -284,11 +284,52 @@ else:
         multiple=True,
         help="Exclude paths containing this substring. Repeatable.",
     )
+    @click.option(
+        "--skip-ids",
+        default="",
+        help=(
+            "Comma-separated list of match IDs to skip (from --dry-run "
+            "output). IDs are stable across dry-run and real run, so the "
+            "workflow is: --dry-run, copy the IDs of unwanted matches, "
+            "re-run with --skip-ids 'c-000-L42,f-003,d-001'. "
+            "Granularities: c-NNN (whole file), c-NNN-L<line> (one line), "
+            "st-NNN (symlink target), sn-NNN (symlink name), f-NNN (file "
+            "rename), d-NNN (directory rename)."
+        ),
+    )
+    @click.option(
+        "--force",
+        is_flag=True,
+        help=(
+            "Bypass the dry-run gate and the uncommitted-changes check. "
+            "Use only in scripted/CI contexts where the preview was "
+            "audited out-of-band."
+        ),
+    )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def rename_symbols(
-        old_name, new_name, root, dry_run, regex, word_boundary, exclude, as_json
+        old_name,
+        new_name,
+        root,
+        dry_run,
+        regex,
+        word_boundary,
+        exclude,
+        skip_ids,
+        force,
+        as_json,
     ):
         """Bulk rename with cross-reference updates.
+
+        \b
+        Canonical workflow (the CLI guards each step):
+          1. Clean git tree            ← refuses if uncommitted changes
+          2. Dry-run preview           ← refuses execute without recent --dry-run
+          3. Review the change list    ← inspect the dry-run file list + counts
+          4. Real run                  ← matching --dry-run gates the execute
+          5. Test the result           ← reminder printed after execute
+
+        Override the guards (CI, scripted, audited out-of-band): --force
 
         \b
         Quick start:
@@ -307,6 +348,26 @@ else:
           scitex-dev rename-symbols --regex "(?<![A-Za-z0-9_])v1_" "v2_"
 
         \b
+        Skipping unwanted matches (--skip-ids):
+          # Step 1 — dry-run, look at the IDs printed beside each match:
+          rename-symbols project orochi_project --root . -w --dry-run
+          #   c-005-L42  bin/runner.sh:42   ← keep
+          #   f-003      examples/project/   ← rename DON'T want
+          #   d-001      hooks/project-switch/  ← rename DON'T want
+          #
+          # Step 2 — real run with offending IDs skipped:
+          rename-symbols project orochi_project --root . -w \\
+              --skip-ids "f-003,d-001"
+          #
+          # Granularities:
+          #   c-NNN          whole file
+          #   c-NNN-L<line>  one line in a file
+          #   st-NNN         symlink target
+          #   sn-NNN         symlink name
+          #   f-NNN          file rename
+          #   d-NNN          directory rename
+
+        \b
         Recovery:
           If a rename produces wrong matches (e.g. double-prefix), run the
           reverse rename with the same flags — it's deterministic and
@@ -319,15 +380,20 @@ else:
         from . import execute_rename, preview_rename
 
         extra_excludes = list(exclude) if exclude else []
-        fn = preview_rename if dry_run else execute_rename
-        result = fn(
+        skip_id_list = [s.strip() for s in (skip_ids or "").split(",") if s.strip()]
+        common_kwargs: dict = dict(
             pattern=old_name,
             replacement=new_name,
             directory=root,
             regex=regex,
             word_boundary=word_boundary,
             extra_excludes=extra_excludes,
+            skip_ids=skip_id_list,
         )
+        if dry_run:
+            result = preview_rename(**common_kwargs)
+        else:
+            result = execute_rename(force=force, **common_kwargs)
 
         if as_json:
             from dataclasses import asdict
@@ -343,6 +409,33 @@ else:
         if getattr(result, "error", None):
             print(f"\nError: {result.error}", file=_sys.stderr)
             _sys.exit(2)
+
+        # Post-rename reminder (step 5 of the canonical workflow).
+        # Only after a successful real run — not on dry-run, not on error.
+        if not dry_run and not as_json:
+            summary = getattr(result, "summary", {}) or {}
+            n_files = summary.get("content_files", 0)
+            n_matches = summary.get("content_matches", 0)
+            n_renamed = summary.get("files_renamed", 0)
+            print(
+                f"\n✓ Renamed '{old_name}' -> '{new_name}' "
+                f"({n_files} files, {n_matches} matches"
+                + (f", {n_renamed} files renamed" if n_renamed else "")
+                + ")",
+                file=_sys.stderr,
+            )
+            print(
+                "  Next steps:\n"
+                "    1. Inspect the diff:    git diff --stat\n"
+                "    2. Run your tests:      pytest / npm test / make check\n"
+                "    3. Commit when happy:   git add -A && git commit -am '...'\n"
+                "  If the rename overreached, it's reversible:\n"
+                f"    rename-symbols '{new_name}' '{old_name}' --root '{root}'"
+                + (" --word-boundary" if word_boundary else "")
+                + (" --regex" if regex else "")
+                + " --dry-run",
+                file=_sys.stderr,
+            )
 
     # -------------------------------------------------------------------
     # Documentation commands

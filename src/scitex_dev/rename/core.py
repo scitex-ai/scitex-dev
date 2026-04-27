@@ -177,7 +177,20 @@ def preview_rename(
         skip_ids=skip_ids or [],
         **kwargs,
     )
-    return bulk_rename(config)
+    result = bulk_rename(config)
+    # Record the dry-run so the matching execute_rename call can verify
+    # the user saw the change list (systematic guard, not a written rule).
+    if result.error is None:
+        from ._lock import write_dry_run_lock
+
+        try:
+            write_dry_run_lock(config)
+        except OSError:
+            # Lock-file write failed (e.g. read-only /tmp); the preview
+            # itself succeeded so don't fail the call. The execute will
+            # just block until a future dry-run lands.
+            pass
+    return result
 
 
 def execute_rename(
@@ -238,6 +251,39 @@ def execute_rename(
         skip_ids=skip_ids or [],
         **kwargs,
     )
+
+    # Systematic dry-run gate: refuse to execute unless a matching
+    # ``preview_rename`` was conducted in the last LOCK_TTL_SECONDS for
+    # the same (pattern, replacement, root, regex/word_boundary) tuple.
+    # This makes "I forgot to dry-run" structurally impossible without
+    # an explicit ``--force`` override.
+    if not force:
+        from ._lock import LOCK_TTL_SECONDS, find_recent_lock, lock_path_hint
+
+        if find_recent_lock(config) is None:
+            ttl_min = LOCK_TTL_SECONDS // 60
+            wb_flag = " --word-boundary" if config.word_boundary else ""
+            re_flag = " --regex" if config.regex else ""
+            return _make_error_result(
+                pattern,
+                replacement,
+                directory,
+                (
+                    "Dry-run not conducted (or expired). The execute path "
+                    "requires a matching --dry-run within the last "
+                    f"{ttl_min} min for the same "
+                    "(pattern, replacement, root, flags) tuple — this is "
+                    "a systematic guard against unintended overreach.\n\n"
+                    "Run the preview first:\n"
+                    f"  scitex-dev rename-symbols "
+                    f"{pattern!r} {replacement!r} "
+                    f"--root {os.path.abspath(directory)!r}"
+                    f"{wb_flag}{re_flag} --dry-run\n\n"
+                    "Then re-run this command (without --dry-run). To "
+                    "skip this guard for scripted/CI use:  --force\n\n"
+                    f"Lock file: {lock_path_hint(config)}"
+                ),
+            )
     return bulk_rename(config)
 
 
