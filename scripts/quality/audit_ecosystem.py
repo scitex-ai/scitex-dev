@@ -180,6 +180,13 @@ def grep_hardcodes(src: Path) -> list[str]:
             continue  # skill / claude-md docs, not active code
         if line.endswith(".sh") or line.endswith(".md"):
             continue  # scripts and docs
+        # Skip generated sphinx output and pending JSON tool-use captures.
+        if "/_sphinx_html/" in line or "/.pending/" in line:
+            continue
+        if line.endswith(".html") or line.endswith(".json") or line.endswith(".pickle"):
+            continue
+        if "/_sphinx" in line or "/.doctrees/" in line:
+            continue
         hits.append(line)
     return hits
 
@@ -232,25 +239,52 @@ def audit_one(package: str, repo_root: Path, registry: dict[str, Any]) -> Packag
             )
         )
 
-    # --- §C5: missing scitex-config runtime dep ---
-    # Skip the package that *defines* scitex_config — its src/ imports the
-    # module from itself, not from an external dependency.
-    src = repo_root / "src" / import_name_for(package)
-    if (
-        package != "scitex-config"
-        and grep_uses_scitex_config(src)
-        and not declares_dep(pyproject, "scitex-config")
-    ):
-        rep.findings.append(
-            Finding(
-                package=package,
-                section="C5",
-                severity="CRITICAL",
-                lens="working",
-                message="src imports scitex_config but pyproject does not declare scitex-config",
-                detail="fresh-venv install will fail at import",
+    # --- §C5+§C9+§C10+§C11: pyproject lint ---
+    # Delegate to scitex_dev._pyproject_lint so the rules stay in one place
+    # (it ships unit tests). Each rule maps to its checklist §-section.
+    try:
+        from scitex_dev._pyproject_lint import lint_pyproject as _lint
+
+        lint_rep = _lint(repo_root, package_name=package)
+        for f in lint_rep.findings:
+            section = {
+                "E5C5_implicit_deps": "C5",
+                "E5C9_skill_bundling": "C9",
+                "E5C10_duplicate_table": "C10",
+                "E5C11_invalid_pep639_license": "C11",
+                "E5C1_missing_pyproject": "C1",
+                "E5L1_dirty_release_state": "L2",
+            }.get(f.rule, f.rule)
+            rep.findings.append(
+                Finding(
+                    package=package,
+                    section=section,
+                    severity=f.severity,
+                    lens="working",
+                    message=f.message,
+                    detail=f.detail,
+                )
             )
-        )
+    except Exception:
+        # Fall back to the legacy single-rule check so the audit stays
+        # functional even if the import fails (e.g. CI clones scitex-dev
+        # at an older sha than the auditor expects).
+        src = repo_root / "src" / import_name_for(package)
+        if (
+            package != "scitex-config"
+            and grep_uses_scitex_config(src)
+            and not declares_dep(pyproject, "scitex-config")
+        ):
+            rep.findings.append(
+                Finding(
+                    package=package,
+                    section="C5",
+                    severity="CRITICAL",
+                    lens="working",
+                    message="src imports scitex_config but pyproject does not declare scitex-config",
+                    detail="fresh-venv install will fail at import",
+                )
+            )
 
     # --- §L2: pyproject / tag / pypi alignment ---
     if rep.pyproject_version and rep.pypi_version:
@@ -279,6 +313,7 @@ def audit_one(package: str, repo_root: Path, registry: dict[str, Any]) -> Packag
             )
 
     # --- §E: skills bundling ---
+    src = repo_root / "src" / import_name_for(package)
     skill_md = src / "_skills" / package / "SKILL.md"
     if not skill_md.is_file():
         rep.findings.append(
