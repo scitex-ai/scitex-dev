@@ -98,6 +98,16 @@ def read_pyproject_version(pyproject: Path) -> str | None:
     return m.group(1) if m else None
 
 
+def read_pyproject_name(pyproject: Path) -> str | None:
+    """Return [project].name verbatim, or None if missing/unreadable."""
+    try:
+        text = pyproject.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r'^name\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    return m.group(1) if m else None
+
+
 def declares_dep(pyproject: Path, dep: str) -> bool:
     """Return True if `dep` appears in [project].dependencies (not optional).
 
@@ -372,14 +382,30 @@ def main() -> int:
 
     registry = load_registry(scitex_dev_root)
 
-    # Discover packages: registry ∪ on-disk scitex-* dirs
-    on_disk = {
-        p.name
-        for p in projects_root.iterdir()
-        if p.is_dir()
-        and (p.name.startswith("scitex-") or p.name == "scitex")
-        and (p / "pyproject.toml").is_file()
-    }
+    # Discover on-disk packages with the periodic-checklist scope gate
+    # (`pyproject.name == basename`). Skip symlinks (e.g. legacy
+    # scitex-tunnel→scitex-ssh shim), `*bak*` archives, and dirs whose
+    # pyproject identifies a different package. This filters out paper repos
+    # (scitex-paper-1st), the umbrella source dir (scitex-python whose
+    # pyproject.name is "scitex"), and rename leftovers without listing each
+    # one explicitly.
+    on_disk: set[str] = set()
+    for p in projects_root.iterdir():
+        if not p.is_dir() or p.is_symlink():
+            continue
+        name = p.name
+        if not (name.startswith("scitex-") or name == "scitex"):
+            continue
+        if "bak" in name or name.endswith("-old"):
+            continue
+        pyproject = p / "pyproject.toml"
+        if not pyproject.is_file():
+            continue
+        declared = read_pyproject_name(pyproject)
+        if declared and declared != name:
+            continue
+        on_disk.add(name)
+
     candidates = sorted(set(registry) | on_disk)
 
     reports: list[PackageReport] = []
