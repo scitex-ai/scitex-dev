@@ -370,6 +370,61 @@ classifiers = [
     assert not [f for f in rep.findings if f.rule == "E5C13_orphan_license_classifier"]
 
 
+def test_e5f2_fires_on_umbrella_private_import(tmp_path):
+    """Cross-package private imports break when only the standalone is installed."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["scitex-stats>=0.2.0"]
+""",
+        src_files={
+            "foo.py": (
+                "from scitex.stats._utils import p2stars\n"
+                "def x(): return p2stars(0.05)\n"
+            )
+        },
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert any(f.rule == "E5F2_internal_api_leak" for f in rep.findings)
+
+
+def test_e5f2_silent_on_standalone_private_import(tmp_path):
+    """Direct standalone import is the canonical fix and must not flag."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["scitex-stats>=0.2.0"]
+""",
+        src_files={
+            "foo.py": (
+                "from scitex_stats._utils import p2stars\n"
+                "def x(): return p2stars(0.05)\n"
+            )
+        },
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert not [f for f in rep.findings if f.rule == "E5F2_internal_api_leak"]
+
+
+def test_e5f2_silent_on_public_umbrella_import(tmp_path):
+    """`from scitex.stats import ttest_ind` is the public path; not flagged."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["scitex"]
+""",
+        src_files={"foo.py": "from scitex.stats import ttest_ind\n"},
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert not [f for f in rep.findings if f.rule == "E5F2_internal_api_leak"]
+
+
 def test_e5c11_silent_on_spdx(tmp_path):
     repo = _write_repo(
         tmp_path,
