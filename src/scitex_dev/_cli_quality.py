@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from ._pyproject_lint import lint_pyproject
+from ._release_publisher import publish_release
 from ._rtd_onboard import onboard_rtd
 
 SCRIPTS = Path(__file__).parent.parent.parent / "scripts" / "quality"
@@ -54,6 +55,38 @@ def rtd_onboard_cli(repo_root: str | None = None, dry_run: bool = False) -> int:
     """Scaffold a minimal Read the Docs setup. Idempotent."""
     repo = Path(repo_root or ".").resolve()
     rep = onboard_rtd(repo, dry_run=dry_run)
+    print(rep.render())
+    return 0 if not rep.failed else 1
+
+
+def release_publish_cli(
+    repo_root: str | None = None,
+    version: str | None = None,
+    notes: str | None = None,
+    dry_run: bool = False,
+) -> int:
+    """Smart `git tag -> push -> gh release create` (per workflow trigger).
+
+    Auto-detects whether the repo's publish-pypi.yml fires on
+    ``release: published`` or ``push: tags`` and runs the right
+    sequence. Idempotent: skips an existing tag or release.
+    """
+    repo = Path(repo_root or ".").resolve()
+    if not version:
+        # Default to pyproject.toml version if not specified.
+        try:
+            import tomllib  # type: ignore[import-not-found]
+        except ImportError:
+            import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+        with (repo / "pyproject.toml").open("rb") as fh:
+            data = tomllib.load(fh)
+        version = (data.get("project") or {}).get("version")
+    if not version:
+        print(
+            "error: --version required (and pyproject.toml has none)", file=sys.stderr
+        )
+        return 1
+    rep = publish_release(repo, version, notes=notes, dry_run=dry_run)
     print(rep.render())
     return 0 if not rep.failed else 1
 

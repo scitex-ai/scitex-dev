@@ -746,32 +746,73 @@ def _latest_tag(repo: Path) -> str | None:
     return sorted(tags, key=keyer)[-1]
 
 
+def _publish_trigger(repo: Path) -> str | None:
+    """Return 'release', 'tags', or None.
+
+    Detects whether the publish-pypi workflow fires on GH release publish
+    or on git-tag push. Used by E5L1 to give a more actionable fix-hint
+    and by E5L2 to flag the workflow-specific footgun.
+    """
+    wf = repo / ".github" / "workflows" / "publish-pypi.yml"
+    if not wf.is_file():
+        return None
+    try:
+        text = wf.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    if re.search(r"^\s*release:\s*$", text, re.MULTILINE):
+        return "release"
+    if re.search(r"^\s*tags:\s*$", text, re.MULTILINE):
+        return "tags"
+    return None
+
+
 def check_release_alignment(
     repo: Path, pyproject_data: dict[str, Any], package_name: str
 ) -> list[LintFinding]:
-    """Rule E5L1 — pyproject ↔ tag ↔ PyPI alignment."""
+    """Rule E5L1 — pyproject ↔ tag ↔ PyPI alignment.
+
+    When pyproject is ahead of PyPI AND the publish workflow fires on
+    ``release: published``, the fix-hint includes the
+    ``gh release create`` step that operators routinely forget.
+    """
     findings: list[LintFinding] = []
     py_ver = (pyproject_data.get("project") or {}).get("version")
     if not py_ver:
         return findings
     tag = _latest_tag(repo)
     pypi = _pypi_version(package_name)
+    trigger = _publish_trigger(repo)
     if tag and tag.lstrip("v") != py_ver:
+        if trigger == "release":
+            hint = (
+                f"git tag v{py_ver} && git push --tags && "
+                f"gh release create v{py_ver} (workflow uses release:published)"
+            )
+        else:
+            hint = f"git tag v{py_ver} && git push --tags"
         findings.append(
             LintFinding(
                 rule="E5L1_dirty_release_state",
                 severity="LOW",
                 message=f"latest git tag `{tag}` ≠ pyproject version `{py_ver}`",
-                fix_hint=f"git tag v{py_ver} && git push --tags",
+                fix_hint=hint,
             )
         )
     if pypi and pypi != py_ver:
+        if trigger == "release":
+            detail = (
+                "release in flight, or tag pushed without `gh release create` "
+                "(workflow uses release:published — tag-push alone won't publish)"
+            )
+        else:
+            detail = "release in flight, or release stale"
         findings.append(
             LintFinding(
                 rule="E5L1_dirty_release_state",
                 severity="LOW",
                 message=f"PyPI latest `{pypi}` ≠ pyproject version `{py_ver}`",
-                detail="release in flight, or release stale",
+                detail=detail,
             )
         )
     return findings
