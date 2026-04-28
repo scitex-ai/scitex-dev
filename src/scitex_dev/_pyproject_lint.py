@@ -398,6 +398,95 @@ def check_duplicate_tables(pyproject: Path) -> list[LintFinding]:
     return findings
 
 
+def check_version_drift(
+    repo: Path, pyproject_data: dict[str, Any], package_name: str
+) -> list[LintFinding]:
+    """Rule E5F1 — `__version__` literal in src/__init__.py must match pyproject.
+
+    Two acceptable patterns:
+
+    - Dynamic via ``importlib.metadata`` (preferred — no drift possible).
+    - Literal string. If literal, MUST equal ``[project].version``.
+
+    Caught the scitex-stats v0.2.8 vs pyproject 0.2.11 vs PyPI 0.2.10
+    drift earlier this session.
+    """
+    findings: list[LintFinding] = []
+    py_ver = (pyproject_data.get("project") or {}).get("version")
+    if not py_ver:
+        return findings
+    import_name = package_name.replace("-", "_")
+    init_py = repo / "src" / import_name / "__init__.py"
+    if not init_py.is_file():
+        return findings
+    try:
+        text = init_py.read_text(encoding="utf-8")
+    except OSError:
+        return findings
+    # Bail when version is sourced from importlib.metadata (dynamic, can't drift).
+    if "importlib.metadata" in text and re.search(
+        r"__version__\s*=\s*(?:[\w.]+\.)?(?:version|_v)\s*\(",
+        text,
+    ):
+        return findings
+    m = re.search(r'^__version__\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    if not m:
+        return findings
+    src_ver = m.group(1)
+    if src_ver != py_ver:
+        findings.append(
+            LintFinding(
+                rule="E5F1_version_drift",
+                severity="MEDIUM",
+                message=f"__init__.py __version__ = {src_ver!r} ≠ pyproject {py_ver!r}",
+                detail=f"{init_py.relative_to(repo)}",
+                fix_hint=(
+                    "either update the literal, or switch to dynamic resolution: "
+                    "from importlib.metadata import version as _v; "
+                    f'__version__ = _v("{package_name}")'
+                ),
+            )
+        )
+    return findings
+
+
+def check_readme_interfaces_callout(
+    repo: Path, package_name: str = ""
+) -> list[LintFinding]:  # noqa: ARG001
+    """Rule E5J1 — README must mirror SKILL.md's Interfaces callout.
+
+    The convention (general/02_repo_04_quality.md, 06_skills_05) is that
+    every package's README opens with a ``> **Interfaces:** ...`` line so
+    consumers see the primary interface ratings without opening SKILL.md.
+
+    LOW severity — cosmetic, but consistent ecosystem-wide signalling
+    matters for agent discovery.
+    """
+    readme = repo / "README.md"
+    if not readme.is_file():
+        return []
+    try:
+        text = readme.read_text(encoding="utf-8")
+    except OSError:
+        return []
+    # Allow on first 60 lines (skip badges block).
+    head = "\n".join(text.splitlines()[:80])
+    if re.search(r"^>\s*\*\*Interfaces:\*\*", head, re.MULTILINE):
+        return []
+    # Skip very-short READMEs (placeholders).
+    if len(text) < 500:
+        return []
+    return [
+        LintFinding(
+            rule="E5J1_readme_interfaces_callout",
+            severity="LOW",
+            message="README.md missing `> **Interfaces:**` callout",
+            detail="convention from general/02_repo_04_quality.md §SciTeX-Specific README Rules",
+            fix_hint="Add `> **Interfaces:** Python ⭐⭐⭐ · CLI ⭐ · MCP — · Skills ⭐⭐ · Hook — · HTTP —`",
+        )
+    ]
+
+
 def check_license(pyproject_data: dict[str, Any]) -> list[LintFinding]:
     """Rule E5C11 — AGPL-3.0-only as PEP 639 SPDX expression."""
     proj = pyproject_data.get("project") or {}
@@ -531,6 +620,8 @@ def lint_pyproject(repo: Path, package_name: str | None = None) -> LintReport:
     rep.findings.extend(check_skill_bundling(repo, data, rep.package))
     rep.findings.extend(check_license(data))
     rep.findings.extend(check_release_alignment(repo, data, rep.package))
+    rep.findings.extend(check_version_drift(repo, data, rep.package))
+    rep.findings.extend(check_readme_interfaces_callout(repo, rep.package))
     return rep
 
 
@@ -541,6 +632,8 @@ __all__ = [
     "lint_pyproject",
     "check_implicit_deps",
     "check_skill_bundling",
+    "check_version_drift",
+    "check_readme_interfaces_callout",
     "check_duplicate_tables",
     "check_license",
     "check_release_alignment",
