@@ -357,3 +357,105 @@ where = ["src"]
 def test_missing_pyproject(tmp_path):
     rep = lint_pyproject(tmp_path)
     assert any(f.rule == "E5C1_missing_pyproject" for f in rep.findings)
+
+
+# ----------------------------------------------------------------------
+# E5F1 — __version__ drift
+# ----------------------------------------------------------------------
+
+
+def test_e5f1_fires_when_version_literal_drifts(tmp_path):
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.2.0"
+""",
+        src_files={"__init__.py": '__version__ = "0.1.0"\n'},
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    drift = [f for f in rep.findings if f.rule == "E5F1_version_drift"]
+    assert drift
+    assert "0.1.0" in drift[0].message and "0.2.0" in drift[0].message
+
+
+def test_e5f1_silent_when_version_matches(tmp_path):
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+""",
+        src_files={"__init__.py": '__version__ = "0.1.0"\n'},
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert not [f for f in rep.findings if f.rule == "E5F1_version_drift"]
+
+
+def test_e5f1_silent_when_version_dynamic(tmp_path):
+    """importlib.metadata-based version can't drift; no finding expected."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.2.0"
+""",
+        src_files={
+            "__init__.py": (
+                "from importlib.metadata import version as _v\n"
+                "__version__ = _v('demo')\n"
+            )
+        },
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert not [f for f in rep.findings if f.rule == "E5F1_version_drift"]
+
+
+# ----------------------------------------------------------------------
+# E5J1 — README interfaces callout
+# ----------------------------------------------------------------------
+
+
+def test_e5j1_fires_when_readme_missing_callout(tmp_path):
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+""",
+    )
+    # Long enough to bypass the placeholder filter, but no Interfaces callout.
+    (repo / "README.md").write_text("# demo\n\n" + ("This is a real package. " * 30))
+    rep = lint_pyproject(repo, package_name="demo")
+    assert [f for f in rep.findings if f.rule == "E5J1_readme_interfaces_callout"]
+
+
+def test_e5j1_silent_when_callout_present(tmp_path):
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+""",
+    )
+    (repo / "README.md").write_text(
+        "# demo\n\n"
+        "> **Interfaces:** Python ⭐⭐⭐ (primary) · CLI — · MCP — · Skills ⭐⭐ · Hook — · HTTP —\n\n"
+        + ("Body. " * 60)
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert not [f for f in rep.findings if f.rule == "E5J1_readme_interfaces_callout"]
+
+
+def test_e5j1_silent_when_readme_is_placeholder(tmp_path):
+    """Don't nag short/stub READMEs (< 500 chars)."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+""",
+    )
+    (repo / "README.md").write_text("# demo\n\nWIP.\n")
+    rep = lint_pyproject(repo, package_name="demo")
+    assert not [f for f in rep.findings if f.rule == "E5J1_readme_interfaces_callout"]
