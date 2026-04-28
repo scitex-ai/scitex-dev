@@ -545,6 +545,40 @@ def check_license(pyproject_data: dict[str, Any]) -> list[LintFinding]:
     ]
 
 
+def check_orphan_license_classifier(
+    pyproject_data: dict[str, Any],
+) -> list[LintFinding]:
+    """Rule E5C13 — PEP 639 SPDX + legacy License classifier are incompatible.
+
+    setuptools 80+ raises ``InvalidConfigError`` when ``[project].license``
+    is the SPDX expression form AND ``[project].classifiers`` still
+    contains a ``License :: OSI Approved :: ...`` row. This breaks
+    `pip install -e .` and `pip wheel`. Caught by socialia's CI on the
+    pre-commit-build step on 2026-04-28.
+
+    Fix: drop the classifier; the SPDX expression is now authoritative.
+    """
+    proj = pyproject_data.get("project") or {}
+    lic = proj.get("license")
+    classifiers = proj.get("classifiers") or []
+    has_spdx = isinstance(lic, str) and lic.strip()
+    has_legacy = any(
+        isinstance(c, str) and c.startswith("License :: OSI Approved")
+        for c in classifiers
+    )
+    if has_spdx and has_legacy:
+        return [
+            LintFinding(
+                rule="E5C13_orphan_license_classifier",
+                severity="HIGH",
+                message="legacy `License :: OSI Approved :: ...` classifier present alongside SPDX expression",
+                detail="setuptools 80+ refuses to build the package",
+                fix_hint="remove the License classifier(s) from [project].classifiers",
+            )
+        ]
+    return []
+
+
 def _pypi_version(name: str) -> str | None:
     try:
         import urllib.request
@@ -642,6 +676,7 @@ def lint_pyproject(repo: Path, package_name: str | None = None) -> LintReport:
     rep.findings.extend(check_implicit_deps(repo, data, rep.package))
     rep.findings.extend(check_skill_bundling(repo, data, rep.package))
     rep.findings.extend(check_license(data))
+    rep.findings.extend(check_orphan_license_classifier(data))
     rep.findings.extend(check_release_alignment(repo, data, rep.package))
     rep.findings.extend(check_version_drift(repo, data, rep.package))
     rep.findings.extend(check_readme_interfaces_callout(repo, rep.package))

@@ -336,6 +336,40 @@ license = {text = "AGPL-3.0-only"}
     assert licenses and "deprecated table form" in licenses[0].message
 
 
+def test_e5c13_fires_on_orphan_legacy_classifier(tmp_path):
+    """SPDX license + legacy classifier breaks setuptools 80+."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+license = "AGPL-3.0-only"
+classifiers = [
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+]
+""",
+    )
+    rep = lint_pyproject(repo)
+    assert any(f.rule == "E5C13_orphan_license_classifier" for f in rep.findings)
+
+
+def test_e5c13_silent_when_classifiers_have_no_license(tmp_path):
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+license = "AGPL-3.0-only"
+classifiers = [
+    "Operating System :: OS Independent",
+]
+""",
+    )
+    rep = lint_pyproject(repo)
+    assert not [f for f in rep.findings if f.rule == "E5C13_orphan_license_classifier"]
+
+
 def test_e5c11_silent_on_spdx(tmp_path):
     repo = _write_repo(
         tmp_path,
