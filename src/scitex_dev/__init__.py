@@ -96,6 +96,12 @@ from .ecosystem import (
 # RTD
 from .rtd import check_all_rtd as check_all_rtd, check_rtd_status as check_rtd_status
 
+# PyPI publishing
+from ._pypi_package_data import (
+    PackageDataAuditReport as PackageDataAuditReport,
+    audit_package_data as audit_package_data,
+)
+
 # GitHub
 from .github import (
     check_all_remotes as check_all_remotes,
