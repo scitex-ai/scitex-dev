@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from ._pyproject_lint import lint_pyproject
+from ._rtd_onboard import onboard_rtd
 
 SCRIPTS = Path(__file__).parent.parent.parent / "scripts" / "quality"
 
@@ -47,6 +48,14 @@ def lint_pyproject_cli(repo_root: str | None = None, strict: bool = False) -> in
     if rep.has_high:
         return 1
     return 2 if strict else 0
+
+
+def rtd_onboard_cli(repo_root: str | None = None, dry_run: bool = False) -> int:
+    """Scaffold a minimal Read the Docs setup. Idempotent."""
+    repo = Path(repo_root or ".").resolve()
+    rep = onboard_rtd(repo, dry_run=dry_run)
+    print(rep.render())
+    return 0 if not rep.failed else 1
 
 
 def audit_ecosystem(
