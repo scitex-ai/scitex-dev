@@ -83,6 +83,30 @@ dependencies = ["numpy", "scitex-config>=0.3.0"]
     assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
 
 
+def test_e5c5_silent_when_inside_main_guard(tmp_path):
+    """`if __name__ == "__main__": import X` is a script-only import."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+dependencies = []
+""",
+        src_files={
+            "foo.py": (
+                "import numpy as np\n\n"
+                "def f(x):\n"
+                "    return x * 2\n\n"
+                'if __name__ == "__main__":\n'
+                "    import scitex_config\n"
+                "    print(scitex_config.__version__)\n"
+            )
+        },
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
+
+
 def test_e5c5_silent_when_inside_type_checking(tmp_path):
     """`if TYPE_CHECKING: from x import Y` is not a runtime dep."""
     repo = _write_repo(

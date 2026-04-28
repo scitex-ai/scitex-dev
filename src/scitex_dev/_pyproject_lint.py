@@ -219,17 +219,39 @@ def _scan_imports(src_dir: Path) -> set[str]:
                     self.visit(stmt)
 
             def visit_If(self, node: ast.If):  # noqa: N802
-                # `if TYPE_CHECKING: import X` and `if False: import X` are
-                # not real imports at runtime — count them as guarded so the
-                # linter doesn't flag them as missing deps.
+                # Imports inside any of these conditional branches don't run
+                # at module import time, so they're not runtime hard deps:
+                #   - if TYPE_CHECKING:           — typing-only
+                #   - if False:                   — disabled branch
+                #   - if __name__ == "__main__":  — script-only entry-point
                 test = node.test
-                guarded = (
-                    (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING")
-                    or (
-                        isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
-                    )
-                    or (isinstance(test, ast.Constant) and test.value is False)
+                is_type_checking = (
+                    isinstance(test, ast.Name) and test.id == "TYPE_CHECKING"
+                ) or (isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING")
+                is_constant_false = (
+                    isinstance(test, ast.Constant) and test.value is False
                 )
+                # `if __name__ == "__main__":` and `if "__main__" == __name__:`
+                is_main_guard = (
+                    isinstance(test, ast.Compare)
+                    and len(test.ops) == 1
+                    and isinstance(test.ops[0], ast.Eq)
+                    and (
+                        (
+                            isinstance(test.left, ast.Name)
+                            and test.left.id == "__name__"
+                            and isinstance(test.comparators[0], ast.Constant)
+                            and test.comparators[0].value == "__main__"
+                        )
+                        or (
+                            isinstance(test.comparators[0], ast.Name)
+                            and test.comparators[0].id == "__name__"
+                            and isinstance(test.left, ast.Constant)
+                            and test.left.value == "__main__"
+                        )
+                    )
+                )
+                guarded = is_type_checking or is_constant_false or is_main_guard
                 if guarded:
                     self.guard_depth += 1
                 for stmt in node.body:
