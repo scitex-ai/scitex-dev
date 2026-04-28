@@ -49,6 +49,7 @@ from typing import Any
 ECOSYSTEM_IMPORTS_TO_DIST: dict[str, str] = {
     "scitex_config": "scitex-config",
     "scitex_core": "scitex-core",
+    "scitex": "scitex",  # the umbrella distribution
     "scitex_io": "scitex-io",
     "scitex_dev": "scitex-dev",
     "scitex_logging": "scitex-logging",
