@@ -145,10 +145,16 @@ class LintReport:
 
 
 def _load_pyproject(path: Path) -> dict[str, Any] | None:
-    """Parse pyproject.toml; return None on parse error (caller flags it)."""
-    try:
-        import tomllib
+    """Parse pyproject.toml; return None on parse error (caller flags it).
 
+    tomllib is stdlib on 3.11+; fall back to tomli on 3.10. CI runs the
+    matrix on 3.10 / 3.11 / 3.12 / 3.13, so the import dance matters.
+    """
+    try:
+        try:
+            import tomllib  # type: ignore[import-not-found]
+        except ImportError:
+            import tomli as tomllib  # type: ignore[import-not-found,no-redef]
         with path.open("rb") as fh:
             return tomllib.load(fh)
     except Exception:
