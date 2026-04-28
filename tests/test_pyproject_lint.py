@@ -83,6 +83,51 @@ dependencies = ["numpy", "scitex-config>=0.3.0"]
     assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
 
 
+def test_e5c5_silent_when_inside_type_checking(tmp_path):
+    """`if TYPE_CHECKING: from x import Y` is not a runtime dep."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+dependencies = []
+""",
+        src_files={
+            "foo.py": (
+                "from typing import TYPE_CHECKING\n"
+                "if TYPE_CHECKING:\n"
+                "    from scitex_config._ecosystem import local_state\n"
+            )
+        },
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
+
+
+def test_e5c5_silent_when_function_body_try_except(tmp_path):
+    """A try/except ImportError inside a function body is still guarded."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+dependencies = []
+""",
+        src_files={
+            "foo.py": (
+                "def maybe():\n"
+                "    try:\n"
+                "        from scitex_hpc import Reservation\n"
+                "    except ImportError:\n"
+                "        return None\n"
+                "    return Reservation\n"
+            )
+        },
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
+
+
 def test_e5c5_silent_when_import_is_guarded(tmp_path):
     """Optional imports wrapped in try/except ImportError don't need a dep.
 

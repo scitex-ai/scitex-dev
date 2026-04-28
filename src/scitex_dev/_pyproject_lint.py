@@ -199,16 +199,16 @@ def _scan_imports(src_dir: Path) -> set[str]:
 
         class V(ast.NodeVisitor):
             def __init__(self):
-                self.in_try_depth = 0
+                self.guard_depth = 0
 
             def visit_Try(self, node: ast.Try):  # noqa: N802
                 # Only the body of a try-block counts as guarded; the
                 # except/finally blocks shouldn't grant immunity to
                 # imports written there (rare but real).
-                self.in_try_depth += 1
+                self.guard_depth += 1
                 for stmt in node.body:
                     self.visit(stmt)
-                self.in_try_depth -= 1
+                self.guard_depth -= 1
                 for handler in node.handlers:
                     for stmt in handler.body:
                         self.visit(stmt)
@@ -217,8 +217,29 @@ def _scan_imports(src_dir: Path) -> set[str]:
                 for stmt in node.finalbody:
                     self.visit(stmt)
 
+            def visit_If(self, node: ast.If):  # noqa: N802
+                # `if TYPE_CHECKING: import X` and `if False: import X` are
+                # not real imports at runtime — count them as guarded so the
+                # linter doesn't flag them as missing deps.
+                test = node.test
+                guarded = (
+                    (isinstance(test, ast.Name) and test.id == "TYPE_CHECKING")
+                    or (
+                        isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING"
+                    )
+                    or (isinstance(test, ast.Constant) and test.value is False)
+                )
+                if guarded:
+                    self.guard_depth += 1
+                for stmt in node.body:
+                    self.visit(stmt)
+                if guarded:
+                    self.guard_depth -= 1
+                for stmt in node.orelse:
+                    self.visit(stmt)
+
             def _add(self, name: str | None):
-                if name and self.in_try_depth == 0:
+                if name and self.guard_depth == 0:
                     out.add(name.split(".")[0])
 
             def visit_Import(self, node: ast.Import):  # noqa: N802
