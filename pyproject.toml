@@ -13,7 +13,7 @@ authors = [{name = "Yusuke Watanabe", email = "ywatanabe@scitex.ai"}]
 keywords = ["scitex", "developer-tools", "documentation", "llm-friendly", "mcp"]
 
 # Zero runtime dependencies — stdlib only
-dependencies = []
+dependencies = ["scitex-config>=0.3.0"]
 
 [project.optional-dependencies]
 cli = ["click>=8.0.0"]
