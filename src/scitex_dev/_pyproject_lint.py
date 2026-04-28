@@ -545,6 +545,90 @@ def check_license(pyproject_data: dict[str, Any]) -> list[LintFinding]:
     ]
 
 
+def check_internal_api_leak(repo: Path, package_name: str) -> list[LintFinding]:
+    """Rule E5F2 — flag cross-package imports of private modules.
+
+    Pattern that bites:
+        from scitex.stats._utils import p2stars
+
+    The umbrella ``scitex.stats`` shim re-exports the public API of
+    ``scitex_stats``, but private modules (``_utils``, ``_internal``)
+    are NOT part of the namespace contract and may break without
+    notice. Worse, when a downstream installs only the standalone
+    (``scitex-stats``) without the umbrella, ``scitex.stats._utils``
+    is unimportable even though ``scitex_stats._utils`` works.
+
+    Caught scitex-bridge on 2026-04-28 (used
+    ``scitex.stats._utils.p2stars``; standalone CI broke).
+
+    The fix is always the same: import directly from the standalone
+    distribution instead — `scitex_stats._utils` (still private, but
+    at least the import path is honest about coupling).
+
+    Severity HIGH because cross-package private imports survive
+    until the upstream's private layout changes; then they break in
+    the wild without a deprecation cycle.
+    """
+    findings: list[LintFinding] = []
+    # The umbrella package is allowed to use private paths under its own
+    # namespace (alias-shim mechanics).
+    if package_name == "scitex":
+        return findings
+    import_name = package_name.replace("-", "_")
+    src = repo / "src" / import_name
+    if not src.is_dir():
+        return findings
+    # Compatibility shims (figrecipe's _scitex_compat/, packages' own
+    # _compat/_legacy/) intentionally bridge old umbrella paths.
+    SKIP_SEGMENTS = ("_compat", "_scitex_compat", "_legacy", "compat_")
+    import ast
+
+    def _is_umbrella_private(module: str | None) -> bool:
+        # scitex.X._private  ↔  scitex.X.Y._private  etc.
+        if not module:
+            return False
+        parts = module.split(".")
+        if parts[0] != "scitex":
+            return False
+        return any(p.startswith("_") for p in parts[1:])
+
+    seen: set[tuple[str, str]] = set()
+    for py in src.rglob("*.py"):
+        if "__pycache__" in py.parts:
+            continue
+        if any(seg in str(py) for seg in SKIP_SEGMENTS):
+            continue
+        try:
+            text = py.read_text(encoding="utf-8", errors="replace")
+            tree = ast.parse(text, filename=str(py))
+        except (OSError, SyntaxError):
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            if not _is_umbrella_private(node.module):
+                continue
+            line = f"from {node.module} import ..."
+            key = (str(py.relative_to(repo)), line)
+            if key in seen:
+                continue
+            seen.add(key)
+            findings.append(
+                LintFinding(
+                    rule="E5F2_internal_api_leak",
+                    severity="HIGH",
+                    message=f"reaches into umbrella's private namespace: `from {node.module} import ...`",
+                    detail=f"{py.relative_to(repo)}:{node.lineno}",
+                    fix_hint=(
+                        "import the same symbol from the standalone "
+                        "distribution (e.g. `scitex_stats._utils` instead of "
+                        "`scitex.stats._utils`)"
+                    ),
+                )
+            )
+    return findings
+
+
 def check_orphan_license_classifier(
     pyproject_data: dict[str, Any],
 ) -> list[LintFinding]:
@@ -675,6 +759,7 @@ def lint_pyproject(repo: Path, package_name: str | None = None) -> LintReport:
     rep.package = pkg or repo.name
     rep.findings.extend(check_implicit_deps(repo, data, rep.package))
     rep.findings.extend(check_skill_bundling(repo, data, rep.package))
+    rep.findings.extend(check_internal_api_leak(repo, rep.package))
     rep.findings.extend(check_license(data))
     rep.findings.extend(check_orphan_license_classifier(data))
     rep.findings.extend(check_release_alignment(repo, data, rep.package))
