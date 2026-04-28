@@ -109,6 +109,10 @@ from ._pypi_extras import (
     audit_extras as audit_extras,
     write_extras_to_pyproject as write_extras_to_pyproject,
 )
+from ._pypi_package_data import (
+    PackageDataAuditReport as PackageDataAuditReport,
+    audit_package_data as audit_package_data,
+)
 from .pypi import (
     PublishMethod as PublishMethod,
     PublishResult as PublishResult,
