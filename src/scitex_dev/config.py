@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from scitex_config._ecosystem import local_state
+
 
 @dataclass
 class HostConfig:
@@ -81,8 +83,8 @@ def _get_default_config_path() -> Path:
     ``~/.scitex/dev_config.yaml`` is honored as a fallback if it exists
     AND the preferred path does not, to keep older installs working.
     """
-    preferred = Path.home() / ".scitex" / "dev" / "config.yaml"
-    legacy = Path.home() / ".scitex" / "dev_config.yaml"
+    preferred = local_state.path("dev", "config.yaml")
+    legacy = local_state.user_root() / "dev_config.yaml"
     if not preferred.exists() and legacy.exists():
         return legacy
     return preferred
