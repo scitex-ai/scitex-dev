@@ -9,12 +9,24 @@ from typing import Dict, List, Optional, TypedDict
 
 
 class PackageInfo(TypedDict, total=False):
-    """Package information structure."""
+    """Package information structure.
+
+    `category` controls how the auditor and ecosystem CLI treat the entry:
+
+    - ``umbrella``     — the top-level scitex package; full audit
+    - ``library``      — standard scitex-* leaf; full audit
+    - ``external-lib`` — non-scitex-prefixed lib in the ecosystem
+                          (figrecipe, socialia); full audit
+    - ``template``     — scaffolds; auditor skips §C5/§E/§L by default
+    - ``dataset``      — data-only repos (crossref-local, openalex-local);
+                          auditor skips §E (no SKILL.md required)
+    """
 
     local_path: str
     pypi_name: str
     github_repo: str
     import_name: str
+    category: str
 
 
 # Ordered dict - order matters for display
@@ -24,240 +36,336 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "pypi_name": "scitex",
         "github_repo": "ywatanabe1989/scitex-python",
         "import_name": "scitex",
+        "category": "umbrella",
     },
     "scitex-io": {
         "local_path": "~/proj/scitex-io",
         "pypi_name": "scitex-io",
         "github_repo": "ywatanabe1989/scitex-io",
         "import_name": "scitex_io",
+        "category": "library",
     },
     "scitex-stats": {
         "local_path": "~/proj/scitex-stats",
         "pypi_name": "scitex-stats",
         "github_repo": "ywatanabe1989/scitex-stats",
         "import_name": "scitex_stats",
+        "category": "library",
     },
     "scitex-clew": {
         "local_path": "~/proj/scitex-clew",
         "pypi_name": "scitex-clew",
         "github_repo": "ywatanabe1989/scitex-clew",
         "import_name": "scitex_clew",
+        "category": "library",
     },
     "scitex-cloud": {
         "local_path": "~/proj/scitex-cloud",
         "pypi_name": "scitex-cloud",
         "github_repo": "ywatanabe1989/scitex-cloud",
         "import_name": "scitex_cloud",
+        "category": "library",
     },
     "figrecipe": {
         "local_path": "~/proj/figrecipe",
         "pypi_name": "figrecipe",
         "github_repo": "ywatanabe1989/figrecipe",
         "import_name": "figrecipe",
+        "category": "external-lib",
     },
     "openalex-local": {
         "local_path": "~/proj/openalex-local",
         "pypi_name": "openalex-local",
         "github_repo": "ywatanabe1989/openalex-local",
         "import_name": "openalex_local",
+        "category": "dataset",
     },
     "crossref-local": {
         "local_path": "~/proj/crossref-local",
         "pypi_name": "crossref-local",
         "github_repo": "ywatanabe1989/crossref-local",
         "import_name": "crossref_local",
+        "category": "dataset",
     },
     "scitex-writer": {
         "local_path": "~/proj/scitex-writer",
         "pypi_name": "scitex-writer",
         "github_repo": "ywatanabe1989/scitex-writer",
         "import_name": "scitex_writer",
+        "category": "library",
     },
     "scitex-linter": {
         "local_path": "~/proj/scitex-linter",
         "pypi_name": "scitex-linter",
         "github_repo": "ywatanabe1989/scitex-linter",
         "import_name": "scitex_linter",
+        "category": "library",
     },
     "scitex-dataset": {
         "local_path": "~/proj/scitex-dataset",
         "pypi_name": "scitex-dataset",
         "github_repo": "ywatanabe1989/scitex-dataset",
         "import_name": "scitex_dataset",
+        "category": "library",
     },
     "socialia": {
         "local_path": "~/proj/socialia",
         "pypi_name": "socialia",
         "github_repo": "ywatanabe1989/socialia",
         "import_name": "socialia",
-    },
-    "automated-research-demo": {
-        "local_path": "~/proj/automated-research-demo",
-        "pypi_name": "automated-research-demo",
-        "github_repo": "ywatanabe1989/automated-research-demo",
-        "import_name": "automated_research_demo",
+        "category": "external-lib",
     },
     "scitex-research-template": {
         "local_path": "~/proj/scitex-research-template",
         "pypi_name": "scitex-research-template",
         "github_repo": "ywatanabe1989/scitex-research-template",
         "import_name": "scitex_research_template",
+        "category": "template",
     },
     "pip-project-template": {
         "local_path": "~/proj/pip-project-template",
         "pypi_name": "pip-project-template",
         "github_repo": "ywatanabe1989/pip-project-template",
         "import_name": "pip_project_template",
+        "category": "template",
     },
     "scitex-container": {
         "local_path": "~/proj/scitex-container",
         "pypi_name": "scitex-container",
         "github_repo": "ywatanabe1989/scitex-container",
         "import_name": "scitex_container",
+        "category": "library",
     },
-    "scitex-tunnel": {
-        "local_path": "~/proj/scitex-tunnel",
-        "pypi_name": "scitex-tunnel",
-        "github_repo": "ywatanabe1989/scitex-tunnel",
-        "import_name": "scitex_tunnel",
+    "scitex-ssh": {
+        "local_path": "~/proj/scitex-ssh",
+        "pypi_name": "scitex-ssh",
+        "github_repo": "ywatanabe1989/scitex-ssh",
+        "import_name": "scitex_ssh",
+        "category": "library",
     },
     "scitex-ui": {
         "local_path": "~/proj/scitex-ui",
         "pypi_name": "scitex-ui",
         "github_repo": "ywatanabe1989/scitex-ui",
         "import_name": "scitex_ui",
+        "category": "library",
     },
     "scitex-app": {
         "local_path": "~/proj/scitex-app",
         "pypi_name": "scitex-app",
         "github_repo": "ywatanabe1989/scitex-app",
         "import_name": "scitex_app",
+        "category": "library",
     },
     "scitex-audio": {
         "local_path": "~/proj/scitex-audio",
         "pypi_name": "scitex-audio",
         "github_repo": "ywatanabe1989/scitex-audio",
         "import_name": "scitex_audio",
+        "category": "library",
     },
     "scitex-parallel": {
         "local_path": "~/proj/scitex-parallel",
         "pypi_name": "scitex-parallel",
         "github_repo": "ywatanabe1989/scitex-parallel",
         "import_name": "scitex_parallel",
+        "category": "library",
     },
     "scitex-types": {
         "local_path": "~/proj/scitex-types",
         "pypi_name": "scitex-types",
         "github_repo": "ywatanabe1989/scitex-types",
         "import_name": "scitex_types",
+        "category": "library",
     },
     "scitex-path": {
         "local_path": "~/proj/scitex-path",
         "pypi_name": "scitex-path",
         "github_repo": "ywatanabe1989/scitex-path",
         "import_name": "scitex_path",
+        "category": "library",
     },
     "scitex-repro": {
         "local_path": "~/proj/scitex-repro",
         "pypi_name": "scitex-repro",
         "github_repo": "ywatanabe1989/scitex-repro",
         "import_name": "scitex_repro",
+        "category": "library",
     },
     "scitex-compat": {
         "local_path": "~/proj/scitex-compat",
         "pypi_name": "scitex-compat",
         "github_repo": "ywatanabe1989/scitex-compat",
         "import_name": "scitex_compat",
+        "category": "library",
     },
     "scitex-etc": {
         "local_path": "~/proj/scitex-etc",
         "pypi_name": "scitex-etc",
         "github_repo": "ywatanabe1989/scitex-etc",
         "import_name": "scitex_etc",
+        "category": "library",
     },
     "scitex-gists": {
         "local_path": "~/proj/scitex-gists",
         "pypi_name": "scitex-gists",
         "github_repo": "ywatanabe1989/scitex-gists",
         "import_name": "scitex_gists",
+        "category": "library",
     },
     "scitex-audit": {
         "local_path": "~/proj/scitex-audit",
         "pypi_name": "scitex-audit",
         "github_repo": "ywatanabe1989/scitex-audit",
         "import_name": "scitex_audit",
+        "category": "library",
     },
     "scitex-core": {
         "local_path": "~/proj/scitex-core",
         "pypi_name": "scitex-core",
         "github_repo": "ywatanabe1989/scitex-core",
         "import_name": "scitex_core",
+        "category": "library",
     },
     "scitex-db": {
         "local_path": "~/proj/scitex-db",
         "pypi_name": "scitex-db",
         "github_repo": "ywatanabe1989/scitex-db",
         "import_name": "scitex_db",
+        "category": "library",
     },
     "scitex-scholar": {
         "local_path": "~/proj/scitex-scholar",
         "pypi_name": "scitex-scholar",
         "github_repo": "ywatanabe1989/scitex-scholar",
         "import_name": "scitex_scholar",
+        "category": "library",
     },
     "scitex-template": {
         "local_path": "~/proj/scitex-template",
         "pypi_name": "scitex-template",
         "github_repo": "ywatanabe1989/scitex-template",
         "import_name": "scitex_template",
+        "category": "library",
     },
     "scitex-dev": {
         "local_path": "~/proj/scitex-dev",
         "pypi_name": "scitex-dev",
         "github_repo": "ywatanabe1989/scitex-dev",
         "import_name": "scitex_dev",
+        "category": "library",
     },
     "scitex-agent-container": {
         "local_path": "~/proj/scitex-agent-container",
         "pypi_name": "scitex-agent-container",
         "github_repo": "ywatanabe1989/scitex-agent-container",
         "import_name": "scitex_agent_container",
+        "category": "library",
     },
     "scitex-orochi": {
         "local_path": "~/proj/scitex-orochi",
         "pypi_name": "scitex-orochi",
         "github_repo": "ywatanabe1989/scitex-orochi",
         "import_name": "scitex_orochi",
+        "category": "library",
     },
     "singularity-template": {
         "local_path": "~/proj/singularity-template",
         "pypi_name": "singularity-template",
         "github_repo": "ywatanabe1989/singularity-template",
         "import_name": "singularity_template",
+        "category": "template",
     },
     "scitex-str": {
         "local_path": "~/proj/scitex-str",
         "pypi_name": "scitex-str",
         "github_repo": "ywatanabe1989/scitex-str",
         "import_name": "scitex_str",
+        "category": "library",
     },
     "scitex-logging": {
         "local_path": "~/proj/scitex-logging",
         "pypi_name": "scitex-logging",
         "github_repo": "ywatanabe1989/scitex-logging",
         "import_name": "scitex_logging",
+        "category": "library",
     },
     "scitex-dict": {
         "local_path": "~/proj/scitex-dict",
         "pypi_name": "scitex-dict",
         "github_repo": "ywatanabe1989/scitex-dict",
         "import_name": "scitex_dict",
+        "category": "library",
     },
     "scitex-browser": {
         "local_path": "~/proj/scitex-browser",
         "pypi_name": "scitex-browser",
         "github_repo": "ywatanabe1989/scitex-browser",
         "import_name": "scitex_browser",
+        "category": "library",
+    },
+    "scitex-config": {
+        "local_path": "~/proj/scitex-config",
+        "pypi_name": "scitex-config",
+        "github_repo": "ywatanabe1989/scitex-config",
+        "import_name": "scitex_config",
+        "category": "library",
+    },
+    "scitex-events": {
+        "local_path": "~/proj/scitex-events",
+        "pypi_name": "scitex-events",
+        "github_repo": "ywatanabe1989/scitex-events",
+        "import_name": "scitex_events",
+        "category": "library",
+    },
+    "scitex-hpc": {
+        "local_path": "~/proj/scitex-hpc",
+        "pypi_name": "scitex-hpc",
+        "github_repo": "ywatanabe1989/scitex-hpc",
+        "import_name": "scitex_hpc",
+        "category": "library",
+    },
+    "scitex-decorators": {
+        "local_path": "~/proj/scitex-decorators",
+        "pypi_name": "scitex-decorators",
+        "github_repo": "ywatanabe1989/scitex-decorators",
+        "import_name": "scitex_decorators",
+        "category": "library",
+    },
+    "scitex-pd": {
+        "local_path": "~/proj/scitex-pd",
+        "pypi_name": "scitex-pd",
+        "github_repo": "ywatanabe1989/scitex-pd",
+        "import_name": "scitex_pd",
+        "category": "library",
+    },
+    "scitex-plt": {
+        "local_path": "~/proj/scitex-plt",
+        "pypi_name": "scitex-plt",
+        "github_repo": "ywatanabe1989/scitex-plt",
+        "import_name": "scitex_plt",
+        "category": "library",
+    },
+    "scitex-nn": {
+        "local_path": "~/proj/scitex-nn",
+        "pypi_name": "scitex-nn",
+        "github_repo": "ywatanabe1989/scitex-nn",
+        "import_name": "scitex_nn",
+        "category": "library",
+    },
+    "scitex-gen": {
+        "local_path": "~/proj/scitex-gen",
+        "pypi_name": "scitex-gen",
+        "github_repo": "ywatanabe1989/scitex-gen",
+        "import_name": "scitex_gen",
+        "category": "library",
+    },
+    "scitex-dsp": {
+        "local_path": "~/proj/scitex-dsp",
+        "pypi_name": "scitex-dsp",
+        "github_repo": "ywatanabe1989/scitex-dsp",
+        "import_name": "scitex_dsp",
+        "category": "library",
     },
 }
 
