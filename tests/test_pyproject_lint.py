@@ -410,6 +410,29 @@ dependencies = ["scitex-stats>=0.2.0"]
     assert not [f for f in rep.findings if f.rule == "E5F2_internal_api_leak"]
 
 
+def test_e5f2_silent_when_guarded_by_try_except(tmp_path):
+    """Optional fallback imports are explicitly handled — don't flag them."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "0.1.0"
+dependencies = ["scitex"]
+""",
+        src_files={
+            "foo.py": (
+                "try:\n"
+                "    from scitex.io.bundle.kinds._plot._models import FigureModel\n"
+                "    HAS = True\n"
+                "except ImportError:\n"
+                "    HAS = False\n"
+            )
+        },
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert not [f for f in rep.findings if f.rule == "E5F2_internal_api_leak"]
+
+
 def test_e5f2_silent_on_public_umbrella_import(tmp_path):
     """`from scitex.stats import ttest_ind` is the public path; not flagged."""
     repo = _write_repo(

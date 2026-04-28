@@ -603,29 +603,76 @@ def check_internal_api_leak(repo: Path, package_name: str) -> list[LintFinding]:
             tree = ast.parse(text, filename=str(py))
         except (OSError, SyntaxError):
             continue
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.ImportFrom):
-                continue
-            if not _is_umbrella_private(node.module):
-                continue
-            line = f"from {node.module} import ..."
-            key = (str(py.relative_to(repo)), line)
-            if key in seen:
-                continue
-            seen.add(key)
-            findings.append(
-                LintFinding(
-                    rule="E5F2_internal_api_leak",
-                    severity="HIGH",
-                    message=f"reaches into umbrella's private namespace: `from {node.module} import ...`",
-                    detail=f"{py.relative_to(repo)}:{node.lineno}",
-                    fix_hint=(
-                        "import the same symbol from the standalone "
-                        "distribution (e.g. `scitex_stats._utils` instead of "
-                        "`scitex.stats._utils`)"
-                    ),
+
+        # Walk with try/except + TYPE_CHECKING + __main__ guard awareness so
+        # `try: from scitex.io.bundle._x import Y; except ImportError: ...`
+        # is NOT flagged — it's an explicit fallback path.
+        class V(ast.NodeVisitor):
+            def __init__(self):
+                self.depth = 0
+
+            def visit_Try(self, node: ast.Try):  # noqa: N802
+                self.depth += 1
+                for s in node.body:
+                    self.visit(s)
+                self.depth -= 1
+                for h in node.handlers:
+                    for s in h.body:
+                        self.visit(s)
+                for s in node.orelse:
+                    self.visit(s)
+                for s in node.finalbody:
+                    self.visit(s)
+
+            def visit_If(self, node: ast.If):  # noqa: N802
+                t = node.test
+                guarded = (isinstance(t, ast.Name) and t.id == "TYPE_CHECKING") or (
+                    isinstance(t, ast.Compare)
+                    and len(t.ops) == 1
+                    and isinstance(t.ops[0], ast.Eq)
+                    and (
+                        isinstance(t.left, ast.Name)
+                        and t.left.id == "__name__"
+                        and isinstance(t.comparators[0], ast.Constant)
+                        and t.comparators[0].value == "__main__"
+                    )
                 )
-            )
+                if guarded:
+                    self.depth += 1
+                for s in node.body:
+                    self.visit(s)
+                if guarded:
+                    self.depth -= 1
+                for s in node.orelse:
+                    self.visit(s)
+
+            def visit_ImportFrom(self, node: ast.ImportFrom):  # noqa: N802
+                if self.depth > 0:
+                    return
+                if not _is_umbrella_private(node.module):
+                    return
+                line = f"from {node.module} import ..."
+                key = (str(py.relative_to(repo)), line)
+                if key in seen:
+                    return
+                seen.add(key)
+                findings.append(
+                    LintFinding(
+                        rule="E5F2_internal_api_leak",
+                        severity="HIGH",
+                        message=f"reaches into umbrella's private namespace: `from {node.module} import ...`",
+                        detail=f"{py.relative_to(repo)}:{node.lineno}",
+                        fix_hint=(
+                            "import the same symbol from the standalone "
+                            "distribution (e.g. `scitex_stats._utils` instead "
+                            "of `scitex.stats._utils`), or wrap with "
+                            "`try: ... except ImportError:` if the umbrella is "
+                            "an optional fallback"
+                        ),
+                    )
+                )
+
+        V().visit(tree)
     return findings
 
 
