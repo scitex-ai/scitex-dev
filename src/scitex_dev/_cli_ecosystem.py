@@ -62,13 +62,181 @@ def register_ecosystem_commands(main_group):
                 repo = info.get("github_repo", "")
                 click.echo(f"  {pkg:25s} {repo}")
 
+    @ecosystem.command("graph")
+    @click.option(
+        "--format",
+        "fmt",
+        type=click.Choice(["mermaid", "dot"]),
+        default="mermaid",
+        help="Output format.",
+    )
+    @click.option(
+        "--output",
+        "-o",
+        type=click.Path(dir_okay=False, writable=True),
+        default=None,
+        help="Write graph to FILE instead of stdout.",
+    )
+    @click.option(
+        "--cycles",
+        is_flag=True,
+        help="Detect dependency cycles; exit 1 if any are found.",
+    )
+    @click.option(
+        "--include-extras/--no-extras",
+        default=True,
+        help="Include optional-dependencies in the graph (default: include).",
+    )
+    @click.option(
+        "--group-by-tier/--no-group-by-tier",
+        default=True,
+        help="Group nodes into tier subgraphs (mermaid only).",
+    )
+    @click.pass_context
+    def ecosystem_graph(ctx, fmt, output, cycles, include_extras, group_by_tier):
+        """Emit a current-state ecosystem dependency graph (mermaid/DOT)."""
+        from . import ecosystem_graph as _eg
+
+        pkgs = _eg.discover_packages()
+        graph = _eg.build_graph(pkgs)
+
+        if cycles:
+            found = _eg.find_cycles(graph, include_extras=False)
+            if not found:
+                click.echo("No dependency cycles detected.")
+                ctx.exit(0)
+            click.echo(f"Detected {len(found)} cycle(s):", err=True)
+            for cyc in found:
+                click.echo("  - " + " -> ".join(cyc), err=True)
+            ctx.exit(1)
+
+        if fmt == "mermaid":
+            text = _eg.to_mermaid(
+                graph,
+                group_by_tier=group_by_tier,
+                include_extras=include_extras,
+            )
+        else:
+            text = _eg.to_dot(graph, include_extras=include_extras)
+
+        if output:
+            from pathlib import Path as _P
+
+            _P(output).write_text(text, encoding="utf-8")
+            click.echo(f"Wrote {len(graph)}-node graph to {output}", err=True)
+        else:
+            click.echo(text, nl=False)
+
+    @ecosystem.command("packages")
+    @click.option(
+        "--host",
+        "-h",
+        "hosts",
+        multiple=True,
+        help="Host name(s). Default: all enabled hosts.",
+    )
+    @click.option(
+        "--package",
+        "-p",
+        "packages",
+        multiple=True,
+        help="Package name(s). Default: all.",
+    )
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Mode 2: print commands that would run on out-of-sync hosts.",
+    )
+    @click.option(
+        "--apply",
+        "do_apply",
+        is_flag=True,
+        help="Mode 3: actually execute the sync. Mutually exclusive with --dry-run.",
+    )
+    @click.option(
+        "--unsafe",
+        is_flag=True,
+        help="Skip ahead-check; allow clobbering remote unpushed commits.",
+    )
+    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
+    @click.pass_context
+    def ecosystem_packages(ctx, hosts, packages, dry_run, do_apply, unsafe, as_json):
+        """Audit ecosystem package versions across hosts (3 modes).
+
+        \b
+            scitex-dev ecosystem packages                  # observe
+            scitex-dev ecosystem packages --dry-run        # preview sync
+            scitex-dev ecosystem packages --apply          # execute sync
+        """
+        if dry_run and do_apply:
+            click.echo("error: --dry-run and --apply are mutually exclusive", err=True)
+            ctx.exit(2)
+
+        from .ecosystem_packages import packages_audit
+
+        host_list = list(hosts) if hosts else None
+        pkg_list = list(packages) if packages else None
+        if host_list == ["all"]:
+            host_list = None
+
+        if do_apply:
+            mode = "apply"
+        elif dry_run:
+            mode = "dry-run"
+        else:
+            mode = "observe"
+
+        result = packages_audit(
+            mode=mode, hosts=host_list, packages=pkg_list, unsafe=unsafe
+        )
+
+        if as_json:
+            # Drop the rendered table from JSON; "state" is the structured form.
+            payload = {k: v for k, v in result.items() if k != "table"}
+            click.echo(json.dumps(payload, indent=2, default=str))
+        else:
+            if mode == "observe":
+                click.echo(result["table"])
+                summ = result["summary"]
+                click.echo()
+                click.echo(f"{summ['matching']}/{summ['total']} cells up-to-date")
+                if summ["needing_sync"]:
+                    click.echo("needing sync:")
+                    for n in summ["needing_sync"]:
+                        click.echo(f"  - {n['host']}: {n['pkg']}")
+            elif mode == "dry-run":
+                cmds = result["commands"]
+                if not cmds:
+                    click.echo("# everything in sync — no commands to preview")
+                for host, pkgs_ in cmds.items():
+                    for pkg, lines in pkgs_.items():
+                        click.echo(f"# {host} :: {pkg}")
+                        for line in lines:
+                            click.echo(f"  {line}")
+            else:  # apply
+                click.echo(json.dumps(result, indent=2, default=str))
+
+        # Exit code: observe returns 1 if anything mismatches (or unknown).
+        if mode == "observe":
+            summ = result["summary"]
+            ctx.exit(
+                0 if summ["matching"] == summ["total"] and summ["total"] > 0 else 1
+            )
+        ctx.exit(0)
+
     @ecosystem.command("fix-mismatches")
     @click.option(
         "--confirm", is_flag=True, help="Apply fixes (default: preview only)."
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def ecosystem_fix_mismatches(confirm, as_json):
-        """Detect and fix version mismatches across ecosystem."""
+    @click.pass_context
+    def ecosystem_fix_mismatches(ctx, confirm, as_json):
+        """(deprecated) Renamed to `packages`. Forwards to `packages [--apply]`."""
+        click.echo(
+            "warning: `ecosystem fix-mismatches` is deprecated; "
+            "use `ecosystem packages` (or `packages --apply` to execute).",
+            err=True,
+        )
         from . import fix_mismatches
         from .cli_utils import wrap_as_cli
 
@@ -109,7 +277,11 @@ def register_ecosystem_commands(main_group):
     def ecosystem_sync_remote(
         hosts, package, dry_run, unsafe, no_install, no_stash, as_json
     ):
-        """Sync ecosystem packages to remote hosts over SSH.
+        """(deprecated) Sync ecosystem packages to remote hosts over SSH.
+
+        Replaced by ``ecosystem packages`` (default observation mode,
+        ``--dry-run`` preview, ``--apply`` to execute). This alias will
+        be removed in the next major release.
 
         Each package on each host is: ahead-check -> git stash -> git
         pull -> pip install -e . -> git stash pop. Packages whose
@@ -123,6 +295,12 @@ def register_ecosystem_commands(main_group):
             scitex-dev ecosystem sync-remote -h mba -h spartan
             scitex-dev ecosystem sync-remote -h all -p scitex-db
         """
+        click.echo(
+            "warning: `ecosystem sync-remote` is deprecated; "
+            "use `ecosystem packages` (default observation, --dry-run preview, "
+            "--apply to execute).",
+            err=True,
+        )
         from .cli_utils import wrap_as_cli
         from .sync import sync_all
 
