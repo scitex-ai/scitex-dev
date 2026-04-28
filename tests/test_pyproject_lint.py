@@ -448,6 +448,48 @@ dependencies = ["scitex"]
     assert not [f for f in rep.findings if f.rule == "E5F2_internal_api_leak"]
 
 
+def test_e5l1_release_trigger_hint_for_release_workflow(tmp_path):
+    """When pyproject ≠ PyPI and workflow uses release:published, the
+    fix-hint must include `gh release create` — operators routinely
+    forget this and tag-push alone never publishes."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "1.0.0"
+""",
+    )
+    wf = repo / ".github" / "workflows" / "publish-pypi.yml"
+    wf.parent.mkdir(parents=True)
+    wf.write_text("name: Publish\non:\n  release:\n    types: [published]\n")
+    rep = lint_pyproject(repo, package_name="demo")
+    e5l1 = [f for f in rep.findings if f.rule == "E5L1_dirty_release_state"]
+    # Either the tag-mismatch or pypi-mismatch path: at least one finding
+    # should mention `gh release create` since the workflow uses
+    # release:published trigger.
+    assert any("gh release create" in (f.fix_hint or f.detail) for f in e5l1)
+
+
+def test_e5l1_tag_trigger_hint_omits_release_create(tmp_path):
+    """tag-trigger workflows publish on push --tags; no gh release needed."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject="""[project]
+name = "demo"
+version = "1.0.0"
+""",
+    )
+    wf = repo / ".github" / "workflows" / "publish-pypi.yml"
+    wf.parent.mkdir(parents=True)
+    wf.write_text("name: Publish\non:\n  push:\n    tags:\n      - 'v*'\n")
+    rep = lint_pyproject(repo, package_name="demo")
+    e5l1 = [f for f in rep.findings if f.rule == "E5L1_dirty_release_state"]
+    # No finding should mention `gh release create` for tag-trigger workflows.
+    for f in e5l1:
+        assert "gh release create" not in (f.fix_hint or "")
+        assert "gh release create" not in (f.detail or "")
+
+
 def test_e5c11_silent_on_spdx(tmp_path):
     repo = _write_repo(
         tmp_path,
