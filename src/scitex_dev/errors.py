@@ -58,6 +58,62 @@ _BUILTIN_ERROR_MAP: dict[type, ErrorCode] = {
 }
 
 
+class ScitexError(Exception):
+    """Canonical SciTeX exception for structured failures.
+
+    Use when the failure crosses an MCP / CLI / HTTP boundary and the caller
+    (often an LLM agent) needs a machine-readable category plus a human
+    remediation hint. For plain Python errors raised inside a script,
+    prefer the standard library exceptions (``ValueError``, ``FileNotFoundError``,
+    etc.) — see ``general/03_interface_01_python-api/09_error-handling.md``.
+
+    Parameters
+    ----------
+    message : str
+        Human-readable description of the failure.
+    code : ErrorCode, optional
+        Machine-readable category. Defaults to ``ErrorCode.INTERNAL``.
+    remediation : str, optional
+        How to fix it (e.g. ``"pip install scitex-io[h5]"``).
+
+    Examples
+    --------
+    >>> raise ScitexError(
+    ...     "h5py not installed",
+    ...     code=ErrorCode.DEPENDENCY,
+    ...     remediation="pip install scitex-io[h5]",
+    ... )
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: ErrorCode = ErrorCode.INTERNAL,
+        remediation: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.message = message
+        self.error_code = code
+        self.remediation = remediation
+
+    def to_dict(self) -> dict[str, str]:
+        """Serialize to the structured shape consumed by MCP tools and `--json`."""
+        out: dict[str, str] = {
+            "code": self.error_code.value,
+            "message": self.message,
+        }
+        if self.remediation:
+            out["remediation"] = self.remediation
+        return out
+
+    def __str__(self) -> str:
+        base = f"[{self.error_code.value}] {self.message}"
+        if self.remediation:
+            return f"{base} (remediation: {self.remediation})"
+        return base
+
+
 def classify_exception(exc: Exception) -> ErrorCode:
     """Classify an exception into an ErrorCode.
 

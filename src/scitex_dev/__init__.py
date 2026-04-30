@@ -39,7 +39,12 @@ from .cli_utils import (
     wrap_as_cli,
 )
 from .decorators import supports_return_as
-from .errors import ErrorCode, classify_exception
+from .errors import ErrorCode, ScitexError, classify_exception
+from ._imports import (
+    InstallHint as InstallHint,
+    last_install_hint as last_install_hint,
+    try_import_optional as try_import_optional,
+)
 from ._mcp_compat import get_tools_sync
 from .mcp_utils import async_wrap_as_mcp, result_to_mcp, run_as_mcp, wrap_as_mcp
 from .side_effects import SideEffect
@@ -196,7 +201,11 @@ __all__ = [
     "Result",
     "RESULT_SCHEMA",
     "ErrorCode",
+    "ScitexError",
     "classify_exception",
+    "try_import_optional",
+    "last_install_hint",
+    "InstallHint",
     "supports_return_as",
     "SideEffect",
     "handle_result",
