@@ -37,6 +37,7 @@ Read in this order when building or auditing a package. Each section presupposes
 - [01_ecosystem_04_environment-variables.md](01_ecosystem_04_environment-variables.md) — `SCITEX_<MODULE_NAME>_*` prefix rule; mandates per-package `NN_env-vars.md` leaf
 - [01_ecosystem_05_re-export.md](01_ecosystem_05_re-export.md) — Umbrella `scitex.<name>` thin-re-export pattern + lazy-import guard
 - [01_ecosystem_06_local-state-directories.md](01_ecosystem_06_local-state-directories.md) — `<project>/.scitex/<pkg-short>/` + `~/.scitex/<pkg-short>/` layout, precedence, `SCITEX_DIR`, `PathManager`
+- [01_ecosystem_07_license-and-cla.md](01_ecosystem_07_license-and-cla.md) — AGPL-3.0-only SPDX policy, CLA workflow template, `signatures/cla.json` shape (object, not bare array), `pull_request_target` base-branch trap, bootstrap + audit recipes
 
 ### 2. Package — how does *this* `scitex-*` package's repo live on disk?
 - [02_package_01_layout-src-tests-scripts-examples.md](02_package_01_layout-src-tests-scripts-examples.md) — Layout boundaries between `src/`, `tests/`, `scripts/`, `examples/`, `references/`
