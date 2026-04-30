@@ -55,6 +55,17 @@ RULES: dict[str, Rule] = {
                 "`python -m <pkg>` work."
             ),
         ),
+        Rule(
+            "PS108",
+            "§1",
+            (
+                "flat package layout: ≥3 sibling `.py` files at `src/<pkg>/` "
+                "share a common prefix (e.g. `_cli_*.py`, `_skills_*.py`) — "
+                "promote them to a `<prefix>/` subpackage for navigability. "
+                "A common prefix on 3+ flat files is a reliable signal that "
+                "the cluster wants to be a directory."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
@@ -760,6 +771,11 @@ def audit_project(
         _check_empty_test_dirs(repo_root, distribution, violations)
     _check_tests_subdir_convention(repo_root, distribution, violations)
     _check_docs_structure(repo_root, violations)
+    src_pkg = _src_pkg_dir(repo_root, distribution)
+    if src_pkg is not None:
+        from ._check_flat_layout import check_flat_layout
+
+        check_flat_layout(src_pkg, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]
