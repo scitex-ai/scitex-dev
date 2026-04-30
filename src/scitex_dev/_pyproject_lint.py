@@ -818,6 +818,98 @@ def check_release_alignment(
     return findings
 
 
+def check_cla_workflow_exists(repo: Path) -> list[LintFinding]:
+    """Rule E5C12 — every scitex-* repo must ship a CLA gate workflow.
+
+    The canonical location is `.github/workflows/cla.yml`. See
+    `_skills/general/01_ecosystem_07_license-and-cla.md` for the workflow
+    template and the maintainer-allowlist convention.
+
+    Missing → external contributors can't be gated; the project loses CLA
+    coverage. Bot accounts and the maintainer should still be allowlisted
+    in the workflow itself (`bot*,ywatanabe1989`).
+    """
+    cla_yml = repo / ".github" / "workflows" / "cla.yml"
+    if not cla_yml.is_file():
+        return [
+            LintFinding(
+                rule="E5C12_missing_cla_workflow",
+                severity="MEDIUM",
+                message=".github/workflows/cla.yml is missing",
+                detail=(
+                    "every scitex-* repo gates contributions via the CLA action; "
+                    "see _skills/general/01_ecosystem_07_license-and-cla.md"
+                ),
+                fix_hint=(
+                    "copy the workflow template from a sibling repo (e.g. scitex-core) "
+                    "and ensure `allowlist: bot*,ywatanabe1989`"
+                ),
+            )
+        ]
+    return []
+
+
+def check_cla_signatures_shape(repo: Path) -> list[LintFinding]:
+    """Rule E5C14 — `signatures/cla.json` on `cla-signatures` branch must be
+    a JSON object with key `signedContributors`, not a bare array.
+
+    A bare-array file (`[]`) makes ``contributor-assistant/github-action@v2.6.1``
+    crash on startup with ``Cannot read properties of undefined (reading 'some')``.
+    Hit on scitex-dev and scitex-audio in 2026-04.
+
+    Uses `git show cla-signatures:signatures/cla.json` to fetch the file
+    content without checking out the branch. Skipped (no finding) if the
+    branch doesn't exist locally — that's a healthy "fresh repo" state where
+    the action will bootstrap correctly on first PR.
+    """
+    import json as _json
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "show", "cla-signatures:signatures/cla.json"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, FileNotFoundError):
+        return []
+    if result.returncode != 0:
+        # branch or file absent — fresh repo or never-bootstrapped state, OK.
+        return []
+    raw = result.stdout
+    try:
+        parsed = _json.loads(raw)
+    except _json.JSONDecodeError:
+        return [
+            LintFinding(
+                rule="E5C14_malformed_cla_signatures",
+                severity="HIGH",
+                message="cla-signatures:signatures/cla.json is not valid JSON",
+                detail=raw[:200],
+                fix_hint='replace with `{"signedContributors": []}`',
+            )
+        ]
+    if not isinstance(parsed, dict) or "signedContributors" not in parsed:
+        return [
+            LintFinding(
+                rule="E5C14_malformed_cla_signatures",
+                severity="HIGH",
+                message=(
+                    "cla-signatures:signatures/cla.json is not an object with "
+                    "key `signedContributors` (action will crash on startup)"
+                ),
+                detail=f"shape: {type(parsed).__name__}; content: {raw[:120]}",
+                fix_hint=(
+                    'PUT `{"signedContributors": []}` to that path on '
+                    "the cla-signatures branch — see "
+                    "_skills/general/01_ecosystem_07_license-and-cla.md repair recipe"
+                ),
+            )
+        ]
+    return []
+
+
 def lint_pyproject(repo: Path, package_name: str | None = None) -> LintReport:
     """Run every rule against `repo/pyproject.toml`. Used by CLI + tests."""
     pyproject = repo / "pyproject.toml"
@@ -853,6 +945,8 @@ def lint_pyproject(repo: Path, package_name: str | None = None) -> LintReport:
     rep.findings.extend(check_release_alignment(repo, data, rep.package))
     rep.findings.extend(check_version_drift(repo, data, rep.package))
     rep.findings.extend(check_readme_interfaces_callout(repo, rep.package))
+    rep.findings.extend(check_cla_workflow_exists(repo))
+    rep.findings.extend(check_cla_signatures_shape(repo))
     return rep
 
 
@@ -868,4 +962,6 @@ __all__ = [
     "check_duplicate_tables",
     "check_license",
     "check_release_alignment",
+    "check_cla_workflow_exists",
+    "check_cla_signatures_shape",
 ]
