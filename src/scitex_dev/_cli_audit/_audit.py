@@ -1395,6 +1395,76 @@ def _extract_names(payload) -> set[str]:
     return set()
 
 
+def _check_cli_framework(package: str, out: list[Violation]) -> None:
+    """§11 — CLI framework conformance.
+
+    Every scitex-* CLI must use Click (per `08_universal-flags.md` /
+    `07_audit-cli.md`). argparse causes drift the auditor itself
+    cannot fully police: doubled subparser metavar in --help, manual
+    --json wiring on every parser, no shared CategorizedGroup, no
+    decorator ergonomics. Click is already a transitive dep through
+    scitex-dev; argparse adds zero benefit to the ecosystem.
+
+    Static check: parse the entry-point module + every sibling .py in
+    its directory for `import argparse` / `from argparse`. Flag any
+    occurrence in a CLI module.
+    """
+    import importlib.util as _ilu
+
+    ep_value = _ep_value_for(package)
+    if ep_value is None:
+        return
+    # entry-point format: "module.path:object" — locate the module file.
+    mod_name = ep_value.split(":", 1)[0]
+    try:
+        spec = _ilu.find_spec(mod_name)
+    except Exception:
+        return
+    if spec is None or spec.origin is None:
+        return
+
+    from pathlib import Path as _P
+
+    ep_file = _P(spec.origin)
+    # Audit the entry-point file + every other .py in its directory
+    # (the package's _cli/ submodule typically lives next to it).
+    cli_dir = ep_file.parent
+    py_files = [ep_file] + [
+        p
+        for p in cli_dir.rglob("*.py")
+        if p != ep_file and "__pycache__" not in p.parts
+    ]
+
+    import re as _re
+
+    pat = _re.compile(
+        r"^\s*(import\s+argparse|from\s+argparse\s+import)", _re.MULTILINE
+    )
+    offenders: list[str] = []
+    for f in py_files:
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        if pat.search(text):
+            offenders.append(str(f))
+
+    if offenders:
+        # Single rolled-up violation; list first 3 file paths so the
+        # remediation is actionable without flooding output.
+        sample = ", ".join(offenders[:3])
+        more = f" (+{len(offenders) - 3} more)" if len(offenders) > 3 else ""
+        out.append(
+            Violation(
+                package,
+                "§11",
+                f"CLI uses `argparse` — Click is canonical (zero drift, "
+                f"shared CategorizedGroup, --json/--help-recursive built-in). "
+                f"Migrate: {sample}{more}",
+            )
+        )
+
+
 def _ep_value_for(package: str) -> str | None:
     """First console-script `module:obj` value registered under `package`."""
     try:
@@ -1483,6 +1553,7 @@ RULE_SEVERITY: dict[str, str] = {
     "§7": "warn",
     "§8": "warn",
     "§10": "warn",  # CLI startup speed (slow import → slow tab completion)
+    "§11": "warn",  # CLI framework conformance (Click canonical; argparse banned)
 }
 SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}
 
@@ -1544,6 +1615,7 @@ def _audit_one(
     _check_config_help(cmd, package, out)
     _scan_env_vars(package, out)
     _check_startup_speed(package, out)
+    _check_cli_framework(package, out)
     if behavioral:
         _check_behavioral(package, out, cmd, timeout=timeout)
     return ("ok" if not out else "warn"), out
