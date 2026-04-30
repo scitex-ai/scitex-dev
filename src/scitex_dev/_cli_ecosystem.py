@@ -55,7 +55,14 @@ def register_ecosystem_commands(main_group):
 
             wrap_as_cli(list_versions, as_json=as_json, packages=pkgs)
         elif as_json:
-            click.echo(json.dumps({"packages": pkgs}))
+            items = [
+                {
+                    "name": pkg,
+                    "github_repo": ECOSYSTEM.get(pkg, {}).get("github_repo", ""),
+                }
+                for pkg in pkgs
+            ]
+            click.echo(json.dumps({"packages": items}))
         else:
             for pkg in pkgs:
                 info = ECOSYSTEM.get(pkg, {})
