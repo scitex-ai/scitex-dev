@@ -110,6 +110,23 @@ def test_PA202_bare_string_version(tmp_path):
     assert "PA203" in codes  # fallback string is not '0.0.0+local'
 
 
+def test_PA202_clean_with_aliased_import(tmp_path):
+    """`from importlib.metadata import version as _v; __version__ = _v(...)` is canonical."""
+    body = (
+        "from __future__ import annotations\n"
+        "from importlib.metadata import version as _v, PackageNotFoundError\n"
+        "try:\n"
+        "    __version__ = _v('fakepkg')\n"
+        "except PackageNotFoundError:\n"
+        "    __version__ = '0.0.0+local'\n"
+        "__all__ = ['__version__']\n"
+    )
+    init = _write_init(tmp_path, body)
+    codes = _codes(_audit_init(init, "fakepkg"))
+    assert "PA202" not in codes
+    assert "PA203" not in codes
+
+
 def test_PA203_clean_when_canonical_fallback(tmp_path):
     body = (
         "from __future__ import annotations\n"

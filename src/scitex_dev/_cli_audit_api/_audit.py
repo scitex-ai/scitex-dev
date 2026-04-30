@@ -156,6 +156,9 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
         "future": False,
         "all": None,
         "version_nodes": [],
+        # Local names bound to `importlib.metadata.version` (incl. aliases like
+        # `from importlib.metadata import version as _v`). Used by PA202.
+        "version_aliases": {"version"},
     }
 
     def _record_import(node: ast.AST, in_try: bool) -> None:
@@ -189,6 +192,12 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
             for alias in node.names:
                 local = alias.asname or alias.name
                 bound_names.add(local)
+                # Record `from importlib.metadata import version [as X]` aliases
+                # so PA202 recognizes the canonical pattern through any alias.
+                if mod == "importlib.metadata" and alias.name == "version":
+                    aliases = state["version_aliases"]
+                    assert isinstance(aliases, set)
+                    aliases.add(local)
                 if root in _THIRD_PARTY_ROOTS:
                     third_party_bound.add(local)
                 if (
@@ -296,7 +305,11 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
         out.append(Violation("PA201", where, "add `__version__` to __all__"))
 
     if version_nodes:
-        results = [_inspect_version_pattern(n) for n in version_nodes]
+        raw_aliases = state["version_aliases"]
+        version_aliases: set[str] = (
+            raw_aliases if isinstance(raw_aliases, set) else {"version"}
+        )
+        results = [_inspect_version_pattern(n, version_aliases) for n in version_nodes]
         uses_metadata = any(ok for ok, _ in results)
         fallbacks = [fb for _, fb in results if fb is not None]
         if not uses_metadata:
@@ -321,21 +334,28 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
     return out
 
 
-def _inspect_version_pattern(node: ast.Assign) -> tuple[bool, str | None]:
+def _inspect_version_pattern(
+    node: ast.Assign,
+    version_aliases: set[str] = frozenset({"version"}),  # type: ignore[assignment]
+) -> tuple[bool, str | None]:
     """Return (uses_importlib_metadata, fallback_string_if_present).
 
     Recognized patterns:
         try:
-            __version__ = version("<dist>")
+            __version__ = version("<dist>")          # bare or aliased import
         except PackageNotFoundError:
             __version__ = "0.0.0+local"
 
-        __version__ = version("<dist>") | importlib.metadata.version("<dist>")
+        __version__ = importlib.metadata.version("<dist>")
+
+    ``version_aliases`` is the set of local names bound to
+    ``importlib.metadata.version`` (e.g. ``{"version", "_v"}`` after
+    ``from importlib.metadata import version as _v``).
     """
     value = node.value
     if isinstance(value, ast.Call):
         callee = value.func
-        if isinstance(callee, ast.Name) and callee.id == "version":
+        if isinstance(callee, ast.Name) and callee.id in version_aliases:
             return True, None
         if (
             isinstance(callee, ast.Attribute)
