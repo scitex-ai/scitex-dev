@@ -79,5 +79,3 @@ Strike (`~~item~~`) when done. Foundations shipped in scitex-dev `feat-python-ap
 - [ ] Can scitex-python be written more cleanly without per-submodule directories for re-exporting?
 - [ ] Same question for MCP.
 - [ ] Same question for CLI commands.
-
-<!-- EOF -->

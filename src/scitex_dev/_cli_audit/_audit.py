@@ -379,11 +379,50 @@ def _check_help_format(cmd: click.BaseCommand, full: str, out: list[Violation]) 
         )
 
 
+# Convention flags — when a leaf exposes one of these capabilities, it MUST
+# use the canonical spelling per `08_universal-flags.md` "Convention flags"
+# section. Maps non-canonical synonyms → canonical form.
+_CONVENTION_SYNONYMS: dict[str, str] = {
+    # Parallelism: `-j/--jobs` is the canonical (matches make/cargo/ninja)
+    "--parallel": "--jobs (use `-j N` / `--jobs N`)",
+    "--n-cpus": "--jobs (use `-j N` / `--jobs N`)",
+    "--n_cpus": "--jobs (use `-j N` / `--jobs N`)",
+    "--ncpus": "--jobs (use `-j N` / `--jobs N`)",
+    "--workers": "--jobs (use `-j N` / `--jobs N`)",
+    "--n-workers": "--jobs (use `-j N` / `--jobs N`)",
+    # Quietness: `-q/--quiet` is canonical
+    "--silent": "--quiet (use `-q` / `--quiet`)",
+    # NOTE: `--debug` is intentionally NOT mapped — it has a distinct meaning
+    # for server-mode commands (Flask/uvicorn debug-reload) that is not
+    # verbosity. Use `-v/--verbose` for log verbosity, `--debug` for runtime
+    # debug mode.
+}
+
+
+def _check_convention_flags(
+    cmd: click.BaseCommand, full: str, out: list[Violation]
+) -> None:
+    """§2 convention flags — non-canonical synonyms for capabilities that
+    have a standardized spelling per 08_universal-flags.md (Convention flags).
+    """
+    flags = _flag_names(cmd)
+    for synonym, canonical in _CONVENTION_SYNONYMS.items():
+        if synonym in flags:
+            out.append(
+                Violation(
+                    full,
+                    "§2",
+                    f"non-canonical convention flag {synonym!r} — use {canonical}",
+                )
+            )
+
+
 def _check_universal_flags(
     cmd: click.BaseCommand, full: str, is_root: bool, out: list[Violation]
 ) -> None:
     """§2 — universal flag presence."""
     flags = _flag_names(cmd)
+    _check_convention_flags(cmd, full, out)
 
     if is_root:
         if not ({"--version", "-V"} & flags):
@@ -400,6 +439,18 @@ def _check_universal_flags(
                     full,
                     "§2",
                     "top-level missing --help-recursive flag",
+                )
+            )
+        # --json must be parseable at root so `<cli> --json` doesn't crash.
+        # Emitting JSON content (vs help text) when called with --json is
+        # checked behaviorally elsewhere.
+        if "--json" not in flags:
+            out.append(
+                Violation(
+                    full,
+                    "§2",
+                    "top-level missing --json flag "
+                    "(universal: machine-readable output for every CLI)",
                 )
             )
         return
@@ -1344,6 +1395,76 @@ def _extract_names(payload) -> set[str]:
     return set()
 
 
+def _check_cli_framework(package: str, out: list[Violation]) -> None:
+    """§11 — CLI framework conformance.
+
+    Every scitex-* CLI must use Click (per `08_universal-flags.md` /
+    `07_audit-cli.md`). argparse causes drift the auditor itself
+    cannot fully police: doubled subparser metavar in --help, manual
+    --json wiring on every parser, no shared CategorizedGroup, no
+    decorator ergonomics. Click is already a transitive dep through
+    scitex-dev; argparse adds zero benefit to the ecosystem.
+
+    Static check: parse the entry-point module + every sibling .py in
+    its directory for `import argparse` / `from argparse`. Flag any
+    occurrence in a CLI module.
+    """
+    import importlib.util as _ilu
+
+    ep_value = _ep_value_for(package)
+    if ep_value is None:
+        return
+    # entry-point format: "module.path:object" — locate the module file.
+    mod_name = ep_value.split(":", 1)[0]
+    try:
+        spec = _ilu.find_spec(mod_name)
+    except Exception:
+        return
+    if spec is None or spec.origin is None:
+        return
+
+    from pathlib import Path as _P
+
+    ep_file = _P(spec.origin)
+    # Audit the entry-point file + every other .py in its directory
+    # (the package's _cli/ submodule typically lives next to it).
+    cli_dir = ep_file.parent
+    py_files = [ep_file] + [
+        p
+        for p in cli_dir.rglob("*.py")
+        if p != ep_file and "__pycache__" not in p.parts
+    ]
+
+    import re as _re
+
+    pat = _re.compile(
+        r"^\s*(import\s+argparse|from\s+argparse\s+import)", _re.MULTILINE
+    )
+    offenders: list[str] = []
+    for f in py_files:
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        if pat.search(text):
+            offenders.append(str(f))
+
+    if offenders:
+        # Single rolled-up violation; list first 3 file paths so the
+        # remediation is actionable without flooding output.
+        sample = ", ".join(offenders[:3])
+        more = f" (+{len(offenders) - 3} more)" if len(offenders) > 3 else ""
+        out.append(
+            Violation(
+                package,
+                "§11",
+                f"CLI uses `argparse` — Click is canonical (zero drift, "
+                f"shared CategorizedGroup, --json/--help-recursive built-in). "
+                f"Migrate: {sample}{more}",
+            )
+        )
+
+
 def _ep_value_for(package: str) -> str | None:
     """First console-script `module:obj` value registered under `package`."""
     try:
@@ -1354,6 +1475,61 @@ def _ep_value_for(package: str) -> str | None:
         if ep.name == package:
             return ep.value
     return None
+
+
+def _check_startup_speed(
+    package: str,
+    out: list[Violation],
+    threshold_ms: int = 500,
+) -> None:
+    """§9 — `import <module>` cold-start must be < threshold_ms.
+
+    Click bash-completion calls the program once per Tab press to resolve
+    dynamic completions, so a slow import = unusable tab-completion. The
+    fix is PEP 562 lazy `__getattr__` in the top-level `__init__.py`
+    (see `_skills/general/03_interface_01_python-api/
+    04_lazy-imports-and-optional-deps.md`).
+    """
+    import subprocess as _sp
+    import sys as _sys
+
+    ep_value = _ep_value_for(package)
+    if ep_value is None:
+        return
+    # Entry-point format is "module.path:object"; take the TOP-LEVEL package.
+    module_name = ep_value.split(":", 1)[0].split(".", 1)[0]
+    if not module_name:
+        return
+
+    code = (
+        "import time;t=time.perf_counter();"
+        f"import {module_name};"
+        "print(int((time.perf_counter()-t)*1000))"
+    )
+    try:
+        r = _sp.run(
+            [_sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if r.returncode != 0:
+            return  # import failure — covered elsewhere
+        ms = int(r.stdout.strip())
+    except Exception:
+        return
+
+    if ms > threshold_ms:
+        out.append(
+            Violation(
+                package,
+                "§10",
+                f"`import {module_name}` cold-start is {ms}ms (>{threshold_ms}ms threshold). "
+                "Slow tab-completion: Click runs the program once per Tab press. Convert "
+                f"{module_name}/__init__.py to PEP 562 lazy `__getattr__` (see python-api "
+                "skill 04_lazy-imports-and-optional-deps.md, 'PEP 562 module __getattr__' section).",
+            )
+        )
 
 
 # --------------------------------------------------------------------- #
@@ -1376,6 +1552,8 @@ RULE_SEVERITY: dict[str, str] = {
     "§6b": "warn",
     "§7": "warn",
     "§8": "warn",
+    "§10": "warn",  # CLI startup speed (slow import → slow tab completion)
+    "§11": "warn",  # CLI framework conformance (Click canonical; argparse banned)
 }
 SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}
 
@@ -1436,6 +1614,8 @@ def _audit_one(
     _check_introspection(cmd, package, out)
     _check_config_help(cmd, package, out)
     _scan_env_vars(package, out)
+    _check_startup_speed(package, out)
+    _check_cli_framework(package, out)
     if behavioral:
         _check_behavioral(package, out, cmd, timeout=timeout)
     return ("ok" if not out else "warn"), out

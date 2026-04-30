@@ -41,12 +41,18 @@ def _make_repo(tmp_path: Path, name: str = "demo-pkg") -> Path:
 
 def _violations_for(repo: Path, name: str) -> list[str]:
     """Run the rule check functions directly and return the rule codes that fired."""
+    from scitex_dev._cli_audit_project._audit import Violation, _src_pkg_dir
+    from scitex_dev._cli_audit_project._check_flat_layout import check_flat_layout
+
     out: list = []
     _check_top_level(repo, out)
     _check_mirror(repo, name, out)
     _check_tests_subdir_convention(repo, name, out)
     _check_docs_structure(repo, out)
     _check_placeholder_tests(repo, out)
+    src_pkg = _src_pkg_dir(repo, name)
+    if src_pkg is not None:
+        check_flat_layout(src_pkg, Violation, out)
     return [v.rule for v in out]
 
 
@@ -129,11 +135,12 @@ def test_ps203_fires_on_loose_top_level_test(tmp_path):
     assert "PS203" in rules
 
 
-def test_ps203_silent_for_meta_test(tmp_path):
+def test_ps203_strict_no_meta_test_exemption(tmp_path):
+    """Strict: any test_*.py at tests/ root violates, even meta-tests."""
     repo = _make_repo(tmp_path, "demo")
     (repo / "tests" / "test_examples.py").write_text("def test_x(): assert True\n")
     rules = _violations_for(repo, "demo")
-    assert "PS203" not in rules
+    assert "PS203" in rules
 
 
 def test_ps204_fires_on_orphan_test(tmp_path):
@@ -295,3 +302,92 @@ def test_audit_project_rule_filter_restricts(tmp_path):
     payload = _json.loads(buf.getvalue())
     codes = {v["rule"] for v in payload["violations"]}
     assert codes == {"PS102"}
+
+
+# ---------------------------------------------------------------------------
+# PS108 — flat package layout
+# ---------------------------------------------------------------------------
+
+
+def test_ps108_fires_on_prefix_cluster(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    src = repo / "src" / "demo"
+    (src / "_cli_a.py").write_text("")
+    (src / "_cli_b.py").write_text("")
+    (src / "_cli_c.py").write_text("")
+    rules = _violations_for(repo, "demo")
+    assert "PS108" in rules
+
+
+def test_ps108_silent_below_threshold(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    src = repo / "src" / "demo"
+    (src / "_cli_a.py").write_text("")
+    (src / "_cli_b.py").write_text("")
+    rules = _violations_for(repo, "demo")
+    assert "PS108" not in rules
+
+
+def test_ps108_silent_when_subpkg_absorbs_cluster(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    src = repo / "src" / "demo"
+    (src / "_cli").mkdir()
+    (src / "_cli" / "__init__.py").write_text("")
+    (src / "_cli_a.py").write_text("")
+    (src / "_cli_b.py").write_text("")
+    (src / "_cli_c.py").write_text("")
+    rules = _violations_for(repo, "demo")
+    assert "PS108" not in rules
+
+
+def test_ps108_rolls_up_multiple_clusters(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    src = repo / "src" / "demo"
+    for n in ("a", "b", "c"):
+        (src / f"_cli_{n}.py").write_text("")
+        (src / f"_skills_{n}.py").write_text("")
+    # Direct call: assert single rolled-up violation mentions both prefixes.
+    from scitex_dev._cli_audit_project._audit import Violation
+    from scitex_dev._cli_audit_project._check_flat_layout import check_flat_layout
+    out: list = []
+    check_flat_layout(src, Violation, out)
+    assert len(out) == 1
+    assert "cli_*" in out[0].detail and "skills_*" in out[0].detail
+
+
+# ---------------------------------------------------------------------------
+# PS204 enrichment — actionable orphan-test hints (basename + sibling listing)
+# ---------------------------------------------------------------------------
+
+
+def test_ps204_hint_suggests_move_on_unique_basename(tmp_path):
+    """Refactor scenario: src/<pkg>/foo.py moved to src/<pkg>/sub/foo.py;
+    the orphan test_foo.py should be told where to relocate."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "src" / "demo" / "sub").mkdir()
+    (repo / "src" / "demo" / "sub" / "foo.py").write_text("def f(): pass\n")
+    (repo / "tests" / "demo" / "test_foo.py").write_text("def test_x(): pass\n")
+    out: list = []
+    from scitex_dev._cli_audit_project._audit import _check_mirror
+    _check_mirror(repo, "demo", out)
+    ps204 = [v for v in out if v.rule == "PS204"]
+    assert len(ps204) == 1
+    assert "src likely moved" in ps204[0].detail
+    assert "sub/foo.py" in ps204[0].detail
+    assert "tests/demo/sub/test_foo.py" in ps204[0].detail
+
+
+def test_ps204_hint_lists_siblings_when_no_basename_match(tmp_path):
+    """When no src file matches the expected basename, list what *is* in the
+    mirror dir so the agent can correlate."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "src" / "demo" / "bar.py").write_text("def f(): pass\n")
+    (repo / "src" / "demo" / "baz.py").write_text("def f(): pass\n")
+    (repo / "tests" / "demo" / "test_qux.py").write_text("def test_x(): pass\n")
+    out: list = []
+    from scitex_dev._cli_audit_project._audit import _check_mirror
+    _check_mirror(repo, "demo", out)
+    ps204 = [v for v in out if v.rule == "PS204"]
+    assert len(ps204) == 1
+    detail = ps204[0].detail
+    assert "bar.py" in detail and "baz.py" in detail

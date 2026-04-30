@@ -202,31 +202,75 @@ def format_stats_text(stats: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def register_stats_command(group: click.Group) -> None:
-    """Register the stats commands on a Click group."""
+def register_stats_command(
+    ecosystem_group: click.Group, main_group: click.Group | None = None
+) -> None:
+    """Register the canonical `ecosystem stats` and a deprecated top-level alias.
 
-    @group.command(
+    The canonical command lives at ``scitex-dev ecosystem stats`` (matches
+    the noun-verb hierarchy: ecosystem is the noun, stats is the verb-ish
+    leaf). The legacy ``scitex-dev show-stats`` is kept as a hidden
+    deprecation alias for one cycle and removed in 0.11.0.
+    """
+
+    @ecosystem_group.command("show-stats")
+    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
+    def show_stats(as_json: bool) -> None:
+        """Show SciTeX ecosystem statistics (package counts, CLI commands, MCP tools, …)."""
+        result = collect_stats()
+        if as_json:
+            click.echo(json.dumps(result, indent=2))
+        else:
+            click.echo(format_stats_text(result))
+
+    # Deprecated bare-noun alias (§1: leaves must be verbs). Removed in 0.11.0.
+    @ecosystem_group.command("stats", hidden=True)
+    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
+    def _stats_bare_deprecated(as_json: bool) -> None:
+        """(deprecated) Use `ecosystem show-stats`. Removed in 0.11.0."""
+        click.echo(
+            "warning: `ecosystem stats` was renamed to `ecosystem show-stats` "
+            "(verb-noun per §1).",
+            err=True,
+        )
+        result = collect_stats()
+        if as_json:
+            click.echo(json.dumps(result, indent=2))
+        else:
+            click.echo(format_stats_text(result))
+
+    if main_group is None:
+        return
+
+    @main_group.command(
+        "show-stats",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True},
+    )
+    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
+    def show_stats_deprecated(as_json: bool) -> None:
+        """(deprecated) Use `scitex-dev ecosystem stats`. Removed in 0.11.0."""
+        click.echo(
+            "warning: `scitex-dev show-stats` was moved to `scitex-dev ecosystem stats`. "
+            "Will be removed in 0.11.0.",
+            err=True,
+        )
+        result = collect_stats()
+        if as_json:
+            click.echo(json.dumps(result, indent=2))
+        else:
+            click.echo(format_stats_text(result))
+
+    @main_group.command(
         "stats",
         hidden=True,
         context_settings={"ignore_unknown_options": True},
     )
     @click.pass_context
     def stats_deprecated(ctx: click.Context) -> None:
-        """(deprecated) Renamed to `show-stats`."""
+        """(deprecated) Use `scitex-dev ecosystem stats`."""
         click.echo(
-            "error: `scitex-dev stats` was renamed to `scitex-dev show-stats`.\n"
-            "Re-run with: scitex-dev show-stats",
+            "error: `scitex-dev stats` was moved to `scitex-dev ecosystem stats`.",
             err=True,
         )
         ctx.exit(2)
-
-    @group.command("show-stats")
-    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def show_stats(as_json: bool) -> None:
-        """Show SciTeX ecosystem statistics."""
-        stats = collect_stats()
-
-        if as_json:
-            click.echo(json.dumps(stats, indent=2))
-        else:
-            click.echo(format_stats_text(stats))

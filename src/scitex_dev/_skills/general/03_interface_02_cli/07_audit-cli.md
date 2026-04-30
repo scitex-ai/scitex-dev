@@ -33,8 +33,10 @@ scitex-dev ecosystem audit-cli <package-name> --behavioral   # also run subproce
 - §1a missing introspection commands (`list-python-apis`, `mcp list-tools`) and their `--json` flag.
 - §1b banned bare leaves (`version`, `completion`).
 - §1d tokens not in catalog/dict/Moby.
-- §2 missing universal flags: `--version`/`-V` and `--help-recursive` at top; `--json` on read verbs; `--dry-run` and `--yes`/`-y` on mutating verbs.
+- §2 missing universal flags at top: `--version`/`-V`, `--help-recursive`, **`--json`** (so `<cli> --json` parses without crashing); on read verbs: `--json`; on mutating verbs: `--dry-run` and `--yes`/`-y`.
 - §4 missing concrete example in command help/epilog (Click guarantees the Usage line).
+- §10 CLI startup speed — `import <top-level-module>` cold-start exceeds 500ms.
+- §11 CLI framework conformance — entry-point module or sibling `_cli/` imports `argparse`. Migrate to Click (canonical). argparse adds drift (doubled subparser metavar in --help, no shared CategorizedGroup, manual `--json` wiring per parser, no `--help-recursive` plumbing). Click runs the program once per Tab press; slow import = unusable tab-completion. Remediation: PEP 562 lazy `__getattr__` in `__init__.py` (see python-api skill 04 "PEP 562 module __getattr__" section).
 
 ## Coverage matrix
 
@@ -48,7 +50,7 @@ Auditor coverage of each rule (`yes` = enforced statically; `partial` = best-eff
 | §1c  | Pass-through entry points                    | no        | Auditor cannot statically detect verbatim-forward entries.           |
 | §1d  | Vocabulary in catalog/dict/Moby              | yes       | Layered lookup; warns on `unknown`.                                  |
 | §1e  | (this section — the auditor itself)          | n/a       |                                                                      |
-| §2   | Universal flag presence                      | yes       | `--version`/`-V`, `--help-recursive`, `--json`, `--dry-run`, `--yes`.|
+| §2   | Universal flag presence                      | yes       | Root: `--version`/`-V`, `--help-recursive`, `--json` (parseable). Leaves: `--json` on read verbs; `--dry-run` and `--yes`/`-y` on mutating verbs. |
 | §3   | Exit code conformance                        | partial   | Top-level bogus-flag returns 2 (behavioral; `--behavioral`).         |
 | §4   | Help format                                  | partial   | Heuristic: looks for "example", "$ ", or "e.g." in help/epilog.      |
 | §5   | Deprecation hard-error redirect              | no        | Renamed commands are typically `hidden=True`; auditor skips them.    |
@@ -56,6 +58,14 @@ Auditor coverage of each rule (`yes` = enforced statically; `partial` = best-eff
 | §6b  | Config path fallback documented in `--help`  | yes       | Greps root help/epilog for `config.yaml`, `$SCITEX_<PKG>_CONFIG`, or `~/.scitex/`. |
 | §7   | CLI ↔ MCP parity                             | no        | Could compare `list-python-apis` and `mcp list-tools` output (TODO). |
 | §8   | stdout/stderr discipline                     | partial   | `list-python-apis --json` parsed as JSON (behavioral; `--behavioral`). |
+| §10  | CLI startup speed (`import <pkg>` < 500ms)   | yes       | Cold-start measurement in fresh subprocess. Threshold: 500ms (Click runs program once per Tab press). Remediation: PEP 562 lazy `__getattr__` in `__init__.py`. |
+| §11  | CLI framework conformance (Click canonical)  | yes       | Static scan of entry-point module + sibling `_cli/` dir for `import argparse` / `from argparse`. Click is canonical for every scitex-* CLI; argparse causes drift (doubled subparser metavar, manual `--json` wiring per parser, no shared CategorizedGroup). |
+
+## Periodic auditing during development
+
+For how to run `audit-all` continuously while editing a package — cron / tmux / agent recipes, the JSON contract for programmatic consumers, and Claude Code-specific autonomous mechanisms — see [`05_development_02_periodic-audits.md`](../05_development_02_periodic-audits.md).
+
+This file (`07_audit-cli.md`) is about *what* `audit-cli` checks; the periodic-audits skill is about *when* and *how* to invoke it during development.
 
 ## Custom dict format
 

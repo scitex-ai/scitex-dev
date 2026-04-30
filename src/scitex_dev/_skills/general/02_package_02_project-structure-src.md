@@ -25,6 +25,48 @@ tags: [scitex-python, scitex-general, scitex-package, project-structure, src]
 │           └── ...
 ```
 
+## Subpackage clusters — keep `src/<pkg>/` navigable
+
+Once `src/<pkg>/` accumulates **3+ flat `.py` files sharing a common
+prefix** (`_cli_*.py`, `_skills_*.py`, `_mcp_*.py`, `sync_*.py`, …),
+promote them into a subpackage. A common prefix on three files is a
+reliable signal that the cluster wants to be a directory.
+
+```
+# Before — flat, hard to scan
+src/<pkg>/
+├── _cli.py
+├── _cli_audit.py
+├── _cli_audit_api.py
+├── _cli_skills.py
+├── _cli_stats.py
+
+# After — grouped by responsibility
+src/<pkg>/
+└── _cli/
+    ├── __init__.py
+    ├── _root.py
+    ├── _audit.py
+    ├── _audit_api.py
+    ├── _skills.py
+    └── _stats.py
+```
+
+Group **by responsibility, not blind prefix-promotion** — if the CLI
+surface (`<pkg> --help`) already groups commands into Ecosystem /
+Development / Documentation / Interface / Shell sections, mirror those
+same categories in the source layout. The CLI grouping is your
+designed-in taxonomy; the source layout should match it.
+
+`audit-project`'s **PS108** rule flags packages where prefix-clusters
+have grown past the threshold and rolls all clusters into one
+violation, so you land the reorganization in a single coherent pass
+rather than fixing one prefix at a time across separate PRs.
+
+When PS108 fires alongside PS204 (orphan tests), the orphan-test
+hint also tells you where each test should be moved — refactor the
+src and the tests in the same change.
+
 ## Imports
 
 - **Absolute imports**: `from <package_name>.x.y import z`.

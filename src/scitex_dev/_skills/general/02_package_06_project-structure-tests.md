@@ -55,31 +55,37 @@ Tests are organized into a **fixed set of literal subdirectories**. Anything els
 | `tests/reports/` | optional | agent-generated test summaries |
 | `tests/custom/` | ✅ | legacy: tests with no source counterpart |
 
-## Allowed at `tests/` root (NOT in a subdir)
+## Allowed at `tests/` root (NOT in a subdir) — strict
 
-The auditor (`PS203`) flags loose `test_*.py` files at `tests/` root that should be inside `tests/<pkg>/...`. The exception is a small set of **meta tests** that are legitimately top-level because they test cross-cutting concerns:
+`PS203` is **strict**: the only files allowed directly at `tests/` root
+are pytest infrastructure files. Every test file must live in one of the
+allowed subdirectories — there is no "meta test" exemption.
 
 ```
 tests/
-├── conftest.py
-├── __init__.py
-├── test_examples.py                # walks ./examples/, runs each
-├── test_skills_quality.py          # via _skills_quality_pytest
-├── test_integration.py             # legacy (prefer tests/integration/)
-├── test_reproduce.py
-├── test_thin_wrapper_consistency.py
-├── test_units.py
-├── test_api.py
-├── test_cli.py
-├── test_server.py
-├── test___version__.py
-├── test___main__.py
-├── test__install_guide.py
-├── test__optional_deps.py
-└── <pkg>/                          # mandatory parent
+├── __init__.py            # OK
+├── conftest.py            # OK
+├── <pkg>/                 # required mirror parent
+├── examples/              # cross-cutting tests live here
+├── integration/
+├── e2e/
+└── ...
 ```
 
-Module-mirror tests like `test_save_load.py`, `test_registry.py`, `test__cache.py` belong **inside** `tests/<pkg>/`, not at `tests/` root.
+Where the old "meta tests" go now:
+
+| Old `tests/test_*.py` | New home |
+| :--- | :--- |
+| `test_examples.py` | `tests/examples/test_run_all.py` |
+| `test_integration.py` | `tests/integration/test_<name>.py` |
+| `test_skills_quality.py` | `tests/skills/test_quality.py` |
+| `test_cli.py`, `test_api.py`, `test_server.py` | `tests/<pkg>/test_<name>.py` (mirror the src module being driven) |
+| `test___version__.py`, `test___main__.py` | `tests/<pkg>/test___version__.py` etc. (they mirror `__version__.py` / `__main__.py`) |
+| `test__install_guide.py`, `test__optional_deps.py` | `tests/integration/` or `tests/<pkg>/` depending on what they actually exercise |
+
+If a legitimate exception comes up that doesn't fit any subdir, propose
+extending the allowed-subdirs list rather than letting drift back into
+`tests/` root — the strict rule keeps the layout reviewable.
 
 ## Other artefacts
 
@@ -93,10 +99,17 @@ Module-mirror tests like `test_save_load.py`, `test_registry.py`, `test__cache.p
 
 - **PS201** — missing `tests/<pkg>/` parent
 - **PS202** — `src/<pkg>/<sub>/` has files but no `tests/<pkg>/<sub>/`
-- **PS203** — loose `test_*.py` at `tests/` root that should live inside `tests/<pkg>/...`
-- **PS204** — orphan test (no matching `src/<pkg>/<path>/...`)
+- **PS203** — *strict*: any `test_*.py` at `tests/` root (only `__init__.py` and `conftest.py` allowed)
+- **PS204** — orphan test (no matching `src/<pkg>/<path>/...`); detail
+  is *enriched*: when exactly one src file shares the expected basename,
+  the violation suggests the relocate target; otherwise it lists the
+  files actually present in the mirror dir so you can correlate
 - **PS205** — wrong public/private prefix
 - **PS206** — placeholder-only test (no `def test_` or `class Test`)
+- **PS207** — empty test mirror directory (mirror dir exists but contains
+  no `test_*.py`, while the corresponding `src/<pkg>/<sub>/` has source
+  files); src-aware so it never flags fixture trees that legitimately have
+  no source counterpart
 - **PS302** — unrecognized subdir at `tests/` root
 - **PS303** — `examples/<name>` without matching `tests/examples/test_<name>.py`
 

@@ -44,6 +44,28 @@ RULES: dict[str, Rule] = {
             "§1",
             "uses `.playground/` — collapsed into `.dev/` for easier typing",
         ),
+        Rule(
+            "PS105",
+            "§1",
+            (
+                "package registers console_scripts but has no `__main__.py` — "
+                "`python -m <pkg>` will fail with 'No module named <pkg>.__main__'. "
+                "Add `src/<pkg>/__main__.py` that imports and calls the CLI entry "
+                "(usually `from . import _cli; _cli.main()`) so both `<pkg>` and "
+                "`python -m <pkg>` work."
+            ),
+        ),
+        Rule(
+            "PS108",
+            "§1",
+            (
+                "flat package layout: ≥3 sibling `.py` files at `src/<pkg>/` "
+                "share a common prefix (e.g. `_cli_*.py`, `_skills_*.py`) — "
+                "promote them to a `<prefix>/` subpackage for navigability. "
+                "A common prefix on 3+ flat files is a reliable signal that "
+                "the cluster wants to be a directory."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
@@ -74,6 +96,16 @@ RULES: dict[str, Rule] = {
             "PS206",
             "§2",
             "placeholder-only test (no `def test_` or `class Test`)",
+        ),
+        Rule(
+            "PS207",
+            "§2",
+            (
+                "empty test directory (no `test_*.py` files, only `__pycache__/` "
+                "or nothing) — created during a partial migration but never filled. "
+                "Either move the corresponding `tests/<sub>/test_*.py` files in, "
+                "or remove the empty dir."
+            ),
         ),
         # §3 tests/ subdirectory convention -------------------------------------
         Rule(
@@ -127,26 +159,15 @@ class Violation:
 _PRIVATE_TEST_RE = re.compile(r"^test__([A-Za-z0-9][A-Za-z0-9_]*)\.py$")
 _PUBLIC_TEST_RE = re.compile(r"^test_([A-Za-z0-9][A-Za-z0-9_]*)\.py$")
 
-# Allowed at tests/ root WITHOUT being under tests/<pkg>/. These are
-# cross-cutting "meta" tests that legitimately live above the package mirror,
-# plus standard pytest fixtures and dispatchers.
+# Allowed at tests/ root. STRICT: only pytest infrastructure files —
+# no test files. Module-mirror tests belong under tests/<pkg>/; cross-
+# cutting tests belong in their category subdir (tests/integration/,
+# tests/e2e/, tests/examples/, …). If a legitimate exception comes up,
+# update this set rather than letting tests-at-root drift back in.
 _META_TESTS_AT_ROOT = frozenset(
     {
         "__init__.py",
         "conftest.py",
-        "test_examples.py",
-        "test_skills_quality.py",
-        "test_integration.py",
-        "test_reproduce.py",
-        "test_thin_wrapper_consistency.py",
-        "test_units.py",
-        "test_api.py",
-        "test_cli.py",
-        "test_server.py",
-        "test___version__.py",
-        "test___main__.py",
-        "test__install_guide.py",
-        "test__optional_deps.py",
     }
 )
 
@@ -263,7 +284,7 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
 
 
 def _check_top_level(repo: Path, out: list[Violation]) -> None:
-    """PS101 / PS102 / PS103 / PS104."""
+    """PS101 / PS102 / PS103 / PS104 / PS105."""
     if not (repo / "pyproject.toml").is_file():
         out.append(Violation("PS101", str(repo), "no pyproject.toml at repo root"))
 
@@ -282,6 +303,32 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
                     f"top-level junk file: {child.name}",
                 )
             )
+
+    # PS105: console_scripts present but no __main__.py — `python -m <pkg>`
+    # would fail with "No module named <pkg>.__main__".
+    pyp = repo / "pyproject.toml"
+    if pyp.is_file():
+        text = pyp.read_text(encoding="utf-8", errors="replace")
+        has_console_scripts = "[project.scripts]" in text or "console_scripts" in text
+        if has_console_scripts:
+            # Find src/<pkg>/ candidates and check each top-level __main__.py.
+            src = repo / "src"
+            if src.is_dir():
+                for pkg_dir in src.iterdir():
+                    if not pkg_dir.is_dir() or pkg_dir.name.startswith("_"):
+                        continue
+                    if not (pkg_dir / "__init__.py").is_file():
+                        continue
+                    if not (pkg_dir / "__main__.py").is_file():
+                        out.append(
+                            Violation(
+                                "PS105",
+                                str(pkg_dir),
+                                f"missing {pkg_dir.name}/__main__.py — "
+                                "`python -m " + pkg_dir.name + "` will fail. "
+                                "Add a __main__.py that imports & calls the CLI entry.",
+                            )
+                        )
 
 
 def _src_pkg_dir(repo: Path, distribution: str) -> Path | None:
@@ -376,17 +423,15 @@ def _check_mirror(
             )
 
     # PS204: orphan test files — every test_*.py under tests/<pkg>/ should
-    # have a matching src counterpart.
+    # have a matching src counterpart. Hinter is built once and reused so
+    # the basename index is amortized across all orphans in this package.
+    from ._check_orphan_hint import build_orphan_hinter
+
+    _hint = build_orphan_hinter(src_pkg, repo)
     for test_file in tests_pkg.rglob("test_*.py"):
         rel = test_file.relative_to(tests_pkg)
         if not _test_has_src_match(test_file, rel, src_pkg):
-            out.append(
-                Violation(
-                    "PS204",
-                    str(test_file),
-                    "no matching src file (orphan test)",
-                )
-            )
+            out.append(Violation("PS204", str(test_file), _hint(rel)))
 
 
 def _has_py(d: Path) -> bool:
@@ -556,6 +601,70 @@ def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
         )
 
 
+def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) -> None:
+    """PS207 — empty test mirror directory.
+
+    Flags a `tests/<pkg>/<sub>/` that exists but contains no `test_*.py`
+    files, WHEN the corresponding `src/<pkg>/<sub>/` does have source
+    files. This catches partial migrations (mirror dir created, never
+    filled) without false-flagging fresh packages whose `tests/<pkg>/`
+    is legitimately empty because no source has been written yet.
+    """
+    tests_root = repo / "tests"
+    if not tests_root.is_dir():
+        return
+
+    src_pkg = _src_pkg_dir(repo, distribution)
+    if src_pkg is None:
+        return  # no src to mirror against
+
+    skip = {"__pycache__", "coverage", "htmlcov", ".pytest_cache"}
+    for sub in tests_root.rglob("*"):
+        if not sub.is_dir():
+            continue
+        if any(part in skip for part in sub.parts):
+            continue
+
+        # Has any .py test file? (skip __init__.py — it's pytest infra)
+        py_files = [
+            p
+            for p in sub.iterdir()
+            if p.is_file() and p.suffix == ".py" and p.name != "__init__.py"
+        ]
+        if py_files:
+            continue
+        # Has child dirs? leaf-emptiness check propagates via recursion
+        child_dirs = [c for c in sub.iterdir() if c.is_dir() and c.name not in skip]
+        if child_dirs:
+            continue
+
+        # Only flag if a corresponding src/<pkg>/<sub>/ has source files.
+        # Resolve sub's path relative to tests/<pkg>/.
+        try:
+            rel = sub.relative_to(tests_root / src_pkg.name)
+        except ValueError:
+            continue  # not under tests/<pkg>/, leave to other rules
+        src_counterpart = src_pkg / rel
+        if not src_counterpart.is_dir():
+            continue
+        src_py = [
+            p
+            for p in src_counterpart.iterdir()
+            if p.is_file() and p.suffix == ".py" and p.name != "__init__.py"
+        ]
+        if not src_py:
+            continue  # nothing in src to mirror — empty test dir is fine
+
+        out.append(
+            Violation(
+                "PS207",
+                str(sub),
+                f"empty test directory mirrors {src_counterpart} ({len(src_py)} src "
+                f"files) — move corresponding test_*.py files in or remove the dir.",
+            )
+        )
+
+
 def _check_docs_structure(repo: Path, out: list[Violation]) -> None:
     """PS401 / PS402 — docs/ layout."""
     docs = repo / "docs"
@@ -657,8 +766,14 @@ def audit_project(
     if not skip_mirror:
         _check_mirror(repo_root, distribution, violations)
         _check_placeholder_tests(repo_root, violations)
+        _check_empty_test_dirs(repo_root, distribution, violations)
     _check_tests_subdir_convention(repo_root, distribution, violations)
     _check_docs_structure(repo_root, violations)
+    src_pkg = _src_pkg_dir(repo_root, distribution)
+    if src_pkg is not None:
+        from ._check_flat_layout import check_flat_layout
+
+        check_flat_layout(src_pkg, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]

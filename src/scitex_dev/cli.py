@@ -56,7 +56,12 @@ def register_docs_subcommand(
     docs_sub = parser.add_subparsers(dest="docs_command", title="Commands")
 
     # docs list
-    list_p = docs_sub.add_parser("list", help="List available documentation pages")
+    list_p = docs_sub.add_parser(
+        "list",
+        help="List available documentation pages",
+        epilog=(f"Examples:\n  {prog} docs list\n  {prog} docs list --json\n"),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     list_p.add_argument("--json", action="store_true", dest="as_json")
     list_p.set_defaults(
         func=lambda args: _run_docs_command(
@@ -72,7 +77,17 @@ def register_docs_subcommand(
     )
 
     # docs get [page]
-    get_p = docs_sub.add_parser("get", help="Show a documentation page")
+    get_p = docs_sub.add_parser(
+        "get",
+        help="Show a documentation page",
+        epilog=(
+            f"Examples:\n"
+            f"  {prog} docs get               # show overview\n"
+            f"  {prog} docs get api           # specific page\n"
+            f"  {prog} docs get api --json\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     get_p.add_argument(
         "name", nargs="?", default=None, help="Page name (see 'docs list')"
     )
@@ -222,7 +237,7 @@ def _get_tldr(package: str) -> str:
     return f"{package}: documentation available via get_docs(package='{package}')"
 
 
-def docs_click_group(package: str, name: str = "docs"):
+def docs_click_group(package: str, name: str = "docs"):  # noqa: D401
     """Create a Click command group for docs (requires Click installed).
 
     Usage::
@@ -239,18 +254,26 @@ def docs_click_group(package: str, name: str = "docs"):
     @click.group(name=name, invoke_without_command=True)
     @click.pass_context
     def docs_grp(ctx):
-        f"""View package documentation.
-
-        \b
-        Examples:
-          {prog} docs list            # List doc pages
-          {prog} docs get             # Show available pages
-          {prog} docs get api         # Show specific page
-        """
+        """View package documentation (list / get / search)."""
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
 
-    @docs_grp.command("list")
+    # Click reads the function docstring for short help; the f-string above
+    # used to silently evaluate to None (f-strings are not docstrings).
+    docs_grp.help = (
+        "View package documentation.\n\n"
+        "\b\n"
+        "Examples:\n"
+        f"  {prog} docs list            # List doc pages\n"
+        f"  {prog} docs get             # Show available pages\n"
+        f"  {prog} docs get api         # Show specific page\n"
+        f"  {prog} docs search QUERY    # Search across docs/APIs/CLI/MCP\n"
+    )
+
+    @docs_grp.command(
+        "list",
+        epilog=f"Examples:\n  $ {prog} docs list\n  $ {prog} docs list --json",
+    )
     @click.option("--json", "as_json", is_flag=True, help="JSON output")
     def docs_list(as_json):
         """List available documentation pages."""
@@ -263,7 +286,15 @@ def docs_click_group(package: str, name: str = "docs"):
         )
         _run_docs_command(ns, package=package)
 
-    @docs_grp.command("get")
+    @docs_grp.command(
+        "get",
+        epilog=(
+            f"Examples:\n"
+            f"  $ {prog} docs get                # show overview\n"
+            f"  $ {prog} docs get api            # specific page\n"
+            f"  $ {prog} docs get api --format json"
+        ),
+    )
     @click.argument("page_name", required=False, default=None)
     @click.option("--json", "as_json", is_flag=True, help="JSON output")
     @click.option("--format", "fmt", type=click.Choice(["html", "json"]), default=None)
@@ -303,6 +334,8 @@ def skills_click_group(package: str, name: str = "skills"):
     except ImportError:
         raise ImportError("Click is required. pip install click")
 
+    prog = package.replace("_", "-")
+
     @click.group(name=name, invoke_without_command=True)
     @click.pass_context
     def skills_grp(ctx):
@@ -310,14 +343,25 @@ def skills_click_group(package: str, name: str = "skills"):
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
 
-    @skills_grp.command("list")
+    @skills_grp.command(
+        "list",
+        epilog=f"Examples:\n  $ {prog} skills list\n  $ {prog} skills list --json",
+    )
     @click.option("--json", "as_json", is_flag=True, help="JSON output")
     def skills_list(as_json):
         """List available skill pages."""
         ns = argparse.Namespace(as_json=as_json)
         _skills_list(ns, package=package)
 
-    @skills_grp.command("get")
+    @skills_grp.command(
+        "get",
+        epilog=(
+            f"Examples:\n"
+            f"  $ {prog} skills get                    # list available\n"
+            f"  $ {prog} skills get python-scitex      # show specific\n"
+            f"  $ {prog} skills get python-scitex --json"
+        ),
+    )
     @click.argument("skill_name", required=False, default=None)
     @click.option("--json", "as_json", is_flag=True, help="JSON output")
     def skills_get(skill_name, as_json):
@@ -332,7 +376,15 @@ def skills_click_group(package: str, name: str = "skills"):
 
     # hook-bypass: line-limit — adding export subcommand; cli.py split
     # refactor tracked in GITIGNORED/REFACTORING.md, follow-up work item.
-    @skills_grp.command("export")
+    @skills_grp.command(
+        "export",
+        epilog=(
+            f"Examples:\n"
+            f"  $ {prog} skills export                       # default dest\n"
+            f"  $ {prog} skills export --dest /tmp/skills\n"
+            f"  $ {prog} skills export --dry-run --json      # preview"
+        ),
+    )
     @click.option(
         "--dest",
         default=None,
@@ -346,8 +398,11 @@ def skills_click_group(package: str, name: str = "skills"):
     )
     @click.option("--clean", is_flag=True, help="Delete pkg subdir first.")
     @click.option("--dry-run", is_flag=True, help="Preview without writing.")
+    @click.option(
+        "--yes", "-y", is_flag=True, help="Skip confirmation when overwriting."
+    )
     @click.option("--json", "as_json", is_flag=True, help="JSON output")
-    def skills_export(dest, source, clean, dry_run, as_json):
+    def skills_export(dest, source, clean, dry_run, yes, as_json):
         """Export this package's skills to <dest>."""
         from pathlib import Path as _P
 
@@ -414,10 +469,18 @@ def register_skills_subcommand(
         scitex-stats skills get               # Show main SKILL.md
         scitex-stats skills get test-selection # Show a reference page
     """
+    prog = package.replace("_", "-")
     parser = subparsers.add_parser(
         "skills",
         help=f"View skills for {package}",
         description=f"Browse {package} skills (workflow-oriented guides).",
+        epilog=(
+            f"Examples:\n"
+            f"  {prog} skills list\n"
+            f"  {prog} skills get test-selection\n"
+            f"  {prog} skills export --dry-run\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--help-recursive",
@@ -427,12 +490,26 @@ def register_skills_subcommand(
     skills_sub = parser.add_subparsers(dest="skills_command", title="Commands")
 
     # skills list
-    list_p = skills_sub.add_parser("list", help="List available skill pages")
+    list_p = skills_sub.add_parser(
+        "list",
+        help="List available skill pages",
+        epilog=f"Examples:\n  {prog} skills list\n  {prog} skills list --json\n",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     list_p.add_argument("--json", action="store_true", dest="as_json")
     list_p.set_defaults(func=lambda args: _skills_list(args, package))
 
     # skills get [name]
-    get_p = skills_sub.add_parser("get", help="Show a skill page")
+    get_p = skills_sub.add_parser(
+        "get",
+        help="Show a skill page",
+        epilog=(
+            f"Examples:\n"
+            f"  {prog} skills get                  # list available\n"
+            f"  {prog} skills get test-selection   # show specific\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     get_p.add_argument(
         "name",
         nargs="?",
@@ -446,6 +523,13 @@ def register_skills_subcommand(
     export_p = skills_sub.add_parser(
         "export",
         help="Export skills to ~/.claude/skills/scitex/",
+        epilog=(
+            f"Examples:\n"
+            f"  {prog} skills export                 # default dest\n"
+            f"  {prog} skills export --dest /tmp/skills\n"
+            f"  {prog} skills export --dry-run --json\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     export_p.add_argument(
         "--dest",
@@ -467,6 +551,12 @@ def register_skills_subcommand(
         "--dry-run",
         action="store_true",
         help="Preview what would be exported without writing",
+    )
+    export_p.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Skip confirmation when overwriting destination",
     )
     export_p.add_argument(
         "--json",
