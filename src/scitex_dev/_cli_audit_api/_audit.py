@@ -255,6 +255,24 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
             ):
                 bound_names.add(node.name)
+                # Recognise PEP 562 lazy-load: `def __getattr__(name): if name == "X": ...`.
+                # Pytest collects any module-level callable; PEP 562 lets a
+                # module expose names dynamically without binding them at
+                # import time. Treat each `name == "..."` literal inside
+                # __getattr__ as a bound name so PA102 doesn't false-fire.
+                if node.name == "__getattr__":
+                    for sub in ast.walk(node):
+                        if (
+                            isinstance(sub, ast.Compare)
+                            and len(sub.ops) == 1
+                            and isinstance(sub.ops[0], ast.Eq)
+                            and isinstance(sub.left, ast.Name)
+                            and sub.left.id == "name"
+                            and len(sub.comparators) == 1
+                            and isinstance(sub.comparators[0], ast.Constant)
+                            and isinstance(sub.comparators[0].value, str)
+                        ):
+                            bound_names.add(sub.comparators[0].value)
 
     _walk(tree.body, in_try=False)
 

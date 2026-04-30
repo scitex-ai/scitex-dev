@@ -62,6 +62,23 @@ def test_PA102_unbound_name_in_all(tmp_path):
     assert "PA102" in _codes(_audit_init(init, "fakepkg"))
 
 
+def test_PA102_silent_for_pep562_lazy_getattr(tmp_path):
+    """PEP 562 lazy `__getattr__` dispatch counts names as bound."""
+    body = (
+        "from __future__ import annotations\n"
+        "__version__ = '0.0.0+local'\n"
+        "__all__ = ['__version__', 'lazy_one', 'lazy_two']\n"
+        "def __getattr__(name):\n"
+        "    if name == 'lazy_one':\n"
+        "        from . import _impl_one as m; return m\n"
+        "    if name == 'lazy_two':\n"
+        "        from . import _impl_two as m; return m\n"
+        "    raise AttributeError(name)\n"
+    )
+    init = _write_init(tmp_path, body)
+    assert "PA102" not in _codes(_audit_init(init, "fakepkg"))
+
+
 def test_PA103_private_name_in_all(tmp_path):
     body = (
         "from __future__ import annotations\n"
