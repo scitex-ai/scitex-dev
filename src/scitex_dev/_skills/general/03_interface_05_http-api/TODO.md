@@ -1,3 +1,9 @@
+---
+name: TODO
+description: HTTP API skill — open TODOs — see file body for details.
+tags: [scitex-dev, scitex-package]
+---
+
 # HTTP API skill — open TODOs
 
 Strike through (`~~item~~`) when done.

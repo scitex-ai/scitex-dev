@@ -1,3 +1,9 @@
+---
+name: TODO
+description: SciTeX MCP Convention — Open TODOs — see file body for details.
+tags: [scitex-dev, scitex-package]
+---
+
 # SciTeX MCP Convention — Open TODOs
 
 User-tracked items for the canonical MCP skill. Strike through (`~~item~~`) when done.

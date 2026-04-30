@@ -6,6 +6,8 @@ description: >
   metadata for CLI and MCP consumers. ErrorCode maps exception types to
   machine-readable codes. @supports_return_as adds opt-in Result wrapping.
   SideEffect declares mutations for LLM transparency.
+name: result-types
+tags: [scitex-dev, scitex-package]
 ---
 
 # Result Types

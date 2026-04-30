@@ -1,6 +1,7 @@
 ---
 name: agentic-test-skills
 description: Skill trigger-rate testing — does Claude view the expected SKILL.md when asked a realistic multi-step question. Use when adding trigger tests for a package's skills.
+tags: [scitex-dev, scitex-package]
 ---
 
 # 17_agentic-test-skills

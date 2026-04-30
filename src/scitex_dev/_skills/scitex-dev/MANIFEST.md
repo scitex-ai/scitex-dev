@@ -3,6 +3,9 @@ package: scitex-dev
 version: 0.4.0
 source: github.com/ywatanabe1989/scitex-dev
 skills_path: src/scitex_dev/_skills/scitex-dev/
+name: MANIFEST
+tags: [scitex-dev, scitex-package]
+description: Skills Manifest — These skills are distributed with **scitex-dev** and are the source of truth.
 ---
 
 # Skills Manifest

@@ -1,3 +1,9 @@
+---
+name: TODO
+description: TODO — Skills Interface — see file body for details.
+tags: [scitex-dev, scitex-package]
+---
+
 # TODO — Skills Interface
 
 ## scitex-dev work
