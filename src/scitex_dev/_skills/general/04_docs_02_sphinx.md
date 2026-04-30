@@ -49,3 +49,32 @@ SciTeX packages must include a five-interfaces table in `index.rst` (HTTP API is
 - **Use `develop` branch** as github_version for "Edit on GitHub" links
 - **Exclude `to_claude/`** from Sphinx builds
 - `api/scitex_io.rst` — follow scitex-io naming pattern for API doc files
+
+## Bundling pre-built HTML in the wheel (production serving)
+
+`scitex_dev.docs.get_docs(package=..., format="html")` resolves to a pre-built HTML directory; `scitex-cloud/apps/workspace/docs_app/` consumes that to serve per-package docs at <https://scitex.ai/apps/docs/>. For a package's docs to appear there after `pip install <pkg>`, the HTML must ship in the wheel.
+
+Convention:
+
+```
+docs/sphinx/_build/html/        # local Sphinx output; gitignored
+src/<pkg>/_sphinx_html/         # bundled in the wheel; refreshed at release
+```
+
+Release-time refresh (typical `scripts/makefile/docs.sh`):
+
+```bash
+sphinx-build -b html docs/sphinx docs/sphinx/_build/html
+rm -rf src/<pkg>/_sphinx_html
+cp -r docs/sphinx/_build/html src/<pkg>/_sphinx_html
+```
+
+`pyproject.toml` must include the directory in the wheel:
+
+```toml
+[tool.hatch.build.targets.wheel]
+packages = ["src/<pkg>"]
+include = ["src/<pkg>/_sphinx_html/**"]
+```
+
+If a package has no Sphinx tree, omit `_sphinx_html/`; `get_docs(format="html")` returns `None` and the docs site skips that package gracefully. See [`02_package_01_project-structure.md`](02_package_01_project-structure.md) for the broader project-structure context.

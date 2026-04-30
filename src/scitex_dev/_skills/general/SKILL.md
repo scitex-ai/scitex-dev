@@ -41,7 +41,7 @@ Read in this order when building or auditing a package. Each section presupposes
 - [01_ecosystem_07_license-and-cla.md](01_ecosystem_07_license-and-cla.md) — AGPL-3.0-only SPDX policy, CLA workflow template, `signatures/cla.json` shape (object, not bare array), `pull_request_target` base-branch trap, bootstrap + audit recipes
 
 ### 2. Package — how does *this* `scitex-*` package's repo live on disk?
-- [02_package_01_layout-src-tests-scripts-examples.md](02_package_01_layout-src-tests-scripts-examples.md) — Layout boundaries between `src/`, `tests/`, `scripts/`, `examples/`, `references/`
+- [02_package_01_project-structure.md](02_package_01_project-structure.md) — Project structure: `src/`, `tests/`, `scripts/`, `examples/`, `references/`, `templates/`/`assets/` boundaries
 - [02_package_02_github-actions.md](02_package_02_github-actions.md) — CI, PyPI publish, CLA, reusable workflow patterns
 - [02_package_03_quality.md](02_package_03_quality.md) — Repository-level quality (AGPL, Four Freedoms, README rules, GitHub setup)
 
