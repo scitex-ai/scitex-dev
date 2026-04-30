@@ -637,3 +637,88 @@ version = "0.1.0"
     (repo / "README.md").write_text("# demo\n\nWIP.\n")
     rep = lint_pyproject(repo, package_name="demo")
     assert not [f for f in rep.findings if f.rule == "E5J1_readme_interfaces_callout"]
+
+
+# ----------------------------------------------------------------------
+# E5C12 — missing CLA workflow
+# ----------------------------------------------------------------------
+
+
+def test_e5c12_fires_when_cla_workflow_missing(tmp_path):
+    repo = _write_repo(
+        tmp_path,
+        pyproject='[project]\nname = "demo"\nversion = "0.1.0"\n',
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert any(f.rule == "E5C12_missing_cla_workflow" for f in rep.findings)
+
+
+def test_e5c12_silent_when_cla_workflow_exists(tmp_path):
+    repo = _write_repo(
+        tmp_path,
+        pyproject='[project]\nname = "demo"\nversion = "0.1.0"\n',
+    )
+    wf = repo / ".github" / "workflows" / "cla.yml"
+    wf.parent.mkdir(parents=True)
+    wf.write_text("name: CLA Assistant\non:\n  pull_request_target:\n")
+    rep = lint_pyproject(repo, package_name="demo")
+    assert not any(f.rule == "E5C12_missing_cla_workflow" for f in rep.findings)
+
+
+# ----------------------------------------------------------------------
+# E5C14 — malformed cla-signatures/signatures/cla.json
+# ----------------------------------------------------------------------
+
+
+def _init_git_repo_with_cla_signatures(repo: Path, content: str) -> None:
+    """Set up a tmp git repo with a `cla-signatures` branch holding given content."""
+    import subprocess
+
+    def run(*args: str) -> None:
+        subprocess.run(
+            ["git", "-C", str(repo), *args],
+            check=True,
+            capture_output=True,
+        )
+
+    run("init", "--quiet", "-b", "main")
+    run("config", "user.email", "test@example.com")
+    run("config", "user.name", "test")
+    run("commit", "--allow-empty", "-m", "init", "--quiet")
+    run("checkout", "--quiet", "-b", "cla-signatures")
+    sigs = repo / "signatures"
+    sigs.mkdir()
+    (sigs / "cla.json").write_text(content)
+    run("add", "signatures/cla.json")
+    run("commit", "-m", "init signatures", "--quiet")
+    run("checkout", "--quiet", "main")
+
+
+def test_e5c14_fires_on_bare_array_signatures(tmp_path):
+    repo = _write_repo(
+        tmp_path,
+        pyproject='[project]\nname = "demo"\nversion = "0.1.0"\n',
+    )
+    _init_git_repo_with_cla_signatures(repo, "[]\n")
+    rep = lint_pyproject(repo, package_name="demo")
+    assert any(f.rule == "E5C14_malformed_cla_signatures" for f in rep.findings)
+
+
+def test_e5c14_silent_on_proper_object_signatures(tmp_path):
+    repo = _write_repo(
+        tmp_path,
+        pyproject='[project]\nname = "demo"\nversion = "0.1.0"\n',
+    )
+    _init_git_repo_with_cla_signatures(repo, '{"signedContributors": []}\n')
+    rep = lint_pyproject(repo, package_name="demo")
+    assert not any(f.rule == "E5C14_malformed_cla_signatures" for f in rep.findings)
+
+
+def test_e5c14_silent_when_branch_absent(tmp_path):
+    """No cla-signatures branch is a healthy fresh-repo state — no finding."""
+    repo = _write_repo(
+        tmp_path,
+        pyproject='[project]\nname = "demo"\nversion = "0.1.0"\n',
+    )
+    rep = lint_pyproject(repo, package_name="demo")
+    assert not any(f.rule == "E5C14_malformed_cla_signatures" for f in rep.findings)

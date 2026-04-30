@@ -286,13 +286,39 @@ else:
     def config_cmd(as_json):
         """Show dev configuration."""
         from . import config_to_dict, load_config
-        from .cli_utils import wrap_as_cli
 
-        def _get_config():
-            cfg = load_config()
-            return config_to_dict(cfg)
+        cfg = config_to_dict(load_config())
 
-        wrap_as_cli(_get_config, as_json=as_json)
+        if as_json:
+            click.echo(json.dumps(cfg, indent=2, default=str))
+            return
+
+        # Human-readable text output: section headers + tabular rows
+        sections = [
+            ("Packages", "packages", ["name", "github_repo", "local_path"]),
+            ("Hosts", "hosts", None),
+            ("GitHub Remotes", "github_remotes", None),
+            ("Branches", "branches", None),
+        ]
+        for title, key, cols in sections:
+            items = cfg.get(key, [])
+            if not items:
+                continue
+            click.echo(f"\n{title} ({len(items)})")
+            click.echo("=" * (len(title) + 4 + len(str(len(items)))))
+            for item in items:
+                if isinstance(item, dict) and cols:
+                    parts = [str(item.get(c, "")) for c in cols]
+                    click.echo(
+                        "  "
+                        + "  ".join(
+                            f"{p:25s}" if i == 0 else p for i, p in enumerate(parts)
+                        )
+                    )
+                elif isinstance(item, dict):
+                    click.echo("  " + " | ".join(f"{k}={v}" for k, v in item.items()))
+                else:
+                    click.echo(f"  {item}")
 
     @main.command(
         "rename",
