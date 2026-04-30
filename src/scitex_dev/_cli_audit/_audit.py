@@ -402,6 +402,18 @@ def _check_universal_flags(
                     "top-level missing --help-recursive flag",
                 )
             )
+        # --json must be parseable at root so `<cli> --json` doesn't crash.
+        # Emitting JSON content (vs help text) when called with --json is
+        # checked behaviorally elsewhere.
+        if "--json" not in flags:
+            out.append(
+                Violation(
+                    full,
+                    "§2",
+                    "top-level missing --json flag "
+                    "(universal: machine-readable output for every CLI)",
+                )
+            )
         return
 
     # Leaf-only flag checks; groups themselves are read-like dispatchers.
@@ -1356,6 +1368,61 @@ def _ep_value_for(package: str) -> str | None:
     return None
 
 
+def _check_startup_speed(
+    package: str,
+    out: list[Violation],
+    threshold_ms: int = 500,
+) -> None:
+    """§9 — `import <module>` cold-start must be < threshold_ms.
+
+    Click bash-completion calls the program once per Tab press to resolve
+    dynamic completions, so a slow import = unusable tab-completion. The
+    fix is PEP 562 lazy `__getattr__` in the top-level `__init__.py`
+    (see `_skills/general/03_interface_01_python-api/
+    04_lazy-imports-and-optional-deps.md`).
+    """
+    import subprocess as _sp
+    import sys as _sys
+
+    ep_value = _ep_value_for(package)
+    if ep_value is None:
+        return
+    # Entry-point format is "module.path:object"; take the TOP-LEVEL package.
+    module_name = ep_value.split(":", 1)[0].split(".", 1)[0]
+    if not module_name:
+        return
+
+    code = (
+        "import time;t=time.perf_counter();"
+        f"import {module_name};"
+        "print(int((time.perf_counter()-t)*1000))"
+    )
+    try:
+        r = _sp.run(
+            [_sys.executable, "-c", code],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if r.returncode != 0:
+            return  # import failure — covered elsewhere
+        ms = int(r.stdout.strip())
+    except Exception:
+        return
+
+    if ms > threshold_ms:
+        out.append(
+            Violation(
+                package,
+                "§9",
+                f"`import {module_name}` cold-start is {ms}ms (>{threshold_ms}ms threshold). "
+                "Slow tab-completion: Click runs the program once per Tab press. Convert "
+                f"{module_name}/__init__.py to PEP 562 lazy `__getattr__` (see python-api "
+                "skill 04_lazy-imports-and-optional-deps.md, 'PEP 562 module __getattr__' section).",
+            )
+        )
+
+
 # --------------------------------------------------------------------- #
 # Rule severity & filtering                                              #
 # --------------------------------------------------------------------- #
@@ -1376,6 +1443,7 @@ RULE_SEVERITY: dict[str, str] = {
     "§6b": "warn",
     "§7": "warn",
     "§8": "warn",
+    "§9": "warn",  # CLI startup speed (slow import → slow tab completion)
 }
 SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}
 
@@ -1436,6 +1504,7 @@ def _audit_one(
     _check_introspection(cmd, package, out)
     _check_config_help(cmd, package, out)
     _scan_env_vars(package, out)
+    _check_startup_speed(package, out)
     if behavioral:
         _check_behavioral(package, out, cmd, timeout=timeout)
     return ("ok" if not out else "warn"), out
