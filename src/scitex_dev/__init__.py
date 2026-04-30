@@ -26,8 +26,15 @@ Public API (20 functions)::
     result_to_mcp, wrap_as_mcp
 """
 
-__version__ = "0.6.1"
-
+try:
+    from importlib.metadata import version as _v, PackageNotFoundError
+    try:
+        __version__ = _v("scitex-dev")
+    except PackageNotFoundError:
+        __version__ = "0.0.0+local"
+    del _v, PackageNotFoundError
+except ImportError:  # pragma: no cover — only on ancient Pythons
+    __version__ = "0.0.0+local"
 # --- Public API: LLM-friendly types and utilities ---
 from .cli_utils import (
     add_dry_run_argument,
