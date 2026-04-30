@@ -59,112 +59,11 @@ Auditor coverage of each rule (`yes` = enforced statically; `partial` = best-eff
 | §8   | stdout/stderr discipline                     | partial   | `list-python-apis --json` parsed as JSON (behavioral; `--behavioral`). |
 | §10  | CLI startup speed (`import <pkg>` < 500ms)   | yes       | Cold-start measurement in fresh subprocess. Threshold: 500ms (Click runs program once per Tab press). Remediation: PEP 562 lazy `__getattr__` in `__init__.py`. |
 
-## Run audit-all periodically during development
+## Periodic auditing during development
 
-Single-leaf check across every auditor (cli, mcp-tools, skills, python-apis, project):
+For how to run `audit-all` continuously while editing a package — cron / tmux / agent recipes, the JSON contract for programmatic consumers, and Claude Code-specific autonomous mechanisms — see [`05_development_02_periodic-audits.md`](../05_development_02_periodic-audits.md).
 
-```bash
-scitex-dev ecosystem audit-all <distribution>
-scitex-dev ecosystem audit-all <distribution> --json --severity error
-```
-
-Different from `audit-summary`, which is the **cross-leaf** rollup (every package). Use `audit-all` while editing one package; use `audit-summary` for ecosystem health.
-
-**Recommendation:** wire `audit-all` into a periodic background loop while developing — keeps the regressions you cause immediately visible instead of accumulating until a release. Three flavours:
-
-```bash
-# Cron (runs every 10 min while you work)
-*/10 * * * * cd ~/proj/<pkg> && scitex-dev ecosystem audit-all $(basename $PWD) >> ~/.scitex/dev/runtime/audit.log 2>&1
-
-# Background loop in a tmux/screen pane (manual)
-while sleep 300; do scitex-dev ecosystem audit-all <pkg> --severity error || say "audit failed"; done
-
-# Agentic loop (Claude Code) — `/loop 5m scitex-dev ecosystem audit-all <pkg>`
-#   The /loop skill self-paces the cadence and reports drift back to you.
-```
-
-The cheap-to-run cases (audit-cli, audit-mcp-tools, audit-skills) finish in under a second on a fast leaf; audit-python-apis and audit-project are the slow ones. Even with all five, total wall-clock is well under 10s for healthy packages.
-
-Periodic invocation also tightens the feedback loop on **§10 (CLI startup speed)** — you'll notice when an `__init__.py` change breaks the < 500ms threshold the same minute you make it, not three releases later.
-
-### For Claude Code agents — three autonomous mechanisms
-
-These skills are primarily aimed at Claude Code agents writing/maintaining scitex-* packages. The harness exposes three orthogonal scheduling primitives — pick the one that matches your work pattern:
-
-| Tool | Purpose | When to use |
-|---|---|---|
-| **`CronCreate`** | Fixed cron schedule (e.g. `*/10 * * * *`). Fires while the REPL is idle. Auto-expires after 7 days; cancel sooner with `CronDelete`. | "Run `audit-all` every 10 minutes regardless of what I'm doing." |
-| **`ScheduleWakeup`** | Self-paced — agent picks the delay each turn based on what it's waiting for (e.g. CI to finish, a long-running test). | "After I push a refactor, wake me when `audit-all` would catch a regression I haven't yet committed." |
-| **`Monitor`** | Passive event-stream watcher (good for `tail -f` / poll loops). Surfaces matching lines as notifications without re-running anything. | "Tail `~/.scitex/dev/runtime/audit.log` and surface the line whenever an auditor reports a new violation." |
-
-Examples (idiomatic Claude Code usage):
-
-```
-# Cron — runs in background, regardless of conversation state
-CronCreate("*/10 * * * *",
-           "scitex-dev ecosystem audit-all $(basename $(pwd)) --json --severity error",
-           summary="audit current package every 10 min")
-
-# Self-paced — agent chooses next delay each iteration
-ScheduleWakeup(delaySeconds=300,
-               reason="check audit-all post-refactor",
-               prompt="<<autonomous-loop-dynamic>>")
-
-# Monitor — stream every new auditor warning
-Monitor("tail -f ~/.scitex/dev/runtime/audit.log | grep --line-buffered '\\[§\\|\\[PS\\|\\[PA'",
-        description="audit violations in current package")
-```
-
-Pairing pattern: an agent commits a change → `Monitor` watches the audit log written by `CronCreate` → agent reacts to violation lines without polling. The agent never has to remember to re-audit; the harness does it.
-
-These three mechanisms are Claude Code-specific (other harnesses won't have the same primitive names). For non-Claude-Code use, the cron + tmux-loop recipes above remain the portable equivalents.
-
-### `--json` for agentic / programmatic consumers
-
-Every auditor accepts `--json`, and `audit-all --json` returns a structured aggregate so an agent (or any script) can reason about violations without parsing human text:
-
-```bash
-scitex-dev ecosystem audit-all <pkg> --json
-```
-
-Shape:
-
-```json
-{
-  "distribution": "scitex-stats",
-  "results": {
-    "audit-cli":         {"exit": 1, "data": {"package": "...", "violations": [...]}},
-    "audit-mcp-tools":   {"exit": 0, "data": {...}},
-    "audit-skills":      {"exit": 0, "data": {...}},
-    "audit-python-apis": {"exit": 0, "data": {...}},
-    "audit-project":     {"exit": 1, "data": {...}}
-  }
-}
-```
-
-Each per-auditor `data.violations` is a list of `{command, rule, message}` objects. Agents writing scitex-* packages should:
-
-1. Run `audit-all <pkg> --json` after every code-shape change (rename, refactor, new command).
-2. Parse `results[*].data.violations` and self-correct any rule violations before declaring the change done.
-3. Track `results[*].exit` — overall non-zero means at least one auditor flagged something.
-
-The JSON contract is the same across packages so a single agent prompt can audit any leaf:
-
-```python
-import json, subprocess
-r = subprocess.run(
-    ["scitex-dev", "ecosystem", "audit-all", pkg, "--json"],
-    capture_output=True, text=True,
-)
-report = json.loads(r.stdout)
-all_violations = [
-    (auditor, v)
-    for auditor, res in report["results"].items()
-    for v in res.get("data", {}).get("violations", [])
-]
-```
-
-This same pattern works for individual auditors (`scitex-dev ecosystem audit-cli <pkg> --json`) when an agent only needs one dimension.
+This file (`07_audit-cli.md`) is about *what* `audit-cli` checks; the periodic-audits skill is about *when* and *how* to invoke it during development.
 
 ## Custom dict format
 

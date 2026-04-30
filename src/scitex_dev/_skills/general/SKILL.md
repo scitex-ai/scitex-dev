@@ -64,9 +64,10 @@ Project structure split into one leaf per top-level directory:
 - [04_docs_02_sphinx.md](04_docs_02_sphinx.md) — Sphinx docs, conf.py, troubleshooting
 - [04_docs_03_rtd.md](04_docs_03_rtd.md) — Read the Docs onboarding, `.readthedocs.yaml`, build config
 
-### 5. Version Control — how does *this* package ship?
-- [05_version-control_01_management.md](05_version-control_01_management.md) — Branches, tags, release waves, release gates (core workflow)
-- [05_version-control_02_release-automation.md](05_version-control_02_release-automation.md) — Automation commands, ecosystem sync CLI, MCP tools, Python API
+### 5. Development — version control, periodic audits, release
+- [05_development_01_version-control.md](05_development_01_version-control.md) — Branches, tags, release waves, release gates (core workflow)
+- [05_development_02_periodic-audits.md](05_development_02_periodic-audits.md) — Run `audit-all` continuously while editing — cron / tmux / agent loops, JSON contract for programmatic consumers, Claude Code `CronCreate` / `ScheduleWakeup` / `Monitor` mechanisms
+- [05_development_03_release-automation.md](05_development_03_release-automation.md) — Automation commands, ecosystem sync CLI, MCP tools, Python API
 
 ### 8. Ecosystem quality — periodic cross-package audits, run when something feels off
 - [98_quality_01_failure-playbook.md](98_quality_01_failure-playbook.md) — Severity-tagged cookbook of ecosystem failure modes

@@ -6,7 +6,7 @@ tags: [scitex-python, scitex-general, scitex-package, meta]
 
 # SciTeX Version Management (Core Workflow)
 
-For automation commands and ecosystem-sync CLI details, see the companion skill [05_version-control_02_release-automation.md](05_version-control_02_release-automation.md).
+For automation commands and ecosystem-sync CLI details, see the companion skill [05_development_03_release-automation.md](05_development_03_release-automation.md).
 
 ## Version Management Levels
 
@@ -106,7 +106,7 @@ git add pyproject.toml
 git commit -m "chore: bump version to X.Y.Z"
 git tag -a vX.Y.Z -m "Release vX.Y.Z"
 git push origin develop --tags
-# 3. Sync — see 05_version-control_02_release-automation.md for commands
+# 3. Sync — see 05_development_03_release-automation.md for commands
 ```
 
 ## RULES: Never Sync Blind
