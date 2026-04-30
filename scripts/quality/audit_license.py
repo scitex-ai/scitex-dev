@@ -9,8 +9,9 @@ Every in-scope repo must have, consistently:
 
   1. `pyproject.toml` with `license = "AGPL-3.0-only"` (PEP 639 SPDX form).
      `AGPL-3.0` (deprecated form) is rejected.
-  2. Classifier `License :: OSI Approved :: GNU Affero General Public License v3`
-     in `[project].classifiers`.
+  2. **No legacy `License :: OSI Approved :: ...` classifier alongside SPDX.**
+     Setuptools >=80 hard-rejects the combination per PEP 639. The
+     classifier must be absent when `license = "AGPL-3.0-only"` is set.
   3. `LICENSE` file at repo root containing AGPL v3 full text.
 
 Scope: `pyproject.toml` exists AND directory-name equals pyproject
@@ -38,7 +39,9 @@ ECOSYSTEM_ALLOWLIST = {
 }
 
 EXPECTED_LICENSE = "AGPL-3.0-only"
-EXPECTED_CLASSIFIER = "License :: OSI Approved :: GNU Affero General Public License v3"
+# PEP 639: setuptools >=80 hard-rejects this classifier when SPDX
+# `license = ...` is also set. Now flagged as a violation if PRESENT.
+LEGACY_CLASSIFIER_PREFIX = "License :: OSI Approved"
 AGPL_SIGNATURE = "GNU AFFERO GENERAL PUBLIC LICENSE"
 
 
@@ -78,8 +81,16 @@ def check_repo(repo: Path) -> list[str]:
             f'"{EXPECTED_LICENSE}" (SPDX; `AGPL-3.0` is deprecated)'
         )
 
-    if EXPECTED_CLASSIFIER not in txt:
-        v.append(f'classifier missing: "{EXPECTED_CLASSIFIER}"')
+    # PEP 639: legacy AGPL trove classifier alongside SPDX `license = ...`
+    # is rejected by setuptools >=80. Flag its PRESENCE as a violation.
+    legacy_classifier_re = re.compile(
+        r'^\s*"License :: OSI Approved :: GNU Affero[^"]*"', re.MULTILINE
+    )
+    if legacy_classifier_re.search(txt):
+        v.append(
+            "legacy `License :: OSI Approved :: ...` classifier present "
+            "alongside SPDX license — setuptools >=80 will reject the build (PEP 639)"
+        )
 
     lf = repo / "LICENSE"
     if not lf.is_file():
@@ -127,7 +138,7 @@ def main() -> int:
             f"FAIL — {offenders}/{total} ecosystem packages have license "
             f"inconsistencies. Expected everywhere:\n"
             f'  pyproject.toml:  license = "{EXPECTED_LICENSE}"\n'
-            f'  classifier:      "{EXPECTED_CLASSIFIER}"\n'
+            f"  classifier:      (no legacy `License :: OSI Approved :: ...` — PEP 639)\n"
             f"  LICENSE file:    AGPL v3 full text at repo root\n"
             f"\nRun `python3.11 scripts/quality/fix_license.py --apply` "
             f"to auto-fix clean-tree repos."
