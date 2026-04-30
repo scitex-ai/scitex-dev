@@ -176,6 +176,18 @@ def test_ps206_silent_when_real_test_present(tmp_path):
     assert "PS206" not in rules
 
 
+def test_ps206_silent_for_factory_assigned_test(tmp_path):
+    """`test_x = make_*(...)` is a valid pytest collectable, not a placeholder."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "tests" / "demo" / "test_skills.py").write_text(
+        "from somewhere import make_skill_quality_tests\n"
+        "test_skills_quality = make_skill_quality_tests()\n"
+    )
+    (repo / "src" / "demo" / "foo.py").write_text("def f(): pass\n")
+    rules = _violations_for(repo, "demo")
+    assert "PS206" not in rules
+
+
 # ---------------------------------------------------------------------------
 # §3 tests/ subdir convention
 # ---------------------------------------------------------------------------
