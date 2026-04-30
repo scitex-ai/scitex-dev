@@ -28,6 +28,5 @@ scitex/
 src/scitex_dev/app/
 
 # Hook logs and pending
-docs/to_claude/hooks/**/*.log
-docs/to_claude/hooks/**/.pending/
+docs/to_claude
 .playwright-cli/

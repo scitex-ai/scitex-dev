@@ -106,15 +106,43 @@ def _get_package_version(pip_name: str) -> str:
         return "unknown"
 
 
+_SKIP_DIRS = {"__pycache__", "GITIGNORED", ".git"}
+
+
 def _collect_skills_from_dir(
     skills_dir: Path,
     version: str,
 ) -> list[dict[str, str]]:
-    """Collect skill entries from a single skills directory."""
-    skills = []
-    for md_file in sorted(skills_dir.glob("*.md")):
+    """Collect skill entries recursively, preserving relative paths.
+
+    Walks `skills_dir` recursively and records every `*.md` file. Each entry
+    carries `rel_path` (relative to `skills_dir`), so the exporter can
+    reproduce the directory structure under the destination.
+
+    For the canonical `_skills/general/` use case this means the nested
+    `03_interface_04_skills/00_index.md` etc. files survive the round-trip.
+    Legacy flat layouts (top-level `*.md` only) keep working unchanged.
+    """
+    skills: list[dict[str, str]] = []
+    for md_file in sorted(skills_dir.rglob("*.md")):
+        # Skip hidden / generated subtrees.
+        if any(
+            part in _SKIP_DIRS or part.startswith(".")
+            for part in md_file.relative_to(skills_dir).parts[:-1]
+        ):
+            continue
+        rel = md_file.relative_to(skills_dir)
+        rel_str = str(rel)
+        # `name` keeps backward-compat semantics for top-level files; nested
+        # files get their full relative path (without `.md`) as the name so
+        # downstream `list_skills` / `get_skill` callers can still address them.
+        if rel_str == "SKILL.md":
+            name = "SKILL"
+        elif "/" in rel_str:
+            name = rel_str[:-3]  # strip trailing .md
+        else:
+            name = md_file.stem
         meta = _parse_frontmatter(md_file)
-        name = "SKILL" if md_file.name == "SKILL.md" else md_file.stem
         desc = meta.get("description", "")
         if not desc and md_file.name != "SKILL.md":
             try:
@@ -127,24 +155,11 @@ def _collect_skills_from_dir(
             {
                 "name": name,
                 "path": str(md_file),
+                "rel_path": rel_str,
                 "description": desc,
                 "version": version,
             }
         )
-
-    # DEPRECATED: also check references/ subdir
-    refs_dir = skills_dir / "references"
-    if refs_dir.is_dir():
-        for md_file in sorted(refs_dir.glob("*.md")):
-            meta = _parse_frontmatter(md_file)
-            skills.append(
-                {
-                    "name": md_file.stem,
-                    "path": str(md_file),
-                    "description": meta.get("description", ""),
-                    "version": version,
-                }
-            )
     return skills
 
 
@@ -317,7 +332,15 @@ def export_skills(
                 continue
 
             name = entry["name"]
-            out_file = pkg_dest / ("SKILL.md" if name == "SKILL" else f"{name}.md")
+            # Prefer `rel_path` (preserves nested subdirs like
+            # `03_interface_04_skills/00_index.md`); fall back to flat
+            # `<name>.md` for legacy entries that predate rel_path.
+            rel_path = entry.get("rel_path")
+            if rel_path:
+                out_file = pkg_dest / rel_path
+                out_file.parent.mkdir(parents=True, exist_ok=True)
+            else:
+                out_file = pkg_dest / ("SKILL.md" if name == "SKILL" else f"{name}.md")
 
             # Copy and flatten references/ paths in content
             content = src_path.read_text(encoding="utf-8")

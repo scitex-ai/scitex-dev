@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Tests for scitex_dev.errors — ErrorCode registry and classify_exception."""
 
-from scitex_dev.errors import ErrorCode, classify_exception
+import pytest
+
+from scitex_dev.errors import ErrorCode, ScitexError, classify_exception
 
 
 class TestErrorCode:
@@ -68,3 +70,71 @@ class TestClassifyException:
         exc = ValueError("test")
         exc.error_code = "INVALID"
         assert classify_exception(exc) == ErrorCode.VALIDATION
+
+
+class TestScitexError:
+    def test_default_code_is_internal(self):
+        err = ScitexError("boom")
+        assert err.error_code == ErrorCode.INTERNAL
+        assert err.message == "boom"
+        assert err.remediation is None
+
+    def test_explicit_code_and_remediation(self):
+        err = ScitexError(
+            "h5py not installed",
+            code=ErrorCode.DEPENDENCY,
+            remediation="pip install scitex-io[h5]",
+        )
+        assert err.error_code == ErrorCode.DEPENDENCY
+        assert err.remediation == "pip install scitex-io[h5]"
+
+    def test_is_exception(self):
+        with pytest.raises(ScitexError):
+            raise ScitexError("x", code=ErrorCode.VALIDATION)
+
+    def test_to_dict_minimal(self):
+        err = ScitexError("bad", code=ErrorCode.VALIDATION)
+        assert err.to_dict() == {"code": "E001", "message": "bad"}
+
+    def test_to_dict_with_remediation(self):
+        err = ScitexError(
+            "missing", code=ErrorCode.DEPENDENCY, remediation="pip install x"
+        )
+        assert err.to_dict() == {
+            "code": "E004",
+            "message": "missing",
+            "remediation": "pip install x",
+        }
+
+    def test_str_includes_code(self):
+        err = ScitexError("boom", code=ErrorCode.NETWORK)
+        assert str(err) == "[E007] boom"
+
+    def test_str_includes_remediation(self):
+        err = ScitexError("boom", code=ErrorCode.DEPENDENCY, remediation="fix it")
+        assert "fix it" in str(err)
+        assert "[E004]" in str(err)
+
+    def test_classify_exception_picks_up_scitex_error(self):
+        err = ScitexError("x", code=ErrorCode.RATE_LIMITED)
+        assert classify_exception(err) == ErrorCode.RATE_LIMITED
+
+    def test_chaining_preserves_cause(self):
+        try:
+            try:
+                raise ImportError("h5py")
+            except ImportError as e:
+                raise ScitexError(
+                    "h5py not installed",
+                    code=ErrorCode.DEPENDENCY,
+                    remediation="pip install scitex-io[h5]",
+                ) from e
+        except ScitexError as e:
+            assert isinstance(e.__cause__, ImportError)
+
+    def test_top_level_reexport(self):
+        from scitex_dev import ErrorCode as RE_Code
+        from scitex_dev import ScitexError as RE_Err
+
+        assert RE_Code is ErrorCode
+        assert RE_Err is ScitexError

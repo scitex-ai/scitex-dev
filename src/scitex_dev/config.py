@@ -11,6 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from scitex_config._ecosystem import local_state
+
 
 @dataclass
 class HostConfig:
@@ -27,7 +29,11 @@ class HostConfig:
     python_bin: str = "python3"
     pip_bin: str = "pip"
     remote_base: str = "~/proj"
+    # Legacy: explicit allow-list. If empty, host syncs all ecosystem
+    # packages (preferred). Kept for backward compat.
     packages: list[str] = field(default_factory=list)
+    # New: opt-out list. Packages here are excluded from sync.
+    exclude: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -70,8 +76,18 @@ class DevConfig:
 
 
 def _get_default_config_path() -> Path:
-    """Get default config file path."""
-    return Path.home() / ".scitex" / "dev_config.yaml"
+    """Get default config file path.
+
+    Preferred location is ``~/.scitex/dev/config.yaml`` (matches the
+    runtime/ sibling tree). The legacy single-file path
+    ``~/.scitex/dev_config.yaml`` is honored as a fallback if it exists
+    AND the preferred path does not, to keep older installs working.
+    """
+    preferred = local_state.path("dev", "config.yaml")
+    legacy = local_state.user_root() / "dev_config.yaml"
+    if not preferred.exists() and legacy.exists():
+        return legacy
+    return preferred
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -119,10 +135,18 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 
 def _parse_host_config(data: dict[str, Any]) -> HostConfig:
-    """Parse host config from dict."""
+    """Parse host config from dict.
+
+    Supports both the legacy ``packages:`` allow-list and the new
+    ``exclude:`` opt-out list. If neither is given, the host syncs all
+    ecosystem packages.
+    """
     packages = data.get("packages", [])
     if isinstance(packages, str):
         packages = [p.strip() for p in packages.split(",") if p.strip()]
+    exclude = data.get("exclude", [])
+    if isinstance(exclude, str):
+        exclude = [p.strip() for p in exclude.split(",") if p.strip()]
     return HostConfig(
         name=data.get("name", "unknown"),
         hostname=data.get("hostname", "localhost"),
@@ -135,6 +159,7 @@ def _parse_host_config(data: dict[str, Any]) -> HostConfig:
         pip_bin=data.get("pip_bin", "pip"),
         remote_base=data.get("remote_base", "~/proj"),
         packages=packages if isinstance(packages, list) else [],
+        exclude=exclude if isinstance(exclude, list) else [],
     )
 
 

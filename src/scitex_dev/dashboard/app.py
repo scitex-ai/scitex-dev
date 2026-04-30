@@ -158,12 +158,13 @@ def run_background(
     """
     import subprocess
     import sys
-    from pathlib import Path
+
+    from scitex_config._ecosystem import local_state
 
     # Runtime-only (per 01_arch_06_local-state-directories.md §1):
     # logs + pid files go under `runtime/`, never committed to git.
-    runtime_dir = Path.home() / ".scitex" / "dev" / "runtime"
-    runtime_dir.mkdir(parents=True, exist_ok=True)
+    # local_state.runtime_path() auto-creates runtime/ + .gitkeep + README.md.
+    runtime_dir = local_state.runtime_path("dev")
 
     log_path = runtime_dir / "dashboard.log"
     pid_path = runtime_dir / "dashboard.pid"

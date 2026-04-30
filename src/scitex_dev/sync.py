@@ -49,20 +49,21 @@ def _build_ssh_args(host: HostConfig) -> list[str]:
 def _get_host_packages(host: HostConfig, config: DevConfig) -> list[tuple[str, str]]:
     """Get (package_name, remote_dir_name) pairs for a host.
 
-    Uses host.packages if set, otherwise all ecosystem packages.
-    Returns tuples of (pypi_name, directory_name) where directory_name
-    is the local_path basename (e.g., 'scitex-python' for scitex).
+    Resolution: legacy ``host.packages`` allow-list wins; otherwise
+    default to all ecosystem packages minus ``host.exclude``.
     """
     pkg_map = {p.name: p for p in config.packages}
-
-    names = host.packages if host.packages else [p.name for p in config.packages]
-    result = []
+    if host.packages:
+        names = list(host.packages)
+    else:
+        excluded = set(host.exclude or [])
+        names = [p.name for p in config.packages if p.name not in excluded]
+    out = []
     for name in names:
         pkg = pkg_map.get(name)
         if pkg and pkg.local_path:
-            dir_name = Path(pkg.local_path).expanduser().name
-            result.append((name, dir_name))
-    return result
+            out.append((name, Path(pkg.local_path).expanduser().name))
+    return out
 
 
 def _build_sync_commands(
@@ -432,91 +433,8 @@ def sync_local(
     return results
 
 
-def sync_tags(
-    packages: list[str] | None = None,
-    confirm: bool = False,
-    config: DevConfig | None = None,
-) -> dict[str, Any]:
-    """Push local tags for all packages to origin.
-
-    Safety: defaults to preview only. Pass confirm=True to execute.
-
-    Parameters
-    ----------
-    packages : list[str] | None
-        Package names. None = all configured packages.
-    confirm : bool
-        If False (default), preview only.
-        If True, execute git push --tags.
-    config : DevConfig | None
-        Configuration.
-
-    Returns
-    -------
-    dict
-        {package: {status, tag, output|commands}}.
-    """
-    if config is None:
-        config = load_config()
-
-    targets = config.packages
-    if packages:
-        targets = [p for p in targets if p.name in packages]
-
-    results: dict[str, Any] = {}
-    for pkg in targets:
-        if not pkg.local_path:
-            continue
-
-        path = Path(pkg.local_path).expanduser()
-        if not path.exists():
-            results[pkg.name] = {"status": "skipped", "error": f"{path} not found"}
-            continue
-
-        # Get latest tag (always safe to check)
-        try:
-            tag_result = subprocess.run(
-                ["git", "describe", "--tags", "--abbrev=0"],
-                capture_output=True,
-                text=True,
-                cwd=str(path),
-                timeout=10,
-            )
-            tag = tag_result.stdout.strip() if tag_result.returncode == 0 else None
-        except Exception:
-            tag = None
-
-        if not confirm:
-            results[pkg.name] = {
-                "status": "dry_run",
-                "tag": tag,
-                "commands": ["git", "push", "origin", "--tags"],
-            }
-            continue
-
-        try:
-            push_result = subprocess.run(
-                ["git", "push", "origin", "--tags"],
-                capture_output=True,
-                text=True,
-                cwd=str(path),
-                timeout=30,
-            )
-            if push_result.returncode == 0:
-                results[pkg.name] = {
-                    "status": "ok",
-                    "tag": tag,
-                    "output": push_result.stderr.strip(),  # git push outputs to stderr
-                }
-            else:
-                results[pkg.name] = {
-                    "status": "error",
-                    "tag": tag,
-                    "error": push_result.stderr.strip(),
-                }
-        except Exception as e:
-            results[pkg.name] = {"status": "error", "error": str(e)}
-    return results
+# sync_tags lives in sync_tags.py; re-export for backward compat
+from .sync_tags import sync_tags  # noqa: E402,F401
 
 
 # EOF

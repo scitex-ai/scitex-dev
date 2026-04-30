@@ -22,7 +22,7 @@
 | openalex-local | ~/proj/openalex-local | 284M+ works academic DB | Python, SQLite |
 | scitex-dataset | ~/proj/scitex-dataset | Neuroscience dataset fetcher | Python |
 | scitex-container | ~/proj/scitex-container | Apptainer/Docker management | Python, Bash |
-| scitex-tunnel | ~/proj/scitex-tunnel | SSH reverse tunnels | Python, Bash |
+| scitex-ssh | ~/proj/scitex-ssh | SSH primitives + gated reverse tunnels | Python, Bash |
 | emacs_mcp_server | ~/proj/emacs_mcp_server | Emacs MCP bridge | Python |
 
 ## Task Routing Guide

@@ -72,7 +72,7 @@ SCITEX_CATEGORIES: list[tuple[str, str, list[str]]] = [
         [
             "scitex-cloud",
             "scitex-container",
-            "scitex-tunnel",
+            "scitex-ssh",
             "scitex-orochi",
             "scitex-orochi-private",
             "scitex-agent-container",

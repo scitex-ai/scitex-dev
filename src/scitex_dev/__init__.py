@@ -26,8 +26,15 @@ Public API (20 functions)::
     result_to_mcp, wrap_as_mcp
 """
 
-__version__ = "0.6.1"
-
+try:
+    from importlib.metadata import version as _v, PackageNotFoundError
+    try:
+        __version__ = _v("scitex-dev")
+    except PackageNotFoundError:
+        __version__ = "0.0.0+local"
+    del _v, PackageNotFoundError
+except ImportError:  # pragma: no cover — only on ancient Pythons
+    __version__ = "0.0.0+local"
 # --- Public API: LLM-friendly types and utilities ---
 from .cli_utils import (
     add_dry_run_argument,
@@ -39,7 +46,12 @@ from .cli_utils import (
     wrap_as_cli,
 )
 from .decorators import supports_return_as
-from .errors import ErrorCode, classify_exception
+from .errors import ErrorCode, ScitexError, classify_exception
+from ._imports import (
+    InstallHint as InstallHint,
+    last_install_hint as last_install_hint,
+    try_import_optional as try_import_optional,
+)
 from ._mcp_compat import get_tools_sync
 from .mcp_utils import async_wrap_as_mcp, result_to_mcp, run_as_mcp, wrap_as_mcp
 from .side_effects import SideEffect
@@ -95,6 +107,12 @@ from .ecosystem import (
 
 # RTD
 from .rtd import check_all_rtd as check_all_rtd, check_rtd_status as check_rtd_status
+
+# PyPI publishing
+from ._pypi_package_data import (
+    PackageDataAuditReport as PackageDataAuditReport,
+    audit_package_data as audit_package_data,
+)
 
 # GitHub
 from .github import (
@@ -190,7 +208,11 @@ __all__ = [
     "Result",
     "RESULT_SCHEMA",
     "ErrorCode",
+    "ScitexError",
     "classify_exception",
+    "try_import_optional",
+    "last_install_hint",
+    "InstallHint",
     "supports_return_as",
     "SideEffect",
     "handle_result",
