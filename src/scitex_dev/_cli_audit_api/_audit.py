@@ -282,6 +282,20 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                             nodes = state.setdefault("version_nodes", [])
                             assert isinstance(nodes, list)
                             nodes.append(node)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                # Annotated assignments: `__all__: list[str] = [...]`,
+                # `__version__: str = ...`. Treat them like ast.Assign.
+                bound_names.add(node.target.id)
+                if (
+                    node.target.id == "__all__"
+                    and node.value is not None
+                    and isinstance(node.value, (ast.List, ast.Tuple))
+                ):
+                    state["all"] = [
+                        elt.value
+                        for elt in node.value.elts
+                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+                    ]
             elif isinstance(
                 node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
             ):
@@ -350,7 +364,14 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 )
 
     # §2 — version strategy
-    if all_names is not None and "__version__" not in all_names:
+    # PA201 only fires when __version__ is actually defined. Modules that
+    # delegate everything (sys.modules aliases, e.g. scitex-plt → figrecipe)
+    # don't define __version__ themselves.
+    if (
+        all_names is not None
+        and "__version__" not in all_names
+        and "__version__" in bound_names
+    ):
         out.append(Violation("PA201", where, "add `__version__` to __all__"))
 
     if version_nodes:
