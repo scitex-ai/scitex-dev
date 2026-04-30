@@ -133,14 +133,14 @@ def register_skills_commands(main_group):
     # command going forward because the destination is always required —
     # callers can't be surprised by a hidden default like `export`'s
     # `~/.claude/skills/scitex/`.
-    @skills.command("tags-expand")
+    @skills.command("expand-tags")
     @click.argument("tag")
     @click.option(
         "--no-source-tree",
         is_flag=True,
         help="Skip ~/proj/scitex-*/src/*/_skills scan; only use installed packages.",
     )
-    def skills_tags_expand(tag, no_source_tree):
+    def skills_expand_tags(tag, no_source_tree):
         """Print absolute paths of skill files whose frontmatter `tags:` includes <tag>.
 
         \b
@@ -152,6 +152,22 @@ def register_skills_commands(main_group):
         Designed for CLAUDE.md `@<tag>` shorthand resolution. See
         general/06_skills_06_frontmatter-metadata.md §"CLAUDE.md tag shortcuts".
         """
+        from ._cli_skills_tags import tags_expand
+
+        raise SystemExit(tags_expand(tag, include_source_tree=not no_source_tree))
+
+    # Deprecated bare-noun-leading alias (§1: leaves must start with verb).
+    # Removed in 0.11.0.
+    @skills.command("tags-expand", hidden=True)
+    @click.argument("tag")
+    @click.option("--no-source-tree", is_flag=True)
+    def _skills_tags_expand_deprecated(tag, no_source_tree):
+        """(deprecated) Use `skills expand-tags`. Removed in 0.11.0."""
+        click.echo(
+            "warning: `skills tags-expand` was renamed to `skills expand-tags` "
+            "(verb-noun per §1).",
+            err=True,
+        )
         from ._cli_skills_tags import tags_expand
 
         raise SystemExit(tags_expand(tag, include_source_tree=not no_source_tree))

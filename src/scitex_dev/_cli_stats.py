@@ -213,10 +213,26 @@ def register_stats_command(
     deprecation alias for one cycle and removed in 0.11.0.
     """
 
-    @ecosystem_group.command("stats")
+    @ecosystem_group.command("show-stats")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def stats(as_json: bool) -> None:
+    def show_stats(as_json: bool) -> None:
         """Show SciTeX ecosystem statistics (package counts, CLI commands, MCP tools, …)."""
+        result = collect_stats()
+        if as_json:
+            click.echo(json.dumps(result, indent=2))
+        else:
+            click.echo(format_stats_text(result))
+
+    # Deprecated bare-noun alias (§1: leaves must be verbs). Removed in 0.11.0.
+    @ecosystem_group.command("stats", hidden=True)
+    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
+    def _stats_bare_deprecated(as_json: bool) -> None:
+        """(deprecated) Use `ecosystem show-stats`. Removed in 0.11.0."""
+        click.echo(
+            "warning: `ecosystem stats` was renamed to `ecosystem show-stats` "
+            "(verb-noun per §1).",
+            err=True,
+        )
         result = collect_stats()
         if as_json:
             click.echo(json.dumps(result, indent=2))

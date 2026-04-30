@@ -139,7 +139,7 @@ def register_ecosystem_commands(main_group):
         else:
             click.echo(text, nl=False)
 
-    @ecosystem.command("packages")
+    @ecosystem.command("check-versions")
     @click.option(
         "--host",
         "-h",
@@ -235,6 +235,25 @@ def register_ecosystem_commands(main_group):
                 0 if summ["matching"] == summ["total"] and summ["total"] > 0 else 1
             )
         ctx.exit(0)
+
+    # Deprecated alias for the §1 noun-verb fix (packages → check-versions).
+    # Removed in 0.11.0.
+    @ecosystem.command(
+        "packages",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    )
+    @click.pass_context
+    def _ecosystem_packages_deprecated(ctx):
+        """(deprecated) Use `ecosystem check-versions`. Removed in 0.11.0."""
+        click.echo(
+            "warning: `ecosystem packages` was renamed to `ecosystem check-versions`.",
+            err=True,
+        )
+        target = ecosystem.get_command(ctx, "check-versions")
+        if target is None:
+            ctx.exit(2)
+        ctx.invoke(target, *ctx.args)
 
     @ecosystem.command("fix-mismatches", hidden=True)
     @click.option(
