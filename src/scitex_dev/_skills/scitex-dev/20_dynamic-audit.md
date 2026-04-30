@@ -92,5 +92,3 @@ To unblock release-gate use before the full task dataset exists:
 4. Block release if any regress
 
 Full coverage is a quarter-long effort; start with this minimum.
-
-<!-- EOF -->
