@@ -1,6 +1,6 @@
 ---
 name: repository-quality
-description: Release-gate repository quality checklist for every SciTeX package — AGPL-3.0-or-later licence + the Four Freedoms, README rules (no `import scitex as stx`, no trailing ywatanabe@ signature), `_builtin_handlers.py`/fallback-verification hygiene, skills-authoritative rule (no out-of-band docs in `docs/` duplicating `_skills/`), GitHub repo config (topics, default branch, branch protection), and allowlist checks before `git push` / PyPI release. Use as the final sign-off before any `vb release`.
+description: Release-gate repository quality checklist for every SciTeX package — AGPL-3.0-only licence + the Four Freedoms (see `01_ecosystem_07_license-and-cla.md` for the full SPDX/CLA policy), README rules (no `import scitex as stx`, no trailing ywatanabe@ signature), `_builtin_handlers.py`/fallback-verification hygiene, skills-authoritative rule (no out-of-band docs in `docs/` duplicating `_skills/`), GitHub repo config (topics, default branch, branch protection), and allowlist checks before `git push` / PyPI release. Use as the final sign-off before any `vb release`.
 tags: [scitex-python, scitex-general, scitex-package, meta]
 ---
 
@@ -14,8 +14,8 @@ tags: [scitex-python, scitex-general, scitex-package, meta]
 
 ## Licensing
 
-- AGPL v3.0 (required for SciTeX ecosystem packages)
-- CLA.md + CONTRIBUTING.md
+- AGPL v3.0 (`license = "AGPL-3.0-only"`) is required for every SciTeX ecosystem package.
+- See [01_ecosystem_07_license-and-cla.md](01_ecosystem_07_license-and-cla.md) for the full ecosystem policy: SPDX/PEP 639 specifics, the CLA workflow template, the `signatures/cla.json` shape gotcha, and bootstrap + audit recipes.
 
 ## Documentation Accuracy (SciTeX-Specific)
 

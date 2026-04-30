@@ -34,6 +34,7 @@ Run through this list before shipping a CLI. Items marked **(A)** are covered by
 - [ ] `--help-recursive` at top level.
 - [ ] `--version` / `-V` at top level prints `pkg/X.Y.Z`.
 - [ ] `--json` on every data-reading command (introspection, list, show, get, search, …).
+- [ ] **JSON content parity** (§2 [08_universal-flags.md](08_universal-flags.md)): every field shown in text mode appears in `--json` mode. No fetch-path forking on `as_json` that drops data. `--help-recursive --json` produces a structured tree, not plain text.
 - [ ] `--dry-run` on every mutating command.
 - [ ] `--yes` / `-y` on every mutating command that would otherwise prompt.
 - [ ] `--verbose` / `-v` accepts the count style (`-v` / `-vv` / `-vvv`) where applicable.

@@ -134,13 +134,19 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
             print(tldr)
         return
 
-    # Determine format
+    # Determine format. Note: page listings always use the rich manifest
+    # (format=None) so the text and --json paths show the same data —
+    # downgrading to format="json" here would drop page titles.
     fmt = args.format
-    if args.as_json and fmt is None:
-        fmt = "json"
+    if args.list_pages:
+        fetch_fmt = None
+    elif args.as_json and fmt is None:
+        fetch_fmt = "json"
+    else:
+        fetch_fmt = fmt
 
     try:
-        result = get_docs(package=package, format=fmt, page=args.page)
+        result = get_docs(package=package, format=fetch_fmt, page=args.page)
     except LookupError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(2)
