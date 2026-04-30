@@ -72,7 +72,113 @@ def register_skills_commands(main_group):
             click.echo(f"Skill {target}package '{package}' not found.", err=True)
             raise SystemExit(1)
 
-    @skills.command("export")
+    # ----- Canonical: `skills install` (replaces `export` + `collect`) -----
+    @skills.command("install")
+    @click.option(
+        "--dest",
+        type=click.Path(),
+        default=None,
+        help=(
+            "Target directory. Default: ~/.scitex/dev/skills/ — the "
+            "canonical store, peer to ~/.scitex/{audio,browser,scholar,...}/. "
+            "Use --claude-symlink to also expose under ~/.claude/skills/scitex/."
+        ),
+    )
+    @click.option("--package", default=None, help="Install only this package.")
+    @click.option(
+        "--source",
+        type=click.Choice(["installed", "pypi"]),
+        default="installed",
+        help="installed or pypi.",
+    )
+    @click.option(
+        "--clean", is_flag=True, help="Delete package subdirs before installing."
+    )
+    @click.option(
+        "--link",
+        is_flag=True,
+        help="Symlink skill files to editable source (source=installed only); "
+        "edits propagate live with no re-install.",
+    )
+    @click.option(
+        "--claude-symlink",
+        is_flag=True,
+        help="After install, ensure ~/.claude/skills/scitex → DEST (idempotent). "
+        "For Claude Code consumers; does not affect the source of truth at DEST.",
+    )
+    @click.option("--dry-run", is_flag=True, help="Preview without copying.")
+    @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+    def skills_install(
+        dest, package, source, clean, link, claude_symlink, dry_run, as_json
+    ):
+        """Install skills from installed/PyPI packages into DEST (default: ~/.scitex/dev/skills/).
+
+        \b
+        Examples:
+          scitex-dev skills install                                     # → ~/.scitex/dev/skills/
+          scitex-dev skills install --claude-symlink                    # also → ~/.claude/skills/scitex/
+          scitex-dev skills install --dest /tmp/skills --package scitex-writer
+          scitex-dev skills install --link                              # editable symlink to source
+          scitex-dev skills install --dry-run --json                    # preview
+        """
+        import json as json_mod
+        import os as _os
+        from pathlib import Path
+
+        from .skills import export_skills, list_skills
+
+        # Default to ~/.scitex/dev/skills/ (peer to other ~/.scitex/<pkg>/ stores)
+        target = Path(dest) if dest else Path.home() / ".scitex" / "dev" / "skills"
+
+        if dry_run:
+            result = {
+                k: [e["name"] + ".md" for e in v]
+                for k, v in list_skills(package=package).items()
+            }
+            if as_json:
+                click.echo(
+                    json_mod.dumps(
+                        {"dest": str(target), "source": source, "packages": result},
+                        indent=2,
+                    )
+                )
+            else:
+                total = sum(len(v) for v in result.values())
+                click.echo(
+                    f"Would install {total} files to {target}/ (source={source})"
+                )
+                for k, v in sorted(result.items()):
+                    click.echo(f"  {k}/: {len(v)} files")
+                if claude_symlink:
+                    claude_link = Path.home() / ".claude" / "skills" / "scitex"
+                    click.echo(f"Would symlink {claude_link} → {target}")
+            return
+
+        target.mkdir(parents=True, exist_ok=True)
+        exported = export_skills(
+            target, package=package, clean=clean, source=source, link=link
+        )
+
+        if claude_symlink:
+            claude_link = Path.home() / ".claude" / "skills" / "scitex"
+            claude_link.parent.mkdir(parents=True, exist_ok=True)
+            # Idempotent: replace stale link, leave non-link contents alone.
+            if claude_link.is_symlink() or not claude_link.exists():
+                if claude_link.is_symlink():
+                    claude_link.unlink()
+                _os.symlink(target.resolve(), claude_link)
+                click.echo(f"linked: {claude_link} → {target}")
+            else:
+                click.echo(
+                    f"warning: {claude_link} exists and is not a symlink — "
+                    "skipping --claude-symlink (move it aside manually if needed).",
+                    err=True,
+                )
+
+        _print_export_result(exported, target, as_json)
+
+    # ----- Deprecated `export` — same behaviour, default destination differs -----
+    @skills.command("export", hidden=True)
     @click.option(
         "--dest",
         type=click.Path(),
@@ -172,7 +278,7 @@ def register_skills_commands(main_group):
 
         raise SystemExit(tags_expand(tag, include_source_tree=not no_source_tree))
 
-    @skills.command("collect")
+    @skills.command("collect", hidden=True)
     @click.argument(
         "destination",
         type=click.Path(),

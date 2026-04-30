@@ -74,7 +74,7 @@ def register_ecosystem_commands(main_group):
                 repo = info.get("github_repo", "")
                 click.echo(f"  {pkg:25s} {repo}")
 
-    @ecosystem.command("graph")
+    @ecosystem.command("show-graph")
     @click.option(
         "--format",
         "fmt",
@@ -138,6 +138,25 @@ def register_ecosystem_commands(main_group):
             click.echo(f"Wrote {len(graph)}-node graph to {output}", err=True)
         else:
             click.echo(text, nl=False)
+
+    # Deprecated bare-noun alias (§1: leaves must be verbs). Removed in 0.11.0.
+    @ecosystem.command(
+        "graph",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    )
+    @click.pass_context
+    def _ecosystem_graph_deprecated(ctx):
+        """(deprecated) Use `ecosystem show-graph`. Removed in 0.11.0."""
+        click.echo(
+            "warning: `ecosystem graph` was renamed to `ecosystem show-graph` "
+            "(verb-noun per §1).",
+            err=True,
+        )
+        target = ecosystem.get_command(ctx, "show-graph")
+        if target is None:
+            ctx.exit(2)
+        ctx.invoke(target, *ctx.args)
 
     @ecosystem.command("check-versions")
     @click.option(
@@ -983,6 +1002,87 @@ def register_ecosystem_commands(main_group):
             + "".join(f"{per_auditor_clean[a]:>4}/{len(leaves):<9}" for a in chosen),
             fg="green",
         )
+
+    @ecosystem.command(
+        "audit-all",
+        epilog=(
+            "Examples:\n"
+            "  $ scitex-dev ecosystem audit-all scitex-io\n"
+            "  $ scitex-dev ecosystem audit-all scitex-io --json\n"
+            "\n"
+            "Runs every audit-* command on a single distribution and\n"
+            "aggregates exit codes (overall exit=1 if any auditor reports\n"
+            "violations). For cross-leaf rollups across the whole ecosystem,\n"
+            "use `audit-summary` instead."
+        ),
+    )
+    @click.argument("distribution")
+    @click.option("--json", "as_json", is_flag=True, help="Emit JSON output.")
+    @click.option(
+        "--severity",
+        type=click.Choice(["info", "warn", "error"]),
+        default="warn",
+        help="Minimum severity to report (passed through to each auditor).",
+    )
+    def ecosystem_audit_all(distribution, as_json, severity):
+        """Run every audit-* on DISTRIBUTION; aggregate exit codes."""
+        import json as _json
+        import subprocess
+        import sys as _sys
+
+        # Order: cheap-to-fast → slow. Each audit-* honours --json + --severity
+        # idempotently. audit-summary excluded — it's the cross-leaf rollup.
+        audits = [
+            "audit-cli",
+            "audit-mcp-tools",
+            "audit-skills",
+            "audit-python-apis",
+            "audit-project",
+        ]
+
+        results: dict = {}
+        overall_exit = 0
+        # Resolve sibling `scitex-dev` console script. Falls back to PATH lookup.
+        import shutil as _shutil
+
+        scitex_dev_bin = _shutil.which("scitex-dev") or "scitex-dev"
+        for a in audits:
+            cmd = [scitex_dev_bin, "ecosystem", a, distribution]
+            if as_json:
+                cmd.append("--json")
+            # audit-cli + audit-summary support --severity; others ignore unknowns
+            if a == "audit-cli":
+                cmd += ["--severity", severity]
+            try:
+                if as_json:
+                    r = subprocess.run(cmd, capture_output=True, text=True)
+                    payload = r.stdout.strip() or "null"
+                    try:
+                        results[a] = {
+                            "exit": r.returncode,
+                            "data": _json.loads(payload),
+                        }
+                    except _json.JSONDecodeError:
+                        results[a] = {"exit": r.returncode, "raw": payload}
+                else:
+                    click.echo(f"\n=== {a} ===", err=True)
+                    r = subprocess.run(cmd)
+                    results[a] = {"exit": r.returncode}
+            except Exception as e:
+                click.echo(f"error: {a} failed to launch: {e}", err=True)
+                results[a] = {"exit": 1, "error": str(e)}
+                overall_exit = 1
+                continue
+            if r.returncode != 0:
+                overall_exit = 1
+
+        if as_json:
+            click.echo(
+                _json.dumps(
+                    {"distribution": distribution, "results": results}, indent=2
+                )
+            )
+        _sys.exit(overall_exit)
 
     @ecosystem.command("start-dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")

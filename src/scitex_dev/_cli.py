@@ -240,30 +240,30 @@ else:
     # individual `quality audit-*` callers must update.
     from . import _cli_quality
 
-    @ecosystem_group.command("audit-docs")
+    # These sub-rules belong inside their canonical owner per the
+    # consolidation plan. Hidden until folded in (PR-by-PR) so the public
+    # surface is just five audit-* commands. Removed in 0.11.0.
+    #   audit-docs   → splits across audit-python-apis (README API drift)
+    #                  and audit-skills (SKILL.md code-example drift)
+    #   audit-scope  → folds into audit-project (test-import boundary)
+    #   audit-lines  → folds into audit-project (LOC-limits, source metric)
+    #   audit-frontmatter → DROPPED (frontmatter shape lives in audit-skills)
+    @ecosystem_group.command("audit-docs", hidden=True)
     @click.option("--projects-root", default=None)
     def _ecosystem_audit_docs(projects_root):
-        """Scan SKILL.md / docstring examples for drift."""
+        """(deprecated) Splits into `audit-python-apis` (README API drift) and `audit-skills` (SKILL.md drift). Removed in 0.11.0."""
         raise SystemExit(_cli_quality.audit_docs(projects_root=projects_root))
 
-    @ecosystem_group.command("audit-scope")
+    @ecosystem_group.command("audit-scope", hidden=True)
     @click.option("--projects-root", default=None)
     def _ecosystem_audit_scope(projects_root):
-        """Check tests cover the public API surface."""
+        """(deprecated) Folds into `audit-project`. Removed in 0.11.0."""
         raise SystemExit(_cli_quality.audit_scope(projects_root=projects_root))
 
-    @ecosystem_group.command("audit-lines")
+    @ecosystem_group.command("audit-lines", hidden=True)
     def _ecosystem_audit_lines():
-        """Enforce per-file line limits against the allowlist."""
+        """(deprecated) Folds into `audit-project` (LOC-limits). Removed in 0.11.0."""
         raise SystemExit(_cli_quality.audit_lines())
-
-    @ecosystem_group.command("audit-frontmatter")
-    @click.argument("root", type=click.Path(exists=True, file_okay=False))
-    def _ecosystem_audit_frontmatter(root):
-        """Check skill YAML frontmatter (description length, canonical-location, context_tokens drift, group tags). Warn-only."""
-        from ._cli_quality_frontmatter import audit_frontmatter
-
-        raise SystemExit(audit_frontmatter(root))
 
     # ----- Deprecation shim: `scitex-dev quality <cmd>` → ecosystem -----
     @main.group("quality", hidden=True)
