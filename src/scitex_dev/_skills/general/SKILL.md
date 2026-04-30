@@ -41,9 +41,15 @@ Read in this order when building or auditing a package. Each section presupposes
 - [01_ecosystem_07_license-and-cla.md](01_ecosystem_07_license-and-cla.md) — AGPL-3.0-only SPDX policy, CLA workflow template, `signatures/cla.json` shape (object, not bare array), `pull_request_target` base-branch trap, bootstrap + audit recipes
 
 ### 2. Package — how does *this* `scitex-*` package's repo live on disk?
-- [02_package_01_project-structure.md](02_package_01_project-structure.md) — Project structure: `src/`, `tests/`, `scripts/`, `examples/`, `references/`, `templates/`/`assets/` boundaries
-- [02_package_02_github-actions.md](02_package_02_github-actions.md) — CI, PyPI publish, CLA, reusable workflow patterns
-- [02_package_03_quality.md](02_package_03_quality.md) — Repository-level quality (AGPL, Four Freedoms, README rules, GitHub setup)
+Project structure split into one leaf per top-level directory:
+- [02_package_01_project-structure-root.md](02_package_01_project-structure-root.md) — Repo-root rules, allowed files, forbidden top-level dirs, `./docs/`, `./templates/` wheel-vs-git, anti-patterns, pre-release checklist
+- [02_package_02_project-structure-src.md](02_package_02_project-structure-src.md) — `src/<pkg>/` layout, absolute imports, cascade direction (umbrella `scitex` is the only forbidden import from `src/`), public/private filename convention
+- [02_package_03_project-structure-scripts.md](02_package_03_project-structure-scripts.md) — `./scripts/` for maintenance + scientific analysis (not shipped); graduation to `examples/` or `src/`
+- [02_package_04_project-structure-makefile.md](02_package_04_project-structure-makefile.md) — `./scripts/makefile/` per-target dispatcher pattern + canonical target inventory
+- [02_package_05_project-structure-examples.md](02_package_05_project-structure-examples.md) — Numbered examples + `_out/` artefacts committed + `00_run_all.sh` + matched `tests/examples/test_*.py`
+- [02_package_06_project-structure-tests.md](02_package_06_project-structure-tests.md) — `tests/<pkg>/` mandatory parent, allowed subdirs, public/private mirroring, allowed root meta-tests, `audit-project` rules
+- [02_package_07_github-actions.md](02_package_07_github-actions.md) — CI, PyPI publish, CLA, reusable workflow patterns
+- [02_package_08_quality.md](02_package_08_quality.md) — Repository-level quality (AGPL, Four Freedoms, README rules, GitHub setup)
 
 ### 3. Interfaces — how do users and agents touch *this* package?
 - [03_interface_00_overview.md](03_interface_00_overview.md) — Five interfaces: overview and delegation chain

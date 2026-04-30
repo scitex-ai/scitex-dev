@@ -1,0 +1,100 @@
+---
+name: research-project-scripts
+description: `./scripts/` is the **primary code location** for a SciTeX research project — analysis pipelines, model-training runs, exploratory data work. Pipelines entered via `@stx.session` so `CONFIG`, `SDIR_OUT`, `SDIR_RUN`, `logger`, `plt` are auto-injected. Helpers in `./scripts/utils/`. Pipelines that produce a result worth keeping land artefacts under `SDIR_OUT/` (auto-created per script). The `./scripts/makefile/` Makefile-target subdir is documented separately.
+tags: [scitex-python, scitex-scientific, research, project-structure, scripts]
+---
+
+# `./scripts` — the primary code location
+
+> Sibling leaves: [`./root`](02_research-project_01_project-structure-root.md) · [`./config + ./data`](02_research-project_03_project-structure-config-and-data.md) · [`./scripts/makefile`](02_research-project_04_project-structure-makefile.md) · [`./examples`](02_research-project_05_project-structure-examples.md) · [`./tests`](02_research-project_06_project-structure-tests.md)
+
+## Purpose
+
+A research project's `./scripts/` is what `./src/` is to a package. Pipelines, analyses, model-training runs all live here.
+
+```
+./scripts/
+├── makefile/                            # Makefile target backing scripts (separate leaf)
+├── utils/                               # helpers shared across multiple scripts
+├── analysis/
+│   ├── 01_load_and_summarize.py
+│   ├── 02_run_models.py
+│   └── _shared.py                       # private; tested as test__shared.py
+└── one_off/
+    └── inspect_2026-04-30.py            # ad-hoc; .dev/ is also fine
+```
+
+## Entry-point pattern: `@stx.session`
+
+Each substantive script is entered via `@stx.session`. The decorator injects `CONFIG`, `SDIR_OUT`, `SDIR_RUN`, `logger`, `plt` — see [02_research-project_07_config-and-parameters.md](02_research-project_07_config-and-parameters.md) for the full semantics.
+
+```python
+# scripts/analysis/01_load_and_summarize.py
+import scitex as stx
+
+@stx.session
+def main(
+    data_path: str = "./data/raw.parquet",
+    n_samples: int = 100,
+    CONFIG=stx.session.INJECTED,
+    SDIR_OUT=stx.session.INJECTED,
+    plt=stx.session.INJECTED,
+    logger=stx.session.INJECTED,
+):
+    df = stx.io.load(data_path).head(n_samples)
+    fig = plt.figure(); df.plot(ax=fig.gca())
+    stx.io.save(fig, SDIR_OUT / "summary.png")
+    return 0
+```
+
+Why `@stx.session`:
+- Auto-CLI from the function signature (every parameter becomes a flag).
+- `CONFIG` resolved from `./config/*.yaml` with deep-merge + CLI/env override.
+- `SDIR_OUT` deterministic per script, `SDIR_RUN` unique per invocation.
+- Reproducibility metadata (git sha, python version, config snapshot) saved automatically.
+
+## `./scripts/utils/`
+
+Helpers used across multiple scripts go here. Not exposed via any public API.
+
+```
+./scripts/
+├── utils/
+│   ├── _io_helpers.py                   # private (note the underscore)
+│   └── _date_parsing.py
+├── analysis/
+│   ├── 01_collect_data.py               # imports from ../utils/_io_helpers
+│   └── 02_summarize.py
+```
+
+If a util gets imported from `./examples/` or starts being broadly useful → graduate it to a real package.
+
+## Tests for scripts
+
+Substantial scripts get tests under `./tests/scripts/` (mirrors `./scripts/`, see [02_research-project_06_project-structure-tests.md](02_research-project_06_project-structure-tests.md)):
+
+```
+scripts/analysis/run_pipeline.py        →  tests/scripts/analysis/test_run_pipeline.py
+scripts/analysis/_helper.py             →  tests/scripts/analysis/test__helper.py
+```
+
+Throwaway one-offs in `./scripts/one_off/` don't need tests; if you find yourself wanting one, that's a signal to graduate the code to `./scripts/analysis/` (or to `./examples/`).
+
+## Numbered prefixes
+
+Numbered prefixes (`01_<name>.py`) are encouraged for analysis pipelines — same convention as `./examples/`. The order encodes pipeline stage:
+
+```
+scripts/analysis/01_collect_data.py
+scripts/analysis/02_clean.py
+scripts/analysis/03_train_model.py
+scripts/analysis/04_evaluate.py
+```
+
+Once stable, a `00_run_all.sh` dispatcher in the same dir lets you re-run the whole pipeline.
+
+## Output discipline: `SDIR_OUT/` vs `SDIR_RUN/`
+
+Use `SDIR_OUT` (deterministic — same script → same path) for figures, summary tables, processed data the next run should clobber. Use `SDIR_RUN` (unique per invocation) for logs, full-state snapshots, anything you want to keep across reruns. Don't write run-specific artefacts under `./data/` (that's for inputs).
+
+See [02_research-project_07_config-and-parameters.md](02_research-project_07_config-and-parameters.md) for the canonical pattern.
