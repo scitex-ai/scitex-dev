@@ -16,6 +16,8 @@ from pathlib import Path
 
 import click
 
+from .. import _skills_audit_core as _core
+
 
 @dataclass(frozen=True)
 class Rule:
@@ -138,17 +140,15 @@ def _locate_skills_dir(distribution: str) -> Path | None:
 # Checks
 # ---------------------------------------------------------------------------
 
-_LEAF_PREFIX_RE = re.compile(r"^\d{2}_")
-_KEBAB_SUFFIX_RE = re.compile(r"^\d{2}_[a-z0-9]+(?:[-_][a-z0-9]+)*\.md$")
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 _FRONTMATTER_KEY_RE = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_-]*):", re.MULTILINE)
 _HTML_HEADER_RE = re.compile(r"\A<!-- ---")
 _HTML_FOOTER_RE = re.compile(r"<!-- EOF -->\s*\Z")
-_FORBIDDEN_SUBDIRS = {"legacy", ".old"}
 _MAX_SKILL_MD_BYTES = 4 * 1024
 _MAX_SKILL_MD_LINES = 80
 _MAX_LEAF_BYTES = 10 * 1024
 _MAX_LEAF_LINES = 200
+_NAMING_EXEMPT = {"TODO.md", "MANIFEST.md", "DRIFT_REPORT.md"}
 
 
 def _check_layout(
@@ -186,22 +186,18 @@ def _check_layout(
         )
         return None
     # SK103 — forbidden subdirs
-    for sub in skills_dir.iterdir():
-        if sub.is_dir() and sub.name in _FORBIDDEN_SUBDIRS:
-            out.append(
-                Violation("SK103", str(sub), f"forbidden subdirectory: {sub.name}/")
-            )
+    for sub in _core.find_forbidden_subdirs(skills_dir):
+        out.append(Violation("SK103", str(sub), f"forbidden subdirectory: {sub.name}/"))
     # SK104 — duplicate index files
     aliases = ("SKILL_INDEX.md", "INDEX.md", "README.md")
-    for alias in aliases:
-        if (skills_dir / alias).is_file():
-            out.append(
-                Violation(
-                    "SK104",
-                    str(skills_dir / alias),
-                    f"alias index `{alias}` shadows the canonical `SKILL.md`",
-                )
+    for alias_path in _core.find_alias_indexes(skills_dir, aliases):
+        out.append(
+            Violation(
+                "SK104",
+                str(alias_path),
+                f"alias index `{alias_path.name}` shadows the canonical `SKILL.md`",
             )
+        )
     return skills_dir
 
 
@@ -213,15 +209,15 @@ def _check_naming(skills_dir: Path, out: list[Violation]) -> None:
         name = f.name
         if name == "SKILL.md":
             continue
-        if name in {"TODO.md", "MANIFEST.md", "DRIFT_REPORT.md"}:
+        if name in _NAMING_EXEMPT:
             # Project-management leaves are exempt from the prefix rule.
             continue
-        if not _LEAF_PREFIX_RE.match(name):
+        if not _core.has_numeric_prefix(name):
             out.append(Violation("SK201", str(f), "missing `NN_` numeric prefix"))
             continue
         if name.startswith("SKILL"):
             out.append(Violation("SK202", str(f), "`SKILL.md` must not carry a prefix"))
-        if not _KEBAB_SUFFIX_RE.match(name):
+        if not _core.is_kebab_after_prefix(name):
             out.append(
                 Violation(
                     "SK203",
@@ -266,8 +262,7 @@ def _check_frontmatter(path: Path, out: list[Violation]) -> dict[str, str] | Non
 
 def _check_skill_md_size(skill_md: Path, out: list[Violation]) -> None:
     """SK301 — SKILL.md size budget."""
-    nbytes = skill_md.stat().st_size
-    nlines = skill_md.read_text().count("\n")
+    nbytes, nlines = _core.file_size(skill_md)
     if nbytes > _MAX_SKILL_MD_BYTES or nlines > _MAX_SKILL_MD_LINES:
         out.append(
             Violation(
@@ -281,8 +276,7 @@ def _check_skill_md_size(skill_md: Path, out: list[Violation]) -> None:
 
 def _check_leaf_size(leaf: Path, out: list[Violation]) -> None:
     """SK401 — leaf size budget."""
-    nbytes = leaf.stat().st_size
-    nlines = leaf.read_text().count("\n")
+    nbytes, nlines = _core.file_size(leaf)
     if nbytes > _MAX_LEAF_BYTES or nlines > _MAX_LEAF_LINES:
         out.append(
             Violation(
@@ -296,22 +290,14 @@ def _check_leaf_size(leaf: Path, out: list[Violation]) -> None:
 
 def _check_index_links(skill_md: Path, skills_dir: Path, out: list[Violation]) -> None:
     """SK302 — every sibling leaf is referenced from SKILL.md (no orphans)."""
-    text = skill_md.read_text()
-    siblings = {
-        f.name
-        for f in skills_dir.iterdir()
-        if f.is_file() and f.suffix == ".md" and f.name != "SKILL.md"
-    }
-    for name in sorted(siblings):
-        # Look for the literal filename in a markdown link.
-        if f"]({name})" not in text and f"({name})" not in text:
-            out.append(
-                Violation(
-                    "SK302",
-                    str(skills_dir / name),
-                    "leaf is not referenced from `SKILL.md`",
-                )
+    for orphan in _core.find_orphan_leaves(skill_md, skills_dir):
+        out.append(
+            Violation(
+                "SK302",
+                str(orphan),
+                "leaf is not referenced from `SKILL.md`",
             )
+        )
 
 
 def _check_import_alias(path: Path, out: list[Violation]) -> None:
