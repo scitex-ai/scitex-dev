@@ -1414,7 +1414,7 @@ def _check_startup_speed(
         out.append(
             Violation(
                 package,
-                "§9",
+                "§10",
                 f"`import {module_name}` cold-start is {ms}ms (>{threshold_ms}ms threshold). "
                 "Slow tab-completion: Click runs the program once per Tab press. Convert "
                 f"{module_name}/__init__.py to PEP 562 lazy `__getattr__` (see python-api "
@@ -1443,7 +1443,7 @@ RULE_SEVERITY: dict[str, str] = {
     "§6b": "warn",
     "§7": "warn",
     "§8": "warn",
-    "§9": "warn",  # CLI startup speed (slow import → slow tab completion)
+    "§10": "warn",  # CLI startup speed (slow import → slow tab completion)
 }
 SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}
 
