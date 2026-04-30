@@ -594,6 +594,44 @@ def register_ecosystem_commands(main_group):
             )
         )
 
+    # ------------------------------------------------------------------ #
+    # audit-python-apis — companion to audit-cli / audit-mcp-tools for    #
+    # the Python API surface (mirrors `list-python-apis` introspection)   #
+    # ------------------------------------------------------------------ #
+
+    @ecosystem.command(
+        "audit-python-apis",
+        epilog=(
+            "Examples:\n"
+            "  $ scitex-dev ecosystem audit-python-apis scitex-io\n"
+            "  $ scitex-dev ecosystem audit-python-apis scitex-io --json\n"
+            "  $ scitex-dev ecosystem audit-python-apis scitex-io --rule PA101 --rule PA202\n"
+            "\n"
+            "Foundation rules (PA<§><idx>): PA101–104 (§1 naming/visibility),\n"
+            "PA201–203 (§2 version), PA301 (§3 lazy imports), PA501 (§5 future\n"
+            "annotations). See general/03_interface_01_python-api/12_audit-checklist.md."
+        ),
+    )
+    @click.argument("distribution")
+    @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
+    @click.option(
+        "--rule",
+        "rules",
+        multiple=True,
+        help="Restrict to specific rule codes (e.g. --rule PA101). Repeatable.",
+    )
+    def ecosystem_audit_python_apis(distribution, json_out, rules):
+        """Check a package's Python API against the §1–§5 audit checklist."""
+        from . import _cli_audit_api
+
+        raise SystemExit(
+            _cli_audit_api.audit_api(
+                distribution,
+                json_out=json_out,
+                rules=set(rules) if rules else None,
+            )
+        )
+
     @ecosystem.command("start-dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")
     @click.option("--host", default="0.0.0.0", help="Host to bind to.")
