@@ -86,6 +86,16 @@ RULES: dict[str, Rule] = {
             "§2",
             "placeholder-only test (no `def test_` or `class Test`)",
         ),
+        Rule(
+            "PS207",
+            "§2",
+            (
+                "empty test directory (no `test_*.py` files, only `__pycache__/` "
+                "or nothing) — created during a partial migration but never filled. "
+                "Either move the corresponding `tests/<sub>/test_*.py` files in, "
+                "or remove the empty dir."
+            ),
+        ),
         # §3 tests/ subdirectory convention -------------------------------------
         Rule(
             "PS301",
@@ -593,6 +603,47 @@ def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
         )
 
 
+def _check_empty_test_dirs(repo: Path, out: list[Violation]) -> None:
+    """PS207 — empty test directory (no `test_*.py`, possibly only `__pycache__/`).
+
+    Flags a directory under `tests/` (excluding the well-known
+    `examples/` / `examples_smoke/` / `coverage/` / `__pycache__/`)
+    that contains no `test_*.py` files. This catches partial migrations
+    where the mirror dirs were created but never filled.
+    """
+    tests_root = repo / "tests"
+    if not tests_root.is_dir():
+        return
+
+    skip = {"__pycache__", "coverage", "htmlcov", ".pytest_cache"}
+    for sub in tests_root.rglob("*"):
+        if not sub.is_dir():
+            continue
+        if any(part in skip for part in sub.parts):
+            continue
+        # Has at least one test file (.py starting with test_, or any *.py)?
+        py_files = [
+            p
+            for p in sub.iterdir()
+            if p.is_file() and p.suffix == ".py" and p.name != "__init__.py"
+        ]
+        if py_files:
+            continue
+        # Has child directories that are non-skip? Then it's just a parent;
+        # leave the leaf-emptiness check to recursion.
+        child_dirs = [c for c in sub.iterdir() if c.is_dir() and c.name not in skip]
+        if child_dirs:
+            continue
+        out.append(
+            Violation(
+                "PS207",
+                str(sub),
+                "empty test directory — partial migration left it; move "
+                "corresponding test_*.py files in or remove the dir.",
+            )
+        )
+
+
 def _check_docs_structure(repo: Path, out: list[Violation]) -> None:
     """PS401 / PS402 — docs/ layout."""
     docs = repo / "docs"
@@ -694,6 +745,7 @@ def audit_project(
     if not skip_mirror:
         _check_mirror(repo_root, distribution, violations)
         _check_placeholder_tests(repo_root, violations)
+        _check_empty_test_dirs(repo_root, violations)
     _check_tests_subdir_convention(repo_root, distribution, violations)
     _check_docs_structure(repo_root, violations)
 
