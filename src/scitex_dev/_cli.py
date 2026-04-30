@@ -147,15 +147,15 @@ else:
         except Exception:
             return "0.0.0-unknown"
 
-    # Disable Click's auto --help so we control its position relative to
-    # --help-recursive (logical hierarchy: --help-recursive immediately
-    # follows --help). Re-add --help / -h explicitly in the desired slot.
-    _CTX = {**CONTEXT_SETTINGS, "help_option_names": []}
-
+    # Disable Click's auto --help on THIS group only (parameter, not
+    # context — does not propagate to subcommands). Then re-add --help /
+    # -h explicitly via @click.help_option in the desired display slot so
+    # --help-recursive immediately follows --help.
     @click.group(
         cls=CategorizedGroup,
         invoke_without_command=True,
-        context_settings=_CTX,
+        context_settings=CONTEXT_SETTINGS,
+        add_help_option=False,
     )
     @click.option("--version", "-V", is_flag=True, help="Show version and exit.")
     @click.help_option("-h", "--help")
@@ -174,7 +174,10 @@ else:
         help_recursive: bool,
         as_json: bool,
     ) -> None:
-        """scitex-dev - Shared developer utilities for the SciTeX ecosystem."""
+        """scitex-dev — Shared developer utilities for the SciTeX ecosystem."""
+        # The version is injected into main.help after the decorator binds
+        # (below the function definition) so `--help` shows
+        # "scitex-dev (v0.10.4) — Shared developer utilities..."
         # Expose the root-level --json flag to subcommands via ctx.obj so
         # commands that already honour `--json` can read the inherited
         # setting and default to structured output without the user
@@ -204,6 +207,13 @@ else:
 
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
+
+    # Inject the version into the help text so --help shows
+    # "scitex-dev (v0.10.4) — Shared developer utilities..."
+    main.help = (
+        f"scitex-dev (v{_get_version()}) — "
+        "Shared developer utilities for the SciTeX ecosystem."
+    )
 
     # -------------------------------------------------------------------
     # Ecosystem commands
