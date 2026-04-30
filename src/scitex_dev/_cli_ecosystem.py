@@ -231,7 +231,7 @@ def register_ecosystem_commands(main_group):
             )
         ctx.exit(0)
 
-    @ecosystem.command("fix-mismatches")
+    @ecosystem.command("fix-mismatches", hidden=True)
     @click.option(
         "--confirm", is_flag=True, help="Apply fixes (default: preview only)."
     )
@@ -261,7 +261,7 @@ def register_ecosystem_commands(main_group):
         pkgs = list(package) if package else None
         wrap_as_cli(sync_local, as_json=as_json, packages=pkgs, confirm=not dry_run)
 
-    @ecosystem.command("sync-remote")
+    @ecosystem.command("sync-remote", hidden=True)
     @click.option(
         "--host",
         "-h",

@@ -20,6 +20,11 @@ class PackageInfo(TypedDict, total=False):
     - ``template``     — scaffolds; auditor skips §C5/§E/§L by default
     - ``dataset``      — data-only repos (crossref-local, openalex-local);
                           auditor skips §E (no SKILL.md required)
+
+    `archived` (optional, default False) — set ``True`` for repos that have
+    been GitHub-archived (read-only) and superseded. The CLA / quality /
+    publish auditors should skip archived entries by default; the entry is
+    kept in the registry so historical references resolve.
     """
 
     local_path: str
@@ -27,6 +32,7 @@ class PackageInfo(TypedDict, total=False):
     github_repo: str
     import_name: str
     category: str
+    archived: bool
 
 
 # Ordered dict - order matters for display
@@ -121,6 +127,7 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/scitex-research-template",
         "import_name": "scitex_research_template",
         "category": "template",
+        "archived": True,  # superseded by scitex-template
     },
     "pip-project-template": {
         "local_path": "~/proj/pip-project-template",
@@ -128,6 +135,7 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/pip-project-template",
         "import_name": "pip_project_template",
         "category": "template",
+        "archived": True,  # superseded by scitex-template
     },
     "scitex-container": {
         "local_path": "~/proj/scitex-container",
@@ -246,7 +254,7 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "pypi_name": "scitex-template",
         "github_repo": "ywatanabe1989/scitex-template",
         "import_name": "scitex_template",
-        "category": "library",
+        "category": "template",
     },
     "scitex-dev": {
         "local_path": "~/proj/scitex-dev",
@@ -270,11 +278,12 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "category": "library",
     },
     "singularity-template": {
-        "local_path": "~/proj/singularity-template",
+        "local_path": "~/proj/singularity_template",
         "pypi_name": "singularity-template",
-        "github_repo": "ywatanabe1989/singularity-template",
+        "github_repo": "ywatanabe1989/singularity_template",
         "import_name": "singularity_template",
         "category": "template",
+        "archived": True,  # superseded by scitex-template
     },
     "scitex-str": {
         "local_path": "~/proj/scitex-str",
