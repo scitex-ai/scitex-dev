@@ -190,16 +190,24 @@ else:
         """Enforce per-file line limits against the allowlist."""
         raise SystemExit(_cli_quality.audit_lines())
 
-    @quality.command("audit-cli")
-    @click.argument("package")
-    def _quality_audit_cli(package):
-        """Check a package's CLI against the noun-verb convention (warn-only).
-
-        Requires the `cli-audit` extra: pip install 'scitex-dev[cli-audit]'
-        """
-        from . import _cli_audit
-
-        raise SystemExit(_cli_audit.audit_cli(package))
+    @quality.command(
+        "audit-cli",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    )
+    @click.pass_context
+    def _quality_audit_cli_deprecated(ctx):
+        """Deprecated — moved to `scitex-dev ecosystem audit-cli` (§5)."""
+        click.echo(
+            "error: `scitex-dev quality audit-cli` was renamed to "
+            "`scitex-dev ecosystem audit-cli`.",
+            err=True,
+        )
+        click.echo(
+            "Re-run with: scitex-dev ecosystem audit-cli " + " ".join(ctx.args),
+            err=True,
+        )
+        raise SystemExit(2)
 
     @quality.command("audit-frontmatter")
     @click.argument("root", type=click.Path(exists=True, file_okay=False))

@@ -93,53 +93,10 @@ CATALOG: dict[str, set[str]] = {
             "completion",
             "stats",
             "quality",
-            # Common plurals (Moby POS marks most plurals with 'p' not 'N' — seed here)
-            "skills",
-            "packages",
-            "projects",
-            "jobs",
-            "tasks",
-            "runs",
-            "hosts",
-            "machines",
-            "remotes",
-            "tunnels",
-            "containers",
-            "images",
-            "events",
-            "logs",
-            "figures",
-            "tables",
-            "papers",
-            "bibentries",
-            "claims",
-            "datasets",
-            "tools",
-            "records",
-            "files",
-            "paths",
-            "caches",
-            "users",
-            "accounts",
-            "tokens",
-            "keys",
-            "secrets",
-            "sessions",
-            "commands",
-            "examples",
-            "templates",
-            "manifests",
-            "releases",
-            "configs",
-            "profiles",
-            "presets",
-            "env-vars",
-            "docs",
-            "modules",
-            "scripts",
-            "guidelines",
             "installation",
-            "installations",
+            # Plurals (`packages`, `jobs`, `bibentries`, …) are auto-recognised
+            # via the singularizer in `_audit._singular_candidates` — no need
+            # to seed them explicitly.
             # Domain-specific nouns (container backends, ecosystem jargon)
             "apptainer",
             "singularity",
@@ -147,7 +104,6 @@ CATALOG: dict[str, set[str]] = {
             "podman",
             "sandbox",
             "backend",
-            "backends",
             "sms",
             "template",
             "templates",
@@ -192,6 +148,10 @@ CATALOG: dict[str, set[str]] = {
             "preferences",
             "cli",
             "context",
+            # §1e introspection objects
+            "python-api",
+            "python-apis",
+            "tools",
         ]
     },
     # Transitive verbs — need an object
@@ -249,7 +209,8 @@ CATALOG: dict[str, set[str]] = {
             "eval",
             "execute",
             "exec",
-            "run",
+            # `run` is intentionally noun-only per §1c — use `start-run` /
+            # `submit-run` for the verb action.
             "kill",
             "ps",
             "build",
@@ -299,8 +260,26 @@ CATALOG: dict[str, set[str]] = {
 FLAT_KEEPERS = {"doctor", "repl", "shell", "version"}
 
 
-def audit_cli(package: str) -> int:
-    """Audit a package's installed CLI; return exit code (always 0 — warn-only)."""
+def audit_cli(
+    package: str | None = None,
+    behavioral: bool = False,
+    output_json: bool = False,
+    audit_all: bool = False,
+    dry_run: bool = False,
+    registry_path: str | None = None,
+    rules: tuple[str, ...] = (),
+    exclude: tuple[str, ...] = (),
+    min_severity: str | None = None,
+    timeout: float = 30.0,
+) -> int:
+    """Audit a package's installed CLI; return exit code (always 0 — warn-only).
+
+    - `package` is required unless `audit_all=True`.
+    - `audit_all=True` runs the audit across every entry in the registry
+      (resolved via the §6b cascade: --registry > $SCITEX_DEV_REGISTRY >
+      project YAML > user YAML > bundled dict).
+    - `dry_run=True` (with `audit_all=True`) lists targets without auditing.
+    """
     if not AVAILABLE:
         import click
 
@@ -311,6 +290,30 @@ def audit_cli(package: str) -> int:
         )
         return 2
 
-    from ._audit import run_audit
+    from ._audit import run_audit, run_audit_all
 
-    return run_audit(package)
+    if audit_all:
+        return run_audit_all(
+            behavioral=behavioral,
+            output_json=output_json,
+            dry_run=dry_run,
+            registry_path=registry_path,
+            rules=rules,
+            exclude=exclude,
+            min_severity=min_severity,
+            timeout=timeout,
+        )
+    if package is None:
+        import click
+
+        click.echo("error: PACKAGE is required (or pass --all)", err=True)
+        return 2
+    return run_audit(
+        package,
+        behavioral=behavioral,
+        output_json=output_json,
+        rules=rules,
+        exclude=exclude,
+        min_severity=min_severity,
+        timeout=timeout,
+    )
