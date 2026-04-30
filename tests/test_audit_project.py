@@ -129,11 +129,12 @@ def test_ps203_fires_on_loose_top_level_test(tmp_path):
     assert "PS203" in rules
 
 
-def test_ps203_silent_for_meta_test(tmp_path):
+def test_ps203_strict_no_meta_test_exemption(tmp_path):
+    """Strict: any test_*.py at tests/ root violates, even meta-tests."""
     repo = _make_repo(tmp_path, "demo")
     (repo / "tests" / "test_examples.py").write_text("def test_x(): assert True\n")
     rules = _violations_for(repo, "demo")
-    assert "PS203" not in rules
+    assert "PS203" in rules
 
 
 def test_ps204_fires_on_orphan_test(tmp_path):

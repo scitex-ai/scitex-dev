@@ -148,26 +148,15 @@ class Violation:
 _PRIVATE_TEST_RE = re.compile(r"^test__([A-Za-z0-9][A-Za-z0-9_]*)\.py$")
 _PUBLIC_TEST_RE = re.compile(r"^test_([A-Za-z0-9][A-Za-z0-9_]*)\.py$")
 
-# Allowed at tests/ root WITHOUT being under tests/<pkg>/. These are
-# cross-cutting "meta" tests that legitimately live above the package mirror,
-# plus standard pytest fixtures and dispatchers.
+# Allowed at tests/ root. STRICT: only pytest infrastructure files —
+# no test files. Module-mirror tests belong under tests/<pkg>/; cross-
+# cutting tests belong in their category subdir (tests/integration/,
+# tests/e2e/, tests/examples/, …). If a legitimate exception comes up,
+# update this set rather than letting tests-at-root drift back in.
 _META_TESTS_AT_ROOT = frozenset(
     {
         "__init__.py",
         "conftest.py",
-        "test_examples.py",
-        "test_skills_quality.py",
-        "test_integration.py",
-        "test_reproduce.py",
-        "test_thin_wrapper_consistency.py",
-        "test_units.py",
-        "test_api.py",
-        "test_cli.py",
-        "test_server.py",
-        "test___version__.py",
-        "test___main__.py",
-        "test__install_guide.py",
-        "test__optional_deps.py",
     }
 )
 
@@ -603,17 +592,22 @@ def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
         )
 
 
-def _check_empty_test_dirs(repo: Path, out: list[Violation]) -> None:
-    """PS207 — empty test directory (no `test_*.py`, possibly only `__pycache__/`).
+def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) -> None:
+    """PS207 — empty test mirror directory.
 
-    Flags a directory under `tests/` (excluding the well-known
-    `examples/` / `examples_smoke/` / `coverage/` / `__pycache__/`)
-    that contains no `test_*.py` files. This catches partial migrations
-    where the mirror dirs were created but never filled.
+    Flags a `tests/<pkg>/<sub>/` that exists but contains no `test_*.py`
+    files, WHEN the corresponding `src/<pkg>/<sub>/` does have source
+    files. This catches partial migrations (mirror dir created, never
+    filled) without false-flagging fresh packages whose `tests/<pkg>/`
+    is legitimately empty because no source has been written yet.
     """
     tests_root = repo / "tests"
     if not tests_root.is_dir():
         return
+
+    src_pkg = _src_pkg_dir(repo, distribution)
+    if src_pkg is None:
+        return  # no src to mirror against
 
     skip = {"__pycache__", "coverage", "htmlcov", ".pytest_cache"}
     for sub in tests_root.rglob("*"):
@@ -621,7 +615,8 @@ def _check_empty_test_dirs(repo: Path, out: list[Violation]) -> None:
             continue
         if any(part in skip for part in sub.parts):
             continue
-        # Has at least one test file (.py starting with test_, or any *.py)?
+
+        # Has any .py test file? (skip __init__.py — it's pytest infra)
         py_files = [
             p
             for p in sub.iterdir()
@@ -629,17 +624,34 @@ def _check_empty_test_dirs(repo: Path, out: list[Violation]) -> None:
         ]
         if py_files:
             continue
-        # Has child directories that are non-skip? Then it's just a parent;
-        # leave the leaf-emptiness check to recursion.
+        # Has child dirs? leaf-emptiness check propagates via recursion
         child_dirs = [c for c in sub.iterdir() if c.is_dir() and c.name not in skip]
         if child_dirs:
             continue
+
+        # Only flag if a corresponding src/<pkg>/<sub>/ has source files.
+        # Resolve sub's path relative to tests/<pkg>/.
+        try:
+            rel = sub.relative_to(tests_root / src_pkg.name)
+        except ValueError:
+            continue  # not under tests/<pkg>/, leave to other rules
+        src_counterpart = src_pkg / rel
+        if not src_counterpart.is_dir():
+            continue
+        src_py = [
+            p
+            for p in src_counterpart.iterdir()
+            if p.is_file() and p.suffix == ".py" and p.name != "__init__.py"
+        ]
+        if not src_py:
+            continue  # nothing in src to mirror — empty test dir is fine
+
         out.append(
             Violation(
                 "PS207",
                 str(sub),
-                "empty test directory — partial migration left it; move "
-                "corresponding test_*.py files in or remove the dir.",
+                f"empty test directory mirrors {src_counterpart} ({len(src_py)} src "
+                f"files) — move corresponding test_*.py files in or remove the dir.",
             )
         )
 
@@ -745,7 +757,7 @@ def audit_project(
     if not skip_mirror:
         _check_mirror(repo_root, distribution, violations)
         _check_placeholder_tests(repo_root, violations)
-        _check_empty_test_dirs(repo_root, violations)
+        _check_empty_test_dirs(repo_root, distribution, violations)
     _check_tests_subdir_convention(repo_root, distribution, violations)
     _check_docs_structure(repo_root, violations)
 
