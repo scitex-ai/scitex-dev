@@ -227,13 +227,6 @@ def register_stats_command(group: click.Group) -> None:
         stats = collect_stats()
 
         if as_json:
-            from .types import RESULT_SCHEMA
-
-            output = {
-                "result_envelope": RESULT_SCHEMA,
-                "success": True,
-                "data": stats,
-            }
-            click.echo(json.dumps(output, indent=2))
+            click.echo(json.dumps(stats, indent=2))
         else:
             click.echo(format_stats_text(stats))
