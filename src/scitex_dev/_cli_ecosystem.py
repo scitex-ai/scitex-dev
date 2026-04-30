@@ -679,6 +679,61 @@ def register_ecosystem_commands(main_group):
             )
         )
 
+    @ecosystem.command(
+        "audit-project",
+        epilog=(
+            "Project-structure auditor.\n"
+            "\n"
+            "Foundation rules (PS<§><idx>):\n"
+            "  PS101–104  §1 top-level layout (pyproject, forbidden dirs, junk)\n"
+            "  PS201–206  §2 src ↔ tests mirror (parent, mirror, prefix, orphan, placeholder)\n"
+            "  PS301–303  §3 tests/ subdir convention (htmlcov, unknown subdirs, examples)\n"
+            "  PS401–402  §4 docs/ structure (to_claude gitignored, assets location)\n"
+            "\n"
+            "See _skills/general/02_package_01_project-structure-root.md for the\n"
+            "full convention; ditto _skills/scientific/02_research-project_01_project-structure-root.md\n"
+            "for research-project layout. Templates and datasets are exempt from §2."
+        ),
+    )
+    @click.argument("distribution")
+    @click.option(
+        "--repo",
+        "repo_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        default=None,
+        help="Repo root (defaults to the registry's local_path or the installed package's location).",
+    )
+    @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
+    @click.option(
+        "--rule",
+        "rules",
+        multiple=True,
+        help="Restrict to specific rule codes (e.g. --rule PS201). Repeatable.",
+    )
+    def ecosystem_audit_project(distribution, repo_path, json_out, rules):
+        """Check a package's project-structure against the canonical layout."""
+        from pathlib import Path
+
+        from . import _cli_audit_project
+        from .ecosystem import ECOSYSTEM
+
+        repo = Path(repo_path).expanduser() if repo_path else None
+        if repo is None:
+            local = ECOSYSTEM.get(distribution, {}).get("local_path")
+            if local:
+                cand = Path(local).expanduser()
+                if cand.is_dir():
+                    repo = cand
+
+        raise SystemExit(
+            _cli_audit_project.audit_project(
+                distribution,
+                repo=repo,
+                json_out=json_out,
+                rules=set(rules) if rules else None,
+            )
+        )
+
     @ecosystem.command("start-dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")
     @click.option("--host", default="0.0.0.0", help="Host to bind to.")
