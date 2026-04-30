@@ -397,13 +397,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_capture",
         "category": "library",
     },
-    "scitex-chat": {
-        "local_path": "~/proj/scitex-chat",
-        "pypi_name": "scitex-chat",
-        "github_repo": "ywatanabe1989/scitex-chat",
-        "import_name": "scitex_chat",
-        "category": "library",
-    },
     "scitex-context": {
         "local_path": "~/proj/scitex-context",
         "pypi_name": "scitex-context",
