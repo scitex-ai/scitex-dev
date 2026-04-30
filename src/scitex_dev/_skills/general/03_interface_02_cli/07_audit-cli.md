@@ -1,0 +1,78 @@
+---
+name: interface-cli-audit
+description: SciTeX CLI automated audit — `scitex-dev ecosystem audit-cli`. Token classification, what it flags, custom dict format.
+user-invocable: false
+tags: [scitex-python, scitex-general, cli]
+---
+
+# §1e. Automated check — `scitex-dev ecosystem audit-cli`
+
+- Opt-in linter that walks a package's Click command tree.
+- Warns (never errors) on §1 / §1d violations.
+- Behind the `cli-audit` extra so ordinary consumers don't pull dictionary data.
+
+```bash
+pip install 'scitex-dev[cli-audit]'
+scitex-dev ecosystem audit-cli <package-name>
+scitex-dev ecosystem audit-cli <package-name> --behavioral   # also run subprocess checks (slow)
+```
+
+## Token classification (first hit wins)
+
+1. `<project-root>/.scitex/dev/cli-audit-dict.yaml` — project-local dict.
+2. `~/.scitex/dev/cli-audit-dict.yaml` — user dict.
+3. Bundled catalog from [06_noun-verb-catalog.md](06_noun-verb-catalog.md).
+4. Moby POS dictionary (~130k English words, vendored ~900 KB gzipped).
+5. Otherwise → warning to extend the custom dict.
+
+## What it flags (warn-only)
+
+- §1 leaf token is a noun without a verb (`<cli> dashboard` → suggests `start-dashboard`).
+- §1 bare transitive verb at top level (`<cli> list` → demands `list-<object>`).
+- §1 group (non-leaf) token is a verb (groups must be nouns).
+- §1a missing introspection commands (`list-python-apis`, `mcp list-tools`) and their `--json` flag.
+- §1b banned bare leaves (`version`, `completion`).
+- §1d tokens not in catalog/dict/Moby.
+- §2 missing universal flags: `--version`/`-V` and `--help-recursive` at top; `--json` on read verbs; `--dry-run` and `--yes`/`-y` on mutating verbs.
+- §4 missing concrete example in command help/epilog (Click guarantees the Usage line).
+
+## Coverage matrix
+
+Auditor coverage of each rule (`yes` = enforced statically; `partial` = best-effort heuristic; `no` = not yet auditable):
+
+| Rule | Topic                                        | Coverage  | Notes                                                                |
+|------|----------------------------------------------|-----------|----------------------------------------------------------------------|
+| §1   | Noun-verb subcommand structure               | yes       | Click tree walk, token classification.                               |
+| §1a  | Required introspection commands              | yes       | Presence + `--json` static; `-v|-vv|-vvv` monotonic ladder behavioral (`--behavioral`). |
+| §1b  | Banned bare leaves (`version`, `completion`) | yes       | Hard-coded denylist at any depth.                                    |
+| §1c  | Pass-through entry points                    | no        | Auditor cannot statically detect verbatim-forward entries.           |
+| §1d  | Vocabulary in catalog/dict/Moby              | yes       | Layered lookup; warns on `unknown`.                                  |
+| §1e  | (this section — the auditor itself)          | n/a       |                                                                      |
+| §2   | Universal flag presence                      | yes       | `--version`/`-V`, `--help-recursive`, `--json`, `--dry-run`, `--yes`.|
+| §3   | Exit code conformance                        | partial   | Top-level bogus-flag returns 2 (behavioral; `--behavioral`).         |
+| §4   | Help format                                  | partial   | Heuristic: looks for "example", "$ ", or "e.g." in help/epilog.      |
+| §5   | Deprecation hard-error redirect              | no        | Renamed commands are typically `hidden=True`; auditor skips them.    |
+| §6a  | Env var prefix `SCITEX_<PKG>_*`              | partial   | Static source scan flags bare-pkg prefix; cross-pkg `SCITEX_*` allowed. |
+| §6b  | Config path fallback documented in `--help`  | yes       | Greps root help/epilog for `config.yaml`, `$SCITEX_<PKG>_CONFIG`, or `~/.scitex/`. |
+| §7   | CLI ↔ MCP parity                             | no        | Could compare `list-python-apis` and `mcp list-tools` output (TODO). |
+| §8   | stdout/stderr discipline                     | partial   | `list-python-apis --json` parsed as JSON (behavioral; `--behavioral`). |
+
+## Custom dict format
+
+```yaml
+# cli-audit-dict.yaml
+nouns:
+  - bibentry
+  - openurl
+transitive_verbs:
+  - enrich
+  - deduplicate
+intransitive_verbs:
+  - vacuum
+```
+
+## Operational notes
+
+- Run in CI for every `scitex-*` repo.
+- Never fails the build, but drift becomes visible.
+- Custom dicts are **additive**: they extend the catalog with package-specific tokens, never reclassify or override existing ones. A token already classified by the canonical catalog keeps its class even if also listed in a dict.

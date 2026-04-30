@@ -632,6 +632,46 @@ def register_ecosystem_commands(main_group):
             )
         )
 
+    # ------------------------------------------------------------------ #
+    # audit-skills — companion to audit-cli / audit-mcp-tools / audit-   #
+    # python-apis for the `_skills/<pip-name>/` tree                      #
+    # ------------------------------------------------------------------ #
+
+    @ecosystem.command(
+        "audit-skills",
+        epilog=(
+            "Examples:\n"
+            "  $ scitex-dev ecosystem audit-skills scitex-io\n"
+            "  $ scitex-dev ecosystem audit-skills scitex-io --json\n"
+            "  $ scitex-dev ecosystem audit-skills scitex-io --rule SK210 --rule SK211\n"
+            "\n"
+            "Foundation rules (SK<§><idx>): SK101–104 (§1 layout), SK201–203\n"
+            "(§2 naming), SK210–211 (§2a no header/footer above frontmatter),\n"
+            "SK301–302 (§3 SKILL.md as index), SK401 (§4 leaf size), SK601\n"
+            "(§6 no `import scitex as stx`), SK701–704 (frontmatter required\n"
+            "fields). See general/03_interface_04_skills/12_quality-checklist.md."
+        ),
+    )
+    @click.argument("distribution")
+    @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
+    @click.option(
+        "--rule",
+        "rules",
+        multiple=True,
+        help="Restrict to specific rule codes (e.g. --rule SK210). Repeatable.",
+    )
+    def ecosystem_audit_skills(distribution, json_out, rules):
+        """Check a package's `_skills/<pip-name>/` against the §1–§FM checklist."""
+        from . import _cli_audit_skills
+
+        raise SystemExit(
+            _cli_audit_skills.audit_skills(
+                distribution,
+                json_out=json_out,
+                rules=set(rules) if rules else None,
+            )
+        )
+
     @ecosystem.command("start-dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")
     @click.option("--host", default="0.0.0.0", help="Host to bind to.")

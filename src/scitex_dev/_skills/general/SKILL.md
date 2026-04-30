@@ -1,0 +1,70 @@
+---
+name: general
+description: Canonical engineering standards every `scitex-*` package and research project must follow — 3-layer architecture cascade, dependency/version pinning, local-state directory layout (`~/.scitex/<pkg-short>/` and `<project>/.scitex/<pkg-short>/`), repo layout (src/tests/scripts/examples), the five interfaces (Python API → CLI → MCP → Skills → optional HTTP) with their delegation rules and the noun-verb CLI convention, README/Sphinx docs, version-control workflow plus `scitex-dev ecosystem …` release automation, skill-authoring rules (layout, editable-vs-wheel install, public-vs-private), and the periodic quality checklist. Use as the single entry point for creating, auditing, reviewing, or releasing any SciTeX package.
+user-invocable: false
+primary_interface: mixed
+interfaces:
+  python: 3
+  cli: 2
+  mcp: 2
+  skills: 3
+  hook: 0
+  http: 0
+tags: [scitex-python, scitex-general, scitex-package]
+---
+
+# SciTeX General Standards
+
+> **Interfaces:** Python ⭐⭐⭐ · CLI ⭐⭐ · MCP ⭐⭐ · Skills ⭐⭐⭐ · Hook — · HTTP —
+
+`pip install scitex` — standards for all ecosystem packages.
+
+## Sub-skills
+
+Read in this order when building or auditing a package. Each section presupposes the ones above it.
+
+**Three tiers of concerns:**
+
+- **§1 — Ecosystem-wide rules** (cross-package conventions every `scitex-*` repo follows): cascade hierarchy, dependency pinning, module-vs-standalone decisions, env-var prefix, re-export bridge, local-state directory layout. Audience: anyone touching any `scitex-*` package.
+- **§2–§5 — Per-package concerns** (how to build, document, and ship a single `scitex-*` repo): package layout, the five interfaces (Skills authoring is now §3.4 under Interfaces), docs, release flow. Audience: package authors.
+- **§7 — Research-project concerns** (how a research project *consumes* SciTeX): `@stx.session`, `CONFIG`, `SDIR_OUT` / `SDIR_RUN`. Audience: scientists running experiments.
+- **§8 — Ecosystem quality** (cross-package periodic audits): failure playbook, quality checklist. Audience: ecosystem maintainers.
+
+### 1. Ecosystem-wide rules — what every `scitex-*` package must follow
+- [01_ecosystem_01_upstream-and-downstream.md](01_ecosystem_01_upstream-and-downstream.md) — 3-layer cascade, test scope, cascade pattern
+- [01_ecosystem_02_dependency-and-version-pinning.md](01_ecosystem_02_dependency-and-version-pinning.md) — Dependency hygiene, optional extras, version-pinning rules
+- [01_ecosystem_03_modules-and-standalone-packages.md](01_ecosystem_03_modules-and-standalone-packages.md) — Module vs standalone package boundaries
+- [01_ecosystem_04_environment-variables.md](01_ecosystem_04_environment-variables.md) — `SCITEX_<MODULE_NAME>_*` prefix rule; mandates per-package `NN_env-vars.md` leaf
+- [01_ecosystem_05_re-export.md](01_ecosystem_05_re-export.md) — Umbrella `scitex.<name>` thin-re-export pattern + lazy-import guard
+- [01_ecosystem_06_local-state-directories.md](01_ecosystem_06_local-state-directories.md) — `<project>/.scitex/<pkg-short>/` + `~/.scitex/<pkg-short>/` layout, precedence, `SCITEX_DIR`, `PathManager`
+
+### 2. Package — how does *this* `scitex-*` package's repo live on disk?
+- [02_package_01_layout-src-tests-scripts-examples.md](02_package_01_layout-src-tests-scripts-examples.md) — Layout boundaries between `src/`, `tests/`, `scripts/`, `examples/`, `references/`
+- [02_package_02_github-actions.md](02_package_02_github-actions.md) — CI, PyPI publish, CLA, reusable workflow patterns
+- [02_package_03_quality.md](02_package_03_quality.md) — Repository-level quality (AGPL, Four Freedoms, README rules, GitHub setup)
+
+### 3. Interfaces — how do users and agents touch *this* package?
+- [03_interface_00_overview.md](03_interface_00_overview.md) — Five interfaces: overview and delegation chain
+- [03_interface_01_python-api/](03_interface_01_python-api/) — Minimal API, `__all__`, lazy imports, NumPy docstrings, version strategy (split into per-section files; start at [00_index.md](03_interface_01_python-api/00_index.md))
+- [03_interface_02_cli/](03_interface_02_cli/) — Required sub-commands, flags, noun-verb convention, AI-friendly rules (split into per-section files; start at [00_index.md](03_interface_02_cli/00_index.md))
+- [03_interface_03_mcp/00_index.md](03_interface_03_mcp/00_index.md) — fastmcp, tool naming, reproducibility, standard commands
+- [03_interface_04_skills/](03_interface_04_skills/) — `_skills/` layout, SKILL.md format, registration, export, frontmatter, public-vs-private (split into per-section files; start at [00_index.md](03_interface_04_skills/00_index.md))
+- [03_interface_05_http-api/](03_interface_05_http-api/) (split into per-section files; start at [00_index.md](03_interface_05_http-api/00_index.md)) — Optional FastAPI delegation
+
+### 4. Documentation — how does *this* package become understandable?
+- [04_docs_01_readme.md](04_docs_01_readme.md) — Standard README template, sections, badges, footer
+- [04_docs_02_sphinx.md](04_docs_02_sphinx.md) — Sphinx docs, conf.py, RTD config, troubleshooting
+
+### 5. Version Control — how does *this* package ship?
+- [05_version-control_01_management.md](05_version-control_01_management.md) — Branches, tags, release waves, release gates (core workflow)
+- [05_version-control_02_release-automation.md](05_version-control_02_release-automation.md) — Automation commands, ecosystem sync CLI, MCP tools, Python API
+
+### 7. Research project — how a research project *consumes* SciTeX
+- [07_research-project_01_config-and-parameters.md](07_research-project_01_config-and-parameters.md) — `@stx.session` and the `CONFIG` object (SDIR_OUT, SDIR_RUN, YAML merging)
+
+### 8. Ecosystem quality — periodic cross-package audits, run when something feels off
+- [98_quality_01_failure-playbook.md](98_quality_01_failure-playbook.md) — Severity-tagged cookbook of ecosystem failure modes
+- [99_quality_02_checklist.md](99_quality_02_checklist.md) — Strategic /speak-and-call runbook with append-only log
+
+### Scratch
+- [40_playground.md](40_playground.md) — Scratch notes
