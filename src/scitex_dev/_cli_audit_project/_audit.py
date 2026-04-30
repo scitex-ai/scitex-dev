@@ -44,6 +44,17 @@ RULES: dict[str, Rule] = {
             "§1",
             "uses `.playground/` — collapsed into `.dev/` for easier typing",
         ),
+        Rule(
+            "PS105",
+            "§1",
+            (
+                "package registers console_scripts but has no `__main__.py` — "
+                "`python -m <pkg>` will fail with 'No module named <pkg>.__main__'. "
+                "Add `src/<pkg>/__main__.py` that imports and calls the CLI entry "
+                "(usually `from . import _cli; _cli.main()`) so both `<pkg>` and "
+                "`python -m <pkg>` work."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
@@ -263,7 +274,7 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
 
 
 def _check_top_level(repo: Path, out: list[Violation]) -> None:
-    """PS101 / PS102 / PS103 / PS104."""
+    """PS101 / PS102 / PS103 / PS104 / PS105."""
     if not (repo / "pyproject.toml").is_file():
         out.append(Violation("PS101", str(repo), "no pyproject.toml at repo root"))
 
@@ -282,6 +293,32 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
                     f"top-level junk file: {child.name}",
                 )
             )
+
+    # PS105: console_scripts present but no __main__.py — `python -m <pkg>`
+    # would fail with "No module named <pkg>.__main__".
+    pyp = repo / "pyproject.toml"
+    if pyp.is_file():
+        text = pyp.read_text(encoding="utf-8", errors="replace")
+        has_console_scripts = "[project.scripts]" in text or "console_scripts" in text
+        if has_console_scripts:
+            # Find src/<pkg>/ candidates and check each top-level __main__.py.
+            src = repo / "src"
+            if src.is_dir():
+                for pkg_dir in src.iterdir():
+                    if not pkg_dir.is_dir() or pkg_dir.name.startswith("_"):
+                        continue
+                    if not (pkg_dir / "__init__.py").is_file():
+                        continue
+                    if not (pkg_dir / "__main__.py").is_file():
+                        out.append(
+                            Violation(
+                                "PS105",
+                                str(pkg_dir),
+                                f"missing {pkg_dir.name}/__main__.py — "
+                                "`python -m " + pkg_dir.name + "` will fail. "
+                                "Add a __main__.py that imports & calls the CLI entry.",
+                            )
+                        )
 
 
 def _src_pkg_dir(repo: Path, distribution: str) -> Path | None:
