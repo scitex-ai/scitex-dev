@@ -24,3 +24,6 @@ These complement (never duplicate) the engineering rules in [../general/SKILL.md
 
 ### 1. Figures
 - [01_figures_01_standards.md](01_figures_01_standards.md) — Universal scientific-figure standards: comparison rules (shared color scale, aligned axes), multi-panel layout, color maps, PDF report layout. Pairs with `figrecipe/21_scientific-figure-patterns.md` for matplotlib code.
+
+### 2. Research project — how a research project *consumes* SciTeX
+- [02_research-project_01_config-and-parameters.md](02_research-project_01_config-and-parameters.md) — `@stx.session` and the `CONFIG` object (`SDIR_OUT`, `SDIR_RUN`, YAML deep-merge, CLI/env overrides). Use when adding parameters to a script, debugging config resolution, or auditing an experiment for reproducibility.

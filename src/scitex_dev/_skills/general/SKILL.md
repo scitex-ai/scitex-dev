@@ -27,8 +27,9 @@ Read in this order when building or auditing a package. Each section presupposes
 
 - **§1 — Ecosystem-wide rules** (cross-package conventions every `scitex-*` repo follows): cascade hierarchy, dependency pinning, module-vs-standalone decisions, env-var prefix, re-export bridge, local-state directory layout. Audience: anyone touching any `scitex-*` package.
 - **§2–§5 — Per-package concerns** (how to build, document, and ship a single `scitex-*` repo): package layout, the five interfaces (Skills authoring is now §3.4 under Interfaces), docs, release flow. Audience: package authors.
-- **§7 — Research-project concerns** (how a research project *consumes* SciTeX): `@stx.session`, `CONFIG`, `SDIR_OUT` / `SDIR_RUN`. Audience: scientists running experiments.
 - **§8 — Ecosystem quality** (cross-package periodic audits): failure playbook, quality checklist. Audience: ecosystem maintainers.
+
+> Research-project usage (`@stx.session`, `CONFIG`, `SDIR_OUT`/`SDIR_RUN`) lives in [`../scientific/`](../scientific/SKILL.md) — that is research-methodology, not package engineering.
 
 ### 1. Ecosystem-wide rules — what every `scitex-*` package must follow
 - [01_ecosystem_01_upstream-and-downstream.md](01_ecosystem_01_upstream-and-downstream.md) — 3-layer cascade, test scope, cascade pattern
@@ -60,9 +61,6 @@ Read in this order when building or auditing a package. Each section presupposes
 ### 5. Version Control — how does *this* package ship?
 - [05_version-control_01_management.md](05_version-control_01_management.md) — Branches, tags, release waves, release gates (core workflow)
 - [05_version-control_02_release-automation.md](05_version-control_02_release-automation.md) — Automation commands, ecosystem sync CLI, MCP tools, Python API
-
-### 7. Research project — how a research project *consumes* SciTeX
-- [07_research-project_01_config-and-parameters.md](07_research-project_01_config-and-parameters.md) — `@stx.session` and the `CONFIG` object (SDIR_OUT, SDIR_RUN, YAML merging)
 
 ### 8. Ecosystem quality — periodic cross-package audits, run when something feels off
 - [98_quality_01_failure-playbook.md](98_quality_01_failure-playbook.md) — Severity-tagged cookbook of ecosystem failure modes
