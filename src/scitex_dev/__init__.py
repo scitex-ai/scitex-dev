@@ -30,6 +30,7 @@ from __future__ import annotations
 
 try:
     from importlib.metadata import version as _v, PackageNotFoundError
+
     try:
         __version__ = _v("scitex-dev")
     except PackageNotFoundError:
@@ -37,158 +38,160 @@ try:
     del _v, PackageNotFoundError
 except ImportError:  # pragma: no cover — only on ancient Pythons
     __version__ = "0.0.0+local"
-# --- Public API: LLM-friendly types and utilities ---
-from .cli_utils import (
-    add_dry_run_argument,
-    add_json_argument,
-    dry_run_option,
-    handle_result,
-    json_option,
-    run_as_cli,
-    wrap_as_cli,
-)
-from .decorators import supports_return_as
-from .errors import ErrorCode, ScitexError, classify_exception
-from ._imports import (
-    InstallHint as InstallHint,
-    last_install_hint as last_install_hint,
-    try_import_optional as try_import_optional,
-)
-from ._mcp_compat import get_tools_sync
-from .mcp_utils import async_wrap_as_mcp, result_to_mcp, run_as_mcp, wrap_as_mcp
-from .side_effects import SideEffect
-from .types import RESULT_SCHEMA, Result
+# PEP 562 lazy public API.
+#
+# Every public name is loaded on first attribute access — `import scitex_dev`
+# costs ~50ms (down from 8.4s) because nothing transitively pulls in the
+# `scitex` umbrella, `figrecipe`, `scitex_scholar`, etc. until you actually
+# touch a function that needs them. This makes CLI tab-completion, --help,
+# and quick scripts an order of magnitude faster.
+#
+# To add a new public name: extend `_LAZY_ATTRS`. Don't add `from .X import Y`
+# at module top — that re-introduces eager loading and slows every CLI call.
+# See `_skills/general/03_interface_02_cli/17_lazy-imports-cli-startup.md`.
+_LAZY_ATTRS: dict[str, str] = {
+    # cli_utils
+    "add_dry_run_argument": "cli_utils",
+    "add_json_argument": "cli_utils",
+    "dry_run_option": "cli_utils",
+    "handle_result": "cli_utils",
+    "json_option": "cli_utils",
+    "run_as_cli": "cli_utils",
+    "wrap_as_cli": "cli_utils",
+    # decorators
+    "supports_return_as": "decorators",
+    # errors
+    "ErrorCode": "errors",
+    "ScitexError": "errors",
+    "classify_exception": "errors",
+    # _imports
+    "InstallHint": "_imports",
+    "last_install_hint": "_imports",
+    "try_import_optional": "_imports",
+    # _mcp_compat
+    "get_tools_sync": "_mcp_compat",
+    # mcp_utils
+    "async_wrap_as_mcp": "mcp_utils",
+    "result_to_mcp": "mcp_utils",
+    "run_as_mcp": "mcp_utils",
+    "wrap_as_mcp": "mcp_utils",
+    # side_effects
+    "SideEffect": "side_effects",
+    # types
+    "RESULT_SCHEMA": "types",
+    "Result": "types",
+    # docs
+    "build_docs": "docs",
+    "get_docs": "docs",
+    "search_docs": "docs",
+    # search
+    "search": "search",
+    # versions
+    "check_versions": "versions",
+    "get_ecosystem_versions": "versions",
+    "get_mismatches": "versions",
+    "list_versions": "versions",
+    # fix
+    "bump_version": "fix",
+    "detect_mismatches": "fix",
+    "determine_bump_type": "fix",
+    "fix_init_version": "fix",
+    "fix_local": "fix",
+    "fix_mismatches": "fix",
+    "fix_remote": "fix",
+    "verify_versions": "fix",
+    # config
+    "DevConfig": "config",
+    "GitHubRemote": "config",
+    "HostConfig": "config",
+    "PackageConfig": "config",
+    "PyPIAccount": "config",
+    "config_to_dict": "config",
+    "create_default_config": "config",
+    "get_config_path": "config",
+    "get_enabled_hosts": "config",
+    "get_enabled_remotes": "config",
+    "load_config": "config",
+    # ecosystem
+    "ECOSYSTEM": "ecosystem",
+    "get_all_packages": "ecosystem",
+    "get_local_path": "ecosystem",
+    # rtd
+    "check_all_rtd": "rtd",
+    "check_rtd_status": "rtd",
+    # _pypi_package_data
+    "PackageDataAuditReport": "_pypi_package_data",
+    "audit_package_data": "_pypi_package_data",
+    # github
+    "check_all_remotes": "github",
+    "compare_with_local": "github",
+    "get_github_latest_tag": "github",
+    "get_github_release": "github",
+    "get_github_tags": "github",
+    # rename
+    "RenameConfig": "rename",
+    "RenameResult": "rename",
+    "bulk_rename": "rename",
+    "execute_rename": "rename",
+    "preview_rename": "rename",
+    # ssh
+    "check_all_hosts": "ssh",
+    "get_remote_version": "ssh",
+    "get_remote_versions": "ssh",
+    "test_host_connection": "ssh",
+    # sync
+    "sync_all": "sync",
+    "sync_host": "sync",
+    "sync_local": "sync",
+    "sync_tags": "sync",
+    # sync_remote
+    "pull_local": "sync_remote",
+    "remote_commit": "sync_remote",
+    "remote_diff": "sync_remote",
+    # ci
+    "CIStatus": "ci",
+    "WorkflowRun": "ci",
+    "check_ci": "ci",
+    "check_pypi_publish": "ci",
+    "create_github_release": "ci",
+    "get_failing_packages": "ci",
+    "verify_all_pypi_configs": "ci",
+    "verify_pypi_config": "ci",
+    "wait_all_pypi": "ci",
+    "wait_for_workflow": "ci",
+    # deploy
+    "deploy_scitex_cloud": "deploy",
+    "verify_production": "deploy",
+    # skills
+    "verify_docs_and_skills": "skills",
+    # test_runner
+    "TestConfig": "test_runner",
+    "fetch_hpc_result": "test_runner",
+    "poll_hpc_job": "test_runner",
+    "run_hpc_sbatch": "test_runner",
+    "run_hpc_srun": "test_runner",
+    "run_local": "test_runner",
+    "sync_to_hpc": "test_runner",
+    "watch_hpc_job": "test_runner",
+}
 
-# --- Public API: Docs aggregation ---
-from .docs import build_docs, get_docs, search_docs
 
-# --- Public API: Unified search ---
-from .search import search
+def __getattr__(name: str):
+    """PEP 562 lazy-loader: import on first access, cache, then return."""
+    mod_name = _LAZY_ATTRS.get(name)
+    if mod_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from importlib import import_module
 
-# --- Public API: Versions ---
-from .versions import (
-    check_versions,
-    get_ecosystem_versions,
-    get_mismatches,
-    list_versions,
-)
-from .fix import (
-    bump_version as bump_version,
-    detect_mismatches as detect_mismatches,
-    determine_bump_type as determine_bump_type,
-    fix_init_version as fix_init_version,
-    fix_local as fix_local,
-    fix_mismatches as fix_mismatches,
-    fix_remote as fix_remote,
-    verify_versions as verify_versions,
-)
+    attr = getattr(import_module(f".{mod_name}", __name__), name)
+    globals()[name] = (
+        attr  # cache in module globals; subsequent access skips this branch
+    )
+    return attr
 
-# --- Accessible but not in __all__ (advanced/internal use) ---
 
-# Config
-from .config import (
-    DevConfig as DevConfig,
-    GitHubRemote as GitHubRemote,
-    HostConfig as HostConfig,
-    PackageConfig as PackageConfig,
-    PyPIAccount as PyPIAccount,
-    config_to_dict as config_to_dict,
-    create_default_config as create_default_config,
-    get_config_path as get_config_path,
-    get_enabled_hosts as get_enabled_hosts,
-    get_enabled_remotes as get_enabled_remotes,
-    load_config as load_config,
-)
-
-# Ecosystem
-from .ecosystem import (
-    ECOSYSTEM as ECOSYSTEM,
-    get_all_packages as get_all_packages,
-    get_local_path as get_local_path,
-)
-
-# RTD
-from .rtd import check_all_rtd as check_all_rtd, check_rtd_status as check_rtd_status
-
-# PyPI publishing
-from ._pypi_package_data import (
-    PackageDataAuditReport as PackageDataAuditReport,
-    audit_package_data as audit_package_data,
-)
-
-# GitHub
-from .github import (
-    check_all_remotes as check_all_remotes,
-    compare_with_local as compare_with_local,
-    get_github_latest_tag as get_github_latest_tag,
-    get_github_release as get_github_release,
-    get_github_tags as get_github_tags,
-)
-
-# Rename
-from .rename import (
-    RenameConfig as RenameConfig,
-    RenameResult as RenameResult,
-    bulk_rename as bulk_rename,
-    execute_rename as execute_rename,
-    preview_rename as preview_rename,
-)
-
-# SSH
-from .ssh import (
-    check_all_hosts as check_all_hosts,
-    get_remote_version as get_remote_version,
-    get_remote_versions as get_remote_versions,
-    test_host_connection as test_host_connection,
-)
-
-# Sync
-from .sync import (
-    sync_all as sync_all,
-    sync_host as sync_host,
-    sync_local as sync_local,
-    sync_tags as sync_tags,
-)
-from .sync_remote import (
-    pull_local as pull_local,
-    remote_commit as remote_commit,
-    remote_diff as remote_diff,
-)
-
-# CI
-from .ci import (
-    CIStatus as CIStatus,
-    WorkflowRun as WorkflowRun,
-    check_ci as check_ci,
-    check_pypi_publish as check_pypi_publish,
-    create_github_release as create_github_release,
-    get_failing_packages as get_failing_packages,
-    verify_all_pypi_configs as verify_all_pypi_configs,
-    verify_pypi_config as verify_pypi_config,
-    wait_all_pypi as wait_all_pypi,
-    wait_for_workflow as wait_for_workflow,
-)
-
-# Deploy
-from .deploy import (
-    deploy_scitex_cloud as deploy_scitex_cloud,
-    verify_production as verify_production,
-)
-
-# Skills verification
-from .skills import verify_docs_and_skills as verify_docs_and_skills
-
-# Test runner
-from .test_runner import (
-    TestConfig as TestConfig,
-    fetch_hpc_result as fetch_hpc_result,
-    poll_hpc_job as poll_hpc_job,
-    run_hpc_sbatch as run_hpc_sbatch,
-    run_hpc_srun as run_hpc_srun,
-    run_local as run_local,
-    sync_to_hpc as sync_to_hpc,
-    watch_hpc_job as watch_hpc_job,
-)
+def __dir__() -> list[str]:
+    return sorted(set(_LAZY_ATTRS) | set(globals()))
 
 
 __all__ = [

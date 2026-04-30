@@ -1,11 +1,13 @@
 ---
 name: interface-cli-flags
-description: SciTeX CLI universal flags — -h/--help, --help-recursive, --json, --dry-run, -V/--version, -v/--verbose, -q/--quiet, -y/--yes. No interactive prompts.
+description: SciTeX CLI universal & convention flags — required (-h, --help-recursive, --json, --dry-run, -V, -y) and convention (-v, -q, -j/--jobs). No interactive prompts.
 user-invocable: false
 tags: [scitex-python, scitex-general, cli]
 ---
 
-# §2. Universal flags
+# §2. Universal & convention flags
+
+## Universal flags (required by context)
 
 | Flag               | Purpose                                       | Required on                |
 |--------------------|-----------------------------------------------|----------------------------|
@@ -14,9 +16,17 @@ tags: [scitex-python, scitex-general, cli]
 | `--json`           | Machine-readable JSON on stdout, no log noise | Every data-reading command |
 | `--dry-run`        | Preview changes without side effects          | Every mutating command     |
 | `--version`, `-V`  | Print `pkg/X.Y.Z`                             | Top-level                  |
-| `--verbose`, `-v`  | Extra stderr logs (count style: `-v|-vv|-vvv`) | Optional                   |
-| `--quiet`, `-q`    | Suppress non-error stderr                     | Optional                   |
 | `--yes`, `-y`      | Bypass interactive confirm                    | Mutating commands          |
+
+## Convention flags (optional but standardized when present)
+
+When a command exposes one of these capabilities, it MUST use this exact spelling — not a synonym (`--n-cpus`, `--parallel`, `--silent`, etc.).
+
+| Flag               | Purpose                                                       | When to add                                  |
+|--------------------|---------------------------------------------------------------|----------------------------------------------|
+| `--verbose`, `-v`  | Extra stderr logs (count style: `-v|-vv|-vvv`)                | Any command with multiple detail levels      |
+| `--quiet`, `-q`    | Suppress non-error stderr                                     | Any command with default chatter             |
+| `--jobs N`, `-j N` | Parallelism. `1` = serial (default). `0` or `auto` = all CPUs. Matches `make`, `cargo`, `ninja`. | Any command that fans out across packages, files, or items |
 
 ## Verbosity ladder
 

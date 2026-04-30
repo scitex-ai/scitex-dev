@@ -252,14 +252,67 @@ def register_ecosystem_commands(main_group):
     @ecosystem.command("sync")
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
     @click.option("--dry-run", is_flag=True, help="Preview without syncing.")
+    @click.option(
+        "--jobs",
+        "-j",
+        "jobs",
+        default="1",
+        show_default=True,
+        help="Parallel installs. 1=serial, N=N workers, 0 or 'auto'=all CPUs.",
+    )
+    @click.option(
+        "--quiet",
+        "-q",
+        is_flag=True,
+        help="Suppress per-package progress lines (errors still on stderr).",
+    )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def ecosystem_sync(package, dry_run, as_json):
-        """Sync ecosystem packages locally (pip install -e)."""
+    def ecosystem_sync(package, dry_run, jobs, quiet, as_json):
+        """Install ecosystem packages from local clones in editable mode (pip install -e).
+
+        Walks every configured package, runs `pip install -e <local_path>` for
+        each. Use `-j N` to install in parallel; progress is streamed to stderr
+        unless --json or --quiet is set.
+        """
+        import sys
+
         from .cli_utils import wrap_as_cli
         from .sync import sync_local
 
         pkgs = list(package) if package else None
-        wrap_as_cli(sync_local, as_json=as_json, packages=pkgs, confirm=not dry_run)
+
+        # Resolve --jobs ('auto' or '0' → all CPUs)
+        if str(jobs).lower() in ("auto", "0"):
+            jobs_n = 0
+        else:
+            try:
+                jobs_n = int(jobs)
+            except ValueError:
+                click.echo(
+                    f"error: --jobs must be int, 'auto', or '0' (got {jobs!r})",
+                    err=True,
+                )
+                sys.exit(2)
+
+        # Per-package progress callback (stderr; off in --json or --quiet mode)
+        def _progress(idx, total, name, status, elapsed):
+            mark = {"ok": "✓", "error": "✗", "skipped": "·", "dry_run": "·"}.get(
+                status, "?"
+            )
+            click.echo(
+                f"[{idx}/{total}] {mark} {name} ({status}, {elapsed:.1f}s)", err=True
+            )
+
+        on_progress = None if (as_json or quiet) else _progress
+
+        wrap_as_cli(
+            sync_local,
+            as_json=as_json,
+            packages=pkgs,
+            confirm=not dry_run,
+            jobs=jobs_n,
+            on_progress=on_progress,
+        )
 
     @ecosystem.command("sync-remote", hidden=True)
     @click.option(

@@ -282,9 +282,24 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                             nodes = state.setdefault("version_nodes", [])
                             assert isinstance(nodes, list)
                             nodes.append(node)
+                        # Track string-keyed dict literals at module level —
+                        # these are commonly used by PEP 562 dispatch tables
+                        # like `_LAZY_ATTRS = {"foo": "submod", ...}`.
+                        if isinstance(node.value, ast.Dict):
+                            keys = [
+                                k.value
+                                for k in node.value.keys
+                                if isinstance(k, ast.Constant)
+                                and isinstance(k.value, str)
+                            ]
+                            if keys:
+                                tables = state.setdefault("dispatch_tables", {})
+                                assert isinstance(tables, dict)
+                                tables[target.id] = keys
             elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
                 # Annotated assignments: `__all__: list[str] = [...]`,
-                # `__version__: str = ...`. Treat them like ast.Assign.
+                # `__version__: str = ...`, `_LAZY_ATTRS: dict[str, str] = {...}`.
+                # Treat them like ast.Assign.
                 bound_names.add(node.target.id)
                 if (
                     node.target.id == "__all__"
@@ -296,6 +311,17 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                         for elt in node.value.elts
                         if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
                     ]
+                # Annotated dispatch table: `_LAZY_ATTRS: dict[str, str] = {...}`.
+                if isinstance(node.value, ast.Dict):
+                    keys = [
+                        k.value
+                        for k in node.value.keys
+                        if isinstance(k, ast.Constant) and isinstance(k.value, str)
+                    ]
+                    if keys:
+                        tables = state.setdefault("dispatch_tables", {})
+                        assert isinstance(tables, dict)
+                        tables[node.target.id] = keys
             elif isinstance(
                 node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
             ):
@@ -307,6 +333,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 # __getattr__ as a bound name so PA102 doesn't false-fire.
                 if node.name == "__getattr__":
                     for sub in ast.walk(node):
+                        # Pattern A: `if name == "X":`
                         if (
                             isinstance(sub, ast.Compare)
                             and len(sub.ops) == 1
@@ -318,6 +345,25 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                             and isinstance(sub.comparators[0].value, str)
                         ):
                             bound_names.add(sub.comparators[0].value)
+                        # Pattern B: `_LAZY_ATTRS.get(name)` / `_LAZY_ATTRS[name]`
+                        # — pull keys from the module-level dispatch table.
+                        ref_name = None
+                        if (
+                            isinstance(sub, ast.Call)
+                            and isinstance(sub.func, ast.Attribute)
+                            and sub.func.attr in ("get", "__getitem__")
+                            and isinstance(sub.func.value, ast.Name)
+                        ):
+                            ref_name = sub.func.value.id
+                        elif isinstance(sub, ast.Subscript) and isinstance(
+                            sub.value, ast.Name
+                        ):
+                            ref_name = sub.value.id
+                        if ref_name:
+                            tables = state.get("dispatch_tables", {})
+                            if isinstance(tables, dict):
+                                for k in tables.get(ref_name, []):
+                                    bound_names.add(k)
 
     _walk(tree.body, in_try=False)
 
