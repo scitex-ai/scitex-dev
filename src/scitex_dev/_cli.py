@@ -64,8 +64,55 @@ else:
                 with formatter.section("Other"):
                     formatter.write_dl(uncategorized)
 
+    def _command_to_dict(
+        cmd: click.Command,
+        parent_ctx: click.Context | None,
+        info_name: str,
+    ) -> dict:
+        """Serialize one click command (and its subcommands recursively) to a dict."""
+        sub_ctx = click.Context(cmd, parent=parent_ctx, info_name=info_name)
+        options: list[dict] = []
+        arguments: list[dict] = []
+        for p in cmd.params:
+            if isinstance(p, click.Argument):
+                arguments.append({"name": p.name, "required": p.required})
+            else:
+                options.append(
+                    {
+                        "name": p.name,
+                        "opts": list(p.opts),
+                        "help": getattr(p, "help", "") or "",
+                        "is_flag": bool(getattr(p, "is_flag", False)),
+                    }
+                )
+        out: dict = {
+            "name": info_name,
+            "help": (cmd.help or "").strip(),
+            "short_help": (cmd.short_help or "").strip(),
+            "options": options,
+            "arguments": arguments,
+        }
+        if isinstance(cmd, click.Group):
+            commands: dict = {}
+            for sub in sorted(cmd.list_commands(sub_ctx)):
+                sub_cmd = cmd.get_command(sub_ctx, sub)
+                if sub_cmd is None:
+                    continue
+                commands[sub] = _command_to_dict(sub_cmd, sub_ctx, sub)
+            out["commands"] = commands
+        return out
+
     def _show_recursive_help(ctx: click.Context) -> None:
-        """Recursively show help for all commands."""
+        """Recursively show help for all commands. Honours ctx.obj['json']."""
+        if ctx.obj and ctx.obj.get("json"):
+            import json as _json
+
+            tree = _command_to_dict(
+                ctx.command, ctx.parent, ctx.info_name or "scitex-dev"
+            )
+            click.echo(_json.dumps(tree, indent=2))
+            return
+
         click.echo(ctx.get_help())
         click.echo()
         group = ctx.command

@@ -43,3 +43,47 @@ tags: [scitex-python, scitex-general, cli]
 - Required on every **data-reading** command (introspection, list, show, get, search, …).
 - Recommended on every command that emits structured output the user might pipe.
 - On non-data commands (lifecycle: `start`, `stop`, …) `--json` may emit `{"status": "ok"}` or be a no-op — the rule is: if the command exits, exit code carries the success signal; `--json` adds machine-readable detail when meaningful.
+
+## `--json` content parity (data superset rule)
+
+`--json` is an **output-formatting** flag, not a fetch flag. The data the command produces must be the **same** in text and JSON modes; only the rendering differs. Concretely:
+
+- Every column / field shown in text mode MUST appear in JSON mode.
+- JSON MAY include strictly more fields than text (extra metadata, paths, ids).
+- JSON MUST NOT drop fields, collapse a list-of-objects to a list-of-strings, or substitute a different fetch path that returns less data.
+
+**Counter-examples (real bugs fixed in scitex-dev 0.8.2):**
+
+| Command | Bug | Fix |
+| --- | --- | --- |
+| `ecosystem list --json` | text emitted `name + github_repo`; JSON emitted only `["scitex", ...]` | JSON now `[{"name": ..., "github_repo": ...}, ...]` |
+| `docs list --json` | `--json` flag flipped the *fetcher* to `format="json"` (minimal page list) instead of the rich manifest the text path uses | Always fetch the rich manifest when listing; `--json` only changes the renderer |
+| `--help-recursive --json` | top-level `--json` ignored; printed plain text help | Walk the click tree to a JSON tree of `{name, help, options, arguments, commands{}}` |
+
+**The pattern to avoid:** branching on `as_json` *inside the data-fetch step* and asking the data layer for a smaller payload. Fetch the rich shape unconditionally; let the renderer decide what to print.
+
+```python
+# WRONG — JSON path returns less data
+fmt = "json" if as_json else None
+result = fetch(format=fmt)            # ← changes WHAT we get
+if as_json:
+    print(json.dumps(result))
+else:
+    render_table(result)
+
+# RIGHT — JSON path renders the same data, just differently
+result = fetch()                      # ← always the rich shape
+if as_json:
+    print(json.dumps(result))
+else:
+    render_table(result)
+```
+
+**Audit recipe:**
+
+```bash
+# For every <cmd> that supports --json:
+diff <(<cmd> | awk '{print $1}' | sort) \
+     <(<cmd> --json | jq -r '.[].name // .[]' | sort)
+# Anything in the text-only column is a parity gap.
+```

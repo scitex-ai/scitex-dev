@@ -75,6 +75,7 @@ Run before tagging a release. Tick each item or document the deviation in the PR
 - [ ] (A) Bare, `-v`, `-vv`, `-vvv` levels behave per spec.
 - [ ] (A) `--json` flag emits a parseable list.
 - [ ] (A) Output count matches `len(<pkg>.__all__)`.
+- [ ] **JSON content parity**: every field shown in `-vvv` text appears in `--json` output (or a strict superset). The `--json` path must not fork the fetcher to a smaller payload — fetch the rich shape unconditionally, render differently. See [03_interface_02_cli/08_universal-flags.md](../03_interface_02_cli/08_universal-flags.md) for the cross-interface principle.
 
 ## §10 — Import conventions in docs
 
