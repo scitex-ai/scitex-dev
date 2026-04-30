@@ -22,7 +22,7 @@ else:
     # Names below MUST match the actual registered command names. Anything
     # not listed here falls through to the "Other" section in --help.
     COMMAND_CATEGORIES = [
-        ("Ecosystem", ["doctor", "ecosystem", "show-stats", "quality"]),
+        ("Ecosystem", ["doctor", "ecosystem"]),
         ("Development", ["show-config", "rename-symbols"]),
         ("Documentation", ["docs", "search-docs", "skills"]),
         ("Interface", ["mcp", "list-python-apis"]),
@@ -209,62 +209,78 @@ else:
 
     from ._cli_ecosystem import register_ecosystem_commands
 
-    register_ecosystem_commands(main)
+    ecosystem_group = register_ecosystem_commands(main)
 
+    # Stats now lives under `ecosystem` per noun-verb hierarchy. The legacy
+    # top-level `show-stats` is kept as a hidden deprecation alias for one
+    # cycle; remove in 0.11.0.
     from ._cli_stats import register_stats_command
 
-    register_stats_command(main)
+    register_stats_command(ecosystem_group, main_group=main)
 
-    # Quality audits (ecosystem-wide doc/test/line-limit scanners)
+    # Quality audits — each one keeps its own command (separation of concern).
+    # Move them under `ecosystem` so `ecosystem audit-*` is the single
+    # canonical audit namespace. The top-level `quality` group is dropped;
+    # individual `quality audit-*` callers must update.
     from . import _cli_quality
 
-    @main.group("quality")
-    def quality():
-        """Ecosystem quality audits (docs, test scope, line limits)."""
-
-    @quality.command("audit-docs")
+    @ecosystem_group.command("audit-docs")
     @click.option("--projects-root", default=None)
-    def _quality_audit_docs(projects_root):
+    def _ecosystem_audit_docs(projects_root):
         """Scan SKILL.md / docstring examples for drift."""
         raise SystemExit(_cli_quality.audit_docs(projects_root=projects_root))
 
-    @quality.command("audit-scope")
+    @ecosystem_group.command("audit-scope")
     @click.option("--projects-root", default=None)
-    def _quality_audit_scope(projects_root):
+    def _ecosystem_audit_scope(projects_root):
         """Check tests cover the public API surface."""
         raise SystemExit(_cli_quality.audit_scope(projects_root=projects_root))
 
-    @quality.command("audit-lines")
-    def _quality_audit_lines():
+    @ecosystem_group.command("audit-lines")
+    def _ecosystem_audit_lines():
         """Enforce per-file line limits against the allowlist."""
         raise SystemExit(_cli_quality.audit_lines())
 
-    @quality.command(
-        "audit-cli",
-        hidden=True,
-        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
-    )
-    @click.pass_context
-    def _quality_audit_cli_deprecated(ctx):
-        """Deprecated — moved to `scitex-dev ecosystem audit-cli` (§5)."""
-        click.echo(
-            "error: `scitex-dev quality audit-cli` was renamed to "
-            "`scitex-dev ecosystem audit-cli`.",
-            err=True,
-        )
-        click.echo(
-            "Re-run with: scitex-dev ecosystem audit-cli " + " ".join(ctx.args),
-            err=True,
-        )
-        raise SystemExit(2)
-
-    @quality.command("audit-frontmatter")
+    @ecosystem_group.command("audit-frontmatter")
     @click.argument("root", type=click.Path(exists=True, file_okay=False))
-    def _quality_audit_frontmatter(root):
+    def _ecosystem_audit_frontmatter(root):
         """Check skill YAML frontmatter (description length, canonical-location, context_tokens drift, group tags). Warn-only."""
         from ._cli_quality_frontmatter import audit_frontmatter
 
         raise SystemExit(audit_frontmatter(root))
+
+    # ----- Deprecation shim: `scitex-dev quality <cmd>` → ecosystem -----
+    @main.group("quality", hidden=True)
+    def _quality_deprecated():
+        """(deprecated) Use `scitex-dev ecosystem audit-*` instead."""
+
+    def _make_quality_redirect(cmd_name: str):
+        @_quality_deprecated.command(
+            cmd_name,
+            context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+        )
+        @click.pass_context
+        def _redirect(ctx):
+            f"""(deprecated) See `scitex-dev ecosystem {cmd_name}`."""
+            click.echo(
+                f"warning: `scitex-dev quality {cmd_name}` was moved to "
+                f"`scitex-dev ecosystem {cmd_name}`. Will be removed in 0.11.0.",
+                err=True,
+            )
+            target = ecosystem_group.get_command(ctx, cmd_name)
+            if target is None:
+                ctx.exit(2)
+            ctx.invoke(target, *ctx.args)
+
+        return _redirect
+
+    for _quality_cmd in (
+        "audit-docs",
+        "audit-scope",
+        "audit-lines",
+        "audit-frontmatter",
+    ):
+        _make_quality_redirect(_quality_cmd)
 
     # -------------------------------------------------------------------
     # Development commands
@@ -386,7 +402,31 @@ else:
 
     from .cli import docs_click_group
 
-    main.add_command(docs_click_group(package="scitex-dev"))
+    docs_grp = docs_click_group(package="scitex-dev")
+    main.add_command(docs_grp)
+
+    # `docs search` — canonical home for ecosystem-wide search across APIs,
+    # CLI, MCP tools, and documentation. The legacy top-level `search-docs`
+    # is kept as a hidden deprecation alias (see below). Removed in 0.11.0.
+    @docs_grp.command("search")
+    @click.argument("query")
+    @click.option(
+        "--scope", default="all", help="Search scope: all, api, cli, mcp, docs."
+    )
+    @click.option("--max-results", default=10, help="Maximum results.")
+    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
+    def _docs_search(query, scope, max_results, as_json):
+        """Search across APIs, CLI, MCP tools, and documentation."""
+        from . import search as do_search
+        from .cli_utils import wrap_as_cli
+
+        wrap_as_cli(
+            do_search,
+            as_json=as_json,
+            query=query,
+            scope=scope,
+            max_results=max_results,
+        )
 
     from ._cli_skills import register_skills_commands
 
@@ -411,15 +451,20 @@ else:
         )
         ctx.exit(2)
 
-    @main.command("search-docs")
+    @main.command("search-docs", hidden=True)
     @click.argument("query")
     @click.option(
         "--scope", default="all", help="Search scope: all, api, cli, mcp, docs."
     )
     @click.option("--max-results", default=10, help="Maximum results.")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def search_docs(query, scope, max_results, as_json):
-        """Search across APIs, CLI, MCP tools, and documentation."""
+    def search_docs_deprecated(query, scope, max_results, as_json):
+        """(deprecated) Use `scitex-dev docs search`. Removed in 0.11.0."""
+        click.echo(
+            "warning: `scitex-dev search-docs` was moved to "
+            "`scitex-dev docs search`. Will be removed in 0.11.0.",
+            err=True,
+        )
         from . import search as do_search
         from .cli_utils import wrap_as_cli
 

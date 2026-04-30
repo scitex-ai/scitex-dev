@@ -8,7 +8,12 @@ import click
 
 
 def register_ecosystem_commands(main_group):
-    """Register ecosystem command group on the main CLI."""
+    """Register ecosystem command group on the main CLI.
+
+    Returns the ``ecosystem`` Click group so additional subcommands
+    (stats, audit-frontmatter, audit-docs, audit-lines, audit-scope)
+    can be registered on it from outside this module.
+    """
 
     @main_group.group(invoke_without_command=True)
     @click.option(
@@ -16,7 +21,7 @@ def register_ecosystem_commands(main_group):
     )
     @click.pass_context
     def ecosystem(ctx, help_recursive):
-        """Manage the SciTeX ecosystem (versions, sync, fixes)."""
+        """Manage the SciTeX ecosystem (versions, sync, audits, stats)."""
         if help_recursive:
             _print_ecosystem_help_recursive(ctx)
             ctx.exit(0)
@@ -990,3 +995,5 @@ def register_ecosystem_commands(main_group):
                 open_browser=not no_browser,
                 force=force,
             )
+
+    return ecosystem

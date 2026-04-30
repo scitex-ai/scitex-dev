@@ -222,7 +222,7 @@ def _get_tldr(package: str) -> str:
     return f"{package}: documentation available via get_docs(package='{package}')"
 
 
-def docs_click_group(package: str, name: str = "docs"):
+def docs_click_group(package: str, name: str = "docs"):  # noqa: D401
     """Create a Click command group for docs (requires Click installed).
 
     Usage::
@@ -239,16 +239,21 @@ def docs_click_group(package: str, name: str = "docs"):
     @click.group(name=name, invoke_without_command=True)
     @click.pass_context
     def docs_grp(ctx):
-        f"""View package documentation.
-
-        \b
-        Examples:
-          {prog} docs list            # List doc pages
-          {prog} docs get             # Show available pages
-          {prog} docs get api         # Show specific page
-        """
+        """View package documentation (list / get / search)."""
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
+
+    # Click reads the function docstring for short help; the f-string above
+    # used to silently evaluate to None (f-strings are not docstrings).
+    docs_grp.help = (
+        "View package documentation.\n\n"
+        "\b\n"
+        "Examples:\n"
+        f"  {prog} docs list            # List doc pages\n"
+        f"  {prog} docs get             # Show available pages\n"
+        f"  {prog} docs get api         # Show specific page\n"
+        f"  {prog} docs search QUERY    # Search across docs/APIs/CLI/MCP\n"
+    )
 
     @docs_grp.command("list")
     @click.option("--json", "as_json", is_flag=True, help="JSON output")
