@@ -353,3 +353,41 @@ def test_ps108_rolls_up_multiple_clusters(tmp_path):
     check_flat_layout(src, Violation, out)
     assert len(out) == 1
     assert "cli_*" in out[0].detail and "skills_*" in out[0].detail
+
+
+# ---------------------------------------------------------------------------
+# PS204 enrichment — actionable orphan-test hints (basename + sibling listing)
+# ---------------------------------------------------------------------------
+
+
+def test_ps204_hint_suggests_move_on_unique_basename(tmp_path):
+    """Refactor scenario: src/<pkg>/foo.py moved to src/<pkg>/sub/foo.py;
+    the orphan test_foo.py should be told where to relocate."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "src" / "demo" / "sub").mkdir()
+    (repo / "src" / "demo" / "sub" / "foo.py").write_text("def f(): pass\n")
+    (repo / "tests" / "demo" / "test_foo.py").write_text("def test_x(): pass\n")
+    out: list = []
+    from scitex_dev._cli_audit_project._audit import _check_mirror
+    _check_mirror(repo, "demo", out)
+    ps204 = [v for v in out if v.rule == "PS204"]
+    assert len(ps204) == 1
+    assert "src likely moved" in ps204[0].detail
+    assert "sub/foo.py" in ps204[0].detail
+    assert "tests/demo/sub/test_foo.py" in ps204[0].detail
+
+
+def test_ps204_hint_lists_siblings_when_no_basename_match(tmp_path):
+    """When no src file matches the expected basename, list what *is* in the
+    mirror dir so the agent can correlate."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "src" / "demo" / "bar.py").write_text("def f(): pass\n")
+    (repo / "src" / "demo" / "baz.py").write_text("def f(): pass\n")
+    (repo / "tests" / "demo" / "test_qux.py").write_text("def test_x(): pass\n")
+    out: list = []
+    from scitex_dev._cli_audit_project._audit import _check_mirror
+    _check_mirror(repo, "demo", out)
+    ps204 = [v for v in out if v.rule == "PS204"]
+    assert len(ps204) == 1
+    detail = ps204[0].detail
+    assert "bar.py" in detail and "baz.py" in detail

@@ -423,17 +423,15 @@ def _check_mirror(
             )
 
     # PS204: orphan test files — every test_*.py under tests/<pkg>/ should
-    # have a matching src counterpart.
+    # have a matching src counterpart. Hinter is built once and reused so
+    # the basename index is amortized across all orphans in this package.
+    from ._check_orphan_hint import build_orphan_hinter
+
+    _hint = build_orphan_hinter(src_pkg, repo)
     for test_file in tests_pkg.rglob("test_*.py"):
         rel = test_file.relative_to(tests_pkg)
         if not _test_has_src_match(test_file, rel, src_pkg):
-            out.append(
-                Violation(
-                    "PS204",
-                    str(test_file),
-                    "no matching src file (orphan test)",
-                )
-            )
+            out.append(Violation("PS204", str(test_file), _hint(rel)))
 
 
 def _has_py(d: Path) -> bool:
