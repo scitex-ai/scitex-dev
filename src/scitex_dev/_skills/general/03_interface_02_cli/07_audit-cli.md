@@ -87,6 +87,38 @@ The cheap-to-run cases (audit-cli, audit-mcp-tools, audit-skills) finish in unde
 
 Periodic invocation also tightens the feedback loop on **§10 (CLI startup speed)** — you'll notice when an `__init__.py` change breaks the < 500ms threshold the same minute you make it, not three releases later.
 
+### For Claude Code agents — three autonomous mechanisms
+
+These skills are primarily aimed at Claude Code agents writing/maintaining scitex-* packages. The harness exposes three orthogonal scheduling primitives — pick the one that matches your work pattern:
+
+| Tool | Purpose | When to use |
+|---|---|---|
+| **`CronCreate`** | Fixed cron schedule (e.g. `*/10 * * * *`). Fires while the REPL is idle. Auto-expires after 7 days; cancel sooner with `CronDelete`. | "Run `audit-all` every 10 minutes regardless of what I'm doing." |
+| **`ScheduleWakeup`** | Self-paced — agent picks the delay each turn based on what it's waiting for (e.g. CI to finish, a long-running test). | "After I push a refactor, wake me when `audit-all` would catch a regression I haven't yet committed." |
+| **`Monitor`** | Passive event-stream watcher (good for `tail -f` / poll loops). Surfaces matching lines as notifications without re-running anything. | "Tail `~/.scitex/dev/runtime/audit.log` and surface the line whenever an auditor reports a new violation." |
+
+Examples (idiomatic Claude Code usage):
+
+```
+# Cron — runs in background, regardless of conversation state
+CronCreate("*/10 * * * *",
+           "scitex-dev ecosystem audit-all $(basename $(pwd)) --json --severity error",
+           summary="audit current package every 10 min")
+
+# Self-paced — agent chooses next delay each iteration
+ScheduleWakeup(delaySeconds=300,
+               reason="check audit-all post-refactor",
+               prompt="<<autonomous-loop-dynamic>>")
+
+# Monitor — stream every new auditor warning
+Monitor("tail -f ~/.scitex/dev/runtime/audit.log | grep --line-buffered '\\[§\\|\\[PS\\|\\[PA'",
+        description="audit violations in current package")
+```
+
+Pairing pattern: an agent commits a change → `Monitor` watches the audit log written by `CronCreate` → agent reacts to violation lines without polling. The agent never has to remember to re-audit; the harness does it.
+
+These three mechanisms are Claude Code-specific (other harnesses won't have the same primitive names). For non-Claude-Code use, the cron + tmux-loop recipes above remain the portable equivalents.
+
 ### `--json` for agentic / programmatic consumers
 
 Every auditor accepts `--json`, and `audit-all --json` returns a structured aggregate so an agent (or any script) can reason about violations without parsing human text:
