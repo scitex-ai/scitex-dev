@@ -734,6 +734,179 @@ def register_ecosystem_commands(main_group):
             )
         )
 
+    # ------------------------------------------------------------------ #
+    # audit-summary — cross-leaf, cross-auditor violation counts. The   #
+    # one-command answer to "what's the deterministic state of the       #
+    # ecosystem right now?" — re-runnable, replayable, immune to drift.  #
+    # ------------------------------------------------------------------ #
+
+    @ecosystem.command(
+        "audit-summary",
+        epilog=(
+            "Examples:\n"
+            "  $ scitex-dev ecosystem audit-summary\n"
+            "  $ scitex-dev ecosystem audit-summary --auditor python-apis\n"
+            "  $ scitex-dev ecosystem audit-summary --json\n"
+            "  $ scitex-dev ecosystem audit-summary --parallel 16\n"
+            "\n"
+            "Runs each scitex-dev auditor against every ecosystem leaf and\n"
+            "prints per-leaf violation counts. Each rule is deterministic, so\n"
+            "the same commit gives the same numbers across machines.\n"
+            "\n"
+            "Excluded by default: scitex (umbrella), scitex-orochi,\n"
+            "scitex-cloud. Pass --include-meta to include them."
+        ),
+    )
+    @click.option(
+        "--auditor",
+        "auditors",
+        multiple=True,
+        type=click.Choice(
+            [
+                "python-apis",
+                "skills",
+                "project",
+                "cli",
+                "mcp-tools",
+            ]
+        ),
+        help="Auditor(s) to run. Repeatable. Default: all five.",
+    )
+    @click.option(
+        "--parallel",
+        "-p",
+        default=8,
+        type=int,
+        show_default=True,
+        help="Concurrent leaves audited in parallel.",
+    )
+    @click.option(
+        "--include-meta",
+        is_flag=True,
+        help="Include scitex / scitex-orochi / scitex-cloud (skipped by default).",
+    )
+    @click.option(
+        "--json",
+        "json_out",
+        is_flag=True,
+        help="Emit structured JSON instead of a table.",
+    )
+    def ecosystem_audit_summary(auditors, parallel, include_meta, json_out):
+        """Cross-leaf, cross-auditor violation summary — one source of truth."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import subprocess
+        from .ecosystem import ECOSYSTEM
+
+        chosen = (
+            list(auditors)
+            if auditors
+            else ["python-apis", "skills", "project", "cli", "mcp-tools"]
+        )
+
+        skip = set() if include_meta else {"scitex", "scitex-orochi", "scitex-cloud"}
+        leaves = sorted(name for name in ECOSYSTEM.keys() if name not in skip)
+
+        def _audit_one(leaf, auditor):
+            """Subprocess one (leaf, auditor); return (leaf, auditor, n_violations)."""
+            try:
+                proc = subprocess.run(
+                    [
+                        "scitex-dev",
+                        "ecosystem",
+                        f"audit-{auditor}",
+                        leaf,
+                        "--json",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                # Auditors return non-zero on violations but still emit JSON.
+                # Look for JSON in stdout regardless of exit code.
+                payload = json.loads(proc.stdout) if proc.stdout.strip() else {}
+                violations = payload.get("violations", [])
+                if not isinstance(violations, list):
+                    violations = []
+                return leaf, auditor, len(violations)
+            except (subprocess.TimeoutExpired, json.JSONDecodeError, OSError):
+                return leaf, auditor, -1  # sentinel: error
+
+        # Run all (leaf, auditor) pairs in a thread pool.
+        results: dict[str, dict[str, int]] = {leaf: {} for leaf in leaves}
+        pairs = [(leaf, a) for leaf in leaves for a in chosen]
+
+        with ThreadPoolExecutor(max_workers=parallel) as pool:
+            futures = [pool.submit(_audit_one, leaf, a) for leaf, a in pairs]
+            for fut in as_completed(futures):
+                leaf, auditor, n = fut.result()
+                results[leaf][auditor] = n
+
+        if json_out:
+            click.echo(
+                json.dumps(
+                    {
+                        "auditors": chosen,
+                        "leaves": leaves,
+                        "violations": results,
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return
+
+        # Pretty table.
+        col_w = 30
+        click.secho(
+            f"\n=== ecosystem audit-summary ({len(leaves)} leaves × {len(chosen)} auditors, parallel={parallel}) ===",
+            fg="cyan",
+            bold=True,
+        )
+        header = (
+            f"{'PACKAGE':<{col_w}}" + "".join(f"{a:>14}" for a in chosen) + "  TOTAL"
+        )
+        click.echo(header)
+        click.echo("-" * len(header))
+
+        per_auditor_total = dict.fromkeys(chosen, 0)
+        per_auditor_clean = dict.fromkeys(chosen, 0)
+        leaf_total = 0
+
+        for leaf in leaves:
+            row = f"{leaf:<{col_w}}"
+            row_total = 0
+            row_has_violation = False
+            for a in chosen:
+                n = results[leaf].get(a, -1)
+                if n < 0:
+                    row += f"{'ERR':>14}"
+                    continue
+                row += f"{n:>14}"
+                per_auditor_total[a] += n
+                if n == 0:
+                    per_auditor_clean[a] += 1
+                else:
+                    row_has_violation = True
+                row_total += n
+            row += f"  {row_total:>5}"
+            leaf_total += row_total
+            # Only print rows with violations, mirroring audit_snapshot.sh.
+            if row_has_violation:
+                click.echo(row)
+
+        click.echo("-" * len(header))
+        click.secho(
+            f"{'TOTAL':<{col_w}}"
+            + "".join(f"{per_auditor_total[a]:>14}" for a in chosen)
+            + f"  {leaf_total:>5}",
+            fg="yellow",
+        )
+        click.secho(
+            f"{'CLEAN/N':<{col_w}}"
+            + "".join(f"{per_auditor_clean[a]:>4}/{len(leaves):<9}" for a in chosen),
+            fg="green",
+        )
+
     @ecosystem.command("start-dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")
     @click.option("--host", default="0.0.0.0", help="Host to bind to.")

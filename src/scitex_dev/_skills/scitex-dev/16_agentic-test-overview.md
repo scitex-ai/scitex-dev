@@ -1,6 +1,7 @@
 ---
 name: agentic-test-overview
 description: Overview of SciTeX agentic testing — four layers across skills and MCP, shared newbie-docker substrate, claude -p plan-quota execution. Use when planning or explaining the agentic test harness.
+tags: [scitex-dev, scitex-package]
 ---
 
 # 16_agentic-test-overview

@@ -109,26 +109,90 @@ def fix_version(repo: Path, dry_run: bool = False) -> FixResult:
     # Find a top-level `__version__ = "..."` literal.
     pattern = re.compile(r'^__version__\s*=\s*"([^"]+)"\s*$', re.MULTILINE)
     m = pattern.search(text)
-    if not m:
+    block = CANONICAL_BLOCK.format(dist=pkg)
+    if m:
+        # Replace the single literal line with the canonical block.
+        new_text = text[: m.start()] + block.rstrip() + text[m.end() :]
+        if not dry_run:
+            init_py.write_text(new_text)
         return FixResult(
             repo=repo,
             package=pkg,
             init_py=init_py,
-            action="no_literal",
+            action="rewrote",
+            old_value=m.group(1),
         )
 
-    block = CANONICAL_BLOCK.format(dist=pkg)
-    # Replace the single line with the canonical block.
-    new_text = text[: m.start()] + block.rstrip() + text[m.end() :]
+    # `__version__` is absent entirely — insert the canonical block. We place
+    # it after the module-level docstring (if any) so attribute discoverers
+    # (Sphinx, importlib.metadata fallback paths) can find it on the first
+    # pass, and so it doesn't shadow `from __future__` imports.
+    insertion_point = _find_post_docstring_insertion(text)
+    before = text[:insertion_point]
+    after = text[insertion_point:]
+    # Surround the block with single blank lines on either side, but don't
+    # double-up if blanks are already present.
+    leading = "\n" if before and not before.endswith("\n\n") else ""
+    trailing = "\n" if after and not after.startswith("\n") else ""
+    new_text = before + leading + block + trailing + after
     if not dry_run:
         init_py.write_text(new_text)
     return FixResult(
         repo=repo,
         package=pkg,
         init_py=init_py,
-        action="rewrote",
-        old_value=m.group(1),
+        action="inserted",
+        old_value=None,
     )
+
+
+def _find_post_docstring_insertion(text: str) -> int:
+    """Return the byte offset where the version block should be inserted.
+
+    Skips past:
+      - the shebang line (`#!...`)
+      - any module-level comment lines starting `#` at the top
+      - the module docstring (single or triple-quoted, single- or multi-line)
+      - any `from __future__ import ...` lines (they MUST come first in the
+        module after the docstring)
+
+    If none of those apply, returns 0 (insert at the very top).
+    """
+    import ast
+
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return 0
+
+    # First, walk the AST to find the end of the docstring + future imports.
+    insert_after_lineno = 0
+    for node in tree.body:
+        # Module docstring is a bare Expr->Constant(str)
+        if (
+            isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            insert_after_lineno = node.end_lineno or 0
+            continue
+        # __future__ imports
+        if isinstance(node, ast.ImportFrom) and node.module == "__future__":
+            insert_after_lineno = node.end_lineno or insert_after_lineno
+            continue
+        break  # first non-docstring, non-__future__ statement — stop here
+
+    if insert_after_lineno == 0:
+        return 0
+
+    # Convert lineno (1-based) to byte offset of the START of the next line.
+    lines = text.split("\n")
+    offset = 0
+    for i, line in enumerate(lines, start=1):
+        if i > insert_after_lineno:
+            break
+        offset += len(line) + 1  # +1 for the newline
+    return offset
 
 
 def fix_versions_bulk(repos: list[Path], dry_run: bool = False) -> BulkResult:

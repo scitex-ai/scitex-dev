@@ -123,6 +123,37 @@ _STDLIB_SAFE_ROOTS = frozenset(
         "base64",
         "struct",
         "operator",
+        "asyncio",
+        "socket",
+        "threading",
+        "queue",
+        "select",
+        "signal",
+        "fcntl",
+        "termios",
+        "platform",
+        "getpass",
+        "argparse",
+        "csv",
+        "shlex",
+        "glob",
+        "fnmatch",
+        "pickle",
+        "random",
+        "secrets",
+        "ssl",
+        "urllib",
+        "http",
+        "email",
+        "html",
+        "xml",
+        "configparser",
+        "tomllib",
+        "zipfile",
+        "tarfile",
+        "gzip",
+        "bz2",
+        "lzma",
     }
 )
 
@@ -251,10 +282,42 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                             nodes = state.setdefault("version_nodes", [])
                             assert isinstance(nodes, list)
                             nodes.append(node)
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                # Annotated assignments: `__all__: list[str] = [...]`,
+                # `__version__: str = ...`. Treat them like ast.Assign.
+                bound_names.add(node.target.id)
+                if (
+                    node.target.id == "__all__"
+                    and node.value is not None
+                    and isinstance(node.value, (ast.List, ast.Tuple))
+                ):
+                    state["all"] = [
+                        elt.value
+                        for elt in node.value.elts
+                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+                    ]
             elif isinstance(
                 node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
             ):
                 bound_names.add(node.name)
+                # Recognise PEP 562 lazy-load: `def __getattr__(name): if name == "X": ...`.
+                # Pytest collects any module-level callable; PEP 562 lets a
+                # module expose names dynamically without binding them at
+                # import time. Treat each `name == "..."` literal inside
+                # __getattr__ as a bound name so PA102 doesn't false-fire.
+                if node.name == "__getattr__":
+                    for sub in ast.walk(node):
+                        if (
+                            isinstance(sub, ast.Compare)
+                            and len(sub.ops) == 1
+                            and isinstance(sub.ops[0], ast.Eq)
+                            and isinstance(sub.left, ast.Name)
+                            and sub.left.id == "name"
+                            and len(sub.comparators) == 1
+                            and isinstance(sub.comparators[0], ast.Constant)
+                            and isinstance(sub.comparators[0].value, str)
+                        ):
+                            bound_names.add(sub.comparators[0].value)
 
     _walk(tree.body, in_try=False)
 
@@ -301,7 +364,14 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 )
 
     # §2 — version strategy
-    if all_names is not None and "__version__" not in all_names:
+    # PA201 only fires when __version__ is actually defined. Modules that
+    # delegate everything (sys.modules aliases, e.g. scitex-plt → figrecipe)
+    # don't define __version__ themselves.
+    if (
+        all_names is not None
+        and "__version__" not in all_names
+        and "__version__" in bound_names
+    ):
         out.append(Violation("PA201", where, "add `__version__` to __all__"))
 
     if version_nodes:

@@ -1,6 +1,7 @@
 ---
 name: agentic-test-mcp
 description: MCP evaluation — does Claude call the expected MCP tool for a query, with the right arguments, and follow through. Use when designing or running MCP tool-use tests. (Draft — not yet implemented.)
+tags: [scitex-dev, scitex-package]
 ---
 
 # 18_agentic-test-mcp

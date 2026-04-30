@@ -5,6 +5,8 @@ description: >
   Full ecosystem release workflow — pre-flight checks, version bump, PyPI publish,
   local sync, NAS deploy (including scitex-cloud special handling), and verification.
   Use via /update-scitex-full command.
+name: full-update
+tags: [scitex-dev, scitex-package]
 ---
 
 # Full Ecosystem Update

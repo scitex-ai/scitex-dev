@@ -1,3 +1,9 @@
+---
+name: TODO
+description: Python API skill — open TODOs — see file body for details.
+tags: [scitex-dev, scitex-package]
+---
+
 <!-- ---
 !-- Timestamp: 2026-04-30 15:30:00
 !-- Author: ywatanabe

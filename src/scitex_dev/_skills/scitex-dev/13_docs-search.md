@@ -6,6 +6,8 @@ description: >
   get_docs resolves pre-built Sphinx HTML, existing Sphinx builds, or
   introspected docstrings. search supports Google-like query syntax across
   Python API, CLI commands, MCP tools, and docs pages.
+name: docs-search
+tags: [scitex-dev, scitex-package]
 ---
 
 # Docs Aggregation and Search

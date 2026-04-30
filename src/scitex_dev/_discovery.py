@@ -72,7 +72,10 @@ def discover_packages() -> dict[str, str]:
                 if not installed:
                     continue
                 packages[pip_name] = import_name
-                logger.warning(
+                # Demoted from WARNING to DEBUG: this is a packaging hint for
+                # maintainers, not an error users should see on every CLI invocation.
+                # Was producing 30+ noise lines on `scitex skills list`.
+                logger.debug(
                     "Package '%s' missing scitex_dev.docs entry point — "
                     'add [project.entry-points."scitex_dev.docs"] to its pyproject.toml',
                     pip_name,

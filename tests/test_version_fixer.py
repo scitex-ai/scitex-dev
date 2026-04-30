@@ -47,10 +47,41 @@ def test_already_dynamic_is_noop(tmp_path):
     assert body.startswith("from importlib.metadata")
 
 
-def test_no_literal_no_change(tmp_path):
+def test_no_literal_inserts_canonical_block(tmp_path):
+    """When __version__ is missing entirely, fix_version inserts the
+    canonical importlib.metadata block after the docstring + future imports."""
     repo = _write_repo(tmp_path, "demo", '"""docstring only."""\n')
     rep = fix_version(repo)
-    assert rep.action == "no_literal"
+    assert rep.action == "inserted"
+    body = (repo / "src" / "demo" / "__init__.py").read_text()
+    # Block was added.
+    assert "importlib.metadata" in body
+    assert '_v("demo")' in body
+    # Original docstring preserved.
+    assert '"""docstring only."""' in body
+    # Inserted file is syntactically valid + runtime-executable.
+    compile(body, "<test>", "exec")
+    ns: dict = {}
+    exec(body, ns)
+    assert ns["__version__"] == "0.0.0+local"
+
+
+def test_no_literal_with_future_import(tmp_path):
+    """Insertion goes AFTER `from __future__` imports (PEP 236 compliance)."""
+    repo = _write_repo(
+        tmp_path,
+        "demo",
+        '"""docstring."""\nfrom __future__ import annotations\n\nimport os\n',
+    )
+    rep = fix_version(repo)
+    assert rep.action == "inserted"
+    body = (repo / "src" / "demo" / "__init__.py").read_text()
+    # Future import precedes the block (Python requires this).
+    future_pos = body.index("from __future__")
+    block_pos = body.index("importlib.metadata")
+    assert future_pos < block_pos, "future import must come before version block"
+    # Original `import os` still present.
+    assert "import os" in body
 
 
 def test_dry_run_does_not_write(tmp_path):

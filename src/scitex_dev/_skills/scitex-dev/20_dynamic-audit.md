@@ -7,6 +7,8 @@ description: >
   workloads. Paired with static audits (scitex-python 99_checklist §§1–15)
   to form a two-gate quality regime: static gates commit, dynamic gates
   release.
+name: dynamic-audit
+tags: [scitex-dev, scitex-package]
 ---
 
 # Dynamic Audit Skeleton (§16 of 99_checklist)

@@ -26,6 +26,8 @@ Public API (20 functions)::
     result_to_mcp, wrap_as_mcp
 """
 
+from __future__ import annotations
+
 try:
     from importlib.metadata import version as _v, PackageNotFoundError
     try:

@@ -1,3 +1,9 @@
+---
+name: TODO
+description: SciTeX CLI Convention — Open TODOs — see file body for details.
+tags: [scitex-dev, scitex-package]
+---
+
 # SciTeX CLI Convention — Open TODOs
 
 User-tracked items for the canonical CLI skill.

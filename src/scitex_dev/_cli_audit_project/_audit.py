@@ -519,11 +519,19 @@ def _check_tests_subdir_convention(
 
 
 def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
-    """PS206 — placeholder-only test (no `def test_` or `class Test`)."""
+    """PS206 — placeholder-only test (no `def test_` / `class Test` / `test_x = factory()`).
+
+    Recognises three pytest-collectable shapes:
+    - `def test_*` at module level
+    - `class Test*` at module level
+    - `test_*` module-level assignment (e.g. `test_foo = make_tests(...)`) —
+      pytest collects any module-level callable named `test_*`.
+    """
     tests_root = _tests_root(repo)
     if tests_root is None:
         return
     has_def_or_class_re = re.compile(r"^\s*(def\s+test_|class\s+Test)", re.MULTILINE)
+    has_factory_assign_re = re.compile(r"^test_[A-Za-z0-9_]*\s*=", re.MULTILINE)
     for test_file in tests_root.rglob("test_*.py"):
         if _is_blacklisted(test_file, tests_root):
             continue
@@ -535,14 +543,17 @@ def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
         marker = "# Start of Source Code from:"
         if marker in text:
             text = text.split(marker, 1)[0]
-        if not has_def_or_class_re.search(text):
-            out.append(
-                Violation(
-                    "PS206",
-                    str(test_file),
-                    "placeholder-only — add `def test_*` or `class Test*` body",
-                )
+        if has_def_or_class_re.search(text):
+            continue
+        if has_factory_assign_re.search(text):
+            continue
+        out.append(
+            Violation(
+                "PS206",
+                str(test_file),
+                "placeholder-only — add `def test_*`, `class Test*`, or `test_x = factory()`",
             )
+        )
 
 
 def _check_docs_structure(repo: Path, out: list[Violation]) -> None:

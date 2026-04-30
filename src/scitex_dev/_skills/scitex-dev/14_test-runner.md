@@ -6,6 +6,8 @@ description: >
   execution. run_local runs pytest in-process. sync_to_hpc rsyncs the
   project. run_hpc_srun/sbatch submit jobs. poll_hpc_job and
   fetch_hpc_result retrieve status and output.
+name: test-runner
+tags: [scitex-dev, scitex-package]
 ---
 
 # Test Runner
