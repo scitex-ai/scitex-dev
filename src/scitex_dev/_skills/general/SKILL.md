@@ -53,7 +53,8 @@ Read in this order when building or auditing a package. Each section presupposes
 
 ### 4. Documentation — how does *this* package become understandable?
 - [04_docs_01_readme.md](04_docs_01_readme.md) — Standard README template, sections, badges, footer
-- [04_docs_02_sphinx.md](04_docs_02_sphinx.md) — Sphinx docs, conf.py, RTD config, troubleshooting
+- [04_docs_02_sphinx.md](04_docs_02_sphinx.md) — Sphinx docs, conf.py, troubleshooting
+- [04_docs_03_rtd.md](04_docs_03_rtd.md) — Read the Docs onboarding, `.readthedocs.yaml`, build config
 
 ### 5. Version Control — how does *this* package ship?
 - [05_version-control_01_management.md](05_version-control_01_management.md) — Branches, tags, release waves, release gates (core workflow)

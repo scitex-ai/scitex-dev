@@ -9,10 +9,17 @@ from dataclasses import dataclass, field
 import re
 
 SKILL_MD = "SKILL.md"
-LEAF_SIZE_MAX = 10 * 1024  # §4
+LEAF_SIZE_MAX = 16 * 1024  # §4 — dense reference leaves can run ~12-15KB
 STUB_SIZE_MIN = 300  # §4
-INDEX_SIZE_MAX = 4 * 1024  # §3
-PREFIX_RE = re.compile(r"^(\d{2})_[a-z0-9][a-z0-9-]*\.md$")
+INDEX_SIZE_MAX = 8 * 1024  # §3 — accommodates ~25 entries with descriptions
+# Matches either:
+#   2-level: NN_kebab-name.md                       (e.g. 40_playground.md)
+#   3-level: NN_group-kebab_NN_leaf-kebab.md        (e.g. 01_ecosystem_01_upstream-and-downstream.md)
+PREFIX_RE = re.compile(
+    r"^(\d{2})_[a-z0-9][a-z0-9-]*"
+    r"(?:_(\d{2})_[a-z0-9][a-z0-9-]*)?"
+    r"\.md$"
+)
 FORBIDDEN_SUBDIRS = {"legacy", ".old"}
 ALIAS_INDEX_NAMES = {"SKILL_INDEX.md", "INDEX.md"}
 # Special system files that sit alongside SKILL.md but are not content leaves.
@@ -74,19 +81,25 @@ def check_skill_dir(skill_dir: Path) -> SkillReport:
         and p.name not in SYSTEM_FILES
     )
 
-    # §2 prefix format
-    prefixes_seen: list[int] = []
+    # §2 prefix format. For 2-level names the prefix is a single int;
+    # for 3-level names (NN_group_NN_leaf) it is the (group, leaf) pair.
+    # Duplicate detection compares full keys so different leaves under the
+    # same group (e.g. 01_ecosystem_01_*, 01_ecosystem_02_*) don't collide.
+    prefixes_seen: list[tuple[int, int | None]] = []
     for leaf in leaves:
         m = PREFIX_RE.match(leaf.name)
         if not m:
             add("§2.prefix", leaf, "filename must match NN_kebab-name.md")
         else:
-            prefixes_seen.append(int(m.group(1)))
+            group_prefix = int(m.group(1))
+            leaf_prefix = int(m.group(2)) if m.group(2) else None
+            prefixes_seen.append((group_prefix, leaf_prefix))
 
     # §2 duplicate prefixes
-    dupes = {n for n in prefixes_seen if prefixes_seen.count(n) > 1}
-    for d in dupes:
-        add("§2.duplicate-prefix", skill_dir, f"prefix {d:02d} used more than once")
+    dupes = {key for key in prefixes_seen if prefixes_seen.count(key) > 1}
+    for group_p, leaf_p in dupes:
+        label = f"{group_p:02d}" if leaf_p is None else f"{group_p:02d}_*_{leaf_p:02d}"
+        add("§2.duplicate-prefix", skill_dir, f"prefix {label} used more than once")
 
     # §4 leaf size
     for leaf in leaves:
