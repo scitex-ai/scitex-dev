@@ -147,12 +147,18 @@ else:
         except Exception:
             return "0.0.0-unknown"
 
+    # Disable Click's auto --help so we control its position relative to
+    # --help-recursive (logical hierarchy: --help-recursive immediately
+    # follows --help). Re-add --help / -h explicitly in the desired slot.
+    _CTX = {**CONTEXT_SETTINGS, "help_option_names": []}
+
     @click.group(
         cls=CategorizedGroup,
         invoke_without_command=True,
-        context_settings=CONTEXT_SETTINGS,
+        context_settings=_CTX,
     )
     @click.option("--version", "-V", is_flag=True, help="Show version and exit.")
+    @click.help_option("-h", "--help")
     @click.option("--help-recursive", is_flag=True, help="Show help for all commands.")
     @click.option(
         "--json",
