@@ -19,12 +19,14 @@ except ImportError:
 else:
     CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 
+    # Names below MUST match the actual registered command names. Anything
+    # not listed here falls through to the "Other" section in --help.
     COMMAND_CATEGORIES = [
-        ("Ecosystem", ["doctor", "ecosystem", "stats"]),
-        ("Development", ["config", "rename"]),
-        ("Documentation", ["docs", "search", "skills"]),
-        ("Integration", ["mcp", "list-python-apis"]),
-        ("Shell", ["completion"]),
+        ("Ecosystem", ["doctor", "ecosystem", "show-stats", "quality"]),
+        ("Development", ["show-config", "rename-symbols"]),
+        ("Documentation", ["docs", "search-docs", "skills"]),
+        ("Interface", ["mcp", "list-python-apis"]),
+        ("Shell", ["install-tab-completion"]),
     ]
 
     class CategorizedGroup(click.Group):
