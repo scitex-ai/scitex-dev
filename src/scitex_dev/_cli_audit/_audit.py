@@ -379,11 +379,50 @@ def _check_help_format(cmd: click.BaseCommand, full: str, out: list[Violation]) 
         )
 
 
+# Convention flags — when a leaf exposes one of these capabilities, it MUST
+# use the canonical spelling per `08_universal-flags.md` "Convention flags"
+# section. Maps non-canonical synonyms → canonical form.
+_CONVENTION_SYNONYMS: dict[str, str] = {
+    # Parallelism: `-j/--jobs` is the canonical (matches make/cargo/ninja)
+    "--parallel": "--jobs (use `-j N` / `--jobs N`)",
+    "--n-cpus": "--jobs (use `-j N` / `--jobs N`)",
+    "--n_cpus": "--jobs (use `-j N` / `--jobs N`)",
+    "--ncpus": "--jobs (use `-j N` / `--jobs N`)",
+    "--workers": "--jobs (use `-j N` / `--jobs N`)",
+    "--n-workers": "--jobs (use `-j N` / `--jobs N`)",
+    # Quietness: `-q/--quiet` is canonical
+    "--silent": "--quiet (use `-q` / `--quiet`)",
+    # NOTE: `--debug` is intentionally NOT mapped — it has a distinct meaning
+    # for server-mode commands (Flask/uvicorn debug-reload) that is not
+    # verbosity. Use `-v/--verbose` for log verbosity, `--debug` for runtime
+    # debug mode.
+}
+
+
+def _check_convention_flags(
+    cmd: click.BaseCommand, full: str, out: list[Violation]
+) -> None:
+    """§2 convention flags — non-canonical synonyms for capabilities that
+    have a standardized spelling per 08_universal-flags.md (Convention flags).
+    """
+    flags = _flag_names(cmd)
+    for synonym, canonical in _CONVENTION_SYNONYMS.items():
+        if synonym in flags:
+            out.append(
+                Violation(
+                    full,
+                    "§2",
+                    f"non-canonical convention flag {synonym!r} — use {canonical}",
+                )
+            )
+
+
 def _check_universal_flags(
     cmd: click.BaseCommand, full: str, is_root: bool, out: list[Violation]
 ) -> None:
     """§2 — universal flag presence."""
     flags = _flag_names(cmd)
+    _check_convention_flags(cmd, full, out)
 
     if is_root:
         if not ({"--version", "-V"} & flags):

@@ -869,12 +869,13 @@ def register_ecosystem_commands(main_group):
         help="Auditor(s) to run. Repeatable. Default: all five.",
     )
     @click.option(
-        "--parallel",
-        "-p",
+        "--jobs",
+        "-j",
+        "parallel",
         default=8,
         type=int,
         show_default=True,
-        help="Concurrent leaves audited in parallel.",
+        help="Concurrent leaves audited in parallel (-j auto / -j0 = all CPUs).",
     )
     @click.option(
         "--include-meta",

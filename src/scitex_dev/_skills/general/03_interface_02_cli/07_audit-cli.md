@@ -59,6 +59,81 @@ Auditor coverage of each rule (`yes` = enforced statically; `partial` = best-eff
 | §8   | stdout/stderr discipline                     | partial   | `list-python-apis --json` parsed as JSON (behavioral; `--behavioral`). |
 | §10  | CLI startup speed (`import <pkg>` < 500ms)   | yes       | Cold-start measurement in fresh subprocess. Threshold: 500ms (Click runs program once per Tab press). Remediation: PEP 562 lazy `__getattr__` in `__init__.py`. |
 
+## Run audit-all periodically during development
+
+Single-leaf check across every auditor (cli, mcp-tools, skills, python-apis, project):
+
+```bash
+scitex-dev ecosystem audit-all <distribution>
+scitex-dev ecosystem audit-all <distribution> --json --severity error
+```
+
+Different from `audit-summary`, which is the **cross-leaf** rollup (every package). Use `audit-all` while editing one package; use `audit-summary` for ecosystem health.
+
+**Recommendation:** wire `audit-all` into a periodic background loop while developing — keeps the regressions you cause immediately visible instead of accumulating until a release. Three flavours:
+
+```bash
+# Cron (runs every 10 min while you work)
+*/10 * * * * cd ~/proj/<pkg> && scitex-dev ecosystem audit-all $(basename $PWD) >> ~/.scitex/dev/runtime/audit.log 2>&1
+
+# Background loop in a tmux/screen pane (manual)
+while sleep 300; do scitex-dev ecosystem audit-all <pkg> --severity error || say "audit failed"; done
+
+# Agentic loop (Claude Code) — `/loop 5m scitex-dev ecosystem audit-all <pkg>`
+#   The /loop skill self-paces the cadence and reports drift back to you.
+```
+
+The cheap-to-run cases (audit-cli, audit-mcp-tools, audit-skills) finish in under a second on a fast leaf; audit-python-apis and audit-project are the slow ones. Even with all five, total wall-clock is well under 10s for healthy packages.
+
+Periodic invocation also tightens the feedback loop on **§10 (CLI startup speed)** — you'll notice when an `__init__.py` change breaks the < 500ms threshold the same minute you make it, not three releases later.
+
+### `--json` for agentic / programmatic consumers
+
+Every auditor accepts `--json`, and `audit-all --json` returns a structured aggregate so an agent (or any script) can reason about violations without parsing human text:
+
+```bash
+scitex-dev ecosystem audit-all <pkg> --json
+```
+
+Shape:
+
+```json
+{
+  "distribution": "scitex-stats",
+  "results": {
+    "audit-cli":         {"exit": 1, "data": {"package": "...", "violations": [...]}},
+    "audit-mcp-tools":   {"exit": 0, "data": {...}},
+    "audit-skills":      {"exit": 0, "data": {...}},
+    "audit-python-apis": {"exit": 0, "data": {...}},
+    "audit-project":     {"exit": 1, "data": {...}}
+  }
+}
+```
+
+Each per-auditor `data.violations` is a list of `{command, rule, message}` objects. Agents writing scitex-* packages should:
+
+1. Run `audit-all <pkg> --json` after every code-shape change (rename, refactor, new command).
+2. Parse `results[*].data.violations` and self-correct any rule violations before declaring the change done.
+3. Track `results[*].exit` — overall non-zero means at least one auditor flagged something.
+
+The JSON contract is the same across packages so a single agent prompt can audit any leaf:
+
+```python
+import json, subprocess
+r = subprocess.run(
+    ["scitex-dev", "ecosystem", "audit-all", pkg, "--json"],
+    capture_output=True, text=True,
+)
+report = json.loads(r.stdout)
+all_violations = [
+    (auditor, v)
+    for auditor, res in report["results"].items()
+    for v in res.get("data", {}).get("violations", [])
+]
+```
+
+This same pattern works for individual auditors (`scitex-dev ecosystem audit-cli <pkg> --json`) when an agent only needs one dimension.
+
 ## Custom dict format
 
 ```yaml
