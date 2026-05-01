@@ -124,8 +124,29 @@ def _run_git(repo: Path, *args: str) -> str | None:
     return result.stdout.strip()
 
 
+def _is_completion_context() -> bool:
+    """True when the current process is a Click shell-completion source eval.
+
+    `.bashrc`/`.zshrc` typically embed
+        eval "$(_SCITEX_DEV_COMPLETE=bash_source scitex-dev)"
+    which runs scitex-dev on every shell startup. Emitting the drift line
+    in that path produces an unwanted warning every time the user opens a
+    new shell or types `bash`. The Click env var is a reliable signal.
+    """
+    return any(
+        k.startswith("_SCITEX_DEV_COMPLETE") or k == "_CLICK_COMPLETE"
+        for k in os.environ
+    )
+
+
 def _compute_drift(repo: Path) -> str | None:
-    """Return a one-line warning, or None if up-to-date / unknown."""
+    """Return a one-line warning, or None if up-to-date / unknown.
+
+    "Ahead-only" returns None — when you're working on develop you are
+    *supposed* to be ahead of the latest release tag, so a warning there
+    is just noise. We only nudge on "behind" (you should pull) or
+    "diverged" (you should rebase / fast-forward).
+    """
     # Use `git tag --sort=-v:refname` (highest-semver-first) instead of
     # `git describe --tags`, which only finds tags REACHABLE FROM HEAD.
     # Reachability fails the standard gitflow case where v* tags live
@@ -153,17 +174,15 @@ def _compute_drift(repo: Path) -> str | None:
         n_behind = int(behind or "0")
     except ValueError:
         return None
-    if n_ahead == 0 and n_behind == 0:
+    if n_behind == 0:
+        # Quiet on "ahead-only" — develop is *supposed* to be ahead of the
+        # latest release tag; warning there is just startup noise. Only
+        # the "behind" and "diverged" cases call for action.
         return None
     if n_ahead and n_behind:
         return (
             f"editable scitex-dev: HEAD ({head}) diverged from latest tag "
             f"{latest_tag} (+{n_ahead}/−{n_behind}). `git pull --rebase`?"
-        )
-    if n_ahead:
-        return (
-            f"editable scitex-dev: HEAD ({head}) is {n_ahead} commit(s) "
-            f"ahead of latest tag {latest_tag} — uncommitted release work."
         )
     return (
         f"editable scitex-dev: HEAD ({head}) is {n_behind} commit(s) behind "
@@ -240,6 +259,13 @@ def emit_if_drift(distribution: str = "scitex-dev") -> None:
     if getattr(emit_if_drift, "_emitted", False):
         return
     if os.environ.get(_SUBPROCESS_MARKER) == "1":
+        emit_if_drift._emitted = True  # type: ignore[attr-defined]
+        return
+    # Don't emit when invoked as a Click shell-completion source eval
+    # (`.bashrc`/`.zshrc` typically embed
+    #  `eval "$(_SCITEX_DEV_COMPLETE=bash_source scitex-dev)"`),
+    # otherwise every shell startup prints the drift line.
+    if _is_completion_context():
         emit_if_drift._emitted = True  # type: ignore[attr-defined]
         return
     emit_if_drift._emitted = True  # type: ignore[attr-defined]
