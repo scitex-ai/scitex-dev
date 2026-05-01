@@ -311,6 +311,16 @@ RULES: dict[str, Rule] = {
                 "and reference it from the `## Installation` section."
             ),
         ),
+        Rule(
+            "PS131",
+            "§1",
+            (
+                "README.md `## <N> Interfaces` section must have exactly "
+                "one `<details open>` block — the primary interface. Its "
+                "minimal example doubles as the quick-start (no separate "
+                "`## Quick Start` H2 needed)."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",

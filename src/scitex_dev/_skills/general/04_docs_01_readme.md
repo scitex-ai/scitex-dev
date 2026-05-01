@@ -29,8 +29,10 @@ identity (logo + tagline + install link) → CI status (badges) → content.
 ## Solution
 <details><summary>Supported Formats / Feature Table</summary></details>
 ## Installation
-## Quickstart
-## Five Interfaces (HTTP optional)
+## <N> Interfaces (Python · CLI · MCP · Skills · HTTP optional)
+  ← The primary interface (highest star rating) is `<details open>` —
+    its minimal example doubles as the quick-start. NO separate
+    `## Quick Start` H2 (it duplicates the primary interface block).
 ## Lint Rules (if applicable)
 ## Part of SciTeX
 
@@ -91,6 +93,11 @@ per interface. Star ratings live on the `<summary>` (not in a separate
 callout); strip parenthetical expansions and `-- for AI Agents` /
 `— for AI Agent Discovery` tails (audit rule **PS118**).
 
+**The primary interface (highest star rating) uses `<details open>`**
+and carries `(primary)` after the stars. Its minimal example IS the
+quick-start — there is no separate `## Quick Start` H2 (audit rule
+**PS131**: exactly one interface block is `<details open>`).
+
 ```markdown
 <details>
 <summary><strong>Python API ⭐⭐⭐</strong></summary>
@@ -98,9 +105,9 @@ callout); strip parenthetical expansions and `-- for AI Agents` /
 > **[Full API reference](<deeplink>)**
 </details>
 
-<details>
-<summary><strong>CLI Commands ⭐⭐</strong></summary>
-[Minimal command examples]
+<details open>
+<summary><strong>CLI Commands ⭐⭐⭐ (primary)</strong></summary>
+[Minimal command examples — doubles as the quick-start]
 > **[Full CLI reference](<deeplink>)** · run `<pkg> --help-recursive` for the live tree.
 </details>
 

@@ -197,6 +197,16 @@ _RE_BARE_RTD_ROOT = re.compile(
 )
 
 
+# PS131 — exactly one interface `<details>` block must be `<details open>`
+# (the primary). Counted only inside the `## <N> Interfaces` section.
+_RE_INTERFACES_HEADING = re.compile(
+    r"^##\s+(Three|Four|Five|Six|\d+)\s+Interfaces\b",
+    re.MULTILINE | re.IGNORECASE,
+)
+_RE_DETAILS_OPEN_TAG = re.compile(r"<details\s+open\b", re.IGNORECASE)
+_RE_NEXT_H2 = re.compile(r"^##\s+", re.MULTILINE)
+
+
 def _read_head(readme: Path, n: int) -> str | None:
     """Return the first `n` bytes of `readme` as text, or None on error/missing."""
     if not readme.is_file():
@@ -234,12 +244,13 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
     if head_sections is None or head_badges is None:
         return
 
-    # PS107 — required sections
+    # PS107 — required sections. NOTE (2026-05): `## Quick Start` is no
+    # longer required — the primary `<details open>` interface block
+    # doubles as the quick-start (PS131). If a Quick Start H2 is present,
+    # it's tolerated but PS107 doesn't enforce it anymore.
     missing: list[str] = []
     if not _RE_INSTALLATION.search(head_sections):
         missing.append("## Installation")
-    if not _RE_QUICKSTART.search(head_sections):
-        missing.append("## Quick Start")
     if not _RE_INTERFACES.search(head_sections):
         missing.append("## <N> Interfaces")
     if not _RE_PART_OF_SCITEX.search(head_sections):
@@ -451,6 +462,29 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                 ),
             )
         )
+
+    # PS131 — exactly one `<details open>` inside `## <N> Interfaces`.
+    iface_h = _RE_INTERFACES_HEADING.search(full)
+    if iface_h is not None:
+        # Slice out the interfaces section (until next H2 or EOF).
+        section_start = iface_h.end()
+        next_h = _RE_NEXT_H2.search(full, pos=section_start)
+        section = full[section_start : next_h.start() if next_h else len(full)]
+        n_open = len(_RE_DETAILS_OPEN_TAG.findall(section))
+        if n_open != 1:
+            out.append(
+                violation_cls(
+                    "PS131",
+                    str(readme),
+                    (
+                        f"README.md `## <N> Interfaces` section has "
+                        f"{n_open} `<details open>` block(s); expected "
+                        "exactly 1 (the primary interface). The primary's "
+                        "minimal example doubles as the quick-start, so "
+                        "it should be expanded by default."
+                    ),
+                )
+            )
 
     # PS123 — `Full X reference` links must deep-link, not bare RTD root.
     bad_links: list[str] = []
