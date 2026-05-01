@@ -30,23 +30,6 @@
 | 2 | **Skills scattered across 33 source repos** -- users can't discover them easily | **`scitex-dev skills export --link`** -- symlink the full skill pack into `~/.claude/skills/scitex/` for live-edit dev loops |
 | 3 | **Testing against a SLURM cluster requires ssh + sbatch dance** -- interrupts local flow | **`scitex-dev test hpc` + `--poll` + `--result`** -- non-blocking submit, query later |
 
-## Problem
-
-The SciTeX ecosystem spans multiple packages (scitex-clew, scitex-writer, scitex-stats, figrecipe, etc.), each with their own documentation, versions, APIs, and CLI commands. Keeping them in sync, discovering what's available, and maintaining consistency across the ecosystem becomes increasingly difficult as it grows.
-
-## Solution
-
-`scitex-dev` (v0.5.1) provides a unified toolkit for developing and maintaining the SciTeX ecosystem:
-
-- **Version management** — detect and fix version mismatches across pyproject.toml, `__init__.py`, git tags, and PyPI
-- **CI/CD** — check GitHub Actions status, wait for workflows, verify PyPI publish
-- **Deployment** — deploy and verify production on remote hosts
-- **Skills** — aggregate, export, and verify AI agent skill pages across the ecosystem
-- **Docs aggregation** — discover, build, and search documentation across all packages
-- **LLM-friendly types** — `Result`, `ErrorCode`, `@supports_return_as` for consistent structured responses
-
-Zero runtime dependencies. Pure stdlib.
-
 ## Installation
 
 ```bash
@@ -62,6 +45,29 @@ pip install scitex-dev[mcp]
 pip install scitex-dev[all]
 ```
 
+### Configuration
+
+Copy [`.env.example`](.env.example) to `.env` (gitignored) at your
+project root, then edit. CLI flags always override env vars. The full
+list (with inline comments) lives in `.env.example`.
+
+<details>
+<summary><strong>Local state directories</strong></summary>
+
+<br>
+
+scitex-dev reads optional config + cache from the canonical SciTeX
+local-state locations:
+
+| Path                          | Scope         | Purpose                              |
+|-------------------------------|---------------|--------------------------------------|
+| `~/.scitex/dev/`              | user-global   | per-user config, cache               |
+| `<proj-root>/.scitex/dev/`    | project-local | overrides for the current repo       |
+
+Project-local wins when both exist. Both are optional.
+
+</details>
+
 ## Modules
 
 | Module | Functions | Purpose |
@@ -73,32 +79,10 @@ pip install scitex-dev[all]
 | `versions` | `get_commits_since_tag` | Commit tracking since last release |
 | `_dist_info` | `clean_stale_dist_info` | Internal: stale dist-info cleanup |
 
-## Quick Start
-
-```python
-from scitex_dev.fix import detect_mismatches, fix_local, verify_versions
-from scitex_dev.ci import check_ci, get_failing_packages
-from scitex_dev.skills import list_skills, export_skills
-
-# Detect version mismatches across the ecosystem
-mismatches = detect_mismatches()
-
-# Fix mismatches locally (dry run by default)
-fix_local(packages=["scitex-stats"], confirm=True)
-
-# Check CI status
-status = check_ci(packages=["scitex", "figrecipe"])
-failing = get_failing_packages()
-
-# List and export AI agent skills
-skills = list_skills()
-export_skills()
-```
-
 ## Four Interfaces
 
 <details>
-<summary><b>Python API</b></summary>
+<summary><strong>Python API ⭐⭐</strong></summary>
 
 ```python
 # Version management
@@ -132,8 +116,8 @@ from scitex_dev import Result, supports_return_as
 
 </details>
 
-<details>
-<summary><b>CLI Commands</b></summary>
+<details open>
+<summary><strong>CLI Commands ⭐⭐⭐ (primary)</strong></summary>
 
 ```bash
 # Ecosystem management
@@ -157,7 +141,7 @@ scitex-dev --help-recursive
 </details>
 
 <details>
-<summary><b>MCP Server</b></summary>
+<summary><strong>MCP Server ⭐⭐</strong></summary>
 
 ```bash
 # Start server
@@ -200,7 +184,7 @@ export SCITEX_DEV_ENV_SRC=~/.scitex/dev/remote.src
 </details>
 
 <details>
-<summary><strong>Skills — for AI Agent Discovery</strong></summary>
+<summary><strong>Skills ⭐⭐⭐</strong></summary>
 
 <br>
 
@@ -212,6 +196,8 @@ scitex-dev skills get SKILL         # Show main skill page
 scitex-dev skills export --package scitex-dev  # Export to Claude Code
 # Private skills (~/.scitex/*/skills/*-private/) are symlinked automatically
 ```
+
+> **[Full skills directory](https://github.com/ywatanabe1989/scitex-dev/tree/develop/src/scitex_dev/_skills)**
 
 | Skill | Content |
 |-------|---------|
@@ -232,19 +218,8 @@ scitex-dev skills export --package scitex-dev  # Export to Claude Code
 the umbrella with `pip install scitex[dev]` to use as
 `scitex.dev` (Python) or `scitex dev ...` (CLI).
 
-```python
-from scitex_dev.fix import detect_mismatches, verify_versions
-from scitex_dev.ci import check_ci, get_failing_packages
-
-# See the entire ecosystem at a glance
-mismatches = detect_mismatches()
-verify_versions()
-
-# Monitor CI across all packages
-failing = get_failing_packages()
-```
-
-The SciTeX system follows the Four Freedoms for Research below, inspired by [the Free Software Definition](https://www.gnu.org/philosophy/free-sw.en.html):
+SciTeX follows the Four Freedoms for Research below, inspired by
+[the Free Software Definition](https://www.gnu.org/philosophy/free-sw.en.html):
 
 >Four Freedoms for Research
 >
