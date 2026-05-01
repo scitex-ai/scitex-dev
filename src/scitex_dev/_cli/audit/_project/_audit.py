@@ -315,10 +315,11 @@ RULES: dict[str, Rule] = {
             "PS131",
             "§1",
             (
-                "README.md `## <N> Interfaces` section must have exactly "
-                "one `<details open>` block — the primary interface. Its "
-                "minimal example doubles as the quick-start (no separate "
-                "`## Quick Start` H2 needed)."
+                "README.md `## <N> Interfaces` section must have at least "
+                "one `<details open>` block — the primary interface, or "
+                "all top-rated interfaces when several tie at the highest "
+                "star count. The primary's minimal example doubles as "
+                "the quick-start (no separate `## Quick Start` H2)."
             ),
         ),
         Rule(

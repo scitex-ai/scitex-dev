@@ -117,10 +117,10 @@ scitex-dev ecosystem sync
 
 # Documentation
 scitex-dev docs --package scitex-writer
-scitex-dev search "save figure"
+scitex-dev search-docs "save figure"
 
 # Bulk rename
-scitex-dev rename old_name new_name --dry-run
+scitex-dev rename-symbols old_name new_name --dry-run
 
 # See all commands
 scitex-dev --help
@@ -172,8 +172,8 @@ export SCITEX_DEV_ENV_SRC=~/.scitex/dev/remote.src
 
 </details>
 
-<details>
-<summary><strong>Skills ⭐⭐⭐</strong></summary>
+<details open>
+<summary><strong>Skills ⭐⭐⭐ (primary)</strong></summary>
 
 <br>
 
@@ -192,12 +192,16 @@ scitex-dev skills export --package scitex-dev  # Export to Claude Code
 |-------|---------|
 | `result-types` | `Result`, `ErrorCode`, `@supports_return_as` for LLM-friendly responses |
 | `cli-mcp-utils` | CLI and MCP utility helpers |
+| `config` | Package configuration and priority config patterns |
 | `versions` | Version management, mismatch detection and fixing |
 | `ecosystem` | Ecosystem list, sync, and commit workflows |
 | `rename` | Safe bulk rename with cross-reference updates |
 | `docs-search` | Documentation aggregation and unified search |
 | `test-runner` | Local and HPC test execution |
-| `config` | Package configuration and priority config patterns |
+| `full-update` / `full-update-deploy` | End-to-end audit → bump → release → sync pipelines |
+| `agentic-test-overview` / `-skills` / `-mcp` | Agent-vs-agent quality testing |
+| `dynamic-audit` | Cross-package periodic audit checklist |
+| `env-vars` | `SCITEX_DEV_*` / `SCITEX_*` environment variable reference |
 
 </details>
 

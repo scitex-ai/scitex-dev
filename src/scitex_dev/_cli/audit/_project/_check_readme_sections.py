@@ -492,17 +492,18 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
         next_h = _RE_NEXT_H2.search(full, pos=section_start)
         section = full[section_start : next_h.start() if next_h else len(full)]
         n_open = len(_RE_DETAILS_OPEN_TAG.findall(section))
-        if n_open != 1:
+        if n_open < 1:
             out.append(
                 violation_cls(
                     "PS131",
                     str(readme),
                     (
-                        f"README.md `## <N> Interfaces` section has "
-                        f"{n_open} `<details open>` block(s); expected "
-                        "exactly 1 (the primary interface). The primary's "
-                        "minimal example doubles as the quick-start, so "
-                        "it should be expanded by default."
+                        "README.md `## <N> Interfaces` section has 0 "
+                        "`<details open>` block(s); expected at least 1 "
+                        "(the primary interface, or all top-rated "
+                        "interfaces when tied). The primary's minimal "
+                        "example doubles as the quick-start, so it must "
+                        "be expanded by default."
                     ),
                 )
             )

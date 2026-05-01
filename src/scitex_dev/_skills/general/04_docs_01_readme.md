@@ -95,10 +95,13 @@ per interface. Star ratings live on the `<summary>` (not in a separate
 callout); strip parenthetical expansions and `-- for AI Agents` /
 `— for AI Agent Discovery` tails (audit rule **PS118**).
 
-**The primary interface (highest star rating) uses `<details open>`**
-and carries `(primary)` after the stars. Its minimal example IS the
-quick-start — there is no separate `## Quick Start` H2 (audit rule
-**PS131**: exactly one interface block is `<details open>`).
+**The primary interface(s) use `<details open>`** and carry `(primary)`
+after the stars. The primary is the interface with the highest star
+rating; when multiple interfaces tie at the highest rating (e.g. CLI
+⭐⭐⭐ AND Skills ⭐⭐⭐), open ALL of them. Their minimal example(s)
+double as the quick-start — there is no separate `## Quick Start` H2
+(audit rule **PS131**: at least one interface block is `<details
+open>`).
 
 ```markdown
 <details>
