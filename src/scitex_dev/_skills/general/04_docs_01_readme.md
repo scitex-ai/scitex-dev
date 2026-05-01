@@ -32,7 +32,9 @@ identity (logo + tagline + install link) → CI status (badges) → content.
 ## <N> Interfaces (Python · CLI · MCP · Skills · HTTP optional)
   ← The primary interface (highest star rating) is `<details open>` —
     its minimal example doubles as the quick-start. NO separate
-    `## Quick Start` H2 (it duplicates the primary interface block).
+    `## Quick Start` H2 (PS131; duplicates the primary interface block).
+    NO standalone `## Modules` H2 either (PS132; duplicates autoapi
+    and drifts).
 ## Lint Rules (if applicable)
 ## Part of SciTeX
 

@@ -68,17 +68,6 @@ Project-local wins when both exist. Both are optional.
 
 </details>
 
-## Modules
-
-| Module | Functions | Purpose |
-|--------|-----------|---------|
-| `skills` | `list_skills`, `get_skill`, `export_skills`, `verify_docs_and_skills` | AI agent skill discovery and export |
-| `fix` | `detect_mismatches`, `fix_local`, `fix_remote`, `fix_init_version`, `bump_version`, `determine_bump_type`, `verify_versions` | Version mismatch detection and repair |
-| `ci` | `check_ci`, `get_failing_packages`, `verify_pypi_config`, `create_github_release`, `wait_for_workflow`, `check_pypi_publish` | GitHub Actions and PyPI integration |
-| `deploy` | `deploy_scitex_cloud`, `verify_production` | Remote host deployment |
-| `versions` | `get_commits_since_tag` | Commit tracking since last release |
-| `_dist_info` | `clean_stale_dist_info` | Internal: stale dist-info cleanup |
-
 ## Four Interfaces
 
 <details>

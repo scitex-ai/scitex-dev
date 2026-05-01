@@ -197,6 +197,10 @@ _RE_BARE_RTD_ROOT = re.compile(
 )
 
 
+# PS132 — banned standalone `## Modules` H2 (drift; duplicate of autoapi).
+_RE_MODULES_H2 = re.compile(r"^##\s+Modules\b", re.MULTILINE | re.IGNORECASE)
+
+
 # PS131 — exactly one interface `<details>` block must be `<details open>`
 # (the primary). Counted only inside the `## <N> Interfaces` section.
 _RE_INTERFACES_HEADING = re.compile(
@@ -459,6 +463,23 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                     "`scitex` README, not in sub-package READMEs. Remove the "
                     "line; if the umbrella relationship needs surfacing, the "
                     "standardized 'Part of SciTeX' one-liner already covers it."
+                ),
+            )
+        )
+
+    # PS132 — `## Modules` H2 (hand-curated function table) is banned.
+    if _RE_MODULES_H2.search(full):
+        out.append(
+            violation_cls(
+                "PS132",
+                str(readme),
+                (
+                    "README.md has a standalone '## Modules' H2 — a "
+                    "hand-curated table of Python modules + functions. "
+                    "This duplicates the Python API <details> block and "
+                    "the autoapi page; it drifts as the package evolves. "
+                    "Drop the section — the Python API block + Full API "
+                    "reference deep-link cover this."
                 ),
             )
         )

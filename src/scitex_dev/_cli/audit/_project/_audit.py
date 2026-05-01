@@ -321,6 +321,18 @@ RULES: dict[str, Rule] = {
                 "`## Quick Start` H2 needed)."
             ),
         ),
+        Rule(
+            "PS132",
+            "§1",
+            (
+                "README.md has a standalone `## Modules` H2 (a hand-curated "
+                "table of Python modules + functions). This duplicates the "
+                "Python API `<details>` block AND the autoapi page on RTD, "
+                "and drifts as the package evolves. Drop the section — "
+                "the Python API block + Full API reference deep-link "
+                "cover this."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
