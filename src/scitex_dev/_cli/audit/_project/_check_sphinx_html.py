@@ -1,19 +1,28 @@
-"""PS121 / PS122 — bundled Sphinx HTML + CI auto-refresh.
+"""PS121 / PS122 / PS124-PS127 — Sphinx + Read the Docs setup.
 
-scitex-cloud (`apps/workspace/docs_app/`) serves per-package docs from
-the in-wheel ``src/<pkg>/_sphinx_html/`` bundle. The canonical refresh
-path is a GitHub Actions workflow (`.github/workflows/docs.yml`) that
-rebuilds and auto-commits the bundle on every push to main/develop.
+scitex-cloud serves per-package docs from the in-wheel
+``src/<pkg>/_sphinx_html/`` bundle. The canonical refresh path is a
+GitHub Actions workflow (``.github/workflows/docs.yml``) that rebuilds
+and auto-commits the bundle on every push to main/develop. RTD also
+builds the same source tree so the live site stays in sync.
 
-Both checks are warn-only and only fire when the package has a Sphinx
-source tree (``docs/sphinx/conf.py``). Packages without docs simply
-skip both rules — they're invisible in the docs site, which is fine
-for low-doc utility packages.
+All checks fire only when the package has a Sphinx source tree
+(``docs/sphinx/conf.py``). Packages without docs skip these rules.
 """
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
+
+# Canonical pinned deps from `_skills/general/04_docs_02_sphinx.md`.
+_CANONICAL_DOCS_DEPS = [
+    re.compile(r"^\s*sphinx\s*>=\s*7", re.MULTILINE),
+    re.compile(r"^\s*sphinx-rtd-theme\s*>=\s*2", re.MULTILINE),
+    re.compile(r"^\s*myst-parser\s*>=\s*2", re.MULTILINE),
+    re.compile(r"^\s*sphinx-copybutton\s*>=\s*0\.5", re.MULTILINE),
+    re.compile(r"^\s*sphinx-autodoc-typehints\s*>=\s*1", re.MULTILINE),
+]
 
 
 def _has_sphinx_source(repo: Path) -> bool:
@@ -74,3 +83,120 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
                 ),
             )
         )
+
+    # PS124 — `.readthedocs.yaml` (or .yml) must exist.
+    rtd_yaml = repo / ".readthedocs.yaml"
+    rtd_yml = repo / ".readthedocs.yml"
+    rtd_path = (
+        rtd_yaml if rtd_yaml.is_file() else (rtd_yml if rtd_yml.is_file() else None)
+    )
+    if rtd_path is None:
+        out.append(
+            violation_cls(
+                "PS124",
+                str(rtd_yaml),
+                (
+                    "package has docs/sphinx/ but no .readthedocs.yaml at "
+                    "the repo root. RTD won't build without it. See "
+                    "_skills/general/04_docs_02_sphinx.md for the canonical "
+                    "config."
+                ),
+            )
+        )
+    else:
+        # PS125 — `.readthedocs.yaml` shape check.
+        try:
+            rtd_text = rtd_path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            rtd_text = ""
+        canonical_bits = [
+            (re.compile(r"^version:\s*2\b", re.MULTILINE), "version: 2"),
+            (
+                re.compile(r"os:\s*ubuntu-22\.04", re.MULTILINE),
+                "build.os: ubuntu-22.04",
+            ),
+            (
+                re.compile(r"python:\s*[\"']?3\.11[\"']?", re.MULTILINE),
+                "build.tools.python: '3.11'",
+            ),
+            (
+                re.compile(r"configuration:\s*docs/sphinx/conf\.py", re.MULTILINE),
+                "sphinx.configuration: docs/sphinx/conf.py",
+            ),
+        ]
+        missing = [label for pat, label in canonical_bits if not pat.search(rtd_text)]
+        if missing:
+            out.append(
+                violation_cls(
+                    "PS125",
+                    str(rtd_path),
+                    (
+                        ".readthedocs config deviates from the canonical "
+                        "SciTeX shape — missing: "
+                        + ", ".join(missing)
+                        + ". See _skills/general/04_docs_02_sphinx.md."
+                    ),
+                )
+            )
+
+    # PS126 — `docs/sphinx/requirements.txt` with canonical pinned deps.
+    docs_req = repo / "docs" / "sphinx" / "requirements.txt"
+    if not docs_req.is_file():
+        out.append(
+            violation_cls(
+                "PS126",
+                str(docs_req),
+                (
+                    "package has docs/sphinx/ but no requirements.txt. "
+                    "Pinning the canonical doc deps (sphinx>=7.0, "
+                    "sphinx-rtd-theme>=2.0, myst-parser>=2.0, "
+                    "sphinx-copybutton>=0.5, sphinx-autodoc-typehints>=1.25) "
+                    "keeps RTD builds reproducible across the ecosystem."
+                ),
+            )
+        )
+    else:
+        try:
+            req_text = docs_req.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            req_text = ""
+        if not all(pat.search(req_text) for pat in _CANONICAL_DOCS_DEPS):
+            out.append(
+                violation_cls(
+                    "PS126",
+                    str(docs_req),
+                    (
+                        "docs/sphinx/requirements.txt is missing one or more "
+                        "canonical pinned deps. Required floor: sphinx>=7.0, "
+                        "sphinx-rtd-theme>=2.0, myst-parser>=2.0, "
+                        "sphinx-copybutton>=0.5, sphinx-autodoc-typehints>=1.25."
+                    ),
+                )
+            )
+
+    # PS127 — pyproject.toml [project.urls] Documentation entry.
+    pyproject = repo / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            pp_text = pyproject.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            pp_text = ""
+        # Cheap regex: look for Documentation = "https://...readthedocs.io..."
+        if not re.search(
+            r"^\s*Documentation\s*=\s*[\"\']https?://[^\"\']*readthedocs\.io",
+            pp_text,
+            re.MULTILINE | re.IGNORECASE,
+        ):
+            out.append(
+                violation_cls(
+                    "PS127",
+                    str(pyproject),
+                    (
+                        "pyproject.toml [project.urls] has no Documentation "
+                        "entry pointing at RTD (e.g. "
+                        'Documentation = "https://<pkg>.readthedocs.io"). '
+                        "PyPI surfaces this URL — missing it hides the docs "
+                        "from new users."
+                    ),
+                )
+            )

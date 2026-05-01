@@ -93,3 +93,20 @@ packages = ["src/<pkg>"]
 ```
 
 If a package has no Sphinx tree, omit `_sphinx_html/`; `get_docs(format="html")` returns `None` and the docs site skips that package gracefully. See [`02_package_01_project-structure.md`](02_package_01_project-structure.md) for the broader project-structure context.
+
+## Audit rules (project-structure auditor)
+
+When `docs/sphinx/conf.py` exists, `scitex-dev ecosystem audit-project`
+enforces the canonical setup:
+
+| Code  | Enforces                                                                          |
+|-------|-----------------------------------------------------------------------------------|
+| PS121 | `src/<pkg>/_sphinx_html/index.html` is bundled (scitex-cloud serves from it)      |
+| PS122 | `.github/workflows/docs.yml` exists (auto-refreshes the bundle on push)           |
+| PS124 | `.readthedocs.yaml` (or `.yml`) exists at repo root                               |
+| PS125 | `.readthedocs.yaml` matches the canonical shape (version 2, ubuntu-22.04, py3.11) |
+| PS126 | `docs/sphinx/requirements.txt` pins the canonical doc deps                        |
+| PS127 | `pyproject.toml [project.urls]` has `Documentation = "https://<pkg>.readthedocs.io"` |
+
+Packages without `docs/sphinx/conf.py` skip all six rules — utility
+packages without docs are fine (just invisible in the docs site).

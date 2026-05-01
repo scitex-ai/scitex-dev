@@ -235,6 +235,50 @@ RULES: dict[str, Rule] = {
                 "X reference deep-link patterns'."
             ),
         ),
+        Rule(
+            "PS124",
+            "§1",
+            (
+                "package has `docs/sphinx/` but no `.readthedocs.yaml` (or "
+                "`.readthedocs.yml`) at the repo root. Without it, RTD won't "
+                "build the docs. Use the canonical config — see "
+                "`_skills/general/04_docs_02_sphinx.md`."
+            ),
+        ),
+        Rule(
+            "PS125",
+            "§1",
+            (
+                "`.readthedocs.yaml` deviates from the canonical SciTeX "
+                "shape (version: 2, build.os: ubuntu-22.04, "
+                "build.tools.python: '3.11', sphinx.configuration: "
+                "docs/sphinx/conf.py). Drift breaks the cross-package "
+                "uniformity scitex-cloud relies on."
+            ),
+        ),
+        Rule(
+            "PS126",
+            "§1",
+            (
+                "`docs/sphinx/requirements.txt` is missing or doesn't pin "
+                "the canonical SciTeX docs deps (sphinx>=7.0, "
+                "sphinx-rtd-theme>=2.0, myst-parser>=2.0, "
+                "sphinx-copybutton>=0.5, sphinx-autodoc-typehints>=1.25). "
+                "Pinned versions keep RTD builds reproducible across the "
+                "ecosystem."
+            ),
+        ),
+        Rule(
+            "PS127",
+            "§1",
+            (
+                "`pyproject.toml [project.urls]` has no "
+                '`Documentation = "https://<pkg>.readthedocs.io"` entry '
+                "(or it points elsewhere). PyPI surfaces this URL on the "
+                "project page; missing it makes the docs invisible to new "
+                "users."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
