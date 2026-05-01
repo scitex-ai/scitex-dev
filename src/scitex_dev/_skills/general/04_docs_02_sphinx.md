@@ -61,20 +61,88 @@ docs/sphinx/_build/html/        # local Sphinx output; gitignored
 src/<pkg>/_sphinx_html/         # bundled in the wheel; refreshed at release
 ```
 
-Release-time refresh (typical `scripts/makefile/docs.sh`):
+**Canonical refresh path: GitHub Actions** (`.github/workflows/docs.yml`).
+The workflow:
+1. Builds Sphinx HTML on every push/PR.
+2. PRs use `sphinx-build -W` (treat warnings as errors → catches breakage early).
+3. Pushes to `main`/`develop` rebuild without `-W`, copy the output to
+   `src/<pkg>/_sphinx_html/`, and auto-commit when it changes
+   (`[skip ci]` to avoid loops).
+
+Reference workflow: `scitex-ssh/.github/workflows/docs.yml`.
+
+Manual fallback (if CI is unavailable):
 
 ```bash
 sphinx-build -b html docs/sphinx docs/sphinx/_build/html
 rm -rf src/<pkg>/_sphinx_html
-cp -r docs/sphinx/_build/html src/<pkg>/_sphinx_html
+cp -rf docs/sphinx/_build/html src/<pkg>/_sphinx_html
 ```
 
-`pyproject.toml` must include the directory in the wheel:
+`pyproject.toml` must include the directory in the wheel. Hatchling
+needs `force-include` (a plain include glob is dropped because
+`_sphinx_html/` lives under `src/<pkg>/` which is already a package
+dir):
 
 ```toml
 [tool.hatch.build.targets.wheel]
 packages = ["src/<pkg>"]
-include = ["src/<pkg>/_sphinx_html/**"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/<pkg>/_sphinx_html" = "<pkg>/_sphinx_html"
 ```
 
 If a package has no Sphinx tree, omit `_sphinx_html/`; `get_docs(format="html")` returns `None` and the docs site skips that package gracefully. See [`02_package_01_project-structure.md`](02_package_01_project-structure.md) for the broader project-structure context.
+
+## Audit rules (project-structure auditor)
+
+When `docs/sphinx/conf.py` exists, `scitex-dev ecosystem audit-project`
+enforces the canonical setup:
+
+| Code  | Enforces                                                                          |
+|-------|-----------------------------------------------------------------------------------|
+| PS121 | `src/<pkg>/_sphinx_html/index.html` is bundled (scitex-cloud serves from it)      |
+| PS122 | `.github/workflows/docs.yml` exists (auto-refreshes the bundle on push)           |
+| PS124 | `.readthedocs.yaml` (or `.yml`) exists at repo root                               |
+| PS125 | `.readthedocs.yaml` matches the canonical shape (version 2, ubuntu-22.04, py3.11) |
+| PS126 | `docs/sphinx/requirements.txt` pins the canonical doc deps                        |
+| PS127 | `pyproject.toml [project.urls]` has `Documentation = "https://<pkg>.readthedocs.io"` |
+
+## CRITICAL: do NOT gitignore `src/<pkg>/_sphinx_html/`
+
+The legacy `.gitignore` template often included `src/*/_sphinx_html/`
+to keep build artefacts out of source control. **That is wrong for the
+current convention.** scitex-cloud serves docs from the in-wheel bundle,
+which means the bundle MUST be committed. Symptom: CI fails with
+`FileNotFoundError: Forced include not found:
+.../src/<pkg>/_sphinx_html` because hatchling's `force-include` references
+a path the checkout doesn't have. Fix: remove that line from `.gitignore`.
+
+## Read the Docs project provisioning
+
+Use the v3 API (token at `~/.dotfiles/src/.bash.d/secrets/access_tokens/read_the_docs.txt`,
+also exported as `$RTD_TOKEN`) to register a new project:
+
+```bash
+curl -X POST -H "Authorization: Token $RTD_TOKEN" \
+  -H "Content-Type: application/json" \
+  https://readthedocs.org/api/v3/projects/ \
+  -d '{
+    "name": "<pkg>",
+    "repository": {"url": "https://github.com/ywatanabe1989/<pkg>", "type": "git"},
+    "homepage": "https://github.com/ywatanabe1989/<pkg>",
+    "programming_language": "py",
+    "language": "en",
+    "default_branch": "main"
+  }'
+```
+
+Then trigger the first build:
+
+```bash
+curl -X POST -H "Authorization: Token $RTD_TOKEN" \
+  https://readthedocs.org/api/v3/projects/<pkg>/versions/latest/builds/
+```
+
+Packages without `docs/sphinx/conf.py` skip all six rules — utility
+packages without docs are fine (just invisible in the docs site).

@@ -148,6 +148,192 @@ RULES: dict[str, Rule] = {
                 "the cluster wants to be a directory."
             ),
         ),
+        Rule(
+            "PS116",
+            "§1",
+            (
+                "README.md uses the deprecated `> **Interfaces:** ...` "
+                "summary callout. Per 2026-05 convention, put star ratings "
+                "directly on each interface section header instead "
+                "(e.g. `## Python API ⭐⭐⭐`)."
+            ),
+        ),
+        Rule(
+            "PS117",
+            "§1",
+            (
+                'README.md has a duplicate badge block: a `<p align="center">` '
+                "row of img.shields.io / badge.fury.io / readthedocs badges "
+                "appears in addition to the canonical "
+                "`<!-- scitex-badges:start --> ... :end -->` block. Keep "
+                "only the canonical block."
+            ),
+        ),
+        Rule(
+            "PS118",
+            "§1",
+            (
+                "README.md interface section header carries a banned "
+                "descriptor like `(Application Programming Interface)`, "
+                "`-- for AI Agents`, or `— for AI Agent Discovery`. The "
+                "section names themselves carry meaning — strip the prose."
+            ),
+        ),
+        Rule(
+            "PS119",
+            "§1",
+            (
+                "README.md contains a `> **SciTeX users**: pip install scitex "
+                "already includes ...` install hint. These belong in the "
+                "umbrella `scitex` README, not in sub-package READMEs "
+                "(extras like `pip install scitex[ssh]` drift)."
+            ),
+        ),
+        Rule(
+            "PS120",
+            "§1",
+            (
+                "README.md `## Part of SciTeX` section is missing the "
+                "standardized umbrella one-liner. After the `is part of "
+                "[SciTeX]` opener, mention `pip install scitex[<extra>]` "
+                "AND `scitex.<module>` AND `scitex <subcommand>` so users "
+                "see how the package fits the umbrella."
+            ),
+        ),
+        Rule(
+            "PS121",
+            "§1",
+            (
+                "package has `docs/sphinx/conf.py` but no "
+                "`src/<pkg>/_sphinx_html/index.html` bundled. scitex-cloud "
+                "serves docs from the in-wheel `_sphinx_html/` — without it "
+                "the package is invisible at https://scitex.ai/apps/docs/. "
+                "Refresh via the canonical CI workflow "
+                "(`.github/workflows/docs.yml`)."
+            ),
+        ),
+        Rule(
+            "PS122",
+            "§1",
+            (
+                "package has `docs/sphinx/` but no "
+                "`.github/workflows/docs.yml` CI workflow. Auto-refreshing "
+                "`_sphinx_html/` in CI is the canonical pattern (see "
+                "scitex-ssh as reference). Manual refresh drifts; CI keeps "
+                "the bundle fresh on every push to main/develop."
+            ),
+        ),
+        Rule(
+            "PS123",
+            "§1",
+            (
+                "README.md interface section has a `Full X reference` link "
+                "pointing at the bare RTD root (e.g. "
+                "`https://<pkg>.readthedocs.io/`) instead of a deep-link "
+                "anchor page. Use the canonical deep-link per interface — "
+                "see `_skills/general/04_docs_01_readme.md` 'Canonical Full "
+                "X reference deep-link patterns'."
+            ),
+        ),
+        Rule(
+            "PS124",
+            "§1",
+            (
+                "package has `docs/sphinx/` but no `.readthedocs.yaml` (or "
+                "`.readthedocs.yml`) at the repo root. Without it, RTD won't "
+                "build the docs. Use the canonical config — see "
+                "`_skills/general/04_docs_02_sphinx.md`."
+            ),
+        ),
+        Rule(
+            "PS125",
+            "§1",
+            (
+                "`.readthedocs.yaml` deviates from the canonical SciTeX "
+                "shape (version: 2, build.os: ubuntu-22.04, "
+                "build.tools.python: '3.11', sphinx.configuration: "
+                "docs/sphinx/conf.py). Drift breaks the cross-package "
+                "uniformity scitex-cloud relies on."
+            ),
+        ),
+        Rule(
+            "PS126",
+            "§1",
+            (
+                "`docs/sphinx/requirements.txt` is missing or doesn't pin "
+                "the canonical SciTeX docs deps (sphinx>=7.0, "
+                "sphinx-rtd-theme>=2.0, myst-parser>=2.0, "
+                "sphinx-copybutton>=0.5, sphinx-autodoc-typehints>=1.25). "
+                "Pinned versions keep RTD builds reproducible across the "
+                "ecosystem."
+            ),
+        ),
+        Rule(
+            "PS127",
+            "§1",
+            (
+                "`pyproject.toml [project.urls]` has no "
+                '`Documentation = "https://<pkg>.readthedocs.io"` entry '
+                "(or it points elsewhere). PyPI surfaces this URL on the "
+                "project page; missing it makes the docs invisible to new "
+                "users."
+            ),
+        ),
+        Rule(
+            "PS128",
+            "§1",
+            (
+                "`.gitignore` excludes `src/<pkg>/_sphinx_html/` but the "
+                "convention requires committing the bundle. scitex-cloud "
+                "serves from the in-wheel HTML; CI's hatchling "
+                "force-include will fail with `FileNotFoundError: Forced "
+                "include not found`. Remove the line."
+            ),
+        ),
+        Rule(
+            "PS129",
+            "§1",
+            (
+                "package source references `SCITEX_<MODULE>_*` env vars "
+                "but documents them in NEITHER a README "
+                "`## Environment Variables` section NOR a `.env.example` "
+                "at repo root. Pick one — see "
+                "`_skills/general/04_docs_03_env-vars-and-state.md`."
+            ),
+        ),
+        Rule(
+            "PS130",
+            "§1",
+            (
+                "README has `## Environment Variables` AND `.env.example` "
+                "exists at repo root — the two will drift. Pick one: keep "
+                "the README table (small lists), OR keep `.env.example` "
+                "and reference it from the `## Installation` section."
+            ),
+        ),
+        Rule(
+            "PS131",
+            "§1",
+            (
+                "README.md `## <N> Interfaces` section must have at least "
+                "one `<details open>` block — the primary interface, or "
+                "all top-rated interfaces when several tie at the highest "
+                "star count. The primary's minimal example doubles as "
+                "the quick-start (no separate `## Quick Start` H2)."
+            ),
+        ),
+        Rule(
+            "PS132",
+            "§1",
+            (
+                "README.md has a standalone `## Modules` H2 (a hand-curated "
+                "table of Python modules + functions). This duplicates the "
+                "Python API `<details>` block AND the autoapi page on RTD, "
+                "and drifts as the package evolves. Drop the section — "
+                "the Python API block + Full API reference deep-link "
+                "cover this."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
@@ -936,6 +1122,12 @@ def audit_project(
     from ._check_readme_sections import check_readme_sections
 
     check_readme_sections(repo_root, Violation, violations)
+    from ._check_sphinx_html import check_sphinx_html
+
+    check_sphinx_html(repo_root, Violation, violations)
+    from ._check_env_example import check_env_example
+
+    check_env_example(repo_root, Violation, violations)
     from ._check_examples import check_examples_conventions
 
     check_examples_conventions(repo_root, Violation, violations)

@@ -17,9 +17,11 @@ Every SciTeX package README follows this structure:
 
 **One-line tagline**
 
-[Badges: PyPI, Docs, Tests, License — centered]
-
 [Quick links: Documentation · pip install — centered]
+
+[Badges: PyPI, Docs, Tests, License] ← placed JUST ABOVE the `---`
+separator (not under the H1). The header reads top-to-bottom as
+identity (logo + tagline + install link) → CI status (badges) → content.
 
 ---
 
@@ -27,11 +29,47 @@ Every SciTeX package README follows this structure:
 ## Solution
 <details><summary>Supported Formats / Feature Table</summary></details>
 ## Installation
-## Quickstart
-## Five Interfaces (HTTP optional)
+## <N> Interfaces (Python · CLI · MCP · Skills · HTTP optional)
+  ← The primary interface (highest star rating) is `<details open>` —
+    its minimal example doubles as the quick-start. NO separate
+    `## Quick Start` H2 (PS131; duplicates the primary interface block).
+    NO standalone `## Modules` H2 either (PS132; duplicates autoapi
+    and drifts).
 ## Lint Rules (if applicable)
 ## Part of SciTeX
-[Four Freedoms blockquote]
+
+**Required first paragraph** (one standardized line):
+
+> `<package>` is part of [**SciTeX**](https://scitex.ai). Install via
+> the umbrella with `pip install scitex[<extra>]` to use as
+> `scitex.<module>` (Python) or `scitex <subcommand> ...` (CLI).
+
+Replace `<package>`, `<extra>`, `<module>`, `<subcommand>` per package.
+Do NOT use the older `> **SciTeX users**: ...` blockquote form (drifts;
+inconsistent across the ecosystem).
+
+[Optional `import scitex` snippet — ONLY include if it demonstrates
+ **synergy via the umbrella**: an advantage you only get when combined
+ with OTHER scitex packages through `import scitex`. Concretely, the
+ snippet must touch at least TWO scitex modules and the combination must
+ produce a meaningful result the standalone package cannot.
+
+ Examples of valid synergy:
+   import scitex as stx
+   data = stx.io.load("session.npy")          # scitex-io
+   fig, ax = stx.plt.subplots()               # scitex-plt
+   ax.plot(data)
+   stx.io.save(fig, "out.png")                # plt → io round-trip
+
+ NOT synergy (skip the snippet entirely):
+   import scitex
+   scitex.ssh.setup(2222, ...)                # same call as scitex_ssh.setup
+                                              # — different alias, no benefit
+
+ If your package has no umbrella synergy yet, omit the snippet and ship
+ only the Four Freedoms blockquote. Don't fabricate a single-module
+ example just to fill the section.]
+[Four Freedoms blockquote — always present]
 
 ---
 
@@ -50,31 +88,72 @@ Every SciTeX package README follows this structure:
 </p>
 ```
 
-## Five Interfaces, HTTP optional (Collapsible)
+## Interface sections (collapsible)
 
-Each interface in its own `<details>` block:
+The README's `## <N> Interfaces` section contains one `<details>` block
+per interface. Star ratings live on the `<summary>` (not in a separate
+callout); strip parenthetical expansions and `-- for AI Agents` /
+`— for AI Agent Discovery` tails (audit rule **PS118**).
+
+**The primary interface(s) use `<details open>`** and carry `(primary)`
+after the stars. The primary is the interface with the highest star
+rating; when multiple interfaces tie at the highest rating (e.g. CLI
+⭐⭐⭐ AND Skills ⭐⭐⭐), open ALL of them. Their minimal example(s)
+double as the quick-start — there is no separate `## Quick Start` H2
+(audit rule **PS131**: at least one interface block is `<details
+open>`).
 
 ```markdown
 <details>
-<summary><strong>Python API</strong></summary>
-[Code examples]
+<summary><strong>Python API ⭐⭐⭐</strong></summary>
+[Minimal `import <pkg>` example, 3-10 lines]
+> **[Full API reference](<deeplink>)**
+</details>
+
+<details open>
+<summary><strong>CLI Commands ⭐⭐⭐ (primary)</strong></summary>
+[Minimal command examples — doubles as the quick-start]
+> **[Full CLI reference](<deeplink>)** · run `<pkg> --help-recursive` for the live tree.
 </details>
 
 <details>
-<summary><strong>CLI Commands</strong></summary>
-[Command examples]
+<summary><strong>MCP Server ⭐⭐</strong></summary>
+[Tool table + `<pkg> mcp start`]
+> **[Full MCP specification](<deeplink>)** · run `<pkg> mcp list-tools` for the live registry.
 </details>
 
 <details>
-<summary><strong>MCP Server — for AI Agents</strong></summary>
-[Tool table + start command]
-</details>
-
-<details>
-<summary><strong>Skills — for AI Agent Discovery</strong></summary>
-[Skill table + CLI commands]
+<summary><strong>Skills ⭐⭐</strong></summary>
+[Skill table + `<pkg> skills list`]
+> **[Full skills directory](https://github.com/ywatanabe1989/<pkg>/tree/develop/src/<import>/_skills/<pkg>)**
 </details>
 ```
+
+### Canonical "Full X reference" deep-link patterns
+
+Each `Full X` link **must** be a deep-link, not a bare RTD root URL
+(audit rule **PS123**). The deep-link points into the bundled
+`_sphinx_html/` (also surfaced via Read the Docs):
+
+| Interface  | Canonical deep-link                                                          |
+|------------|------------------------------------------------------------------------------|
+| Python API | `https://<pkg>.readthedocs.io/en/latest/api/<import_name>.html`              |
+| CLI        | `https://<pkg>.readthedocs.io/en/latest/quickstart.html` (or dedicated page) |
+| MCP        | `https://<pkg>.readthedocs.io/en/latest/api/<import_name>._mcp.html`         |
+| Skills     | `https://github.com/ywatanabe1989/<pkg>/tree/develop/src/<import>/_skills/<pkg>` |
+
+Skills point at the source tree on GitHub (not RTD) because skill
+markdown is consumed by AI agents that follow the directory structure
+directly.
+
+### Future: `scitex-dev readme refresh` (planned)
+
+The interface block bodies (code examples + tool tables + skill tables)
+should eventually be auto-generated between markers like
+`<!-- scitex-api:start --> ... <!-- scitex-api:end -->`. The generator
+will call `scitex_dev.introspect.api(<pkg>)`, `<pkg> --help-recursive`,
+`<pkg> mcp list-tools`, and `ls _skills/<pkg>/` — so the README can't
+drift from reality. Tracked under scitex-dev TODO.
 
 ## Four Freedoms Footer
 

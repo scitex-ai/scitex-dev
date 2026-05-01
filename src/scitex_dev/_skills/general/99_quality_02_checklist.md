@@ -98,15 +98,30 @@ primary_interface: python | cli | mcp | hook | mixed
 interfaces: {python: 0..3, cli: 0..3, mcp: 0..3, skills: 0..3, hook: 0..3, http: 0..3}
 ```
 
-Body starts with the callout:
-`> **Interfaces:** Python ⭐⭐⭐ (primary) · CLI — · MCP — · Skills ⭐⭐ · Hook — · HTTP —`
+Body starts with a one-line description (no blockquote callout). The
+old `> **Interfaces:** ...` summary line is **deprecated** as of 2026-05
+— star ratings now live on each interface section header (see §6).
 
-**Check:** glob all SKILL.md, parse frontmatter, report missing fields.
+**Check:** glob all SKILL.md, parse frontmatter, report missing fields;
+warn on any surviving `> **Interfaces:**` callout line.
 
-## 6. README callout mirror
+## 6. README per-section star ratings
 
-Every `scitex-*/README.md` has the same `> **Interfaces:** ...` callout
-just above its `## Problem and Solution` table (mirrors SKILL.md body).
+Every `scitex-*/README.md` puts the interface star rating directly on
+each interface section header, not in a separate summary callout:
+
+```markdown
+## Python API ⭐⭐⭐
+## CLI Commands ⭐
+## MCP Server ⭐⭐
+## Skills ⭐⭐
+```
+
+Strip parenthetical expansions (`(Application Programming Interface)`)
+and trailing role descriptors (`-- for AI Agents`, `— for AI Agent
+Discovery`). Also: do not duplicate the badges block — keep one
+`<!-- scitex-badges:start --> ... :end -->` block at the top, no
+secondary `<p align="center">` badge row under the logo.
 
 ## 7. Doc-example chains resolve
 
