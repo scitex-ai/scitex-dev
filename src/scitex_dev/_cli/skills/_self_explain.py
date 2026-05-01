@@ -19,6 +19,14 @@ from typing import Any, Dict, Optional
 # this do?" answers across the whole ecosystem.
 # ---------------------------------------------------------------------------
 
+# Tiered question set. Each tier has a clear purpose:
+#   identity  — what is this and why does it exist (1 sentence + table)
+#   usage     — show me the minimum thing that works (code)
+#   boundary  — what is this NOT for (red test; agent must redirect, not hallucinate)
+# Authors override the boundary tier per-package via
+# ``src/<pkg>/_skills/<pkg>/_red_tests.yaml`` so each package gets its
+# own targeted "no, that's not us" pairs.
+
 _PROMPT_WHAT_FOR = (
     "Read the skills under ~/.claude/skills/ and answer in ONE sentence: "
     "what is this package for?"
@@ -31,15 +39,27 @@ _PROMPT_PROBLEMS = (
 )
 
 _PROMPT_QUICK_START = (
-    "Read the skills under ~/.claude/skills/ and show the canonical Quick "
-    "Start example as a Python code block. Just the code, no commentary."
+    "Read the skills under ~/.claude/skills/ and show the minimal working "
+    "example as a Python code block. Just the code, no commentary."
 )
 
-_PROMPTS = {
+_PROMPT_WHEN_NOT_TO_USE = (
+    "Read the skills under ~/.claude/skills/ and answer in 1-2 sentences: "
+    "when should someone NOT use this package? If the skills don't say, "
+    "answer 'not specified in the skills'."
+)
+
+_PROMPTS_DEFAULT = {
+    # Tier 1 — identity
     "what_for": _PROMPT_WHAT_FOR,
     "problems_solved": _PROMPT_PROBLEMS,
+    # Tier 2 — usage
     "quick_start": _PROMPT_QUICK_START,
+    "when_not_to_use": _PROMPT_WHEN_NOT_TO_USE,
 }
+
+# Backward-compat alias for callers / tests that grab _PROMPTS directly.
+_PROMPTS = _PROMPTS_DEFAULT
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +94,44 @@ def _find_skills_dir(distribution: str) -> Path:
             f"Has the package been laid out with _skills/<dist>/ yet?"
         )
     return candidate
+
+
+def _load_red_tests(skills_src: Path) -> list[dict]:
+    """Load per-package red tests from ``<skills_src>/_red_tests.yaml``.
+
+    Schema (list of dicts):
+        - question: "Can this do <unrelated thing>?"
+          expect_contains: ["No", "scitex-X"]   # substrings the answer MUST contain
+          expect_excludes: ["yes", "you can"]   # substrings the answer must NOT contain
+
+    Missing file or invalid YAML → returns []. Authors are not required
+    to provide red tests; the absence just skips the boundary tier.
+    """
+    red_file = skills_src / "_red_tests.yaml"
+    if not red_file.is_file():
+        return []
+    try:
+        import yaml  # type: ignore[import-untyped]
+    except ImportError:
+        return []
+    try:
+        data = yaml.safe_load(red_file.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    out = []
+    for entry in data:
+        if not isinstance(entry, dict) or "question" not in entry:
+            continue
+        out.append(
+            {
+                "question": str(entry["question"]),
+                "expect_contains": list(entry.get("expect_contains") or []),
+                "expect_excludes": list(entry.get("expect_excludes") or []),
+            }
+        )
+    return out
 
 
 def _stage_skills_mount(skills_src: Path, distribution: str) -> Path:
@@ -142,6 +200,27 @@ def self_explain(
                 result = runner.run(prompt, model=model)
                 answers.append(_extract_text(result))
             out[key] = answers[0] if runs_per_prompt == 1 else answers
+
+        # Tier 4 — boundary / red tests. Author-provided per-package via
+        # _red_tests.yaml; each entry asks a "can this do X?" question and
+        # we score the answer against expect_contains / expect_excludes.
+        red_results = []
+        for entry in _load_red_tests(skills_src):
+            ans_text = _extract_text(runner.run(entry["question"], model=model))
+            low = ans_text.lower()
+            passes_contains = all(s.lower() in low for s in entry["expect_contains"])
+            passes_excludes = all(
+                s.lower() not in low for s in entry["expect_excludes"]
+            )
+            red_results.append(
+                {
+                    "question": entry["question"],
+                    "answer": ans_text,
+                    "passed": bool(passes_contains and passes_excludes),
+                }
+            )
+        if red_results:
+            out["red_tests"] = red_results
         return out
     finally:
         if cleanup_mount is not None and cleanup_mount.exists():
