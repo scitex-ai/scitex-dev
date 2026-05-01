@@ -56,6 +56,19 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
+            "PS106",
+            "§1",
+            (
+                "README.md is missing a coverage badge — every scitex-* "
+                "package should surface its current test coverage at the "
+                "top of the README so reviewers and downstream consumers "
+                "can see at a glance whether the package is well-tested. "
+                "Add a `[![coverage](https://img.shields.io/...)](url)` "
+                "or `![codecov](https://codecov.io/...)` line near the "
+                "title. The badge must be in README.md (not a sub-doc)."
+            ),
+        ),
+        Rule(
             "PS108",
             "§1",
             (
@@ -774,6 +787,9 @@ def audit_project(
         from ._check_flat_layout import check_flat_layout
 
         check_flat_layout(src_pkg, Violation, violations)
+    from ._check_readme_badges import check_coverage_badge
+
+    check_coverage_badge(repo_root, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]

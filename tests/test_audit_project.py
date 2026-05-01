@@ -53,6 +53,11 @@ def _violations_for(repo: Path, name: str) -> list[str]:
     src_pkg = _src_pkg_dir(repo, name)
     if src_pkg is not None:
         check_flat_layout(src_pkg, Violation, out)
+    from scitex_dev._cli_audit_project._check_readme_badges import (
+        check_coverage_badge,
+    )
+
+    check_coverage_badge(repo, Violation, out)
     return [v.rule for v in out]
 
 
@@ -349,6 +354,7 @@ def test_ps108_rolls_up_multiple_clusters(tmp_path):
     # Direct call: assert single rolled-up violation mentions both prefixes.
     from scitex_dev._cli_audit_project._audit import Violation
     from scitex_dev._cli_audit_project._check_flat_layout import check_flat_layout
+
     out: list = []
     check_flat_layout(src, Violation, out)
     assert len(out) == 1
@@ -369,6 +375,7 @@ def test_ps204_hint_suggests_move_on_unique_basename(tmp_path):
     (repo / "tests" / "demo" / "test_foo.py").write_text("def test_x(): pass\n")
     out: list = []
     from scitex_dev._cli_audit_project._audit import _check_mirror
+
     _check_mirror(repo, "demo", out)
     ps204 = [v for v in out if v.rule == "PS204"]
     assert len(ps204) == 1
@@ -386,8 +393,46 @@ def test_ps204_hint_lists_siblings_when_no_basename_match(tmp_path):
     (repo / "tests" / "demo" / "test_qux.py").write_text("def test_x(): pass\n")
     out: list = []
     from scitex_dev._cli_audit_project._audit import _check_mirror
+
     _check_mirror(repo, "demo", out)
     ps204 = [v for v in out if v.rule == "PS204"]
     assert len(ps204) == 1
     detail = ps204[0].detail
     assert "bar.py" in detail and "baz.py" in detail
+
+
+# ---------------------------------------------------------------------------
+# PS106 — coverage badge required in README
+# ---------------------------------------------------------------------------
+
+
+def test_ps106_fires_when_no_coverage_badge(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text("# demo\n\nA package.\n")
+    rules = _violations_for(repo, "demo")
+    assert "PS106" in rules
+
+
+def test_ps106_silent_with_codecov_badge(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(
+        "# demo\n\n[![cov](https://codecov.io/gh/x/y/graph/badge.svg)](https://codecov.io/gh/x/y)\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS106" not in rules
+
+
+def test_ps106_silent_with_shields_codecov_badge(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(
+        "# demo\n\n![cov](https://img.shields.io/codecov/c/github/x/y)\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS106" not in rules
+
+
+def test_ps106_silent_when_readme_missing(tmp_path):
+    """No README → PS101/future PS107 catches it; PS106 stays quiet."""
+    repo = _make_repo(tmp_path, "demo")
+    rules = _violations_for(repo, "demo")
+    assert "PS106" not in rules
