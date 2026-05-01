@@ -30,6 +30,7 @@
 | 2 | **Skills scattered across ~70 source repos** -- AI agents can't discover them; humans can't review them | **`scitex-dev skills list / get / export`** -- aggregate every package's `_skills/` and symlink them into `~/.claude/skills/scitex/` for live-edit dev loops |
 | 3 | **Coordinated releases need ten manual steps** -- bump version, push tag, watch CI, verify PyPI, deploy — done per-package, multiplied by 70 | **`scitex-dev ecosystem sync` + `check-versions` + `start-dashboard`** -- one-shot install/sync across hosts, version-mismatch detection, and a web dashboard with the live state |
 | 4 | **Bulk renames across 70 repos break cross-references** -- import paths, doc references, symlinks — `sed -i` corrupts something every time | **`scitex-dev rename-symbols`** -- atomic rename with cross-reference updates, regex support, dry-run preview, git-safety guards |
+| 5 | **Testing on a SLURM cluster needs ssh + module load + sbatch + poll loops** -- interrupts local flow | **Sibling [`scitex-hpc`](https://github.com/ywatanabe1989/scitex-hpc)** (lightweight, 3 deps) -- `JobConfig(...) → sync() → srun()` or `sbatch() + poll_job() + fetch_result()`; login-shell SSH so SLURM modules load correctly |
 
 ## Installation
 
