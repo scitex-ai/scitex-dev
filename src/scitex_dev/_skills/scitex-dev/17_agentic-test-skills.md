@@ -38,26 +38,13 @@ body was consulted via auto-load.
 
 ### Recommended eval JSON additions
 
-```json
-{
-  "id": "case-1",
-  "query": "<substantive multi-step query>",
-  "expected_skill": "scitex-io/SKILL.md",
-  "answer_contains": ["use_caller_path=True", "stx.io.save"],
-  "complexity": "high"
-}
-```
-
-- **Hard-trigger pass** if the `Read`/`view` tool-use path matches.
-- **Soft-trigger pass** if every string in `answer_contains` appears
-  in `result`.
-- A case passes the run if **either** trigger type passes.
-- 2-of-3 threshold still applies across 3 runs per case.
-
-Author guidance: choose `answer_contains` strings that are authored
-in the skill body and unlikely to appear from model training alone.
-The presence of `use_caller_path=True` in an answer about scitex-io
-is a strong soft-trigger signal because the flag is SciTeX-specific.
+Add `"answer_contains": ["use_caller_path=True", "stx.io.save"]` to a case
+to enable **soft-trigger** scoring: a run passes if every listed string
+appears in `result`, even when no `Read`/`view` tool-use fired. A case
+passes if hard-trigger OR soft-trigger passes; the 2-of-3 threshold still
+applies. Choose `answer_contains` strings that are authored in the skill
+body and unlikely to appear from model training alone (SciTeX-specific
+flags like `use_caller_path=True` are strong signals).
 
 ## Generic image (built once, used for all skill evals)
 
@@ -79,9 +66,9 @@ install -m 644 ~/.claude/.credentials.json /tmp/newbie_creds.json
 
 ### Mode A — dev iteration (direct source mount)
 
-Fastest feedback loop — edit the source `SKILL.md` in the package
-repo and the next `docker run` reflects it instantly. **No export, no
-staging, no rebuild.**
+Fastest feedback loop — edit the source `SKILL.md` and the next
+`docker run` reflects it instantly. No export, no staging, no rebuild.
+Mount each package's skill dir read-only:
 
 ```bash
 docker run --rm \
@@ -92,62 +79,30 @@ docker run --rm \
   --dangerously-skip-permissions
 ```
 
-For a multi-skill scope, add one `-v <repo>/.../_skills/<pkg>:/home/agent/.claude/skills/<pkg>:ro` per package. The container sees exactly those
-skills and nothing else.
+### Mode B — production test (pip install + export, canonical CI target)
 
-### Mode B — production test (pip install + export)
-
-Exercises the **real install path** — what a fresh user gets when they
-`pip install scitex-io` and the shipped skill lands in
-`~/.claude/skills/scitex/<pkg>/`. Use this to catch packaging bugs
-(missing `_skills/` in the wheel, export script failures, etc.).
-
-```bash
-# Inside a derived image OR a Python env
-pip install scitex-io
-
-# Export the skill into a staging dir
-scitex-io skills export --dest /tmp/evalrun_io/.claude/skills --clean
-
-# Mount the staged result
-docker run --rm \
-  -v /tmp/evalrun_io/.claude/skills:/home/agent/.claude/skills:ro \
-  -v /tmp/newbie_creds.json:/home/agent/.claude/.credentials.json \
-  scitex-agentic-test:latest \
-  -p "<query>" --output-format json --model claude-haiku-4-5 \
-  --dangerously-skip-permissions
-```
-
-Mode B is the **canonical CI target** — it measures what users
-actually experience. Mode A is for tightening the skill's trigger
-behavior before committing.
+Exercises the real install path — what a fresh user gets after
+`pip install scitex-<pkg>`. Catches packaging bugs (missing `_skills/`
+in the wheel, export script failures). Same `docker run` invocation as
+mode A, but mount the *exported* skill dir
+(`scitex-<pkg> skills export --dest /tmp/<staging>/.claude/skills --clean`)
+instead of the raw source.
 
 Reproducibility anchor for papers: record the generic image tag
-(`scitex-agentic-test:<date>`) plus either the mode-A source commit
-SHA or the mode-B exported skill hash. Both forms fully describe
-the measured environment.
+(`scitex-agentic-test:<date>`) + either the mode-A source commit SHA
+or the mode-B exported skill hash.
 
 ## MVP — Phase 1 (synthetic kv-lookup)
 
-The harness-validation skill lives at
+Harness-validation skill at
 `scitex-agent-container/containers/skills/kv-lookup/SKILL.md`. Pushy
-description enumerates trigger words (`apple, banana, cherry, date,
-elderberry`). Body holds the authoritative lookup table.
-
-Result measured 2026-04-23 — **8/8 trigger + answer OK at $0.088 over
-54 s** across 4 cases × 2 runs:
-
-| case | expected | trigger | answer |
-|------|----------|---------|--------|
-| banana     | kv-lookup | 2/2 | "12"   |
-| cherry     | kv-lookup | 2/2 | "42"   |
-| elderberry | kv-lookup | 2/2 | "256"  |
-| fig (neg)  | none      | 2/2 | refused, cited kv-lookup by name |
-
-`tool_uses: []` on some runs is expected — Claude Code auto-loads small
-skill bodies from the description match; it doesn't always explicitly
-`Read` the file. For compliance measurement (Layer 3) we still check
-the answer content, not just the tool call.
+description enumerates trigger words (apple/banana/cherry/date/
+elderberry); body has the lookup table. Measured 2026-04-23: **8/8
+trigger + answer OK at $0.088 over 54 s** across 4 cases × 2 runs
+(banana=12, cherry=42, elderberry=256, fig=neg-refusal).
+`tool_uses: []` on some runs is expected — Claude Code auto-loads
+small skill bodies from the description match without an explicit
+`Read`. Layer-3 compliance still checks the answer content.
 
 ## Drop-in pytest per package
 
@@ -228,15 +183,10 @@ full eval JSON.
 ## Next — from MVP to real packages
 
 Current MVP proves the harness works end-to-end on a synthetic skill
-with runtime-mounted catalog. To measure a real package:
-
-1. Stage the package's `SKILL.md` (and any referenced leaves) under
-   `tests/skill_evals/<pkg>_stage/skills/<pkg>/`.
-2. Author `tests/skill_evals/<pkg>.json` with 3-5 substantive queries +
-   at least one adjacent negative.
-3. Drop in `tests/test_skill_trigger.py` (snippet above).
-4. Run the trigger tests and establish baseline — for MCP-enabled
-   packages, a derived image `scitex-agentic-test-<pkg>:latest` with
-   `RUN pip install scitex-<pkg>` may be needed for the Python side
-   (the skill itself still mounts at runtime). Keep the pip set tight
-   — installing all of scitex takes >1 hour.
+with a runtime-mounted catalog. To measure a real package: stage its
+`SKILL.md` under `tests/skill_evals/<pkg>_stage/skills/<pkg>/`, author
+`tests/skill_evals/<pkg>.json` (3–5 substantive queries + ≥1 adjacent
+negative), drop in `tests/test_skill_trigger.py`, then run the trigger
+tests for a baseline. MCP-enabled packages may need a derived image
+`scitex-agentic-test-<pkg>:latest` with `RUN pip install scitex-<pkg>`
+(keep the pip set tight — installing all of scitex takes >1 hour).
