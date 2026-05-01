@@ -31,7 +31,12 @@ Every SciTeX package README follows this structure:
 ## Five Interfaces (HTTP optional)
 ## Lint Rules (if applicable)
 ## Part of SciTeX
-[Four Freedoms blockquote]
+[Optional `import scitex; scitex.<module>.X(...)` snippet — ONLY include
+ if it shows real synergy (e.g. orchestrator integration, multi-module
+ composition). Don't include a snippet that is just a different import
+ alias for the same call (e.g. `scitex.ssh.setup(...)` vs
+ `scitex_ssh.setup(...)` — same function, no synergy → skip).]
+[Four Freedoms blockquote — always present]
 
 ---
 
