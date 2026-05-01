@@ -109,6 +109,43 @@ git push origin develop --tags
 # 3. Sync — see 05_development_03_release-automation.md for commands
 ```
 
+## When to merge `develop` → `main`
+
+`main` is what casual visitors see on GitHub. `develop` is where active
+work integrates. The trigger for a merge depends on what changed:
+
+| Change kind                           | Merge `develop` → `main`?          | Why                                                   |
+|---------------------------------------|-------------------------------------|-------------------------------------------------------|
+| **Code/API/CLI/MCP change → release** | YES, as part of the release commit | `main` must reflect what's on PyPI                     |
+| **Skills/`_skills/`/audit-rule update** | YES, after a small batch coalesces | Ecosystem visibility — auditors live in tree         |
+| **README/docs polish**                | YES, after a small batch coalesces | Visitors landing on github.com see the canonical README |
+| **In-flight refactor / WIP**          | NO — keep on `develop`             | `main` should not show half-finished work             |
+| **Single typo fix**                   | OK to wait — coalesce with next batch | Avoid one-line merge churn on `main`                |
+
+### Cadence
+
+Doc/skill batches: **merge to `main` when CI is green and the batch tells
+a coherent story** (a few commits that together complete a convention
+update, audit rule rollout, or README polish). Don't wait for a
+release if there's no code change pending.
+
+Code releases: **merge to `main` immediately before tagging** — the tag
+should always sit on `main`, never on `develop`. `publish-pypi.yml` is
+opt-in and runs against the tagged commit.
+
+### Mechanic
+
+```bash
+git -C ~/proj/PACKAGE checkout main
+git -C ~/proj/PACKAGE pull origin main
+git -C ~/proj/PACKAGE merge --no-ff develop -m "merge: <one-line summary of batch>"
+git -C ~/proj/PACKAGE push origin main
+git -C ~/proj/PACKAGE checkout develop
+```
+
+If a pre-push hook blocks `git push origin main` (some repos have one),
+open a PR `develop → main` instead and merge via `gh pr merge --merge`.
+
 ## RULES: Never Sync Blind
 
 1. **NEVER push without checking remote state first** (`diff`)
