@@ -1,0 +1,302 @@
+"""README convention checks — PS107 / PS109 / PS110 / PS111 / PS112.
+
+Codifies the SciTeX README template (see
+``_skills/general/04_docs_01_readme.md`` and the literal template at
+``_skills/general/04_docs_01_readme_template.md``). Detection mirrors
+PS106 (``_check_readme_badges.py``): cheap substring/regex scans on the
+first ~16 KB of README.md, warn-only.
+
+False-positive guards:
+- Skip every check when README is missing (PS101 covers that) or
+  shorter than ``_MIN_README_BYTES`` (placeholder/scaffold READMEs).
+- PS109/PS110/PS112 only scan the first 4 KB / 16 KB respectively, so
+  late-document boilerplate doesn't get mis-detected as compliant.
+
+Section names match the most common pattern across 8 surveyed READMEs
+(scitex-python, scitex-io, scitex-stats, scitex-dev, figrecipe,
+scitex-writer, scitex-scholar, scitex-git). See ``/tmp/readme_survey.md``
+for the underlying analysis.
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+
+
+_MIN_README_BYTES = 200
+_HEAD_BYTES_BADGES = 4096
+_HEAD_BYTES_SECTIONS = 16384
+
+
+# PS107 — required H2 sections.
+# Acceptable variants for "Quick Start" — both `## Quick Start` and
+# `## Quickstart` are common in the wild.
+_RE_INSTALLATION = re.compile(r"^##\s+Installation\b", re.MULTILINE | re.IGNORECASE)
+_RE_QUICKSTART = re.compile(
+    r"^##\s+(Quick\s*Start|Quickstart)\b", re.MULTILINE | re.IGNORECASE
+)
+_RE_PART_OF_SCITEX = re.compile(
+    r"^##\s+Part\s+of\s+SciTeX\b", re.MULTILINE | re.IGNORECASE
+)
+# Accept "## Three Interfaces", "## Four Interfaces", "## Five Interfaces",
+# "## Six Interfaces" — the count varies (Python+CLI+MCP+Skills+HTTP, with
+# HTTP optional). Number-word OR plain digit accepted.
+_RE_INTERFACES = re.compile(
+    r"^##\s+(Three|Four|Five|Six|\d+)\s+Interfaces\b",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+# PS109 — PyPI version badge. Accepts badge.fury.io OR shields.io/pypi.
+_RE_PYPI_BADGE = re.compile(
+    r"(badge\.fury\.io/py/|img\.shields\.io/pypi/v/)", re.IGNORECASE
+)
+
+
+# PS110 — Four Freedoms blockquote. Tolerates the leading `>` with or
+# without a space, and either `Four Freedoms for Research` or just
+# `Four Freedoms` (most use the full phrase but stay forgiving).
+_RE_FOUR_FREEDOMS = re.compile(
+    r">\s*Four\s+Freedoms(?:\s+for\s+Research)?", re.IGNORECASE
+)
+
+
+# PS111 — banned personal email. The convention says READMEs should
+# point at the community project, not a single maintainer's address.
+_BANNED_EMAIL = "ywatanabe@scitex.ai"
+
+
+# PS112 — SciTeX logo at top. Accepted forms (any one is enough):
+#   - <img src=".../scitex-logo*.png" ...>
+#   - <img src=".../scitex-logo-*.png" ...>
+# inside the first 4 KB. We're permissive on path so both
+# docs/assets/images/scitex-logo-*.png and docs/scitex-logo-*.png
+# variants pass — both occur in the surveyed READMEs.
+_RE_SCITEX_LOGO = re.compile(
+    r"<img[^>]+src=[\"'][^\"']*scitex-logo[^\"']*\.(?:png|svg|jpg|jpeg)[\"']",
+    re.IGNORECASE,
+)
+
+
+# PS113 — SciTeX icon footer. Centered icon-link at the very bottom of
+# the README per the canonical template, e.g.
+#   <p align="center">
+#     <a href="https://scitex.ai" target="_blank">
+#       <img src="docs/scitex-icon-navy-inverted.png" alt="SciTeX" width="40"/>
+#     </a>
+#   </p>
+# Detection: scitex-icon-* image referenced anywhere in the LAST ~2 KB
+# (the footer area), permissive on path / variant just like PS112.
+_RE_SCITEX_ICON = re.compile(
+    r"<img[^>]+src=[\"'][^\"']*scitex-icon[^\"']*\.(?:png|svg|jpg|jpeg)[\"']",
+    re.IGNORECASE,
+)
+_TAIL_BYTES_FOOTER = 2048
+
+
+# PS114 — "Problem and Solution" must be presented as a table, not prose.
+# Detection: an `## Problem` (or `## Problem and Solution`) heading must
+# be followed within ~3 KB by a markdown table separator row
+# (`| --- | --- |` style). Misses pure-prose treatments of the section.
+_RE_PROBLEM_HEADING = re.compile(
+    r"^##\s+Problem(\s+and\s+Solution)?\b", re.MULTILINE | re.IGNORECASE
+)
+_RE_TABLE_SEPARATOR = re.compile(
+    r"^\s*\|\s*[-:]+\s*(\|\s*[-:]+\s*)+\|\s*$", re.MULTILINE
+)
+_TABLE_LOOKAHEAD_BYTES = 3072
+
+
+# PS115 — `## Part of SciTeX` must open with the canonical "is part of
+# [SciTeX]" sentence. Format: `\`<pkg>\` is part of [SciTeX](https://scitex.ai)`.
+# Tolerant: allows the package name in backticks or plain, allows the
+# SciTeX link to be either the canonical URL or the **bold** form.
+_RE_PART_OF_OPENER = re.compile(
+    r"is\s+part\s+of\s+\[\*{0,2}SciTeX\*{0,2}\]\(https?://scitex\.ai/?\)",
+    re.IGNORECASE,
+)
+_PART_OF_LOOKAHEAD_BYTES = 1024
+
+
+def _read_head(readme: Path, n: int) -> str | None:
+    """Return the first `n` bytes of `readme` as text, or None on error/missing."""
+    if not readme.is_file():
+        return None
+    try:
+        text = readme.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return text[:n]
+
+
+def _readme_is_substantive(readme: Path) -> bool:
+    """True iff README exists and is at least ``_MIN_README_BYTES`` bytes."""
+    if not readme.is_file():
+        return False
+    try:
+        return readme.stat().st_size >= _MIN_README_BYTES
+    except OSError:
+        return False
+
+
+def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
+    """Append PS107 / PS109 / PS110 / PS111 / PS112 violations.
+
+    Each rule is independent; a missing README short-circuits all five
+    (PS101 already flags missing pyproject and a future check could flag
+    missing README — we don't double-flag here).
+    """
+    readme = repo / "README.md"
+    if not _readme_is_substantive(readme):
+        return
+
+    head_sections = _read_head(readme, _HEAD_BYTES_SECTIONS)
+    head_badges = _read_head(readme, _HEAD_BYTES_BADGES)
+    if head_sections is None or head_badges is None:
+        return
+
+    # PS107 — required sections
+    missing: list[str] = []
+    if not _RE_INSTALLATION.search(head_sections):
+        missing.append("## Installation")
+    if not _RE_QUICKSTART.search(head_sections):
+        missing.append("## Quick Start")
+    if not _RE_INTERFACES.search(head_sections):
+        missing.append("## <N> Interfaces")
+    if not _RE_PART_OF_SCITEX.search(head_sections):
+        missing.append("## Part of SciTeX")
+    if missing:
+        out.append(
+            violation_cls(
+                "PS107",
+                str(readme),
+                (
+                    "README.md is missing required H2 section(s): "
+                    + ", ".join(missing)
+                    + ". See _skills/general/04_docs_01_readme_template.md "
+                    "for the canonical layout."
+                ),
+            )
+        )
+
+    # PS109 — PyPI version badge
+    if not _RE_PYPI_BADGE.search(head_badges):
+        out.append(
+            violation_cls(
+                "PS109",
+                str(readme),
+                (
+                    "README.md is missing a PyPI version badge in the first ~4 KB. "
+                    "Add a `[![PyPI](https://badge.fury.io/py/<pkg>.svg)]"
+                    "(https://pypi.org/project/<pkg>/)` or "
+                    "`[![PyPI](https://img.shields.io/pypi/v/<pkg>.svg)](...)` line "
+                    "near the title."
+                ),
+            )
+        )
+
+    # PS110 — Four Freedoms footer (search the whole readable text for the
+    # blockquote line — it lives near the bottom of the file).
+    full = readme.read_text(encoding="utf-8", errors="replace")
+    if not _RE_FOUR_FREEDOMS.search(full):
+        out.append(
+            violation_cls(
+                "PS110",
+                str(readme),
+                (
+                    "README.md does not contain the Four Freedoms for Research "
+                    "blockquote. Append the canonical block under "
+                    "`## Part of SciTeX` (see _skills/general/"
+                    "04_docs_01_readme_template.md)."
+                ),
+            )
+        )
+
+    # PS111 — banned personal email
+    if _BANNED_EMAIL in full:
+        out.append(
+            violation_cls(
+                "PS111",
+                str(readme),
+                (
+                    f"README.md contains the banned personal email "
+                    f"`{_BANNED_EMAIL}`. SciTeX is a community project; "
+                    "remove the address (use the project URL or GitHub "
+                    "issues for contact)."
+                ),
+            )
+        )
+
+    # PS112 — SciTeX logo at top
+    if not _RE_SCITEX_LOGO.search(head_badges):
+        out.append(
+            violation_cls(
+                "PS112",
+                str(readme),
+                (
+                    "README.md is missing a SciTeX logo image in the first ~4 KB. "
+                    'Add a centered `<img src="docs/scitex-logo-blue-cropped.png" '
+                    "...>` (or `docs/assets/images/scitex-logo-blue-cropped.png`) "
+                    "near the title."
+                ),
+            )
+        )
+
+    # PS113 — SciTeX icon footer (centered link at the very bottom).
+    tail = full[-_TAIL_BYTES_FOOTER:] if len(full) > _TAIL_BYTES_FOOTER else full
+    if not _RE_SCITEX_ICON.search(tail):
+        out.append(
+            violation_cls(
+                "PS113",
+                str(readme),
+                (
+                    "README.md is missing a SciTeX icon footer (centered "
+                    "scitex-icon image in the last ~2 KB). Add the canonical "
+                    "footer block — see _skills/general/04_docs_01_readme_template.md."
+                ),
+            )
+        )
+
+    # PS115 — "## Part of SciTeX" must open with the canonical
+    # "is part of [SciTeX](https://scitex.ai)" sentence. The synergy
+    # code block under it is OPTIONAL — standalone packages can skip
+    # the example as long as the opener is present.
+    pos_part = _RE_PART_OF_SCITEX.search(full)
+    if pos_part is not None:
+        window = full[pos_part.end() : pos_part.end() + _PART_OF_LOOKAHEAD_BYTES]
+        if not _RE_PART_OF_OPENER.search(window):
+            out.append(
+                violation_cls(
+                    "PS115",
+                    str(readme),
+                    (
+                        "README.md '## Part of SciTeX' section does not open "
+                        "with the canonical '<pkg> is part of "
+                        "[SciTeX](https://scitex.ai)' sentence. The synergy "
+                        "code block is optional for standalone packages, but "
+                        "the opener is required so consumers know how the "
+                        "package fits into the ecosystem."
+                    ),
+                )
+            )
+
+    # PS114 — "Problem and Solution" must be presented as a markdown table.
+    # When the heading is present but no table separator follows within
+    # ~3 KB, the section is prose-only — flag it.
+    m = _RE_PROBLEM_HEADING.search(full)
+    if m is not None:
+        window = full[m.end() : m.end() + _TABLE_LOOKAHEAD_BYTES]
+        if not _RE_TABLE_SEPARATOR.search(window):
+            out.append(
+                violation_cls(
+                    "PS114",
+                    str(readme),
+                    (
+                        "README.md '## Problem and Solution' (or '## Problem') "
+                        "section is prose-only. SciTeX convention is a "
+                        "markdown table with columns | # | Problem | Solution | "
+                        "— see _skills/general/04_docs_01_readme_template.md."
+                    ),
+                )
+            )

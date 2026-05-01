@@ -265,6 +265,55 @@ def register_skills_commands(main_group):
     # command going forward because the destination is always required —
     # callers can't be surprised by a hidden default like `export`'s
     # `~/.claude/skills/scitex/`.
+    @skills.command("self-explain")
+    @click.argument("distribution")
+    @click.option("--model", default="claude-haiku-4-5", help="Claude model id.")
+    @click.option(
+        "--runs",
+        default=1,
+        type=int,
+        help="Runs per prompt (>1 returns lists).",
+    )
+    @click.option(
+        "--format",
+        "out_format",
+        type=click.Choice(["json", "markdown"]),
+        default="json",
+        help="Output format. 'markdown' is README-marker-ready.",
+    )
+    @click.option(
+        "--json",
+        "as_json",
+        is_flag=True,
+        default=False,
+        help="(deprecated) Equivalent to --format json. Kept for back-compat.",
+    )
+    def skills_self_explain(distribution, model, runs, out_format, as_json):
+        """Have an agent (mounted with only this package's skills) answer
+        'what is this for / what does it solve / how do I use it?'.
+
+        Each invocation spends real Anthropic API credits on your account
+        (the mounted container uses ANTHROPIC_API_KEY, not Claude Code
+        plan quota). Cost = 4 prompts × --runs.
+
+        \b
+        Example:
+            $ scitex-dev skills self-explain scitex-io
+            $ scitex-dev skills self-explain scitex-stats --runs 3
+            $ scitex-dev skills self-explain scitex-io --format markdown >> README.md
+        """
+        import json as _json
+
+        from ._self_explain import render_markdown, self_explain
+
+        result = self_explain(distribution, model=model, runs_per_prompt=runs)
+        # --json is the legacy flag; --format takes precedence when both are set.
+        effective = "json" if as_json and out_format == "json" else out_format
+        if effective == "markdown":
+            click.echo(render_markdown(result), nl=False)
+        else:
+            click.echo(_json.dumps(result, indent=2))
+
     @skills.command("expand-tags")
     @click.argument("tag")
     @click.option(

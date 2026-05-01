@@ -58,12 +58,36 @@ def _violations_for(repo: Path, name: str) -> list[str]:
     )
 
     check_coverage_badge(repo, Violation, out)
+    from scitex_dev._cli.audit._project._check_readme_sections import (
+        check_readme_sections,
+    )
+
+    check_readme_sections(repo, Violation, out)
     from scitex_dev._cli.audit._project._check_examples import (
         check_examples_conventions,
     )
 
     check_examples_conventions(repo, Violation, out)
     return [v.rule for v in out]
+
+
+# Canonical compliant README used by negative tests for PS107/109/110/111/112.
+# Padded past the 200-byte threshold so PS107 sees a "substantive" file.
+_GOOD_README = (
+    "# demo\n\n"
+    "[![PyPI](https://badge.fury.io/py/demo.svg)](https://pypi.org/project/demo/)\n"
+    "[![cov](https://codecov.io/gh/x/y/graph/badge.svg)](https://codecov.io/gh/x/y)\n"
+    '<p align="center"><img src="docs/scitex-logo-blue-cropped.png" alt="SciTeX" width="400"></p>\n\n'
+    "## Installation\n\n```bash\npip install demo\n```\n\n"
+    "## Quick Start\n\n```python\nimport demo\n```\n\n"
+    "## Four Interfaces\n\n- Python API\n- CLI\n- MCP\n- Skills\n\n"
+    "## Part of SciTeX\n\n"
+    "`demo` is part of [SciTeX](https://scitex.ai).\n\n"
+    ">Four Freedoms for Research\n>\n"
+    ">0. Run.\n>1. Study.\n>2. Redistribute.\n>3. Modify.\n\n"
+    '<p align="center"><a href="https://scitex.ai">'
+    '<img src="docs/scitex-icon-navy-inverted.png" alt="SciTeX" width="40"/></a></p>\n'
+)
 
 
 # ---------------------------------------------------------------------------
@@ -493,3 +517,123 @@ def test_ps502_silent_when_out_dir_has_content(tmp_path):
     (out_dir / "FINISHED_SUCCESS").mkdir()
     rules = _violations_for(repo, "demo")
     assert "PS502" not in rules
+
+
+# ---------------------------------------------------------------------------
+# PS107 / PS109 / PS110 / PS111 / PS112 — README convention rules
+# ---------------------------------------------------------------------------
+
+
+def test_ps107_fires_on_missing_sections(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    # Body is over 200 bytes but lacks any of the required H2 sections.
+    (repo / "README.md").write_text(
+        "# demo\n\nA package without the canonical sections. " + ("x " * 100)
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS107" in rules
+
+
+def test_ps107_silent_on_canonical_readme(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_GOOD_README)
+    rules = _violations_for(repo, "demo")
+    assert "PS107" not in rules
+
+
+def test_ps107_accepts_quickstart_one_word(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = _GOOD_README.replace("## Quick Start", "## Quickstart")
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS107" not in rules
+
+
+def test_ps107_silent_when_readme_too_small(tmp_path):
+    """Tiny placeholder READMEs should not be audited."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text("# demo\n")
+    rules = _violations_for(repo, "demo")
+    assert "PS107" not in rules
+
+
+def test_ps109_fires_when_pypi_badge_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = _GOOD_README.replace(
+        "[![PyPI](https://badge.fury.io/py/demo.svg)](https://pypi.org/project/demo/)\n",
+        "",
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS109" in rules
+
+
+def test_ps109_silent_with_shields_pypi_badge(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = _GOOD_README.replace(
+        "https://badge.fury.io/py/demo.svg",
+        "https://img.shields.io/pypi/v/demo.svg",
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS109" not in rules
+
+
+def test_ps110_fires_when_four_freedoms_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = _GOOD_README.split(">Four Freedoms")[0]
+    (repo / "README.md").write_text(body + ("filler " * 30))
+    rules = _violations_for(repo, "demo")
+    assert "PS110" in rules
+
+
+def test_ps110_silent_with_four_freedoms(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_GOOD_README)
+    rules = _violations_for(repo, "demo")
+    assert "PS110" not in rules
+
+
+def test_ps111_fires_with_banned_email(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_GOOD_README + "\nContact: ywatanabe@scitex.ai\n")
+    rules = _violations_for(repo, "demo")
+    assert "PS111" in rules
+
+
+def test_ps111_silent_without_banned_email(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_GOOD_README)
+    rules = _violations_for(repo, "demo")
+    assert "PS111" not in rules
+
+
+def test_ps112_fires_when_logo_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = _GOOD_README.replace(
+        '<p align="center"><img src="docs/scitex-logo-blue-cropped.png" alt="SciTeX" width="400"></p>\n\n',
+        "",
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS112" in rules
+
+
+def test_ps112_silent_with_assets_images_path(tmp_path):
+    """docs/assets/images/scitex-logo-*.png path is also valid."""
+    repo = _make_repo(tmp_path, "demo")
+    body = _GOOD_README.replace(
+        "docs/scitex-logo-blue-cropped.png",
+        "docs/assets/images/scitex-logo-blue-cropped.png",
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS112" not in rules
+
+
+def test_readme_rules_silent_when_readme_missing(tmp_path):
+    """No README → all PS107/109/110/111/112 stay quiet (PS101 covers it)."""
+    repo = _make_repo(tmp_path, "demo")
+    rules = _violations_for(repo, "demo")
+    for code in ("PS107", "PS109", "PS110", "PS111", "PS112"):
+        assert code not in rules

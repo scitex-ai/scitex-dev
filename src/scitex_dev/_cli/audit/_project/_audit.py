@@ -69,6 +69,75 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
+            "PS107",
+            "§1",
+            (
+                "README.md is missing required H2 sections "
+                "(## Installation / ## Quick Start / ## Part of SciTeX) — "
+                "see _skills/general/04_docs_01_readme_template.md for the "
+                "canonical layout."
+            ),
+        ),
+        Rule(
+            "PS109",
+            "§1",
+            (
+                "README.md is missing a PyPI version badge "
+                "(badge.fury.io/py/<pkg> or img.shields.io/pypi/v/<pkg>) "
+                "in the first ~4 KB."
+            ),
+        ),
+        Rule(
+            "PS110",
+            "§1",
+            (
+                "README.md is missing the Four Freedoms for Research "
+                "blockquote — the SciTeX community-license footer."
+            ),
+        ),
+        Rule(
+            "PS111",
+            "§1",
+            (
+                "README.md contains a banned personal email "
+                "(ywatanabe@scitex.ai) — SciTeX is a community project."
+            ),
+        ),
+        Rule(
+            "PS112",
+            "§1",
+            (
+                "README.md is missing a SciTeX logo image at the top "
+                "(docs/scitex-logo-*.png or docs/assets/images/scitex-logo-*.png)."
+            ),
+        ),
+        Rule(
+            "PS113",
+            "§1",
+            (
+                "README.md is missing a SciTeX icon footer — centered "
+                "scitex-icon image link in the last ~2 KB of the file."
+            ),
+        ),
+        Rule(
+            "PS114",
+            "§1",
+            (
+                "README.md `## Problem and Solution` section is prose-only — "
+                "convention is a markdown table with columns "
+                "`| # | Problem | Solution |`."
+            ),
+        ),
+        Rule(
+            "PS115",
+            "§1",
+            (
+                "README.md `## Part of SciTeX` section does not open with "
+                "the canonical `<pkg> is part of [SciTeX](https://scitex.ai)` "
+                "sentence. Synergy code is optional; the opener is required."
+            ),
+        ),
+        Rule(
             "PS108",
             "§1",
             (
@@ -414,8 +483,13 @@ def _check_mirror(
     _check_loose_top_level_tests(tests_root, src_pkg, import_name, out)
 
     # Walk src/<pkg>/ — every directory with .py files needs a mirror.
-    # Every .py file (excluding __init__.py) needs a corresponding test.
+    # Skip directories that aren't tracked in git (gitignored local-only
+    # artifacts like src/<pkg>/app/ — they don't ship in the wheel and
+    # don't need test coverage). The ignore-aware check is silent when
+    # git isn't available so non-git checkouts still get flagged.
     for src_dir in [d for d in src_pkg.rglob("*") if d.is_dir() and _has_py(d)]:
+        if _is_git_ignored(src_dir, repo):
+            continue
         rel = src_dir.relative_to(src_pkg)
         mirror_dir = tests_pkg / rel
         if not mirror_dir.is_dir():
@@ -429,6 +503,12 @@ def _check_mirror(
 
     # PS205: per-file public/private prefix consistency.
     # For each src .py file, expected test name lives under tests/<pkg>/<rel>/.
+    # When src has BOTH a public `foo.py` AND a private `_foo.py` in the
+    # same directory (rare but legitimate — see scitex-dev dashboard), each
+    # of `test_foo.py` / `test__foo.py` is the legitimate counterpart of one
+    # of them. The naive "wrong_name exists" check then false-positives
+    # because the OTHER variant's correct test looks misnamed for THIS one.
+    # Skip the flag when both src variants exist.
     for src_file in src_pkg.rglob("*.py"):
         if src_file.name == "__init__.py":
             continue
@@ -439,11 +519,18 @@ def _check_mirror(
             expected_name = f"test_{stem}.py"  # _foo.py → test__foo.py
         else:
             expected_name = f"test_{stem}.py"  # foo.py  → test_foo.py
-        # Use a *wrong* candidate to detect the mis-prefix:
         wrong_name = f"test_{stem.lstrip('_')}.py" if is_private else f"test__{stem}.py"
         target_dir = tests_pkg / rel.parent
         if not target_dir.is_dir():
             continue  # PS202 already flagged this
+        # Both-variant guard: if the "other" src file also exists, the file
+        # at wrong_path is its legitimate test, not a misnamed copy of ours.
+        if is_private:
+            other_src = src_file.with_name(src_file.name[1:])  # strip leading _
+        else:
+            other_src = src_file.with_name(f"_{src_file.name}")
+        if other_src.is_file():
+            continue
         wrong_path = target_dir / wrong_name
         if wrong_path.is_file():
             out.append(
@@ -480,6 +567,35 @@ def _has_py(d: Path) -> bool:
         if child.is_file() and child.suffix == ".py" and child.name != "__init__.py":
             return True
     return False
+
+
+def _is_git_ignored(path: Path, repo: Path) -> bool:
+    """True iff `path` is gitignored relative to `repo`.
+
+    Returns False when git is unavailable or the path isn't inside a git
+    repo — non-git checkouts (sdist installs, tarball extracts) still
+    get full PS202 coverage. Used to skip src subdirs that exist locally
+    but won't ship in the wheel (e.g. src/<pkg>/app/ if it's listed in
+    .gitignore as a developer-only scratch area).
+    """
+    import shutil
+    import subprocess
+
+    git = shutil.which("git")
+    if git is None or not (repo / ".git").exists():
+        return False
+    try:
+        result = subprocess.run(
+            [git, "-C", str(repo), "check-ignore", "--quiet", str(path)],
+            capture_output=True,
+            timeout=3,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        return False
+    # check-ignore exits 0 when the path IS ignored, 1 when it isn't,
+    # 128 on any other error. Only treat exit 0 as "ignored".
+    return result.returncode == 0
 
 
 def _check_loose_top_level_tests(
@@ -685,6 +801,8 @@ def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) 
         src_counterpart = src_pkg / rel
         if not src_counterpart.is_dir():
             continue
+        if _is_git_ignored(src_counterpart, repo):
+            continue  # src is gitignored — won't ship; no test mirror needed
         src_py = [
             p
             for p in src_counterpart.iterdir()
@@ -815,6 +933,9 @@ def audit_project(
     from ._check_readme_badges import check_coverage_badge
 
     check_coverage_badge(repo_root, Violation, violations)
+    from ._check_readme_sections import check_readme_sections
+
+    check_readme_sections(repo_root, Violation, violations)
     from ._check_examples import check_examples_conventions
 
     check_examples_conventions(repo_root, Violation, violations)

@@ -102,11 +102,33 @@ PACKAGE is part of [**SciTeX**](https://scitex.ai).
 
 ## SciTeX-Specific Rules
 
-- **No `ywatanabe@scitex.ai`** in footer — community project
-- **Use `import scitex`** in examples, not `import scitex as stx`
+- **No `ywatanabe@scitex.ai`** in footer — community project (audit: **PS111**)
+- **`import scitex`** and **`import scitex as stx`** are both acceptable
+  in code blocks; pick one and stay consistent within a single README.
+  (Reality: the umbrella canonical README and most skill docs use `as stx`;
+  earlier guidance forbidding `as stx` was inconsistent with practice.)
 - **Verify all format/feature claims** against actual `_builtin_handlers.py` or source code
 - **Match quickstart.rst** — README Quickstart and Sphinx quickstart should show the same examples
-- **Add Logo and Icon** docs/assets/images/{scitex-logo-blue-cropped.png,scitex-icon-navy-inverted.png}
+- **Add Logo and Icon** — either `docs/assets/images/{scitex-logo-blue-cropped.png,scitex-icon-navy-inverted.png}`
+  or `docs/{scitex-logo-blue-cropped.png,scitex-icon-navy-inverted.png}`
+  is accepted (audit: **PS112** for the top logo).
+
+## Canonical Template + Audit Rules
+
+The literal canonical README lives at
+[`04_docs_01_readme_template.md`](./04_docs_01_readme_template.md).
+Run `scitex-dev ecosystem audit-project <pkg>` to check a repo against
+the template. The following warn-only rules enforce its load-bearing
+sections:
+
+| Code  | Enforces                                                            |
+|-------|---------------------------------------------------------------------|
+| PS106 | Coverage badge in the first ~4 KB                                   |
+| PS107 | Required H2 sections: `## Installation`, `## Quick Start`, `## Part of SciTeX` |
+| PS109 | PyPI version badge in the first ~4 KB                               |
+| PS110 | Four Freedoms for Research blockquote present                       |
+| PS111 | Banned personal email `ywatanabe@scitex.ai` absent                  |
+| PS112 | SciTeX logo image in the first ~4 KB                                |
 
 ---
 
