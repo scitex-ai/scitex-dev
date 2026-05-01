@@ -1,0 +1,12 @@
+ID: 2026Y-05M-01D-10h30m20s_C1l4
+PID: 2860717
+START_DATETIME: 2026-05-01 10:30:20.804479
+FILE: /home/ywatanabe/proj/scitex-dev/examples/01_unified_search.py
+SDIR_OUT: /home/ywatanabe/proj/scitex-dev/examples/01_unified_search_out
+SDIR_RUN: 
+    /home/ywatanabe/proj/scitex-dev/examples/01_unified_search_out/RUNNING/2026Y-05M-01D-10h30m20s_C1l4-main
+ARGS:
+    query: save figure
+EXIT_STATUS: 1
+END_DATETIME: 2026-05-01 10:30:26.915311
+RUN_DURATION: 00:00:06

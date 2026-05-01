@@ -1,27 +1,44 @@
 #!/usr/bin/env python3
-"""Example: Documentation aggregation across SciTeX packages."""
+"""Example: Documentation aggregation across SciTeX packages.
+
+Run:
+    python 03_docs_aggregation.py
+    python 03_docs_aggregation.py --query "save figure"
+    python 03_docs_aggregation.py --help
+
+Output:
+    03_docs_aggregation_out/FINISHED_SUCCESS/<session_id>/
+    ├── docs_overview.json
+    └── search_hits.json
+"""
 
 import json
 from pathlib import Path
 
+import scitex as stx
+
 from scitex_dev import get_docs, search_docs
 
-# Get docs overview for all packages
-docs = get_docs()
 
-output_dir = Path(__file__).parent / "03_docs_aggregation_out"
-output_dir.mkdir(exist_ok=True)
+@stx.session
+def main(
+    query: str = "save figure",
+    CONFIG=stx.session.INJECTED,
+    logger=stx.session.INJECTED,
+):
+    """Show every package's docs surface and search across all docs."""
+    OUT = Path(CONFIG.SDIR_RUN)
 
-with open(output_dir / "docs_overview.json", "w") as f:
-    json.dump(
-        docs if isinstance(docs, (list, dict)) else str(docs), f, indent=2, default=str
-    )
+    logger.info("Aggregating package docs overviews")
+    docs = get_docs()
+    (OUT / "docs_overview.json").write_text(json.dumps(docs, indent=2, default=str))
 
-print(f"Documentation overview saved to {output_dir / 'docs_overview.json'}")
+    logger.info(f"Searching docs for: {query!r}")
+    hits = search_docs(query)
+    (OUT / "search_hits.json").write_text(json.dumps(hits, indent=2, default=str))
+    logger.info(f"Got {len(hits) if hasattr(hits, '__len__') else '?'} hits")
+    return 0
 
-# Search documentation
-search_results = search_docs("installation")
-with open(output_dir / "docs_search.json", "w") as f:
-    json.dump(search_results, f, indent=2, default=str)
 
-print(f"Documentation search results saved to {output_dir / 'docs_search.json'}")
+if __name__ == "__main__":
+    main()

@@ -58,6 +58,11 @@ def _violations_for(repo: Path, name: str) -> list[str]:
     )
 
     check_coverage_badge(repo, Violation, out)
+    from scitex_dev._cli_audit_project._check_examples import (
+        check_examples_conventions,
+    )
+
+    check_examples_conventions(repo, Violation, out)
     return [v.rule for v in out]
 
 
@@ -436,3 +441,55 @@ def test_ps106_silent_when_readme_missing(tmp_path):
     repo = _make_repo(tmp_path, "demo")
     rules = _violations_for(repo, "demo")
     assert "PS106" not in rules
+
+
+# ---------------------------------------------------------------------------
+# PS501 / PS502 — examples conventions
+# ---------------------------------------------------------------------------
+
+
+def test_ps501_fires_when_main_lacks_stx_session(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir()
+    (repo / "examples" / "01_demo.py").write_text(
+        "def main():\n    print('hi')\n\nif __name__ == '__main__':\n    main()\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS501" in rules
+
+
+def test_ps501_silent_with_stx_session(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir()
+    (repo / "examples" / "01_demo.py").write_text(
+        "import scitex as stx\n@stx.session\ndef main():\n    pass\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS501" not in rules
+
+
+def test_ps501_silent_when_no_def_main(tmp_path):
+    """Pure imperative scripts without main() are a separate concern."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir()
+    (repo / "examples" / "01_demo.py").write_text("print('hi')\n")
+    rules = _violations_for(repo, "demo")
+    assert "PS501" not in rules
+
+
+def test_ps502_fires_on_empty_out_dir(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir()
+    (repo / "examples" / "01_demo_out").mkdir()
+    rules = _violations_for(repo, "demo")
+    assert "PS502" in rules
+
+
+def test_ps502_silent_when_out_dir_has_content(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir()
+    out_dir = repo / "examples" / "01_demo_out"
+    out_dir.mkdir()
+    (out_dir / "FINISHED_SUCCESS").mkdir()
+    rules = _violations_for(repo, "demo")
+    assert "PS502" not in rules
