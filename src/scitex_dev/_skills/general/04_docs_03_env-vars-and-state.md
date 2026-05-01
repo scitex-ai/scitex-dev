@@ -81,7 +81,10 @@ $EDITOR .env
 CLI flags always override env vars. The full list of variables (with
 inline comments) lives in `.env.example`.
 
-### Local state
+<details>
+<summary><strong>Local state directories</strong></summary>
+
+<br>
 
 `<pkg>` reads optional config + cache from the canonical SciTeX
 local-state locations. **`<pkg-short>` strips the `scitex-` prefix**
@@ -94,7 +97,13 @@ local-state locations. **`<pkg-short>` strips the `scitex-` prefix**
 | `<proj-root>/.scitex/<pkg-short>/` | project-local | overrides for the current repo       |
 
 Project-local wins when both exist. Both are optional.
+
+</details>
 ```
+
+Local state lives inside its own collapsed `<details>` block — most
+users never need to know about these directories, so we fold them by
+default. Only power users opening the disclosure care.
 
 ## Why no big README table?
 
