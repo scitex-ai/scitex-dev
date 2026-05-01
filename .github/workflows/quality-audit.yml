@@ -12,6 +12,7 @@ on:
     branches: [develop]
     paths:
       - "scripts/quality/audit_ecosystem.py"
+      - "src/scitex_dev/_ecosystem/_core.py"
       - "src/scitex_dev/ecosystem.py"
       - ".github/workflows/quality-audit.yml"
 
@@ -37,7 +38,10 @@ jobs:
           python3 - <<'PY'
           import json, re, subprocess, sys
           from pathlib import Path
-          src = Path("scitex-dev/src/scitex_dev/ecosystem.py").read_text()
+          # 0.11.0 layout: ecosystem.py moved to _ecosystem/_core.py.
+          eco_new = Path("scitex-dev/src/scitex_dev/_ecosystem/_core.py")
+          eco_old = Path("scitex-dev/src/scitex_dev/ecosystem.py")
+          src = (eco_new if eco_new.is_file() else eco_old).read_text()
           for m in re.finditer(
               r'^\s*"([\w-]+)"\s*:\s*\{(.*?)\},?\s*$', src,
               re.MULTILINE | re.DOTALL):
