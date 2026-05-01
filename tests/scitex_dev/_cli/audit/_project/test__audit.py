@@ -80,9 +80,13 @@ _GOOD_README = (
     '<p align="center"><img src="docs/scitex-logo-blue-cropped.png" alt="SciTeX" width="400"></p>\n\n'
     "## Installation\n\n```bash\npip install demo\n```\n\n"
     "## Quick Start\n\n```python\nimport demo\n```\n\n"
+    "## Four Interfaces\n\n- Python API\n- CLI\n- MCP\n- Skills\n\n"
     "## Part of SciTeX\n\n"
+    "`demo` is part of [SciTeX](https://scitex.ai).\n\n"
     ">Four Freedoms for Research\n>\n"
-    ">0. Run.\n>1. Study.\n>2. Redistribute.\n>3. Modify.\n"
+    ">0. Run.\n>1. Study.\n>2. Redistribute.\n>3. Modify.\n\n"
+    '<p align="center"><a href="https://scitex.ai">'
+    '<img src="docs/scitex-icon-navy-inverted.png" alt="SciTeX" width="40"/></a></p>\n'
 )
 
 
