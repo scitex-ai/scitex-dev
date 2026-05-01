@@ -11,8 +11,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 
-from scitex_dev._cli_audit_skills import RULES, Violation, audit_skills
-from scitex_dev._cli_audit_skills._audit import (
+from scitex_dev._cli.audit._skills import RULES, Violation, audit_skills
+from scitex_dev._cli.audit._skills._audit import (
     _check_frontmatter,
     _check_header_footer,
     _check_index_links,
@@ -192,7 +192,7 @@ def test_audit_skills_returns_2_when_package_not_installed(capsys):
 def test_audit_skills_passes_clean_synthetic_pkg(tmp_path, capsys):
     pkg_root = _make_compliant_pkg(tmp_path, "synthtest")
     with patch(
-        "scitex_dev._cli_audit_skills._audit._locate_skills_dir",
+        "scitex_dev._cli.audit._skills._audit._locate_skills_dir",
         return_value=pkg_root,
     ):
         rc = audit_skills("synthtest")
@@ -212,7 +212,7 @@ def test_audit_skills_finds_violations_in_dirty_pkg(tmp_path, capsys):
         "---\nname: orphan\ndescription: x\ntags: [t]\n---\n# X\n"
     )
     with patch(
-        "scitex_dev._cli_audit_skills._audit._locate_skills_dir",
+        "scitex_dev._cli.audit._skills._audit._locate_skills_dir",
         return_value=pkg_root,
     ):
         rc = audit_skills("dirty")
@@ -223,7 +223,7 @@ def test_audit_skills_json_output_shape(tmp_path, capsys):
     pkg_root = _make_compliant_pkg(tmp_path, "jsonpkg")
     (pkg_root / "01_quick-start.md").write_text("# Missing frontmatter\n")
     with patch(
-        "scitex_dev._cli_audit_skills._audit._locate_skills_dir",
+        "scitex_dev._cli.audit._skills._audit._locate_skills_dir",
         return_value=pkg_root,
     ):
         rc = audit_skills("jsonpkg", json_out=True)
@@ -244,7 +244,7 @@ def test_audit_skills_rule_filter_restricts_violations(tmp_path):
     )
     (pkg_root / "01_bad.md").write_text("# missing frontmatter\n")
     with patch(
-        "scitex_dev._cli_audit_skills._audit._locate_skills_dir",
+        "scitex_dev._cli.audit._skills._audit._locate_skills_dir",
         return_value=pkg_root,
     ):
         rc = audit_skills("filtertest", json_out=True, rules={"SK210"})

@@ -788,7 +788,7 @@ def audit_project(
 
     # Look up the registry entry to decide which rules apply.
     try:
-        from ..ecosystem import ECOSYSTEM
+        from ...._ecosystem import ECOSYSTEM
     except ImportError:
         ECOSYSTEM = {}
     info = ECOSYSTEM.get(distribution, {})

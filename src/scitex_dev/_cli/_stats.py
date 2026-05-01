@@ -38,7 +38,7 @@ def _run_cmd_json(cmd: list[str], timeout: int = 30) -> Any:
 
 def _count_packages() -> int:
     """Count ecosystem packages from the registry."""
-    from ._ecosystem import ECOSYSTEM
+    from .._ecosystem import ECOSYSTEM
 
     return len(ECOSYSTEM)
 

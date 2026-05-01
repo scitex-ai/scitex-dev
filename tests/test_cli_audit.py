@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for scitex_dev._cli_audit — pure helpers + small integration paths.
+"""Tests for scitex_dev._cli.audit._summary — pure helpers + small integration paths.
 
 Covers the parts that don't require a live console-script entry point:
 - token classification + dictionary cascade
@@ -22,8 +22,8 @@ from pathlib import Path
 import click
 import pytest
 
-from scitex_dev._cli_audit import FLAT_KEEPERS
-from scitex_dev._cli_audit._audit import (
+from scitex_dev._cli.audit._summary import FLAT_KEEPERS
+from scitex_dev._cli.audit._summary._audit import (
     Violation,
     _PackageTimeout,
     _audit_one,
@@ -511,7 +511,7 @@ class TestAuditOneNotFound:
 
     def test_returns_skip_mcp_for_mcp_entry(self, monkeypatch):
         # Patch _ep_value_for so the package looks like an MCP server.
-        from scitex_dev._cli_audit import _audit as audit_mod
+        from scitex_dev._cli.audit._summary import _audit as audit_mod
 
         monkeypatch.setattr(
             audit_mod, "_ep_value_for", lambda pkg: "fake.mcp_server:main"

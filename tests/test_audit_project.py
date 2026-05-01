@@ -9,8 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 
 
-from scitex_dev._cli_audit_project import RULES, audit_project
-from scitex_dev._cli_audit_project._audit import (
+from scitex_dev._cli.audit._project import RULES, audit_project
+from scitex_dev._cli.audit._project._audit import (
     _check_top_level,
     _check_mirror,
     _check_tests_subdir_convention,
@@ -41,8 +41,8 @@ def _make_repo(tmp_path: Path, name: str = "demo-pkg") -> Path:
 
 def _violations_for(repo: Path, name: str) -> list[str]:
     """Run the rule check functions directly and return the rule codes that fired."""
-    from scitex_dev._cli_audit_project._audit import Violation, _src_pkg_dir
-    from scitex_dev._cli_audit_project._check_flat_layout import check_flat_layout
+    from scitex_dev._cli.audit._project._audit import Violation, _src_pkg_dir
+    from scitex_dev._cli.audit._project._check_flat_layout import check_flat_layout
 
     out: list = []
     _check_top_level(repo, out)
@@ -53,12 +53,12 @@ def _violations_for(repo: Path, name: str) -> list[str]:
     src_pkg = _src_pkg_dir(repo, name)
     if src_pkg is not None:
         check_flat_layout(src_pkg, Violation, out)
-    from scitex_dev._cli_audit_project._check_readme_badges import (
+    from scitex_dev._cli.audit._project._check_readme_badges import (
         check_coverage_badge,
     )
 
     check_coverage_badge(repo, Violation, out)
-    from scitex_dev._cli_audit_project._check_examples import (
+    from scitex_dev._cli.audit._project._check_examples import (
         check_examples_conventions,
     )
 
@@ -357,8 +357,8 @@ def test_ps108_rolls_up_multiple_clusters(tmp_path):
         (src / f"_cli_{n}.py").write_text("")
         (src / f"_skills_{n}.py").write_text("")
     # Direct call: assert single rolled-up violation mentions both prefixes.
-    from scitex_dev._cli_audit_project._audit import Violation
-    from scitex_dev._cli_audit_project._check_flat_layout import check_flat_layout
+    from scitex_dev._cli.audit._project._audit import Violation
+    from scitex_dev._cli.audit._project._check_flat_layout import check_flat_layout
 
     out: list = []
     check_flat_layout(src, Violation, out)
@@ -379,7 +379,7 @@ def test_ps204_hint_suggests_move_on_unique_basename(tmp_path):
     (repo / "src" / "demo" / "sub" / "foo.py").write_text("def f(): pass\n")
     (repo / "tests" / "demo" / "test_foo.py").write_text("def test_x(): pass\n")
     out: list = []
-    from scitex_dev._cli_audit_project._audit import _check_mirror
+    from scitex_dev._cli.audit._project._audit import _check_mirror
 
     _check_mirror(repo, "demo", out)
     ps204 = [v for v in out if v.rule == "PS204"]
@@ -397,7 +397,7 @@ def test_ps204_hint_lists_siblings_when_no_basename_match(tmp_path):
     (repo / "src" / "demo" / "baz.py").write_text("def f(): pass\n")
     (repo / "tests" / "demo" / "test_qux.py").write_text("def test_x(): pass\n")
     out: list = []
-    from scitex_dev._cli_audit_project._audit import _check_mirror
+    from scitex_dev._cli.audit._project._audit import _check_mirror
 
     _check_mirror(repo, "demo", out)
     ps204 = [v for v in out if v.rule == "PS204"]

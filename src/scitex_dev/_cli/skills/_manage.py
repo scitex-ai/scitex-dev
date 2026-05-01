@@ -22,7 +22,7 @@ def register_skills_commands(main_group):
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def skills_list(package, as_json):
         """List all skills across installed packages."""
-        from .skills import list_skills
+        from ...skills import list_skills
 
         result = list_skills(package=package)
         if as_json:
@@ -44,7 +44,7 @@ def register_skills_commands(main_group):
     @click.argument("name", required=False, default=None)
     def skills_get(package, name):
         """Get content of a skill. Use 'all' to dump every skill across the ecosystem."""
-        from .skills import get_skill, list_skills
+        from ...skills import get_skill, list_skills
 
         if package == "all":
             all_skills = list_skills()
@@ -125,7 +125,7 @@ def register_skills_commands(main_group):
         import os as _os
         from pathlib import Path
 
-        from .skills import export_skills, list_skills
+        from ...skills import export_skills, list_skills
 
         # Default to ~/.scitex/dev/skills/ (peer to other ~/.scitex/<pkg>/ stores)
         target = Path(dest) if dest else Path.home() / ".scitex" / "dev" / "skills"
@@ -207,11 +207,11 @@ def register_skills_commands(main_group):
         """Export skills to ~/.claude/skills/scitex/."""
         import json as json_mod
         from pathlib import Path
-        from .skills import _get_default_export_dest, export_skills
+        from ...skills import _get_default_export_dest, export_skills
 
         target = Path(dest) if dest else _get_default_export_dest()
         if dry_run:
-            from .skills import list_skills
+            from ...skills import list_skills
 
             result = {
                 k: [e["name"] + ".md" for e in v]
@@ -258,7 +258,7 @@ def register_skills_commands(main_group):
         Designed for CLAUDE.md `@<tag>` shorthand resolution. See
         general/06_skills_06_frontmatter-metadata.md §"CLAUDE.md tag shortcuts".
         """
-        from ._cli_skills_tags import tags_expand
+        from ._tags import tags_expand
 
         raise SystemExit(tags_expand(tag, include_source_tree=not no_source_tree))
 
@@ -274,7 +274,7 @@ def register_skills_commands(main_group):
             "(verb-noun per §1).",
             err=True,
         )
-        from ._cli_skills_tags import tags_expand
+        from ._tags import tags_expand
 
         raise SystemExit(tags_expand(tag, include_source_tree=not no_source_tree))
 
@@ -319,7 +319,7 @@ def register_skills_commands(main_group):
         import json as json_mod
         from pathlib import Path
 
-        from .skills import export_skills, list_skills
+        from ...skills import export_skills, list_skills
 
         target = Path(destination)
         if dry_run:

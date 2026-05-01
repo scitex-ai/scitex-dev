@@ -50,13 +50,13 @@ def register_ecosystem_commands(main_group):
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def ecosystem_list(package, versions, as_json):
         """List packages in the SciTeX ecosystem."""
-        from ._ecosystem import ECOSYSTEM, get_all_packages
+        from ..._ecosystem import ECOSYSTEM, get_all_packages
 
         pkgs = list(package) if package else get_all_packages()
 
         if versions:
-            from . import list_versions
-            from .cli_utils import wrap_as_cli
+            from ... import list_versions
+            from .._utils import wrap_as_cli
 
             wrap_as_cli(list_versions, as_json=as_json, packages=pkgs)
         elif as_json:
@@ -107,7 +107,7 @@ def register_ecosystem_commands(main_group):
     @click.pass_context
     def ecosystem_graph(ctx, fmt, output, cycles, include_extras, group_by_tier):
         """Emit a current-state ecosystem dependency graph (mermaid/DOT)."""
-        from ._ecosystem import _graph as _eg
+        from ..._ecosystem import _graph as _eg
 
         pkgs = _eg.discover_packages()
         graph = _eg.build_graph(pkgs)
@@ -203,7 +203,7 @@ def register_ecosystem_commands(main_group):
             click.echo("error: --dry-run and --apply are mutually exclusive", err=True)
             ctx.exit(2)
 
-        from ._ecosystem._packages import packages_audit
+        from ..._ecosystem._packages import packages_audit
 
         host_list = list(hosts) if hosts else None
         pkg_list = list(packages) if packages else None
@@ -287,8 +287,8 @@ def register_ecosystem_commands(main_group):
             "use `ecosystem packages` (or `packages --apply` to execute).",
             err=True,
         )
-        from . import fix_mismatches
-        from .cli_utils import wrap_as_cli
+        from ... import fix_mismatches
+        from .._utils import wrap_as_cli
 
         wrap_as_cli(fix_mismatches, as_json=as_json, confirm=confirm)
 
@@ -319,8 +319,8 @@ def register_ecosystem_commands(main_group):
         """
         import sys
 
-        from .cli_utils import wrap_as_cli
-        from ._sync import sync_local
+        from .._utils import wrap_as_cli
+        from ..._sync import sync_local
 
         pkgs = list(package) if package else None
 
@@ -404,8 +404,8 @@ def register_ecosystem_commands(main_group):
             "--apply to execute).",
             err=True,
         )
-        from .cli_utils import wrap_as_cli
-        from ._sync import sync_all
+        from .._utils import wrap_as_cli
+        from ..._sync import sync_all
 
         host_list = list(hosts) if hosts else None
         if host_list == ["all"]:
@@ -441,7 +441,7 @@ def register_ecosystem_commands(main_group):
     def _audit_cli_epilog() -> str:
         """Build a dynamic --help epilog showing the registry cascade + entries."""
         try:
-            from ._cli_audit._audit import REGISTRY_CASCADE_DOC, _load_registry
+            from ..audit._summary._audit import REGISTRY_CASCADE_DOC, _load_registry
         except Exception:
             return ""
         registry, provenance = _load_registry(None)
@@ -554,7 +554,7 @@ def register_ecosystem_commands(main_group):
         The package list for --all is resolved via the registry cascade
         documented in the epilog below.
         """
-        from . import _cli_audit
+        from ..audit import _summary as _cli_audit
 
         raise SystemExit(
             _cli_audit.audit_cli(
@@ -667,7 +667,7 @@ def register_ecosystem_commands(main_group):
         The package list for --all is resolved via the same registry cascade
         used by `audit-cli` (see that command's --help).
         """
-        from ._cli_audit._mcp_audit import run_audit_mcp, run_audit_mcp_all
+        from ..audit._summary._mcp_audit import run_audit_mcp, run_audit_mcp_all
 
         if audit_all:
             raise SystemExit(
@@ -725,7 +725,7 @@ def register_ecosystem_commands(main_group):
     )
     def ecosystem_audit_python_apis(distribution, json_out, rules):
         """Check a package's Python API against the §1–§5 audit checklist."""
-        from . import _cli_audit_api
+        from ..audit import _api as _cli_audit_api
 
         raise SystemExit(
             _cli_audit_api.audit_api(
@@ -765,7 +765,7 @@ def register_ecosystem_commands(main_group):
     )
     def ecosystem_audit_skills(distribution, json_out, rules):
         """Check a package's `_skills/<pip-name>/` against the §1–§FM checklist."""
-        from . import _cli_audit_skills
+        from ..audit import _skills as _cli_audit_skills
 
         raise SystemExit(
             _cli_audit_skills.audit_skills(
@@ -810,8 +810,8 @@ def register_ecosystem_commands(main_group):
         """Check a package's project-structure against the canonical layout."""
         from pathlib import Path
 
-        from . import _cli_audit_project
-        from ._ecosystem import ECOSYSTEM
+        from ..audit import _project as _cli_audit_project
+        from ..._ecosystem import ECOSYSTEM
 
         repo = Path(repo_path).expanduser() if repo_path else None
         if repo is None:
@@ -892,7 +892,7 @@ def register_ecosystem_commands(main_group):
         """Cross-leaf, cross-auditor violation summary — one source of truth."""
         from concurrent.futures import ThreadPoolExecutor, as_completed
         import subprocess
-        from ._ecosystem import ECOSYSTEM
+        from ..._ecosystem import ECOSYSTEM
 
         chosen = (
             list(auditors)
@@ -1101,12 +1101,12 @@ def register_ecosystem_commands(main_group):
         if background:
             # Delegate to run_background so log + pid land under
             # ~/.scitex/dev/runtime/ per 01_arch_06_local-state-directories.md.
-            from .dashboard.app import run_background
+            from ...dashboard.app import run_background
 
             run_background(host=host, port=port, force=force)
             click.echo(f"Dashboard started in background on {host}:{port}")
         else:
-            from .dashboard import run_dashboard
+            from ...dashboard import run_dashboard
 
             run_dashboard(
                 port=port,

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scitex_dev._cli_audit_api._audit import RULES, _audit_init
+from scitex_dev._cli.audit._api._audit import RULES, _audit_init
 
 
 def _write_init(tmp_path: Path, body: str) -> Path:

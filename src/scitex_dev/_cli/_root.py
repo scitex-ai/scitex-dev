@@ -219,18 +219,18 @@ else:
     # Ecosystem commands
     # -------------------------------------------------------------------
 
-    from ._cli_doctor import register_doctor_command
+    from ._doctor import register_doctor_command
 
     register_doctor_command(main)
 
-    from ._cli_ecosystem import register_ecosystem_commands
+    from .ecosystem._registry import register_ecosystem_commands
 
     ecosystem_group = register_ecosystem_commands(main)
 
     # Stats now lives under `ecosystem` per noun-verb hierarchy. The legacy
     # top-level `show-stats` is kept as a hidden deprecation alias for one
     # cycle; remove in 0.11.0.
-    from ._cli_stats import register_stats_command
+    from ._stats import register_stats_command
 
     register_stats_command(ecosystem_group, main_group=main)
 
@@ -238,7 +238,7 @@ else:
     # Move them under `ecosystem` so `ecosystem audit-*` is the single
     # canonical audit namespace. The top-level `quality` group is dropped;
     # individual `quality audit-*` callers must update.
-    from . import _cli_quality
+    from .quality import _check as _cli_quality
 
     # These sub-rules belong inside their canonical owner per the
     # consolidation plan. Hidden until folded in (PR-by-PR) so the public
@@ -319,7 +319,7 @@ else:
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def config_cmd(as_json):
         """Show dev configuration."""
-        from . import config_to_dict, load_config
+        from .. import config_to_dict, load_config
 
         cfg = config_to_dict(load_config())
 
@@ -383,12 +383,12 @@ else:
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def rename_symbols(old_name, new_name, root, dry_run, regex, exclude, as_json):
         """Bulk rename with cross-reference updates. Supports --regex for regex patterns."""
-        from .cli_utils import wrap_as_cli
+        from ._utils import wrap_as_cli
 
         extra_excludes = list(exclude) if exclude else []
 
         if dry_run:
-            from . import preview_rename
+            from .. import preview_rename
 
             wrap_as_cli(
                 preview_rename,
@@ -400,7 +400,7 @@ else:
                 extra_excludes=extra_excludes,
             )
         else:
-            from . import execute_rename
+            from .. import execute_rename
 
             wrap_as_cli(
                 execute_rename,
@@ -416,7 +416,7 @@ else:
     # Documentation commands
     # -------------------------------------------------------------------
 
-    from .cli import docs_click_group
+    from ._dispatch import docs_click_group
 
     docs_grp = docs_click_group(package="scitex-dev")
     main.add_command(docs_grp)
@@ -433,8 +433,8 @@ else:
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def _docs_search(query, scope, max_results, as_json):
         """Search across APIs, CLI, MCP tools, and documentation."""
-        from . import search as do_search
-        from .cli_utils import wrap_as_cli
+        from .. import search as do_search
+        from ._utils import wrap_as_cli
 
         wrap_as_cli(
             do_search,
@@ -444,11 +444,11 @@ else:
             max_results=max_results,
         )
 
-    from ._cli_skills import register_skills_commands
+    from .skills._manage import register_skills_commands
 
     register_skills_commands(main)
 
-    from ._cli_completion import register_completion_command
+    from ._completion import register_completion_command
 
     register_completion_command(main)
 
@@ -481,8 +481,8 @@ else:
             "`scitex-dev docs search`. Will be removed in 0.11.0.",
             err=True,
         )
-        from . import search as do_search
-        from .cli_utils import wrap_as_cli
+        from .. import search as do_search
+        from ._utils import wrap_as_cli
 
         wrap_as_cli(
             do_search,
@@ -529,7 +529,7 @@ else:
     def mcp_start():
         """Start the scitex-dev MCP server."""
         try:
-            from ._mcp._server import mcp as mcp_server
+            from .._mcp._server import mcp as mcp_server
         except ImportError as e:
             raise click.ClickException(
                 f"Failed to import MCP server. "
@@ -554,7 +554,7 @@ else:
             return
 
         try:
-            from ._mcp._server import mcp as mcp_server
+            from .._mcp._server import mcp as mcp_server
 
             import asyncio
 
@@ -614,7 +614,7 @@ else:
     def mcp_list_tools(verbose, as_json):
         """List available MCP tools."""
         try:
-            from ._mcp._server import mcp as mcp_server
+            from .._mcp._server import mcp as mcp_server
         except ImportError as e:
             raise click.ClickException(
                 f"fastmcp not installed. Install with: pip install scitex-dev[mcp]\n{e}"
@@ -626,7 +626,7 @@ else:
         total = len(tools)
 
         if as_json:
-            from .types import RESULT_SCHEMA
+            from ..types import RESULT_SCHEMA
 
             output = {
                 "result_envelope": RESULT_SCHEMA,

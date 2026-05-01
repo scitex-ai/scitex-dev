@@ -55,7 +55,7 @@ def _load_registry(
     the layer that supplied the registry — surfaced in --help and in the
     `--all` summary so users know what they're auditing.
     """
-    from .. import _ecosystem as _eco
+    from .... import _ecosystem as _eco
 
     bundled: dict = dict(_eco.ECOSYSTEM)
 
@@ -193,7 +193,9 @@ def _load_moby() -> dict[str, set[str]]:
     Labels: noun, verb, verb-t, verb-i.
     """
     db: dict[str, set[str]] = {}
-    data = resources.files("scitex_dev._cli_audit").joinpath("data", "mobypos.txt.gz")
+    data = resources.files("scitex_dev._cli.audit._summary").joinpath(
+        "data", "mobypos.txt.gz"
+    )
     with gzip.open(data.open("rb"), mode="rt", encoding="latin-1") as f:
         for line in f:
             if "\\" not in line:
@@ -1078,7 +1080,7 @@ def _is_allowed_env(var: str) -> bool:
 def _known_scitex_prefixes() -> tuple[str, ...]:
     """Return the set of valid `SCITEX_<PKG>_` prefixes from the bundled registry."""
     try:
-        from .. import _ecosystem as _eco
+        from .... import _ecosystem as _eco
     except Exception:
         return ()
     out: set[str] = {"SCITEX_"}  # umbrella

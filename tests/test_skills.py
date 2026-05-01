@@ -336,7 +336,7 @@ class TestSkillsCLI:
     def cli_group(self):
         """Build a minimal click group with skills commands registered."""
         import click
-        from scitex_dev._cli_skills import register_skills_commands
+        from scitex_dev._cli.skills._manage import register_skills_commands
 
         @click.group()
         def cli():

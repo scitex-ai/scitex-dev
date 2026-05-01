@@ -51,13 +51,13 @@ except ImportError:  # pragma: no cover — only on ancient Pythons
 # See `_skills/general/03_interface_02_cli/17_lazy-imports-cli-startup.md`.
 _LAZY_ATTRS: dict[str, str] = {
     # cli_utils
-    "add_dry_run_argument": "cli_utils",
-    "add_json_argument": "cli_utils",
-    "dry_run_option": "cli_utils",
-    "handle_result": "cli_utils",
-    "json_option": "cli_utils",
-    "run_as_cli": "cli_utils",
-    "wrap_as_cli": "cli_utils",
+    "add_dry_run_argument": "_cli",
+    "add_json_argument": "_cli",
+    "dry_run_option": "_cli",
+    "handle_result": "_cli",
+    "json_option": "_cli",
+    "run_as_cli": "_cli",
+    "wrap_as_cli": "_cli",
     # decorators
     "supports_return_as": "decorators",
     # errors

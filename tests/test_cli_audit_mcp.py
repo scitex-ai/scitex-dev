@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Tests for scitex_dev._cli_audit._mcp_audit — MCP-side helpers."""
+"""Tests for scitex_dev._cli.audit._summary._mcp_audit — MCP-side helpers."""
 
 from __future__ import annotations
 
 
-from scitex_dev._cli_audit._audit import Violation
-from scitex_dev._cli_audit._mcp_audit import (
+from scitex_dev._cli.audit._summary._audit import Violation
+from scitex_dev._cli.audit._summary._mcp_audit import (
     _check_bridge_pattern,
     _check_skills_pair,
     _check_tool_naming,
@@ -33,24 +33,24 @@ class TestNameDerivation:
 
 class TestSkipNonStandalone:
     def test_umbrella_skipped(self):
-        from scitex_dev._cli_audit._mcp_audit import _should_skip
+        from scitex_dev._cli.audit._summary._mcp_audit import _should_skip
 
         assert _should_skip("scitex") is True
 
     def test_mcp_server_packages_skipped(self):
-        from scitex_dev._cli_audit._mcp_audit import _should_skip
+        from scitex_dev._cli.audit._summary._mcp_audit import _should_skip
 
         assert _should_skip("scitex-cloud-mcp") is True
         assert _should_skip("scitex-orochi-server") is True
 
     def test_normal_package_not_skipped(self):
-        from scitex_dev._cli_audit._mcp_audit import _should_skip
+        from scitex_dev._cli.audit._summary._mcp_audit import _should_skip
 
         assert _should_skip("scitex-cloud") is False
         assert _should_skip("scitex-stats") is False
 
     def test_audit_one_returns_skip_status(self):
-        from scitex_dev._cli_audit._mcp_audit import _audit_one_mcp
+        from scitex_dev._cli.audit._summary._mcp_audit import _audit_one_mcp
 
         status, violations = _audit_one_mcp("scitex")
         assert status == "skip-not-standalone"
@@ -133,7 +133,7 @@ class TestSkillsPair:
 
 class TestBridgePattern:
     def test_no_bridge_no_violation(self, monkeypatch):
-        from scitex_dev._cli_audit import _mcp_audit as mod
+        from scitex_dev._cli.audit._summary import _mcp_audit as mod
 
         monkeypatch.setattr(mod, "_read_bridge_source", lambda pkg: None)
         out: list[Violation] = []
@@ -141,7 +141,7 @@ class TestBridgePattern:
         assert out == []
 
     def test_safe_mount_bridge_clean(self, monkeypatch):
-        from scitex_dev._cli_audit import _mcp_audit as mod
+        from scitex_dev._cli.audit._summary import _mcp_audit as mod
 
         src = (
             "from ._compat import safe_mount\n"
@@ -154,7 +154,7 @@ class TestBridgePattern:
         assert out == []
 
     def test_hand_wrap_flagged(self, monkeypatch):
-        from scitex_dev._cli_audit import _mcp_audit as mod
+        from scitex_dev._cli.audit._summary import _mcp_audit as mod
 
         src = "@mcp.tool()\nasync def audio_speak(text: str) -> str:\n    pass\n"
         monkeypatch.setattr(mod, "_read_bridge_source", lambda pkg: src)
@@ -166,7 +166,7 @@ class TestBridgePattern:
 
     def test_direct_mount_flagged(self, monkeypatch):
         """`mcp.mount(...)` without `safe_mount` is now drift (§1)."""
-        from scitex_dev._cli_audit import _mcp_audit as mod
+        from scitex_dev._cli.audit._summary import _mcp_audit as mod
 
         src = (
             "def register_io_tools(mcp):\n"

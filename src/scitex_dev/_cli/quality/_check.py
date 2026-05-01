@@ -4,11 +4,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ._pyproject_lint import lint_pyproject
-from ._release_publisher import publish_release
-from ._rtd_onboard import onboard_rtd
+from ..._pyproject_lint import lint_pyproject
+from ..._release_publisher import publish_release
+from ..._rtd_onboard import onboard_rtd
 
-SCRIPTS = Path(__file__).parent.parent.parent / "scripts" / "quality"
+SCRIPTS = Path(__file__).parent.parent.parent.parent.parent / "scripts" / "quality"
 
 
 def audit_docs(projects_root: str | None = None):
@@ -108,10 +108,10 @@ def audit_ecosystem(
 
 
 def _main(argv=None):
-    """Minimal argv dispatcher so `python -m scitex_dev._cli_quality <cmd>` works."""
+    """Minimal argv dispatcher so `python -m scitex_dev._cli.quality._check <cmd>` works."""
     import argparse
 
-    parser = argparse.ArgumentParser(prog="scitex_dev._cli_quality")
+    parser = argparse.ArgumentParser(prog="scitex_dev._cli.quality._check")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_docs = sub.add_parser("audit_docs", help="Run doc-example auditor")
