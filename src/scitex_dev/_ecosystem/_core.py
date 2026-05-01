@@ -79,6 +79,13 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "figrecipe",
         "category": "external-lib",
     },
+    "newb": {
+        "local_path": "~/proj/newb",
+        "pypi_name": "newb",
+        "github_repo": "ywatanabe1989/newb",
+        "import_name": "newb",
+        "category": "external-lib",
+    },
     "openalex-local": {
         "local_path": "~/proj/openalex-local",
         "pypi_name": "openalex-local",
