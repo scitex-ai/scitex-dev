@@ -26,9 +26,10 @@
 
 | # | Problem | Solution |
 |---|---------|----------|
-| 1 | **33 packages get out of sync** -- one package bumps a dep; consumers forget to update minima; users hit runtime errors | **`scitex-dev ecosystem` suite** -- `list`, `diff`, `sync`, `fix-mismatches`, `commit`, `pull`, `push` — fanout tooling for coordinated releases |
-| 2 | **Skills scattered across 33 source repos** -- users can't discover them easily | **`scitex-dev skills export --link`** -- symlink the full skill pack into `~/.claude/skills/scitex/` for live-edit dev loops |
-| 3 | **Testing against a SLURM cluster requires ssh + sbatch dance** -- interrupts local flow | **`scitex-dev test hpc` + `--poll` + `--result`** -- non-blocking submit, query later |
+| 1 | **~70 ecosystem packages drift apart** -- versions, READMEs, sphinx setups, CLI conventions diverge faster than humans can audit | **`scitex-dev ecosystem audit-*`** -- `audit-project`, `audit-cli`, `audit-mcp-tools`, `audit-python-apis`, `audit-skills`, `audit-summary` enforce ~130 numbered rules across the whole ecosystem |
+| 2 | **Skills scattered across ~70 source repos** -- AI agents can't discover them; humans can't review them | **`scitex-dev skills list / get / export`** -- aggregate every package's `_skills/` and symlink them into `~/.claude/skills/scitex/` for live-edit dev loops |
+| 3 | **Coordinated releases need ten manual steps** -- bump version, push tag, watch CI, verify PyPI, deploy — done per-package, multiplied by 70 | **`scitex-dev ecosystem sync` + `check-versions` + `start-dashboard`** -- one-shot install/sync across hosts, version-mismatch detection, and a web dashboard with the live state |
+| 4 | **Bulk renames across 70 repos break cross-references** -- import paths, doc references, symlinks — `sed -i` corrupts something every time | **`scitex-dev rename-symbols`** -- atomic rename with cross-reference updates, regex support, dry-run preview, git-safety guards |
 
 ## Installation
 
