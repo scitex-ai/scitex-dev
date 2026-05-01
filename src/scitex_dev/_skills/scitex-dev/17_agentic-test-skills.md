@@ -56,13 +56,17 @@ docker build -f Dockerfile.agentic-test -t scitex-agentic-test:latest .
 The image contains only Node + claude CLI. No baked skills, no baked
 credentials. Rebuild only when the base image changes.
 
+## Isolation model — what "newbie" means
+
+**Skills-isolated, identity-shared.** Only the single `_skills/<pkg>/`
+and `/tmp/newbie_creds.json` land inside; no other `~/.claude/` files
+leak in. But the creds are a copy of YOUR `~/.claude/.credentials.json`
+— the agent calls Claude API as your account (your usage / billing).
+For true identity isolation, write a separate test token to a different
+`/tmp/test_creds.json`. Mount is `:ro` so the container can't write
+back. Prep: `install -m 644 ~/.claude/.credentials.json /tmp/newbie_creds.json`
+
 ## Two runtime modes (pick by purpose)
-
-One shared credentials copy (session scope):
-
-```bash
-install -m 644 ~/.claude/.credentials.json /tmp/newbie_creds.json
-```
 
 ### Mode A — dev iteration (direct source mount)
 
@@ -73,7 +77,7 @@ Mount each package's skill dir read-only:
 ```bash
 docker run --rm \
   -v ~/proj/scitex-io/src/scitex_io/_skills/scitex-io:/home/agent/.claude/skills/scitex-io:ro \
-  -v /tmp/newbie_creds.json:/home/agent/.claude/.credentials.json \
+  -v /tmp/newbie_creds.json:/home/agent/.claude/.credentials.json:ro \
   scitex-agentic-test:latest \
   -p "<query>" --output-format json --model claude-haiku-4-5 \
   --dangerously-skip-permissions
