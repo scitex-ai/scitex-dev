@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
-from .mcp import register_docs_tools
+from ._core import register_docs_tools
 
 mcp = FastMCP(
     name="scitex-dev",

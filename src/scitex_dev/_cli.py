@@ -529,7 +529,7 @@ else:
     def mcp_start():
         """Start the scitex-dev MCP server."""
         try:
-            from ._mcp_server import mcp as mcp_server
+            from ._mcp._server import mcp as mcp_server
         except ImportError as e:
             raise click.ClickException(
                 f"Failed to import MCP server. "
@@ -554,7 +554,7 @@ else:
             return
 
         try:
-            from ._mcp_server import mcp as mcp_server
+            from ._mcp._server import mcp as mcp_server
 
             import asyncio
 
@@ -614,7 +614,7 @@ else:
     def mcp_list_tools(verbose, as_json):
         """List available MCP tools."""
         try:
-            from ._mcp_server import mcp as mcp_server
+            from ._mcp._server import mcp as mcp_server
         except ImportError as e:
             raise click.ClickException(
                 f"fastmcp not installed. Install with: pip install scitex-dev[mcp]\n{e}"

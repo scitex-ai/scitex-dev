@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from .types import Result
+from ..types import Result
 
 
 def run_as_mcp(fn: Callable, **kwargs: Any) -> str:
@@ -60,7 +60,7 @@ def wrap_as_mcp(
     str
         JSON string with Result structure.
     """
-    from .errors import classify_exception
+    from ..errors import classify_exception
 
     try:
         data = fn(**kwargs)
@@ -118,7 +118,7 @@ async def async_wrap_as_mcp(
     str
         JSON string with Result structure.
     """
-    from .errors import classify_exception
+    from ..errors import classify_exception
 
     try:
         data = await coro_fn(**kwargs)

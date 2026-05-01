@@ -5,7 +5,7 @@
 These functions return JSON strings suitable for MCP tool responses.
 Register them in your MCP server::
 
-    from scitex_dev.mcp import register_docs_tools
+    from scitex_dev._mcp._core import register_docs_tools
     register_docs_tools(mcp)
 """
 

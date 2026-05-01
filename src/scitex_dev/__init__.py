@@ -68,13 +68,12 @@ _LAZY_ATTRS: dict[str, str] = {
     "InstallHint": "_imports",
     "last_install_hint": "_imports",
     "try_import_optional": "_imports",
-    # _mcp_compat
-    "get_tools_sync": "_mcp_compat",
-    # mcp_utils
-    "async_wrap_as_mcp": "mcp_utils",
-    "result_to_mcp": "mcp_utils",
-    "run_as_mcp": "mcp_utils",
-    "wrap_as_mcp": "mcp_utils",
+    # _mcp
+    "get_tools_sync": "_mcp",
+    "async_wrap_as_mcp": "_mcp",
+    "result_to_mcp": "_mcp",
+    "run_as_mcp": "_mcp",
+    "wrap_as_mcp": "_mcp",
     # side_effects
     "SideEffect": "side_effects",
     # types

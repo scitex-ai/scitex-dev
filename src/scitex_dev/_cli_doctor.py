@@ -204,7 +204,7 @@ def check_mcp_server() -> list[dict]:
         return results
 
     try:
-        from scitex_dev._mcp_server import mcp as mcp_server
+        from scitex_dev._mcp._server import mcp as mcp_server
         import asyncio
 
         tool_count = len(asyncio.run(mcp_server.list_tools()))
