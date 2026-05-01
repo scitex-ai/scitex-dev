@@ -39,6 +39,13 @@ _RE_QUICKSTART = re.compile(
 _RE_PART_OF_SCITEX = re.compile(
     r"^##\s+Part\s+of\s+SciTeX\b", re.MULTILINE | re.IGNORECASE
 )
+# Accept "## Three Interfaces", "## Four Interfaces", "## Five Interfaces",
+# "## Six Interfaces" — the count varies (Python+CLI+MCP+Skills+HTTP, with
+# HTTP optional). Number-word OR plain digit accepted.
+_RE_INTERFACES = re.compile(
+    r"^##\s+(Three|Four|Five|Six|\d+)\s+Interfaces\b",
+    re.MULTILINE | re.IGNORECASE,
+)
 
 
 # PS109 — PyPI version badge. Accepts badge.fury.io OR shields.io/pypi.
@@ -70,6 +77,46 @@ _RE_SCITEX_LOGO = re.compile(
     r"<img[^>]+src=[\"'][^\"']*scitex-logo[^\"']*\.(?:png|svg|jpg|jpeg)[\"']",
     re.IGNORECASE,
 )
+
+
+# PS113 — SciTeX icon footer. Centered icon-link at the very bottom of
+# the README per the canonical template, e.g.
+#   <p align="center">
+#     <a href="https://scitex.ai" target="_blank">
+#       <img src="docs/scitex-icon-navy-inverted.png" alt="SciTeX" width="40"/>
+#     </a>
+#   </p>
+# Detection: scitex-icon-* image referenced anywhere in the LAST ~2 KB
+# (the footer area), permissive on path / variant just like PS112.
+_RE_SCITEX_ICON = re.compile(
+    r"<img[^>]+src=[\"'][^\"']*scitex-icon[^\"']*\.(?:png|svg|jpg|jpeg)[\"']",
+    re.IGNORECASE,
+)
+_TAIL_BYTES_FOOTER = 2048
+
+
+# PS114 — "Problem and Solution" must be presented as a table, not prose.
+# Detection: an `## Problem` (or `## Problem and Solution`) heading must
+# be followed within ~3 KB by a markdown table separator row
+# (`| --- | --- |` style). Misses pure-prose treatments of the section.
+_RE_PROBLEM_HEADING = re.compile(
+    r"^##\s+Problem(\s+and\s+Solution)?\b", re.MULTILINE | re.IGNORECASE
+)
+_RE_TABLE_SEPARATOR = re.compile(
+    r"^\s*\|\s*[-:]+\s*(\|\s*[-:]+\s*)+\|\s*$", re.MULTILINE
+)
+_TABLE_LOOKAHEAD_BYTES = 3072
+
+
+# PS115 — `## Part of SciTeX` must open with the canonical "is part of
+# [SciTeX]" sentence. Format: `\`<pkg>\` is part of [SciTeX](https://scitex.ai)`.
+# Tolerant: allows the package name in backticks or plain, allows the
+# SciTeX link to be either the canonical URL or the **bold** form.
+_RE_PART_OF_OPENER = re.compile(
+    r"is\s+part\s+of\s+\[\*{0,2}SciTeX\*{0,2}\]\(https?://scitex\.ai/?\)",
+    re.IGNORECASE,
+)
+_PART_OF_LOOKAHEAD_BYTES = 1024
 
 
 def _read_head(readme: Path, n: int) -> str | None:
@@ -115,6 +162,8 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
         missing.append("## Installation")
     if not _RE_QUICKSTART.search(head_sections):
         missing.append("## Quick Start")
+    if not _RE_INTERFACES.search(head_sections):
+        missing.append("## <N> Interfaces")
     if not _RE_PART_OF_SCITEX.search(head_sections):
         missing.append("## Part of SciTeX")
     if missing:
@@ -193,3 +242,61 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                 ),
             )
         )
+
+    # PS113 — SciTeX icon footer (centered link at the very bottom).
+    tail = full[-_TAIL_BYTES_FOOTER:] if len(full) > _TAIL_BYTES_FOOTER else full
+    if not _RE_SCITEX_ICON.search(tail):
+        out.append(
+            violation_cls(
+                "PS113",
+                str(readme),
+                (
+                    "README.md is missing a SciTeX icon footer (centered "
+                    "scitex-icon image in the last ~2 KB). Add the canonical "
+                    "footer block — see _skills/general/04_docs_01_readme_template.md."
+                ),
+            )
+        )
+
+    # PS115 — "## Part of SciTeX" must open with the canonical
+    # "is part of [SciTeX](https://scitex.ai)" sentence. The synergy
+    # code block under it is OPTIONAL — standalone packages can skip
+    # the example as long as the opener is present.
+    pos_part = _RE_PART_OF_SCITEX.search(full)
+    if pos_part is not None:
+        window = full[pos_part.end() : pos_part.end() + _PART_OF_LOOKAHEAD_BYTES]
+        if not _RE_PART_OF_OPENER.search(window):
+            out.append(
+                violation_cls(
+                    "PS115",
+                    str(readme),
+                    (
+                        "README.md '## Part of SciTeX' section does not open "
+                        "with the canonical '<pkg> is part of "
+                        "[SciTeX](https://scitex.ai)' sentence. The synergy "
+                        "code block is optional for standalone packages, but "
+                        "the opener is required so consumers know how the "
+                        "package fits into the ecosystem."
+                    ),
+                )
+            )
+
+    # PS114 — "Problem and Solution" must be presented as a markdown table.
+    # When the heading is present but no table separator follows within
+    # ~3 KB, the section is prose-only — flag it.
+    m = _RE_PROBLEM_HEADING.search(full)
+    if m is not None:
+        window = full[m.end() : m.end() + _TABLE_LOOKAHEAD_BYTES]
+        if not _RE_TABLE_SEPARATOR.search(window):
+            out.append(
+                violation_cls(
+                    "PS114",
+                    str(readme),
+                    (
+                        "README.md '## Problem and Solution' (or '## Problem') "
+                        "section is prose-only. SciTeX convention is a "
+                        "markdown table with columns | # | Problem | Solution | "
+                        "— see _skills/general/04_docs_01_readme_template.md."
+                    ),
+                )
+            )

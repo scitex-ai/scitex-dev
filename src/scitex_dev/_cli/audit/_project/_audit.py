@@ -112,6 +112,32 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
+            "PS113",
+            "§1",
+            (
+                "README.md is missing a SciTeX icon footer — centered "
+                "scitex-icon image link in the last ~2 KB of the file."
+            ),
+        ),
+        Rule(
+            "PS114",
+            "§1",
+            (
+                "README.md `## Problem and Solution` section is prose-only — "
+                "convention is a markdown table with columns "
+                "`| # | Problem | Solution |`."
+            ),
+        ),
+        Rule(
+            "PS115",
+            "§1",
+            (
+                "README.md `## Part of SciTeX` section does not open with "
+                "the canonical `<pkg> is part of [SciTeX](https://scitex.ai)` "
+                "sentence. Synergy code is optional; the opener is required."
+            ),
+        ),
+        Rule(
             "PS108",
             "§1",
             (
