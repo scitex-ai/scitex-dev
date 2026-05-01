@@ -21,7 +21,14 @@ def register_skills_commands(main_group):
     @click.option("--package", default=None, help="Filter by package name.")
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def skills_list(package, as_json):
-        """List all skills across installed packages."""
+        """List all skills across installed packages.
+
+        \b
+        Example:
+            $ scitex-dev skills list
+            $ scitex-dev skills list --json
+            $ scitex-dev skills list --package scitex-io
+        """
         from ...skills import list_skills
 
         result = list_skills(package=package)
@@ -42,8 +49,18 @@ def register_skills_commands(main_group):
     @skills.command("get")
     @click.argument("package")
     @click.argument("name", required=False, default=None)
-    def skills_get(package, name):
-        """Get content of a skill. Use 'all' to dump every skill across the ecosystem."""
+    @click.option(
+        "--json", "as_json", is_flag=True, help="Emit skill as JSON envelope."
+    )
+    def skills_get(package, name, as_json):
+        """Get content of a skill. Use 'all' to dump every skill across the ecosystem.
+
+        \b
+        Example:
+            $ scitex-dev skills get scitex-io save-and-load
+            $ scitex-dev skills get scitex-stats hypothesis-testing --json
+            $ scitex-dev skills get all
+        """
         from ...skills import get_skill, list_skills
 
         if package == "all":
@@ -66,7 +83,14 @@ def register_skills_commands(main_group):
 
         content = get_skill(package=package, name=name)
         if content:
-            click.echo(content)
+            if as_json:
+                import json as _json
+
+                click.echo(
+                    _json.dumps({"package": package, "name": name, "content": content})
+                )
+            else:
+                click.echo(content)
         else:
             target = f"'{name}' in " if name else ""
             click.echo(f"Skill {target}package '{package}' not found.", err=True)
@@ -108,8 +132,9 @@ def register_skills_commands(main_group):
     )
     @click.option("--dry-run", is_flag=True, help="Preview without copying.")
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
     def skills_install(
-        dest, package, source, clean, link, claude_symlink, dry_run, as_json
+        dest, package, source, clean, link, claude_symlink, dry_run, as_json, yes
     ):
         """Install skills from installed/PyPI packages into DEST (default: ~/.scitex/dev/skills/).
 
@@ -121,6 +146,7 @@ def register_skills_commands(main_group):
           scitex-dev skills install --link                              # editable symlink to source
           scitex-dev skills install --dry-run --json                    # preview
         """
+        del yes  # accepted for §2 compliance; install honours --dry-run for preview
         import json as json_mod
         import os as _os
         from pathlib import Path

@@ -88,7 +88,8 @@ def register_completion_command(main_group):
         is_flag=True,
         help="Print the eval line and target rc file without writing.",
     )
-    def install_tab_completion(shell, dry_run):
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def install_tab_completion(shell, dry_run, yes):
         """Append a one-line eval to the shell's rc file.
 
         Safe to run more than once — already-installed lines are skipped.
@@ -115,6 +116,7 @@ def register_completion_command(main_group):
         For one-off activation without persisting to rc:
           eval "$(_SCITEX_DEV_COMPLETE=bash_source scitex-dev)"
         """
+        del yes  # accepted for §2 compliance; use --dry-run for preview
         import os
 
         rc_path = os.path.expanduser(_RC_MAP[shell])

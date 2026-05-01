@@ -308,7 +308,12 @@ def register_doctor_command(main_group):
     @main_group.command("doctor")
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def doctor_cmd(as_json: bool) -> None:
-        """Diagnose the health of the full SciTeX ecosystem."""
+        """Diagnose the health of the full SciTeX ecosystem.
+
+        \b
+        Example:
+            $ scitex-dev doctor --json
+        """
         from importlib.metadata import version as pkg_version
 
         try:

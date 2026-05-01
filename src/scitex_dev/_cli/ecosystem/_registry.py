@@ -111,8 +111,13 @@ def register_ecosystem_commands(main_group):
         default=True,
         help="Group nodes into tier subgraphs (mermaid only).",
     )
+    @click.option(
+        "--json", "as_json", is_flag=True, help="Emit graph as JSON edges/nodes."
+    )
     @click.pass_context
-    def ecosystem_graph(ctx, fmt, output, cycles, include_extras, group_by_tier):
+    def ecosystem_graph(
+        ctx, fmt, output, cycles, include_extras, group_by_tier, as_json
+    ):
         """Emit a current-state ecosystem dependency graph (mermaid/DOT).
 
         \b
@@ -120,11 +125,30 @@ def register_ecosystem_commands(main_group):
             $ scitex-dev ecosystem show-graph
             $ scitex-dev ecosystem show-graph --format dot -o /tmp/eco.dot
             $ scitex-dev ecosystem show-graph --cycles
+            $ scitex-dev ecosystem show-graph --json
         """
         from ..._ecosystem import _graph as _eg
 
         pkgs = _eg.discover_packages()
         graph = _eg.build_graph(pkgs)
+
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {
+                        "nodes": list(graph.keys()),
+                        "edges": [
+                            {"from": src, "to": dst}
+                            for src, deps in graph.items()
+                            for dst in deps
+                        ],
+                        "package_count": len(graph),
+                    }
+                )
+            )
+            return
 
         if cycles:
             found = _eg.find_cycles(graph, include_extras=False)

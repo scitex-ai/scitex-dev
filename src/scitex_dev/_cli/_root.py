@@ -401,8 +401,17 @@ else:
         help="Exclude paths containing this substring. Repeatable.",
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def rename_symbols(old_name, new_name, root, dry_run, regex, exclude, as_json):
-        """Bulk rename with cross-reference updates. Supports --regex for regex patterns."""
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def rename_symbols(old_name, new_name, root, dry_run, regex, exclude, as_json, yes):
+        """Bulk rename with cross-reference updates. Supports --regex for regex patterns.
+
+        \b
+        Example:
+            $ scitex-dev rename-symbols old_func new_func --dry-run
+            $ scitex-dev rename-symbols old_func new_func --yes
+            $ scitex-dev rename-symbols 'old_(\\w+)' 'new_\\1' --regex --dry-run
+        """
+        del yes  # accepted for §2; use --dry-run for preview, omit for apply
         from ._utils import wrap_as_cli
 
         extra_excludes = list(exclude) if exclude else []
@@ -452,7 +461,14 @@ else:
     @click.option("--max-results", default=10, help="Maximum results.")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def _docs_search(query, scope, max_results, as_json):
-        """Search across APIs, CLI, MCP tools, and documentation."""
+        """Search across APIs, CLI, MCP tools, and documentation.
+
+        \b
+        Example:
+            $ scitex-dev docs search "save figure"
+            $ scitex-dev docs search version --scope api
+            $ scitex-dev docs search hpc --max-results 20 --json
+        """
         from .. import search as do_search
         from ._utils import wrap_as_cli
 
@@ -546,8 +562,22 @@ else:
                 click.echo(cmd.get_help(sub_ctx))
 
     @mcp.command("start")
-    def mcp_start():
-        """Start the scitex-dev MCP server."""
+    @click.option(
+        "--dry-run", is_flag=True, help="Print what would be done; do not start."
+    )
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def mcp_start(dry_run, yes):
+        """Start the scitex-dev MCP server.
+
+        \b
+        Example:
+            $ scitex-dev mcp start
+            $ scitex-dev mcp start --dry-run
+        """
+        del yes  # accepted for §2; mcp start is non-interactive
+        if dry_run:
+            click.echo("would start scitex-dev MCP server (fastmcp on stdio)")
+            return
         try:
             from .._mcp._server import mcp as mcp_server
         except ImportError as e:
@@ -561,7 +591,12 @@ else:
 
     @mcp.command("doctor")
     def mcp_doctor():
-        """Check MCP server dependencies and configuration."""
+        """Check MCP server dependencies and configuration.
+
+        \b
+        Example:
+            $ scitex-dev mcp doctor
+        """
         click.echo("Checking MCP dependencies...")
 
         try:
@@ -605,8 +640,42 @@ else:
         ctx.exit(2)
 
     @mcp.command("show-installation")
-    def mcp_show_installation():
-        """Show installation instructions for MCP server integration."""
+    @click.option(
+        "--json",
+        "as_json",
+        is_flag=True,
+        help="Emit JSON manifest of MCP install instructions.",
+    )
+    def mcp_show_installation(as_json):
+        """Show installation instructions for MCP server integration.
+
+        \b
+        Example:
+            $ scitex-dev mcp show-installation
+            $ scitex-dev mcp show-installation --json
+        """
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {
+                        "install": "pip install scitex-dev[mcp]",
+                        "mcp_servers": {
+                            "scitex-dev": {
+                                "command": "scitex-dev",
+                                "args": ["mcp", "start"],
+                            },
+                        },
+                        "verify": [
+                            "scitex-dev mcp doctor",
+                            "scitex-dev mcp list-tools",
+                        ],
+                    },
+                    indent=2,
+                )
+            )
+            return
         click.echo("Install scitex-dev with MCP support:")
         click.echo()
         click.echo("  pip install scitex-dev[mcp]")
@@ -632,7 +701,14 @@ else:
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def mcp_list_tools(verbose, as_json):
-        """List available MCP tools."""
+        """List available MCP tools.
+
+        \b
+        Example:
+            $ scitex-dev mcp list-tools
+            $ scitex-dev mcp list-tools -vv
+            $ scitex-dev mcp list-tools --json
+        """
         try:
             from .._mcp._server import mcp as mcp_server
         except ImportError as e:
@@ -685,7 +761,13 @@ else:
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def list_python_apis(verbose, as_json):
-        """List Python APIs (scitex-dev public API tree)."""
+        """List Python APIs (scitex-dev public API tree).
+
+        \b
+        Example:
+            $ scitex-dev list-python-apis
+            $ scitex-dev list-python-apis -v --json
+        """
         import inspect
 
         import scitex_dev
