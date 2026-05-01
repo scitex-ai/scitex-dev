@@ -69,6 +69,49 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
+            "PS107",
+            "§1",
+            (
+                "README.md is missing required H2 sections "
+                "(## Installation / ## Quick Start / ## Part of SciTeX) — "
+                "see _skills/general/04_docs_01_readme_template.md for the "
+                "canonical layout."
+            ),
+        ),
+        Rule(
+            "PS109",
+            "§1",
+            (
+                "README.md is missing a PyPI version badge "
+                "(badge.fury.io/py/<pkg> or img.shields.io/pypi/v/<pkg>) "
+                "in the first ~4 KB."
+            ),
+        ),
+        Rule(
+            "PS110",
+            "§1",
+            (
+                "README.md is missing the Four Freedoms for Research "
+                "blockquote — the SciTeX community-license footer."
+            ),
+        ),
+        Rule(
+            "PS111",
+            "§1",
+            (
+                "README.md contains a banned personal email "
+                "(ywatanabe@scitex.ai) — SciTeX is a community project."
+            ),
+        ),
+        Rule(
+            "PS112",
+            "§1",
+            (
+                "README.md is missing a SciTeX logo image at the top "
+                "(docs/scitex-logo-*.png or docs/assets/images/scitex-logo-*.png)."
+            ),
+        ),
+        Rule(
             "PS108",
             "§1",
             (
@@ -864,6 +907,9 @@ def audit_project(
     from ._check_readme_badges import check_coverage_badge
 
     check_coverage_badge(repo_root, Violation, violations)
+    from ._check_readme_sections import check_readme_sections
+
+    check_readme_sections(repo_root, Violation, violations)
     from ._check_examples import check_examples_conventions
 
     check_examples_conventions(repo_root, Violation, violations)
