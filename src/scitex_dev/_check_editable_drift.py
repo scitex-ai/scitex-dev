@@ -69,14 +69,41 @@ def _editable_source_dir(distribution: str) -> Path | None:
     return None
 
 
-def _git_head_mtime(repo: Path) -> float | None:
-    head = repo / ".git" / "HEAD"
-    if not head.is_file():
+def _git_state_mtime(repo: Path) -> float | None:
+    """Composite mtime so the cache invalidates on commit moves AND tag fetches.
+
+    `git fetch --tags` updates `.git/packed-refs` (and/or files under
+    `.git/refs/tags/`) but does NOT touch `.git/HEAD`. Keying the cache
+    only on HEAD's mtime made `git fetch --tags --force` invisible to
+    the next drift check — the cache returned the stale "ahead of v0.X"
+    line until something else (commit, checkout) bumped HEAD.
+
+    Take max(HEAD, packed-refs, refs/tags/) so any of those three
+    bumping invalidates the cache.
+    """
+    git_dir = repo / ".git"
+    if not git_dir.exists():
         return None
-    try:
-        return head.stat().st_mtime
-    except OSError:
-        return None
+    candidates: list[float] = []
+    for rel in ("HEAD", "packed-refs"):
+        p = git_dir / rel
+        if p.is_file():
+            try:
+                candidates.append(p.stat().st_mtime)
+            except OSError:
+                pass
+    refs_tags = git_dir / "refs" / "tags"
+    if refs_tags.is_dir():
+        try:
+            candidates.append(refs_tags.stat().st_mtime)
+        except OSError:
+            pass
+    return max(candidates) if candidates else None
+
+
+# Backward-compat alias so any external caller that imports the old name
+# keeps working — our own callsite uses _git_state_mtime now.
+_git_head_mtime = _git_state_mtime
 
 
 def _run_git(repo: Path, *args: str) -> str | None:
@@ -154,23 +181,25 @@ def check(distribution: str = "scitex-dev") -> str | None:
     src = _editable_source_dir(distribution)
     if src is None:
         return None
-    head_mtime = _git_head_mtime(src)
-    if head_mtime is None:
+    state_mtime = _git_state_mtime(src)
+    if state_mtime is None:
         return None
     cache = _read_cache()
     entry = cache.get(distribution, {})
     now = time.time()
     if (
-        entry.get("head_mtime") == head_mtime
+        entry.get("head_mtime") == state_mtime
         and now - float(entry.get("checked_at", 0)) < 86400
     ):
         return entry.get("warning")
     if now - float(entry.get("checked_at", 0)) < _MIN_INTERVAL_SECONDS:
-        # Avoid thrashing if HEAD is being rewritten in a tight loop.
+        # Avoid thrashing when HEAD/tags are being rewritten in a tight loop.
         return entry.get("warning")
     warning = _compute_drift(src)
     cache[distribution] = {
-        "head_mtime": head_mtime,
+        # Field name kept as 'head_mtime' for backward compat with existing
+        # cache files; semantically it now stores the composite git-state mtime.
+        "head_mtime": state_mtime,
         "checked_at": now,
         "warning": warning,
     }
