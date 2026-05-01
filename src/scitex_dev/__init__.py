@@ -176,6 +176,17 @@ _LAZY_ATTRS: dict[str, str] = {
 }
 
 
+# Editable-install drift warning — fires once per process when the working
+# tree is ahead of/behind the latest tag. Cheap (~1ms cache hit; skipped
+# entirely on non-editable installs). Suppress with SCITEX_DEV_NO_DRIFT_WARN=1.
+try:
+    from ._check_editable_drift import emit_if_drift as _emit_drift
+
+    _emit_drift("scitex-dev")
+except Exception:
+    pass
+
+
 def __getattr__(name: str):
     """PEP 562 lazy-loader: import on first access, cache, then return."""
     mod_name = _LAZY_ATTRS.get(name)
