@@ -52,7 +52,7 @@ class McpTriggerResult:
 
 ```python
 # tests/test_mcp_trigger.py  (not yet implemented)
-from scitex_dev._agentic_testing_pytest import make_mcp_trigger_tests
+from scitex_dev._agentic_testing import make_mcp_trigger_tests
 
 test_mcp_trigger = make_mcp_trigger_tests(
     eval_path="tests/mcp_evals/<pkg>.json",

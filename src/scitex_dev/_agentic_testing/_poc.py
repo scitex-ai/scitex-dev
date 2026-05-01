@@ -2,8 +2,8 @@
 and that tool_use extraction yields paths.
 
 Run:
-    python -m scitex_dev._agentic_testing_poc --backend host
-    python -m scitex_dev._agentic_testing_poc --backend docker
+    python -m scitex_dev._agentic_testing._poc --backend host
+    python -m scitex_dev._agentic_testing._poc --backend docker
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import json
 import sys
 import time
 
-from ._agentic_testing import DEFAULT_MODEL, extract_viewed_paths, get_runner
+from ._core import DEFAULT_MODEL, extract_viewed_paths, get_runner
 
 
 def _cost_from(result: dict) -> float | None:
