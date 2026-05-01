@@ -113,9 +113,9 @@ _LAZY_ATTRS: dict[str, str] = {
     "get_enabled_remotes": "config",
     "load_config": "config",
     # ecosystem
-    "ECOSYSTEM": "ecosystem",
-    "get_all_packages": "ecosystem",
-    "get_local_path": "ecosystem",
+    "ECOSYSTEM": "_ecosystem",
+    "get_all_packages": "_ecosystem",
+    "get_local_path": "_ecosystem",
     # rtd
     "check_all_rtd": "rtd",
     "check_rtd_status": "rtd",

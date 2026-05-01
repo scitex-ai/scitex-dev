@@ -50,7 +50,7 @@ def register_ecosystem_commands(main_group):
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def ecosystem_list(package, versions, as_json):
         """List packages in the SciTeX ecosystem."""
-        from .ecosystem import ECOSYSTEM, get_all_packages
+        from ._ecosystem import ECOSYSTEM, get_all_packages
 
         pkgs = list(package) if package else get_all_packages()
 
@@ -107,7 +107,7 @@ def register_ecosystem_commands(main_group):
     @click.pass_context
     def ecosystem_graph(ctx, fmt, output, cycles, include_extras, group_by_tier):
         """Emit a current-state ecosystem dependency graph (mermaid/DOT)."""
-        from . import ecosystem_graph as _eg
+        from ._ecosystem import _graph as _eg
 
         pkgs = _eg.discover_packages()
         graph = _eg.build_graph(pkgs)
@@ -203,7 +203,7 @@ def register_ecosystem_commands(main_group):
             click.echo("error: --dry-run and --apply are mutually exclusive", err=True)
             ctx.exit(2)
 
-        from .ecosystem_packages import packages_audit
+        from ._ecosystem._packages import packages_audit
 
         host_list = list(hosts) if hosts else None
         pkg_list = list(packages) if packages else None
@@ -811,7 +811,7 @@ def register_ecosystem_commands(main_group):
         from pathlib import Path
 
         from . import _cli_audit_project
-        from .ecosystem import ECOSYSTEM
+        from ._ecosystem import ECOSYSTEM
 
         repo = Path(repo_path).expanduser() if repo_path else None
         if repo is None:
@@ -892,7 +892,7 @@ def register_ecosystem_commands(main_group):
         """Cross-leaf, cross-auditor violation summary — one source of truth."""
         from concurrent.futures import ThreadPoolExecutor, as_completed
         import subprocess
-        from .ecosystem import ECOSYSTEM
+        from ._ecosystem import ECOSYSTEM
 
         chosen = (
             list(auditors)

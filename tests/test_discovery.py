@@ -48,7 +48,7 @@ class TestDiscoverPackages:
             patch("importlib.metadata.entry_points", return_value=[ep]),
             patch("scitex_dev._discovery.ECOSYSTEM", {}, create=True),
             patch.dict(
-                "sys.modules", {"scitex_dev.ecosystem": MagicMock(ECOSYSTEM={})}
+                "sys.modules", {"scitex_dev._ecosystem": MagicMock(ECOSYSTEM={})}
             ),
         ):
             result = discover_packages()
@@ -60,7 +60,7 @@ class TestDiscoverPackages:
         with (
             patch("importlib.metadata.entry_points", side_effect=Exception("fail")),
             patch.dict(
-                "sys.modules", {"scitex_dev.ecosystem": MagicMock(ECOSYSTEM={})}
+                "sys.modules", {"scitex_dev._ecosystem": MagicMock(ECOSYSTEM={})}
             ),
         ):
             result = discover_packages()

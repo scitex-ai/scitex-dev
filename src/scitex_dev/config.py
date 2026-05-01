@@ -217,7 +217,7 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
     data = _load_yaml(config_path)
 
     # Parse packages: ECOSYSTEM is single source of truth, config overrides
-    from .ecosystem import ECOSYSTEM
+    from ._ecosystem import ECOSYSTEM
 
     # Start with all ECOSYSTEM packages
     pkg_map: dict[str, PackageConfig] = {}

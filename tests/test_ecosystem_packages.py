@@ -13,7 +13,7 @@ import pytest
 from click.testing import CliRunner
 
 from scitex_dev.config import DevConfig, HostConfig, PackageConfig
-from scitex_dev.ecosystem_packages import (
+from scitex_dev._ecosystem._packages import (
     out_of_sync_pairs,
     packages_audit,
     render_table,
@@ -55,15 +55,15 @@ def _patch_shas(origin, local, remote_map):
     """Stack mock patches for SHA readers."""
     return [
         patch(
-            "scitex_dev.ecosystem_packages._origin_sha",
+            "scitex_dev._ecosystem._packages._origin_sha",
             side_effect=lambda path, branch="develop": origin,
         ),
         patch(
-            "scitex_dev.ecosystem_packages._local_sha",
+            "scitex_dev._ecosystem._packages._local_sha",
             side_effect=lambda path: local,
         ),
         patch(
-            "scitex_dev.ecosystem_packages._remote_sha",
+            "scitex_dev._ecosystem._packages._remote_sha",
             side_effect=lambda host, dir_name: remote_map.get((host.name, dir_name)),
         ),
     ]
@@ -148,12 +148,12 @@ def test_observation_exit_codes_via_cli(fake_config):
         ("mba", "scitex-io"): o,
         ("mba", "figrecipe"): o,
     }
-    with patch("scitex_dev.ecosystem_packages.load_config", return_value=fake_config):
+    with patch("scitex_dev._ecosystem._packages.load_config", return_value=fake_config):
         with (
-            patch("scitex_dev.ecosystem_packages._origin_sha", return_value=o),
-            patch("scitex_dev.ecosystem_packages._local_sha", return_value=o),
+            patch("scitex_dev._ecosystem._packages._origin_sha", return_value=o),
+            patch("scitex_dev._ecosystem._packages._local_sha", return_value=o),
             patch(
-                "scitex_dev.ecosystem_packages._remote_sha",
+                "scitex_dev._ecosystem._packages._remote_sha",
                 side_effect=lambda h, d: remote_ok.get((h.name, d)),
             ),
         ):
@@ -163,12 +163,12 @@ def test_observation_exit_codes_via_cli(fake_config):
     # One mismatch -> exit 1
     remote_bad = dict(remote_ok)
     remote_bad[("nas", "scitex-io")] = "f" * 40
-    with patch("scitex_dev.ecosystem_packages.load_config", return_value=fake_config):
+    with patch("scitex_dev._ecosystem._packages.load_config", return_value=fake_config):
         with (
-            patch("scitex_dev.ecosystem_packages._origin_sha", return_value=o),
-            patch("scitex_dev.ecosystem_packages._local_sha", return_value=o),
+            patch("scitex_dev._ecosystem._packages._origin_sha", return_value=o),
+            patch("scitex_dev._ecosystem._packages._local_sha", return_value=o),
             patch(
-                "scitex_dev.ecosystem_packages._remote_sha",
+                "scitex_dev._ecosystem._packages._remote_sha",
                 side_effect=lambda h, d: remote_bad.get((h.name, d)),
             ),
         ):
@@ -269,7 +269,7 @@ def test_render_table_has_expected_columns(fake_config):
     patches = _patch_shas(o, o, {})
     _, close = _stack(patches)
     try:
-        from scitex_dev.ecosystem_packages import collect_state
+        from scitex_dev._ecosystem._packages import collect_state
 
         state = collect_state(config=fake_config)
     finally:
@@ -288,7 +288,7 @@ def test_out_of_sync_pairs_skips_unknown_origin(fake_config):
     patches = _patch_shas(None, None, {})
     _, close = _stack(patches)
     try:
-        from scitex_dev.ecosystem_packages import collect_state
+        from scitex_dev._ecosystem._packages import collect_state
 
         state = collect_state(config=fake_config)
     finally:

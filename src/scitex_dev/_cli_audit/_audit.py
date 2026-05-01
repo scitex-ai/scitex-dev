@@ -55,7 +55,7 @@ def _load_registry(
     the layer that supplied the registry — surfaced in --help and in the
     `--all` summary so users know what they're auditing.
     """
-    from .. import ecosystem as _eco
+    from .. import _ecosystem as _eco
 
     bundled: dict = dict(_eco.ECOSYSTEM)
 
@@ -1078,7 +1078,7 @@ def _is_allowed_env(var: str) -> bool:
 def _known_scitex_prefixes() -> tuple[str, ...]:
     """Return the set of valid `SCITEX_<PKG>_` prefixes from the bundled registry."""
     try:
-        from .. import ecosystem as _eco
+        from .. import _ecosystem as _eco
     except Exception:
         return ()
     out: set[str] = {"SCITEX_"}  # umbrella
