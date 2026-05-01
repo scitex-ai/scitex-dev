@@ -31,7 +31,7 @@ register_docs_tools(mcp)
 @mcp.tool()
 async def dev_ecosystem_list(packages: list[str] | None = None) -> str:
     """List versions across the SciTeX ecosystem."""
-    from .dev_mcp.handlers import list_versions_handler
+    from ..dev_mcp.handlers import list_versions_handler
 
     return await list_versions_handler(packages=packages)
 
@@ -39,7 +39,7 @@ async def dev_ecosystem_list(packages: list[str] | None = None) -> str:
 @mcp.tool()
 async def dev_ecosystem_fix_mismatches(dry_run: bool = True) -> str:
     """Detect and fix version mismatches across ecosystem."""
-    from .dev_mcp.handlers import fix_mismatches_handler
+    from ..dev_mcp.handlers import fix_mismatches_handler
 
     return await fix_mismatches_handler(dry_run=dry_run)
 
@@ -47,7 +47,7 @@ async def dev_ecosystem_fix_mismatches(dry_run: bool = True) -> str:
 @mcp.tool()
 async def dev_config_show() -> str:
     """Get dev configuration."""
-    from .dev_mcp.handlers import get_config_handler
+    from ..dev_mcp.handlers import get_config_handler
 
     return await get_config_handler()
 
@@ -59,7 +59,7 @@ async def dev_test_local(
     pattern: str = "",
 ) -> str:
     """Run tests locally."""
-    from .dev_mcp.handlers import test_run_handler
+    from ..dev_mcp.handlers import test_run_handler
 
     return await test_run_handler(module=module, fast=fast, pattern=pattern)
 
@@ -71,7 +71,7 @@ async def dev_test_hpc(
     fast: bool = False,
 ) -> str:
     """Run tests on HPC via Slurm."""
-    from .dev_mcp.handlers import test_hpc_run_handler
+    from ..dev_mcp.handlers import test_hpc_run_handler
 
     return await test_hpc_run_handler(module=module, mode=mode, fast=fast)
 
@@ -79,7 +79,7 @@ async def dev_test_hpc(
 @mcp.tool()
 async def dev_test_hpc_poll(job_id: str | None = None) -> str:
     """Poll HPC job status."""
-    from .dev_mcp.handlers import test_hpc_poll_handler
+    from ..dev_mcp.handlers import test_hpc_poll_handler
 
     return await test_hpc_poll_handler(job_id=job_id)
 
@@ -87,7 +87,7 @@ async def dev_test_hpc_poll(job_id: str | None = None) -> str:
 @mcp.tool()
 async def dev_test_hpc_result(job_id: str | None = None) -> str:
     """Fetch HPC test output."""
-    from .dev_mcp.handlers import test_hpc_result_handler
+    from ..dev_mcp.handlers import test_hpc_result_handler
 
     return await test_hpc_result_handler(job_id=job_id)
 
@@ -104,7 +104,7 @@ async def dev_bulk_rename(
 
     When regex=True, pattern is a Python regex and replacement can use \\1, \\2 backreferences.
     """
-    from .dev_mcp.handlers import rename_handler
+    from ..dev_mcp.handlers import rename_handler
 
     return await rename_handler(
         pattern=pattern,
@@ -118,7 +118,7 @@ async def dev_bulk_rename(
 @mcp.tool()
 async def dev_skills_list(package: str | None = None) -> str:
     """List skills across the SciTeX ecosystem."""
-    from .dev_mcp.handlers import skills_list_handler
+    from ..dev_mcp.handlers import skills_list_handler
 
     return await skills_list_handler(package=package)
 
@@ -126,7 +126,7 @@ async def dev_skills_list(package: str | None = None) -> str:
 @mcp.tool()
 async def dev_skills_get(package: str, name: str) -> str:
     """Get content of a specific skill from a package."""
-    from .dev_mcp.handlers import skills_get_handler
+    from ..dev_mcp.handlers import skills_get_handler
 
     return await skills_get_handler(package=package, name=name)
 
@@ -148,7 +148,7 @@ async def dev_ecosystem_sync_remote(
     Parameters match scitex_dev.sync.sync_all. Pass confirm=True to
     execute; default is dry-run preview.
     """
-    from .dev_mcp.handlers import sync_handler
+    from ..dev_mcp.handlers import sync_handler
 
     return await sync_handler(
         hosts=hosts,
@@ -165,6 +165,6 @@ async def dev_ecosystem_sync_local(
     confirm: bool = False,
 ) -> str:
     """Install all ecosystem packages editable in the local venv."""
-    from .dev_mcp.handlers import sync_local_handler
+    from ..dev_mcp.handlers import sync_local_handler
 
     return await sync_local_handler(packages=packages, confirm=confirm)
