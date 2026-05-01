@@ -335,12 +335,12 @@ def check_all_hosts(
         config = load_config()
 
     if packages is None:
-        from .ecosystem import get_all_packages
+        from ._ecosystem import get_all_packages
 
         packages = get_all_packages()
 
     # Get pypi names for packages
-    from .ecosystem import ECOSYSTEM
+    from ._ecosystem import ECOSYSTEM
 
     pypi_names = []
     name_map = {}  # pypi_name -> package_name

@@ -52,7 +52,7 @@ def discover_packages() -> dict[str, str]:
 
     # 2. Fill in from ECOSYSTEM (source of truth for all packages)
     try:
-        from .ecosystem import ECOSYSTEM
+        from ._ecosystem import ECOSYSTEM
 
         from importlib.metadata import PackageNotFoundError, distribution
 

@@ -51,13 +51,13 @@ except ImportError:  # pragma: no cover — only on ancient Pythons
 # See `_skills/general/03_interface_02_cli/17_lazy-imports-cli-startup.md`.
 _LAZY_ATTRS: dict[str, str] = {
     # cli_utils
-    "add_dry_run_argument": "cli_utils",
-    "add_json_argument": "cli_utils",
-    "dry_run_option": "cli_utils",
-    "handle_result": "cli_utils",
-    "json_option": "cli_utils",
-    "run_as_cli": "cli_utils",
-    "wrap_as_cli": "cli_utils",
+    "add_dry_run_argument": "_cli",
+    "add_json_argument": "_cli",
+    "dry_run_option": "_cli",
+    "handle_result": "_cli",
+    "json_option": "_cli",
+    "run_as_cli": "_cli",
+    "wrap_as_cli": "_cli",
     # decorators
     "supports_return_as": "decorators",
     # errors
@@ -68,13 +68,12 @@ _LAZY_ATTRS: dict[str, str] = {
     "InstallHint": "_imports",
     "last_install_hint": "_imports",
     "try_import_optional": "_imports",
-    # _mcp_compat
-    "get_tools_sync": "_mcp_compat",
-    # mcp_utils
-    "async_wrap_as_mcp": "mcp_utils",
-    "result_to_mcp": "mcp_utils",
-    "run_as_mcp": "mcp_utils",
-    "wrap_as_mcp": "mcp_utils",
+    # _mcp
+    "get_tools_sync": "_mcp",
+    "async_wrap_as_mcp": "_mcp",
+    "result_to_mcp": "_mcp",
+    "run_as_mcp": "_mcp",
+    "wrap_as_mcp": "_mcp",
     # side_effects
     "SideEffect": "side_effects",
     # types
@@ -113,9 +112,9 @@ _LAZY_ATTRS: dict[str, str] = {
     "get_enabled_remotes": "config",
     "load_config": "config",
     # ecosystem
-    "ECOSYSTEM": "ecosystem",
-    "get_all_packages": "ecosystem",
-    "get_local_path": "ecosystem",
+    "ECOSYSTEM": "_ecosystem",
+    "get_all_packages": "_ecosystem",
+    "get_local_path": "_ecosystem",
     # rtd
     "check_all_rtd": "rtd",
     "check_rtd_status": "rtd",
@@ -140,14 +139,14 @@ _LAZY_ATTRS: dict[str, str] = {
     "get_remote_versions": "ssh",
     "test_host_connection": "ssh",
     # sync
-    "sync_all": "sync",
-    "sync_host": "sync",
-    "sync_local": "sync",
-    "sync_tags": "sync",
+    "sync_all": "_sync",
+    "sync_host": "_sync",
+    "sync_local": "_sync",
+    "sync_tags": "_sync",
     # sync_remote
-    "pull_local": "sync_remote",
-    "remote_commit": "sync_remote",
-    "remote_diff": "sync_remote",
+    "pull_local": "_sync",
+    "remote_commit": "_sync",
+    "remote_diff": "_sync",
     # ci
     "CIStatus": "ci",
     "WorkflowRun": "ci",

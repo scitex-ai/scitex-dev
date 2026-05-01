@@ -188,7 +188,7 @@ def check_github_remote(
     if config is None:
         config = load_config()
 
-    from .ecosystem import ECOSYSTEM
+    from ._ecosystem import ECOSYSTEM
 
     results = {}
 
@@ -263,7 +263,7 @@ def check_all_remotes(
         config = load_config()
 
     if packages is None:
-        from .ecosystem import get_all_packages
+        from ._ecosystem import get_all_packages
 
         packages = get_all_packages()
 
@@ -304,7 +304,7 @@ def compare_with_local(
         config = load_config()
 
     if packages is None:
-        from .ecosystem import get_all_packages
+        from ._ecosystem import get_all_packages
 
         packages = get_all_packages()
 

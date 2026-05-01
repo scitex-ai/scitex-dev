@@ -153,7 +153,7 @@ the answer content, not just the tool call.
 
 ```python
 # tests/test_skill_trigger.py
-from scitex_dev._agentic_testing_pytest import make_skill_trigger_tests
+from scitex_dev._agentic_testing import make_skill_trigger_tests
 
 test_skill_trigger = make_skill_trigger_tests(
     eval_path="tests/skill_evals/<pkg>.json",

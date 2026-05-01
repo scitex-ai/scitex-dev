@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import DevConfig, load_config
-from .sync import sync_all, sync_local
+from ._sync import sync_all, sync_local
 from .versions import get_mismatches
 
 
