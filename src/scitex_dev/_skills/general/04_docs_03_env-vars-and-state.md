@@ -1,6 +1,6 @@
 ---
 name: env-vars-and-local-state
-description: Canonical convention for declaring per-package environment variables (`.env.example` at repo root, commented entries, all keys SCITEX_<MODULE>_<NAME>) and surfacing local-state directories (`~/.scitex/<pkg>/` and `<proj-root>/.scitex/<pkg>/`) in the README. Replaces the older standalone `## Environment Variables` H2 section.
+description: Canonical convention for declaring per-package environment variables (`.env.example` at repo root, commented entries, all keys SCITEX_<MODULE>_<NAME>) and surfacing local-state directories (`~/.scitex/<pkg-short>/` and `<proj-root>/.scitex/<pkg-short>/`) in the README. Replaces the older standalone `## Environment Variables` H2 section.
 tags: [scitex-python, scitex-general, scitex-package, meta]
 ---
 
@@ -42,8 +42,8 @@ variable. Format:
 # follow the SciTeX ecosystem convention: SCITEX_<MODULE>_<NAME>.
 #
 # Local state (per the SciTeX local-state convention) is read from:
-#   ~/.scitex/<pkg>/               user-global config + cache
-#   <proj-root>/.scitex/<pkg>/     project-local overrides (preferred)
+#   ~/.scitex/<pkg-short>/               user-global config + cache
+#   <proj-root>/.scitex/<pkg-short>/     project-local overrides (preferred)
 
 # <one-line description of variable A>
 # SCITEX_<MODULE>_VAR_A=<example value>
@@ -84,12 +84,14 @@ inline comments) lives in `.env.example`.
 ### Local state
 
 `<pkg>` reads optional config + cache from the canonical SciTeX
-local-state locations:
+local-state locations. **`<pkg-short>` strips the `scitex-` prefix**
+(e.g. `scitex-ssh` → `ssh`, `scitex-scholar` → `scholar`). See
+`01_ecosystem_06_local-state-directories.md` for the full rule.
 
 | Path                              | Scope         | Purpose                              |
 |-----------------------------------|---------------|--------------------------------------|
-| `~/.scitex/<pkg>/`                | user-global   | per-user config, credentials, cache  |
-| `<proj-root>/.scitex/<pkg>/`      | project-local | overrides for the current repo       |
+| `~/.scitex/<pkg-short>/`          | user-global   | per-user config, credentials, cache  |
+| `<proj-root>/.scitex/<pkg-short>/` | project-local | overrides for the current repo       |
 
 Project-local wins when both exist. Both are optional.
 ```
