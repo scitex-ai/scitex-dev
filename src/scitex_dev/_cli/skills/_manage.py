@@ -265,6 +265,52 @@ def register_skills_commands(main_group):
     # command going forward because the destination is always required —
     # callers can't be surprised by a hidden default like `export`'s
     # `~/.claude/skills/scitex/`.
+    @skills.command("self-explain")
+    @click.argument("distribution")
+    @click.option("--model", default="claude-haiku-4-5", help="Claude model id.")
+    @click.option(
+        "--runs",
+        default=1,
+        type=int,
+        help="Runs per prompt (>1 returns lists).",
+    )
+    @click.option(
+        "--json",
+        "as_json",
+        is_flag=True,
+        default=True,
+        help="JSON output (default).",
+    )
+    def skills_self_explain(distribution, model, runs, as_json):
+        """Have an agent (mounted with only this package's skills) answer
+        'what is this for / what does it solve / how do I use it?'.
+
+        Each invocation spends real Anthropic API credits on your account
+        (the mounted container uses ANTHROPIC_API_KEY, not Claude Code
+        plan quota). Cost = 3 prompts × --runs.
+
+        \b
+        Example:
+            $ scitex-dev skills self-explain scitex-io
+            $ scitex-dev skills self-explain scitex-stats --runs 3
+            $ scitex-dev skills self-explain scitex-writer --model claude-sonnet-4-5
+        """
+        import json as _json
+
+        from ._self_explain import self_explain
+
+        result = self_explain(distribution, model=model, runs_per_prompt=runs)
+        if as_json:
+            click.echo(_json.dumps(result, indent=2))
+        else:
+            click.echo(f"# {result['package']}\n")
+            click.echo("## What for\n")
+            click.echo(f"{result['what_for']}\n")
+            click.echo("## Problems solved\n")
+            click.echo(f"{result['problems_solved']}\n")
+            click.echo("## Quick start\n")
+            click.echo(f"{result['quick_start']}\n")
+
     @skills.command("expand-tags")
     @click.argument("tag")
     @click.option(
