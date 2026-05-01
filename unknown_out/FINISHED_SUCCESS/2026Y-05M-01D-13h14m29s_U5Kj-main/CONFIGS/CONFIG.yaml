@@ -1,0 +1,11 @@
+ID: 2026Y-05M-01D-13h14m29s_U5Kj
+PID: 1085086
+START_DATETIME: 2026-05-01 13:14:29.590937
+FILE: /home/ywatanabe/proj/scitex-dev/unknown.py
+SDIR_OUT: /home/ywatanabe/proj/scitex-dev/unknown_out
+SDIR_RUN: 
+    /home/ywatanabe/proj/scitex-dev/unknown_out/RUNNING/2026Y-05M-01D-13h14m29s_U5Kj-main
+ARGS: {}
+EXIT_STATUS: 0
+END_DATETIME: 2026-05-01 13:14:43.823174
+RUN_DURATION: 00:00:14

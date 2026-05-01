@@ -61,20 +61,35 @@ docs/sphinx/_build/html/        # local Sphinx output; gitignored
 src/<pkg>/_sphinx_html/         # bundled in the wheel; refreshed at release
 ```
 
-Release-time refresh (typical `scripts/makefile/docs.sh`):
+**Canonical refresh path: GitHub Actions** (`.github/workflows/docs.yml`).
+The workflow:
+1. Builds Sphinx HTML on every push/PR.
+2. PRs use `sphinx-build -W` (treat warnings as errors → catches breakage early).
+3. Pushes to `main`/`develop` rebuild without `-W`, copy the output to
+   `src/<pkg>/_sphinx_html/`, and auto-commit when it changes
+   (`[skip ci]` to avoid loops).
+
+Reference workflow: `scitex-ssh/.github/workflows/docs.yml`.
+
+Manual fallback (if CI is unavailable):
 
 ```bash
 sphinx-build -b html docs/sphinx docs/sphinx/_build/html
 rm -rf src/<pkg>/_sphinx_html
-cp -r docs/sphinx/_build/html src/<pkg>/_sphinx_html
+cp -rf docs/sphinx/_build/html src/<pkg>/_sphinx_html
 ```
 
-`pyproject.toml` must include the directory in the wheel:
+`pyproject.toml` must include the directory in the wheel. Hatchling
+needs `force-include` (a plain include glob is dropped because
+`_sphinx_html/` lives under `src/<pkg>/` which is already a package
+dir):
 
 ```toml
 [tool.hatch.build.targets.wheel]
 packages = ["src/<pkg>"]
-include = ["src/<pkg>/_sphinx_html/**"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/<pkg>/_sphinx_html" = "<pkg>/_sphinx_html"
 ```
 
 If a package has no Sphinx tree, omit `_sphinx_html/`; `get_docs(format="html")` returns `None` and the docs site skips that package gracefully. See [`02_package_01_project-structure.md`](02_package_01_project-structure.md) for the broader project-structure context.

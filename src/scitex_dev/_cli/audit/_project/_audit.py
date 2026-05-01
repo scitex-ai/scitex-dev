@@ -200,6 +200,29 @@ RULES: dict[str, Rule] = {
                 "see how the package fits the umbrella."
             ),
         ),
+        Rule(
+            "PS121",
+            "§1",
+            (
+                "package has `docs/sphinx/conf.py` but no "
+                "`src/<pkg>/_sphinx_html/index.html` bundled. scitex-cloud "
+                "serves docs from the in-wheel `_sphinx_html/` — without it "
+                "the package is invisible at https://scitex.ai/apps/docs/. "
+                "Refresh via the canonical CI workflow "
+                "(`.github/workflows/docs.yml`)."
+            ),
+        ),
+        Rule(
+            "PS122",
+            "§1",
+            (
+                "package has `docs/sphinx/` but no "
+                "`.github/workflows/docs.yml` CI workflow. Auto-refreshing "
+                "`_sphinx_html/` in CI is the canonical pattern (see "
+                "scitex-ssh as reference). Manual refresh drifts; CI keeps "
+                "the bundle fresh on every push to main/develop."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
@@ -988,6 +1011,9 @@ def audit_project(
     from ._check_readme_sections import check_readme_sections
 
     check_readme_sections(repo_root, Violation, violations)
+    from ._check_sphinx_html import check_sphinx_html
+
+    check_sphinx_html(repo_root, Violation, violations)
     from ._check_examples import check_examples_conventions
 
     check_examples_conventions(repo_root, Violation, violations)

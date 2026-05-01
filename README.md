@@ -24,7 +24,6 @@
 
 ## Problem and Solution
 
-
 | # | Problem | Solution |
 |---|---------|----------|
 | 1 | **33 packages get out of sync** -- one package bumps a dep; consumers forget to update minima; users hit runtime errors | **`scitex-dev ecosystem` suite** -- `list`, `diff`, `sync`, `fix-mismatches`, `commit`, `pull`, `push` — fanout tooling for coordinated releases |
@@ -229,7 +228,9 @@ scitex-dev skills export --package scitex-dev  # Export to Claude Code
 
 ## Part of SciTeX
 
-`scitex-dev` is part of [SciTeX](https://scitex.ai). It provides the shared infrastructure that keeps the ecosystem consistent and discoverable. When used with the orchestrator package `scitex`, it enables unified version management, CI monitoring, and deployment across all modules:
+`scitex-dev` is part of [**SciTeX**](https://scitex.ai). Install via
+the umbrella with `pip install scitex[dev]` to use as
+`scitex.dev` (Python) or `scitex dev ...` (CLI).
 
 ```python
 from scitex_dev.fix import detect_mismatches, verify_versions
