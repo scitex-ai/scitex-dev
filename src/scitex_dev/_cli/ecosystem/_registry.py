@@ -49,7 +49,14 @@ def register_ecosystem_commands(main_group):
     @click.option("--versions", is_flag=True, help="Include version details.")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def ecosystem_list(package, versions, as_json):
-        """List packages in the SciTeX ecosystem."""
+        """List packages in the SciTeX ecosystem.
+
+        \b
+        Example:
+            $ scitex-dev ecosystem list
+            $ scitex-dev ecosystem list --json
+            $ scitex-dev ecosystem list -p scitex-io --versions
+        """
         from ..._ecosystem import ECOSYSTEM, get_all_packages
 
         pkgs = list(package) if package else get_all_packages()
@@ -106,7 +113,14 @@ def register_ecosystem_commands(main_group):
     )
     @click.pass_context
     def ecosystem_graph(ctx, fmt, output, cycles, include_extras, group_by_tier):
-        """Emit a current-state ecosystem dependency graph (mermaid/DOT)."""
+        """Emit a current-state ecosystem dependency graph (mermaid/DOT).
+
+        \b
+        Example:
+            $ scitex-dev ecosystem show-graph
+            $ scitex-dev ecosystem show-graph --format dot -o /tmp/eco.dot
+            $ scitex-dev ecosystem show-graph --cycles
+        """
         from ..._ecosystem import _graph as _eg
 
         pkgs = _eg.discover_packages()
@@ -195,9 +209,10 @@ def register_ecosystem_commands(main_group):
         """Audit ecosystem package versions across hosts (3 modes).
 
         \b
-            scitex-dev ecosystem packages                  # observe
-            scitex-dev ecosystem packages --dry-run        # preview sync
-            scitex-dev ecosystem packages --apply          # execute sync
+        Example:
+            $ scitex-dev ecosystem check-versions                  # observe
+            $ scitex-dev ecosystem check-versions --dry-run        # preview sync
+            $ scitex-dev ecosystem check-versions --apply          # execute sync
         """
         if dry_run and do_apply:
             click.echo("error: --dry-run and --apply are mutually exclusive", err=True)
@@ -310,13 +325,21 @@ def register_ecosystem_commands(main_group):
         help="Suppress per-package progress lines (errors still on stderr).",
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def ecosystem_sync(package, dry_run, jobs, quiet, as_json):
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def ecosystem_sync(package, dry_run, jobs, quiet, as_json, yes):
         """Install ecosystem packages from local clones in editable mode (pip install -e).
 
         Walks every configured package, runs `pip install -e <local_path>` for
         each. Use `-j N` to install in parallel; progress is streamed to stderr
         unless --json or --quiet is set.
+
+        \b
+        Example:
+            $ scitex-dev ecosystem sync --dry-run
+            $ scitex-dev ecosystem sync -y -j 4
+            $ scitex-dev ecosystem sync -p scitex-io --yes
         """
+        del yes  # accepted for §2 compliance; sync is non-interactive already
         import sys
 
         from .._utils import wrap_as_cli
@@ -807,7 +830,14 @@ def register_ecosystem_commands(main_group):
         help="Restrict to specific rule codes (e.g. --rule PS201). Repeatable.",
     )
     def ecosystem_audit_project(distribution, repo_path, json_out, rules):
-        """Check a package's project-structure against the canonical layout."""
+        """Check a package's project-structure against the canonical layout.
+
+        \b
+        Example:
+            $ scitex-dev ecosystem audit-project scitex-io
+            $ scitex-dev ecosystem audit-project scitex-dev --json
+            $ scitex-dev ecosystem audit-project scitex-stats --rule PS108
+        """
         from pathlib import Path
 
         from ..audit import _project as _cli_audit_project
@@ -1096,8 +1126,28 @@ def register_ecosystem_commands(main_group):
     @click.option(
         "--background", is_flag=True, help="Run dashboard in a background process."
     )
-    def ecosystem_start_dashboard(port, host, debug, no_browser, force, background):
-        """Launch the ecosystem dashboard web UI."""
+    @click.option(
+        "--dry-run", is_flag=True, help="Print what would be done; do not start."
+    )
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def ecosystem_start_dashboard(
+        port, host, debug, no_browser, force, background, dry_run, yes
+    ):
+        """Launch the ecosystem dashboard web UI.
+
+        \b
+        Example:
+            $ scitex-dev ecosystem start-dashboard
+            $ scitex-dev ecosystem start-dashboard --port 9000 --background
+            $ scitex-dev ecosystem start-dashboard --dry-run
+        """
+        del yes  # accepted for §2; dashboard launch is non-interactive
+        if dry_run:
+            click.echo(
+                f"would launch dashboard on {host}:{port} "
+                f"(background={background}, debug={debug}, force={force})"
+            )
+            return
         if background:
             # Delegate to run_background so log + pid land under
             # ~/.scitex/dev/runtime/ per 01_arch_06_local-state-directories.md.

@@ -216,7 +216,13 @@ def register_stats_command(
     @ecosystem_group.command("show-stats")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def show_stats(as_json: bool) -> None:
-        """Show SciTeX ecosystem statistics (package counts, CLI commands, MCP tools, …)."""
+        """Show SciTeX ecosystem statistics (package counts, CLI commands, MCP tools, …).
+
+        \b
+        Example:
+            $ scitex-dev ecosystem show-stats
+            $ scitex-dev ecosystem show-stats --json
+        """
         result = collect_stats()
         if as_json:
             click.echo(json.dumps(result, indent=2))

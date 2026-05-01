@@ -174,7 +174,18 @@ else:
         help_recursive: bool,
         as_json: bool,
     ) -> None:
-        """scitex-dev — Shared developer utilities for the SciTeX ecosystem."""
+        """scitex-dev — Shared developer utilities for the SciTeX ecosystem.
+
+        \b
+        Config path resolution:
+            ./config.yaml -> $SCITEX_DEV_CONFIG -> ~/.scitex/dev/config.yaml -> defaults
+
+        \b
+        Example:
+            $ scitex-dev ecosystem list --json
+            $ scitex-dev doctor
+            $ scitex-dev mcp start
+        """
         # The version is injected into main.help after the decorator binds
         # (below the function definition) so `--help` shows
         # "scitex-dev (v0.10.4) — Shared developer utilities..."
@@ -212,7 +223,11 @@ else:
     # "scitex-dev (v0.10.4) — Shared developer utilities..."
     main.help = (
         f"scitex-dev (v{_get_version()}) — "
-        "Shared developer utilities for the SciTeX ecosystem."
+        "Shared developer utilities for the SciTeX ecosystem.\n"
+        "\n"
+        "\b\n"
+        "Config path resolution:\n"
+        "  config.yaml → $SCITEX_DEV_CONFIG → ~/.scitex/dev/config.yaml → defaults"
     )
 
     # -------------------------------------------------------------------
@@ -318,7 +333,12 @@ else:
     @main.command("show-config")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def config_cmd(as_json):
-        """Show dev configuration."""
+        """Show dev configuration.
+
+        \b
+        Example:
+            $ scitex-dev show-config --json
+        """
         from .. import config_to_dict, load_config
 
         cfg = config_to_dict(load_config())
