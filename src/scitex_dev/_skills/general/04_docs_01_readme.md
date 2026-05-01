@@ -31,6 +31,13 @@ Every SciTeX package README follows this structure:
 ## Five Interfaces (HTTP optional)
 ## Lint Rules (if applicable)
 ## Part of SciTeX
+
+**Do NOT include "SciTeX users" install hints** in sub-package READMEs.
+Lines like `> **SciTeX users**: pip install scitex already includes <X>`
+belong in the umbrella `scitex` README, not in each sub-package. They
+also drift fast (extras like `pip install scitex[ssh]` change between
+releases, and the sub-package README is the wrong place to track that).
+
 [Optional `import scitex` snippet — ONLY include if it demonstrates
  **synergy via the umbrella**: an advantage you only get when combined
  with OTHER scitex packages through `import scitex`. Concretely, the
