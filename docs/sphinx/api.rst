@@ -77,5 +77,5 @@ CLI
 MCP
 ---
 
-.. automodule:: scitex_dev.mcp
+.. automodule:: scitex_dev._mcp
    :members:

@@ -153,48 +153,26 @@ r = Result(success=True, data=42)
 json_str = result_to_mcp(r)    # same as r.to_json()
 ```
 
-## Click Option Factories
+## Universal flag factories
 
 Lazy-import decorators (Click optional; stdlib-only core).
 
-### json_option
-
-Adds `--json` flag (`as_json` parameter) to a Click command.
+| Helper | Effect |
+|---|---|
+| `@json_option` | Adds `--json` (`as_json` param) to a Click command |
+| `@dry_run_option` | Adds `--dry-run` to a Click command |
+| `add_json_argument(parser)` | argparse equivalent (dest=`as_json`) |
+| `add_dry_run_argument(parser)` | argparse equivalent (dest=`dry_run`) |
 
 ```python
-from scitex_dev import json_option
+from scitex_dev import json_option, dry_run_option
 import click
 
 @click.command()
 @json_option
-def my_cmd(as_json):
-    ...
-```
-
-### dry_run_option
-
-Adds `--dry-run` flag to a Click command.
-
-```python
-from scitex_dev import dry_run_option
-
-@click.command()
 @dry_run_option
-def my_cmd(dry_run):
+def my_cmd(as_json, dry_run):
     ...
-```
-
-### add_json_argument / add_dry_run_argument
-
-Argparse equivalents:
-
-```python
-from scitex_dev import add_json_argument, add_dry_run_argument
-import argparse
-
-parser = argparse.ArgumentParser()
-add_json_argument(parser)     # --json / dest="as_json"
-add_dry_run_argument(parser)  # --dry-run / dest="dry_run"
 ```
 
 ## Typical MCP Tool Pattern

@@ -141,9 +141,10 @@ scitex-agent-container/containers/
 └── Dockerfile.agentic-test          # generic test image (FROM base); no bake
 
 scitex-dev/src/scitex_dev/
-├── _agentic_testing.py              # HostRunner, NewbieDockerRunner
-├── _agentic_testing_pytest.py       # make_skill_trigger_tests(...)
-├── _agentic_testing_poc.py          # CLI: one-shot prompt
+├── _agentic_testing/
+│   ├── _core.py                     # HostRunner, NewbieDockerRunner
+│   ├── _pytest.py                   # make_skill_trigger_tests(...)
+│   └── _poc.py                      # CLI: one-shot prompt
 └── _skills/scitex-dev/
     ├── 16_agentic-test-overview.md  # this file
     ├── 17_agentic-test-skills.md    # skill-trigger specifics

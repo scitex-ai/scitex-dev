@@ -88,7 +88,7 @@ pip install -e <repo>
 
 **Symptom.** You edit `scitex_dev/_mcp_server.py`, restart, no change. Investigation shows the umbrella has its own `_mcp_tools/dev.py` overriding what gets registered.
 
-**Cause.** `scitex mcp start` runs `scitex.__main__:main`, which registers tools from `scitex/_mcp_tools/*.py`, NOT from `scitex_dev._mcp_server` directly. The two are linked by the `safe_mount` import in the bridge file.
+**Cause.** `scitex mcp start` runs `scitex.__main__:main`, which registers tools from `scitex/_mcp_tools/*.py`, NOT from `scitex_dev._mcp._server` directly. The two are linked by the `safe_mount` import in the bridge file.
 
 **Fix.** Always check both:
 1. The standalone's `_mcp_server.py` (source of truth for tools).

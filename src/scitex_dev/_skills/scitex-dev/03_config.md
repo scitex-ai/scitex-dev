@@ -162,45 +162,19 @@ remotes = get_enabled_remotes()  # list[GitHubRemote] where enabled=True
 
 ```yaml
 # ~/.scitex/dev/config.yaml
-
 packages:
-  - name: scitex-io
-    local_path: ~/proj/scitex-io
-    pypi_name: scitex-io
-    github_repo: ywatanabe1989/scitex-io
-    import_name: scitex_io
-  - name: scitex-stats
-    local_path: ~/proj/scitex-stats
-    pypi_name: scitex-stats
-    github_repo: ywatanabe1989/scitex-stats
-    import_name: scitex_stats
-
+  - {name: scitex-io, local_path: ~/proj/scitex-io, pypi_name: scitex-io,
+     github_repo: ywatanabe1989/scitex-io, import_name: scitex_io}
 hosts:
-  - name: myserver
-    hostname: myserver.example.com
-    user: myuser
-    role: dev
-    enabled: true
-    remote_base: ~/proj
-  - name: hpc
-    hostname: hpc.cluster.edu
-    user: myuser
-    role: hpc
-    enabled: true
-    partition: gpu
-
+  - {name: myserver, hostname: myserver.example.com, user: myuser,
+     role: dev, enabled: true, remote_base: ~/proj}
+  - {name: hpc, hostname: hpc.cluster.edu, user: myuser,
+     role: hpc, enabled: true, partition: gpu}
 github_remotes:
-  - name: ywatanabe1989
-    org: ywatanabe1989
-    enabled: true
-
+  - {name: ywatanabe1989, org: ywatanabe1989, enabled: true}
 pypi_accounts:
-  - name: ywatanabe1989
-    enabled: true
-
-branches:
-  - main
-  - develop
+  - {name: ywatanabe1989, enabled: true}
+branches: [main, develop]
 ```
 
 ## Environment Variable Overrides
@@ -221,7 +195,4 @@ export SCITEX_DEV_CONFIG=~/.scitex/work_config.yaml
 
 ## CLI
 
-```bash
-scitex-dev config
-scitex-dev config --json
-```
+`scitex-dev show-config [--json]`

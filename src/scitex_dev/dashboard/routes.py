@@ -39,7 +39,7 @@ def register_routes(app: Flask) -> None:
     @app.route("/api/ecosystem")
     def api_ecosystem():
         """Get ecosystem registry (repos, paths, clone URLs) for AI agents."""
-        from ..ecosystem import ECOSYSTEM
+        from .._ecosystem import ECOSYSTEM
 
         repos = []
         for name, info in ECOSYSTEM.items():

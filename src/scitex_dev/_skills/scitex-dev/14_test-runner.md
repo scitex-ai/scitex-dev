@@ -132,32 +132,14 @@ if status["state"] == "COMPLETED":
     print(status["output"])
 ```
 
-## watch_hpc_job
+## watch_hpc_job, fetch_hpc_result
 
-Poll until job completes (blocks, polls every `interval` seconds).
+Convenience wrappers around `poll_hpc_job`:
 
-```python
-from scitex_dev import watch_hpc_job
-
-result = watch_hpc_job(
-    job_id: str | None = None,
-    hpc_host: str | None = None,
-    interval: int = 15,
-) -> dict  # same as poll_hpc_job when terminal state reached
-```
-
-## fetch_hpc_result
-
-Fetch full test output from HPC via scp.
-
-```python
-from scitex_dev import fetch_hpc_result
-
-output = fetch_hpc_result(
-    job_id: str | None = None,
-    hpc_host: str | None = None,
-) -> str | None  # stdout content or None if not found
-```
+- `watch_hpc_job(job_id=None, hpc_host=None, interval=15) -> dict` — polls
+  until terminal state, then returns the same dict as `poll_hpc_job`.
+- `fetch_hpc_result(job_id=None, hpc_host=None) -> str | None` — scp's the
+  full stdout from `.pytest-hpc-output/{job_id}.out`. None if missing.
 
 ## Typical HPC Workflow
 

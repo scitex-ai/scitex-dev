@@ -28,6 +28,30 @@ The repo root contains exactly the files that **must** be there. Everything else
 
 Everything else belongs in a subdirectory. **Do not create new top-level directories** without strong reason — extend an existing one or use `./.dev/` for one-offs.
 
+## README badges — coverage is required (PS106)
+
+Every `scitex-*` README must surface its **current test coverage** at
+the top, alongside the PyPI / docs / build / license badges. Reviewers
+and downstream consumers should be able to see at a glance whether the
+package is well-tested without diving into CI logs.
+
+Recommended badge line (drop into the existing `<p align="center">`
+badge block near the title):
+
+```markdown
+[![coverage](https://img.shields.io/codecov/c/github/<owner>/<repo>)](https://codecov.io/gh/<owner>/<repo>)
+```
+
+Either the shields.io shorthand (above) or a direct codecov / coveralls
+badge satisfies `PS106`. The auditor scans the first ~4 KB of
+`README.md`, so the badge has to live near the title — a coverage badge
+buried at the bottom is invisible and doesn't count.
+
+If the package doesn't yet upload coverage, set up
+[`codecov/codecov-action`](https://github.com/codecov/codecov-action)
+in `test.yml` first; the badge will then start showing real numbers
+once coverage uploads start arriving.
+
 ## `pyproject.toml` is the only Python packaging file
 
 Don't add `setup.py`, `requirements.txt`, or `MANIFEST.in`. All those concerns belong in `pyproject.toml`. Lint enforced by `E5C5`/`E5C9`/`E5C10`/`E5C11`/`E5C13` in `scitex_dev._pyproject_lint`.

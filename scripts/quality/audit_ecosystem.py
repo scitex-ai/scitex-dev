@@ -364,7 +364,12 @@ def load_registry(repo_root: Path) -> dict[str, dict[str, str]]:
     auditor can resolve packages whose dirname differs from the registry key
     (e.g. `scitex` lives at `~/proj/scitex-python/`).
     """
-    eco_py = repo_root / "src" / "scitex_dev" / "ecosystem.py"
+    # After 0.11.0 layout refactor, ecosystem.py lives at _ecosystem/_core.py.
+    # Try the new path first; fall back to the pre-refactor path so the same
+    # script can audit older repos / tags that still use the flat layout.
+    eco_py = repo_root / "src" / "scitex_dev" / "_ecosystem" / "_core.py"
+    if not eco_py.is_file():
+        eco_py = repo_root / "src" / "scitex_dev" / "ecosystem.py"
     if not eco_py.is_file():
         return {}
     text = eco_py.read_text(encoding="utf-8")
