@@ -223,6 +223,18 @@ RULES: dict[str, Rule] = {
                 "the bundle fresh on every push to main/develop."
             ),
         ),
+        Rule(
+            "PS123",
+            "§1",
+            (
+                "README.md interface section has a `Full X reference` link "
+                "pointing at the bare RTD root (e.g. "
+                "`https://<pkg>.readthedocs.io/`) instead of a deep-link "
+                "anchor page. Use the canonical deep-link per interface — "
+                "see `_skills/general/04_docs_01_readme.md` 'Canonical Full "
+                "X reference deep-link patterns'."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",

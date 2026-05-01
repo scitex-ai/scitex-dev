@@ -84,31 +84,64 @@ inconsistent across the ecosystem).
 </p>
 ```
 
-## Five Interfaces, HTTP optional (Collapsible)
+## Interface sections (collapsible)
 
-Each interface in its own `<details>` block:
+The README's `## <N> Interfaces` section contains one `<details>` block
+per interface. Star ratings live on the `<summary>` (not in a separate
+callout); strip parenthetical expansions and `-- for AI Agents` /
+`— for AI Agent Discovery` tails (audit rule **PS118**).
 
 ```markdown
 <details>
-<summary><strong>Python API</strong></summary>
-[Code examples]
+<summary><strong>Python API ⭐⭐⭐</strong></summary>
+[Minimal `import <pkg>` example, 3-10 lines]
+> **[Full API reference](<deeplink>)**
 </details>
 
 <details>
-<summary><strong>CLI Commands</strong></summary>
-[Command examples]
+<summary><strong>CLI Commands ⭐⭐</strong></summary>
+[Minimal command examples]
+> **[Full CLI reference](<deeplink>)** · run `<pkg> --help-recursive` for the live tree.
 </details>
 
 <details>
-<summary><strong>MCP Server — for AI Agents</strong></summary>
-[Tool table + start command]
+<summary><strong>MCP Server ⭐⭐</strong></summary>
+[Tool table + `<pkg> mcp start`]
+> **[Full MCP specification](<deeplink>)** · run `<pkg> mcp list-tools` for the live registry.
 </details>
 
 <details>
-<summary><strong>Skills — for AI Agent Discovery</strong></summary>
-[Skill table + CLI commands]
+<summary><strong>Skills ⭐⭐</strong></summary>
+[Skill table + `<pkg> skills list`]
+> **[Full skills directory](https://github.com/ywatanabe1989/<pkg>/tree/develop/src/<import>/_skills/<pkg>)**
 </details>
 ```
+
+### Canonical "Full X reference" deep-link patterns
+
+Each `Full X` link **must** be a deep-link, not a bare RTD root URL
+(audit rule **PS123**). The deep-link points into the bundled
+`_sphinx_html/` (also surfaced via Read the Docs):
+
+| Interface  | Canonical deep-link                                                          |
+|------------|------------------------------------------------------------------------------|
+| Python API | `https://<pkg>.readthedocs.io/en/latest/api/<import_name>.html`              |
+| CLI        | `https://<pkg>.readthedocs.io/en/latest/quickstart.html` (or dedicated page) |
+| MCP        | `https://<pkg>.readthedocs.io/en/latest/api/<import_name>._mcp.html`         |
+| Skills     | `https://github.com/ywatanabe1989/<pkg>/tree/develop/src/<import>/_skills/<pkg>` |
+
+Skills point at the source tree on GitHub (not RTD) because skill
+markdown is consumed by AI agents that follow the directory structure
+directly.
+
+### Future: `scitex-dev readme refresh` (planned)
+
+The interface block bodies (code examples + tool tables + skill tables)
+should eventually be auto-generated between markers like
+`<!-- scitex-api:start --> ... <!-- scitex-api:end -->`. The generator
+will call `scitex_dev.introspect.api(<pkg>)`, `<pkg> --help-recursive`,
+`<pkg> mcp list-tools`, and `ls _skills/<pkg>/` — so the README can't
+drift from reality. Tracked under scitex-dev TODO.
 
 ## Four Freedoms Footer
 

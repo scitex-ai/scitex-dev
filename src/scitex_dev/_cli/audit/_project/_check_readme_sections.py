@@ -188,6 +188,15 @@ _RE_UMBRELLA_CLI = re.compile(r"`scitex\s+[a-zA-Z][\w-]*", re.IGNORECASE)
 _PART_OF_UMBRELLA_LOOKAHEAD = 1024
 
 
+# PS123 — `Full X` link must deep-link, not bare RTD root.
+_RE_FULL_X_LINK = re.compile(
+    r"\[\s*Full\s+[\w\s]+?\s*\]\((?P<url>[^\)]+)\)", re.IGNORECASE
+)
+_RE_BARE_RTD_ROOT = re.compile(
+    r"^https?://[\w-]+\.readthedocs\.io/?(?:en/[\w.-]+/?)?$", re.IGNORECASE
+)
+
+
 def _read_head(readme: Path, n: int) -> str | None:
     """Return the first `n` bytes of `readme` as text, or None on error/missing."""
     if not readme.is_file():
@@ -439,6 +448,29 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                     "`scitex` README, not in sub-package READMEs. Remove the "
                     "line; if the umbrella relationship needs surfacing, the "
                     "standardized 'Part of SciTeX' one-liner already covers it."
+                ),
+            )
+        )
+
+    # PS123 — `Full X reference` links must deep-link, not bare RTD root.
+    bad_links: list[str] = []
+    for m in _RE_FULL_X_LINK.finditer(full):
+        url = m.group("url").strip()
+        if _RE_BARE_RTD_ROOT.match(url):
+            bad_links.append(url)
+    if bad_links:
+        out.append(
+            violation_cls(
+                "PS123",
+                str(readme),
+                (
+                    "README.md interface section has 'Full X reference' "
+                    "link(s) pointing at bare RTD root: "
+                    + ", ".join(sorted(set(bad_links))[:3])
+                    + ". Use a deep-link to the relevant anchor page (e.g. "
+                    "`/en/latest/api/<import>.html`) — see _skills/general/"
+                    "04_docs_01_readme.md 'Canonical Full X reference "
+                    "deep-link patterns'."
                 ),
             )
         )
