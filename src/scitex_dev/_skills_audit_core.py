@@ -96,7 +96,11 @@ def find_dead_links(skill_md: Path, skills_dir: Path) -> list[str]:
     """
     text = skill_md.read_text(errors="replace")
     missing: list[str] = []
-    for m in re.finditer(r"\(([^)]+\.md)\)", text):
+    # Require ']' immediately before '(' so we ONLY match markdown link
+    # syntax `[text](url.md)` and not arbitrary parentheticals like
+    # `(see [foo.md](foo.md))` which would otherwise greedily capture
+    # past the inner `]` and produce a bogus "missing" target.
+    for m in re.finditer(r"\]\(([^)]+\.md)\)", text):
         target = m.group(1)
         if "/" in target:
             continue
