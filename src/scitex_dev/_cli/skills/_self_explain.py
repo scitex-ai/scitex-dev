@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from newb import render_markdown as _newb_render_markdown
-from newb import self_explain as _newb_self_explain
+from newb import run as _newb_run  # noqa: F401  (used by self_explain below)
 
 # Re-export so existing callers (``_cli/skills/_manage.py``) keep working.
 render_markdown = _newb_render_markdown
@@ -82,7 +82,7 @@ def self_explain(
         name in the SciTeX layout (``_skills/<dist>/``).
     """
     skills_dir = _find_skills_dir(distribution)
-    return _newb_self_explain(
+    return _newb_run(
         skills_dir,
         model=model,
         runs_per_prompt=runs_per_prompt,
