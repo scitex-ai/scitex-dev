@@ -14,7 +14,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .config import DevConfig, load_config
+from ..config import DevConfig, load_config
 
 
 def sync_tags(

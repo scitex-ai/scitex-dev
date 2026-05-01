@@ -320,7 +320,7 @@ def register_ecosystem_commands(main_group):
         import sys
 
         from .cli_utils import wrap_as_cli
-        from .sync import sync_local
+        from ._sync import sync_local
 
         pkgs = list(package) if package else None
 
@@ -405,7 +405,7 @@ def register_ecosystem_commands(main_group):
             err=True,
         )
         from .cli_utils import wrap_as_cli
-        from .sync import sync_all
+        from ._sync import sync_all
 
         host_list = list(hosts) if hosts else None
         if host_list == ["all"]:

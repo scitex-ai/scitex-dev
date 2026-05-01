@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from scitex_dev.config import HostConfig
-from scitex_dev.sync import (
+from scitex_dev._sync._local import (
     _check_ahead_state,
     _sync_one_package,
     sync_all,
@@ -40,7 +40,7 @@ def fake_host() -> HostConfig:
 
 
 class TestCheckAheadState:
-    @patch("scitex_dev.sync.subprocess.run")
+    @patch("scitex_dev._sync._local.subprocess.run")
     def test_clean_repo_returns_clean(self, mock_run, fake_host):
         mock_run.return_value = MagicMock(
             returncode=0, stdout="SACDEV_STATE la=0 ra=0", stderr=""
@@ -50,7 +50,7 @@ class TestCheckAheadState:
         assert result["local_ahead"] == 0
         assert result["remote_ahead"] == 0
 
-    @patch("scitex_dev.sync.subprocess.run")
+    @patch("scitex_dev._sync._local.subprocess.run")
     def test_ahead_remote_with_unpushed_commits(self, mock_run, fake_host):
         mock_run.return_value = MagicMock(
             returncode=0, stdout="SACDEV_STATE la=3 ra=0", stderr=""
@@ -59,7 +59,7 @@ class TestCheckAheadState:
         assert result["status"] == "ahead"
         assert result["local_ahead"] == 3
 
-    @patch("scitex_dev.sync.subprocess.run")
+    @patch("scitex_dev._sync._local.subprocess.run")
     def test_diverged_both_ahead_and_behind(self, mock_run, fake_host):
         mock_run.return_value = MagicMock(
             returncode=0, stdout="SACDEV_STATE la=2 ra=5", stderr=""
@@ -69,7 +69,7 @@ class TestCheckAheadState:
         assert result["local_ahead"] == 2
         assert result["remote_ahead"] == 5
 
-    @patch("scitex_dev.sync.subprocess.run")
+    @patch("scitex_dev._sync._local.subprocess.run")
     def test_behind_only_is_clean(self, mock_run, fake_host):
         """Pulling 5 commits ahead on upstream is fine — no data loss risk."""
         mock_run.return_value = MagicMock(
@@ -78,7 +78,7 @@ class TestCheckAheadState:
         result = _check_ahead_state(fake_host, "scitex-db")
         assert result["status"] == "clean"
 
-    @patch("scitex_dev.sync.subprocess.run")
+    @patch("scitex_dev._sync._local.subprocess.run")
     def test_missing_repo_reports_missing(self, mock_run, fake_host):
         mock_run.return_value = MagicMock(
             returncode=0, stdout="SACDEV_MISSING", stderr=""
@@ -86,7 +86,7 @@ class TestCheckAheadState:
         result = _check_ahead_state(fake_host, "scitex-db")
         assert result["status"] == "missing"
 
-    @patch("scitex_dev.sync.subprocess.run")
+    @patch("scitex_dev._sync._local.subprocess.run")
     def test_ssh_error_surfaces(self, mock_run, fake_host):
         mock_run.return_value = MagicMock(
             returncode=255, stdout="", stderr="Connection refused"
@@ -100,8 +100,8 @@ class TestCheckAheadState:
 
 
 class TestSyncOnePackageSafeMode:
-    @patch("scitex_dev.sync._check_ahead_state")
-    @patch("scitex_dev.sync.subprocess.run")
+    @patch("scitex_dev._sync._local._check_ahead_state")
+    @patch("scitex_dev._sync._local.subprocess.run")
     def test_skips_when_remote_ahead(self, mock_run, mock_check, fake_host):
         mock_check.return_value = {
             "status": "ahead",
@@ -114,8 +114,8 @@ class TestSyncOnePackageSafeMode:
         # The actual sync command should NOT have been invoked
         mock_run.assert_not_called()
 
-    @patch("scitex_dev.sync._check_ahead_state")
-    @patch("scitex_dev.sync.subprocess.run")
+    @patch("scitex_dev._sync._local._check_ahead_state")
+    @patch("scitex_dev._sync._local.subprocess.run")
     def test_skips_when_diverged(self, mock_run, mock_check, fake_host):
         mock_check.return_value = {
             "status": "diverged",
@@ -126,8 +126,8 @@ class TestSyncOnePackageSafeMode:
         assert result["status"] == "skipped_diverged"
         mock_run.assert_not_called()
 
-    @patch("scitex_dev.sync._check_ahead_state")
-    @patch("scitex_dev.sync.subprocess.run")
+    @patch("scitex_dev._sync._local._check_ahead_state")
+    @patch("scitex_dev._sync._local.subprocess.run")
     def test_proceeds_when_clean(self, mock_run, mock_check, fake_host):
         mock_check.return_value = {
             "status": "clean",
@@ -139,8 +139,8 @@ class TestSyncOnePackageSafeMode:
         assert result["status"] == "ok"
         mock_run.assert_called_once()
 
-    @patch("scitex_dev.sync._check_ahead_state")
-    @patch("scitex_dev.sync.subprocess.run")
+    @patch("scitex_dev._sync._local._check_ahead_state")
+    @patch("scitex_dev._sync._local.subprocess.run")
     def test_safe_false_bypasses_check(self, mock_run, mock_check, fake_host):
         mock_run.return_value = MagicMock(returncode=0, stdout="ok", stderr="")
         _sync_one_package(fake_host, "scitex-db", stash=True, install=True, safe=False)
@@ -151,13 +151,13 @@ class TestSyncOnePackageSafeMode:
 
 
 class TestSyncHostDryRun:
-    @patch("scitex_dev.sync.load_config")
+    @patch("scitex_dev._sync._local.load_config")
     def test_dry_run_returns_commands_with_safe_flag(self, mock_load, fake_host):
         mock_cfg = MagicMock()
         mock_cfg.packages = []
         mock_load.return_value = mock_cfg
         with patch(
-            "scitex_dev.sync._get_host_packages",
+            "scitex_dev._sync._local._get_host_packages",
             return_value=[("scitex-db", "scitex-db")],
         ):
             result = sync_host(fake_host, confirm=False, safe=True)
@@ -172,9 +172,9 @@ class TestSyncHostDryRun:
 
 
 class TestSyncAllPropagation:
-    @patch("scitex_dev.sync.load_config")
-    @patch("scitex_dev.sync.get_enabled_hosts")
-    @patch("scitex_dev.sync.sync_host")
+    @patch("scitex_dev._sync._local.load_config")
+    @patch("scitex_dev._sync._local.get_enabled_hosts")
+    @patch("scitex_dev._sync._local.sync_host")
     def test_safe_parameter_forwarded(
         self, mock_sync_host, mock_enabled, mock_load, fake_host
     ):

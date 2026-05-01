@@ -140,14 +140,14 @@ _LAZY_ATTRS: dict[str, str] = {
     "get_remote_versions": "ssh",
     "test_host_connection": "ssh",
     # sync
-    "sync_all": "sync",
-    "sync_host": "sync",
-    "sync_local": "sync",
-    "sync_tags": "sync",
+    "sync_all": "_sync",
+    "sync_host": "_sync",
+    "sync_local": "_sync",
+    "sync_tags": "_sync",
     # sync_remote
-    "pull_local": "sync_remote",
-    "remote_commit": "sync_remote",
-    "remote_diff": "sync_remote",
+    "pull_local": "_sync",
+    "remote_commit": "_sync",
+    "remote_diff": "_sync",
     # ci
     "CIStatus": "ci",
     "WorkflowRun": "ci",

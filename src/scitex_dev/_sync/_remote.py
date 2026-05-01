@@ -20,8 +20,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from .config import DevConfig, HostConfig, get_enabled_hosts, load_config
-from .sync import _build_ssh_args, _get_host_packages
+from ..config import DevConfig, HostConfig, get_enabled_hosts, load_config
+from ._local import _build_ssh_args, _get_host_packages
 
 # ---------------------------------------------------------------------------
 # SSH helper (filters X11 noise)

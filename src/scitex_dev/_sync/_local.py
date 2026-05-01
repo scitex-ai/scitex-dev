@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from .config import DevConfig, HostConfig, get_enabled_hosts, load_config
+from ..config import DevConfig, HostConfig, get_enabled_hosts, load_config
 
 # ---------------------------------------------------------------------------
 # SSH helpers
@@ -481,10 +481,6 @@ def sync_local(
                     )
 
     return results
-
-
-# sync_tags lives in sync_tags.py; re-export for backward compat
-from .sync_tags import sync_tags  # noqa: E402,F401
 
 
 # EOF

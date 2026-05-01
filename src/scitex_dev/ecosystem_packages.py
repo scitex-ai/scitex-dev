@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import DevConfig, HostConfig, get_enabled_hosts, load_config
-from .sync import _build_ssh_args, _build_sync_commands, _get_host_packages, sync_all
+from ._sync import _build_ssh_args, _build_sync_commands, _get_host_packages, sync_all
 
 
 def _short(sha: str | None) -> str:
