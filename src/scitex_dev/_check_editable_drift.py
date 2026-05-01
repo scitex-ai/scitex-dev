@@ -126,10 +126,26 @@ def _run_git(repo: Path, *args: str) -> str | None:
 
 def _compute_drift(repo: Path) -> str | None:
     """Return a one-line warning, or None if up-to-date / unknown."""
-    latest_tag = _run_git(repo, "describe", "--tags", "--abbrev=0")
+    # Use `git tag --sort=-v:refname` (highest-semver-first) instead of
+    # `git describe --tags`, which only finds tags REACHABLE FROM HEAD.
+    # Reachability fails the standard gitflow case where v* tags live
+    # on the main branch's merge commit but the user is checked out on
+    # develop — develop hasn't been fast-forwarded to include the
+    # merge, so describe walks back to the previous on-branch tag.
+    # We want "latest published version" regardless of branch topology.
+    raw = _run_git(
+        repo,
+        "tag",
+        "--list",
+        "v[0-9]*",
+        "--sort=-v:refname",
+    )
+    latest_tag = raw.splitlines()[0].strip() if raw else ""
     head = _run_git(repo, "rev-parse", "--short", "HEAD")
     if not latest_tag or not head:
         return None
+    # rev-list --count A..B works fine for non-ancestor tags; it counts
+    # commits in B not reachable from A (and vice versa for the reverse).
     ahead = _run_git(repo, "rev-list", "--count", f"{latest_tag}..HEAD")
     behind = _run_git(repo, "rev-list", "--count", f"HEAD..{latest_tag}")
     try:
