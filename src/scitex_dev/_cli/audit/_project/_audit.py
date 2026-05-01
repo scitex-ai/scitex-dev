@@ -279,6 +279,38 @@ RULES: dict[str, Rule] = {
                 "users."
             ),
         ),
+        Rule(
+            "PS128",
+            "§1",
+            (
+                "`.gitignore` excludes `src/<pkg>/_sphinx_html/` but the "
+                "convention requires committing the bundle. scitex-cloud "
+                "serves from the in-wheel HTML; CI's hatchling "
+                "force-include will fail with `FileNotFoundError: Forced "
+                "include not found`. Remove the line."
+            ),
+        ),
+        Rule(
+            "PS129",
+            "§1",
+            (
+                "package source references `SCITEX_<MODULE>_*` env vars "
+                "but documents them in NEITHER a README "
+                "`## Environment Variables` section NOR a `.env.example` "
+                "at repo root. Pick one — see "
+                "`_skills/general/04_docs_03_env-vars-and-state.md`."
+            ),
+        ),
+        Rule(
+            "PS130",
+            "§1",
+            (
+                "README has `## Environment Variables` AND `.env.example` "
+                "exists at repo root — the two will drift. Pick one: keep "
+                "the README table (small lists), OR keep `.env.example` "
+                "and reference it from the `## Installation` section."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
@@ -1070,6 +1102,9 @@ def audit_project(
     from ._check_sphinx_html import check_sphinx_html
 
     check_sphinx_html(repo_root, Violation, violations)
+    from ._check_env_example import check_env_example
+
+    check_env_example(repo_root, Violation, violations)
     from ._check_examples import check_examples_conventions
 
     check_examples_conventions(repo_root, Violation, violations)

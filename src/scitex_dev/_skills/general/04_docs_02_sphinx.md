@@ -108,5 +108,41 @@ enforces the canonical setup:
 | PS126 | `docs/sphinx/requirements.txt` pins the canonical doc deps                        |
 | PS127 | `pyproject.toml [project.urls]` has `Documentation = "https://<pkg>.readthedocs.io"` |
 
+## CRITICAL: do NOT gitignore `src/<pkg>/_sphinx_html/`
+
+The legacy `.gitignore` template often included `src/*/_sphinx_html/`
+to keep build artefacts out of source control. **That is wrong for the
+current convention.** scitex-cloud serves docs from the in-wheel bundle,
+which means the bundle MUST be committed. Symptom: CI fails with
+`FileNotFoundError: Forced include not found:
+.../src/<pkg>/_sphinx_html` because hatchling's `force-include` references
+a path the checkout doesn't have. Fix: remove that line from `.gitignore`.
+
+## Read the Docs project provisioning
+
+Use the v3 API (token at `~/.dotfiles/src/.bash.d/secrets/access_tokens/read_the_docs.txt`,
+also exported as `$RTD_TOKEN`) to register a new project:
+
+```bash
+curl -X POST -H "Authorization: Token $RTD_TOKEN" \
+  -H "Content-Type: application/json" \
+  https://readthedocs.org/api/v3/projects/ \
+  -d '{
+    "name": "<pkg>",
+    "repository": {"url": "https://github.com/ywatanabe1989/<pkg>", "type": "git"},
+    "homepage": "https://github.com/ywatanabe1989/<pkg>",
+    "programming_language": "py",
+    "language": "en",
+    "default_branch": "main"
+  }'
+```
+
+Then trigger the first build:
+
+```bash
+curl -X POST -H "Authorization: Token $RTD_TOKEN" \
+  https://readthedocs.org/api/v3/projects/<pkg>/versions/latest/builds/
+```
+
 Packages without `docs/sphinx/conf.py` skip all six rules — utility
 packages without docs are fine (just invisible in the docs site).

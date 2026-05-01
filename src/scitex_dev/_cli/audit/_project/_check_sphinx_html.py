@@ -174,6 +174,33 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
                 )
             )
 
+    # PS128 — `.gitignore` must NOT exclude `src/<pkg>/_sphinx_html/` —
+    # scitex-cloud serves from the bundled in-wheel HTML, which must be
+    # tracked. Symptom: CI fails with hatchling 'Forced include not found'.
+    gitignore = repo / ".gitignore"
+    if gitignore.is_file():
+        try:
+            gi_text = gitignore.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            gi_text = ""
+        if re.search(
+            r"^\s*src/(?:\*|[\w-]+)/_sphinx_html/?\s*$",
+            gi_text,
+            re.MULTILINE,
+        ):
+            out.append(
+                violation_cls(
+                    "PS128",
+                    str(gitignore),
+                    (
+                        ".gitignore excludes src/<pkg>/_sphinx_html/ — but "
+                        "scitex-cloud serves docs from the in-wheel bundle, "
+                        "so it MUST be tracked. Remove the line; CI's "
+                        "hatchling force-include will fail otherwise."
+                    ),
+                )
+            )
+
     # PS127 — pyproject.toml [project.urls] Documentation entry.
     pyproject = repo / "pyproject.toml"
     if pyproject.is_file():
