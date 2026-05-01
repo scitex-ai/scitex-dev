@@ -148,6 +148,58 @@ RULES: dict[str, Rule] = {
                 "the cluster wants to be a directory."
             ),
         ),
+        Rule(
+            "PS116",
+            "§1",
+            (
+                "README.md uses the deprecated `> **Interfaces:** ...` "
+                "summary callout. Per 2026-05 convention, put star ratings "
+                "directly on each interface section header instead "
+                "(e.g. `## Python API ⭐⭐⭐`)."
+            ),
+        ),
+        Rule(
+            "PS117",
+            "§1",
+            (
+                'README.md has a duplicate badge block: a `<p align="center">` '
+                "row of img.shields.io / badge.fury.io / readthedocs badges "
+                "appears in addition to the canonical "
+                "`<!-- scitex-badges:start --> ... :end -->` block. Keep "
+                "only the canonical block."
+            ),
+        ),
+        Rule(
+            "PS118",
+            "§1",
+            (
+                "README.md interface section header carries a banned "
+                "descriptor like `(Application Programming Interface)`, "
+                "`-- for AI Agents`, or `— for AI Agent Discovery`. The "
+                "section names themselves carry meaning — strip the prose."
+            ),
+        ),
+        Rule(
+            "PS119",
+            "§1",
+            (
+                "README.md contains a `> **SciTeX users**: pip install scitex "
+                "already includes ...` install hint. These belong in the "
+                "umbrella `scitex` README, not in sub-package READMEs "
+                "(extras like `pip install scitex[ssh]` drift)."
+            ),
+        ),
+        Rule(
+            "PS120",
+            "§1",
+            (
+                "README.md `## Part of SciTeX` section is missing the "
+                "standardized umbrella one-liner. After the `is part of "
+                "[SciTeX]` opener, mention `pip install scitex[<extra>]` "
+                "AND `scitex.<module>` AND `scitex <subcommand>` so users "
+                "see how the package fits the umbrella."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",

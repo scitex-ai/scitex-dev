@@ -119,6 +119,75 @@ _RE_PART_OF_OPENER = re.compile(
 _PART_OF_LOOKAHEAD_BYTES = 1024
 
 
+# PS116 — deprecated `> **Interfaces:**` callout (replaced 2026-05 by
+# per-section star ratings).
+_RE_INTERFACES_CALLOUT = re.compile(
+    r"^>\s*\*\*\s*Interfaces\s*:\s*\*\*", re.MULTILINE | re.IGNORECASE
+)
+
+
+# PS117 — duplicate badge block. The canonical block is wrapped by
+# `<!-- scitex-badges:start --> ... <!-- scitex-badges:end -->`. A second
+# `<p align="center">` block whose body contains badge URLs (shields.io,
+# badge.fury.io, readthedocs.org) is the duplicate we want to flag.
+_RE_CANONICAL_BADGES_BLOCK = re.compile(
+    r"<!--\s*scitex-badges:start\s*-->.*?<!--\s*scitex-badges:end\s*-->",
+    re.DOTALL | re.IGNORECASE,
+)
+_RE_CENTERED_BADGE_ROW = re.compile(
+    r"<p\s+align=[\"']center[\"']>\s*"
+    r"(?:[^<]*<a[^>]*>\s*)?"
+    r"<img[^>]+src=[\"'][^\"']*"
+    r"(?:img\.shields\.io|badge\.fury\.io|readthedocs\.org)",
+    re.IGNORECASE,
+)
+
+
+# PS118 — banned descriptors in interface section headers.
+# Targets `<summary>` or `##`-style headings carrying parenthetical
+# expansions like `(Application Programming Interface)` and trailing
+# role descriptors like `-- for AI Agents`, `— for AI Agents`,
+# `— for AI Agent Discovery`.
+_BANNED_HEADER_PHRASES = [
+    re.compile(
+        r"<summary>[^<]*\((?:Application Programming Interface|"
+        r"Command[\s-]?Line Interface|Model Context Protocol)[^<]*\)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"<summary>[^<]*(?:--|—|-)\s*for\s+AI\s+Agent",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"^##\s+[^\n]*\((?:Application Programming Interface|"
+        r"Command[\s-]?Line Interface|Model Context Protocol)[^\n]*\)",
+        re.MULTILINE | re.IGNORECASE,
+    ),
+    re.compile(
+        r"^##\s+[^\n]*(?:--|—|-)\s*for\s+AI\s+Agent",
+        re.MULTILINE | re.IGNORECASE,
+    ),
+]
+
+
+# PS119 — banned `> **SciTeX users**: pip install scitex` blockquote.
+_RE_SCITEX_USERS_HINT = re.compile(
+    r"^>\s*\*\*\s*SciTeX\s+users?\s*\*\*\s*:\s*[^\n]*pip\s+install\s+scitex",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+# PS120 — standardized "Part of SciTeX" umbrella one-liner. After the
+# PS115 opener, the section must mention all three: the umbrella install
+# (`pip install scitex[<extra>]`), the Python alias (`scitex.<module>`),
+# and the CLI alias (`scitex <subcommand>`). We check for each token
+# independently inside the section window so wording can vary.
+_RE_UMBRELLA_INSTALL = re.compile(r"pip\s+install\s+scitex\[[^\]]+\]", re.IGNORECASE)
+_RE_UMBRELLA_PYTHON = re.compile(r"`scitex\.[a-zA-Z_]\w*`")
+_RE_UMBRELLA_CLI = re.compile(r"`scitex\s+[a-zA-Z][\w-]*", re.IGNORECASE)
+_PART_OF_UMBRELLA_LOOKAHEAD = 1024
+
+
 def _read_head(readme: Path, n: int) -> str | None:
     """Return the first `n` bytes of `readme` as text, or None on error/missing."""
     if not readme.is_file():
@@ -297,6 +366,108 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                         "section is prose-only. SciTeX convention is a "
                         "markdown table with columns | # | Problem | Solution | "
                         "— see _skills/general/04_docs_01_readme_template.md."
+                    ),
+                )
+            )
+
+    # PS116 — deprecated `> **Interfaces:**` summary callout.
+    if _RE_INTERFACES_CALLOUT.search(full):
+        out.append(
+            violation_cls(
+                "PS116",
+                str(readme),
+                (
+                    "README.md uses the deprecated '> **Interfaces:** ...' "
+                    "summary callout. Per 2026-05 convention, drop this "
+                    "line and put star ratings on each interface section "
+                    "header instead (e.g. '## Python API ⭐⭐⭐'). See "
+                    "_skills/general/99_quality_02_checklist.md §6."
+                ),
+            )
+        )
+
+    # PS117 — duplicate badge block. The canonical
+    # `<!-- scitex-badges:start --> ... :end -->` block lives at the top;
+    # any extra `<p align="center">` row containing badge URLs is the
+    # duplicate flagged here.
+    canonical_match = _RE_CANONICAL_BADGES_BLOCK.search(full)
+    if canonical_match is not None:
+        # Search the area AFTER the canonical block for a centered badge row.
+        after = full[canonical_match.end() :]
+        if _RE_CENTERED_BADGE_ROW.search(after):
+            out.append(
+                violation_cls(
+                    "PS117",
+                    str(readme),
+                    (
+                        "README.md has a duplicate badge row "
+                        '(`<p align="center">` with shields.io / '
+                        "badge.fury / readthedocs badges) below the canonical "
+                        "`<!-- scitex-badges:* -->` block. Keep only the "
+                        "canonical block."
+                    ),
+                )
+            )
+
+    # PS118 — banned descriptors in interface section headers.
+    for pat in _BANNED_HEADER_PHRASES:
+        if pat.search(full):
+            out.append(
+                violation_cls(
+                    "PS118",
+                    str(readme),
+                    (
+                        "README.md interface section header carries a banned "
+                        "descriptor — e.g. '(Application Programming "
+                        "Interface)', '-- for AI Agents', or '— for AI Agent "
+                        "Discovery'. Strip the prose; the section name itself "
+                        "carries meaning."
+                    ),
+                )
+            )
+            break  # one violation per file is enough
+
+    # PS119 — banned `> **SciTeX users**: pip install scitex ...` hint.
+    if _RE_SCITEX_USERS_HINT.search(full):
+        out.append(
+            violation_cls(
+                "PS119",
+                str(readme),
+                (
+                    "README.md contains a `> **SciTeX users**: pip install "
+                    "scitex ...` install hint. These belong in the umbrella "
+                    "`scitex` README, not in sub-package READMEs. Remove the "
+                    "line; if the umbrella relationship needs surfacing, the "
+                    "standardized 'Part of SciTeX' one-liner already covers it."
+                ),
+            )
+        )
+
+    # PS120 — standardized 'Part of SciTeX' umbrella one-liner. Within the
+    # ~1 KB after `## Part of SciTeX`, expect all three tokens:
+    #   - `pip install scitex[<extra>]`
+    #   - a `scitex.<module>` Python alias in backticks
+    #   - a `scitex <subcommand>` CLI alias in backticks
+    if pos_part is not None:
+        window = full[pos_part.end() : pos_part.end() + _PART_OF_UMBRELLA_LOOKAHEAD]
+        missing_bits: list[str] = []
+        if not _RE_UMBRELLA_INSTALL.search(window):
+            missing_bits.append("`pip install scitex[<extra>]`")
+        if not _RE_UMBRELLA_PYTHON.search(window):
+            missing_bits.append("`scitex.<module>`")
+        if not _RE_UMBRELLA_CLI.search(window):
+            missing_bits.append("`scitex <subcommand>`")
+        if missing_bits:
+            out.append(
+                violation_cls(
+                    "PS120",
+                    str(readme),
+                    (
+                        "README.md '## Part of SciTeX' is missing the "
+                        "standardized umbrella one-liner — needs: "
+                        + ", ".join(missing_bits)
+                        + ". See _skills/general/04_docs_01_readme.md "
+                        "for the canonical sentence."
                     ),
                 )
             )

@@ -9,15 +9,6 @@ enforce the load-bearing parts of this template.
 ```markdown
 # <PACKAGE>
 
-<!-- scitex-badges:start -->
-[![PyPI](https://img.shields.io/pypi/v/<PACKAGE>.svg)](https://pypi.org/project/<PACKAGE>/)
-[![Python](https://img.shields.io/pypi/pyversions/<PACKAGE>.svg)](https://pypi.org/project/<PACKAGE>/)
-[![Tests](https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/test.yml/badge.svg)](https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/test.yml)
-[![Coverage](https://codecov.io/gh/ywatanabe1989/<PACKAGE>/graph/badge.svg)](https://codecov.io/gh/ywatanabe1989/<PACKAGE>)
-[![Docs](https://readthedocs.org/projects/<PACKAGE>/badge/?version=latest)](https://<PACKAGE>.readthedocs.io/en/latest/)
-[![License: AGPL v3](https://img.shields.io/badge/license-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-<!-- scitex-badges:end -->
-
 <p align="center">
   <a href="https://scitex.ai">
     <img src="docs/scitex-logo-blue-cropped.png" alt="SciTeX" width="400">
@@ -29,6 +20,15 @@ enforce the load-bearing parts of this template.
 <p align="center">
   <a href="https://<PACKAGE>.readthedocs.io/">Full Documentation</a> · <code>pip install <PACKAGE></code>
 </p>
+
+<!-- scitex-badges:start -->
+[![PyPI](https://img.shields.io/pypi/v/<PACKAGE>.svg)](https://pypi.org/project/<PACKAGE>/)
+[![Python](https://img.shields.io/pypi/pyversions/<PACKAGE>.svg)](https://pypi.org/project/<PACKAGE>/)
+[![Tests](https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/test.yml/badge.svg)](https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/test.yml)
+[![Coverage](https://codecov.io/gh/ywatanabe1989/<PACKAGE>/graph/badge.svg)](https://codecov.io/gh/ywatanabe1989/<PACKAGE>)
+[![Docs](https://readthedocs.org/projects/<PACKAGE>/badge/?version=latest)](https://<PACKAGE>.readthedocs.io/en/latest/)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+<!-- scitex-badges:end -->
 
 ---
 

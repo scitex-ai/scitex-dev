@@ -17,9 +17,11 @@ Every SciTeX package README follows this structure:
 
 **One-line tagline**
 
-[Badges: PyPI, Docs, Tests, License — centered]
-
 [Quick links: Documentation · pip install — centered]
+
+[Badges: PyPI, Docs, Tests, License] ← placed JUST ABOVE the `---`
+separator (not under the H1). The header reads top-to-bottom as
+identity (logo + tagline + install link) → CI status (badges) → content.
 
 ---
 
