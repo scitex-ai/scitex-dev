@@ -178,12 +178,29 @@ def check(distribution: str = "scitex-dev") -> str | None:
     return warning
 
 
+_SUBPROCESS_MARKER = "_SCITEX_DEV_DRIFT_EMITTED"
+
+
 def emit_if_drift(distribution: str = "scitex-dev") -> None:
-    """Print warning to stderr if there is one. Safe to call repeatedly
-    (cache + once-per-process flag prevent duplicate noise)."""
+    """Print warning to stderr if there is one. Safe to call repeatedly.
+
+    Suppression is two-layered so a parent process emits at most once and
+    every subprocess (e.g. each per-leaf auditor spawned by `audit-all`)
+    inherits the suppression via env var instead of re-printing the same
+    drift line N times:
+    - In-process: function-attribute flag.
+    - Across processes: `_SCITEX_DEV_DRIFT_EMITTED=1` env var, set after
+      the first emit and inherited by every subprocess.
+    """
     if getattr(emit_if_drift, "_emitted", False):
+        return
+    if os.environ.get(_SUBPROCESS_MARKER) == "1":
+        emit_if_drift._emitted = True  # type: ignore[attr-defined]
         return
     emit_if_drift._emitted = True  # type: ignore[attr-defined]
     msg = check(distribution)
     if msg:
         print(f"[scitex-dev] {msg}", file=sys.stderr)
+    # Mark for any subprocess we spawn, regardless of whether we printed
+    # (no-drift state should also propagate so the env stays consistent).
+    os.environ[_SUBPROCESS_MARKER] = "1"
