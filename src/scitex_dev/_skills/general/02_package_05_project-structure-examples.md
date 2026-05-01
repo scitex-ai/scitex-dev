@@ -15,6 +15,60 @@ tags: [scitex-python, scitex-general, scitex-package, project-structure, example
 - Examples are **free to import the umbrella `scitex`** — unlike `src/`, they sit at the consumer side of the cascade.
 - Use SciTeX where applicable: `@stx.session`, `stx.io`, `stx.plt`.
 
+## Canonical pattern: `@stx.session`-decorated `main()`
+
+The reference is `~/proj/figrecipe/examples/01_bundle_format.py` and
+`~/proj/scitex-python/examples/01_session.py`. Every `.py` example
+should follow this shape:
+
+```python
+#!/usr/bin/env python3
+"""Example: <one-line>.
+
+Run:
+    python NN_<name>.py
+    python NN_<name>.py --some-flag value
+    python NN_<name>.py --help
+"""
+from pathlib import Path
+import scitex as stx
+import <pkg>
+
+
+@stx.session
+def main(
+    some_flag: str = "default",        # auto-becomes --some-flag
+    CONFIG=stx.session.INJECTED,
+    logger=stx.session.INJECTED,
+):
+    """Demonstrate <feature>."""
+    OUT = Path(CONFIG.SDIR_RUN)
+    logger.info(f"Output dir: {OUT}")
+    # ... do work, write to OUT, return 0
+
+
+if __name__ == "__main__":
+    main()
+```
+
+What `@stx.session` gives you for free:
+
+- **Auto-CLI**: every `def main(...)` parameter becomes a `--kebab-case`
+  flag with the right type — no `argparse` boilerplate.
+- **Auto-organized output**: `CONFIG.SDIR_RUN` points at
+  `<example-stem>_out/FINISHED_SUCCESS/<session_id>/` (or `…/RUNNING/`
+  / `…/FAILED/` while in progress / on error). The state-suffix is the
+  signal that the run completed cleanly.
+- **Config injection**: `CONFIG` aggregates `./config/*.yaml` files at
+  the package root.
+- **Pre-wired matplotlib + logger**: ask for `plt=stx.session.INJECTED`
+  or `logger=stx.session.INJECTED` and they arrive configured.
+- **Reproducibility**: each run gets a unique `CONFIG.ID` and stdout/
+  stderr are captured into `SDIR_RUN/logs/`.
+
+When **NOT** to use `@stx.session`: shell scripts (`.sh`), or
+notebooks where Jupyter is the runner (`.ipynb` — see below).
+
 ## Mandatory numbered prefix
 
 ```
@@ -53,6 +107,34 @@ for f in 0[1-9]_*.py 1[0-9]_*.py; do
     python "$f"
 done
 ```
+
+## `.ipynb` — when GitHub-rendering matters
+
+Jupyter notebooks render inline on GitHub with cell outputs visible,
+which makes them ideal for tutorial-style examples (see
+`~/proj/scitex-python/examples/02_io.ipynb` etc.). Keep the same
+numbered-prefix convention: `02_io.ipynb`, `03_clew.ipynb`, …
+
+`.ipynb` cannot use `@stx.session` (the decorator wraps a function;
+notebooks execute cell-by-cell). Author them as a sequence of cells
+that import the package and demonstrate features inline. The `_out/`
+sibling directory is optional for notebooks since the rendered cell
+outputs ARE the demonstration.
+
+### Testing `.ipynb` examples
+
+`runpy` doesn't help for notebooks. Two workable approaches:
+
+1. **`jupyter nbconvert --execute --to notebook --output /dev/null
+   <file>.ipynb`** — runs every cell; non-zero exit on any failure.
+   Cheapest CI integration.
+2. **`pytest-nbval`** (`pytest --nbval-lax examples/`) — runs each
+   notebook and tolerates output drift; flag `--nbval` (strict) if
+   you also want output equality.
+
+For `.py` examples the `tests/examples/test_<stem>.py` mirror runs
+them directly (via `runpy.run_path` or `subprocess.run`). For
+`.ipynb` examples the matching test invokes `nbconvert` or `nbval`.
 
 ## 1:1 match with `tests/examples/`
 

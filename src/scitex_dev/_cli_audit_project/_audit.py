@@ -136,6 +136,31 @@ RULES: dict[str, Rule] = {
             "§3",
             "examples/<name>.{py,sh,ipynb} has no matching tests/examples/test_<name>.py",
         ),
+        Rule(
+            "PS501",
+            "§5",
+            (
+                "examples/<n>_*.py main() does not use @stx.session — the "
+                "canonical pattern (see ~/proj/figrecipe/examples/ and "
+                "~/proj/scitex-python/examples/01_session.py) decorates main "
+                "with @stx.session for auto-CLI, auto-organized output "
+                "(SDIR_RUN/FINISHED_SUCCESS/<id>/), config injection, and "
+                "session reproducibility. Replace manual `OUTPUT_DIR = "
+                "Path(__file__).parent / '<n>_out'` boilerplate with `OUT = "
+                "Path(CONFIG.SDIR_RUN)` inside the decorated main()."
+            ),
+        ),
+        Rule(
+            "PS502",
+            "§5",
+            (
+                "examples/<n>_*_out/ exists but is empty (or contains only "
+                "__pycache__) — the example was never run end-to-end. Either "
+                "execute it once so SciTeX's session machinery populates the "
+                "FINISHED_SUCCESS marker, or remove the empty _out/ if the "
+                "example doesn't yet work."
+            ),
+        ),
         # §4 docs/ structure ----------------------------------------------------
         Rule(
             "PS401",
@@ -790,6 +815,9 @@ def audit_project(
     from ._check_readme_badges import check_coverage_badge
 
     check_coverage_badge(repo_root, Violation, violations)
+    from ._check_examples import check_examples_conventions
+
+    check_examples_conventions(repo_root, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]
