@@ -59,7 +59,10 @@ DEFAULT_MODEL = "claude-haiku-4-5"
 DEFAULT_TIMEOUT = 120
 RUNS_PER_CASE = 3
 
-DEFAULT_DOCKER_IMAGE = "scitex-agent-container:latest"
+# Published from scitex-agent-container's publish-agentic-test-image.yml
+# workflow on every v* tag (and via workflow_dispatch). See
+# scitex-agent-container/containers/Dockerfile.agentic-test for the source.
+DEFAULT_DOCKER_IMAGE = "ghcr.io/ywatanabe1989/scitex-agentic-test:latest"
 
 
 @dataclass
@@ -287,9 +290,26 @@ class NewbieDockerRunner:
         ]
         proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode != 0:
-            raise RuntimeError(
-                f"docker run failed for image {self.image!r}: {proc.stderr[:500]}"
-            )
+            # Image likely not pulled yet — try once before giving up. Costs
+            # one network round-trip on first invocation per host; fast on the
+            # subsequent calls. Stays silent (no echo) so test output is clean.
+            stderr = proc.stderr or ""
+            if (
+                "Unable to find image" in stderr
+                or "manifest unknown" in stderr
+                or "pull" in stderr.lower()
+            ):
+                pull = subprocess.run(
+                    ["docker", "pull", self.image],
+                    capture_output=True,
+                    text=True,
+                )
+                if pull.returncode == 0:
+                    proc = subprocess.run(cmd, capture_output=True, text=True)
+            if proc.returncode != 0:
+                raise RuntimeError(
+                    f"docker run failed for image {self.image!r}: {proc.stderr[:500]}"
+                )
         self._started = True
 
     def run(

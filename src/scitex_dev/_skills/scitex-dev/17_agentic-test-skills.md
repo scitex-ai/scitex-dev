@@ -46,15 +46,15 @@ applies. Choose `answer_contains` strings that are authored in the skill
 body and unlikely to appear from model training alone (SciTeX-specific
 flags like `use_caller_path=True` are strong signals).
 
-## Generic image (built once, used for all skill evals)
+## Generic image (pulled from ghcr.io)
 
-```bash
-cd /home/ywatanabe/proj/scitex-agent-container/containers
-docker build -f Dockerfile.agentic-test -t scitex-agentic-test:latest .
-```
-
-The image contains only Node + claude CLI. No baked skills, no baked
-credentials. Rebuild only when the base image changes.
+`docker pull ghcr.io/ywatanabe1989/scitex-agentic-test:latest` — built
+and pushed by `scitex-agent-container/.github/workflows/publish-agentic-test-image.yml`
+on every `v*` tag. Harness auto-pulls on first run if missing. Image
+holds Node + claude CLI only — no baked skills/credentials. To build
+locally (when editing the Dockerfile): `docker build -f scitex-agent-container/containers/Dockerfile.agentic-test
+-t scitex-agentic-test:latest scitex-agent-container/containers`,
+then `SCITEX_DEV_AGENTIC_DOCKER_IMAGE=scitex-agentic-test:latest`.
 
 ## Isolation model — what "newbie" means
 
@@ -78,7 +78,7 @@ Mount each package's skill dir read-only:
 docker run --rm \
   -v ~/proj/scitex-io/src/scitex_io/_skills/scitex-io:/home/agent/.claude/skills/scitex-io:ro \
   -v /tmp/newbie_creds.json:/home/agent/.claude/.credentials.json:ro \
-  scitex-agentic-test:latest \
+  ghcr.io/ywatanabe1989/scitex-agentic-test:latest \
   -p "<query>" --output-format json --model claude-haiku-4-5 \
   --dangerously-skip-permissions
 ```
