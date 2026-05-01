@@ -28,23 +28,23 @@ from typing import Any, Dict, Optional
 # own targeted "no, that's not us" pairs.
 
 _PROMPT_WHAT_FOR = (
-    "Read the skills under ~/.claude/skills/ and answer in ONE sentence: "
+    "Use the Read tool to open every .md file under /home/agent/.claude/skills/ (there's exactly one package directory there). Then and answer in ONE sentence: "
     "what is this package for?"
 )
 
 _PROMPT_PROBLEMS = (
-    "Read the skills under ~/.claude/skills/ and list 3-5 problems this "
+    "Use the Read tool to open every .md file under /home/agent/.claude/skills/ (there's exactly one package directory there). Then and list 3-5 problems this "
     "package solves. Output as a markdown table with columns: "
     "| # | Problem | Solution |. No prose around the table."
 )
 
 _PROMPT_QUICK_START = (
-    "Read the skills under ~/.claude/skills/ and show the minimal working "
+    "Use the Read tool to open every .md file under /home/agent/.claude/skills/ (there's exactly one package directory there). Then and show the minimal working "
     "example as a Python code block. Just the code, no commentary."
 )
 
 _PROMPT_WHEN_NOT_TO_USE = (
-    "Read the skills under ~/.claude/skills/ and answer in 1-2 sentences: "
+    "Use the Read tool to open every .md file under /home/agent/.claude/skills/ (there's exactly one package directory there). Then and answer in 1-2 sentences: "
     "when should someone NOT use this package? If the skills don't say, "
     "answer 'not specified in the skills'."
 )

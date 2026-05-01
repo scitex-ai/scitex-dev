@@ -275,12 +275,18 @@ class NewbieDockerRunner:
             "HOME=/home/agent",
         ]
         if self.skills_mount is not None:
-            # Mount the scoped ``.claude`` tree read-only at the agent HOME so
-            # ``claude`` picks up ``$HOME/.claude/skills/scitex/...`` and
-            # nothing else (no prior projects, no auth config).
+            # Mount ONLY the skills subdir read-only at /home/agent/.claude/skills/.
+            # The rest of /home/agent/.claude/ stays writable in the container
+            # so the claude CLI can persist its session state (projects/,
+            # statsig/, conversation history) — earlier we mounted the whole
+            # .claude dir :ro and the agent's read attempts succeeded only
+            # for the very first prompt before the cache write failed and
+            # corrupted subsequent reads. Skills-only :ro preserves the
+            # isolation contract (no host ~/.claude leak) while letting
+            # claude write its own bookkeeping.
             cmd += [
                 "-v",
-                f"{self.skills_mount}/.claude:/home/agent/.claude:ro",
+                f"{self.skills_mount}/.claude/skills:/home/agent/.claude/skills:ro",
             ]
         cmd += [
             "--entrypoint",
