@@ -15,9 +15,11 @@ tags: [scitex-python, scitex-general, scitex-package]
 
 # SciTeX General Standards
 
-> **Interfaces:** Python ⭐⭐⭐ · CLI ⭐⭐ · MCP ⭐⭐ · Skills ⭐⭐⭐ · Hook — · HTTP —
-
 `pip install scitex` — standards for all ecosystem packages.
+
+(Interface star ratings live on each interface section header below, not
+in a single summary callout. See
+`03_interface_04_skills/13_standard-template.md`.)
 
 ## Sub-skills
 

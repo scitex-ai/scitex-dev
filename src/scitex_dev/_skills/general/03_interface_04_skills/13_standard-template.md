@@ -50,9 +50,15 @@ interfaces:
 
 # <pip-name>
 
-> **Interfaces:** Python <stars> · CLI <stars> · MCP <stars> · Skills <stars> · Hook — · HTTP —
-
 <one-paragraph intro>
+
+> **Convention (since 2026-05):** the old single-line
+> `> **Interfaces:** Python ⭐⭐⭐ · CLI ⭐ · ...` callout is deprecated.
+> Put the star rating directly on each interface section header below
+> (e.g. `## Python API ⭐⭐⭐`). Strip parenthetical expansions
+> (`(Application Programming Interface)`) and trailing descriptors
+> (`-- for AI Agents`, `— for AI Agent Discovery`) — the bullets carry
+> meaning, the prose doesn't.
 
 ## Installation & import
 
