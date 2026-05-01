@@ -31,11 +31,27 @@ Every SciTeX package README follows this structure:
 ## Five Interfaces (HTTP optional)
 ## Lint Rules (if applicable)
 ## Part of SciTeX
-[Optional `import scitex; scitex.<module>.X(...)` snippet — ONLY include
- if it shows real synergy (e.g. orchestrator integration, multi-module
- composition). Don't include a snippet that is just a different import
- alias for the same call (e.g. `scitex.ssh.setup(...)` vs
- `scitex_ssh.setup(...)` — same function, no synergy → skip).]
+[Optional `import scitex` snippet — ONLY include if it demonstrates
+ **synergy via the umbrella**: an advantage you only get when combined
+ with OTHER scitex packages through `import scitex`. Concretely, the
+ snippet must touch at least TWO scitex modules and the combination must
+ produce a meaningful result the standalone package cannot.
+
+ Examples of valid synergy:
+   import scitex as stx
+   data = stx.io.load("session.npy")          # scitex-io
+   fig, ax = stx.plt.subplots()               # scitex-plt
+   ax.plot(data)
+   stx.io.save(fig, "out.png")                # plt → io round-trip
+
+ NOT synergy (skip the snippet entirely):
+   import scitex
+   scitex.ssh.setup(2222, ...)                # same call as scitex_ssh.setup
+                                              # — different alias, no benefit
+
+ If your package has no umbrella synergy yet, omit the snippet and ship
+ only the Four Freedoms blockquote. Don't fabricate a single-module
+ example just to fill the section.]
 [Four Freedoms blockquote — always present]
 
 ---
