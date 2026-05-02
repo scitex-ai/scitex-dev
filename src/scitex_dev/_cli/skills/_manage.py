@@ -265,7 +265,7 @@ def register_skills_commands(main_group):
     # command going forward because the destination is always required —
     # callers can't be surprised by a hidden default like `export`'s
     # `~/.claude/skills/scitex/`.
-    @skills.command("self-explain")
+    @skills.command("explain-self")
     @click.argument("distribution")
     @click.option("--model", default="claude-haiku-4-5", help="Claude model id.")
     @click.option(
@@ -313,6 +313,37 @@ def register_skills_commands(main_group):
             click.echo(render_markdown(result), nl=False)
         else:
             click.echo(_json.dumps(result, indent=2))
+
+    # Deprecated alias for backward compatibility.
+    @skills.command("self-explain", hidden=True)
+    @click.argument("distribution")
+    @click.option("--model", default="claude-haiku-4-5", help="Claude model id.")
+    @click.option(
+        "--runs", default=1, type=int, help="Runs per prompt (>1 returns lists)."
+    )
+    @click.option(
+        "--format",
+        "out_format",
+        type=click.Choice(["json", "markdown"]),
+        default="json",
+    )
+    @click.option("--json", "as_json", is_flag=True, default=False)
+    @click.pass_context
+    def skills_self_explain_alias(ctx, distribution, model, runs, out_format, as_json):
+        """Deprecated alias for `skills explain-self`.
+
+        \b
+        Example:
+            $ scitex-dev skills self-explain scitex-io
+        """
+        ctx.invoke(
+            skills_self_explain,
+            distribution=distribution,
+            model=model,
+            runs=runs,
+            out_format=out_format,
+            as_json=as_json,
+        )
 
     @skills.command("expand-tags")
     @click.argument("tag")
