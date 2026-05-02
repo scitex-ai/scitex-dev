@@ -374,72 +374,12 @@ else:
                 else:
                     click.echo(f"  {item}")
 
-    @main.command(
-        "rename",
-        hidden=True,
-        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
-    )
-    @click.pass_context
-    def rename_deprecated(ctx):
-        """(deprecated) Renamed to `rename-symbols`."""
-        click.echo(
-            "error: `scitex-dev rename` was renamed to `scitex-dev rename-symbols`.\n"
-            "Re-run with: scitex-dev rename-symbols <old> <new> [...]",
-            err=True,
-        )
-        ctx.exit(2)
+    # rename-symbols + the hidden `rename` deprecation alias live in
+    # _cli/_rename.py. Extracted to keep _root.py under the line budget
+    # and to give the bulk-rename surface a focused module to grow into.
+    from ._rename import register as _register_rename
 
-    @main.command("rename-symbols")
-    @click.argument("old_name")
-    @click.argument("new_name")
-    @click.option("--root", default=".", help="Root directory for rename.")
-    @click.option("--dry-run", is_flag=True, help="Preview without renaming.")
-    @click.option("--regex", is_flag=True, help="Treat pattern as Python regex.")
-    @click.option(
-        "--exclude",
-        multiple=True,
-        help="Exclude paths containing this substring. Repeatable.",
-    )
-    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-    def rename_symbols(old_name, new_name, root, dry_run, regex, exclude, as_json, yes):
-        """Bulk rename with cross-reference updates. Supports --regex for regex patterns.
-
-        \b
-        Example:
-            $ scitex-dev rename-symbols old_func new_func --dry-run
-            $ scitex-dev rename-symbols old_func new_func --yes
-            $ scitex-dev rename-symbols 'old_(\\w+)' 'new_\\1' --regex --dry-run
-        """
-        del yes  # accepted for §2; use --dry-run for preview, omit for apply
-        from ._utils import wrap_as_cli
-
-        extra_excludes = list(exclude) if exclude else []
-
-        if dry_run:
-            from .. import preview_rename
-
-            wrap_as_cli(
-                preview_rename,
-                as_json=as_json,
-                pattern=old_name,
-                replacement=new_name,
-                directory=root,
-                regex=regex,
-                extra_excludes=extra_excludes,
-            )
-        else:
-            from .. import execute_rename
-
-            wrap_as_cli(
-                execute_rename,
-                as_json=as_json,
-                pattern=old_name,
-                replacement=new_name,
-                directory=root,
-                regex=regex,
-                extra_excludes=extra_excludes,
-            )
+    _register_rename(main)
 
     # -------------------------------------------------------------------
     # Documentation commands
