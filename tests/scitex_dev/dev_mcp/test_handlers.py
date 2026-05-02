@@ -1,9 +1,8 @@
 """Smoke tests for scitex_dev.dev_mcp.handlers — exercise async handlers with mocks.
 
-The dev_mcp package depends on a `scitex_dev.mcp_utils` module that may not be
-present in every install (it's wired up by the MCP entry-point). If the import
-fails we skip the test rather than fail collection — PS202 only requires that
-this test file exists at the mirror path.
+handlers.py imports `wrap_as_mcp` from `scitex_dev._mcp` (the post-0.11
+collapsed package). If the import fails for any reason (e.g. partial
+install) we skip rather than fail collection.
 """
 
 from __future__ import annotations

@@ -10,7 +10,7 @@ All handlers return structured Result JSON via wrap_as_mcp.
 from __future__ import annotations
 
 
-from ..mcp_utils import wrap_as_mcp
+from .._mcp import wrap_as_mcp
 from ..types import Result
 
 
@@ -180,7 +180,7 @@ async def sync_handler(
     remote working copies that have unpushed commits so we never
     clobber work. Pass safe=False to force pull regardless.
     """
-    from ..sync import sync_all
+    from .._sync import sync_all
 
     return wrap_as_mcp(
         sync_all,
@@ -198,7 +198,7 @@ async def sync_local_handler(
     confirm: bool = False,
 ) -> str:
     """`pip install -e .` every SciTeX package in the local ecosystem — ensures imports resolve to the working-tree version, not the last PyPI release. Use whenever the user asks to "install all scitex packages in editable mode", "make pip see my local changes", "sync local editable installs", "reinstall after cloning fresh", or is fixing a version mismatch introduced by `pip install scitex`."""
-    from ..sync import sync_local
+    from .._sync import sync_local
 
     return wrap_as_mcp(
         sync_local,
@@ -213,7 +213,7 @@ async def remote_diff_handler(
     packages: list[str] | None = None,
 ) -> str:
     """SSH to each configured remote host and run `git status` / `git diff` across every SciTeX repo — surfaces work that still lives only on gpu01 / laptop / HPC. Use when the user asks "is anything uncommitted on my other machines?", "show remote diffs", "what have I changed on the HPC?", or before a sync to check for drift."""
-    from ..sync_remote import remote_diff
+    from .._sync import remote_diff
 
     return wrap_as_mcp(
         remote_diff,
@@ -231,7 +231,7 @@ async def remote_commit_handler(
     confirm: bool = False,
 ) -> str:
     """SSH to a remote host and `git commit` (+ optionally `git push`) dirty changes across SciTeX repos — useful for rescuing work left behind on an HPC session or another machine. Use when the user asks to "commit what's on gpu01", "save the HPC-side changes", "push remote work to origin", "grab that half-finished change I made on the lab server". Pass `confirm=True` to actually commit (default previews)."""
-    from ..sync_remote import remote_commit
+    from .._sync import remote_commit
 
     return wrap_as_mcp(
         remote_commit,
@@ -253,7 +253,7 @@ async def pull_local_handler(
     stash: bool = True,
 ) -> str:
     """`git pull` every local SciTeX repo from origin — with an optional `git stash` first to survive dirty trees. Drop-in replacement for walking each `~/proj/scitex-*` folder and running `git pull`. Use when the user asks to "update all my local scitex repos", "pull origin on every package", "sync local with GitHub", "stash and pull all scitex", or at session start."""
-    from ..sync_remote import pull_local
+    from .._sync import pull_local
 
     return wrap_as_mcp(
         pull_local,
