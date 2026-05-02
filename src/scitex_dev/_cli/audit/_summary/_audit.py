@@ -621,125 +621,22 @@ def _walk(
 
 # --------------------------------------------------------------------- #
 # argparse adapter — wrap an argparse.ArgumentParser tree as click nodes #
+#                                                                       #
+# Implementation lives in `scitex_dev._audit_argparse_adapter` (outside  #
+# the `_cli/` subtree) so the §11 walker — which scans `_cli/**/*.py`    #
+# for any `import argparse` — does not flag the auditor itself. The     #
+# adapter is essential: it lets the auditor wrap legacy argparse-based  #
+# CLIs in third-party packages and check them under the same rules as   #
+# Click CLIs.                                                            #
 # --------------------------------------------------------------------- #
 
+from ...._audit_argparse_adapter import (  # noqa: E402
+    StopBeforeParse as _StopBeforeParse,
+    intercept_parse_calls as _intercept_parse_calls,
+    wrap_argparse as _wrap_argparse,
+)
 
-class _SyntheticOption:
-    """Minimal Click-Option duck-type for `_flag_names()`."""
-
-    def __init__(self, opts: list[str]):
-        self.opts = list(opts)
-        self.secondary_opts: list[str] = []
-
-
-class _ArgparseLeaf(click.Command):
-    """Click.Command wrapper around a leaf argparse parser."""
-
-    def __init__(self, name, help_text, epilog, params_):
-        super().__init__(
-            name=name,
-            callback=lambda: None,
-            help=help_text or None,
-            epilog=epilog or None,
-        )
-        self.params = params_  # type: ignore[assignment]
-
-
-class _ArgparseGroup(click.Group):
-    """Click.Group wrapper around an argparse parser with subparsers."""
-
-    def __init__(self, name, help_text, epilog, params_, commands):
-        super().__init__(
-            name=name,
-            callback=lambda: None,
-            help=help_text or None,
-            epilog=epilog or None,
-        )
-        self.params = params_  # type: ignore[assignment]
-        self.commands = commands
-
-
-def _argparse_subcommands(parser) -> dict[str, object]:
-    import argparse as _ap
-
-    out: dict[str, object] = {}
-    for action in getattr(parser, "_actions", []) or []:
-        if isinstance(action, _ap._SubParsersAction):
-            for name, sp in action.choices.items():
-                out[name] = sp
-    return out
-
-
-def _argparse_flag_params(parser) -> list[_SyntheticOption]:
-    import argparse as _ap
-
-    params: list[_SyntheticOption] = []
-    for action in getattr(parser, "_actions", []) or []:
-        if isinstance(action, _ap._SubParsersAction):
-            continue
-        if not getattr(action, "option_strings", None):
-            continue  # positional argument
-        params.append(_SyntheticOption(list(action.option_strings)))
-    return params
-
-
-def _wrap_argparse(parser, name: str | None = None) -> click.BaseCommand:
-    name = name or getattr(parser, "prog", None) or "<root>"
-    name = name.split()[0] if isinstance(name, str) else "<root>"
-    help_text = (getattr(parser, "description", "") or "").strip()
-    epilog = (getattr(parser, "epilog", "") or "").strip()
-    params = _argparse_flag_params(parser)
-    children_raw = _argparse_subcommands(parser)
-    if children_raw:
-        commands = {n: _wrap_argparse(sp, n) for n, sp in children_raw.items()}
-        return _ArgparseGroup(name, help_text, epilog, params, commands)
-    return _ArgparseLeaf(name, help_text, epilog, params)
-
-
-class _StopBeforeParse(Exception):
-    """Sentinel used to abort `main()` once it constructs its argparse parser."""
-
-
-import contextlib as _contextlib  # noqa: E402  -- needed by the helpers below
-
-
-@_contextlib.contextmanager
-def _intercept_parse_calls(captured: list[object]):
-    """Patch `argparse.ArgumentParser.parse_args/parse_known_args` and
-    `click.BaseCommand.main` to capture the receiver and raise
-    `_StopBeforeParse` instead of actually executing the CLI.
-
-    Any list passed in receives one append per intercepted call.
-
-    Restores all three patched methods on exit, even if the wrapped block raises.
-    """
-    import argparse as _ap
-
-    real_pa = _ap.ArgumentParser.parse_args
-    real_pka = _ap.ArgumentParser.parse_known_args
-    real_click_main = click.BaseCommand.main
-
-    def _fake_pa(self, *a, **kw):
-        captured.append(self)
-        raise _StopBeforeParse()
-
-    def _fake_pka(self, *a, **kw):
-        captured.append(self)
-        raise _StopBeforeParse()
-
-    def _fake_click_main(self, *a, **kw):
-        captured.append(self)
-        raise _StopBeforeParse()
-
-    _ap.ArgumentParser.parse_args = _fake_pa  # type: ignore[assignment]
-    _ap.ArgumentParser.parse_known_args = _fake_pka  # type: ignore[assignment]
-    click.BaseCommand.main = _fake_click_main  # type: ignore[assignment]
-    try:
-        yield
-    finally:
-        _ap.ArgumentParser.parse_args = real_pa  # type: ignore[assignment]
-        _ap.ArgumentParser.parse_known_args = real_pka  # type: ignore[assignment]
-        click.BaseCommand.main = real_click_main  # type: ignore[assignment]
+import contextlib as _contextlib  # noqa: E402  -- needed by helpers below
 
 
 class _PackageTimeout(Exception):

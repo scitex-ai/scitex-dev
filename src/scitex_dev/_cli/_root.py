@@ -445,7 +445,7 @@ else:
     # Documentation commands
     # -------------------------------------------------------------------
 
-    from ._dispatch import docs_click_group
+    from .._dispatch import docs_click_group
 
     docs_grp = docs_click_group(package="scitex-dev")
     main.add_command(docs_grp)

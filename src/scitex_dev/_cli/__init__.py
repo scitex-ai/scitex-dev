@@ -4,7 +4,6 @@
 
 Module map:
 - `_root`        — top-level Click group `main` (the `scitex-dev` console script entry point)
-- `_dispatch`    — reusable docs/skills mixins for downstream packages
 - `_utils`       — `handle_result`, `run_as_cli`, `wrap_as_cli`, json/dry-run option helpers
 - `_completion`  — shell tab-completion installer
 - `_doctor`      — `scitex-dev doctor`
