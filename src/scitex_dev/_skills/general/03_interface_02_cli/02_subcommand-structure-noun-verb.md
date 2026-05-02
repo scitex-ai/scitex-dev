@@ -90,11 +90,38 @@ The `scitex-dev ecosystem audit-cli` linter ([07_audit-cli.md](07_audit-cli.md))
 ## Anti-patterns
 
 ```
-<cli> list                              # bare transitive verb
+<cli> list                              # bare transitive verb (no object)
 <cli> dashboard                         # trailing noun (use start-dashboard)
 <cli> create resource <name>            # verb before noun
 <cli> resource send heartbeat           # compound verb split
 ```
+
+## Exception — verb with required positional object
+
+A bare transitive verb at the top level is **acceptable** when it
+takes its object as a required positional argument:
+
+```
+<cli> install <pkg>                     # ok — object is the positional
+<cli> commit -m "..."                   # ok — same shape
+<cli> verify <SOURCE>                   # ok — SOURCE is the object
+```
+
+Compare `pip install <pkg>`, `git commit`, `pytest <path>` — ergonomic,
+unambiguous, no `<verb>-<noun>` clutter. The auditor's §1 rule has a
+matching exception (`_has_required_positional`): if the leaf declares
+at least one required positional argument, the warning is suppressed.
+
+This means the design choice between
+`<cli> verify-package <SOURCE>` (hyphenated compound) and
+`<cli> verify <SOURCE>` (verb + positional) is up to taste. **Both pass
+the audit.** Pick the one that reads better to your users — for action
+verbs whose object is *the* positional, the second form is almost
+always cleaner.
+
+Pure pytest-style — `<cli> <SOURCE>` with no verb at all (positional
+on the group itself) — is also fine and even more concise; pick this
+when there's a single dominant action and verbs would just be noise.
 
 ## Rationale
 

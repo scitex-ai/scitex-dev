@@ -491,6 +491,22 @@ def _check_universal_flags(
             )
 
 
+def _has_required_positional(cmd: click.BaseCommand) -> bool:
+    """True iff ``cmd`` declares at least one required positional argument.
+
+    A bare transitive verb at the top level is acceptable when it takes
+    its object as a positional argument (`<cli> <verb> <OBJECT>`) — the
+    object is right there, just not concatenated into the subcommand
+    name. Compare ``pip install <pkg>``, ``git commit -m``, ``pytest
+    <path>``: ergonomic, unambiguous, no `<verb>-<noun>` clutter. The
+    auditor's §1 rule recognises this shape and skips the warning.
+    """
+    for p in getattr(cmd, "params", []) or []:
+        if isinstance(p, click.Argument) and getattr(p, "required", False):
+            return True
+    return False
+
+
 def _walk(
     cmd: click.BaseCommand,
     path: list[str],
@@ -547,13 +563,16 @@ def _walk(
                 and not is_compound
                 and len(path) == 1
                 and "noun" not in labels
+                and not _has_required_positional(cmd)
             ):
                 out.append(
                     Violation(
                         full,
                         "§1",
                         f"bare transitive verb at top level — needs an object; "
-                        f"use '{name}-<object>' or nest under a noun",
+                        f"use '{name}-<object>' or nest under a noun, OR add "
+                        f"a required positional argument that IS the object "
+                        f"(e.g. '{name} <SOURCE>')",
                     )
                 )
         else:

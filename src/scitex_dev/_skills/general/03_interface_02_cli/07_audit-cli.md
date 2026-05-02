@@ -28,7 +28,7 @@ scitex-dev ecosystem audit-cli <package-name> --behavioral   # also run subproce
 ## What it flags (warn-only)
 
 - §1 leaf token is a noun without a verb (`<cli> dashboard` → suggests `start-dashboard`).
-- §1 bare transitive verb at top level (`<cli> list` → demands `list-<object>`).
+- §1 bare transitive verb at top level (`<cli> list` → demands `list-<object>`). **Exception:** if the verb declares a required positional argument (`<cli> install <pkg>`), the object is right there; the warning is suppressed.
 - §1 group (non-leaf) token is a verb (groups must be nouns).
 - §1a missing introspection commands (`list-python-apis`, `mcp list-tools`) and their `--json` flag.
 - §1b banned bare leaves (`version`, `completion`).
