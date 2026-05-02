@@ -366,6 +366,18 @@ RULES: dict[str, Rule] = {
             "placeholder-only test (no `def test_` or `class Test`)",
         ),
         Rule(
+            "PS210",
+            "§2",
+            (
+                "`[dev]` extras incomplete — an optional `[X]` extra dep is "
+                "imported unguarded by the test suite but missing from `[dev]` "
+                "(see _skills/general/01_ecosystem_02_dependency-and-version-"
+                "pinning.md `[dev]` extras completeness — fastmcp lesson, "
+                "2026-05-02). A bare `pip install -e .[dev]` will fail at "
+                "test-collection."
+            ),
+        ),
+        Rule(
             "PS207",
             "§2",
             (
@@ -1134,6 +1146,9 @@ def audit_project(
     from ._check_examples import check_examples_conventions
 
     check_examples_conventions(repo_root, Violation, violations)
+    from ._check_dev_extras_complete import check_dev_extras_complete
+
+    check_dev_extras_complete(repo_root, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]

@@ -78,7 +78,15 @@ test bug; **LOW** cosmetic. Full cookbook (~18 patterns):
 
 Leaf packages (scitex-io, scitex-stats, etc.) MUST NOT import the
 `scitex` umbrella in their tests — only in `scripts/` or `examples/`.
-Cross-package imports use `pytest.importorskip`.
+Cross-**scitex**-package imports use `pytest.importorskip` so a clean
+sibling-less venv still collects.
+
+> Optional 3rd-party deps that power *this* package's own feature
+> (e.g. `fastmcp` for a package's own MCP server) follow the opposite
+> rule: include them in `[dev]` and run the tests unconditionally. The
+> full boundary lives in
+> [01_ecosystem_02_dependency-and-version-pinning.md `[dev]` extras
+> completeness](01_ecosystem_02_dependency-and-version-pinning.md).
 
 **Check:** `scripts/audit_test_scope.py --projects-root $HOME/proj` in
 scitex-python. Reports every test-level `import scitex` / bare sibling.
