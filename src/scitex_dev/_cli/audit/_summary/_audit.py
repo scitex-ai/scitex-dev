@@ -1520,14 +1520,30 @@ def _check_cli_framework(package: str, out: list[Violation]) -> None:
     from pathlib import Path as _P
 
     ep_file = _P(spec.origin)
-    # Audit the entry-point file + every other .py in its directory
-    # (the package's _cli/ submodule typically lives next to it).
-    cli_dir = ep_file.parent
-    py_files = [ep_file] + [
-        p
-        for p in cli_dir.rglob("*.py")
-        if p != ep_file and "__pycache__" not in p.parts
-    ]
+    # Walk only files that are actually part of the CLI tree:
+    #   * the entry-point file itself
+    #   * every .py under a `_cli/` subdir of the entry-point's parent
+    #     (the canonical Click submodule layout: pkg/_cli/__init__.py
+    #     plus pkg/_cli/_*.py command files)
+    # Recursing into the whole package root produced false positives for
+    # stats library files (posthoc/_*.py), linter rule modules, even
+    # this auditor itself — none of those are CLI entry-points and any
+    # argparse import there is unrelated to §11.
+    py_files = [ep_file]
+    cli_subdir = ep_file.parent / "_cli"
+    if cli_subdir.is_dir():
+        py_files += [
+            p
+            for p in cli_subdir.rglob("*.py")
+            if p != ep_file and "__pycache__" not in p.parts
+        ]
+    elif ep_file.parent.name == "_cli":
+        # Entry-point already lives inside _cli/ — sweep its siblings.
+        py_files += [
+            p
+            for p in ep_file.parent.rglob("*.py")
+            if p != ep_file and "__pycache__" not in p.parts
+        ]
 
     import re as _re
 
