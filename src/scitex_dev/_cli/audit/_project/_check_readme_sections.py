@@ -232,6 +232,29 @@ def _readme_is_substantive(readme: Path) -> bool:
         return False
 
 
+def _is_external_lib_repo(repo: Path) -> bool:
+    """True iff ``repo``'s absolute path matches an ECOSYSTEM entry whose
+    category is ``external-lib`` (figrecipe, socialia, newb,
+    crossref-local, openalex-local, …) — packages that intentionally
+    sit outside the ``scitex.<module>`` umbrella and so shouldn't be
+    held to PS120's umbrella one-liner.
+    """
+    try:
+        from scitex_dev._ecosystem._core import ECOSYSTEM
+    except Exception:
+        return False
+    target = str(Path(repo).expanduser().resolve())
+    for info in ECOSYSTEM.values():
+        if info.get("category") != "external-lib":
+            continue
+        local = info.get("local_path")
+        if not local:
+            continue
+        if str(Path(local).expanduser().resolve()) == target:
+            return True
+    return False
+
+
 def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
     """Append PS107 / PS109 / PS110 / PS111 / PS112 violations.
 
@@ -536,7 +559,13 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
     #   - `pip install scitex[<extra>]`
     #   - a `scitex.<module>` Python alias in backticks
     #   - a `scitex <subcommand>` CLI alias in backticks
-    if pos_part is not None:
+    #
+    # Skip for `external-lib` category packages (figrecipe, socialia,
+    # newb, crossref-local, openalex-local, …) — they intentionally
+    # don't fold under the `scitex.<module>` umbrella; demanding the
+    # tokens produces false positives. Built-in `library` and `umbrella`
+    # entries still get checked.
+    if pos_part is not None and not _is_external_lib_repo(repo):
         window = full[pos_part.end() : pos_part.end() + _PART_OF_UMBRELLA_LOOKAHEAD]
         missing_bits: list[str] = []
         if not _RE_UMBRELLA_INSTALL.search(window):
