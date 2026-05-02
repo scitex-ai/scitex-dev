@@ -1746,6 +1746,23 @@ def run_audit(
     timeout: float = 30.0,
 ) -> int:
     """Audit a single package (single-target mode)."""
+    # Archived packages are read-only history — skip like audit-project does.
+    try:
+        from ...._ecosystem import ECOSYSTEM
+    except ImportError:
+        ECOSYSTEM = {}
+    if ECOSYSTEM.get(package, {}).get("archived"):
+        if output_json:
+            rec = {
+                "package": package,
+                "status": "archived",
+                "violations": [],
+            }
+            _emit_json([rec], registry_provenance or "single-package mode")
+        else:
+            click.echo(f"skip  {package}: archived")
+        return 0
+
     status, violations = _audit_one(package, behavioral=behavioral, timeout=timeout)
     violations = _filter_violations(violations, rules, exclude, min_severity)
     if not violations and status == "warn":

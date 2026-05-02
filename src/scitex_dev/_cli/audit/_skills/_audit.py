@@ -340,6 +340,30 @@ def audit_skills(
     int
         Exit code: 0 = no violations, 1 = violations, 2 = could not locate.
     """
+    # Archived packages are read-only history — skip like audit-project does.
+    try:
+        from ...._ecosystem import ECOSYSTEM
+    except ImportError:
+        ECOSYSTEM = {}
+    if ECOSYSTEM.get(distribution, {}).get("archived"):
+        if json_out:
+            import json
+
+            click.echo(
+                json.dumps(
+                    {
+                        "distribution": distribution,
+                        "skills_dir": None,
+                        "archived": True,
+                        "violations": [],
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            click.echo(f"skip  {distribution}: archived")
+        return 0
+
     skills_dir = _locate_skills_dir(distribution)
     violations: list[Violation] = []
 

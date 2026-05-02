@@ -508,6 +508,30 @@ def audit_api(
     int
         Exit code: 0 = no violations, 1 = violations, 2 = could not import.
     """
+    # Archived packages are read-only history — skip like audit-project does.
+    try:
+        from ...._ecosystem import ECOSYSTEM
+    except ImportError:
+        ECOSYSTEM = {}
+    if ECOSYSTEM.get(distribution, {}).get("archived"):
+        if json_out:
+            import json
+
+            click.echo(
+                json.dumps(
+                    {
+                        "distribution": distribution,
+                        "init": None,
+                        "archived": True,
+                        "violations": [],
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            click.echo(f"skip  {distribution}: archived")
+        return 0
+
     import_name = _import_name(distribution)
     init_path = _locate_init(import_name)
     if init_path is None:
