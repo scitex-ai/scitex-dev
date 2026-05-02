@@ -254,6 +254,27 @@ def _readme_is_substantive(readme: Path) -> bool:
         return False
 
 
+def _has_console_script(repo: Path) -> bool:
+    """True iff the package's pyproject.toml registers any
+    ``[project.scripts]`` entry. Used to skip PS120's ``scitex <subcommand>``
+    CLI-token requirement on library-only packages — demanding a CLI alias
+    when no CLI exists would force a misleading lint-satisfaction edit.
+    """
+    pyproj = repo / "pyproject.toml"
+    if not pyproj.is_file():
+        return False
+    try:
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib  # type: ignore[no-redef]
+        data = tomllib.loads(pyproj.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    scripts = (data.get("project") or {}).get("scripts") or {}
+    return bool(scripts)
+
+
 def _is_external_lib_repo(repo: Path) -> bool:
     """True iff ``repo``'s absolute path matches an ECOSYSTEM entry whose
     category is ``external-lib`` (figrecipe, socialia, newb,
@@ -621,7 +642,7 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
             missing_bits.append("`pip install scitex[<extra>]`")
         if not _RE_UMBRELLA_PYTHON.search(window):
             missing_bits.append("`scitex.<module>`")
-        if not _RE_UMBRELLA_CLI.search(window):
+        if not _RE_UMBRELLA_CLI.search(window) and _has_console_script(repo):
             missing_bits.append("`scitex <subcommand>`")
         if missing_bits:
             out.append(
