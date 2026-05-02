@@ -10,6 +10,7 @@
 on:
   # Pre-tool-use hooks
   limit_line_numbers.sh
+  enforce_background_subagents.sh
 
   # Post-tool-use hooks
   ensure_executable.sh

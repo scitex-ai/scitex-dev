@@ -34,3 +34,6 @@ Project structure split into one leaf per top-level directory:
 - [02_research-project_05_project-structure-examples.md](02_research-project_05_project-structure-examples.md) — Numbered examples + `_out/` artefacts; how research-project examples differ from package examples
 - [02_research-project_06_project-structure-tests.md](02_research-project_06_project-structure-tests.md) — `tests/scripts/` mandatory parent, allowed subdirs, public/private mirroring, `audit-project` rules
 - [02_research-project_07_config-and-parameters.md](02_research-project_07_config-and-parameters.md) — `@stx.session` and the `CONFIG` object (`SDIR_OUT`, `SDIR_RUN`, YAML deep-merge, CLI/env overrides). Use when adding parameters to a script, debugging config resolution, or auditing an experiment for reproducibility.
+
+### 3. Reporting
+- [03_reporting_01_pdf-reports.md](03_reporting_01_pdf-reports.md) — Recurring scientific PDF analysis reports — timestamped filenames, mandatory section structure, navigable bookmarks (`fpdf2` / `pikepdf`), aspect-preserving figure embedding, size management for email (<10 MB, DPI/ghostscript/split), and delivery tracking via email + issue-tracker comment.

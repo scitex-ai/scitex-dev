@@ -1,11 +1,9 @@
 #!/bin/bash
 # -*- coding: utf-8 -*-
-# Timestamp: "2026-02-16 09:18:05 (ywatanabe)"
+# Timestamp: "2026-04-10 09:13:10 (ywatanabe)"
 # File: ./src/.claude/to_claude/hooks/pre-tool-use/limit_line_numbers.sh
 
-THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOG_PATH="$THIS_DIR/.$(basename "$0").log"
-echo >"$LOG_PATH" 2>/dev/null || true
+GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 
 GRAY='\033[0;90m'
 GREEN='\033[0;32m'
@@ -19,6 +17,10 @@ echo_warning() { echo -e "${YELLOW}WARN: $1${NC}"; }
 echo_error() { echo -e "${RED}ERRO: $1${NC}"; }
 echo_header() { echo_info "=== $1 ==="; }
 # ---------------------------------------
+
+THIS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOG_PATH="$THIS_DIR/.$(basename "$0").log"
+echo >"$LOG_PATH" 2>/dev/null || true
 
 # Description: Claude Code hook to enforce file size limits
 
@@ -67,7 +69,7 @@ THRESHOLD_PY=512
 THRESHOLD_CSS=512
 THRESHOLD_HTML=1024
 THRESHOLD_MARKDOWN=512
-REFACTORING_MD="./GITIGNORED/REFACTORING.md"
+REFACTORING_MD="$GIT_ROOT/GITIGNORED/REFACTORING.md"
 
 # Parse JSON using Python - outputs tab-separated values with line counts
 # Capture output and exit code separately to properly handle parse failures
@@ -145,6 +147,27 @@ if [ "$CURRENT" -gt "$THRESHOLD" ] && [ "$PROPOSED" -lt "$CURRENT" ]; then
     exit 0
 fi
 
+# Active refactoring — bypass line limit. The companion notice hook
+# (notify_refactoring_md.sh) emits the active-refactor banner using
+# the SAME file + SAME emptiness rule (any non-blank line counts as
+# an active entry). Keep these two checks in sync — they are the
+# matched pair operators rely on. Empty / whitespace-only file does
+# NOT bypass: a blank REFACTORING.md is treated as "no active
+# refactor" so a stale empty file can't keep the limit suspended.
+if [ -f "$REFACTORING_MD" ] && [ -s "$REFACTORING_MD" ] &&
+    grep -q '[^[:space:]]' "$REFACTORING_MD" 2>/dev/null; then
+    exit 0
+fi
+
+# Self-clean: if REFACTORING.md exists but is empty / whitespace-only,
+# delete it. Keeps GITIGNORED/ tidy — notify_refactoring_md.sh does the
+# same on its code path. Safe because scan_oversized --apply recreates
+# it on demand.
+if [ -f "$REFACTORING_MD" ] && { [ ! -s "$REFACTORING_MD" ] ||
+    ! grep -q '[^[:space:]]' "$REFACTORING_MD" 2>/dev/null; }; then
+    rm -f "$REFACTORING_MD" 2>/dev/null || true
+fi
+
 # Block any change that leaves file above threshold
 if [ "$PROPOSED" -gt "$THRESHOLD" ]; then
     {
@@ -158,14 +181,39 @@ if [ "$PROPOSED" -gt "$THRESHOLD" ]; then
         echo "  - HTML:     max $THRESHOLD_HTML lines"
         echo "  - MD:       max $THRESHOLD_MARKDOWN lines"
         echo ""
-        echo "Action required:"
-        echo "  1.  Document context in $REFACTORING_MD"
-        echo "  2.  Refactor into small files, preparing thin orchestrator."
-        echo "  2.1 Following convensions in the project"
-        echo "  2.2 Use subdirectories wisely"
-        echo "  2.3 DO NOT PATCH WITH WORKAROUND LIKE DELETING LINES"
-        echo "  2.4 Linters may add additional lines"
-        echo "  3.  Delete $REFACTORING_MD after completion"
+        echo "Refactoring required (do this BEFORE the blocked edit):"
+        echo ""
+        echo "  Step 0. PAUSE the current task. This refactor takes priority."
+        echo "          Do not attempt to bypass by squeezing/deleting lines."
+        echo ""
+        echo "  Step 1. Create $REFACTORING_MD and write:"
+        echo "            - the file you're refactoring"
+        echo "            - the split plan (which logical groups → which new files/dirs)"
+        echo "          While this file exists with non-blank content, the line"
+        echo "          limit is suspended so you can land the refactor."
+        echo ""
+        echo "  Step 2. Split the oversized file into focused modules:"
+        echo "            - one cohesive responsibility per file"
+        echo "            - leave the original as a thin orchestrator that"
+        echo "              re-exports the public API (preserves imports)"
+        echo "            - group related new files under a subdirectory when"
+        echo "              ≥3 files share a common prefix or theme"
+        echo "            - follow the project's existing naming conventions"
+        echo "            - do not delete code or hide it behind workarounds;"
+        echo "              line shrink must come from genuine extraction"
+        echo "          Note: linters/formatters may add lines on save —"
+        echo "          aim well below the threshold, not exactly at it."
+        echo ""
+        echo "  Step 2.5. Check the surrounding directory while you're here."
+        echo "            If sibling files show the same smell that produced"
+        echo "            this oversized file (flat clusters of files sharing"
+        echo "            a common prefix, parallel modules with duplicated"
+        echo "            scaffolding, etc.), refactor them in the same pass."
+        echo "            One coherent reorganization is better than fixing"
+        echo "            the same shape five times across five separate PRs."
+        echo ""
+        echo "  Step 3. Verify (tests pass, imports still resolve), then"
+        echo "          delete $REFACTORING_MD to re-arm the limit."
     } >&2
     exit 2
 fi

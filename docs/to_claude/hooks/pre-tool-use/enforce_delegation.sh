@@ -118,8 +118,38 @@ if [[ "${1:-}" == "--self-test" ]]; then
         echo "  FAIL: hook-bypass comment — expected allow (exit 0), got exit $rc"
     fi
 
-    # Test 10: quick-lookup cat — ALLOW
-    result=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"cat /etc/hostname"},"cwd":"/tmp","session_id":"test","tool_use_id":"t10"}' | "$0" 2>&1) && rc=$? || rc=$?
+    # Test 10: sleep command without background — BLOCK
+    result=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"sleep 5"},"cwd":"/tmp","session_id":"test","tool_use_id":"t10a"}' | "$0" 2>&1) && rc=$? || rc=$?
+    if [[ $rc -eq 2 ]] && echo "$result" | grep -q "sleep command detected"; then
+        ((pass++))
+        echo "  PASS: sleep command — blocked"
+    else
+        ((fail++))
+        echo "  FAIL: sleep command — expected block exit 2 with sleep message, got exit $rc"
+    fi
+
+    # Test 10b: sleep in chained command — BLOCK
+    result=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"sleep 5 && cat /tmp/file","timeout":7000},"cwd":"/tmp","session_id":"test","tool_use_id":"t10b"}' | "$0" 2>&1) && rc=$? || rc=$?
+    if [[ $rc -eq 2 ]] && echo "$result" | grep -q "sleep command detected"; then
+        ((pass++))
+        echo "  PASS: sleep in chained command — blocked"
+    else
+        ((fail++))
+        echo "  FAIL: sleep in chained command — expected block exit 2 with sleep message, got exit $rc"
+    fi
+
+    # Test 10c: sleep with run_in_background=true — ALLOW
+    result=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"sleep 10 && echo done","run_in_background":true},"cwd":"/tmp","session_id":"test","tool_use_id":"t10c"}' | "$0" 2>&1) && rc=$? || rc=$?
+    if [[ $rc -eq 0 ]]; then
+        ((pass++))
+        echo "  PASS: sleep with run_in_background=true — allowed"
+    else
+        ((fail++))
+        echo "  FAIL: sleep with run_in_background=true — expected allow (exit 0), got exit $rc"
+    fi
+
+    # Test 10d: quick-lookup cat — ALLOW
+    result=$(printf '%s' '{"tool_name":"Bash","tool_input":{"command":"cat /etc/hostname"},"cwd":"/tmp","session_id":"test","tool_use_id":"t10d"}' | "$0" 2>&1) && rc=$? || rc=$?
     if [[ $rc -eq 0 ]]; then
         ((pass++))
         echo "  PASS: quick-lookup cat — allowed without timeout"
@@ -158,9 +188,22 @@ fi
 
 # Only enforce in master agent (orchestrator) context.
 # Subagents are allowed to run long commands directly.
-if [[ "${CLAUDE_ORCHESTRATOR:-}" != "1" ]] && [[ ! -f /tmp/.claude_orchestrator_flag ]]; then
-    exit 0
-fi
+# Activates on either:
+#   * CLAUDE_ORCHESTRATOR=1  (legacy explicit flag)
+#   * /tmp/.claude_orchestrator_flag present
+#   * CLAUDE_AGENT_ROLE matches an interface/orchestrator role
+#     (lead, head-*, telegram — anything that owns a user-facing
+#     latency budget and must delegate heavy Bash to the background)
+case "${CLAUDE_AGENT_ROLE:-}" in
+lead | head-* | telegram | proj-*)
+    # Treated as orchestrator — fall through to enforce.
+    ;;
+*)
+    if [[ "${CLAUDE_ORCHESTRATOR:-}" != "1" ]] && [[ ! -f /tmp/.claude_orchestrator_flag ]]; then
+        exit 0
+    fi
+    ;;
+esac
 
 # Read input from stdin
 INPUT="$(cat)"
@@ -204,6 +247,22 @@ RUN_IN_BG="$(echo "$PARSED" | cut -f4)"
 # Allow if run_in_background is true
 if [[ "$RUN_IN_BG" == "True" ]]; then
     exit 0
+fi
+
+# BLOCK sleep commands — they hang the orchestrator regardless of timeout
+# (run_in_background=true was already allowed above, so this only catches foreground sleep)
+if echo "$COMMAND" | grep -qE '(^|[;&|]\s*)sleep\s'; then
+    echo "BLOCKED: sleep command detected. Use run_in_background: true instead of sleep." >&2
+    echo "" >&2
+    echo "Command: ${COMMAND:0:120}" >&2
+    echo "" >&2
+    echo "Options:" >&2
+    echo "  1. Add run_in_background: true to the Bash tool call" >&2
+    echo "  2. Delegate to a subagent via Agent tool" >&2
+    echo "  3. Remove the sleep entirely" >&2
+    echo "" >&2
+    echo "Bypass: add '# hook-bypass: delegation' in the command" >&2
+    exit 2
 fi
 
 # Allow if timeout is set and <= 7000ms

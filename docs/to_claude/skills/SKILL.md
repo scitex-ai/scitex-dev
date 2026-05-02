@@ -1,6 +1,6 @@
 ---
 name: skills-overview
-description: Master index of all available skills for development workflows. Use when needing guidance on which skill to apply or when starting work on any project.
+description: ALWAYS invoke this skill at the start of any task to pick the right specialized skill. Do not begin development work without consulting this master index first.
 ---
 
 # Skills Overview
@@ -34,7 +34,7 @@ automated-research-demo   github.com/ywatanabe1989/automated-research-demo
 scitex-research-template  github.com/ywatanabe1989/scitex-research-template
 pip-project-template      github.com/ywatanabe1989/pip-project-template
 scitex-container          github.com/ywatanabe1989/scitex-container
-scitex-ssh                github.com/ywatanabe1989/scitex-ssh
+scitex-tunnel             github.com/ywatanabe1989/scitex-tunnel
 scitex-ui                 github.com/ywatanabe1989/scitex-ui
 scitex-app                github.com/ywatanabe1989/scitex-app
 scitex-audio              github.com/ywatanabe1989/scitex-audio

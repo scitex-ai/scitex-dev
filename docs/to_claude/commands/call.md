@@ -1,2 +1,5 @@
+## Requied Skills
+@~/.claude/skills/scitex/scitex-notification/cli-reference.md
+
 #### Alarm Call
-User might be sleeping. When you speak more than 10 times but no response returned by the user, please call to the user, me (+61-461-522-907).
+User might be sleeping. When you speak more than $ARGUMENTS times (default: 7 times) but no response returned, please make a phone call to the user.

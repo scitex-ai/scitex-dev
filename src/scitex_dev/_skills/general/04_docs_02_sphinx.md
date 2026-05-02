@@ -108,6 +108,21 @@ enforces the canonical setup:
 | PS126 | `docs/sphinx/requirements.txt` pins the canonical doc deps                        |
 | PS127 | `pyproject.toml [project.urls]` has `Documentation = "https://<pkg>.readthedocs.io"` |
 
+## GitHub language stats — mark `_sphinx_html/` as generated
+
+Once `_sphinx_html/` is committed, GitHub's Linguist will misclassify
+the repo as "HTML" because the bundle outweighs the Python source.
+Add a `.gitattributes` line to exclude it:
+
+```
+# Sphinx-generated docs bundle — exclude from GitHub language stats.
+src/*/_sphinx_html/** linguist-generated
+```
+
+`linguist-generated` is the honest tag (the directory is generated from
+`docs/sphinx/*.rst` by sphinx-build); `linguist-vendored` would also
+work but signals "third-party code", which it isn't.
+
 ## CRITICAL: do NOT gitignore `src/<pkg>/_sphinx_html/`
 
 The legacy `.gitignore` template often included `src/*/_sphinx_html/`
