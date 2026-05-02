@@ -33,6 +33,7 @@ Canonical CLI rules for every `scitex-*` package. Split into focused files; load
 | [14_stdout-stderr.md](14_stdout-stderr.md)                                                        | §8 — stream discipline                                             |
 | [15_audit-checklist.md](15_audit-checklist.md)                                                    | §9 — manual audit checklist                                        |
 | [16_example.md](16_example.md)                                                                    | Reference CLI shape (`scitex-plt`)                                 |
+| [17_option-positional-ordering.md](17_option-positional-ordering.md)                              | §10 — options on either side of positional must both parse (PS134) |
 
 ## Cross-references
 

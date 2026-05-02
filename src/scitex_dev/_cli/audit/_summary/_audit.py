@@ -1416,6 +1416,64 @@ def _extract_names(payload) -> set[str]:
     return set()
 
 
+def _check_option_positional_ordering(
+    package: str, root: click.BaseCommand, out: list[Violation]
+) -> None:
+    """§10 — options on either side of the SOURCE positional must work.
+
+    Click's ``invoke_without_command=True`` group with a positional
+    argument treats anything *after* the positional as a subcommand
+    name, so the natural ``cli <SOURCE> --flag value`` form crashes.
+    The fix is a pre-Click ``argv`` reorder hook wired into the
+    console-script entry (and ``__main__.py``).
+
+    Static check (no subprocess): when the root command is a Click
+    Group with ``invoke_without_command=True`` AND has a top-level
+    positional argument, the registered console-script value must NOT
+    point at the click group itself — it must point at a wrapper
+    function (commonly ``cli_entrypoint``) that calls
+    ``sys.argv[1:] = _reorder_argv(sys.argv[1:])`` before handing off
+    to the group. See `interface-cli-option-positional-ordering`.
+    """
+    if not isinstance(root, click.Group):
+        return
+    if not getattr(root, "invoke_without_command", False):
+        return
+    if not _has_required_positional(root) and not any(
+        isinstance(p, click.Argument) for p in (root.params or [])
+    ):
+        return
+    ep_value = _ep_value_for(package)
+    if ep_value is None:
+        return
+    # Resolve the entry-point object and compare against the click group.
+    mod_name, _, obj_name = ep_value.partition(":")
+    try:
+        import importlib
+
+        mod = importlib.import_module(mod_name)
+        ep_obj = getattr(mod, obj_name, None)
+    except Exception:
+        return
+    # If the entry-point IS the click group (or one of its standard
+    # decorated forms), there's no chance to rewrite argv.
+    if ep_obj is root or (
+        isinstance(ep_obj, click.BaseCommand) and ep_obj.name == root.name
+    ):
+        out.append(
+            Violation(
+                package,
+                "§10",
+                f"top-level group has a positional but the console-script "
+                f"entry ({ep_value}) is the click group itself — "
+                f"`cli <SOURCE> --flag value` will fail with 'No such "
+                f"command'. Wire a `cli_entrypoint()` wrapper that "
+                f"reorders sys.argv before calling the group "
+                f"(see interface-cli-option-positional-ordering).",
+            )
+        )
+
+
 def _check_cli_framework(package: str, out: list[Violation]) -> None:
     """§11 — CLI framework conformance.
 
@@ -1637,6 +1695,7 @@ def _audit_one(
     _scan_env_vars(package, out)
     _check_startup_speed(package, out)
     _check_cli_framework(package, out)
+    _check_option_positional_ordering(package, cmd, out)
     if behavioral:
         _check_behavioral(package, out, cmd, timeout=timeout)
     return ("ok" if not out else "warn"), out
