@@ -1,8 +1,13 @@
 ---
 name: agentic-test-skills
-description: Skill trigger-rate testing — does Claude view the expected SKILL.md when asked a realistic multi-step question. Use when adding trigger tests for a package's skills.
-tags: [scitex-dev, scitex-package]
+description: STALE (2026-05-02) — superseded by the standalone newb package. The scitex-agentic-test image and SCITEX_DEV_AGENTIC_DOCKER_IMAGE wiring described below no longer apply. Kept for historical context only; re-author once sac's claude-agent-sdk redesign lands.
+tags: [scitex-dev, scitex-package, stale]
 ---
+
+> **⚠ STALE — 2026-05-02.** The `scitex-agentic-test` image and the
+> `SCITEX_DEV_AGENTIC_DOCKER_IMAGE` env var documented here are
+> retired. Skill evaluation moved to [newb](https://github.com/ywatanabe1989/newb).
+> Do not follow the workflow as written.
 
 # 17_agentic-test-skills
 

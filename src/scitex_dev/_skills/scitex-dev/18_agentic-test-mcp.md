@@ -1,8 +1,14 @@
 ---
 name: agentic-test-mcp
-description: MCP evaluation — does Claude call the expected MCP tool for a query, with the right arguments, and follow through. Use when designing or running MCP tool-use tests. (Draft — not yet implemented.)
-tags: [scitex-dev, scitex-package]
+description: STALE (2026-05-02) — superseded by the standalone newb package. The scitex-agentic-test base image referenced here was retired from scitex-agent-container. Kept as a draft sketch; re-author once sac's claude-agent-sdk redesign lands.
+tags: [scitex-dev, scitex-package, stale]
 ---
+
+> **⚠ STALE — 2026-05-02.** The `scitex-agentic-test` base image
+> referenced below was removed from scitex-agent-container. MCP
+> evaluation will be reframed against [newb](https://github.com/ywatanabe1989/newb)
+> and the upcoming claude-agent-sdk-based sac redesign. Do not implement
+> this draft as written.
 
 # 18_agentic-test-mcp
 

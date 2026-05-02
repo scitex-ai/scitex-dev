@@ -1,8 +1,15 @@
 ---
 name: agentic-test-overview
-description: Overview of SciTeX agentic testing — four layers across skills and MCP, shared newbie-docker substrate, claude -p plan-quota execution. Use when planning or explaining the agentic test harness.
-tags: [scitex-dev, scitex-package]
+description: STALE (2026-05-02) — superseded by the standalone newb package. The scitex-agentic-test image and its publish workflow were removed from scitex-agent-container; sac itself is being redesigned around claude-agent-sdk. Kept for historical context only; do not follow the workflow as written. Re-author once sac's new design lands.
+tags: [scitex-dev, scitex-package, stale]
 ---
+
+> **⚠ STALE — 2026-05-02.** The `scitex-agentic-test` image referenced
+> below has been removed from scitex-agent-container. Skill and MCP
+> evaluation moved to the standalone [newb](https://github.com/ywatanabe1989/newb)
+> package. scitex-agent-container is being redesigned around
+> claude-agent-sdk; this skill will be re-authored once that lands.
+> Do not follow the workflow described here.
 
 # 16_agentic-test-overview
 
