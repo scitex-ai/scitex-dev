@@ -1119,6 +1119,9 @@ def audit_project(
     from ._check_readme_badges import check_coverage_badge
 
     check_coverage_badge(repo_root, Violation, violations)
+    from ._check_readme_badge_position import check_badge_position
+
+    check_badge_position(repo_root, Violation, violations)
     from ._check_readme_sections import check_readme_sections
 
     check_readme_sections(repo_root, Violation, violations)
