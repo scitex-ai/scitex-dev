@@ -15,7 +15,14 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from newb import render_markdown as _newb_render_markdown
-from newb import run as _newb_run  # noqa: F401  (used by self_explain below)
+
+# newb 0.18+ renamed `run` → `test` (mental model: "newbie tries"). Older
+# newbs still expose `run`; new newbs may drop it. Try the new name first
+# and fall back to the old.
+try:
+    from newb import test as _newb_run  # noqa: F401
+except ImportError:
+    from newb import run as _newb_run  # noqa: F401
 
 # Re-export so existing callers (``_cli/skills/_manage.py``) keep working.
 render_markdown = _newb_render_markdown
