@@ -427,12 +427,22 @@ def _check_universal_flags(
     _check_convention_flags(cmd, full, out)
 
     if is_root:
-        if not ({"--version", "-V"} & flags):
+        if "--version" not in flags or "-V" not in flags:
+            missing = ", ".join(sorted({"--version", "-V"} - flags))
             out.append(
                 Violation(
                     full,
                     "§2",
-                    "top-level missing --version/-V flag",
+                    f"top-level missing {missing} (both long AND short forms required: `@click.version_option('-V', '--version', prog_name='<cli>')`)",
+                )
+            )
+        if "--help" not in flags or "-h" not in flags:
+            missing = ", ".join(sorted({"--help", "-h"} - flags))
+            out.append(
+                Violation(
+                    full,
+                    "§2",
+                    f"top-level missing {missing} (both required: `context_settings={{'help_option_names': ['-h', '--help']}}`)",
                 )
             )
         if "--help-recursive" not in flags:

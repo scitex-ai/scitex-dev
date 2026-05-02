@@ -54,12 +54,34 @@ _RE_PYPI_BADGE = re.compile(
 )
 
 
-# PS110 — Four Freedoms blockquote. Tolerates the leading `>` with or
-# without a space, and either `Four Freedoms for Research` or just
-# `Four Freedoms` (most use the full phrase but stay forgiving).
+# PS110 — Four Freedoms blockquote. Header detection.
 _RE_FOUR_FREEDOMS = re.compile(
     r">\s*Four\s+Freedoms(?:\s+for\s+Research)?", re.IGNORECASE
 )
+
+# PS110b — Each line of the canonical block, in order. Drift detection:
+# packages have hand-edited single freedoms (e.g. `--` instead of `—`,
+# rephrased verbs, missing AGPL closer). The blockquote should be
+# CANONICAL — copy-paste from 04_docs_01_readme_template.md, not paraphrased.
+# Each pattern is anchored on the leading `>` (with or without a space).
+_RE_FOUR_FREEDOMS_LINES = [
+    re.compile(
+        r">\s*0\.\s+The\s+freedom\s+to\s+\*\*run\*\*\s+your\s+research\s+anywhere\s+[—-]+\s+your\s+machine,\s+your\s+terms\.",
+    ),
+    re.compile(
+        r">\s*1\.\s+The\s+freedom\s+to\s+\*\*study\*\*\s+how\s+every\s+step\s+works\s+[—-]+\s+from\s+raw\s+data\s+to\s+final\s+manuscript\.",
+    ),
+    re.compile(
+        r">\s*2\.\s+The\s+freedom\s+to\s+\*\*redistribute\*\*\s+your\s+workflows,\s+not\s+just\s+your\s+papers\.",
+    ),
+    re.compile(
+        r">\s*3\.\s+The\s+freedom\s+to\s+\*\*modify\*\*\s+any\s+module\s+and\s+share\s+improvements\s+with\s+the\s+community\.",
+    ),
+    re.compile(
+        r">\s*AGPL-3\.0\s+[—-]+\s+because\s+we\s+believe\s+research\s+infrastructure\s+deserves\s+the\s+same\s+freedoms\s+as\s+the\s+software\s+it\s+runs\s+on\.",
+        re.IGNORECASE,
+    ),
+]
 
 
 # PS111 — banned personal email. The convention says READMEs should
@@ -328,6 +350,33 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                 ),
             )
         )
+    else:
+        # PS110b — canonical drift. Each numbered freedom + the AGPL line
+        # must match the canonical phrasing exactly (the only allowed
+        # variation is em-dash vs hyphen-double).
+        missing = [
+            i for i, pat in enumerate(_RE_FOUR_FREEDOMS_LINES) if not pat.search(full)
+        ]
+        if missing:
+            labels = [
+                "freedom 0 (run)",
+                "freedom 1 (study)",
+                "freedom 2 (redistribute)",
+                "freedom 3 (modify)",
+                "AGPL-3.0 closer",
+            ]
+            named = ", ".join(labels[i] for i in missing)
+            out.append(
+                violation_cls(
+                    "PS110b",
+                    str(readme),
+                    (
+                        f"Four Freedoms blockquote drifted from canonical text — "
+                        f"missing/rephrased: {named}. Copy-paste verbatim from "
+                        f"_skills/general/04_docs_01_readme_template.md (do not paraphrase)."
+                    ),
+                )
+            )
 
     # PS111 — banned personal email
     if _BANNED_EMAIL in full:
