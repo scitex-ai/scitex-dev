@@ -436,8 +436,13 @@ def _check_universal_flags(
                     f"top-level missing {missing} (both long AND short forms required: `@click.version_option('-V', '--version', prog_name='<cli>')`)",
                 )
             )
-        if "--help" not in flags or "-h" not in flags:
-            missing = ", ".join(sorted({"--help", "-h"} - flags))
+        # Click's canonical way to register short -h is via
+        # `context_settings={"help_option_names": ["-h", "--help"]}`,
+        # which doesn't surface in cmd.params. Honor it before flagging.
+        ctx_help = set((cmd.context_settings or {}).get("help_option_names") or [])
+        help_names = flags | ctx_help
+        if "--help" not in help_names or "-h" not in help_names:
+            missing = ", ".join(sorted({"--help", "-h"} - help_names))
             out.append(
                 Violation(
                     full,
