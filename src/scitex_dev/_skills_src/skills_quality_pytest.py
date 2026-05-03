@@ -2,14 +2,14 @@
 
 Usage in a package's tests/test_skills_quality.py:
 
-    from scitex_dev._skills_quality_pytest import make_skill_quality_tests
+    from scitex_dev._skills_src.skills_quality_pytest import make_skill_quality_tests
     test_skills_quality = make_skill_quality_tests(package_root="..")
 """
 
 from __future__ import annotations
 from pathlib import Path
 import pytest
-from ._skills_quality import check_package, SkillReport
+from .skills_quality import check_package, SkillReport
 
 
 def make_skill_quality_tests(package_root: str | Path):

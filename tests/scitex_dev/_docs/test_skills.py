@@ -8,7 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from scitex_dev._core.discovery import invalidate_cache
-from scitex_dev._docs.skills import (
+from scitex_dev._skills_src.skills import (
     _find_skills_dir,
     _stamp_manifest_version,
     export_skills,
@@ -124,7 +124,7 @@ class TestFindSkillsDir:
 
     def test_new_layout_found(self, skills_tree):
         with patch(
-            "scitex_dev._docs.skills.get_package_root",
+            "scitex_dev._skills_src.skills.get_package_root",
             return_value=skills_tree,
         ):
             result = _find_skills_dir("test_pkg", "test-pkg")
@@ -133,7 +133,7 @@ class TestFindSkillsDir:
 
     def test_legacy_layout_found_with_deprecation_warning(self, legacy_skills_tree):
         with patch(
-            "scitex_dev._docs.skills.get_package_root",
+            "scitex_dev._skills_src.skills.get_package_root",
             return_value=legacy_skills_tree,
         ):
             import io
@@ -142,7 +142,7 @@ class TestFindSkillsDir:
             log_stream = io.StringIO()
             handler = logging.StreamHandler(log_stream)
             handler.setLevel(logging.WARNING)
-            logger = logging.getLogger("scitex_dev._docs.skills")
+            logger = logging.getLogger("scitex_dev._skills_src.skills")
             logger.addHandler(handler)
             try:
                 result = _find_skills_dir("legacy_pkg", "legacy-pkg")
@@ -166,7 +166,7 @@ class TestFindSkillsDir:
         (legacy_dir / "SKILL.md").write_text("# Legacy\n")
 
         with patch(
-            "scitex_dev._docs.skills.get_package_root",
+            "scitex_dev._skills_src.skills.get_package_root",
             return_value=pkg_root,
         ):
             result = _find_skills_dir("dual_pkg", "dual-pkg")
@@ -179,7 +179,7 @@ class TestFindSkillsDir:
         (pkg_root / "_skills" / "empty-pkg").mkdir(parents=True)
 
         with patch(
-            "scitex_dev._docs.skills.get_package_root",
+            "scitex_dev._skills_src.skills.get_package_root",
             return_value=pkg_root,
         ):
             result = _find_skills_dir("empty_pkg", "empty-pkg")
@@ -188,7 +188,7 @@ class TestFindSkillsDir:
 
     def test_nonexistent_module_returns_none(self):
         with patch(
-            "scitex_dev._docs.skills.get_package_root",
+            "scitex_dev._skills_src.skills.get_package_root",
             return_value=None,
         ):
             result = _find_skills_dir("no_such_module", "no-such-pkg")
@@ -203,7 +203,7 @@ class TestFindSkillsDir:
         (docs_dir / "SKILL.md").write_text("# Docs skills\n")
 
         with patch(
-            "scitex_dev._docs.skills.get_package_root",
+            "scitex_dev._skills_src.skills.get_package_root",
             return_value=pkg_root,
         ):
             result = _find_skills_dir("docs_pkg", "docs-pkg")
@@ -223,15 +223,15 @@ class TestExportSkills:
         """Return context managers that mock discovery to point at pkg_root."""
         return (
             patch(
-                "scitex_dev._docs.skills.discover_packages",
+                "scitex_dev._skills_src.skills.discover_packages",
                 return_value=_mock_discover(pip_name, module_name),
             ),
             patch(
-                "scitex_dev._docs.skills.get_package_root",
+                "scitex_dev._skills_src.skills.get_package_root",
                 return_value=pkg_root,
             ),
             patch(
-                "scitex_dev._docs.skills._get_package_version",
+                "scitex_dev._skills_src.skills._get_package_version",
                 return_value="1.0.0",
             ),
         )
@@ -348,7 +348,7 @@ class TestSkillsCLI:
     def _patch_list_skills(self):
         """Mock list_skills to return a small predictable result."""
         return patch(
-            "scitex_dev._docs.skills.list_skills",
+            "scitex_dev._skills_src.skills.list_skills",
             return_value={
                 "mock-pkg": [
                     {
@@ -383,15 +383,15 @@ class TestSkillsCLI:
         dest = tmp_path / "real"
         with (
             patch(
-                "scitex_dev._docs.skills.discover_packages",
+                "scitex_dev._skills_src.skills.discover_packages",
                 return_value=_mock_discover("test-pkg", "test_pkg"),
             ),
             patch(
-                "scitex_dev._docs.skills.get_package_root",
+                "scitex_dev._skills_src.skills.get_package_root",
                 return_value=skills_tree,
             ),
             patch(
-                "scitex_dev._docs.skills._get_package_version",
+                "scitex_dev._skills_src.skills._get_package_version",
                 return_value="1.0.0",
             ),
         ):

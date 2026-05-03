@@ -29,7 +29,7 @@ def register_skills_commands(main_group):
             $ scitex-dev skills list --json
             $ scitex-dev skills list --package scitex-io
         """
-        from ..._docs.skills import list_skills
+        from ..._skills_src.skills import list_skills
 
         result = list_skills(package=package)
         if as_json:
@@ -61,7 +61,7 @@ def register_skills_commands(main_group):
             $ scitex-dev skills get scitex-stats hypothesis-testing --json
             $ scitex-dev skills get all
         """
-        from ..._docs.skills import get_skill, list_skills
+        from ..._skills_src.skills import get_skill, list_skills
 
         if package == "all":
             all_skills = list_skills()
@@ -151,7 +151,7 @@ def register_skills_commands(main_group):
         import os as _os
         from pathlib import Path
 
-        from ..._docs.skills import export_skills, list_skills
+        from ..._skills_src.skills import export_skills, list_skills
 
         # Default to ~/.scitex/dev/skills/ (peer to other ~/.scitex/<pkg>/ stores)
         target = Path(dest) if dest else Path.home() / ".scitex" / "dev" / "skills"
@@ -233,11 +233,11 @@ def register_skills_commands(main_group):
         """Export skills to ~/.claude/skills/scitex/."""
         import json as json_mod
         from pathlib import Path
-        from ..._docs.skills import _get_default_export_dest, export_skills
+        from ..._skills_src.skills import _get_default_export_dest, export_skills
 
         target = Path(dest) if dest else _get_default_export_dest()
         if dry_run:
-            from ..._docs.skills import list_skills
+            from ..._skills_src.skills import list_skills
 
             result = {
                 k: [e["name"] + ".md" for e in v]
@@ -425,7 +425,7 @@ def register_skills_commands(main_group):
         import json as json_mod
         from pathlib import Path
 
-        from ..._docs.skills import export_skills, list_skills
+        from ..._skills_src.skills import export_skills, list_skills
 
         target = Path(destination)
         if dry_run:
