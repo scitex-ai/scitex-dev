@@ -11,10 +11,11 @@ Every `scitex-*` package CLI **must** expose two introspection commands so that 
 
 ## Commands
 
-| Command            | Lists                                       | Section anchor                                                         |
-|--------------------|---------------------------------------------|------------------------------------------------------------------------|
-| `list-python-apis` | Public Python API (`__all__`)               | this file + [03_interface_01_python-api/SKILL.md](../03_interface_01_python-api/SKILL.md) |
-| `mcp list-tools`   | MCP tools registered by the package         | this file + [03_interface_03_mcp/SKILL.md](../03_interface_03_mcp/SKILL.md)        |
+| Command              | Lists                                       | Section anchor                                                         |
+|----------------------|---------------------------------------------|------------------------------------------------------------------------|
+| `list-python-apis`   | Public Python API (`__all__`)               | this file + [03_interface_01_python-api/SKILL.md](../03_interface_01_python-api/SKILL.md) |
+| `mcp list-tools`     | MCP tools registered by the package         | this file + [03_interface_03_mcp/SKILL.md](../03_interface_03_mcp/SKILL.md)        |
+| `skills {list, get, install}` | Bundled agent-facing skills (markdown leaves under `_skills/<pkg>/`) | this file + [03_interface_04_skills/SKILL.md](../03_interface_04_skills/SKILL.md) |
 
 Both follow the §1 noun-verb grammar:
 
@@ -92,3 +93,10 @@ The §1e auditor should verify:
 - [ ] `<cli> mcp list-tools` exists and exits 0.
 - [ ] `<cli> mcp list-tools -v|-vv|-vvv` follow the same monotonic ladder.
 - [ ] Both commands honor `--json`.
+- [ ] If the package ships `_skills/<pkg>/`, `<cli> skills` exists as a
+      group with `list`, `get`, and `install` subcommands. Self-contained
+      (no scitex-dev runtime dep) so users can introspect bundled skills
+      without discovering the ecosystem-wide tooling first. `list` and
+      `get` accept `--json`; `install` defaults to symlinking
+      `_skills/<pkg>/` → `~/.scitex/dev/skills/<pkg>/` and accepts
+      `--claude-symlink` to also expose at `~/.claude/skills/scitex/`.

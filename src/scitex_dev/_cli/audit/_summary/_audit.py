@@ -894,6 +894,48 @@ def _check_introspection(
             )
         )
 
+    # §1a — `<pkg> skills {list, get, install}` group required when the
+    # package ships a `_skills/` directory. Lets users introspect and
+    # install the bundled skills without having to discover scitex-dev.
+    if _package_ships_skills(package):
+        skills = cmd.commands.get("skills")
+        if skills is None or not isinstance(skills, click.Group):
+            out.append(
+                Violation(
+                    package,
+                    "§1a",
+                    "missing required 'skills' command group "
+                    "({list, get, install}) — package ships _skills/ but "
+                    "exposes no CLI to list/get/install them",
+                )
+            )
+        else:
+            for verb in ("list", "get", "install"):
+                if verb not in skills.commands:
+                    out.append(
+                        Violation(
+                            f"{package} skills",
+                            "§1a",
+                            f"missing required '{verb}' subcommand under 'skills'",
+                        )
+                    )
+
+
+def _package_ships_skills(package: str) -> bool:
+    """True if `<pkg>/src/<import_name>/_skills/<package>/` exists."""
+    import importlib.util
+
+    import_name = package.replace("-", "_")
+    spec = importlib.util.find_spec(import_name)
+    if spec is None or not spec.submodule_search_locations:
+        return False
+    from pathlib import Path as _Path
+
+    for loc in spec.submodule_search_locations:
+        if (_Path(loc) / "_skills" / package).is_dir():
+            return True
+    return False
+
 
 def _expected_env_prefix(package: str) -> str | None:
     """Compute `SCITEX_<PKG>_` prefix for a scitex-* package.
