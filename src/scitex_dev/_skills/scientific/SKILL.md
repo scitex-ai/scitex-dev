@@ -1,17 +1,18 @@
 ---
 name: scientific
-description: Scientific-methodology skills for the SciTeX ecosystem — publication-quality figures, statistics, experiment reproducibility. Distinct from `general/` (which covers package engineering) and per-package skills (which cover package-specific APIs). Load when authoring analysis scripts, preparing figures for manuscripts, or checking scientific rigour of ecosystem output.
+description: |
+  [WHAT] Scientific-methodology skills for the SciTeX ecosystem — publication-quality figures, statistics, experiment reproducibility. Distinct from `general/` (which covers package engineering) and per-package skills (which cover package-specific APIs). Load when authoring analysis scripts, preparing figures for manuscripts, or checking scientific rigour of ecosystem output.
+  [WHEN] Authoring analysis scripts, preparing figures or PDF reports for manuscripts, or auditing scientific outputs of any ecosystem package.
+  [HOW] Read SKILL.md as the index, then drill into the numbered sub-skill leaves (`01_figures_*`, `02_research-project_*`, `03_reporting_*`) for the relevant topic.
+tags: [scitex-scientific]
 user-invocable: false
 primary_interface: mixed
-tags: [scitex-python, scitex-scientific, scitex-package, research, paper]
-invocation:
-  - "how should my figure look for a paper"
-  - "comparison plot rules"
-  - "multi-panel layout standards"
-  - "PDF report layout"
-  - "which stats test should I use"
-context_tokens_total: 1200
-canonical-location: scitex-python/src/scitex/_skills/scientific/SKILL.md
+interfaces:
+  python: 0-3
+  cli: 0-3
+  mcp: 0-3
+  skills: 3
+  http: 0
 ---
 
 # SciTeX Scientific Standards

@@ -1,7 +1,8 @@
 ---
-name: research-project-tests
-description: `./tests/` for a SciTeX research project — pytest-driven, same convention as for packages but the source tree being mirrored is `./scripts/` (not `./src/`). Mandatory `tests/scripts/` parent. Allowed sibling subdirs (examples/agentic/integration/e2e/github_actions/coverage/logs/reports/custom). Public/private filename convention with double-underscore for private. Same `audit-project` rule set (PS201–PS206 with `tests/scripts/` substituted for `tests/<pkg>/`, plus PS302/PS303).
-tags: [scitex-python, scitex-scientific, research, project-structure, tests]
+description: |
+  [TOPIC] Research Project Tests
+  [DETAILS] `./tests/` for a SciTeX research project — pytest-driven, same convention as for packages but the source tree being mirrored is `./scripts/` (not `./src/`). Mandatory `tests/scripts/` parent. Allowed sibling subdirs (examples/agentic/integration/e2e/github_actions/coverage/logs/reports/custom). Public/private filename convention with double-underscore for private. Same `audit-project` rule set (PS201–PS206 with `tests/scripts/` substituted for `tests/<pkg>/`, plus PS302/PS303).
+tags: [scitex-scientific-research-project-project-structure-tests]
 ---
 
 # `./tests` — pytest-driven, mirrors `./scripts`

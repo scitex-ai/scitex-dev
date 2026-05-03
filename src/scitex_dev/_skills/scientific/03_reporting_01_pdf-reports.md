@@ -1,8 +1,8 @@
 ---
-name: scientific-pdf-reports
-description: Library-agnostic standards for generating scientific PDF analysis reports — timestamped filenames, mandatory section structure (title / executive summary / methods / results / comparison tables / per-subject summary / pipeline status), navigable PDF bookmarks (fpdf2 or pikepdf post-hoc), figure rules (aspect-ratio preservation, numbered captions, compact multi-panel layout, shared axes for comparisons), size management for email delivery (DPI control, ghostscript compression, splitting), and delivery tracking (email + issue-tracker comment with PDF attachment, summary, file path, and back-link). Use when authoring a recurring analysis report, preparing a results PDF for collaborators, or auditing a delivery pipeline for reproducibility and traceability.
-canonical-location: scitex-python/src/scitex/_skills/scientific/03_reporting_01_pdf-reports.md
-tags: [scitex-dev, scitex-package, scientific-reporting, pdf]
+description: |
+  [TOPIC] Scientific Pdf Reports
+  [DETAILS] Library-agnostic standards for generating scientific PDF analysis reports — timestamped filenames, mandatory section structure (title / executive summary / methods / results / comparison tables / per-subject summary / pipeline status), navigable PDF bookmarks (fpdf2 or pikepdf post-hoc), figure rules (aspect-ratio preservation, numbered captions, compact multi-panel layout, shared axes for comparisons), size management for email delivery (DPI control, ghostscript compression, splitting), and delivery tracking (email + issue-tracker comment with PDF attachment, summary, file path, and back-link). Use when authoring a recurring analysis report, preparing a results PDF for collaborators, or auditing a delivery pipeline for reproducibility and traceability.
+tags: [scitex-scientific-reporting-pdf-reports]
 ---
 
 # Scientific PDF Reports (universal principles)

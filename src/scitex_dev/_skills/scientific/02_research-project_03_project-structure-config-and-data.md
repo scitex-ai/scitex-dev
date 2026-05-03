@@ -1,7 +1,8 @@
 ---
-name: research-project-config-and-data
-description: `./config/` and `./data/` for a SciTeX research project. `./config/` is the project-scope YAML tree (`PATH.yaml`, `PARAMS.yaml`, `EXPERIMENT.yaml`, `COLORS.yaml`) auto-loaded into `CONFIG` by `@stx.session`. `./data/` holds inputs and intermediate datasets — large files gitignored, symlinks tracked. Run outputs do NOT live in `./data/` — those go under `SDIR_OUT/` (auto-created by `@stx.session`). Pairs with [`02_research-project_07_config-and-parameters.md`](02_research-project_07_config-and-parameters.md) for CONFIG semantics.
-tags: [scitex-python, scitex-scientific, research, project-structure, config, data]
+description: |
+  [TOPIC] Research Project Config And Data
+  [DETAILS] `./config/` and `./data/` for a SciTeX research project. `./config/` is the project-scope YAML tree (`PATH.yaml`, `PARAMS.yaml`, `EXPERIMENT.yaml`, `COLORS.yaml`) auto-loaded into `CONFIG` by `@stx.session`. `./data/` holds inputs and intermediate datasets — large files gitignored, symlinks tracked. Run outputs do NOT live in `./data/` — those go under `SDIR_OUT/` (auto-created by `@stx.session`). Pairs with [`02_research-project_07_config-and-parameters.md`](02_research-project_07_config-and-parameters.md) for CONFIG semantics.
+tags: [scitex-scientific-research-project-project-structure-config-and-data]
 ---
 
 # `./config` and `./data`

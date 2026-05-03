@@ -1,7 +1,8 @@
 ---
-name: research-project-scripts
-description: `./scripts/` is the **primary code location** for a SciTeX research project — analysis pipelines, model-training runs, exploratory data work. Pipelines entered via `@stx.session` so `CONFIG`, `SDIR_OUT`, `SDIR_RUN`, `logger`, `plt` are auto-injected. Helpers in `./scripts/utils/`. Pipelines that produce a result worth keeping land artefacts under `SDIR_OUT/` (auto-created per script). The `./scripts/makefile/` Makefile-target subdir is documented separately.
-tags: [scitex-python, scitex-scientific, research, project-structure, scripts]
+description: |
+  [TOPIC] Research Project Scripts
+  [DETAILS] `./scripts/` is the **primary code location** for a SciTeX research project — analysis pipelines, model-training runs, exploratory data work. Pipelines entered via `@stx.session` so `CONFIG`, `SDIR_OUT`, `SDIR_RUN`, `logger`, `plt` are auto-injected. Helpers in `./scripts/utils/`. Pipelines that produce a result worth keeping land artefacts under `SDIR_OUT/` (auto-created per script). The `./scripts/makefile/` Makefile-target subdir is documented separately.
+tags: [scitex-scientific-research-project-project-structure-scripts]
 ---
 
 # `./scripts` — the primary code location

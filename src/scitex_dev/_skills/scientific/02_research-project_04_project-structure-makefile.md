@@ -1,7 +1,8 @@
 ---
-name: research-project-makefile
-description: Makefile + `./scripts/makefile/` pattern for a SciTeX research project — same convention as for packages. Root Makefile is a thin one-line dispatcher per target; logic lives as standalone shell scripts under `./scripts/makefile/`. Targets here lean toward analysis lifecycle (run-pipeline, repro, eval) more than packaging (build/upload-pypi). For the full pattern, see the package equivalent and reuse the same scripts where applicable.
-tags: [scitex-python, scitex-scientific, research, project-structure, makefile, scripts]
+description: |
+  [TOPIC] Research Project Makefile
+  [DETAILS] Makefile + `./scripts/makefile/` pattern for a SciTeX research project — same convention as for packages. Root Makefile is a thin one-line dispatcher per target; logic lives as standalone shell scripts under `./scripts/makefile/`. Targets here lean toward analysis lifecycle (run-pipeline, repro, eval) more than packaging (build/upload-pypi). For the full pattern, see the package equivalent and reuse the same scripts where applicable.
+tags: [scitex-scientific-research-project-project-structure-makefile]
 ---
 
 # `./scripts/makefile/` — Makefile target backing scripts (research project)

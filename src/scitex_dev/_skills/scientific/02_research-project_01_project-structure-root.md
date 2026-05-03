@@ -1,7 +1,8 @@
 ---
-name: research-project-root
-description: Repo-root rules for a SciTeX *research project* (analysis pipelines, experiments) — what's allowed at the root (README, LICENSE, pyproject.toml even though research projects aren't shippable, Makefile thin dispatcher, .gitignore), forbidden top-level dirs (`mgmt`, `references`, `htmlcov`, top-level `assets`, `.playground`), the hidden directories `./.dev/` (scratch) and `./.old/` (hidden archive) and `./.scitex/<pkg-short>/` (project-scope scitex state — see [01_ecosystem_06_local-state-directories.md](../general/01_ecosystem_06_local-state-directories.md)), the production-ready-always invariant, anti-patterns, and a project-handoff checklist.
-tags: [scitex-python, scitex-scientific, research, project-structure, root]
+description: |
+  [TOPIC] Research Project Root
+  [DETAILS] Repo-root rules for a SciTeX *research project* (analysis pipelines, experiments) — what's allowed at the root (README, LICENSE, pyproject.toml even though research projects aren't shippable, Makefile thin dispatcher, .gitignore), forbidden top-level dirs (`mgmt`, `references`, `htmlcov`, top-level `assets`, `.playground`), the hidden directories `./.dev/` (scratch) and `./.old/` (hidden archive) and `./.scitex/<pkg-short>/` (project-scope scitex state — see [01_ecosystem_06_local-state-directories.md](../general/01_ecosystem_06_local-state-directories.md)), the production-ready-always invariant, anti-patterns, and a project-handoff checklist.
+tags: [scitex-scientific-research-project-project-structure-root]
 ---
 
 # Repo Root — Research Project

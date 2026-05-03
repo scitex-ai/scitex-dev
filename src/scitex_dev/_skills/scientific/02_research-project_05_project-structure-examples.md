@@ -1,7 +1,8 @@
 ---
-name: research-project-examples
-description: `./examples/` for a SciTeX research project — same convention as for packages. Numbered prefix (`01_<descriptive-name>.{py,sh,ipynb}`), `_out/` artefacts committed to git, `00_run_all.sh` dispatcher, matched 1:1 by `tests/examples/test_<stem>.py`. Less common in research projects than in packages, but valuable for showcasing how the project's pipelines are invoked.
-tags: [scitex-python, scitex-scientific, research, project-structure, examples]
+description: |
+  [TOPIC] Research Project Examples
+  [DETAILS] `./examples/` for a SciTeX research project — same convention as for packages. Numbered prefix (`01_<descriptive-name>.{py,sh,ipynb}`), `_out/` artefacts committed to git, `00_run_all.sh` dispatcher, matched 1:1 by `tests/examples/test_<stem>.py`. Less common in research projects than in packages, but valuable for showcasing how the project's pipelines are invoked.
+tags: [scitex-scientific-research-project-project-structure-examples]
 ---
 
 # `./examples` — runnable demos (research project)
