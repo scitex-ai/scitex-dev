@@ -158,6 +158,35 @@ the refactor surfaces a missing piece of the public taxonomy too.
 reveal something true about the package's structure, not just shuffle
 files into shorter siblings.
 
+## Topical clusters with no shared prefix — the silent mess
+
+PS108 catches prefix clusters (`_cli_*`, `_skills_*`). It does **not**
+catch the second mess pattern: a package root with many flat files that
+*share a topic* but no prefix.
+
+Example — scitex-dev's actual `src/scitex_dev/` had ~30 flat top-level
+files like `ci.py`, `deploy.py`, `github.py`, `rtd.py`,
+`_version_fixer.py`, `_release_publisher.py`, `versions.py` — clearly a
+"release/CI" cluster, but no shared prefix means PS108 stays silent.
+
+**Rule (PS108b — pending audit)**: when `src/<pkg>/` (or any
+subpackage) holds **>15 flat `.py` files** excluding `__init__.py` and
+`__main__.py`, group them into topical subpackages. Use the same
+decision rules as the prefix case (group by responsibility, mirror the
+public taxonomy, leave singletons flat).
+
+Suggested categories every package tends to need (rename to taste):
+
+| Category | Examples of files that belong here |
+| -------- | ---------------------------------- |
+| `_release/` | CI helpers, deploy, github, rtd, version bumpers |
+| `_docs/`    | docs build, search, sphinx hooks |
+| `_core/`    | config, errors, types, dist-info, imports, decorators |
+| `_quality/` | linters, audit-core (NOT the CLI surface — that lives in `_cli/audit/`) |
+
+Single-file orphans (no peers) **stay flat** — see decision rule #3
+above. Don't create `_logging/` for one `logging.py`.
+
 ## Imports
 
 - **Absolute imports**: `from <package_name>.x.y import z`.
