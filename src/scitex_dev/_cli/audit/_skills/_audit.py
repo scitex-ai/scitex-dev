@@ -64,7 +64,7 @@ RULES: dict[str, Rule] = {
             "file ends with `<!-- EOF -->` or similar trailing marker",
         ),
         # §3 SKILL.md as index only
-        Rule("SK301", "§3", "`SKILL.md` exceeds the size budget (~80 lines / ~4 KB)"),
+        Rule("SK301", "§3", "`SKILL.md` exceeds the size budget (~120 lines / ~6 KB)"),
         Rule(
             "SK302",
             "§3",
@@ -149,8 +149,8 @@ _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 _FRONTMATTER_KEY_RE = re.compile(r"^([a-zA-Z_][a-zA-Z0-9_-]*):", re.MULTILINE)
 _HTML_HEADER_RE = re.compile(r"\A<!-- ---")
 _HTML_FOOTER_RE = re.compile(r"<!-- EOF -->\s*\Z")
-_MAX_SKILL_MD_BYTES = 4 * 1024
-_MAX_SKILL_MD_LINES = 80
+_MAX_SKILL_MD_BYTES = 6 * 1024
+_MAX_SKILL_MD_LINES = 120
 _MAX_LEAF_BYTES = 10 * 1024
 _MAX_LEAF_LINES = 200
 _NAMING_EXEMPT = {"TODO.md", "MANIFEST.md", "DRIFT_REPORT.md"}

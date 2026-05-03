@@ -103,10 +103,10 @@ def save(obj, path, makedirs=True, ...):
 
 ## Size Limits
 
-- SKILL.md: ≤ ~4 KB / ~80 lines (index discipline)
+- SKILL.md: ≤ ~6 KB / ~120 lines (index discipline; bumped 2026-05 from 4 KB / 80 lines to fit structured 3W1H frontmatter)
 - Each leaf: ≤ ~10 KB / ~200 lines, one focused topic per file
 
-If a leaf exceeds 10 KB, split it. If SKILL.md exceeds 80 lines, the content has leaked from a leaf back into the index — promote it to a new leaf.
+If a leaf exceeds 10 KB, split it. If SKILL.md exceeds 120 lines, the content has leaked from a leaf back into the index — promote it to a new leaf.
 
 ## Cross-references
 
