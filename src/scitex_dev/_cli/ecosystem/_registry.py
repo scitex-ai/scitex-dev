@@ -814,8 +814,8 @@ def register_ecosystem_commands(main_group):
         "--fix",
         is_flag=True,
         help=(
-            "Auto-fix mechanically resolvable rules (SK705/SK707/SK709/SK710/"
-            "SK711). Rewrites only frontmatter; idempotent."
+            "Auto-fix mechanically resolvable rules (SK705/SK709/SK710). "
+            "Rewrites only frontmatter; idempotent."
         ),
     )
     def ecosystem_audit_skills(distribution, json_out, rules, fix):

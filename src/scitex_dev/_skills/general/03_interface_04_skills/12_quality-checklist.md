@@ -145,36 +145,29 @@ mirrors `audit-cli`, `audit-mcp-tools`, `audit-python-apis`. Rule codes
 | SK601 | §6 | skill text uses bare `import scitex` (not `as stx`) |
 | SK105 | §1 | `01_installation.md` present (mandatory) |
 | SK106 | §1 | `02_quick-start.md` present (mandatory) |
-| SK107 | §1 | `03_python-api.md` present iff package has any public Python API (`__all__` non-empty or any public symbol in `import <pkg>`) |
+| SK107 | §1 | `03_python-api.md` present iff package exposes any public Python API |
 | SK108 | §1 | `04_cli-reference.md` present iff `[project.scripts]` ships any entry |
 | SK109 | §1 | `05_mcp-tools.md` present iff MCP server entry-point registered |
-| SK110 | §1 | `06_http-api.md` present iff package ships HTTP routes (heuristic: imports starlette/fastapi/uvicorn under `src/`) |
-| SK111 | §1 | `20_env-vars.md` present iff source references any `SCITEX_<MOD>_*` env var via `os.environ` / `os.getenv` |
+| SK110 | §1 | `06_http-api.md` present iff package ships HTTP routes |
+| SK111 | §1 | `20_env-vars.md` present iff source references any `SCITEX_<MOD>_*` env var |
 | SK701 | FM | every file has a `---` frontmatter block at line 1 |
 | SK702 | FM | frontmatter contains required `name:` |
 | SK703 | FM | frontmatter contains required `description:` |
 | SK704 | FM | frontmatter contains required `tags:` |
 | SK705 | FM | leaf MUST NOT carry `name:` field (filename = identity) |
-| SK706 | FM | SKILL.md MUST carry `what:` + `when:` + `how:` non-empty (each ≤500 chars) |
-| SK707 | FM | SKILL.md `description:` matches `f"{what} Use when {when} {how}"` (whitespace-normalised) — auto-fixable via `--fix` |
+| SK706 | FM | SKILL.md `description:` contains inline markers `[WHAT]`, `[WHEN]`, `[HOW]` (each on its own line is fine) |
 | SK708 | FM | SKILL.md `name:` exactly matches the package's pip-name |
 | SK709 | FM | SKILL.md `tags:` equals `[scitex-<pkg>]` exactly (one canonical tag) |
 | SK710 | FM | leaf `tags[0]` equals `scitex-<pkg>-<slug>` (canonical-first ordering) |
-| SK711 | FM | leaf `description:` matches `f"{topic}: {details}"` (whitespace-normalised) — auto-fixable via `--fix` |
+| SK711 | FM | leaf `description:` contains inline markers `[TOPIC]` and `[DETAILS]` |
 
 ### §1 Conditionality
 
-SK105–SK106 are unconditional (every package needs install + quick-start). SK107–SK111 are gated by pyproject.toml inspection / source scanning — the auditor checks whether the package actually ships the interface before nagging for the missing leaf:
-
-- SK107: skipped when `src/<pkg>/__init__.py` exposes no public symbols (`__all__ == []` and no module-level public names).
-- SK108: skipped when `[project.scripts]` is empty / absent.
-- SK109: skipped when no `mcp` entry-point is registered.
-- SK110: skipped when no HTTP framework import is found under `src/`.
-- SK111: skipped when no `SCITEX_<MOD>_*` env-var reference is found under `src/`.
+SK105–SK106 are unconditional. SK107–SK111 are gated by pyproject.toml inspection / source scanning — auditor checks whether the package actually ships the interface (public Python API / `[project.scripts]` / MCP entry-point / HTTP framework import / `SCITEX_<MOD>_*` env reference) before nagging for the missing leaf.
 
 ### §FM Auto-fix
 
-`scitex-dev ecosystem audit-skills <pkg> --fix` rewrites `description:` from the structured source fields (`what`/`when`/`how` for SKILL.md, `topic`/`details` for leaves). Safe: frontmatter only, idempotent, prints a diff. Cures SK707 and SK711 violations mechanically. Other rules require manual fixes.
+`scitex-dev ecosystem audit-skills <pkg> --fix` mechanically fixes SK705 (strip leaf `name:`), SK709 (rewrite SKILL.md `tags:` to `[scitex-<pkg>]`), and SK710 (prepend canonical `scitex-<pkg>-<slug>` to leaf `tags`). Frontmatter-only, idempotent, prints a diff. SK706 / SK711 (description marker presence) require manual edits — description is the source of truth.
 
 Run examples:
 

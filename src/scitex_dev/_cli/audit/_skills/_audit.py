@@ -363,7 +363,7 @@ def _collect_violations(distribution: str, canonical_dir: Path) -> list[Violatio
     return violations
 
 
-_FIXABLE = {"SK705", "SK707", "SK709", "SK710", "SK711"}
+_FIXABLE = {"SK705", "SK709", "SK710"}
 
 
 def _apply_fixes(

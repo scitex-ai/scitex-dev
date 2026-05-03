@@ -172,13 +172,14 @@ def _make_compliant_pkg(tmp_path: Path, dist: str) -> Path:
     """Write a synthetic `_skills/<dist>/` tree that should pass all rules."""
     pkg_root = tmp_path / dist.replace("-", "_") / "_skills" / dist
     pkg_root.mkdir(parents=True)
+    import_name = dist.replace("-", "_")
     (pkg_root / "SKILL.md").write_text(
         f"---\n"
         f"name: {dist}\n"
-        f"what: Test package.\n"
-        f"when: running the test suite.\n"
-        f"how: import {dist.replace('-', '_')}.\n"
-        f"description: Test package. Use when running the test suite. import {dist.replace('-', '_')}.\n"
+        f"description: |\n"
+        f"  [WHAT] Test package.\n"
+        f"  [WHEN] Running the test suite.\n"
+        f"  [HOW] import {import_name}.\n"
         f"tags: [{dist}]\n"
         f"---\n\n# {dist}\n\n"
         f"- [01_installation.md](01_installation.md)\n"
@@ -186,17 +187,17 @@ def _make_compliant_pkg(tmp_path: Path, dist: str) -> Path:
     )
     (pkg_root / "01_installation.md").write_text(
         f"---\n"
-        f"topic: Installation\n"
-        f"details: pip install {dist}.\n"
-        f"description: Installation: pip install {dist}.\n"
+        f"description: |\n"
+        f"  [TOPIC] Installation\n"
+        f"  [DETAILS] pip install {dist}.\n"
         f"tags: [{dist}-installation]\n"
         f"---\n\n# Installation\n"
     )
     (pkg_root / "02_quick-start.md").write_text(
         f"---\n"
-        f"topic: Quick start\n"
-        f"details: smallest example.\n"
-        f"description: Quick start: smallest example.\n"
+        f"description: |\n"
+        f"  [TOPIC] Quick start\n"
+        f"  [DETAILS] smallest example.\n"
         f"tags: [{dist}-quick-start]\n"
         f"---\n\n# Quick\n"
     )
@@ -255,6 +256,52 @@ def test_audit_skills_json_output_shape(tmp_path, capsys):
     assert len(payload["violations"]) >= 1
     for v in payload["violations"]:
         assert set(v.keys()) == {"rule", "where", "detail"}
+
+
+def test_sk706_flags_missing_markers_in_skill_md(tmp_path, capsys):
+    pkg_root = _make_compliant_pkg(tmp_path, "marktest")
+    # Replace SKILL.md description with one missing [HOW]
+    (pkg_root / "SKILL.md").write_text(
+        "---\n"
+        "name: marktest\n"
+        "description: |\n"
+        "  [WHAT] thing.\n"
+        "  [WHEN] always.\n"
+        "tags: [marktest]\n"
+        "---\n\n# marktest\n\n"
+        "- [01_installation.md](01_installation.md)\n"
+        "- [02_quick-start.md](02_quick-start.md)\n"
+    )
+    with patch(
+        "scitex_dev._cli.audit._skills._audit._locate_skills_dir",
+        return_value=pkg_root,
+    ):
+        rc = audit_skills("marktest", json_out=True, rules={"SK706"})
+    assert rc == 1
+    payload = json.loads(capsys.readouterr().out)
+    codes = {v["rule"] for v in payload["violations"]}
+    assert "SK706" in codes
+
+
+def test_sk711_flags_missing_markers_in_leaf(tmp_path, capsys):
+    pkg_root = _make_compliant_pkg(tmp_path, "leafmark")
+    # Replace 01_installation.md with description missing [DETAILS]
+    (pkg_root / "01_installation.md").write_text(
+        "---\n"
+        "description: |\n"
+        "  [TOPIC] Installation\n"
+        "tags: [leafmark-installation]\n"
+        "---\n\n# Installation\n"
+    )
+    with patch(
+        "scitex_dev._cli.audit._skills._audit._locate_skills_dir",
+        return_value=pkg_root,
+    ):
+        rc = audit_skills("leafmark", json_out=True, rules={"SK711"})
+    assert rc == 1
+    payload = json.loads(capsys.readouterr().out)
+    codes = {v["rule"] for v in payload["violations"]}
+    assert "SK711" in codes
 
 
 def test_audit_skills_rule_filter_restricts_violations(tmp_path):

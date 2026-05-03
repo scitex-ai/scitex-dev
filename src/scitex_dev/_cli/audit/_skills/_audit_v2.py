@@ -47,10 +47,7 @@ V2_RULES: dict[str, V2Rule] = {
         V2Rule(
             "SK706",
             "§FM",
-            "SKILL.md missing `what`/`when`/`how` (each non-empty, ≤500 chars)",
-        ),
-        V2Rule(
-            "SK707", "§FM", "SKILL.md `description:` does not match canonical formula"
+            "SKILL.md `description:` must contain inline markers `[WHAT]`, `[WHEN]`, `[HOW]`",
         ),
         V2Rule("SK708", "§FM", "SKILL.md `name:` does not equal pip-name"),
         V2Rule("SK709", "§FM", "SKILL.md `tags:` must equal exactly `[scitex-<pkg>]`"),
@@ -58,7 +55,9 @@ V2_RULES: dict[str, V2Rule] = {
             "SK710", "§FM", "leaf `tags[0]` must equal canonical `scitex-<pkg>-<slug>`"
         ),
         V2Rule(
-            "SK711", "§FM", 'leaf `description:` does not match `f"{topic}: {details}"`'
+            "SK711",
+            "§FM",
+            "leaf `description:` must contain inline markers `[TOPIC]` and `[DETAILS]`",
         ),
     ]
 }
@@ -67,19 +66,6 @@ V2_RULES: dict[str, V2Rule] = {
 # ---------------------------------------------------------------------------
 # Helpers shared with _audit.Violation by duck-typing — caller wraps results.
 # ---------------------------------------------------------------------------
-
-
-def expected_skill_description(data: dict) -> str:
-    what = _core.normalize_ws(str(data.get("what") or ""))
-    when = _core.normalize_ws(str(data.get("when") or ""))
-    how = _core.normalize_ws(str(data.get("how") or ""))
-    return _core.normalize_ws(f"{what} Use when {when} {how}")
-
-
-def expected_leaf_description(data: dict) -> str:
-    topic = _core.normalize_ws(str(data.get("topic") or ""))
-    details = _core.normalize_ws(str(data.get("details") or ""))
-    return _core.normalize_ws(f"{topic}: {details}")
 
 
 # ---------------------------------------------------------------------------
@@ -151,35 +137,17 @@ def check_skill_md_frontmatter(
     if data is None:
         return out  # SK701 covers missing/unparseable
 
-    # SK706 — what/when/how
-    missing = []
-    overlong = []
-    for k in ("what", "when", "how"):
-        v = data.get(k)
-        if v is None or not str(v).strip():
-            missing.append(k)
-        elif len(str(v)) > 500:
-            overlong.append(k)
-    if missing or overlong:
-        bits = []
-        if missing:
-            bits.append(f"missing/empty: {','.join(missing)}")
-        if overlong:
-            bits.append(f">500 chars: {','.join(overlong)}")
-        out.append(("SK706", str(skill_md), "; ".join(bits)))
-
-    # SK707 — description matches formula
-    if not missing:  # only meaningful when source fields exist
-        actual = _core.normalize_ws(str(data.get("description") or ""))
-        expected = expected_skill_description(data)
-        if actual != expected:
-            out.append(
-                (
-                    "SK707",
-                    str(skill_md),
-                    'description drift from f"{what} Use when {when} {how}"',
-                )
+    # SK706 — description contains [WHAT]/[WHEN]/[HOW] markers
+    desc = str(data.get("description") or "")
+    missing_markers = [m for m in ("[WHAT]", "[WHEN]", "[HOW]") if m not in desc]
+    if missing_markers:
+        out.append(
+            (
+                "SK706",
+                str(skill_md),
+                f"description missing markers: {', '.join(missing_markers)}",
             )
+        )
 
     # SK708 — name == pip-name
     name = data.get("name")
@@ -210,16 +178,17 @@ def check_leaf_frontmatter(leaf: Path, distribution: str) -> list[tuple[str, str
     if "name" in data:
         out.append(("SK705", str(leaf), "leaf carries forbidden `name:` field"))
 
-    # SK711 — description matches f"{topic}: {details}" when both source fields exist
-    topic = data.get("topic")
-    details = data.get("details")
-    if topic is not None and details is not None:
-        actual = _core.normalize_ws(str(data.get("description") or ""))
-        expected = expected_leaf_description(data)
-        if actual != expected:
-            out.append(
-                ("SK711", str(leaf), 'description drift from f"{topic}: {details}"')
+    # SK711 — description contains [TOPIC] and [DETAILS] markers
+    desc = str(data.get("description") or "")
+    missing_markers = [m for m in ("[TOPIC]", "[DETAILS]") if m not in desc]
+    if missing_markers:
+        out.append(
+            (
+                "SK711",
+                str(leaf),
+                f"description missing markers: {', '.join(missing_markers)}",
             )
+        )
 
     # SK710 — tags[0] equals scitex-<pkg>-<slug>
     tags = _normalize_tags_field(data.get("tags"))
@@ -334,13 +303,6 @@ def fix_skill_md(skill_md: Path, distribution: str, codes: set[str]) -> set[str]
     fixed: set[str] = set()
     new_block = block
 
-    if "SK707" in codes:
-        # Only fixable if source fields are present and non-empty
-        if all(str(data.get(k) or "").strip() for k in ("what", "when", "how")):
-            new_desc = expected_skill_description(data)
-            new_block = _replace_key_value(new_block, "description", new_desc)
-            fixed.add("SK707")
-
     if "SK709" in codes:
         new_block = _replace_tags(new_block, [distribution])
         fixed.add("SK709")
@@ -360,14 +322,6 @@ def fix_leaf(leaf: Path, distribution: str, codes: set[str]) -> set[str]:
     if "SK705" in codes and "name" in data:
         new_block = _delete_key(new_block, "name")
         fixed.add("SK705")
-
-    if "SK711" in codes:
-        topic = data.get("topic")
-        details = data.get("details")
-        if topic is not None and details is not None:
-            new_desc = expected_leaf_description(data)
-            new_block = _replace_key_value(new_block, "description", new_desc)
-            fixed.add("SK711")
 
     if "SK710" in codes:
         existing = _normalize_tags_field(data.get("tags"))
