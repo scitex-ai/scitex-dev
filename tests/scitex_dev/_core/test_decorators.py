@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Tests for scitex_dev.decorators — @supports_return_as."""
 
-from scitex_dev.decorators import supports_return_as
-from scitex_dev.types import Result
+from scitex_dev._core.decorators import supports_return_as
+from scitex_dev._core.types import Result
 
 
 @supports_return_as

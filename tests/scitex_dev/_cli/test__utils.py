@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Tests for scitex_dev.cli_utils — handle_result, run_as_cli, wrap_as_cli."""
+"""Tests for scitex_dev._core.cli_utils — handle_result, run_as_cli, wrap_as_cli."""
 
 import io
 import json
 
 
-from scitex_dev.cli_utils import handle_result
-from scitex_dev.types import Result
+from scitex_dev._core.cli_utils import handle_result
+from scitex_dev._core.types import Result
 
 
 class TestHandleResult:
@@ -65,7 +65,7 @@ class TestWrapAsCli:
     def test_success_exits_zero(self):
         import pytest
 
-        from scitex_dev.cli_utils import wrap_as_cli
+        from scitex_dev._core.cli_utils import wrap_as_cli
 
         def add(a, b):
             return a + b
@@ -77,7 +77,7 @@ class TestWrapAsCli:
     def test_failure_exits_nonzero(self):
         import pytest
 
-        from scitex_dev.cli_utils import wrap_as_cli
+        from scitex_dev._core.cli_utils import wrap_as_cli
 
         def fail():
             raise FileNotFoundError("missing.csv")
@@ -89,7 +89,7 @@ class TestWrapAsCli:
     def test_json_output_on_success(self, capsys):
         import pytest
 
-        from scitex_dev.cli_utils import wrap_as_cli
+        from scitex_dev._core.cli_utils import wrap_as_cli
 
         def get_data():
             return {"count": 42}
@@ -104,7 +104,7 @@ class TestWrapAsCli:
     def test_json_output_on_error(self, capsys):
         import pytest
 
-        from scitex_dev.cli_utils import wrap_as_cli
+        from scitex_dev._core.cli_utils import wrap_as_cli
 
         def fail():
             raise ValueError("bad input")
@@ -120,7 +120,7 @@ class TestWrapAsCli:
     def test_duck_typed_suggestions(self, capsys):
         import pytest
 
-        from scitex_dev.cli_utils import wrap_as_cli
+        from scitex_dev._core.cli_utils import wrap_as_cli
 
         def fail_with_hints():
             exc = RuntimeError("broke")

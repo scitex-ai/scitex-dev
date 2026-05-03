@@ -4,7 +4,7 @@
 
 import pytest
 
-from scitex_dev._discovery import invalidate_cache
+from scitex_dev._core.discovery import invalidate_cache
 from scitex_dev._docs.search import parse_query, score_text, search
 
 

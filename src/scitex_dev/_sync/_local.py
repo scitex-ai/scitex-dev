@@ -18,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from ..config import DevConfig, HostConfig, get_enabled_hosts, load_config
+from .._core.config import DevConfig, HostConfig, get_enabled_hosts, load_config
 
 # ---------------------------------------------------------------------------
 # SSH helpers

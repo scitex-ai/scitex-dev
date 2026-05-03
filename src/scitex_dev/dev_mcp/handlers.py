@@ -11,7 +11,7 @@ from __future__ import annotations
 
 
 from .._mcp import wrap_as_mcp
-from ..types import Result
+from .._core.types import Result
 
 
 async def list_versions_handler(
@@ -29,7 +29,7 @@ async def list_versions_handler(
 
 async def get_config_handler() -> str:
     """Show the active `DevConfig` — which hosts are configured, which packages are registered in the ecosystem, default HPC partition / time / memory, editable-install paths. Use when the user asks "show my dev config", "what hosts does scitex-dev know?", "dump the config", or is debugging why `sync` / `test_hpc_run` can't find a host."""
-    from ..config import config_to_dict, get_config_path, load_config
+    from .._core.config import config_to_dict, get_config_path, load_config
 
     def _get_config():
         config = load_config()

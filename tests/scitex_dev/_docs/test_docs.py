@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
-from scitex_dev._discovery import invalidate_cache
+from scitex_dev._core.discovery import invalidate_cache
 from scitex_dev._docs.docs import build_docs, get_docs, search_docs
 
 

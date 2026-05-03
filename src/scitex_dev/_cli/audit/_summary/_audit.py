@@ -630,7 +630,7 @@ def _walk(
 # Click CLIs.                                                            #
 # --------------------------------------------------------------------- #
 
-from ...._audit_argparse_adapter import (  # noqa: E402
+from ...._core.audit_argparse_adapter import (  # noqa: E402
     StopBeforeParse as _StopBeforeParse,
     intercept_parse_calls as _intercept_parse_calls,
     wrap_argparse as _wrap_argparse,

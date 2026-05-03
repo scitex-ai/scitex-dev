@@ -4,7 +4,7 @@
 import json
 from pathlib import Path
 
-from scitex_dev.types import Result
+from scitex_dev._core.types import Result
 
 
 class TestResult:

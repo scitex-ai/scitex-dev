@@ -21,7 +21,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ..config import DevConfig, load_config
+from .._core.config import DevConfig, load_config
 from .._sync import sync_all, sync_local
 from .versions import get_mismatches
 

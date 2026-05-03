@@ -352,7 +352,7 @@ else:
     # Documentation commands
     # -------------------------------------------------------------------
 
-    from .._dispatch import docs_click_group
+    from .._core.dispatch import docs_click_group
 
     docs_grp = docs_click_group(package="scitex-dev")
     main.add_command(docs_grp)
@@ -629,7 +629,7 @@ else:
         total = len(tools)
 
         if as_json:
-            from ..types import RESULT_SCHEMA
+            from .._core.types import RESULT_SCHEMA
 
             output = {
                 "result_envelope": RESULT_SCHEMA,

@@ -9,7 +9,7 @@ packages until they migrate. Will be removed in 0.12.0.
 
 from __future__ import annotations
 
-from ._cli._utils import (
+from .._cli._utils import (
     add_dry_run_argument,
     add_json_argument,
     dry_run_option,

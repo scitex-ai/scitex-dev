@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scitex_dev._discovery import (
+from scitex_dev._core.discovery import (
     discover_packages,
     get_package_root,
     get_sphinx_source,
@@ -46,7 +46,7 @@ class TestDiscoverPackages:
 
         with (
             patch("importlib.metadata.entry_points", return_value=[ep]),
-            patch("scitex_dev._discovery.ECOSYSTEM", {}, create=True),
+            patch("scitex_dev._core.discovery.ECOSYSTEM", {}, create=True),
             patch.dict(
                 "sys.modules", {"scitex_dev._ecosystem": MagicMock(ECOSYSTEM={})}
             ),

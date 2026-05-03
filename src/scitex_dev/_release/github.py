@@ -10,7 +10,7 @@ import os
 import urllib.request
 from typing import Any
 
-from ..config import DevConfig, GitHubRemote, get_enabled_remotes, load_config
+from .._core.config import DevConfig, GitHubRemote, get_enabled_remotes, load_config
 
 
 def _get_github_token() -> str | None:

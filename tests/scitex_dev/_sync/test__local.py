@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from scitex_dev.config import HostConfig
+from scitex_dev._core.config import HostConfig
 from scitex_dev._sync._local import (
     _check_ahead_state,
     _sync_one_package,

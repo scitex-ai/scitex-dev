@@ -87,7 +87,7 @@ def register_routes(app: Flask) -> None:
     def api_config():
         """Get current configuration."""
         try:
-            from ..config import config_to_dict, get_config_path, load_config
+            from .._core.config import config_to_dict, get_config_path, load_config
 
             config = load_config()
             return jsonify(config_to_dict(config, config_path=get_config_path()))
@@ -109,7 +109,7 @@ def register_routes(app: Flask) -> None:
         try:
             packages = request.args.getlist("package") or None
             hosts = request.args.getlist("host") or None
-            from ..config import get_enabled_hosts, load_config
+            from .._core.config import get_enabled_hosts, load_config
             from ..ssh import check_all_hosts
 
             config = load_config()
@@ -164,7 +164,7 @@ def _get_all_version_data(force_refresh: bool = False) -> dict[str, Any]:
     dict
         Combined version data.
     """
-    from ..config import get_enabled_hosts, get_enabled_remotes, load_config
+    from .._core.config import get_enabled_hosts, get_enabled_remotes, load_config
     from .._release.github import check_all_remotes
     from ..ssh import check_all_hosts
     from .._release.versions import list_versions

@@ -5,7 +5,7 @@
 import json
 
 
-from scitex_dev._manifest import (
+from scitex_dev._core.manifest import (
     generate_manifest,
     read_manifest,
     write_manifest,

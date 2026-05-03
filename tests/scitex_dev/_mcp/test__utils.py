@@ -3,9 +3,9 @@
 
 import json
 
-from scitex_dev.decorators import supports_return_as
+from scitex_dev._core.decorators import supports_return_as
 from scitex_dev._mcp._utils import result_to_mcp, run_as_mcp, wrap_as_mcp
-from scitex_dev.types import Result
+from scitex_dev._core.types import Result
 
 
 @supports_return_as

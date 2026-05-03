@@ -71,7 +71,7 @@ def docs_get(
             default=str,
         )
     except LookupError as e:
-        from ._discovery import discover_packages
+        from .._core.discovery import discover_packages
 
         available = list(discover_packages().keys())
         return json.dumps(

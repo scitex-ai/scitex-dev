@@ -33,7 +33,7 @@ import logging
 from pathlib import Path
 from typing import Any, Optional
 
-from .._discovery import discover_packages, get_package_root, get_sphinx_source
+from .._core.discovery import discover_packages, get_package_root, get_sphinx_source
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +110,7 @@ def build_docs(
         LookupError: If package not found.
         RuntimeError: If Sphinx is not installed.
     """
-    from .._builder import build_sphinx
+    from .._core.builder import build_sphinx
 
     if formats is None:
         formats = ["html"]
@@ -289,7 +289,7 @@ def _get_one(
             return _enrich_manifest(result, package)
 
     # 3. Fallback: introspect
-    from .._introspect import introspect_package
+    from .._core.introspect import introspect_package
 
     return introspect_package(module_name)
 
@@ -313,7 +313,7 @@ def _resolve_from_built(
 
     # No format requested → return manifest
     if format is None:
-        from .._manifest import read_manifest, generate_manifest
+        from .._core.manifest import read_manifest, generate_manifest
 
         manifest = read_manifest(html_dir)
         if manifest is not None:

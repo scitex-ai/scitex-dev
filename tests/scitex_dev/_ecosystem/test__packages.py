@@ -12,7 +12,7 @@ from unittest.mock import patch
 import pytest
 from click.testing import CliRunner
 
-from scitex_dev.config import DevConfig, HostConfig, PackageConfig
+from scitex_dev._core.config import DevConfig, HostConfig, PackageConfig
 from scitex_dev._ecosystem._packages import (
     out_of_sync_pairs,
     packages_audit,
@@ -236,7 +236,7 @@ def test_sync_remote_alias_warns(fake_config):
     from scitex_dev._cli import main as root_cli
 
     runner = CliRunner()
-    with patch("scitex_dev.config.load_config", return_value=fake_config):
+    with patch("scitex_dev._core.config.load_config", return_value=fake_config):
         r = runner.invoke(
             root_cli,
             ["ecosystem", "sync-remote", "-h", "nas", "-p", "scitex-io", "--dry-run"],

@@ -28,7 +28,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional
 
-from .._discovery import discover_packages, get_package_root
+from .._core.discovery import discover_packages, get_package_root
 
 logger = logging.getLogger(__name__)
 
@@ -323,7 +323,7 @@ def _search_api(
     fuzzy: bool = True,
 ) -> list[dict[str, Any]]:
     """Search Python API (public functions, classes, methods)."""
-    from .._introspect import introspect_package
+    from .._core.introspect import introspect_package
 
     results = []
     for pkg_name, module_name in targets.items():

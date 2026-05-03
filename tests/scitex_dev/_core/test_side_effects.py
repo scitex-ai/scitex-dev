@@ -3,7 +3,7 @@
 
 import pytest
 
-from scitex_dev.side_effects import SideEffect
+from scitex_dev._core.side_effects import SideEffect
 
 
 class TestSideEffect:

@@ -10,7 +10,7 @@ migrate. Will be removed in 0.12.0.
 
 from __future__ import annotations
 
-from ._dispatch import (
+from ._core.dispatch import (
     docs_click_group,
     register_docs_subcommand,
     register_skills_subcommand,

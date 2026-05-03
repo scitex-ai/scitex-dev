@@ -3,7 +3,7 @@
 
 import pytest
 
-from scitex_dev.errors import ErrorCode, ScitexError, classify_exception
+from scitex_dev._core.errors import ErrorCode, ScitexError, classify_exception
 
 
 class TestErrorCode:
