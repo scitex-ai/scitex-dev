@@ -1,12 +1,8 @@
 ---
-topic: cli-mcp-utils
-package: scitex-dev
-description: >
-  Adapters for consuming Result objects in CLI (exit codes, text/JSON output)
-  and MCP (JSON string) contexts. Also provides reusable Click option factories
-  for --json and --dry-run flags.
-name: cli-mcp-utils
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Cli Mcp Utils
+  [DETAILS] Adapters for consuming Result objects in CLI (exit codes, text/JSON output) and MCP (JSON string) contexts. Also provides reusable Click option factories for --json and --dry-run flags.
+tags: [scitex-dev-cli-mcp-utils]
 ---
 
 # CLI and MCP Utilities

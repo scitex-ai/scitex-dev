@@ -1,7 +1,8 @@
 ---
-name: agentic-test-overview
-description: STALE (2026-05-02) — superseded by the standalone newb package. The scitex-agentic-test image and its publish workflow were removed from scitex-agent-container; sac itself is being redesigned around claude-agent-sdk. Kept for historical context only; do not follow the workflow as written. Re-author once sac's new design lands.
-tags: [scitex-dev, scitex-package, stale]
+description: |
+  [TOPIC] Agentic Test Overview
+  [DETAILS] STALE (2026-05-02) — superseded by the standalone newb package. The scitex-agentic-test image and its publish workflow were removed from scitex-agent-container; sac itself is being redesigned around claude-agent-sdk. Kept for historical context only; do not follow the workflow as written. Re-author once sac's new design lands.
+tags: [scitex-dev-agentic-test-overview]
 ---
 
 > **⚠ STALE — 2026-05-02.** The `scitex-agentic-test` image referenced

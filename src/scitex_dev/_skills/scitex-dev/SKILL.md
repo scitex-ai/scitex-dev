@@ -1,5 +1,10 @@
 ---
-description: Developer utilities for maintaining the whole SciTeX ecosystem across ~15 packages — version audit and mismatch fixing, editable-install sync, per-host git pull/commit/diff via SSH, bulk rename across files + contents + directories + symlinks (with git-safety guards), aggregated docs search across all packages, a Result/ErrorCode envelope shared by CLI + MCP, DevConfig/HostConfig, a local + HPC-Slurm test runner (`sbatch` / `srun`, job polling, result fetch), skill aggregation (`list_skills`, `get_skill`), and ecosystem-wide release pipelines (audit → bump → release → sync). Drop-in replacement for hand-rolled `for pkg in scitex-*; do ...` loops, manual `git status` walks across sibling repos, and shell scripts that pip-install everything in editable mode. Use whenever the user asks to "list scitex versions", "check for version mismatches", "fix version drift", "rename old_name → new_name across all files", "sync my changes to the HPC / laptop / servers", "run tests on the HPC via Slurm", "poll my sbatch job", "fetch HPC test output", "search the docs for save_fig", "commit remote changes on gpu01", "pull all repos", "audit the ecosystem before a release", "show ecosystem skills", or does any cross-package maintenance.
+name: scitex-dev
+description: |
+  [WHAT] Developer utilities for maintaining the whole SciTeX ecosystem across ~15 packages — version audit and mismatch fixing, editable-install sync, per-host git pull/commit/diff via SSH, bulk rename across files + contents + directories + symlinks (with git-safety guards), aggregated docs search across all packages, a Result/ErrorCode envelope shared by CLI + MCP, DevConfig/HostConfig, a local +…
+  [WHEN] Use whenever the user asks to "list scitex versions", "check for version mismatches", "fix version drift", "rename old_name → new_name across all files", "sync my changes to the HPC / laptop / servers", "run tests on the HPC via Slurm", "poll my sbatch job", "fetch HPC test output", "search the docs for save_fig", "commit remote changes on gpu01", "pull all repos", "audit the ecosystem before a…
+  [HOW] See sub-skills index for entry points.
+tags: [scitex-dev]
 allowed-tools: mcp__scitex__dev_*
 primary_interface: cli
 interfaces:
@@ -7,10 +12,7 @@ interfaces:
   cli: 3
   mcp: 2
   skills: 2
-  hook: 0
   http: 0
-name: scitex-dev
-tags: [scitex-dev, scitex-package]
 ---
 
 # scitex-dev Skills Index

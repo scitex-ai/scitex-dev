@@ -1,12 +1,8 @@
 ---
-topic: config
-package: scitex-dev
-description: >
-  Configuration management for scitex developer utilities. DevConfig holds
-  packages, SSH hosts, GitHub remotes, and PyPI accounts. Config loaded from
-  ~/.scitex/dev/config.yaml with SCITEX_DEV_* environment variable overrides.
-name: config
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Config
+  [DETAILS] Configuration management for scitex developer utilities. DevConfig holds packages, SSH hosts, GitHub remotes, and PyPI accounts. Config loaded from ~/.scitex/dev/config.yaml with SCITEX_DEV_* environment variable overrides.
+tags: [scitex-dev-config]
 ---
 
 # Configuration

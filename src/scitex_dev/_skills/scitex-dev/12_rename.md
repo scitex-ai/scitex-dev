@@ -1,12 +1,8 @@
 ---
-topic: rename
-package: scitex-dev
-description: >
-  Bulk rename utility for files, file contents, directories, and symlinks
-  with cross-reference updates. Ported from rename.sh. Safe by default
-  (preview_rename before execute_rename). Supports regex patterns.
-name: rename
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Rename
+  [DETAILS] Bulk rename utility for files, file contents, directories, and symlinks with cross-reference updates. Ported from rename.sh. Safe by default (preview_rename before execute_rename). Supports regex patterns.
+tags: [scitex-dev-rename]
 ---
 
 # Bulk Rename

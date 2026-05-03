@@ -1,13 +1,8 @@
 ---
-topic: result-types
-package: scitex-dev
-description: >
-  LLM-friendly structured return types. Result wraps function output with
-  metadata for CLI and MCP consumers. ErrorCode maps exception types to
-  machine-readable codes. @supports_return_as adds opt-in Result wrapping.
-  SideEffect declares mutations for LLM transparency.
-name: result-types
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Result Types
+  [DETAILS] LLM-friendly structured return types. Result wraps function output with metadata for CLI and MCP consumers. ErrorCode maps exception types to machine-readable codes. @supports_return_as adds opt-in Result wrapping. SideEffect declares mutations for LLM transparency.
+tags: [scitex-dev-result-types]
 ---
 
 # Result Types

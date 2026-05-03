@@ -1,7 +1,8 @@
 ---
-name: agentic-test-skills
-description: STALE (2026-05-02) — superseded by the standalone newb package. The scitex-agentic-test image and SCITEX_DEV_AGENTIC_DOCKER_IMAGE wiring described below no longer apply. Kept for historical context only; re-author once sac's claude-agent-sdk redesign lands.
-tags: [scitex-dev, scitex-package, stale]
+description: |
+  [TOPIC] Agentic Test Skills
+  [DETAILS] STALE (2026-05-02) — superseded by the standalone newb package. The scitex-agentic-test image and SCITEX_DEV_AGENTIC_DOCKER_IMAGE wiring described below no longer apply. Kept for historical context only; re-author once sac's claude-agent-sdk redesign lands.
+tags: [scitex-dev-agentic-test-skills]
 ---
 
 > **⚠ STALE — 2026-05-02.** The `scitex-agentic-test` image and the

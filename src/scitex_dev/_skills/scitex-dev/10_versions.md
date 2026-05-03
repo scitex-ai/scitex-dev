@@ -1,12 +1,8 @@
 ---
-topic: versions
-package: scitex-dev
-description: >
-  Version checking and mismatch detection across the SciTeX ecosystem.
-  Compares pyproject.toml, installed (importlib.metadata), git tag, and
-  PyPI versions. fix_mismatches combines detection with sync.
-name: versions
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Versions
+  [DETAILS] Version checking and mismatch detection across the SciTeX ecosystem. Compares pyproject.toml, installed (importlib.metadata), git tag, and PyPI versions. fix_mismatches combines detection with sync.
+tags: [scitex-dev-versions]
 ---
 
 # Version Management

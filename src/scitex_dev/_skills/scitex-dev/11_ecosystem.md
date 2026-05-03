@@ -1,13 +1,8 @@
 ---
-topic: ecosystem
-package: scitex-dev
-description: >
-  SciTeX package registry and sync operations. ECOSYSTEM is the canonical
-  dict of all packages with local paths, PyPI names, and GitHub repos.
-  sync_local reinstalls via pip install -e. sync_host/sync_all push via SSH.
-  pull_local/remote_commit handle reverse sync.
-name: ecosystem
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Ecosystem
+  [DETAILS] SciTeX package registry and sync operations. ECOSYSTEM is the canonical dict of all packages with local paths, PyPI names, and GitHub repos. sync_local reinstalls via pip install -e. sync_host/sync_all push via SSH. pull_local/remote_commit handle reverse sync.
+tags: [scitex-dev-ecosystem]
 ---
 
 # Ecosystem Management

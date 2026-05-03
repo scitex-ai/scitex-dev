@@ -1,13 +1,8 @@
 ---
-topic: docs-search
-package: scitex-dev
-description: >
-  Documentation aggregation and unified search across all SciTeX packages.
-  get_docs resolves pre-built Sphinx HTML, existing Sphinx builds, or
-  introspected docstrings. search supports Google-like query syntax across
-  Python API, CLI commands, MCP tools, and docs pages.
-name: docs-search
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Docs Search
+  [DETAILS] Documentation aggregation and unified search across all SciTeX packages. get_docs resolves pre-built Sphinx HTML, existing Sphinx builds, or introspected docstrings. search supports Google-like query syntax across Python API, CLI commands, MCP tools, and docs pages.
+tags: [scitex-dev-docs-search]
 ---
 
 # Docs Aggregation and Search

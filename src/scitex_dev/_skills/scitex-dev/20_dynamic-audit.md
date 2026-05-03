@@ -1,14 +1,8 @@
 ---
-topic: dynamic-audit
-package: scitex-dev
-description: >
-  Design skeleton for dynamic ecosystem audits — agent-driven end-to-end
-  research tasks that exercise the full SciTeX stack under realistic
-  workloads. Paired with static audits (scitex-python 99_checklist §§1–15)
-  to form a two-gate quality regime: static gates commit, dynamic gates
-  release.
-name: dynamic-audit
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Dynamic Audit
+  [DETAILS] Design skeleton for dynamic ecosystem audits — agent-driven end-to-end research tasks that exercise the full SciTeX stack under realistic workloads. Paired with static audits (scitex-python 99_checklist §§1–15) to form a two-gate quality regime: static gates commit, dynamic gates release.
+tags: [scitex-dev-dynamic-audit]
 ---
 
 # Dynamic Audit Skeleton (§16 of 99_checklist)

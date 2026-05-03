@@ -1,7 +1,8 @@
 ---
-name: agentic-test-mcp
-description: STALE (2026-05-02) — superseded by the standalone newb package. The scitex-agentic-test base image referenced here was retired from scitex-agent-container. Kept as a draft sketch; re-author once sac's claude-agent-sdk redesign lands.
-tags: [scitex-dev, scitex-package, stale]
+description: |
+  [TOPIC] Agentic Test Mcp
+  [DETAILS] STALE (2026-05-02) — superseded by the standalone newb package. The scitex-agentic-test base image referenced here was retired from scitex-agent-container. Kept as a draft sketch; re-author once sac's claude-agent-sdk redesign lands.
+tags: [scitex-dev-agentic-test-mcp]
 ---
 
 > **⚠ STALE — 2026-05-02.** The `scitex-agentic-test` base image
