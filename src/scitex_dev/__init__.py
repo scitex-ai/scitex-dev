@@ -86,19 +86,19 @@ _LAZY_ATTRS: dict[str, str] = {
     # search
     "search": "search",
     # versions
-    "check_versions": "versions",
-    "get_ecosystem_versions": "versions",
-    "get_mismatches": "versions",
-    "list_versions": "versions",
+    "check_versions": "_release.versions",
+    "get_ecosystem_versions": "_release.versions",
+    "get_mismatches": "_release.versions",
+    "list_versions": "_release.versions",
     # fix
-    "bump_version": "fix",
-    "detect_mismatches": "fix",
-    "determine_bump_type": "fix",
-    "fix_init_version": "fix",
-    "fix_local": "fix",
-    "fix_mismatches": "fix",
-    "fix_remote": "fix",
-    "verify_versions": "fix",
+    "bump_version": "_release.fix",
+    "detect_mismatches": "_release.fix",
+    "determine_bump_type": "_release.fix",
+    "fix_init_version": "_release.fix",
+    "fix_local": "_release.fix",
+    "fix_mismatches": "_release.fix",
+    "fix_remote": "_release.fix",
+    "verify_versions": "_release.fix",
     # config
     "DevConfig": "config",
     "GitHubRemote": "config",
@@ -116,17 +116,17 @@ _LAZY_ATTRS: dict[str, str] = {
     "get_all_packages": "_ecosystem",
     "get_local_path": "_ecosystem",
     # rtd
-    "check_all_rtd": "rtd",
-    "check_rtd_status": "rtd",
+    "check_all_rtd": "_release.rtd",
+    "check_rtd_status": "_release.rtd",
     # _pypi_package_data
-    "PackageDataAuditReport": "_pypi_package_data",
-    "audit_package_data": "_pypi_package_data",
+    "PackageDataAuditReport": "_release.pypi_package_data",
+    "audit_package_data": "_release.pypi_package_data",
     # github
-    "check_all_remotes": "github",
-    "compare_with_local": "github",
-    "get_github_latest_tag": "github",
-    "get_github_release": "github",
-    "get_github_tags": "github",
+    "check_all_remotes": "_release.github",
+    "compare_with_local": "_release.github",
+    "get_github_latest_tag": "_release.github",
+    "get_github_release": "_release.github",
+    "get_github_tags": "_release.github",
     # rename
     "RenameConfig": "rename",
     "RenameResult": "rename",
@@ -148,19 +148,19 @@ _LAZY_ATTRS: dict[str, str] = {
     "remote_commit": "_sync",
     "remote_diff": "_sync",
     # ci
-    "CIStatus": "ci",
-    "WorkflowRun": "ci",
-    "check_ci": "ci",
-    "check_pypi_publish": "ci",
-    "create_github_release": "ci",
-    "get_failing_packages": "ci",
-    "verify_all_pypi_configs": "ci",
-    "verify_pypi_config": "ci",
-    "wait_all_pypi": "ci",
-    "wait_for_workflow": "ci",
+    "CIStatus": "_release.ci",
+    "WorkflowRun": "_release.ci",
+    "check_ci": "_release.ci",
+    "check_pypi_publish": "_release.ci",
+    "create_github_release": "_release.ci",
+    "get_failing_packages": "_release.ci",
+    "verify_all_pypi_configs": "_release.ci",
+    "verify_pypi_config": "_release.ci",
+    "wait_all_pypi": "_release.ci",
+    "wait_for_workflow": "_release.ci",
     # deploy
-    "deploy_scitex_cloud": "deploy",
-    "verify_production": "deploy",
+    "deploy_scitex_cloud": "_release.deploy",
+    "verify_production": "_release.deploy",
     # skills
     "verify_docs_and_skills": "skills",
     # test_runner
@@ -179,7 +179,7 @@ _LAZY_ATTRS: dict[str, str] = {
 # tree is ahead of/behind the latest tag. Cheap (~1ms cache hit; skipped
 # entirely on non-editable installs). Suppress with SCITEX_DEV_NO_DRIFT_WARN=1.
 try:
-    from ._check_editable_drift import emit_if_drift as _emit_drift
+    from ._release.check_editable_drift import emit_if_drift as _emit_drift
 
     _emit_drift("scitex-dev")
 except Exception:

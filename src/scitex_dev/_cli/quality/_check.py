@@ -4,9 +4,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ..._pyproject_lint import lint_pyproject
-from ..._release_publisher import publish_release
-from ..._rtd_onboard import onboard_rtd
+from ..._release.pyproject_lint import lint_pyproject
+from ..._release.publisher import publish_release
+from ..._release.rtd_onboard import onboard_rtd
 
 SCRIPTS = Path(__file__).parent.parent.parent.parent.parent / "scripts" / "quality"
 

@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 
-from scitex_dev._release_publisher import _detect_trigger, publish_release
+from scitex_dev._release.publisher import _detect_trigger, publish_release
 
 
 def _mk_workflow(repo: Path, body: str) -> Path:

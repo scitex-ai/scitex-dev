@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from ._ecosystem import ECOSYSTEM, get_all_packages, get_local_path
+from .._ecosystem import ECOSYSTEM, get_all_packages, get_local_path
 
 
 def get_version_from_toml(path: Path) -> str | None:

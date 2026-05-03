@@ -9,7 +9,7 @@ from __future__ import annotations
 import urllib.request
 from typing import Any
 
-from ._ecosystem import ECOSYSTEM
+from .._ecosystem import ECOSYSTEM
 
 # RTD project slugs (if different from package name)
 RTD_SLUGS: dict[str, str] = {

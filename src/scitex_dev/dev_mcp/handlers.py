@@ -18,7 +18,7 @@ async def list_versions_handler(
     packages: list[str] | None = None,
 ) -> str:
     """Report the installed version of every SciTeX package (scitex, scitex-io, scitex-stats, figrecipe, scitex-writer, scitex-scholar, scitex-notebook, scitex-audio, scitex-clew, scitex-dev, scitex-linter, …). Use when the user asks "what versions of scitex do I have?", "list ecosystem versions", "show every scitex-* version", or before a release to see the current state. Optionally filter to a subset with `packages=[...]`."""
-    from ..versions import list_versions
+    from .._release.versions import list_versions
 
     return wrap_as_mcp(
         list_versions,
@@ -338,7 +338,7 @@ async def fix_mismatches_handler(
     confirm: bool = False,
 ) -> str:
     """Scan every SciTeX package (locally and on every configured remote host) for installed-version drift against `pyproject.toml`, and restore consistency via `pip install` + `git pull`. Use whenever the user asks "are all my scitex installs in sync?", "fix version mismatches", "why is scitex-io saying 0.3.1 on gpu01 but 0.3.2 here?", "audit and repair ecosystem versions", or before a release/demo where version drift would bite. Defaults to dry-run; pass `confirm=True` to actually install."""
-    from ..fix import fix_mismatches
+    from .._release.fix import fix_mismatches
 
     return wrap_as_mcp(
         fix_mismatches,

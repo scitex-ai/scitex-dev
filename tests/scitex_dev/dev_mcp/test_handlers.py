@@ -44,7 +44,7 @@ def test_all_handlers_exposed():
 
 def test_list_versions_handler_runs(monkeypatch):
     """list_versions_handler returns valid JSON wrapping a mocked list_versions."""
-    import scitex_dev.versions as vmod
+    import scitex_dev._release.versions as vmod
 
     monkeypatch.setattr(
         vmod, "list_versions", lambda packages=None: {"scitex-dev": "0.0.0"}

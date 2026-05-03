@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scitex_dev._version_fixer import fix_version
+from scitex_dev._release.version_fixer import fix_version
 
 
 def _write_repo(tmp_path: Path, name: str, init_body: str) -> Path:

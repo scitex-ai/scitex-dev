@@ -10,7 +10,7 @@ import os
 import urllib.request
 from typing import Any
 
-from .config import DevConfig, GitHubRemote, get_enabled_remotes, load_config
+from ..config import DevConfig, GitHubRemote, get_enabled_remotes, load_config
 
 
 def _get_github_token() -> str | None:
@@ -188,7 +188,7 @@ def check_github_remote(
     if config is None:
         config = load_config()
 
-    from ._ecosystem import ECOSYSTEM
+    from .._ecosystem import ECOSYSTEM
 
     results = {}
 
@@ -263,7 +263,7 @@ def check_all_remotes(
         config = load_config()
 
     if packages is None:
-        from ._ecosystem import get_all_packages
+        from .._ecosystem import get_all_packages
 
         packages = get_all_packages()
 
@@ -304,7 +304,7 @@ def compare_with_local(
         config = load_config()
 
     if packages is None:
-        from ._ecosystem import get_all_packages
+        from .._ecosystem import get_all_packages
 
         packages = get_all_packages()
 

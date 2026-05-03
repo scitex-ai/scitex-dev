@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 
-from scitex_dev._pyproject_lint import (
+from scitex_dev._release.pyproject_lint import (
     check_duplicate_tables,
     lint_pyproject,
 )

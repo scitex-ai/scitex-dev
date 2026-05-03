@@ -1,4 +1,4 @@
-"""Tests for scitex_dev._pypi_package_data."""
+"""Tests for scitex_dev._release.pypi_package_data."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 
-from scitex_dev._pypi_package_data import (
+from scitex_dev._release.pypi_package_data import (
     _list_src_data_files,
     _detect_backend,
     _has_package_data_block,

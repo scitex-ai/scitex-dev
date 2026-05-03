@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scitex_dev._rtd_onboard import onboard_rtd
+from scitex_dev._release.rtd_onboard import onboard_rtd
 
 
 def _write_min_pyproject(repo: Path, name: str = "demo") -> None:

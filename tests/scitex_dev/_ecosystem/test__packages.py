@@ -254,7 +254,7 @@ def test_fix_mismatches_alias_warns():
     runner = CliRunner()
     # We don't care about the underlying action — just the warning surface.
     with patch(
-        "scitex_dev.fix.fix_mismatches", return_value={"detected": {}, "summary": {}}
+        "scitex_dev._release.fix.fix_mismatches", return_value={"detected": {}, "summary": {}}
     ):
         r = runner.invoke(root_cli, ["ecosystem", "fix-mismatches"])
     combined = r.output + (r.stderr_bytes or b"").decode()
