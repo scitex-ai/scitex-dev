@@ -149,6 +149,20 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
+            "PS108b",
+            "§1",
+            (
+                "topical clutter: >15 flat `.py` files at `src/<pkg>/` root "
+                "(or any subpackage) without shared prefix. PS108 only "
+                "catches prefix clusters; this catches the second mess "
+                "pattern — many flat files sharing a topic but no prefix. "
+                "Group into `_release/`, `_docs/`, `_core/`, `_quality/` "
+                "subpackages by topical responsibility (single-file "
+                "orphans stay flat). See "
+                "general/02_package_02_project-structure-src.md."
+            ),
+        ),
+        Rule(
             "PS116",
             "§1",
             (
@@ -1125,9 +1139,10 @@ def audit_project(
     _check_docs_structure(repo_root, violations)
     src_pkg = _src_pkg_dir(repo_root, distribution)
     if src_pkg is not None:
-        from ._check_flat_layout import check_flat_layout
+        from ._check_flat_layout import check_flat_layout, check_topical_clutter
 
         check_flat_layout(src_pkg, Violation, violations)
+        check_topical_clutter(src_pkg, Violation, violations)
     from ._check_readme_badges import check_coverage_badge
 
     check_coverage_badge(repo_root, Violation, violations)
