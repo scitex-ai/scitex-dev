@@ -316,7 +316,11 @@ def export_skills(
     if clean:
         for pkg_name in all_skills:
             pkg_dir = dest / pkg_name
-            if pkg_dir.is_dir():
+            # is_dir() follows symlinks; check is_symlink() first to
+            # avoid rmtree-on-symlink errors when re-running with --link.
+            if pkg_dir.is_symlink():
+                pkg_dir.unlink()
+            elif pkg_dir.is_dir():
                 shutil.rmtree(pkg_dir)
 
     exported: dict[str, list[Path]] = {}
@@ -324,25 +328,32 @@ def export_skills(
     for pkg_name, entries in all_skills.items():
         pkg_dest = dest / pkg_name
 
-        # --link mode: symlink the entire package _skills/ directory so any
-        # add/rename/delete in source propagates immediately. Per-file
-        # symlinks (legacy) miss new files until re-install.
+        # --link mode: symlink the entire package _skills/<pkg_name>/
+        # directory (including nested subdirs) so any add/rename/delete
+        # in source propagates immediately. Per-file symlinks (legacy)
+        # miss new files until re-install.
         if link and entries:
             src_paths = [Path(e["path"]) for e in entries if Path(e["path"]).exists()]
             if src_paths:
-                src_dirs = {p.parent.resolve() for p in src_paths}
-                if len(src_dirs) == 1:
-                    src_dir = next(iter(src_dirs))
+                # Find canonical skill-tree root: walk up from any leaf
+                # until we hit an ancestor named pkg_name. Handles both
+                # flat layouts (one parent dir) and nested layouts like
+                # general/03_interface_04_skills/12_quality-checklist.md.
+                src_root = None
+                for ancestor in [src_paths[0].parent, *src_paths[0].parents]:
+                    if ancestor.name == pkg_name:
+                        src_root = ancestor.resolve()
+                        break
+                if src_root and src_root.is_dir():
                     if pkg_dest.is_symlink() or pkg_dest.is_file():
                         pkg_dest.unlink()
                     elif pkg_dest.is_dir():
                         shutil.rmtree(pkg_dest)
                     pkg_dest.parent.mkdir(parents=True, exist_ok=True)
-                    pkg_dest.symlink_to(src_dir, target_is_directory=True)
+                    pkg_dest.symlink_to(src_root, target_is_directory=True)
                     exported[pkg_name] = [pkg_dest / p.name for p in src_paths]
                     continue
-                # Multiple source dirs (rare, e.g. nested subdirs across
-                # roots) — fall through to per-file symlink.
+                # Could not resolve canonical root — fall through.
 
         pkg_dest.mkdir(parents=True, exist_ok=True)
 
