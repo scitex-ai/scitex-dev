@@ -1,157 +1,147 @@
 ---
 name: skills-frontmatter-metadata
-description: YAML frontmatter convention for every SciTeX skill file — what is required (`name`, `description`, `tags`), what is recommended based on >70% adoption across the ecosystem (`allowed-tools`, `primary_interface`, `interfaces`), and which earlier extensions are dropped because adoption never converged (`invocation`, `context_tokens`, `canonical-location`, `see-also`). Also documents the Claude Code standard fields. Use when authoring any new skill or auditing existing frontmatter.
+description: YAML frontmatter convention for every SciTeX skill file — structured source fields (`what`/`when`/`how` for SKILL.md, `topic`/`details` for leaves), auto-derived `description:` cache, canonical single-tag scheme, and SKILL.md-only fields (`allowed-tools`, `primary_interface`, `interfaces`). Replaces hand-edited free-form descriptions with single-source-of-truth structured fields. Use when authoring any new skill or auditing existing frontmatter.
 tags: [scitex-python, scitex-general, scitex-package, meta]
 ---
 
 # Skill Frontmatter Metadata
 
-Every SciTeX skill file (the per-skill `SKILL.md` and every leaf `.md` under it) carries YAML frontmatter. Convention below was derived from a 12-package audit (Tier A + Tier B) — fields are listed by **actual ecosystem adoption**, not aspiration.
+Every SciTeX skill file (the per-skill `SKILL.md` and every leaf `.md` under it) carries YAML frontmatter. Convention below locks structured source fields plus an auto-derived `description:` cache so authors edit one source of truth and the auditor regenerates the cache.
 
 ## 0. Frontmatter must be the very first bytes — no header, no footer
 
-Claude Code parses YAML frontmatter only when the file **starts with `---` on line 1**. Any preceding content — auto-inserted timestamp blocks, license banners, even a blank line — pushes the frontmatter below the first byte and the loader treats the file as plain markdown with no metadata. The same applies to trailing markers like `<!-- EOF -->` for tools that scan the last block.
+Claude Code parses YAML frontmatter only when the file **starts with `---` on line 1**. Any preceding content — auto-inserted timestamp blocks, license banners, even a blank line — pushes the frontmatter below the first byte and the loader treats the file as plain markdown with no metadata. The same applies to trailing markers like `<!-- EOF -->`.
 
-Required shape:
-
-```markdown
----
-name: my-skill
-description: ...
-tags: [...]
----
-
-# My Skill
-
-...content...
-```
-
-Banned at the **top** of any skill / agent / command / hook file: HTML-comment banners, timestamp/author/license blocks, blank lines, or any byte before the opening `---`.
-
+Banned at the **top**: HTML-comment banners, timestamp/author/license blocks, blank lines, or any byte before the opening `---`.
 Banned at the **bottom**: trailing `<!-- EOF -->` or similar end-of-file markers.
 
-If your editor auto-inserts these on save, disable that behavior for files under `_skills/`, `skills/`, `agents/`, `commands/`, and `.claude/`. Run the lint script below before commit as a backstop:
+Enforced at release-gate time — see [12_quality-checklist.md](12_quality-checklist.md) (SK210, SK211).
 
-```bash
-python3 -c "
-import re
-from pathlib import Path
-hdr = re.compile(r'^<!-- ---\n(?:!--.*\n)+!-- --- -->\n+', re.MULTILINE)
-ftr = re.compile(r'\n*<!-- EOF -->\s*\$')
-for f in Path('src/scitex/_skills').rglob('*.md'):
-    t = f.read_text()
-    new = ftr.sub('\n', hdr.sub('', t, count=1))
-    if new != t: f.write_text(new); print('cleaned', f)
-"
-```
+## 1. Required source fields
 
-This is enforced at release-gate time — see [12_quality-checklist.md](12_quality-checklist.md).
+### SKILL.md — structured 3W1H + tag
 
-## 1. Required (every file)
-
-| Field | Adoption | Purpose |
-|---|---|---|
-| `name` | 12/12 | Display name. Lowercase + hyphens. Defaults to dir name. |
-| `description` | 12/12 | One-line summary. Claude Code uses this to decide auto-load. |
-| `tags` | recommended-as-required | Categorisation; agents filter on it. See tag table below. |
-
-```yaml
----
-name: scitex-io
-description: Universal scientific file I/O with 30+ format handlers.
-tags: [scitex-io, scitex-package]
----
-```
-
-### Canonical `tags` values
-
-| Tag | Meaning |
+| Field | Purpose |
 |---|---|
-| `scitex-package` | Rules that apply to every `scitex-*` repo |
-| `scitex-general` | The ecosystem-wide `general/` skill category |
-| `scitex-python` | Specific to the scitex-python umbrella package |
-| `scitex-<name>` | Owned by a specific package (`scitex-io`, `figrecipe`, …) |
-| `research` | Rules for a research project *using* SciTeX |
-| `paper` | Manuscript prep — figures, LaTeX, citations |
-| `infra` | Cross-cutting infrastructure — SSH, containers, cloud, tunnels |
-| `meta` | Rules about writing rules — skill authoring, quality checklists |
-| `claude-code` | Claude Code runtime reference material |
+| `name` | MUST equal the package's pip-name (e.g., `scitex-io`). |
+| `what` | Verb-phrase describing what the package does. 1–2 sentences. Block literal `\|` allowed. |
+| `when` | Trigger condition. 1–2 sentences. Block literal `\|` allowed. |
+| `how` | Primary entry point (e.g., `import scitex_io` or `scitex-io --help`). 1–2 sentences. |
+| `description` | **Auto-derived** cache (see §3). Do not hand-edit. |
+| `tags` | Exactly `[scitex-<pkg>]` — one canonical tag per SKILL.md. |
 
-A leaf usually carries 2–4 tags: its package, its category, and 1–2 cross-cutting scopes.
+### Leaf — structured topic/details + tag
 
-## 2. Recommended for SKILL.md (>70% adoption)
+| Field | Purpose |
+|---|---|
+| `topic` | Short noun phrase (e.g., `Installation`, `Python API`). |
+| `details` | Key specifics. 1–2 sentences. Block literal `\|` allowed. |
+| `description` | **Auto-derived** cache. Do not hand-edit. |
+| `tags` | First tag canonical: `scitex-<pkg>-<slug>` where `<slug>` = filename minus `NN_` prefix and `.md`. Optional topical tags after. |
 
-| Field | Adoption | Purpose |
-|---|---|---|
-| `allowed-tools` | 12/12 SKILL.md | Tool prefix the skill may use without per-call approval — e.g., `mcp__scitex__io_*` |
-| `primary_interface` | 10/12 SKILL.md | Highest-rated interface: `python`, `cli`, `mcp`, `skills`, `hook`, or `mixed` |
-| `interfaces` | 10/12 SKILL.md | Star-rating dict (0–3) per interface; renders as the header line |
+Leaves do **NOT** carry `name:` (filename is identity). They do **NOT** carry `allowed-tools` / `primary_interface` / `interfaces` (SKILL.md-only — see §2).
+
+Example leaf for `01_installation.md` in `scitex-io`:
+
+```yaml
+---
+topic: Installation
+details: pip install scitex-io; verify with `python -c "import scitex_io"`.
+description: "Installation: pip install scitex-io; verify with `python -c \"import scitex_io\"`."
+tags: [scitex-io-installation]
+---
+```
+
+## 2. Recommended for SKILL.md only
+
+| Field | Purpose |
+|---|---|
+| `allowed-tools` | Tool prefix the skill may use without per-call approval — e.g., `mcp__scitex_io__*`. Omit if no MCP server. |
+| `primary_interface` | Highest-rated interface: `python`, `cli`, `mcp`, `skills`, `http`, or `mixed`. |
+| `interfaces` | Star-rating dict (0–3) per interface; renders as the header line. |
+
+Example SKILL.md frontmatter:
 
 ```yaml
 ---
 name: scitex-io
-description: Universal scientific file I/O with 30+ format handlers.
-tags: [scitex-io, scitex-package]
-allowed-tools: mcp__scitex__io_*
+what: |
+  Universal scientific file I/O with 30+ format handlers
+  (HDF5, NPY, CSV, JSON, MAT, PKL, ...).
+when: reading or writing scientific data files in Python.
+how: "`import scitex_io as sio; sio.save(obj, path)`."
+description: <auto-generated — see §3>
+tags: [scitex-io]
+allowed-tools: mcp__scitex_io__*
 primary_interface: python
 interfaces:
   python: 3
   cli: 2
   mcp: 2
   skills: 3
-  hook: 0
   http: 0
 ---
 ```
 
-The header line in the SKILL.md body restates the rating for human readers:
+YAML multiline confirmed: block literal `|`, block folded `>`, and plain continuation all parse correctly in the Claude Code skill loader (verified end-to-end 2026-05-03 via `claude -p` test). Use `|` whenever a structured field exceeds one line.
 
-```markdown
-> **Interfaces:** Python ⭐⭐⭐ · CLI ⭐⭐ · MCP ⭐⭐ · Skills ⭐⭐⭐ · Hook — · HTTP —
+## 3. Auto-derived `description:`
+
+`description:` is the cache the Claude Code loader reads to decide auto-load. Source of truth lives in the structured fields in the same file; the cache is regenerated mechanically.
+
+**Formulas (whitespace-normalised, single line, ≤500 chars):**
+
+- SKILL.md: `description = f"{what} Use when {when} {how}"`
+- Leaf: `description = f"{topic}: {details}"`
+
+**Regeneration:**
+
+```bash
+scitex-dev ecosystem audit-skills <pkg> --fix
 ```
 
-## 3. Claude Code standard fields (optional)
+`--fix` rewrites `description:` from the structured fields, idempotent, frontmatter-only, prints a diff. Optional pre-commit hook can keep cache always synced. The auditor flags drift via SK707 (SKILL.md) and SK711 (leaf).
 
-Use only when the skill is interactive (slash command) rather than a static rule file. Most SciTeX skills are rule files and need none of these.
+**Why this design:** single source of truth in the same file; no external schema; drift caught by audit; humans edit one place; the cache exists only because Claude Code's loader requires `description:` literally.
+
+## 4. Claude Code standard fields (optional)
+
+Use only when the skill is interactive (slash command). Most SciTeX skills are rule files and need none of these.
 
 | Field | Purpose |
 |---|---|
 | `argument-hint` | Autocomplete hint, e.g. `[issue-number]` |
-| `disable-model-invocation` | `true` = only the user can `/name`-invoke; Claude cannot auto-load |
-| `user-invocable` | `false` = hide from the `/` menu (default `true`) |
+| `disable-model-invocation` | `true` = only the user can `/name`-invoke |
+| `user-invocable` | `false` = hide from the `/` menu |
 | `model` | Model override while the skill is active |
 | `effort` | `low` / `medium` / `high` / `max` |
-| `context: fork` | Run in an isolated subagent |
-| `agent` | Subagent type when forking |
-| `hooks` | Skill-scoped lifecycle hooks |
 
-## 4. Dropped from convention
+## 5. Canonical `tags` values
 
-These were once proposed as ecosystem extensions but adoption never converged. **Do not add to new files.** When auditing an old file with these fields, prefer to delete rather than maintain.
+| Tag | Meaning |
+|---|---|
+| `scitex-<pkg>` | SKILL.md canonical tag (one only) |
+| `scitex-<pkg>-<slug>` | Leaf canonical tag (first position) |
+| `scitex-general` | Ecosystem-wide `general/` skill category |
+| `meta` | Rules about writing rules — skill authoring, quality checklists |
+| `infra` | Cross-cutting infrastructure |
+
+## 6. Dropped from convention
+
+Do not add to new files. When auditing an old file with these, prefer to delete.
 
 | Field | Why dropped |
 |---|---|
-| `invocation` | Only `general/` itself uses it; downstream packages rely on `description` keyword-matching |
-| `context_tokens` / `context_tokens_total` | 0/12 packages set it; agents don't read it |
-| `canonical-location` | 1/12; drift detection never built |
-| `see-also` | 0/12; cross-references live in body markdown links instead |
-
-## 5. Per-leaf frontmatter (minimum)
-
-Leaves under SKILL.md carry only:
-
-```yaml
----
-name: <leaf-topic>
-description: <one-line summary>
-tags: [<package>, <category>, ...]
----
-```
-
-`allowed-tools`, `primary_interface`, `interfaces` are **SKILL.md-only** — leaves inherit from the index.
+| `invocation` | Only `general/` itself uses it; downstream packages rely on `description` keyword-matching. |
+| `context_tokens` / `context_tokens_total` | 0/12 packages set it; agents don't read it. |
+| `canonical-location` | 1/12; drift detection never built. |
+| `see-also` | 0/12; cross-references live in body markdown links instead. |
+| Hand-edited `description:` | Now auto-derived from structured fields (§3). |
+| Multi-tag SKILL.md (`[scitex-io, scitex-package]`) | One canonical tag per SKILL.md (§1). |
+| Leaf `name:` field | Filename is identity (§1). |
 
 ## Cross-references
 
-- [03_skill-md-as-index.md](03_skill-md-as-index.md) — SKILL.md template that uses the recommended fields
+- [03_skill-md-as-index.md](03_skill-md-as-index.md) — SKILL.md template
 - [13_standard-template.md](13_standard-template.md) — copy-paste scaffold matching this convention
-- [12_quality-checklist.md](12_quality-checklist.md) — release-gate verification
+- [12_quality-checklist.md](12_quality-checklist.md) — release-gate verification (SK706–SK711)
