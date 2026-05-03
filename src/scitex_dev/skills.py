@@ -323,6 +323,27 @@ def export_skills(
 
     for pkg_name, entries in all_skills.items():
         pkg_dest = dest / pkg_name
+
+        # --link mode: symlink the entire package _skills/ directory so any
+        # add/rename/delete in source propagates immediately. Per-file
+        # symlinks (legacy) miss new files until re-install.
+        if link and entries:
+            src_paths = [Path(e["path"]) for e in entries if Path(e["path"]).exists()]
+            if src_paths:
+                src_dirs = {p.parent.resolve() for p in src_paths}
+                if len(src_dirs) == 1:
+                    src_dir = next(iter(src_dirs))
+                    if pkg_dest.is_symlink() or pkg_dest.is_file():
+                        pkg_dest.unlink()
+                    elif pkg_dest.is_dir():
+                        shutil.rmtree(pkg_dest)
+                    pkg_dest.parent.mkdir(parents=True, exist_ok=True)
+                    pkg_dest.symlink_to(src_dir, target_is_directory=True)
+                    exported[pkg_name] = [pkg_dest / p.name for p in src_paths]
+                    continue
+                # Multiple source dirs (rare, e.g. nested subdirs across
+                # roots) — fall through to per-file symlink.
+
         pkg_dest.mkdir(parents=True, exist_ok=True)
 
         pkg_files: list[Path] = []
