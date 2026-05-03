@@ -17,6 +17,7 @@ from pathlib import Path
 import click
 
 from .... import _skills_audit_core as _core
+from . import _audit_v2 as _v2
 
 
 @dataclass(frozen=True)
@@ -87,6 +88,10 @@ RULES: dict[str, Rule] = {
         ),
     ]
 }
+# Merge spec-v2 rules (SK105–SK111, SK705–SK711) — kept in `_audit_v2.py`
+# to preserve `_audit.py`'s size budget.
+for _r in _v2.V2_RULES.values():
+    RULES[_r.code] = Rule(_r.code, _r.section, _r.message)
 
 
 @dataclass
@@ -238,8 +243,13 @@ def _check_header_footer(path: Path, out: list[Violation]) -> None:
         out.append(Violation("SK211", str(path), "remove trailing `<!-- EOF -->`"))
 
 
-def _check_frontmatter(path: Path, out: list[Violation]) -> dict[str, str] | None:
+def _check_frontmatter(
+    path: Path, out: list[Violation], *, is_skill_md: bool = True
+) -> dict[str, str] | None:
     """SK701 / SK702 / SK703 / SK704 — frontmatter required fields.
+
+    SK702 (`name:` required) only fires for SKILL.md; leaves are governed by
+    SK705 (must NOT carry `name:`).
 
     Returns the parsed key->raw-value dict for downstream rule reuse, or None
     if frontmatter is missing entirely.
@@ -251,7 +261,7 @@ def _check_frontmatter(path: Path, out: list[Violation]) -> dict[str, str] | Non
         return None
     block = m.group(1)
     keys = set(_FRONTMATTER_KEY_RE.findall(block))
-    if "name" not in keys:
+    if is_skill_md and "name" not in keys:
         out.append(Violation("SK702", str(path), "missing `name:` field"))
     if "description" not in keys:
         out.append(Violation("SK703", str(path), "missing `description:` field"))
@@ -318,11 +328,71 @@ def _check_import_alias(path: Path, out: list[Violation]) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _collect_violations(distribution: str, canonical_dir: Path) -> list[Violation]:
+    """Run all per-file rules on a fully-discovered `_skills/<dist>/` dir."""
+    violations: list[Violation] = []
+    skill_md = canonical_dir / "SKILL.md"
+
+    # SKILL.md checks.
+    _check_header_footer(skill_md, violations)
+    _check_frontmatter(skill_md, violations, is_skill_md=True)
+    _check_skill_md_size(skill_md, violations)
+    _check_index_links(skill_md, canonical_dir, violations)
+    _check_import_alias(skill_md, violations)
+    for code, where, detail in _v2.check_skill_md_frontmatter(skill_md, distribution):
+        violations.append(Violation(code, where, detail))
+
+    # File-presence (SK105–SK111).
+    for code, where, detail in _v2.check_file_presence(canonical_dir, distribution):
+        violations.append(Violation(code, where, detail))
+
+    # Naming check covers the whole directory at once.
+    _check_naming(canonical_dir, violations)
+
+    # Per-leaf checks.
+    for leaf in sorted(canonical_dir.iterdir()):
+        if not leaf.is_file() or leaf.suffix != ".md" or leaf.name == "SKILL.md":
+            continue
+        _check_header_footer(leaf, violations)
+        _check_frontmatter(leaf, violations, is_skill_md=False)
+        _check_leaf_size(leaf, violations)
+        _check_import_alias(leaf, violations)
+        for code, where, detail in _v2.check_leaf_frontmatter(leaf, distribution):
+            violations.append(Violation(code, where, detail))
+
+    return violations
+
+
+_FIXABLE = {"SK705", "SK707", "SK709", "SK710", "SK711"}
+
+
+def _apply_fixes(
+    distribution: str, canonical_dir: Path, violations: list[Violation]
+) -> dict[str, set[str]]:
+    """Apply fixes; return {file_path: {codes_fixed}}."""
+    by_file: dict[Path, set[str]] = {}
+    for v in violations:
+        if v.rule not in _FIXABLE:
+            continue
+        by_file.setdefault(Path(v.where), set()).add(v.rule)
+    fixed_log: dict[str, set[str]] = {}
+    skill_md = canonical_dir / "SKILL.md"
+    for path, codes in by_file.items():
+        if path == skill_md:
+            done = _v2.fix_skill_md(path, distribution, codes)
+        else:
+            done = _v2.fix_leaf(path, distribution, codes)
+        if done:
+            fixed_log[str(path)] = done
+    return fixed_log
+
+
 def audit_skills(
     distribution: str,
     *,
     json_out: bool = False,
     rules: set[str] | None = None,
+    fix: bool = False,
 ) -> int:
     """Audit `<distribution>` against the skills checklist. Warn-only.
 
@@ -370,26 +440,18 @@ def audit_skills(
     canonical_dir = _check_layout(skills_dir, distribution, violations)
 
     if canonical_dir is not None:
-        skill_md = canonical_dir / "SKILL.md"
+        violations.extend(_collect_violations(distribution, canonical_dir))
 
-        # SKILL.md checks.
-        _check_header_footer(skill_md, violations)
-        _check_frontmatter(skill_md, violations)
-        _check_skill_md_size(skill_md, violations)
-        _check_index_links(skill_md, canonical_dir, violations)
-        _check_import_alias(skill_md, violations)
-
-        # Naming check covers the whole directory at once.
-        _check_naming(canonical_dir, violations)
-
-        # Per-leaf checks.
-        for leaf in sorted(canonical_dir.iterdir()):
-            if not leaf.is_file() or leaf.suffix != ".md" or leaf.name == "SKILL.md":
-                continue
-            _check_header_footer(leaf, violations)
-            _check_frontmatter(leaf, violations)
-            _check_leaf_size(leaf, violations)
-            _check_import_alias(leaf, violations)
+        # --fix: apply auto-fixable rules and re-collect.
+        if fix:
+            fixed_log = _apply_fixes(distribution, canonical_dir, violations)
+            for path_str, codes in sorted(fixed_log.items()):
+                click.echo(f"fixed {path_str}: {', '.join(sorted(codes))}")
+            # Re-run checks after fixes.
+            violations = []
+            canonical_dir2 = _check_layout(skills_dir, distribution, violations)
+            if canonical_dir2 is not None:
+                violations.extend(_collect_violations(distribution, canonical_dir2))
 
     if rules:
         violations = [v for v in violations if v.rule in rules]

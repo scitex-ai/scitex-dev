@@ -128,3 +128,152 @@ def find_duplicate_prefixes(skills_dir: Path) -> list[tuple[int, int | None]]:
             seen.add(k)
             dupes.append(k)
     return dupes
+
+
+# ---------------------------------------------------------------------------
+# Spec v2 helpers — pyproject probe, source scan, frontmatter YAML
+# ---------------------------------------------------------------------------
+
+
+_HTTP_IMPORT_RE = re.compile(
+    r"^\s*(?:from\s+(?:starlette|fastapi|uvicorn)\b|import\s+(?:starlette|fastapi|uvicorn)\b)",
+    re.MULTILINE,
+)
+_ENVVAR_RE_TEMPLATE = r"(?:os\.environ(?:\.get)?|os\.getenv|getenv)\s*[\(\[]\s*['\"]SCITEX_{mod}_[A-Z0-9_]+"
+
+
+def find_package_root(skills_dir: Path) -> Path | None:
+    """Walk up from `skills_dir` looking for a directory containing pyproject.toml."""
+    p = skills_dir.resolve()
+    for parent in [p, *p.parents]:
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    return None
+
+
+def load_pyproject(pkg_root: Path) -> dict:
+    """Return parsed pyproject.toml dict, or {} on failure."""
+    try:
+        try:
+            import tomllib  # py3.11+
+        except ImportError:
+            import tomli as tomllib  # type: ignore
+        with (pkg_root / "pyproject.toml").open("rb") as f:
+            return tomllib.load(f)
+    except Exception:
+        return {}
+
+
+def has_public_python_api(import_name: str) -> bool | None:
+    """Return True/False if determinable, else None (unknown -> skip rule)."""
+    try:
+        import importlib
+
+        mod = importlib.import_module(import_name)
+    except Exception:
+        return None
+    all_ = getattr(mod, "__all__", None)
+    if isinstance(all_, (list, tuple)):
+        if len(all_) > 0:
+            return True
+    # Fall back: any non-underscore attr at module level (excl. submodules/builtins)
+    for name in dir(mod):
+        if not name.startswith("_"):
+            return True
+    return False
+
+
+def has_cli_scripts(pyproject: dict) -> bool:
+    return bool(pyproject.get("project", {}).get("scripts"))
+
+
+def has_mcp_entry(pyproject: dict, import_name: str) -> bool:
+    eps = pyproject.get("project", {}).get("entry-points", {})
+    if eps.get("mcp.servers"):
+        return True
+    # Fallback: try importing <pkg>._mcp_server
+    try:
+        import importlib
+
+        importlib.import_module(f"{import_name}._mcp_server")
+        return True
+    except Exception:
+        return False
+
+
+def _iter_py_sources(pkg_root: Path):
+    src = pkg_root / "src"
+    base = src if src.is_dir() else pkg_root
+    for p in base.rglob("*.py"):
+        # Skip caches/legacy
+        parts = set(p.parts)
+        if "__pycache__" in parts or ".old" in parts:
+            continue
+        yield p
+
+
+def has_http_imports(pkg_root: Path) -> bool:
+    for p in _iter_py_sources(pkg_root):
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        if _HTTP_IMPORT_RE.search(text):
+            return True
+    return False
+
+
+def has_envvar_refs(pkg_root: Path, distribution: str) -> bool:
+    # MOD = distribution suffix without scitex- prefix, uppercased; or whole
+    # name uppercased when no prefix.
+    base = (
+        distribution[len("scitex-") :]
+        if distribution.startswith("scitex-")
+        else distribution
+    )
+    mod = re.escape(base.replace("-", "_").upper())
+    pat = re.compile(_ENVVAR_RE_TEMPLATE.format(mod=mod))
+    for p in _iter_py_sources(pkg_root):
+        try:
+            text = p.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+        if pat.search(text):
+            return True
+    return False
+
+
+def parse_frontmatter_yaml(path: Path) -> tuple[dict | None, str, str, str]:
+    """Return (data, frontmatter_block, body, full_text).
+
+    `data` is None when there is no `---` block at line 1, or when YAML
+    parsing fails. `frontmatter_block` is the raw text between the two `---`
+    fences (without the fences); empty when no block. `body` is everything
+    after the closing `---\\n`.
+    """
+    text = path.read_text(encoding="utf-8", errors="replace")
+    m = re.match(r"\A---\n(.*?)\n---\n", text, re.DOTALL)
+    if not m:
+        return None, "", text, text
+    block = m.group(1)
+    body = text[m.end() :]
+    try:
+        import yaml
+
+        data = yaml.safe_load(block)
+        if not isinstance(data, dict):
+            data = None
+    except Exception:
+        data = None
+    return data, block, body, text
+
+
+def normalize_ws(s: str) -> str:
+    """Collapse runs of whitespace (incl. newlines) into single spaces; strip."""
+    return re.sub(r"\s+", " ", s or "").strip()
+
+
+def slug_from_filename(name: str) -> str:
+    """`02_quick-start.md` -> `quick-start`. Strip 2-digit prefix, suffix."""
+    base = name[:-3] if name.endswith(".md") else name
+    return re.sub(r"^\d{2}_", "", base).lower()

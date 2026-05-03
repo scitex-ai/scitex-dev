@@ -173,11 +173,32 @@ def _make_compliant_pkg(tmp_path: Path, dist: str) -> Path:
     pkg_root = tmp_path / dist.replace("-", "_") / "_skills" / dist
     pkg_root.mkdir(parents=True)
     (pkg_root / "SKILL.md").write_text(
-        f"---\nname: {dist}\ndescription: Test package.\ntags: [{dist}]\n---\n\n"
-        f"# {dist}\n\n- [01_quick-start.md](01_quick-start.md)\n"
+        f"---\n"
+        f"name: {dist}\n"
+        f"what: Test package.\n"
+        f"when: running the test suite.\n"
+        f"how: import {dist.replace('-', '_')}.\n"
+        f"description: Test package. Use when running the test suite. import {dist.replace('-', '_')}.\n"
+        f"tags: [{dist}]\n"
+        f"---\n\n# {dist}\n\n"
+        f"- [01_installation.md](01_installation.md)\n"
+        f"- [02_quick-start.md](02_quick-start.md)\n"
     )
-    (pkg_root / "01_quick-start.md").write_text(
-        "---\nname: quick-start\ndescription: tour\ntags: [test]\n---\n\n# Quick\n"
+    (pkg_root / "01_installation.md").write_text(
+        f"---\n"
+        f"topic: Installation\n"
+        f"details: pip install {dist}.\n"
+        f"description: Installation: pip install {dist}.\n"
+        f"tags: [{dist}-installation]\n"
+        f"---\n\n# Installation\n"
+    )
+    (pkg_root / "02_quick-start.md").write_text(
+        f"---\n"
+        f"topic: Quick start\n"
+        f"details: smallest example.\n"
+        f"description: Quick start: smallest example.\n"
+        f"tags: [{dist}-quick-start]\n"
+        f"---\n\n# Quick\n"
     )
     return pkg_root
 

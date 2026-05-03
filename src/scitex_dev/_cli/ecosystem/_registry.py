@@ -810,7 +810,15 @@ def register_ecosystem_commands(main_group):
         multiple=True,
         help="Restrict to specific rule codes (e.g. --rule SK210). Repeatable.",
     )
-    def ecosystem_audit_skills(distribution, json_out, rules):
+    @click.option(
+        "--fix",
+        is_flag=True,
+        help=(
+            "Auto-fix mechanically resolvable rules (SK705/SK707/SK709/SK710/"
+            "SK711). Rewrites only frontmatter; idempotent."
+        ),
+    )
+    def ecosystem_audit_skills(distribution, json_out, rules, fix):
         """Check a package's `_skills/<pip-name>/` against the §1–§FM checklist."""
         from ..audit import _skills as _cli_audit_skills
 
@@ -819,6 +827,7 @@ def register_ecosystem_commands(main_group):
                 distribution,
                 json_out=json_out,
                 rules=set(rules) if rules else None,
+                fix=fix,
             )
         )
 
