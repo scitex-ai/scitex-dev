@@ -29,42 +29,9 @@ else:
         ("Shell", ["install-tab-completion"]),
     ]
 
-    class CategorizedGroup(click.Group):
-        """Custom Click group that displays commands organized by category."""
+    from ..click_helpers import make_categorized_group
 
-        def format_commands(self, ctx, formatter):
-            commands = {}
-            for subcommand in self.list_commands(ctx):
-                cmd = self.get_command(ctx, subcommand)
-                if cmd is not None and not cmd.hidden:
-                    commands[subcommand] = cmd
-
-            if not commands:
-                return
-
-            displayed = set()
-
-            for category_name, category_commands in COMMAND_CATEGORIES:
-                category_items = []
-                for name in category_commands:
-                    if name in commands and name not in displayed:
-                        cmd = commands[name]
-                        help_text = cmd.get_short_help_str(limit=formatter.width)
-                        category_items.append((name, help_text))
-                        displayed.add(name)
-
-                if category_items:
-                    with formatter.section(category_name):
-                        formatter.write_dl(category_items)
-
-            uncategorized = [
-                (name, commands[name].get_short_help_str(limit=formatter.width))
-                for name in sorted(commands.keys())
-                if name not in displayed
-            ]
-            if uncategorized:
-                with formatter.section("Other"):
-                    formatter.write_dl(uncategorized)
+    CategorizedGroup = make_categorized_group(COMMAND_CATEGORIES)
 
     def _command_to_dict(
         cmd: click.Command,
