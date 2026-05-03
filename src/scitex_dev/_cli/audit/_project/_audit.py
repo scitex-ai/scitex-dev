@@ -1186,11 +1186,15 @@ def audit_project(
         )
         return 0 if not violations else 1
 
+    from ...._audit_disclaimer import emit_disclaimer
+
     if not violations:
         click.echo(f"ok  {distribution}: no project-structure violations")
+        emit_disclaimer()
         return 0
 
     click.echo(f"warn  {distribution} ({repo_root}): {len(violations)} violation(s)")
     for v in violations:
         click.echo(v.format())
+    emit_disclaimer()
     return 1

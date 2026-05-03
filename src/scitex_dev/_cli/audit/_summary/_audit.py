@@ -1687,12 +1687,16 @@ def _emit_human(package: str, status: str, violations: list[Violation]) -> None:
     if status.startswith("not-auditable"):
         click.echo(f"error {package}: {status}", err=True)
         return
+    from ...._audit_disclaimer import emit_disclaimer
+
     if status == "ok":
         click.echo(f"ok    {package}: no CLI convention violations")
+        emit_disclaimer()
         return
     click.echo(f"warn  {package}: {len(violations)} warning(s)")
     for v in violations:
         click.echo(f"  [{v.rule}] {v.command}: {v.message}")
+    emit_disclaimer()
 
 
 def _emit_json(records: list[dict], registry_provenance: str) -> None:

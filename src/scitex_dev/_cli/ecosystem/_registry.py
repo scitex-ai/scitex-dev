@@ -1107,8 +1107,11 @@ def register_ecosystem_commands(main_group):
         results: dict = {}
         overall_exit = 0
         # Resolve sibling `scitex-dev` console script. Falls back to PATH lookup.
+        import os as _os
         import shutil as _shutil
 
+        # Suppress per-auditor disclaimer; emit once at end of audit-all.
+        sub_env = {**_os.environ, "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1"}
         scitex_dev_bin = _shutil.which("scitex-dev") or "scitex-dev"
         for a in audits:
             cmd = [scitex_dev_bin, "ecosystem", a, distribution]
@@ -1119,7 +1122,7 @@ def register_ecosystem_commands(main_group):
                 cmd += ["--severity", severity]
             try:
                 if as_json:
-                    r = subprocess.run(cmd, capture_output=True, text=True)
+                    r = subprocess.run(cmd, capture_output=True, text=True, env=sub_env)
                     payload = r.stdout.strip() or "null"
                     try:
                         results[a] = {
@@ -1130,7 +1133,7 @@ def register_ecosystem_commands(main_group):
                         results[a] = {"exit": r.returncode, "raw": payload}
                 else:
                     click.echo(f"\n=== {a} ===", err=True)
-                    r = subprocess.run(cmd)
+                    r = subprocess.run(cmd, env=sub_env)
                     results[a] = {"exit": r.returncode}
             except Exception as e:
                 click.echo(f"error: {a} failed to launch: {e}", err=True)
@@ -1146,6 +1149,11 @@ def register_ecosystem_commands(main_group):
                     {"distribution": distribution, "results": results}, indent=2
                 )
             )
+        else:
+            from ..._audit_disclaimer import emit_disclaimer
+
+            click.echo("", err=True)
+            emit_disclaimer()
         _sys.exit(overall_exit)
 
     @ecosystem.command("start-dashboard")

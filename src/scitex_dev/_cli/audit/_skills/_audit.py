@@ -482,11 +482,15 @@ def audit_skills(
         )
         return 2
 
+    from ...._audit_disclaimer import emit_disclaimer
+
     if not violations:
         click.echo(f"ok  {distribution}: no skills violations")
+        emit_disclaimer()
         return 0
 
     click.echo(f"warn  {distribution}: {len(violations)} violation(s)")
     for v in violations:
         click.echo(v.format())
+    emit_disclaimer()
     return 1
