@@ -34,7 +34,7 @@ Cookbook of the specific symptoms observed during ecosystem-wide remediation pas
 | **LOW** | `Doc-Drift Nightly` cancelled | 10-minute `timeout-minutes` hit by pip resolver backtracking | bump to 25 min, or constrain sphinx version to avoid backtracking |
 | **LOW** | `coverage < fail_under` even though tests all pass | aspirational threshold; real coverage is lower | lower `fail_under` to current floor; raise again when new tests land |
 | **LOW** | Skill quality `§2.prefix: MANIFEST.md filename must match NN_kebab-name.md` | MANIFEST.md is a system file, not a leaf | upgrade scitex-dev to a version where the checker exempts `SYSTEM_FILES = {"MANIFEST.md"}` |
-| **LOW** | Skill quality `§3.index-monolith: SKILL.md > 4096B` | bloated frontmatter description | trim `description:` — it gets copied into skill-matching prompts; verbose prose costs tokens without helping trigger rates |
+| **LOW** | Skill quality `§3.index-monolith: SKILL.md > 6144B` | bloated frontmatter description or substantive content leaked into the index | trim `description:` (auto-derived from `what`/`when`/`how` — keep those concise); promote any prose section to a leaf |
 | **LOW** | Skill quality `§4.monolith: NN_foo.md > 10240B` | leaf grew unmanageably | split into two leaves with new prefixes, link both from `SKILL.md`, prefer topical split over length-based |
 
 ## 2. Triage order
