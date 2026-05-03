@@ -253,6 +253,23 @@ CATALOG: dict[str, set[str]] = {
     },
     # Intransitive verbs — may be flat keepers per §1a
     **{w: {"verb-i"} for w in ["doctor", "repl", "shell"]},
+    # Polysemous noun+verb tokens — "show me X" pattern. Treated as
+    # both noun and verb-i, so they pass §1's leaf-must-be-verb check
+    # under a noun group (e.g., `<cli> agent status`, `<cli> job logs`),
+    # while still being unacceptable as a bare top-level leaf (caught
+    # by §1 because they have a noun label and no compound).
+    **{
+        w: {"noun", "verb-i"}
+        for w in [
+            "status",
+            "logs",
+            "log",
+            "info",
+            "health",
+            "summary",
+            "report",
+        ]
+    },
     # Allowed flat-keeper exceptions
     "version": {"flat-keeper"},
 }

@@ -1,8 +1,8 @@
 ---
-name: interface-cli-noun-verb
-description: SciTeX CLI subcommand grammar — chain shape `<cli> <noun> [<noun> …] <verb>`, transitive vs intransitive verbs, tree vs compound-leaf, ambiguous tokens.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Noun Verb
+  [DETAILS] SciTeX CLI subcommand grammar — chain shape `<cli> <noun> [<noun> …] <verb>`, transitive vs intransitive verbs, tree vs compound-leaf, ambiguous tokens.
+tags: [scitex-general-interface-cli-subcommand-structure-noun-verb]
 ---
 
 # §1. Subcommand structure — noun-verb
@@ -57,6 +57,25 @@ Chain shape:
 | `<cli> list-jobs` | ✓        | object baked into the verb             | prefer when 1–2 leaf actions   |
 | `<cli> list`      | ✗        | no object anywhere                     | **never**                      |
 | `<cli> job`       | ✗        | trailing noun, no action               | **never** (unless exception)   |
+
+## Polysemous "show-me-X" leaves under a noun group
+
+A small set of tokens (`status`, `logs`, `log`, `info`, `health`,
+`summary`, `report`) are technically nouns but read as
+intransitive-verb shorthand for "report this thing's status / logs /
+…". They are allowed as **leaf tokens under a noun group**:
+
+```
+<cli> agent status                   # ok — noun group + polysemous leaf
+<cli> job logs                       # ok — same shape
+```
+
+They are still **forbidden as bare top-level leaves** — `<cli> status`
+fails §1 (no object). The catalog labels them as `{noun, verb-i}`; the
+auditor's polysemous-escape lets them through specifically when nested.
+
+This avoids both the `show-status`/`list-logs` compound clutter and the
+audit's strict "leaf must be verb" complaint.
 
 ## Ambiguous tokens (noun+verb in English)
 
