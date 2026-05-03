@@ -138,7 +138,7 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
     import logging
 
     logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
-    from .docs import get_docs
+    from ._docs.docs import get_docs
 
     # --tldr: concise quick-start
     if args.tldr:
@@ -207,7 +207,7 @@ def _get_tldr(package: str) -> str:
 
     Tries to extract from built docs, falls back to a generic template.
     """
-    from .docs import get_docs
+    from ._docs.docs import get_docs
 
     try:
         result = get_docs(package=package)
@@ -406,7 +406,7 @@ def skills_click_group(package: str, name: str = "skills"):
         """Export this package's skills to <dest>."""
         from pathlib import Path as _P
 
-        from .skills import (
+        from ._docs.skills import (
             _get_default_export_dest,
             export_skills,
             list_skills,
@@ -576,7 +576,7 @@ def _skills_list(args: argparse.Namespace, package: str) -> None:
     import logging
 
     logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
-    from .skills import list_skills
+    from ._docs.skills import list_skills
 
     result = list_skills(package=package)
     if args.as_json:
@@ -600,9 +600,9 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
     import logging
 
     logging.getLogger("scitex_dev._discovery").setLevel(logging.ERROR)
-    from .skills import export_skills
+    from ._docs.skills import export_skills
 
-    from .skills import _get_default_export_dest
+    from ._docs.skills import _get_default_export_dest
 
     dest = (
         Path(args.dest) if getattr(args, "dest", None) else _get_default_export_dest()
@@ -610,7 +610,7 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
     source = getattr(args, "source", "installed")
     clean = getattr(args, "clean", False)
     if getattr(args, "dry_run", False):
-        from .skills import list_skills
+        from ._docs.skills import list_skills
 
         result = {
             k: [e["name"] + ".md" for e in v]
@@ -653,7 +653,7 @@ def _skills_get(args: argparse.Namespace, package: str) -> None:
         _skills_list(argparse.Namespace(as_json=False), package)
         return
 
-    from .skills import get_skill
+    from ._docs.skills import get_skill
 
     content = get_skill(package=package, name=args.name)
     if content:

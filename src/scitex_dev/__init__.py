@@ -80,11 +80,11 @@ _LAZY_ATTRS: dict[str, str] = {
     "RESULT_SCHEMA": "types",
     "Result": "types",
     # docs
-    "build_docs": "docs",
-    "get_docs": "docs",
-    "search_docs": "docs",
+    "build_docs": "_docs.docs",
+    "get_docs": "_docs.docs",
+    "search_docs": "_docs.docs",
     # search
-    "search": "search",
+    "search": "_docs.search",
     # versions
     "check_versions": "_release.versions",
     "get_ecosystem_versions": "_release.versions",
@@ -162,7 +162,7 @@ _LAZY_ATTRS: dict[str, str] = {
     "deploy_scitex_cloud": "_release.deploy",
     "verify_production": "_release.deploy",
     # skills
-    "verify_docs_and_skills": "skills",
+    "verify_docs_and_skills": "_docs.skills",
     # test_runner
     "TestConfig": "test_runner",
     "fetch_hpc_result": "test_runner",

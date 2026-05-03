@@ -21,7 +21,7 @@ def docs_list() -> str:
     Returns:
         JSON string with package manifest overview.
     """
-    from .docs import get_docs
+    from .._docs.docs import get_docs
 
     try:
         result = get_docs()
@@ -57,7 +57,7 @@ def docs_get(
     Returns:
         JSON string with documentation content.
     """
-    from .docs import get_docs
+    from .._docs.docs import get_docs
 
     try:
         result = get_docs(package=package, format=format, page=page)
@@ -108,7 +108,7 @@ def docs_build(
     Returns:
         JSON string with build results.
     """
-    from .docs import build_docs
+    from .._docs.docs import build_docs
 
     try:
         result = build_docs(package=package, formats=formats)
@@ -148,7 +148,7 @@ def docs_search(
     Returns:
         JSON string with search results.
     """
-    from .docs import search_docs
+    from .._docs.docs import search_docs
 
     try:
         results = search_docs(

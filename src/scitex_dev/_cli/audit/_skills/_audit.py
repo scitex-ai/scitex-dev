@@ -16,7 +16,7 @@ from pathlib import Path
 
 import click
 
-from .... import _skills_audit_core as _core
+from ...._docs import skills_audit_core as _core
 from . import _audit_v2 as _v2
 
 
