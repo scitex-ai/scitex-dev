@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from scitex_dev._discovery import invalidate_cache
-from scitex_dev.skills import (
+from scitex_dev._core.discovery import invalidate_cache
+from scitex_dev._docs.skills import (
     _find_skills_dir,
     _stamp_manifest_version,
     export_skills,
