@@ -5,14 +5,11 @@ description: |
 tags: [scitex-dev-agentic-test-skills]
 ---
 
-> **⚠ STALE — 2026-05-02.** The `scitex-agentic-test` image and the
-> `SCITEX_DEV_AGENTIC_DOCKER_IMAGE` env var documented here are
-> retired. Skill evaluation moved to [newb](https://github.com/ywatanabe1989/newb).
-> Do not follow the workflow as written.
+# 31_agentic-test-skills
 
-# 17_agentic-test-skills
+> **STALE 2026-05-02** — `scitex-agentic-test` image + `SCITEX_DEV_AGENTIC_DOCKER_IMAGE` retired; moved to [newb](https://github.com/ywatanabe1989/newb).
 
-Layer 2 of agentic testing (see [16_agentic-test-overview.md]). Given a
+Layer 2 of agentic testing (see [30_agentic-test-overview.md]). Given a
 clean Claude Code instance and exactly one scoped skill catalog, measure
 whether a realistic user query causes Claude to view the expected
 `SKILL.md`.

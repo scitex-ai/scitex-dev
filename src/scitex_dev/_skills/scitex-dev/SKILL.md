@@ -25,26 +25,31 @@ interfaces:
 ## Sub-skills
 
 ### Core (01–09)
-- [01_result-types.md](01_result-types.md) — Result envelope, ErrorCode, @supports_return_as, SideEffect
-- [02_cli-mcp-utils.md](02_cli-mcp-utils.md) — Adapters: CLI exit codes, MCP JSON, option factories
-- [03_config.md](03_config.md) — DevConfig, HostConfig, load_config, create_default_config
+- [01_installation.md](01_installation.md) — Install + extras + smoke verify
+- [02_quick-start.md](02_quick-start.md) — `doctor` + `ecosystem list`
+- [03_python-api.md](03_python-api.md) — Public Python surface
+- [04_cli-reference.md](04_cli-reference.md) — CLI surface map
 
 ### Workflows (10–19)
-- [10_versions.md](10_versions.md) — list_versions, check_versions, get_mismatches, fix_mismatches
-- [11_ecosystem.md](11_ecosystem.md) — Package registry, sync_local, sync_all, sync_host, pull_local
-- [12_rename.md](12_rename.md) — bulk_rename, preview_rename, execute_rename
-- [13_docs-search.md](13_docs-search.md) — get_docs, build_docs, search_docs, search
-- [14_test-runner.md](14_test-runner.md) — run_local, run_hpc_sbatch, poll_hpc_job, fetch_hpc_result
-- [15_full-update.md](15_full-update.md) — Full ecosystem release pipeline — pre-flight + release (phases 1–2)
-- [19_full-update-deploy.md](19_full-update-deploy.md) — Full ecosystem release pipeline — local sync, NAS deploy, verification (phases 3–5)
+- [10_result-types.md](10_result-types.md) — Result envelope, ErrorCode, @supports_return_as, SideEffect
+- [11_cli-mcp-utils.md](11_cli-mcp-utils.md) — Adapters: CLI exit codes, MCP JSON, option factories
+- [12_config.md](12_config.md) — DevConfig, HostConfig, load_config, create_default_config
+- [13_versions.md](13_versions.md) — list_versions, check_versions, get_mismatches, fix_mismatches
+- [14_ecosystem.md](14_ecosystem.md) — Package registry, sync_local, sync_all, sync_host, pull_local
+- [15_rename.md](15_rename.md) — bulk_rename, preview_rename, execute_rename
+- [16_docs-search.md](16_docs-search.md) — get_docs, build_docs, search_docs, search
+- [17_test-runner.md](17_test-runner.md) — run_local, run_hpc_sbatch, poll_hpc_job, fetch_hpc_result
+- [18_full-update.md](18_full-update.md) — Release pipeline phases 1–2 (pre-flight + release)
+- [19_release-deploy.md](19_release-deploy.md) — Release pipeline phases 3–5 (local sync, NAS deploy, verify)
 
-### Agentic Testing (16–18)
-- [16_agentic-test-overview.md](16_agentic-test-overview.md) — Four-layer testing model + shared newbie-docker substrate (entry point)
-- [17_agentic-test-skills.md](17_agentic-test-skills.md) — Skill trigger-rate testing (Layer 2 for skills)
-- [18_agentic-test-mcp.md](18_agentic-test-mcp.md) — MCP tool-call evaluation (Layer 2+3 for MCP) — draft spec
+### Meta (20–29)
+- [20_env-vars.md](20_env-vars.md) — `SCITEX_DEV_*` env vars
+- [21_dynamic-audit.md](21_dynamic-audit.md) — Dynamic-audit design skeleton for release-gate
 
-### Quality Gates (20+)
-- [20_dynamic-audit.md](20_dynamic-audit.md) — Dynamic-audit design skeleton for release-gate (paired with scitex-python 99_checklist static commit-gate)
+### Architecture (30–39)
+- [30_agentic-test-overview.md](30_agentic-test-overview.md) — Four-layer testing model + shared newbie-docker substrate
+- [31_agentic-test-skills.md](31_agentic-test-skills.md) — Skill trigger-rate testing (Layer 2 for skills)
+- [32_agentic-test-mcp.md](32_agentic-test-mcp.md) — MCP tool-call evaluation (Layer 2+3 for MCP)
 
 ### Metadata
 - [MANIFEST.md](MANIFEST.md) — Package version and skill-export instructions
@@ -69,4 +74,4 @@ dev.preview_rename(pattern="old", replacement="new", directory=".")
 
 ## Environment
 
-- [30_env-vars.md](30_env-vars.md) — SCITEX_* env vars read by scitex-dev at runtime
+- [20_env-vars.md](20_env-vars.md) — `SCITEX_DEV_*` env vars read by scitex-dev at runtime

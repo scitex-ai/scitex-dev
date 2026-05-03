@@ -1,13 +1,13 @@
 ---
 description: |
   [TOPIC] Full Update Deploy
-  [DETAILS] Phases 3–5 of the full ecosystem update — local sync, NAS deploy (scitex-cloud special handling), verification, parallel execution strategy, and common failure modes. See 15_full-update.md for phases 1–2 (pre-flight + release).
-tags: [scitex-dev-full-update-deploy]
+  [DETAILS] Phases 3–5 of the full ecosystem update — local sync, NAS deploy (scitex-cloud special handling), verification, parallel execution strategy, and common failure modes. See 18_full-update.md for phases 1–2 (pre-flight + release).
+tags: [scitex-dev-release-deploy]
 ---
 
 # Full Ecosystem Update — Phases 3–5 (Deploy + Verify)
 
-Continuation of [15_full-update.md](15_full-update.md). Phases 1–2 cover pre-flight
+Continuation of [18_full-update.md](18_full-update.md). Phases 1–2 cover pre-flight
 and release; this file covers local sync, NAS deploy, verification, parallel
 execution, and failure modes.
 

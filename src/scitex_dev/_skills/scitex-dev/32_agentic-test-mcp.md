@@ -11,10 +11,10 @@ tags: [scitex-dev-agentic-test-mcp]
 > and the upcoming claude-agent-sdk-based sac redesign. Do not implement
 > this draft as written.
 
-# 18_agentic-test-mcp
+# 32_agentic-test-mcp
 
 Layer 2+3 for MCP servers. **Draft design** — the harness is wired for
-skill trigger tests (see [17_agentic-test-skills.md]) but not yet for
+skill trigger tests (see [31_agentic-test-skills.md]) but not yet for
 MCP evaluation. This leaf records the planned architecture so the next
 implementation pass has a spec.
 

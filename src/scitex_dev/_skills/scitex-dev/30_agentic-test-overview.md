@@ -12,7 +12,7 @@ tags: [scitex-dev-agentic-test-overview]
 > claude-agent-sdk; this skill will be re-authored once that lands.
 > Do not follow the workflow described here.
 
-# 16_agentic-test-overview
+# 30_agentic-test-overview
 
 Umbrella for SciTeX's **agentic testing** family — evaluations that run
 inside a clean Claude Code instance to measure whether skills and MCP
@@ -20,9 +20,9 @@ servers behave as intended end-to-end.
 
 See the split leaves:
 
-- [17_agentic-test-skills.md](17_agentic-test-skills.md) — skill
+- [31_agentic-test-skills.md](31_agentic-test-skills.md) — skill
   trigger-rate (Layer 2): does Claude view the expected `SKILL.md`?
-- [18_agentic-test-mcp.md](18_agentic-test-mcp.md) — MCP evaluation
+- [32_agentic-test-mcp.md](32_agentic-test-mcp.md) — MCP evaluation
   (Layer 2+3): does Claude call the expected tool(s) with the right
   arguments and follow through?
 
@@ -154,7 +154,7 @@ scitex-dev/src/scitex_dev/
 │   ├── _pytest.py                   # make_skill_trigger_tests(...)
 │   └── _poc.py                      # CLI: one-shot prompt
 └── _skills/scitex-dev/
-    ├── 16_agentic-test-overview.md  # this file
-    ├── 17_agentic-test-skills.md    # skill-trigger specifics
-    └── 18_agentic-test-mcp.md       # MCP-eval specifics
+    ├── 30_agentic-test-overview.md  # this file
+    ├── 31_agentic-test-skills.md    # skill-trigger specifics
+    └── 32_agentic-test-mcp.md       # MCP-eval specifics
 ```
