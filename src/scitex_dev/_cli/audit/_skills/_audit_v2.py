@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from ...._docs import skills_audit_core as _core
+from ...._skills_src import skills_audit_core as _core
 
 
 @dataclass(frozen=True)
