@@ -1,8 +1,8 @@
 ---
-name: interface-cli-flags
-description: SciTeX CLI universal & convention flags — required (-h, --help-recursive, --json, --dry-run, -V, -y) and convention (-v, -q, -j/--jobs). No interactive prompts.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Flags
+  [DETAILS] SciTeX CLI universal & convention flags — required (-h, --help-recursive, --json, --dry-run, -V, -y) and convention (-v, -q, -j/--jobs). No interactive prompts.
+tags: [scitex-general-interface-cli-universal-flags]
 ---
 
 # §2. Universal & convention flags

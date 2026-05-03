@@ -1,8 +1,8 @@
 ---
-name: ecosystem-local-state-directories
-description: Canonical filesystem layout for every scitex-* package's local state — config, logs, caches, PID files, workspace dirs. Two roots (`<project>/.scitex/<pkg-short>/` and `~/.scitex/<pkg-short>/`), project overrides user, always via PathManager.
-user-invocable: false
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Ecosystem Local State Directories
+  [DETAILS] Canonical filesystem layout for every scitex-* package's local state — config, logs, caches, PID files, workspace dirs. Two roots (`<project>/.scitex/<pkg-short>/` and `~/.scitex/<pkg-short>/`), project overrides user, always via PathManager.
+tags: [scitex-general-ecosystem-local-state-directories]
 ---
 
 # Local State Directories — Canonical Layout

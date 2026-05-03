@@ -1,7 +1,8 @@
 ---
-name: package-tests
-description: `./tests/` for a SciTeX package — pytest-driven, controlled by `pyproject.toml`. The mandatory `tests/<pkg>/` parent (1:1 mirror of `src/<pkg>/`), allowed sibling subdirs (scripts/examples/skills/agentic/integration/e2e/github_actions/coverage/logs/reports/custom), public/private filename convention with double-underscore for private (`test__foo.py` mirrors `_foo.py`), the small set of "meta tests" allowed at `tests/` root, the `audit-project` rules (PS201–PS206, PS302), and the historical `sync_tests_with_source.sh` precedent. Drop the source-as-comments pattern — it's noise.
-tags: [scitex-python, scitex-general, scitex-package, project-structure, tests]
+description: |
+  [TOPIC] Package Tests
+  [DETAILS] `./tests/` for a SciTeX package — pytest-driven, controlled by `pyproject.toml`. The mandatory `tests/<pkg>/` parent (1:1 mirror of `src/<pkg>/`), allowed sibling subdirs (scripts/examples/skills/agentic/integration/e2e/github_actions/coverage/logs/reports/custom), public/private filename convention with double-underscore for private (`test__foo.py` mirrors `_foo.py`), the small set of "meta tests" allowed at `tests/` root, the `audit-project` rules (PS201–PS206, PS302), and the historical `sync_tests_with_source.sh` precedent. Drop the source-as-comments pattern — it's noise.
+tags: [scitex-general-package-project-structure-tests]
 ---
 
 # `./tests` — pytest-driven, mirrors `./src`

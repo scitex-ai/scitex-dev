@@ -1,7 +1,8 @@
 ---
-name: skills-how-to-update
-description: Update workflow for SciTeX skill content — the source-of-truth locations (`src/<pkg>/_skills/<pip-name>/` always; never the exported copies in `~/.dotfiles/.../skills/scitex/` or `~/.claude/skills/scitex/`), the pre-tool-use hook that blocks direct edits to export copies, editable-install vs wheel-install resolution, the `scitex-dev skills export --package <pkg>` export command, the `scitex-dev skills list` / `--dry-run` verification commands, and how to create a GitHub issue when the package is not installed in editable mode. Use whenever you want to change existing skill text.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills How To Update
+  [DETAILS] Update workflow for SciTeX skill content — the source-of-truth locations (`src/<pkg>/_skills/<pip-name>/` always; never the exported copies in `~/.dotfiles/.../skills/scitex/` or `~/.claude/skills/scitex/`), the pre-tool-use hook that blocks direct edits to export copies, editable-install vs wheel-install resolution, the `scitex-dev skills export --package <pkg>` export command, the `scitex-dev skills list` / `--dry-run` verification commands, and how to create a GitHub issue when the package is not installed in editable mode. Use whenever you want to change existing skill text.
+tags: [scitex-general-interface-skills-how-to-update]
 ---
 
 # How to Update SciTeX Skills

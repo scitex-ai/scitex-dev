@@ -1,3 +1,10 @@
+---
+description: |
+  [TOPIC] Docs Readme Template
+  [DETAILS] .
+tags: [scitex-general-docs-readme-template]
+---
+
 # Canonical SciTeX README Template
 
 Literal template for every SciTeX package README.md. Replace `<PACKAGE>`

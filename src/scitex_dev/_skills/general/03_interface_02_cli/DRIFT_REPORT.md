@@ -1,7 +1,8 @@
 ---
-name: DRIFT_REPORT
-description: SciTeX Ecosystem CLI Drift Report — see file body for details.
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Drift_Report
+  [DETAILS] SciTeX Ecosystem CLI Drift Report — see file body for details.
+tags: [scitex-general-interface-cli-DRIFT-REPORT]
 ---
 
 # SciTeX Ecosystem CLI Drift Report

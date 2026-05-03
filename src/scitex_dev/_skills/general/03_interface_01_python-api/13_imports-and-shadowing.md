@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-imports-and-shadowing
-description: Import resolution rules for scitex submodules that intentionally shadow stdlib names (`scitex.os`, `scitex.io`, `scitex.logging`, `scitex.path`). Bare `import os` always resolves to stdlib (PEP 328 absolute imports); scitex submodules require an explicit `from . import` or full path. Aliasing rules to preserve the visual distinction. When `importlib.import_module` is justified.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Imports And Shadowing
+  [DETAILS] Import resolution rules for scitex submodules that intentionally shadow stdlib names (`scitex.os`, `scitex.io`, `scitex.logging`, `scitex.path`). Bare `import os` always resolves to stdlib (PEP 328 absolute imports); scitex submodules require an explicit `from . import` or full path. Aliasing rules to preserve the visual distinction. When `importlib.import_module` is justified.
+tags: [scitex-general-interface-python-api-imports-and-shadowing]
 ---
 
 # Imports and Stdlib Shadowing

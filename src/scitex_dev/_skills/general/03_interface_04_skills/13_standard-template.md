@@ -1,5 +1,4 @@
 ---
-name: skills-standard-template
 description: |
   [WHAT] The scaffold template every new SciTeX package should start from
   — full SKILL.md plus the standard-7 leaf set (01_installation,
@@ -8,7 +7,7 @@ description: |
   [WHEN] Authoring a new package's `_skills/<pip-name>/` tree.
   [HOW] Copy the templates below by hand, or run
   `scitex-dev skills init --package <name>` once shipped.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+tags: [scitex-general-interface-skills-standard-template]
 ---
 
 # Standard `_skills/<pip-name>/` Scaffold

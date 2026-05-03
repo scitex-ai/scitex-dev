@@ -1,7 +1,8 @@
 ---
-name: interface-http-api-health-and-ops
-description: Operational endpoints every HTTP server must expose — `/health` (liveness, fast), `/ready` (readiness, checks deps), CORS configuration, request logging, optional `/metrics` for Prometheus. Cache headers for static assets. Health checks must be cheap so load balancers can poll without overhead.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api Health And Ops
+  [DETAILS] Operational endpoints every HTTP server must expose — `/health` (liveness, fast), `/ready` (readiness, checks deps), CORS configuration, request logging, optional `/metrics` for Prometheus. Cache headers for static assets. Health checks must be cheap so load balancers can poll without overhead.
+tags: [scitex-general-interface-http-api-health-and-ops]
 ---
 
 # Health and Operations

@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-audit
-description: SciTeX MCP automated audit — `scitex-dev ecosystem audit-mcp-tools`. Coverage matrix, what it flags, custom dict format. Parallels `audit-cli`.
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp Audit
+  [DETAILS] SciTeX MCP automated audit — `scitex-dev ecosystem audit-mcp-tools`. Coverage matrix, what it flags, custom dict format. Parallels `audit-cli`.
+tags: [scitex-general-interface-mcp-audit-mcp-tools]
 ---
 
 # §7. Automated check — `scitex-dev ecosystem audit-mcp-tools`

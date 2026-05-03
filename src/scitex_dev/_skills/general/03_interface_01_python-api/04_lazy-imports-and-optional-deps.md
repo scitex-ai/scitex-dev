@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-lazy-imports
-description: Two lazy-import concerns — (1) optional deps via `try_import_optional` so a missing extra never crashes import, and (2) PEP 562 `__getattr__` so heavy required submodules don't slow down `import <pkg>` and CLI startup. Conditional `__all__` rules. The `_LazyModule` class for the umbrella's submodule attribute access. Sentinel pattern for "feature available?" checks.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Lazy Imports
+  [DETAILS] Two lazy-import concerns — (1) optional deps via `try_import_optional` so a missing extra never crashes import, and (2) PEP 562 `__getattr__` so heavy required submodules don't slow down `import <pkg>` and CLI startup. Conditional `__all__` rules. The `_LazyModule` class for the umbrella's submodule attribute access. Sentinel pattern for "feature available?" checks.
+tags: [scitex-general-interface-python-api-lazy-imports-and-optional-deps]
 ---
 
 # Lazy Imports and Optional Dependencies

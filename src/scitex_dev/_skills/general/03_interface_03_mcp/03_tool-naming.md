@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-tool-naming
-description: SciTeX MCP tool naming — `<pkg>_<verb>_<noun>` snake_case, mirrors the CLI subcommand tree, examples per package.
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp Tool Naming
+  [DETAILS] SciTeX MCP tool naming — `<pkg>_<verb>_<noun>` snake_case, mirrors the CLI subcommand tree, examples per package.
+tags: [scitex-general-interface-mcp-tool-naming]
 ---
 
 # §2. Tool naming — `<pkg>_<verb>_<noun>`

@@ -1,5 +1,4 @@
 ---
-name: skills-frontmatter-metadata
 description: |
   YAML frontmatter convention for every SciTeX skill file — single
   `description:` field carrying inline `[WHAT]/[WHEN]/[HOW]` markers
@@ -7,7 +6,7 @@ description: |
   scheme, and SKILL.md-only fields (`allowed-tools`, `primary_interface`,
   `interfaces`). Use when authoring any new skill or auditing existing
   frontmatter.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+tags: [scitex-general-interface-skills-frontmatter-metadata]
 ---
 
 # Skill Frontmatter Metadata

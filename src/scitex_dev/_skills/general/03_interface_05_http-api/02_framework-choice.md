@@ -1,7 +1,8 @@
 ---
-name: interface-http-api-framework-choice
-description: Framework selection rules — FastAPI canonical for REST APIs (auto-OpenAPI, Pydantic validation, async). aiohttp allowed only when WebSocket is genuinely needed. Starlette only when an SDK forces it. Flask and stdlib `http.server` are drift to migrate.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api Framework Choice
+  [DETAILS] Framework selection rules — FastAPI canonical for REST APIs (auto-OpenAPI, Pydantic validation, async). aiohttp allowed only when WebSocket is genuinely needed. Starlette only when an SDK forces it. Flask and stdlib `http.server` are drift to migrate.
+tags: [scitex-general-interface-http-api-framework-choice]
 ---
 
 # Framework Choice

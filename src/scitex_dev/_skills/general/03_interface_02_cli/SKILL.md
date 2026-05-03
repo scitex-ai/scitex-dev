@@ -1,8 +1,8 @@
 ---
-name: interface-cli
-description: Canonical CLI design convention for every SciTeX package — predictable CLI surface, no interactive commands, subcommand structure (noun → noun → … → verb), recommended commands (list-python-apis, mcp, skills, docs, install-shell-completion), flags (--version|-V, --verbose|-v, --help|-h, --help-recursive, --json, --dry-run, --quiet|-q, --yes|-y), exit codes, help format, deprecation redirect, env var namespace, config precedence, MCP parity, stdout/stderr discipline.
-user-invocable: true
-tags: [scitex-python, scitex-general]
+description: |
+  [TOPIC] Interface Cli
+  [DETAILS] Canonical CLI design convention for every SciTeX package — predictable CLI surface, no interactive commands, subcommand structure (noun → noun → … → verb), recommended commands (list-python-apis, mcp, skills, docs, install-shell-completion), flags (--version|-V, --verbose|-v, --help|-h, --help-recursive, --json, --dry-run, --quiet|-q, --yes|-y), exit codes, help format, deprecation redirect, env var namespace, config precedence, MCP parity, stdout/stderr discipline.
+tags: [scitex-general-interface-cli-index]
 ---
 
 # SciTeX CLI Convention (Canonical) — Index

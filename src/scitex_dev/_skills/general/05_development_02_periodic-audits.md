@@ -1,8 +1,8 @@
 ---
-name: development-workflow-periodic-audits
-description: Run `scitex-dev ecosystem audit-all <pkg>` periodically during development so quality drift is caught the minute it appears, not at release time. Cron / tmux / agent recipes, JSON contract for programmatic consumers, and Claude Code-specific autonomous mechanisms (CronCreate / ScheduleWakeup / Monitor).
-user-invocable: false
-tags: [scitex-python, scitex-general, development, quality, agentic]
+description: |
+  [TOPIC] Development Workflow Periodic Audits
+  [DETAILS] Run `scitex-dev ecosystem audit-all <pkg>` periodically during development so quality drift is caught the minute it appears, not at release time. Cron / tmux / agent recipes, JSON contract for programmatic consumers, and Claude Code-specific autonomous mechanisms (CronCreate / ScheduleWakeup / Monitor).
+tags: [scitex-general-development-periodic-audits]
 ---
 
 # Periodic audits during development

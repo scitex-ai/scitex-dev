@@ -1,8 +1,8 @@
 ---
-name: interface-cli-pass-through
-description: SciTeX CLI pass-through entry points — tool wrappers (`<cli> git ...`), script exec (`<cli> run script.py`), one-shot eval. Exempt from §1 noun-verb rule.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Pass Through
+  [DETAILS] SciTeX CLI pass-through entry points — tool wrappers (`<cli> git ...`), script exec (`<cli> run script.py`), one-shot eval. Exempt from §1 noun-verb rule.
+tags: [scitex-general-interface-cli-pass-through]
 ---
 
 # §1c. Pass-through exceptions

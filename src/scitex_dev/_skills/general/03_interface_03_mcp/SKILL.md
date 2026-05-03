@@ -1,8 +1,8 @@
 ---
-name: interface-mcp
-description: Canonical MCP (Model Context Protocol) server convention for every SciTeX package — single FastMCP instance per package, `<pkg>_<verb>_<noun>` tool naming, mount-pattern delegation from the scitex umbrella, required subcommands (`mcp start | doctor | list-tools | show-installation`), `list-tools` `-v|-vv|-vvv` ladder, skills integration, Python-API parity. Embeds lessons from the 2026-04 dev.py refactor.
-user-invocable: true
-tags: [scitex-python, scitex-general]
+description: |
+  [TOPIC] Interface Mcp
+  [DETAILS] Canonical MCP (Model Context Protocol) server convention for every SciTeX package — single FastMCP instance per package, `<pkg>_<verb>_<noun>` tool naming, mount-pattern delegation from the scitex umbrella, required subcommands (`mcp start | doctor | list-tools | show-installation`), `list-tools` `-v|-vv|-vvv` ladder, skills integration, Python-API parity. Embeds lessons from the 2026-04 dev.py refactor.
+tags: [scitex-general-interface-mcp-index]
 ---
 
 # SciTeX MCP Convention (Canonical) — Index
@@ -31,4 +31,4 @@ Canonical MCP rules for every `scitex-*` package. Split into focused files; load
 ## Related
 
 - [03_interface_02_cli/](../03_interface_02_cli/) — CLI convention (mirror discipline).
-- [03_interface_01_python-api/00_index.md](../03_interface_01_python-api/00_index.md) — Python API surface that MCP wraps.
+- [03_interface_01_python-api/SKILL.md](../03_interface_01_python-api/SKILL.md) — Python API surface that MCP wraps.

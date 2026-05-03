@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-error-handling
-description: Error-class hierarchy is canonical in `scitex_dev._errors` (ErrorCode enum, classify_exception, structured response shape). Downstream packages import + extend rather than redefining. Ecosystem-wide consistency for LLM-readable error responses. Standard library exceptions still preferred for plain Python errors.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Error Handling
+  [DETAILS] Error-class hierarchy is canonical in `scitex_dev._errors` (ErrorCode enum, classify_exception, structured response shape). Downstream packages import + extend rather than redefining. Ecosystem-wide consistency for LLM-readable error responses. Standard library exceptions still preferred for plain Python errors.
+tags: [scitex-general-interface-python-api-error-handling]
 ---
 
 # Error Handling

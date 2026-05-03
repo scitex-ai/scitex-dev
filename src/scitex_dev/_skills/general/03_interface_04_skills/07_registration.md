@@ -1,7 +1,8 @@
 ---
-name: skills-registration
-description: How a SciTeX package becomes discoverable to `scitex-dev skills export` — the two required `pyproject.toml` entry points (`scitex_dev.docs` + `scitex_dev.skills`), the `pip install -e . --no-deps --force-reinstall` step that refreshes the entry-point cache, and the verification one-liner. Without both entry points the package is silently skipped.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills Registration
+  [DETAILS] How a SciTeX package becomes discoverable to `scitex-dev skills export` — the two required `pyproject.toml` entry points (`scitex_dev.docs` + `scitex_dev.skills`), the `pip install -e . --no-deps --force-reinstall` step that refreshes the entry-point cache, and the verification one-liner. Without both entry points the package is silently skipped.
+tags: [scitex-general-interface-skills-registration]
 ---
 
 # Registration

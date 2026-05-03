@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-import-conventions
-description: Standalone vs umbrella import conventions. `pip install scitex-io` → `import scitex_io as sio`. `pip install scitex` → `import scitex.io as sio`. Skills and READMEs document both forms. Inside package source, use the standalone form. In umbrella docs, write `import scitex` (never `as stx`).
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Import Conventions
+  [DETAILS] Standalone vs umbrella import conventions. `pip install scitex-io` → `import scitex_io as sio`. `pip install scitex` → `import scitex.io as sio`. Skills and READMEs document both forms. Inside package source, use the standalone form. In umbrella docs, write `import scitex` (never `as stx`).
+tags: [scitex-general-interface-python-api-import-conventions]
 ---
 
 # Import Conventions

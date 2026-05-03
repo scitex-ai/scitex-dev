@@ -1,7 +1,8 @@
 ---
-name: interface-http-api-endpoints
-description: REST endpoint conventions — noun-based URLs (`/papers`, `/papers/{id}`), HTTP verbs map to actions (GET=read, POST=create, PUT=replace, DELETE=remove), JSON request/response, Pydantic models for validation, OpenAPI auto-docs at `/docs`. Path style matches CLI's noun-verb convention so the two interfaces stay legible side by side.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api Endpoints
+  [DETAILS] REST endpoint conventions — noun-based URLs (`/papers`, `/papers/{id}`), HTTP verbs map to actions (GET=read, POST=create, PUT=replace, DELETE=remove), JSON request/response, Pydantic models for validation, OpenAPI auto-docs at `/docs`. Path style matches CLI's noun-verb convention so the two interfaces stay legible side by side.
+tags: [scitex-general-interface-http-api-endpoint-conventions]
 ---
 
 # Endpoint Conventions

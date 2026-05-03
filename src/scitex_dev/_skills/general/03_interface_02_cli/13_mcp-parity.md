@@ -1,8 +1,8 @@
 ---
-name: interface-cli-mcp-parity
-description: SciTeX CLI ↔ MCP tool parity — same logical name, args, JSON shape. Documented in package SKILL.md.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Mcp Parity
+  [DETAILS] SciTeX CLI ↔ MCP tool parity — same logical name, args, JSON shape. Documented in package SKILL.md.
+tags: [scitex-general-interface-cli-mcp-parity]
 ---
 
 # §7. MCP tool parity

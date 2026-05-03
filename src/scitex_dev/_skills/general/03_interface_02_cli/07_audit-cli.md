@@ -1,8 +1,8 @@
 ---
-name: interface-cli-audit
-description: SciTeX CLI automated audit — `scitex-dev ecosystem audit-cli`. Token classification, what it flags, custom dict format.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Audit
+  [DETAILS] SciTeX CLI automated audit — `scitex-dev ecosystem audit-cli`. Token classification, what it flags, custom dict format.
+tags: [scitex-general-interface-cli-audit-cli]
 ---
 
 # §1e. Automated check — `scitex-dev ecosystem audit-cli`

@@ -1,16 +1,18 @@
 ---
 name: general
-description: Canonical engineering standards every `scitex-*` package and research project must follow — 3-layer architecture cascade, dependency/version pinning, local-state directory layout (`~/.scitex/<pkg-short>/` and `<project>/.scitex/<pkg-short>/`), repo layout (src/tests/scripts/examples), the five interfaces (Python API → CLI → MCP → Skills → optional HTTP) with their delegation rules and the noun-verb CLI convention, README/Sphinx docs, version-control workflow plus `scitex-dev ecosystem …` release automation, skill-authoring rules (layout, editable-vs-wheel install, public-vs-private), and the periodic quality checklist. Use as the single entry point for creating, auditing, reviewing, or releasing any SciTeX package.
+description: |
+  [WHAT] Canonical engineering standards every `scitex-*` package and research project must follow — 3-layer architecture cascade, dependency/version pinning, local-state directory layout (`~/.scitex/<pkg-short>/` and `<project>/.scitex/<pkg-short>/`), repo layout (src/tests/scripts/examples), the five interfaces (Python API → CLI → MCP → Skills → optional HTTP) with their delegation rules and the noun-verb CLI convention, README/Sphinx docs, version-control workflow plus `scitex-dev ecosystem …` release automation, skill-authoring rules (layout, editable-vs-wheel install, public-vs-private), and the periodic quality checklist. Use as the single entry point for creating, auditing, reviewing, or releasing any SciTeX package.
+  [WHEN] Creating, auditing, reviewing, or releasing any SciTeX package, or onboarding a research repo to ecosystem standards.
+  [HOW] Read SKILL.md as the index, then drill into the numbered sub-skill leaves (`01_ecosystem_*`, `02_package_*`, `03_interface_*`, `04_docs_*`, `05_development_*`, `98_quality_*`) for the relevant tier.
+tags: [scitex-general]
 user-invocable: false
 primary_interface: mixed
 interfaces:
-  python: 3
-  cli: 2
-  mcp: 2
+  python: 0-3
+  cli: 0-3
+  mcp: 0-3
   skills: 3
-  hook: 0
   http: 0
-tags: [scitex-python, scitex-general, scitex-package]
 ---
 
 # SciTeX General Standards
@@ -55,11 +57,11 @@ Project structure split into one leaf per top-level directory:
 
 ### 3. Interfaces — how do users and agents touch *this* package?
 - [03_interface_00_overview.md](03_interface_00_overview.md) — Five interfaces: overview and delegation chain
-- [03_interface_01_python-api/](03_interface_01_python-api/) — Minimal API, `__all__`, lazy imports, NumPy docstrings, version strategy (split into per-section files; start at [00_index.md](03_interface_01_python-api/00_index.md))
-- [03_interface_02_cli/](03_interface_02_cli/) — Required sub-commands, flags, noun-verb convention, AI-friendly rules (split into per-section files; start at [00_index.md](03_interface_02_cli/00_index.md))
-- [03_interface_03_mcp/00_index.md](03_interface_03_mcp/00_index.md) — fastmcp, tool naming, reproducibility, standard commands
-- [03_interface_04_skills/](03_interface_04_skills/) — `_skills/` layout, SKILL.md format, registration, export, frontmatter, public-vs-private (split into per-section files; start at [00_index.md](03_interface_04_skills/00_index.md))
-- [03_interface_05_http-api/](03_interface_05_http-api/) (split into per-section files; start at [00_index.md](03_interface_05_http-api/00_index.md)) — Optional FastAPI delegation
+- [03_interface_01_python-api/](03_interface_01_python-api/) — Minimal API, `__all__`, lazy imports, NumPy docstrings, version strategy (split into per-section files; start at [SKILL.md](03_interface_01_python-api/SKILL.md))
+- [03_interface_02_cli/](03_interface_02_cli/) — Required sub-commands, flags, noun-verb convention, AI-friendly rules (split into per-section files; start at [SKILL.md](03_interface_02_cli/SKILL.md))
+- [03_interface_03_mcp/SKILL.md](03_interface_03_mcp/SKILL.md) — fastmcp, tool naming, reproducibility, standard commands
+- [03_interface_04_skills/](03_interface_04_skills/) — `_skills/` layout, SKILL.md format, registration, export, frontmatter, public-vs-private (split into per-section files; start at [SKILL.md](03_interface_04_skills/SKILL.md))
+- [03_interface_05_http-api/](03_interface_05_http-api/) (split into per-section files; start at [SKILL.md](03_interface_05_http-api/SKILL.md)) — Optional FastAPI delegation
 
 ### 4. Documentation — how does *this* package become understandable?
 - [04_docs_01_readme.md](04_docs_01_readme.md) — Standard README template, sections, badges, footer

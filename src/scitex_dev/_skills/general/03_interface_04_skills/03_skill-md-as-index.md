@@ -1,7 +1,8 @@
 ---
-name: skills-skill-md-as-index
-description: SKILL.md is an index file only — frontmatter (name, description, tags, allowed-tools, primary_interface, interfaces), one-line interface header, prose intro, "Installation & import" snippet, and grouped links to numbered leaves. Substantive content goes in focused leaf files. Includes the converged template (>70% adoption across the ecosystem) and per-leaf authoring rules.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills Skill Md As Index
+  [DETAILS] SKILL.md is an index file only — frontmatter (name, description, tags, allowed-tools, primary_interface, interfaces), one-line interface header, prose intro, "Installation & import" snippet, and grouped links to numbered leaves. Substantive content goes in focused leaf files. Includes the converged template (>70% adoption across the ecosystem) and per-leaf authoring rules.
+tags: [scitex-general-interface-skills-skill-md-as-index]
 ---
 
 # SKILL.md as Index, Sub-skills as Leaves

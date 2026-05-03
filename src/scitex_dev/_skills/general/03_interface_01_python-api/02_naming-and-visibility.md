@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-naming
-description: Underscore-prefix rule for private modules, `__all__` discipline (only public names listed), no re-export of third-party symbols, naming conventions for public functions vs private helpers.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Naming
+  [DETAILS] Underscore-prefix rule for private modules, `__all__` discipline (only public names listed), no re-export of third-party symbols, naming conventions for public functions vs private helpers.
+tags: [scitex-general-interface-python-api-naming-and-visibility]
 ---
 
 # Naming and Visibility

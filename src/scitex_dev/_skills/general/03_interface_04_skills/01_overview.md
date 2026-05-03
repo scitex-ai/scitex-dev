@@ -1,7 +1,8 @@
 ---
-name: skills-overview
-description: Practical author's guide for writing and maintaining `_skills/` content in every SciTeX package — what a "skill" is in the Claude Code sense (an agent-loadable rule file, not a dev doc), the SKILL.md-as-index pattern, leaf-file scope (one topic per `.md`), prose over checkboxes, lessons from past audits (audit-driven remediation), and the authoring workflow from idea → draft → export → commit. Use when writing any new skill or overhauling an existing one.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills Overview
+  [DETAILS] Practical author's guide for writing and maintaining `_skills/` content in every SciTeX package — what a "skill" is in the Claude Code sense (an agent-loadable rule file, not a dev doc), the SKILL.md-as-index pattern, leaf-file scope (one topic per `.md`), prose over checkboxes, lessons from past audits (audit-driven remediation), and the authoring workflow from idea → draft → export → commit. Use when writing any new skill or overhauling an existing one.
+tags: [scitex-general-interface-skills-overview]
 ---
 
 # Writing Skills for SciTeX Packages

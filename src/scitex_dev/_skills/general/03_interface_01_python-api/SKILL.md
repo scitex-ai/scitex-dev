@@ -1,7 +1,8 @@
 ---
-name: interface-python-api
-description: Python API design rules for every SciTeX package — minimal public surface (`_` prefix + `__all__`), `importlib.metadata` version strategy, lazy imports for optional deps, NumPy-style docstrings, `from __future__ import annotations`, optional `@supports_return_as` decorator, scitex-dev-canonical error handling, standalone-vs-umbrella import conventions, and the `list-python-apis -v|-vv|-vvv` introspection ladder. Use when designing a new package's public API, reviewing PRs that touch `__init__.py`, or auditing an existing package before release.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api
+  [DETAILS] Python API design rules for every SciTeX package — minimal public surface (`_` prefix + `__all__`), `importlib.metadata` version strategy, lazy imports for optional deps, NumPy-style docstrings, `from __future__ import annotations`, optional `@supports_return_as` decorator, scitex-dev-canonical error handling, standalone-vs-umbrella import conventions, and the `list-python-apis -v|-vv|-vvv` introspection ladder. Use when designing a new package's public API, reviewing PRs that touch `__init__.py`, or auditing an existing package before release.
+tags: [scitex-general-interface-python-api-index]
 ---
 
 # Python API (SciTeX) — Index

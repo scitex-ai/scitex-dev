@@ -1,7 +1,8 @@
 ---
-name: skills-numbered-prefix-convention
-description: Two-level `NN_<category>_NN_<topic>.md` numbering rule for `_skills/` leaves — `01-09` interfaces (quick start, Python API, CLI, MCP), `10-19` features, `20-29` meta. Gives a fresh agent an implicit reading order so SKILL.md links are sortable. Use whenever a package's skill count exceeds 3-4 leaves.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills Numbered Prefix Convention
+  [DETAILS] Two-level `NN_<category>_NN_<topic>.md` numbering rule for `_skills/` leaves — `01-09` interfaces (quick start, Python API, CLI, MCP), `10-19` features, `20-29` meta. Gives a fresh agent an implicit reading order so SKILL.md links are sortable. Use whenever a package's skill count exceeds 3-4 leaves.
+tags: [scitex-general-interface-skills-numbered-prefix-convention]
 ---
 
 # Numbered-Prefix File Convention

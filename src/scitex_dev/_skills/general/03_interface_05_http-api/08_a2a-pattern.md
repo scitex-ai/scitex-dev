@@ -1,7 +1,8 @@
 ---
-name: interface-http-api-a2a-pattern
-description: A2A (Agent-to-Agent) JSON-RPC protocol — used only by scitex-agent-container. Agent-protocol-specific by design (tasks, streaming replies, AgentCard discovery); not generalizable to functional services like audio playback or paper fetching. Documented here so contributors recognize the pattern but do NOT replicate it for non-agent packages.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api A2A Pattern
+  [DETAILS] A2A (Agent-to-Agent) JSON-RPC protocol — used only by scitex-agent-container. Agent-protocol-specific by design (tasks, streaming replies, AgentCard discovery); not generalizable to functional services like audio playback or paper fetching. Documented here so contributors recognize the pattern but do NOT replicate it for non-agent packages.
+tags: [scitex-general-interface-http-api-a2a-pattern]
 ---
 
 # A2A — Specialty Pattern for Agent Packages

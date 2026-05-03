@@ -1,7 +1,8 @@
 ---
-name: MCP_DRIFT_REPORT
-description: SciTeX Ecosystem MCP Drift Report — see file body for details.
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Mcp_Drift_Report
+  [DETAILS] SciTeX Ecosystem MCP Drift Report — see file body for details.
+tags: [scitex-general-interface-mcp-MCP-DRIFT-REPORT]
 ---
 
 # SciTeX Ecosystem MCP Drift Report

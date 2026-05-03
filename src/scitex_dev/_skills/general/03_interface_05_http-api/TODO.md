@@ -1,7 +1,8 @@
 ---
-name: TODO
-description: HTTP API skill — open TODOs — see file body for details.
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Todo
+  [DETAILS] HTTP API skill — open TODOs — see file body for details.
+tags: [scitex-general-interface-http-api-TODO]
 ---
 
 # HTTP API skill — open TODOs
@@ -58,4 +59,4 @@ These four helpers make the canonical pattern a 5-line setup in any new HTTP pac
 ## Documentation
 
 - [x] Split monolithic `03_interface_05_http-api.md` into per-section files (this directory).
-- [x] Remove the legacy `03_interface_05_http-api.md` flat file. Parent `general/SKILL.md` now points at `03_interface_05_http-api/00_index.md`.
+- [x] Remove the legacy `03_interface_05_http-api.md` flat file. Parent `general/SKILL.md` now points at `03_interface_05_http-api/SKILL.md`.

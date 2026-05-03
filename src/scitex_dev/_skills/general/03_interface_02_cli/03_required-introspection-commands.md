@@ -1,8 +1,8 @@
 ---
-name: interface-cli-required-introspection
-description: SciTeX CLI required introspection commands — `list-python-apis` and `mcp list-tools` with `-v|-vv|-vvv` verbosity levels. Mandatory on every package CLI for parity with sibling packages.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Required Introspection
+  [DETAILS] SciTeX CLI required introspection commands — `list-python-apis` and `mcp list-tools` with `-v|-vv|-vvv` verbosity levels. Mandatory on every package CLI for parity with sibling packages.
+tags: [scitex-general-interface-cli-required-introspection-commands]
 ---
 
 # §1a. Required introspection commands
@@ -13,8 +13,8 @@ Every `scitex-*` package CLI **must** expose two introspection commands so that 
 
 | Command            | Lists                                       | Section anchor                                                         |
 |--------------------|---------------------------------------------|------------------------------------------------------------------------|
-| `list-python-apis` | Public Python API (`__all__`)               | this file + [03_interface_01_python-api/00_index.md](../03_interface_01_python-api/00_index.md) |
-| `mcp list-tools`   | MCP tools registered by the package         | this file + [03_interface_03_mcp/00_index.md](../03_interface_03_mcp/00_index.md)        |
+| `list-python-apis` | Public Python API (`__all__`)               | this file + [03_interface_01_python-api/SKILL.md](../03_interface_01_python-api/SKILL.md) |
+| `mcp list-tools`   | MCP tools registered by the package         | this file + [03_interface_03_mcp/SKILL.md](../03_interface_03_mcp/SKILL.md)        |
 
 Both follow the §1 noun-verb grammar:
 

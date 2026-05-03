@@ -1,7 +1,8 @@
 ---
-name: license-and-cla
-description: Ecosystem-wide policy for licensing (SPDX `AGPL-3.0-only`) and the Contributor License Agreement gate. Covers the AGPL-only rationale, the `cla.yml` workflow template, the strict `signatures/cla.json` shape that the CLA action requires (object with `signedContributors`, NOT a bare array), recovery from the size-3 crash, the `pull_request_target` base-branch trap, and the bootstrap + audit recipes.
-tags: [scitex-python, scitex-general, scitex-ecosystem, license, cla, compliance]
+description: |
+  [TOPIC] License And Cla
+  [DETAILS] Ecosystem-wide policy for licensing (SPDX `AGPL-3.0-only`) and the Contributor License Agreement gate. Covers the AGPL-only rationale, the `cla.yml` workflow template, the strict `signatures/cla.json` shape that the CLA action requires (object with `signedContributors`, NOT a bare array), recovery from the size-3 crash, the `pull_request_target` base-branch trap, and the bootstrap + audit recipes.
+tags: [scitex-general-ecosystem-license-and-cla]
 ---
 
 # License and CLA (ecosystem policy)

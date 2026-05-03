@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-list-tools-ladder
-description: SciTeX MCP `mcp list-tools` verbosity ladder — names → signatures → docstrings → full schema. Mirrors `list-python-apis`.
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp List Tools Ladder
+  [DETAILS] SciTeX MCP `mcp list-tools` verbosity ladder — names → signatures → docstrings → full schema. Mirrors `list-python-apis`.
+tags: [scitex-general-interface-mcp-list-tools-ladder]
 ---
 
 # §4. `mcp list-tools` verbosity ladder

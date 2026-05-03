@@ -1,7 +1,8 @@
 ---
-name: package-src
-description: `./src/<pkg>/` layout for a SciTeX *package* — the production code that ships in the wheel. Covers the one-package-per-repo rule, absolute-import discipline, the cascade-direction rule (inter-scitex package imports along the cascade are healthy; only the umbrella `scitex` should not be imported from a scitex-* package's own `src/` because it re-exports the package itself, creating a real cycle), and the public/private filename convention (`_foo.py` for private, mirrored by `tests/<pkg>/test__foo.py`).
-tags: [scitex-python, scitex-general, scitex-package, project-structure, src]
+description: |
+  [TOPIC] Package Src
+  [DETAILS] `./src/<pkg>/` layout for a SciTeX *package* — the production code that ships in the wheel. Covers the one-package-per-repo rule, absolute-import discipline, the cascade-direction rule (inter-scitex package imports along the cascade are healthy; only the umbrella `scitex` should not be imported from a scitex-* package's own `src/` because it re-exports the package itself, creating a real cycle), and the public/private filename convention (`_foo.py` for private, mirrored by `tests/<pkg>/test__foo.py`).
+tags: [scitex-general-package-project-structure-src]
 ---
 
 # `./src` — pip-installable package

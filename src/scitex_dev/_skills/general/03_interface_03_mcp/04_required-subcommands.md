@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-required-subcommands
-description: SciTeX MCP — required `mcp` subcommands every package CLI must expose (start, doctor, list-tools, show-installation).
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp Required Subcommands
+  [DETAILS] SciTeX MCP — required `mcp` subcommands every package CLI must expose (start, doctor, list-tools, show-installation).
+tags: [scitex-general-interface-mcp-required-subcommands]
 ---
 
 # §3. Required MCP subcommands

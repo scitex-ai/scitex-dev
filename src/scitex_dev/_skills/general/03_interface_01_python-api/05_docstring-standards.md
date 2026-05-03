@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-docstrings
-description: NumPy-style docstrings for every public function — Parameters, Returns, Examples sections. Module docstrings carry purpose + Functionalities/IO/Dependencies blocks. One-liners are insufficient for `__all__` members. Sphinx autodoc + LLM readability both benefit.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Docstrings
+  [DETAILS] NumPy-style docstrings for every public function — Parameters, Returns, Examples sections. Module docstrings carry purpose + Functionalities/IO/Dependencies blocks. One-liners are insufficient for `__all__` members. Sphinx autodoc + LLM readability both benefit.
+tags: [scitex-general-interface-python-api-docstring-standards]
 ---
 
 # Docstring Standards

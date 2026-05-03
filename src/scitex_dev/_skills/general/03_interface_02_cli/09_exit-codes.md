@@ -1,8 +1,8 @@
 ---
-name: interface-cli-exit-codes
-description: SciTeX CLI exit code semantics — 0 success, 1 runtime, 2 usage, 3-9 domain, ≥10 reserved.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Exit Codes
+  [DETAILS] SciTeX CLI exit code semantics — 0 success, 1 runtime, 2 usage, 3-9 domain, ≥10 reserved.
+tags: [scitex-general-interface-cli-exit-codes]
 ---
 
 # §3. Exit codes

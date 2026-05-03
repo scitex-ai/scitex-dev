@@ -1,7 +1,8 @@
 ---
-name: package-makefile
-description: Makefile + `./scripts/makefile/` pattern for a SciTeX package. The root Makefile is a thin one-line dispatcher per target; the actual logic lives as standalone shell scripts under `./scripts/makefile/`. Each script is independently runnable from the shell, testable in isolation, and easy to share across repos via symlink. Canonical target inventory (install / test-changed / test-full / coverage-html / lint / clean / build / upload-pypi-test / upload-pypi / release / docs).
-tags: [scitex-python, scitex-general, scitex-package, project-structure, makefile, scripts]
+description: |
+  [TOPIC] Package Makefile
+  [DETAILS] Makefile + `./scripts/makefile/` pattern for a SciTeX package. The root Makefile is a thin one-line dispatcher per target; the actual logic lives as standalone shell scripts under `./scripts/makefile/`. Each script is independently runnable from the shell, testable in isolation, and easy to share across repos via symlink. Canonical target inventory (install / test-changed / test-full / coverage-html / lint / clean / build / upload-pypi-test / upload-pypi / release / docs).
+tags: [scitex-general-package-project-structure-makefile]
 ---
 
 # `./scripts/makefile/` — Makefile target backing scripts

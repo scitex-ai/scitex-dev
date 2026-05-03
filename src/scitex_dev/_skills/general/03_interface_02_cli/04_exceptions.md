@@ -1,8 +1,8 @@
 ---
-name: interface-cli-exceptions
-description: SciTeX CLI single-token exceptions — `doctor`, `repl`, `shell`. Banned bare leaves (`version`, `completion`). Reserved single-token flags.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Exceptions
+  [DETAILS] SciTeX CLI single-token exceptions — `doctor`, `repl`, `shell`. Banned bare leaves (`version`, `completion`). Reserved single-token flags.
+tags: [scitex-general-interface-cli-exceptions]
 ---
 
 # §1b. Exceptions (single-token commands)

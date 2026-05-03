@@ -1,7 +1,8 @@
 ---
-name: interface-http-api-overview
-description: When a SciTeX package warrants an HTTP API, the delegation rule (no original logic — endpoints wrap Python API), and the three transport shapes (REST, WebSocket, specialty protocols). Most packages do not need this interface.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api Overview
+  [DETAILS] When a SciTeX package warrants an HTTP API, the delegation rule (no original logic — endpoints wrap Python API), and the three transport shapes (REST, WebSocket, specialty protocols). Most packages do not need this interface.
+tags: [scitex-general-interface-http-api-overview]
 ---
 
 # Overview

@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-checklist
-description: SciTeX MCP manual audit checklist — run before shipping a package's MCP server. Items marked (A) will be auto-checked by `scitex-dev ecosystem audit-mcp-tools` once it ships; the rest stay manual.
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp Checklist
+  [DETAILS] SciTeX MCP manual audit checklist — run before shipping a package's MCP server. Items marked (A) will be auto-checked by `scitex-dev ecosystem audit-mcp-tools` once it ships; the rest stay manual.
+tags: [scitex-general-interface-mcp-audit-checklist]
 ---
 
 # §9. Audit checklist
@@ -64,4 +64,4 @@ Run through this list before shipping a package's MCP server. Items marked **(A)
 ## Cross-references
 
 - [ ] CLI side has matching `mcp` subcommand entries in [CLI §1e](../03_interface_02_cli/03_required-introspection-commands.md).
-- [ ] Python-API side documents `<cli> mcp list-tools` as the introspection counterpart of `list-python-apis` (in [03_interface_01_python-api/00_index.md](../03_interface_01_python-api/00_index.md)).
+- [ ] Python-API side documents `<cli> mcp list-tools` as the introspection counterpart of `list-python-apis` (in [03_interface_01_python-api/SKILL.md](../03_interface_01_python-api/SKILL.md)).

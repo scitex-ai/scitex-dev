@@ -1,7 +1,8 @@
 ---
-name: interface-skills
-description: How a SciTeX package exposes agent-facing skills — `_skills/<pip-name>/` directory layout, SKILL.md as index-only, two-level `NN_<category>_NN_<topic>.md` naming, no-monolith leaf-file rule (≤10 KB per file, ≤80 lines per SKILL.md), registration via `[project.entry-points."scitex_dev.skills"]`, editable-vs-wheel install resolution, public-vs-private split, frontmatter metadata, ecosystem-wide `general/` inheritance via scitex-dev, scaffold template (`scitex-dev skills init`), export workflow to `~/.claude/skills/scitex/`, and the release-gate quality checklist. Use when adding or auditing `_skills/` in a package.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Skills
+  [DETAILS] How a SciTeX package exposes agent-facing skills — `_skills/<pip-name>/` directory layout, SKILL.md as index-only, two-level `NN_<category>_NN_<topic>.md` naming, no-monolith leaf-file rule (≤10 KB per file, ≤80 lines per SKILL.md), registration via `[project.entry-points."scitex_dev.skills"]`, editable-vs-wheel install resolution, public-vs-private split, frontmatter metadata, ecosystem-wide `general/` inheritance via scitex-dev, scaffold template (`scitex-dev skills init`), export workflow to `~/.claude/skills/scitex/`, and the release-gate quality checklist. Use when adding or auditing `_skills/` in a package.
+tags: [scitex-general-interface-skills-index]
 ---
 
 # SciTeX Skills Interface — Index

@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-version
-description: The canonical `__version__` block — `importlib.metadata.version()` with `PackageNotFoundError` fallback to `0.0.0+local`. Works for both wheel installs and editable installs. Why custom pyproject.toml parsing breaks.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Version
+  [DETAILS] The canonical `__version__` block — `importlib.metadata.version()` with `PackageNotFoundError` fallback to `0.0.0+local`. Works for both wheel installs and editable installs. Why custom pyproject.toml parsing breaks.
+tags: [scitex-general-interface-python-api-version-strategy]
 ---
 
 # Version Strategy

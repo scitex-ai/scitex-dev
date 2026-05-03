@@ -1,8 +1,8 @@
 ---
-name: interface-cli-example
-description: SciTeX CLI reference shape — canonical top-level help output that conforms to §1 (noun groups + sub-verbs, compound leaves, no bare transitive leaves).
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Example
+  [DETAILS] SciTeX CLI reference shape — canonical top-level help output that conforms to §1 (noun groups + sub-verbs, compound leaves, no bare transitive leaves).
+tags: [scitex-general-interface-cli-example]
 ---
 
 # Reference example — canonical shape

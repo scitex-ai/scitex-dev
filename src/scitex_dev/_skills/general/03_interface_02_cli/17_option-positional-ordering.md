@@ -1,8 +1,8 @@
 ---
-name: interface-cli-option-positional-ordering
-description: Allow options before AND after the positional argument — `cli <pos> --flag val` and `cli --flag val <pos>` must both parse. Click's `invoke_without_command=True` group breaks this by default; pre-Click argv reorder fixes it.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Option Positional Ordering
+  [DETAILS] Allow options before AND after the positional argument — `cli <pos> --flag val` and `cli --flag val <pos>` must both parse. Click's `invoke_without_command=True` group breaks this by default; pre-Click argv reorder fixes it.
+tags: [scitex-general-interface-cli-option-positional-ordering]
 ---
 
 # §10. Option / positional ordering — both forms must work

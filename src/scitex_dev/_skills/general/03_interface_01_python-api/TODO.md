@@ -1,7 +1,8 @@
 ---
-name: TODO
-description: Python API skill — open TODOs — see file body for details.
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Todo
+  [DETAILS] Python API skill — open TODOs — see file body for details.
+tags: [scitex-general-interface-python-api-TODO]
 ---
 
 <!-- ---

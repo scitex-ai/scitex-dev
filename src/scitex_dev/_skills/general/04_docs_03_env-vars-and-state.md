@@ -1,7 +1,8 @@
 ---
-name: env-vars-and-local-state
-description: Canonical convention for declaring per-package environment variables (`.env.example` at repo root, commented entries, all keys SCITEX_<MODULE>_<NAME>) and surfacing local-state directories (`~/.scitex/<pkg-short>/` and `<proj-root>/.scitex/<pkg-short>/`) in the README. Replaces the older standalone `## Environment Variables` H2 section.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Env Vars And Local State
+  [DETAILS] Canonical convention for declaring per-package environment variables (`.env.example` at repo root, commented entries, all keys SCITEX_<MODULE>_<NAME>) and surfacing local-state directories (`~/.scitex/<pkg-short>/` and `<proj-root>/.scitex/<pkg-short>/`) in the README. Replaces the older standalone `## Environment Variables` H2 section.
+tags: [scitex-general-docs-env-vars-and-state]
 ---
 
 # Environment Variables & Local State

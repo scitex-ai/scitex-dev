@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-audit-checklist
-description: Release-gate checklist for a package's Python API. Run before tagging a release. Mirrors the structure of the CLI and MCP audit checklists. (A) markers indicate items the planned `audit-api` linter will automate.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Audit Checklist
+  [DETAILS] Release-gate checklist for a package's Python API. Run before tagging a release. Mirrors the structure of the CLI and MCP audit checklists. (A) markers indicate items the planned `audit-api` linter will automate.
+tags: [scitex-general-interface-python-api-audit-checklist]
 ---
 
 # Python API Audit Checklist

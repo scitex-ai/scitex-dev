@@ -1,7 +1,8 @@
 ---
-name: skills-export-commands
-description: The `scitex-dev skills` CLI — `list`, `get`, `export`, `tags-expand` — for managing the source-of-truth-to-export-copy pipeline. Includes the `SCITEX_DEV_SKILLS_DEFAULT_EXPORT_DIR` env override and the rule that exported copies under `~/.claude/skills/scitex/<pip-name>/` must never be edited directly (a pre-tool-use hook blocks such edits).
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills Export Commands
+  [DETAILS] The `scitex-dev skills` CLI — `list`, `get`, `export`, `tags-expand` — for managing the source-of-truth-to-export-copy pipeline. Includes the `SCITEX_DEV_SKILLS_DEFAULT_EXPORT_DIR` env override and the rule that exported copies under `~/.claude/skills/scitex/<pip-name>/` must never be edited directly (a pre-tool-use hook blocks such edits).
+tags: [scitex-general-interface-skills-export-commands]
 ---
 
 # Export Commands

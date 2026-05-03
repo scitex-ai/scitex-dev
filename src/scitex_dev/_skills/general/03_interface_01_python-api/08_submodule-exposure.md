@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-submodule-exposure
-description: When to expose a submodule (e.g. `scitex_stats.tests`, `scitex_io.formats`) versus keeping it private (`_utils`). Heuristics, not strict rules — the answer depends on whether users address the submodule by name in their code. Research deferred — convention crystallizing.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Submodule Exposure
+  [DETAILS] When to expose a submodule (e.g. `scitex_stats.tests`, `scitex_io.formats`) versus keeping it private (`_utils`). Heuristics, not strict rules — the answer depends on whether users address the submodule by name in their code. Research deferred — convention crystallizing.
+tags: [scitex-general-interface-python-api-submodule-exposure]
 ---
 
 # Submodule Exposure

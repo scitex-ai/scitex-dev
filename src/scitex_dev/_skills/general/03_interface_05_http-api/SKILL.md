@@ -1,7 +1,8 @@
 ---
-name: interface-http-api
-description: Optional HTTP API interface for SciTeX packages — when to expose one, framework choice (FastAPI canonical for REST; aiohttp when WebSocket is genuinely needed; Starlette only when an SDK forces it), REST endpoint conventions, JSON error envelope, `/health` and observability, auth posture (canonical: nginx reverse proxy in front; helper middleware for dev), CLI integration, and the A2A specialty pattern for agent packages. Use when adding HTTP endpoints to a package, choosing a framework, or auditing an existing HTTP server against the ecosystem convention.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api
+  [DETAILS] Optional HTTP API interface for SciTeX packages — when to expose one, framework choice (FastAPI canonical for REST; aiohttp when WebSocket is genuinely needed; Starlette only when an SDK forces it), REST endpoint conventions, JSON error envelope, `/health` and observability, auth posture (canonical: nginx reverse proxy in front; helper middleware for dev), CLI integration, and the A2A specialty pattern for agent packages. Use when adding HTTP endpoints to a package, choosing a framework, or auditing an existing HTTP server against the ecosystem convention.
+tags: [scitex-general-interface-http-api-index]
 ---
 
 # HTTP API (Optional) — Index
