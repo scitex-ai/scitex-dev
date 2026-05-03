@@ -26,27 +26,27 @@ class TestGetDocs:
 
     def test_no_packages_discovered(self):
         """With no entry points, returns empty dict."""
-        with patch("scitex_dev.docs.discover_packages", return_value={}):
+        with patch("scitex_dev._docs.docs.discover_packages", return_value={}):
             result = get_docs()
         assert result == {}
 
     def test_single_package_not_found(self):
-        with patch("scitex_dev.docs.discover_packages", return_value={}):
+        with patch("scitex_dev._docs.docs.discover_packages", return_value={}):
             with pytest.raises(LookupError, match="not found"):
                 get_docs(package="nonexistent")
 
     def test_single_package_introspect_fallback(self):
         """When no built docs exist, falls back to introspection."""
         with patch(
-            "scitex_dev.docs.discover_packages",
+            "scitex_dev._docs.docs.discover_packages",
             return_value={"test-pkg": "json"},
         ):
             with patch(
-                "scitex_dev.docs.get_package_root",
+                "scitex_dev._docs.docs.get_package_root",
                 return_value=None,
             ):
                 with patch(
-                    "scitex_dev.docs.get_sphinx_source",
+                    "scitex_dev._docs.docs.get_sphinx_source",
                     return_value=None,
                 ):
                     result = get_docs(package="test-pkg")
@@ -62,11 +62,11 @@ class TestGetDocs:
         (html_dir / "index.html").write_text("<html></html>")
 
         with patch(
-            "scitex_dev.docs.discover_packages",
+            "scitex_dev._docs.docs.discover_packages",
             return_value={"test-pkg": "test_mod"},
         ):
             with patch(
-                "scitex_dev.docs.get_package_root",
+                "scitex_dev._docs.docs.get_package_root",
                 return_value=tmp_path,
             ):
                 result = get_docs(package="test-pkg", format="html")
@@ -76,11 +76,11 @@ class TestGetDocs:
 
     def test_multiple_packages(self):
         with patch(
-            "scitex_dev.docs.discover_packages",
+            "scitex_dev._docs.docs.discover_packages",
             return_value={"pkg-a": "json", "pkg-b": "os"},
         ):
-            with patch("scitex_dev.docs.get_package_root", return_value=None):
-                with patch("scitex_dev.docs.get_sphinx_source", return_value=None):
+            with patch("scitex_dev._docs.docs.get_package_root", return_value=None):
+                with patch("scitex_dev._docs.docs.get_sphinx_source", return_value=None):
                     result = get_docs(packages=["pkg-a", "pkg-b"])
 
         assert isinstance(result, dict)
@@ -93,11 +93,11 @@ class TestGetDocs:
         (html_dir / "index.html").write_text("<html></html>")
 
         with patch(
-            "scitex_dev.docs.discover_packages",
+            "scitex_dev._docs.docs.discover_packages",
             return_value={"test-pkg": "test_mod"},
         ):
             with patch(
-                "scitex_dev.docs.get_package_root",
+                "scitex_dev._docs.docs.get_package_root",
                 return_value=tmp_path,
             ):
                 with pytest.raises(ValueError, match="Unknown format"):
@@ -106,7 +106,7 @@ class TestGetDocs:
 
 class TestSearchDocs:
     def test_search_empty(self):
-        with patch("scitex_dev.docs.discover_packages", return_value={}):
+        with patch("scitex_dev._docs.docs.discover_packages", return_value={}):
             result = search_docs(query="anything")
         assert result == []
 
@@ -118,14 +118,14 @@ class TestSearchDocs:
             ],
             "modules": {},
         }
-        with patch("scitex_dev.docs.discover_packages", return_value={"pkg": "mod"}):
-            with patch("scitex_dev.docs.get_docs", return_value=manifest):
+        with patch("scitex_dev._docs.docs.discover_packages", return_value={"pkg": "mod"}):
+            with patch("scitex_dev._docs.docs.get_docs", return_value=manifest):
                 # Direct call to avoid recursion — test _get_one separately
                 pass
 
         # Test with mock at the right level
-        with patch("scitex_dev.docs.discover_packages", return_value={"pkg": "mod"}):
-            with patch("scitex_dev.docs._get_one", return_value=manifest):
+        with patch("scitex_dev._docs.docs.discover_packages", return_value={"pkg": "mod"}):
+            with patch("scitex_dev._docs.docs._get_one", return_value=manifest):
                 result = search_docs(query="api")
 
         assert len(result) >= 1
@@ -138,8 +138,8 @@ class TestSearchDocs:
             ],
             "modules": {},
         }
-        with patch("scitex_dev.docs.discover_packages", return_value={"pkg": "mod"}):
-            with patch("scitex_dev.docs._get_one", return_value=manifest):
+        with patch("scitex_dev._docs.docs.discover_packages", return_value={"pkg": "mod"}):
+            with patch("scitex_dev._docs.docs._get_one", return_value=manifest):
                 result = search_docs(query="test", max_results=5)
 
         assert len(result) <= 5
@@ -147,6 +147,6 @@ class TestSearchDocs:
 
 class TestBuildDocs:
     def test_build_unknown_package(self):
-        with patch("scitex_dev.docs.discover_packages", return_value={}):
+        with patch("scitex_dev._docs.docs.discover_packages", return_value={}):
             with pytest.raises(LookupError, match="not found"):
                 build_docs(package="nonexistent")
