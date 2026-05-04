@@ -125,6 +125,7 @@ def register_skills_commands(main_group):
     @click.option("--force", is_flag=True, help="Overwrite existing files.")
     @click.option("--dry-run", is_flag=True, help="Preview without writing.")
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
     def skills_init(
         pip_name,
         import_name,
@@ -136,6 +137,7 @@ def register_skills_commands(main_group):
         force,
         dry_run,
         as_json,
+        yes,
     ):
         """Scaffold a `_skills/<pip-name>/` tree per the standard template.
 
@@ -145,6 +147,7 @@ def register_skills_commands(main_group):
           scitex-dev skills init --package scitex-foo --with-mcp --with-http
           scitex-dev skills init --package my-package --dest /tmp/skills/ --dry-run
         """
+        del yes  # accepted for §2 compliance; init honours --dry-run for preview
         import json as _json
         from pathlib import Path
 
