@@ -1095,7 +1095,18 @@ def register_ecosystem_commands(main_group):
         multiple=True,
         help="Restrict to specific rule codes (e.g. --rule PS201). Repeatable.",
     )
-    def ecosystem_audit_project(distribution, repo_path, json_out, rules):
+    @click.option(
+        "--severity",
+        type=click.Choice(["error", "warning", "info"]),
+        default="error",
+        show_default=True,
+        help=(
+            "Minimum severity floor. 'error' prints E findings only and exits 1 "
+            "iff ≥1 E. 'warning' prints E+W. 'info' prints everything. "
+            "W/I findings never fail CI on their own."
+        ),
+    )
+    def ecosystem_audit_project(distribution, repo_path, json_out, rules, severity):
         """Check a package's project-structure against the canonical layout.
 
         \b
@@ -1103,6 +1114,7 @@ def register_ecosystem_commands(main_group):
             $ scitex-dev ecosystem audit-project scitex-io
             $ scitex-dev ecosystem audit-project scitex-dev --json
             $ scitex-dev ecosystem audit-project scitex-stats --rule PS108
+            $ scitex-dev ecosystem audit-project scitex-io --severity warning
         """
         from pathlib import Path
 
@@ -1123,6 +1135,7 @@ def register_ecosystem_commands(main_group):
                 repo=repo,
                 json_out=json_out,
                 rules=set(rules) if rules else None,
+                severity=severity,
             )
         )
 

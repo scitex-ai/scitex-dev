@@ -22,6 +22,14 @@ class Rule:
     code: str
     section: str
     message: str
+    # Severity drives the audit's exit code:
+    #   E (error)   — at least one E finding fails the audit (exit 1)
+    #   W (warning) — printed but does not fail (exit 0 if no E findings)
+    #   I (info)    — printed only with --severity info; never fails
+    # Default W keeps existing rules backward-compatible until each is
+    # explicitly tagged. Promote to E when the rule is well-tested and the
+    # ecosystem has already been brought into compliance.
+    severity: str = "W"
 
 
 RULES: dict[str, Rule] = {
@@ -517,6 +525,46 @@ RULES: dict[str, Rule] = {
     ]
 }
 
+# Severity escalation table. Codes listed here are promoted from the default
+# W to the named severity. New rules default to W (warn-only) so they can
+# bake in production before failing CI; promote to E only after the ecosystem
+# has been swept clean of pre-existing violations.
+#
+# E (error) — fails CI; the rule is well-tested and the fix is mechanical.
+# I (info)  — printed only with --severity info; never fails. Use for
+#             aspirational checks where the cost-of-noise outweighs signal.
+_SEVERITY_OVERRIDES: dict[str, str] = {
+    # Structural — must hold for any package
+    "PS101": "E",  # missing pyproject.toml
+    "PS102": "E",  # forbidden top-level dir (logs/, mgmt/, ...)
+    "PS103": "E",  # top-level junk file
+    "PS105": "E",  # console_scripts present but no __main__.py
+    # Community files — every public package needs them
+    "PS133": "E",  # CLA.md
+    "PS134": "E",  # CHANGELOG.md
+    "PS135": "E",  # CONTRIBUTING.md
+    "PS136": "E",  # examples/
+    "PS137": "E",  # README.md
+    "PS138": "E",  # LICENSE
+    # src ↔ tests mirror — load-bearing for CI confidence
+    "PS201": "E",
+    "PS202": "E",
+    "PS203": "E",
+    "PS204": "E",
+    "PS205": "E",
+    "PS302": "E",  # unrecognized tests/ subdir
+}
+
+# Apply the overrides — replace each tagged Rule with a promoted copy.
+RULES = {
+    code: (
+        Rule(rule.code, rule.section, rule.message, _SEVERITY_OVERRIDES[code])
+        if code in _SEVERITY_OVERRIDES
+        else rule
+    )
+    for code, rule in RULES.items()
+}
+
 
 @dataclass
 class Violation:
@@ -527,7 +575,13 @@ class Violation:
     def format(self) -> str:
         r = RULES.get(self.rule)
         section = r.section if r else "?"
-        return f"  [{self.rule} {section}] {self.where}: {self.detail}"
+        sev = r.severity if r else "W"
+        return f"  [{sev}] [{self.rule} {section}] {self.where}: {self.detail}"
+
+    @property
+    def severity(self) -> str:
+        r = RULES.get(self.rule)
+        return r.severity if r else "W"
 
 
 # ---------------------------------------------------------------------------
@@ -1178,8 +1232,9 @@ def audit_project(
     repo: Path | None = None,
     json_out: bool = False,
     rules: set[str] | None = None,
+    severity: str = "error",
 ) -> int:
-    """Audit `<distribution>` against the project-structure checklist. Warn-only.
+    """Audit `<distribution>` against the project-structure checklist.
 
     Parameters
     ----------
@@ -1191,11 +1246,17 @@ def audit_project(
         Emit machine-readable output on stdout.
     rules : set of str, optional
         If given, only run these rule codes.
+    severity : {"error","warning","info"}
+        Minimum severity to print AND to drive the exit code.
+        - ``"error"``  (default): print E findings only; exit 1 iff ≥1 E.
+        - ``"warning"``: print E + W findings; exit 1 iff ≥1 E.
+        - ``"info"``: print everything; exit 1 iff ≥1 E.
+        W and I findings never fail CI on their own.
 
     Returns
     -------
     int
-        Exit code: 0 = no violations, 1 = violations, 2 = could not locate.
+        Exit code: 0 = no E-level violations, 1 = ≥1 E violation, 2 = could not locate.
     """
     repo_root = _resolve_repo_root(distribution, repo)
     violations: list[Violation] = []
@@ -1274,6 +1335,13 @@ def audit_project(
     if rules:
         violations = [v for v in violations if v.rule in rules]
 
+    # Severity filtering: print everything ≥ the requested floor.
+    _floor = {"error": {"E"}, "warning": {"E", "W"}, "info": {"E", "W", "I"}}
+    visible_set = _floor.get(severity, _floor["error"])
+    visible = [v for v in violations if v.severity in visible_set]
+    n_errors = sum(1 for v in violations if v.severity == "E")
+    exit_code = 1 if n_errors > 0 else 0
+
     if json_out:
         import json as _json
 
@@ -1283,24 +1351,40 @@ def audit_project(
                     "distribution": distribution,
                     "repo": str(repo_root),
                     "violations": [
-                        {"rule": v.rule, "where": v.where, "detail": v.detail}
-                        for v in violations
+                        {
+                            "rule": v.rule,
+                            "where": v.where,
+                            "detail": v.detail,
+                            "severity": v.severity,
+                        }
+                        for v in visible
                     ],
+                    "exit_code": exit_code,
+                    "errors": n_errors,
                 },
                 indent=2,
             )
         )
-        return 0 if not violations else 1
+        return exit_code
 
     from ...._audit_disclaimer import emit_disclaimer
 
-    if not violations:
+    if not visible:
+        # No findings at the requested severity floor.
         click.echo(f"ok  {distribution}: no project-structure violations")
         emit_disclaimer()
-        return 0
+        return exit_code
 
-    click.echo(f"warn  {distribution} ({repo_root}): {len(violations)} violation(s)")
-    for v in violations:
+    n_w = sum(1 for v in visible if v.severity == "W")
+    n_i = sum(1 for v in visible if v.severity == "I")
+    label = "fail" if exit_code else "warn"
+    summary = f"{label}  {distribution} ({repo_root}): {n_errors} error(s)"
+    if n_w:
+        summary += f", {n_w} warning(s)"
+    if n_i:
+        summary += f", {n_i} info"
+    click.echo(summary)
+    for v in visible:
         click.echo(v.format())
     emit_disclaimer()
-    return 1
+    return exit_code
