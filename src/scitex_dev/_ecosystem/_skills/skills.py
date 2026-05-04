@@ -37,7 +37,7 @@ import shutil
 from pathlib import Path
 from typing import Optional
 
-from .._core.discovery import discover_packages, get_package_root
+from ..._core.discovery import discover_packages, get_package_root
 
 logger = logging.getLogger(__name__)
 
@@ -307,7 +307,7 @@ def export_skills(
         return export_from_pypi(dest=dest, package=package)
 
     # Clean stale dist-info to prevent importlib.metadata confusion
-    from .._core.dist_info import clean_stale_dist_info
+    from ..._core.dist_info import clean_stale_dist_info
 
     clean_stale_dist_info()
 

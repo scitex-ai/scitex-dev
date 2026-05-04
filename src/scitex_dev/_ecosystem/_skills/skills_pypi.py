@@ -32,7 +32,7 @@ def export_from_pypi(
     Returns:
         Dict mapping namespace -> list of exported file paths.
     """
-    from .._ecosystem import get_all_packages
+    from .. import get_all_packages
 
     all_packages = get_all_packages()
     if package:

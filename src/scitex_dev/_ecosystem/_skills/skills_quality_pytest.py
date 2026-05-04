@@ -2,7 +2,7 @@
 
 Usage in a package's tests/test_skills_quality.py:
 
-    from scitex_dev._skills_src.skills_quality_pytest import make_skill_quality_tests
+    from scitex_dev._ecosystem._skills.skills_quality_pytest import make_skill_quality_tests
     test_skills_quality = make_skill_quality_tests(package_root="..")
 """
 

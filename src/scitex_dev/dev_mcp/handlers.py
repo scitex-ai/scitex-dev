@@ -358,7 +358,7 @@ async def skills_list_handler(
     package: str | None = None,
 ) -> str:
     """Enumerate every skill page shipped by every SciTeX package — scitex-io's `01_save-and-load`, scitex-stats' `01_test-catalog`, figrecipe's `02_plot-types`, scitex-writer's `13_claims`, etc. Use whenever the user asks "what skill pages exist?", "list all scitex skills", "what docs are shipped with these packages?", or is discovering learning resources. Filter to one package with `package='scitex-io'`."""
-    from .._skills_src.skills import list_skills
+    from .._ecosystem._skills.skills import list_skills
 
     return wrap_as_mcp(list_skills, idempotent=True, package=package)
 
@@ -368,7 +368,7 @@ async def skills_get_handler(
     name: str,
 ) -> str:
     """Fetch the full Markdown of one skill page — e.g. `package='scitex-io', name='01_save-and-load'` returns that file's contents. Use whenever the user asks "show me the scitex-io quick-start skill", "read the figrecipe composition skill", "get the claims skill page from scitex-writer", or is diving into a specific guide. Pair with `skills_list_handler` to discover names."""
-    from .._skills_src.skills import get_skill
+    from .._ecosystem._skills.skills import get_skill
 
     return wrap_as_mcp(get_skill, idempotent=True, package=package, name=name)
 

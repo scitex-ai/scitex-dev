@@ -21,6 +21,11 @@ from ._ecosystem._mcp._utils import (
     run_as_mcp,
     wrap_as_mcp,
 )
+from ._ecosystem._skills.skills import (
+    export_skills,
+    get_skill,
+    list_skills,
+)
 
 __all__ = [
     "async_wrap_as_mcp",
@@ -28,7 +33,10 @@ __all__ = [
     "docs_get",
     "docs_list",
     "docs_search",
+    "export_skills",
+    "get_skill",
     "get_tools_sync",
+    "list_skills",
     "register_docs_tools",
     "result_to_mcp",
     "run_as_mcp",
