@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Tests for scitex_dev._mcp._utils — run_as_mcp, result_to_mcp."""
+"""Tests for scitex_dev._ecosystem._mcp._utils — run_as_mcp, result_to_mcp."""
 
 import json
 
 from scitex_dev._core.decorators import supports_return_as
-from scitex_dev._mcp._utils import result_to_mcp, run_as_mcp, wrap_as_mcp
+from scitex_dev._ecosystem._mcp._utils import result_to_mcp, run_as_mcp, wrap_as_mcp
 from scitex_dev._core.types import Result
 
 
@@ -70,7 +70,7 @@ class TestAsyncWrapAsMcp:
     def test_async_success(self):
         import asyncio
 
-        from scitex_dev._mcp._utils import async_wrap_as_mcp
+        from scitex_dev._ecosystem._mcp._utils import async_wrap_as_mcp
 
         async def async_add(a, b):
             return a + b
@@ -83,7 +83,7 @@ class TestAsyncWrapAsMcp:
     def test_async_failure(self):
         import asyncio
 
-        from scitex_dev._mcp._utils import async_wrap_as_mcp
+        from scitex_dev._ecosystem._mcp._utils import async_wrap_as_mcp
 
         async def async_fail():
             raise FileNotFoundError("missing.csv")
@@ -97,7 +97,7 @@ class TestAsyncWrapAsMcp:
     def test_async_duck_typed_suggestions(self):
         import asyncio
 
-        from scitex_dev._mcp._utils import async_wrap_as_mcp
+        from scitex_dev._ecosystem._mcp._utils import async_wrap_as_mcp
 
         async def async_fail_hints():
             exc = RuntimeError("broke")

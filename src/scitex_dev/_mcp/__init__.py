@@ -1,33 +1,8 @@
-"""SciTeX-dev MCP integration: docs tool wrappers, server, and compatibility helpers.
+"""scitex-dev's OWN FastMCP server.
 
-Module map:
-- `_core`    — `register_docs_tools` + `docs_list/docs_get/docs_build/docs_search`
-- `_utils`   — `wrap_as_mcp`, `async_wrap_as_mcp`, `run_as_mcp`, `result_to_mcp`
-- `_compat`  — `get_tools_sync` (FastMCP version-bridge helpers)
-- `_server`  — top-level `mcp` FastMCP server instance
+The MCP helper utilities (`wrap_as_mcp`, `register_docs_tools`,
+`get_tools_sync`, …) used to live here but are now ecosystem-glue
+under `scitex_dev._ecosystem._mcp` and re-exported as the public
+`scitex_dev.ecosystem` surface. This package retains only the
+`_server` module that hosts scitex-dev's own MCP tools.
 """
-
-from __future__ import annotations
-
-from ._compat import get_tools_sync
-from ._core import (
-    docs_build,
-    docs_get,
-    docs_list,
-    docs_search,
-    register_docs_tools,
-)
-from ._utils import async_wrap_as_mcp, result_to_mcp, run_as_mcp, wrap_as_mcp
-
-__all__ = [
-    "async_wrap_as_mcp",
-    "docs_build",
-    "docs_get",
-    "docs_list",
-    "docs_search",
-    "get_tools_sync",
-    "register_docs_tools",
-    "result_to_mcp",
-    "run_as_mcp",
-    "wrap_as_mcp",
-]

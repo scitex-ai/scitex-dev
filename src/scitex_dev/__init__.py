@@ -68,12 +68,12 @@ _LAZY_ATTRS: dict[str, str] = {
     "InstallHint": "_core.imports",
     "last_install_hint": "_core.imports",
     "try_import_optional": "_core.imports",
-    # _mcp
-    "get_tools_sync": "_mcp",
-    "async_wrap_as_mcp": "_mcp",
-    "result_to_mcp": "_mcp",
-    "run_as_mcp": "_mcp",
-    "wrap_as_mcp": "_mcp",
+    # ecosystem MCP helpers (re-exported via scitex_dev.ecosystem)
+    "get_tools_sync": "_ecosystem._mcp",
+    "async_wrap_as_mcp": "_ecosystem._mcp",
+    "result_to_mcp": "_ecosystem._mcp",
+    "run_as_mcp": "_ecosystem._mcp",
+    "wrap_as_mcp": "_ecosystem._mcp",
     # side_effects
     "SideEffect": "_core.side_effects",
     # types

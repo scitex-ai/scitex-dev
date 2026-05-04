@@ -5,7 +5,7 @@
 These functions return JSON strings suitable for MCP tool responses.
 Register them in your MCP server::
 
-    from scitex_dev._mcp._core import register_docs_tools
+    from scitex_dev.ecosystem import register_docs_tools
     register_docs_tools(mcp)
 """
 
@@ -21,7 +21,7 @@ def docs_list() -> str:
     Returns:
         JSON string with package manifest overview.
     """
-    from .._docs.docs import get_docs
+    from ..._docs.docs import get_docs
 
     try:
         result = get_docs()
@@ -57,7 +57,7 @@ def docs_get(
     Returns:
         JSON string with documentation content.
     """
-    from .._docs.docs import get_docs
+    from ..._docs.docs import get_docs
 
     try:
         result = get_docs(package=package, format=format, page=page)
@@ -71,7 +71,7 @@ def docs_get(
             default=str,
         )
     except LookupError as e:
-        from .._core.discovery import discover_packages
+        from ..._core.discovery import discover_packages
 
         available = list(discover_packages().keys())
         return json.dumps(
@@ -108,7 +108,7 @@ def docs_build(
     Returns:
         JSON string with build results.
     """
-    from .._docs.docs import build_docs
+    from ..._docs.docs import build_docs
 
     try:
         result = build_docs(package=package, formats=formats)
@@ -148,7 +148,7 @@ def docs_search(
     Returns:
         JSON string with search results.
     """
-    from .._docs.docs import search_docs
+    from ..._docs.docs import search_docs
 
     try:
         results = search_docs(
