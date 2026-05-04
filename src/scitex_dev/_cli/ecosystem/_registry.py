@@ -418,31 +418,43 @@ def register_ecosystem_commands(main_group):
     @click.option("--https", is_flag=True, help="Use https:// URLs (default ssh).")
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
     @click.option("--jobs", "-j", default=4, show_default=True, type=int)
-    @click.option("--dry-run", is_flag=True)
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=True,
+        help="(default) Print what would run; do nothing. Pass --yes to apply.",
+    )
     @click.option("--json", "as_json", is_flag=True)
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    @click.option(
+        "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
+    )
     def ecosystem_clone(dest, branch, https, package, jobs, dry_run, as_json, yes):
         """Clone every ecosystem repo into DEST (default ~/proj/).
 
         \b
+        Default is dry-run — pass --yes to actually clone.
+
+        \b
         Example:
-          $ scitex-dev ecosystem clone                          # → ~/proj/
-          $ scitex-dev ecosystem clone --dest /scratch/proj
-          $ scitex-dev ecosystem clone --https --branch main
-          $ scitex-dev ecosystem clone -p scitex-io -p scitex-stats
+          $ scitex-dev ecosystem clone                # preview (dry-run)
+          $ scitex-dev ecosystem clone --yes          # apply
+          $ scitex-dev ecosystem clone --dest /scratch/proj --yes
+          $ scitex-dev ecosystem clone --https --branch main --yes
+          $ scitex-dev ecosystem clone -p scitex-io --yes
         """
-        del yes  # accepted for §2 compliance; clone is non-interactive
         from pathlib import Path as _Path
 
         from ..._ecosystem._git_ops import clone_all
 
+        # Dry-run is default; --yes overrides to apply for real.
+        effective_dry_run = dry_run and not yes
         results = clone_all(
             dest=_Path(dest),
             branch=branch,
             use_ssh=not https,
             packages=list(package) or None,
             jobs=jobs,
-            dry_run=dry_run,
+            dry_run=effective_dry_run,
             on_progress=None if as_json else _git_progress,
         )
         if as_json:
@@ -460,17 +472,37 @@ def register_ecosystem_commands(main_group):
     @ecosystem.command("checkout")
     @click.argument("branch")
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=True,
+        help="(default) Print what would run; do nothing. Pass --yes to apply.",
+    )
+    @click.option(
+        "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
+    )
     @click.option("--json", "as_json", is_flag=True)
-    def ecosystem_checkout(branch, package, as_json):
+    def ecosystem_checkout(branch, package, dry_run, yes, as_json):
         """`git checkout <branch>` in every ecosystem clone.
 
         \b
+        Default is dry-run — pass --yes to actually checkout.
+
+        \b
         Example:
-          $ scitex-dev ecosystem checkout develop
-          $ scitex-dev ecosystem checkout main -p scitex-io
+          $ scitex-dev ecosystem checkout develop          # preview
+          $ scitex-dev ecosystem checkout develop --yes    # apply
+          $ scitex-dev ecosystem checkout main -p scitex-io --yes
         """
+        from ..._ecosystem._core import ECOSYSTEM as _ECO
         from ..._ecosystem._git_ops import checkout_all
 
+        if dry_run and not yes:
+            for n, info in _ECO.items():
+                if info.get("archived") or (package and n not in package):
+                    continue
+                click.echo(f"would run in {info['local_path']}: git checkout {branch}")
+            raise SystemExit(0)
         results = checkout_all(
             branch=branch,
             packages=list(package) or None,
@@ -494,22 +526,32 @@ def register_ecosystem_commands(main_group):
     )
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
     @click.option("--jobs", "-j", default=4, show_default=True, type=int)
-    @click.option("--dry-run", is_flag=True, help="Print what would run; do nothing.")
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=True,
+        help="(default) Print what would run; do nothing. Pass --yes to apply.",
+    )
+    @click.option(
+        "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
+    )
     @click.option("--json", "as_json", is_flag=True)
     def ecosystem_pull(no_rebase, package, jobs, dry_run, yes, as_json):
         """`git pull --rebase` in every ecosystem clone (parallel).
 
         \b
+        Default is dry-run — pass --yes to actually pull.
+
+        \b
         Example:
-          $ scitex-dev ecosystem pull
-          $ scitex-dev ecosystem pull -j 8
-          $ scitex-dev ecosystem pull -p scitex-io -p scitex-stats
+          $ scitex-dev ecosystem pull              # preview
+          $ scitex-dev ecosystem pull --yes        # apply
+          $ scitex-dev ecosystem pull --yes -j 8
+          $ scitex-dev ecosystem pull -p scitex-io --yes
         """
-        del yes  # accepted for §2 compliance; pull is non-interactive
         from ..._ecosystem._git_ops import pull_all
 
-        if dry_run:
+        if dry_run and not yes:
             from ..._ecosystem._core import ECOSYSTEM as _ECO
 
             for n, info in _ECO.items():
@@ -547,28 +589,40 @@ def register_ecosystem_commands(main_group):
     @click.option("--extras", default="", help="Comma-separated extras (e.g. dev,mcp).")
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
     @click.option("--jobs", "-j", default=1, show_default=True, type=int)
-    @click.option("--dry-run", is_flag=True)
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=True,
+        help="(default) Print what would run; do nothing. Pass --yes to apply.",
+    )
     @click.option("--json", "as_json", is_flag=True)
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    @click.option(
+        "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
+    )
     def ecosystem_install(source, extras, package, jobs, dry_run, as_json, yes):
         """`pip install` every ecosystem package.
 
         \b
+        Default is dry-run — pass --yes to actually install.
+
+        \b
         Example:
-          $ scitex-dev ecosystem install                            # editable from local
-          $ scitex-dev ecosystem install --source pypi              # latest PyPI
-          $ scitex-dev ecosystem install --extras dev,mcp -j 4
-          $ scitex-dev ecosystem install -p scitex-io --source pypi
+          $ scitex-dev ecosystem install                       # preview (dry-run)
+          $ scitex-dev ecosystem install --yes                 # editable from local
+          $ scitex-dev ecosystem install --source pypi --yes
+          $ scitex-dev ecosystem install --extras dev,mcp -j 4 --yes
+          $ scitex-dev ecosystem install -p scitex-io --source pypi --yes
         """
-        del yes
         from ..._ecosystem._git_ops import install_all
 
+        # Dry-run is default; --yes overrides to apply for real.
+        effective_dry_run = dry_run and not yes
         results = install_all(
             source=source,
             extras=extras,
             packages=list(package) or None,
             jobs=jobs,
-            dry_run=dry_run,
+            dry_run=effective_dry_run,
             on_progress=None if as_json else _git_progress,
         )
         if as_json:
