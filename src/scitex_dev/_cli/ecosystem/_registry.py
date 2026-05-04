@@ -1140,6 +1140,60 @@ def register_ecosystem_commands(main_group):
         )
 
     # ------------------------------------------------------------------ #
+    # init-config — write a `.scitex/dev/config.yaml` from the heuristic #
+    # so the user can confirm + commit the project's type.               #
+    # ------------------------------------------------------------------ #
+    @ecosystem.command("init-config")
+    @click.option(
+        "--repo",
+        "repo_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        default=".",
+        show_default=True,
+        help="Project root (defaults to cwd).",
+    )
+    @click.option(
+        "--project-type",
+        "project_types",
+        multiple=True,
+        type=click.Choice(["pip", "research"]),
+        help="Override the heuristic guess. Repeatable for hybrid repos.",
+    )
+    @click.option(
+        "--force",
+        is_flag=True,
+        help="Overwrite an existing .scitex/dev/config.yaml.",
+    )
+    @click.option("--yes", "-y", is_flag=True, help="Confirm destructive write.")
+    def ecosystem_init_config(repo_path, project_types, force, yes):
+        """Write `.scitex/dev/config.yaml` from the heuristic guess.
+
+        \b
+        Example:
+            $ scitex-dev ecosystem init-config
+            $ scitex-dev ecosystem init-config --project-type research --yes
+            $ scitex-dev ecosystem init-config --project-type pip --project-type research
+        """
+        del yes  # accepted for §2 compliance; --force gates overwrite
+        from pathlib import Path
+
+        from ..audit._config import detect_project_types, write_config
+
+        repo = Path(repo_path).expanduser().resolve()
+        types = (
+            list(project_types) if project_types else sorted(detect_project_types(repo))
+        )
+        try:
+            written = write_config(repo, project_types=types, overwrite=force)
+        except FileExistsError as e:
+            click.echo(
+                f"refuse: {e} already exists; pass --force to overwrite.",
+                err=True,
+            )
+            raise SystemExit(1)
+        click.echo(f"wrote: {written}  (project-type: {', '.join(types)})")
+
+    # ------------------------------------------------------------------ #
     # audit-summary — cross-leaf, cross-auditor violation counts. The   #
     # one-command answer to "what's the deterministic state of the       #
     # ecosystem right now?" — re-runnable, replayable, immune to drift.  #
