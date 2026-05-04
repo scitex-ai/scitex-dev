@@ -348,6 +348,36 @@ RULES: dict[str, Rule] = {
                 "cover this."
             ),
         ),
+        Rule(
+            "PS133",
+            "§1",
+            (
+                "missing CLA.md at repo root — every public scitex-* package "
+                "needs a Contributor License Agreement so external PRs can be "
+                "merged without legal ambiguity. Use the canonical CLA.md "
+                "from any current sibling package as the template."
+            ),
+        ),
+        Rule(
+            "PS134",
+            "§1",
+            (
+                "missing CHANGELOG.md at repo root — every shipping package "
+                "needs a Keep-a-Changelog-style file so consumers can see "
+                "what changed across versions. New packages start with an "
+                "[Unreleased] section."
+            ),
+        ),
+        Rule(
+            "PS135",
+            "§1",
+            (
+                "missing CONTRIBUTING.md at repo root — every public package "
+                "needs contributor guidance (branch naming, test workflow, "
+                "PR conventions). Use the canonical CONTRIBUTING.md from "
+                "any current sibling package as the template."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
@@ -553,6 +583,11 @@ _FORBIDDEN_TOP_DIRS = {
     "htmlcov": "coverage reports should live in tests/coverage/",
     "assets": "use ./docs/assets/ instead",
     ".playground": "collapsed into .dev/ for easier typing",
+    "logs": "runtime artifact — move to ./GITIGNORED/logs/ or ./tests/logs/ and add to .gitignore",
+    "catboost_info": "CatBoost training artifact — must be gitignored (add `catboost_info/` to .gitignore)",
+    "signatures": "scratch dir — move to ./GITIGNORED/signatures/ if needed locally",
+    "scitex": "orphan module dir — the real package lives in src/<pkg>/. Use a hidden ./.scitex/ for runtime state, never a visible ./scitex/.",
+    "unknown_out": "@stx.session output landed at repo root — re-run from a script directory or set CONFIG.SDIR_RUN. Move the dir aside if you need to keep it.",
 }
 
 # Top-level junk-file patterns (substring match on the basename).
@@ -603,9 +638,18 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
 
 
 def _check_top_level(repo: Path, out: list[Violation]) -> None:
-    """PS101 / PS102 / PS103 / PS104 / PS105."""
+    """PS101 / PS102 / PS103 / PS104 / PS105 / PS133-PS135."""
     if not (repo / "pyproject.toml").is_file():
         out.append(Violation("PS101", str(repo), "no pyproject.toml at repo root"))
+
+    # PS133/134/135: required community files at repo root.
+    for code, fname in (
+        ("PS133", "CLA.md"),
+        ("PS134", "CHANGELOG.md"),
+        ("PS135", "CONTRIBUTING.md"),
+    ):
+        if not (repo / fname).is_file():
+            out.append(Violation(code, str(repo), f"missing {fname}"))
 
     for dirname, why in _FORBIDDEN_TOP_DIRS.items():
         candidate = repo / dirname
