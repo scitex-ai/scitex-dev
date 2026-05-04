@@ -26,6 +26,113 @@ Centralized project parameters, loaded into `CONFIG` by `@stx.session`. **Script
 - `@stx.session` deep-merges every file into a single `CONFIG` object exposed to `main(...)`.
 - Resolution chain: **direct argument → CONFIG yaml → env var → default**. See [`02_research-project_07_config-and-parameters.md`](02_research-project_07_config-and-parameters.md) for full semantics, examples, override rules.
 
+### `PATH.yaml` — single source of truth for paths
+
+**Mandatory** when a project has any non-trivial filesystem layout. Top-level `PATH:` namespace; ALL_CAPS keys; values are either literal strings OR Python `f"..."` strings interpolated at access time.
+
+```yaml
+# config/PATH.yaml
+PATH:
+  ## Top-level (mostly symlinks; targets in .scitex/<pkg>/ or canonical data roots)
+  PAPER:    "./paper"             # → ./.scitex/writer
+  CLEW:     "./clew"              # → ./.scitex/clew
+  DATA:     "./data"
+
+  ## Per-cohort (f-strings interpolated against capsule_id, etc. at access time)
+  COHORT_A:
+    ROOT:      "./data/cohort_a_corebench"
+    SRC:       "./data/cohort_a_corebench/src"
+    INVENTORY: "./data/cohort_a_corebench/src/inventory.json"
+    RAW:       f"./data/cohort_a_corebench/src/capsules/{capsule_id}.tar.gz"
+    EXTRACTED: f"./data/cohort_a_corebench/src/capsules_extracted/{capsule_id}"
+    CAPSULE:   f"./data/cohort_a_corebench/capsules/capsule-{capsule_nn:02d}"
+
+  ## Experiment outputs (write target for stx.io.save symlink_to=...)
+  RESULTS:
+    ROOT:      "./data/results"
+    CLEW_DEMO: f"./data/results/clew_demos/{exp_name}"
+```
+
+Rules:
+
+- **Single source of truth** — every other location in the codebase (scripts, manuscripts, sbatch wrappers, sac yamls) reads from `CONFIG.PATH.<KEY>`, never hardcodes the same string.
+- **f-string syntax in YAML** — values starting with `f"` are evaluated as Python f-strings against the local variables in scope. `@stx.session` (or its scitex-io / scitex-dev shim) handles the resolution.
+- **No hardcoded absolute paths** — `/home/<user>/...` and `/data/...` literals are forbidden in scripts (lint rule RP203). Use `CONFIG.PATH.<KEY>` instead.
+- **Read alongside `stx.io.save(..., symlink_to=CONFIG.PATH.RESULTS.CLEW_DEMO)`** — outputs become discoverable from `./data/` without changing where `@stx.session` writes (next to script).
+
+### Using f-string paths in scripts
+
+`CONFIG.PATH.<KEY>` returns the **literal f-string** (e.g. the string `'f"./data/seizures/{patient_id}.csv"'`). The caller resolves it with `eval(...)` against local variables in scope. The convention from real research projects (e.g. neurovista):
+
+```python
+import scitex as stx
+
+@stx.session
+def main(patient_id: str = "P001", CONFIG=stx.INJECTED, logger=stx.INJECTED):
+    # Single value
+    df = stx.io.load(eval(CONFIG.PATH.SEIZURES_CSV))
+    # → resolves f"./data/seizures/{patient_id}.csv"  using local patient_id
+
+    # Save with discoverable symlink (auto-creates ./data/results/.../result.csv → script_out/.../)
+    stx.io.save(df, "result.csv", symlink_to=eval(CONFIG.PATH.RESULTS_CLEW_DEMO))
+
+    # Glob over a templated directory (one f-string, many matches)
+    capsules = stx.io.glob(eval(CONFIG.PATH.COHORT_A.EXTRACTED).replace(
+        "{capsule_id}", "*"
+    ))
+
+    # Save into a templated location (e.g. per-cohort)
+    summary = {"violations": 0}
+    cohort = "A"
+    stx.io.save(summary, eval(CONFIG.PATH.RESULTS.COHORT_RUN), force=True)
+```
+
+Rules for f-string usage:
+
+- **Always `eval(CONFIG.PATH.<KEY>)` before passing to `stx.io.{load,save,glob}`** — never use the raw string.
+- **Wrap the script with `@stx.session`** — only the session decorator deep-merges + injects `CONFIG`.
+- **Local variables must be named exactly as the f-string placeholders.** `f"...{patient_id}..."` requires `patient_id` in the call frame.
+- **For glob/wildcard semantics**, replace the placeholder with `"*"`: `eval(CONFIG.PATH.X).replace("{patient_id}", "*")`. Then call `stx.io.glob(resolved_pattern)`.
+- **Reject unbound placeholders** — if a `{var}` is not in scope, `eval` raises `NameError`. That's correct: it surfaces missing parameters loudly instead of silently using a stale or wrong path.
+
+### The "phantom-unused-variable" problem
+
+`eval(CONFIG.PATH.X)` reads `patient_id` from the call frame, but to a static analyzer (`ruff F841`, `pyright reportUnusedVariable`, `vulture`) the variable looks **unused** — it's never referenced explicitly in the source. Linters will flag it, autofixers may delete it. This is the single biggest footgun of the f-string + eval pattern.
+
+**Mandatory convention** when defining a variable solely consumed by an eval'd path:
+
+1. **Add a `# noqa: F841` (or pyright equivalent) suppression** at the binding site.
+2. **Add a one-line comment** stating which `CONFIG.PATH.<KEY>` consumes it.
+
+```python
+@stx.session
+def main(patient_id: str = "P001", CONFIG=stx.INJECTED, logger=stx.INJECTED):
+    # patient_id consumed by eval(CONFIG.PATH.SEIZURES_CSV) below.
+    # noqa: F841 — referenced inside f-string, invisible to static analysis.
+
+    df = stx.io.load(eval(CONFIG.PATH.SEIZURES_CSV))
+    # ↑ resolves f"./data/seizures/{patient_id}.csv"
+```
+
+Or, when the consuming line is far from the binding, repeat the suppression at the binding:
+
+```python
+patient_id = picker.next()  # noqa: F841 — see eval(CONFIG.PATH.SEIZURES_CSV)
+...  # 30 lines of unrelated work
+df = stx.io.load(eval(CONFIG.PATH.SEIZURES_CSV))
+```
+
+**Better alternative when available**: a wrapper function that names the bindings explicitly and avoids `eval`:
+
+```python
+# Hypothetical ergonomic wrapper (if/when scitex-io exposes it):
+df = stx.io.load(stx.io.resolve(CONFIG.PATH.SEIZURES_CSV, patient_id=patient_id))
+```
+
+This makes `patient_id` a *real* function argument — visible to linters, IDEs, and refactoring tools. Prefer this form when the helper is available; fall back to `eval` + suppression comment otherwise.
+
+**Auditor rule** (research-project mode): flag any `eval(CONFIG.PATH.*)` whose preceding ~5 lines contain a binding without a `# noqa` or `# eval` marker. The fix is to add the suppression, not to remove the variable.
+
 ## `./data` — inputs + intermediate
 
 ```

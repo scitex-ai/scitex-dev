@@ -16,14 +16,32 @@ A research project's `./scripts/` is what `./src/` is to a package. Pipelines, a
 ```
 ./scripts/
 ├── makefile/                            # Makefile target backing scripts (separate leaf)
+├── dataset/                             # data prep — download / extract / build_inventory / inspect
+├── io/                                  # I/O helpers — readers/writers shared across analyses
 ├── utils/                               # helpers shared across multiple scripts
-├── analysis/
+├── <experiment-name>/                   # one subdir per substantive experiment / analysis lane
 │   ├── 01_load_and_summarize.py
 │   ├── 02_run_models.py
 │   └── _shared.py                       # private; tested as test__shared.py
 └── one_off/
     └── inspect_2026-04-30.py            # ad-hoc; .dev/ is also fine
 ```
+
+**Standard subdir set for any research project**:
+
+| Subdir | Role |
+|---|---|
+| `dataset/` | Acquire + stage the data (download, extract, inventory, sanity-inspect). One subdir level deeper than this when there are ≥ 2 cohorts: `scripts/cohorts/<cohort>/dataset/` (see [`./08_cohort-datasets`](02_research-project_08_cohort-datasets.md)). |
+| `io/` | Cross-experiment readers/writers — e.g. `load_subject(N)`, `save_pac_results(...)`. Imported, not invoked. |
+| `utils/` | Cross-experiment helpers (math, plotting, path resolvers). Imported, not invoked. |
+| `makefile/` | Files invoked by the project's Makefile (separate leaf). |
+| `<experiment-name>/` | One per substantive analysis lane (`pac/`, `power_spectrum/`, `clew/`). Numbered scripts inside (`01_*`, `02_*`, ...). |
+
+The `dataset/`, `io/`, `utils/` triad is the **stable foundation** a research project starts with. Experiment subdirs accrete as the project grows.
+
+**Real-world examples**:
+- `~/proj/neurovista/scripts/{dataset,io,utils,pac,power_spectrum,clew}/` — single-cohort project; experiment subdirs are domain analyses.
+- `~/proj/paper-scitex-clew/scripts/cohorts/{a_corebench,b_bixbench,c_biomysterybench,shared}/dataset/` — multi-cohort project; the `dataset/` triad nests one level deeper.
 
 ## Entry-point pattern: `@stx.session`
 

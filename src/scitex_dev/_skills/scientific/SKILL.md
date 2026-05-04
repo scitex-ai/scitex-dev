@@ -23,6 +23,9 @@ These complement (never duplicate) the engineering rules in [../general/SKILL.md
 
 ## Sub-skills
 
+### 0. Planning
+- [00_planning_01_hypotheses-agreement.md](00_planning_01_hypotheses-agreement.md) — Numbered, falsifiable hypotheses (H1/H2/...) with metric + prediction + baseline + falsification. Required **before** writing any experiment script. Research-project counterpart of the architecture agreement for pip packages.
+
 ### 1. Figures
 - [01_figures_01_standards.md](01_figures_01_standards.md) — Universal scientific-figure standards: comparison rules (shared color scale, aligned axes), multi-panel layout, color maps, PDF report layout. Pairs with `figrecipe/21_scientific-figure-patterns.md` for matplotlib code.
 
@@ -35,6 +38,9 @@ Project structure split into one leaf per top-level directory:
 - [02_research-project_05_project-structure-examples.md](02_research-project_05_project-structure-examples.md) — Numbered examples + `_out/` artefacts; how research-project examples differ from package examples
 - [02_research-project_06_project-structure-tests.md](02_research-project_06_project-structure-tests.md) — `tests/scripts/` mandatory parent, allowed subdirs, public/private mirroring, `audit-project` rules
 - [02_research-project_07_config-and-parameters.md](02_research-project_07_config-and-parameters.md) — `@stx.session` and the `CONFIG` object (`SDIR_OUT`, `SDIR_RUN`, YAML deep-merge, CLI/env overrides). Use when adding parameters to a script, debugging config resolution, or auditing an experiment for reproducibility.
+- [02_research-project_08_cohort-datasets.md](02_research-project_08_cohort-datasets.md) — Multi-dataset projects: uniform `data/<cohort>/{capsules,src}/` tree, mirrored `scripts/cohorts/<cohort>/dataset/` and `tests/scripts/cohorts/<cohort>/dataset/`, generic filenames + cohort-in-path, `shared/` orchestrator pattern.
+- [02_research-project_09_id-readability-and-data-immutability.md](02_research-project_09_id-readability-and-data-immutability.md) — UUID/random upstream IDs → readable ordinal symlinks (provenance preserved in target name); raw data stays compressed in `src/capsules/`; extractions in mirrored `src/capsules_extracted/`; strategies for very large datasets.
+- [02_research-project_10_naming-and-numbering.md](02_research-project_10_naming-and-numbering.md) — Three rules: zero-fill all numbering to max-ID width (lex-sort = numeric-sort); mirror naming across `scripts/` / `tests/` / `data/`; cohort/group context in the path, not the filename.
 
 ### 3. Reporting
 - [03_reporting_01_pdf-reports.md](03_reporting_01_pdf-reports.md) — Recurring scientific PDF analysis reports — timestamped filenames, mandatory section structure, navigable bookmarks (`fpdf2` / `pikepdf`), aspect-preserving figure embedding, size management for email (<10 MB, DPI/ghostscript/split), and delivery tracking via email + issue-tracker comment.

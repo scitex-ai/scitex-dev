@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Package Root
-  [DETAILS] What's allowed at the repo root for a SciTeX package — README.md, LICENSE, pyproject.toml (the only Python packaging file — no setup.py / requirements.txt / MANIFEST.in), Makefile (thin dispatcher), .gitignore/.gitattributes, CLA.md / CONTRIBUTING.md (for the CLA gate), and optional CLAUDE.md / CHANGELOG.md. Forbidden top-level dirs (`mgmt`, `references`, `htmlcov`, top-level `assets`, `.playground`). Hidden/scratch (`.dev`, `.old`). The `production-ready always` invariant, anti-patterns, and a pre-release checklist. For each subdirectory, see the sibling leaves (02-06).
+  [DETAILS] What's allowed at the repo root for a SciTeX package — README.md, LICENSE, pyproject.toml (the only Python packaging file — no setup.py / requirements.txt / MANIFEST.in), Makefile (thin dispatcher), .gitignore/.gitattributes, CLA.md / CONTRIBUTING.md (for the CLA gate), and optional CLAUDE.md / CHANGELOG.md. Forbidden top-level dirs (`mgmt`, `project_management`, `references`, `htmlcov`, top-level `assets`, `.playground`). Hidden/scratch (`.dev`, `.old`). The `production-ready always` invariant, anti-patterns, and a pre-release checklist. For each subdirectory, see the sibling leaves (02-06).
 tags: [scitex-general-package-project-structure-root]
 ---
 
@@ -72,7 +72,7 @@ Don't add `setup.py`, `requirements.txt`, or `MANIFEST.in`. All those concerns b
 
 | Top-level dir | Why forbidden | Where it should live |
 | :--- | :--- | :--- |
-| `./mgmt/` | not used in scitex | (delete) |
+| `./mgmt/`, `./project_management/` | not used in scitex | (delete) |
 | `./references/` | not used in scitex | (delete) |
 | `./htmlcov/` | coverage artifacts | `./tests/coverage/` (gitignored) |
 | `./assets/` | top-level visual noise | `./docs/assets/` |
