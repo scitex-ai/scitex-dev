@@ -28,7 +28,11 @@ Centralized project parameters, loaded into `CONFIG` by `@stx.session`. **Script
 
 ### `PATH.yaml` — single source of truth for paths
 
-**Mandatory** when a project has any non-trivial filesystem layout. Top-level `PATH:` namespace; ALL_CAPS keys; values are either literal strings OR Python `f"..."` strings interpolated at access time.
+**Mandatory** when a project has any non-trivial filesystem layout. ALL_CAPS keys; values are Python `f"..."` strings interpolated at access time via `eval(CONFIG.PATH.<KEY>)`.
+
+**No outer `PATH:` wrapper.** The filename `PATH.yaml` already gives the namespace — `@stx.session` exposes the file's top-level keys directly under `CONFIG.PATH`. If you wrap the contents in `PATH:`, you end up with `CONFIG.PATH.PATH.<KEY>` and 100 % of your access sites break with `AttributeError`.
+
+**Every value uses `f"..."` literal syntax — even static paths.** Scripts always do `eval(CONFIG.PATH.<KEY>)`; if a value is a plain `"./data/foo"` it parses to a Python expression `./data/foo` which is a `SyntaxError`. The `f` prefix makes it a valid Python f-string literal that evaluates to the path string (with any `{var}` interpolated against the local frame).
 
 ```yaml
 # config/PATH.yaml
@@ -59,6 +63,24 @@ Rules:
 - **f-string syntax in YAML** — values starting with `f"` are evaluated as Python f-strings against the local variables in scope. `@stx.session` (or its scitex-io / scitex-dev shim) handles the resolution.
 - **No hardcoded absolute paths** — `/home/<user>/...` and `/data/...` literals are forbidden in scripts (lint rule RP203). Use `CONFIG.PATH.<KEY>` instead.
 - **Read alongside `stx.io.save(..., symlink_to=CONFIG.PATH.RESULTS.CLEW_DEMO)`** — outputs become discoverable from `./data/` without changing where `@stx.session` writes (next to script).
+
+### Cross-stage I/O with `symlink_to`
+
+`stx.io.save(obj, "x.csv")` auto-routes to `<script>_out/x.csv` under the current script's SDIR_OUT. This is good for per-script provenance but breaks multi-stage pipelines where stage 2 needs to load stage 1's output without knowing stage 1's filename.
+
+**Pattern**: every cross-stage save publishes to a fixed location via `symlink_to`:
+
+```python
+# stage 1 — extract metrics
+stx.io.save(df, "metrics.csv", symlink_to=eval(CONFIG.PATH.METRICS_CSV))
+# real bytes:  ./scripts/01_extract_metrics_out/metrics.csv
+# symlink at:  ./data/results/metrics.csv  → real bytes
+
+# stage 2 — load via the stable path
+df = stx.io.load(eval(CONFIG.PATH.METRICS_CSV))
+```
+
+Result: every stage's outputs are simultaneously (a) namespaced under their producing script's `_out/` for provenance, and (b) discoverable from a single `./data/results/` location for downstream consumers.
 
 ### Using f-string paths in scripts
 

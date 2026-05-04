@@ -63,3 +63,29 @@ What's typically **dropped** vs the package set:
 ## Script template
 
 Use the same bash template as packages — see [`../general/02_package_04_project-structure-makefile.md`](../general/02_package_04_project-structure-makefile.md#script-template). Logs land under `./tests/logs/`.
+
+## Footgun: do NOT set `SHELL := /bin/bash` at the top of the Makefile
+
+When a Makefile target invokes a `@stx.session`-decorated Python script and the Makefile has `SHELL := /bin/bash`, the session decorator fails to resolve `CONFIG.PATH` and raises `AttributeError: 'DotDict' object has no attribute '<KEY>'`. Running the same Python command from the same shell directly works fine.
+
+Root cause: `SHELL := /bin/bash` changes how make's recipes evaluate environment + cwd inheritance under certain make versions, and scitex's session decorator depends on the inherited environment to locate `./config/`. Empirically dropping the line (so make uses its default `/bin/sh`) fixes it.
+
+```make
+# WRONG — breaks @stx.session under make
+SHELL := /bin/bash
+
+.PHONY: solve
+solve:
+	python3 scripts/01_extract_metrics.py
+	python3 scripts/02_build_report.py        # ← AttributeError on CONFIG.PATH.X
+```
+
+```make
+# RIGHT — drop the SHELL line; default /bin/sh works
+.PHONY: solve
+solve:
+	python3 scripts/01_extract_metrics.py
+	python3 scripts/02_build_report.py
+```
+
+If you genuinely need bash features (arrays, `[[ ]]`), put them in a `./scripts/makefile/<target>.sh` with `#!/bin/bash` shebang and have the Makefile target call that script. Don't change the Makefile's SHELL.
