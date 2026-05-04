@@ -29,7 +29,7 @@ else:
         ("Shell", ["install-tab-completion"]),
     ]
 
-    from ..click_helpers import make_categorized_group
+    from .._ecosystem.click_helpers import make_categorized_group
 
     CategorizedGroup = make_categorized_group(COMMAND_CATEGORIES)
 

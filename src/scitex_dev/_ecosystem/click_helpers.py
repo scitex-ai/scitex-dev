@@ -6,7 +6,7 @@ render a grouped command list (per general/03_interface_02_cli §6).
 Usage::
 
     import click
-    from scitex_dev.click_helpers import CategorizedGroup, make_categorized_group
+    from scitex_dev.ecosystem import CategorizedGroup, make_categorized_group
 
     CATEGORIES = [
         ("Lifecycle", ["start", "stop", "restart"]),

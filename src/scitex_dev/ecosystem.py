@@ -26,8 +26,10 @@ from ._ecosystem._skills.skills import (
     get_skill,
     list_skills,
 )
+from ._ecosystem.click_helpers import CategorizedGroup, make_categorized_group
 
 __all__ = [
+    "CategorizedGroup",
     "async_wrap_as_mcp",
     "docs_build",
     "docs_get",
@@ -37,6 +39,7 @@ __all__ = [
     "get_skill",
     "get_tools_sync",
     "list_skills",
+    "make_categorized_group",
     "register_docs_tools",
     "result_to_mcp",
     "run_as_mcp",
