@@ -1335,6 +1335,16 @@ def audit_project(
     if rules:
         violations = [v for v in violations if v.rule in rules]
 
+    # Project-type dispatch: drop findings for rule families that don't
+    # apply to this project (PS rules only fire for `pip` projects, RP
+    # rules only for `research`). Honours the user's `audit.skip` list too.
+    from .._config import load_config
+
+    cfg = load_config(repo_root)
+    violations = [
+        v for v in violations if cfg.applies(v.rule) and v.rule not in cfg.skip
+    ]
+
     # Severity filtering: print everything ≥ the requested floor.
     _floor = {"error": {"E"}, "warning": {"E", "W"}, "info": {"E", "W", "I"}}
     visible_set = _floor.get(severity, _floor["error"])
