@@ -253,6 +253,9 @@ def scaffold_package_skills(
     """Materialize `plan` on disk. Returns (written, skipped) absolute paths.
 
     Skips any file that already exists unless `force=True`. Never deletes.
+    When SKILL.md is in the skipped set (existing file preserved), the
+    function still appends references to any newly-written leaves to that
+    SKILL.md so the auditor's SK302 (leaf-not-referenced) check stays clean.
     """
     plan.dest.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
@@ -264,7 +267,47 @@ def scaffold_package_skills(
             continue
         target.write_text(body)
         written.append(target)
+    _update_skill_index(plan.dest, written)
     return written, skipped
+
+
+_SUBSKILL_HEADING = "## Sub-skills"
+
+_LEAF_BLURBS = {
+    "01_installation.md": "install + import sanity check",
+    "02_quick-start.md": "30-second tour",
+    "03_python-api.md": "Python API surface",
+    "04_cli-reference.md": "CLI subcommands",
+    "05_mcp-tools.md": "MCP tool surface",
+    "06_http-api.md": "HTTP routes",
+    "20_env-vars.md": "Environment variables",
+}
+
+
+def _update_skill_index(dest: Path, written: list[Path]) -> None:
+    """Append refs for newly-written leaves to an existing SKILL.md.
+
+    No-op if SKILL.md doesn't exist (caller wrote a fresh one with full
+    index already), or if the leaf is already referenced.
+    """
+    skill = dest / "SKILL.md"
+    if not skill.exists() or skill in written:
+        return
+    text = skill.read_text()
+    new_leaves = [p for p in written if p.name != "SKILL.md" and p.name not in text]
+    if not new_leaves:
+        return
+    new_lines = [
+        f"- [{p.name}]({p.name}) — {_LEAF_BLURBS.get(p.name, 'TODO')}"
+        for p in sorted(new_leaves, key=lambda x: x.name)
+    ]
+    if _SUBSKILL_HEADING in text:
+        text = text.rstrip() + "\n" + "\n".join(new_lines) + "\n"
+    else:
+        text = (
+            text.rstrip() + f"\n\n{_SUBSKILL_HEADING}\n\n" + "\n".join(new_lines) + "\n"
+        )
+    skill.write_text(text)
 
 
 __all__ = ["ScaffoldPlan", "build_plan", "scaffold_package_skills"]
