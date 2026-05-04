@@ -241,6 +241,8 @@ CATALOG: dict[str, set[str]] = {
             "sync",
             "pull",
             "push",
+            "checkout",
+            "clone",
             "commit",
             "stash",
             "apply",

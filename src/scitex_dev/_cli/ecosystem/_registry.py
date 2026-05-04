@@ -404,6 +404,185 @@ def register_ecosystem_commands(main_group):
             on_progress=on_progress,
         )
 
+    # ---------------------------------------------------------------
+    # Bootstrap / cross-machine ops: clone | checkout | pull | install
+    # ---------------------------------------------------------------
+
+    def _git_progress(idx, total, name, status, msg):
+        mark = {"ok": "✓", "err": "✗", "skip": "·", "dry": "·"}.get(status, "?")
+        click.echo(f"[{idx}/{total}] {mark} {name}: {msg}", err=True)
+
+    @ecosystem.command("clone")
+    @click.option("--dest", default="~/proj", show_default=True, help="Parent dir.")
+    @click.option("--branch", default="develop", show_default=True)
+    @click.option("--https", is_flag=True, help="Use https:// URLs (default ssh).")
+    @click.option("--package", "-p", multiple=True, help="Specific packages.")
+    @click.option("--jobs", "-j", default=4, show_default=True, type=int)
+    @click.option("--dry-run", is_flag=True)
+    @click.option("--json", "as_json", is_flag=True)
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def ecosystem_clone(dest, branch, https, package, jobs, dry_run, as_json, yes):
+        """Clone every ecosystem repo into DEST (default ~/proj/).
+
+        \b
+        Example:
+          $ scitex-dev ecosystem clone                          # → ~/proj/
+          $ scitex-dev ecosystem clone --dest /scratch/proj
+          $ scitex-dev ecosystem clone --https --branch main
+          $ scitex-dev ecosystem clone -p scitex-io -p scitex-stats
+        """
+        del yes  # accepted for §2 compliance; clone is non-interactive
+        from pathlib import Path as _Path
+
+        from ..._ecosystem._git_ops import clone_all
+
+        results = clone_all(
+            dest=_Path(dest),
+            branch=branch,
+            use_ssh=not https,
+            packages=list(package) or None,
+            jobs=jobs,
+            dry_run=dry_run,
+            on_progress=None if as_json else _git_progress,
+        )
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {k: {"exit": v[0], "msg": v[1]} for k, v in results.items()},
+                    indent=2,
+                )
+            )
+        rc = 0 if all(v[0] == 0 for v in results.values()) else 1
+        raise SystemExit(rc)
+
+    @ecosystem.command("checkout")
+    @click.argument("branch")
+    @click.option("--package", "-p", multiple=True, help="Specific packages.")
+    @click.option("--json", "as_json", is_flag=True)
+    def ecosystem_checkout(branch, package, as_json):
+        """`git checkout <branch>` in every ecosystem clone.
+
+        \b
+        Example:
+          $ scitex-dev ecosystem checkout develop
+          $ scitex-dev ecosystem checkout main -p scitex-io
+        """
+        from ..._ecosystem._git_ops import checkout_all
+
+        results = checkout_all(
+            branch=branch,
+            packages=list(package) or None,
+            on_progress=None if as_json else _git_progress,
+        )
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {k: {"exit": v[0], "msg": v[1]} for k, v in results.items()},
+                    indent=2,
+                )
+            )
+        rc = 0 if all(v[0] == 0 for v in results.values()) else 1
+        raise SystemExit(rc)
+
+    @ecosystem.command("pull")
+    @click.option(
+        "--no-rebase", is_flag=True, help="Use plain git pull (default --rebase)."
+    )
+    @click.option("--package", "-p", multiple=True, help="Specific packages.")
+    @click.option("--jobs", "-j", default=4, show_default=True, type=int)
+    @click.option("--dry-run", is_flag=True, help="Print what would run; do nothing.")
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    @click.option("--json", "as_json", is_flag=True)
+    def ecosystem_pull(no_rebase, package, jobs, dry_run, yes, as_json):
+        """`git pull --rebase` in every ecosystem clone (parallel).
+
+        \b
+        Example:
+          $ scitex-dev ecosystem pull
+          $ scitex-dev ecosystem pull -j 8
+          $ scitex-dev ecosystem pull -p scitex-io -p scitex-stats
+        """
+        del yes  # accepted for §2 compliance; pull is non-interactive
+        from ..._ecosystem._git_ops import pull_all
+
+        if dry_run:
+            from ..._ecosystem._core import ECOSYSTEM as _ECO
+
+            for n, info in _ECO.items():
+                if info.get("archived") or (package and n not in package):
+                    continue
+                cmd = "git pull" + ("" if no_rebase else " --rebase")
+                click.echo(f"would run in {info['local_path']}: {cmd}")
+            raise SystemExit(0)
+        results = pull_all(
+            rebase=not no_rebase,
+            packages=list(package) or None,
+            jobs=jobs,
+            on_progress=None if as_json else _git_progress,
+        )
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {k: {"exit": v[0], "msg": v[1]} for k, v in results.items()},
+                    indent=2,
+                )
+            )
+        rc = 0 if all(v[0] == 0 for v in results.values()) else 1
+        raise SystemExit(rc)
+
+    @ecosystem.command("install")
+    @click.option(
+        "--source",
+        type=click.Choice(["editable", "pypi"]),
+        default="editable",
+        show_default=True,
+        help="editable: pip install -e <local>; pypi: pip install <name> from PyPI.",
+    )
+    @click.option("--extras", default="", help="Comma-separated extras (e.g. dev,mcp).")
+    @click.option("--package", "-p", multiple=True, help="Specific packages.")
+    @click.option("--jobs", "-j", default=1, show_default=True, type=int)
+    @click.option("--dry-run", is_flag=True)
+    @click.option("--json", "as_json", is_flag=True)
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def ecosystem_install(source, extras, package, jobs, dry_run, as_json, yes):
+        """`pip install` every ecosystem package.
+
+        \b
+        Example:
+          $ scitex-dev ecosystem install                            # editable from local
+          $ scitex-dev ecosystem install --source pypi              # latest PyPI
+          $ scitex-dev ecosystem install --extras dev,mcp -j 4
+          $ scitex-dev ecosystem install -p scitex-io --source pypi
+        """
+        del yes
+        from ..._ecosystem._git_ops import install_all
+
+        results = install_all(
+            source=source,
+            extras=extras,
+            packages=list(package) or None,
+            jobs=jobs,
+            dry_run=dry_run,
+            on_progress=None if as_json else _git_progress,
+        )
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {k: {"exit": v[0], "msg": v[1]} for k, v in results.items()},
+                    indent=2,
+                )
+            )
+        rc = 0 if all(v[0] == 0 for v in results.values()) else 1
+        raise SystemExit(rc)
+
     @ecosystem.command("sync-remote", hidden=True)
     @click.option(
         "--host",
