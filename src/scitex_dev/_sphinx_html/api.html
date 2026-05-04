@@ -66,19 +66,7 @@
 <li class="toctree-l3"><a class="reference internal" href="#scitex_dev.cli.skills_click_group"><code class="docutils literal notranslate"><span class="pre">skills_click_group()</span></code></a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#module-scitex_dev._mcp">MCP</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="#scitex_dev._mcp.async_wrap_as_mcp"><code class="docutils literal notranslate"><span class="pre">async_wrap_as_mcp()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#scitex_dev._mcp.docs_build"><code class="docutils literal notranslate"><span class="pre">docs_build()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#scitex_dev._mcp.docs_get"><code class="docutils literal notranslate"><span class="pre">docs_get()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#scitex_dev._mcp.docs_list"><code class="docutils literal notranslate"><span class="pre">docs_list()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#scitex_dev._mcp.docs_search"><code class="docutils literal notranslate"><span class="pre">docs_search()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#scitex_dev._mcp.get_tools_sync"><code class="docutils literal notranslate"><span class="pre">get_tools_sync()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#scitex_dev._mcp.register_docs_tools"><code class="docutils literal notranslate"><span class="pre">register_docs_tools()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#scitex_dev._mcp.result_to_mcp"><code class="docutils literal notranslate"><span class="pre">result_to_mcp()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#scitex_dev._mcp.run_as_mcp"><code class="docutils literal notranslate"><span class="pre">run_as_mcp()</span></code></a></li>
-<li class="toctree-l3"><a class="reference internal" href="#scitex_dev._mcp.wrap_as_mcp"><code class="docutils literal notranslate"><span class="pre">wrap_as_mcp()</span></code></a></li>
-</ul>
-</li>
+<li class="toctree-l2"><a class="reference internal" href="#module-scitex_dev._mcp">MCP</a></li>
 </ul>
 </li>
 <li class="toctree-l1"><a class="reference internal" href="search.html">Search Page</a></li>
@@ -232,177 +220,12 @@ cli.add_command(skills_click_group(package=”scitex-app”))</p>
 </section>
 <section id="module-scitex_dev._mcp">
 <span id="mcp"></span><h2>MCP<a class="headerlink" href="#module-scitex_dev._mcp" title="Link to this heading"></a></h2>
-<p>SciTeX-dev MCP integration: docs tool wrappers, server, and compatibility helpers.</p>
-<p>Module map:
-- <cite>_core</cite>    — <cite>register_docs_tools</cite> + <cite>docs_list/docs_get/docs_build/docs_search</cite>
-- <cite>_utils</cite>   — <cite>wrap_as_mcp</cite>, <cite>async_wrap_as_mcp</cite>, <cite>run_as_mcp</cite>, <cite>result_to_mcp</cite>
-- <cite>_compat</cite>  — <cite>get_tools_sync</cite> (FastMCP version-bridge helpers)
-- <cite>_server</cite>  — top-level <cite>mcp</cite> FastMCP server instance</p>
-<dl class="py function">
-<dt class="sig sig-object py" id="scitex_dev._mcp.async_wrap_as_mcp">
-<span class="property"><span class="k"><span class="pre">async</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">scitex_dev._mcp.</span></span><span class="sig-name descname"><span class="pre">async_wrap_as_mcp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">coro_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><span class="pre">Callable</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">side_effects</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hints_on_error</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">idempotent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></span><a class="reference internal" href="_modules/scitex_dev/_mcp/_utils.html#async_wrap_as_mcp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._mcp.async_wrap_as_mcp" title="Link to this definition"></a></dt>
-<dd><p>Async version of <code class="docutils literal notranslate"><span class="pre">wrap_as_mcp</span></code> for async handlers.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>coro_fn</strong> (<em>Callable</em>) – Any async callable (coroutine function) returning data
-or raising exceptions.</p></li>
-<li><p><strong>side_effects</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><em>optional</em>) – Declared side effects.</p></li>
-<li><p><strong>hints_on_error</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><em>optional</em>) – Recovery guidance for expected failures (FAQ-style).</p></li>
-<li><p><strong>idempotent</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Whether the operation is safe to retry.</p></li>
-<li><p><strong>**kwargs</strong> – Arguments to pass to <code class="docutils literal notranslate"><span class="pre">coro_fn</span></code>.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>JSON string with Result structure.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="scitex_dev._mcp.docs_build">
-<span class="sig-prename descclassname"><span class="pre">scitex_dev._mcp.</span></span><span class="sig-name descname"><span class="pre">docs_build</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">package</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">formats</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></span><a class="reference internal" href="_modules/scitex_dev/_mcp/_core.html#docs_build"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._mcp.docs_build" title="Link to this definition"></a></dt>
-<dd><p>Build documentation from Sphinx source.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>package</strong> – Package name. None = build all.</p></li>
-<li><p><strong>formats</strong> – List of builders (“html”, “json”). Default: [“html”].</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>JSON string with build results.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="scitex_dev._mcp.docs_get">
-<span class="sig-prename descclassname"><span class="pre">scitex_dev._mcp.</span></span><span class="sig-name descname"><span class="pre">docs_get</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">package</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">page</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></span><a class="reference internal" href="_modules/scitex_dev/_mcp/_core.html#docs_get"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._mcp.docs_get" title="Link to this definition"></a></dt>
-<dd><p>Get documentation for a specific SciTeX package.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>package</strong> – Package name (e.g. “scitex-writer”).</p></li>
-<li><p><strong>format</strong> – None for manifest, “json” for structured, “html” for path.</p></li>
-<li><p><strong>page</strong> – Specific documentation page name.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>JSON string with documentation content.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="scitex_dev._mcp.docs_list">
-<span class="sig-prename descclassname"><span class="pre">scitex_dev._mcp.</span></span><span class="sig-name descname"><span class="pre">docs_list</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></span><a class="reference internal" href="_modules/scitex_dev/_mcp/_core.html#docs_list"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._mcp.docs_list" title="Link to this definition"></a></dt>
-<dd><p>List all installed SciTeX packages with documentation.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Returns<span class="colon">:</span></dt>
-<dd class="field-odd"><p>JSON string with package manifest overview.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="scitex_dev._mcp.docs_search">
-<span class="sig-prename descclassname"><span class="pre">scitex_dev._mcp.</span></span><span class="sig-name descname"><span class="pre">docs_search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">query</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">package</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></span><a class="reference internal" href="_modules/scitex_dev/_mcp/_core.html#docs_search"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._mcp.docs_search" title="Link to this definition"></a></dt>
-<dd><p>Search documentation across SciTeX packages.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>query</strong> – Search query (keyword matching).</p></li>
-<li><p><strong>package</strong> – Limit search to a single package.</p></li>
-<li><p><strong>max_results</strong> – Maximum results to return.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>JSON string with search results.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="scitex_dev._mcp.get_tools_sync">
-<span class="sig-prename descclassname"><span class="pre">scitex_dev._mcp.</span></span><span class="sig-name descname"><span class="pre">get_tools_sync</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mcp_server</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_mounted</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a></span></span><a class="reference internal" href="_modules/scitex_dev/_mcp/_compat.html#get_tools_sync"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._mcp.get_tools_sync" title="Link to this definition"></a></dt>
-<dd><p>Get all tools as <code class="docutils literal notranslate"><span class="pre">{name:</span> <span class="pre">Tool}</span></code> dict.  Works with FastMCP 2.x and 3.x.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>mcp_server</strong> (<em>FastMCP</em>) – FastMCP server instance.</p></li>
-<li><p><strong>include_mounted</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <em>True</em> (default), include tools from mounted sub-servers.</p></li>
-</ul>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="scitex_dev._mcp.register_docs_tools">
-<span class="sig-prename descclassname"><span class="pre">scitex_dev._mcp.</span></span><span class="sig-name descname"><span class="pre">register_docs_tools</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mcp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="_modules/scitex_dev/_mcp/_core.html#register_docs_tools"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._mcp.register_docs_tools" title="Link to this definition"></a></dt>
-<dd><p>Register docs MCP tools on a FastMCP server instance.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><p><strong>mcp</strong> – A FastMCP server instance with a &#64;mcp.tool() decorator.</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="scitex_dev._mcp.result_to_mcp">
-<span class="sig-prename descclassname"><span class="pre">scitex_dev._mcp.</span></span><span class="sig-name descname"><span class="pre">result_to_mcp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">result</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Result</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></span><a class="reference internal" href="_modules/scitex_dev/_mcp/_utils.html#result_to_mcp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._mcp.result_to_mcp" title="Link to this definition"></a></dt>
-<dd><p>Convert an existing Result to MCP-ready JSON.</p>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="scitex_dev._mcp.run_as_mcp">
-<span class="sig-prename descclassname"><span class="pre">scitex_dev._mcp.</span></span><span class="sig-name descname"><span class="pre">run_as_mcp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><span class="pre">Callable</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></span><a class="reference internal" href="_modules/scitex_dev/_mcp/_utils.html#run_as_mcp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._mcp.run_as_mcp" title="Link to this definition"></a></dt>
-<dd><p>Call a <code class="docutils literal notranslate"><span class="pre">&#64;supports_return_as</span></code> function and return MCP-ready JSON.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>fn</strong> (<em>Callable</em>) – A function decorated with <code class="docutils literal notranslate"><span class="pre">&#64;supports_return_as</span></code>.</p></li>
-<li><p><strong>**kwargs</strong> – Arguments to pass to <code class="docutils literal notranslate"><span class="pre">fn</span></code>.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>JSON string with the full Result structure.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py function">
-<dt class="sig sig-object py" id="scitex_dev._mcp.wrap_as_mcp">
-<span class="sig-prename descclassname"><span class="pre">scitex_dev._mcp.</span></span><span class="sig-name descname"><span class="pre">wrap_as_mcp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.14)"><span class="pre">Callable</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">side_effects</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hints_on_error</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">idempotent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.14)"><span class="pre">Any</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></span><a class="reference internal" href="_modules/scitex_dev/_mcp/_utils.html#wrap_as_mcp"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._mcp.wrap_as_mcp" title="Link to this definition"></a></dt>
-<dd><p>Call any function and wrap its return in Result JSON.</p>
-<p>Unlike <code class="docutils literal notranslate"><span class="pre">run_as_mcp</span></code> (which requires <code class="docutils literal notranslate"><span class="pre">&#64;supports_return_as</span></code>),
-this wraps any plain function. Use this to retrofit existing
-handlers without modifying the underlying function.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters<span class="colon">:</span></dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>fn</strong> (<em>Callable</em>) – Any callable returning data or raising exceptions.</p></li>
-<li><p><strong>side_effects</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><em>optional</em>) – Declared side effects (e.g. <code class="docutils literal notranslate"><span class="pre">[&quot;file_create:</span> <span class="pre">/tmp/out.csv&quot;]</span></code>).</p></li>
-<li><p><strong>hints_on_error</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em><em>, </em><em>optional</em>) – Recovery guidance for expected failures (FAQ-style).</p></li>
-<li><p><strong>idempotent</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – Whether the operation is safe to retry.</p></li>
-<li><p><strong>**kwargs</strong> – Arguments to pass to <code class="docutils literal notranslate"><span class="pre">fn</span></code>.</p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns<span class="colon">:</span></dt>
-<dd class="field-even"><p>JSON string with Result structure.</p>
-</dd>
-<dt class="field-odd">Return type<span class="colon">:</span></dt>
-<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)">str</a></p>
-</dd>
-</dl>
-</dd></dl>
-
+<p>scitex-dev’s OWN FastMCP server.</p>
+<p>The MCP helper utilities (<cite>wrap_as_mcp</cite>, <cite>register_docs_tools</cite>,
+<cite>get_tools_sync</cite>, …) used to live here but are now ecosystem-glue
+under <cite>scitex_dev._ecosystem._mcp</cite> and re-exported as the public
+<cite>scitex_dev.ecosystem</cite> surface. This package retains only the
+<cite>_server</cite> module that hosts scitex-dev’s own MCP tools.</p>
 </section>
 </section>
 
