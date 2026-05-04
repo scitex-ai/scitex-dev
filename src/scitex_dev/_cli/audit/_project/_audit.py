@@ -378,6 +378,37 @@ RULES: dict[str, Rule] = {
                 "any current sibling package as the template."
             ),
         ),
+        Rule(
+            "PS136",
+            "§1",
+            (
+                "missing or empty examples/ directory at repo root — every "
+                "scitex-* package must show working code: at least one "
+                "runnable `examples/<NN_>name.py` (or `.ipynb`) demonstrating "
+                "the primary use case. Without examples, agents and humans "
+                "have to grep tests/ to learn the API. See `_skills/general/"
+                "02_package_01_project-structure.md`."
+            ),
+        ),
+        Rule(
+            "PS137",
+            "§1",
+            (
+                "missing README.md at repo root — every package's first-touch "
+                "documentation surface. Use the canonical template at "
+                "`_skills/general/04_docs_01_readme_template.md`."
+            ),
+        ),
+        Rule(
+            "PS138",
+            "§1",
+            (
+                "missing LICENSE at repo root — every public scitex-* "
+                "package must declare its license. Accepted: `LICENSE`, "
+                "`LICENSE.md`, or `LICENSE.txt`. The umbrella ships AGPL-3.0 "
+                "with the Four-Freedoms-for-Research footer."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
@@ -642,14 +673,45 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
     if not (repo / "pyproject.toml").is_file():
         out.append(Violation("PS101", str(repo), "no pyproject.toml at repo root"))
 
-    # PS133/134/135: required community files at repo root.
+    # PS133-PS138: required community files at repo root.
+    # LICENSE has no extension (PEP-639 / ecosystem convention); accept LICENSE
+    # or LICENSE.md or LICENSE.txt.
     for code, fname in (
         ("PS133", "CLA.md"),
         ("PS134", "CHANGELOG.md"),
         ("PS135", "CONTRIBUTING.md"),
+        ("PS137", "README.md"),
     ):
         if not (repo / fname).is_file():
             out.append(Violation(code, str(repo), f"missing {fname}"))
+    if not any(
+        (repo / cand).is_file() for cand in ("LICENSE", "LICENSE.md", "LICENSE.txt")
+    ):
+        out.append(
+            Violation("PS138", str(repo), "missing LICENSE (or LICENSE.md/.txt)")
+        )
+
+    # PS136: examples/ must exist and have at least one runnable file.
+    examples = repo / "examples"
+    if not examples.is_dir():
+        out.append(Violation("PS136", str(repo), "no examples/ directory"))
+    else:
+        runnable = [
+            p
+            for p in examples.rglob("*")
+            if p.is_file()
+            and p.suffix in {".py", ".ipynb", ".sh"}
+            and not p.name.startswith("__")
+            and "__pycache__" not in p.parts
+        ]
+        if not runnable:
+            out.append(
+                Violation(
+                    "PS136",
+                    str(examples),
+                    "examples/ exists but contains no .py/.ipynb/.sh",
+                )
+            )
 
     for dirname, why in _FORBIDDEN_TOP_DIRS.items():
         candidate = repo / dirname
