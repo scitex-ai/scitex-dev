@@ -243,7 +243,9 @@ def audit_one(package: str, repo_root: Path, registry: dict[str, Any]) -> Packag
     # Delegate to scitex_dev._pyproject_lint so the rules stay in one place
     # (it ships unit tests). Each rule maps to its checklist §-section.
     try:
-        from scitex_dev._release.pyproject_lint import lint_pyproject as _lint
+        from scitex_dev._ecosystem._release.pyproject_lint import (
+            lint_pyproject as _lint,
+        )
 
         lint_rep = _lint(repo_root, package_name=package)
         for f in lint_rep.findings:
