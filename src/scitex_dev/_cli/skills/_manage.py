@@ -29,7 +29,7 @@ def register_skills_commands(main_group):
             $ scitex-dev skills list --json
             $ scitex-dev skills list --package scitex-io
         """
-        from ..._ecosystem._skills.skills import list_skills
+        from ..._ecosystem._skills.skills import drift_warning, list_skills
 
         result = list_skills(package=package)
         if as_json:
@@ -45,6 +45,12 @@ def register_skills_commands(main_group):
                 for s in items:
                     desc = f" -- {s['description']}" if s["description"] else ""
                     click.echo(f"  {s['name']}{desc}")
+            # Non-blocking drift signal: cached skills older than the
+            # installed package version. Stderr only; never prompts.
+            for pkg in result:
+                w = drift_warning(pkg)
+                if w:
+                    click.echo(w, err=True)
 
     @skills.command("get")
     @click.argument("package")
@@ -61,7 +67,10 @@ def register_skills_commands(main_group):
             $ scitex-dev skills get scitex-stats hypothesis-testing --json
             $ scitex-dev skills get all
         """
-        from ..._ecosystem._skills.skills import get_skill, list_skills
+        from ..._ecosystem._skills.skills import (
+            get_skill,
+            list_skills,
+        )
 
         if package == "all":
             all_skills = list_skills()
@@ -91,6 +100,11 @@ def register_skills_commands(main_group):
                 )
             else:
                 click.echo(content)
+            # Non-blocking drift signal: cached skill older than installed.
+            # Stderr only; never prompts.
+            w = drift_warning(package)
+            if w:
+                click.echo(w, err=True)
         else:
             target = f"'{name}' in " if name else ""
             click.echo(f"Skill {target}package '{package}' not found.", err=True)

@@ -381,11 +381,17 @@ def export_skills(
 
                 content = re.sub(r"references/", "", content)
 
-            # Stamp version and source into MANIFEST.md at export time
-            if name == "MANIFEST":
-                version = entry.get("version", "unknown")
-                content = _stamp_manifest_version(content, version)
-                content = _stamp_manifest_field(content, "exported_via", source)
+            # Stamp every leaf's frontmatter with the exporting package's
+            # version + source. The cached copy is the single drift signal:
+            # `skills get` / `skills list` compare these stamps to the
+            # currently installed `importlib.metadata.version()` and warn
+            # when the cache is older than what's installed.
+            #
+            # MANIFEST.md is forbidden by the SK105 audit rule and is no
+            # longer emitted; the per-leaf stamp replaces it.
+            version = entry.get("version", "unknown")
+            content = _stamp_frontmatter_field(content, "version", version)
+            content = _stamp_frontmatter_field(content, "exported_via", source)
 
             if out_file.exists() or out_file.is_symlink():
                 if out_file.is_symlink():
@@ -394,13 +400,11 @@ def export_skills(
                     out_file.chmod(0o644)
 
             if link:
-                # For MANIFEST.md we still write the version-stamped copy,
-                # since it differs from the raw source file. Everything else
-                # can be a direct symlink to the editable source.
-                if name == "MANIFEST":
-                    out_file.write_text(content, encoding="utf-8")
-                else:
-                    out_file.symlink_to(src_path.resolve())
+                # Symlinking would defeat the per-leaf version stamp (the
+                # source has no version field). Always write a stamped
+                # copy when --link is requested AND a version stamp lands
+                # in the content.
+                out_file.write_text(content, encoding="utf-8")
             else:
                 out_file.write_text(content, encoding="utf-8")
             pkg_files.append(out_file)
@@ -426,21 +430,75 @@ def _generate_root_skill_md(dest: Path, exported: dict[str, list[Path]]) -> None
     render_root_skill_md(dest, exported)
 
 
-def _stamp_manifest_version(content: str, version: str) -> str:
-    """Replace the version field in MANIFEST.md frontmatter with the installed version."""
-    import re
+def cached_skill_version(package: str) -> Optional[str]:
+    """Read the version stamp from the cached SKILL.md of `package`.
 
-    return re.sub(
-        r"^(version:\s*).*$",
-        rf"\g<1>{version}",
-        content,
-        count=1,
-        flags=re.MULTILINE,
+    Returns the value of the `version:` frontmatter field of
+    `~/.claude/skills/scitex/<package>/SKILL.md` (the location used by
+    `export_skills`), or None if the cache, file, or stamp is absent.
+    """
+    cache_root = _get_default_export_dest()
+    skill_md = cache_root / package / "SKILL.md"
+    if not skill_md.is_file():
+        return None
+    fm = _parse_frontmatter(skill_md)
+    v = fm.get("version", "").strip()
+    return v or None
+
+
+def installed_version(package: str) -> Optional[str]:
+    """Return `importlib.metadata.version(package)` or None if missing."""
+    try:
+        from importlib.metadata import version
+
+        return version(package)
+    except Exception:
+        return None
+
+
+def _is_older(cached: str, installed: str) -> bool:
+    """Best-effort cached < installed comparison.
+
+    Uses `packaging.version.Version` when available; falls back to a
+    naive lexicographic compare. False means "not strictly older" — we
+    only warn on confirmed staleness.
+    """
+    try:
+        from packaging.version import Version
+
+        return Version(cached) < Version(installed)
+    except Exception:
+        return cached != installed and cached < installed
+
+
+def drift_warning(package: str) -> Optional[str]:
+    """Return a one-line non-blocking drift warning for `package`, or None.
+
+    Emitted from `skills get` / `skills list` to stderr without
+    prompting the user (prompts would hang automated agents). The
+    cached copy is the user's working set; this function compares it
+    to the live `importlib.metadata.version()` and reports staleness.
+    """
+    cached = cached_skill_version(package)
+    inst = installed_version(package)
+    if not cached or not inst or cached == inst:
+        return None
+    if not _is_older(cached, inst):
+        return None
+    return (
+        f"warn: cached skills for {package} are from v{cached}; "
+        f"installed v{inst}. Run `scitex-dev skills install --force` to refresh."
     )
 
 
-def _stamp_manifest_field(content: str, key: str, value: str) -> str:
-    """Set or insert a field in MANIFEST.md frontmatter."""
+def _stamp_frontmatter_field(content: str, key: str, value: str) -> str:
+    """Set or insert a field in a markdown file's YAML frontmatter.
+
+    Used at `skills export` time to stamp every cached leaf with the
+    exporting package's `version` and `exported_via` fields. The
+    runtime drift check (`skills get` / `skills list`) reads these
+    stamps to compare against `importlib.metadata.version()`.
+    """
     import re
 
     if re.search(rf"^{key}:", content, re.MULTILINE):
@@ -451,8 +509,15 @@ def _stamp_manifest_field(content: str, key: str, value: str) -> str:
             count=1,
             flags=re.MULTILINE,
         )
-    # Insert before closing ---
-    return content.replace("---\n\n", f"{key}: {value}\n---\n\n", 1)
+    # Insert before the closing `---` of the frontmatter block. If the
+    # file has no frontmatter (legacy), prepend a minimal block.
+    if content.startswith("---\n"):
+        # Find the second `---\n` and insert before it.
+        end = content.find("\n---\n", 4)
+        if end != -1:
+            return content[: end + 1] + f"{key}: {value}\n" + content[end + 1 :]
+    # No frontmatter at all — prepend a minimal one.
+    return f"---\n{key}: {value}\n---\n\n" + content
 
 
 def _parse_frontmatter(path: Path) -> dict[str, str]:

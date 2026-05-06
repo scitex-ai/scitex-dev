@@ -10,9 +10,16 @@ import pytest
 from scitex_dev._core.discovery import invalidate_cache
 from scitex_dev._ecosystem._skills.skills import (
     _find_skills_dir,
-    _stamp_manifest_version,
+    _stamp_frontmatter_field,
     export_skills,
 )
+
+
+def _stamp_manifest_version(content: str, version: str) -> str:
+    """Compatibility shim — the legacy MANIFEST.md helper has been
+    replaced by the generic `_stamp_frontmatter_field`. Tests that
+    exercise the version-stamping behaviour now route through it."""
+    return _stamp_frontmatter_field(content, "version", version)
 
 
 # ---------------------------------------------------------------------------
@@ -101,11 +108,16 @@ class TestStampManifestVersion:
         result = _stamp_manifest_version(content, "2.0.0")
         assert body in result
 
-    def test_handles_no_version_field(self):
+    def test_inserts_version_field_when_missing(self):
+        # The new generic stamper INSERTS the field if it's missing
+        # (legacy MANIFEST.md helper used to leave content unchanged).
+        # Inserting is the desired behavior for stamping every cached
+        # leaf so drift detection works on first export.
         content = "---\npackage: foo\n---\n# No version here\n"
         result = _stamp_manifest_version(content, "1.0.0")
-        # Content should be unchanged when there is no version: line
-        assert result == content
+        assert "version: 1.0.0" in result
+        assert "package: foo" in result
+        assert "# No version here" in result
 
     def test_handles_version_with_extra_whitespace(self):
         content = "---\nversion:   0.0.0  \n---\n# Body\n"
