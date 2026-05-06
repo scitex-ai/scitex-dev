@@ -1586,25 +1586,42 @@ def _check_startup_speed(
 # --------------------------------------------------------------------- #
 
 # Severity tiers — used by --severity to gate which findings are reported.
+#
+# Per 2026-05-06 directive: any rule that has been live long enough to ship a
+# documented spec is `error` (CI must fail). Demote a rule back to `warn` only
+# after a concrete false-positive lands on develop. `info` is reserved for
+# purely advisory categorizations (pass-through entry-points) that cannot
+# describe a violation.
 RULE_SEVERITY: dict[str, str] = {
     "§1": "error",
     "§1a": "error",
     "§1b": "error",
     "§1c": "info",
-    "§1d": "warn",
+    "§1d": "error",
     "§1e": "info",
-    "§2": "warn",
-    "§3": "warn",
-    "§4": "warn",
+    "§2": "error",
+    "§3": "error",
+    "§4": "error",
     "§5": "error",
-    "§6a": "warn",
-    "§6b": "warn",
-    "§7": "warn",
-    "§8": "warn",
-    "§10": "warn",  # CLI startup speed (slow import → slow tab completion)
-    "§11": "warn",  # CLI framework conformance (Click canonical; argparse banned)
+    "§6": "error",
+    "§6a": "error",
+    "§6b": "error",
+    "§7": "error",
+    "§8": "error",
+    "§10": "error",
+    "§11": "error",
 }
 SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}
+
+
+def _max_severity(violations: list[Violation]) -> str:
+    """Highest severity present among violations; 'info' if list is empty."""
+    best = "info"
+    for v in violations:
+        sev = RULE_SEVERITY.get(v.rule, "warn")
+        if SEVERITY_ORDER[sev] > SEVERITY_ORDER[best]:
+            best = sev
+    return best
 
 
 def _filter_violations(
@@ -1693,7 +1710,10 @@ def _emit_human(package: str, status: str, violations: list[Violation]) -> None:
         click.echo(f"ok    {package}: no CLI convention violations")
         emit_disclaimer()
         return
-    click.echo(f"warn  {package}: {len(violations)} warning(s)")
+    sev = _max_severity(violations)
+    label = "error" if sev == "error" else "warn "
+    noun = "error(s)" if sev == "error" else "warning(s)"
+    click.echo(f"{label} {package}: {len(violations)} {noun}")
     for v in violations:
         click.echo(f"  [{v.rule}] {v.command}: {v.message}")
     emit_disclaimer()
@@ -1752,7 +1772,8 @@ def run_audit(
         _emit_human(package, status, violations)
     if status == "not-found" or status.startswith("not-auditable"):
         return 2
-    return 0
+    # Exit 1 if any violation reaches `error` severity. Warnings alone exit 0.
+    return 1 if _max_severity(violations) == "error" else 0
 
 
 def run_audit_all(
@@ -1803,6 +1824,7 @@ def run_audit_all(
 
     records: list[dict] = []
     counts = {"ok": 0, "warn": 0, "skip-mcp": 0, "not-found": 0, "not-auditable": 0}
+    any_error = False
     for name, ep, hint in targets:
         if hint == "not-found":
             status, violations = "not-found", []
@@ -1827,6 +1849,8 @@ def run_audit_all(
             status = "ok"
         if not output_json:
             _emit_human(name, status, violations)
+        if _max_severity(violations) == "error" or status.startswith("not-auditable"):
+            any_error = True
         records.append(
             {
                 "package": name,
@@ -1847,4 +1871,4 @@ def run_audit_all(
             f"{counts['skip-mcp']} skipped (MCP), "
             f"{counts['not-found']} not-found, {counts['not-auditable']} not-auditable"
         )
-    return 0
+    return 1 if any_error else 0

@@ -249,17 +249,20 @@ class TestFilterViolations:
         assert out[0].rule == "§2"
 
     def test_severity_error_only(self):
-        # §1 = error, §4 = warn — only §1 should pass --severity error
-        vs = [self._v("§1"), self._v("§4")]
+        # §1 = error, §1c = info — only §1 should pass --severity error.
+        # (Per the 2026-05-06 sweep, every actionable § is now error;
+        # info-only tags like §1c remain below the error threshold.)
+        vs = [self._v("§1"), self._v("§1c")]
         out = _filter_violations(vs, min_severity="error")
         rules = [v.rule for v in out]
         assert "§1" in rules
-        assert "§4" not in rules
+        assert "§1c" not in rules
 
     def test_severity_warn_includes_warn_and_error(self):
         vs = [self._v("§1"), self._v("§4"), self._v("§1c")]
         out = _filter_violations(vs, min_severity="warn")
-        # §1 (error) and §4 (warn) pass; §1c (info) does not
+        # §1 (error) and §4 (error) both pass the warn threshold;
+        # §1c (info) does not.
         rules = {v.rule for v in out}
         assert "§1" in rules and "§4" in rules
         assert "§1c" not in rules

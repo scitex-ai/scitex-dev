@@ -40,6 +40,7 @@ from ._audit import (
     _filter_violations,
     _isolated_streams,
     _load_registry,
+    _max_severity,
     _PackageTimeout,
     _violation_to_dict,
     _watchdog,
@@ -659,7 +660,9 @@ def run_audit_mcp(
             )
         else:
             _emit_human(package, status, violations)
-    return 0 if status not in ("",) and not status.startswith("not-auditable") else 2
+    if status.startswith("not-auditable"):
+        return 2
+    return 1 if _max_severity(violations) == "error" else 0
 
 
 def run_audit_mcp_all(
@@ -718,6 +721,7 @@ def run_audit_mcp_all(
         "skip-not-standalone": 0,
         "not-auditable": 0,
     }
+    any_error = False
     for name in targets:
         wall_budget = max(timeout + 5.0, 10.0)
         try:
@@ -739,6 +743,9 @@ def run_audit_mcp_all(
             # Don't spam the human report with one line per non-MCP package.
             if status not in ("no-mcp-server", "skip-not-standalone"):
                 _emit_human(name, status, violations)
+
+        if _max_severity(violations) == "error" or status.startswith("not-auditable"):
+            any_error = True
 
         records.append(
             {
@@ -781,4 +788,4 @@ def run_audit_mcp_all(
             f"{counts['skip-not-standalone']} skip-not-standalone, "
             f"{counts['not-auditable']} not-auditable\n"
         )
-    return 0
+    return 1 if any_error else 0

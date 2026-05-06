@@ -525,20 +525,56 @@ RULES: dict[str, Rule] = {
     ]
 }
 
-# Severity escalation table. Codes listed here are promoted from the default
-# W to the named severity. New rules default to W (warn-only) so they can
-# bake in production before failing CI; promote to E only after the ecosystem
-# has been swept clean of pre-existing violations.
+# Severity escalation table.
+#
+# Per 2026-05-06 directive: every rule that ships a concrete spec defaults to
+# E (error → fails CI). Demote back to W only after a documented false
+# positive lands on develop. New rules MAY start at W during their initial
+# bake-in, but the bar for staying W is "active false-positive history",
+# not "we haven't promoted it yet".
 #
 # E (error) — fails CI; the rule is well-tested and the fix is mechanical.
+# W (warn)  — prints, doesn't fail; for rules with active false-positive
+#             history that haven't been demoted yet.
 # I (info)  — printed only with --severity info; never fails. Use for
-#             aspirational checks where the cost-of-noise outweighs signal.
+#             purely advisory categorizations (no actionable violation).
 _SEVERITY_OVERRIDES: dict[str, str] = {
     # Structural — must hold for any package
     "PS101": "E",  # missing pyproject.toml
     "PS102": "E",  # forbidden top-level dir (logs/, mgmt/, ...)
     "PS103": "E",  # top-level junk file
+    "PS104": "E",  # uses .playground/
     "PS105": "E",  # console_scripts present but no __main__.py
+    # README content — every public package follows the convention
+    "PS106": "E",
+    "PS107": "E",
+    "PS108": "E",
+    "PS108b": "E",
+    "PS109": "E",
+    "PS110": "E",
+    "PS111": "E",
+    "PS112": "E",
+    "PS113": "E",
+    "PS114": "E",
+    "PS115": "E",
+    "PS116": "E",
+    "PS117": "E",
+    "PS118": "E",
+    "PS119": "E",
+    "PS120": "E",
+    "PS123": "E",
+    "PS129": "E",
+    "PS130": "E",
+    "PS131": "E",
+    "PS132": "E",
+    # Sphinx / RTD bundle
+    "PS121": "E",
+    "PS122": "E",
+    "PS124": "E",
+    "PS125": "E",
+    "PS126": "E",
+    "PS127": "E",
+    "PS128": "E",
     # Community files — every public package needs them
     "PS133": "E",  # CLA.md
     "PS134": "E",  # CHANGELOG.md
@@ -552,7 +588,16 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS203": "E",
     "PS204": "E",
     "PS205": "E",
+    "PS206": "E",  # placeholder-only test
+    "PS207": "E",  # empty test directory
+    "PS210": "E",  # [dev] extras incomplete
+    "PS301": "E",  # top-level htmlcov/
     "PS302": "E",  # unrecognized tests/ subdir
+    "PS303": "E",  # examples/<n>.py without tests/examples/test_<n>.py
+    "PS401": "E",  # docs/to_claude/ tracked
+    "PS402": "E",  # top-level assets/
+    "PS501": "E",  # examples missing @stx.session
+    "PS502": "E",  # empty examples/<n>_out/
 }
 
 # Apply the overrides — replace each tagged Rule with a promoted copy.
