@@ -1473,62 +1473,42 @@ def register_ecosystem_commands(main_group):
         _sys.exit(overall_exit)
 
     @ecosystem.command(
-        "write-ci-workflow",
+        "write-audit-test",
         epilog=(
             "Examples:\n"
-            "  $ scitex-dev ecosystem write-ci-workflow scitex-types\n"
-            "  $ scitex-dev ecosystem write-ci-workflow scitex-io --force\n"
-            "  $ scitex-dev ecosystem write-ci-workflow scitex-io --dry-run\n"
+            "  $ scitex-dev ecosystem write-audit-test scitex-types\n"
+            "  $ scitex-dev ecosystem write-audit-test scitex-io --force\n"
+            "  $ scitex-dev ecosystem write-audit-test scitex-io --dry-run\n"
             "\n"
-            "Writes the canonical .github/workflows/audit.yml into the\n"
-            "package's local checkout. The workflow runs\n"
-            "`scitex-dev ecosystem audit-all <pkg>` on every push and PR\n"
-            "and goes red on any error-severity violation. See\n"
-            "_skills/general/02_package_07_github-actions.md for the\n"
-            "failure-policy contract."
+            "Drops the canonical pytest stub at\n"
+            "`tests/develop/test_audit.py` so the package's own test\n"
+            "suite runs `scitex-dev ecosystem audit-all <pkg>` and\n"
+            "fails when any error-severity violation is reported. A\n"
+            "separate `.github/workflows/audit.yml` is therefore not\n"
+            "needed — the existing test workflow picks the audit up.\n"
+            "Also creates `tests/develop/__init__.py` and an empty\n"
+            "`tests/conftest.py` if either is missing."
         ),
     )
     @click.argument("distribution")
-    @click.option("--force", is_flag=True, help="Overwrite an existing audit.yml.")
+    @click.option("--force", is_flag=True, help="Overwrite an existing test_audit.py.")
     @click.option(
         "--dry-run",
         is_flag=True,
-        help="Print the target path and contents without writing.",
-    )
-    @click.option(
-        "--scitex-dev-version",
-        default=None,
-        help=(
-            "Pin scitex-dev to this version in the workflow "
-            "(default: the version of scitex-dev running this command, "
-            "via importlib.metadata)."
-        ),
-    )
-    @click.option(
-        "--unpinned",
-        is_flag=True,
-        help=(
-            "Skip the version pin (NOT RECOMMENDED — every PyPI release "
-            "may add new audit rules and CI picks them up silently)."
-        ),
+        help="Print the target paths and contents without writing.",
     )
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-    def ecosystem_write_ci_workflow(
-        distribution, force, dry_run, scitex_dev_version, unpinned, yes
-    ):
-        """Materialise the canonical audit.yml for DISTRIBUTION."""
+    def ecosystem_write_audit_test(distribution, force, dry_run, yes):
+        """Materialise tests/develop/test_audit.py for DISTRIBUTION."""
         del yes  # generation is non-destructive when --force is absent
-        from ..._ecosystem import ECOSYSTEM, get_local_path, should_skip_audit
+        from ..._ecosystem import ECOSYSTEM, get_local_path
 
         if distribution not in ECOSYSTEM:
             click.echo(f"error: '{distribution}' not in ECOSYSTEM", err=True)
             raise SystemExit(2)
-        skip, reason = should_skip_audit(distribution, "audit-cli")
-        # Sanity probe; we accept any package except archived for the
-        # workflow generator.
         info = ECOSYSTEM[distribution]
         if info.get("archived"):
-            click.echo(f"skip  {distribution}: archived ({reason})", err=True)
+            click.echo(f"skip  {distribution}: archived", err=True)
             raise SystemExit(0)
 
         local = get_local_path(distribution)
@@ -1539,65 +1519,84 @@ def register_ecosystem_commands(main_group):
             )
             raise SystemExit(2)
 
-        # Resolve the scitex-dev version pin. Default = the version of
-        # scitex-dev running this command — single source of truth =
-        # the live install's pyproject.toml. The user controls upgrades
-        # by re-running the generator after a `pip install -U`.
-        if unpinned:
-            pin_spec = ""
-        elif scitex_dev_version:
-            pin_spec = f"=={scitex_dev_version}"
-        else:
-            from importlib.metadata import version as _imv
+        tests = local / "tests"
+        develop = tests / "develop"
+        target = develop / "test_audit.py"
+        develop_init = develop / "__init__.py"
+        conftest = tests / "conftest.py"
 
-            try:
-                pin_spec = f"=={_imv('scitex-dev')}"
-            except Exception:
-                click.echo(
-                    "error: cannot resolve scitex-dev version via "
-                    "importlib.metadata; pass --scitex-dev-version X.Y.Z "
-                    "or --unpinned",
-                    err=True,
-                )
-                raise SystemExit(2)
-
-        target = local / ".github" / "workflows" / "audit.yml"
-        content = (
-            "name: audit\n"
+        test_content = (
+            '"""Audit conformance — runs `scitex-dev ecosystem audit-all`\n'
+            "on this package as a normal pytest test. Generated by\n"
+            "`scitex-dev ecosystem write-audit-test`. Re-run that command\n"
+            "after upgrading scitex-dev to refresh any pin in [dev].\n"
+            '"""\n'
             "\n"
-            "on:\n"
-            "  pull_request:\n"
-            "  push:\n"
-            "    branches: [main, develop]\n"
+            "import shutil\n"
             "\n"
-            "jobs:\n"
-            "  audit-all:\n"
-            "    runs-on: ubuntu-latest\n"
-            "    steps:\n"
-            "      - uses: actions/checkout@v4\n"
-            "      - uses: actions/setup-python@v5\n"
-            '        with: { python-version: "3.11" }\n'
-            '      - run: pip install -e ".[dev]"\n'
-            f'      - run: pip install "scitex-dev[cli-audit]{pin_spec}"\n'
-            "      - name: Run audit-all\n"
-            f"        run: scitex-dev ecosystem audit-all {distribution}\n"
+            "import pytest\n"
+            "\n"
+            "\n"
+            "def test_audit_all_clean():\n"
+            '    if shutil.which("scitex-dev") is None:\n'
+            "        pytest.skip(\n"
+            '            "scitex-dev not installed — add `scitex-dev[cli-audit]` "\n'
+            '            "to [project.optional-dependencies.dev]"\n'
+            "        )\n"
+            "    from scitex_dev.testing import audit_all_for_package\n"
+            "\n"
+            f"    audit_all_for_package({distribution!r})\n"
+        )
+        develop_init_content = (
+            '"""Dev-hygiene tests — audit conformance, etc.\n'
+            "\n"
+            "Tests in this directory exercise the package's compliance\n"
+            "with ecosystem-wide rules (CLI/MCP/skills/project structure)\n"
+            "via `scitex-dev ecosystem audit-all`. They are not unit tests\n"
+            "of the package's own logic; those live under tests/<pkg>/.\n"
+            '"""\n'
+        )
+        conftest_content = (
+            '"""Pytest fixtures and rootdir marker for this package.\n'
+            "\n"
+            "An empty conftest.py at tests/ is the canonical SciTeX\n"
+            "convention (audit-project PS208) — it pins the pytest\n"
+            "rootdir and gives downstream fixtures a home.\n"
+            '"""\n'
         )
 
+        # Each entry: (path, content, force_required_to_overwrite).
+        # tests/develop/__init__.py and tests/conftest.py are *only*
+        # written when missing — they're shared infrastructure, never
+        # owned by the audit-test feature. The test_audit.py file IS
+        # owned: --force overwrites it on every regeneration.
+        plan = [
+            (target, test_content, True),
+            (develop_init, develop_init_content, False),
+            (conftest, conftest_content, False),
+        ]
+
         if dry_run:
-            click.echo(f"# would write: {target}")
-            click.echo(content)
+            for path, content, _ in plan:
+                click.echo(f"# would write: {path}")
+                click.echo(content)
+                click.echo()
             return
 
-        if target.exists() and not force:
-            click.echo(
-                f"error: {target} already exists (pass --force to overwrite)",
-                err=True,
-            )
-            raise SystemExit(1)
-
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content)
-        click.echo(f"wrote {target}")
+        for path, content, owned in plan:
+            if path.exists():
+                if owned and not force:
+                    click.echo(
+                        f"error: {path} already exists (pass --force to overwrite)",
+                        err=True,
+                    )
+                    raise SystemExit(1)
+                if not owned:
+                    # Don't touch user-owned conftest/__init__ if present.
+                    continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+            click.echo(f"wrote {path}")
 
     @ecosystem.command("start-dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")

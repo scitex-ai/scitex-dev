@@ -55,18 +55,37 @@ def _skill_hints_text() -> str:
         f"  SK*  → 03_interface_04_skills/  (skill files)\n"
         f"  PA*  → 03_interface_01_python-api/  (Python API rules)\n"
         f"tool docs: `{root}/scitex-dev/` — how to use scitex-dev itself "
-        f"(CLI reference, ecosystem helpers, agentic-test). Not audit rules."
+        f"(CLI reference, ecosystem helpers, agentic-test). Not audit rules.\n"
+        f"escalation: think a rule fires wrongly, is too strict, or that "
+        f"a missing rule should exist? Open an issue at "
+        f"https://github.com/ywatanabe1989/scitex-dev/issues/new with "
+        f"the violation block above pasted in — that's the feedback loop "
+        f"the rule corpus learns from."
     )
 
 
+def _scitex_dev_version() -> str:
+    """Live scitex-dev version string for the auditor signature."""
+    try:
+        from importlib.metadata import version
+
+        return version("scitex-dev")
+    except Exception:
+        return "unknown"
+
+
 def _disclaimer_text() -> str:
-    """Sufficiency disclaimer with the absolute path to `_skills/general/`.
+    """Sufficiency disclaimer with the absolute path to `_skills/general/`,
+    prefixed with the auditor's own version signature.
 
     Resolved at call time so the same string is correct under an
     editable checkout (`<repo>/src/scitex_dev/_skills/general/`) and a
     pip-installed wheel (`<site-packages>/scitex_dev/_skills/general/`).
+    The signature line lets a CI failure be tied to a specific
+    scitex-dev version when the rule corpus shifts between releases.
     """
     return (
+        f"audited by scitex-dev v{_scitex_dev_version()}\n"
         "note: passing this audit is necessary but not sufficient for "
         f"SciTeX standards — see `{_skills_root()}/general/` for the "
         "full quality checklist (content accuracy, prose clarity, "
