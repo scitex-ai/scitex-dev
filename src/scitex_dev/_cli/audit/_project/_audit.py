@@ -432,6 +432,23 @@ RULES: dict[str, Rule] = {
                 "11_import-conventions.md`."
             ),
         ),
+        Rule(
+            "PS140",
+            "§2",
+            (
+                "package source has cross-package imports (`scitex_<X>` "
+                "peer or `scitex.<X>` umbrella) but no "
+                "`tests/integration/test_cross_package_imports.py` runtime "
+                "gate, OR the gate's `CROSS_PACKAGE_IMPORTS` list is "
+                "stale (missing some imports / contains removed ones). "
+                "Without this gate, renames in peer standalones surface "
+                "as silent ModuleNotFoundError at user runtime — the "
+                "scitex_io._load_cache rename was undetected for weeks "
+                "because of this gap. Regenerate via "
+                "`python /tmp/write-integration-tests.py <pkg-dir>` "
+                "(or the equivalent scitex-dev subcommand)."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
@@ -598,6 +615,7 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS137": "E",  # README.md
     "PS138": "E",  # LICENSE
     "PS139": "E",  # pyproject.toml depends on scitex umbrella (anti-pattern)
+    "PS140": "E",  # missing/stale tests/integration/test_cross_package_imports.py
     # src ↔ tests mirror — load-bearing for CI confidence
     "PS201": "E",
     "PS202": "E",
@@ -1395,6 +1413,13 @@ def audit_project(
     from ._check_dev_extras_complete import check_dev_extras_complete
 
     check_dev_extras_complete(repo_root, Violation, violations)
+    from ._check_umbrella_dep_and_integration import (
+        check_ps139_umbrella_dep,
+        check_ps140_integration_gate,
+    )
+
+    check_ps139_umbrella_dep(repo_root, Violation, violations)
+    check_ps140_integration_gate(repo_root, distribution, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]
