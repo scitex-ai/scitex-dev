@@ -1460,10 +1460,16 @@ def register_ecosystem_commands(main_group):
                 )
             )
         else:
-            from ..._audit_disclaimer import emit_disclaimer
+            from ..._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
             click.echo("", err=True)
             emit_disclaimer()
+            # When at least one sub-auditor reported errors, append the
+            # rule-prefix → skill-tree map. Per-auditor hints are
+            # suppressed inside subprocess via SCITEX_DEV_NO_AUDIT_DISCLAIMER=1
+            # so they don't fire five times — emit once at the end here.
+            if overall_exit:
+                emit_skill_hints()
         _sys.exit(overall_exit)
 
     @ecosystem.command(

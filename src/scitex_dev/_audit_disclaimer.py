@@ -59,18 +59,26 @@ def _skill_hints_text() -> str:
     )
 
 
-DISCLAIMER = (
-    "note: passing this audit is necessary but not sufficient for "
-    "SciTeX standards — see _skills/general/ for the full quality "
-    "checklist (content accuracy, prose clarity, naming taste, etc.)."
-)
+def _disclaimer_text() -> str:
+    """Sufficiency disclaimer with the absolute path to `_skills/general/`.
+
+    Resolved at call time so the same string is correct under an
+    editable checkout (`<repo>/src/scitex_dev/_skills/general/`) and a
+    pip-installed wheel (`<site-packages>/scitex_dev/_skills/general/`).
+    """
+    return (
+        "note: passing this audit is necessary but not sufficient for "
+        f"SciTeX standards — see `{_skills_root()}/general/` for the "
+        "full quality checklist (content accuracy, prose clarity, "
+        "naming taste, etc.)."
+    )
 
 
 def emit_disclaimer() -> None:
     """Print the sufficiency disclaimer to stderr (suppress with SCITEX_DEV_NO_AUDIT_DISCLAIMER=1)."""
     if _os.environ.get("SCITEX_DEV_NO_AUDIT_DISCLAIMER"):
         return
-    click.echo(DISCLAIMER, err=True)
+    click.echo(_disclaimer_text(), err=True)
 
 
 def emit_skill_hints() -> None:
