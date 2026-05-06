@@ -142,6 +142,57 @@ Naming patterns:
 
 Every package inheriting from `scitex-minimal-template` carries `.github/workflows/scitex-quality.yml`. Runs `scitex-dev quality {audit-cli, audit-frontmatter, audit-docs, audit-lines, audit-scope}` on a Monday cron + on push/PR. Warn-only (`continue-on-error: true`) until the package is clean; flip individual steps to fail-the-build once green.
 
+## Per-package CI: `scitex-dev ecosystem audit-all <pkg>` is mandatory
+
+Every `scitex-*` repo MUST run `scitex-dev ecosystem audit-all <pkg>` in CI on every push and PR. This is the only ecosystem-wide gate that composes:
+
+- `audit-cli` (§1–§11 click compliance)
+- `audit-mcp-tools` (§1–§6 MCP compliance, including the §3 four-subcommand check)
+- `audit-skills` (skill leaf shape, frontmatter, line budgets)
+- `audit-python-apis` (Python API parity with CLI/MCP surfaces)
+- `audit-project` (PS101–PS134 project-structure rules — readme, sphinx, version pins, CHANGELOG, license, etc.)
+
+Without this gate, drift accumulates silently — packages can ship help text that contradicts the click tree, MCP tools that don't trace back to a Python API, missing CHANGELOG entries, or stale skill leaves. The §5b umbrella-passthrough rule is enforceable only when both the umbrella and the standalone run audit-all on the same commit.
+
+### Required workflow shape
+
+```yaml
+# .github/workflows/audit.yml
+name: audit
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+jobs:
+  audit-all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -e ".[dev]"
+      - run: pip install scitex-dev[cli-audit]
+      - name: Run audit-all
+        run: scitex-dev ecosystem audit-all <pkg-short-name>
+```
+
+Where `<pkg-short-name>` matches the entry in `scitex_dev._ecosystem._core.ECOSYSTEM` (e.g. `scitex-io`, `scitex-cloud`, `scitex-hpc`, plus branded packages like `socialia` and `figrecipe`).
+
+### Failure policy
+
+- **PR**: audit-all warnings are visible but **do not block merge** (`continue-on-error: true`) until the package is fully green.
+- **Push to main/develop**: audit-all warnings are reported but never block (the test workflow + sphinx-quality are the merge gates).
+- **Once a package reaches 0 warnings**, flip `continue-on-error: false` to lock the rule in. Drift after that point is a hard CI fail.
+
+### Adoption status
+
+The ecosystem skill `_skills/scitex-dev/audit-all-ci-rollout.md` (TODO — to be created) tracks per-package adoption of this workflow file. Packages without it are flagged by `audit-project` PS-TBD.
+
+### Why this is mandatory, not optional
+
+`scitex-dev ecosystem audit-all` is the *only* place where umbrella-side rules (§5b passthrough) and standalone-side rules (§3 mcp subcommands, §1a tab completion, §10 positional ordering) are checked together. Running individual `audit-cli` or `audit-mcp-tools` invocations from local shells doesn't catch the cross-package drift that's already cost the ecosystem ~16 packages × multiple commits to clean up (the 2026-05-06 sweeps).
+
 ## Release-gate checklist
 
 Before tagging `v*`:
