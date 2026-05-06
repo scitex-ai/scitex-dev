@@ -1456,6 +1456,92 @@ def register_ecosystem_commands(main_group):
             emit_disclaimer()
         _sys.exit(overall_exit)
 
+    @ecosystem.command(
+        "write-ci-workflow",
+        epilog=(
+            "Examples:\n"
+            "  $ scitex-dev ecosystem write-ci-workflow scitex-types\n"
+            "  $ scitex-dev ecosystem write-ci-workflow scitex-io --force\n"
+            "  $ scitex-dev ecosystem write-ci-workflow scitex-io --dry-run\n"
+            "\n"
+            "Writes the canonical .github/workflows/audit.yml into the\n"
+            "package's local checkout. The workflow runs\n"
+            "`scitex-dev ecosystem audit-all <pkg>` on every push and PR\n"
+            "and goes red on any error-severity violation. See\n"
+            "_skills/general/02_package_07_github-actions.md for the\n"
+            "failure-policy contract."
+        ),
+    )
+    @click.argument("distribution")
+    @click.option("--force", is_flag=True, help="Overwrite an existing audit.yml.")
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print the target path and contents without writing.",
+    )
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def ecosystem_write_ci_workflow(distribution, force, dry_run, yes):
+        """Materialise the canonical audit.yml for DISTRIBUTION."""
+        del yes  # generation is non-destructive when --force is absent
+        from ..._ecosystem import ECOSYSTEM, get_local_path, should_skip_audit
+
+        if distribution not in ECOSYSTEM:
+            click.echo(f"error: '{distribution}' not in ECOSYSTEM", err=True)
+            raise SystemExit(2)
+        skip, reason = should_skip_audit(distribution, "audit-cli")
+        # The check above is just a sanity probe; we accept any package
+        # except archived for the workflow generator.
+        info = ECOSYSTEM[distribution]
+        if info.get("archived"):
+            click.echo(f"skip  {distribution}: archived ({reason})", err=True)
+            raise SystemExit(0)
+
+        local = get_local_path(distribution)
+        if local is None or not local.exists():
+            click.echo(
+                f"error: local path for '{distribution}' missing: {local}",
+                err=True,
+            )
+            raise SystemExit(2)
+
+        target = local / ".github" / "workflows" / "audit.yml"
+        content = (
+            "name: audit\n"
+            "\n"
+            "on:\n"
+            "  pull_request:\n"
+            "  push:\n"
+            "    branches: [main, develop]\n"
+            "\n"
+            "jobs:\n"
+            "  audit-all:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - uses: actions/checkout@v4\n"
+            "      - uses: actions/setup-python@v5\n"
+            '        with: { python-version: "3.11" }\n'
+            '      - run: pip install -e ".[dev]"\n'
+            '      - run: pip install "scitex-dev[cli-audit]"\n'
+            "      - name: Run audit-all\n"
+            f"        run: scitex-dev ecosystem audit-all {distribution}\n"
+        )
+
+        if dry_run:
+            click.echo(f"# would write: {target}")
+            click.echo(content)
+            return
+
+        if target.exists() and not force:
+            click.echo(
+                f"error: {target} already exists (pass --force to overwrite)",
+                err=True,
+            )
+            raise SystemExit(1)
+
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+        click.echo(f"wrote {target}")
+
     @ecosystem.command("start-dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")
     @click.option("--host", default="0.0.0.0", help="Host to bind to.")
