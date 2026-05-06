@@ -7,7 +7,44 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
+## [0.11.2] — 2026-05-07
+
+### Fixed
+- **`scitex_dev/testing/` subpackage now ships in the wheel.** It was
+  added after the v0.11.1 tag, so the published v0.11.1 wheel was
+  missing it — every package's `tests/develop/test_audit.py` failed in
+  CI with `ModuleNotFoundError: No module named 'scitex_dev.testing'`.
+  v0.11.2 unblocks the test-suite-integrated audit gate across the
+  ecosystem.
+
+### Added (audit rules)
+- **PA304** (audit-python-apis) — standalone source must not import the
+  umbrella (`from scitex.X` / `import scitex` / `import scitex.X`).
+  Module-level only; function-scoped lazy imports + `__main__` guards
+  exempt; `examples/`, `docs/`, `_demo_*.py` files exempt;
+  umbrella-private (`scitex._foo`) exempt.
+- **PA305** (audit-python-apis) — modules importing `playwright.async_api`
+  must call `scitex_browser.debugging.capture_debug_artifacts_async`
+  somewhere in the same module.
+- **PS139** (audit-project) — standalone `pyproject.toml` must not list
+  `scitex` (umbrella) as a runtime or extras dependency.
+- **PS140** (audit-project) — packages with cross-package imports must
+  ship `tests/integration/test_cross_package_imports.py`. Stale
+  `CROSS_PACKAGE_IMPORTS` lists also flag.
+- **§1a** — `install-shell-completion` and `print-shell-completion`
+  subcommands are now mandatory for every CLI (was advisory).
+- **§2 no-interactive-prompts** — CLI source must not call
+  `click.confirm`, `click.prompt`, `getpass.getpass`, or bare
+  `input()`. Mutating actions gate on `--yes`/`-y` instead.
+
+### Added (helpers + skills)
+- `scitex_browser.debugging.capture_debug_artifacts_async` — async
+  helper that saves screenshot + HTML in one call. Used by
+  `click_with_fallbacks_async` / `fill_with_fallbacks_async` to
+  auto-capture before/after every interaction by default (opt-out via
+  `capture_debug=False`).
+- `_skills/general/02_package_09_browser-automation-debugging.md` —
+  rule + pattern + anti-patterns for stepwise PNG+HTML capture.
 - `scitex-dev ecosystem write-ci-workflow <pkg>` — materialises the canonical
   `.github/workflows/audit.yml` inside a package's local checkout. The
   generated workflow runs `audit-all` on every push and PR, with no
@@ -45,5 +82,3 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 - `<cli>` placeholder substitution in shell-completion help text.
-</content>
-</invoke>
