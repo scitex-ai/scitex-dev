@@ -82,10 +82,28 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
         """Print the click-generated completion script to stdout.
 
         \b
-        For one-off activation in the current shell:
-          eval "$({prog_name} print-shell-completion --shell bash)"
+        Example:
+          $ <cli> print-shell-completion --shell bash
+          $ <cli> print-shell-completion --shell zsh
+          $ eval "$(<cli> print-shell-completion --shell bash)"
         """
         click.echo(_generate_script(shell, prog_name))
+
+    # Click caches `help` from the docstring at decoration time, so
+    # mutating __doc__ post-hoc is too late — also overwrite the
+    # registered Command's `help` attribute so `<cli>` is rendered as
+    # the actual prog name in `--help` output (audit-cli §4 expects a
+    # concrete example, not a placeholder).
+    _psc_cmd = main_group.commands["print-shell-completion"]
+    _psc_cmd.help = (_psc_cmd.help or "").replace("<cli>", prog_name)
+    print_shell_completion.__doc__ = (print_shell_completion.__doc__ or "").replace(
+        "<cli>", prog_name
+    )
+
+    def _swap_cli_placeholder_post(name: str, fn) -> None:
+        cmd = main_group.commands[name]
+        cmd.help = (cmd.help or "").replace("<cli>", prog_name)
+        fn.__doc__ = (fn.__doc__ or "").replace("<cli>", prog_name)
 
     @main_group.command("install-shell-completion")
     @click.option(
@@ -104,10 +122,10 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
         """Wire up `<TAB>` completion in the user's shell rc.
 
         \b
-        Examples:
-          {prog} install-shell-completion              # → ~/.bashrc
-          {prog} install-shell-completion --shell zsh  # → ~/.zshrc
-          {prog} install-shell-completion --dry-run    # preview only
+        Example:
+          $ <cli> install-shell-completion              # → ~/.bashrc
+          $ <cli> install-shell-completion --shell zsh  # → ~/.zshrc
+          $ <cli> install-shell-completion --dry-run    # preview only
 
         \b
         Activate in the current shell after install:
@@ -145,6 +163,8 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
             f.write(f"\n{line}\n")
         click.echo(f"Tab completion installed in {rc_path}")
         click.echo(f"Run: source {rc_path}")
+
+    _swap_cli_placeholder_post("install-shell-completion", install_shell_completion)
 
     @main_group.command(
         "install-tab-completion",
