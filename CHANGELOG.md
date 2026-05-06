@@ -9,6 +9,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.11.3] — 2026-05-07
 
+### Added
+- `audit_all_for_package(..., skip_rules=("PS108b", "PS121"))` —
+  packages can locally bypass aspirational structural rules from their
+  `tests/develop/test_audit.py` while a refactor is pending. The
+  ecosystem default keeps these rules at `error`; opt-in only.
+
 ### Fixed
 - **Top-level compatibility shims now ship in the wheel:**
   `scitex_dev.decorators`, `scitex_dev._skills_quality`, and

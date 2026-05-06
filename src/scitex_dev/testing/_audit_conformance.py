@@ -24,7 +24,12 @@ import subprocess
 SKIP_ENV_VAR = "SCITEX_DEV_SKIP_AUDIT"
 
 
-def audit_all_for_package(distribution: str, *, timeout: float = 120.0) -> None:
+def audit_all_for_package(
+    distribution: str,
+    *,
+    timeout: float = 120.0,
+    skip_rules: tuple[str, ...] = (),
+) -> None:
     """Run `scitex-dev ecosystem audit-all <distribution>` and assert exit 0.
 
     Parameters
@@ -65,10 +70,19 @@ def audit_all_for_package(distribution: str, *, timeout: float = 120.0) -> None:
         timeout=timeout,
         env={**os.environ, "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1"},
     )
+    if proc.returncode != 0 and skip_rules:
+        # Re-classify: if every error-severity violation in stdout is on
+        # the caller's allow-list, treat as clean. Use a simple line scan;
+        # error lines look like `  [E] [PSnnn §M] …`.
+        non_skipped = [
+            line
+            for line in proc.stdout.splitlines()
+            if line.lstrip().startswith("[E]")
+            and not any(f"[{r} " in line or f"[{r}]" in line for r in skip_rules)
+        ]
+        if not non_skipped:
+            return
     if proc.returncode != 0:
-        # Build a single message that pytest will print verbatim. Keep
-        # the command line at the top so a copy-paste re-runs the audit
-        # exactly.
         cmd = f"{bin_path} ecosystem audit-all {distribution}"
         msg = (
             f"audit-all reported violations for {distribution!r} "
