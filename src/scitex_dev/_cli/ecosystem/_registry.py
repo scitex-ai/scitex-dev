@@ -1489,8 +1489,27 @@ def register_ecosystem_commands(main_group):
         is_flag=True,
         help="Print the target path and contents without writing.",
     )
+    @click.option(
+        "--scitex-dev-version",
+        default=None,
+        help=(
+            "Pin scitex-dev to this version in the workflow "
+            "(default: the version of scitex-dev running this command, "
+            "via importlib.metadata)."
+        ),
+    )
+    @click.option(
+        "--unpinned",
+        is_flag=True,
+        help=(
+            "Skip the version pin (NOT RECOMMENDED — every PyPI release "
+            "may add new audit rules and CI picks them up silently)."
+        ),
+    )
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-    def ecosystem_write_ci_workflow(distribution, force, dry_run, yes):
+    def ecosystem_write_ci_workflow(
+        distribution, force, dry_run, scitex_dev_version, unpinned, yes
+    ):
         """Materialise the canonical audit.yml for DISTRIBUTION."""
         del yes  # generation is non-destructive when --force is absent
         from ..._ecosystem import ECOSYSTEM, get_local_path, should_skip_audit
@@ -1499,8 +1518,8 @@ def register_ecosystem_commands(main_group):
             click.echo(f"error: '{distribution}' not in ECOSYSTEM", err=True)
             raise SystemExit(2)
         skip, reason = should_skip_audit(distribution, "audit-cli")
-        # The check above is just a sanity probe; we accept any package
-        # except archived for the workflow generator.
+        # Sanity probe; we accept any package except archived for the
+        # workflow generator.
         info = ECOSYSTEM[distribution]
         if info.get("archived"):
             click.echo(f"skip  {distribution}: archived ({reason})", err=True)
@@ -1513,6 +1532,28 @@ def register_ecosystem_commands(main_group):
                 err=True,
             )
             raise SystemExit(2)
+
+        # Resolve the scitex-dev version pin. Default = the version of
+        # scitex-dev running this command — single source of truth =
+        # the live install's pyproject.toml. The user controls upgrades
+        # by re-running the generator after a `pip install -U`.
+        if unpinned:
+            pin_spec = ""
+        elif scitex_dev_version:
+            pin_spec = f"=={scitex_dev_version}"
+        else:
+            from importlib.metadata import version as _imv
+
+            try:
+                pin_spec = f"=={_imv('scitex-dev')}"
+            except Exception:
+                click.echo(
+                    "error: cannot resolve scitex-dev version via "
+                    "importlib.metadata; pass --scitex-dev-version X.Y.Z "
+                    "or --unpinned",
+                    err=True,
+                )
+                raise SystemExit(2)
 
         target = local / ".github" / "workflows" / "audit.yml"
         content = (
@@ -1531,7 +1572,7 @@ def register_ecosystem_commands(main_group):
             "      - uses: actions/setup-python@v5\n"
             '        with: { python-version: "3.11" }\n'
             '      - run: pip install -e ".[dev]"\n'
-            '      - run: pip install "scitex-dev[cli-audit]"\n'
+            f'      - run: pip install "scitex-dev[cli-audit]{pin_spec}"\n'
             "      - name: Run audit-all\n"
             f"        run: scitex-dev ecosystem audit-all {distribution}\n"
         )

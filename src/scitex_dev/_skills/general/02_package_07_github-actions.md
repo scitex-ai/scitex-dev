@@ -172,12 +172,22 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install -e ".[dev]"
-      - run: pip install "scitex-dev[cli-audit]"
+      - run: pip install "scitex-dev[cli-audit]==<X.Y.Z>"
       - name: Run audit-all
         run: scitex-dev ecosystem audit-all <pkg-short-name>
 ```
 
 Where `<pkg-short-name>` matches the entry in `scitex_dev._ecosystem._core.ECOSYSTEM` (e.g. `scitex-io`, `scitex-cloud`, `scitex-hpc`, plus branded packages like `socialia` and `figrecipe`).
+
+**`scitex-dev` MUST be pinned to a specific version.** Every PyPI
+release of `scitex-dev` may add new audit rules; an unpinned install
+makes a previously-green CI go red overnight without any change to the
+package being audited. The `write-ci-workflow` generator pins to the
+exact version of `scitex-dev` running on the user's machine when the
+workflow is generated. To upgrade, run `pip install -U scitex-dev` and
+re-run `scitex-dev ecosystem write-ci-workflow <pkg> --force`. Use
+`--unpinned` only for short-lived experiments — never for the
+ecosystem rollout.
 
 The workflow runs the command verbatim — no `continue-on-error`. As of
 2026-05-06 every actionable audit rule is `error` severity, and
