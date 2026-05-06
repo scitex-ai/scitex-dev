@@ -43,6 +43,15 @@ RULES: dict[str, Rule] = {
             "§1",
             "duplicate index file (e.g. `SKILL_INDEX.md`); only one `SKILL.md` per dir",
         ),
+        Rule(
+            "SK105",
+            "§1",
+            "`MANIFEST.md` is forbidden — `SKILL.md` is the single canonical "
+            "index of every skill tree. Distribution / update mechanics belong "
+            "in a numbered leaf (e.g. `99_distribution.md`) or in the package "
+            "README, not in a sibling top-level file that duplicates SKILL.md's "
+            "intent.",
+        ),
         # §2 File naming & ordering
         Rule(
             "SK201",
@@ -153,7 +162,7 @@ _MAX_SKILL_MD_BYTES = 6 * 1024
 _MAX_SKILL_MD_LINES = 120
 _MAX_LEAF_BYTES = 10 * 1024
 _MAX_LEAF_LINES = 200
-_NAMING_EXEMPT = {"TODO.md", "MANIFEST.md", "DRIFT_REPORT.md"}
+_NAMING_EXEMPT = {"TODO.md", "DRIFT_REPORT.md"}
 
 
 def _check_layout(
@@ -201,6 +210,20 @@ def _check_layout(
                 "SK104",
                 str(alias_path),
                 f"alias index `{alias_path.name}` shadows the canonical `SKILL.md`",
+            )
+        )
+    # SK105 — MANIFEST.md is forbidden. The canonical index is SKILL.md;
+    # distribution / update mechanics belong in a numbered leaf or the
+    # package README.
+    manifest = skills_dir / "MANIFEST.md"
+    if manifest.is_file():
+        out.append(
+            Violation(
+                "SK105",
+                str(manifest),
+                "`MANIFEST.md` is forbidden — fold its content into a "
+                "numbered leaf (e.g. `99_distribution.md`) or the README; "
+                "`SKILL.md` is the single canonical index",
             )
         )
     return skills_dir
