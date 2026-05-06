@@ -382,6 +382,12 @@ def _audit_umbrella_imports(
             )
         ):
             continue
+        # Filename pattern for in-tree demos (e.g. scitex-stats's
+        # tests/categorical/_demo_chi2.py). Same exemption as `examples/`
+        # — these are runnable demonstrations of the API surface, not
+        # library code that consumers import.
+        if py_file.name.startswith("_demo_") or py_file.name.startswith("demo_"):
+            continue
         try:
             text = py_file.read_text(encoding="utf-8")
         except OSError:
