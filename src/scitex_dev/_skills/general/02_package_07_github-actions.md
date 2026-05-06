@@ -234,6 +234,33 @@ Writes `tests/develop/test_audit.py` (force-required to overwrite),
 plus `tests/develop/__init__.py` and an empty `tests/conftest.py`
 when missing.
 
+### Bypass — exceptions and temporal remedy
+
+The audit gate is mandatory in steady state, but two situations
+legitimately call for a temporary skip:
+
+1. **Remediation in flight.** A package is mid-cleanup of pre-existing
+   violations and the noise is blocking unrelated test runs.
+2. **Local dev without the audit corpus.** A developer working on a
+   feature on a machine where `scitex-dev[cli-audit]` isn't installed.
+
+Both bypass via the environment variable:
+
+```bash
+SCITEX_DEV_SKIP_AUDIT=1 python -m pytest .
+```
+
+When set, `audit_all_for_package` calls `pytest.skip()` instead of
+running the audit subprocess. The skip line shows up clearly in the
+report so it's never silent.
+
+**Hard rule.** CI for `main`/`develop` MUST NOT set
+`SCITEX_DEV_SKIP_AUDIT`. The variable is for ephemeral local sessions
+and short-lived cleanup branches only — every push to a release-track
+branch must run the audit. If a package needs a sustained exemption
+from a specific rule, demote that rule to `warn` in scitex-dev (with a
+documented false-positive history) instead of muting the whole gate.
+
 ### Why this is mandatory, not optional
 
 `scitex-dev ecosystem audit-all` is the *only* place where umbrella-side rules (§5b passthrough) and standalone-side rules (§3 mcp subcommands, §1a tab completion, §10 positional ordering) are checked together. Running individual `audit-cli` or `audit-mcp-tools` invocations from local shells doesn't catch the cross-package drift that's already cost the ecosystem ~16 packages × multiple commits to clean up (the 2026-05-06 sweeps).

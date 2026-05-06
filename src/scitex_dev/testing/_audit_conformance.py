@@ -21,6 +21,9 @@ import shutil
 import subprocess
 
 
+SKIP_ENV_VAR = "SCITEX_DEV_SKIP_AUDIT"
+
+
 def audit_all_for_package(distribution: str, *, timeout: float = 120.0) -> None:
     """Run `scitex-dev ecosystem audit-all <distribution>` and assert exit 0.
 
@@ -32,13 +35,28 @@ def audit_all_for_package(distribution: str, *, timeout: float = 120.0) -> None:
     timeout
         Per-test wall-clock cap; covers a slow PyPI install in CI.
 
+    Bypass
+    ------
+    Set ``SCITEX_DEV_SKIP_AUDIT=1`` in the environment to skip the
+    audit (the test calls ``pytest.skip`` instead of running the
+    subprocess). Use during a remediation push when pre-existing
+    violations would block unrelated test runs, or when developing
+    locally without scitex-dev's audit corpus available. CI for
+    release branches MUST NOT set this — drift goes silent.
+
     Raises
     ------
     AssertionError
         If the subprocess returns non-zero. The full stdout + stderr
         are included in the message so the failing rule is visible in
-        the pytest report without re-running the audit by hand.
+        the test report without re-running the audit by hand.
     """
+    if os.environ.get(SKIP_ENV_VAR):
+        import pytest
+
+        pytest.skip(
+            f"audit-all skipped via {SKIP_ENV_VAR}=1 (unset to re-enable the gate)"
+        )
     bin_path = shutil.which("scitex-dev") or "scitex-dev"
     proc = subprocess.run(
         [bin_path, "ecosystem", "audit-all", distribution],
