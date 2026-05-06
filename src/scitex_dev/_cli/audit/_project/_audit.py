@@ -543,6 +543,69 @@ RULES: dict[str, Rule] = {
                 "example doesn't yet work."
             ),
         ),
+        Rule(
+            "PS503",
+            "§5",
+            (
+                "examples/<n>_*_out/ has no FINISHED_SUCCESS/<session_id>/ "
+                "subdir — the demo's already-run artefacts must be tracked "
+                "in git so users see them on GitHub. Run the example once "
+                "with @stx.session and commit the FINISHED_SUCCESS dir."
+            ),
+        ),
+        Rule(
+            "PS504",
+            "§5",
+            (
+                "examples/<n>.ipynb has no committed cell outputs — looks "
+                "nbstripped. GitHub renders cell outputs inline, so the "
+                "demo is invisible without them. Re-run the notebook and "
+                "commit with outputs intact."
+            ),
+        ),
+        Rule(
+            "PS505",
+            "§5",
+            (
+                "examples/<n>.ipynb has a sibling test "
+                "tests/examples/test_<n>.py but the test does not invoke "
+                "`nbconvert --execute` or `pytest --nbval` — runpy/import "
+                "tricks don't execute notebooks. Mirror the .py "
+                "smoke-test convention with one of those commands."
+            ),
+        ),
+        Rule(
+            "PS506",
+            "§5",
+            (
+                "examples/<n>.ipynb imports matplotlib but lacks the "
+                "`%matplotlib inline` cell magic — figure outputs won't "
+                "embed in the notebook, so GitHub-rendered cells will be "
+                "blank. Add `%matplotlib inline` near the top."
+            ),
+        ),
+        Rule(
+            "PS507",
+            "§5",
+            (
+                "examples/<n>.ipynb imports matplotlib but does not call "
+                "`plt.show()` (or rely on inline auto-display) — figures "
+                "may not appear in the rendered cell outputs. Call "
+                "`plt.show()` explicitly after each plot."
+            ),
+        ),
+        Rule(
+            "PS508",
+            "§5",
+            (
+                "examples/<n>.ipynb contains warning output in committed "
+                "cells (DeprecationWarning, UserWarning, FutureWarning, "
+                "RuntimeWarning, or stderr-stream `Warning:` text). "
+                "Demos must be clean — silence the warning at the source, "
+                "filter it explicitly with `warnings.filterwarnings`, or "
+                "fix the underlying cause before re-running and committing."
+            ),
+        ),
         # §4 docs/ structure ----------------------------------------------------
         Rule(
             "PS401",
@@ -632,6 +695,12 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS402": "E",  # top-level assets/
     "PS501": "E",  # examples missing @stx.session
     "PS502": "E",  # empty examples/<n>_out/
+    "PS503": "E",  # examples/<n>_out/ missing FINISHED_SUCCESS/<id>/
+    "PS504": "E",  # .ipynb has no committed cell outputs
+    "PS505": "E",  # .ipynb test does not nbconvert / nbval
+    "PS506": "E",  # .ipynb missing %matplotlib inline
+    "PS507": "E",  # .ipynb missing plt.show()
+    "PS508": "E",  # .ipynb has warning output in committed cells
 }
 
 # Apply the overrides — replace each tagged Rule with a promoted copy.

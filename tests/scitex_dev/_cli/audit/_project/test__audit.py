@@ -560,9 +560,324 @@ def test_ps502_silent_when_out_dir_has_content(tmp_path):
     (repo / "examples").mkdir(exist_ok=True)
     out_dir = repo / "examples" / "01_demo_out"
     out_dir.mkdir()
-    (out_dir / "FINISHED_SUCCESS").mkdir()
+    fs = out_dir / "FINISHED_SUCCESS" / "session_id"
+    fs.mkdir(parents=True)
+    (fs / "result.png").write_bytes(b"PNG")
     rules = _violations_for(repo, "demo")
     assert "PS502" not in rules
+
+
+# ---------------------------------------------------------------------------
+# PS503 — _out/ must contain FINISHED_SUCCESS/<session_id>/ from @stx.session
+# ---------------------------------------------------------------------------
+
+
+def test_ps503_fires_when_out_dir_has_no_finished_success(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    out_dir = repo / "examples" / "01_demo_out"
+    out_dir.mkdir()
+    # Has content (so PS502 is silent) but no FINISHED_SUCCESS/<id>/.
+    (out_dir / "stale_artefact.png").write_bytes(b"PNG")
+    rules = _violations_for(repo, "demo")
+    assert "PS503" in rules
+
+
+def test_ps503_silent_when_finished_success_id_present(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    out_dir = repo / "examples" / "01_demo_out"
+    out_dir.mkdir()
+    fs_id = out_dir / "FINISHED_SUCCESS" / "2026Y-05M-07D-01h00m00s_demo-main"
+    fs_id.mkdir(parents=True)
+    (fs_id / "fig.png").write_bytes(b"PNG")
+    rules = _violations_for(repo, "demo")
+    assert "PS503" not in rules
+
+
+# ---------------------------------------------------------------------------
+# PS504 / PS506 / PS507 — .ipynb examples conventions
+# ---------------------------------------------------------------------------
+
+
+def _write_notebook(path, cells):
+    import json
+
+    nb = {
+        "cells": cells,
+        "metadata": {},
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+    path.write_text(json.dumps(nb))
+
+
+def _code_cell(source, outputs=()):
+    return {
+        "cell_type": "code",
+        "source": source,
+        "outputs": list(outputs),
+        "execution_count": None,
+        "metadata": {},
+    }
+
+
+def test_ps504_fires_when_notebook_has_no_outputs(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [_code_cell("print('hello')")],
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS504" in rules
+
+
+def test_ps504_silent_when_notebook_has_outputs(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [
+            _code_cell(
+                "print('hello')",
+                outputs=[
+                    {"output_type": "stream", "name": "stdout", "text": "hello\n"}
+                ],
+            )
+        ],
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS504" not in rules
+
+
+def test_ps506_fires_when_notebook_imports_mpl_without_inline_magic(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [
+            _code_cell(
+                "import matplotlib.pyplot as plt\nplt.plot([1,2,3])\nplt.show()",
+                outputs=[
+                    {
+                        "output_type": "display_data",
+                        "data": {"image/png": "X"},
+                        "metadata": {},
+                    }
+                ],
+            )
+        ],
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS506" in rules
+
+
+def test_ps506_silent_when_inline_magic_present(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [
+            _code_cell(
+                "%matplotlib inline\nimport matplotlib.pyplot as plt\nplt.plot([1,2,3])\nplt.show()",
+                outputs=[
+                    {
+                        "output_type": "display_data",
+                        "data": {"image/png": "X"},
+                        "metadata": {},
+                    }
+                ],
+            )
+        ],
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS506" not in rules
+
+
+def test_ps507_fires_when_notebook_imports_mpl_without_plt_show(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [
+            _code_cell(
+                "%matplotlib inline\nimport matplotlib.pyplot as plt\nplt.plot([1,2,3])",
+                outputs=[
+                    {
+                        "output_type": "display_data",
+                        "data": {"image/png": "X"},
+                        "metadata": {},
+                    }
+                ],
+            )
+        ],
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS507" in rules
+
+
+def test_ps506_507_silent_when_notebook_does_not_import_mpl(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [
+            _code_cell(
+                "x = 1\nprint(x)",
+                outputs=[{"output_type": "stream", "name": "stdout", "text": "1\n"}],
+            )
+        ],
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS506" not in rules
+    assert "PS507" not in rules
+
+
+# ---------------------------------------------------------------------------
+# PS505 — .ipynb test must use nbconvert / nbval
+# ---------------------------------------------------------------------------
+
+
+def test_ps505_fires_when_ipynb_test_uses_subprocess_python(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [_code_cell("x=1", outputs=[{"output_type": "stream", "text": "ok"}])],
+    )
+    test_dir = repo / "tests" / "examples"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    (test_dir / "test_01_demo.py").write_text(
+        "import subprocess\n"
+        "def test_runs():\n"
+        "    subprocess.run(['python', '01_demo.ipynb'])\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS505" in rules
+
+
+def test_ps505_silent_when_ipynb_test_uses_nbconvert(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [_code_cell("x=1", outputs=[{"output_type": "stream", "text": "ok"}])],
+    )
+    test_dir = repo / "tests" / "examples"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    (test_dir / "test_01_demo.py").write_text(
+        "import subprocess\n"
+        "def test_runs():\n"
+        "    subprocess.run(['jupyter', 'nbconvert', '--execute', '--to', 'notebook', '01_demo.ipynb'])\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS505" not in rules
+
+
+def test_ps508_fires_on_stderr_stream_warning(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [
+            _code_cell(
+                "import warnings\nwarnings.warn('old API', DeprecationWarning)",
+                outputs=[
+                    {
+                        "output_type": "stream",
+                        "name": "stderr",
+                        "text": "DeprecationWarning: old API\n",
+                    }
+                ],
+            )
+        ],
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS508" in rules
+
+
+def test_ps508_fires_on_error_output_with_warning_class(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [
+            _code_cell(
+                "raise FutureWarning('x')",
+                outputs=[
+                    {
+                        "output_type": "error",
+                        "ename": "FutureWarning",
+                        "evalue": "x",
+                        "traceback": [],
+                    }
+                ],
+            )
+        ],
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS508" in rules
+
+
+def test_ps508_silent_on_clean_stdout(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [
+            _code_cell(
+                "print('hello')",
+                outputs=[
+                    {"output_type": "stream", "name": "stdout", "text": "hello\n"}
+                ],
+            )
+        ],
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS508" not in rules
+
+
+def test_ps508_silent_on_real_exception_not_warning(tmp_path):
+    """`output_type=error` for a real exception (KeyError, ValueError) is not a warning."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [
+            _code_cell(
+                "raise KeyError('x')",
+                outputs=[
+                    {
+                        "output_type": "error",
+                        "ename": "KeyError",
+                        "evalue": "x",
+                        "traceback": [],
+                    }
+                ],
+            )
+        ],
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS508" not in rules
+
+
+def test_ps505_silent_when_ipynb_test_uses_nbval(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [_code_cell("x=1", outputs=[{"output_type": "stream", "text": "ok"}])],
+    )
+    test_dir = repo / "tests" / "examples"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    (test_dir / "test_01_demo.py").write_text(
+        "import subprocess\n"
+        "def test_runs():\n"
+        "    subprocess.run(['pytest', '--nbval-lax', 'examples/'])\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS505" not in rules
 
 
 # ---------------------------------------------------------------------------

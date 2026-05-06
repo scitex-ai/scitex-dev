@@ -7,6 +7,38 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.4] — 2026-05-07
+
+### Added (audit rules — examples chapter)
+- **PS503** (audit-project) — `examples/<n>_*_out/` must contain a
+  `FINISHED_SUCCESS/<session_id>/` subdirectory with at least one
+  tracked artefact. Proves the example was run end-to-end via
+  `@stx.session`, not hand-fabricated.
+- **PS504** (audit-project) — `.ipynb` example must commit cell
+  outputs. GitHub renders cell outputs inline; a stripped notebook is
+  invisible to viewers. Detected by walking the notebook JSON for any
+  `code` cell with a non-empty `outputs` list.
+- **PS505** (audit-project) — `tests/examples/test_<n>.py` for an
+  `.ipynb` example must invoke `jupyter nbconvert --execute` or
+  `pytest --nbval[-lax]`. Subprocess `python <name>.ipynb` does not
+  execute notebook cells.
+- **PS506** (audit-project) — `.ipynb` that imports `matplotlib` must
+  include the `%matplotlib inline` cell magic. Without it the figure
+  outputs aren't embedded in cell outputs and rendered notebooks on
+  GitHub show no plots.
+- **PS507** (audit-project) — `.ipynb` that imports `matplotlib` must
+  call `plt.show()` at least once. Even with `%matplotlib inline`,
+  deferring display can leave figures un-rendered.
+- **PS508** (audit-project) — `.ipynb` example must not contain
+  warning output (DeprecationWarning, UserWarning, FutureWarning, etc.)
+  in committed cell outputs. Demos must run cleanly. Detected by
+  scanning cell `outputs` for stderr-stream warnings or
+  `output_type=error` with a `Warning`-named class.
+
+All six new rules default to severity `error` (CI-failing). The
+notebook-aware checks live in `_check_examples.py` and parse the
+notebook JSON locally — no execution, fast.
+
 ## [0.11.3] — 2026-05-07
 
 ### Added
