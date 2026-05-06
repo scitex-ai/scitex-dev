@@ -940,6 +940,25 @@ def _check_introspection(
             )
         )
 
+    # §1a — shell-completion subcommands are MANDATORY for every CLI:
+    # `install-shell-completion` (writes the script to ~/.config/...) and
+    # `print-shell-completion` (prints to stdout). Without them, users get
+    # nothing on `<pkg> <TAB>`. Codified 2026-05-06 after scitex-scholar
+    # shipped without either subcommand and the gap surfaced only when a
+    # human noticed `scitex-scholar install` failed.
+    for required in ("install-shell-completion", "print-shell-completion"):
+        if required not in cmd.commands:
+            out.append(
+                Violation(
+                    package,
+                    "§1a",
+                    f"missing required top-level command {required!r} — "
+                    "without it `<pkg> <TAB>` produces nothing. Wire via "
+                    "`scitex_dev._cli._completion.attach_shell_completion(group, "
+                    f'prog_name="{package}")`.',
+                )
+            )
+
     # §1a — `<pkg> skills {list, get, install}` group required when the
     # package ships a `_skills/` directory. Lets users introspect and
     # install the bundled skills without having to discover scitex-dev.

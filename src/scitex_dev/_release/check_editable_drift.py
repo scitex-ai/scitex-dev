@@ -133,10 +133,13 @@ def _is_completion_context() -> bool:
     in that path produces an unwanted warning every time the user opens a
     new shell or types `bash`. The Click env var is a reliable signal.
     """
-    return any(
-        k.startswith("_SCITEX_DEV_COMPLETE") or k == "_CLICK_COMPLETE"
-        for k in os.environ
-    )
+    # Match any `_<PROG>_COMPLETE=...` from `eval "$(_FOO_COMPLETE=bash_source foo)"`
+    # — scitex-dev's drift checker is imported transitively whenever any
+    # downstream tool (scitex-scholar, scitex-io, …) is invoked, including
+    # during their own shell-completion sourcing. Without broad matching,
+    # the drift line ends up in the completion candidate list and bash
+    # treats it as one of the suggestions (symptom: "TAB needed twice").
+    return any(k == "_CLICK_COMPLETE" or k.endswith("_COMPLETE") for k in os.environ)
 
 
 def _compute_drift(repo: Path) -> str | None:
