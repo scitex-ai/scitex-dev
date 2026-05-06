@@ -410,6 +410,18 @@ def _python_api_names(package: str) -> set[str]:
     attributes), and keeps only callables that are NOT classes/types. Classes
     are exposed as API but are rarely wrapped as MCP tools — including them
     in the parity check produces false positives.
+
+    Two layouts are accepted, matching the two patterns in the
+    SciTeX ecosystem:
+
+    1. **Flat** — `pkg.<verb>_<noun>(...)` (the original convention).
+       Used by scitex-stats, scitex-io, etc.
+    2. **Nested** — `pkg.<noun>.<verb>(...)` (the CLI-mirror form).
+       Each noun submodule re-exports verbs under their bare names;
+       this auditor flattens them to `<noun>_<verb>` for the parity
+       comparison so the MCP tool naming convention still applies
+       (a tool named ``agent_list`` matches either ``pkg.agent_list``
+       or ``pkg.agent.list``).
     """
     import inspect as _inspect
 
@@ -426,7 +438,33 @@ def _python_api_names(package: str) -> set[str]:
         if not isinstance(n, str):
             continue
         val = getattr(mod, n, None)
-        if val is None or _inspect.isclass(val) or _inspect.ismodule(val):
+        if val is None or _inspect.isclass(val):
+            continue
+        if _inspect.ismodule(val):
+            # Nested-form noun submodule. Walk its public verbs and
+            # surface them as `<noun>_<verb>` so the parity check can
+            # match an MCP tool named the same way. Skip submodules
+            # without an explicit __all__ — those tend to be deep
+            # internals, not the package's CLI-tree mirror.
+            sub_names = getattr(val, "__all__", None)
+            if sub_names is None:
+                continue
+            for sub_n in sub_names:
+                if not isinstance(sub_n, str):
+                    continue
+                sub_val = getattr(val, sub_n, None)
+                if (
+                    sub_val is None
+                    or _inspect.isclass(sub_val)
+                    or _inspect.ismodule(sub_val)
+                    or not callable(sub_val)
+                ):
+                    continue
+                # Trailing underscore is the Python idiom for keyword
+                # aliasing (`import_`, `class_`); strip before joining
+                # so `pkg.db.import_` matches MCP `db_import`.
+                clean_verb = sub_n.rstrip("_")
+                out.add(f"{n}_{clean_verb}")
             continue
         if callable(val):
             out.add(n)
