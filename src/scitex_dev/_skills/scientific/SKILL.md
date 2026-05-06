@@ -44,3 +44,12 @@ Project structure split into one leaf per top-level directory:
 
 ### 3. Reporting
 - [03_reporting_01_pdf-reports.md](03_reporting_01_pdf-reports.md) — Recurring scientific PDF analysis reports — timestamped filenames, mandatory section structure, navigable bookmarks (`fpdf2` / `pikepdf`), aspect-preserving figure embedding, size management for email (<10 MB, DPI/ghostscript/split), and delivery tracking via email + issue-tracker comment.
+
+### 4. Clew adoption — translating any project into a Clew-verifiable form
+- [04_clew_01_dag-as-map-and-evidence.md](04_clew_01_dag-as-map-and-evidence.md) — Conceptual: same SHA-256 DAG in two modes — *map* (live, read-write, used during build/exploration by agents and authors) and *evidence* (post-hoc, read-only, used by reviewers). Read first when adopting Clew on any project.
+- [04_clew_02_translation-playbook.md](04_clew_02_translation-playbook.md) — Universal agent prompt: 5 inputs (CAPSULE_ID, CAPSULE_PATH, QUESTIONS_PATH, ORACLE_PATH, WORKDIR), tier dispatch (easy / notebook / medium / hard), agent-vs-verifier split, scoring schema, DONE signal. Loadable as `spec.skills.required` on any sac agent yaml.
+- [04_clew_03_translation-template.md](04_clew_03_translation-template.md) — Concrete project skeleton: pre-flight checklist, agent-vs-verifier directory layout, clean-DAG Makefile pattern, six-step procedure (inputs → pre-flight → scaffold → implement+iterate → validity gate → DONE).
+- [04_clew_04_translation-notebook-delta.md](04_clew_04_translation-notebook-delta.md) — Notebook-cohort delta: two-stage flow (`scitex-notebook convert` → flat `.py` → standard SciTeX translation), kernel/determinism/cached-API rules, per-`eval_mode` scoring (range / str / llm).
+
+### 5. Private skills for consumer projects (research repos, paper repos, internal apps)
+- [05_private-skills_01_consumer-project.md](05_private-skills_01_consumer-project.md) — 4-layer skill stack (public-package, fleet-private, consumer-project private, gitignored notes), where each lives, decision tree for "where does this new agent-facing doc go?", lift-up rule (transient → reusable → public), concrete `paper-scitex-clew` layout. Pairs with `../general/03_interface_04_skills/06_public-vs-private.md` (which is for *package* authors); this leaf is for *consumer* projects.

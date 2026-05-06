@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from scitex.config import PriorityConfig
+    from scitex_config import PriorityConfig
 except ImportError:
 
     class PriorityConfig:
@@ -212,7 +212,7 @@ def _emit_test_event(
     state files (~/.scitex/events/) and optional webhook delivery.
     """
     try:
-        from scitex.events import emit
+        from scitex_events import emit
     except ImportError:
         return
 

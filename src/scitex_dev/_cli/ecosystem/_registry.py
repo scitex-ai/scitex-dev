@@ -1659,13 +1659,38 @@ def register_ecosystem_commands(main_group):
         ),
     )
     @click.option(
+        "--remote-prelude",
+        default="",
+        help=(
+            "Shell snippet executed on HOST before `python3 -m venv` "
+            "runs. Use to source environment files or load modules "
+            "(e.g. `module load Python/3.11.3` on Spartan)."
+        ),
+    )
+    @click.option(
+        "--remote-python",
+        default="python3",
+        show_default=True,
+        help="Python binary on HOST used for `-m venv`. Override when the "
+        "default `python3` resolves to <3.11 (e.g. `python3.11`).",
+    )
+    @click.option(
         "--dry-run",
         is_flag=True,
         help="Print the rsync + ssh commands that would run; don't execute.",
     )
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
     def ecosystem_test_remote(
-        packages, host, all_packages, audit_only, jobs, remote_base, dry_run, yes
+        packages,
+        host,
+        all_packages,
+        audit_only,
+        jobs,
+        remote_base,
+        remote_prelude,
+        remote_python,
+        dry_run,
+        yes,
     ):
         """Run pytest on HOST against rsynced local checkouts."""
         del yes  # non-destructive on local; remote installs are idempotent
@@ -1720,13 +1745,11 @@ def register_ecosystem_commands(main_group):
             remote_root = f"{remote_base}/{pkg}"
             remote_src = f"{remote_root}/src"
             remote_venv = f"{remote_root}/.venv"
-            ssh_mkdir = [
-                "ssh",
-                host,
-                "mkdir",
-                "-p",
-                shlex.quote(remote_src),
-            ]
+            # Don't quote remote paths — single-quoting kills tilde expansion
+            # (`'~/foo'` → literal `~/foo`). Internal-controlled values, no
+            # spaces in defaults; if a custom --remote-base contains shell
+            # specials the user owns the breakage.
+            ssh_mkdir = ["ssh", host, f"mkdir -p {remote_src}"]
             rsync_cmd = [
                 "rsync",
                 "-az",
@@ -1741,22 +1764,39 @@ def register_ecosystem_commands(main_group):
             #   3. `pip install -e .[dev]` (with bare-`.` fallback) +
             #      scitex-dev[cli-audit] for the audit gate,
             #   4. pytest -n auto when xdist is available, otherwise serial.
+            prelude = (remote_prelude + "; ") if remote_prelude else ""
+            # Tilde-bearing paths intentionally left UNQUOTED so the remote
+            # shell expands `~` to $HOME. Internal-controlled, no spaces.
+            # SCITEX_DEV_REGISTRY exported so audit-project / audit-cli
+            # read the bootstrap-written override YAML, not HOST's
+            # bundled ECOSYSTEM (which would point at HOST's own
+            # ~/proj/<pkg>).
             remote_script = (
                 f"set -e; "
-                f"if [ ! -f {shlex.quote(remote_venv)}/bin/activate ]; then "
-                f"  python3 -m venv {shlex.quote(remote_venv)}; "
+                f"export SCITEX_DEV_REGISTRY={registry_remote}; "
+                f"{prelude}"
+                f"if [ ! -f {remote_venv}/bin/activate ]; then "
+                f"  {remote_python} -m venv {remote_venv}; "
                 f"fi; "
-                f". {shlex.quote(remote_venv)}/bin/activate; "
-                f"cd {shlex.quote(remote_src)}; "
+                f". {remote_venv}/bin/activate; "
+                f"cd {remote_src}; "
                 f"python -m pip install --quiet --upgrade pip; "
                 f"python -m pip install -e '.[dev]' --quiet || "
                 f"python -m pip install -e . --quiet; "
-                f"python -m pip install 'scitex-dev[cli-audit]' --quiet; "
+                # Install scitex-dev editable from the bootstrap-synced
+                # local copy so the audit corpus on HOST matches the
+                # version running locally (no PyPI drift). Two-step
+                # to dodge pip's editable-with-extras parsing of `~`:
+                # editable install first (path-only), then non-editable
+                # extras install against the same path picks up the
+                # cli-audit dependencies.
+                f"python -m pip install -e {scitex_dev_remote} --quiet; "
+                f"python -m pip install {scitex_dev_remote}[cli-audit] --quiet; "
                 f"python -m pip install pytest-xdist --quiet || true; "
                 f"if python -c 'import xdist' 2>/dev/null; then "
-                f"  python -m pytest -n auto --tb=short {shlex.quote(test_path)}; "
+                f"  python -m pytest -n auto --tb=short {test_path}; "
                 f"else "
-                f"  python -m pytest --tb=short {shlex.quote(test_path)}; "
+                f"  python -m pytest --tb=short {test_path}; "
                 f"fi"
             )
             ssh_cmd = ["ssh", host, "bash", "-lc", shlex.quote(remote_script)]
@@ -1791,6 +1831,67 @@ def register_ecosystem_commands(main_group):
             f"# test-remote: host={host}, packages={len(targets)}, "
             f"jobs={jobs}, audit_only={audit_only}"
         )
+
+        # Bootstrap: sync the local scitex-dev checkout once, before any
+        # per-package run. Each per-package venv installs scitex-dev
+        # editable from this synced copy so the audit corpus on HOST
+        # exactly matches what's running locally — no PyPI version drift.
+        scitex_dev_local = get_local_path("scitex-dev")
+        if scitex_dev_local is None or not scitex_dev_local.exists():
+            click.echo("error: local scitex-dev checkout missing", err=True)
+            raise SystemExit(2)
+        scitex_dev_remote = f"{remote_base}/scitex-dev/src"
+        click.echo("# bootstrap: rsync local scitex-dev → HOST")
+        boot_mkdir = _sp.run(
+            ["ssh", host, f"mkdir -p {scitex_dev_remote}"],
+            capture_output=True,
+            text=True,
+        )
+        if boot_mkdir.returncode != 0:
+            click.echo(f"error: bootstrap mkdir failed: {boot_mkdir.stderr}", err=True)
+            raise SystemExit(boot_mkdir.returncode)
+        boot_rsync = _sp.run(
+            [
+                "rsync",
+                "-az",
+                "--delete",
+                *excl_args,
+                f"{scitex_dev_local}/",
+                f"{host}:{scitex_dev_remote}/",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if boot_rsync.returncode != 0:
+            click.echo(f"error: bootstrap rsync failed: {boot_rsync.stderr}", err=True)
+            raise SystemExit(boot_rsync.returncode)
+
+        # Bootstrap (continued): write a registry override YAML on HOST
+        # so audit-all reads paths under our sandbox, not HOST's own
+        # ~/proj/<pkg> working checkouts. Without this, audit-project
+        # (PS134/PS210/...) reads HOST-local paths and audits the wrong
+        # files. The override flows in via SCITEX_DEV_REGISTRY in the
+        # remote_script env (per scitex-dev's §6b cascade).
+        import yaml as _yaml
+
+        override = {}
+        for nm, info in ECOSYSTEM.items():
+            ov = dict(info)
+            ov["local_path"] = f"{remote_base}/{nm}/src"
+            override[nm] = ov
+        registry_remote = f"{remote_base}/.ecosystem-override.yaml"
+        registry_yaml = _yaml.safe_dump(override, sort_keys=False)
+        write_cmd = ["ssh", host, f"cat > {registry_remote}"]
+        write_proc = _sp.run(
+            write_cmd, input=registry_yaml, capture_output=True, text=True
+        )
+        if write_proc.returncode != 0:
+            click.echo(
+                f"error: registry override write failed: {write_proc.stderr}",
+                err=True,
+            )
+            raise SystemExit(write_proc.returncode)
+        click.echo(f"# bootstrap: wrote registry override to {registry_remote}")
         results: dict[str, tuple[int, str]] = {}
         with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
             futures = {pool.submit(_run_one, p): p for p in targets}

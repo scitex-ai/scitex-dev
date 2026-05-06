@@ -137,7 +137,7 @@ def _read_bridge_source(package: str) -> str | None:
     """Read `scitex/_mcp_tools/<short>.py`; None if absent."""
     short = _short_name(package)
     try:
-        import scitex._mcp_tools as bridge_pkg
+        import scitex__mcp_tools as bridge_pkg
     except Exception:
         return None
     pkg_dir = Path(getattr(bridge_pkg, "__file__", "")).parent

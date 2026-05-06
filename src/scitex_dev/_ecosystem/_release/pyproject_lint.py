@@ -549,7 +549,7 @@ def check_internal_api_leak(repo: Path, package_name: str) -> list[LintFinding]:
     """Rule E5F2 — flag cross-package imports of private modules.
 
     Pattern that bites:
-        from scitex.stats._utils import p2stars
+        from scitex_stats._utils import p2stars
 
     The umbrella ``scitex.stats`` shim re-exports the public API of
     ``scitex_stats``, but private modules (``_utils``, ``_internal``)
