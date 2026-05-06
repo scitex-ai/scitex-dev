@@ -537,29 +537,45 @@ else:
     )
     @click.pass_context
     def mcp_installation_deprecated(ctx):
-        """(deprecated) Renamed to `show-installation`."""
+        """(deprecated) Renamed to `install`."""
         click.echo(
             "error: `scitex-dev mcp installation` was renamed to "
-            "`scitex-dev mcp show-installation`.\n"
-            "Re-run with: scitex-dev mcp show-installation",
+            "`scitex-dev mcp install`.\n"
+            "Re-run with: scitex-dev mcp install",
             err=True,
         )
         ctx.exit(2)
 
-    @mcp.command("show-installation")
+    @mcp.command(
+        "show-installation",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True},
+    )
+    @click.pass_context
+    def mcp_show_installation_deprecated(ctx):
+        """(deprecated) Renamed to `install`."""
+        click.echo(
+            "error: `scitex-dev mcp show-installation` was renamed to "
+            "`scitex-dev mcp install`.\n"
+            "Re-run with: scitex-dev mcp install",
+            err=True,
+        )
+        ctx.exit(2)
+
+    @mcp.command("install")
     @click.option(
         "--json",
         "as_json",
         is_flag=True,
         help="Emit JSON manifest of MCP install instructions.",
     )
-    def mcp_show_installation(as_json):
+    def mcp_install(as_json):
         """Show installation instructions for MCP server integration.
 
         \b
         Example:
-            $ scitex-dev mcp show-installation
-            $ scitex-dev mcp show-installation --json
+            $ scitex-dev mcp install
+            $ scitex-dev mcp install --json
         """
         if as_json:
             import json as _json
