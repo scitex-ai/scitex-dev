@@ -1662,6 +1662,11 @@ RULE_SEVERITY: dict[str, str] = {
     "§8": "error",
     "§10": "error",
     "§11": "error",
+    # PA304: umbrella imports (scitex.X / import scitex) inside standalone
+    # source. Drags umbrella __init__ + lazy re-export setup into every call
+    # — measurable on NFS-mounted homes (HPC). Codified 2026-05-06 after the
+    # scitex-scholar 2.7s cold-import surfaced on Spartan.
+    "PA304": "error",
 }
 SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}
 

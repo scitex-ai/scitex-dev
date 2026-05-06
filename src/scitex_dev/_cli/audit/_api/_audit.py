@@ -47,6 +47,16 @@ RULES: dict[str, Rule] = {
             "§3",
             "top-level `import` outside try/except may break on missing optional dep",
         ),
+        # §3 Lazy imports / optional deps (continued)
+        Rule(
+            "PA304",
+            "§3",
+            "umbrella import `scitex.<sub>` / `import scitex` inside standalone "
+            "source — drags the umbrella `__init__.py` and its lazy re-export "
+            "machinery into every call. Use `scitex_<sub>` (peer standalone) "
+            "instead. See _skills/general/03_interface_01_python-api/"
+            "11_import-conventions.md.",
+        ),
         # §5 Type hints
         Rule("PA501", "§5", "`from __future__ import annotations` is missing"),
     ]
@@ -169,6 +179,61 @@ def _locate_init(import_name: str) -> Path | None:
         return None
     origin = Path(spec.origin)
     return origin if origin.name == "__init__.py" else None
+
+
+def _audit_umbrella_imports(
+    init_path: Path, distribution: str, import_name: str
+) -> list[Violation]:
+    """PA304 — flag `from scitex.X` / `import scitex.X` / `import scitex`
+    anywhere under the standalone package's source tree.
+
+    The umbrella `scitex` package itself is exempt (its source legitimately
+    references `scitex.<sub>`).
+    """
+    out: list[Violation] = []
+    if import_name == "scitex":
+        return out
+    pkg_root = init_path.parent
+    # Walk every .py under the package source.
+    for py_file in sorted(pkg_root.rglob("*.py")):
+        # Skip vendored/cached/build artifacts.
+        parts = py_file.parts
+        if any(
+            seg in parts
+            for seg in ("__pycache__", "build", "dist", ".tox", "site-packages")
+        ):
+            continue
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        try:
+            tree = ast.parse(text, filename=str(py_file))
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                mod = node.module or ""
+                if mod == "scitex" or mod.startswith("scitex."):
+                    out.append(
+                        Violation(
+                            "PA304",
+                            f"{distribution}: {py_file.relative_to(pkg_root.parent)}:{node.lineno}",
+                            f"from {mod} import ... — replace with peer standalone import",
+                        )
+                    )
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    name = alias.name
+                    if name == "scitex" or name.startswith("scitex."):
+                        out.append(
+                            Violation(
+                                "PA304",
+                                f"{distribution}: {py_file.relative_to(pkg_root.parent)}:{node.lineno}",
+                                f"import {name} — replace with peer standalone import",
+                            )
+                        )
+    return out
 
 
 def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
@@ -554,6 +619,7 @@ def audit_api(
         )
 
     violations = _audit_init(init_path, distribution)
+    violations.extend(_audit_umbrella_imports(init_path, distribution, import_name))
     if rules:
         violations = [v for v in violations if v.rule in rules]
 

@@ -417,6 +417,21 @@ RULES: dict[str, Rule] = {
                 "with the Four-Freedoms-for-Research footer."
             ),
         ),
+        Rule(
+            "PS139",
+            "§1",
+            (
+                "pyproject.toml lists `scitex` (the umbrella) as a dependency "
+                "or extras member. This creates a circular drag: the umbrella "
+                "depends on standalones, so a standalone depending on the "
+                "umbrella means installing one pulls the entire ecosystem and "
+                "every `import scitex_<pkg>` traverses the umbrella's lazy "
+                "re-export __init__. Replace with the specific peer "
+                "standalone(s) (e.g. `scitex-session>=0.1.0`). See "
+                "`_skills/general/03_interface_01_python-api/"
+                "11_import-conventions.md`."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
             "PS201",
@@ -582,6 +597,7 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS136": "E",  # examples/
     "PS137": "E",  # README.md
     "PS138": "E",  # LICENSE
+    "PS139": "E",  # pyproject.toml depends on scitex umbrella (anti-pattern)
     # src ↔ tests mirror — load-bearing for CI confidence
     "PS201": "E",
     "PS202": "E",
