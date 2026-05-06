@@ -7,6 +7,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.3] — 2026-05-07
+
+### Fixed
+- **Top-level compatibility shims now ship in the wheel:**
+  `scitex_dev.decorators`, `scitex_dev._skills_quality`, and
+  `scitex_dev._skills_quality_pytest`. Consumer packages
+  (`scitex-dataset`, etc.) import these top-level paths; the actual
+  implementations moved to `scitex_dev._ecosystem._skills.*` but the
+  shims preserve the public import surface. v0.11.2 was missing them,
+  so every consumer's CI failed with
+  `ModuleNotFoundError: scitex_dev.decorators` /
+  `scitex_dev._skills_quality_pytest`.
+
 ## [0.11.2] — 2026-05-07
 
 ### Fixed
