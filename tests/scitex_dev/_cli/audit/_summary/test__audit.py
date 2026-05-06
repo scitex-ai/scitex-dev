@@ -397,6 +397,17 @@ class TestIntrospectionCheck:
         def list_tools(as_json):
             pass
 
+        # §1a — shell-completion subcommands mandatory (codified 2026-05-06).
+        @root.command("install-shell-completion")
+        @click.option("--shell", default="bash")
+        def isc(shell):
+            pass
+
+        @root.command("print-shell-completion")
+        @click.option("--shell", default="bash")
+        def psc(shell):
+            pass
+
         return root
 
     def test_complete_tree_passes(self):

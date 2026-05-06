@@ -324,6 +324,20 @@ def _audit_umbrella_imports(
                 return True
         return False
 
+    def _is_umbrella_private(mod: str) -> bool:
+        """`scitex._<name>[…]` — umbrella-private (no peer standalone)."""
+        if not mod.startswith("scitex."):
+            return False
+        first = mod[len("scitex.") :].split(".", 1)[0]
+        return first.startswith("_")
+
+    def _flag(mod: str) -> bool:
+        if mod == "scitex":
+            return True
+        if mod.startswith("scitex.") and not _is_umbrella_private(mod):
+            return True
+        return False
+
     def _scan_module_level(body: list[ast.stmt], py_file: Path) -> None:
         """Walk only top-level statements + control-flow descendants.
         Skip function and class bodies (lazy) and `if __name__ == ...`."""
@@ -336,7 +350,7 @@ def _audit_umbrella_imports(
                 continue
             if isinstance(stmt, ast.ImportFrom):
                 mod = stmt.module or ""
-                if mod == "scitex" or mod.startswith("scitex."):
+                if _flag(mod):
                     out.append(
                         Violation(
                             "PA304",
@@ -347,7 +361,7 @@ def _audit_umbrella_imports(
             elif isinstance(stmt, ast.Import):
                 for alias in stmt.names:
                     name = alias.name
-                    if name == "scitex" or name.startswith("scitex."):
+                    if _flag(name):
                         out.append(
                             Violation(
                                 "PA304",

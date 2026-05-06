@@ -39,6 +39,8 @@ def test_rules_registry_covers_documented_codes():
         "PA202",
         "PA203",
         "PA301",
+        "PA304",  # umbrella imports inside standalone source (2026-05-06)
+        "PA305",  # playwright source must call capture_debug_artifacts_async
         "PA501",
     }
     assert expected == set(RULES)
