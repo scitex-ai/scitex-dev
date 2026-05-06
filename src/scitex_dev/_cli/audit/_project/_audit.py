@@ -1423,7 +1423,7 @@ def audit_project(
         )
         return exit_code
 
-    from ...._audit_disclaimer import emit_disclaimer
+    from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
     if not visible:
         # No findings at the requested severity floor.
@@ -1443,4 +1443,5 @@ def audit_project(
     for v in visible:
         click.echo(v.format())
     emit_disclaimer()
+    emit_skill_hints()
     return exit_code

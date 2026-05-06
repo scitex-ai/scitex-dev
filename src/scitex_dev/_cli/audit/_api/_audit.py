@@ -575,7 +575,7 @@ def audit_api(
         )
         return 0 if not violations else 1
 
-    from ...._audit_disclaimer import emit_disclaimer
+    from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
     if not violations:
         click.echo(f"ok  {distribution}: no Python API violations")
@@ -586,4 +586,5 @@ def audit_api(
     for v in violations:
         click.echo(v.format())
     emit_disclaimer()
+    emit_skill_hints()
     return 1
