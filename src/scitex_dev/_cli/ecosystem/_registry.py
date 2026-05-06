@@ -1165,7 +1165,12 @@ def register_ecosystem_commands(main_group):
         help="Overwrite an existing .scitex/dev/config.yaml.",
     )
     @click.option("--yes", "-y", is_flag=True, help="Confirm destructive write.")
-    def ecosystem_init_config(repo_path, project_types, force, yes):
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print the target path and detected project types without writing.",
+    )
+    def ecosystem_init_config(repo_path, project_types, force, yes, dry_run):
         """Write `.scitex/dev/config.yaml` from the heuristic guess.
 
         \b
@@ -1173,6 +1178,7 @@ def register_ecosystem_commands(main_group):
             $ scitex-dev ecosystem init-config
             $ scitex-dev ecosystem init-config --project-type research --yes
             $ scitex-dev ecosystem init-config --project-type pip --project-type research
+            $ scitex-dev ecosystem init-config --dry-run
         """
         del yes  # accepted for §2 compliance; --force gates overwrite
         from pathlib import Path
@@ -1183,6 +1189,10 @@ def register_ecosystem_commands(main_group):
         types = (
             list(project_types) if project_types else sorted(detect_project_types(repo))
         )
+        if dry_run:
+            target = repo / ".scitex" / "dev" / "config.yaml"
+            click.echo(f"# would write: {target}  (project-type: {', '.join(types)})")
+            return
         try:
             written = write_config(repo, project_types=types, overwrite=force)
         except FileExistsError as e:

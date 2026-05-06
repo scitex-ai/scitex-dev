@@ -569,7 +569,18 @@ else:
         is_flag=True,
         help="Emit JSON manifest of MCP install instructions.",
     )
-    def mcp_install(as_json):
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Accepted for §2 compliance; this command is informational and never mutates state.",
+    )
+    @click.option(
+        "--yes",
+        "-y",
+        is_flag=True,
+        help="Accepted for §2 compliance; this command is informational and never mutates state.",
+    )
+    def mcp_install(as_json, dry_run, yes):
         """Show installation instructions for MCP server integration.
 
         \b
@@ -577,6 +588,7 @@ else:
             $ scitex-dev mcp install
             $ scitex-dev mcp install --json
         """
+        del dry_run, yes  # accepted for §2 mutation flags; this verb is read-only
         if as_json:
             import json as _json
 

@@ -25,6 +25,7 @@ GITIGNORED/
 
 # WIP directories
 scitex/
+.scitex/
 src/scitex_dev/app/
 
 # Hook logs and pending
