@@ -450,6 +450,12 @@ def skills_click_group(package: str, name: str = "skills"):
             total = sum(len(v) for v in exported.values())
             click.echo(f"Exported {total} files for {package} to {target}")
 
+    # `install` is the audit-cli §3 canonical verb name for materialising
+    # cached resources to the user's filesystem; we keep `export` as a
+    # back-compat alias and bind both to the same callback so existing
+    # docs / muscle memory keep working.
+    skills_grp.add_command(skills_export, name="install")
+
     return skills_grp
 
 
