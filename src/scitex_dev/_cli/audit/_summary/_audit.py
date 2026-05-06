@@ -1649,7 +1649,13 @@ RULE_SEVERITY: dict[str, str] = {
     "§3": "error",
     "§4": "error",
     "§5": "error",
-    "§6": "error",
+    # §6 (Python API ↔ MCP tool parity) demoted to warn 2026-05-06:
+    # the >50% threshold fires on utility-heavy packages (scitex-io 87%,
+    # scitex-container 72%) where most APIs are internal helpers nobody
+    # wraps as MCP. Rule is real (parity is the long-term goal) but the
+    # false-positive rate makes it inappropriate as an error gate. Promote
+    # back once the threshold is tightened or per-pkg allowlists are added.
+    "§6": "warn",
     "§6a": "error",
     "§6b": "error",
     "§7": "error",
