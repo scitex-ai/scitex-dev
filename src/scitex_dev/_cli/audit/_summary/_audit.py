@@ -381,6 +381,46 @@ def _check_help_format(cmd: click.BaseCommand, full: str, out: list[Violation]) 
         )
 
 
+# Version pattern accepted in the root help text. Matches the canonical
+# `<cli> (vX.Y.Z) — ...` form used by scitex-dev/scitex-io as well as a
+# bare `vX.Y.Z` token elsewhere in the help. Pre-release suffixes
+# (rc1, dev0, post1, a2, b3) are accepted because importlib.metadata
+# returns them verbatim.
+_VERSION_IN_HELP_RE = re.compile(
+    r"\bv?\d+\.\d+(?:\.\d+)?(?:[.\-_]?(?:rc|dev|post|a|b)\d+)?\b"
+)
+
+
+def _check_root_help_has_version(
+    cmd: click.BaseCommand, full: str, out: list[Violation]
+) -> None:
+    """§4 — the root command's --help MUST include the package version.
+
+    Operators reading `<cli> --help` should see which version they're
+    on without a separate `<cli> --version` call. The convention is the
+    canonical opening line `<cli> (vX.Y.Z) — <one-line description>`,
+    but any `vX.Y.Z` token in the root command's help/epilog satisfies
+    the rule. (Pass-through entry points are exempt — checked by the
+    caller.)
+    """
+    blocks = []
+    for attr in ("help", "epilog"):
+        v = getattr(cmd, attr, None)
+        if v:
+            blocks.append(v)
+    text = "\n".join(blocks)
+    if not text or not _VERSION_IN_HELP_RE.search(text):
+        out.append(
+            Violation(
+                full,
+                "§4",
+                "root --help does not show the package version — add the "
+                "canonical opening line `<cli> (vX.Y.Z) — <description>` "
+                "(use importlib.metadata.version() so the literal stays in sync)",
+            )
+        )
+
+
 # Convention flags — when a leaf exposes one of these capabilities, it MUST
 # use the canonical spelling per `08_universal-flags.md` "Convention flags"
 # section. Maps non-canonical synonyms → canonical form.
@@ -539,6 +579,12 @@ def _walk(
 
     # §2 universal flag presence.
     _check_universal_flags(cmd, full, is_root, out)
+
+    # §4 root --help must show the package version. Pass-through entry
+    # points are exempt because their help is forwarded verbatim from
+    # the upstream tool.
+    if is_root and not _is_pass_through(cmd):
+        _check_root_help_has_version(cmd, full, out)
 
     if not is_root:
         # §1c — pass-through entry points are exempt from §1 / §1d / §4.
