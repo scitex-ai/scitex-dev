@@ -158,6 +158,13 @@ class TestBridgePattern:
 
         src = "@mcp.tool()\nasync def audio_speak(text: str) -> str:\n    pass\n"
         monkeypatch.setattr(mod, "_read_bridge_source", lambda pkg: src)
+        # Also mock `_resolve_mcp_server` — the bridge-pattern check
+        # consults it to decide whether hand-wrap is the only available
+        # option (when the standalone has no `_mcp_server.mcp`, hand-wrap
+        # is forgiven). Force a non-None to keep the §1 enforcement
+        # active regardless of which peer standalones happen to be
+        # installed in the test env (locally vs CI differ).
+        monkeypatch.setattr(mod, "_resolve_mcp_server", lambda pkg: object())
         out: list[Violation] = []
         _check_bridge_pattern("scitex-audio", out)
         assert len(out) == 1
