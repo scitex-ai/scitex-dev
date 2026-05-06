@@ -1740,21 +1740,20 @@ def run_audit(
     timeout: float = 30.0,
 ) -> int:
     """Audit a single package (single-target mode)."""
-    # Archived packages are read-only history — skip like audit-project does.
+    # Category-aware skip: archived packages, templates, etc. — see
+    # `scitex_dev._ecosystem._core.should_skip_audit` for the per-auditor
+    # category map.
     try:
-        from ...._ecosystem import ECOSYSTEM
+        from ...._ecosystem import should_skip_audit
     except ImportError:
-        ECOSYSTEM = {}
-    if ECOSYSTEM.get(package, {}).get("archived"):
+        should_skip_audit = lambda *_a, **_k: (False, "")  # noqa: E731
+    skip, reason = should_skip_audit(package, "audit-cli")
+    if skip:
         if output_json:
-            rec = {
-                "package": package,
-                "status": "archived",
-                "violations": [],
-            }
+            rec = {"package": package, "status": f"skip-{reason}", "violations": []}
             _emit_json([rec], registry_provenance or "single-package mode")
         else:
-            click.echo(f"skip  {package}: archived")
+            click.echo(f"skip  {package}: {reason}")
         return 0
 
     status, violations = _audit_one(package, behavioral=behavioral, timeout=timeout)

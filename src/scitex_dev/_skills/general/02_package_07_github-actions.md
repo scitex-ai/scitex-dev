@@ -172,18 +172,55 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install -e ".[dev]"
-      - run: pip install scitex-dev[cli-audit]
+      - run: pip install "scitex-dev[cli-audit]"
       - name: Run audit-all
         run: scitex-dev ecosystem audit-all <pkg-short-name>
 ```
 
 Where `<pkg-short-name>` matches the entry in `scitex_dev._ecosystem._core.ECOSYSTEM` (e.g. `scitex-io`, `scitex-cloud`, `scitex-hpc`, plus branded packages like `socialia` and `figrecipe`).
 
+The workflow runs the command verbatim — no `continue-on-error`. As of
+2026-05-06 every actionable audit rule is `error` severity, and
+`scitex-dev ecosystem audit-all` returns `1` whenever any sub-auditor
+reports an error-severity violation. The job goes red ⇔ the exit code
+is nonzero ⇔ violations exist.
+
 ### Failure policy
 
-- **PR**: audit-all warnings are visible but **do not block merge** (`continue-on-error: true`) until the package is fully green.
-- **Push to main/develop**: audit-all warnings are reported but never block (the test workflow + sphinx-quality are the merge gates).
-- **Once a package reaches 0 warnings**, flip `continue-on-error: false` to lock the rule in. Drift after that point is a hard CI fail.
+The exit code is the single source of truth:
+
+| Sub-auditor exit | Severity present                  | audit-all exit |
+|------------------|-----------------------------------|----------------|
+| 0                | none, or warn-only                | 0 (green)      |
+| 1                | at least one error-severity rule  | 1 (red)        |
+| 2                | not-auditable / install error     | 1 (red)        |
+
+`continue-on-error` is **not** used. Visibility (red ❌ in the PR check
+list) and merge-gating (whether the red blocks merge) are kept
+separate:
+
+- **Until a package is clean.** Don't add `audit` to the
+  branch-protection required-checks list. The job goes red on every
+  violation but doesn't block merges — drift stays visible without
+  stopping work. Suppressing the red with `continue-on-error: true`
+  hides the signal entirely (the workflow appears green ✅) and is
+  forbidden.
+- **Once a package reaches 0 errors.** Add `audit` to required checks
+  in branch-protection settings so any new red blocks merge. Demoting a
+  rule back to `warn` is only acceptable after a documented false
+  positive lands (and is logged in the rule's table comment).
+
+### Per-package adoption
+
+Use the helper to materialise the canonical workflow:
+
+```bash
+scitex-dev ecosystem write-ci-workflow <pkg-short-name>
+```
+
+This writes `.github/workflows/audit.yml` with the package name
+already filled in, refusing to overwrite an existing file unless
+`--force` is passed.
 
 ### Adoption status
 

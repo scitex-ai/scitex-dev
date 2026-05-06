@@ -640,6 +640,18 @@ def run_audit_mcp(
     timeout: float = 30.0,
 ) -> int:
     """Audit a single package's MCP surface (single-target mode)."""
+    try:
+        from ...._ecosystem import should_skip_audit
+    except ImportError:
+        should_skip_audit = lambda *_a, **_k: (False, "")  # noqa: E731
+    skip, reason = should_skip_audit(package, "audit-mcp-tools")
+    if skip:
+        if output_json:
+            rec = {"package": package, "status": f"skip-{reason}", "violations": []}
+            _emit_json([rec], "single-package mode (mcp)")
+        else:
+            click.echo(f"skip  {package}: {reason}")
+        return 0
     status, violations = _audit_one_mcp(package, behavioral=behavioral, timeout=timeout)
     violations = _filter_violations(violations, rules, exclude, min_severity)
     if not violations and status == "warn":

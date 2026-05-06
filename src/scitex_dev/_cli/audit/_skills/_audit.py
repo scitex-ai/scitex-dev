@@ -410,12 +410,13 @@ def audit_skills(
     int
         Exit code: 0 = no violations, 1 = violations, 2 = could not locate.
     """
-    # Archived packages are read-only history — skip like audit-project does.
+    # Category-aware skip — see `should_skip_audit` in _ecosystem._core.
     try:
-        from ...._ecosystem import ECOSYSTEM
+        from ...._ecosystem import should_skip_audit
     except ImportError:
-        ECOSYSTEM = {}
-    if ECOSYSTEM.get(distribution, {}).get("archived"):
+        should_skip_audit = lambda *_a, **_k: (False, "")  # noqa: E731
+    skip, reason = should_skip_audit(distribution, "audit-skills")
+    if skip:
         if json_out:
             import json
 
@@ -424,14 +425,14 @@ def audit_skills(
                     {
                         "distribution": distribution,
                         "skills_dir": None,
-                        "archived": True,
+                        "skipped": reason,
                         "violations": [],
                     },
                     indent=2,
                 )
             )
         else:
-            click.echo(f"skip  {distribution}: archived")
+            click.echo(f"skip  {distribution}: {reason}")
         return 0
 
     skills_dir = _locate_skills_dir(distribution)

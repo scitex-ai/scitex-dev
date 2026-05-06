@@ -1328,17 +1328,18 @@ def audit_project(
         )
         return 2
 
-    # Look up the registry entry to decide which rules apply.
+    # Category-aware skip — see `should_skip_audit` in _ecosystem._core.
     try:
-        from ...._ecosystem import ECOSYSTEM
+        from ...._ecosystem import ECOSYSTEM, should_skip_audit
     except ImportError:
         ECOSYSTEM = {}
-    info = ECOSYSTEM.get(distribution, {})
-    if info.get("archived"):
-        # Archived entries are read-only history — don't flag.
+        should_skip_audit = lambda *_a, **_k: (False, "")  # noqa: E731
+    skip, reason = should_skip_audit(distribution, "audit-project")
+    if skip:
         if not json_out:
-            click.echo(f"skip  {distribution}: archived")
+            click.echo(f"skip  {distribution}: {reason}")
         return 0
+    info = ECOSYSTEM.get(distribution, {})
     category = info.get("category", "library")
     skip_mirror = category in _MIRROR_EXEMPT_CATEGORIES
 
