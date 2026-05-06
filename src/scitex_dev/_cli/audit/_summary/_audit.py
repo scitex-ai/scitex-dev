@@ -1751,7 +1751,10 @@ def _emit_human(package: str, status: str, violations: list[Violation]) -> None:
         )
         return
     if status == "not-found":
-        click.echo(f"error {package}: no console script registered", err=True)
+        # No console script is a legitimate state for utility packages
+        # (types, base/core libraries, etc.) — audit-cli can't enforce
+        # a CLI convention on a package that has no CLI. Surface as info.
+        click.echo(f"info  {package}: no console script — skipped")
         return
     if status.startswith("not-auditable"):
         click.echo(f"error {package}: {status}", err=True)
@@ -1822,8 +1825,11 @@ def run_audit(
         _emit_json([rec], registry_provenance or "single-package mode")
     else:
         _emit_human(package, status, violations)
-    if status == "not-found" or status.startswith("not-auditable"):
+    if status.startswith("not-auditable"):
         return 2
+    if status == "not-found":
+        # Legitimate "no CLI" — exit 0, audit-cli has nothing to enforce.
+        return 0
     # Exit 1 if any violation reaches `error` severity. Warnings alone exit 0.
     return 1 if _max_severity(violations) == "error" else 0
 
