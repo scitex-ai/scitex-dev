@@ -57,6 +57,18 @@ RULES: dict[str, Rule] = {
             "instead. See _skills/general/03_interface_01_python-api/"
             "11_import-conventions.md.",
         ),
+        # §3 Browser-automation debug capture
+        Rule(
+            "PA305",
+            "§3",
+            "module imports `playwright.async_api` (live browser automation) "
+            "but does not call `capture_debug_artifacts_async` — every "
+            "decision point in a Playwright flow must capture screenshot + "
+            "HTML so selector regressions are diagnosable post-mortem. See "
+            "`_skills/general/02_package_09_browser-automation-debugging.md`. "
+            "Wire via `from scitex_browser.debugging import "
+            "capture_debug_artifacts_async`.",
+        ),
         # §5 Type hints
         Rule("PA501", "§5", "`from __future__ import annotations` is missing"),
     ]
@@ -179,6 +191,92 @@ def _locate_init(import_name: str) -> Path | None:
         return None
     origin = Path(spec.origin)
     return origin if origin.name == "__init__.py" else None
+
+
+def _audit_playwright_capture(
+    init_path: Path, distribution: str, import_name: str
+) -> list[Violation]:
+    """PA305 — every module that imports `playwright.async_api` (a sign
+    of live browser automation) must contain at least one
+    `capture_debug_artifacts_async` call. Helper-routed callers can opt
+    in via `from scitex_browser.debugging import capture_debug_artifacts_async`
+    (presence-only check; semantics not enforced).
+
+    The auditor doesn't check call frequency or coverage — just
+    presence-or-absence. Reviewers should still apply the stepwise
+    rule from `02_package_09_browser-automation-debugging.md`.
+    """
+    out: list[Violation] = []
+    # The rule applies to packages that USE playwright in production. We
+    # exempt scitex-browser itself (it's the home of the helper and may
+    # have helper-implementation modules without consumer-style calls).
+    if import_name == "scitex_browser":
+        return out
+    pkg_root = init_path.parent
+    for py_file in sorted(pkg_root.rglob("*.py")):
+        parts = py_file.parts
+        if any(
+            seg in parts
+            for seg in (
+                "__pycache__",
+                "build",
+                "dist",
+                ".tox",
+                "site-packages",
+                "tests",
+                "examples",
+                "docs",
+            )
+        ):
+            continue
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        # Cheap pre-check: skip files that don't even mention playwright.
+        if "playwright" not in text:
+            continue
+        try:
+            tree = ast.parse(text, filename=str(py_file))
+        except SyntaxError:
+            continue
+        imports_playwright = False
+        calls_capture = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                mod = node.module or ""
+                if mod == "playwright.async_api" or mod.startswith(
+                    "playwright.async_api."
+                ):
+                    imports_playwright = True
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "playwright.async_api" or alias.name.startswith(
+                        "playwright.async_api."
+                    ):
+                        imports_playwright = True
+            # Calls — both bare `capture_debug_artifacts_async(...)` and
+            # `something.capture_debug_artifacts_async(...)` (e.g. via
+            # an instance method that delegates).
+            elif isinstance(node, ast.Call):
+                f = node.func
+                if isinstance(f, ast.Name) and f.id == "capture_debug_artifacts_async":
+                    calls_capture = True
+                elif (
+                    isinstance(f, ast.Attribute)
+                    and f.attr == "capture_debug_artifacts_async"
+                ):
+                    calls_capture = True
+        if imports_playwright and not calls_capture:
+            out.append(
+                Violation(
+                    "PA305",
+                    f"{distribution}: {py_file.relative_to(pkg_root.parent)}",
+                    "imports `playwright.async_api` but no "
+                    "`capture_debug_artifacts_async` call in module",
+                )
+            )
+    return out
 
 
 def _audit_umbrella_imports(
@@ -620,6 +718,7 @@ def audit_api(
 
     violations = _audit_init(init_path, distribution)
     violations.extend(_audit_umbrella_imports(init_path, distribution, import_name))
+    violations.extend(_audit_playwright_capture(init_path, distribution, import_name))
     if rules:
         violations = [v for v in violations if v.rule in rules]
 
