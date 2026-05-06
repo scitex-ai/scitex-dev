@@ -365,7 +365,13 @@ _PLAIN_MOUNT_CALL = re.compile(r"\.\s*mount\s*\(")
 
 
 def _check_bridge_pattern(package: str, out: list[Violation]) -> None:
-    """§1 — umbrella bridge must use `safe_mount` (or equivalent), not hand-wrap."""
+    """§1 — umbrella bridge must use `safe_mount` (or equivalent), not hand-wrap.
+
+    Exempt when the standalone has no `<pkg>._mcp_server.mcp`: the bridge
+    cannot `safe_mount` a non-existent server, so hand-wrapping is the
+    only available option. The §1 rule only applies when the bridge
+    *could* mount but chose not to.
+    """
     src = _read_bridge_source(package)
     if src is None:
         # No bridge → not flagged here; presence is checked under §6 parity.
@@ -376,6 +382,11 @@ def _check_bridge_pattern(package: str, out: list[Violation]) -> None:
     has_hand_wrap = bool(_HAND_WRAP_DECORATOR.search(src))
 
     if has_hand_wrap and not (has_safe_mount or has_plain_mount):
+        # Standalone-side check: if `<pkg>._mcp_server.mcp` doesn't
+        # resolve, hand-wrap is the only option. Don't penalise the
+        # standalone for the umbrella's choice when no alternative exists.
+        if _resolve_mcp_server(package) is None:
+            return
         out.append(
             Violation(
                 package,
