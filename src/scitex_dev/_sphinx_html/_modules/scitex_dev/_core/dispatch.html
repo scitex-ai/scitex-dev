@@ -535,6 +535,12 @@
             <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">exported</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
             <span class="n">click</span><span class="o">.</span><span class="n">echo</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Exported </span><span class="si">{</span><span class="n">total</span><span class="si">}</span><span class="s2"> files for </span><span class="si">{</span><span class="n">package</span><span class="si">}</span><span class="s2"> to </span><span class="si">{</span><span class="n">target</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 
+    <span class="c1"># `install` is the audit-cli §3 canonical verb name for materialising</span>
+    <span class="c1"># cached resources to the user&#39;s filesystem; we keep `export` as a</span>
+    <span class="c1"># back-compat alias and bind both to the same callback so existing</span>
+    <span class="c1"># docs / muscle memory keep working.</span>
+    <span class="n">skills_grp</span><span class="o">.</span><span class="n">add_command</span><span class="p">(</span><span class="n">skills_export</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;install&quot;</span><span class="p">)</span>
+
     <span class="k">return</span> <span class="n">skills_grp</span></div>
 
 
