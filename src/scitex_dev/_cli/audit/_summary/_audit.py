@@ -1591,6 +1591,88 @@ def _ep_value_for(package: str) -> str | None:
     return None
 
 
+def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
+    """§2 — CLI source must not call `click.confirm`, `click.prompt`,
+    `getpass.getpass`, or built-in `input`.
+
+    Mutating actions are gated by `--yes`/`-y` (refuse with non-zero exit
+    otherwise). Read flows are expected to fail loud with a clear error,
+    not pause for input. Agentic / cron / CI invocations cannot answer a
+    Y/n prompt — they hang, then time out — so any blocking-stdin call
+    is a silent reliability bomb.
+
+    Static AST scan over `src/<pkg>/**/*.py`. Skips obvious non-CLI
+    directories (`tests/`, `examples/`, `docs/`).
+    """
+    import ast
+    import importlib.util
+    from pathlib import Path
+
+    import_name = package.replace("-", "_")
+    spec = importlib.util.find_spec(import_name)
+    if spec is None or spec.origin is None:
+        return
+    pkg_root = Path(spec.origin).parent
+    if not pkg_root.exists():
+        return
+
+    forbidden = {
+        (
+            "click",
+            "confirm",
+        ): "click.confirm() — use `--yes`/`-y` and refuse-without-yes instead",
+        (
+            "click",
+            "prompt",
+        ): "click.prompt() — accept the value as a CLI option/flag instead",
+        (
+            "getpass",
+            "getpass",
+        ): "getpass.getpass() — accept secret via env var or --password-file",
+        ("getpass", "getuser"): None,  # informational, not a prompt — exempt
+    }
+    forbidden_bare = {"input"}  # builtin input()
+
+    for py in pkg_root.rglob("*.py"):
+        if any(s in py.parts for s in ("__pycache__", "tests", "examples", "docs")):
+            continue
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
+        except (OSError, SyntaxError):
+            continue
+        rel = py.relative_to(pkg_root.parent)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            f = node.func
+            # click.confirm(...) / getpass.getpass(...)
+            if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+                key = (f.value.id, f.attr)
+                msg = forbidden.get(key)
+                if msg is None and key not in forbidden:
+                    continue
+                if msg is None:
+                    continue  # exempt entry
+                out.append(
+                    Violation(
+                        package,
+                        "§2",
+                        f"interactive prompt at {rel}:{node.lineno} — {msg}",
+                    )
+                )
+            # bare input(...) — exempt if it's `input.button-primary` etc.
+            elif isinstance(f, ast.Name) and f.id in forbidden_bare:
+                out.append(
+                    Violation(
+                        package,
+                        "§2",
+                        f"interactive `input()` at {rel}:{node.lineno} — "
+                        "CLIs must be non-interactive; accept value via "
+                        "option/flag or fail with a clear error.",
+                    )
+                )
+
+
 def _check_startup_speed(
     package: str,
     out: list[Violation],
@@ -1757,6 +1839,7 @@ def _audit_one(
     _check_config_help(cmd, package, out)
     _scan_env_vars(package, out)
     _check_startup_speed(package, out)
+    _check_no_interactive_prompts(package, out)
     _check_cli_framework(package, out)
     _check_option_positional_ordering(package, cmd, out)
     if behavioral:
