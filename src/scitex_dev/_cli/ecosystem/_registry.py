@@ -1605,6 +1605,209 @@ def register_ecosystem_commands(main_group):
             path.write_text(content)
             click.echo(f"wrote {path}")
 
+    @ecosystem.command(
+        "test-remote",
+        epilog=(
+            "Examples:\n"
+            "  $ scitex-dev ecosystem test-remote --host bm198 scitex-io\n"
+            "  $ scitex-dev ecosystem test-remote --host bm198 --all --audit-only\n"
+            "  $ scitex-dev ecosystem test-remote --host bm198 --dry-run scitex-stats\n"
+            "\n"
+            "rsync local checkouts to HOST, SSH in, install (`pip install -e .[dev]`),\n"
+            "run pytest with `-n auto` (xdist when available), stream output, and\n"
+            "propagate the exit code. Excludes `.git/`, `__pycache__/`, `*.egg-info/`,\n"
+            "`_sphinx_html/`, `GITIGNORED/`, `.scitex/`. With `--all`, fans out across\n"
+            "every non-archived ECOSYSTEM package in parallel; failed packages are\n"
+            "summarised at the end. Use this to offload heavy parallel runs to a host\n"
+            "with spare cores when the local box is loaded."
+        ),
+    )
+    @click.argument("packages", nargs=-1)
+    @click.option(
+        "--host",
+        required=True,
+        help="SSH host alias (e.g. `bm198`, `spartan-bm198`). Must be reachable "
+        "via `ssh <host>` non-interactively (use ~/.ssh/config).",
+    )
+    @click.option(
+        "--all",
+        "all_packages",
+        is_flag=True,
+        help="Run on every non-archived ECOSYSTEM package (ignores PACKAGES).",
+    )
+    @click.option(
+        "--audit-only",
+        is_flag=True,
+        help="Only run `tests/develop/test_audit.py`, not the full test tree.",
+    )
+    @click.option(
+        "--jobs",
+        "-j",
+        type=int,
+        default=4,
+        show_default=True,
+        help="Max packages to run concurrently when --all is set.",
+    )
+    @click.option(
+        "--remote-base",
+        default="~/.scitex/dev/test-remote",
+        show_default=True,
+        help=(
+            "Parent directory on HOST where each package is rsynced. "
+            "Default is a sandbox under ~/.scitex/ so HOST's own "
+            "~/proj/<pkg> working checkouts are never touched."
+        ),
+    )
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print the rsync + ssh commands that would run; don't execute.",
+    )
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def ecosystem_test_remote(
+        packages, host, all_packages, audit_only, jobs, remote_base, dry_run, yes
+    ):
+        """Run pytest on HOST against rsynced local checkouts."""
+        del yes  # non-destructive on local; remote installs are idempotent
+        import shlex
+        import subprocess as _sp
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        from ..._ecosystem import ECOSYSTEM, get_local_path
+
+        if all_packages:
+            targets = [n for n, info in ECOSYSTEM.items() if not info.get("archived")]
+        else:
+            if not packages:
+                click.echo("error: no PACKAGES given (and --all not set)", err=True)
+                raise SystemExit(2)
+            targets = list(packages)
+            for n in targets:
+                if n not in ECOSYSTEM:
+                    click.echo(f"error: '{n}' not in ECOSYSTEM", err=True)
+                    raise SystemExit(2)
+
+        # rsync exclusions — keep payload small and avoid shipping build artefacts
+        # that would confuse a fresh install on the remote.
+        rsync_excludes = [
+            ".git/",
+            "__pycache__/",
+            "*.egg-info/",
+            "_sphinx_html/",
+            "GITIGNORED/",
+            ".scitex/",
+            ".pytest_cache/",
+            ".mypy_cache/",
+            ".ruff_cache/",
+            "build/",
+            "dist/",
+            "*.pyc",
+        ]
+        excl_args = []
+        for e in rsync_excludes:
+            excl_args.extend(["--exclude", e])
+
+        test_path = "tests/develop/" if audit_only else "tests/"
+
+        def _run_one(pkg: str) -> tuple[str, int, str]:
+            local = get_local_path(pkg)
+            if local is None or not local.exists():
+                return pkg, 2, f"local checkout missing: {local}"
+            # Per-package layout on HOST. Source and venv live in sibling
+            # subtrees so rsync --delete on `src/` never wipes the venv.
+            #   <remote_base>/<pkg>/src/     ← rsync target (working tree)
+            #   <remote_base>/<pkg>/.venv/   ← persistent per-package venv
+            remote_root = f"{remote_base}/{pkg}"
+            remote_src = f"{remote_root}/src"
+            remote_venv = f"{remote_root}/.venv"
+            ssh_mkdir = [
+                "ssh",
+                host,
+                "mkdir",
+                "-p",
+                shlex.quote(remote_src),
+            ]
+            rsync_cmd = [
+                "rsync",
+                "-az",
+                "--delete",
+                *excl_args,
+                f"{local}/",
+                f"{host}:{remote_src}/",
+            ]
+            # Remote one-liner:
+            #   1. create the per-package venv if missing,
+            #   2. activate it,
+            #   3. `pip install -e .[dev]` (with bare-`.` fallback) +
+            #      scitex-dev[cli-audit] for the audit gate,
+            #   4. pytest -n auto when xdist is available, otherwise serial.
+            remote_script = (
+                f"set -e; "
+                f"if [ ! -f {shlex.quote(remote_venv)}/bin/activate ]; then "
+                f"  python3 -m venv {shlex.quote(remote_venv)}; "
+                f"fi; "
+                f". {shlex.quote(remote_venv)}/bin/activate; "
+                f"cd {shlex.quote(remote_src)}; "
+                f"python -m pip install --quiet --upgrade pip; "
+                f"python -m pip install -e '.[dev]' --quiet || "
+                f"python -m pip install -e . --quiet; "
+                f"python -m pip install 'scitex-dev[cli-audit]' --quiet; "
+                f"python -m pip install pytest-xdist --quiet || true; "
+                f"if python -c 'import xdist' 2>/dev/null; then "
+                f"  python -m pytest -n auto --tb=short {shlex.quote(test_path)}; "
+                f"else "
+                f"  python -m pytest --tb=short {shlex.quote(test_path)}; "
+                f"fi"
+            )
+            ssh_cmd = ["ssh", host, "bash", "-lc", shlex.quote(remote_script)]
+
+            if dry_run:
+                lines = [
+                    "# " + " ".join(shlex.quote(a) for a in ssh_mkdir),
+                    "# " + " ".join(shlex.quote(a) for a in rsync_cmd),
+                    "# " + " ".join(shlex.quote(a) for a in ssh_cmd),
+                ]
+                return pkg, 0, "\n".join(lines)
+
+            # mkdir + rsync (sequential — required before ssh)
+            for cmd in (ssh_mkdir, rsync_cmd):
+                r = _sp.run(cmd, capture_output=True, text=True)
+                if r.returncode != 0:
+                    return pkg, r.returncode, r.stderr.strip() or r.stdout.strip()
+            # pytest run — capture output for the parallel summary
+            r = _sp.run(ssh_cmd, capture_output=True, text=True)
+            tail = (r.stdout + r.stderr).strip().splitlines()
+            tail = "\n".join(tail[-25:]) if len(tail) > 25 else "\n".join(tail)
+            return pkg, r.returncode, tail
+
+        if dry_run:
+            for pkg in targets:
+                _, _, out = _run_one(pkg)
+                click.echo(f"--- {pkg} ---")
+                click.echo(out)
+            return
+
+        click.echo(
+            f"# test-remote: host={host}, packages={len(targets)}, "
+            f"jobs={jobs}, audit_only={audit_only}"
+        )
+        results: dict[str, tuple[int, str]] = {}
+        with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+            futures = {pool.submit(_run_one, p): p for p in targets}
+            for f in as_completed(futures):
+                pkg, code, tail = f.result()
+                status = "ok" if code == 0 else f"FAIL({code})"
+                click.echo(f"[{status:>8}] {pkg}")
+                results[pkg] = (code, tail)
+
+        failed = [(p, c, t) for p, (c, t) in results.items() if c != 0]
+        click.echo("")
+        click.echo(f"# summary: {len(results) - len(failed)} ok, {len(failed)} failed")
+        for p, c, t in failed:
+            click.echo(f"\n--- {p} (exit {c}) ---")
+            click.echo(t)
+        raise SystemExit(0 if not failed else 1)
+
     @ecosystem.command("start-dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")
     @click.option("--host", default="0.0.0.0", help="Host to bind to.")
