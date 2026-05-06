@@ -22,6 +22,7 @@ Canonical CLI rules for every `scitex-*` package. Split into focused files; load
 | [03_required-introspection-commands.md](03_required-introspection-commands.md)                  | §1a — `list-python-apis` and `mcp list-tools` with `-v|-vv|-vvv`   |
 | [04_exceptions.md](04_exceptions.md)                                                              | §1b — single-token commands (`doctor`, `repl`/`shell`); banned bare leaves |
 | [05_pass-through.md](05_pass-through.md)                                                          | §1c — verbatim-forwarding entry points exempt from §1              |
+| [05a_umbrella-passthrough.md](05a_umbrella-passthrough.md)                                        | §5b — umbrella `scitex` re-exports standalone click groups; brand rewrite (e.g. socialia → `scitex social`) |
 | [06_noun-verb-catalog.md](06_noun-verb-catalog.md)                                                | §1d — recommended noun & verb vocabulary, synonym avoidance        |
 | [07_audit-cli.md](07_audit-cli.md)                                                                | §1e — `scitex-dev ecosystem audit-cli` linter                      |
 | [08_universal-flags.md](08_universal-flags.md)                                                    | §2 — required flags, no interactive prompts                        |

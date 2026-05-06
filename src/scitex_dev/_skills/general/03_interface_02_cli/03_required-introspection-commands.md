@@ -16,6 +16,7 @@ Every `scitex-*` package CLI **must** expose two introspection commands so that 
 | `list-python-apis`   | Public Python API (`__all__`)               | this file + [03_interface_01_python-api/SKILL.md](../03_interface_01_python-api/SKILL.md) |
 | `mcp list-tools`     | MCP tools registered by the package         | this file + [03_interface_03_mcp/SKILL.md](../03_interface_03_mcp/SKILL.md)        |
 | `skills {list, get, install}` | Bundled agent-facing skills (markdown leaves under `_skills/<pkg>/`) | this file + [03_interface_04_skills/SKILL.md](../03_interface_04_skills/SKILL.md) |
+| `install-shell-completion` / `print-shell-completion` | Wires up bash/zsh/fish tab-completion. **Required** — without it, every scitex-* CLI ships without working `<TAB>` completion (the 2026-05-06 scitex-hpc symptom). `install-shell-completion --shell bash` must source the click-generated completion into the user's shell rc; `print-shell-completion --shell bash` prints it for piping. | §1b [04_exceptions.md](04_exceptions.md) |
 
 Both follow the §1 noun-verb grammar:
 
@@ -100,3 +101,4 @@ The §1e auditor should verify:
       `get` accept `--json`; `install` defaults to symlinking
       `_skills/<pkg>/` → `~/.scitex/dev/skills/<pkg>/` and accepts
       `--claude-symlink` to also expose at `~/.claude/skills/scitex/`.
+- [ ] `<cli> install-shell-completion` and `<cli> print-shell-completion` exist; both accept `--shell {bash,zsh,fish}`. `install-shell-completion` writes the click-generated completion to the appropriate shell rc (or `~/.config/<shell>/completions/<cli>`) and prints a one-line "open a new shell" message. `print-shell-completion` prints the snippet without modifying the filesystem (useful for `eval "$(<cli> print-shell-completion --shell bash)"`).

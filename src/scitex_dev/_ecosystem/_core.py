@@ -25,6 +25,16 @@ class PackageInfo(TypedDict, total=False):
     been GitHub-archived (read-only) and superseded. The CLA / quality /
     publish auditors should skip archived entries by default; the entry is
     kept in the registry so historical references resolve.
+
+    `umbrella_subcommand` (optional) — the name this package mounts as
+    under the umbrella ``scitex`` CLI / MCP server. For ``scitex-<x>`` the
+    default is the part after ``scitex-`` (so ``scitex-dataset`` →
+    ``dataset``). Branded packages without the prefix (``socialia`` →
+    ``social``, ``figrecipe`` → ``plt``) MUST set this explicitly; the
+    umbrella shim and ``audit-cli §5b`` / ``audit-mcp-tools §1`` read it
+    to know how to rewrite the program name and validate the mount
+    namespace. See
+    ``_skills/general/03_interface_02_cli/05a_umbrella-passthrough.md``.
     """
 
     local_path: str
@@ -33,6 +43,7 @@ class PackageInfo(TypedDict, total=False):
     import_name: str
     category: str
     archived: bool
+    umbrella_subcommand: str
 
 
 # Ordered dict - order matters for display
