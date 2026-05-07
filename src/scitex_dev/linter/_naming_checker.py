@@ -1,13 +1,13 @@
 """Naming convention and hardcoding checks for SciTeX linter.
 
 Rules:
-  S007 — load_configs() result should use UPPER_CASE variable name
-  S008 — Magic number in module scope; consider moving to config/
+  _lk("STX-S007") — load_configs() result should use UPPER_CASE variable name
+  _lk("STX-S008") — Magic number in module scope; consider moving to config/
 """
 
 import ast
 
-from ._rule_tables import S007, S008
+from ._rules import lookup as _lk
 
 # Trivial numeric constants that are not magic numbers
 _TRIVIAL_NUMBERS = frozenset({0, 1, -1, 0.0, 1.0, -1.0, 2, 0.5, 100})
@@ -64,7 +64,7 @@ def check_config_naming(checker, node: ast.Assign) -> None:
     for target in node.targets:
         if isinstance(target, ast.Name) and not target.id.isupper():
             line = checker._get_source(node.lineno)
-            checker._add(S007, node.lineno, node.col_offset, line)
+            checker._add(_lk("STX-S007"), node.lineno, node.col_offset, line)
 
 
 def check_magic_numbers(checker, node: ast.Assign) -> None:
@@ -110,4 +110,4 @@ def check_magic_numbers(checker, node: ast.Assign) -> None:
         return
 
     line = checker._get_source(node.lineno)
-    checker._add(S008, node.lineno, node.col_offset, line)
+    checker._add(_lk("STX-S008"), node.lineno, node.col_offset, line)

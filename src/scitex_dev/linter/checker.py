@@ -11,20 +11,8 @@ from . import rules
 from ._rule_tables import AXES_HINTS as _AXES_HINTS
 from ._rule_tables import AXES_SKIP as _AXES_SKIP
 from ._rule_tables import CALL_RULES as _CALL_RULES
-from ._rule_tables import (
-    I001,
-    I002,
-    I003,
-    I006,
-    I007,
-    S001,
-    S002,
-    S003,
-    S004,
-    S005,
-    S006,
-)
 from ._rule_tables import PRINT_RULE as _PRINT_RULE
+from ._rules import lookup as _lk
 from .rules import Rule
 
 
@@ -159,19 +147,19 @@ class SciTeXChecker(ast.NodeVisitor):
 
         # import matplotlib.pyplot as plt
         if "matplotlib.pyplot" in module_name:
-            self._add(I001, node.lineno, node.col_offset, line)
+            self._add(_lk("STX-I001"), node.lineno, node.col_offset, line)
 
         if module_name == "argparse" and self._is_script:
-            self._add(S003, node.lineno, node.col_offset, line)
+            self._add(_lk("STX-S003"), node.lineno, node.col_offset, line)
 
         if module_name == "pickle":
-            self._add(I003, node.lineno, node.col_offset, line)
+            self._add(_lk("STX-I003"), node.lineno, node.col_offset, line)
 
         if module_name == "random":
-            self._add(I006, node.lineno, node.col_offset, line)
+            self._add(_lk("STX-I006"), node.lineno, node.col_offset, line)
 
         if module_name == "logging":
-            self._add(I007, node.lineno, node.col_offset, line)
+            self._add(_lk("STX-I007"), node.lineno, node.col_offset, line)
 
     def _check_import_from(self, module: str, node: ast.ImportFrom) -> None:
         """Check `from X import Y` statements."""
@@ -181,24 +169,24 @@ class SciTeXChecker(ast.NodeVisitor):
         if module == "matplotlib":
             for alias in node.names:
                 if alias.name == "pyplot":
-                    self._add(I001, node.lineno, node.col_offset, line)
+                    self._add(_lk("STX-I001"), node.lineno, node.col_offset, line)
                     break
         elif module and "matplotlib.pyplot" in module:
-            self._add(I001, node.lineno, node.col_offset, line)
+            self._add(_lk("STX-I001"), node.lineno, node.col_offset, line)
 
         # from scipy import stats / from scipy.stats import *
         if module in ("scipy", "scipy.stats"):
             if module == "scipy":
                 for alias in node.names:
                     if alias.name == "stats":
-                        self._add(I002, node.lineno, node.col_offset, line)
+                        self._add(_lk("STX-I002"), node.lineno, node.col_offset, line)
                         break
             else:
-                self._add(I002, node.lineno, node.col_offset, line)
+                self._add(_lk("STX-I002"), node.lineno, node.col_offset, line)
 
         # from argparse import *
         if module == "argparse" and self._is_script:
-            self._add(S003, node.lineno, node.col_offset, line)
+            self._add(_lk("STX-S003"), node.lineno, node.col_offset, line)
 
     # -- Try/Except visitor (EH001) --
 
@@ -498,7 +486,7 @@ class SciTeXChecker(ast.NodeVisitor):
                     return
         # No int return found
         line = self._get_source(node.lineno)
-        self._add(S004, node.lineno, node.col_offset, line)
+        self._add(_lk("STX-S004"), node.lineno, node.col_offset, line)
 
     def _check_injected_params(self, node: ast.FunctionDef) -> None:
         """Check that @stx.session function declares all INJECTED parameters."""
@@ -507,16 +495,17 @@ class SciTeXChecker(ast.NodeVisitor):
         if missing:
             line = self._get_source(node.lineno)
             missing_str = ", ".join(missing)
+            s006 = _lk("STX-S006")
             dynamic_rule = Rule(
-                id=S006.id,
-                severity=S006.severity,
-                category=S006.category,
+                id=s006.id,
+                severity=s006.severity,
+                category=s006.category,
                 message=(
                     f"@stx.session function missing INJECTED parameters: {missing_str}. "
                     f"All 5 must be declared: CONFIG, COLORS, logger, plt, rngg"
                 ),
-                suggestion=S006.suggestion,
-                requires=S006.requires,
+                suggestion=s006.suggestion,
+                requires=s006.requires,
             )
             self._add(dynamic_rule, node.lineno, node.col_offset, line)
 
@@ -549,15 +538,15 @@ class SciTeXChecker(ast.NodeVisitor):
             return self.issues
 
         if not self._has_main_guard:
-            self._add(S002, 1, 0, "")
+            self._add(_lk("STX-S002"), 1, 0, "")
 
         if self._has_main_guard and not (
             self._has_session_decorator or self._has_module_decorator
         ):
-            self._add(S001, 1, 0, "")
+            self._add(_lk("STX-S001"), 1, 0, "")
 
         if self._has_main_guard and not self._has_stx_import:
-            self._add(S005, 1, 0, "")
+            self._add(_lk("STX-S005"), 1, 0, "")
 
         # Sort: errors first, then by line
         from .rules import SEVERITY_ORDER

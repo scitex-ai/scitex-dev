@@ -13,15 +13,13 @@ This indirection is what lets the engine drop its `_rules/_io.py`,
 rules with the same id, so removing engine duplicates is safe.
 """
 
-from . import rules
+from . import rules  # noqa: F401  (kept for legacy attribute access)
 
-# Convenience aliases used by checker.py (these clusters still live in
-# the engine; they don't migrate).
-S001, S002, S003 = rules.S001, rules.S002, rules.S003
-S004, S005, S006 = rules.S004, rules.S005, rules.S006
-S007, S008 = rules.S007, rules.S008
-I001, I002, I003 = rules.I001, rules.I002, rules.I003
-I006, I007 = rules.I006, rules.I007
+# Note: previously this module re-exported S001-S008 / I001-I007 as
+# eager aliases (`S001 = rules.S001`). After the engine `_rules/_structure.py`
+# and `_rules/_imports.py` files were deleted, those rules ship from the
+# scitex umbrella plugin instead and the checker resolves them via
+# `lookup("STX-XXX")` directly. The aliases are gone.
 
 # Names that refer to the scitex package (skip linting on these)
 STX_NAMES = frozenset(("stx", "scitex"))
