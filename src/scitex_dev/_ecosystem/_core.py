@@ -267,6 +267,13 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_scholar",
         "category": "library",
     },
+    "scitex-seizure-metrics": {
+        "local_path": "~/proj/scitex-seizure-metrics",
+        "pypi_name": "scitex-seizure-metrics",
+        "github_repo": "ywatanabe1989/scitex-seizure-metrics",
+        "import_name": "scitex_seizure_metrics",
+        "category": "library",
+    },
     "scitex-template": {
         "local_path": "~/proj/scitex-template",
         "pypi_name": "scitex-template",
@@ -525,13 +532,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "pypi_name": "scitex-sh",
         "github_repo": "ywatanabe1989/scitex-sh",
         "import_name": "scitex_sh",
-        "category": "library",
-    },
-    "scitex-skills": {
-        "local_path": "~/proj/scitex-skills",
-        "pypi_name": "scitex-skills",
-        "github_repo": "ywatanabe1989/scitex-skills",
-        "import_name": "scitex_skills",
         "category": "library",
     },
     "scitex-tex": {
