@@ -221,52 +221,9 @@ def check_files(path, as_json, no_color, severity, category):
 
 
 def _do_format(path, check, diff, dry_run, as_json):
-    import difflib
+    from ._format_runner import run as _format_run
 
-    from .fixer import fix_source
-
-    config = load_config(path)
-    target = Path(path)
-    if not target.exists():
-        click.echo(f"Error: {path} not found", err=True)
-        return 2
-
-    files = _collect_files(target, config=config)
-    if not files:
-        click.echo(f"No Python files found in {path}", err=True)
-        return 0
-
-    changed = 0
-    for f in files:
-        original = f.read_text(encoding="utf-8")
-        fixed = fix_source(original, filepath=str(f), config=config)
-        if fixed != original:
-            changed += 1
-            if diff:
-                d = difflib.unified_diff(
-                    original.splitlines(keepends=True),
-                    fixed.splitlines(keepends=True),
-                    fromfile=str(f),
-                    tofile=str(f),
-                )
-                sys.stdout.writelines(d)
-            if check or dry_run:
-                click.echo(f"Would fix {f}")
-            else:
-                f.write_text(fixed, encoding="utf-8")
-                click.echo(f"Fixed {f}")
-
-    if changed == 0:
-        click.echo("All files clean")
-        return 0
-    if check:
-        click.echo(f"\n{changed} file(s) would be changed")
-        return 1
-    if dry_run:
-        click.echo(f"\n{changed} file(s) would be fixed (dry-run)")
-        return 0
-    click.echo(f"\n{changed} file(s) fixed")
-    return 0
+    return _format_run(path, check=check, diff=diff, dry_run=dry_run, as_json=as_json)
 
 
 @main_group.command("format-files")

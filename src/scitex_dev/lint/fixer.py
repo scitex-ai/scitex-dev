@@ -382,25 +382,46 @@ def _fix_io_in_source(source: str, filepath: str = "<stdin>") -> str:
 
 def fix_source(source: str, filepath: str = "<stdin>", config=None) -> str:
     """Auto-fix SciTeX issues in source code. Returns fixed source."""
+    from ._style_fixer import fix_style
+
     source = _fix_s006_in_source(source, filepath, config=config)
     source = _fix_io_in_source(source, filepath)
+    source = fix_style(source)
     return source
+
+
+def _fix_notebook(path: Path, write: bool, config=None) -> tuple:
+    import json
+
+    nb = json.loads(path.read_text(encoding="utf-8"))
+    changed = False
+    for cell in nb.get("cells", []):
+        if cell.get("cell_type") != "code":
+            continue
+        src_list = cell.get("source", [])
+        src = "".join(src_list) if isinstance(src_list, list) else src_list
+        new_src = fix_source(src, filepath=str(path), config=config)
+        if new_src != src:
+            cell["source"] = new_src.splitlines(keepends=True)
+            changed = True
+    if write and changed:
+        path.write_text(json.dumps(nb, indent=1) + "\n", encoding="utf-8")
+    return (nb, changed)
 
 
 def fix_file(filepath: str, write: bool = True, config=None) -> tuple:
     """Fix a file in place. Returns (fixed_source, changed).
 
-    Args:
-        filepath: Path to the Python file.
-        write: If True, write the fixed source back to the file.
-        config: Optional LinterConfig instance.
-
-    Returns:
-        Tuple of (fixed_source, changed) where changed is a bool.
+    Supports ``.py`` and ``.ipynb``. Notebooks are dispatched to
+    ``_fix_notebook``; the returned ``fixed_source`` is the parsed
+    notebook dict in that case.
     """
     path = Path(filepath)
     if not path.exists() or not path.is_file():
         return ("", False)
+
+    if path.suffix == ".ipynb":
+        return _fix_notebook(path, write=write, config=config)
 
     original = path.read_text(encoding="utf-8")
     fixed = fix_source(original, filepath=str(path), config=config)
