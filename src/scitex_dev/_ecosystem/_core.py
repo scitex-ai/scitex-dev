@@ -139,14 +139,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "socialia",
         "category": "external-lib",
     },
-    "scitex-research-template": {
-        "local_path": "~/proj/scitex-research-template",
-        "pypi_name": "scitex-research-template",
-        "github_repo": "ywatanabe1989/scitex-research-template",
-        "import_name": "scitex_research_template",
-        "category": "template",
-        "archived": True,  # superseded by scitex-template
-    },
     "pip-project-template": {
         "local_path": "~/proj/pip-project-template",
         "pypi_name": "pip-project-template",
