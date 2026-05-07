@@ -43,7 +43,7 @@ Read in this order when building or auditing a package. Each section presupposes
 - [01_ecosystem_05_re-export.md](01_ecosystem_05_re-export.md) — Umbrella `scitex.<name>` thin-re-export pattern + lazy-import guard
 - [01_ecosystem_06_local-state-directories.md](01_ecosystem_06_local-state-directories.md) — `<project>/.scitex/<pkg-short>/` + `~/.scitex/<pkg-short>/` layout, precedence, `SCITEX_DIR`, `PathManager`
 - [01_ecosystem_07_license-and-cla.md](01_ecosystem_07_license-and-cla.md) — AGPL-3.0-only SPDX policy, CLA workflow template, `signatures/cla.json` shape (object, not bare array), `pull_request_target` base-branch trap, bootstrap + audit recipes
-- [01_ecosystem_08_linter-plugins.md](01_ecosystem_08_linter-plugins.md) — Each package ships its own lint rules via the `scitex_dev.lint.plugins` entry point; `scitex-dev lint` aggregates. Engine in `scitex_dev.lint` (formerly `scitex-linter`); rules live next to the API they enforce. Doc-block linting (`.md`/`.rst`/`.ipynb`) and ecosystem-wide `lint sweep`.
+- [01_ecosystem_08_linter-plugins.md](01_ecosystem_08_linter-plugins.md) — Each package ships its own lint rules via the `scitex_dev.linter.plugins` entry point; `scitex-dev linter` aggregates. Engine in `scitex_dev.linter` (formerly `scitex-linter`); rules live next to the API they enforce. Doc-block linting (`.md`/`.rst`/`.ipynb`) and ecosystem-wide `lint sweep`.
 
 ### 2. Package — how does *this* `scitex-*` package's repo live on disk?
 Project structure split into one leaf per top-level directory:

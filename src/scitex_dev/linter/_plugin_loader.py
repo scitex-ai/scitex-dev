@@ -40,7 +40,7 @@ def load_plugins():
     # packages can migrate at their own pace. Same plugin registered under
     # both groups is deduplicated by entry-point name.
     seen_names: set = set()
-    for group in ("scitex_dev.lint.plugins", "scitex_linter.plugins"):
+    for group in ("scitex_dev.linter.plugins", "scitex_linter.plugins"):
         for ep in _iter_entry_points(group):
             key = (group, ep.name)
             if ep.name in seen_names:

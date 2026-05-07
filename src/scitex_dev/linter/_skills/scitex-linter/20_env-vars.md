@@ -1,11 +1,11 @@
 ---
 description: |
   [TOPIC] Env Vars
-  [DETAILS] Environment variables read by `scitex-dev lint` (engine, formerly `scitex-linter`) at import / runtime. Prefix is `SCITEX_DEV_LINTER_` — the legacy `SCITEX_LINTER_` prefix is still accepted for one release with a `DeprecationWarning`. Follows the SCITEX_<MODULE>_* convention — see general/10_arch-environment-variables.md.
+  [DETAILS] Environment variables read by `scitex-dev linter` (engine, formerly `scitex-linter`) at import / runtime. Prefix is `SCITEX_DEV_LINTER_` — the legacy `SCITEX_LINTER_` prefix is still accepted for one release with a `DeprecationWarning`. Follows the SCITEX_<MODULE>_* convention — see general/10_arch-environment-variables.md.
 tags: [scitex-linter-env-vars]
 ---
 
-# scitex-dev lint — Environment Variables
+# scitex-dev linter — Environment Variables
 
 Canonical prefix: **`SCITEX_DEV_LINTER_`**. The engine accepts the legacy
 `SCITEX_LINTER_` prefix for the soft-migration window (one release) and
@@ -50,5 +50,5 @@ The following legacy names are still read but emit a `DeprecationWarning`:
 ## Audit
 
 ```bash
-grep -rhoE 'SCITEX_(DEV_)?LINTER_[A-Z0-9_]+' $HOME/proj/scitex-dev/src/scitex_dev/lint/ | sort -u
+grep -rhoE 'SCITEX_(DEV_)?LINTER_[A-Z0-9_]+' $HOME/proj/scitex-dev/src/scitex_dev/linter/ | sort -u
 ```

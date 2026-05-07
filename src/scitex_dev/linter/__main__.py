@@ -1,4 +1,4 @@
-"""Entry point for `python -m scitex_dev.lint`."""
+"""Entry point for `python -m scitex_dev.linter`."""
 
 from .cli import main
 

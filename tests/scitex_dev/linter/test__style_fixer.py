@@ -1,4 +1,4 @@
-"""Tests for `scitex_dev.lint._style_fixer`.
+"""Tests for `scitex_dev.linter._style_fixer`.
 
 Covers the AST-based deletions for STX-P006/P007/P008/P009 + FM002/P004,
 with explicit cases for the regex traps that motivated this fixer:
@@ -12,8 +12,8 @@ from __future__ import annotations
 import json
 
 
-from scitex_dev.lint._style_fixer import fix_style
-from scitex_dev.lint.fixer import fix_file, fix_source
+from scitex_dev.linter._style_fixer import fix_style
+from scitex_dev.linter.fixer import fix_file, fix_source
 
 
 class TestFixStyleKwargs:

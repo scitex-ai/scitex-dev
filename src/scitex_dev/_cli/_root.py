@@ -444,19 +444,20 @@ else:
     register_mcp_commands(main)
 
     # -------------------------------------------------------------------
-    # lint — engine moved here from scitex-linter (soft migration)
+    # linter — engine moved here from scitex-linter (soft migration)
+    # `linter` is a noun per the noun-verb CLI convention (audit-cli §1).
     # -------------------------------------------------------------------
 
     try:
-        from ..lint.cli import main_group as _lint_group
+        from ..linter.cli import main_group as _linter_group
 
-        _lint_group.name = "lint"
-        _lint_group.short_help = (
+        _linter_group.name = "linter"
+        _linter_group.short_help = (
             "AST-based linter (was scitex-linter). Plugins register rules "
-            "via entry-point group `scitex_dev.lint.plugins` "
+            "via entry-point group `scitex_dev.linter.plugins` "
             "(legacy `scitex_linter.plugins` still honoured)."
         )
-        main.add_command(_lint_group)
+        main.add_command(_linter_group)
     except Exception:
         pass
 
