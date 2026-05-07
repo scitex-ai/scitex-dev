@@ -31,7 +31,12 @@ def collect_files(path: Path, recursive: bool = True, config=None) -> list:
         return []
 
     patterns = ("**/*.py", "**/*.ipynb") if recursive else ("*.py", "*.ipynb")
-    skip = set(config.exclude_dirs) if config else set(_DEFAULT_SKIP)
+    # Always skip transient/cache dirs even when the user provides a custom
+    # exclude_dirs — these are never the canonical source and linting them
+    # produces stale duplicate findings.
+    skip = set(_DEFAULT_SKIP)
+    if config and config.exclude_dirs:
+        skip.update(config.exclude_dirs)
 
     files: list = []
     for pattern in patterns:
