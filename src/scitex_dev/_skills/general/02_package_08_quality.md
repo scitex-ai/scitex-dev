@@ -63,3 +63,24 @@ finding ships with a ``fix_hint`` showing the exact pyproject edit.
 The lint is *the source of truth* for ecosystem invariants. When a new
 regression is discovered, the response is to add a rule + unit test —
 not to remind the agent in conversation.
+
+## Code-pattern lint (`scitex-dev lint`)
+
+`pyproject_lint` above checks the *package shape*. For anti-patterns
+inside the **code** (e.g. `np.save` instead of `stx.io.save`,
+`scatter(..., s=10)` style overrides, `@stx.session` examples missing
+INJECTED params), use `scitex-dev lint`:
+
+```bash
+scitex-dev lint check-files src/<pkg>                  # files in this package
+scitex-dev lint sweep --package <pkg> --strict         # README + docs sweep, CI gate
+```
+
+Rules are **owned by the package whose API they enforce** (figrecipe
+ships its own `STX-P*` / `STX-FM*` rules), and `scitex-dev lint`
+aggregates them via the `scitex_dev.lint.plugins` entry point. Add a new
+rule by writing a `get_plugin()` in your package's `_linter_plugin.py` —
+see [`01_ecosystem_08_linter-plugins.md`](01_ecosystem_08_linter-plugins.md)
+for the contract, the `requires=` runtime gate, doc-block linting
+(`.md`/`.rst`/`.ipynb`), and the soft-migration window from
+`scitex-linter`.
