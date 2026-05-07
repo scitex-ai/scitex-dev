@@ -77,6 +77,11 @@ def _violations_for(repo: Path, name: str) -> list[str]:
     )
 
     check_examples_conventions(repo, Violation, out)
+    from scitex_dev._cli.audit._project._check_readme_structure import (
+        check_readme_structure,
+    )
+
+    check_readme_structure(repo, Violation, out)
     return [v.rule for v in out]
 
 
@@ -878,6 +883,178 @@ def test_ps505_silent_when_ipynb_test_uses_nbval(tmp_path):
     )
     rules = _violations_for(repo, "demo")
     assert "PS505" not in rules
+
+
+# ---------------------------------------------------------------------------
+# PS141 / PS142 / PS143 / PS144 — README structure rules
+# ---------------------------------------------------------------------------
+
+
+_README_HEADER = (
+    "# demo\n\n"
+    '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+    '<p align="center"><b>tagline</b></p>\n\n'
+    "<!-- scitex-badges:start --><!-- scitex-badges:end -->\n\n"
+)
+
+
+def _good_pas_table():
+    return (
+        "## Problem and Solution\n\n"
+        "| # | Problem | Solution |\n"
+        "|---|---------|----------|\n"
+        "| 1 | **Hilbert** under-doubles positive freqs at low f0/fs. | "
+        "**Hard-step mask** brings the analytic-signal envelope back to scipy parity at every fs. |\n\n"
+    )
+
+
+def _full_compliant_readme():
+    return (
+        _README_HEADER
+        + _good_pas_table()
+        + "## Installation\n\n```bash\npip install demo\n```\n\n"
+        + "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```\n\n"
+        + "## 2 Interfaces\n\nPython API and CLI.\n\n"
+        + "## Demo\n\n![Hilbert](docs/hilbert.png)\n\n"
+        + "## Part of SciTeX\n\nPart of SciTeX.\n"
+    )
+
+
+def test_ps141_fires_when_demo_section_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(
+        _README_HEADER
+        + _good_pas_table()
+        + "## Installation\n\npip install demo\n\n"
+        + "## Architecture\n\n```\nfile-tree\n├── x\n│   └── y\n```\n\n"
+        + "## 2 Interfaces\n\nx\n\n"
+        + "## Part of SciTeX\n\nx\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS141" in rules
+
+
+def test_ps141_fires_when_demo_section_has_no_visual(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(
+        _full_compliant_readme().replace(
+            "## Demo\n\n![Hilbert](docs/hilbert.png)",
+            "## Demo\n\nLook at this cool thing.",
+        )
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS141" in rules
+
+
+def test_ps141_silent_with_mermaid_demo(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = _full_compliant_readme().replace(
+        "## Demo\n\n![Hilbert](docs/hilbert.png)",
+        "## Demo\n\n```mermaid\ngraph TD\nA-->B\n```",
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS141" not in rules
+
+
+def test_ps142_fires_when_architecture_section_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(
+        _full_compliant_readme().replace(
+            "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```\n\n",
+            "",
+        )
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS142" in rules
+
+
+def test_ps142_fires_when_architecture_section_has_no_diagram(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(
+        _full_compliant_readme().replace(
+            "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```",
+            "## Architecture\n\nThis package is a flat single module.",
+        )
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS142" in rules
+
+
+def test_ps142_silent_with_filetree(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_full_compliant_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS142" not in rules
+
+
+def test_ps143_fires_when_demo_appears_before_installation(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        _README_HEADER
+        + _good_pas_table()
+        + "## Demo\n\n![x](y.png)\n\n"
+        + "## Installation\n\npip install demo\n\n"
+        + "## Architecture\n\n```\nx/\n├── a\n│   └── b\n```\n\n"
+        + "## 2 Interfaces\n\nx\n\n"
+        + "## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS143" in rules
+
+
+def test_ps143_silent_on_canonical_order(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_full_compliant_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS143" not in rules
+
+
+def test_ps144_fires_when_cell_has_no_bold(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = _full_compliant_readme().replace(
+        "| 1 | **Hilbert** under-doubles positive freqs at low f0/fs. | "
+        "**Hard-step mask** brings the analytic-signal envelope back to scipy parity at every fs. |",
+        "| 1 | Hilbert under-doubles positive freqs at low f0/fs. | "
+        "Hard-step mask matches scipy. |",
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS144" in rules
+
+
+def test_ps144_fires_when_entire_cell_is_bold(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = _full_compliant_readme().replace(
+        "| 1 | **Hilbert** under-doubles positive freqs at low f0/fs. | "
+        "**Hard-step mask** brings the analytic-signal envelope back to scipy parity at every fs. |",
+        "| 1 | **Hilbert under-doubles positive freqs at low f0/fs.** | "
+        "**Hard-step mask matches scipy.** |",
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS144" in rules
+
+
+def test_ps144_fires_when_cell_too_long(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    long_text = "x " * 110  # 220+ chars
+    body = _full_compliant_readme().replace(
+        "| 1 | **Hilbert** under-doubles positive freqs at low f0/fs. | "
+        "**Hard-step mask** brings the analytic-signal envelope back to scipy parity at every fs. |",
+        f"| 1 | **Hilbert** {long_text} | **scipy** {long_text} |",
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS144" in rules
+
+
+def test_ps144_silent_on_well_formed_cell(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_full_compliant_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS144" not in rules
 
 
 # ---------------------------------------------------------------------------

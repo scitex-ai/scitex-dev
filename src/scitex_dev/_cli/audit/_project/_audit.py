@@ -433,6 +433,56 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
+            "PS141",
+            "§1",
+            (
+                "README.md is missing a mandatory `## Demo` section "
+                "containing at least one visual element. Accepted (inside "
+                "the section body): Markdown image `![alt](path.png)`, "
+                'HTML `<img src="…">` pointing at a non-shields.io URL, '
+                "or a fenced ```mermaid block. Demos drive discovery; "
+                "every package must show what it does, not just describe "
+                "it."
+            ),
+        ),
+        Rule(
+            "PS142",
+            "§1",
+            (
+                "README.md is missing a mandatory `## Architecture` "
+                "section. Accepted body forms: a fenced ```mermaid block, "
+                "an ASCII text diagram (fenced code block ≥10 lines), a "
+                "file-tree listing (lines containing `├──`/`└──`/`│`), or "
+                "an `<img>` tag. Even small packages should sketch their "
+                "module layout so readers see structure at a glance."
+            ),
+        ),
+        Rule(
+            "PS143",
+            "§1",
+            (
+                "README.md sections do not appear in canonical order. The "
+                "expected order (skipping any section the package omits) "
+                "is: `Problem and Solution` → `Installation` → "
+                "`Architecture` → `<N> Interfaces` → `Demo` → "
+                "`Quick Start` (optional) → `Part of SciTeX`. Re-order "
+                "the H2 headers; drift accumulates fast across packages "
+                "if order is left to taste."
+            ),
+        ),
+        Rule(
+            "PS144",
+            "§1",
+            (
+                "README.md `## Problem and Solution` table cells violate "
+                "bold-emphasis rules. A cell must (a) contain at least "
+                "one `**bold**` span, (b) bold ≤ 30 % of the cell's text "
+                "(bolding entire sentences defeats emphasis), and (c) be "
+                "≤ 200 characters per cell (long prose belongs in section "
+                "body, not a row). Bold the key noun phrase only."
+            ),
+        ),
+        Rule(
             "PS140",
             "§2",
             (
@@ -679,6 +729,8 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS138": "E",  # LICENSE
     "PS139": "E",  # pyproject.toml depends on scitex umbrella (anti-pattern)
     "PS140": "E",  # missing/stale tests/integration/test_cross_package_imports.py
+    "PS141": "E",  # README missing `## Demo` with visual content
+    "PS142": "E",  # README missing `## Architecture` with diagram/tree
     # src ↔ tests mirror — load-bearing for CI confidence
     "PS201": "E",
     "PS202": "E",
@@ -1479,6 +1531,9 @@ def audit_project(
     from ._check_examples import check_examples_conventions
 
     check_examples_conventions(repo_root, Violation, violations)
+    from ._check_readme_structure import check_readme_structure
+
+    check_readme_structure(repo_root, Violation, violations)
     from ._check_dev_extras_complete import check_dev_extras_complete
 
     check_dev_extras_complete(repo_root, Violation, violations)

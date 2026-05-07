@@ -9,6 +9,24 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.11.4] — 2026-05-07
 
+### Added (audit rules — README structure)
+- **PS141** (audit-project) — README.md must have a mandatory `## Demo`
+  section whose body contains at least one visual element (markdown
+  image, non-shield HTML `<img>`, or fenced ```mermaid block).
+- **PS142** (audit-project) — README.md must have a mandatory
+  `## Architecture` section. Accepted body forms: ```mermaid fence,
+  ASCII text diagram (fenced ≥10 lines), file-tree characters
+  (`├──`/`└──`/`│`), or `<img>` tag.
+- **PS143** (audit-project) — README.md sections must appear in the
+  canonical order: `Problem and Solution → Installation →
+  Architecture → <N> Interfaces → Demo → Quick Start → Part of
+  SciTeX`. Optional sections may be skipped; relative order of those
+  present must hold.
+- **PS144** (audit-project) — `## Problem and Solution` table cells
+  must (a) contain ≥1 `**bold**` span, (b) keep bold coverage ≤30%
+  of cell text, and (c) stay ≤200 characters per cell. Bolding entire
+  sentences defeats emphasis; flat prose defeats the table.
+
 ### Added (audit rules — examples chapter)
 - **PS503** (audit-project) — `examples/<n>_*_out/` must contain a
   `FINISHED_SUCCESS/<session_id>/` subdirectory with at least one
