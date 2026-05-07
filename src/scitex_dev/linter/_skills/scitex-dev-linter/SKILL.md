@@ -1,5 +1,5 @@
 ---
-name: scitex-linter
+name: scitex-dev-linter
 description: |
   [WHAT] AST-based linter for reproducible-research Python — 47 built-in
   rules across 7 categories: STX-I (imports), STX-IO (forbid raw
@@ -8,11 +8,11 @@ description: |
   scitex.path, no hardcoded `/home/...`), STX-PA (plot/axes), and more.
   [WHEN] User asks to lint scitex code, check scitex conventions, list
   linter rules, show STX-IO001 meaning, or enforce reproducible-research
-  style; mentions STX-*, scitex-linter, scitex conventions, reproducibility
+  style; mentions STX-*, scitex-dev linter, scitex conventions, reproducibility
   lint.
-  [HOW] `scitex-linter check <path>` (CLI) or `scitex_linter.check(path)`
+  [HOW] `scitex-dev linter check <path>` (CLI) or `scitex_dev.linter.check(path)`
   (Python). Hook integration auto-runs on PreToolUse for Edit/Write.
-tags: [scitex-linter]
+tags: [scitex-dev-linter]
 allowed-tools: mcp__scitex__linter_*
 primary_interface: hook
 interfaces:
@@ -23,7 +23,7 @@ interfaces:
   http: 0
 ---
 
-# scitex-linter
+# scitex-dev linter
 
 > **Interfaces:** Python ⭐ · CLI ⭐⭐ · MCP ⭐ · Skills ⭐⭐ · Hook ⭐⭐⭐ (primary) · HTTP —
 
@@ -35,16 +35,16 @@ The same module is reachable via two install paths. Both forms work at
 runtime; which one a user has depends on their install choice.
 
 ```python
-# Standalone — pip install scitex-linter
-import scitex_linter
-scitex_linter.list_rules(...)
+# Standalone — pip install scitex-dev
+from scitex_dev import linter
+scitex_dev.linter.list_rules(...)
 
 # Umbrella — pip install scitex
 import scitex.linter
 scitex.linter.list_rules(...)
 ```
 
-`pip install scitex-linter` alone does NOT expose the `scitex` namespace;
+`pip install scitex-dev` alone does NOT expose the `scitex` namespace;
 `import scitex.linter` raises `ModuleNotFoundError`. To use the
 `scitex.linter` form, also `pip install scitex`.
 
@@ -57,7 +57,7 @@ rule and empirical verification table.
 - [01_installation.md](01_installation.md) — pip install + extras + smoke verify
 - [02_quick-start.md](02_quick-start.md) — minimal `check-files` example
 - [03_python-api.md](03_python-api.md) — top-level Python surface
-- [04_cli-reference.md](04_cli-reference.md) — `scitex-linter` subcommand summary
+- [04_cli-reference.md](04_cli-reference.md) — `scitex-dev linter` subcommand summary
 
 ### Core
 - [06_quick-start.md](06_quick-start.md) — basic usage (legacy detail)
@@ -70,8 +70,8 @@ rule and empirical verification table.
 ## CLI
 
 ```bash
-scitex-linter check [path]
-scitex-linter list-rules
+scitex-dev linter check [path]
+scitex-dev linter list-rules
 ```
 
 ## MCP Tools
@@ -85,4 +85,4 @@ scitex-linter list-rules
 
 ## Environment
 
-- [20_env-vars.md](20_env-vars.md) — SCITEX_* env vars read by scitex-linter at runtime
+- [20_env-vars.md](20_env-vars.md) — SCITEX_* env vars read by scitex-dev linter at runtime

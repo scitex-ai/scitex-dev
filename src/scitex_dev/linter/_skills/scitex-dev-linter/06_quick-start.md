@@ -2,13 +2,13 @@
 description: |
   [TOPIC] Quick Start
   [DETAILS] Basic linter usage — check files, list rules.
-tags: [scitex-linter-quick-start]
+tags: [scitex-dev-linter-quick-start]
 ---
 
 # Quick Start
 
 ```python
-from scitex_linter import list_rules
+from scitex_dev.linter import list_rules
 
 # List all available rules
 rules = list_rules()
@@ -23,7 +23,7 @@ plot_rules = list_rules(category="plot")
 
 ```bash
 # CLI
-scitex-linter check src/
-scitex-linter check src/my_script.py
-scitex-linter list-rules
+scitex-dev linter check src/
+scitex-dev linter check src/my_script.py
+scitex-dev linter list-rules
 ```

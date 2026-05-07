@@ -1,8 +1,8 @@
 ---
 description: |
   [TOPIC] Env Vars
-  [DETAILS] Environment variables read by `scitex-dev linter` (engine, formerly `scitex-linter`) at import / runtime. Prefix is `SCITEX_DEV_LINTER_` — the legacy `SCITEX_LINTER_` prefix is still accepted for one release with a `DeprecationWarning`. Follows the SCITEX_<MODULE>_* convention — see general/10_arch-environment-variables.md.
-tags: [scitex-linter-env-vars]
+  [DETAILS] Environment variables read by `scitex-dev linter` (engine, formerly `scitex-dev linter`) at import / runtime. Prefix is `SCITEX_DEV_LINTER_` — the legacy `SCITEX_LINTER_` prefix is still accepted for one release with a `DeprecationWarning`. Follows the SCITEX_<MODULE>_* convention — see general/10_arch-environment-variables.md.
+tags: [scitex-dev-linter-env-vars]
 ---
 
 # scitex-dev linter — Environment Variables

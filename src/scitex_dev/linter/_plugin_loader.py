@@ -36,30 +36,22 @@ def load_plugins():
         "checkers": [],
     }
 
-    # Read both the legacy and the canonical entry-point groups so leaf
-    # packages can migrate at their own pace. Same plugin registered under
-    # both groups is deduplicated by entry-point name.
-    seen_names: set = set()
-    for group in ("scitex_dev.linter.plugins", "scitex_linter.plugins"):
-        for ep in _iter_entry_points(group):
-            key = (group, ep.name)
-            if ep.name in seen_names:
-                continue
-            seen_names.add(ep.name)
-            try:
-                get_plugin = ep.load()
-                plugin = get_plugin()
-            except Exception:
-                _logger.debug(
-                    "Failed to load linter plugin %s (%s)", ep.name, key, exc_info=True
-                )
-                continue
+    # Canonical entry-point group. The legacy `scitex_linter.plugins`
+    # group is no longer read — all leaf packages now register under
+    # the new name (the dual-registration window has closed).
+    for ep in _iter_entry_points("scitex_dev.linter.plugins"):
+        try:
+            get_plugin = ep.load()
+            plugin = get_plugin()
+        except Exception:
+            _logger.debug("Failed to load linter plugin %s", ep.name, exc_info=True)
+            continue
 
-            for rule in plugin.get("rules", []):
-                merged["rules"][rule.id] = rule
-            merged["call_rules"].update(plugin.get("call_rules", {}))
-            merged["axes_hints"].update(plugin.get("axes_hints", {}))
-            merged["checkers"].extend(plugin.get("checkers", []))
+        for rule in plugin.get("rules", []):
+            merged["rules"][rule.id] = rule
+        merged["call_rules"].update(plugin.get("call_rules", {}))
+        merged["axes_hints"].update(plugin.get("axes_hints", {}))
+        merged["checkers"].extend(plugin.get("checkers", []))
 
     _cache = merged
     return _cache

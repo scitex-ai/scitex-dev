@@ -1,13 +1,13 @@
 ---
 description: |
-  [TOPIC] scitex-linter CLI Reference
-  [DETAILS] Top-level subcommands of `scitex-linter` — check-files, format-files, lint-and-run, list-rules, list-rules-all, mcp, completion helpers.
-tags: [scitex-linter-cli-reference]
+  [TOPIC] scitex-dev linter CLI Reference
+  [DETAILS] Top-level subcommands of `scitex-dev linter` — check-files, format-files, lint-and-run, list-rules, list-rules-all, mcp, completion helpers.
+tags: [scitex-dev-linter-cli-reference]
 ---
 
 # CLI Reference
 
-`scitex-linter` is the entry point installed by `pip install scitex-linter`.
+`scitex-dev linter` is the entry point installed by `pip install scitex-dev`.
 
 ## Top-level options
 
@@ -48,7 +48,7 @@ tags: [scitex-linter-cli-reference]
 
 ```
 1. Explicit CLI flags
-2. ./pyproject.toml [tool.scitex_linter]
+2. ./pyproject.toml [tool.scitex_dev.linter]
 3. ./config.yaml (project-local)
 4. $SCITEX_LINTER_CONFIG (path to a YAML file)
 5. ~/.scitex/linter/config.yaml (user-wide)
@@ -58,10 +58,10 @@ tags: [scitex-linter-cli-reference]
 ## Examples
 
 ```bash
-scitex-linter check-files src/
-scitex-linter list-rules --json
-scitex-linter format-files path/to/file.py
-scitex-linter mcp list-tools
+scitex-dev linter check-files src/
+scitex-dev linter list-rules --json
+scitex-dev linter format-files path/to/file.py
+scitex-dev linter mcp list-tools
 ```
 
 See `10_cli-reference.md` for prior detailed reference.

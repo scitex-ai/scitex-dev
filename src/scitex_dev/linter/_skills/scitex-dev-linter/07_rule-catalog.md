@@ -2,7 +2,7 @@
 description: |
   [TOPIC] Rule Catalog
   [DETAILS] All built-in linter rules by category — IO, stats, plot.
-tags: [scitex-linter-rule-catalog]
+tags: [scitex-dev-linter-rule-catalog]
 ---
 
 # Rule Catalog

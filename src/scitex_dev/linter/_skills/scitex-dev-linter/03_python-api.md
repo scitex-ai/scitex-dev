@@ -1,13 +1,13 @@
 ---
 description: |
-  [TOPIC] scitex-linter Python API
+  [TOPIC] scitex-dev linter Python API
   [DETAILS] Top-level public callables — list_rules; richer surface (check_source/check_files/Rule) via internal modules and MCP.
-tags: [scitex-linter-python-api]
+tags: [scitex-dev-linter-python-api]
 ---
 
 # Python API
 
-The top-level public surface re-exported from `scitex_linter` is
+The top-level public surface re-exported from `scitex_dev.linter` is
 intentionally small; most use is via the CLI or the MCP tool layer.
 
 ## Top-level
@@ -18,20 +18,20 @@ intentionally small; most use is via the CLI or the MCP tool layer.
 | `list_rules`   | Return all rules (built-in + plugin), optional `category=`    |
 
 ```python
-import scitex_linter
+from scitex_dev import linter
 
-scitex_linter.list_rules()               # every Rule
-scitex_linter.list_rules(category="io")  # filter
+scitex_dev.linter.list_rules()               # every Rule
+scitex_dev.linter.list_rules(category="io")  # filter
 ```
 
 ## Richer surface (internal modules)
 
 | Symbol                              | Purpose                                  |
 |-------------------------------------|------------------------------------------|
-| `scitex_linter._linter.check_source`| Check a Python source string             |
-| `scitex_linter._linter.check_files` | Check a list of file paths               |
-| `scitex_linter._rules.ALL_RULES`    | Dict of built-in rule definitions        |
-| `scitex_linter._plugin_loader.load_plugins` | Discover entry-point plugins     |
+| `scitex_dev.linter._linter.check_source`| Check a Python source string             |
+| `scitex_dev.linter._linter.check_files` | Check a list of file paths               |
+| `scitex_dev.linter._rules.ALL_RULES`    | Dict of built-in rule definitions        |
+| `scitex_dev.linter._plugin_loader.load_plugins` | Discover entry-point plugins     |
 
 These are stable enough to use from scripts but live under
 underscore-prefixed modules; long-term, prefer the CLI / MCP layer.
@@ -43,5 +43,5 @@ See `11_mcp-tools.md` — the `linter_check`, `linter_check_source`, and
 
 ## flake8 plugin
 
-Installing `scitex-linter` registers an `STX` flake8 plugin
-(`scitex_linter.flake8_plugin:SciTeXFlake8Checker`).
+Installing `scitex-dev linter` registers an `STX` flake8 plugin
+(`scitex_dev.linter.flake8_plugin:SciTeXFlake8Checker`).
