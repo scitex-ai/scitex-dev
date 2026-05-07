@@ -555,6 +555,7 @@ def test_ps501_silent_when_no_def_main(tmp_path):
 def test_ps502_fires_on_empty_out_dir(tmp_path):
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
+    (repo / "examples" / "01_demo.py").write_text("def main(): pass\nmain()")
     (repo / "examples" / "01_demo_out").mkdir()
     rules = _violations_for(repo, "demo")
     assert "PS502" in rules
@@ -563,11 +564,25 @@ def test_ps502_fires_on_empty_out_dir(tmp_path):
 def test_ps502_silent_when_out_dir_has_content(tmp_path):
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
+    (repo / "examples" / "01_demo.py").write_text("def main(): pass\nmain()")
     out_dir = repo / "examples" / "01_demo_out"
     out_dir.mkdir()
     fs = out_dir / "FINISHED_SUCCESS" / "session_id"
     fs.mkdir(parents=True)
     (fs / "result.png").write_bytes(b"PNG")
+    rules = _violations_for(repo, "demo")
+    assert "PS502" not in rules
+
+
+def test_ps502_silent_when_only_ipynb_owns_stem(tmp_path):
+    """`.ipynb`-only stems: `_out/` is legacy, do not flag."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    (repo / "examples" / "01_demo.ipynb").write_text(
+        '{"cells": [{"cell_type": "code", "source": "x=1", "outputs": [{}]}], '
+        '"metadata": {}, "nbformat": 4, "nbformat_minor": 5}'
+    )
+    (repo / "examples" / "01_demo_out").mkdir()  # legacy empty
     rules = _violations_for(repo, "demo")
     assert "PS502" not in rules
 
@@ -580,12 +595,28 @@ def test_ps502_silent_when_out_dir_has_content(tmp_path):
 def test_ps503_fires_when_out_dir_has_no_finished_success(tmp_path):
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
+    (repo / "examples" / "01_demo.py").write_text("def main(): pass\nmain()")
     out_dir = repo / "examples" / "01_demo_out"
     out_dir.mkdir()
     # Has content (so PS502 is silent) but no FINISHED_SUCCESS/<id>/.
     (out_dir / "stale_artefact.png").write_bytes(b"PNG")
     rules = _violations_for(repo, "demo")
     assert "PS503" in rules
+
+
+def test_ps503_silent_when_only_ipynb_owns_stem(tmp_path):
+    """`.ipynb`-only stems: cell outputs ARE the demo, no FINISHED_SUCCESS needed."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    (repo / "examples" / "01_demo.ipynb").write_text(
+        '{"cells": [{"cell_type": "code", "source": "x=1", "outputs": [{}]}], '
+        '"metadata": {}, "nbformat": 4, "nbformat_minor": 5}'
+    )
+    out_dir = repo / "examples" / "01_demo_out"
+    out_dir.mkdir()
+    (out_dir / "stale_artefact.png").write_bytes(b"PNG")
+    rules = _violations_for(repo, "demo")
+    assert "PS503" not in rules
 
 
 def test_ps503_silent_when_finished_success_id_present(tmp_path):

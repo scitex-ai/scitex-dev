@@ -7,6 +7,16 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.5] — 2026-05-07
+
+### Fixed
+- **PS502 / PS503 ignore `.ipynb`-only stems.** When an example's
+  stem is owned by a `.ipynb` file (no matching `<n>.py`), the
+  rendered cell outputs ARE the demo — the `_out/` sibling is
+  optional and any legacy directory left over from a `.py → .ipynb`
+  migration does not trigger PS502/PS503. Rules still fire when a
+  `.py` example is present.
+
 ## [0.11.4] — 2026-05-07
 
 ### Added (audit rules — README structure)

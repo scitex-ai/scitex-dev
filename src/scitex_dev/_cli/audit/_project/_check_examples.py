@@ -296,8 +296,22 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
                     )
 
     # ---------- _out/ dir rules: PS502 (empty), PS503 (FINISHED_SUCCESS) ---
+    #
+    # Skip both when a `.ipynb` example owns the stem instead of (or
+    # alongside) a `.py` example — for notebooks, the rendered cell
+    # outputs ARE the demo, so an `_out/` sibling is optional. The
+    # rules only apply to `.py` examples that produce side artefacts.
     for child in examples.iterdir():
         if not child.is_dir() or not child.name.endswith("_out"):
+            continue
+        stem = child.name[: -len("_out")]
+        py_sibling = examples / f"{stem}.py"
+        ipynb_sibling = examples / f"{stem}.ipynb"
+        if not py_sibling.is_file() and ipynb_sibling.is_file():
+            # `.ipynb`-only example — `_out/` is legacy; rules don't apply.
+            continue
+        if not py_sibling.is_file():
+            # No matching example at all; treat as orphan (out of scope).
             continue
         if _is_empty_or_pycache_only(child):
             out.append(
