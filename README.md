@@ -69,6 +69,74 @@ Project-local wins when both exist. Both are optional.
 
 </details>
 
+## Architecture
+
+```
+scitex_dev/
+├── _cli/
+│   ├── audit/                ← rule corpus (PA*, PS*, SK*, §*)
+│   │   ├── _api/             ← Python-API rules (PA1xx)
+│   │   ├── _project/         ← project-structure rules (PS1xx, PS5xx)
+│   │   ├── _skills/          ← skill-file rules (SK1xx)
+│   │   └── _summary/         ← CLI/MCP §-rules + audit-all wrapper
+│   ├── ecosystem/            ← cross-package commands (audit-all, list, …)
+│   └── _skills.py            ← `scitex-dev skills` group
+├── _ecosystem/               ← shared helpers (skill-quality, ECOSYSTEM map)
+├── _skills/                  ← canonical skill-file corpus shipped to agents
+└── testing/                  ← `audit_all_for_package` pytest helper
+```
+
+Audit rules live alongside the code they check. Each rule has a
+docstring, an entry in `RULES`, a severity in `_SEVERITY_OVERRIDES`,
+and at least one unit test under `tests/.../_audit/_project/`.
+
+## Demo
+
+```mermaid
+flowchart LR
+    A["scitex-dev ecosystem<br/>audit-all <pkg>"] --> B[audit-cli]
+    A --> C[audit-mcp-tools]
+    A --> D[audit-skills]
+    A --> E[audit-python-apis]
+    A --> F[audit-project]
+    B & C & D & E & F --> G{any error?}
+    G -- "yes" --> H["exit 1<br/>(CI fails)"]
+    G -- "no" --> I["exit 0<br/>(CI green)"]
+```
+
+`scitex-dev` is a CLI/audit tool — its "demo" is the audit running on a
+package. Sample output (run on `scitex-io`):
+
+```
+=== audit-cli ===
+ok    scitex-io: no CLI convention violations
+
+=== audit-mcp-tools ===
+ok  scitex-io: no MCP convention violations
+
+=== audit-skills ===
+ok  scitex-io: no skills violations
+
+=== audit-python-apis ===
+ok  scitex-io: no Python API violations
+
+=== audit-project ===
+ok  scitex-io: no project-structure violations
+```
+
+Failure mode (sample, scitex-dsp before the Hilbert fix):
+
+```
+=== audit-project ===
+fail  scitex-dsp (/home/ywatanabe/proj/scitex-dsp): 2 error(s)
+  [E] [PS141 §1] README.md: missing mandatory `## Demo` section
+  [E] [PS503 §5] examples/01_demo_out: no FINISHED_SUCCESS/<session_id>/ subdir
+```
+
+See [`examples/`](examples/) for runnable demos that exercise
+`scitex-dev`'s own commands (search, version-management, docs
+aggregation).
+
 ## Four Interfaces
 
 <details>

@@ -19,8 +19,7 @@ def test_audit_all_clean():
 
     audit_all_for_package(
         "scitex-dev",
-        # Self-skip pending follow-up:
-        #   PS503: examples need FINISHED_SUCCESS/<id>/ — to be filled
-        #   PS141: README needs `## Demo` section — coming next commit
-        skip_rules=("PS503", "PS141"),
+        # Self-skip until we run our own examples end-to-end:
+        #   PS503 — examples need FINISHED_SUCCESS/<session_id>/ artefacts
+        skip_rules=("PS503",),
     )
