@@ -380,6 +380,20 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_nn",
         "category": "library",
     },
+    "scitex-ml": {
+        "local_path": "~/proj/scitex-ml",
+        "pypi_name": "scitex-ml",
+        "github_repo": "ywatanabe1989/scitex-ml",
+        "import_name": "scitex_ml",
+        "category": "library",
+    },
+    "scitex-genai": {
+        "local_path": "~/proj/scitex-genai",
+        "pypi_name": "scitex-genai",
+        "github_repo": "ywatanabe1989/scitex-genai",
+        "import_name": "scitex_genai",
+        "category": "library",
+    },
     "scitex-gen": {
         "local_path": "~/proj/scitex-gen",
         "pypi_name": "scitex-gen",
