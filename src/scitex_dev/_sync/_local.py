@@ -14,6 +14,7 @@ Safety model (like bulk_rename):
 from __future__ import annotations
 
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -369,8 +370,11 @@ def sync_all(
 def _install_one(pkg, path: Path) -> tuple[str, dict[str, Any]]:
     """Run `pip install -e <path>` for one package; return (name, result)."""
     try:
+        # sys.executable -m pip — bare `pip` finds the first one on PATH,
+        # which can be a system Python with stale metadata (spartan's
+        # /usr/bin/pip is Python 3.9 and fails on >=3.10 wheels).
         result = subprocess.run(
-            ["pip", "install", "-e", str(path), "-q"],
+            [sys.executable, "-m", "pip", "install", "-e", str(path), "-q"],
             capture_output=True,
             text=True,
             timeout=300,
@@ -437,7 +441,15 @@ def sync_local(
         if not confirm:
             results[pkg.name] = {
                 "status": "dry_run",
-                "commands": ["pip", "install", "-e", str(path), "-q"],
+                "commands": [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "-e",
+                    str(path),
+                    "-q",
+                ],
             }
             continue
         work.append((pkg, path))
