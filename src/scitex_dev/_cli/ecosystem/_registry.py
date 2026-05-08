@@ -1391,6 +1391,140 @@ def register_ecosystem_commands(main_group):
             fg="green",
         )
 
+    @ecosystem.command("list-audit-rules")
+    @click.option(
+        "--auditor",
+        type=click.Choice(["api", "project", "skills", "release", "all"]),
+        default="all",
+        help="Limit output to one auditor's rule corpus.",
+    )
+    @click.option(
+        "--json", "as_json", is_flag=True, help="Emit JSON instead of a table."
+    )
+    def ecosystem_list_audit_rules(auditor, as_json):
+        """List every registered audit rule (id, section, message).
+
+        Walks the four code-side rule registries:
+
+        \b
+          api      — PA*  (audit-python-apis)
+          project  — PS*  (audit-project)
+          skills   — SK*  (audit-skills)
+          release  — E5C* (pyproject_lint, surfaces inside audit-project)
+
+        \b
+        Examples:
+          $ scitex-dev ecosystem list-audit-rules
+          $ scitex-dev ecosystem list-audit-rules --auditor project
+          $ scitex-dev ecosystem list-audit-rules --json | jq
+
+        Note: audit-cli and audit-mcp-tools use §-numbered violations
+        defined inline (no central registry), so they're not listed
+        here. Their conventions live in
+        `_skills/general/03_interface_02_cli/` and
+        `_skills/general/03_interface_03_mcp/`.
+        """
+        import json as _json
+
+        sources: dict[str, list[dict]] = {}
+
+        def _push(name: str, items):
+            if items:
+                sources[name] = items
+
+        if auditor in ("api", "all"):
+            from ..audit._api._audit import RULES as PA_RULES
+
+            _push(
+                "api",
+                [
+                    {"id": r.code, "section": r.section, "message": r.message}
+                    for r in PA_RULES.values()
+                ],
+            )
+        if auditor in ("project", "all"):
+            from ..audit._project._audit import RULES as PS_RULES
+
+            _push(
+                "project",
+                [
+                    {
+                        "id": r.code,
+                        "section": r.section,
+                        "message": r.message,
+                        "severity": getattr(r, "severity", "?"),
+                    }
+                    for r in PS_RULES.values()
+                ],
+            )
+        if auditor in ("skills", "all"):
+            from ..audit._skills._audit import RULES as SK_RULES
+
+            _push(
+                "skills",
+                [
+                    {"id": r.code, "section": r.section, "message": r.message}
+                    for r in SK_RULES.values()
+                ],
+            )
+        if auditor in ("release", "all"):
+            # pyproject_lint declares E5C* rules implicitly via per-check
+            # functions; pull canonical (rule_id, severity, summary) from
+            # the module docstring + check_*-name → finding.rule mapping.
+            release_rules = [
+                {
+                    "id": "E5C5",
+                    "section": "release",
+                    "message": "implicit deps not declared",
+                },
+                {
+                    "id": "E5C9",
+                    "section": "release",
+                    "message": "_skills/ ships but build excludes it",
+                },
+                {
+                    "id": "E5C10",
+                    "section": "release",
+                    "message": "duplicate TOML table",
+                },
+                {
+                    "id": "E5C11",
+                    "section": "release",
+                    "message": "deprecated PEP 621 license form",
+                },
+                {
+                    "id": "E5C12",
+                    "section": "release",
+                    "message": "dependency missing >= lower bound",
+                },
+                {
+                    "id": "E5L1",
+                    "section": "release",
+                    "message": "pyproject ↔ tag ↔ PyPI version drift",
+                },
+                {
+                    "id": "E5J1",
+                    "section": "release",
+                    "message": "README missing Interfaces callout",
+                },
+                {
+                    "id": "E5F1",
+                    "section": "release",
+                    "message": "internal API leak (private re-exported)",
+                },
+            ]
+            _push("release", release_rules)
+
+        if as_json:
+            click.echo(_json.dumps(sources, indent=2))
+            return
+
+        for name, items in sources.items():
+            click.secho(f"\n=== {name} ({len(items)} rules) ===", fg="cyan")
+            for r in items:
+                sev = f" [{r['severity']}]" if "severity" in r else ""
+                click.echo(f"  {r['id']:6} {r['section']:6}{sev} {r['message']}")
+
     @ecosystem.command(
         "audit-all",
         epilog=(
