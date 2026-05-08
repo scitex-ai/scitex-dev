@@ -1467,7 +1467,11 @@ def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
     tests_root = _tests_root(repo)
     if tests_root is None:
         return
-    has_def_or_class_re = re.compile(r"^\s*(def\s+test_|class\s+Test)", re.MULTILINE)
+    has_def_or_class_re = re.compile(
+        # Accept `def test_*`, `async def test_*`, or `class Test*`.
+        r"^\s*(?:async\s+)?(def\s+test_|class\s+Test)",
+        re.MULTILINE,
+    )
     has_factory_assign_re = re.compile(r"^test_[A-Za-z0-9_]*\s*=", re.MULTILINE)
     # Any of these counts as "exercises behaviour":
     # - bare `assert ...`
