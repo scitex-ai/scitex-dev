@@ -250,12 +250,12 @@ def audit_one(package: str, repo_root: Path, registry: dict[str, Any]) -> Packag
         lint_rep = _lint(repo_root, package_name=package)
         for f in lint_rep.findings:
             section = {
-                "E5C5_implicit_deps": "C5",
-                "E5C9_skill_bundling": "C9",
-                "E5C10_duplicate_table": "C10",
-                "E5C11_invalid_pep639_license": "C11",
+                "REL-5_implicit_deps": "C5",
+                "REL-9_skill_bundling": "C9",
+                "REL-10_duplicate_table": "C10",
+                "REL-11_invalid_pep639_license": "C11",
                 "E5C1_missing_pyproject": "C1",
-                "E5L1_dirty_release_state": "L2",
+                "REL-21_dirty_release_state": "L2",
             }.get(f.rule, f.rule)
             rep.findings.append(
                 Finding(

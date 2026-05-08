@@ -11,7 +11,7 @@ Rules that talk about a specific package's API live in that package's
 `_linter_plugin.py`:
 
 - `IO001-IO007` → scitex-io
-- `PA001-PA005` → scitex-io  (paths talk about `stx.io.save()`)
+- `PA-001-PA-005` → scitex-io  (paths talk about `stx.io.save()`)
 - `ST001-ST006` → scitex-stats
 - `P001-P005`   → figrecipe
 - `FM001-FM009` → figrecipe

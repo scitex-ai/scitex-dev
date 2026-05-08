@@ -11,7 +11,7 @@ Run before tagging a release. Tick each item or document the deviation in the PR
 
 `(A)` = automated by **`scitex-dev ecosystem audit-python-apis <distribution>`** (shipped — parallels `ecosystem audit-cli`, `ecosystem audit-mcp-tools`; mirrors the `list-python-apis` introspection command).
 
-**Shipped rules** (rule code → checklist item): PA101 (§1 `__all__` present), PA102 (§1 every name bound), PA103 (§1 no `_`-prefixed in `__all__`), PA104 (§1 no third-party re-export), PA201 (§2 `__version__` in `__all__`), PA202 (§2 `importlib.metadata.version()` pattern), PA203 (§2 `"0.0.0+local"` fallback), PA301 (§3 top-level optional import flagged unless wrapped), PA501 (§5 `from __future__ import annotations`). Run with `--json` for machine-readable output, `--rule PA101 --rule PA202 ...` to scope. See [TODO.md](TODO.md) for deferred rules.
+**Shipped rules** (rule code → checklist item): PA-101 (§1 `__all__` present), PA-102 (§1 every name bound), PA-103 (§1 no `_`-prefixed in `__all__`), PA-104 (§1 no third-party re-export), PA-201 (§2 `__version__` in `__all__`), PA-202 (§2 `importlib.metadata.version()` pattern), PA-203 (§2 `"0.0.0+local"` fallback), PA-301 (§3 top-level optional import flagged unless wrapped), PA-501 (§5 `from __future__ import annotations`). Run with `--json` for machine-readable output, `--rule PA-101 --rule PA-202 ...` to scope. See [TODO.md](TODO.md) for deferred rules.
 
 ## §1 — Naming and visibility
 

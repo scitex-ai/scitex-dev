@@ -5,11 +5,11 @@ Schema (canonical): see GITIGNORED/RULES_FOR_SCIENTIFIC_PROJECTS.md
 
 ```yaml
 project-type:
-  - pip          # PS1xx rules apply
+  - pip          # PS-1xx rules apply
   - research     # RP1xx-RP9xx rules apply
 audit:
   skip:
-    - PS108
+    - PS-108
   whitelist: .audit-whitelist.yaml
 metadata:
   cohorts: 3
@@ -200,7 +200,7 @@ def write_config(
     body += "project-type:\n"
     for t in project_types:
         body += f"  - {t}\n"
-    body += "\n# audit:\n#   skip:\n#     - PS108\n"
+    body += "\n# audit:\n#   skip:\n#     - PS-108\n"
     target.write_text(body)
     return target
 

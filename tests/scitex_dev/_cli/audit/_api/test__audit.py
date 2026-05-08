@@ -31,17 +31,17 @@ def _codes(violations) -> set[str]:
 
 def test_rules_registry_covers_documented_codes():
     expected = {
-        "PA101",
-        "PA102",
-        "PA103",
-        "PA104",
-        "PA201",
-        "PA202",
-        "PA203",
-        "PA301",
-        "PA304",  # umbrella imports inside standalone source (2026-05-06)
-        "PA305",  # playwright source must call capture_debug_artifacts_async
-        "PA501",
+        "PA-101",
+        "PA-102",
+        "PA-103",
+        "PA-104",
+        "PA-201",
+        "PA-202",
+        "PA-203",
+        "PA-301",
+        "PA-304",  # umbrella imports inside standalone source (2026-05-06)
+        "PA-305",  # playwright source must call capture_debug_artifacts_async
+        "PA-501",
     }
     assert expected == set(RULES)
 
@@ -51,7 +51,7 @@ def test_rules_registry_covers_documented_codes():
 
 def test_PA101_missing_all(tmp_path):
     init = _write_init(tmp_path, "from __future__ import annotations\n")
-    assert "PA101" in _codes(_audit_init(init, "fakepkg"))
+    assert "PA-101" in _codes(_audit_init(init, "fakepkg"))
 
 
 def test_PA102_unbound_name_in_all(tmp_path):
@@ -61,7 +61,7 @@ def test_PA102_unbound_name_in_all(tmp_path):
         "__all__ = ['__version__', 'ghost']\n"
     )
     init = _write_init(tmp_path, body)
-    assert "PA102" in _codes(_audit_init(init, "fakepkg"))
+    assert "PA-102" in _codes(_audit_init(init, "fakepkg"))
 
 
 def test_PA102_silent_for_pep562_lazy_getattr(tmp_path):
@@ -78,7 +78,7 @@ def test_PA102_silent_for_pep562_lazy_getattr(tmp_path):
         "    raise AttributeError(name)\n"
     )
     init = _write_init(tmp_path, body)
-    assert "PA102" not in _codes(_audit_init(init, "fakepkg"))
+    assert "PA-102" not in _codes(_audit_init(init, "fakepkg"))
 
 
 def test_PA103_private_name_in_all(tmp_path):
@@ -89,7 +89,7 @@ def test_PA103_private_name_in_all(tmp_path):
         "__all__ = ['__version__', '_secret']\n"
     )
     init = _write_init(tmp_path, body)
-    assert "PA103" in _codes(_audit_init(init, "fakepkg"))
+    assert "PA-103" in _codes(_audit_init(init, "fakepkg"))
 
 
 def test_PA104_third_party_in_all(tmp_path):
@@ -100,7 +100,7 @@ def test_PA104_third_party_in_all(tmp_path):
         "__all__ = ['__version__', 'ndarray']\n"
     )
     init = _write_init(tmp_path, body)
-    assert "PA104" in _codes(_audit_init(init, "fakepkg"))
+    assert "PA-104" in _codes(_audit_init(init, "fakepkg"))
 
 
 # --- §2 Version strategy -----------------------------------------------------
@@ -114,7 +114,7 @@ def test_PA201_version_missing_from_all(tmp_path):
         "__all__ = []\n"
     )
     init = _write_init(tmp_path, body)
-    assert "PA201" in _codes(_audit_init(init, "fakepkg"))
+    assert "PA-201" in _codes(_audit_init(init, "fakepkg"))
 
 
 def test_PA202_bare_string_version(tmp_path):
@@ -125,8 +125,8 @@ def test_PA202_bare_string_version(tmp_path):
     )
     init = _write_init(tmp_path, body)
     codes = _codes(_audit_init(init, "fakepkg"))
-    assert "PA202" in codes
-    assert "PA203" in codes  # fallback string is not '0.0.0+local'
+    assert "PA-202" in codes
+    assert "PA-203" in codes  # fallback string is not '0.0.0+local'
 
 
 def test_PA202_clean_with_aliased_import(tmp_path):
@@ -142,8 +142,8 @@ def test_PA202_clean_with_aliased_import(tmp_path):
     )
     init = _write_init(tmp_path, body)
     codes = _codes(_audit_init(init, "fakepkg"))
-    assert "PA202" not in codes
-    assert "PA203" not in codes
+    assert "PA-202" not in codes
+    assert "PA-203" not in codes
 
 
 def test_PA203_clean_when_canonical_fallback(tmp_path):
@@ -158,9 +158,9 @@ def test_PA203_clean_when_canonical_fallback(tmp_path):
     )
     init = _write_init(tmp_path, body)
     # The walker keeps the *last* assignment — the fallback literal.
-    # PA203 must NOT fire because the fallback equals the canonical local segment.
+    # PA-203 must NOT fire because the fallback equals the canonical local segment.
     codes = _codes(_audit_init(init, "fakepkg"))
-    assert "PA203" not in codes
+    assert "PA-203" not in codes
 
 
 # --- §3 Lazy imports ---------------------------------------------------------
@@ -174,7 +174,7 @@ def test_PA301_top_level_optional_import(tmp_path):
         "__all__ = ['__version__']\n"
     )
     init = _write_init(tmp_path, body)
-    assert "PA301" in _codes(_audit_init(init, "fakepkg"))
+    assert "PA-301" in _codes(_audit_init(init, "fakepkg"))
 
 
 def test_PA301_clean_when_wrapped(tmp_path):
@@ -188,7 +188,7 @@ def test_PA301_clean_when_wrapped(tmp_path):
         "__all__ = ['__version__', 'h5py']\n"
     )
     init = _write_init(tmp_path, body)
-    assert "PA301" not in _codes(_audit_init(init, "fakepkg"))
+    assert "PA-301" not in _codes(_audit_init(init, "fakepkg"))
 
 
 # --- §5 Type hints -----------------------------------------------------------
@@ -197,7 +197,7 @@ def test_PA301_clean_when_wrapped(tmp_path):
 def test_PA501_missing_future_annotations(tmp_path):
     body = "__version__ = '0.0.0+local'\n__all__ = ['__version__']\n"
     init = _write_init(tmp_path, body)
-    assert "PA501" in _codes(_audit_init(init, "fakepkg"))
+    assert "PA-501" in _codes(_audit_init(init, "fakepkg"))
 
 
 # --- Negative: a fully canonical __init__.py passes -------------------------

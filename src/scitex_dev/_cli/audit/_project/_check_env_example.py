@@ -1,11 +1,11 @@
-"""PS129 / PS130 — env-var convention via `.env.example`.
+"""PS-129 / PS-130 — env-var convention via `.env.example`.
 
 Single source of truth for per-package environment variables: a top-level
 `.env.example` with commented entries. The README references it from the
 `## Installation` section instead of duplicating a table.
 
-PS129 — package source references `SCITEX_<MODULE>_*` but no `.env.example`
-PS130 — README still has a standalone `## Environment Variables` H2
+PS-129 — package source references `SCITEX_<MODULE>_*` but no `.env.example`
+PS-130 — README still has a standalone `## Environment Variables` H2
 
 Both warn-only.
 """
@@ -38,7 +38,7 @@ def _src_uses_scitex_env(repo: Path) -> bool:
 
 
 def check_env_example(repo: Path, violation_cls: type, out: list) -> None:
-    """Append PS129 / PS130 violations.
+    """Append PS-129 / PS-130 violations.
 
     Both styles are acceptable:
       - README ``## Environment Variables`` H2 with a table (fine for
@@ -46,11 +46,11 @@ def check_env_example(repo: Path, violation_cls: type, out: list) -> None:
       - Top-level ``.env.example`` (cleaner for many vars; user can
         ``cp`` and edit)
 
-    PS129 fires when the package uses SCITEX_<MODULE>_* in source but
+    PS-129 fires when the package uses SCITEX_<MODULE>_* in source but
     documents them in NEITHER place — undocumented env vars are the
     real failure mode.
 
-    PS130 fires when BOTH styles are present: the table and the
+    PS-130 fires when BOTH styles are present: the table and the
     ``.env.example`` will drift. Pick one.
     """
     env_example = repo / ".env.example"
@@ -67,11 +67,11 @@ def check_env_example(repo: Path, violation_cls: type, out: list) -> None:
         except OSError:
             pass
 
-    # PS129 — source uses SCITEX_<MODULE>_* but documented in NEITHER place.
+    # PS-129 — source uses SCITEX_<MODULE>_* but documented in NEITHER place.
     if _src_uses_scitex_env(repo) and not has_env_example and not readme_has_env_h2:
         out.append(
             violation_cls(
-                "PS129",
+                "PS-129",
                 str(env_example),
                 (
                     "package source references SCITEX_<MODULE>_* env vars "
@@ -83,11 +83,11 @@ def check_env_example(repo: Path, violation_cls: type, out: list) -> None:
             )
         )
 
-    # PS130 — BOTH a README env H2 AND a `.env.example` exist.
+    # PS-130 — BOTH a README env H2 AND a `.env.example` exist.
     if has_env_example and readme_has_env_h2:
         out.append(
             violation_cls(
-                "PS130",
+                "PS-130",
                 str(readme),
                 (
                     "README has '## Environment Variables' AND `.env.example` "

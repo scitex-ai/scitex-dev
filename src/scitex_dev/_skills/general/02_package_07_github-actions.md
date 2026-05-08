@@ -150,7 +150,7 @@ Every `scitex-*` repo MUST run `scitex-dev ecosystem audit-all <pkg>` on every p
 - `audit-mcp-tools` (§1–§6 MCP compliance, including the §3 four-subcommand check)
 - `audit-skills` (skill leaf shape, frontmatter, line budgets)
 - `audit-python-apis` (Python API parity with CLI/MCP surfaces)
-- `audit-project` (PS101–PS134 project-structure rules — readme, sphinx, version pins, CHANGELOG, license, etc.)
+- `audit-project` (PS-101–PS-134 project-structure rules — readme, sphinx, version pins, CHANGELOG, license, etc.)
 
 Without this gate, drift accumulates silently — packages can ship help text that contradicts the click tree, MCP tools that don't trace back to a Python API, missing CHANGELOG entries, or stale skill leaves. The §5b umbrella-passthrough rule is enforceable only when both the umbrella and the standalone run audit-all on the same commit.
 

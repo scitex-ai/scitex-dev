@@ -76,9 +76,9 @@ Project-local wins when both exist. Both are optional.
 scitex_dev/
 ├── _cli/
 │   ├── audit/                ← rule corpus (PA*, PS*, SK*, §*)
-│   │   ├── _api/             ← Python-API rules (PA1xx)
-│   │   ├── _project/         ← project-structure rules (PS1xx, PS5xx)
-│   │   ├── _skills/          ← skill-file rules (SK1xx)
+│   │   ├── _api/             ← Python-API rules (PA-1xx)
+│   │   ├── _project/         ← project-structure rules (PS-1xx, PS-5xx)
+│   │   ├── _skills/          ← skill-file rules (SK-1xx)
 │   │   └── _summary/         ← CLI/MCP §-rules + audit-all wrapper
 │   ├── ecosystem/            ← cross-package commands (audit-all, list, …)
 │   └── _skills.py            ← `scitex-dev skills` group
@@ -130,8 +130,8 @@ Failure mode (sample, scitex-dsp before the Hilbert fix):
 ```
 === audit-project ===
 fail  scitex-dsp (/home/ywatanabe/proj/scitex-dsp): 2 error(s)
-  [E] [PS141 §1] README.md: missing mandatory `## Demo` section
-  [E] [PS503 §5] examples/01_demo_out: no FINISHED_SUCCESS/<session_id>/ subdir
+  [E] [PS-141 §1] README.md: missing mandatory `## Demo` section
+  [E] [PS-503 §5] examples/01_demo_out: no FINISHED_SUCCESS/<session_id>/ subdir
 ```
 
 See [`examples/`](examples/) for runnable demos that exercise

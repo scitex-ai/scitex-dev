@@ -6,28 +6,28 @@
 
 Codifies the regressions caught during the 2026-04-28 audit pass so an
 agent doesn't have to rediscover them by re-running the full audit
-script every time. Each rule has a stable id (`E5C5`, `E5C9`, …) keyed
+script every time. Each rule has a stable id (`REL-5`, `REL-9`, …) keyed
 to the §-numbers in `general/99_quality_02_checklist.md` so findings
 join the same triage flow.
 
 Rules
 -----
-- ``E5C5_implicit_deps`` — every ecosystem package imported anywhere
+- ``REL-5_implicit_deps`` — every ecosystem package imported anywhere
   under ``src/<pkg>/`` must appear in
   ``[project].dependencies``. Caught the 2026-04-28 class-action where
   6 packages broke on PyPI by importing ``scitex_config._ecosystem``
   without declaring ``scitex-config``.
-- ``E5C9_skill_bundling`` — if ``src/<pkg>/_skills/`` exists, the build
+- ``REL-9_skill_bundling`` — if ``src/<pkg>/_skills/`` exists, the build
   must (a) include ``_skills/**/*.md`` in package-data and (b) register
   the ``scitex_dev.skills`` entry-point. Caught packages whose SKILL.md
   was on disk but never shipped on PyPI.
-- ``E5C10_duplicate_table`` — TOML 1.0 forbids declaring the same
+- ``REL-10_duplicate_table`` — TOML 1.0 forbids declaring the same
   table twice; setuptools is silent about it but tomllib raises. Caught
   scitex-resource and scitex-capture this session.
-- ``E5C11_invalid_pep639_license`` — `license = "AGPL-3.0-only"` is the
+- ``REL-11_invalid_pep639_license`` — `license = "AGPL-3.0-only"` is the
   ecosystem standard. Caught packages still using
   `license = {text = "..."}` (deprecated PEP 621 form).
-- ``E5L1_dirty_release_state`` — pyproject version, latest git tag, and
+- ``REL-21_dirty_release_state`` — pyproject version, latest git tag, and
   PyPI latest must agree (within drift tolerance). Caught the
   scitex-stats / scitex-cloud / scitex-orochi tag-vs-PyPI drift.
 
@@ -44,7 +44,7 @@ from pathlib import Path
 from typing import Any
 
 
-# Map import_name → pip name. Used by E5C5 to recognise an import as
+# Map import_name → pip name. Used by REL-5 to recognise an import as
 # "this is an ecosystem package".
 ECOSYSTEM_IMPORTS_TO_DIST: dict[str, str] = {
     "scitex_config": "scitex-config",
@@ -285,7 +285,7 @@ def _parse_req(spec: str):
     Centralised so every rule that walks dependency strings handles
     extras, markers, and version specifiers identically. Falls back to
     the legacy regex split only when packaging.Requirement raises —
-    keeps E5C5 working on packages that ship deliberately-funky strings
+    keeps REL-5 working on packages that ship deliberately-funky strings
     (e.g. relative paths) we'd rather flag elsewhere.
     """
     try:
@@ -317,7 +317,7 @@ def _iter_dep_specs(data: dict[str, Any]):
     """Yield (group, spec_string) for every declared dep + optional dep.
 
     `group` is "dependencies" for runtime deps or the extra name (e.g.
-    "dev", "cli") for optional deps. Used by E5C12_min_version_pin so a
+    "dev", "cli") for optional deps. Used by REL-12_min_version_pin so a
     single walker covers both surfaces.
     """
     project = data.get("project") or {}
@@ -332,7 +332,7 @@ def check_min_version_pin(
     pyproject_data: dict[str, Any],
 ) -> list[LintFinding]:
     self_name = (pyproject_data.get("project") or {}).get("name") or ""
-    """Rule E5C12 — every declared dep must carry a `>=` (or `~=`) lower bound.
+    """Rule REL-12 — every declared dep must carry a `>=` (or `~=`) lower bound.
 
     Bare ``"pkg"`` accepts any historic version (including pre-1.0
     breakage); upper-only pins like ``"pkg<2"`` likewise let stale
@@ -352,7 +352,7 @@ def check_min_version_pin(
         if req is None:
             findings.append(
                 LintFinding(
-                    rule="E5C12_min_version_pin",
+                    rule="REL-12_min_version_pin",
                     severity="HIGH",
                     message=f"[{group}] `{spec}`: not a valid PEP 508 spec",
                     detail="packaging.requirements.Requirement could not parse",
@@ -369,7 +369,7 @@ def check_min_version_pin(
         extras = f"[{','.join(sorted(req.extras))}]" if req.extras else ""
         findings.append(
             LintFinding(
-                rule="E5C12_min_version_pin",
+                rule="REL-12_min_version_pin",
                 severity="HIGH",
                 message=(
                     f"[{group}] `{req.name}{extras}`: missing `>=` lower bound "
@@ -389,7 +389,7 @@ def check_min_version_pin(
 def check_implicit_deps(
     repo: Path, pyproject_data: dict[str, Any], package_name: str
 ) -> list[LintFinding]:
-    """Rule E5C5 — codifies the 2026-04-28 class-action."""
+    """Rule REL-5 — codifies the 2026-04-28 class-action."""
     findings: list[LintFinding] = []
     import_name = package_name.replace("-", "_")
     imports = _scan_imports(_src_dir(repo, import_name))
@@ -402,7 +402,7 @@ def check_implicit_deps(
             continue
         findings.append(
             LintFinding(
-                rule="E5C5_implicit_deps",
+                rule="REL-5_implicit_deps",
                 severity="CRITICAL",
                 message=f"src imports `{mod}` but pyproject does not declare `{dist}`",
                 detail="fresh-venv install will fail at import time with ModuleNotFoundError",
@@ -461,7 +461,7 @@ def _skill_bundled(data: dict[str, Any], import_name: str) -> bool:
 def check_skill_bundling(
     repo: Path, pyproject_data: dict[str, Any], package_name: str
 ) -> list[LintFinding]:
-    """Rule E5C9 — _skills/ on disk implies bundling + entry-point."""
+    """Rule REL-9 — _skills/ on disk implies bundling + entry-point."""
     findings: list[LintFinding] = []
     import_name = package_name.replace("-", "_")
     skills_dir = _src_dir(repo, import_name) / "_skills"
@@ -470,7 +470,7 @@ def check_skill_bundling(
     if not _skill_bundled(pyproject_data, import_name):
         findings.append(
             LintFinding(
-                rule="E5C9_skill_bundling",
+                rule="REL-9_skill_bundling",
                 severity="HIGH",
                 message="_skills/ on disk but package-data does not ship `_skills/**/*.md`",
                 detail=f"PyPI users won't see {skills_dir.name}/<pkg>/SKILL.md",
@@ -480,7 +480,7 @@ def check_skill_bundling(
     if not _has_entry_point(pyproject_data, "scitex_dev.skills", package_name):
         findings.append(
             LintFinding(
-                rule="E5C9_skill_bundling",
+                rule="REL-9_skill_bundling",
                 severity="HIGH",
                 message="_skills/ on disk but no `scitex_dev.skills` entry-point",
                 detail="agents won't discover the package via importlib.metadata",
@@ -494,7 +494,7 @@ _DUP_TABLE_RE = re.compile(r"^\s*\[(?:tool|project)[\w.\-]*\]", re.MULTILINE)
 
 
 def check_duplicate_tables(pyproject: Path) -> list[LintFinding]:
-    """Rule E5C10 — surface 'cannot declare twice' errors before they bite."""
+    """Rule REL-10 — surface 'cannot declare twice' errors before they bite."""
     try:
         text = pyproject.read_text(encoding="utf-8")
     except OSError:
@@ -508,7 +508,7 @@ def check_duplicate_tables(pyproject: Path) -> list[LintFinding]:
         if count > 1:
             findings.append(
                 LintFinding(
-                    rule="E5C10_duplicate_table",
+                    rule="REL-10_duplicate_table",
                     severity="HIGH",
                     message=f"TOML table declared {count}× — {header}",
                     detail="setuptools accepts only the LAST declaration; tomllib refuses outright",
@@ -521,7 +521,7 @@ def check_duplicate_tables(pyproject: Path) -> list[LintFinding]:
 def check_version_drift(
     repo: Path, pyproject_data: dict[str, Any], package_name: str
 ) -> list[LintFinding]:
-    """Rule E5F1 — `__version__` literal in src/__init__.py must match pyproject.
+    """Rule REL-31 — `__version__` literal in src/__init__.py must match pyproject.
 
     Two acceptable patterns:
 
@@ -556,7 +556,7 @@ def check_version_drift(
     if src_ver != py_ver:
         findings.append(
             LintFinding(
-                rule="E5F1_version_drift",
+                rule="REL-31_version_drift",
                 severity="MEDIUM",
                 message=f"__init__.py __version__ = {src_ver!r} ≠ pyproject {py_ver!r}",
                 detail=f"{init_py.relative_to(repo)}",
@@ -573,7 +573,7 @@ def check_version_drift(
 def check_readme_interfaces_callout(
     repo: Path, package_name: str = ""
 ) -> list[LintFinding]:  # noqa: ARG001
-    """Rule E5J1 — README must mirror SKILL.md's Interfaces callout.
+    """Rule REL-41 — README must mirror SKILL.md's Interfaces callout.
 
     The convention (general/02_repo_04_quality.md, 06_skills_05) is that
     every package's README opens with a ``> **Interfaces:** ...`` line so
@@ -598,7 +598,7 @@ def check_readme_interfaces_callout(
         return []
     return [
         LintFinding(
-            rule="E5J1_readme_interfaces_callout",
+            rule="REL-41_readme_interfaces_callout",
             severity="LOW",
             message="README.md missing `> **Interfaces:**` callout",
             detail="convention from general/02_repo_04_quality.md §SciTeX-Specific README Rules",
@@ -608,7 +608,7 @@ def check_readme_interfaces_callout(
 
 
 def check_license(pyproject_data: dict[str, Any]) -> list[LintFinding]:
-    """Rule E5C11 — AGPL-3.0-only as PEP 639 SPDX expression."""
+    """Rule REL-11 — AGPL-3.0-only as PEP 639 SPDX expression."""
     proj = pyproject_data.get("project") or {}
     lic = proj.get("license")
     if isinstance(lic, str):
@@ -616,7 +616,7 @@ def check_license(pyproject_data: dict[str, Any]) -> list[LintFinding]:
             return []
         return [
             LintFinding(
-                rule="E5C11_invalid_pep639_license",
+                rule="REL-11_invalid_pep639_license",
                 severity="MEDIUM",
                 message=f"license is `{lic!r}`, expected SPDX `AGPL-3.0-only`",
                 fix_hint='license = "AGPL-3.0-only"',
@@ -625,7 +625,7 @@ def check_license(pyproject_data: dict[str, Any]) -> list[LintFinding]:
     if isinstance(lic, dict):
         return [
             LintFinding(
-                rule="E5C11_invalid_pep639_license",
+                rule="REL-11_invalid_pep639_license",
                 severity="MEDIUM",
                 message="license uses deprecated table form (PEP 621 pre-639)",
                 detail=f"got {lic!r}",
@@ -634,7 +634,7 @@ def check_license(pyproject_data: dict[str, Any]) -> list[LintFinding]:
         ]
     return [
         LintFinding(
-            rule="E5C11_invalid_pep639_license",
+            rule="REL-11_invalid_pep639_license",
             severity="LOW",
             message="no license field in [project]",
             fix_hint='license = "AGPL-3.0-only"',
@@ -847,7 +847,7 @@ def _publish_trigger(repo: Path) -> str | None:
     """Return 'release', 'tags', or None.
 
     Detects whether the publish-pypi workflow fires on GH release publish
-    or on git-tag push. Used by E5L1 to give a more actionable fix-hint
+    or on git-tag push. Used by REL-21 to give a more actionable fix-hint
     and by E5L2 to flag the workflow-specific footgun.
     """
     wf = repo / ".github" / "workflows" / "publish-pypi.yml"
@@ -867,7 +867,7 @@ def _publish_trigger(repo: Path) -> str | None:
 def check_release_alignment(
     repo: Path, pyproject_data: dict[str, Any], package_name: str
 ) -> list[LintFinding]:
-    """Rule E5L1 — pyproject ↔ tag ↔ PyPI alignment.
+    """Rule REL-21 — pyproject ↔ tag ↔ PyPI alignment.
 
     When pyproject is ahead of PyPI AND the publish workflow fires on
     ``release: published``, the fix-hint includes the
@@ -890,7 +890,7 @@ def check_release_alignment(
             hint = f"git tag v{py_ver} && git push --tags"
         findings.append(
             LintFinding(
-                rule="E5L1_dirty_release_state",
+                rule="REL-21_dirty_release_state",
                 severity="LOW",
                 message=f"latest git tag `{tag}` ≠ pyproject version `{py_ver}`",
                 fix_hint=hint,
@@ -906,7 +906,7 @@ def check_release_alignment(
             detail = "release in flight, or release stale"
         findings.append(
             LintFinding(
-                rule="E5L1_dirty_release_state",
+                rule="REL-21_dirty_release_state",
                 severity="LOW",
                 message=f"PyPI latest `{pypi}` ≠ pyproject version `{py_ver}`",
                 detail=detail,
@@ -916,7 +916,7 @@ def check_release_alignment(
 
 
 def check_cla_workflow_exists(repo: Path) -> list[LintFinding]:
-    """Rule E5C12 — every scitex-* repo must ship a CLA gate workflow.
+    """Rule REL-12 — every scitex-* repo must ship a CLA gate workflow.
 
     The canonical location is `.github/workflows/cla.yml`. See
     `_skills/general/01_ecosystem_07_license-and-cla.md` for the workflow
@@ -930,7 +930,7 @@ def check_cla_workflow_exists(repo: Path) -> list[LintFinding]:
     if not cla_yml.is_file():
         return [
             LintFinding(
-                rule="E5C12_missing_cla_workflow",
+                rule="REL-12_missing_cla_workflow",
                 severity="MEDIUM",
                 message=".github/workflows/cla.yml is missing",
                 detail=(
@@ -1025,10 +1025,10 @@ def lint_pyproject(repo: Path, package_name: str | None = None) -> LintReport:
     if data is None:
         rep.findings.append(
             LintFinding(
-                rule="E5C10_duplicate_table",
+                rule="REL-10_duplicate_table",
                 severity="HIGH",
                 message="pyproject.toml fails to parse with tomllib",
-                detail="usually a duplicate table; see E5C10 finding above for the offender",
+                detail="usually a duplicate table; see REL-10 finding above for the offender",
             )
         )
         return rep

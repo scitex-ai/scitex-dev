@@ -1,4 +1,4 @@
-"""PS150 / PS151 — scitex-dev pin enforcement.
+"""PS-150 / PS-151 — scitex-dev pin enforcement.
 
 Symptom these prevent: a package's `tests/develop/test_audit.py`
 calls `shutil.which("scitex-dev")` and `pytest.skip()`s when absent.
@@ -6,11 +6,11 @@ A consumer pyproject.toml that does NOT declare `scitex-dev` in
 `[project.optional-dependencies.dev]` (or in `[project.dependencies]`
 for runtime tooling) silently has NO audit gate in CI's fresh venv.
 
-PS150 (W) — `scitex-dev` (or `scitex-dev[cli-audit]`) absent from
+PS-150 (W) — `scitex-dev` (or `scitex-dev[cli-audit]`) absent from
             both `[project.dependencies]` and `[project.optional-
             dependencies.dev]`. Audit gate silently skipped.
 
-PS151 (W) — `scitex-dev` is declared but the version pin floor is
+PS-151 (W) — `scitex-dev` is declared but the version pin floor is
             below the known-good version (`MIN_KNOWN_GOOD`).
             Older scitex-dev releases ship a smaller / differently-
             classified rule corpus, so the same package gets
@@ -63,7 +63,7 @@ def check_audit_pin(repo: Path, Violation: type, out: list[Any]) -> None:
     if not all_pins:
         out.append(
             Violation(
-                "PS150",
+                "PS-150",
                 str(pyproject),
                 (
                     "[dev] does not declare `scitex-dev` — "
@@ -76,13 +76,13 @@ def check_audit_pin(repo: Path, Violation: type, out: list[Any]) -> None:
         return
 
     # Find the floor across all pin declarations. Bare `scitex-dev`
-    # (no >=N) means floats — flag with PS151 too because that's
+    # (no >=N) means floats — flag with PS-151 too because that's
     # exactly the drift the rule fights.
     floors = [p for p in all_pins if p]
     if not floors:
         out.append(
             Violation(
-                "PS151",
+                "PS-151",
                 str(pyproject),
                 (
                     "scitex-dev declared without a version floor. Pin to "
@@ -99,7 +99,7 @@ def check_audit_pin(repo: Path, Violation: type, out: list[Any]) -> None:
     if _version_lt(lowest, MIN_KNOWN_GOOD):
         out.append(
             Violation(
-                "PS151",
+                "PS-151",
                 str(pyproject),
                 (
                     f"scitex-dev pin floor {lowest!r} is below the "

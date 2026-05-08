@@ -2,7 +2,7 @@
 
 Mirror file for ``src/scitex_dev/linter/_mcp/tools/lint.py``. The module
 registers fastmcp tools at import time; this test just verifies it
-imports cleanly so PS204/PS207 are satisfied.
+imports cleanly so PS-204/PS-207 are satisfied.
 """
 
 

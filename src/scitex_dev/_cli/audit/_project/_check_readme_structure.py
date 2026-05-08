@@ -1,20 +1,20 @@
-"""README structure rules — PS141, PS142, PS143, PS144.
+"""README structure rules — PS-141, PS-142, PS-143, PS-144.
 
-PS141: README.md must have a `## Demo` section whose body contains at
+PS-141: README.md must have a `## Demo` section whose body contains at
 least one visual element (markdown image, non-shield HTML `<img>`,
 or fenced ```mermaid block).
 
-PS142: README.md must have a `## Architecture` section whose body
+PS-142: README.md must have a `## Architecture` section whose body
 contains at least one of: ```mermaid fence, ASCII text diagram
 (fenced code block ≥10 lines), file-tree characters
 (`├──`/`└──`/`│`), or `<img>` tag.
 
-PS143: section H2 headers appear in canonical order. The expected
+PS-143: section H2 headers appear in canonical order. The expected
 order (skipping any optional or omitted section) is:
     Problem and Solution → Installation → Architecture →
     <N> Interfaces → Demo → Quick Start → Part of SciTeX
 
-PS144: `## Problem and Solution` table cells must (a) contain at
+PS-144: `## Problem and Solution` table cells must (a) contain at
 least one `**bold**` span, (b) keep bold coverage ≤ 30% of cell
 text, and (c) stay ≤ 200 characters per cell.
 """
@@ -29,7 +29,7 @@ _README_HEAD_BYTES = 16384
 _MIN_README_BYTES = 200
 
 
-# --- PS141 / PS142 / PS143: section presence + content ---------------------
+# --- PS-141 / PS-142 / PS-143: section presence + content ---------------------
 
 # Canonical H2 section names (lowercased keys), with the regex matching their
 # header line (line starting with `##` and the section name).
@@ -65,7 +65,7 @@ _CANONICAL_ORDER = [
     "part_of_scitex",
 ]
 
-# Visual-content patterns inside a section body (PS141).
+# Visual-content patterns inside a section body (PS-141).
 _RE_MD_IMAGE = re.compile(r"!\[[^\]]*\]\([^)]+\)")
 _RE_HTML_IMG = re.compile(r"<img\s+[^>]*\bsrc\s*=\s*['\"]([^'\"]+)['\"]", re.IGNORECASE)
 _RE_MERMAID_FENCE = re.compile(r"```mermaid\b", re.IGNORECASE)
@@ -74,7 +74,7 @@ _RE_BADGE_HOST = re.compile(
     re.IGNORECASE,
 )
 
-# Architecture content (PS142) — wider net than PS141.
+# Architecture content (PS-142) — wider net than PS-141.
 _RE_TREE_CHARS = re.compile(r"[├└│]")
 _RE_FENCED_BLOCK = re.compile(r"```([^\n]*)\n(.*?)```", re.DOTALL)
 
@@ -102,7 +102,7 @@ def _section_body(text: str, name: str) -> tuple[str, int, int] | None:
 
 
 def _has_visual_content(body: str) -> bool:
-    """PS141 acceptance: at least one image / mermaid / non-badge <img>."""
+    """PS-141 acceptance: at least one image / mermaid / non-badge <img>."""
     if _RE_MD_IMAGE.search(body):
         return True
     if _RE_MERMAID_FENCE.search(body):
@@ -115,7 +115,7 @@ def _has_visual_content(body: str) -> bool:
 
 
 def _has_architecture_content(body: str) -> bool:
-    """PS142 acceptance: mermaid / file tree / ≥10-line fenced block / <img>."""
+    """PS-142 acceptance: mermaid / file tree / ≥10-line fenced block / <img>."""
     if _RE_MERMAID_FENCE.search(body):
         return True
     if _RE_TREE_CHARS.search(body):
@@ -130,7 +130,7 @@ def _has_architecture_content(body: str) -> bool:
 
 
 def _check_section_order(text: str) -> list[str]:
-    """PS143: return list[str] of out-of-order section pairs found, or [].
+    """PS-143: return list[str] of out-of-order section pairs found, or [].
 
     Each entry is `'<found_after> appears after <found_before> but should '
     'precede it'`.
@@ -158,7 +158,7 @@ def _check_section_order(text: str) -> list[str]:
     return issues
 
 
-# --- PS144: Problem and Solution table cell quality -----------------------
+# --- PS-144: Problem and Solution table cell quality -----------------------
 
 _RE_BOLD_SPAN = re.compile(r"\*\*(.+?)\*\*", re.DOTALL)
 _BOLD_MAX_RATIO = 0.30
@@ -186,7 +186,7 @@ def _table_rows(body: str) -> list[list[str]]:
 
 
 def _cell_bold_problems(cell: str) -> list[str]:
-    """Return list of PS144 sub-issues for a single cell."""
+    """Return list of PS-144 sub-issues for a single cell."""
     out: list[str] = []
     if len(cell) > _CELL_MAX_CHARS:
         out.append(f"cell length {len(cell)} > {_CELL_MAX_CHARS} chars")
@@ -216,12 +216,12 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
     if len(text) < _MIN_README_BYTES:
         return
 
-    # ---- PS141: ## Demo + visual content ---------------------------------
+    # ---- PS-141: ## Demo + visual content ---------------------------------
     demo = _section_body(text, "demo")
     if demo is None:
         out.append(
             violation_cls(
-                "PS141",
+                "PS-141",
                 str(readme),
                 "missing mandatory `## Demo` section",
             )
@@ -231,7 +231,7 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
         if not _has_visual_content(body):
             out.append(
                 violation_cls(
-                    "PS141",
+                    "PS-141",
                     str(readme),
                     (
                         "`## Demo` section has no visual content — add a "
@@ -241,12 +241,12 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
                 )
             )
 
-    # ---- PS142: ## Architecture + diagram/tree content -------------------
+    # ---- PS-142: ## Architecture + diagram/tree content -------------------
     arch = _section_body(text, "architecture")
     if arch is None:
         out.append(
             violation_cls(
-                "PS142",
+                "PS-142",
                 str(readme),
                 "missing mandatory `## Architecture` section",
             )
@@ -256,7 +256,7 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
         if not _has_architecture_content(body):
             out.append(
                 violation_cls(
-                    "PS142",
+                    "PS-142",
                     str(readme),
                     (
                         "`## Architecture` section has no diagram, file "
@@ -265,12 +265,12 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
                 )
             )
 
-    # ---- PS143: section ordering ----------------------------------------
+    # ---- PS-143: section ordering ----------------------------------------
     order_issues = _check_section_order(text)
     for issue in order_issues:
-        out.append(violation_cls("PS143", str(readme), issue))
+        out.append(violation_cls("PS-143", str(readme), issue))
 
-    # ---- PS144: ## Problem and Solution table cell rules ----------------
+    # ---- PS-144: ## Problem and Solution table cell rules ----------------
     pas = _section_body(text, "problem_and_solution")
     if pas is not None:
         body, _s, _e = pas
@@ -283,7 +283,7 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
                 for issue in _cell_bold_problems(cell):
                     out.append(
                         violation_cls(
-                            "PS144",
+                            "PS-144",
                             str(readme),
                             f"row {row_idx} {col_label}: {issue}",
                         )

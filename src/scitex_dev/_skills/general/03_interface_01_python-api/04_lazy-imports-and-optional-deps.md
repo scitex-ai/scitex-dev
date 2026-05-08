@@ -161,7 +161,7 @@ except ImportError:
 - Every conditional public name → must be in `__all__`.
 - No top-level `import <optional_dep>` outside a try/except.
 
-Linter rule (planned): **PA007** — flag bare imports of names declared in `extras_require`.
+Linter rule (planned): **PA-007** — flag bare imports of names declared in `extras_require`.
 
 ---
 
@@ -276,7 +276,7 @@ If `import <pkg>` cold-start is > 500ms, top-level `__init__.py` is leaking eage
 
 ### Auditor
 
-`scitex-dev ecosystem audit-project <pkg>` will flag heavy top-level imports as rule **PA008** (TBD). The check measures `import <pkg>` cold-start time and fails if > 500ms; remedy points to this section.
+`scitex-dev ecosystem audit-project <pkg>` will flag heavy top-level imports as rule **PA-008** (TBD). The check measures `import <pkg>` cold-start time and fails if > 500ms; remedy points to this section.
 
 ### Audited
 

@@ -25,7 +25,7 @@ A fresh agent landing on the package can read 01-04 to understand the surface in
 
 ## Standard-7 leaf set
 
-Every package should ship these seven leaves (mandatory or conditional on the package's interfaces). The auditor enforces presence via SK105–SK111 — see [12_quality-checklist.md](12_quality-checklist.md).
+Every package should ship these seven leaves (mandatory or conditional on the package's interfaces). The auditor enforces presence via SK-105–SK-111 — see [12_quality-checklist.md](12_quality-checklist.md).
 
 | Leaf | Required when |
 |---|---|

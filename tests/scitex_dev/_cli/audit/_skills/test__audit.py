@@ -40,7 +40,7 @@ def test_rule_namespace_is_sk():
 
 
 # ---------------------------------------------------------------------------
-# Header/footer (SK210 / SK211)
+# Header/footer (SK-210 / SK-211)
 # ---------------------------------------------------------------------------
 
 
@@ -53,7 +53,7 @@ def test_sk210_flags_html_header_banner(tmp_path):
     out: list[Violation] = []
     _check_header_footer(f, out)
     codes = {v.rule for v in out}
-    assert "SK210" in codes
+    assert "SK-210" in codes
 
 
 def test_sk211_flags_eof_marker(tmp_path):
@@ -62,7 +62,7 @@ def test_sk211_flags_eof_marker(tmp_path):
     out: list[Violation] = []
     _check_header_footer(f, out)
     codes = {v.rule for v in out}
-    assert "SK211" in codes
+    assert "SK-211" in codes
 
 
 def test_clean_file_passes_header_footer(tmp_path):
@@ -74,7 +74,7 @@ def test_clean_file_passes_header_footer(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Frontmatter (SK701 / SK702 / SK703 / SK704)
+# Frontmatter (SK-701 / SK-702 / SK-703 / SK-704)
 # ---------------------------------------------------------------------------
 
 
@@ -84,7 +84,7 @@ def test_sk701_flags_missing_frontmatter(tmp_path):
     out: list[Violation] = []
     result = _check_frontmatter(f, out)
     assert result is None
-    assert {v.rule for v in out} == {"SK701"}
+    assert {v.rule for v in out} == {"SK-701"}
 
 
 def test_sk702_703_704_flag_missing_required_fields(tmp_path):
@@ -94,9 +94,9 @@ def test_sk702_703_704_flag_missing_required_fields(tmp_path):
     out: list[Violation] = []
     _check_frontmatter(f, out)
     codes = {v.rule for v in out}
-    assert "SK702" in codes
-    assert "SK703" in codes
-    assert "SK704" in codes
+    assert "SK-702" in codes
+    assert "SK-703" in codes
+    assert "SK-704" in codes
 
 
 def test_full_frontmatter_passes(tmp_path):
@@ -111,7 +111,7 @@ def test_full_frontmatter_passes(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Naming (SK201 / SK203)
+# Naming (SK-201 / SK-203)
 # ---------------------------------------------------------------------------
 
 
@@ -125,7 +125,7 @@ def test_sk201_flags_missing_numeric_prefix(tmp_path):
     out: list[Violation] = []
     _check_naming(tmp_path, out)
     codes = {v.rule for v in out}
-    assert "SK201" in codes
+    assert "SK-201" in codes
 
 
 def test_sk203_flags_non_kebab_case(tmp_path):
@@ -133,7 +133,7 @@ def test_sk203_flags_non_kebab_case(tmp_path):
     out: list[Violation] = []
     _check_naming(tmp_path, out)
     codes = {v.rule for v in out}
-    assert "SK203" in codes
+    assert "SK-203" in codes
 
 
 def test_compliant_naming_passes(tmp_path):
@@ -146,7 +146,7 @@ def test_compliant_naming_passes(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Index links (SK302)
+# Index links (SK-302)
 # ---------------------------------------------------------------------------
 
 
@@ -159,8 +159,8 @@ def test_sk302_flags_orphan_leaf(tmp_path):
     out: list[Violation] = []
     _check_index_links(tmp_path / "SKILL.md", tmp_path, out)
     codes_paths = {(v.rule, Path(v.where).name) for v in out}
-    assert ("SK302", "02_orphan.md") in codes_paths
-    assert ("SK302", "01_topic.md") not in codes_paths
+    assert ("SK-302", "02_orphan.md") in codes_paths
+    assert ("SK-302", "01_topic.md") not in codes_paths
 
 
 # ---------------------------------------------------------------------------
@@ -276,11 +276,11 @@ def test_sk706_flags_missing_markers_in_skill_md(tmp_path, capsys):
         "scitex_dev._cli.audit._skills._audit._locate_skills_dir",
         return_value=pkg_root,
     ):
-        rc = audit_skills("marktest", json_out=True, rules={"SK706"})
+        rc = audit_skills("marktest", json_out=True, rules={"SK-706"})
     assert rc == 1
     payload = json.loads(capsys.readouterr().out)
     codes = {v["rule"] for v in payload["violations"]}
-    assert "SK706" in codes
+    assert "SK-706" in codes
 
 
 def test_sk711_flags_missing_markers_in_leaf(tmp_path, capsys):
@@ -297,11 +297,11 @@ def test_sk711_flags_missing_markers_in_leaf(tmp_path, capsys):
         "scitex_dev._cli.audit._skills._audit._locate_skills_dir",
         return_value=pkg_root,
     ):
-        rc = audit_skills("leafmark", json_out=True, rules={"SK711"})
+        rc = audit_skills("leafmark", json_out=True, rules={"SK-711"})
     assert rc == 1
     payload = json.loads(capsys.readouterr().out)
     codes = {v["rule"] for v in payload["violations"]}
-    assert "SK711" in codes
+    assert "SK-711" in codes
 
 
 def test_audit_skills_rule_filter_restricts_violations(tmp_path):
@@ -315,8 +315,8 @@ def test_audit_skills_rule_filter_restricts_violations(tmp_path):
         "scitex_dev._cli.audit._skills._audit._locate_skills_dir",
         return_value=pkg_root,
     ):
-        rc = audit_skills("filtertest", json_out=True, rules={"SK210"})
-    # We restricted to SK210 — should only see header-banner violations.
+        rc = audit_skills("filtertest", json_out=True, rules={"SK-210"})
+    # We restricted to SK-210 — should only see header-banner violations.
     import sys
 
     payload_text = sys.stdout  # pytest's capsys would normally take this

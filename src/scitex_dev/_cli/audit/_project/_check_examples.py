@@ -1,38 +1,38 @@
-"""PS501 / PS502 / PS503 / PS504 / PS505 / PS506 / PS507 — examples conventions.
+"""PS-501 / PS-502 / PS-503 / PS-504 / PS-505 / PS-506 / PS-507 — examples conventions.
 
-PS501: every `.py` example whose stem starts with NN_ should decorate
+PS-501: every `.py` example whose stem starts with NN_ should decorate
 its `main()` with `@stx.session`. The reference is
 `~/proj/figrecipe/examples/01_bundle_format.py` and
 `~/proj/scitex-python/examples/01_session.py`. The decorator gives
 auto-CLI, SDIR_RUN-managed output, config injection, reproducibility.
 
-PS502: an example file `<n>.py` with a sibling directory `<n>_out/`
+PS-502: an example file `<n>.py` with a sibling directory `<n>_out/`
 that is empty (or contains only `__pycache__`) means the example was
 never run end-to-end — fix the example or delete the empty stub.
 
-PS503: an example file `<n>.py` with a sibling `<n>_out/` directory
+PS-503: an example file `<n>.py` with a sibling `<n>_out/` directory
 that has no `FINISHED_SUCCESS/<session_id>/` subdir. Once `@stx.session`
 runs the example to completion it writes a session-id directory under
 `FINISHED_SUCCESS/`; the rule enforces that directory's presence so
-GitHub viewers see real demo artefacts. (PS502 only checks
-"some content"; PS503 checks the `FINISHED_SUCCESS` shape specifically.)
+GitHub viewers see real demo artefacts. (PS-502 only checks
+"some content"; PS-503 checks the `FINISHED_SUCCESS` shape specifically.)
 
-PS504: `.ipynb` examples must commit their cell outputs. GitHub renders
+PS-504: `.ipynb` examples must commit their cell outputs. GitHub renders
 cell outputs inline, so an `nbstripped` notebook is invisible to
 viewers. Detected by walking notebook cells and looking for any
 non-empty `outputs` list on a `code` cell.
 
-PS505: `tests/examples/test_<stem>.py` for an `.ipynb` example must run
+PS-505: `tests/examples/test_<stem>.py` for an `.ipynb` example must run
 the notebook via `nbconvert --execute` or `pytest --nbval` (importing
 or `runpy`-ing won't execute notebook cells). Detected by string-search
 in the test file.
 
-PS506: a `.ipynb` example that imports matplotlib must include the
+PS-506: a `.ipynb` example that imports matplotlib must include the
 `%matplotlib inline` cell magic; otherwise figure outputs aren't
 embedded in cell outputs and the rendered notebook on GitHub will not
 show plots.
 
-PS507: a `.ipynb` example that imports matplotlib must call `plt.show()`
+PS-507: a `.ipynb` example that imports matplotlib must call `plt.show()`
 at least once. Even with `%matplotlib inline`, deferring display can
 leave figures un-rendered in cell outputs.
 """
@@ -54,7 +54,7 @@ _MPL_IMPORT_RE = re.compile(r"\b(?:import\s+matplotlib|from\s+matplotlib\b)")
 _PLT_SHOW_RE = re.compile(r"\bplt\.show\s*\(")
 _INLINE_MAGIC_RE = re.compile(r"^\s*%matplotlib\s+inline\b", re.MULTILINE)
 
-# PS508: any of these in stderr/error outputs flags as a committed warning.
+# PS-508: any of these in stderr/error outputs flags as a committed warning.
 _WARNING_CLASS_RE = re.compile(
     r"\b("
     r"DeprecationWarning|UserWarning|FutureWarning|RuntimeWarning|"
@@ -175,7 +175,7 @@ def _notebook_warning_outputs(nb_path: Path):
 
 
 def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> None:
-    """Append PS501–PS507 violations for examples/ contents."""
+    """Append PS-501–PS-507 violations for examples/ contents."""
     examples = repo / "examples"
     if not examples.is_dir():
         return
@@ -184,7 +184,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
         if not child.is_file():
             continue
 
-        # ---------- .py rules: PS501 (@stx.session) ------------------------
+        # ---------- .py rules: PS-501 (@stx.session) ------------------------
         if _NUMBERED_PY_EXAMPLE_RE.match(child.name):
             try:
                 text = child.read_text(encoding="utf-8", errors="replace")
@@ -193,7 +193,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
             if _HAS_DEF_MAIN.search(text) and not _STX_SESSION_RE.search(text):
                 out.append(
                     violation_cls(
-                        "PS501",
+                        "PS-501",
                         str(child),
                         (
                             "main() not decorated with @stx.session. Wrap it: "
@@ -205,12 +205,12 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
                     )
                 )
 
-        # ---------- .ipynb rules: PS504 / PS506 / PS507 --------------------
+        # ---------- .ipynb rules: PS-504 / PS-506 / PS-507 --------------------
         if _NUMBERED_IPYNB_EXAMPLE_RE.match(child.name):
             if not _notebook_has_outputs(child):
                 out.append(
                     violation_cls(
-                        "PS504",
+                        "PS-504",
                         str(child),
                         (
                             "notebook has no committed cell outputs (looks "
@@ -225,7 +225,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
                 if not _notebook_has_inline_magic(child):
                     out.append(
                         violation_cls(
-                            "PS506",
+                            "PS-506",
                             str(child),
                             (
                                 "imports matplotlib but missing the "
@@ -238,7 +238,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
                 if not _notebook_has_plt_show(child):
                     out.append(
                         violation_cls(
-                            "PS507",
+                            "PS-507",
                             str(child),
                             (
                                 "imports matplotlib but does not call "
@@ -249,7 +249,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
                         )
                     )
 
-            # PS508: warning text in committed cell outputs.
+            # PS-508: warning text in committed cell outputs.
             warnings_found = list(_notebook_warning_outputs(child))
             if warnings_found:
                 idx, snippet = warnings_found[0]
@@ -260,7 +260,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
                 )
                 out.append(
                     violation_cls(
-                        "PS508",
+                        "PS-508",
                         str(child),
                         (
                             f"committed warning in cell {idx}{more}: "
@@ -272,7 +272,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
                     )
                 )
 
-            # PS505: matched test must use nbconvert / nbval.
+            # PS-505: matched test must use nbconvert / nbval.
             stem = child.stem
             test_path = repo / "tests" / "examples" / f"test_{stem}.py"
             if test_path.is_file():
@@ -283,7 +283,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
                 if not _NB_EXEC_RE.search(test_text):
                     out.append(
                         violation_cls(
-                            "PS505",
+                            "PS-505",
                             str(test_path),
                             (
                                 "notebook smoke-test must invoke "
@@ -295,7 +295,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
                         )
                     )
 
-    # ---------- _out/ dir rules: PS502 (empty), PS503 (FINISHED_SUCCESS) ---
+    # ---------- _out/ dir rules: PS-502 (empty), PS-503 (FINISHED_SUCCESS) ---
     #
     # Skip both when a `.ipynb` example owns the stem instead of (or
     # alongside) a `.py` example — for notebooks, the rendered cell
@@ -316,7 +316,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
         if _is_empty_or_pycache_only(child):
             out.append(
                 violation_cls(
-                    "PS502",
+                    "PS-502",
                     str(child),
                     (
                         "empty examples output dir — the example was never "
@@ -329,7 +329,7 @@ def check_examples_conventions(repo: Path, violation_cls: type, out: list) -> No
         if not _has_finished_success(child):
             out.append(
                 violation_cls(
-                    "PS503",
+                    "PS-503",
                     str(child),
                     (
                         "no FINISHED_SUCCESS/<session_id>/ subdir — the "

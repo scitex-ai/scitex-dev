@@ -137,7 +137,7 @@ Sphinx remains optional for pure-utility packages (no CLI, no MCP, no
 public Python API surface worth documenting). But the moment a package
 ships a click CLI or an MCP server, `docs/sphinx/conf.py` MUST exist —
 otherwise users have no rendered CLI reference and nothing to link to
-from <https://scitex.ai>. The `audit-project` PS128 row below enforces
+from <https://scitex.ai>. The `audit-project` PS-128 row below enforces
 this.
 
 ## Audit rules (project-structure auditor)
@@ -147,13 +147,13 @@ enforces the canonical setup:
 
 | Code  | Enforces                                                                          |
 |-------|-----------------------------------------------------------------------------------|
-| PS121 | `src/<pkg>/_sphinx_html/index.html` is bundled (scitex-cloud serves from it)      |
-| PS122 | `.github/workflows/docs.yml` exists (auto-refreshes the bundle on push)           |
-| PS124 | `.readthedocs.yaml` (or `.yml`) exists at repo root                               |
-| PS125 | `.readthedocs.yaml` matches the canonical shape (version 2, ubuntu-22.04, py3.11) |
-| PS126 | `docs/sphinx/requirements.txt` pins the canonical doc deps                        |
-| PS127 | `pyproject.toml [project.urls]` has `Documentation = "https://<pkg>.readthedocs.io"` |
-| PS128 | If the package ships a click CLI (`scitex_<pkg>._cli:main` resolves), `docs/sphinx/conf.py` MUST exist, list `sphinx_click` in `extensions`, and contain a `.. click::` directive in `cli_reference.rst` (or any RST under `docs/sphinx/`). Hand-written prose subcommand trees under a `Commands` heading without a sibling `.. click::` directive are flagged. |
+| PS-121 | `src/<pkg>/_sphinx_html/index.html` is bundled (scitex-cloud serves from it)      |
+| PS-122 | `.github/workflows/docs.yml` exists (auto-refreshes the bundle on push)           |
+| PS-124 | `.readthedocs.yaml` (or `.yml`) exists at repo root                               |
+| PS-125 | `.readthedocs.yaml` matches the canonical shape (version 2, ubuntu-22.04, py3.11) |
+| PS-126 | `docs/sphinx/requirements.txt` pins the canonical doc deps                        |
+| PS-127 | `pyproject.toml [project.urls]` has `Documentation = "https://<pkg>.readthedocs.io"` |
+| PS-128 | If the package ships a click CLI (`scitex_<pkg>._cli:main` resolves), `docs/sphinx/conf.py` MUST exist, list `sphinx_click` in `extensions`, and contain a `.. click::` directive in `cli_reference.rst` (or any RST under `docs/sphinx/`). Hand-written prose subcommand trees under a `Commands` heading without a sibling `.. click::` directive are flagged. |
 
 ## GitHub language stats — mark `_sphinx_html/` as generated
 

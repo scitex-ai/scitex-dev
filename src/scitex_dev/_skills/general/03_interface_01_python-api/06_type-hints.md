@@ -134,4 +134,4 @@ mypy --strict src/scitex_io
 pyright src/scitex_io
 ```
 
-Linter rule (planned): **PA009** — every public function (in `__all__`) must have annotations on all parameters and a return type.
+Linter rule (planned): **PA-009** — every public function (in `__all__`) must have annotations on all parameters and a return type.

@@ -59,19 +59,19 @@ Development / Documentation / Interface / Shell sections, mirror those
 same categories in the source layout. The CLI grouping is your
 designed-in taxonomy; the source layout should match it.
 
-`audit-project`'s **PS108** rule flags packages where prefix-clusters
+`audit-project`'s **PS-108** rule flags packages where prefix-clusters
 have grown past the threshold and rolls all clusters into one
 violation, so you land the reorganization in a single coherent pass
 rather than fixing one prefix at a time across separate PRs.
 
-When PS108 fires alongside PS204 (orphan tests), the orphan-test
+When PS-108 fires alongside PS-204 (orphan tests), the orphan-test
 hint also tells you where each test should be moved — refactor the
 src and the tests in the same change.
 
 ### Logical categorization, not blind prefix-promotion
 
 The prefix is a *trigger* for noticing a cluster, not a *recipe* for
-the new layout. When PS108 fires, resist the temptation to mechanically
+the new layout. When PS-108 fires, resist the temptation to mechanically
 move every `<prefix>_*.py` into `_<prefix>/` and stop. Two files with
 the same prefix can belong to two different responsibilities, and two
 files with different prefixes can belong together.
@@ -89,13 +89,13 @@ Decision rules, in order:
    subpackage per category is a strong default — the CLI grouping was
    already designed by humans for humans, so reusing it is free
    discoverability.
-3. **A single file with no peers does not need a directory.** PS108
+3. **A single file with no peers does not need a directory.** PS-108
    threshold is 3 for a reason: 1–2 files are findable as flat siblings.
    Don't create a `_logging/` package for one `logging.py`.
 4. **Cross-cluster shared helpers go up one level, not into either cluster.**
    If `_mcp/` and `_cli/` both import a `_dispatch_table` helper, keep
    that helper as a flat sibling at `src/<pkg>/_dispatch.py` rather than
-   picking a "primary" subpackage to host it. PS108 won't flag a single
+   picking a "primary" subpackage to host it. PS-108 won't flag a single
    file.
 5. **When unsure, prefer fewer larger directories over many small ones.**
    You can split later (cheap) but un-splitting is messy (every external
@@ -160,16 +160,16 @@ files into shorter siblings.
 
 ## Topical clusters with no shared prefix — the silent mess
 
-PS108 catches prefix clusters (`_cli_*`, `_skills_*`). It does **not**
+PS-108 catches prefix clusters (`_cli_*`, `_skills_*`). It does **not**
 catch the second mess pattern: a package root with many flat files that
 *share a topic* but no prefix.
 
 Example — scitex-dev's actual `src/scitex_dev/` had ~30 flat top-level
 files like `ci.py`, `deploy.py`, `github.py`, `rtd.py`,
 `_version_fixer.py`, `_release_publisher.py`, `versions.py` — clearly a
-"release/CI" cluster, but no shared prefix means PS108 stays silent.
+"release/CI" cluster, but no shared prefix means PS-108 stays silent.
 
-**Rule (PS108b — pending audit)**: when `src/<pkg>/` (or any
+**Rule (PS-108b — pending audit)**: when `src/<pkg>/` (or any
 subpackage) holds **>15 flat `.py` files** excluding `__init__.py` and
 `__main__.py`, group them into topical subpackages. Use the same
 decision rules as the prefix case (group by responsibility, mirror the
@@ -198,7 +198,7 @@ above. Don't create `_logging/` for one `logging.py`.
 Inter-scitex package deps follow the **cascade direction** (see [01_ecosystem_01_upstream-and-downstream.md](01_ecosystem_01_upstream-and-downstream.md)):
 
 - A downstream package importing from an upstream one is fine and common — e.g. `scitex-stats` depends on `scitex-io` for save/load helpers; `scitex-cloud` depends on `scitex-config` for path resolution.
-- Pyproject must declare every such dep. `E5C5_implicit_deps` flags missing declarations.
+- Pyproject must declare every such dep. `REL-5_implicit_deps` flags missing declarations.
 
 What `src/` should **not** import is the **umbrella `scitex` package itself** — that umbrella re-exports the package, which creates a real cycle on install. Tests, scripts, and examples are free to import from the umbrella.
 
@@ -220,7 +220,7 @@ A leading underscore in a filename marks the module as **private** (not part of 
 | `src/<pkg>/foo.py` (public) | `tests/<pkg>/test_foo.py` |
 | `src/<pkg>/_foo.py` (private) | `tests/<pkg>/test__foo.py` |
 
-The double-underscore visually echoes the source's leading underscore, and PS205 of `audit-project` enforces it.
+The double-underscore visually echoes the source's leading underscore, and PS-205 of `audit-project` enforces it.
 
 `__init__.py` is exempt — it doesn't get its own test file (use `tests/<pkg>/test___init__.py` only when you have a real reason to test package-level behavior, e.g. lazy-import wiring).
 
@@ -233,7 +233,7 @@ The double-underscore visually echoes the source's leading underscore, and PS205
 
 ## `_skills/` — packaged skill assets
 
-If your package ships agent-facing skills, vendor them at `src/<pkg>/_skills/<pkg>/`. The bundling is enforced by `E5C9_skill_bundling` in `scitex_dev._pyproject_lint`. See `_skills/general/03_interface_04_skills/` for the skill-authoring rules.
+If your package ships agent-facing skills, vendor them at `src/<pkg>/_skills/<pkg>/`. The bundling is enforced by `REL-9_skill_bundling` in `scitex_dev._pyproject_lint`. See `_skills/general/03_interface_04_skills/` for the skill-authoring rules.
 
 ## `_sphinx_html/` — pre-built docs (production)
 

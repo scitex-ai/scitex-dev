@@ -47,7 +47,7 @@ Don't commit `SDIR_RUN/<run-id>/` artefacts (those are session-unique). Use `SDI
 
 ## 1:1 match with `tests/examples/`
 
-Every example file has a matching `tests/examples/test_<stem>.py`. PS303 of `audit-project` flags missing tests.
+Every example file has a matching `tests/examples/test_<stem>.py`. PS-303 of `audit-project` flags missing tests.
 
 ```
 examples/01_invoke_pipeline.py          →  tests/examples/test_01_invoke_pipeline.py

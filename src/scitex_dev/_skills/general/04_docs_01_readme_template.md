@@ -10,7 +10,7 @@ tags: [scitex-general-docs-readme-template]
 Literal template for every SciTeX package README.md. Replace `<PACKAGE>`
 (distribution name, e.g. `scitex-io`), `<MODULE>` (import name, e.g.
 `scitex_io`), and `<TAGLINE>` (one-line value proposition) before
-committing. The audit rules PS107 / PS109 / PS110 / PS111 / PS112 / PS133
+committing. The audit rules PS-107 / PS-109 / PS-110 / PS-111 / PS-112 / PS-133
 enforce the load-bearing parts of this template.
 
 **Reference implementations** (look at these first when in doubt):
@@ -114,13 +114,13 @@ Each rule warns (never errors) and fires from
 
 | Code  | Enforces                                                        |
 |-------|-----------------------------------------------------------------|
-| PS106 | Coverage badge present in first ~4 KB                           |
-| PS107 | Required H2 sections: `## Installation`, `## Quick Start`, `## Part of SciTeX` |
-| PS109 | PyPI version badge present in first ~4 KB                       |
-| PS110 | Four Freedoms for Research blockquote present                   |
-| PS111 | Banned personal email `ywatanabe@scitex.ai` not present         |
-| PS112 | SciTeX logo image present in first ~4 KB                        |
-| PS133 | Badges block placed below the Full-Doc line in the centered `<p align="center">` form (figrecipe-style); not above the logo and not in `[![…]]()` markdown form |
+| PS-106 | Coverage badge present in first ~4 KB                           |
+| PS-107 | Required H2 sections: `## Installation`, `## Quick Start`, `## Part of SciTeX` |
+| PS-109 | PyPI version badge present in first ~4 KB                       |
+| PS-110 | Four Freedoms for Research blockquote present                   |
+| PS-111 | Banned personal email `ywatanabe@scitex.ai` not present         |
+| PS-112 | SciTeX logo image present in first ~4 KB                        |
+| PS-133 | Badges block placed below the Full-Doc line in the centered `<p align="center">` form (figrecipe-style); not above the logo and not in `[![…]]()` markdown form |
 
 ## Acceptable Variants
 
@@ -129,7 +129,7 @@ Each rule warns (never errors) and fires from
   the wild). Banner variants (`scitex-logo-banner.png`) are also
   acceptable as long as the basename starts with `scitex-logo`.
 - Quick Start heading: `## Quick Start` or `## Quickstart` (both
-  pass PS107).
+  pass PS-107).
 - PyPI badge: `badge.fury.io/py/<pkg>.svg` or
   `img.shields.io/pypi/v/<pkg>.svg`.
 - `import` idiom in code blocks: both `import scitex` and

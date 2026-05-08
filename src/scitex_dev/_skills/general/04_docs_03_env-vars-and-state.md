@@ -17,7 +17,7 @@ README's `## Environment Variables` H2 contains a 3-column table
 references the file from `## Installation > ### Configuration`; no
 table in the README. Users `cp .env.example .env` to bootstrap.
 
-The audit (PS130) fires only when **both** are present — the two will
+The audit (PS-130) fires only when **both** are present — the two will
 drift. Pick one.
 
 ## Why no triplication
@@ -117,8 +117,8 @@ config — they can't drift because users actually copy the file.
 
 | Code  | Enforces                                                                        |
 |-------|---------------------------------------------------------------------------------|
-| PS129 | Package referencing `SCITEX_<MODULE>_*` env vars must ship `.env.example` at root |
-| PS130 | README has no standalone `## Environment Variables` H2 (move into Installation)  |
+| PS-129 | Package referencing `SCITEX_<MODULE>_*` env vars must ship `.env.example` at root |
+| PS-130 | README has no standalone `## Environment Variables` H2 (move into Installation)  |
 
 ## Reference exemplar
 

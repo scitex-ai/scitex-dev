@@ -229,7 +229,7 @@ before any test runs.
 ``"License :: OSI Approved :: ..."`` classifier in favour of the
 ``license = "AGPL-3.0-only"`` SPDX expression. setuptools 80+ refuses
 the build when *both* are present. After our 2026-04-28a normalization
-to SPDX (E5C11), 41 ecosystem packages still carried the legacy
+to SPDX (REL-11), 41 ecosystem packages still carried the legacy
 classifier alongside the new SPDX form.
 
 **Detection** is automated in

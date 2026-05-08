@@ -96,7 +96,7 @@ test-collection time and CI breaks on the first push that touches the
 feature. The 2026-05-02 scitex-notebook MCP refactor hit this exact
 failure mode on its first push to `develop`.
 
-**Detection.** `audit-project`'s `PS210` check flags any pyproject extra
+**Detection.** `audit-project`'s `PS-210` check flags any pyproject extra
 whose declared deps are referenced unconditionally from `tests/` but
 missing from `[dev]`.
 

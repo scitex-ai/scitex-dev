@@ -67,9 +67,9 @@ _CALL_RULES_SPEC = (
     (("stats", "wilcoxon"), "STX-ST005"),
     (("stats", "kruskal"), "STX-ST006"),
     # Path rules
-    (("os", "makedirs"), "STX-PA003"),
-    (("os", "mkdir"), "STX-PA003"),
-    (("os", "chdir"), "STX-PA004"),
+    (("os", "makedirs"), "STX-PA-003"),
+    (("os", "mkdir"), "STX-PA-003"),
+    (("os", "chdir"), "STX-PA-004"),
 )
 
 _AXES_HINTS_SPEC = (

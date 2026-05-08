@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Research Project Tests
-  [DETAILS] `./tests/` for a SciTeX research project — pytest-driven, same convention as for packages but the source tree being mirrored is `./scripts/` (not `./src/`). Mandatory `tests/scripts/` parent. Allowed sibling subdirs (examples/agentic/integration/e2e/github_actions/coverage/logs/reports/custom). Public/private filename convention with double-underscore for private. Same `audit-project` rule set (PS201–PS206 with `tests/scripts/` substituted for `tests/<pkg>/`, plus PS302/PS303).
+  [DETAILS] `./tests/` for a SciTeX research project — pytest-driven, same convention as for packages but the source tree being mirrored is `./scripts/` (not `./src/`). Mandatory `tests/scripts/` parent. Allowed sibling subdirs (examples/agentic/integration/e2e/github_actions/coverage/logs/reports/custom). Public/private filename convention with double-underscore for private. Same `audit-project` rule set (PS-201–PS-206 with `tests/scripts/` substituted for `tests/<pkg>/`, plus PS-302/PS-303).
 tags: [scitex-scientific-research-project-project-structure-tests]
 ---
 
@@ -11,7 +11,7 @@ tags: [scitex-scientific-research-project-project-structure-tests]
 
 ## Mandatory `tests/scripts/` parent
 
-A research project's primary code lives in `./scripts/`, so `./tests/scripts/` is the mandatory mirror parent (analogous to `tests/<pkg>/` for packages). PS201 fires when it's missing.
+A research project's primary code lives in `./scripts/`, so `./tests/scripts/` is the mandatory mirror parent (analogous to `tests/<pkg>/` for packages). PS-201 fires when it's missing.
 
 ```
 scripts/                            tests/scripts/
@@ -25,7 +25,7 @@ scripts/                            tests/scripts/
 
 ## Public / private filename convention
 
-A leading underscore in the source marks the module **private**. The mirroring test uses **double underscore** between `test` and the basename — same as for packages (PS205 enforces it):
+A leading underscore in the source marks the module **private**. The mirroring test uses **double underscore** between `test` and the basename — same as for packages (PS-205 enforces it):
 
 | Source | Test |
 | :--- | :--- |
@@ -50,7 +50,7 @@ A leading underscore in the source marks the module **private**. The mirroring t
 
 ## Allowed at `tests/` root
 
-A small set of meta-tests at the top level (anything else triggers PS203):
+A small set of meta-tests at the top level (anything else triggers PS-203):
 
 ```
 tests/

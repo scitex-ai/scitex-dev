@@ -1,4 +1,4 @@
-"""PS210 — `[dev]` extras completeness.
+"""PS-210 — `[dev]` extras completeness.
 
 Implements the rule from
 `_skills/general/01_ecosystem_02_dependency-and-version-pinning.md`
@@ -15,7 +15,7 @@ Decision rule the auditor enforces:
   if a project distribution name imported anywhere in ``tests/``
   is declared in some ``[X]`` extra and NOT in ``[dev]``,
   AND the test imports it WITHOUT a guarding ``pytest.importorskip``,
-  emit PS210 (warn).
+  emit PS-210 (warn).
 
 The auditor is intentionally limited to **distribution-level** deps so
 it stays language-agnostic and doesn't need to model every transitive
@@ -129,7 +129,7 @@ def _scan_py_dir(py_dir: Path) -> tuple[set[str], set[str]]:
 
 
 def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> None:
-    """Append PS210 violations.
+    """Append PS-210 violations.
 
     Fires when a dep is declared in some `[X]` extra, used unguarded in
     tests, but absent from `[dev]`. The fix is to add the dep to `[dev]`
@@ -173,7 +173,7 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
                 continue  # importorskip handles it
             out.append(
                 violation_cls(
-                    "PS210",
+                    "PS-210",
                     str(repo / "pyproject.toml"),
                     (
                         f"`[{extra_name}]` extra declares `{dep}` and tests "

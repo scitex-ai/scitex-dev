@@ -1,11 +1,11 @@
-"""PS139 + PS140 — umbrella-dep ban + cross-package integration gate.
+"""PS-139 + PS-140 — umbrella-dep ban + cross-package integration gate.
 
-PS139: standalone packages must not list `scitex` (the umbrella) in
+PS-139: standalone packages must not list `scitex` (the umbrella) in
 runtime / extras dependencies. Codified after the 2026-05-06 HPC NFS
 slow-import investigation surfaced 35+ standalones that pulled the
 umbrella as a transitive dep.
 
-PS140: any package whose source has cross-package imports
+PS-140: any package whose source has cross-package imports
 (`scitex_<X>` peer or `scitex.<X>` umbrella) must ship a runtime
 gate at `tests/integration/test_cross_package_imports.py` listing
 every cross-package module name. Without it, renames/moves in peer
@@ -168,7 +168,7 @@ def check_ps139_umbrella_dep(repo: Path, violation_cls: type, out: list) -> None
     for f in findings:
         out.append(
             violation_cls(
-                "PS139",
+                "PS-139",
                 str(pyproject),
                 f"`scitex` (umbrella) listed at {f}; replace with peer "
                 "standalone(s) to avoid the umbrella drag.",
@@ -195,7 +195,7 @@ def check_ps140_integration_gate(
     if not test_file.exists():
         out.append(
             violation_cls(
-                "PS140",
+                "PS-140",
                 str(repo),
                 (
                     f"source has {len(expected)} cross-package import(s) "
@@ -222,7 +222,7 @@ def check_ps140_integration_gate(
             )
         out.append(
             violation_cls(
-                "PS140",
+                "PS-140",
                 str(test_file),
                 "; ".join(msg_parts) + ". Regenerate the gate.",
             )

@@ -1,7 +1,7 @@
 """Smoke tests for `scitex_dev.linter._rules._base`.
 
 The `Rule` dataclass is exercised by every rule definition; this file
-acts as the canonical PS204/PS205-mirror for the private module so the
+acts as the canonical PS-204/PS-205-mirror for the private module so the
 test tree shape matches the src tree shape.
 """
 

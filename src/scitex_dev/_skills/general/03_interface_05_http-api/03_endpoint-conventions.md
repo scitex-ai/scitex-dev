@@ -146,4 +146,4 @@ If you publish the API publicly, link `/docs` from your README.
 - `response_model=` declared on every non-trivial endpoint.
 - `/docs` reachable and accurate.
 
-Linter rule (planned): **PA1xx-style** — see [09_audit-checklist.md](09_audit-checklist.md) and [TODO.md](TODO.md).
+Linter rule (planned): **PA-1xx-style** — see [09_audit-checklist.md](09_audit-checklist.md) and [TODO.md](TODO.md).

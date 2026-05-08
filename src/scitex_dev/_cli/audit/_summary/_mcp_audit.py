@@ -139,9 +139,9 @@ def _read_bridge_source(package: str) -> str | None:
     try:
         # Auditing the umbrella's private bridge package by design — this
         # is the one place where the umbrella path is intentional, not a
-        # PA304 violation. Use a function-local import (lazy) so PA304's
+        # PA-304 violation. Use a function-local import (lazy) so PA-304's
         # module-level scan exempts it.
-        import scitex._mcp_tools as bridge_pkg  # noqa: PA304
+        import scitex._mcp_tools as bridge_pkg  # noqa: PA-304
     except Exception:
         return None
     pkg_dir = Path(getattr(bridge_pkg, "__file__", "")).parent

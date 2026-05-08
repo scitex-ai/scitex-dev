@@ -1,4 +1,4 @@
-"""Spec-v2 rules: SK105–SK111 (file presence, conditional) and SK705–SK711
+"""Spec-v2 rules: SK-105–SK-111 (file presence, conditional) and SK-705–SK-711
 (frontmatter shape, partially auto-fixable).
 
 Kept separate from `_audit.py` so the legacy file stays close to its size
@@ -25,37 +25,37 @@ V2_RULES: dict[str, V2Rule] = {
     r.code: r
     for r in [
         # §1 — File presence (conditional)
-        V2Rule("SK105", "§1", "missing mandatory `01_installation.md`"),
-        V2Rule("SK106", "§1", "missing mandatory `02_quick-start.md`"),
+        V2Rule("SK-105", "§1", "missing mandatory `01_installation.md`"),
+        V2Rule("SK-106", "§1", "missing mandatory `02_quick-start.md`"),
         V2Rule(
-            "SK107", "§1", "missing `03_python-api.md` (package exposes public API)"
+            "SK-107", "§1", "missing `03_python-api.md` (package exposes public API)"
         ),
         V2Rule(
-            "SK108", "§1", "missing `04_cli-reference.md` ([project.scripts] non-empty)"
+            "SK-108", "§1", "missing `04_cli-reference.md` ([project.scripts] non-empty)"
         ),
-        V2Rule("SK109", "§1", "missing `05_mcp-tools.md` (MCP entry-point present)"),
-        V2Rule("SK110", "§1", "missing `06_http-api.md` (HTTP framework imported)"),
+        V2Rule("SK-109", "§1", "missing `05_mcp-tools.md` (MCP entry-point present)"),
+        V2Rule("SK-110", "§1", "missing `06_http-api.md` (HTTP framework imported)"),
         V2Rule(
-            "SK111",
+            "SK-111",
             "§1",
             "missing `20_env-vars.md` (SCITEX_<MOD>_* env vars referenced)",
         ),
         # §FM — Frontmatter shape
         V2Rule(
-            "SK705", "§FM", "leaf MUST NOT carry `name:` field (filename = identity)"
+            "SK-705", "§FM", "leaf MUST NOT carry `name:` field (filename = identity)"
         ),
         V2Rule(
-            "SK706",
+            "SK-706",
             "§FM",
             "SKILL.md `description:` must contain inline markers `[WHAT]`, `[WHEN]`, `[HOW]`",
         ),
-        V2Rule("SK708", "§FM", "SKILL.md `name:` does not equal pip-name"),
-        V2Rule("SK709", "§FM", "SKILL.md `tags:` must equal exactly `[scitex-<pkg>]`"),
+        V2Rule("SK-708", "§FM", "SKILL.md `name:` does not equal pip-name"),
+        V2Rule("SK-709", "§FM", "SKILL.md `tags:` must equal exactly `[scitex-<pkg>]`"),
         V2Rule(
-            "SK710", "§FM", "leaf `tags[0]` must equal canonical `scitex-<pkg>-<slug>`"
+            "SK-710", "§FM", "leaf `tags[0]` must equal canonical `scitex-<pkg>-<slug>`"
         ),
         V2Rule(
-            "SK711",
+            "SK-711",
             "§FM",
             "leaf `description:` must contain inline markers `[TOPIC]` and `[DETAILS]`",
         ),
@@ -85,36 +85,36 @@ def check_file_presence(
         out.append((code, str(skills_dir), f"expected `{fname}`"))
 
     if not (skills_dir / "01_installation.md").is_file():
-        _missing("SK105", "01_installation.md")
+        _missing("SK-105", "01_installation.md")
     if not (skills_dir / "02_quick-start.md").is_file():
-        _missing("SK106", "02_quick-start.md")
+        _missing("SK-106", "02_quick-start.md")
 
     pyproject = _core.load_pyproject(pkg_root) if pkg_root else {}
 
-    # SK107 — public API
+    # SK-107 — public API
     api = _core.has_public_python_api(import_name)
     if api is True and not (skills_dir / "03_python-api.md").is_file():
-        _missing("SK107", "03_python-api.md")
+        _missing("SK-107", "03_python-api.md")
 
-    # SK108 — CLI scripts
+    # SK-108 — CLI scripts
     if pkg_root and _core.has_cli_scripts(pyproject):
         if not (skills_dir / "04_cli-reference.md").is_file():
-            _missing("SK108", "04_cli-reference.md")
+            _missing("SK-108", "04_cli-reference.md")
 
-    # SK109 — MCP
+    # SK-109 — MCP
     if pkg_root and _core.has_mcp_entry(pyproject, import_name):
         if not (skills_dir / "05_mcp-tools.md").is_file():
-            _missing("SK109", "05_mcp-tools.md")
+            _missing("SK-109", "05_mcp-tools.md")
 
-    # SK110 — HTTP
+    # SK-110 — HTTP
     if pkg_root and _core.has_http_imports(pkg_root):
         if not (skills_dir / "06_http-api.md").is_file():
-            _missing("SK110", "06_http-api.md")
+            _missing("SK-110", "06_http-api.md")
 
-    # SK111 — env vars
+    # SK-111 — env vars
     if pkg_root and _core.has_envvar_refs(pkg_root, distribution):
         if not (skills_dir / "20_env-vars.md").is_file():
-            _missing("SK111", "20_env-vars.md")
+            _missing("SK-111", "20_env-vars.md")
 
     return out
 
@@ -135,31 +135,31 @@ def check_skill_md_frontmatter(
     out: list[tuple[str, str, str]] = []
     data, _block, _body, _text = _core.parse_frontmatter_yaml(skill_md)
     if data is None:
-        return out  # SK701 covers missing/unparseable
+        return out  # SK-701 covers missing/unparseable
 
-    # SK706 — description contains [WHAT]/[WHEN]/[HOW] markers
+    # SK-706 — description contains [WHAT]/[WHEN]/[HOW] markers
     desc = str(data.get("description") or "")
     missing_markers = [m for m in ("[WHAT]", "[WHEN]", "[HOW]") if m not in desc]
     if missing_markers:
         out.append(
             (
-                "SK706",
+                "SK-706",
                 str(skill_md),
                 f"description missing markers: {', '.join(missing_markers)}",
             )
         )
 
-    # SK708 — name == pip-name
+    # SK-708 — name == pip-name
     name = data.get("name")
     if name != distribution:
-        out.append(("SK708", str(skill_md), f"name={name!r} != {distribution!r}"))
+        out.append(("SK-708", str(skill_md), f"name={name!r} != {distribution!r}"))
 
-    # SK709 — tags equals exactly [scitex-<pkg>]
+    # SK-709 — tags equals exactly [scitex-<pkg>]
     tags = _normalize_tags_field(data.get("tags"))
     if tags != [distribution]:
         out.append(
             (
-                "SK709",
+                "SK-709",
                 str(skill_md),
                 f"tags={tags!r}, expected [{distribution!r}]",
             )
@@ -174,29 +174,29 @@ def check_leaf_frontmatter(leaf: Path, distribution: str) -> list[tuple[str, str
     if data is None:
         return out
 
-    # SK705 — leaf must NOT have `name:`
+    # SK-705 — leaf must NOT have `name:`
     if "name" in data:
-        out.append(("SK705", str(leaf), "leaf carries forbidden `name:` field"))
+        out.append(("SK-705", str(leaf), "leaf carries forbidden `name:` field"))
 
-    # SK711 — description contains [TOPIC] and [DETAILS] markers
+    # SK-711 — description contains [TOPIC] and [DETAILS] markers
     desc = str(data.get("description") or "")
     missing_markers = [m for m in ("[TOPIC]", "[DETAILS]") if m not in desc]
     if missing_markers:
         out.append(
             (
-                "SK711",
+                "SK-711",
                 str(leaf),
                 f"description missing markers: {', '.join(missing_markers)}",
             )
         )
 
-    # SK710 — tags[0] equals scitex-<pkg>-<slug>
+    # SK-710 — tags[0] equals scitex-<pkg>-<slug>
     tags = _normalize_tags_field(data.get("tags"))
     expected_tag = f"{distribution}-{_core.slug_from_filename(leaf.name)}"
     if not tags or tags[0] != expected_tag:
         out.append(
             (
-                "SK710",
+                "SK-710",
                 str(leaf),
                 f"tags[0]={tags[0] if tags else None!r}, expected {expected_tag!r}",
             )
@@ -303,9 +303,9 @@ def fix_skill_md(skill_md: Path, distribution: str, codes: set[str]) -> set[str]
     fixed: set[str] = set()
     new_block = block
 
-    if "SK709" in codes:
+    if "SK-709" in codes:
         new_block = _replace_tags(new_block, [distribution])
-        fixed.add("SK709")
+        fixed.add("SK-709")
 
     if new_block != block:
         _write_with_block(skill_md, new_block, body)
@@ -319,18 +319,18 @@ def fix_leaf(leaf: Path, distribution: str, codes: set[str]) -> set[str]:
     fixed: set[str] = set()
     new_block = block
 
-    if "SK705" in codes and "name" in data:
+    if "SK-705" in codes and "name" in data:
         new_block = _delete_key(new_block, "name")
-        fixed.add("SK705")
+        fixed.add("SK-705")
 
-    if "SK710" in codes:
+    if "SK-710" in codes:
         existing = _normalize_tags_field(data.get("tags"))
         canonical = f"{distribution}-{_core.slug_from_filename(leaf.name)}"
         # Strip any prior occurrences of canonical, then prepend
         rest = [t for t in existing if t != canonical]
         new_tags = [canonical, *rest]
         new_block = _replace_tags(new_block, new_tags)
-        fixed.add("SK710")
+        fixed.add("SK-710")
 
     if new_block != block:
         _write_with_block(leaf, new_block, body)

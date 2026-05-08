@@ -20,7 +20,7 @@ Claude Code parses YAML frontmatter only when the file **starts with `---` on li
 Banned at the **top**: HTML-comment banners, timestamp/author/license blocks, blank lines, or any byte before the opening `---`.
 Banned at the **bottom**: trailing `<!-- EOF -->` or similar end-of-file markers.
 
-Enforced at release-gate time — see [12_quality-checklist.md](12_quality-checklist.md) (SK210, SK211).
+Enforced at release-gate time — see [12_quality-checklist.md](12_quality-checklist.md) (SK-210, SK-211).
 
 ## 1. Required fields
 
@@ -86,7 +86,7 @@ YAML block literal `|` lets the description span multiple lines while remaining 
 
 ## 3. Single source of truth
 
-`description:` is the only place the WHAT/WHEN/HOW (or TOPIC/DETAILS) content lives. There are no separate `what:`/`when:`/`how:`/`topic:`/`details:` fields. The auditor checks marker presence via SK706 (SKILL.md) and SK711 (leaf); regeneration / derivation is no longer part of the design.
+`description:` is the only place the WHAT/WHEN/HOW (or TOPIC/DETAILS) content lives. There are no separate `what:`/`when:`/`how:`/`topic:`/`details:` fields. The auditor checks marker presence via SK-706 (SKILL.md) and SK-711 (leaf); regeneration / derivation is no longer part of the design.
 
 ## 4. Claude Code standard fields (optional)
 
@@ -128,4 +128,4 @@ Do not add to new files. When auditing an old file with these, prefer to delete.
 
 - [03_skill-md-as-index.md](03_skill-md-as-index.md) — SKILL.md template
 - [13_standard-template.md](13_standard-template.md) — copy-paste scaffold matching this convention
-- [12_quality-checklist.md](12_quality-checklist.md) — release-gate verification (SK706–SK711)
+- [12_quality-checklist.md](12_quality-checklist.md) — release-gate verification (SK-706–SK-711)

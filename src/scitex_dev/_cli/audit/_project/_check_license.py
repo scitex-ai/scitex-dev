@@ -1,17 +1,17 @@
-"""PS138 / PS138b — LICENSE file checks.
+"""PS-138 / PS-138b — LICENSE file checks.
 
-PS138  — file present at repo root (LICENSE / LICENSE.md / LICENSE.txt).
-PS138b — file content matches the SPDX declaration in pyproject.toml.
+PS-138  — file present at repo root (LICENSE / LICENSE.md / LICENSE.txt).
+PS-138b — file content matches the SPDX declaration in pyproject.toml.
 
-PS138b was added after a 20-line copyright stub passed PS138 (which
+PS-138b was added after a 20-line copyright stub passed PS-138 (which
 only checked presence). The fix verifies the on-disk text contains the
 unmistakable AGPL-3.0 signature lines, including Section 13 ("Remote
 Network Interaction") that's nearly always missing from stubs.
 
 Only AGPL-3.0-only is enforced today — that's the ecosystem-mandated
 license per `01_ecosystem_07_license-and-cla.md`. If a package
-declares a different SPDX expression, PS138b skips it (presence-only
-check via PS138 still applies).
+declares a different SPDX expression, PS-138b skips it (presence-only
+check via PS-138 still applies).
 """
 
 from __future__ import annotations

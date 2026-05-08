@@ -19,7 +19,7 @@ Strike (`~~item~~`) when done. Foundations shipped in scitex-dev `feat-python-ap
 
 - `from scitex_dev import try_import_optional, last_install_hint, InstallHint` — optional-import helper.
 - `from scitex_dev import ScitexError, ErrorCode, classify_exception` — canonical structured exception.
-- `scitex-dev ecosystem audit-python-apis <dist> [--json] [--rule PA101 …]` — auditor with 9 rules: PA101–104 (§1), PA201–203 (§2), PA301 (§3), PA501 (§5). Mirrors `list-python-apis`; sits next to `audit-cli` and `audit-mcp-tools` under `ecosystem`.
+- `scitex-dev ecosystem audit-python-apis <dist> [--json] [--rule PA-101 …]` — auditor with 9 rules: PA-101–104 (§1), PA-201–203 (§2), PA-301 (§3), PA-501 (§5). Mirrors `list-python-apis`; sits next to `audit-cli` and `audit-mcp-tools` under `ecosystem`.
 
 ## Drift to fix in existing packages
 
@@ -54,10 +54,10 @@ Strike (`~~item~~`) when done. Foundations shipped in scitex-dev `feat-python-ap
 - [ ] **§6** decorator placement (cross-file AST scan).
 - [ ] **§7** submodule `__all__` declarations.
 - [ ] **§9** introspection ladder (`-v|-vv|-vvv` exists + behaves per spec).
-- [ ] **§11** PA1101 — stdlib-name aliasing (`import os as scitex_os`).
+- [ ] **§11** PA-1101 — stdlib-name aliasing (`import os as scitex_os`).
 - [ ] **§12** cross-interface parity — separate `audit-ecosystem` command vs. inlined.
-- [ ] PA502+ `Any` tolerance with `# audit: polymorphic` suppression marker.
-- [ ] PA901–904 (§9 errors): custom Exception subclasses outside scitex-dev; bare `except:`; `raise … as e` without `from e`; `print(...)` at library scope.
+- [ ] PA-502+ `Any` tolerance with `# audit: polymorphic` suppression marker.
+- [ ] PA-901–904 (§9 errors): custom Exception subclasses outside scitex-dev; bare `except:`; `raise … as e` without `from e`; `print(...)` at library scope.
 
 ## scitex-dev follow-ups
 

@@ -1,4 +1,4 @@
-"""PS108 — flat package layout (common-prefix cluster) check.
+"""PS-108 — flat package layout (common-prefix cluster) check.
 
 Lives in its own module so `_audit.py` doesn't grow further. The audit
 engine imports `check_flat_layout` and feeds it the same `Violation`
@@ -52,7 +52,7 @@ def check_flat_layout(
     violation_cls: type,
     out: list,
 ) -> None:
-    """Append a single rolled-up PS108 per package when prefix-clusters exist.
+    """Append a single rolled-up PS-108 per package when prefix-clusters exist.
 
     Rolling all clusters into one violation (rather than one per token)
     nudges the agent toward a coherent reorganization pass: when you
@@ -96,7 +96,7 @@ def check_flat_layout(
         "category. Land all clusters in one coherent refactor pass; "
         "piecemeal cleanup leaves the directory half-organized for months."
     )
-    out.append(violation_cls("PS108", str(src_pkg), detail))
+    out.append(violation_cls("PS-108", str(src_pkg), detail))
 
 
 _PS108B_THRESHOLD = 15
@@ -108,9 +108,9 @@ def check_topical_clutter(
     violation_cls: type,
     out: list,
 ) -> None:
-    """PS108b — too many flat .py files at one level, no shared prefix.
+    """PS-108b — too many flat .py files at one level, no shared prefix.
 
-    PS108 catches prefix-cluster mess. This catches the second pattern:
+    PS-108 catches prefix-cluster mess. This catches the second pattern:
     many flat files at the package root that share a *topic* but no
     prefix (release/CI helpers, docs builders, core glue). Threshold is
     intentionally high (>15) so small packages don't get nagged.
@@ -143,4 +143,4 @@ def check_topical_clutter(
         "`_quality/` for linters). Single-file orphans stay flat. See "
         "`general/02_package_02_project-structure-src.md` for decision rules."
     )
-    out.append(violation_cls("PS108b", str(src_pkg), detail))
+    out.append(violation_cls("PS-108b", str(src_pkg), detail))

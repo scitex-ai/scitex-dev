@@ -34,7 +34,7 @@ def register_lint_tools(mcp) -> None:
     def linter_list_rules(
         category: Optional[str] = None, severity: Optional[str] = None
     ) -> dict:
-        """Browse the catalog of every lint rule scitex-linter knows — 47 built-ins plus any rules contributed by plugin packages (scitex-io, scitex-stats, figrecipe, etc.) via `scitex_linter.plugins` entry points. Returns each rule's ID (e.g. `STX-IO001`), category, severity, message, and suggested fix. Use whenever the user asks "what rules are there?", "list linter rules", "show me all STX-IO rules", "what does STX-PA002 mean?", "catalog errors by severity", or is learning the rule set. Filter by `category=` (imports,io,path,axes,stats,fm,structure,…) or `severity=` (error|warning|info)."""
+        """Browse the catalog of every lint rule scitex-linter knows — 47 built-ins plus any rules contributed by plugin packages (scitex-io, scitex-stats, figrecipe, etc.) via `scitex_linter.plugins` entry points. Returns each rule's ID (e.g. `STX-IO001`), category, severity, message, and suggested fix. Use whenever the user asks "what rules are there?", "list linter rules", "show me all STX-IO rules", "what does STX-PA-002 mean?", "catalog errors by severity", or is learning the rule set. Filter by `category=` (imports,io,path,axes,stats,fm,structure,…) or `severity=` (error|warning|info)."""
         from ... import list_rules
 
         rules_list = list_rules()

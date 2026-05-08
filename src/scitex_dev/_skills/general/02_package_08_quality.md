@@ -51,11 +51,11 @@ Rules (each has a stable id + unit test in
 
 | Rule | Severity | Catches |
 | ---- | -------- | ------- |
-| ``E5C5_implicit_deps`` | CRITICAL | src imports an ecosystem dist that pyproject doesn't declare. AST-aware: ``try/except ImportError`` (any depth) and ``if TYPE_CHECKING:`` count as guards. |
-| ``E5C9_skill_bundling`` | HIGH | ``_skills/`` on disk but build won't ship it (setuptools needs explicit ``package-data``; hatchling default is inclusive) OR no ``[project.entry-points."scitex_dev.skills"]`` registration. |
-| ``E5C10_duplicate_table`` | HIGH | Same TOML table declared twice. Setuptools silently drops the first; tomllib refuses outright. |
-| ``E5C11_invalid_pep639_license`` | MEDIUM | ``license`` is anything but the SPDX expression ``"AGPL-3.0-only"``. |
-| ``E5L1_dirty_release_state`` | LOW | pyproject ↔ git tag ↔ PyPI version mismatch. |
+| ``REL-5_implicit_deps`` | CRITICAL | src imports an ecosystem dist that pyproject doesn't declare. AST-aware: ``try/except ImportError`` (any depth) and ``if TYPE_CHECKING:`` count as guards. |
+| ``REL-9_skill_bundling`` | HIGH | ``_skills/`` on disk but build won't ship it (setuptools needs explicit ``package-data``; hatchling default is inclusive) OR no ``[project.entry-points."scitex_dev.skills"]`` registration. |
+| ``REL-10_duplicate_table`` | HIGH | Same TOML table declared twice. Setuptools silently drops the first; tomllib refuses outright. |
+| ``REL-11_invalid_pep639_license`` | MEDIUM | ``license`` is anything but the SPDX expression ``"AGPL-3.0-only"``. |
+| ``REL-21_dirty_release_state`` | LOW | pyproject ↔ git tag ↔ PyPI version mismatch. |
 
 Failure → fix the underlying issue, do NOT add to an allowlist. Each
 finding ships with a ``fix_hint`` showing the exact pyproject edit.

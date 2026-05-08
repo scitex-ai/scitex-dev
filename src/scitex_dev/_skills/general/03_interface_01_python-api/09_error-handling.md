@@ -147,4 +147,4 @@ except ImportError as e:
 - No package-local `class FooError(Exception)` hierarchy parallels to ScitexError.
 - Standard lib exceptions used for in-Python failures (`ValueError`, `FileExistsError`) — not wrapped unless they're crossing an MCP/CLI boundary.
 
-Linter rule (planned): **PA010** — flag custom Exception subclasses in non-`scitex-dev` packages; suggest `ScitexError(code=...)`.
+Linter rule (planned): **PA-010** — flag custom Exception subclasses in non-`scitex-dev` packages; suggest `ScitexError(code=...)`.

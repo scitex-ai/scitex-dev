@@ -147,7 +147,7 @@ Static checks:
 - Grep for `import os as scitex_*`, `import io as scitex_*`, etc. → flag.
 - Verify package README documents the alias pattern when the package's namespace appears in the shadowing inventory above.
 
-Linter rule (planned): **PA011** — flag stdlib-name aliasing patterns above; suggest the canonical form.
+Linter rule (planned): **PA-011** — flag stdlib-name aliasing patterns above; suggest the canonical form.
 
 ## See also
 

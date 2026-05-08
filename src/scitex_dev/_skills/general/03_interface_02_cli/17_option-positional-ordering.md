@@ -76,7 +76,7 @@ CLIs with no positional on the top-level group (pure subcommand routers) don't n
 
 ## Auditor
 
-The CLI auditor (`07_audit-cli.md`) enforces this via a synthetic invocation: if the CLI declares any top-level positional, the auditor calls it both ways and asserts the same result. CLIs that fail one form **fail the audit** (rule **PS134** — *option-positional-order*).
+The CLI auditor (`07_audit-cli.md`) enforces this via a synthetic invocation: if the CLI declares any top-level positional, the auditor calls it both ways and asserts the same result. CLIs that fail one form **fail the audit** (rule **PS-134** — *option-positional-order*).
 
 ## Background
 

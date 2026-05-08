@@ -10,54 +10,54 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [0.11.5] — 2026-05-07
 
 ### Fixed
-- **PS502 / PS503 ignore `.ipynb`-only stems.** When an example's
+- **PS-502 / PS-503 ignore `.ipynb`-only stems.** When an example's
   stem is owned by a `.ipynb` file (no matching `<n>.py`), the
   rendered cell outputs ARE the demo — the `_out/` sibling is
   optional and any legacy directory left over from a `.py → .ipynb`
-  migration does not trigger PS502/PS503. Rules still fire when a
+  migration does not trigger PS-502/PS-503. Rules still fire when a
   `.py` example is present.
 
 ## [0.11.4] — 2026-05-07
 
 ### Added (audit rules — README structure)
-- **PS141** (audit-project) — README.md must have a mandatory `## Demo`
+- **PS-141** (audit-project) — README.md must have a mandatory `## Demo`
   section whose body contains at least one visual element (markdown
   image, non-shield HTML `<img>`, or fenced ```mermaid block).
-- **PS142** (audit-project) — README.md must have a mandatory
+- **PS-142** (audit-project) — README.md must have a mandatory
   `## Architecture` section. Accepted body forms: ```mermaid fence,
   ASCII text diagram (fenced ≥10 lines), file-tree characters
   (`├──`/`└──`/`│`), or `<img>` tag.
-- **PS143** (audit-project) — README.md sections must appear in the
+- **PS-143** (audit-project) — README.md sections must appear in the
   canonical order: `Problem and Solution → Installation →
   Architecture → <N> Interfaces → Demo → Quick Start → Part of
   SciTeX`. Optional sections may be skipped; relative order of those
   present must hold.
-- **PS144** (audit-project) — `## Problem and Solution` table cells
+- **PS-144** (audit-project) — `## Problem and Solution` table cells
   must (a) contain ≥1 `**bold**` span, (b) keep bold coverage ≤30%
   of cell text, and (c) stay ≤200 characters per cell. Bolding entire
   sentences defeats emphasis; flat prose defeats the table.
 
 ### Added (audit rules — examples chapter)
-- **PS503** (audit-project) — `examples/<n>_*_out/` must contain a
+- **PS-503** (audit-project) — `examples/<n>_*_out/` must contain a
   `FINISHED_SUCCESS/<session_id>/` subdirectory with at least one
   tracked artefact. Proves the example was run end-to-end via
   `@stx.session`, not hand-fabricated.
-- **PS504** (audit-project) — `.ipynb` example must commit cell
+- **PS-504** (audit-project) — `.ipynb` example must commit cell
   outputs. GitHub renders cell outputs inline; a stripped notebook is
   invisible to viewers. Detected by walking the notebook JSON for any
   `code` cell with a non-empty `outputs` list.
-- **PS505** (audit-project) — `tests/examples/test_<n>.py` for an
+- **PS-505** (audit-project) — `tests/examples/test_<n>.py` for an
   `.ipynb` example must invoke `jupyter nbconvert --execute` or
   `pytest --nbval[-lax]`. Subprocess `python <name>.ipynb` does not
   execute notebook cells.
-- **PS506** (audit-project) — `.ipynb` that imports `matplotlib` must
+- **PS-506** (audit-project) — `.ipynb` that imports `matplotlib` must
   include the `%matplotlib inline` cell magic. Without it the figure
   outputs aren't embedded in cell outputs and rendered notebooks on
   GitHub show no plots.
-- **PS507** (audit-project) — `.ipynb` that imports `matplotlib` must
+- **PS-507** (audit-project) — `.ipynb` that imports `matplotlib` must
   call `plt.show()` at least once. Even with `%matplotlib inline`,
   deferring display can leave figures un-rendered.
-- **PS508** (audit-project) — `.ipynb` example must not contain
+- **PS-508** (audit-project) — `.ipynb` example must not contain
   warning output (DeprecationWarning, UserWarning, FutureWarning, etc.)
   in committed cell outputs. Demos must run cleanly. Detected by
   scanning cell `outputs` for stderr-stream warnings or
@@ -70,7 +70,7 @@ notebook JSON locally — no execution, fast.
 ## [0.11.3] — 2026-05-07
 
 ### Added
-- `audit_all_for_package(..., skip_rules=("PS108b", "PS121"))` —
+- `audit_all_for_package(..., skip_rules=("PS-108b", "PS-121"))` —
   packages can locally bypass aspirational structural rules from their
   `tests/develop/test_audit.py` while a refactor is pending. The
   ecosystem default keeps these rules at `error`; opt-in only.
@@ -97,17 +97,17 @@ notebook JSON locally — no execution, fast.
   ecosystem.
 
 ### Added (audit rules)
-- **PA304** (audit-python-apis) — standalone source must not import the
+- **PA-304** (audit-python-apis) — standalone source must not import the
   umbrella (`from scitex.X` / `import scitex` / `import scitex.X`).
   Module-level only; function-scoped lazy imports + `__main__` guards
   exempt; `examples/`, `docs/`, `_demo_*.py` files exempt;
   umbrella-private (`scitex._foo`) exempt.
-- **PA305** (audit-python-apis) — modules importing `playwright.async_api`
+- **PA-305** (audit-python-apis) — modules importing `playwright.async_api`
   must call `scitex_browser.debugging.capture_debug_artifacts_async`
   somewhere in the same module.
-- **PS139** (audit-project) — standalone `pyproject.toml` must not list
+- **PS-139** (audit-project) — standalone `pyproject.toml` must not list
   `scitex` (umbrella) as a runtime or extras dependency.
-- **PS140** (audit-project) — packages with cross-package imports must
+- **PS-140** (audit-project) — packages with cross-package imports must
   ship `tests/integration/test_cross_package_imports.py`. Stale
   `CROSS_PACKAGE_IMPORTS` lists also flag.
 - **§1a** — `install-shell-completion` and `print-shell-completion`

@@ -78,7 +78,7 @@ def test_load_override_wins_over_config(tmp_path):
 def test_applies_routes_ps_to_pip(tmp_path):
     _seed_pip(tmp_path)
     cfg = load_config(tmp_path)
-    assert cfg.applies("PS133")
+    assert cfg.applies("PS-133")
     assert not cfg.applies("RP100")
 
 
@@ -87,14 +87,14 @@ def test_applies_routes_rp_to_research(tmp_path):
     write_config(tmp_path, project_types=["research"])
     cfg = load_config(tmp_path)
     assert cfg.applies("RP100")
-    assert not cfg.applies("PS133")
+    assert not cfg.applies("PS-133")
 
 
 def test_applies_hybrid_runs_both(tmp_path):
     _seed_pip(tmp_path)
     write_config(tmp_path, project_types=["pip", "research"])
     cfg = load_config(tmp_path)
-    assert cfg.applies("PS133")
+    assert cfg.applies("PS-133")
     assert cfg.applies("RP100")
 
 
@@ -125,7 +125,7 @@ def test_skip_list_round_trips(tmp_path):
     cfg_path = tmp_path / ".scitex/dev/config.yaml"
     cfg_path.parent.mkdir(parents=True)
     cfg_path.write_text(
-        "project-type:\n  - pip\naudit:\n  skip:\n    - PS108\n    - PS127\n"
+        "project-type:\n  - pip\naudit:\n  skip:\n    - PS-108\n    - PS-127\n"
     )
     cfg = load_config(tmp_path)
-    assert cfg.skip == frozenset({"PS108", "PS127"})
+    assert cfg.skip == frozenset({"PS-108", "PS-127"})

@@ -1,4 +1,4 @@
-"""PS204 enrichment — derive an actionable hint when a test is orphaned.
+"""PS-204 enrichment — derive an actionable hint when a test is orphaned.
 
 Strategy (no git, no history walking):
 

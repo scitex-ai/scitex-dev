@@ -1763,16 +1763,16 @@ RULE_SEVERITY: dict[str, str] = {
     "§8": "error",
     "§10": "error",
     "§11": "error",
-    # PA304: umbrella imports (scitex.X / import scitex) inside standalone
+    # PA-304: umbrella imports (scitex.X / import scitex) inside standalone
     # source. Drags umbrella __init__ + lazy re-export setup into every call
     # — measurable on NFS-mounted homes (HPC). Codified 2026-05-06 after the
     # scitex-scholar 2.7s cold-import surfaced on Spartan.
-    "PA304": "error",
-    # PA305: playwright.async_api imported without capture_debug_artifacts_async
+    "PA-304": "error",
+    # PA-305: playwright.async_api imported without capture_debug_artifacts_async
     # call. Codified 2026-05-06 — every browser-automation decision point must
     # capture screenshot+HTML so selector regressions are diagnosable
     # post-mortem. See _skills/general/02_package_09_browser-automation-debugging.md.
-    "PA305": "error",
+    "PA-305": "error",
 }
 SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}
 

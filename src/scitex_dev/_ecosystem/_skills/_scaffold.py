@@ -255,7 +255,7 @@ def scaffold_package_skills(
     Skips any file that already exists unless `force=True`. Never deletes.
     When SKILL.md is in the skipped set (existing file preserved), the
     function still appends references to any newly-written leaves to that
-    SKILL.md so the auditor's SK302 (leaf-not-referenced) check stays clean.
+    SKILL.md so the auditor's SK-302 (leaf-not-referenced) check stays clean.
     """
     plan.dest.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []

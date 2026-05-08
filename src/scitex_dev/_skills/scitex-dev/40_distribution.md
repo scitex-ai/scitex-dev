@@ -38,7 +38,7 @@ skills are never copied or shipped — the symlink keeps edits live.
 exporting package version (`version: <importlib.metadata.version()>`).
 On `skills get` / `skills list`, the framework compares the cached
 version to the currently installed version and warns if drift is
-detected (cached < installed). See the audit rule `SK105` (forbids
+detected (cached < installed). See the audit rule `SK-105` (forbids
 `MANIFEST.md` — this leaf replaces it) and the version-stamping
 behaviour documented in `13_versions.md`.
 </content>

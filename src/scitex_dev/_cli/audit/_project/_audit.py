@@ -4,7 +4,7 @@ Rules cover the automatable items from
 `scitex-dev/src/scitex_dev/_skills/general/02_package_01_project-structure.md`
 (and its sibling `scientific/02_research-project_01_project-structure.md`).
 
-Numbering: ``PS<§><idx>`` (PS = Project Structure), e.g. PS201 = §2 rule 01.
+Numbering: ``PS<§><idx>`` (PS = Project Structure), e.g. PS-201 = §2 rule 01.
 Mirrors the ``PA<n>`` / ``SK<n>`` / ``M<n>`` pattern of sibling auditors.
 """
 
@@ -41,30 +41,30 @@ RULES: dict[str, Rule] = {
     for r in [
         # §1 Top-level layout ---------------------------------------------------
         Rule(
-            "PS101",
+            "PS-101",
             "§1",
             "missing pyproject.toml at repo root",
             slug="pyproject-missing",
         ),
         Rule(
-            "PS102",
+            "PS-102",
             "§1",
             "forbidden top-level dir present (use the canonical location instead)",
             slug="top-level-forbidden-dir",
         ),
         Rule(
-            "PS103",
+            "PS-103",
             "§1",
             "top-level junk file (move to ./.dev/<category>/ or delete)",
             slug="top-level-junk-file",
         ),
         Rule(
-            "PS104",
+            "PS-104",
             "§1",
             "uses `.playground/` — collapsed into `.dev/` for easier typing",
         ),
         Rule(
-            "PS105",
+            "PS-105",
             "§1",
             (
                 "package registers console_scripts but has no `__main__.py` — "
@@ -75,7 +75,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS106",
+            "PS-106",
             "§1",
             (
                 "README.md is missing a coverage badge — every scitex-* "
@@ -88,7 +88,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS107",
+            "PS-107",
             "§1",
             (
                 "README.md is missing required H2 sections "
@@ -98,7 +98,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS109",
+            "PS-109",
             "§1",
             (
                 "README.md is missing a PyPI version badge "
@@ -107,7 +107,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS110",
+            "PS-110",
             "§1",
             (
                 "README.md is missing the Four Freedoms for Research "
@@ -115,7 +115,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS111",
+            "PS-111",
             "§1",
             (
                 "README.md contains a banned personal email "
@@ -123,7 +123,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS112",
+            "PS-112",
             "§1",
             (
                 "README.md is missing a SciTeX logo image at the top "
@@ -131,7 +131,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS113",
+            "PS-113",
             "§1",
             (
                 "README.md is missing a SciTeX icon footer — centered "
@@ -139,7 +139,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS114",
+            "PS-114",
             "§1",
             (
                 "README.md `## Problem and Solution` section is prose-only — "
@@ -148,7 +148,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS115",
+            "PS-115",
             "§1",
             (
                 "README.md `## Part of SciTeX` section does not open with "
@@ -157,7 +157,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS108",
+            "PS-108",
             "§1",
             (
                 "flat package layout: ≥3 sibling `.py` files at `src/<pkg>/` "
@@ -168,11 +168,11 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS108b",
+            "PS-108b",
             "§1",
             (
                 "topical clutter: >15 flat `.py` files at `src/<pkg>/` root "
-                "(or any subpackage) without shared prefix. PS108 only "
+                "(or any subpackage) without shared prefix. PS-108 only "
                 "catches prefix clusters; this catches the second mess "
                 "pattern — many flat files sharing a topic but no prefix. "
                 "Group into `_release/`, `_docs/`, `_core/`, `_quality/` "
@@ -182,7 +182,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS116",
+            "PS-116",
             "§1",
             (
                 "README.md uses the deprecated `> **Interfaces:** ...` "
@@ -192,7 +192,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS117",
+            "PS-117",
             "§1",
             (
                 'README.md has a duplicate badge block: a `<p align="center">` '
@@ -203,7 +203,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS118",
+            "PS-118",
             "§1",
             (
                 "README.md interface section header carries a banned "
@@ -213,7 +213,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS119",
+            "PS-119",
             "§1",
             (
                 "README.md contains a `> **SciTeX users**: pip install scitex "
@@ -223,7 +223,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS120",
+            "PS-120",
             "§1",
             (
                 "README.md `## Part of SciTeX` section is missing the "
@@ -234,7 +234,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS121",
+            "PS-121",
             "§1",
             (
                 "package has `docs/sphinx/conf.py` but no "
@@ -246,7 +246,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS122",
+            "PS-122",
             "§1",
             (
                 "package has `docs/sphinx/` but no "
@@ -257,7 +257,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS123",
+            "PS-123",
             "§1",
             (
                 "README.md interface section has a `Full X reference` link "
@@ -269,7 +269,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS124",
+            "PS-124",
             "§1",
             (
                 "package has `docs/sphinx/` but no `.readthedocs.yaml` (or "
@@ -279,7 +279,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS125",
+            "PS-125",
             "§1",
             (
                 "`.readthedocs.yaml` deviates from the canonical SciTeX "
@@ -290,7 +290,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS126",
+            "PS-126",
             "§1",
             (
                 "`docs/sphinx/requirements.txt` is missing or doesn't pin "
@@ -302,7 +302,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS127",
+            "PS-127",
             "§1",
             (
                 "`pyproject.toml [project.urls]` has no "
@@ -313,7 +313,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS128",
+            "PS-128",
             "§1",
             (
                 "`.gitignore` excludes `src/<pkg>/_sphinx_html/` but the "
@@ -324,7 +324,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS129",
+            "PS-129",
             "§1",
             (
                 "package source references `SCITEX_<MODULE>_*` env vars "
@@ -335,7 +335,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS130",
+            "PS-130",
             "§1",
             (
                 "README has `## Environment Variables` AND `.env.example` "
@@ -345,7 +345,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS131",
+            "PS-131",
             "§1",
             (
                 "README.md `## <N> Interfaces` section must have at least "
@@ -356,7 +356,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS132",
+            "PS-132",
             "§1",
             (
                 "README.md has a standalone `## Modules` H2 (a hand-curated "
@@ -368,7 +368,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS133",
+            "PS-133",
             "§1",
             (
                 "missing CLA.md at repo root — every public scitex-* package "
@@ -378,7 +378,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS134",
+            "PS-134",
             "§1",
             (
                 "missing CHANGELOG.md at repo root — every shipping package "
@@ -388,7 +388,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS135",
+            "PS-135",
             "§1",
             (
                 "missing CONTRIBUTING.md at repo root — every public package "
@@ -398,7 +398,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS136",
+            "PS-136",
             "§1",
             (
                 "missing or empty examples/ directory at repo root — every "
@@ -410,7 +410,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS137",
+            "PS-137",
             "§1",
             (
                 "missing README.md at repo root — every package's first-touch "
@@ -419,7 +419,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS138",
+            "PS-138",
             "§1",
             (
                 "missing LICENSE at repo root — every public scitex-* "
@@ -429,7 +429,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS138b",
+            "PS-138b",
             "§1",
             (
                 "LICENSE file exists but content does not match SPDX "
@@ -441,7 +441,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS139",
+            "PS-139",
             "§1",
             (
                 "pyproject.toml lists `scitex` (the umbrella) as a dependency "
@@ -456,7 +456,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS141",
+            "PS-141",
             "§1",
             (
                 "README.md is missing a mandatory `## Demo` section "
@@ -469,7 +469,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS142",
+            "PS-142",
             "§1",
             (
                 "README.md is missing a mandatory `## Architecture` "
@@ -481,7 +481,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS143",
+            "PS-143",
             "§1",
             (
                 "README.md sections do not appear in canonical order. The "
@@ -494,7 +494,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS144",
+            "PS-144",
             "§1",
             (
                 "README.md `## Problem and Solution` table cells violate "
@@ -506,7 +506,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS140",
+            "PS-140",
             "§2",
             (
                 "package source has cross-package imports (`scitex_<X>` "
@@ -524,37 +524,37 @@ RULES: dict[str, Rule] = {
         ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
-            "PS201",
+            "PS-201",
             "§2",
             "src/<pkg>/ exists but tests/<pkg>/ is missing — every package needs the tests/<pkg>/ parent",
             slug="tests-pkg-parent-missing",
         ),
         Rule(
-            "PS202",
+            "PS-202",
             "§2",
             "src/<pkg>/<sub>/ has files but tests/<pkg>/<sub>/ is missing",
             slug="src-tests-mirror-dir-missing",
         ),
         Rule(
-            "PS203",
+            "PS-203",
             "§2",
             "loose test_*.py at tests/ root that should live inside tests/<pkg>/...",
             slug="loose-top-level-test",
         ),
         Rule(
-            "PS204",
+            "PS-204",
             "§2",
             "orphan test file: tests/<pkg>/<path>/test_*.py with no matching src/<pkg>/<path>/*.py",
             slug="orphan-test-file",
         ),
         Rule(
-            "PS205",
+            "PS-205",
             "§2",
             "wrong public/private prefix (private `_foo.py` must be tested by `test__foo.py`, not `test_foo.py`)",
             slug="test-name-prefix-mismatch",
         ),
         Rule(
-            "PS150",
+            "PS-150",
             "§1",
             (
                 "pyproject.toml `[project.optional-dependencies.dev]` does not "
@@ -566,7 +566,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS151",
+            "PS-151",
             "§1",
             (
                 "scitex-dev pin floor in `[dev]` is below the known-good version "
@@ -577,24 +577,24 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS206",
+            "PS-206",
             "§2",
             "placeholder-only test (no `def test_` or `class Test`)",
         ),
         Rule(
-            "PS206b",
+            "PS-206b",
             "§2",
             (
                 "import-smoke-only test (`def test_*` exists but the file "
                 "has no assertion at all — `assert`, `pytest.raises`, "
                 "`mock.assert_*`, `self.assertX`, etc.). Pure "
-                "`importlib.import_module(...)` smokes pass PS206 + PS202 "
+                "`importlib.import_module(...)` smokes pass PS-206 + PS-202 "
                 "without exercising behaviour. Add a real assertion or "
                 "delete the file."
             ),
         ),
         Rule(
-            "PS210",
+            "PS-210",
             "§2",
             (
                 "`[dev]` extras incomplete — an optional `[X]` extra dep is "
@@ -606,7 +606,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS207",
+            "PS-207",
             "§2",
             (
                 "empty test directory (no `test_*.py` files, only `__pycache__/` "
@@ -617,22 +617,22 @@ RULES: dict[str, Rule] = {
         ),
         # §3 tests/ subdirectory convention -------------------------------------
         Rule(
-            "PS301",
+            "PS-301",
             "§3",
             "top-level ./htmlcov/ exists — coverage reports should live in tests/coverage/ (gitignored)",
         ),
         Rule(
-            "PS302",
+            "PS-302",
             "§3",
             "unrecognized subdir at tests/ root (must be tests/<pkg>/ or one of the known categories: scripts/examples/skills/agentic/integration/e2e/github_actions/coverage/logs/reports/custom)",
         ),
         Rule(
-            "PS303",
+            "PS-303",
             "§3",
             "examples/<name>.{py,sh,ipynb} has no matching tests/examples/test_<name>.py",
         ),
         Rule(
-            "PS501",
+            "PS-501",
             "§5",
             (
                 "examples/<n>_*.py main() does not use @stx.session — the "
@@ -646,7 +646,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS502",
+            "PS-502",
             "§5",
             (
                 "examples/<n>_*_out/ exists but is empty (or contains only "
@@ -657,7 +657,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS503",
+            "PS-503",
             "§5",
             (
                 "examples/<n>_*_out/ has no FINISHED_SUCCESS/<session_id>/ "
@@ -668,7 +668,7 @@ RULES: dict[str, Rule] = {
             slug="examples-need-finished-success",
         ),
         Rule(
-            "PS504",
+            "PS-504",
             "§5",
             (
                 "examples/<n>.ipynb has no committed cell outputs — looks "
@@ -678,7 +678,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS505",
+            "PS-505",
             "§5",
             (
                 "examples/<n>.ipynb has a sibling test "
@@ -689,7 +689,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS506",
+            "PS-506",
             "§5",
             (
                 "examples/<n>.ipynb imports matplotlib but lacks the "
@@ -699,7 +699,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS507",
+            "PS-507",
             "§5",
             (
                 "examples/<n>.ipynb imports matplotlib but does not call "
@@ -709,7 +709,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS508",
+            "PS-508",
             "§5",
             (
                 "examples/<n>.ipynb contains warning output in committed "
@@ -722,12 +722,12 @@ RULES: dict[str, Rule] = {
         ),
         # §4 docs/ structure ----------------------------------------------------
         Rule(
-            "PS401",
+            "PS-401",
             "§4",
             "./docs/to_claude/ is tracked — must be gitignored (local-machine agent context, not part of the shipped repo)",
         ),
         Rule(
-            "PS402",
+            "PS-402",
             "§4",
             "top-level ./assets/ exists — figures/screenshots belong under ./docs/assets/",
         ),
@@ -749,78 +749,78 @@ RULES: dict[str, Rule] = {
 #             purely advisory categorizations (no actionable violation).
 _SEVERITY_OVERRIDES: dict[str, str] = {
     # Structural — must hold for any package
-    "PS101": "E",  # missing pyproject.toml
-    "PS102": "E",  # forbidden top-level dir (logs/, mgmt/, ...)
-    "PS103": "E",  # top-level junk file
-    "PS104": "E",  # uses .playground/
-    "PS105": "E",  # console_scripts present but no __main__.py
+    "PS-101": "E",  # missing pyproject.toml
+    "PS-102": "E",  # forbidden top-level dir (logs/, mgmt/, ...)
+    "PS-103": "E",  # top-level junk file
+    "PS-104": "E",  # uses .playground/
+    "PS-105": "E",  # console_scripts present but no __main__.py
     # README content — every public package follows the convention
-    "PS106": "E",
-    "PS107": "E",
-    "PS108": "E",
-    "PS108b": "E",
-    "PS109": "E",
-    "PS110": "E",
-    "PS111": "E",
-    "PS112": "E",
-    "PS113": "E",
-    "PS114": "E",
-    "PS115": "E",
-    "PS116": "E",
-    "PS117": "E",
-    "PS118": "E",
-    "PS119": "E",
-    "PS120": "E",
-    "PS123": "E",
-    "PS129": "E",
-    "PS130": "E",
-    "PS131": "E",
-    "PS132": "E",
+    "PS-106": "E",
+    "PS-107": "E",
+    "PS-108": "E",
+    "PS-108b": "E",
+    "PS-109": "E",
+    "PS-110": "E",
+    "PS-111": "E",
+    "PS-112": "E",
+    "PS-113": "E",
+    "PS-114": "E",
+    "PS-115": "E",
+    "PS-116": "E",
+    "PS-117": "E",
+    "PS-118": "E",
+    "PS-119": "E",
+    "PS-120": "E",
+    "PS-123": "E",
+    "PS-129": "E",
+    "PS-130": "E",
+    "PS-131": "E",
+    "PS-132": "E",
     # Sphinx / RTD bundle
-    "PS121": "E",
-    "PS122": "E",
-    "PS124": "E",
-    "PS125": "E",
-    "PS126": "E",
-    "PS127": "E",
-    "PS128": "E",
+    "PS-121": "E",
+    "PS-122": "E",
+    "PS-124": "E",
+    "PS-125": "E",
+    "PS-126": "E",
+    "PS-127": "E",
+    "PS-128": "E",
     # Community files — every public package needs them
-    "PS133": "E",  # CLA.md
-    "PS134": "E",  # CHANGELOG.md
-    "PS135": "E",  # CONTRIBUTING.md
-    "PS136": "E",  # examples/
-    "PS137": "E",  # README.md
-    "PS138": "E",  # LICENSE present
-    "PS138b": "E",  # LICENSE content matches SPDX (no stub)
-    "PS139": "E",  # pyproject.toml depends on scitex umbrella (anti-pattern)
-    "PS140": "E",  # missing/stale tests/integration/test_cross_package_imports.py
-    "PS141": "E",  # README missing `## Demo` with visual content
-    "PS142": "E",  # README missing `## Architecture` with diagram/tree
-    "PS150": "W",  # [dev] missing scitex-dev pin — audit gate silently skips
-    "PS151": "W",  # scitex-dev pin floor < known-good (rule corpus drift)
+    "PS-133": "E",  # CLA.md
+    "PS-134": "E",  # CHANGELOG.md
+    "PS-135": "E",  # CONTRIBUTING.md
+    "PS-136": "E",  # examples/
+    "PS-137": "E",  # README.md
+    "PS-138": "E",  # LICENSE present
+    "PS-138b": "E",  # LICENSE content matches SPDX (no stub)
+    "PS-139": "E",  # pyproject.toml depends on scitex umbrella (anti-pattern)
+    "PS-140": "E",  # missing/stale tests/integration/test_cross_package_imports.py
+    "PS-141": "E",  # README missing `## Demo` with visual content
+    "PS-142": "E",  # README missing `## Architecture` with diagram/tree
+    "PS-150": "W",  # [dev] missing scitex-dev pin — audit gate silently skips
+    "PS-151": "W",  # scitex-dev pin floor < known-good (rule corpus drift)
     # src ↔ tests mirror — load-bearing for CI confidence
-    "PS201": "E",
-    "PS202": "E",
-    "PS203": "E",
-    "PS204": "E",
-    "PS205": "E",
-    "PS206": "E",  # placeholder-only test (no `def test_*` / `class Test*` at all)
-    "PS206b": "W",  # has `def test_*` but body has no assertion (import-smoke only)
-    "PS207": "E",  # empty test directory
-    "PS210": "E",  # [dev] extras incomplete
-    "PS301": "E",  # top-level htmlcov/
-    "PS302": "E",  # unrecognized tests/ subdir
-    "PS303": "E",  # examples/<n>.py without tests/examples/test_<n>.py
-    "PS401": "E",  # docs/to_claude/ tracked
-    "PS402": "E",  # top-level assets/
-    "PS501": "E",  # examples missing @stx.session
-    "PS502": "E",  # empty examples/<n>_out/
-    "PS503": "E",  # examples/<n>_out/ missing FINISHED_SUCCESS/<id>/
-    "PS504": "E",  # .ipynb has no committed cell outputs
-    "PS505": "E",  # .ipynb test does not nbconvert / nbval
-    "PS506": "E",  # .ipynb missing %matplotlib inline
-    "PS507": "E",  # .ipynb missing plt.show()
-    "PS508": "E",  # .ipynb has warning output in committed cells
+    "PS-201": "E",
+    "PS-202": "E",
+    "PS-203": "E",
+    "PS-204": "E",
+    "PS-205": "E",
+    "PS-206": "E",  # placeholder-only test (no `def test_*` / `class Test*` at all)
+    "PS-206b": "W",  # has `def test_*` but body has no assertion (import-smoke only)
+    "PS-207": "E",  # empty test directory
+    "PS-210": "E",  # [dev] extras incomplete
+    "PS-301": "E",  # top-level htmlcov/
+    "PS-302": "E",  # unrecognized tests/ subdir
+    "PS-303": "E",  # examples/<n>.py without tests/examples/test_<n>.py
+    "PS-401": "E",  # docs/to_claude/ tracked
+    "PS-402": "E",  # top-level assets/
+    "PS-501": "E",  # examples missing @stx.session
+    "PS-502": "E",  # empty examples/<n>_out/
+    "PS-503": "E",  # examples/<n>_out/ missing FINISHED_SUCCESS/<id>/
+    "PS-504": "E",  # .ipynb has no committed cell outputs
+    "PS-505": "E",  # .ipynb test does not nbconvert / nbval
+    "PS-506": "E",  # .ipynb missing %matplotlib inline
+    "PS-507": "E",  # .ipynb missing plt.show()
+    "PS-508": "E",  # .ipynb has warning output in committed cells
 }
 
 # Human-readable kebab-case slugs. Surfaced inline in audit output as
@@ -829,75 +829,75 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
 # `[CODE §X]` form (no breakage). New rules SHOULD include a slug from
 # definition.
 _SLUGS: dict[str, str] = {
-    # §1 — top-level layout already slugged at definition (PS101–PS103)
-    "PS104": "uses-playground-dir",
-    "PS105": "main-py-missing",
+    # §1 — top-level layout already slugged at definition (PS-101–PS-103)
+    "PS-104": "uses-playground-dir",
+    "PS-105": "main-py-missing",
     # README structure
-    "PS106": "readme-missing-coverage-badge",
-    "PS107": "readme-missing-h2-sections",
-    "PS108": "readme-missing-license-badge",
-    "PS108b": "readme-missing-pypi-py-version-badge",
-    "PS109": "readme-missing-pypi-version-badge",
-    "PS110": "readme-missing-four-freedoms",
-    "PS111": "readme-personal-email",
-    "PS112": "readme-missing-logo",
-    "PS113": "readme-banned-emoji",
-    "PS114": "readme-banned-marketing",
-    "PS115": "readme-missing-architecture",
-    "PS116": "readme-banned-buzzword",
-    "PS117": "readme-missing-quickstart",
-    "PS118": "readme-missing-installation",
-    "PS119": "readme-missing-part-of-scitex",
-    "PS120": "readme-cli-help-out-of-sync",
-    "PS123": "readme-banned-future-claim",
-    "PS129": "readme-banned-trademark-symbol",
-    "PS130": "readme-missing-related-projects",
-    "PS131": "readme-missing-citation",
-    "PS132": "readme-missing-roadmap",
+    "PS-106": "readme-missing-coverage-badge",
+    "PS-107": "readme-missing-h2-sections",
+    "PS-108": "readme-missing-license-badge",
+    "PS-108b": "readme-missing-pypi-py-version-badge",
+    "PS-109": "readme-missing-pypi-version-badge",
+    "PS-110": "readme-missing-four-freedoms",
+    "PS-111": "readme-personal-email",
+    "PS-112": "readme-missing-logo",
+    "PS-113": "readme-banned-emoji",
+    "PS-114": "readme-banned-marketing",
+    "PS-115": "readme-missing-architecture",
+    "PS-116": "readme-banned-buzzword",
+    "PS-117": "readme-missing-quickstart",
+    "PS-118": "readme-missing-installation",
+    "PS-119": "readme-missing-part-of-scitex",
+    "PS-120": "readme-cli-help-out-of-sync",
+    "PS-123": "readme-banned-future-claim",
+    "PS-129": "readme-banned-trademark-symbol",
+    "PS-130": "readme-missing-related-projects",
+    "PS-131": "readme-missing-citation",
+    "PS-132": "readme-missing-roadmap",
     # Sphinx / RTD
-    "PS121": "rtd-onboarding-missing",
-    "PS122": "rtd-config-missing",
-    "PS124": "sphinx-conf-missing",
-    "PS125": "sphinx-makefile-missing",
-    "PS126": "sphinx-extensions-bad",
-    "PS127": "sphinx-theme-bad",
-    "PS128": "sphinx-build-broken",
+    "PS-121": "rtd-onboarding-missing",
+    "PS-122": "rtd-config-missing",
+    "PS-124": "sphinx-conf-missing",
+    "PS-125": "sphinx-makefile-missing",
+    "PS-126": "sphinx-extensions-bad",
+    "PS-127": "sphinx-theme-bad",
+    "PS-128": "sphinx-build-broken",
     # Community files
-    "PS133": "missing-cla",
-    "PS134": "missing-changelog",
-    "PS135": "missing-contributing",
-    "PS136": "missing-examples-dir",
-    "PS137": "missing-readme",
-    "PS138": "missing-license",
-    "PS138b": "license-stub-mismatched",
-    "PS139": "pyproject-depends-on-umbrella",
-    "PS140": "cross-package-imports-test-missing",
-    "PS141": "readme-missing-demo",
-    "PS142": "readme-missing-architecture-diagram",
-    "PS143": "readme-missing-badge-row",
-    "PS144": "readme-missing-pypi-status",
-    "PS150": "dev-extras-missing-scitex-dev",
-    "PS151": "dev-extras-scitex-dev-floor-too-old",
-    # §2 src↔tests already slugged at definition (PS201–PS205)
-    "PS206": "test-placeholder-only",
-    "PS206b": "test-import-smoke-only",
-    "PS207": "empty-test-dir",
-    "PS210": "dev-extras-incomplete",
+    "PS-133": "missing-cla",
+    "PS-134": "missing-changelog",
+    "PS-135": "missing-contributing",
+    "PS-136": "missing-examples-dir",
+    "PS-137": "missing-readme",
+    "PS-138": "missing-license",
+    "PS-138b": "license-stub-mismatched",
+    "PS-139": "pyproject-depends-on-umbrella",
+    "PS-140": "cross-package-imports-test-missing",
+    "PS-141": "readme-missing-demo",
+    "PS-142": "readme-missing-architecture-diagram",
+    "PS-143": "readme-missing-badge-row",
+    "PS-144": "readme-missing-pypi-status",
+    "PS-150": "dev-extras-missing-scitex-dev",
+    "PS-151": "dev-extras-scitex-dev-floor-too-old",
+    # §2 src↔tests already slugged at definition (PS-201–PS-205)
+    "PS-206": "test-placeholder-only",
+    "PS-206b": "test-import-smoke-only",
+    "PS-207": "empty-test-dir",
+    "PS-210": "dev-extras-incomplete",
     # §3 docs / examples
-    "PS301": "top-level-htmlcov",
-    "PS302": "tests-unknown-subdir",
-    "PS303": "example-without-test",
+    "PS-301": "top-level-htmlcov",
+    "PS-302": "tests-unknown-subdir",
+    "PS-303": "example-without-test",
     # §4 docs/to_claude
-    "PS401": "docs-to-claude-tracked",
-    "PS402": "top-level-assets",
-    # §5 examples + notebooks (PS503 already slugged)
-    "PS501": "example-without-stx-session",
-    "PS502": "examples-out-empty",
-    "PS504": "ipynb-no-cell-outputs",
-    "PS505": "ipynb-test-not-nbconvert",
-    "PS506": "ipynb-missing-matplotlib-inline",
-    "PS507": "ipynb-missing-plt-show",
-    "PS508": "ipynb-warning-in-output",
+    "PS-401": "docs-to-claude-tracked",
+    "PS-402": "top-level-assets",
+    # §5 examples + notebooks (PS-503 already slugged)
+    "PS-501": "example-without-stx-session",
+    "PS-502": "examples-out-empty",
+    "PS-504": "ipynb-no-cell-outputs",
+    "PS-505": "ipynb-test-not-nbconvert",
+    "PS-506": "ipynb-missing-matplotlib-inline",
+    "PS-507": "ipynb-missing-plt-show",
+    "PS-508": "ipynb-warning-in-output",
 }
 
 
@@ -961,7 +961,7 @@ _MIRROR_EXEMPT_CATEGORIES = frozenset({"template", "dataset"})
 
 # Recognized test-category subdirectories at tests/ root.
 # A repo's tests/ subdirs must come from this set (or be the package mirror
-# tests/<pkg>/). Anything else is flagged as PS207.
+# tests/<pkg>/). Anything else is flagged as PS-207.
 # See _skills/general/02_package_01_project-structure.md §"./tests".
 _KNOWN_TEST_SUBDIRS = frozenset(
     {
@@ -1074,18 +1074,18 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
 
 
 def _check_top_level(repo: Path, out: list[Violation]) -> None:
-    """PS101 / PS102 / PS103 / PS104 / PS105 / PS133-PS135."""
+    """PS-101 / PS-102 / PS-103 / PS-104 / PS-105 / PS-133-PS-135."""
     if not (repo / "pyproject.toml").is_file():
-        out.append(Violation("PS101", str(repo), "no pyproject.toml at repo root"))
+        out.append(Violation("PS-101", str(repo), "no pyproject.toml at repo root"))
 
-    # PS133-PS138: required community files at repo root.
+    # PS-133-PS-138: required community files at repo root.
     # LICENSE has no extension (PEP-639 / ecosystem convention); accept LICENSE
     # or LICENSE.md or LICENSE.txt.
     for code, fname in (
-        ("PS133", "CLA.md"),
-        ("PS134", "CHANGELOG.md"),
-        ("PS135", "CONTRIBUTING.md"),
-        ("PS137", "README.md"),
+        ("PS-133", "CLA.md"),
+        ("PS-134", "CHANGELOG.md"),
+        ("PS-135", "CONTRIBUTING.md"),
+        ("PS-137", "README.md"),
     ):
         if not (repo / fname).is_file():
             out.append(Violation(code, str(repo), f"missing {fname}"))
@@ -1094,7 +1094,7 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
     license_path = find_license(repo)
     if license_path is None:
         out.append(
-            Violation("PS138", str(repo), "missing LICENSE (or LICENSE.md/.txt)")
+            Violation("PS-138", str(repo), "missing LICENSE (or LICENSE.md/.txt)")
         )
     else:
         try:
@@ -1103,12 +1103,12 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
             spdx_match = None
         violation_msg = check_license_content(license_path, spdx_match)
         if violation_msg:
-            out.append(Violation("PS138b", str(repo), violation_msg))
+            out.append(Violation("PS-138b", str(repo), violation_msg))
 
-    # PS136: examples/ must exist and have at least one runnable file.
+    # PS-136: examples/ must exist and have at least one runnable file.
     examples = repo / "examples"
     if not examples.is_dir():
-        out.append(Violation("PS136", str(repo), "no examples/ directory"))
+        out.append(Violation("PS-136", str(repo), "no examples/ directory"))
     else:
         runnable = [
             p
@@ -1121,7 +1121,7 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
         if not runnable:
             out.append(
                 Violation(
-                    "PS136",
+                    "PS-136",
                     str(examples),
                     "examples/ exists but contains no .py/.ipynb/.sh",
                 )
@@ -1130,20 +1130,20 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
     for dirname, why in _FORBIDDEN_TOP_DIRS.items():
         candidate = repo / dirname
         if candidate.is_dir():
-            code = "PS104" if dirname == ".playground" else "PS102"
+            code = "PS-104" if dirname == ".playground" else "PS-102"
             out.append(Violation(code, str(candidate), why))
 
     for child in repo.iterdir():
         if child.is_file() and _JUNK_FILE_RE.match(child.name):
             out.append(
                 Violation(
-                    "PS103",
+                    "PS-103",
                     str(child),
                     f"top-level junk file: {child.name}",
                 )
             )
 
-    # PS105: console_scripts present but no __main__.py — `python -m <pkg>`
+    # PS-105: console_scripts present but no __main__.py — `python -m <pkg>`
     # would fail with "No module named <pkg>.__main__".
     pyp = repo / "pyproject.toml"
     if pyp.is_file():
@@ -1161,7 +1161,7 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
                     if not (pkg_dir / "__main__.py").is_file():
                         out.append(
                             Violation(
-                                "PS105",
+                                "PS-105",
                                 str(pkg_dir),
                                 f"missing {pkg_dir.name}/__main__.py — "
                                 "`python -m " + pkg_dir.name + "` will fail. "
@@ -1186,32 +1186,32 @@ def _check_mirror(
     distribution: str,
     out: list[Violation],
 ) -> None:
-    """PS201 / PS202 / PS203 / PS204 / PS205 — src ↔ tests mirror."""
+    """PS-201 / PS-202 / PS-203 / PS-204 / PS-205 — src ↔ tests mirror."""
     src_pkg = _src_pkg_dir(repo, distribution)
     tests_root = _tests_root(repo)
     if src_pkg is None or tests_root is None:
         # Without either side, mirror checks don't apply (a different rule
-        # — PS101 / future PS105 — will catch missing structure).
+        # — PS-101 / future PS-105 — will catch missing structure).
         return
 
     import_name = _import_name(distribution)
     tests_pkg = tests_root / import_name
 
-    # PS201: tests/<pkg>/ must exist
+    # PS-201: tests/<pkg>/ must exist
     if not tests_pkg.is_dir():
         out.append(
             Violation(
-                "PS201",
+                "PS-201",
                 str(tests_root),
                 f"missing `tests/{import_name}/` parent — needed even when most tests are flat",
             )
         )
         # Without the parent we can't run the deeper mirror checks meaningfully.
-        # Still scan PS203 / loose top-level test files.
+        # Still scan PS-203 / loose top-level test files.
         _check_loose_top_level_tests(tests_root, src_pkg, import_name, out)
         return
 
-    # PS203: any test_*.py at tests/ root that's not a known meta-test
+    # PS-203: any test_*.py at tests/ root that's not a known meta-test
     _check_loose_top_level_tests(tests_root, src_pkg, import_name, out)
 
     # Walk src/<pkg>/ — every directory with .py files needs a mirror.
@@ -1227,13 +1227,13 @@ def _check_mirror(
         if not mirror_dir.is_dir():
             out.append(
                 Violation(
-                    "PS202",
+                    "PS-202",
                     str(src_dir),
                     f"no matching tests/{import_name}/{rel}/",
                 )
             )
 
-    # PS205: per-file public/private prefix consistency.
+    # PS-205: per-file public/private prefix consistency.
     # For each src .py file, expected test name lives under tests/<pkg>/<rel>/.
     # When src has BOTH a public `foo.py` AND a private `_foo.py` in the
     # same directory (rare but legitimate — see scitex-dev dashboard), each
@@ -1254,7 +1254,7 @@ def _check_mirror(
         wrong_name = f"test_{stem.lstrip('_')}.py" if is_private else f"test__{stem}.py"
         target_dir = tests_pkg / rel.parent
         if not target_dir.is_dir():
-            continue  # PS202 already flagged this
+            continue  # PS-202 already flagged this
         # Both-variant guard: if the "other" src file also exists, the file
         # at wrong_path is its legitimate test, not a misnamed copy of ours.
         if is_private:
@@ -1267,7 +1267,7 @@ def _check_mirror(
         if wrong_path.is_file():
             out.append(
                 Violation(
-                    "PS205",
+                    "PS-205",
                     str(wrong_path),
                     (
                         f"private `{rel.name}` should be tested by `{expected_name}` "
@@ -1279,7 +1279,7 @@ def _check_mirror(
                 )
             )
 
-    # PS204: orphan test files — every test_*.py under tests/<pkg>/ should
+    # PS-204: orphan test files — every test_*.py under tests/<pkg>/ should
     # have a matching src counterpart. Hinter is built once and reused so
     # the basename index is amortized across all orphans in this package.
     from ._check_orphan_hint import build_orphan_hinter
@@ -1288,7 +1288,7 @@ def _check_mirror(
     for test_file in tests_pkg.rglob("test_*.py"):
         rel = test_file.relative_to(tests_pkg)
         if not _test_has_src_match(test_file, rel, src_pkg):
-            out.append(Violation("PS204", str(test_file), _hint(rel)))
+            out.append(Violation("PS-204", str(test_file), _hint(rel)))
 
 
 def _has_py(d: Path) -> bool:
@@ -1306,7 +1306,7 @@ def _is_git_ignored(path: Path, repo: Path) -> bool:
 
     Returns False when git is unavailable or the path isn't inside a git
     repo — non-git checkouts (sdist installs, tarball extracts) still
-    get full PS202 coverage. Used to skip src subdirs that exist locally
+    get full PS-202 coverage. Used to skip src subdirs that exist locally
     but won't ship in the wheel (e.g. src/<pkg>/app/ if it's listed in
     .gitignore as a developer-only scratch area).
     """
@@ -1336,7 +1336,7 @@ def _check_loose_top_level_tests(
     import_name: str,
     out: list[Violation],
 ) -> None:
-    """PS203 — loose test_*.py at tests/ root that should be under tests/<pkg>/."""
+    """PS-203 — loose test_*.py at tests/ root that should be under tests/<pkg>/."""
     for child in tests_root.iterdir():
         if not child.is_file() or not child.name.startswith("test_"):
             continue
@@ -1346,7 +1346,7 @@ def _check_loose_top_level_tests(
         suggestion = _suggest_test_location(child.name, src_pkg, import_name)
         out.append(
             Violation(
-                "PS203",
+                "PS-203",
                 str(child),
                 suggestion or f"move under tests/{import_name}/...",
             )
@@ -1389,12 +1389,12 @@ def _test_has_src_match(test_file: Path, rel: Path, src_pkg: Path) -> bool:
 def _check_tests_subdir_convention(
     repo: Path, distribution: str, out: list[Violation]
 ) -> None:
-    """PS301 / PS302 / PS303 — tests/ root layout."""
-    # PS301: top-level htmlcov/ should be tests/coverage/.
+    """PS-301 / PS-302 / PS-303 — tests/ root layout."""
+    # PS-301: top-level htmlcov/ should be tests/coverage/.
     if (repo / "htmlcov").is_dir():
         out.append(
             Violation(
-                "PS301",
+                "PS-301",
                 str(repo / "htmlcov"),
                 "rename to tests/coverage/ and gitignore (replaces top-level ./htmlcov/)",
             )
@@ -1404,7 +1404,7 @@ def _check_tests_subdir_convention(
     if tests_root is None:
         return
 
-    # PS302: every subdir at tests/ root must be either tests/<pkg>/ (the
+    # PS-302: every subdir at tests/ root must be either tests/<pkg>/ (the
     # package mirror) or one of the known categories.
     import_name = _import_name(distribution)
     for child in tests_root.iterdir():
@@ -1418,14 +1418,14 @@ def _check_tests_subdir_convention(
             continue  # transient junk; ignore
         out.append(
             Violation(
-                "PS302",
+                "PS-302",
                 str(child),
                 f"unrecognized: rename to tests/{import_name}/{child.name}/ "
                 "or move to one of the known categories",
             )
         )
 
-    # PS303: every examples/<file> should have a matching tests/examples/test_<stem>.py.
+    # PS-303: every examples/<file> should have a matching tests/examples/test_<stem>.py.
     examples_dir = repo / "examples"
     tests_examples = tests_root / "examples"
     if examples_dir.is_dir():
@@ -1442,7 +1442,7 @@ def _check_tests_subdir_convention(
             if not expected.is_file():
                 out.append(
                     Violation(
-                        "PS303",
+                        "PS-303",
                         str(ex),
                         f"missing matching tests/examples/test_{ex.stem}.py",
                     )
@@ -1450,18 +1450,18 @@ def _check_tests_subdir_convention(
 
 
 def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
-    """PS206 + PS206b — placeholder-only / import-smoke-only test detection.
+    """PS-206 + PS-206b — placeholder-only / import-smoke-only test detection.
 
-    PS206 (ERROR): file has no `def test_*` / `class Test*` / `test_x = factory()`
+    PS-206 (ERROR): file has no `def test_*` / `class Test*` / `test_x = factory()`
     at all — pytest will not collect anything from it.
 
-    PS206b (WARN): file has a collectable test but no assertion-like call in
+    PS-206b (WARN): file has a collectable test but no assertion-like call in
     the entire module. Catches the auto-generated importlib smoke pattern:
 
         def test_module_imports():
             importlib.import_module("scitex_db._foo")
 
-    which passes PS202 (mirror exists) + PS206 (test fn present) without
+    which passes PS-202 (mirror exists) + PS-206 (test fn present) without
     exercising any behaviour.
     """
     tests_root = _tests_root(repo)
@@ -1487,7 +1487,7 @@ def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
     )
     # Opt-out marker for legitimate import-smoke tests (rare — e.g. .ipynb-only
     # examples mirrored as smoke). Place this comment anywhere in the file.
-    optout_re = re.compile(r"#\s*PS206b:\s*import-smoke-allowed", re.IGNORECASE)
+    optout_re = re.compile(r"#\s*PS-206b:\s*import-smoke-allowed", re.IGNORECASE)
     for test_file in tests_root.rglob("test_*.py"):
         if _is_blacklisted(test_file, tests_root):
             continue
@@ -1505,33 +1505,33 @@ def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
         if not has_test:
             out.append(
                 Violation(
-                    "PS206",
+                    "PS-206",
                     str(test_file),
                     "placeholder-only — add `def test_*`, `class Test*`, or `test_x = factory()`",
                 )
             )
             continue
-        # PS206b: has a test fn, but no assertion anywhere in the module.
+        # PS-206b: has a test fn, but no assertion anywhere in the module.
         if optout_re.search(text):
             continue
         if not has_assertion_re.search(text):
             out.append(
                 Violation(
-                    "PS206b",
+                    "PS-206b",
                     str(test_file),
                     (
                         "import-smoke-only — has `def test_*` but no assertion "
                         "(`assert`, `pytest.raises`, `mock.assert_*`, "
                         "`self.assertX`, `@given`). Add a real check or "
                         "delete the file. Opt-out: add a "
-                        "`# PS206b: import-smoke-allowed` comment."
+                        "`# PS-206b: import-smoke-allowed` comment."
                     ),
                 )
             )
 
 
 def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) -> None:
-    """PS207 — empty test mirror directory.
+    """PS-207 — empty test mirror directory.
 
     Flags a `tests/<pkg>/<sub>/` that exists but contains no `test_*.py`
     files, WHEN the corresponding `src/<pkg>/<sub>/` does have source
@@ -1588,7 +1588,7 @@ def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) 
 
         out.append(
             Violation(
-                "PS207",
+                "PS-207",
                 str(sub),
                 f"empty test directory mirrors {src_counterpart} ({len(src_py)} src "
                 f"files) — move corresponding test_*.py files in or remove the dir.",
@@ -1597,7 +1597,7 @@ def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) 
 
 
 def _check_docs_structure(repo: Path, out: list[Violation]) -> None:
-    """PS401 / PS402 — docs/ layout."""
+    """PS-401 / PS-402 — docs/ layout."""
     docs = repo / "docs"
     to_claude = docs / "to_claude"
     if to_claude.is_dir():
@@ -1617,7 +1617,7 @@ def _check_docs_structure(repo: Path, out: list[Violation]) -> None:
         if not ignored:
             out.append(
                 Violation(
-                    "PS401",
+                    "PS-401",
                     str(to_claude),
                     "add `docs/to_claude/` (or `**/to_claude/`) to .gitignore",
                 )

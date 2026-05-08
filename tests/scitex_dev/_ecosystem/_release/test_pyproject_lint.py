@@ -46,7 +46,7 @@ def _write_repo(
 
 
 # ----------------------------------------------------------------------
-# E5C5 — implicit transitive dep
+# REL-5 — implicit transitive dep
 # ----------------------------------------------------------------------
 
 
@@ -63,8 +63,8 @@ dependencies = ["numpy"]
     )
     rep = lint_pyproject(repo, package_name="demo")
     rules = [f.rule for f in rep.findings]
-    assert "E5C5_implicit_deps" in rules
-    crit = [f for f in rep.findings if f.rule == "E5C5_implicit_deps"]
+    assert "REL-5_implicit_deps" in rules
+    crit = [f for f in rep.findings if f.rule == "REL-5_implicit_deps"]
     assert crit[0].severity == "CRITICAL"
     assert "scitex-config" in crit[0].message
 
@@ -80,7 +80,7 @@ dependencies = ["numpy", "scitex-config>=0.3.0"]
         src_files={"foo.py": "from scitex_config._ecosystem import local_state\n"},
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
+    assert "REL-5_implicit_deps" not in [f.rule for f in rep.findings]
 
 
 def test_e5c5_silent_when_inside_main_guard(tmp_path):
@@ -104,7 +104,7 @@ dependencies = []
         },
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
+    assert "REL-5_implicit_deps" not in [f.rule for f in rep.findings]
 
 
 def test_e5c5_silent_when_inside_type_checking(tmp_path):
@@ -125,7 +125,7 @@ dependencies = []
         },
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
+    assert "REL-5_implicit_deps" not in [f.rule for f in rep.findings]
 
 
 def test_e5c5_silent_when_function_body_try_except(tmp_path):
@@ -149,7 +149,7 @@ dependencies = []
         },
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
+    assert "REL-5_implicit_deps" not in [f.rule for f in rep.findings]
 
 
 def test_e5c5_silent_when_import_is_guarded(tmp_path):
@@ -176,7 +176,7 @@ dependencies = ["matplotlib"]
         },
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
+    assert "REL-5_implicit_deps" not in [f.rule for f in rep.findings]
 
 
 def test_e5c5_silent_for_self_imports(tmp_path):
@@ -191,11 +191,11 @@ dependencies = ["PyYAML"]
         src_files={"_paths.py": "from scitex_config._ecosystem import local_state\n"},
     )
     rep = lint_pyproject(repo, package_name="scitex-config")
-    assert "E5C5_implicit_deps" not in [f.rule for f in rep.findings]
+    assert "REL-5_implicit_deps" not in [f.rule for f in rep.findings]
 
 
 # ----------------------------------------------------------------------
-# E5C9 — skill bundling
+# REL-9 — skill bundling
 # ----------------------------------------------------------------------
 
 
@@ -216,7 +216,7 @@ where = ["src"]
         skills=True,
     )
     rep = lint_pyproject(repo, package_name="demo")
-    rules = [f.rule for f in rep.findings if f.rule == "E5C9_skill_bundling"]
+    rules = [f.rule for f in rep.findings if f.rule == "REL-9_skill_bundling"]
     assert len(rules) == 2  # package-data + entry-point
 
 
@@ -239,7 +239,7 @@ packages = ["src/demo"]
         skills=True,
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert not [f for f in rep.findings if f.rule == "E5C9_skill_bundling"]
+    assert not [f for f in rep.findings if f.rule == "REL-9_skill_bundling"]
 
 
 def test_e5c9_fires_when_hatchling_excludes_skills(tmp_path):
@@ -261,7 +261,7 @@ exclude = ["**/_skills/**"]
         skills=True,
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert [f for f in rep.findings if f.rule == "E5C9_skill_bundling"]
+    assert [f for f in rep.findings if f.rule == "REL-9_skill_bundling"]
 
 
 def test_e5c9_silent_when_fully_wired(tmp_path):
@@ -283,11 +283,11 @@ demo = ["_skills/**/*.md"]
         skills=True,
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert not [f for f in rep.findings if f.rule == "E5C9_skill_bundling"]
+    assert not [f for f in rep.findings if f.rule == "REL-9_skill_bundling"]
 
 
 # ----------------------------------------------------------------------
-# E5C10 — duplicate TOML table
+# REL-10 — duplicate TOML table
 # ----------------------------------------------------------------------
 
 
@@ -306,7 +306,7 @@ demo = ["data/*.yaml"]
     fp = tmp_path / "pyproject.toml"
     fp.write_text(pyproject)
     findings = check_duplicate_tables(fp)
-    assert any(f.rule == "E5C10_duplicate_table" for f in findings)
+    assert any(f.rule == "REL-10_duplicate_table" for f in findings)
 
 
 def test_e5c10_silent_on_clean_pyproject(tmp_path):
@@ -318,7 +318,7 @@ def test_e5c10_silent_on_clean_pyproject(tmp_path):
 
 
 # ----------------------------------------------------------------------
-# E5C11 — license
+# REL-11 — license
 # ----------------------------------------------------------------------
 
 
@@ -332,7 +332,7 @@ license = {text = "AGPL-3.0-only"}
 """,
     )
     rep = lint_pyproject(repo)
-    licenses = [f for f in rep.findings if f.rule == "E5C11_invalid_pep639_license"]
+    licenses = [f for f in rep.findings if f.rule == "REL-11_invalid_pep639_license"]
     assert licenses and "deprecated table form" in licenses[0].message
 
 
@@ -463,7 +463,7 @@ version = "1.0.0"
     wf.parent.mkdir(parents=True)
     wf.write_text("name: Publish\non:\n  release:\n    types: [published]\n")
     rep = lint_pyproject(repo, package_name="demo")
-    e5l1 = [f for f in rep.findings if f.rule == "E5L1_dirty_release_state"]
+    e5l1 = [f for f in rep.findings if f.rule == "REL-21_dirty_release_state"]
     # Either the tag-mismatch or pypi-mismatch path: at least one finding
     # should mention `gh release create` since the workflow uses
     # release:published trigger.
@@ -483,7 +483,7 @@ version = "1.0.0"
     wf.parent.mkdir(parents=True)
     wf.write_text("name: Publish\non:\n  push:\n    tags:\n      - 'v*'\n")
     rep = lint_pyproject(repo, package_name="demo")
-    e5l1 = [f for f in rep.findings if f.rule == "E5L1_dirty_release_state"]
+    e5l1 = [f for f in rep.findings if f.rule == "REL-21_dirty_release_state"]
     # No finding should mention `gh release create` for tag-trigger workflows.
     for f in e5l1:
         assert "gh release create" not in (f.fix_hint or "")
@@ -500,7 +500,7 @@ license = "AGPL-3.0-only"
 """,
     )
     rep = lint_pyproject(repo)
-    assert not [f for f in rep.findings if f.rule == "E5C11_invalid_pep639_license"]
+    assert not [f for f in rep.findings if f.rule == "REL-11_invalid_pep639_license"]
 
 
 # ----------------------------------------------------------------------
@@ -524,12 +524,12 @@ where = ["src"]
         skills=True,
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert rep.has_critical  # E5C5 fires
-    assert rep.has_high  # E5C9 fires too
+    assert rep.has_critical  # REL-5 fires
+    assert rep.has_high  # REL-9 fires too
     rules = {f.rule for f in rep.findings}
-    assert "E5C5_implicit_deps" in rules
-    assert "E5C9_skill_bundling" in rules
-    assert "E5C11_invalid_pep639_license" in rules
+    assert "REL-5_implicit_deps" in rules
+    assert "REL-9_skill_bundling" in rules
+    assert "REL-11_invalid_pep639_license" in rules
 
 
 def test_missing_pyproject(tmp_path):
@@ -538,7 +538,7 @@ def test_missing_pyproject(tmp_path):
 
 
 # ----------------------------------------------------------------------
-# E5F1 — __version__ drift
+# REL-31 — __version__ drift
 # ----------------------------------------------------------------------
 
 
@@ -552,7 +552,7 @@ version = "0.2.0"
         src_files={"__init__.py": '__version__ = "0.1.0"\n'},
     )
     rep = lint_pyproject(repo, package_name="demo")
-    drift = [f for f in rep.findings if f.rule == "E5F1_version_drift"]
+    drift = [f for f in rep.findings if f.rule == "REL-31_version_drift"]
     assert drift
     assert "0.1.0" in drift[0].message and "0.2.0" in drift[0].message
 
@@ -567,7 +567,7 @@ version = "0.1.0"
         src_files={"__init__.py": '__version__ = "0.1.0"\n'},
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert not [f for f in rep.findings if f.rule == "E5F1_version_drift"]
+    assert not [f for f in rep.findings if f.rule == "REL-31_version_drift"]
 
 
 def test_e5f1_silent_when_version_dynamic(tmp_path):
@@ -586,11 +586,11 @@ version = "0.2.0"
         },
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert not [f for f in rep.findings if f.rule == "E5F1_version_drift"]
+    assert not [f for f in rep.findings if f.rule == "REL-31_version_drift"]
 
 
 # ----------------------------------------------------------------------
-# E5J1 — README interfaces callout
+# REL-41 — README interfaces callout
 # ----------------------------------------------------------------------
 
 
@@ -605,7 +605,7 @@ version = "0.1.0"
     # Long enough to bypass the placeholder filter, but no Interfaces callout.
     (repo / "README.md").write_text("# demo\n\n" + ("This is a real package. " * 30))
     rep = lint_pyproject(repo, package_name="demo")
-    assert [f for f in rep.findings if f.rule == "E5J1_readme_interfaces_callout"]
+    assert [f for f in rep.findings if f.rule == "REL-41_readme_interfaces_callout"]
 
 
 def test_e5j1_silent_when_callout_present(tmp_path):
@@ -622,7 +622,7 @@ version = "0.1.0"
         + ("Body. " * 60)
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert not [f for f in rep.findings if f.rule == "E5J1_readme_interfaces_callout"]
+    assert not [f for f in rep.findings if f.rule == "REL-41_readme_interfaces_callout"]
 
 
 def test_e5j1_silent_when_readme_is_placeholder(tmp_path):
@@ -636,11 +636,11 @@ version = "0.1.0"
     )
     (repo / "README.md").write_text("# demo\n\nWIP.\n")
     rep = lint_pyproject(repo, package_name="demo")
-    assert not [f for f in rep.findings if f.rule == "E5J1_readme_interfaces_callout"]
+    assert not [f for f in rep.findings if f.rule == "REL-41_readme_interfaces_callout"]
 
 
 # ----------------------------------------------------------------------
-# E5C12 — missing CLA workflow
+# REL-12 — missing CLA workflow
 # ----------------------------------------------------------------------
 
 
@@ -650,7 +650,7 @@ def test_e5c12_fires_when_cla_workflow_missing(tmp_path):
         pyproject='[project]\nname = "demo"\nversion = "0.1.0"\n',
     )
     rep = lint_pyproject(repo, package_name="demo")
-    assert any(f.rule == "E5C12_missing_cla_workflow" for f in rep.findings)
+    assert any(f.rule == "REL-12_missing_cla_workflow" for f in rep.findings)
 
 
 def test_e5c12_silent_when_cla_workflow_exists(tmp_path):
@@ -662,7 +662,7 @@ def test_e5c12_silent_when_cla_workflow_exists(tmp_path):
     wf.parent.mkdir(parents=True)
     wf.write_text("name: CLA Assistant\non:\n  pull_request_target:\n")
     rep = lint_pyproject(repo, package_name="demo")
-    assert not any(f.rule == "E5C12_missing_cla_workflow" for f in rep.findings)
+    assert not any(f.rule == "REL-12_missing_cla_workflow" for f in rep.findings)
 
 
 # ----------------------------------------------------------------------

@@ -50,7 +50,7 @@ This applies recursively to peer standalones too:
 indirection (`scitex.dict` → `scitex_dict`) but the cost is the
 umbrella's `__init__.py` setup, not the indirection itself.
 
-Audited by **PA304** (`audit-python-apis`). Triggers as `error` on any
+Audited by **PA-304** (`audit-python-apis`). Triggers as `error` on any
 `from scitex.X` / `import scitex.X` / `import scitex` line inside
 `src/<pkg>/**/*.py` of a standalone package (i.e. any package whose
 `import_name` in the registry is not `scitex`).

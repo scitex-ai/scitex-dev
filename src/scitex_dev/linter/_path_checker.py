@@ -61,9 +61,9 @@ def check_stx_io_path(checker, node: ast.Call) -> None:
 
     line = checker._get_source(node.lineno)
 
-    # PA001: absolute path
+    # PA-001: absolute path
     if path_str.startswith("/"):
-        checker._add(rules.PA001, node.lineno, node.col_offset, line)
-    # PA005: missing ./ prefix (bare relative path)
+        checker._add(rules.PA-001, node.lineno, node.col_offset, line)
+    # PA-005: missing ./ prefix (bare relative path)
     elif not path_str.startswith("./") and not path_str.startswith("../"):
-        checker._add(rules.PA005, node.lineno, node.col_offset, line)
+        checker._add(rules.PA-005, node.lineno, node.col_offset, line)

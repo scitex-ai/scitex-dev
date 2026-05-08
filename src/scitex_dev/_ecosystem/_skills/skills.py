@@ -387,7 +387,7 @@ def export_skills(
             # currently installed `importlib.metadata.version()` and warn
             # when the cache is older than what's installed.
             #
-            # MANIFEST.md is forbidden by the SK105 audit rule and is no
+            # MANIFEST.md is forbidden by the SK-105 audit rule and is no
             # longer emitted; the per-leaf stamp replaces it.
             version = entry.get("version", "unknown")
             content = _stamp_frontmatter_field(content, "version", version)

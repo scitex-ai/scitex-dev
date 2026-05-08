@@ -1002,10 +1002,10 @@ def register_ecosystem_commands(main_group):
             "Examples:\n"
             "  $ scitex-dev ecosystem audit-python-apis scitex-io\n"
             "  $ scitex-dev ecosystem audit-python-apis scitex-io --json\n"
-            "  $ scitex-dev ecosystem audit-python-apis scitex-io --rule PA101 --rule PA202\n"
+            "  $ scitex-dev ecosystem audit-python-apis scitex-io --rule PA-101 --rule PA-202\n"
             "\n"
-            "Foundation rules (PA<§><idx>): PA101–104 (§1 naming/visibility),\n"
-            "PA201–203 (§2 version), PA301 (§3 lazy imports), PA501 (§5 future\n"
+            "Foundation rules (PA<§><idx>): PA-101–104 (§1 naming/visibility),\n"
+            "PA-201–203 (§2 version), PA-301 (§3 lazy imports), PA-501 (§5 future\n"
             "annotations). See general/03_interface_01_python-api/12_audit-checklist.md."
         ),
     )
@@ -1015,7 +1015,7 @@ def register_ecosystem_commands(main_group):
         "--rule",
         "rules",
         multiple=True,
-        help="Restrict to specific rule codes (e.g. --rule PA101). Repeatable.",
+        help="Restrict to specific rule codes (e.g. --rule PA-101). Repeatable.",
     )
     def ecosystem_audit_python_apis(distribution, json_out, rules):
         """Check a package's Python API against the §1–§5 audit checklist."""
@@ -1040,12 +1040,12 @@ def register_ecosystem_commands(main_group):
             "Examples:\n"
             "  $ scitex-dev ecosystem audit-skills scitex-io\n"
             "  $ scitex-dev ecosystem audit-skills scitex-io --json\n"
-            "  $ scitex-dev ecosystem audit-skills scitex-io --rule SK210 --rule SK211\n"
+            "  $ scitex-dev ecosystem audit-skills scitex-io --rule SK-210 --rule SK-211\n"
             "\n"
-            "Foundation rules (SK<§><idx>): SK101–104 (§1 layout), SK201–203\n"
-            "(§2 naming), SK210–211 (§2a no header/footer above frontmatter),\n"
-            "SK301–302 (§3 SKILL.md as index), SK401 (§4 leaf size), SK601\n"
-            "(§6 no `import scitex as stx`), SK701–704 (frontmatter required\n"
+            "Foundation rules (SK<§><idx>): SK-101–104 (§1 layout), SK-201–203\n"
+            "(§2 naming), SK-210–211 (§2a no header/footer above frontmatter),\n"
+            "SK-301–302 (§3 SKILL.md as index), SK-401 (§4 leaf size), SK-601\n"
+            "(§6 no `import scitex as stx`), SK-701–704 (frontmatter required\n"
             "fields). See general/03_interface_04_skills/12_quality-checklist.md."
         ),
     )
@@ -1055,13 +1055,13 @@ def register_ecosystem_commands(main_group):
         "--rule",
         "rules",
         multiple=True,
-        help="Restrict to specific rule codes (e.g. --rule SK210). Repeatable.",
+        help="Restrict to specific rule codes (e.g. --rule SK-210). Repeatable.",
     )
     @click.option(
         "--fix",
         is_flag=True,
         help=(
-            "Auto-fix mechanically resolvable rules (SK705/SK709/SK710). "
+            "Auto-fix mechanically resolvable rules (SK-705/SK-709/SK-710). "
             "Rewrites only frontmatter; idempotent."
         ),
     )
@@ -1084,10 +1084,10 @@ def register_ecosystem_commands(main_group):
             "Project-structure auditor.\n"
             "\n"
             "Foundation rules (PS<§><idx>):\n"
-            "  PS101–104  §1 top-level layout (pyproject, forbidden dirs, junk)\n"
-            "  PS201–206  §2 src ↔ tests mirror (parent, mirror, prefix, orphan, placeholder)\n"
-            "  PS301–303  §3 tests/ subdir convention (htmlcov, unknown subdirs, examples)\n"
-            "  PS401–402  §4 docs/ structure (to_claude gitignored, assets location)\n"
+            "  PS-101–104  §1 top-level layout (pyproject, forbidden dirs, junk)\n"
+            "  PS-201–206  §2 src ↔ tests mirror (parent, mirror, prefix, orphan, placeholder)\n"
+            "  PS-301–303  §3 tests/ subdir convention (htmlcov, unknown subdirs, examples)\n"
+            "  PS-401–402  §4 docs/ structure (to_claude gitignored, assets location)\n"
             "\n"
             "See _skills/general/02_package_01_project-structure-root.md for the\n"
             "full convention; ditto _skills/scientific/02_research-project_01_project-structure-root.md\n"
@@ -1107,7 +1107,7 @@ def register_ecosystem_commands(main_group):
         "--rule",
         "rules",
         multiple=True,
-        help="Restrict to specific rule codes (e.g. --rule PS201). Repeatable.",
+        help="Restrict to specific rule codes (e.g. --rule PS-201). Repeatable.",
     )
     @click.option(
         "--severity",
@@ -1127,7 +1127,7 @@ def register_ecosystem_commands(main_group):
         Example:
             $ scitex-dev ecosystem audit-project scitex-io
             $ scitex-dev ecosystem audit-project scitex-dev --json
-            $ scitex-dev ecosystem audit-project scitex-stats --rule PS108
+            $ scitex-dev ecosystem audit-project scitex-stats --rule PS-108
             $ scitex-dev ecosystem audit-project scitex-io --severity warning
         """
         from pathlib import Path
@@ -1669,49 +1669,49 @@ def register_ecosystem_commands(main_group):
             # the module docstring + check_*-name → finding.rule mapping.
             release_rules = [
                 {
-                    "id": "E5C5",
+                    "id": "REL-5",
                     "slug": "implicit-deps-not-declared",
                     "section": "release",
                     "message": "implicit deps not declared",
                 },
                 {
-                    "id": "E5C9",
+                    "id": "REL-9",
                     "slug": "skills-not-bundled",
                     "section": "release",
                     "message": "_skills/ ships but build excludes it",
                 },
                 {
-                    "id": "E5C10",
+                    "id": "REL-10",
                     "slug": "duplicate-toml-table",
                     "section": "release",
                     "message": "duplicate TOML table",
                 },
                 {
-                    "id": "E5C11",
+                    "id": "REL-11",
                     "slug": "license-deprecated-form",
                     "section": "release",
                     "message": "deprecated PEP 621 license form",
                 },
                 {
-                    "id": "E5C12",
+                    "id": "REL-12",
                     "slug": "min-version-pin-missing",
                     "section": "release",
                     "message": "dependency missing >= lower bound",
                 },
                 {
-                    "id": "E5L1",
+                    "id": "REL-21",
                     "slug": "version-drift",
                     "section": "release",
                     "message": "pyproject ↔ tag ↔ PyPI version drift",
                 },
                 {
-                    "id": "E5J1",
+                    "id": "REL-41",
                     "slug": "readme-missing-interfaces-callout",
                     "section": "release",
                     "message": "README missing Interfaces callout",
                 },
                 {
-                    "id": "E5F1",
+                    "id": "REL-31",
                     "slug": "internal-api-leak",
                     "section": "release",
                     "message": "internal API leak (private re-exported)",
@@ -1849,7 +1849,7 @@ def register_ecosystem_commands(main_group):
             "This does NOT generate stub tests for the package's source\n"
             "modules — it ONLY installs the canonical audit gate.\n"
             "Quality of source-coverage tests is the package author's\n"
-            "responsibility (see PS206 / PS206b for the rules that\n"
+            "responsibility (see PS-206 / PS-206b for the rules that\n"
             "enforce non-trivial test bodies).\n"
         ),
     )
@@ -1935,7 +1935,7 @@ def register_ecosystem_commands(main_group):
             '"""Pytest fixtures and rootdir marker for this package.\n'
             "\n"
             "An empty conftest.py at tests/ is the canonical SciTeX\n"
-            "convention (audit-project PS208) — it pins the pytest\n"
+            "convention (audit-project PS-208) — it pins the pytest\n"
             "rootdir and gives downstream fixtures a home.\n"
             '"""\n'
         )
@@ -2264,7 +2264,7 @@ def register_ecosystem_commands(main_group):
         # Bootstrap (continued): write a registry override YAML on HOST
         # so audit-all reads paths under our sandbox, not HOST's own
         # ~/proj/<pkg> working checkouts. Without this, audit-project
-        # (PS134/PS210/...) reads HOST-local paths and audits the wrong
+        # (PS-134/PS-210/...) reads HOST-local paths and audits the wrong
         # files. The override flows in via SCITEX_DEV_REGISTRY in the
         # remote_script env (per scitex-dev's §6b cascade).
         import yaml as _yaml

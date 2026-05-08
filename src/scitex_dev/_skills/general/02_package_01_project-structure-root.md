@@ -19,12 +19,12 @@ The auditor (`scitex-dev ecosystem audit-project <pkg>`) enforces this list — 
 
 | File | Audit code | Purpose |
 | :--- | :--- | :--- |
-| `README.md` | PS137 | Primary entry point |
-| `LICENSE` (or `LICENSE.md` / `LICENSE.txt`) | PS138 | License text (`AGPL-3.0-only` for SciTeX — see [01_ecosystem_07_license-and-cla.md](01_ecosystem_07_license-and-cla.md)) |
-| `CHANGELOG.md` | PS134 | Release notes (Keep-a-Changelog style; new packages start with `[Unreleased]`) |
-| `CONTRIBUTING.md` | PS135 | Contribution guide referencing the CLA |
-| `CLA.md` | PS133 | CLA agreement text (referenced by `.github/workflows/cla.yml`) |
-| `pyproject.toml` | PS101 | Package metadata + build (no `setup.py`, `requirements.txt`, `MANIFEST.in`) |
+| `README.md` | PS-137 | Primary entry point |
+| `LICENSE` (or `LICENSE.md` / `LICENSE.txt`) | PS-138 | License text (`AGPL-3.0-only` for SciTeX — see [01_ecosystem_07_license-and-cla.md](01_ecosystem_07_license-and-cla.md)) |
+| `CHANGELOG.md` | PS-134 | Release notes (Keep-a-Changelog style; new packages start with `[Unreleased]`) |
+| `CONTRIBUTING.md` | PS-135 | Contribution guide referencing the CLA |
+| `CLA.md` | PS-133 | CLA agreement text (referenced by `.github/workflows/cla.yml`) |
+| `pyproject.toml` | PS-101 | Package metadata + build (no `setup.py`, `requirements.txt`, `MANIFEST.in`) |
 | `Makefile` | — | Thin dispatcher; logic lives in `./scripts/makefile/` (see [02_package_04_project-structure-makefile.md](02_package_04_project-structure-makefile.md)) |
 | `.gitignore`, `.gitattributes` | — | VCS hygiene |
 | `CLAUDE.md` (optional) | — | AI-agent context for this repo |
@@ -34,13 +34,13 @@ Required directories at root:
 | Directory | Audit code | Purpose |
 | :--- | :--- | :--- |
 | `src/<pkg>/` | (implicit) | Package source — see [02_package_02_project-structure-src.md](02_package_02_project-structure-src.md) |
-| `tests/<pkg>/` | PS201 | Mirror of `src/<pkg>/` — see [02_package_06_project-structure-tests.md](02_package_06_project-structure-tests.md) |
-| `examples/` | PS136 | At least one runnable `<NN_>name.py` / `.ipynb` / `.sh` |
+| `tests/<pkg>/` | PS-201 | Mirror of `src/<pkg>/` — see [02_package_06_project-structure-tests.md](02_package_06_project-structure-tests.md) |
+| `examples/` | PS-136 | At least one runnable `<NN_>name.py` / `.ipynb` / `.sh` |
 | `docs/` | (recommended) | Sphinx + assets — see [04_docs_02_sphinx.md](04_docs_02_sphinx.md) |
 
 Everything else belongs in a subdirectory. **Do not create new top-level directories** without strong reason — extend an existing one or use `./.dev/` for one-offs.
 
-## README badges — coverage is required (PS106)
+## README badges — coverage is required (PS-106)
 
 Every `scitex-*` README must surface its **current test coverage** at
 the top, alongside the PyPI / docs / build / license badges. Reviewers
@@ -55,7 +55,7 @@ badge block near the title):
 ```
 
 Either the shields.io shorthand (above) or a direct codecov / coveralls
-badge satisfies `PS106`. The auditor scans the first ~4 KB of
+badge satisfies `PS-106`. The auditor scans the first ~4 KB of
 `README.md`, so the badge has to live near the title — a coverage badge
 buried at the bottom is invisible and doesn't count.
 
@@ -66,9 +66,9 @@ once coverage uploads start arriving.
 
 ## `pyproject.toml` is the only Python packaging file
 
-Don't add `setup.py`, `requirements.txt`, or `MANIFEST.in`. All those concerns belong in `pyproject.toml`. Lint enforced by `E5C5`/`E5C9`/`E5C10`/`E5C11`/`E5C13` in `scitex_dev._pyproject_lint`.
+Don't add `setup.py`, `requirements.txt`, or `MANIFEST.in`. All those concerns belong in `pyproject.toml`. Lint enforced by `REL-5`/`REL-9`/`REL-10`/`REL-11`/`E5C13` in `scitex_dev._pyproject_lint`.
 
-## Forbidden top-level dirs (PS102)
+## Forbidden top-level dirs (PS-102)
 
 | Top-level dir | Why forbidden | Where it should live |
 | :--- | :--- | :--- |
@@ -154,6 +154,6 @@ The main branch must be publishable **today**, regardless of in-flight work:
 - [ ] `make ci-local` (or equivalent) passes from a clean clone
 - [ ] No `scitex` umbrella import in `src/` (see [02_package_02_project-structure-src.md](02_package_02_project-structure-src.md))
 - [ ] `scitex-dev ecosystem audit-project <distribution>` shows no violations
-- [ ] All five required community files at root (PS133/134/135/137/138):
+- [ ] All five required community files at root (PS-133/134/135/137/138):
       `README.md`, `LICENSE`, `CHANGELOG.md`, `CONTRIBUTING.md`, `CLA.md`
-- [ ] `examples/` exists with at least one runnable file (PS136)
+- [ ] `examples/` exists with at least one runnable file (PS-136)

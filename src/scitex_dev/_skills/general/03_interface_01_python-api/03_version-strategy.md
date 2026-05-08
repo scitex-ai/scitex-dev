@@ -72,4 +72,4 @@ python -c "import scitex_io; print(scitex_io.__version__)"
 # Failure: "unknown", AttributeError, or anything else.
 ```
 
-Linter rule (planned): **PA006** — flag any `_get_version()` function or non-`importlib.metadata` version source.
+Linter rule (planned): **PA-006** — flag any `_get_version()` function or non-`importlib.metadata` version source.

@@ -146,7 +146,7 @@ examples/01_load_save.py            →  tests/examples/test_01_load_save.py
 examples/02_plot_summary.py         →  tests/examples/test_02_plot_summary.py
 ```
 
-PS303 of `audit-project` flags an example without a matching test.
+PS-303 of `audit-project` flags an example without a matching test.
 
 ## Agentic demos
 

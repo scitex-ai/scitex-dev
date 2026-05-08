@@ -1,11 +1,11 @@
-"""Tests for `_check_license.py` (PS138 / PS138b).
+"""Tests for `_check_license.py` (PS-138 / PS-138b).
 
-PS138  — file presence (existing rule).
-PS138b — file content matches SPDX declaration.
+PS-138  — file presence (existing rule).
+PS-138b — file content matches SPDX declaration.
 
-These tests cover the regression that motivated PS138b: a 20-line
-copyright stub passed PS138 (file exists) but didn't actually contain
-the AGPL terms. PS138b checks for unmistakable signature lines
+These tests cover the regression that motivated PS-138b: a 20-line
+copyright stub passed PS-138 (file exists) but didn't actually contain
+the AGPL terms. PS-138b checks for unmistakable signature lines
 including Section 13 ("Remote Network Interaction") that distinguishes
 AGPL from GPL.
 """
@@ -94,8 +94,8 @@ class TestCheckLicenseContent:
         assert "stub" in msg.lower() or "does not match" in msg
 
     def test_non_AGPL_skips(self, tmp_path: Path):
-        # PS138b only enforces AGPL-3.0-only today. Other SPDX values
-        # short-circuit (presence-only check via PS138 still applies).
+        # PS-138b only enforces AGPL-3.0-only today. Other SPDX values
+        # short-circuit (presence-only check via PS-138 still applies).
         path = tmp_path / "LICENSE"
         path.write_text(_STUB_LICENSE)
         assert check_license_content(path, "MIT") is None
@@ -137,17 +137,17 @@ class TestCheckLicenseContent:
 
 
 def test_regression_PS138_alone_misses_stubs(tmp_path: Path):
-    """PS138 (presence-only) passes a stub; PS138b catches it.
+    """PS-138 (presence-only) passes a stub; PS-138b catches it.
 
-    This documents the gap that motivated adding PS138b — written so a
+    This documents the gap that motivated adding PS-138b — written so a
     future regression that reverts to presence-only checking will fail
     here loudly.
     """
     path = tmp_path / "LICENSE"
     path.write_text(_STUB_LICENSE)
 
-    # PS138 (presence) — passes.
+    # PS-138 (presence) — passes.
     assert find_license(tmp_path) is not None
 
-    # PS138b (content) — fails.
+    # PS-138b (content) — fails.
     assert check_license_content(path, "AGPL-3.0-only") is not None

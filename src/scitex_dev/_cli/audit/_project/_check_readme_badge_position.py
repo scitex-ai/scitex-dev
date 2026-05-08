@@ -1,4 +1,4 @@
-"""PS133 — README badges placed below the Full-Documentation line, in the
+"""PS-133 — README badges placed below the Full-Documentation line, in the
 centered figrecipe-style ``<p align="center">`` form.
 
 Convention (see ``_skills/general/04_docs_01_readme_template.md``):
@@ -21,7 +21,7 @@ The badges block must:
    ``[![label](badge)](link)`` markdown form.
 
 Both checks scan the first ~6 KB of README.md. Misplaced or missing
-badges trigger PS133; this is independent of PS106 / PS109 / PS112
+badges trigger PS-133; this is independent of PS-106 / PS-109 / PS-112
 which check that *some* form of each badge exists at all.
 """
 
@@ -44,7 +44,7 @@ _BADGES_MD_RE = re.compile(
 
 
 def check_badge_position(repo: Path, violation_cls: type, out: list) -> None:
-    """Append a PS133 violation if badges are missing, mis-placed, or in
+    """Append a PS-133 violation if badges are missing, mis-placed, or in
     the wrong (markdown) form.
     """
     readme = repo / "README.md"
@@ -57,7 +57,7 @@ def check_badge_position(repo: Path, violation_cls: type, out: list) -> None:
 
     full_doc = _FULL_DOC_RE.search(head)
     if not full_doc:
-        # PS107 catches missing required sections; don't double-flag.
+        # PS-107 catches missing required sections; don't double-flag.
         return
 
     full_doc_end = full_doc.end()
@@ -73,7 +73,7 @@ def check_badge_position(repo: Path, violation_cls: type, out: list) -> None:
     if md_badges_after:
         out.append(
             violation_cls(
-                "PS133",
+                "PS-133",
                 str(readme),
                 (
                     "badges block uses the left-aligned ``[![…]]()`` "
@@ -89,7 +89,7 @@ def check_badge_position(repo: Path, violation_cls: type, out: list) -> None:
     if md_badges_anywhere:
         out.append(
             violation_cls(
-                "PS133",
+                "PS-133",
                 str(readme),
                 (
                     "badges block appears BEFORE the Full-Documentation "
@@ -101,5 +101,5 @@ def check_badge_position(repo: Path, violation_cls: type, out: list) -> None:
         )
         return
 
-    # No badges block found at all — PS106 / PS109 / PS112 already
+    # No badges block found at all — PS-106 / PS-109 / PS-112 already
     # cover the per-badge presence; don't double-flag here.

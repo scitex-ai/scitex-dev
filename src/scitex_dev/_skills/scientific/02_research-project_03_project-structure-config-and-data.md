@@ -195,5 +195,5 @@ Adjacent to `./config/` and `./data/`, SciTeX packages may also keep **project-s
 
 The `audit-project` rules apply: `./config/` not directly checked (its presence is informational), `./data/` not directly checked. The lint rules that DO touch this area:
 
-- `PS102` — `./references/` is forbidden at top level (fold provenance into `./data/<source>/README.md`).
-- `PS401` — `./docs/to_claude/` must be gitignored (also applies to `./.scitex/<pkg>/runtime/` artefacts).
+- `PS-102` — `./references/` is forbidden at top level (fold provenance into `./data/<source>/README.md`).
+- `PS-401` — `./docs/to_claude/` must be gitignored (also applies to `./.scitex/<pkg>/runtime/` artefacts).

@@ -33,8 +33,8 @@ identity (logo + tagline + install link) → CI status (badges) → content.
 ## <N> Interfaces (Python · CLI · MCP · Skills · HTTP optional)
   ← The primary interface (highest star rating) is `<details open>` —
     its minimal example doubles as the quick-start. NO separate
-    `## Quick Start` H2 (PS131; duplicates the primary interface block).
-    NO standalone `## Modules` H2 either (PS132; duplicates autoapi
+    `## Quick Start` H2 (PS-131; duplicates the primary interface block).
+    NO standalone `## Modules` H2 either (PS-132; duplicates autoapi
     and drifts).
 ## Lint Rules (if applicable)
 ## Part of SciTeX
@@ -94,14 +94,14 @@ inconsistent across the ecosystem).
 The README's `## <N> Interfaces` section contains one `<details>` block
 per interface. Star ratings live on the `<summary>` (not in a separate
 callout); strip parenthetical expansions and `-- for AI Agents` /
-`— for AI Agent Discovery` tails (audit rule **PS118**).
+`— for AI Agent Discovery` tails (audit rule **PS-118**).
 
 **The primary interface(s) use `<details open>`** and carry `(primary)`
 after the stars. The primary is the interface with the highest star
 rating; when multiple interfaces tie at the highest rating (e.g. CLI
 ⭐⭐⭐ AND Skills ⭐⭐⭐), open ALL of them. Their minimal example(s)
 double as the quick-start — there is no separate `## Quick Start` H2
-(audit rule **PS131**: at least one interface block is `<details
+(audit rule **PS-131**: at least one interface block is `<details
 open>`).
 
 ```markdown
@@ -133,7 +133,7 @@ open>`).
 ### Canonical "Full X reference" deep-link patterns
 
 Each `Full X` link **must** be a deep-link, not a bare RTD root URL
-(audit rule **PS123**). The deep-link points into the bundled
+(audit rule **PS-123**). The deep-link points into the bundled
 `_sphinx_html/` (also surfaced via Read the Docs):
 
 | Interface  | Canonical deep-link                                                          |
@@ -182,7 +182,7 @@ PACKAGE is part of [**SciTeX**](https://scitex.ai).
 
 ## SciTeX-Specific Rules
 
-- **No `ywatanabe@scitex.ai`** in footer — community project (audit: **PS111**)
+- **No `ywatanabe@scitex.ai`** in footer — community project (audit: **PS-111**)
 - **`import scitex`** and **`import scitex as stx`** are both acceptable
   in code blocks; pick one and stay consistent within a single README.
   (Reality: the umbrella canonical README and most skill docs use `as stx`;
@@ -191,7 +191,7 @@ PACKAGE is part of [**SciTeX**](https://scitex.ai).
 - **Match quickstart.rst** — README Quickstart and Sphinx quickstart should show the same examples
 - **Add Logo and Icon** — either `docs/assets/images/{scitex-logo-blue-cropped.png,scitex-icon-navy-inverted.png}`
   or `docs/{scitex-logo-blue-cropped.png,scitex-icon-navy-inverted.png}`
-  is accepted (audit: **PS112** for the top logo).
+  is accepted (audit: **PS-112** for the top logo).
 
 ## Canonical Template + Audit Rules
 
@@ -203,12 +203,12 @@ sections:
 
 | Code  | Enforces                                                            |
 |-------|---------------------------------------------------------------------|
-| PS106 | Coverage badge in the first ~4 KB                                   |
-| PS107 | Required H2 sections: `## Installation`, `## Quick Start`, `## Part of SciTeX` |
-| PS109 | PyPI version badge in the first ~4 KB                               |
-| PS110 | Four Freedoms for Research blockquote present                       |
-| PS111 | Banned personal email `ywatanabe@scitex.ai` absent                  |
-| PS112 | SciTeX logo image in the first ~4 KB                                |
+| PS-106 | Coverage badge in the first ~4 KB                                   |
+| PS-107 | Required H2 sections: `## Installation`, `## Quick Start`, `## Part of SciTeX` |
+| PS-109 | PyPI version badge in the first ~4 KB                               |
+| PS-110 | Four Freedoms for Research blockquote present                       |
+| PS-111 | Banned personal email `ywatanabe@scitex.ai` absent                  |
+| PS-112 | SciTeX logo image in the first ~4 KB                                |
 
 ---
 

@@ -3,7 +3,7 @@
 Rules cover the `(A)`-marked items from
 `scitex-python/src/scitex/_skills/general/03_interface_01_python-api/12_audit-checklist.md`.
 
-Numbering: `PA<§><idx>` (e.g. PA101 = §1 rule 01). Mirrors the `S<n>` / `M<n>`
+Numbering: `PA<§><idx>` (e.g. PA-101 = §1 rule 01). Mirrors the `S<n>` / `M<n>`
 rule-numbering used elsewhere in scitex-dev.
 """
 
@@ -30,53 +30,53 @@ RULES: dict[str, Rule] = {
     r.code: r
     for r in [
         # §1 Naming and visibility
-        Rule("PA101", "§1", "`__all__` is missing from __init__.py", "all-missing"),
+        Rule("PA-101", "§1", "`__all__` is missing from __init__.py", "all-missing"),
         Rule(
-            "PA102",
+            "PA-102",
             "§1",
             "name listed in __all__ is not bound in __init__.py",
             "all-name-unbound",
         ),
         Rule(
-            "PA103",
+            "PA-103",
             "§1",
             "name in __all__ starts with underscore",
             "all-private-name",
         ),
         Rule(
-            "PA104",
+            "PA-104",
             "§1",
             "third-party symbol is re-exported via __all__",
             "all-third-party",
         ),
         # §2 Version strategy
         Rule(
-            "PA201",
+            "PA-201",
             "§2",
             "`__version__` is missing from __all__",
             "version-not-in-all",
         ),
         Rule(
-            "PA202",
+            "PA-202",
             "§2",
             "`__version__` not derived from importlib.metadata.version(...)",
             "version-not-from-metadata",
         ),
         Rule(
-            "PA203",
+            "PA-203",
             "§2",
             'fallback for __version__ should be "0.0.0+local"',
             "version-fallback-wrong",
         ),
         # §3 Lazy imports / optional deps
         Rule(
-            "PA301",
+            "PA-301",
             "§3",
             "top-level `import` outside try/except may break on missing optional dep",
             "top-level-optional-import",
         ),
         Rule(
-            "PA304",
+            "PA-304",
             "§3",
             "umbrella import `scitex.<sub>` / `import scitex` inside standalone "
             "source — drags the umbrella `__init__.py` and its lazy re-export "
@@ -86,7 +86,7 @@ RULES: dict[str, Rule] = {
             "umbrella-import-in-standalone",
         ),
         Rule(
-            "PA305",
+            "PA-305",
             "§3",
             "module imports `playwright.async_api` (live browser automation) "
             "but does not call `capture_debug_artifacts_async` — every "
@@ -99,7 +99,7 @@ RULES: dict[str, Rule] = {
         ),
         # §5 Type hints
         Rule(
-            "PA501",
+            "PA-501",
             "§5",
             "`from __future__ import annotations` is missing",
             "missing-future-annotations",
@@ -122,7 +122,7 @@ class Violation:
 
 
 # Heuristic: imports from these packages are "third-party" — symbols pulled
-# from them and re-exported via __all__ violate PA104.
+# from them and re-exported via __all__ violate PA-104.
 _THIRD_PARTY_ROOTS = frozenset(
     {
         "numpy",
@@ -141,7 +141,7 @@ _THIRD_PARTY_ROOTS = frozenset(
 )
 
 # Stdlib roots whose top-level `import x` is benign and should not trigger
-# PA301 even outside try/except.
+# PA-301 even outside try/except.
 _STDLIB_SAFE_ROOTS = frozenset(
     {
         "os",
@@ -230,7 +230,7 @@ def _locate_init(import_name: str) -> Path | None:
 def _audit_playwright_capture(
     init_path: Path, distribution: str, import_name: str
 ) -> list[Violation]:
-    """PA305 — every module that imports `playwright.async_api` (a sign
+    """PA-305 — every module that imports `playwright.async_api` (a sign
     of live browser automation) must contain at least one
     `capture_debug_artifacts_async` call. Helper-routed callers can opt
     in via `from scitex_browser.debugging import capture_debug_artifacts_async`
@@ -304,7 +304,7 @@ def _audit_playwright_capture(
         if imports_playwright and not calls_capture:
             out.append(
                 Violation(
-                    "PA305",
+                    "PA-305",
                     f"{distribution}: {py_file.relative_to(pkg_root.parent)}",
                     "imports `playwright.async_api` but no "
                     "`capture_debug_artifacts_async` call in module",
@@ -316,13 +316,13 @@ def _audit_playwright_capture(
 def _audit_umbrella_imports(
     init_path: Path, distribution: str, import_name: str
 ) -> list[Violation]:
-    """PA304 — flag `from scitex.X` / `import scitex.X` / `import scitex`
+    """PA-304 — flag `from scitex.X` / `import scitex.X` / `import scitex`
     inside standalone source.
 
     Only **module-level** imports are flagged. Function-scoped (lazy)
     imports don't drag the umbrella when the package is imported as a
     library — they fire only when the function is actually called.
-    The PA304 cost concern is module-import time, not call time.
+    The PA-304 cost concern is module-import time, not call time.
 
     Exemptions:
     - The umbrella `scitex` package itself (its source legitimately
@@ -387,7 +387,7 @@ def _audit_umbrella_imports(
                 if _flag(mod):
                     out.append(
                         Violation(
-                            "PA304",
+                            "PA-304",
                             f"{distribution}: {py_file.relative_to(pkg_root.parent)}:{stmt.lineno}",
                             f"from {mod} import ... — replace with peer standalone import",
                         )
@@ -398,7 +398,7 @@ def _audit_umbrella_imports(
                     if _flag(name):
                         out.append(
                             Violation(
-                                "PA304",
+                                "PA-304",
                                 f"{distribution}: {py_file.relative_to(pkg_root.parent)}:{stmt.lineno}",
                                 f"import {name} — replace with peer standalone import",
                             )
@@ -466,7 +466,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
         "all": None,
         "version_nodes": [],
         # Local names bound to `importlib.metadata.version` (incl. aliases like
-        # `from importlib.metadata import version as _v`). Used by PA202.
+        # `from importlib.metadata import version as _v`). Used by PA-202.
         "version_aliases": {"version"},
     }
 
@@ -486,7 +486,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 ):
                     out.append(
                         Violation(
-                            "PA301",
+                            "PA-301",
                             where,
                             f"`import {alias.name}` at module top-level "
                             "(wrap in try/except ImportError if optional)",
@@ -502,7 +502,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 local = alias.asname or alias.name
                 bound_names.add(local)
                 # Record `from importlib.metadata import version [as X]` aliases
-                # so PA202 recognizes the canonical pattern through any alias.
+                # so PA-202 recognizes the canonical pattern through any alias.
                 if mod == "importlib.metadata" and alias.name == "version":
                     aliases = state["version_aliases"]
                     assert isinstance(aliases, set)
@@ -522,7 +522,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                     if node.level == 0:
                         out.append(
                             Violation(
-                                "PA301",
+                                "PA-301",
                                 where,
                                 f"`from {mod} import ...` at module top-level "
                                 "(wrap in try/except ImportError if optional)",
@@ -608,7 +608,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 # Pytest collects any module-level callable; PEP 562 lets a
                 # module expose names dynamically without binding them at
                 # import time. Treat each `name == "..."` literal inside
-                # __getattr__ as a bound name so PA102 doesn't false-fire.
+                # __getattr__ as a bound name so PA-102 doesn't false-fire.
                 if node.name == "__getattr__":
                     for sub in ast.walk(node):
                         # Pattern A: `if name == "X":`
@@ -658,22 +658,22 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
     # §5
     if not has_future_annotations:
         out.append(
-            Violation("PA501", where, "add `from __future__ import annotations`")
+            Violation("PA-501", where, "add `from __future__ import annotations`")
         )
 
     # §1
     if all_names is None:
-        out.append(Violation("PA101", where, "declare `__all__ = [...]`"))
+        out.append(Violation("PA-101", where, "declare `__all__ = [...]`"))
     else:
         for n in all_names:
             if n.startswith("_") and n not in {"__version__"}:
                 out.append(
-                    Violation("PA103", where, f"'{n}' is private but listed in __all__")
+                    Violation("PA-103", where, f"'{n}' is private but listed in __all__")
                 )
             if n not in bound_names:
                 out.append(
                     Violation(
-                        "PA102",
+                        "PA-102",
                         where,
                         f"'{n}' is in __all__ but not imported/defined in __init__.py",
                     )
@@ -681,14 +681,14 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
             if n in third_party_bound:
                 out.append(
                     Violation(
-                        "PA104",
+                        "PA-104",
                         where,
                         f"'{n}' resolves to a third-party symbol — re-export breaks the API surface",
                     )
                 )
 
     # §2 — version strategy
-    # PA201 only fires when __version__ is actually defined. Modules that
+    # PA-201 only fires when __version__ is actually defined. Modules that
     # delegate everything (sys.modules aliases, e.g. scitex-plt → figrecipe)
     # don't define __version__ themselves.
     if (
@@ -696,7 +696,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
         and "__version__" not in all_names
         and "__version__" in bound_names
     ):
-        out.append(Violation("PA201", where, "add `__version__` to __all__"))
+        out.append(Violation("PA-201", where, "add `__version__` to __all__"))
 
     if version_nodes:
         raw_aliases = state["version_aliases"]
@@ -709,7 +709,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
         if not uses_metadata:
             out.append(
                 Violation(
-                    "PA202",
+                    "PA-202",
                     where,
                     "compute __version__ via importlib.metadata.version('<dist>') "
                     "with PackageNotFoundError fallback",
@@ -719,7 +719,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
             if fb != "0.0.0+local":
                 out.append(
                     Violation(
-                        "PA203",
+                        "PA-203",
                         where,
                         f"fallback is {fb!r}; use '0.0.0+local' (PEP 440 local segment)",
                     )
