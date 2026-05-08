@@ -538,6 +538,29 @@ RULES: dict[str, Rule] = {
             "wrong public/private prefix (private `_foo.py` must be tested by `test__foo.py`, not `test_foo.py`)",
         ),
         Rule(
+            "PS150",
+            "§1",
+            (
+                "pyproject.toml `[project.optional-dependencies.dev]` does not "
+                "declare `scitex-dev` (or `scitex-dev[cli-audit]`). "
+                '`tests/develop/test_audit.py` calls `shutil.which("scitex-dev")` '
+                "and pytest.skip()s when absent — i.e. the audit-conformance gate "
+                "silently does NOT run in CI's fresh venv. Add `scitex-dev>=0.11.5` "
+                "(or current latest) to `[dev]` so the gate fires."
+            ),
+        ),
+        Rule(
+            "PS151",
+            "§1",
+            (
+                "scitex-dev pin floor in `[dev]` is below the known-good version "
+                "(currently 0.11.5). Older scitex-dev releases ship a smaller / "
+                "differently-classified rule corpus, so the same package gets "
+                "different audit verdicts depending on which scitex-dev wheel "
+                "PyPI happens to surface. Bump the floor to the current minimum."
+            ),
+        ),
+        Rule(
             "PS206",
             "§2",
             "placeholder-only test (no `def test_` or `class Test`)",
@@ -756,6 +779,8 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS140": "E",  # missing/stale tests/integration/test_cross_package_imports.py
     "PS141": "E",  # README missing `## Demo` with visual content
     "PS142": "E",  # README missing `## Architecture` with diagram/tree
+    "PS150": "W",  # [dev] missing scitex-dev pin — audit gate silently skips
+    "PS151": "W",  # scitex-dev pin floor < known-good (rule corpus drift)
     # src ↔ tests mirror — load-bearing for CI confidence
     "PS201": "E",
     "PS202": "E",
@@ -1622,6 +1647,9 @@ def audit_project(
 
     check_ps139_umbrella_dep(repo_root, Violation, violations)
     check_ps140_integration_gate(repo_root, distribution, Violation, violations)
+    from ._check_audit_pin import check_audit_pin
+
+    check_audit_pin(repo_root, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]
