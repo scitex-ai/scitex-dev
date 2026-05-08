@@ -1,0 +1,33 @@
+DEMO:
+    demo:
+        xxx: 111
+        yyy: 222
+capture:
+    capture:
+        screenshot:
+            quality: 85
+            monitor_id: 0
+            output_dir:
+        monitoring:
+            interval: 1.0
+            quality: 60
+            verbose: true
+            capture_all: false
+        gif:
+            duration: 0.5
+            optimize: true
+            max_frames:
+        cache:
+            max_size_gb: 1.0
+ID: 2025Y-12M-21D-13h21m17s_RnC7
+PID: 2519572
+START_DATETIME: 2025-12-21 13:21:17.802744
+FILE: /home/ywatanabe/proj/scitex-code/src/scitex/dev/plt/mpl/get_signatures.py
+SDIR_OUT: 
+    /home/ywatanabe/proj/scitex-code/src/scitex/dev/plt/mpl/get_signatures_out
+SDIR_RUN: 
+    /home/ywatanabe/proj/scitex-code/src/scitex/dev/plt/mpl/get_signatures_out/RUNNING/2025Y-12M-21D-13h21m17s_RnC7-main
+ARGS: {}
+EXIT_STATUS: 0
+END_DATETIME: 2025-12-21 13:21:24.381630
+RUN_DURATION: 00:00:06

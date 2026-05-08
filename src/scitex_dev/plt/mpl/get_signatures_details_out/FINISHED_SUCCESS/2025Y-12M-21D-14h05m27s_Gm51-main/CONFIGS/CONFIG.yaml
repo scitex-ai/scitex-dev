@@ -1,0 +1,34 @@
+DEMO:
+    demo:
+        xxx: 111
+        yyy: 222
+capture:
+    capture:
+        screenshot:
+            quality: 85
+            monitor_id: 0
+            output_dir:
+        monitoring:
+            interval: 1.0
+            quality: 60
+            verbose: true
+            capture_all: false
+        gif:
+            duration: 0.5
+            optimize: true
+            max_frames:
+        cache:
+            max_size_gb: 1.0
+ID: 2025Y-12M-21D-14h05m27s_Gm51
+PID: 2624946
+START_DATETIME: 2025-12-21 14:05:27.703134
+FILE: 
+    /home/ywatanabe/proj/scitex-code/src/scitex/dev/plt/mpl/get_signatures_details.py
+SDIR_OUT: 
+    /home/ywatanabe/proj/scitex-code/src/scitex/dev/plt/mpl/get_signatures_details_out
+SDIR_RUN: 
+    /home/ywatanabe/proj/scitex-code/src/scitex/dev/plt/mpl/get_signatures_details_out/RUNNING/2025Y-12M-21D-14h05m27s_Gm51-main
+ARGS: {}
+EXIT_STATUS: 0
+END_DATETIME: 2025-12-21 14:05:36.288371
+RUN_DURATION: 00:00:08
