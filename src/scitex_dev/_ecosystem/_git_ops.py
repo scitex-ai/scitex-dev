@@ -180,16 +180,45 @@ def install_all(
     packages: list[str] | None = None,
     jobs: int = 1,
     dry_run: bool = False,
+    venv: str = "current",
     on_progress: Callable[[int, int, str, str, str], None] | None = None,
 ) -> dict[str, tuple[int, str]]:
     """`pip install` every selected package.
 
     source: ``editable`` → ``pip install -e <local_path>[extras]``
             ``pypi``    → ``pip install <pypi_name>[extras]``
+
+    venv: ``current``     → install into the currently-running Python
+                            (the existing shared-venv behaviour).
+          ``per-package`` → for each package, ensure ``<local>/.venv/``
+                            exists (create with the running Python's
+                            ``-m venv`` if absent) and install INTO that
+                            venv. Yields the canonical CI-parity layout
+                            where every consumer's `[dev]` / `[all]`
+                            extras are exercised in isolation.
     """
     items = _selected_packages(packages)
     results: dict[str, tuple[int, str]] = {}
     extras_suffix = f"[{extras}]" if extras else ""
+
+    def _ensure_venv(local: Path) -> Path | None:
+        """Return path to the venv's python, creating .venv/ if absent."""
+        venv_dir = local / ".venv"
+        py = venv_dir / "bin" / "python"
+        if not py.exists():
+            rc, msg = _run(
+                [sys.executable, "-m", "venv", str(venv_dir)],
+                timeout=120,
+            )
+            if rc != 0:
+                return None
+            # Upgrade pip in the new venv so subsequent installs use a
+            # modern resolver that understands current PEP 517/518 wheels.
+            _run(
+                [str(py), "-m", "pip", "install", "--upgrade", "pip", "-q"],
+                timeout=120,
+            )
+        return py
 
     def _install_one(idx: int, total: int, name: str, info: dict) -> None:
         if source == "editable":
@@ -205,11 +234,24 @@ def install_all(
         else:
             results[name] = (2, f"unknown source: {source}")
             return
-        # Use the same Python that's running scitex-dev — bare `pip` finds
-        # the first one on PATH which can be a system Python with stale
-        # metadata (e.g. spartan's /usr/bin/pip is Python 3.9 and can't
-        # see >=3.10 wheels on PyPI, breaking figrecipe>=0.28 resolution).
-        pip_args = [sys.executable, "-m", "pip", "install"]
+
+        # Pick the python that pip will run under.
+        if venv == "per-package" and source == "editable":
+            local = Path(info["local_path"]).expanduser()
+            py = _ensure_venv(local)
+            if py is None:
+                results[name] = (1, "venv create failed")
+                if on_progress:
+                    on_progress(idx, total, name, "err", "venv create failed")
+                return
+            pip_args = [str(py), "-m", "pip", "install"]
+        else:
+            # Use the same Python that's running scitex-dev — bare `pip`
+            # finds the first one on PATH which can be a system Python
+            # with stale metadata (e.g. spartan's /usr/bin/pip is Python
+            # 3.9 and can't see >=3.10 wheels on PyPI).
+            pip_args = [sys.executable, "-m", "pip", "install"]
+
         cmd = pip_args + ["-e", target] if source == "editable" else pip_args + [target]
         if dry_run:
             results[name] = (0, " ".join(cmd))

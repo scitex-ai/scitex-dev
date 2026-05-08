@@ -587,6 +587,18 @@ def register_ecosystem_commands(main_group):
         help="editable: pip install -e <local>; pypi: pip install <name> from PyPI.",
     )
     @click.option("--extras", default="", help="Comma-separated extras (e.g. dev,mcp).")
+    @click.option(
+        "--venv",
+        type=click.Choice(["current", "per-package"]),
+        default="current",
+        show_default=True,
+        help=(
+            "current: install into the running Python (shared dev venv). "
+            "per-package: create ~/proj/<pkg>/.venv/ if missing and install "
+            "INTO that venv — yields the canonical CI-parity layout where "
+            "each package's [dev]/[all] extras are exercised in isolation."
+        ),
+    )
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
     @click.option("--jobs", "-j", default=1, show_default=True, type=int)
     @click.option(
@@ -599,7 +611,7 @@ def register_ecosystem_commands(main_group):
     @click.option(
         "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
     )
-    def ecosystem_install(source, extras, package, jobs, dry_run, as_json, yes):
+    def ecosystem_install(source, extras, venv, package, jobs, dry_run, as_json, yes):
         """`pip install` every ecosystem package.
 
         \b
@@ -607,11 +619,12 @@ def register_ecosystem_commands(main_group):
 
         \b
         Example:
-          $ scitex-dev ecosystem install                       # preview (dry-run)
-          $ scitex-dev ecosystem install --yes                 # editable from local
+          $ scitex-dev ecosystem install                              # preview (dry-run, current venv)
+          $ scitex-dev ecosystem install --yes                        # editable into running venv
+          $ scitex-dev ecosystem install --venv per-package --extras all,dev --yes -j 4
+                                                                      # ↑ CI-parity: per-package .venv each
           $ scitex-dev ecosystem install --source pypi --yes
-          $ scitex-dev ecosystem install --extras dev,mcp -j 4 --yes
-          $ scitex-dev ecosystem install -p scitex-io --source pypi --yes
+          $ scitex-dev ecosystem install -p scitex-io --venv per-package --extras dev --yes
         """
         from ..._ecosystem._git_ops import install_all
 
@@ -620,6 +633,7 @@ def register_ecosystem_commands(main_group):
         results = install_all(
             source=source,
             extras=extras,
+            venv=venv,
             packages=list(package) or None,
             jobs=jobs,
             dry_run=effective_dry_run,
