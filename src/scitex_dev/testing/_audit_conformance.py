@@ -71,17 +71,23 @@ def audit_all_for_package(
         env={**os.environ, "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1"},
     )
     if proc.returncode != 0 and skip_rules:
-        # Re-classify: if every error-severity violation in stdout is on
-        # the caller's allow-list, treat as clean. Use a simple line scan;
-        # error lines look like `  [E] [PSnnn §M] …`.
+        # Re-classify: if every contributing violation in stdout is on
+        # the caller's allow-list, treat as clean. Auditors print rule
+        # lines in two shapes:
+        #   `  [E] [PSnnn §M] …`       (legacy, from audit-summary)
+        #   `  [PSnnn §M] <where>: …`  (canonical, used by every current auditor)
+        # Match by rule id alone — the surrounding marker is incidental.
         skipped: list[str] = []
         non_skipped: list[str] = []
         for line in proc.stdout.splitlines():
-            if not line.lstrip().startswith("[E]"):
+            stripped = line.lstrip()
+            # Accept any line whose first bracketed token contains a rule id
+            # (avoids false-positives on prose that happens to mention a rule).
+            if not (stripped.startswith("[") or stripped.startswith("[E]")):
                 continue
             matched = [r for r in skip_rules if f"[{r} " in line or f"[{r}]" in line]
             if matched:
-                skipped.append(line.lstrip())
+                skipped.append(stripped)
             else:
                 non_skipped.append(line)
         # Only mask the failure when skip_rules ACTUALLY matched something.
