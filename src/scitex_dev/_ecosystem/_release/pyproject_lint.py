@@ -279,14 +279,111 @@ def _scan_imports(src_dir: Path) -> set[str]:
     return out
 
 
+def _parse_req(spec: str):
+    """PEP 508 parse; returns Requirement or None on malformed input.
+
+    Centralised so every rule that walks dependency strings handles
+    extras, markers, and version specifiers identically. Falls back to
+    the legacy regex split only when packaging.Requirement raises —
+    keeps E5C5 working on packages that ship deliberately-funky strings
+    (e.g. relative paths) we'd rather flag elsewhere.
+    """
+    try:
+        from packaging.requirements import InvalidRequirement, Requirement
+    except ImportError:  # pragma: no cover — packaging is a setuptools dep
+        return None
+    try:
+        return Requirement(spec)
+    except InvalidRequirement:
+        return None
+
+
 def _declared_runtime_deps(data: dict[str, Any]) -> set[str]:
     raw = (data.get("project") or {}).get("dependencies") or []
     result = set()
     for d in raw:
+        req = _parse_req(d)
+        if req is not None:
+            result.add(req.name)
+            continue
+        # Fallback: legacy regex split for malformed specs.
         name = re.split(r"[\[<>=!~ ;]", d, maxsplit=1)[0].strip()
         if name:
             result.add(name)
     return result
+
+
+def _iter_dep_specs(data: dict[str, Any]):
+    """Yield (group, spec_string) for every declared dep + optional dep.
+
+    `group` is "dependencies" for runtime deps or the extra name (e.g.
+    "dev", "cli") for optional deps. Used by E5C12_min_version_pin so a
+    single walker covers both surfaces.
+    """
+    project = data.get("project") or {}
+    for spec in project.get("dependencies") or []:
+        yield "dependencies", spec
+    for extra, specs in (project.get("optional-dependencies") or {}).items():
+        for spec in specs or []:
+            yield f"optional-dependencies.{extra}", spec
+
+
+def check_min_version_pin(
+    pyproject_data: dict[str, Any],
+) -> list[LintFinding]:
+    self_name = (pyproject_data.get("project") or {}).get("name") or ""
+    """Rule E5C12 — every declared dep must carry a `>=` (or `~=`) lower bound.
+
+    Bare ``"pkg"`` accepts any historic version (including pre-1.0
+    breakage); upper-only pins like ``"pkg<2"`` likewise let stale
+    wheels satisfy the spec. Allow ``>=`` (the canonical SciTeX choice)
+    and ``~=`` (compatible release, equivalent lower bound). Exact ``==``
+    pins are flagged separately by the release-alignment rule and pass
+    here so a deliberate freeze isn't double-counted.
+
+    Handles extras and environment markers correctly via
+    ``packaging.requirements.Requirement``: e.g. ``pkg[extra]>=1.0;
+    python_version >= "3.10"`` parses, the extras list is preserved,
+    and the marker is ignored for the pin check.
+    """
+    findings: list[LintFinding] = []
+    for group, spec in _iter_dep_specs(pyproject_data):
+        req = _parse_req(spec)
+        if req is None:
+            findings.append(
+                LintFinding(
+                    rule="E5C12_min_version_pin",
+                    severity="HIGH",
+                    message=f"[{group}] `{spec}`: not a valid PEP 508 spec",
+                    detail="packaging.requirements.Requirement could not parse",
+                    fix_hint="quote env-marker correctly, or use canonical `pkg>=X.Y.Z` form",
+                )
+            )
+            continue
+        if req.name == self_name:
+            continue  # self-referential extra (e.g. `pkg[cli]` in `[all]`)
+        ops = {s.operator for s in req.specifier}
+        if ops & {">=", "~=", "=="}:
+            continue  # has a usable lower bound (or deliberate ==)
+        # Surviving cases: empty specifier, only `<`/`!=`/`>`/`<=`.
+        extras = f"[{','.join(sorted(req.extras))}]" if req.extras else ""
+        findings.append(
+            LintFinding(
+                rule="E5C12_min_version_pin",
+                severity="HIGH",
+                message=(
+                    f"[{group}] `{req.name}{extras}`: missing `>=` lower bound "
+                    f"(spec: `{spec}`)"
+                ),
+                detail=(
+                    "without a lower bound, pip can resolve a years-old "
+                    "incompatible wheel that import-fails at runtime"
+                ),
+                fix_hint=f'replace with `"{req.name}{extras}>=<min>"` '
+                "(pick the oldest version you actually test against)",
+            )
+        )
+    return findings
 
 
 def check_implicit_deps(
@@ -938,6 +1035,7 @@ def lint_pyproject(repo: Path, package_name: str | None = None) -> LintReport:
     pkg = package_name or (data.get("project") or {}).get("name")
     rep.package = pkg or repo.name
     rep.findings.extend(check_implicit_deps(repo, data, rep.package))
+    rep.findings.extend(check_min_version_pin(data))
     rep.findings.extend(check_skill_bundling(repo, data, rep.package))
     rep.findings.extend(check_internal_api_leak(repo, rep.package))
     rep.findings.extend(check_license(data))

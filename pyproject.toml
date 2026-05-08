@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scitex-dev"
-version = "0.11.6"
+dynamic = ["version"]
 description = "Shared developer utilities for the SciTeX ecosystem"
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -53,6 +53,10 @@ scitex-dev = "scitex_dev"
 Homepage = "https://github.com/ywatanabe1989/scitex-dev"
 Repository = "https://github.com/ywatanabe1989/scitex-dev"
 Documentation = "https://scitex-dev.readthedocs.io/"
+
+[tool.setuptools_scm]
+# Empty body: derive version from latest git tag (vX.Y.Z → X.Y.Z).
+# Eliminates pyproject↔tag drift; release flow is `git tag vX.Y.Z && git push --tags`.
 
 [tool.setuptools.packages.find]
 where = ["src"]
