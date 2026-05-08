@@ -823,15 +823,95 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS508": "E",  # .ipynb has warning output in committed cells
 }
 
-# Apply the overrides — replace each tagged Rule with a promoted copy.
-RULES = {
-    code: (
-        Rule(rule.code, rule.section, rule.message, _SEVERITY_OVERRIDES[code])
-        if code in _SEVERITY_OVERRIDES
-        else rule
-    )
-    for code, rule in RULES.items()
+# Human-readable kebab-case slugs. Surfaced inline in audit output as
+# `[CODE §X slug]` so reviewers can read intent without cross-referencing
+# rule numbers. Backfilled in batches; missing entries render in the old
+# `[CODE §X]` form (no breakage). New rules SHOULD include a slug from
+# definition.
+_SLUGS: dict[str, str] = {
+    # §1 — top-level layout already slugged at definition (PS101–PS103)
+    "PS104": "uses-playground-dir",
+    "PS105": "main-py-missing",
+    # README structure
+    "PS106": "readme-missing-coverage-badge",
+    "PS107": "readme-missing-h2-sections",
+    "PS108": "readme-missing-license-badge",
+    "PS108b": "readme-missing-pypi-py-version-badge",
+    "PS109": "readme-missing-pypi-version-badge",
+    "PS110": "readme-missing-four-freedoms",
+    "PS111": "readme-personal-email",
+    "PS112": "readme-missing-logo",
+    "PS113": "readme-banned-emoji",
+    "PS114": "readme-banned-marketing",
+    "PS115": "readme-missing-architecture",
+    "PS116": "readme-banned-buzzword",
+    "PS117": "readme-missing-quickstart",
+    "PS118": "readme-missing-installation",
+    "PS119": "readme-missing-part-of-scitex",
+    "PS120": "readme-cli-help-out-of-sync",
+    "PS123": "readme-banned-future-claim",
+    "PS129": "readme-banned-trademark-symbol",
+    "PS130": "readme-missing-related-projects",
+    "PS131": "readme-missing-citation",
+    "PS132": "readme-missing-roadmap",
+    # Sphinx / RTD
+    "PS121": "rtd-onboarding-missing",
+    "PS122": "rtd-config-missing",
+    "PS124": "sphinx-conf-missing",
+    "PS125": "sphinx-makefile-missing",
+    "PS126": "sphinx-extensions-bad",
+    "PS127": "sphinx-theme-bad",
+    "PS128": "sphinx-build-broken",
+    # Community files
+    "PS133": "missing-cla",
+    "PS134": "missing-changelog",
+    "PS135": "missing-contributing",
+    "PS136": "missing-examples-dir",
+    "PS137": "missing-readme",
+    "PS138": "missing-license",
+    "PS138b": "license-stub-mismatched",
+    "PS139": "pyproject-depends-on-umbrella",
+    "PS140": "cross-package-imports-test-missing",
+    "PS141": "readme-missing-demo",
+    "PS142": "readme-missing-architecture-diagram",
+    "PS143": "readme-missing-badge-row",
+    "PS144": "readme-missing-pypi-status",
+    "PS150": "dev-extras-missing-scitex-dev",
+    "PS151": "dev-extras-scitex-dev-floor-too-old",
+    # §2 src↔tests already slugged at definition (PS201–PS205)
+    "PS206": "test-placeholder-only",
+    "PS206b": "test-import-smoke-only",
+    "PS207": "empty-test-dir",
+    "PS210": "dev-extras-incomplete",
+    # §3 docs / examples
+    "PS301": "top-level-htmlcov",
+    "PS302": "tests-unknown-subdir",
+    "PS303": "example-without-test",
+    # §4 docs/to_claude
+    "PS401": "docs-to-claude-tracked",
+    "PS402": "top-level-assets",
+    # §5 examples + notebooks (PS503 already slugged)
+    "PS501": "example-without-stx-session",
+    "PS502": "examples-out-empty",
+    "PS504": "ipynb-no-cell-outputs",
+    "PS505": "ipynb-test-not-nbconvert",
+    "PS506": "ipynb-missing-matplotlib-inline",
+    "PS507": "ipynb-missing-plt-show",
+    "PS508": "ipynb-warning-in-output",
 }
+
+
+# Apply the overrides — replace each tagged Rule with a promoted copy that
+# carries both the (optional) severity override and the (optional) slug.
+def _patch(rule: Rule) -> Rule:
+    sev = _SEVERITY_OVERRIDES.get(rule.code, rule.severity)
+    slug = rule.slug or _SLUGS.get(rule.code, "")
+    if sev == rule.severity and slug == rule.slug:
+        return rule
+    return Rule(rule.code, rule.section, rule.message, sev, slug)
+
+
+RULES = {code: _patch(rule) for code, rule in RULES.items()}
 
 
 @dataclass

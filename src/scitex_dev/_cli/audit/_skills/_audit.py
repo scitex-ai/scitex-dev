@@ -104,6 +104,54 @@ for _r in _v2.V2_RULES.values():
     RULES[_r.code] = Rule(_r.code, _r.section, _r.message)
 
 
+# Backfill kebab-case slugs across the SK corpus. Surfaced inline in audit
+# output as `[SKxxx §X slug] …`. Missing entries fall back to the bare form;
+# new rules SHOULD include `slug=...` from definition.
+_SLUGS: dict[str, str] = {
+    "SK101": "skills-dir-missing",
+    "SK102": "skill-md-missing",
+    "SK103": "forbidden-skills-subdir",
+    "SK104": "duplicate-skill-index",
+    # SK105 in v2 means "missing 01_installation.md" (overrides the legacy
+    # "MANIFEST.md forbidden" rule via the V2 merge above).
+    "SK105": "leaf-installation-missing",
+    "SK106": "leaf-quick-start-missing",
+    "SK107": "leaf-python-api-missing",
+    "SK108": "leaf-cli-reference-missing",
+    "SK109": "leaf-mcp-tools-missing",
+    "SK110": "leaf-http-api-missing",
+    "SK111": "leaf-skill-table-missing",
+    "SK705": "frontmatter-name-mismatch",
+    "SK706": "frontmatter-description-too-short",
+    "SK707": "frontmatter-tags-empty",
+    "SK708": "frontmatter-tags-not-kebab",
+    "SK709": "frontmatter-tags-pkg-prefix-missing",
+    "SK710": "frontmatter-tags-canonical-mismatch",
+    "SK711": "frontmatter-extra-fields",
+    "SK201": "leaf-missing-numeric-prefix",
+    "SK202": "skill-md-with-numeric-prefix",
+    "SK203": "filename-not-kebab-case",
+    "SK210": "frontmatter-not-at-start",
+    "SK211": "trailing-eof-marker",
+    "SK301": "skill-md-over-budget",
+    "SK302": "leaf-not-linked-from-skill-md",
+    "SK401": "leaf-over-budget",
+    "SK601": "scitex-as-stx-import",
+    "SK701": "frontmatter-missing",
+    "SK702": "frontmatter-name-missing",
+    "SK703": "frontmatter-description-missing",
+    "SK704": "frontmatter-tags-missing",
+}
+RULES = {
+    code: (
+        Rule(rule.code, rule.section, rule.message, _SLUGS.get(code, ""))
+        if not rule.slug and code in _SLUGS
+        else rule
+    )
+    for code, rule in RULES.items()
+}
+
+
 @dataclass
 class Violation:
     rule: str
