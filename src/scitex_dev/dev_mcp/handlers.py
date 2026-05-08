@@ -10,7 +10,7 @@ All handlers return structured Result JSON via wrap_as_mcp.
 from __future__ import annotations
 
 
-from .._mcp import wrap_as_mcp
+from .._ecosystem._mcp import wrap_as_mcp
 from .._core.types import Result
 
 
