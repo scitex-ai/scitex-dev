@@ -74,13 +74,36 @@ def audit_all_for_package(
         # Re-classify: if every error-severity violation in stdout is on
         # the caller's allow-list, treat as clean. Use a simple line scan;
         # error lines look like `  [E] [PSnnn §M] …`.
-        non_skipped = [
-            line
-            for line in proc.stdout.splitlines()
-            if line.lstrip().startswith("[E]")
-            and not any(f"[{r} " in line or f"[{r}]" in line for r in skip_rules)
-        ]
-        if not non_skipped:
+        skipped: list[str] = []
+        non_skipped: list[str] = []
+        for line in proc.stdout.splitlines():
+            if not line.lstrip().startswith("[E]"):
+                continue
+            matched = [r for r in skip_rules if f"[{r} " in line or f"[{r}]" in line]
+            if matched:
+                skipped.append(line.lstrip())
+            else:
+                non_skipped.append(line)
+        # Only mask the failure when skip_rules ACTUALLY matched something.
+        # Without that guard, any non-zero exit (e.g. a warn-level sub-auditor
+        # with no [E] lines) gets silently swallowed simply because the caller
+        # passed *some* skip_rules — the previous behaviour and a real
+        # visibility bug.
+        if skipped and not non_skipped:
+            # Surface a UserWarning so reviewers see exactly what's masked.
+            # Tests still pass; the warning is what catches regression of an
+            # in-progress cleanup that should now be removable from skip_rules.
+            import warnings
+
+            head = skipped[0][:120].rstrip()
+            more = f" (+{len(skipped) - 1} more)" if len(skipped) > 1 else ""
+            warnings.warn(
+                f"audit-all: {len(skipped)} violation(s) masked by "
+                f"skip_rules={list(skip_rules)} on {distribution}: "
+                f"{head}{more}",
+                UserWarning,
+                stacklevel=2,
+            )
             return
     if proc.returncode != 0:
         cmd = f"{bin_path} ecosystem audit-all {distribution}"
