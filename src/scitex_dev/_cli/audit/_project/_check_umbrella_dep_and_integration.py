@@ -126,6 +126,7 @@ def _read_declared_imports(test_file: Path) -> set[str]:
     except (OSError, SyntaxError):
         return set()
     for node in ast.walk(tree):
+        # Plain `CROSS_PACKAGE_IMPORTS = [...]`.
         if isinstance(node, ast.Assign):
             for tgt in node.targets:
                 if isinstance(tgt, ast.Name) and tgt.id == "CROSS_PACKAGE_IMPORTS":
@@ -136,6 +137,19 @@ def _read_declared_imports(test_file: Path) -> set[str]:
                             if isinstance(elt, ast.Constant)
                             and isinstance(elt.value, str)
                         }
+        # Annotated form `CROSS_PACKAGE_IMPORTS: list[str] = [...]`.
+        elif isinstance(node, ast.AnnAssign):
+            tgt = node.target
+            if (
+                isinstance(tgt, ast.Name)
+                and tgt.id == "CROSS_PACKAGE_IMPORTS"
+                and isinstance(node.value, ast.List)
+            ):
+                return {
+                    elt.value
+                    for elt in node.value.elts
+                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
+                }
     return set()
 
 
