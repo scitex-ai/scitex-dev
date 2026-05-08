@@ -554,7 +554,9 @@ class SciTeXChecker(ast.NodeVisitor):
         self.issues.sort(key=lambda i: (-SEVERITY_ORDER[i.rule.severity], i.line))
         return self.issues
 
-    def _add(self, rule: Rule, line: int, col: int, source_line: str) -> None:
+    def _add(self, rule: Rule | None, line: int, col: int, source_line: str) -> None:
+        if rule is None:
+            return
         if rule.requires and rule.requires not in self._available:
             return
         if rule.id in self.config.disable:
