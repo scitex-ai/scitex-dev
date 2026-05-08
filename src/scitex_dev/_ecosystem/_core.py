@@ -140,14 +140,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "socialia",
         "category": "external-lib",
     },
-    "pip-project-template": {
-        "local_path": "~/proj/pip-project-template",
-        "pypi_name": "pip-project-template",
-        "github_repo": "ywatanabe1989/pip-project-template",
-        "import_name": "pip_project_template",
-        "category": "template",
-        "archived": True,  # superseded by scitex-template
-    },
     "scitex-container": {
         "local_path": "~/proj/scitex-container",
         "pypi_name": "scitex-container",
@@ -294,14 +286,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/scitex-orochi",
         "import_name": "scitex_orochi",
         "category": "library",
-    },
-    "singularity-template": {
-        "local_path": "~/proj/singularity_template",
-        "pypi_name": "singularity-template",
-        "github_repo": "ywatanabe1989/singularity_template",
-        "import_name": "singularity_template",
-        "category": "template",
-        "archived": True,  # superseded by scitex-template
     },
     "scitex-str": {
         "local_path": "~/proj/scitex-str",

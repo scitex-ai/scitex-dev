@@ -88,7 +88,6 @@ SCITEX_CATEGORIES: list[tuple[str, str, list[str]]] = [
             "scitex-audit",
             "scitex-repro",
             "scitex-clew",
-            "pip-project-template",
         ],
     ),
     (

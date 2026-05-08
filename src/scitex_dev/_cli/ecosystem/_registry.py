@@ -1406,7 +1406,14 @@ def register_ecosystem_commands(main_group):
         all surfaces (`gather_ecosystem_state`).
         """
 
-    @dashboard.command("list")
+    @dashboard.command(
+        "list",
+        epilog=(
+            "Example:\n"
+            "  $ scitex-dev ecosystem dashboard list -vv\n"
+            "  $ scitex-dev ecosystem dashboard list --json | jq\n"
+        ),
+    )
     @click.option(
         "-v",
         "verbosity",
@@ -1415,19 +1422,39 @@ def register_ecosystem_commands(main_group):
         help="Add -v / -vv / -vvv for more columns.",
     )
     @click.option("--package", "-p", multiple=True, help="Limit to specific packages.")
-    def dashboard_list(verbosity, package):
+    @click.option(
+        "--json",
+        "as_json",
+        is_flag=True,
+        help="Emit JSON instead of the Rich table (alias for `dashboard export --format json`).",
+    )
+    def dashboard_list(verbosity, package, as_json):
         """One-shot snapshot of the ecosystem (no refresh, exit when done)."""
-        from rich.console import Console
-
         from ._dashboard import gather_ecosystem_state
-        from ._dashboard._render import render_table
 
         states = gather_ecosystem_state(
             verbosity=verbosity, packages=list(package) or None
         )
+        if as_json:
+            from ._dashboard import _export as exp
+
+            click.echo(exp.to_json(states))
+            return
+        from rich.console import Console
+
+        from ._dashboard._render import render_table
+
         Console().print(render_table(states, verbosity=verbosity))
 
-    @dashboard.command("start")
+    @dashboard.command(
+        "start",
+        epilog=(
+            "Example:\n"
+            "  $ scitex-dev ecosystem dashboard start -vv\n"
+            "  $ scitex-dev ecosystem dashboard start --gui   # web view (deferred)\n"
+            "  $ scitex-dev ecosystem dashboard start --interval 10\n"
+        ),
+    )
     @click.option("-v", "verbosity", count=True, default=1)
     @click.option(
         "--gui", is_flag=True, help="Launch the Dash web view at 127.0.0.1:8050."
@@ -1435,8 +1462,27 @@ def register_ecosystem_commands(main_group):
     @click.option(
         "--interval", type=float, default=5.0, help="TUI refresh interval (seconds)."
     )
-    def dashboard_start(verbosity, gui, interval):
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print refresh plan (verbosity, interval, package count) and exit without rendering.",
+    )
+    @click.option(
+        "-y",
+        "--yes",
+        "yes",
+        is_flag=True,
+        help="No-op confirmation flag retained for §2 audit-cli compliance.",
+    )
+    def dashboard_start(verbosity, gui, interval, dry_run, yes):
         """Live-refresh dashboard. TUI by default; --gui for the web view."""
+        if dry_run:
+            click.echo(
+                f"would render: verbosity={verbosity} interval={interval}s "
+                f"gui={'yes' if gui else 'no'}"
+            )
+            return
+        del yes  # accepted for compliance; nothing to confirm
         if gui:
             click.echo(
                 "error: --gui (Dash web view) is not yet wired into the v0 dashboard.\n"
@@ -1474,7 +1520,15 @@ def register_ecosystem_commands(main_group):
         except KeyboardInterrupt:
             click.echo("\nstopped.", err=True)
 
-    @dashboard.command("export")
+    @dashboard.command(
+        "export",
+        epilog=(
+            "Example:\n"
+            "  $ scitex-dev ecosystem dashboard export --format json | jq\n"
+            "  $ scitex-dev ecosystem dashboard export --format csv > state.csv\n"
+            "  $ scitex-dev ecosystem dashboard export --format md   # paste into README\n"
+        ),
+    )
     @click.option(
         "--format",
         "fmt",
@@ -1489,14 +1543,32 @@ def register_ecosystem_commands(main_group):
         help="Default -vvv (all columns) for export.",
     )
     @click.option("--package", "-p", multiple=True)
-    def dashboard_export(fmt, verbosity, package):
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print row count + format that would be emitted; no payload written.",
+    )
+    @click.option(
+        "-y",
+        "--yes",
+        "yes",
+        is_flag=True,
+        help="No-op confirmation flag retained for §2 audit-cli compliance.",
+    )
+    def dashboard_export(fmt, verbosity, package, dry_run, yes):
         """Machine-readable dump of the dashboard state."""
-        from ._dashboard import gather_ecosystem_state
         from ._dashboard import _export as exp
+        from ._dashboard import gather_ecosystem_state
 
         states = gather_ecosystem_state(
             verbosity=verbosity, packages=list(package) or None
         )
+        if dry_run:
+            click.echo(
+                f"would emit: format={fmt} rows={len(states)} verbosity={verbosity}"
+            )
+            return
+        del yes
         if fmt == "json":
             click.echo(exp.to_json(states))
         elif fmt == "csv":

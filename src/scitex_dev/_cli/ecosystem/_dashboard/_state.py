@@ -159,6 +159,90 @@ def _last_commit_iso(repo: Path) -> str:
     return _git(repo, "log", "-1", "--format=%cI")
 
 
+def _count_files(path: Path, pattern: str) -> int:
+    """Count matching files; -1 if path doesn't exist."""
+    if not path.is_dir():
+        return -1
+    return sum(1 for _ in path.rglob(pattern))
+
+
+def _count_loc(src_dir: Path) -> int:
+    """Quick wc-style line count across .py files. -1 if no src dir."""
+    if not src_dir.is_dir():
+        return -1
+    total = 0
+    for f in src_dir.rglob("*.py"):
+        try:
+            total += sum(1 for _ in f.open(encoding="utf-8", errors="ignore"))
+        except OSError:
+            continue
+    return total
+
+
+def _src_root(repo: Path, import_name: str) -> Path:
+    """Best-effort src root: src/<pkg> if it exists, else repo/<pkg>."""
+    cand = repo / "src" / import_name
+    if cand.is_dir():
+        return cand
+    return repo / import_name
+
+
+def _enrich_deep(state: PackageState) -> None:
+    """Verbosity-3 columns: skills count, tests count, LOC.
+
+    Filesystem-only — fast. MCP tools / py APIs would need package
+    import, which is heavier; deferred.
+    """
+    repo = Path(state.local_path)
+    if not repo.is_dir():
+        return
+    import_name = state.pkg.replace("-", "_")
+    src_root = _src_root(repo, import_name)
+    skills_root = src_root / "_skills"
+    state.skills_count = _count_files(skills_root, "*.md")
+    state.tests_count = _count_files(repo / "tests", "test_*.py")
+    state.loc = _count_loc(src_root)
+
+
+def _enrich_ci(state: PackageState) -> None:
+    """Latest GH Actions test workflow conclusion on develop."""
+    if not state.exists_locally:
+        return
+    try:
+        out = subprocess.check_output(
+            [
+                "gh",
+                "run",
+                "list",
+                "-R",
+                f"ywatanabe1989/{state.pkg}",
+                "--workflow=test.yml",
+                "--branch=develop",
+                "--limit=1",
+                "--json=status,conclusion",
+            ],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=10,
+        )
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
+        return
+    import json as _json
+
+    try:
+        rows = _json.loads(out)
+    except _json.JSONDecodeError:
+        return
+    if not rows:
+        return
+    row = rows[0]
+    state.ci_status = row.get("conclusion") or row.get("status") or ""
+
+
 def _compute_drift_local(version: str, tag: str) -> str:
     if not version or not tag:
         return ""

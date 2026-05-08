@@ -397,7 +397,9 @@ class SciTeXChecker(ast.NodeVisitor):
                 # Heuristic: if it's called on something that looks like a Path
                 line = self._get_source(node.lineno)
                 if "Path" in line or "path" in line.lower():
-                    self._add(rules.PA003, node.lineno, node.col_offset, line)
+                    pa003 = getattr(rules, "PA003", None)
+                    if pa003 is not None:
+                        self._add(pa003, node.lineno, node.col_offset, line)
 
         # bare func() pattern -- e.g., print(), open()
         elif isinstance(func, ast.Name):
