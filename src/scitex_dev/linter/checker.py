@@ -408,7 +408,7 @@ class SciTeXChecker(ast.NodeVisitor):
                 self._add(_PRINT_RULE, node.lineno, node.col_offset, line)
             elif func.id == "open" and self._has_session_decorator:
                 line = self._get_source(node.lineno)
-                self._add(rules.PA-002, node.lineno, node.col_offset, line)
+                self._add(rules.PA002, node.lineno, node.col_offset, line)
 
     # -- stx.io path checking (delegated to _path_checker) --
 
