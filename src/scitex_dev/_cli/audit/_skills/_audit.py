@@ -25,6 +25,7 @@ class Rule:
     code: str
     section: str
     message: str
+    slug: str = ""  # short kebab-case human-readable name
 
 
 RULES: dict[str, Rule] = {
@@ -112,7 +113,8 @@ class Violation:
     def format(self) -> str:
         r = RULES.get(self.rule)
         section = r.section if r else "?"
-        return f"  [{self.rule} {section}] {self.where}: {self.detail}"
+        slug = f" {r.slug}" if r and r.slug else ""
+        return f"  [{self.rule} {section}{slug}] {self.where}: {self.detail}"
 
 
 # ---------------------------------------------------------------------------

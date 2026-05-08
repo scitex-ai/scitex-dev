@@ -1623,7 +1623,12 @@ def register_ecosystem_commands(main_group):
             _push(
                 "api",
                 [
-                    {"id": r.code, "section": r.section, "message": r.message}
+                    {
+                        "id": r.code,
+                        "slug": getattr(r, "slug", "") or "",
+                        "section": r.section,
+                        "message": r.message,
+                    }
                     for r in PA_RULES.values()
                 ],
             )
@@ -1635,6 +1640,7 @@ def register_ecosystem_commands(main_group):
                 [
                     {
                         "id": r.code,
+                        "slug": getattr(r, "slug", "") or "",
                         "section": r.section,
                         "message": r.message,
                         "severity": getattr(r, "severity", "?"),
@@ -1648,7 +1654,12 @@ def register_ecosystem_commands(main_group):
             _push(
                 "skills",
                 [
-                    {"id": r.code, "section": r.section, "message": r.message}
+                    {
+                        "id": r.code,
+                        "slug": getattr(r, "slug", "") or "",
+                        "section": r.section,
+                        "message": r.message,
+                    }
                     for r in SK_RULES.values()
                 ],
             )
@@ -1708,7 +1719,11 @@ def register_ecosystem_commands(main_group):
             click.secho(f"\n=== {name} ({len(items)} rules) ===", fg="cyan")
             for r in items:
                 sev = f" [{r['severity']}]" if "severity" in r else ""
-                click.echo(f"  {r['id']:6} {r['section']:6}{sev} {r['message']}")
+                slug = r.get("slug", "")
+                slug_str = f"  {slug}" if slug else ""
+                click.echo(
+                    f"  {r['id']:7} {r['section']:5}{sev}{slug_str:40s}  {r['message']}"
+                )
 
     @ecosystem.command(
         "audit-all",

@@ -30,22 +30,33 @@ class Rule:
     # explicitly tagged. Promote to E when the rule is well-tested and the
     # ecosystem has already been brought into compliance.
     severity: str = "W"
+    # Short kebab-case human-readable name (e.g. "examples-need-finished-success").
+    # Surfaces in `audit-all` output as `[CODE §X slug] …` so reviewers can
+    # read intent without cross-referencing rule numbers.
+    slug: str = ""
 
 
 RULES: dict[str, Rule] = {
     r.code: r
     for r in [
         # §1 Top-level layout ---------------------------------------------------
-        Rule("PS101", "§1", "missing pyproject.toml at repo root"),
+        Rule(
+            "PS101",
+            "§1",
+            "missing pyproject.toml at repo root",
+            slug="pyproject-missing",
+        ),
         Rule(
             "PS102",
             "§1",
             "forbidden top-level dir present (use the canonical location instead)",
+            slug="top-level-forbidden-dir",
         ),
         Rule(
             "PS103",
             "§1",
             "top-level junk file (move to ./.dev/<category>/ or delete)",
+            slug="top-level-junk-file",
         ),
         Rule(
             "PS104",
@@ -516,26 +527,31 @@ RULES: dict[str, Rule] = {
             "PS201",
             "§2",
             "src/<pkg>/ exists but tests/<pkg>/ is missing — every package needs the tests/<pkg>/ parent",
+            slug="tests-pkg-parent-missing",
         ),
         Rule(
             "PS202",
             "§2",
             "src/<pkg>/<sub>/ has files but tests/<pkg>/<sub>/ is missing",
+            slug="src-tests-mirror-dir-missing",
         ),
         Rule(
             "PS203",
             "§2",
             "loose test_*.py at tests/ root that should live inside tests/<pkg>/...",
+            slug="loose-top-level-test",
         ),
         Rule(
             "PS204",
             "§2",
             "orphan test file: tests/<pkg>/<path>/test_*.py with no matching src/<pkg>/<path>/*.py",
+            slug="orphan-test-file",
         ),
         Rule(
             "PS205",
             "§2",
             "wrong public/private prefix (private `_foo.py` must be tested by `test__foo.py`, not `test_foo.py`)",
+            slug="test-name-prefix-mismatch",
         ),
         Rule(
             "PS150",
@@ -649,6 +665,7 @@ RULES: dict[str, Rule] = {
                 "in git so users see them on GitHub. Run the example once "
                 "with @stx.session and commit the FINISHED_SUCCESS dir."
             ),
+            slug="examples-need-finished-success",
         ),
         Rule(
             "PS504",
@@ -827,7 +844,8 @@ class Violation:
         r = RULES.get(self.rule)
         section = r.section if r else "?"
         sev = r.severity if r else "W"
-        return f"  [{sev}] [{self.rule} {section}] {self.where}: {self.detail}"
+        slug = f" {r.slug}" if r and r.slug else ""
+        return f"  [{sev}] [{self.rule} {section}{slug}] {self.where}: {self.detail}"
 
     @property
     def severity(self) -> str:

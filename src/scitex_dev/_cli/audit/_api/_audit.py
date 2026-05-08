@@ -23,31 +23,58 @@ class Rule:
     code: str
     section: str
     message: str
+    slug: str = ""  # short, human-readable kebab-case name
 
 
 RULES: dict[str, Rule] = {
     r.code: r
     for r in [
         # §1 Naming and visibility
-        Rule("PA101", "§1", "`__all__` is missing from __init__.py"),
-        Rule("PA102", "§1", "name listed in __all__ is not bound in __init__.py"),
-        Rule("PA103", "§1", "name in __all__ starts with underscore"),
-        Rule("PA104", "§1", "third-party symbol is re-exported via __all__"),
+        Rule("PA101", "§1", "`__all__` is missing from __init__.py", "all-missing"),
+        Rule(
+            "PA102",
+            "§1",
+            "name listed in __all__ is not bound in __init__.py",
+            "all-name-unbound",
+        ),
+        Rule(
+            "PA103",
+            "§1",
+            "name in __all__ starts with underscore",
+            "all-private-name",
+        ),
+        Rule(
+            "PA104",
+            "§1",
+            "third-party symbol is re-exported via __all__",
+            "all-third-party",
+        ),
         # §2 Version strategy
-        Rule("PA201", "§2", "`__version__` is missing from __all__"),
+        Rule(
+            "PA201",
+            "§2",
+            "`__version__` is missing from __all__",
+            "version-not-in-all",
+        ),
         Rule(
             "PA202",
             "§2",
             "`__version__` not derived from importlib.metadata.version(...)",
+            "version-not-from-metadata",
         ),
-        Rule("PA203", "§2", 'fallback for __version__ should be "0.0.0+local"'),
+        Rule(
+            "PA203",
+            "§2",
+            'fallback for __version__ should be "0.0.0+local"',
+            "version-fallback-wrong",
+        ),
         # §3 Lazy imports / optional deps
         Rule(
             "PA301",
             "§3",
             "top-level `import` outside try/except may break on missing optional dep",
+            "top-level-optional-import",
         ),
-        # §3 Lazy imports / optional deps (continued)
         Rule(
             "PA304",
             "§3",
@@ -56,8 +83,8 @@ RULES: dict[str, Rule] = {
             "machinery into every call. Use `scitex_<sub>` (peer standalone) "
             "instead. See _skills/general/03_interface_01_python-api/"
             "11_import-conventions.md.",
+            "umbrella-import-in-standalone",
         ),
-        # §3 Browser-automation debug capture
         Rule(
             "PA305",
             "§3",
@@ -68,9 +95,15 @@ RULES: dict[str, Rule] = {
             "`_skills/general/02_package_09_browser-automation-debugging.md`. "
             "Wire via `from scitex_browser.debugging import "
             "capture_debug_artifacts_async`.",
+            "playwright-without-debug-capture",
         ),
         # §5 Type hints
-        Rule("PA501", "§5", "`from __future__ import annotations` is missing"),
+        Rule(
+            "PA501",
+            "§5",
+            "`from __future__ import annotations` is missing",
+            "missing-future-annotations",
+        ),
     ]
 }
 
@@ -84,7 +117,8 @@ class Violation:
     def format(self) -> str:
         r = RULES.get(self.rule)
         section = r.section if r else "?"
-        return f"  [{self.rule} {section}] {self.where}: {self.detail}"
+        slug = f" {r.slug}" if r and r.slug else ""
+        return f"  [{self.rule} {section}{slug}] {self.where}: {self.detail}"
 
 
 # Heuristic: imports from these packages are "third-party" — symbols pulled
