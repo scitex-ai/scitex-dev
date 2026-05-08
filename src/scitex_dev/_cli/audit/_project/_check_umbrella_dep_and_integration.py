@@ -34,6 +34,30 @@ def _own_import_name(repo: Path) -> str:
     return repo.name.replace("-", "_")
 
 
+def _is_umbrella(repo: Path) -> bool:
+    """True if `repo` is the SciTeX umbrella package (distribution `scitex`).
+
+    Cannot rely on the directory basename alone — the umbrella's local
+    clone is `~/proj/scitex-python/`, so `repo.name` is `scitex-python`
+    not `scitex`. Resolve the canonical distribution name from the
+    ECOSYSTEM registry by matching `local_path` resolved.
+    """
+    try:
+        from scitex_dev._ecosystem._core import ECOSYSTEM
+    except ImportError:
+        return False
+    repo_resolved = repo.resolve()
+    for dist, info in ECOSYSTEM.items():
+        local = info.get("local_path")
+        if not local:
+            continue
+        if Path(local).expanduser().resolve() == repo_resolved:
+            return info.get("category") == "umbrella" or dist == "scitex"
+    # Fallback: import name `scitex` (rare — would mean repo basename
+    # matches the umbrella distribution name).
+    return repo.name == "scitex"
+
+
 def _strip_specifier(spec: str) -> str:
     """`scitex>=2.0` → `scitex`, `scitex[all]>=2.19` → `scitex`."""
     s = spec.strip().strip('"').strip("'")
@@ -119,9 +143,12 @@ def check_ps139_umbrella_dep(repo: Path, violation_cls: type, out: list) -> None
     pyproject = repo / "pyproject.toml"
     if not pyproject.exists():
         return
-    own = _own_import_name(repo)
-    # Exempt the umbrella package itself.
-    if own == "scitex":
+    # Exempt the umbrella package itself — `scitex[<extra>]` self-references
+    # in scitex-python's own pyproject are how the umbrella aggregates peer
+    # standalones, not "umbrella drag." Resolve from the registry because
+    # the umbrella's clone dir is `scitex-python` (not `scitex`), so the
+    # legacy `_own_import_name(repo) == "scitex"` check never matched.
+    if _is_umbrella(repo):
         return
     findings = _scan_pyproject_for_umbrella(pyproject)
     for f in findings:
@@ -138,10 +165,12 @@ def check_ps139_umbrella_dep(repo: Path, violation_cls: type, out: list) -> None
 def check_ps140_integration_gate(
     repo: Path, distribution: str, violation_cls: type, out: list
 ) -> None:
+    # Umbrella's `src/scitex/` is intentionally a giant cross-import graph
+    # (every shim re-exports a peer); a literal cross-package gate listing
+    # all those imports would be self-defeating. Skip the umbrella outright.
+    if _is_umbrella(repo):
+        return
     own = _own_import_name(repo)
-    if own == "scitex":
-        # Umbrella has its own integration test; no peer-cross expected.
-        pass
     src_root = repo / "src"
     if not src_root.exists():
         return
