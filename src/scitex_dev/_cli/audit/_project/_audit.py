@@ -543,6 +543,18 @@ RULES: dict[str, Rule] = {
             "placeholder-only test (no `def test_` or `class Test`)",
         ),
         Rule(
+            "PS206b",
+            "§2",
+            (
+                "import-smoke-only test (`def test_*` exists but the file "
+                "has no assertion at all — `assert`, `pytest.raises`, "
+                "`mock.assert_*`, `self.assertX`, etc.). Pure "
+                "`importlib.import_module(...)` smokes pass PS206 + PS202 "
+                "without exercising behaviour. Add a real assertion or "
+                "delete the file."
+            ),
+        ),
+        Rule(
             "PS210",
             "§2",
             (
@@ -750,7 +762,8 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS203": "E",
     "PS204": "E",
     "PS205": "E",
-    "PS206": "E",  # placeholder-only test
+    "PS206": "E",  # placeholder-only test (no `def test_*` / `class Test*` at all)
+    "PS206b": "W",  # has `def test_*` but body has no assertion (import-smoke only)
     "PS207": "E",  # empty test directory
     "PS210": "E",  # [dev] extras incomplete
     "PS301": "E",  # top-level htmlcov/
@@ -1314,19 +1327,44 @@ def _check_tests_subdir_convention(
 
 
 def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
-    """PS206 — placeholder-only test (no `def test_` / `class Test` / `test_x = factory()`).
+    """PS206 + PS206b — placeholder-only / import-smoke-only test detection.
 
-    Recognises three pytest-collectable shapes:
-    - `def test_*` at module level
-    - `class Test*` at module level
-    - `test_*` module-level assignment (e.g. `test_foo = make_tests(...)`) —
-      pytest collects any module-level callable named `test_*`.
+    PS206 (ERROR): file has no `def test_*` / `class Test*` / `test_x = factory()`
+    at all — pytest will not collect anything from it.
+
+    PS206b (WARN): file has a collectable test but no assertion-like call in
+    the entire module. Catches the auto-generated importlib smoke pattern:
+
+        def test_module_imports():
+            importlib.import_module("scitex_db._foo")
+
+    which passes PS202 (mirror exists) + PS206 (test fn present) without
+    exercising any behaviour.
     """
     tests_root = _tests_root(repo)
     if tests_root is None:
         return
     has_def_or_class_re = re.compile(r"^\s*(def\s+test_|class\s+Test)", re.MULTILINE)
     has_factory_assign_re = re.compile(r"^test_[A-Za-z0-9_]*\s*=", re.MULTILINE)
+    # Any of these counts as "exercises behaviour":
+    # - bare `assert ...`
+    # - pytest.raises / pytest.warns
+    # - unittest TestCase.assertX (assertEqual, assertTrue, etc.)
+    # - mock assertions (.assert_called*, .assert_not_called)
+    # - hypothesis property-test entry (`@given(...)` implies real assertions
+    #   inside the function body, even when the assert keyword isn't used)
+    has_assertion_re = re.compile(
+        r"\bassert\b"
+        r"|pytest\.raises\("
+        r"|pytest\.warns\("
+        r"|self\.assert[A-Z][A-Za-z]*\("
+        r"|\.assert_called(_with|_once[A-Za-z_]*|_)?\("
+        r"|\.assert_not_called\("
+        r"|@given\("
+    )
+    # Opt-out marker for legitimate import-smoke tests (rare — e.g. .ipynb-only
+    # examples mirrored as smoke). Place this comment anywhere in the file.
+    optout_re = re.compile(r"#\s*PS206b:\s*import-smoke-allowed", re.IGNORECASE)
     for test_file in tests_root.rglob("test_*.py"):
         if _is_blacklisted(test_file, tests_root):
             continue
@@ -1338,17 +1376,35 @@ def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
         marker = "# Start of Source Code from:"
         if marker in text:
             text = text.split(marker, 1)[0]
-        if has_def_or_class_re.search(text):
-            continue
-        if has_factory_assign_re.search(text):
-            continue
-        out.append(
-            Violation(
-                "PS206",
-                str(test_file),
-                "placeholder-only — add `def test_*`, `class Test*`, or `test_x = factory()`",
-            )
+        has_test = has_def_or_class_re.search(text) or has_factory_assign_re.search(
+            text
         )
+        if not has_test:
+            out.append(
+                Violation(
+                    "PS206",
+                    str(test_file),
+                    "placeholder-only — add `def test_*`, `class Test*`, or `test_x = factory()`",
+                )
+            )
+            continue
+        # PS206b: has a test fn, but no assertion anywhere in the module.
+        if optout_re.search(text):
+            continue
+        if not has_assertion_re.search(text):
+            out.append(
+                Violation(
+                    "PS206b",
+                    str(test_file),
+                    (
+                        "import-smoke-only — has `def test_*` but no assertion "
+                        "(`assert`, `pytest.raises`, `mock.assert_*`, "
+                        "`self.assertX`, `@given`). Add a real check or "
+                        "delete the file. Opt-out: add a "
+                        "`# PS206b: import-smoke-allowed` comment."
+                    ),
+                )
+            )
 
 
 def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) -> None:
