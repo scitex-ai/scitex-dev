@@ -1,6 +1,11 @@
 """Smoke tests for scitex_dev.cv (ported from umbrella)."""
 
-import scitex_dev.cv as cv_mod
+import pytest
+
+pytest.importorskip("numpy")
+pytest.importorskip("matplotlib")
+
+import scitex_dev.cv as cv_mod  # noqa: E402
 
 
 def test_cv_module_loads():
@@ -8,6 +13,6 @@ def test_cv_module_loads():
 
 
 def test_cv_title_card_importable():
-    from scitex_dev.cv import _title_card  # noqa: F401
+    from scitex_dev.cv import _title_card
 
     assert _title_card is not None
