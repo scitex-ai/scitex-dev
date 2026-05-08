@@ -204,6 +204,41 @@ def _enrich_deep(state: PackageState) -> None:
     state.loc = _count_loc(src_root)
 
 
+def _enrich_audit(state: PackageState) -> None:
+    """Run `audit-all` per package and parse error / warn counts.
+
+    Slow — one subprocess per package (~5–15s each). Only at verbosity≥3.
+    Counts come from the canonical `error <pkg>: N error(s)` /
+    `warn <pkg>: N warning(s)` summary lines.
+    """
+    if not state.exists_locally:
+        return
+    try:
+        proc = subprocess.run(
+            ["scitex-dev", "ecosystem", "audit-all", state.pkg],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env={
+                **__import__("os").environ,
+                "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1",
+            },
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return
+    errs = warns = 0
+    for line in proc.stdout.splitlines():
+        s = line.lstrip()
+        m_e = re.match(r"(?:error|fail)\s+\S+:\s+(\d+)\s+error", s)
+        m_w = re.match(r"warn\s+\S+:\s+(\d+)\s+(?:warning|violation)", s)
+        if m_e:
+            errs += int(m_e.group(1))
+        elif m_w:
+            warns += int(m_w.group(1))
+    state.audit_errors = errs
+    state.audit_warnings = warns
+
+
 def _enrich_ci(state: PackageState) -> None:
     """Latest GH Actions test workflow conclusion on develop."""
     if not state.exists_locally:
@@ -339,6 +374,16 @@ def gather_ecosystem_state(
 
     if verbosity >= 2:
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            pool.map(_enrich_pypi, states)
+            list(pool.map(_enrich_pypi, states))
+
+    if verbosity >= 3:
+        # Deep is local-fast (filesystem) + GH (networked). Parallelise the
+        # whole tier so a 50-package sweep stays under ~10s.
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(_enrich_deep, states))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(_enrich_ci, states))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            list(pool.map(_enrich_audit, states))
 
     return states
