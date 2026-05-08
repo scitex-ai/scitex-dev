@@ -7,6 +7,7 @@ fresh machine and keep it in sync with `develop` across every repo.
 from __future__ import annotations
 
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable
@@ -204,11 +205,12 @@ def install_all(
         else:
             results[name] = (2, f"unknown source: {source}")
             return
-        cmd = (
-            ["pip", "install", "-e", target]
-            if source == "editable"
-            else ["pip", "install", target]
-        )
+        # Use the same Python that's running scitex-dev — bare `pip` finds
+        # the first one on PATH which can be a system Python with stale
+        # metadata (e.g. spartan's /usr/bin/pip is Python 3.9 and can't
+        # see >=3.10 wheels on PyPI, breaking figrecipe>=0.28 resolution).
+        pip_args = [sys.executable, "-m", "pip", "install"]
+        cmd = pip_args + ["-e", target] if source == "editable" else pip_args + [target]
         if dry_run:
             results[name] = (0, " ".join(cmd))
             if on_progress:
