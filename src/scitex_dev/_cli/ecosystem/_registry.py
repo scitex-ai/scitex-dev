@@ -1670,41 +1670,49 @@ def register_ecosystem_commands(main_group):
             release_rules = [
                 {
                     "id": "E5C5",
+                    "slug": "implicit-deps-not-declared",
                     "section": "release",
                     "message": "implicit deps not declared",
                 },
                 {
                     "id": "E5C9",
+                    "slug": "skills-not-bundled",
                     "section": "release",
                     "message": "_skills/ ships but build excludes it",
                 },
                 {
                     "id": "E5C10",
+                    "slug": "duplicate-toml-table",
                     "section": "release",
                     "message": "duplicate TOML table",
                 },
                 {
                     "id": "E5C11",
+                    "slug": "license-deprecated-form",
                     "section": "release",
                     "message": "deprecated PEP 621 license form",
                 },
                 {
                     "id": "E5C12",
+                    "slug": "min-version-pin-missing",
                     "section": "release",
                     "message": "dependency missing >= lower bound",
                 },
                 {
                     "id": "E5L1",
+                    "slug": "version-drift",
                     "section": "release",
                     "message": "pyproject ↔ tag ↔ PyPI version drift",
                 },
                 {
                     "id": "E5J1",
+                    "slug": "readme-missing-interfaces-callout",
                     "section": "release",
                     "message": "README missing Interfaces callout",
                 },
                 {
                     "id": "E5F1",
+                    "slug": "internal-api-leak",
                     "section": "release",
                     "message": "internal API leak (private re-exported)",
                 },
