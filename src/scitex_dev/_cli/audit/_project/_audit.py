@@ -418,6 +418,18 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
+            "PS138b",
+            "§1",
+            (
+                "LICENSE file exists but content does not match SPDX "
+                "declaration `AGPL-3.0-only` — likely a copyright stub "
+                "instead of the full AGPL-3.0 text. The on-disk license "
+                "must contain the full GNU AGPL v3 license, not just a "
+                "title + copyright line. See "
+                "`_skills/general/01_ecosystem_07_license-and-cla.md`."
+            ),
+        ),
+        Rule(
             "PS139",
             "§1",
             (
@@ -726,7 +738,8 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS135": "E",  # CONTRIBUTING.md
     "PS136": "E",  # examples/
     "PS137": "E",  # README.md
-    "PS138": "E",  # LICENSE
+    "PS138": "E",  # LICENSE present
+    "PS138b": "E",  # LICENSE content matches SPDX (no stub)
     "PS139": "E",  # pyproject.toml depends on scitex umbrella (anti-pattern)
     "PS140": "E",  # missing/stale tests/integration/test_cross_package_imports.py
     "PS141": "E",  # README missing `## Demo` with visual content
@@ -940,12 +953,21 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
     ):
         if not (repo / fname).is_file():
             out.append(Violation(code, str(repo), f"missing {fname}"))
-    if not any(
-        (repo / cand).is_file() for cand in ("LICENSE", "LICENSE.md", "LICENSE.txt")
-    ):
+    from ._check_license import check_license_content, find_license
+
+    license_path = find_license(repo)
+    if license_path is None:
         out.append(
             Violation("PS138", str(repo), "missing LICENSE (or LICENSE.md/.txt)")
         )
+    else:
+        try:
+            spdx_match = _spdx_from_pyproject(repo)
+        except Exception:
+            spdx_match = None
+        violation_msg = check_license_content(license_path, spdx_match)
+        if violation_msg:
+            out.append(Violation("PS138b", str(repo), violation_msg))
 
     # PS136: examples/ must exist and have at least one runnable file.
     examples = repo / "examples"
