@@ -124,6 +124,7 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/scitex-linter",
         "import_name": "scitex_linter",
         "category": "library",
+        "archived": True,  # repo archived on GitHub; folded into scitex-dev.linter
     },
     "scitex-dataset": {
         "local_path": "~/proj/scitex-dataset",
