@@ -1391,6 +1391,119 @@ def register_ecosystem_commands(main_group):
             fg="green",
         )
 
+    @ecosystem.group("dashboard")
+    def dashboard():
+        """Ecosystem health dashboard (TUI / GUI / export).
+
+        \b
+        Subcommands:
+          list    one-shot snapshot table (good for piping / `watch`)
+          start   live-refresh TUI (or --gui for the Dash web view)
+          export  machine-readable dump (json / csv / md)
+
+        Verbosity flag (-v / -vv / -vvv) controls column count across
+        all three. -vvv pulls every cached field; same data layer feeds
+        all surfaces (`gather_ecosystem_state`).
+        """
+
+    @dashboard.command("list")
+    @click.option(
+        "-v",
+        "verbosity",
+        count=True,
+        default=1,
+        help="Add -v / -vv / -vvv for more columns.",
+    )
+    @click.option("--package", "-p", multiple=True, help="Limit to specific packages.")
+    def dashboard_list(verbosity, package):
+        """One-shot snapshot of the ecosystem (no refresh, exit when done)."""
+        from rich.console import Console
+
+        from ._dashboard import gather_ecosystem_state
+        from ._dashboard._render import render_table
+
+        states = gather_ecosystem_state(
+            verbosity=verbosity, packages=list(package) or None
+        )
+        Console().print(render_table(states, verbosity=verbosity))
+
+    @dashboard.command("start")
+    @click.option("-v", "verbosity", count=True, default=1)
+    @click.option(
+        "--gui", is_flag=True, help="Launch the Dash web view at 127.0.0.1:8050."
+    )
+    @click.option(
+        "--interval", type=float, default=5.0, help="TUI refresh interval (seconds)."
+    )
+    def dashboard_start(verbosity, gui, interval):
+        """Live-refresh dashboard. TUI by default; --gui for the web view."""
+        if gui:
+            click.echo(
+                "error: --gui (Dash web view) is not yet wired into the v0 dashboard.\n"
+                "       Use `dashboard list` for a snapshot or `dashboard export` for a dump.",
+                err=True,
+            )
+            raise SystemExit(2)
+
+        from rich.console import Console
+        from rich.live import Live
+
+        from ._dashboard import gather_ecosystem_state
+        from ._dashboard._render import render_table
+
+        console = Console()
+        try:
+            with Live(
+                render_table(
+                    gather_ecosystem_state(verbosity=verbosity), verbosity=verbosity
+                ),
+                console=console,
+                refresh_per_second=4,
+                screen=False,
+            ) as live:
+                import time
+
+                while True:
+                    time.sleep(interval)
+                    live.update(
+                        render_table(
+                            gather_ecosystem_state(verbosity=verbosity),
+                            verbosity=verbosity,
+                        )
+                    )
+        except KeyboardInterrupt:
+            click.echo("\nstopped.", err=True)
+
+    @dashboard.command("export")
+    @click.option(
+        "--format",
+        "fmt",
+        type=click.Choice(["json", "csv", "md"]),
+        default="json",
+    )
+    @click.option(
+        "-v",
+        "verbosity",
+        count=True,
+        default=3,
+        help="Default -vvv (all columns) for export.",
+    )
+    @click.option("--package", "-p", multiple=True)
+    def dashboard_export(fmt, verbosity, package):
+        """Machine-readable dump of the dashboard state."""
+        from ._dashboard import gather_ecosystem_state
+        from ._dashboard import _export as exp
+
+        states = gather_ecosystem_state(
+            verbosity=verbosity, packages=list(package) or None
+        )
+        if fmt == "json":
+            click.echo(exp.to_json(states))
+        elif fmt == "csv":
+            click.echo(exp.to_csv(states))
+        elif fmt == "md":
+            click.echo(exp.to_markdown(states))
+
     @ecosystem.command("list-audit-rules")
     @click.option(
         "--auditor",
