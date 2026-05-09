@@ -204,11 +204,15 @@ def _make_compliant_pkg(tmp_path: Path, dist: str) -> Path:
     return pkg_root
 
 
-def test_audit_skills_returns_2_when_package_not_installed(capsys):
+def test_audit_skills_skips_when_package_not_installed(capsys):
+    # Not every package ships a `_skills/` directory, and audit-all
+    # may run before `pip install -e .`. Skip rather than fail so
+    # ecosystem audit-all doesn't trip on every uninstallable peer.
     rc = audit_skills("definitely-not-a-real-pkg-xyz")
-    assert rc == 2
+    assert rc == 0
     err = capsys.readouterr().err
-    assert "cannot locate" in err
+    assert "no `_skills/` directory" in err
+    assert err.startswith("info")
 
 
 def test_audit_skills_passes_clean_synthetic_pkg(tmp_path, capsys):
