@@ -135,11 +135,15 @@ def find_matching_files(
     if need_content_match:
         rg_results = _rg_find_content_matches(directory, config)
         if rg_results is not None:
-            # Apply Python-level filters rg can't handle
+            # Apply Python-level filters rg can't handle. Extension filtering
+            # only kicks in when no explicit `scope` glob is set — same as
+            # the slow path below.
             return [
                 p
                 for p in rg_results
-                if not p.is_symlink() and not should_exclude_path(p, config)
+                if not p.is_symlink()
+                and not should_exclude_path(p, config)
+                and (config.scope or matches_include_extensions(p, config))
             ]
 
     # Fallback: Python glob
