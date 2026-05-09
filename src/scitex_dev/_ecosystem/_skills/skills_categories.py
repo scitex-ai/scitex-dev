@@ -84,7 +84,6 @@ SCITEX_CATEGORIES: list[tuple[str, str, list[str]]] = [
         "Dev tooling — linter, audit, repro, clew, templates",
         [
             "scitex-dev",
-            "scitex-linter",
             "scitex-audit",
             "scitex-repro",
             "scitex-clew",

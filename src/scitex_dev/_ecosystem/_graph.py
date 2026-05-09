@@ -65,7 +65,6 @@ TIER_MAP: Dict[str, str] = {
     "scitex-resource": "middle",
     "scitex-web": "middle",
     "scitex-notification": "middle",
-    "scitex-linter": "middle",
     "scitex-dev": "middle",
     "scitex-clew": "middle",
     "scitex-ui": "middle",
