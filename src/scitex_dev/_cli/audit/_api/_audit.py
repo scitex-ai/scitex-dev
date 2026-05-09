@@ -668,7 +668,9 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
         for n in all_names:
             if n.startswith("_") and n not in {"__version__"}:
                 out.append(
-                    Violation("PA-103", where, f"'{n}' is private but listed in __all__")
+                    Violation(
+                        "PA-103", where, f"'{n}' is private but listed in __all__"
+                    )
                 )
             if n not in bound_names:
                 out.append(
@@ -814,12 +816,15 @@ def audit_api(
     import_name = _import_name(distribution)
     init_path = _locate_init(import_name)
     if init_path is None:
+        # Skipped, not failed: many packages run audit-all from CI before
+        # `pip install -e .` (e.g. when scitex_dev is the only install).
+        # Treat absence as "no API surface to check" rather than an error.
         click.echo(
-            f"audit-api: cannot locate __init__.py for '{distribution}' "
-            f"(import name '{import_name}'). Is it installed?",
+            f"info  {distribution}: cannot locate __init__.py for "
+            f"'{import_name}' — package not importable, skipped.",
             err=True,
         )
-        return 2
+        return 0
 
     # Probe distribution metadata to surface missing-install issues early.
     try:

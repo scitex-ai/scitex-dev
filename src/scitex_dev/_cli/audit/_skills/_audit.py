@@ -81,7 +81,9 @@ RULES: dict[str, Rule] = {
             "sibling leaf `.md` is not linked from `SKILL.md` (orphan or dead link)",
         ),
         # §4 Leaf file size — no monolith
-        Rule("SK-401", "§4", "leaf `.md` exceeds the size budget (~10 KB / ~200 lines)"),
+        Rule(
+            "SK-401", "§4", "leaf `.md` exceeds the size budget (~10 KB / ~200 lines)"
+        ),
         # §FM Frontmatter required fields (rule SK-210 is separate — about position)
         Rule(
             "SK-701", "§FM", "file is missing YAML frontmatter (`---` block at line 1)"
@@ -251,7 +253,9 @@ def _check_layout(
         return None
     # SK-103 — forbidden subdirs
     for sub in _core.find_forbidden_subdirs(skills_dir):
-        out.append(Violation("SK-103", str(sub), f"forbidden subdirectory: {sub.name}/"))
+        out.append(
+            Violation("SK-103", str(sub), f"forbidden subdirectory: {sub.name}/")
+        )
     # SK-104 — duplicate index files
     aliases = ("SKILL_INDEX.md", "INDEX.md", "README.md")
     for alias_path in _core.find_alias_indexes(skills_dir, aliases):
@@ -294,7 +298,9 @@ def _check_naming(skills_dir: Path, out: list[Violation]) -> None:
             out.append(Violation("SK-201", str(f), "missing `NN_` numeric prefix"))
             continue
         if name.startswith("SKILL"):
-            out.append(Violation("SK-202", str(f), "`SKILL.md` must not carry a prefix"))
+            out.append(
+                Violation("SK-202", str(f), "`SKILL.md` must not carry a prefix")
+            )
         if not _core.is_kebab_after_prefix(name):
             out.append(
                 Violation(
@@ -549,12 +555,14 @@ def audit_skills(
         return 0 if not violations else 1
 
     if skills_dir is None:
+        # Same as audit-api: not every package ships a `_skills/` directory,
+        # and audit-all may run before `pip install -e .`. Skip rather than
+        # fail.
         click.echo(
-            f"audit-skills: cannot locate `_skills/` for '{distribution}' "
-            "(is it installed?)",
+            f"info  {distribution}: no `_skills/` directory found — skipped.",
             err=True,
         )
-        return 2
+        return 0
 
     from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
