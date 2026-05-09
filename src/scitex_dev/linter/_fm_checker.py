@@ -134,6 +134,11 @@ class FMChecker(ast.NodeVisitor):
     def _add(self, rule, line, col, source_line):
         from dataclasses import replace as _replace
 
+        # FM rules ship with the figrecipe plugin. When figrecipe isn't
+        # installed in the linter's interpreter, lookup returns None.
+        # Skip silently rather than crash — the rule simply isn't enforced.
+        if rule is None:
+            return
         if rule.id in self.config.disable:
             return
         from .checker import _is_allowed_by_comment

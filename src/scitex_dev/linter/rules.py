@@ -38,6 +38,8 @@ _RULE_PREFIXES = ("S", "I", "IO", "PA", "ST", "EH", "P", "FM")
 def __getattr__(name: str):
     if any(name.startswith(p) and name[len(p) :].isdigit() for p in _RULE_PREFIXES):
         rule = _lookup(f"STX-{name}")
-        if rule is not None:
-            return rule
+        # Plugin-shipped rules (FM via figrecipe, ST via scitex-stats, ...)
+        # may be missing in lean linter envs. Return None so call sites
+        # can skip via a `if rule is None` guard, instead of crashing.
+        return rule
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
