@@ -223,13 +223,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_audit",
         "category": "library",
     },
-    "scitex-core": {
-        "local_path": "~/proj/scitex-core",
-        "pypi_name": "scitex-core",
-        "github_repo": "ywatanabe1989/scitex-core",
-        "import_name": "scitex_core",
-        "category": "library",
-    },
     "scitex-db": {
         "local_path": "~/proj/scitex-db",
         "pypi_name": "scitex-db",

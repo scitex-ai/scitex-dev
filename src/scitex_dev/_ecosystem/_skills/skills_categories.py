@@ -26,7 +26,6 @@ SCITEX_CATEGORIES: list[tuple[str, str, list[str]]] = [
         "Core runtime — session, types, paths, logging",
         [
             "scitex",
-            "scitex-core",
             "scitex-compat",
             "scitex-types",
             "scitex-path",
