@@ -97,7 +97,8 @@ and is called by `scitex-dev ecosystem audit-project <pkg>` (rule
 
 ```
 files: README.md, LICENSE{,.md,.txt}, CHANGELOG.md, CLA.md,
-       CONTRIBUTING.md, pyproject.toml, Makefile, CLAUDE.md
+       CONTRIBUTING.md, SECURITY.md,
+       pyproject.toml, Makefile, CLAUDE.md
 
 dirs:  src, tests, docs, examples, scripts, data, externals,
        dist, build, GITIGNORED
@@ -131,6 +132,25 @@ across every clone.
 
 No category-based silent exemptions: `dataset`, `template`, etc.
 are NOT auto-softened. Each package self-declares.
+
+### `project-type: special` — opt out of PS-103 entirely
+
+For projects whose root layout is by-design unconventional —
+research-style numbered manuscript dirs (`00_shared/`,
+`01_manuscript/`, …), CMS content trees, draft staging — declare
+`special` in `<repo>/.scitex/dev/config.yaml`:
+
+```yaml
+project-type:
+  - pip       # keep all other PS rules active
+  - special   # PS-103 (root whitelist) is skipped
+```
+
+`special` skips PS-103 only; every other PS rule still fires under
+`pip`. This is preferable to listing every weird root entry in
+`audit.root-whitelist` when the layout is intentional and stable.
+Examples in the ecosystem: `scitex-writer` (manuscript revision
+directories), `socialia` (drafts/projects content trees).
 
 ### Cleaning up an offending root
 

@@ -41,6 +41,7 @@ SPEC_DEFAULT_FILES: frozenset[str] = frozenset(
         "CHANGELOG.md",
         "CLA.md",
         "CONTRIBUTING.md",
+        "SECURITY.md",  # GitHub community-health file (sibling of CONTRIBUTING)
         "pyproject.toml",
         "Makefile",
         # Optional agent context. Canonical location is `.claude/CLAUDE.md`

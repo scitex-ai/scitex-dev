@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PROJECT_TYPES = frozenset({"pip", "research"})
+PROJECT_TYPES = frozenset({"pip", "research", "special"})
 
 CONFIG_REL_PATH = Path(".scitex/dev/config.yaml")
 
@@ -45,7 +45,15 @@ class ProjectConfig:
     source: str = "config"  # "config" | "heuristic" | "override"
 
     def applies(self, code: str) -> bool:
-        """True iff a rule code's family is active for this project."""
+        """True iff a rule code's family is active for this project.
+
+        `special`-typed projects opt out of PS-103 (root-layout
+        whitelist) — their unusual root organisation is by design
+        (research-style numbered manuscript dirs, CMS content trees,
+        etc.). All other PS rules still apply if `pip` is also listed.
+        """
+        if code == "PS-103" and "special" in self.project_types:
+            return False
         prefix = code[:2]
         if prefix == "PS":
             return "pip" in self.project_types
