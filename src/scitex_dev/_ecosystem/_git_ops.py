@@ -277,4 +277,66 @@ def install_all(
     return results
 
 
-__all__ = ["clone_all", "checkout_all", "pull_all", "install_all"]
+def install_completions_all(
+    *,
+    shell: str = "bash",
+    packages: list[str] | None = None,
+    jobs: int = 1,
+    dry_run: bool = False,
+    on_progress: Callable[[int, int, str, str, str], None] | None = None,
+) -> dict[str, tuple[int, str]]:
+    """Run `<binary> install-shell-completion --shell <shell> --yes` for every
+    selected package.
+
+    Each package's console-script name defaults to its ``pypi_name``
+    (e.g. ``scitex-io``). Packages whose binary isn't on PATH are
+    reported as a warning, not an error — the package may not yet be
+    installed, or may not register a console script.
+
+    Returns: ``{pkg: (exit_code, message)}``.
+    """
+    import shutil
+
+    items = _selected_packages(packages)
+    results: dict[str, tuple[int, str]] = {}
+
+    def _install_one(idx: int, total: int, name: str, info: dict) -> None:
+        binary = info.get("pypi_name") or name
+        path = shutil.which(binary)
+        if path is None:
+            results[name] = (0, f"skip: `{binary}` not on PATH")
+            if on_progress:
+                on_progress(idx, total, name, "skip", f"no binary {binary}")
+            return
+        cmd = [path, "install-shell-completion", "--shell", shell, "--yes"]
+        if dry_run:
+            results[name] = (0, " ".join(cmd))
+            if on_progress:
+                on_progress(idx, total, name, "dry", " ".join(cmd))
+            return
+        rc, msg = _run(cmd, timeout=60)
+        results[name] = (rc, msg)
+        if on_progress:
+            on_progress(idx, total, name, "ok" if rc == 0 else "err", msg)
+
+    if jobs <= 1:
+        for i, (name, info) in enumerate(items, 1):
+            _install_one(i, len(items), name, info)
+    else:
+        with ThreadPoolExecutor(max_workers=jobs) as ex:
+            futs = [
+                ex.submit(_install_one, i, len(items), name, info)
+                for i, (name, info) in enumerate(items, 1)
+            ]
+            for _ in as_completed(futs):
+                pass
+    return results
+
+
+__all__ = [
+    "clone_all",
+    "checkout_all",
+    "pull_all",
+    "install_all",
+    "install_completions_all",
+]

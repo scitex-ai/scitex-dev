@@ -611,7 +611,36 @@ def register_ecosystem_commands(main_group):
     @click.option(
         "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
     )
-    def ecosystem_install(source, extras, venv, package, jobs, dry_run, as_json, yes):
+    @click.option(
+        "--with-completions/--no-completions",
+        default=True,
+        show_default=True,
+        help=(
+            "After pip install, run `<binary> install-shell-completion --yes` "
+            "for every package whose console script lands on PATH. Generates "
+            "the per-package cache file under ~/.scitex/<pkg-short>/runtime/"
+            "completion/ and a single source line in your rc."
+        ),
+    )
+    @click.option(
+        "--completion-shell",
+        type=click.Choice(["bash", "zsh", "fish"]),
+        default="bash",
+        show_default=True,
+        help="Shell to wire completions for (used with --with-completions).",
+    )
+    def ecosystem_install(
+        source,
+        extras,
+        venv,
+        package,
+        jobs,
+        dry_run,
+        as_json,
+        yes,
+        with_completions,
+        completion_shell,
+    ):
         """`pip install` every ecosystem package.
 
         \b
@@ -626,7 +655,7 @@ def register_ecosystem_commands(main_group):
           $ scitex-dev ecosystem install --source pypi --yes
           $ scitex-dev ecosystem install -p scitex-io --venv per-package --extras dev --yes
         """
-        from ..._ecosystem._git_ops import install_all
+        from ..._ecosystem._git_ops import install_all, install_completions_all
 
         # Dry-run is default; --yes overrides to apply for real.
         effective_dry_run = dry_run and not yes
@@ -639,16 +668,47 @@ def register_ecosystem_commands(main_group):
             dry_run=effective_dry_run,
             on_progress=None if as_json else _git_progress,
         )
+
+        completion_results: dict | None = None
+        if with_completions:
+            # Only attempt for packages that pip-installed successfully —
+            # a binary on PATH for a package whose pip install just failed
+            # is at best stale, at worst missing.
+            ok_pkgs = [name for name, (rc, _) in results.items() if rc == 0]
+            if ok_pkgs:
+                if not as_json:
+                    click.echo(
+                        f"\nWiring shell completions ({completion_shell}) for "
+                        f"{len(ok_pkgs)} package(s)…",
+                        err=True,
+                    )
+                completion_results = install_completions_all(
+                    shell=completion_shell,
+                    packages=ok_pkgs,
+                    jobs=jobs,
+                    dry_run=effective_dry_run,
+                    on_progress=None if as_json else _git_progress,
+                )
+
         if as_json:
             import json as _json
 
-            click.echo(
-                _json.dumps(
-                    {k: {"exit": v[0], "msg": v[1]} for k, v in results.items()},
-                    indent=2,
-                )
-            )
+            payload = {k: {"exit": v[0], "msg": v[1]} for k, v in results.items()}
+            if completion_results is not None:
+                payload = {
+                    "install": payload,
+                    "completions": {
+                        k: {"exit": v[0], "msg": v[1]}
+                        for k, v in completion_results.items()
+                    },
+                }
+            click.echo(_json.dumps(payload, indent=2))
+
         rc = 0 if all(v[0] == 0 for v in results.values()) else 1
+        if completion_results is not None and any(
+            v[0] != 0 for v in completion_results.values()
+        ):
+            rc = max(rc, 1)
         raise SystemExit(rc)
 
     @ecosystem.command("sync-remote", hidden=True)
