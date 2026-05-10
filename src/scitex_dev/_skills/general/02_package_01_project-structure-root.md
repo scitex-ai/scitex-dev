@@ -27,7 +27,7 @@ The auditor (`scitex-dev ecosystem audit-project <pkg>`) enforces this list — 
 | `pyproject.toml` | PS-101 | Package metadata + build (no `setup.py`, `requirements.txt`, `MANIFEST.in`) |
 | `Makefile` | — | Thin dispatcher; logic lives in `./scripts/makefile/` (see [02_package_04_project-structure-makefile.md](02_package_04_project-structure-makefile.md)) |
 | `.gitignore`, `.gitattributes` | — | VCS hygiene |
-| `CLAUDE.md` (optional) | — | AI-agent context for this repo |
+| `.claude/CLAUDE.md` (optional, **canonical**) | — | AI-agent context for this repo. Tolerated as bare `CLAUDE.md` at root for back-compat, but **must be gitignored** either way — it carries machine-local agent state. |
 
 Required directories at root:
 
@@ -97,7 +97,7 @@ and is called by `scitex-dev ecosystem audit-project <pkg>` (rule
 
 ```
 files: README.md, LICENSE{,.md,.txt}, CHANGELOG.md, CLA.md,
-       CONTRIBUTING.md, pyproject.toml, Makefile
+       CONTRIBUTING.md, pyproject.toml, Makefile, CLAUDE.md
 
 dirs:  src, tests, docs, examples, scripts, data, externals,
        dist, build, GITIGNORED

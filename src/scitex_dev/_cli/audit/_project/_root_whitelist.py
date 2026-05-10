@@ -43,6 +43,11 @@ SPEC_DEFAULT_FILES: frozenset[str] = frozenset(
         "CONTRIBUTING.md",
         "pyproject.toml",
         "Makefile",
+        # Optional agent context. Canonical location is `.claude/CLAUDE.md`
+        # (auto-allowed by the hidden-pattern), but root `CLAUDE.md` is
+        # tolerated for backwards compatibility — should be gitignored
+        # since it carries machine-local agent state.
+        "CLAUDE.md",
     }
 )
 
