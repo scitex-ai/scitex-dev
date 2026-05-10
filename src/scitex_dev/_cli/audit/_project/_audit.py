@@ -1823,6 +1823,16 @@ def audit_project(
     from .._config import load_config
 
     cfg = load_config(repo_root)
+    # Track findings that the project-type filter would have dropped —
+    # specifically PS-103 violations on `deferred`-type projects. The
+    # auditor doesn't fire them (deferred opts out) but we surface a
+    # one-line warning so the operator has a visible TODO list when
+    # revisiting cleanup.
+    deferred_dropped: list[Violation] = (
+        [v for v in violations if v.rule == "PS-103"]
+        if "deferred" in cfg.project_types
+        else []
+    )
     violations = [
         v for v in violations if cfg.applies(v.rule) and v.rule not in cfg.skip
     ]
@@ -1861,9 +1871,30 @@ def audit_project(
 
     from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
+    def _emit_deferred_reminder() -> None:
+        if not deferred_dropped:
+            return
+        click.echo(
+            f"  [defer] {distribution}: {len(deferred_dropped)} PS-103 "
+            f"finding(s) suppressed by `project-type: deferred`. "
+            f"Re-review when time permits — entries currently at root "
+            f"that the strict baseline would flag:",
+            err=True,
+        )
+        for v in deferred_dropped[:10]:
+            basename = Path(v.where).name
+            click.echo(f"    - {basename}", err=True)
+        if len(deferred_dropped) > 10:
+            click.echo(
+                f"    … +{len(deferred_dropped) - 10} more (run with "
+                f"`--severity warning` against a non-deferred config to see all)",
+                err=True,
+            )
+
     if not visible:
         # No findings at the requested severity floor.
         click.echo(f"ok  {distribution}: no project-structure violations")
+        _emit_deferred_reminder()
         emit_disclaimer()
         return exit_code
 
@@ -1878,6 +1909,7 @@ def audit_project(
     click.echo(summary)
     for v in visible:
         click.echo(v.format())
+    _emit_deferred_reminder()
     emit_disclaimer()
     emit_skill_hints()
     return exit_code

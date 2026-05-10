@@ -115,7 +115,9 @@ def test_write_overwrite_replaces(tmp_path):
 
 
 def test_project_types_constant():
-    assert PROJECT_TYPES == frozenset({"pip", "research"})
+    assert PROJECT_TYPES == frozenset(
+        {"pip", "research", "special", "django", "deferred"}
+    )
 
 
 # Skip + whitelist (not yet wired into auditor; just round-trip the parse) ----

@@ -133,24 +133,42 @@ across every clone.
 No category-based silent exemptions: `dataset`, `template`, etc.
 are NOT auto-softened. Each package self-declares.
 
-### `project-type: special` — opt out of PS-103 entirely
+### Project-type opts out of PS-103
 
-For projects whose root layout is by-design unconventional —
-research-style numbered manuscript dirs (`00_shared/`,
-`01_manuscript/`, …), CMS content trees, draft staging — declare
-`special` in `<repo>/.scitex/dev/config.yaml`:
+Three project-types skip PS-103 with different semantic intent:
+
+| Type | Meaning | Auditor behaviour | Examples |
+| :--- | :--- | :--- | :--- |
+| `special` | by-design unconventional layout (no future cleanup expected) | silent skip | `scitex-writer`, `socialia`, `scitex-orochi` (monorepo), `newb` (PyPI-alias monorepo), `scitex-ui` (npm hybrid) |
+| `django` | Django framework canonical (`apps/`, `static/`, `media/`, `templates/`, …) | silent skip | `scitex-cloud` |
+| `deferred` | "I know it's messy; remind me later" | **emits a `[defer]` warning listing what would have fired**, so the operator has a TODO list ready when revisiting | `scitex` umbrella |
+
+Pick one (or combine, e.g. `[pip, django, deferred]` for a Django
+app whose deployment artifacts also need a future cleanup pass).
 
 ```yaml
+# scitex-writer/.scitex/dev/config.yaml — research layout
 project-type:
-  - pip       # keep all other PS rules active
-  - special   # PS-103 (root whitelist) is skipped
+  - pip
+  - special
+
+# scitex/.scitex/dev/config.yaml — umbrella with cleanup TODOs
+project-type:
+  - pip
+  - deferred
+
+# scitex-cloud/.scitex/dev/config.yaml — Django + deferred
+project-type:
+  - pip
+  - django
+  - deferred
 ```
 
-`special` skips PS-103 only; every other PS rule still fires under
-`pip`. This is preferable to listing every weird root entry in
-`audit.root-whitelist` when the layout is intentional and stable.
-Examples in the ecosystem: `scitex-writer` (manuscript revision
-directories), `socialia` (drafts/projects content trees).
+`special` / `django` / `deferred` skip PS-103 only; every other PS
+rule still fires under `pip`. Prefer one of these over piling
+entries into `audit.root-whitelist` when the layout is stable —
+the project-type label communicates *intent*, while the whitelist
+just enumerates exceptions.
 
 ### Cleaning up an offending root
 
