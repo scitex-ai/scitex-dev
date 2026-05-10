@@ -360,11 +360,20 @@ def gather_ecosystem_state(
     *,
     workers: int = 16,
     packages: list[str] | None = None,
+    on_update: Callable[[list[PackageState]], None] | None = None,
 ) -> list[PackageState]:
     """Collect dashboard rows for every ECOSYSTEM package.
 
     Verbosity 0–1 are local-only (fast). Verbosity 2+ adds PyPI etc.
+
+    If ``on_update`` is given, it's invoked after the basic gather
+    completes AND after every enrichment task finishes, with the
+    current `states` list. Callers (e.g. the CLI's Rich-Live
+    streaming view) use this to re-render the table progressively
+    as cells fill in.
     """
+    from concurrent.futures import as_completed
+
     eco = _ecosystem_packages()
     if packages:
         eco = {k: v for k, v in eco.items() if k in packages}
@@ -372,6 +381,8 @@ def gather_ecosystem_state(
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         states = list(pool.map(lambda kv: _gather_one(kv[0], kv[1], verbosity), items))
+    if on_update:
+        on_update(states)
 
     # All enrichers below are independent — they read from / write to
     # disjoint PackageState fields. Flatten into one big task list so
@@ -388,6 +399,16 @@ def gather_ecosystem_state(
     if enrichers:
         tasks = [(fn, s) for fn in enrichers for s in states]
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            list(pool.map(lambda fs: fs[0](fs[1]), tasks))
+            futures = [pool.submit(fn, s) for fn, s in tasks]
+            if on_update is None:
+                # Block-and-drain path keeps the old fast contract.
+                for _ in as_completed(futures):
+                    pass
+            else:
+                # Streaming path — invoke the callback after each
+                # completion so the caller can re-render. The callback
+                # is expected to be cheap / debounced (see CLI side).
+                for _ in as_completed(futures):
+                    on_update(states)
 
     return states
