@@ -180,7 +180,7 @@ def install_all(
     packages: list[str] | None = None,
     jobs: int = 1,
     dry_run: bool = False,
-    venv: str = "current",
+    venv: str = "per-package",
     on_progress: Callable[[int, int, str, str, str], None] | None = None,
 ) -> dict[str, tuple[int, str]]:
     """`pip install` every selected package.
@@ -188,25 +188,55 @@ def install_all(
     source: ``editable`` → ``pip install -e <local_path>[extras]``
             ``pypi``    → ``pip install <pypi_name>[extras]``
 
-    venv: ``current``     → install into the currently-running Python
-                            (the existing shared-venv behaviour).
-          ``per-package`` → for each package, ensure ``<local>/.venv/``
-                            exists (create with the running Python's
-                            ``-m venv`` if absent) and install INTO that
-                            venv. Yields the canonical CI-parity layout
-                            where every consumer's `[dev]` / `[all]`
-                            extras are exercised in isolation.
+    venv: ``per-package`` (default) → for each package, ensure
+                            ``<local>/.venv/`` exists (create with the
+                            running Python's ``-m venv`` if absent) and
+                            install INTO that venv. Yields the canonical
+                            CI-parity layout where every consumer's
+                            ``[dev]`` / ``[all]`` extras are exercised
+                            in isolation. If ``<local>/.venv`` is a
+                            symlink (typically to ``~/.venv`` from a
+                            shared-dev setup) it is REPLACED with a real
+                            venv so the package's deps don't bleed into
+                            the global one.
+          ``current``     → install into the currently-running Python
+                            (the legacy shared-venv behaviour). Use only
+                            when you intentionally want every peer
+                            installed into the same env.
     """
     items = _selected_packages(packages)
     results: dict[str, tuple[int, str]] = {}
     extras_suffix = f"[{extras}]" if extras else ""
 
     def _ensure_venv(local: Path) -> Path | None:
-        """Return path to the venv's python, creating .venv/ if absent."""
+        """Return path to the venv's python, creating ``<local>/.venv/`` if absent.
+
+        Treats three cases:
+
+        - ``.venv`` missing → create a fresh venv there.
+        - ``.venv`` is a symlink (typically points at ``~/.venv`` from a
+          shared-dev setup) → break the symlink and create a real venv
+          so the package's deps stay isolated from the global one. This
+          is the canonical CI-parity guarantee — installing into a
+          symlinked .venv silently writes to whatever it points at and
+          collides with every other peer.
+        - ``.venv`` is a real directory → reuse as-is.
+        """
+        import os
+
         venv_dir = local / ".venv"
+
+        if venv_dir.is_symlink():
+            # Break the symlink (do NOT follow it — we want to create
+            # a real venv at this path, not modify the symlink target).
+            try:
+                os.unlink(venv_dir)
+            except OSError:
+                return None
+
         py = venv_dir / "bin" / "python"
         if not py.exists():
-            rc, msg = _run(
+            rc, _msg = _run(
                 [sys.executable, "-m", "venv", str(venv_dir)],
                 timeout=120,
             )

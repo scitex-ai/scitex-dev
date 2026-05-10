@@ -604,14 +604,19 @@ def register_ecosystem_commands(main_group):
     @click.option("--extras", default="", help="Comma-separated extras (e.g. dev,mcp).")
     @click.option(
         "--venv",
-        type=click.Choice(["current", "per-package"]),
-        default="current",
+        type=click.Choice(["per-package", "current"]),
+        default="per-package",
         show_default=True,
         help=(
-            "current: install into the running Python (shared dev venv). "
-            "per-package: create ~/proj/<pkg>/.venv/ if missing and install "
-            "INTO that venv — yields the canonical CI-parity layout where "
-            "each package's [dev]/[all] extras are exercised in isolation."
+            "per-package (DEFAULT): create ~/proj/<pkg>/.venv/ if missing "
+            "and install INTO that venv — yields the canonical CI-parity "
+            "layout where each package's [dev]/[all] extras are exercised "
+            "in isolation. If ~/proj/<pkg>/.venv is a symlink (typically "
+            "to ~/.venv from a shared-dev setup), it is REPLACED with a "
+            "real venv so the deps don't bleed into the global one. "
+            "current (opt-in): install into the running Python (shared "
+            "dev venv) — use only when you intentionally want every peer "
+            "installed into the same env."
         ),
     )
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
@@ -663,12 +668,11 @@ def register_ecosystem_commands(main_group):
 
         \b
         Example:
-          $ scitex-dev ecosystem install                              # preview (dry-run, current venv)
-          $ scitex-dev ecosystem install --yes                        # editable into running venv
-          $ scitex-dev ecosystem install --venv per-package --extras all,dev --yes -j 4
-                                                                      # ↑ CI-parity: per-package .venv each
+          $ scitex-dev ecosystem install                              # preview (dry-run, per-package — DEFAULT)
+          $ scitex-dev ecosystem install --extras all,dev --yes -j 4  # CI-parity install: per-pkg .venv each
+          $ scitex-dev ecosystem install --venv current --yes         # legacy: install everything into running venv
           $ scitex-dev ecosystem install --source pypi --yes
-          $ scitex-dev ecosystem install -p scitex-io --venv per-package --extras dev --yes
+          $ scitex-dev ecosystem install -p scitex-io --extras dev --yes
         """
         from ..._ecosystem._git_ops import install_all, install_completions_all
 
