@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://scitex-dev.readthedocs.io/">Full Documentation</a> · <code>pip install scitex-dev</code>
+  <a href="https://scitex-dev.readthedocs.io/">Full Documentation</a> · <code>uv pip install scitex-dev[all]</code>
 </p>
 
 ---
