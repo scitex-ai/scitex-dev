@@ -48,18 +48,33 @@ def register_ecosystem_commands(main_group):
     @click.option("--package", "-p", multiple=True, help="Specific packages to check.")
     @click.option("--versions", is_flag=True, help="Include version details.")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def ecosystem_list(package, versions, as_json):
+    @click.option(
+        "--names-only",
+        "-q",
+        is_flag=True,
+        help=(
+            "Print only the package names, one per line. Pipe-friendly: "
+            "`scitex-dev ecosystem list -q | xargs scitex-dev ecosystem audit-all`."
+        ),
+    )
+    def ecosystem_list(package, versions, as_json, names_only):
         """List packages in the SciTeX ecosystem.
 
         \b
         Example:
             $ scitex-dev ecosystem list
             $ scitex-dev ecosystem list --json
+            $ scitex-dev ecosystem list -q                # names only
             $ scitex-dev ecosystem list -p scitex-io --versions
         """
         from ..._ecosystem import ECOSYSTEM, get_all_packages
 
         pkgs = list(package) if package else get_all_packages()
+
+        if names_only:
+            for pkg in pkgs:
+                click.echo(pkg)
+            return
 
         if versions:
             from ... import list_versions
@@ -1798,15 +1813,20 @@ def register_ecosystem_commands(main_group):
         epilog=(
             "Examples:\n"
             "  $ scitex-dev ecosystem audit-all scitex-io\n"
+            "  $ scitex-dev ecosystem audit-all scitex-io scitex-stats\n"
+            "  $ scitex-dev ecosystem audit-all scitex-io,scitex-stats\n"
+            "  $ scitex-dev ecosystem audit-all all --severity error\n"
             "  $ scitex-dev ecosystem audit-all scitex-io --json\n"
             "\n"
-            "Runs every audit-* command on a single distribution and\n"
-            "aggregates exit codes (overall exit=1 if any auditor reports\n"
-            "violations). For cross-leaf rollups across the whole ecosystem,\n"
-            "use `audit-summary` instead."
+            "Runs every audit-* on each given distribution and\n"
+            "aggregates exit codes (overall exit=1 if any auditor on any\n"
+            "package reports violations). Pass `all` to run across every\n"
+            "registered ecosystem package. For cross-leaf rollups across\n"
+            "the whole ecosystem with cross-pkg dedup, use audit-summary\n"
+            "instead."
         ),
     )
-    @click.argument("distribution")
+    @click.argument("distributions", nargs=-1, required=True)
     @click.option("--json", "as_json", is_flag=True, help="Emit JSON output.")
     @click.option(
         "--severity",
@@ -1814,11 +1834,41 @@ def register_ecosystem_commands(main_group):
         default="warn",
         help="Minimum severity to report (passed through to each auditor).",
     )
-    def ecosystem_audit_all(distribution, as_json, severity):
-        """Run every audit-* on DISTRIBUTION; aggregate exit codes."""
+    @click.option(
+        "--jobs",
+        "-j",
+        default=1,
+        show_default=True,
+        type=int,
+        help="Run packages in parallel. Audits within a package stay serial.",
+    )
+    def ecosystem_audit_all(distributions, as_json, severity, jobs):
+        """Run every audit-* on each DISTRIBUTION; aggregate exit codes.
+
+        DISTRIBUTIONS accepts: a single name, multiple names as separate
+        args, comma-separated names, or the literal `all` to expand to
+        every registered ecosystem package.
+        """
         import json as _json
+        import os as _os
+        import shutil as _shutil
         import subprocess
         import sys as _sys
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        from ..._ecosystem._core import ECOSYSTEM
+
+        # Expand input: split on commas, flatten, then resolve `all`.
+        raw: list[str] = []
+        for d in distributions:
+            raw.extend(p.strip() for p in d.split(",") if p.strip())
+        if "all" in raw:
+            pkgs = list(ECOSYSTEM.keys())
+        else:
+            pkgs = []
+            for name in raw:
+                if name not in pkgs:
+                    pkgs.append(name)
 
         # Order: cheap-to-fast → slow. Each audit-* honours --json + --severity
         # idempotently. audit-summary excluded — it's the cross-leaf rollup.
@@ -1830,60 +1880,121 @@ def register_ecosystem_commands(main_group):
             "audit-project",
         ]
 
-        results: dict = {}
-        overall_exit = 0
-        # Resolve sibling `scitex-dev` console script. Falls back to PATH lookup.
-        import os as _os
-        import shutil as _shutil
-
-        # Suppress per-auditor disclaimer; emit once at end of audit-all.
         sub_env = {**_os.environ, "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1"}
         scitex_dev_bin = _shutil.which("scitex-dev") or "scitex-dev"
-        for a in audits:
-            cmd = [scitex_dev_bin, "ecosystem", a, distribution]
-            if as_json:
-                cmd.append("--json")
-            # audit-cli + audit-summary support --severity; others ignore unknowns
-            if a == "audit-cli":
-                cmd += ["--severity", severity]
-            try:
+
+        def _run_one(distribution: str) -> tuple[str, int, dict]:
+            results: dict = {}
+            pkg_exit = 0
+            for a in audits:
+                cmd = [scitex_dev_bin, "ecosystem", a, distribution]
                 if as_json:
-                    r = subprocess.run(cmd, capture_output=True, text=True, env=sub_env)
-                    payload = r.stdout.strip() or "null"
-                    try:
-                        results[a] = {
-                            "exit": r.returncode,
-                            "data": _json.loads(payload),
-                        }
-                    except _json.JSONDecodeError:
-                        results[a] = {"exit": r.returncode, "raw": payload}
-                else:
-                    click.echo(f"\n=== {a} ===", err=True)
-                    r = subprocess.run(cmd, env=sub_env)
-                    results[a] = {"exit": r.returncode}
-            except Exception as e:
-                click.echo(f"error: {a} failed to launch: {e}", err=True)
-                results[a] = {"exit": 1, "error": str(e)}
-                overall_exit = 1
-                continue
-            if r.returncode != 0:
-                overall_exit = 1
+                    cmd.append("--json")
+                if a == "audit-cli":
+                    cmd += ["--severity", severity]
+                try:
+                    if as_json or len(pkgs) > 1:
+                        # Capture so multi-pkg output stays grouped.
+                        r = subprocess.run(
+                            cmd, capture_output=True, text=True, env=sub_env
+                        )
+                        if as_json:
+                            payload = r.stdout.strip() or "null"
+                            try:
+                                results[a] = {
+                                    "exit": r.returncode,
+                                    "data": _json.loads(payload),
+                                }
+                            except _json.JSONDecodeError:
+                                results[a] = {
+                                    "exit": r.returncode,
+                                    "raw": payload,
+                                }
+                        else:
+                            results[a] = {
+                                "exit": r.returncode,
+                                "stdout": r.stdout,
+                                "stderr": r.stderr,
+                            }
+                    else:
+                        click.echo(f"\n=== {a} ===", err=True)
+                        r = subprocess.run(cmd, env=sub_env)
+                        results[a] = {"exit": r.returncode}
+                except Exception as e:
+                    click.echo(
+                        f"error: {a} on {distribution} failed to launch: {e}",
+                        err=True,
+                    )
+                    results[a] = {"exit": 1, "error": str(e)}
+                    pkg_exit = 1
+                    continue
+                if r.returncode != 0:
+                    pkg_exit = 1
+            return distribution, pkg_exit, results
+
+        all_results: dict[str, dict] = {}
+        overall_exit = 0
+
+        if jobs <= 1 or len(pkgs) <= 1:
+            for d in pkgs:
+                if not as_json and len(pkgs) > 1:
+                    click.echo(f"\n###### {d} ######", err=True)
+                name, rc, res = _run_one(d)
+                all_results[name] = res
+                if not as_json and len(pkgs) > 1:
+                    for a, r in res.items():
+                        click.echo(f"\n=== {name} :: {a} ===", err=True)
+                        if r.get("stdout"):
+                            click.echo(r["stdout"])
+                        if r.get("stderr"):
+                            click.echo(r["stderr"], err=True)
+                if rc != 0:
+                    overall_exit = 1
+        else:
+            with ThreadPoolExecutor(max_workers=jobs) as ex:
+                futs = {ex.submit(_run_one, d): d for d in pkgs}
+                for f in as_completed(futs):
+                    name, rc, res = f.result()
+                    all_results[name] = res
+                    if not as_json:
+                        click.echo(f"\n###### {name} ######", err=True)
+                        for a, r in res.items():
+                            click.echo(f"\n=== {name} :: {a} ===", err=True)
+                            if r.get("stdout"):
+                                click.echo(r["stdout"])
+                            if r.get("stderr"):
+                                click.echo(r["stderr"], err=True)
+                    if rc != 0:
+                        overall_exit = 1
 
         if as_json:
             click.echo(
                 _json.dumps(
-                    {"distribution": distribution, "results": results}, indent=2
+                    {
+                        "distributions": pkgs,
+                        "results": all_results,
+                        "exit_code": overall_exit,
+                    },
+                    indent=2,
                 )
             )
         else:
             from ..._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
+            if len(pkgs) > 1:
+                click.echo("", err=True)
+                click.echo(f"summary: audited {len(pkgs)} package(s)", err=True)
+                fails = [
+                    n
+                    for n, res in all_results.items()
+                    if any(r.get("exit", 0) != 0 for r in res.values())
+                ]
+                if fails:
+                    click.echo(f"  failures: {', '.join(sorted(fails))}", err=True)
+                else:
+                    click.echo("  all packages pass", err=True)
             click.echo("", err=True)
             emit_disclaimer()
-            # When at least one sub-auditor reported errors, append the
-            # rule-prefix → skill-tree map. Per-auditor hints are
-            # suppressed inside subprocess via SCITEX_DEV_NO_AUDIT_DISCLAIMER=1
-            # so they don't fire five times — emit once at the end here.
             if overall_exit:
                 emit_skill_hints()
         _sys.exit(overall_exit)
