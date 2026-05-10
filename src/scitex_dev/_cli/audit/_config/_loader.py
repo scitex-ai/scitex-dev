@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PROJECT_TYPES = frozenset({"pip", "research", "special"})
+PROJECT_TYPES = frozenset({"pip", "research", "special", "django"})
 
 CONFIG_REL_PATH = Path(".scitex/dev/config.yaml")
 
@@ -52,7 +52,13 @@ class ProjectConfig:
         (research-style numbered manuscript dirs, CMS content trees,
         etc.). All other PS rules still apply if `pip` is also listed.
         """
-        if code == "PS-103" and "special" in self.project_types:
+        # `special` and `django` both opt out of PS-103 (root whitelist).
+        # `django` is a semantic alias — declares "Django framework
+        # canonical layout (apps/, static/, media/, templates/, …)"
+        # rather than the generic "by-design unconventional" of `special`.
+        if code == "PS-103" and (
+            "special" in self.project_types or "django" in self.project_types
+        ):
             return False
         prefix = code[:2]
         if prefix == "PS":

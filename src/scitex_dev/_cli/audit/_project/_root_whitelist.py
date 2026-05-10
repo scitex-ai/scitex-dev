@@ -44,6 +44,11 @@ SPEC_DEFAULT_FILES: frozenset[str] = frozenset(
         "SECURITY.md",  # GitHub community-health file (sibling of CONTRIBUTING)
         "pyproject.toml",
         "Makefile",
+        # Node-ecosystem canonical manifests for any pkg shipping a
+        # frontend (scitex-ui, hybrids). Like `pyproject.toml` but for
+        # npm — no canonical alternative location.
+        "package.json",
+        "package-lock.json",
         # Optional agent context. Canonical location is `.claude/CLAUDE.md`
         # (auto-allowed by the hidden-pattern), but root `CLAUDE.md` is
         # tolerated for backwards compatibility — should be gitignored
