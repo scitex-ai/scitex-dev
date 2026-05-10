@@ -1179,15 +1179,21 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
             code = "PS-104" if dirname == ".playground" else "PS-102"
             out.append(Violation(code, str(candidate), why))
 
-    for child in repo.iterdir():
-        if child.is_file() and _JUNK_FILE_RE.match(child.name):
-            out.append(
-                Violation(
-                    "PS-103",
-                    str(child),
-                    f"top-level junk file: {child.name}",
-                )
+    # PS-103: anything at repo root that is not in the strict baseline,
+    # not hidden, and not whitelisted via .scitex/dev/config.yaml.
+    from ._root_whitelist import _suggest_relocation, list_violations
+
+    for basename, kind in list_violations(repo):
+        out.append(
+            Violation(
+                "PS-103",
+                str(repo / basename),
+                (
+                    f"top-level {kind}: {basename} "
+                    f"({_suggest_relocation(basename, kind)})"
+                ),
             )
+        )
 
     # PS-105: console_scripts present but no __main__.py — `python -m <pkg>`
     # would fail with "No module named <pkg>.__main__".
