@@ -153,6 +153,23 @@ package shipping both `<long-name>` and `<short-alias>` (e.g.,
 source lines — one per binary name. A single `install-shell-completion`
 invocation should write all of them.
 
-### Audit (proposed PS code)
+### Audit — `PS-147 local-state-eval-completion`
 
 - [ ] `<pkg>` source must not contain `eval "$(_<PKG>_COMPLETE=bash_source ...)"` lines that get appended to rc files via `install-shell-completion`. Use the cache pattern above.
+
+The auditor lives at
+`scitex_dev._cli.audit._project._check_local_state.check_ps147_eval_form_completion`.
+It greps every `*.py` under `src/` for the eval-form pattern, skipping
+docstrings and `#` comments. Findings surface under
+`scitex-dev ecosystem audit-project <pkg>` (rule code `PS-147`,
+severity `W` during bake-in).
+
+The upstream helper `scitex_dev._cli._completion.attach_shell_completion`
+already implements the cache pattern — every CLI that uses
+`attach_shell_completion(group, prog_name=...)` inherits it for free.
+Packages still tripping `PS-147` are the ones that ship their own
+`install-shell-completion` body; the fix is to delete the local
+implementation and call `attach_shell_completion` instead.
+
+`scitex-dev ecosystem install --with-completions` (default on) wires
+all 66 packages' completions in one shot after a fresh pip install.

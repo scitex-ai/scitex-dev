@@ -115,6 +115,12 @@ The `runtime/.gitkeep` and `runtime/README.md` seed files (§4b) ship
 inside the **wheel** under `src/<import>/templates/runtime/` and are
 materialised by `PathManager` on first use, not by an install hook.
 
+**Audit — `PS-146 local-state-pip-install-side-effect`**: parses
+`pyproject.toml` for hatch `[tool.hatch.build.hooks.<name>]` entries
+whose hook script contains a `Path.home() / .scitex/...` mkdir, and
+flags setuptools `cmdclass` overriding `install`/`develop`. Severity
+`E` (hard fail) — the rule is unambiguous and the fix is mechanical.
+
 ## 4. What goes where
 
 The package root splits into **tracked** (top-level) and **runtime** (under `runtime/`). The split is the same at both project and user scope.
@@ -282,10 +288,14 @@ package). If X needs the same fact, it owns its own
 `SCITEX_<X>_*` var or — better — calls the owning package's API
 (see "Worked example — machine identity" above).
 
-**Audit (proposed PS code)**: grep package X's source for
-`~/.scitex/<other-pkg>` literals and `SCITEX_<OTHER>_*` env-var
-reads, where `<other-pkg>` is any other scitex-* package short
-name.
+**Audit — `PS-145 local-state-cross-package-read`**: greps every
+`*.py` under `src/` for `~/.scitex/<other-pkg>/` literals and
+`SCITEX_<OTHER>_*` env-var reads (only when surrounded by
+`os.environ` / `os.getenv` context — bare module constants like
+`SCITEX_LOGGING_AVAILABLE = True` set by `try/except ImportError`
+do not trip). Skips docstrings and `#` comments. Implementation
+in `scitex_dev._cli.audit._project._check_local_state`,
+severity `W` during bake-in.
 
 ## 10. Related
 
