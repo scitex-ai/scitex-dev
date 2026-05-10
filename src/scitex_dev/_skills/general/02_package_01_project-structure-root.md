@@ -83,6 +83,73 @@ Don't add `setup.py`, `requirements.txt`, or `MANIFEST.in`. All those concerns b
 | `./scitex/` | orphan module dir — confused with package | the real package is `src/<pkg>/`. For runtime state use a hidden `./.scitex/` (e.g. `./.scitex/<pkg>/runtime/logs/`), never a visible `./scitex/`. |
 | `./unknown_out/` | `@stx.session` output landed at root | re-run from a script directory, or set `CONFIG.SDIR_RUN`. Move the dir aside if you need to keep it. |
 
+## PS-103 — strict root whitelist
+
+PS-102 forbids specific dirs by name. **PS-103** flips the polarity:
+**anything at repo root that is not in the strict baseline below, not
+hidden (`.*`), and not explicitly whitelisted is a violation.**
+
+The auditor lives at `scitex_dev._cli.audit._project._root_whitelist`
+and is called by `scitex-dev ecosystem audit-project <pkg>` (rule
+`PS-103`, severity `E`).
+
+### Baseline (allowed everywhere, no config needed)
+
+```
+files: README.md, LICENSE{,.md,.txt}, CHANGELOG.md, CLA.md,
+       CONTRIBUTING.md, pyproject.toml, Makefile
+
+dirs:  src, tests, docs, examples, scripts, data, externals,
+       dist, build, GITIGNORED
+
+hidden: any `.*`
+        (.git, .github, .scitex, .dev, .gitignore, .gitattributes,
+         .pre-commit-config.yaml, .readthedocs.yaml, .coverage,
+         .env, .env.example, .venv, .pytest_cache, …)
+```
+
+This matches the canonical clean layout (see `~/proj/scitex-stats`
+as a reference implementation).
+
+### Per-pkg / global overrides
+
+Edge cases — Django frameworks, multi-package monorepos, content-
+vending packages — declare their extras explicitly in
+`<repo>/.scitex/dev/config.yaml`:
+
+```yaml
+audit:
+  root-whitelist:
+    files: [architecture.svg]            # exact basenames
+    patterns: ["screenshot-*.png"]       # fnmatch globs
+    dirs: [apps, static, media]          # exact dir basenames
+```
+
+The same block in `~/.scitex/dev/config.yaml` (user-level) is
+unioned on top — useful for scratch directories you want allowed
+across every clone.
+
+No category-based silent exemptions: `dataset`, `template`, etc.
+are NOT auto-softened. Each package self-declares.
+
+### Cleaning up an offending root
+
+Ecosystem-wide non-destructive cleanup:
+
+```bash
+scitex-dev ecosystem clean-root figrecipe              # preview
+scitex-dev ecosystem clean-root figrecipe --yes        # apply
+scitex-dev ecosystem clean-root all -j 8 --yes         # bulk
+
+# Moves entries into:
+#   <repo>/.scitex/dev/runtime/root-violations/<YYYYmmdd-HHMMSS>/
+# (gitignored under §4b — restore by `mv` back; delete after review)
+```
+
+The pre-write hook `inhibit_project_root_pollution.sh` calls into
+the same `is_allowed_at_root()` helper, so write-time and audit-time
+share one rule definition — schemas can't drift.
+
 ## `./docs` — human-facing documentation
 
 - README is the entry point; deeper docs live here (`./docs/installation.md`, `./docs/details/<topic>.md`).
@@ -134,7 +201,7 @@ The main branch must be publishable **today**, regardless of in-flight work:
 
 ## Anti-patterns
 
-- **Top-level junk** (`tmp_test.py`, `quick_check.py`, `debug.log`, `untitled.ipynb`) — move to `./.dev/<category>/` or delete.
+- **Top-level junk** (any `*.png` debug screenshot, `tmp_test.py`, `quick_check.py`, `debug.log`, `untitled.ipynb`, `current-snapshot.yml`, …) — flagged by **PS-103** strict whitelist. Move to `./docs/assets/` (if referenced from docs), `./.dev/<category>/` (if scratch), or delete. Bulk cleanup: `scitex-dev ecosystem clean-root <pkg>` quarantines into `<repo>/.scitex/dev/runtime/root-violations/<ts>/`. Legitimate exceptions go in `audit.root-whitelist` of `.scitex/dev/config.yaml`.
 - **Naked `src/` next to a real package layout** — pick one. SciTeX packages always use `src/<package_name>/`.
 - **`tests/` that doesn't mirror `src/`** — see [02_package_06_project-structure-tests.md](02_package_06_project-structure-tests.md).
 - **Examples with no `_out/`** — readers can't see what the demo produces. See [02_package_05_project-structure-examples.md](02_package_05_project-structure-examples.md).
