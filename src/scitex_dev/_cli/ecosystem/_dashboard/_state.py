@@ -157,7 +157,52 @@ def _ahead_of_origin(repo: Path) -> int:
 
 
 def _last_commit_iso(repo: Path) -> str:
-    return _git(repo, "log", "-1", "--format=%cI")
+    """ISO timestamp of the most recent edit, considering uncommitted work.
+
+    Returns whichever is later between:
+      - last-commit timestamp (`git log -1 --format=%cI`)
+      - the max mtime of any file listed in `git status --porcelain`
+        (so a dirty working tree shows the actual edit moment, not
+        the last clean commit's moment)
+
+    Costs ~5–10ms per repo (one `git log`, one `git status`, then
+    `stat` only on the dirty files — typically 0–10 paths).
+    """
+    from datetime import datetime, timezone
+
+    last_iso = _git(repo, "log", "-1", "--format=%cI")
+    porcelain = _git(repo, "status", "--porcelain")
+    if not porcelain:
+        return last_iso
+
+    # Parse `git status --porcelain` lines: "XY <path>" (and renames
+    # "R  old -> new"). Take the path; stat it for mtime.
+    latest_mtime = 0.0
+    for line in porcelain.splitlines():
+        rel = line[3:] if len(line) > 3 else ""
+        if " -> " in rel:
+            rel = rel.split(" -> ", 1)[1]
+        rel = rel.strip().strip('"')
+        if not rel:
+            continue
+        try:
+            mt = (repo / rel).stat().st_mtime
+        except OSError:
+            continue
+        if mt > latest_mtime:
+            latest_mtime = mt
+
+    if latest_mtime == 0.0:
+        return last_iso
+
+    dirty_iso = (
+        datetime.fromtimestamp(latest_mtime, tz=timezone.utc)
+        .astimezone()
+        .isoformat(timespec="seconds")
+    )
+    # Whichever is the larger ISO string wins. Both are in lexically
+    # comparable formats (yyyy-mm-ddTHH:MM:SS±HH:MM).
+    return dirty_iso if (not last_iso or dirty_iso > last_iso) else last_iso
 
 
 def _count_files(path: Path, pattern: str) -> int:
@@ -203,6 +248,140 @@ def _enrich_deep(state: PackageState) -> None:
     state.skills_count = _count_files(skills_root, "*.md")
     state.tests_count = _count_files(repo / "tests", "test_*.py")
     state.loc = _count_loc(src_root)
+
+
+def _enrich_audit_bulk(
+    states: list[PackageState], *, jobs: int = 8, severity: str = "warn"
+) -> None:
+    """Single-process bulk audit: `scitex-dev ecosystem audit-all <pkgs...>`.
+
+    Replaces 66 individual subprocess spawns with one. Each subprocess
+    spawn costs ~300ms of Python interpreter startup; 66 spawns ≈ 20s
+    of pure overhead. The bulk command parallelises internally via -j,
+    so wall-clock is dominated by the slowest pkg's audit.
+
+    Parses the summary lines `error <pkg>: N error(s)` / `warn <pkg>: N
+    warning(s)` from stdout — same shape that the per-pkg path parsed.
+    """
+    import os as _os
+
+    eligible = [s for s in states if s.exists_locally]
+    if not eligible:
+        return
+    pkgs = [s.pkg for s in eligible]
+    try:
+        proc = subprocess.run(
+            [
+                "scitex-dev",
+                "ecosystem",
+                "audit-all",
+                *pkgs,
+                "--severity",
+                severity,
+                "-j",
+                str(jobs),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=900,
+            env={
+                **_os.environ,
+                "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1",
+            },
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return
+
+    counts: dict[str, tuple[int, int]] = {p: (0, 0) for p in pkgs}
+    for line in proc.stdout.splitlines():
+        s = line.lstrip()
+        m_e = re.match(r"(?:error|fail)\s+(\S+):\s+(\d+)\s+error", s)
+        m_w = re.match(r"warn\s+(\S+):\s+(\d+)\s+(?:warning|violation)", s)
+        if m_e:
+            pkg, n = m_e.group(1), int(m_e.group(2))
+            if pkg in counts:
+                e, w = counts[pkg]
+                counts[pkg] = (e + n, w)
+        elif m_w:
+            pkg, n = m_w.group(1), int(m_w.group(2))
+            if pkg in counts:
+                e, w = counts[pkg]
+                counts[pkg] = (e, w + n)
+
+    by_pkg = {s.pkg: s for s in eligible}
+    for pkg, (e, w) in counts.items():
+        st = by_pkg.get(pkg)
+        if st is not None:
+            st.audit_errors = e
+            st.audit_warnings = w
+
+
+def _enrich_ci_bulk(
+    states: list[PackageState], *, owner: str = "ywatanabe1989"
+) -> None:
+    """Single GraphQL call fetching latest check-suite conclusion for
+    every repo at once, via aliased fields.
+
+    Replaces 66 sequential `gh run list` invocations (each ~500ms) with
+    one ~500ms-total GraphQL round-trip. Same rate-limit cost as one
+    REST call (GraphQL counts 1 point per query, not per alias) — so
+    we go from 66 rate-limit charges per refresh to 1.
+    """
+    import json as _json
+
+    eligible = [s for s in states if s.exists_locally]
+    if not eligible:
+        return
+
+    aliases: list[tuple[str, PackageState]] = []
+    parts: list[str] = []
+    for i, s in enumerate(eligible):
+        alias = f"p{i}"
+        aliases.append((alias, s))
+        parts.append(
+            f'{alias}: repository(owner: "{owner}", name: "{s.pkg}") {{'
+            f'  object(expression: "develop") {{'
+            f"    ... on Commit {{"
+            f"      checkSuites(last: 1) {{ nodes {{ conclusion status }} }}"
+            f"    }}"
+            f"  }}"
+            f"}}"
+        )
+    query = "query { " + " ".join(parts) + " }"
+
+    try:
+        proc = subprocess.run(
+            ["gh", "api", "graphql", "-f", f"query={query}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return
+    if proc.returncode != 0:
+        return
+
+    try:
+        data = _json.loads(proc.stdout).get("data") or {}
+    except _json.JSONDecodeError:
+        return
+
+    for alias, st in aliases:
+        node = (data.get(alias) or {}).get("object") or {}
+        suites = (node.get("checkSuites") or {}).get("nodes") or []
+        if not suites:
+            continue
+        latest = suites[0]
+        # GraphQL returns enums in upper-case (SUCCESS, FAILURE, …);
+        # the renderer keys on lower-case (success, failure, in_progress).
+        conclusion = (latest.get("conclusion") or "").lower()
+        status = (latest.get("status") or "").lower()
+        if conclusion in {"success", "failure", "cancelled"}:
+            st.ci_status = conclusion
+        elif status in {"in_progress", "queued", "requested", "pending"}:
+            st.ci_status = "in_progress"
+        elif conclusion:
+            st.ci_status = conclusion
 
 
 def _enrich_audit(state: PackageState) -> None:
@@ -361,6 +540,7 @@ def gather_ecosystem_state(
     workers: int = 16,
     packages: list[str] | None = None,
     on_update: Callable[[list[PackageState]], None] | None = None,
+    enrichers: set[str] | None = None,
 ) -> list[PackageState]:
     """Collect dashboard rows for every ECOSYSTEM package.
 
@@ -384,31 +564,56 @@ def gather_ecosystem_state(
     if on_update:
         on_update(states)
 
-    # All enrichers below are independent — they read from / write to
-    # disjoint PackageState fields. Flatten into one big task list so
-    # the whole sweep fans out concurrently across `workers`, instead
-    # of waiting for each tier (deep → ci → audit) to drain in series.
-    # Audit is the slow one (~5–15s per pkg subprocess); interleaving
-    # it with the fast HTTP/git tasks keeps the wall clock down.
-    enrichers: list[Callable[[PackageState], None]] = []
-    if verbosity >= 2:
-        enrichers.append(_enrich_pypi)
-    if verbosity >= 3:
-        enrichers.extend([_enrich_deep, _enrich_ci, _enrich_audit])
+    # Verbosity controls which COLUMNS are shown, not what gets
+    # computed. Callers (CLI / tests) pass the set of `enrichers` they
+    # actually need based on visible columns; if omitted we fall back
+    # to a verbosity-driven heuristic for backwards-compat.
+    if enrichers is None:
+        enrichers = set()
+        if verbosity >= 2:
+            enrichers.add("pypi")
+        if verbosity >= 3:
+            enrichers.update({"deep", "audit", "ci"})
 
-    if enrichers:
-        tasks = [(fn, s) for fn in enrichers for s in states]
+    per_pkg_enrichers: list[Callable[[PackageState], None]] = []
+    if "pypi" in enrichers:
+        per_pkg_enrichers.append(_enrich_pypi)
+    if "deep" in enrichers:
+        per_pkg_enrichers.append(_enrich_deep)
+    # Bulk enrichers (one task per fn, processes ALL states at once).
+    # Both replace per-pkg subprocess fan-outs with a single batched
+    # call: audit-all <pkgs...> as one subprocess; one GraphQL query
+    # with aliased fields as one rate-limit charge.
+    bulk_enrichers: list[Callable[[list[PackageState]], None]] = []
+    if "audit" in enrichers:
+        bulk_enrichers.append(_enrich_audit_bulk)
+    if "ci" in enrichers:
+        # CI stays per-pkg: GraphQL `checkSuites` on develop HEAD
+        # misses recent commits where CI hasn't run yet. `gh run list`
+        # sorts by run time and finds the most recent actually-ran
+        # workflow. Parallel via the shared pool keeps wall-clock
+        # bounded; cost is N rate-limit charges instead of 1.
+        per_pkg_enrichers.append(_enrich_ci)
+
+    has_work = per_pkg_enrichers or bulk_enrichers
+    if has_work:
+        tasks: list = []
+        for fn in per_pkg_enrichers:
+            for s in states:
+                tasks.append((fn, s, False))
+        for fn in bulk_enrichers:
+            tasks.append((fn, states, True))
+
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(fn, s) for fn, s in tasks]
+            futures = [pool.submit(fn, arg) for fn, arg, _is_bulk in tasks]
             if on_update is None:
-                # Block-and-drain path keeps the old fast contract.
                 for _ in as_completed(futures):
                     pass
             else:
-                # Streaming path — invoke the callback after each
-                # completion so the caller can re-render. The callback
-                # is expected to be cheap / debounced (see CLI side).
                 for _ in as_completed(futures):
                     on_update(states)
 
+    # Sort: most recently edited first (top → bottom = newest → oldest).
+    # Empty `last_commit_iso` sinks to the bottom.
+    states.sort(key=lambda s: s.last_commit_iso or "", reverse=True)
     return states

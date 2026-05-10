@@ -109,6 +109,36 @@ _COL_GROUP = {
     "loc": "Code",
 }
 
+# Which enricher (if any) populates each column. The CLI uses this
+# to determine what to compute based on visible cols at the current
+# verbosity — verbosity controls VISIBILITY only; visible columns are
+# always computed.
+_COL_TO_ENRICHER: dict[str, str] = {
+    "audit": "audit",
+    "warn": "audit",
+    "skip": "audit",
+    "pypi": "pypi",
+    "ci": "ci",
+    "rtd": "deep",
+    "skills": "deep",
+    "mcp_tools": "deep",
+    "py_apis": "deep",
+    "tests": "deep",
+    "cov": "deep",
+    "loc": "deep",
+}
+
+
+def enrichers_for_cols(cols: list[str]) -> set[str]:
+    """Map a list of visible column ids to the enrichers needed."""
+    return {_COL_TO_ENRICHER[c] for c in cols if c in _COL_TO_ENRICHER}
+
+
+def cols_for_verbosity(verbosity: int) -> list[str]:
+    """Public view of the verbosity → columns mapping."""
+    return _TIERS[max(0, min(verbosity, len(_TIERS) - 1))]
+
+
 _COL_NAMES = {
     "pkg": "Package",
     "category": "Category",
@@ -157,7 +187,7 @@ def _legend_text() -> Text:
     parts: list[Text] = []
     parts.append(Text("Glyphs: ", style="bold dim"))
     parts.append(Text("N/C", style="dim"))
-    parts.append(Text(" not computed at this verbosity  ·  ", style="dim"))
+    parts.append(Text(" not yet computed (live, fills in)  ·  ", style="dim"))
     parts.append(Text("0", style="green"))
     parts.append(Text(" clean  ·  ", style="dim"))
     parts.append(Text("N", style="yellow"))
@@ -292,14 +322,26 @@ def _cell(state: PackageState, col: str) -> Text | str:
 def render_table(states: list[PackageState], verbosity: int = 1) -> Table:
     """Return a Rich Table for the requested verbosity tier.
 
-    Sorts: drift first (red rows on top), then by audit errors, then
-    by name. Stable within ties.
+    Sorts most-recently-edited first (top → bottom = newest → oldest).
+    The last-edited timestamp considers uncommitted working-tree
+    changes, not just the last commit — see `_last_commit_iso` in
+    `_state.py`. Ties broken by package name.
     """
     cols = _TIERS[max(0, min(verbosity, len(_TIERS) - 1))]
 
-    def _key(s: PackageState) -> tuple:
-        drift_bad = 0 if s.drift_local in ("", "✓") else 1
-        return (-drift_bad, -max(s.audit_errors, 0), s.pkg)
+    # Sort newest → oldest, with packages missing a timestamp at the
+    # bottom. Two-pass keeps the logic straightforward without trying
+    # to negate ISO strings inside a tuple-key.
+    dated = sorted(
+        [s for s in states if s.last_commit_iso],
+        key=lambda s: (s.last_commit_iso, s.pkg),
+        reverse=True,
+    )
+    undated = sorted(
+        [s for s in states if not s.last_commit_iso],
+        key=lambda s: s.pkg,
+    )
+    ordered_states = dated + undated
 
     table = Table(
         title=f"scitex ecosystem  ·  v={verbosity}  ·  {len(states)} packages",
@@ -312,6 +354,6 @@ def render_table(states: list[PackageState], verbosity: int = 1) -> Table:
     )
     for i, col in enumerate(cols):
         table.add_column(_column_header(cols, i), no_wrap=True)
-    for state in sorted(states, key=_key):
+    for state in ordered_states:
         table.add_row(*[_cell(state, c) for c in cols])
     return table

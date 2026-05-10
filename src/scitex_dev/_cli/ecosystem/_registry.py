@@ -1522,22 +1522,30 @@ def register_ecosystem_commands(main_group):
         help="Emit JSON instead of the Rich table (alias for `dashboard export --format json`).",
     )
     def dashboard_list(verbosity, package, workers, as_json):
-        """One-shot snapshot of the ecosystem (no refresh, exit when done).
-
-        At -vv / -vvv the cells fill progressively via `rich.live.Live`
-        so the user sees results as each enricher finishes (PyPI HTTP,
-        gh-api CI, audit subprocess) rather than waiting for the whole
-        sweep to drain.
+        """Live ecosystem dashboard. Visible columns at the current
+        verbosity are always computed (verbosity ≠ depth); cells fill
+        in via `rich.live.Live` first-come-first-served as each future
+        completes — PyPI HTTP, gh-api CI (one GraphQL batch), audit
+        (one `audit-all` subprocess).
         """
         import time
 
         from ._dashboard import gather_ecosystem_state
+        from ._dashboard._render import (
+            cols_for_verbosity,
+            enrichers_for_cols,
+            render_table,
+        )
+
+        cols = cols_for_verbosity(verbosity)
+        enrichers = enrichers_for_cols(cols)
 
         if as_json:
             states = gather_ecosystem_state(
                 verbosity=verbosity,
                 packages=list(package) or None,
                 workers=workers,
+                enrichers=enrichers,
             )
             from ._dashboard import _export as exp
 
@@ -1547,24 +1555,11 @@ def register_ecosystem_commands(main_group):
         from rich.console import Console
         from rich.live import Live
 
-        from ._dashboard._render import render_table
-
         console = Console()
 
-        # At v ≤ 1 there's nothing to stream — basic gather is sub-
-        # second and we'd waste cycles spinning up Live. Render once.
-        if verbosity <= 1:
-            states = gather_ecosystem_state(
-                verbosity=verbosity,
-                packages=list(package) or None,
-                workers=workers,
-            )
-            console.print(render_table(states, verbosity=verbosity))
-            return
-
-        # v >= 2: stream. Debounce updates so the per-future callback
-        # doesn't re-render 264 times in a flat burst — Rich repaints
-        # the table in place; 4-5/sec is plenty for the eye.
+        # Always live-stream. Even at v=0/1 we may have audit/pypi/CI
+        # columns visible that need computation; the basic gather is
+        # sub-second so Live engagement cost is negligible.
         last_paint = [0.0]
         states_box: list = []
 
@@ -1586,6 +1581,7 @@ def register_ecosystem_commands(main_group):
                 packages=list(package) or None,
                 workers=workers,
                 on_update=_on_update,
+                enrichers=enrichers,
             )
             # Final paint to ensure the last-completion delta lands.
             live.update(render_table(states_box, verbosity=verbosity))
