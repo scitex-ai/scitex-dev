@@ -92,6 +92,72 @@ _COL_HEADERS = {
 }
 
 
+# Legend strings — what each column header means. Shown as a caption
+# below the rendered table so users don't have to grep the source to
+# read the row. Wording matches the CLI `--help` epilog.
+_COL_LEGEND = {
+    "pkg": "package name",
+    "category": "umbrella / library / dataset / template / external-lib",
+    "audit": "audit-project E-severity finding count (-v fills)",
+    "warn": "audit-project W-severity finding count (-v fills)",
+    "skip": "rule codes silenced via `audit.skip` in <repo>/.scitex/dev/config.yaml",
+    "ver": "pyproject.toml [project] version",
+    "tag": "latest git tag",
+    "pypi": "latest version on PyPI (-vv fills)",
+    "drift_local": "pyproject ↔ latest tag mismatch  (`✓` = synced)",
+    "drift_pypi": "pyproject ↔ PyPI mismatch        (`✓` = synced)",
+    "branch": "current branch (yellow if not develop/main)",
+    "ahead": "commits ahead of origin",
+    "last": "last-commit ISO timestamp",
+    "ci": "GitHub Actions latest run",
+    "rtd": "Read-the-Docs build status",
+    "skills": "_skills/ leaf count",
+    "mcp_tools": "MCP tool count",
+    "py_apis": "public Python API count",
+    "tests": "test count (-vvv fills)",
+    "cov": "coverage % (-vvv fills)",
+    "loc": "source lines of code",
+}
+
+
+def _legend_text(cols: list[str]) -> Text:
+    """Build a caption explaining the visible columns + value glyphs.
+
+    Adapts to verbosity — only legends visible columns. The glyph
+    glossary is constant since the colour scheme is shared across
+    cells.
+    """
+    parts: list[Text] = []
+    parts.append(Text("Columns: ", style="bold dim"))
+    for i, c in enumerate(cols):
+        if c not in _COL_LEGEND:
+            continue
+        if i:
+            parts.append(Text(" · ", style="dim"))
+        parts.append(Text(_COL_HEADERS[c], style="bold"))
+        parts.append(Text(f" = {_COL_LEGEND[c]}", style="dim"))
+    parts.append(Text("\n", style=""))
+    parts.append(Text("Glyphs: ", style="bold dim"))
+    parts.append(Text("·", style="dim"))
+    parts.append(Text(" not computed at this verbosity  ·  ", style="dim"))
+    parts.append(Text("0", style="green"))
+    parts.append(Text(" clean  ·  ", style="dim"))
+    parts.append(Text("N", style="yellow"))
+    parts.append(Text(" warnings  ·  ", style="dim"))
+    parts.append(Text("N", style="red"))
+    parts.append(Text(" errors  ·  ", style="dim"))
+    parts.append(Text("✓", style="green"))
+    parts.append(Text(" synced / pass  ·  ", style="dim"))
+    parts.append(Text("✗", style="red"))
+    parts.append(Text(" failed  ·  ", style="dim"))
+    parts.append(Text("…", style="yellow"))
+    parts.append(Text(" in progress", style="dim"))
+    out = Text("")
+    for p in parts:
+        out.append_text(p)
+    return out
+
+
 def _color_drift(s: str) -> Text:
     if s == "✓":
         return Text("✓", style="green")
@@ -109,10 +175,13 @@ def _color_count(n: int, *, error: bool = False) -> Text:
 
 
 def _color_skip(skip_rules: list[str]) -> Text:
+    # `audit.skip` is an intentional opt-out, not an error. Yellow flags
+    # "review periodically" without screaming. Red bold is reserved for
+    # actual failures (E counts, CI ✗).
     n = len(skip_rules)
     if n == 0:
         return Text("0", style="green")
-    return Text(str(n), style="red bold")
+    return Text(str(n), style="yellow")
 
 
 def _color_ci(s: str) -> Text:
@@ -191,6 +260,9 @@ def render_table(states: list[PackageState], verbosity: int = 1) -> Table:
         title=f"scitex ecosystem  ·  v={verbosity}  ·  {len(states)} packages",
         title_style="bold cyan",
         header_style="bold",
+        caption=_legend_text(cols),
+        caption_justify="left",
+        caption_style="",
         expand=False,
     )
     for col in cols:
