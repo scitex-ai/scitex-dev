@@ -1502,8 +1502,9 @@ def register_ecosystem_commands(main_group):
     )
     @click.option("--package", "-p", multiple=True, help="Limit to specific packages.")
     @click.option(
-        "--workers",
+        "--jobs",
         "-j",
+        "jobs",
         default=16,
         show_default=True,
         type=int,
@@ -1521,7 +1522,7 @@ def register_ecosystem_commands(main_group):
         is_flag=True,
         help="Emit JSON instead of the Rich table (alias for `dashboard export --format json`).",
     )
-    def dashboard_list(verbosity, package, workers, as_json):
+    def dashboard_list(verbosity, package, jobs, as_json):
         """Live ecosystem dashboard. Visible columns at the current
         verbosity are always computed (verbosity ≠ depth); cells fill
         in via `rich.live.Live` first-come-first-served as each future
@@ -1544,7 +1545,7 @@ def register_ecosystem_commands(main_group):
             states = gather_ecosystem_state(
                 verbosity=verbosity,
                 packages=list(package) or None,
-                workers=workers,
+                workers=jobs,
                 enrichers=enrichers,
             )
             from ._dashboard import _export as exp
@@ -1579,7 +1580,7 @@ def register_ecosystem_commands(main_group):
             gather_ecosystem_state(
                 verbosity=verbosity,
                 packages=list(package) or None,
-                workers=workers,
+                workers=jobs,
                 on_update=_on_update,
                 enrichers=enrichers,
             )
