@@ -288,7 +288,13 @@ def install_all(
             if on_progress:
                 on_progress(idx, total, name, "dry", " ".join(cmd))
             return
-        rc, msg = _run(cmd, timeout=300)
+        # 5400s (90 min) per pkg — `scitex[all]` (the umbrella) is known
+        # to take >60 min even with uv because it pulls the full
+        # SciTeX dep tree (numpy/torch/jax/playwright/...). 300 s was
+        # the old limit and killed the umbrella install reliably.
+        # Light peers finish in <60 s either way; the higher ceiling
+        # only matters for the umbrella + a couple of heavy peers.
+        rc, msg = _run(cmd, timeout=5400)
         results[name] = (rc, msg)
         if on_progress:
             on_progress(idx, total, name, "ok" if rc == 0 else "err", msg)
