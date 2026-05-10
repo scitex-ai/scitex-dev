@@ -20,27 +20,38 @@ from rich.text import Text
 from ._state import PackageState
 
 _TIERS: list[list[str]] = [
-    # 0
-    ["pkg", "audit", "drift_local", "ci"],
-    # 1
-    ["pkg", "audit", "drift_local", "ci", "warn", "skip", "ver", "tag"],
-    # 2
+    # Logical groups: identity → audit (E,W,SKIP) → version (VER,TAG,DRIFT)
+    # → branch (BRANCH,↑,LAST) → health (CI,RTD) → deep counts.
+    # 0 — at-a-glance
+    ["pkg", "audit", "warn", "drift_local", "ci"],
+    # 1 — default
     [
         "pkg",
         "audit",
+        "warn",
+        "skip",
+        "ver",
+        "tag",
         "drift_local",
         "ci",
+    ],
+    # 2 — deep triage
+    [
+        "pkg",
+        "audit",
         "warn",
         "skip",
         "ver",
         "tag",
         "pypi",
+        "drift_local",
         "drift_pypi",
         "branch",
         "ahead",
         "last",
+        "ci",
     ],
-    # 3 — everything; renderer falls through to all known cols
+    # 3 — everything
     [
         "pkg",
         "category",
