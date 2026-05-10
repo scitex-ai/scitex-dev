@@ -55,6 +55,8 @@ Project structure split into one leaf per top-level directory:
 - [02_package_06_project-structure-tests.md](02_package_06_project-structure-tests.md) — `tests/<pkg>/` mandatory parent, allowed subdirs, public/private mirroring, allowed root meta-tests, `audit-project` rules
 - [02_package_07_github-actions.md](02_package_07_github-actions.md) — CI, PyPI publish, CLA, reusable workflow patterns
 - [02_package_08_quality.md](02_package_08_quality.md) — Repository-level quality (AGPL, Four Freedoms, README rules, GitHub setup)
+- [02_package_09_browser-automation-debugging.md](02_package_09_browser-automation-debugging.md) — Playwright debug-artifact capture for every browser-automation file (PA-305 rule)
+- [02_package_10_dev-venv-isolation.md](02_package_10_dev-venv-isolation.md) — Real isolated `<pkg-root>/.venv/` per peer (no symlinks to `~/.venv`); CI-parity local dev setup; `scitex-dev ecosystem install --venv per-package` (default)
 
 ### 3. Interfaces — how do users and agents touch *this* package?
 - [03_interface_00_overview.md](03_interface_00_overview.md) — Five interfaces: overview and delegation chain
