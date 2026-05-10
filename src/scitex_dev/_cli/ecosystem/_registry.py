@@ -1502,17 +1502,33 @@ def register_ecosystem_commands(main_group):
     )
     @click.option("--package", "-p", multiple=True, help="Limit to specific packages.")
     @click.option(
+        "--workers",
+        "-j",
+        default=16,
+        show_default=True,
+        type=int,
+        help=(
+            "Concurrent worker threads. All enrichment tasks "
+            "(pypi + deep + ci + audit at -vvv) share one pool — "
+            "264 tasks for the full ecosystem. Bump to 32-64 to "
+            "shorten -vvv wall-clock; cap by GitHub API rate-limit "
+            "(~5000/hr) and local CPU."
+        ),
+    )
+    @click.option(
         "--json",
         "as_json",
         is_flag=True,
         help="Emit JSON instead of the Rich table (alias for `dashboard export --format json`).",
     )
-    def dashboard_list(verbosity, package, as_json):
+    def dashboard_list(verbosity, package, workers, as_json):
         """One-shot snapshot of the ecosystem (no refresh, exit when done)."""
         from ._dashboard import gather_ecosystem_state
 
         states = gather_ecosystem_state(
-            verbosity=verbosity, packages=list(package) or None
+            verbosity=verbosity,
+            packages=list(package) or None,
+            workers=workers,
         )
         if as_json:
             from ._dashboard import _export as exp

@@ -20,10 +20,13 @@ from rich.text import Text
 from ._state import PackageState
 
 _TIERS: list[list[str]] = [
-    # Logical groups: identity → audit (E,W,SKIP) → version (VER,TAG,DRIFT)
-    # → branch (BRANCH,↑,LAST) → health (CI,RTD) → deep counts.
+    # Logical groups: identity → audit (E,W,Bypassed) → version
+    # (pyproject,tag,PyPI) → test (pytest,coverage,CI) → git → code.
+    # Version mismatches are shown via cell-colour, not separate
+    # drift columns — any cell whose value differs from pyproject's
+    # is rendered red.
     # 0 — at-a-glance
-    ["pkg", "audit", "warn", "drift_local", "ci"],
+    ["pkg", "audit", "warn", "ver", "tag", "ci"],
     # 1 — default
     [
         "pkg",
@@ -32,7 +35,7 @@ _TIERS: list[list[str]] = [
         "skip",
         "ver",
         "tag",
-        "drift_local",
+        "pypi",
         "ci",
     ],
     # 2 — deep triage
@@ -44,12 +47,12 @@ _TIERS: list[list[str]] = [
         "ver",
         "tag",
         "pypi",
-        "drift_local",
-        "drift_pypi",
+        "tests",
+        "cov",
+        "ci",
         "branch",
         "ahead",
         "last",
-        "ci",
     ],
     # 3 — everything
     [
@@ -61,95 +64,99 @@ _TIERS: list[list[str]] = [
         "ver",
         "tag",
         "pypi",
-        "drift_local",
-        "drift_pypi",
+        "tests",
+        "cov",
+        "ci",
+        "rtd",
         "branch",
         "ahead",
         "last",
-        "ci",
-        "rtd",
         "skills",
         "mcp_tools",
         "py_apis",
-        "tests",
-        "cov",
         "loc",
     ],
 ]
 
 
-_COL_HEADERS = {
-    "pkg": "PKG",
-    "category": "CAT",
-    "audit": "E",
-    "warn": "W",
-    "skip": "SKIP",
-    "ver": "VER",
-    "tag": "TAG",
-    "pypi": "PYPI",
-    "drift_local": "DRIFT",
-    "drift_pypi": "DRIFT₂",
-    "branch": "BRANCH",
-    "ahead": "↑",
-    "last": "LAST",
+# Each column has (a) a group label (top line, shared across the
+# group) and (b) a column name (bottom line). The renderer prints the
+# group label only on the FIRST column of each group; subsequent
+# columns in the same group leave the top line blank, producing a
+# visual "Audit | | |" / "Version | | | |" effect under Rich's box
+# drawing.
+_COL_GROUP = {
+    "pkg": "",
+    "category": "",
+    "audit": "Audit",
+    "warn": "Audit",
+    "skip": "Audit",
+    "ver": "Version",
+    "tag": "Version",
+    "pypi": "Version",
+    "drift_local": "Version",
+    "drift_pypi": "Version",
+    "tests": "Test",
+    "cov": "Test",
+    "ci": "Test",
+    "rtd": "Test",
+    "branch": "Git",
+    "ahead": "Git",
+    "last": "Git",
+    "skills": "Code",
+    "mcp_tools": "Code",
+    "py_apis": "Code",
+    "loc": "Code",
+}
+
+_COL_NAMES = {
+    "pkg": "Package",
+    "category": "Category",
+    "audit": "Error",
+    "warn": "Warning",
+    "skip": "Bypassed",
+    "ver": "pyproject.toml",
+    "tag": "git tag",
+    "pypi": "PyPI",
+    "drift_local": "Drift",
+    "drift_pypi": "PyPI Drift",
+    "tests": "pytest",
+    "cov": "Coverage",
     "ci": "CI",
     "rtd": "RTD",
-    "skills": "SK",
-    "mcp_tools": "MCP",
-    "py_apis": "API",
-    "tests": "T",
-    "cov": "COV",
+    "branch": "branch",
+    "ahead": "ahead",
+    "last": "last commit",
+    "skills": "skills",
+    "mcp_tools": "MCP tools",
+    "py_apis": "Python APIs",
     "loc": "LOC",
 }
 
 
-# Legend strings — what each column header means. Shown as a caption
-# below the rendered table so users don't have to grep the source to
-# read the row. Wording matches the CLI `--help` epilog.
-_COL_LEGEND = {
-    "pkg": "package name",
-    "category": "umbrella / library / dataset / template / external-lib",
-    "audit": "audit-project E-severity finding count (-v fills)",
-    "warn": "audit-project W-severity finding count (-v fills)",
-    "skip": "rule codes silenced via `audit.skip` in <repo>/.scitex/dev/config.yaml",
-    "ver": "pyproject.toml [project] version",
-    "tag": "latest git tag",
-    "pypi": "latest version on PyPI (-vv fills)",
-    "drift_local": "pyproject ↔ latest tag mismatch  (`✓` = synced)",
-    "drift_pypi": "pyproject ↔ PyPI mismatch        (`✓` = synced)",
-    "branch": "current branch (yellow if not develop/main)",
-    "ahead": "commits ahead of origin",
-    "last": "last-commit ISO timestamp",
-    "ci": "GitHub Actions latest run",
-    "rtd": "Read-the-Docs build status",
-    "skills": "_skills/ leaf count",
-    "mcp_tools": "MCP tool count",
-    "py_apis": "public Python API count",
-    "tests": "test count (-vvv fills)",
-    "cov": "coverage % (-vvv fills)",
-    "loc": "source lines of code",
-}
+def _column_header(cols: list[str], idx: int) -> str:
+    """Two-line header for column at index `idx` in `cols`.
+
+    Top line carries the group label only when this column is the
+    leading column of a new group (i.e. the previous column belongs
+    to a different group, or this is column 0). Subsequent same-group
+    columns leave the top line blank so the group reads visually.
+    """
+    col = cols[idx]
+    group = _COL_GROUP.get(col, "")
+    prev_group = _COL_GROUP.get(cols[idx - 1], "") if idx > 0 else None
+    top = group if (group and group != prev_group) else ""
+    return f"{top}\n{_COL_NAMES.get(col, col)}"
 
 
-def _legend_text(cols: list[str]) -> Text:
-    """Build a caption explaining the visible columns + value glyphs.
-
-    Adapts to verbosity — only legends visible columns. The glyph
-    glossary is constant since the colour scheme is shared across
-    cells.
+def _legend_text() -> Text:
+    """Compact glyph legend. Column headers are self-descriptive
+    after the two-line group rename, so we no longer need a per-
+    column glossary — just remind users what the value glyphs mean.
     """
     parts: list[Text] = []
-    parts.append(Text("Columns: ", style="bold dim"))
-    for i, c in enumerate(cols):
-        if c not in _COL_LEGEND:
-            continue
-        if i:
-            parts.append(Text(" · ", style="dim"))
-        parts.append(Text(_COL_HEADERS[c], style="bold"))
-        parts.append(Text(f" = {_COL_LEGEND[c]}", style="dim"))
-    parts.append(Text("\n", style=""))
     parts.append(Text("Glyphs: ", style="bold dim"))
-    parts.append(Text("·", style="dim"))
+    parts.append(Text("N/C", style="dim"))
     parts.append(Text(" not computed at this verbosity  ·  ", style="dim"))
     parts.append(Text("0", style="green"))
     parts.append(Text(" clean  ·  ", style="dim"))
@@ -169,17 +176,9 @@ def _legend_text(cols: list[str]) -> Text:
     return out
 
 
-def _color_drift(s: str) -> Text:
-    if s == "✓":
-        return Text("✓", style="green")
-    if not s:
-        return Text("", style="dim")
-    return Text(s, style="red")
-
-
 def _color_count(n: int, *, error: bool = False) -> Text:
     if n < 0:
-        return Text("·", style="dim")
+        return Text("N/C", style="dim")
     if n == 0:
         return Text("0", style="green")
     return Text(str(n), style="red" if error else "yellow")
@@ -195,13 +194,55 @@ def _color_skip(skip_rules: list[str]) -> Text:
     return Text(str(n), style="yellow")
 
 
+def _normalise_version(s: str) -> str:
+    """Trim leading `v` and trailing `-alpha`/`-beta`/etc. for equality
+    checks. `0.2.7` ≡ `v0.2.7`."""
+    if not s:
+        return ""
+    s = s.lstrip("v")
+    return s
+
+
+def _color_version_cell(state: "PackageState", col: str) -> Text:
+    """Render a version cell coloured red iff it disagrees with the
+    canonical (pyproject.toml) version.
+
+    `pyproject.toml` is the source of truth. `git tag` and `PyPI` are
+    expected to match it; any divergence is shown by reddening the
+    offending cell. Empty/unknown values render dim.
+    """
+    val_raw = {
+        "ver": state.version_pyproject,
+        "tag": state.tag_latest,
+        "pypi": state.pypi_latest,
+    }.get(col, "")
+
+    if not val_raw:
+        # `-` for missing tag/pyproject; `N/C` for not-fetched PyPI.
+        placeholder = "N/C" if col == "pypi" else "-"
+        return Text(placeholder, style="dim")
+
+    canonical = _normalise_version(state.version_pyproject)
+    own = _normalise_version(val_raw)
+
+    if col == "ver":
+        # The canonical column itself — always rendered neutral
+        # (cyan when dynamic, plain otherwise). Mismatch is shown by
+        # the OTHER columns going red.
+        return Text(val_raw, style="cyan" if state.version_dynamic else "")
+
+    if canonical and own and canonical != own:
+        return Text(val_raw, style="red")
+    return Text(val_raw, style="green" if canonical and own else "")
+
+
 def _color_ci(s: str) -> Text:
     return {
         "success": Text("✓", style="green"),
         "failure": Text("✗", style="red bold"),
         "in_progress": Text("…", style="yellow"),
         "cancelled": Text("⊘", style="dim"),
-        "": Text("·", style="dim"),
+        "": Text("N/C", style="dim"),
     }.get(s, Text(s, style="dim"))
 
 
@@ -218,17 +259,8 @@ def _cell(state: PackageState, col: str) -> Text | str:
         return _color_count(state.audit_warnings)
     if col == "skip":
         return _color_skip(state.skip_rules)
-    if col == "ver":
-        v = state.version_pyproject or "-"
-        return Text(v, style="cyan" if state.version_dynamic else "")
-    if col == "tag":
-        return state.tag_latest or "-"
-    if col == "pypi":
-        return state.pypi_latest or "·"
-    if col == "drift_local":
-        return _color_drift(state.drift_local)
-    if col == "drift_pypi":
-        return _color_drift(state.drift_pypi)
+    if col in ("ver", "tag", "pypi"):
+        return _color_version_cell(state, col)
     if col == "branch":
         b = state.branch or "-"
         return Text(b, style="" if b in ("develop", "main") else "yellow")
@@ -239,7 +271,7 @@ def _cell(state: PackageState, col: str) -> Text | str:
     if col == "ci":
         return _color_ci(state.ci_status)
     if col == "rtd":
-        return state.rtd_status or "·"
+        return state.rtd_status or Text("N/C", style="dim")
     if col == "skills":
         return _color_count(state.skills_count)
     if col == "mcp_tools":
@@ -249,7 +281,9 @@ def _cell(state: PackageState, col: str) -> Text | str:
     if col == "tests":
         return _color_count(state.tests_count)
     if col == "cov":
-        return f"{state.coverage:.0%}" if state.coverage >= 0 else "·"
+        return (
+            f"{state.coverage:.0%}" if state.coverage >= 0 else Text("N/C", style="dim")
+        )
     if col == "loc":
         return _color_count(state.loc)
     return "?"
@@ -271,13 +305,13 @@ def render_table(states: list[PackageState], verbosity: int = 1) -> Table:
         title=f"scitex ecosystem  ·  v={verbosity}  ·  {len(states)} packages",
         title_style="bold cyan",
         header_style="bold",
-        caption=_legend_text(cols),
+        caption=_legend_text(),
         caption_justify="left",
         caption_style="",
         expand=False,
     )
-    for col in cols:
-        table.add_column(_COL_HEADERS[col], no_wrap=True)
+    for i, col in enumerate(cols):
+        table.add_column(_column_header(cols, i), no_wrap=True)
     for state in sorted(states, key=_key):
         table.add_row(*[_cell(state, c) for c in cols])
     return table

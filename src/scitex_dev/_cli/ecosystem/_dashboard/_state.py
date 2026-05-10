@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -372,18 +373,21 @@ def gather_ecosystem_state(
     with ThreadPoolExecutor(max_workers=workers) as pool:
         states = list(pool.map(lambda kv: _gather_one(kv[0], kv[1], verbosity), items))
 
+    # All enrichers below are independent — they read from / write to
+    # disjoint PackageState fields. Flatten into one big task list so
+    # the whole sweep fans out concurrently across `workers`, instead
+    # of waiting for each tier (deep → ci → audit) to drain in series.
+    # Audit is the slow one (~5–15s per pkg subprocess); interleaving
+    # it with the fast HTTP/git tasks keeps the wall clock down.
+    enrichers: list[Callable[[PackageState], None]] = []
     if verbosity >= 2:
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            list(pool.map(_enrich_pypi, states))
-
+        enrichers.append(_enrich_pypi)
     if verbosity >= 3:
-        # Deep is local-fast (filesystem) + GH (networked). Parallelise the
-        # whole tier so a 50-package sweep stays under ~10s.
+        enrichers.extend([_enrich_deep, _enrich_ci, _enrich_audit])
+
+    if enrichers:
+        tasks = [(fn, s) for fn in enrichers for s in states]
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            list(pool.map(_enrich_deep, states))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            list(pool.map(_enrich_ci, states))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            list(pool.map(_enrich_audit, states))
+            list(pool.map(lambda fs: fs[0](fs[1]), tasks))
 
     return states
