@@ -41,38 +41,69 @@ _KNOWN_SHORTS = frozenset(
         "agent-container",
         "app",
         "audio",
+        "audit",
+        "benchmark",
         "bridge",
         "browser",
+        "capture",
         "clew",
         "cloud",
+        "compat",
+        "config",
         "container",
+        "context",
         "crossref-local",
+        "cv",
         "dataset",
+        "datetime",
         "db",
+        "decorators",
         "dev",
+        "dict",
         "dsp",
+        "etc",
+        "events",
         "figrecipe",
         "gen",
+        "genai",
+        "gists",
+        "git",
         "hpc",
+        "introspect",
         "io",
         "linalg",
         "linter",
         "logging",
+        "ml",
+        "msword",
         "newb",
         "nn",
         "notebook",
+        "notification",
         "openalex-local",
         "orochi",
+        "os",
+        "parallel",
+        "path",
+        "pd",
         "plt",
+        "repro",
         "resource",
         "scholar",
+        "security",
+        "seizure-metrics",
+        "session",
+        "sh",
         "skills",
         "socialia",
         "ssh",
         "stats",
         "str",
         "template",
+        "tex",
+        "types",
         "ui",
+        "web",
         "writer",
     }
 )
@@ -170,8 +201,6 @@ def check_ps145_cross_package_read(
             line_no = text[: m.start()].count("\n") + 1
             hits.append(f".scitex/{short} (line {line_no})")
         for m in _RE_ENV_VAR.finditer(text):
-            # Recompute owner up to the last
-            # `_` boundary so multi-word shorts (AGENT_CONTAINER) match.
             full = m.group(0)
             owner_part = full[len("SCITEX_") :].rsplit("_", 1)[0]
             if owner_part in self_env_tokens:
@@ -179,11 +208,32 @@ def check_ps145_cross_package_read(
             short = _short_from_env_token(owner_part)
             if short not in _KNOWN_SHORTS:
                 continue
-            # Skip ambient suffixes (SCITEX_DIR → owner_part="DIR" rejected
-            # earlier; this guards future single-segment ambient names).
             if owner_part in _AMBIENT_ENV_SUFFIXES:
                 continue
             if _is_in_docstring_or_comment(text, m.start()):
+                continue
+            # Require an env-var-read context within ~40 chars to the
+            # left ('os.environ', 'os.getenv', 'getenv(', 'environ['
+            # or the var appearing as an os.environ key on the line).
+            # This filters out Python module-level constants like
+            # `SCITEX_LOGGING_AVAILABLE = True` set by try/except
+            # ImportError — they are not env-var reads.
+            window_start = max(0, m.start() - 60)
+            window = text[window_start : m.start()]
+            line_text = text[
+                text.rfind("\n", 0, m.start()) + 1 : text.find("\n", m.end())
+                if text.find("\n", m.end()) != -1
+                else len(text)
+            ]
+            is_env_read = bool(
+                re.search(r"\b(os\.environ|os\.getenv|getenv|environ\[)", window)
+                or re.search(
+                    r"\b(os\.environ|os\.getenv|getenv|environ\[).{0,80}"
+                    + re.escape(full),
+                    line_text,
+                )
+            )
+            if not is_env_read:
                 continue
             line_no = text[: m.start()].count("\n") + 1
             hits.append(f"{full} (line {line_no})")
@@ -324,12 +374,11 @@ def check_ps147_eval_form_completion(
         if not re.search(r"\.(bashrc|zshrc|profile|bash_profile)\b", text):
             continue
         for m in _RE_EVAL_COMPLETE.finditer(text):
+            if _is_in_docstring_or_comment(text, m.start()):
+                continue
             line_no = text[: m.start()].count("\n") + 1
             line = text.splitlines()[line_no - 1]
             stripped = line.lstrip()
-            # Skip Python comment lines describing the pattern.
-            if stripped.startswith("#"):
-                continue
             findings.append((py, line_no, stripped[:120]))
 
     for py, line_no, snippet in findings:

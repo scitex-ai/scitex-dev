@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from pathlib import Path
 
 import click
 
@@ -50,10 +51,47 @@ def _marker(prog_name: str) -> str:
 
 
 def _eval_line(shell: str, prog_name: str) -> str:
+    """Legacy eval-form line. Kept for migration detection / removal only."""
     return (
         f'eval "$({_env_var(prog_name)}={_SOURCE_MAP[shell]} {prog_name})"  '
         f"{_marker(prog_name)}"
     )
+
+
+def _scitex_dir() -> Path:
+    """Resolve `$SCITEX_DIR` (default `~/.scitex`). Honours §6 relocation."""
+    return Path(os.environ.get("SCITEX_DIR", os.path.expanduser("~/.scitex")))
+
+
+def _pkg_short(prog_name: str) -> str:
+    """`scitex-io` → `io`; `figrecipe` → `figrecipe`."""
+    if prog_name.startswith("scitex-"):
+        return prog_name[len("scitex-") :]
+    return prog_name
+
+
+def _cache_path(prog_name: str) -> Path:
+    """Canonical primary cache: `$SCITEX_DIR/<short>/runtime/completion/<prog>`."""
+    return _scitex_dir() / _pkg_short(prog_name) / "runtime" / "completion" / prog_name
+
+
+def _xdg_symlink(prog_name: str) -> Path:
+    """XDG bash-completion auto-discovery slot.
+
+    Symlinking the primary cache into `~/.local/share/bash-completion/
+    completions/<prog>` lets bash-completion auto-source it on first
+    `<TAB>` even before the user adds the `source` line — defence in
+    depth. Best-effort only; failure to create the symlink does not
+    abort install.
+    """
+    return (
+        Path(os.path.expanduser("~/.local/share/bash-completion/completions"))
+        / prog_name
+    )
+
+
+def _source_line(cache_path: Path, prog_name: str) -> str:
+    return f"[ -f {cache_path} ] && source {cache_path}  {_marker(prog_name)}"
 
 
 def _generate_script(shell: str, prog_name: str) -> str:
@@ -135,7 +173,6 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
         rc_path = _rc_path(shell, prog_name)
 
         if shell == "fish":
-            # fish uses a per-program completion file, not rc-append
             if dry_run:
                 click.echo(f"Would write fish completion to {rc_path}")
                 return
@@ -146,22 +183,61 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
             click.echo(f"Run: source {rc_path}")
             return
 
-        line = _eval_line(shell, prog_name)
+        # Cache-file pattern (§11 + 03_required-introspection §1a):
+        #   1. Generate completion script ONCE → cache file under
+        #      $SCITEX_DIR/<short>/runtime/completion/<prog>.
+        #   2. Symlink it into the XDG bash-completion auto-discovery
+        #      slot (best-effort).
+        #   3. Append a `[ -f cache ] && source cache` line to rc.
+        # Sourcing rc takes microseconds vs. ~0.4s for the eval form
+        # that re-invokes the binary on every shell start.
+        cache = _cache_path(prog_name)
+        line = _source_line(cache, prog_name)
         marker = _marker(prog_name)
+        legacy_eval = _eval_line(shell, prog_name)
 
         if dry_run:
+            click.echo(f"Would write completion cache to {cache}")
+            click.echo(f"Would symlink XDG slot {_xdg_symlink(prog_name)}")
             click.echo(f"Would append to {rc_path}:")
             click.echo(f"  {line}")
             return
 
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(_generate_script(shell, prog_name) + "\n")
+
+        xdg = _xdg_symlink(prog_name)
+        try:
+            xdg.parent.mkdir(parents=True, exist_ok=True)
+            if xdg.is_symlink() or xdg.exists():
+                xdg.unlink()
+            xdg.symlink_to(cache)
+        except OSError:
+            pass  # XDG slot is convenience; rc source line is canonical
+
+        # Migrate: drop the legacy eval line if a previous install left
+        # one in rc — otherwise the user gets both, slow start lingers.
+        existing = ""
         if os.path.isfile(rc_path):
             with open(rc_path) as f:
-                if marker in f.read():
-                    click.echo(f"Tab completion already installed in {rc_path}")
-                    return
+                existing = f.read()
+        if marker in existing and line.strip() in existing:
+            click.echo(f"Tab completion already installed in {rc_path}")
+            return
+        if marker in existing:
+            # Strip every line carrying the marker so we replace cleanly.
+            kept = [ln for ln in existing.splitlines() if marker not in ln]
+            existing = "\n".join(kept).rstrip() + "\n"
+            with open(rc_path, "w") as f:
+                f.write(existing)
+            click.echo(f"Removed previous {prog_name} completion line from {rc_path}")
+        del legacy_eval  # informational only
+
         with open(rc_path, "a") as f:
             f.write(f"\n{line}\n")
-        click.echo(f"Tab completion installed in {rc_path}")
+        click.echo(f"Tab completion installed for {prog_name}")
+        click.echo(f"  cache:  {cache}")
+        click.echo(f"  rc:     {rc_path}  (source line appended)")
         click.echo(f"Run: source {rc_path}")
 
     _swap_cli_placeholder_post("install-shell-completion", install_shell_completion)
