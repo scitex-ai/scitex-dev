@@ -62,6 +62,12 @@ class PackageState:
     # CI
     ci_status: str = ""  # success / failure / in_progress / cancelled / ""
 
+    # Per-package dev venv state ("real" / "symlink" / "missing").
+    # Cheap (one `os.lstat`), always computed because it's the canary
+    # for the per-package isolation rule (see
+    # `_skills/general/02_package_10_dev-venv-isolation.md`).
+    venv_state: str = ""
+
     # Deep (verbosity >= 3)
     rtd_status: str = ""
     skills_count: int = -1
@@ -132,6 +138,23 @@ def _read_skip_rules(repo: Path) -> list[str]:
 
 def _has_audit_gate(repo: Path) -> bool:
     return (repo / "tests" / "develop" / "test_audit.py").is_file()
+
+
+def _venv_state(repo: Path) -> str:
+    """Classify ``<repo>/.venv``:
+
+    - ``"real"``    — real directory (CI-parity isolated venv).
+    - ``"symlink"`` — symlink, typically to a shared `~/.venv` (anti-pattern;
+                      violates the per-package isolation rule, see
+                      `_skills/general/02_package_10_dev-venv-isolation.md`).
+    - ``"missing"`` — no ``.venv`` at the repo root.
+    """
+    venv = repo / ".venv"
+    if venv.is_symlink():
+        return "symlink"
+    if venv.is_dir():
+        return "real"
+    return "missing"
 
 
 def _latest_tag(repo: Path) -> str:
@@ -253,29 +276,58 @@ def _enrich_deep(state: PackageState) -> None:
 def _enrich_audit_bulk(
     states: list[PackageState], *, jobs: int = 8, severity: str = "warn"
 ) -> None:
-    """Single-process bulk audit: `scitex-dev ecosystem audit-all <pkgs...>`.
+    """Bulk audit with JSON cache.
 
-    Replaces 66 individual subprocess spawns with one. Each subprocess
-    spawn costs ~300ms of Python interpreter startup; 66 spawns ≈ 20s
-    of pure overhead. The bulk command parallelises internally via -j,
-    so wall-clock is dominated by the slowest pkg's audit.
+    Step 1 — for each pkg, compute its target fingerprint (git HEAD,
+    or None when the working tree is dirty) and look up the cache. On
+    hit, fill state.audit_errors / audit_warnings from the cache and
+    drop the pkg from the to-run list.
 
-    Parses the summary lines `error <pkg>: N error(s)` / `warn <pkg>: N
-    warning(s)` from stdout — same shape that the per-pkg path parsed.
+    Step 2 — for the remaining (cache-miss) pkgs, run a single
+    `scitex-dev ecosystem audit-all <pkgs...>` subprocess and parse the
+    summary lines (same shape as before).
+
+    Step 3 — write results back to the cache for every pkg that had a
+    clean working tree.
+
+    Net effect: subsequent dashboards return in milliseconds for
+    unchanged packages, only paying the audit cost on the ones whose
+    HEAD has moved since the last run.
     """
     import os as _os
+
+    from ...audit import _cache as audit_cache
 
     eligible = [s for s in states if s.exists_locally]
     if not eligible:
         return
-    pkgs = [s.pkg for s in eligible]
+
+    by_pkg = {s.pkg: s for s in eligible}
+
+    # Step 1: cache lookup.
+    target_fps: dict[str, str | None] = {}
+    to_run: list[str] = []
+    for s in eligible:
+        tfp = audit_cache.target_fingerprint(Path(s.local_path))
+        target_fps[s.pkg] = tfp
+        cached = audit_cache.load(s.pkg, "audit-all", target_fp=tfp)
+        if cached is not None:
+            s.audit_errors = int(cached.get("errors", 0))
+            s.audit_warnings = int(cached.get("warnings", 0))
+        else:
+            to_run.append(s.pkg)
+
+    if not to_run:
+        return  # everything served from cache
+
+    # Step 2: run audit-all only for the cache-miss subset.
     try:
         proc = subprocess.run(
             [
                 "scitex-dev",
                 "ecosystem",
                 "audit-all",
-                *pkgs,
+                *to_run,
                 "--severity",
                 severity,
                 "-j",
@@ -292,7 +344,7 @@ def _enrich_audit_bulk(
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return
 
-    counts: dict[str, tuple[int, int]] = {p: (0, 0) for p in pkgs}
+    counts: dict[str, tuple[int, int]] = {p: (0, 0) for p in to_run}
     for line in proc.stdout.splitlines():
         s = line.lstrip()
         m_e = re.match(r"(?:error|fail)\s+(\S+):\s+(\d+)\s+error", s)
@@ -308,12 +360,16 @@ def _enrich_audit_bulk(
                 e, w = counts[pkg]
                 counts[pkg] = (e, w + n)
 
-    by_pkg = {s.pkg: s for s in eligible}
+    # Step 3: populate states + write cache for clean-tree pkgs.
     for pkg, (e, w) in counts.items():
         st = by_pkg.get(pkg)
-        if st is not None:
-            st.audit_errors = e
-            st.audit_warnings = w
+        if st is None:
+            continue
+        st.audit_errors = e
+        st.audit_warnings = w
+        tfp = target_fps.get(pkg)
+        if tfp is not None:
+            audit_cache.save(pkg, "audit-all", target_fp=tfp, errors=e, warnings=w)
 
 
 def _enrich_ci_bulk(
@@ -507,6 +563,7 @@ def _gather_one(pkg: str, info: dict, verbosity: int) -> PackageState:
     state.has_audit_gate = _has_audit_gate(repo)
     state.skip_rules = _read_skip_rules(repo) if state.has_audit_gate else []
     state.drift_local = _compute_drift_local(state.version_pyproject, state.tag_latest)
+    state.venv_state = _venv_state(repo)
 
     # Verbosity 2+: PyPI lookup. Deliberately not run here — networked.
     # The renderer can call _enrich_pypi(state) lazily / async per row.

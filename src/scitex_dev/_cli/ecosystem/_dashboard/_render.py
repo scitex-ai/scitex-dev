@@ -20,22 +20,25 @@ from rich.text import Text
 from ._state import PackageState
 
 _TIERS: list[list[str]] = [
-    # Logical groups: identity → audit (E,W,Bypassed) → version
+    # Logical groups: identity → audit (E,W,Bypassed) → venv → version
     # (pyproject,tag,PyPI) → test (pytest,coverage,CI) → git → code.
     # Version mismatches are shown via cell-colour, not separate
     # drift columns — any cell whose value differs from pyproject's
     # is rendered red.
     # 0 — at-a-glance
-    ["pkg", "audit", "warn", "ver", "tag", "ci"],
+    ["pkg", "audit", "warn", "venv", "ver", "tag", "ci"],
     # 1 — default
     [
         "pkg",
         "audit",
         "warn",
         "skip",
+        "venv",
         "ver",
         "tag",
         "pypi",
+        "tests",
+        "cov",
         "ci",
     ],
     # 2 — deep triage
@@ -44,6 +47,7 @@ _TIERS: list[list[str]] = [
         "audit",
         "warn",
         "skip",
+        "venv",
         "ver",
         "tag",
         "pypi",
@@ -91,6 +95,7 @@ _COL_GROUP = {
     "audit": "Audit",
     "warn": "Audit",
     "skip": "Audit",
+    "venv": "Env",
     "ver": "Version",
     "tag": "Version",
     "pypi": "Version",
@@ -145,6 +150,7 @@ _COL_NAMES = {
     "audit": "Error",
     "warn": "Warning",
     "skip": "Bypassed",
+    "venv": ".venv",
     "ver": "pyproject.toml",
     "tag": "git tag",
     "pypi": "PyPI",
@@ -289,6 +295,15 @@ def _cell(state: PackageState, col: str) -> Text | str:
         return _color_count(state.audit_warnings)
     if col == "skip":
         return _color_skip(state.skip_rules)
+    if col == "venv":
+        # Per-package isolation status (02_package_10_dev-venv-isolation.md).
+        # real → green ✓ ; symlink (shared) → red ↗ ; missing → dim ·
+        s = state.venv_state
+        return {
+            "real": Text("real", style="green"),
+            "symlink": Text("symlink", style="red"),
+            "missing": Text("·", style="dim"),
+        }.get(s, Text(s or "N/C", style="dim"))
     if col in ("ver", "tag", "pypi"):
         return _color_version_cell(state, col)
     if col == "branch":
