@@ -238,3 +238,57 @@ If your package ships agent-facing skills, vendor them at `src/<pkg>/_skills/<pk
 ## `_sphinx_html/` — pre-built docs (production)
 
 If your package wants its docs served at <https://scitex.ai/apps/docs/>, the pre-built HTML must ship under `src/<pkg>/_sphinx_html/`. See [02_package_01_project-structure-root.md](02_package_01_root.md#production-served-sphinx-html--bundled-in-srcpkg_sphinx_html) for the bundle pattern, and [04_docs_02_sphinx.md](04_docs_02_sphinx.md) for the release recipe.
+
+## `containers/`, `templates/`, and other non-Python assets — bundle in the wheel
+
+If your package ships container recipes (Dockerfiles, Apptainer
+`.def` files), Jinja2 templates, schema YAML, or any other non-Python
+asset that the package's own code reads at runtime, vendor it under
+`src/<pkg>/<asset-dir>/` — never at the **repo root** (`./containers/`,
+`./templates/`).
+
+Repo-root layout:
+
+```
+❌ <repo>/containers/apptainer-base.def
+❌ <repo>/templates/<thing>.j2
+```
+
+is invisible to `pip install`. Users without the repo (the typical
+pip-only consumer) get the CLI but no recipes; commands like
+`<pkg> image build` fail at runtime with "recipe not found".
+
+In-package layout:
+
+```
+✓ src/<pkg>/containers/apptainer-base.def
+✓ src/<pkg>/templates/<thing>.j2
+```
+
+is automatically packaged by `hatch.build.targets.wheel` (and the
+equivalent for setuptools / poetry) when `packages = ["src/<pkg>"]`.
+Verify with:
+
+```bash
+python -m build --wheel
+unzip -l dist/<pkg>-*.whl | grep <asset-dir>
+```
+
+The package's runtime code resolves these via `__file__`-relative
+paths:
+
+```python
+_RECIPES_DIR = Path(__file__).resolve().parent / "containers"
+```
+
+This survives `pip install` (the wheel ships into site-packages),
+editable installs (`pip install -e .`), and `$SCITEX_DIR` relocation
+(it's package-relative, not user-state-relative).
+
+**Built artifacts** (SIFs, sandboxes, generated outputs) are user
+state — they belong under `~/.scitex/<pkg-short>/runtime/<asset-dir>/`,
+not in the wheel. See `01_ecosystem_06_local-state-directories.md` §4b.
+
+Audit (proposed PS code): grep for `<repo>/containers/` /
+`<repo>/templates/` and flag if the package's own code reads them
+(except for setup-time manifests like `pyproject.toml`).
