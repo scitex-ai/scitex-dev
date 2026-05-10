@@ -76,7 +76,16 @@ form. Inline images render as a row, centered.
 
 ## Installation
 
+> **Recommended**: `uv pip install <PACKAGE>[all]` —
+> uv's Rust resolver handles the SciTeX dep set in 1-3 min where
+> pip's serial backtracker can take 30+ min on the full extras.
+> Plain `pip install` still works; the install block below shows both.
+
 ```bash
+# Recommended — uv resolver
+uv pip install <PACKAGE>[all]
+
+# Plain pip also works
 pip install <PACKAGE>
 ```
 

@@ -262,11 +262,26 @@ This repository provides `scitex`, the orchestration layer of the SciTeX ecosyst
 
 ### Installation
 
+Every package's README **must** lead the Installation section with
+`uv pip install <package>[all]` as the recommended form. uv's parallel
+Rust resolver handles the SciTeX dep set in 1-3 min where pip's serial
+backtracker can take 30+ min on the full extras. Plain `pip install`
+remains supported and SHOULD be shown alongside as the fallback, never
+removed. See sibling rule
+[02_package_10_dev-venv-isolation.md](02_package_10_dev-venv-isolation.md)
+for the per-package `.venv/` convention this works with.
+
+The umbrella `scitex` README is canonical:
+
 ``` markdown
 ## Installation
 
 ```bash
-pip install scitex[all]                # Recommended: everything (may take >1 hour on first install — see Installation Tips)
+# Recommended — uv resolver (10-30× faster than pip on the full extras set)
+uv pip install scitex[all]
+
+# Plain pip — slower (~30-90 min on first install; see Installation Tips)
+pip install scitex[all]
 ```
 
 <details>
