@@ -554,6 +554,49 @@ RULES: dict[str, Rule] = {
             slug="test-name-prefix-mismatch",
         ),
         Rule(
+            "PS-145",
+            "§1",
+            (
+                "source reads another scitex package's user-state tree "
+                "(`~/.scitex/<other-pkg>/...`) or `SCITEX_<OTHER>_*` env "
+                "var directly. Cross-package state coupling breaks "
+                "`SCITEX_DIR` relocation and standalone-ability. Use the "
+                "plugin-port pattern: expose your own `SCITEX_<THIS>_*_DIRS` "
+                "slot and let consumers populate it. See "
+                "_skills/general/01_ecosystem_06_local-state-directories.md "
+                "§9.5."
+            ),
+            slug="local-state-cross-package-read",
+        ),
+        Rule(
+            "PS-146",
+            "§1",
+            (
+                "pyproject.toml declares an install-time hook (hatch build "
+                "hook or setuptools cmdclass) that creates `~/.scitex/"
+                "<pkg-short>/` — `pip install` side-effects break wheel "
+                "inertness, fresh-CI runs, and `$SCITEX_DIR` relocation. "
+                "Drop the hook and rely on lazy `PathManager` mkdir on "
+                "first write (§3.5)."
+            ),
+            slug="local-state-pip-install-side-effect",
+        ),
+        Rule(
+            "PS-147",
+            "§1",
+            (
+                "source writes an eval-form shell-completion line "
+                '(`eval "$(_<NAME>_COMPLETE=bash_source <bin>)"`) into '
+                "the user's rc file. The eval form re-invokes the binary "
+                "on every shell start (~0.4s/binary). Use the cache-file "
+                "pattern instead: generate the completion once into "
+                "`~/.scitex/<pkg-short>/runtime/completion/<binary>` and "
+                "have rc `source` it. See _skills/general/03_interface_02_"
+                "cli/03_required-introspection-commands.md."
+            ),
+            slug="local-state-eval-completion",
+        ),
+        Rule(
             "PS-150",
             "§1",
             (
@@ -796,6 +839,9 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS-140": "E",  # missing/stale tests/integration/test_cross_package_imports.py
     "PS-141": "E",  # README missing `## Demo` with visual content
     "PS-142": "E",  # README missing `## Architecture` with diagram/tree
+    "PS-145": "W",  # cross-package state read (bake-in: warn first)
+    "PS-146": "E",  # pip-install side-effect (clear violation)
+    "PS-147": "W",  # eval-form shell completion (bake-in: warn first)
     "PS-150": "W",  # [dev] missing scitex-dev pin — audit gate silently skips
     "PS-151": "W",  # scitex-dev pin floor < known-good (rule corpus drift)
     # src ↔ tests mirror — load-bearing for CI confidence
@@ -1752,6 +1798,15 @@ def audit_project(
     from ._check_audit_pin import check_audit_pin
 
     check_audit_pin(repo_root, Violation, violations)
+    from ._check_local_state import (
+        check_ps145_cross_package_read,
+        check_ps146_pip_install_side_effect,
+        check_ps147_eval_form_completion,
+    )
+
+    check_ps145_cross_package_read(repo_root, distribution, Violation, violations)
+    check_ps146_pip_install_side_effect(repo_root, Violation, violations)
+    check_ps147_eval_form_completion(repo_root, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]
