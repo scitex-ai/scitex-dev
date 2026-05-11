@@ -1707,7 +1707,7 @@ def register_ecosystem_commands(main_group):
             click.echo("\nstopped.", err=True)
 
     @dashboard.command(
-        "tui",
+        "start-tui",
         epilog=(
             "Keys:\n"
             "  /          start filter\n"
@@ -1718,9 +1718,9 @@ def register_ecosystem_commands(main_group):
             "  g / G      jump to top / bottom\n"
             "\n"
             "Example:\n"
-            "  $ scitex-dev ecosystem dashboard tui\n"
-            "  $ scitex-dev ecosystem dashboard tui -p scitex-io,scitex-stats\n"
-            "  $ scitex-dev ecosystem dashboard tui -vv\n"
+            "  $ scitex-dev ecosystem dashboard start-tui\n"
+            "  $ scitex-dev ecosystem dashboard start-tui -p scitex-io,scitex-stats\n"
+            "  $ scitex-dev ecosystem dashboard start-tui -vv\n"
         ),
     )
     @click.option(
@@ -1744,7 +1744,19 @@ def register_ecosystem_commands(main_group):
         type=int,
         help="Concurrent worker threads for enrichment.",
     )
-    def dashboard_tui(verbosity, package, jobs):
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print plan (verbosity, package count) and exit without launching the TUI.",
+    )
+    @click.option(
+        "-y",
+        "--yes",
+        "yes",
+        is_flag=True,
+        help="No-op confirmation flag retained for §2 audit-cli compliance.",
+    )
+    def dashboard_tui(verbosity, package, jobs, dry_run, yes):
         """htop-style TUI with live keystroke filter.
 
         Requires the optional `textual` package. Install with:
@@ -1764,6 +1776,14 @@ def register_ecosystem_commands(main_group):
                     packages_arg.append(p)
         else:
             packages_arg = None
+
+        del yes  # accepted for §2 compliance
+        if dry_run:
+            n = len(packages_arg) if packages_arg else "all"
+            click.echo(
+                f"would launch TUI: verbosity={verbosity} packages={n} jobs={jobs}"
+            )
+            return
 
         try:
             from ._dashboard._tui import run_tui
