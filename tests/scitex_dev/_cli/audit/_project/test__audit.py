@@ -940,13 +940,16 @@ def _good_pas_table():
 
 
 def _full_compliant_readme():
+    # Canonical order (PS-143, updated 2026-05):
+    #   Problem and Solution → Demo / Quick Start → Installation
+    #   → Architecture → <N> Interfaces → Part of SciTeX
     return (
         _README_HEADER
         + _good_pas_table()
+        + "## Demo\n\n![Hilbert](docs/hilbert.png)\n\n"
         + "## Installation\n\n```bash\npip install demo\n```\n\n"
         + "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```\n\n"
         + "## 2 Interfaces\n\nPython API and CLI.\n\n"
-        + "## Demo\n\n![Hilbert](docs/hilbert.png)\n\n"
         + "## Part of SciTeX\n\nPart of SciTeX.\n"
     )
 
@@ -1033,14 +1036,18 @@ def test_ps142_silent_with_filetree(tmp_path):
     assert "PS-142" not in rules
 
 
-def test_ps143_fires_when_demo_appears_before_installation(tmp_path):
+def test_ps143_fires_when_architecture_appears_before_installation(tmp_path):
+    # Updated 2026-05: Demo / Quick Start are now allowed BEFORE
+    # Installation (Quick Start lives between Problem-and-Solution and
+    # Installation per the new canonical order). The misordering this
+    # test now checks is Architecture before Installation.
     repo = _make_repo(tmp_path, "demo")
     body = (
         _README_HEADER
         + _good_pas_table()
         + "## Demo\n\n![x](y.png)\n\n"
-        + "## Installation\n\npip install demo\n\n"
         + "## Architecture\n\n```\nx/\n├── a\n│   └── b\n```\n\n"
+        + "## Installation\n\npip install demo\n\n"
         + "## 2 Interfaces\n\nx\n\n"
         + "## Part of SciTeX\n\nx\n"
     )

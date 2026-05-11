@@ -1,23 +1,26 @@
 """README structure rules — PS-141, PS-142, PS-143, PS-144.
 
-PS-141: README.md must have a `## Demo` section whose body contains at
-least one visual element (markdown image, non-shield HTML `<img>`,
-or fenced ```mermaid block).
+PS-141: README.md must have a `## Demo` OR `## Quick Start` section,
+and a visual element (markdown image, non-shield HTML `<img>`, or
+fenced ```mermaid block) must appear in at least one of: that section,
+or `## Architecture` (the "one diagram is enough" rule, adopted
+2026-05).
 
 PS-142: README.md must have a `## Architecture` (or equivalent
-`## How it works` / `## How It Works`) section whose body contains
+`## How it works` / `## How It Works`) section. Its body must contain
 at least one of: ```mermaid fence, ASCII text diagram (fenced code
 block ≥10 lines), file-tree characters (`├──`/`└──`/`│`), or
-`<img>` tag.
+`<img>` tag — UNLESS the diagram requirement is already satisfied by
+the Demo or Quick Start section (PS-141's visual-anywhere fallback).
 
 PS-143: section H2 headers appear in canonical order. The expected
 order (skipping any optional or omitted section) is:
-    Problem and Solution → Installation → Architecture / How it works →
-    <N> Interfaces → Demo → Quick Start → Part of SciTeX
+    Problem and Solution → Quick Start / Demo → Installation →
+    Architecture / How it works → <N> Interfaces → Part of SciTeX
 
 PS-144: `## Problem and Solution` table cells must (a) contain at
 least one `**bold**` span, (b) keep bold coverage ≤ 30% of cell
-text, and (c) stay ≤ 200 characters per cell.
+text, and (c) stay ≤ 200 characters per cell (one sentence per cell).
 """
 
 from __future__ import annotations
@@ -59,13 +62,15 @@ _SECTION_PATTERNS: dict[str, re.Pattern[str]] = {
 }
 
 # Canonical order (skipped sections collapse — only the relative order matters).
+# Updated 2026-05: Quick Start now sits between Problem-and-Solution and
+# Installation (replaces the old role of the primary Demo block).
 _CANONICAL_ORDER = [
     "problem_and_solution",
+    "quick_start",
+    "demo",
     "installation",
     "architecture",
     "interfaces",
-    "demo",
-    "quick_start",
     "part_of_scitex",
 ]
 
@@ -220,22 +225,27 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
     if len(text) < _MIN_README_BYTES:
         return
 
-    # ---- PS-141 / PS-142: visual content (Demo or Architecture, one is enough) -
-    # The "one diagram" rule: README must have a visual somewhere between
-    # Demo and Architecture, but not necessarily in both. Demo and
-    # Architecture sections themselves are still both required.
+    # ---- PS-141 / PS-142: visual content (one diagram is enough) ----------
+    # Updated 2026-05: a top-level `## Quick Start` H2 counts as the "demo"
+    # role — packages that ship Quick Start need not also ship `## Demo`.
+    # The "one diagram" rule: README must have a visual somewhere among
+    # Demo / Quick Start / Architecture. At least one of {Demo, Quick Start}
+    # must be present, and `## Architecture` (or its alias `## How it
+    # works`) is still required.
     demo = _section_body(text, "demo")
+    quick = _section_body(text, "quick_start")
     arch = _section_body(text, "architecture")
     demo_has_visual = demo is not None and _has_visual_content(demo[0])
+    quick_has_visual = quick is not None and _has_visual_content(quick[0])
     arch_has_visual = arch is not None and _has_architecture_content(arch[0])
-    visual_anywhere = demo_has_visual or arch_has_visual
+    visual_anywhere = demo_has_visual or quick_has_visual or arch_has_visual
 
-    if demo is None:
+    if demo is None and quick is None:
         out.append(
             violation_cls(
                 "PS-141",
                 str(readme),
-                "missing mandatory `## Demo` section",
+                "missing mandatory `## Demo` or `## Quick Start` section",
             )
         )
     elif not visual_anywhere:
@@ -244,9 +254,9 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
                 "PS-141",
                 str(readme),
                 (
-                    "`## Demo` and `## Architecture` both lack visual "
-                    "content — add a markdown image, mermaid fence, or "
-                    "`<img>` to at least one"
+                    "no visual content found in `## Demo`, `## Quick "
+                    "Start`, or `## Architecture` — add a markdown image, "
+                    "mermaid fence, or `<img>` to at least one"
                 ),
             )
         )
@@ -262,7 +272,13 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
         )
     else:
         body, _s, _e = arch
-        if not _has_architecture_content(body) and not demo_has_visual:
+        # PS-142 satisfied if Architecture itself has a diagram OR a
+        # diagram lives in the Demo or Quick Start sections.
+        if (
+            not _has_architecture_content(body)
+            and not demo_has_visual
+            and not quick_has_visual
+        ):
             out.append(
                 violation_cls(
                     "PS-142",
