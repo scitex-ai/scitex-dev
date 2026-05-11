@@ -25,4 +25,5 @@ The Python API is the **single source of truth**. CLI, MCP, and HTTP all delegat
 11. [11_import-conventions.md](11_import-conventions.md) — standalone vs umbrella; `import scitex` not `as stx`
 12. [12_audit-checklist.md](12_audit-checklist.md) — release-gate checklist
 13. [13_imports-and-shadowing.md](13_imports-and-shadowing.md) — stdlib vs `scitex.os` / `scitex.io` resolution, aliasing rules
-14. [TODO.md](TODO.md) — open conversion items, audit-api linter design
+14. [14_numeric-literals.md](14_numeric-literals.md) — `_` thousands separators for literals ≥ 1_000 (`21_600`, not `21600`); PEP 515
+15. [TODO.md](TODO.md) — open conversion items, audit-api linter design

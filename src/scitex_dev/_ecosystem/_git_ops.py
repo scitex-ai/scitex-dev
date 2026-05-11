@@ -288,17 +288,17 @@ def install_all(
             if on_progress:
                 on_progress(idx, total, name, "dry", " ".join(cmd))
             return
-        # 21600 s (6 h) per pkg — `scitex[all,dev]` (the umbrella with
+        # 21_600 s (6 h) per pkg — `scitex[all,dev]` (the umbrella with
         # full dev extras) is known to take >90 min even with uv, and
         # in some envs runs past 2 h because the dep set pulls torch /
         # jax / playwright browsers / pymupdf / ML-heavy chains.
-        # 300 s was the original limit (killed umbrella reliably); 5400
-        # s (90 min) was an intermediate bump that still tripped. Light
-        # peers finish in <60 s either way; the high ceiling matters
-        # only for the umbrella + a couple of heavy peers. A genuine
-        # pip hang (network or resolver deadlock) at 6 h is the operator's
-        # signal to investigate manually.
-        rc, msg = _run(cmd, timeout=21600)
+        # 300 s was the original limit (killed umbrella reliably);
+        # 5_400 s (90 min) was an intermediate bump that still tripped.
+        # Light peers finish in <60 s either way; the high ceiling
+        # matters only for the umbrella + a couple of heavy peers. A
+        # genuine pip hang (network or resolver deadlock) at 6 h is
+        # the operator's signal to investigate manually.
+        rc, msg = _run(cmd, timeout=21_600)
         results[name] = (rc, msg)
         if on_progress:
             on_progress(idx, total, name, "ok" if rc == 0 else "err", msg)
