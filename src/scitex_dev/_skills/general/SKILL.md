@@ -75,6 +75,9 @@ Project structure split into one leaf per top-level directory:
 - [05_development_01_version-control.md](05_development_01_version-control.md) — Branches, tags, release waves, release gates (core workflow)
 - [05_development_02_periodic-audits.md](05_development_02_periodic-audits.md) — Run `audit-all` continuously while editing — cron / tmux / agent loops, JSON contract for programmatic consumers, Claude Code `CronCreate` / `ScheduleWakeup` / `Monitor` mechanisms
 - [05_development_03_release-automation.md](05_development_03_release-automation.md) — Automation commands, ecosystem sync CLI, MCP tools, Python API
+- [05_development_06_subprocess-coverage.md](05_development_06_subprocess-coverage.md) — Subprocess coverage wiring (parallel + COVERAGE_PROCESS_START + `.pth` shim) — unlocks 10-20 points when tests spawn `python -m` children
+- [05_development_07_demo-smoke-tests.md](05_development_07_demo-smoke-tests.md) — Parametrised smoke test over every `_demo_*.py` and `__main__`-bearing `_test_*.py` module — catches NameError, removed APIs, tuple-unpack bugs
+- [05_development_08_coverage-push-playbook.md](05_development_08_coverage-push-playbook.md) — End-to-end playbook for taking a package 30% → 90% Codecov without `omit` shortcuts (subprocess wiring → demo smoke → tree-API feedback → refactor → long-tail unit tests)
 
 ### 8. Ecosystem quality — periodic cross-package audits, run when something feels off
 - [98_quality_01_failure-playbook.md](98_quality_01_failure-playbook.md) — Severity-tagged cookbook of ecosystem failure modes
