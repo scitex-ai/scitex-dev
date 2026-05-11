@@ -152,6 +152,54 @@ Intent: regenerable outputs — things each host / each run writes for itself, n
 
 Subdirectory layout within `runtime/` is up to each package, but **no per-package state may live outside its own root**.
 
+### 4c. Interactive REPL output cache (`runtime/cache/`)
+
+Packages that auto-route user file output based on caller context (the
+canonical example is `scitex_io.save()`) hit a special case when the
+caller is an interactive REPL, IPython kernel, or `python -i` — there
+is no script file to anchor a sibling `_out/` directory to. The
+convention adopted 2026-05 is to write to:
+
+```
+$SCITEX_DIR/<pkg-short>/runtime/cache/<path>
+```
+
+defaulting to `~/.scitex/<pkg-short>/runtime/cache/<path>` when
+`$SCITEX_DIR` is unset.
+
+**Why under `runtime/cache/`** — these writes are regenerable, not
+configuration, and they pollute fast (every interactive `save()`
+produces a file). `cache/` is the explicit ephemeral bucket per §4b.
+
+**Why honour `$SCITEX_DIR`** — interactive output volume can be large;
+relocating the whole user-scope tree with `SCITEX_DIR=/mnt/fast-ssd/scitex`
+must also relocate the REPL cache.
+
+**Required pattern** in source code:
+
+```python
+import os as _os
+
+def _interactive_cache_dir(pkg_short: str) -> str:
+    base = _os.environ.get(
+        "SCITEX_DIR",
+        _os.path.join(_os.path.expanduser("~"), ".scitex"),
+    )
+    sdir = _os.path.join(base, pkg_short, "runtime", "cache")
+    _os.makedirs(sdir, exist_ok=True)   # lazy mkdir per §3.5
+    return sdir
+```
+
+**Reference implementation:** `scitex_io._save.save()` (the IPython /
+`<stdin>` / `env_type in {"ipython", "interactive"}` branch). Pattern
+applies to any future package that auto-routes outputs based on caller
+context — e.g., a hypothetical `scitex_plt.save_fig()` should follow
+the same rule and write to `~/.scitex/plt/runtime/cache/` when called
+interactively.
+
+This is distinct from `~/.scitex/<pkg-short>/cache/` (without `runtime/`),
+which §5 forbids — the canonical bucket is always under `runtime/`.
+
 ## 5. Forbidden locations
 
 Do **not** write to any of these — they fragment the layout and break `SCITEX_DIR` relocation:
