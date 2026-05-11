@@ -50,7 +50,8 @@ class PackageState:
 
     # Git
     branch: str = ""
-    ahead: int = 0
+    ahead: int = 0  # commits on local branch not pushed to origin
+    uncommitted: int = -1  # working-tree files with uncommitted changes
     last_commit_iso: str = ""
 
     # Audit gate
@@ -152,6 +153,19 @@ def _read_skip_rules(repo: Path) -> list[str]:
 
 def _has_audit_gate(repo: Path) -> bool:
     return (repo / "tests" / "develop" / "test_audit.py").is_file()
+
+
+def _uncommitted_count(repo: Path) -> int:
+    """Number of working-tree paths with uncommitted changes.
+
+    Counts `git status --porcelain` lines (one per modified, added,
+    deleted, renamed, or untracked file). Cheap (~5ms per repo).
+    Returns -1 if git can't be queried.
+    """
+    out = _git(repo, "status", "--porcelain")
+    if not out:
+        return 0
+    return sum(1 for line in out.splitlines() if line.strip())
 
 
 def _venv_state(repo: Path) -> str:
@@ -826,6 +840,7 @@ def _gather_one(pkg: str, info: dict, verbosity: int) -> PackageState:
     state.tag_latest = _latest_tag(repo)
     state.branch = _branch(repo)
     state.ahead = _ahead_of_origin(repo)
+    state.uncommitted = _uncommitted_count(repo)
     state.last_commit_iso = _last_commit_iso(repo)
     state.has_audit_gate = _has_audit_gate(repo)
     state.skip_rules = _read_skip_rules(repo) if state.has_audit_gate else []

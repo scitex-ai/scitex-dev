@@ -34,6 +34,9 @@ _TIERS: list[list[str]] = [
         "warn",
         "skip",
         "venv",
+        "branch",
+        "uncommitted",
+        "ahead",
         "ver",
         "tag",
         "release",
@@ -49,6 +52,10 @@ _TIERS: list[list[str]] = [
         "warn",
         "skip",
         "venv",
+        "branch",
+        "uncommitted",
+        "ahead",
+        "last",
         "ver",
         "tag",
         "release",
@@ -56,9 +63,6 @@ _TIERS: list[list[str]] = [
         "tests",
         "cov",
         "ci",
-        "branch",
-        "ahead",
-        "last",
     ],
     # 3 — everything
     [
@@ -110,6 +114,7 @@ _COL_GROUP = {
     "ci": "Test",
     "rtd": "Test",
     "branch": "Git",
+    "uncommitted": "Git",
     "ahead": "Git",
     "last": "Git",
     "skills": "Code",
@@ -167,7 +172,8 @@ _COL_NAMES = {
     "ci": "CI",
     "rtd": "RTD",
     "branch": "branch",
-    "ahead": "ahead",
+    "uncommitted": "dirty",
+    "ahead": "↑ unpushed",
     "last": "last commit",
     "skills": "skills",
     "mcp_tools": "MCP tools",
@@ -357,8 +363,18 @@ def _cell(state: PackageState, col: str) -> Text | str:
     if col == "branch":
         b = state.branch or "-"
         return Text(b, style="" if b in ("develop", "main") else "yellow")
+    if col == "uncommitted":
+        # 0 dim (clean), N yellow (working-tree dirty; needs commit).
+        if state.uncommitted < 0:
+            return Text("N/C", style="dim")
+        if state.uncommitted == 0:
+            return Text("0", style="dim")
+        return Text(str(state.uncommitted), style="yellow")
     if col == "ahead":
-        return _color_count(state.ahead) if state.ahead else Text("0", style="dim")
+        # 0 dim (synced), N yellow (commits not pushed to origin).
+        if state.ahead == 0:
+            return Text("0", style="dim")
+        return Text(str(state.ahead), style="yellow")
     if col == "last":
         return state.last_commit_iso[:10] if state.last_commit_iso else "-"
     if col == "ci":
