@@ -26,7 +26,12 @@ from pathlib import Path
 
 _MIN_README_BYTES = 200
 _HEAD_BYTES_BADGES = 4096
-_HEAD_BYTES_SECTIONS = 16384
+# Read the whole README for section-presence checks. Section H2s like
+# `## Part of SciTeX` legitimately live near the end of a long README;
+# the previous 16 KiB head-slice produced PS-107 false-positives on
+# packages whose READMEs grew past that byte budget (e.g. scitex-io at
+# 20 KB). 1 MiB is plenty — every SciTeX README is well under that.
+_HEAD_BYTES_SECTIONS = 1024 * 1024
 
 
 # PS-107 — required H2 sections.
