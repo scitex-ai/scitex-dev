@@ -598,6 +598,69 @@ RULES: dict[str, Rule] = {
             slug="readme-rtd-badge-baked-label",
         ),
         Rule(
+            "PS-159",
+            "§1",
+            (
+                "README.md figure / table caption numbering is broken — "
+                "`<b>Figure N.</b>` and `<b>Table N.</b>` captions must "
+                "form [1, 2, 3, ...] with no gaps, no duplicates, "
+                "starting at 1. See scitex-stats README for the "
+                "canonical caption form: "
+                '`<p align="center"><sub><b>Figure N.</b> caption '
+                "...</sub></p>`."
+            ),
+            slug="readme-figures-tables-numbering",
+        ),
+        Rule(
+            "PS-160",
+            "§1",
+            (
+                "README.md has a figure or table without a caption — "
+                "every `<img>` data figure (excluding badges, the "
+                "centered logo, and the icon footer) and every "
+                "```mermaid``` fenced block must have a "
+                "`<sub><b>Figure N.</b> ...</sub>` caption; every "
+                "pipe-table (except the Problem and Solution table and "
+                "tables inside `<details>`) must have a "
+                "`<sub><b>Table N.</b> ...</sub>` caption. See "
+                "scitex-stats README for the canonical caption form."
+            ),
+            slug="readme-figures-tables-missing-caption",
+        ),
+        Rule(
+            "PS-161",
+            "§1",
+            (
+                "codecov.yml project/patch coverage target is below 90% "
+                "(or set to `auto`/`auto-target`) — pin a fixed `target: "
+                "90%` so the coverage bar is visible. See scitex-io "
+                "codecov.yml for the canonical config."
+            ),
+            slug="readme-codecov-coverage-target-too-low",
+        ),
+        Rule(
+            "PS-162",
+            "§1",
+            (
+                "README.md badge block (`<!-- scitex-badges:start -->...`) "
+                "is missing a Codecov coverage badge — every public "
+                "scitex package should expose CI coverage. See scitex-io "
+                "README header for the canonical form."
+            ),
+            slug="readme-missing-codecov-badge",
+        ),
+        Rule(
+            "PS-163",
+            "§1",
+            (
+                "README.md badge block (`<!-- scitex-badges:start -->...`) "
+                "is missing a Read-the-Docs badge — every scitex package "
+                "shipping RTD docs should expose the build status. See "
+                "scitex-io README header for the canonical form."
+            ),
+            slug="readme-missing-rtd-badge",
+        ),
+        Rule(
             "PS-140",
             "§2",
             (
@@ -941,6 +1004,11 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS-156": "I",  # examples/ has .py but zero .ipynb (info)
     "PS-157": "W",  # codecov badge URL unbranched (warn)
     "PS-158": "I",  # RTD badge uses readthedocs.org baked label (info)
+    "PS-159": "W",  # README figure/table numbering broken (warn)
+    "PS-160": "W",  # README figure/table missing caption (warn)
+    "PS-161": "W",  # codecov.yml coverage target below 90 (warn)
+    "PS-162": "W",  # README missing Codecov badge (warn)
+    "PS-163": "W",  # README missing Read-the-Docs badge (warn)
     "PS-150": "W",  # [dev] missing scitex-dev pin — audit gate silently skips
     "PS-151": "W",  # scitex-dev pin floor < known-good (rule corpus drift)
     # src ↔ tests mirror — load-bearing for CI confidence
@@ -1028,6 +1096,11 @@ _SLUGS: dict[str, str] = {
     "PS-156": "examples-no-ipynb",
     "PS-157": "readme-codecov-badge-unbranched",
     "PS-158": "readme-rtd-badge-baked-label",
+    "PS-159": "readme-figures-tables-numbering",
+    "PS-160": "readme-figures-tables-missing-caption",
+    "PS-161": "readme-codecov-coverage-target-too-low",
+    "PS-162": "readme-missing-codecov-badge",
+    "PS-163": "readme-missing-rtd-badge",
     "PS-150": "dev-extras-missing-scitex-dev",
     "PS-151": "dev-extras-scitex-dev-floor-too-old",
     # §2 src↔tests already slugged at definition (PS-201–PS-205)
@@ -1806,6 +1879,86 @@ def _check_docs_structure(repo: Path, out: list[Violation]) -> None:
             )
 
 
+def check_codecov_target(repo: Path, violation_cls: type, out: list) -> None:
+    """PS-161: codecov.yml must pin a project/patch coverage target >= 90%.
+
+    Skipped when codecov.yml is absent (separate rules cover codecov
+    setup), when YAML parsing fails, or when the relevant key is missing.
+    Fires once per below-threshold target ('project' and/or 'patch').
+    """
+    cfg = repo / "codecov.yml"
+    if not cfg.is_file():
+        return
+    try:
+        import yaml  # type: ignore[import-untyped]
+    except ImportError:
+        return
+    try:
+        data = yaml.safe_load(cfg.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, yaml.YAMLError):
+        return
+    if not isinstance(data, dict):
+        return
+    try:
+        status = data["coverage"]["status"]
+    except (KeyError, TypeError):
+        return
+    if not isinstance(status, dict):
+        return
+
+    def _parse_target(raw):
+        """Return (numeric_value, is_auto_or_unparseable)."""
+        if isinstance(raw, (int, float)):
+            return float(raw), False
+        if isinstance(raw, str):
+            s = raw.strip().rstrip("%").strip()
+            if s.lower() in ("auto", "auto-target"):
+                return None, True
+            try:
+                return float(s), False
+            except ValueError:
+                return None, False  # unparseable string → skip
+        return None, False
+
+    for kind in ("project", "patch"):
+        block = status.get(kind)
+        if not isinstance(block, dict):
+            continue
+        default = block.get("default")
+        if not isinstance(default, dict):
+            continue
+        if "target" not in default:
+            continue
+        raw = default["target"]
+        value, is_auto = _parse_target(raw)
+        if is_auto:
+            out.append(
+                violation_cls(
+                    "PS-161",
+                    str(cfg),
+                    (
+                        f"codecov.yml {kind}/patch target is "
+                        f"{raw!r} (< 90%) — set target: 90% so "
+                        f"the bar is visible. See scitex-io "
+                        f"codecov.yml for the canonical config."
+                    ),
+                )
+            )
+        elif value is not None and value < 90:
+            out.append(
+                violation_cls(
+                    "PS-161",
+                    str(cfg),
+                    (
+                        f"codecov.yml {kind}/patch target is "
+                        f"{value:g} (< 90%) — set target: 90% so "
+                        f"the bar is visible. See scitex-io "
+                        f"codecov.yml for the canonical config."
+                    ),
+                )
+            )
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -1917,6 +2070,7 @@ def audit_project(
     from ._check_readme_structure import check_readme_structure
 
     check_readme_structure(repo_root, Violation, violations)
+    check_codecov_target(repo_root, Violation, violations)
     from ._check_dev_extras_complete import check_dev_extras_complete
 
     check_dev_extras_complete(repo_root, Violation, violations)

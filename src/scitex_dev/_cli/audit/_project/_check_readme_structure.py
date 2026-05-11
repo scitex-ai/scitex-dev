@@ -1,4 +1,4 @@
-"""README structure rules — PS-141..144, PS-152..155.
+"""README structure rules — PS-141..144, PS-152..155, PS-159..160, PS-162..163.
 
 PS-141: README.md must have a `## Demo` OR `## Quick Start` section,
 and a visual element (markdown image, non-shield HTML `<img>`, or
@@ -41,6 +41,28 @@ PS-155: badge row between `<!-- scitex-badges:start -->` and
 `<p align="center">` rows (row 1: PyPI / Python / RTD; row 2:
 Tests / Install Test / Coverage). See scitex-io README header for
 the canonical form.
+
+PS-159: `<b>Figure N.</b>` and `<b>Table N.</b>` captions must
+form `[1, 2, 3, ...]` — no gaps, no duplicates, starting at 1.
+See scitex-stats README for the canonical caption form.
+
+PS-160: every `<img>` data figure (excluding badges, the centered
+logo, and the SciTeX icon footer) and every ```mermaid``` fenced
+block must have a `<sub><b>Figure N.</b> ...</sub>` caption; every
+pipe-table (except the `## Problem and Solution` table and any
+table inside `<details>`) must have a `<sub><b>Table N.</b>
+...</sub>` caption. See scitex-stats README for the canonical
+caption form.
+
+PS-162: the canonical `<!-- scitex-badges:start -->...<!-- scitex-
+badges:end -->` block must contain a Codecov coverage badge
+(`codecov.io/gh/<owner>/<pkg>...`). Skipped when the badges block
+is missing entirely.
+
+PS-163: the canonical badges block must contain a Read-the-Docs
+badge. Acceptable: `readthedocs.org/projects/<pkg>/badge` OR
+`img.shields.io/readthedocs/<pkg>`. Skipped when the badges block
+is missing entirely.
 """
 
 from __future__ import annotations
@@ -157,6 +179,36 @@ _RE_RTD_BADGE_OWN = re.compile(
 _RE_RTD_BADGE_SHIELDS = re.compile(
     r"img\.shields\.io/readthedocs/[^?\s\"']+",
     re.IGNORECASE,
+)
+
+# PS-162 — Codecov badge presence inside the canonical badges block.
+_RE_CODECOV_BADGE_PRESENT = re.compile(
+    r"codecov\.io/gh/[^/\s\"']+/[^/\s\"']+",
+    re.IGNORECASE,
+)
+
+# PS-163 — Read-the-Docs badge presence inside the canonical badges block.
+# Acceptable patterns: readthedocs.org/projects/<pkg>/badge OR
+# img.shields.io/readthedocs/<pkg>.
+_RE_RTD_BADGE_PRESENT = re.compile(
+    r"readthedocs\.org/projects/[^/\s\"']+/badge"
+    r"|img\.shields\.io/readthedocs/[^?\s\"']+",
+    re.IGNORECASE,
+)
+
+# PS-159 / PS-160 — figure / table caption numbering and presence.
+# Caption form (per scitex-stats README):
+#     <p align="center"><sub><b>Figure 2.</b> caption ...</sub></p>
+_RE_FIGURE_CAPTION = re.compile(
+    r"<sub>\s*<b>\s*Figure\s+(\d+)\s*\.\s*</b>", re.IGNORECASE
+)
+_RE_TABLE_CAPTION = re.compile(
+    r"<sub>\s*<b>\s*Table\s+(\d+)\s*\.\s*</b>", re.IGNORECASE
+)
+# Skip-list for `<img>` tags that are not "data figures" — the centered
+# header logo and the small icon footer.
+_RE_IMG_LOGO_SKIP = re.compile(
+    r"src\s*=\s*['\"][^'\"]*docs/scitex-(?:logo|icon)", re.IGNORECASE
 )
 
 
@@ -286,6 +338,90 @@ def _cell_bold_problems(cell: str) -> list[str]:
     if ratio > _BOLD_MAX_RATIO:
         out.append(f"bold covers {ratio * 100:.0f}% > {int(_BOLD_MAX_RATIO * 100)}%")
     return out
+
+
+# --- PS-159 / PS-160 helpers ----------------------------------------------
+
+
+def _strip_details_spans(text: str) -> str:
+    """Return `text` with every `<details>...</details>` span removed."""
+    stripped = text
+    while True:
+        m_open = _RE_DETAILS_OPEN.search(stripped)
+        if not m_open:
+            break
+        m_close = _RE_DETAILS_CLOSE.search(stripped, m_open.end())
+        if not m_close:
+            stripped = stripped[: m_open.start()]
+            break
+        stripped = stripped[: m_open.start()] + stripped[m_close.end() :]
+    return stripped
+
+
+def _strip_badges_block(text: str) -> str:
+    """Return `text` with the `<!-- scitex-badges:start/end -->` span removed."""
+    return _RE_BADGES_BLOCK.sub("", text)
+
+
+def _count_captionable_figures(text: str) -> int:
+    """Count `<img>` data figures + ```mermaid``` fenced blocks in `text`.
+
+    Excludes: badges block, the centered logo (`docs/scitex-logo*`), and
+    the icon footer (`docs/scitex-icon*`).
+    """
+    body = _strip_badges_block(text)
+    n = 0
+    for m in _RE_HTML_IMG.finditer(body):
+        # Pull the whole <img ...> tag back from the match offset to inspect
+        # full attribute text for the logo/icon skip-list.
+        tag_start = m.start()
+        tag_end = body.find(">", tag_start)
+        tag = body[tag_start : tag_end + 1] if tag_end != -1 else m.group(0)
+        if _RE_IMG_LOGO_SKIP.search(tag):
+            continue
+        n += 1
+    n += len(_RE_MERMAID_FENCE.findall(body))
+    return n
+
+
+def _count_captionable_tables(text: str) -> int:
+    """Count pipe-tables outside `<details>` and outside `## Problem and Solution`."""
+    # 1) Drop <details> spans.
+    body = _strip_details_spans(text)
+    # 2) Drop the `## Problem and Solution` section body.
+    pas = _section_body(body, "problem_and_solution")
+    if pas is not None:
+        _b, s, e = pas
+        body = body[:s] + body[e:]
+    return len(_RE_PIPE_TABLE.findall(body))
+
+
+def _numbering_issues(nums: list[int], kind: str) -> str | None:
+    """Return a one-line description of the numbering problem, or None.
+
+    `kind` is "Figure" or "Table".
+    """
+    if not nums:
+        return None
+    sorted_nums = sorted(nums)
+    # Duplicates first (so "1, 2, 2" reports duplicate not gap).
+    seen: set[int] = set()
+    dups: list[int] = []
+    for n in sorted_nums:
+        if n in seen:
+            dups.append(n)
+        seen.add(n)
+    if dups:
+        dup_str = ", ".join(str(d) for d in sorted(set(dups)))
+        return f"{kind} {dup_str} duplicated"
+    if sorted_nums[0] != 1:
+        return f"{kind} numbering starts at {sorted_nums[0]} (must start at 1)"
+    expected = list(range(1, sorted_nums[-1] + 1))
+    missing = sorted(set(expected) - set(sorted_nums))
+    if missing:
+        miss_str = ", ".join(str(m) for m in missing)
+        return f"{kind} {miss_str} missing"
+    return None
 
 
 # --- Entry point -----------------------------------------------------------
@@ -542,3 +678,98 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
                     ),
                 )
             )
+
+        # ---- PS-162: Codecov badge presence ---------------------------
+        if not _RE_CODECOV_BADGE_PRESENT.search(inner):
+            out.append(
+                violation_cls(
+                    "PS-162",
+                    str(readme),
+                    (
+                        "README badge block is missing a Codecov coverage "
+                        "badge — every public scitex package should expose "
+                        "CI coverage. Add: "
+                        "<a href='https://codecov.io/gh/<owner>/<pkg>'>"
+                        "<img src='https://codecov.io/gh/<owner>/<pkg>/"
+                        "branch/develop/graph/badge.svg' alt='Coverage'>"
+                        "</a>. See scitex-io README header."
+                    ),
+                )
+            )
+
+        # ---- PS-163: Read-the-Docs badge presence ---------------------
+        if not _RE_RTD_BADGE_PRESENT.search(inner):
+            out.append(
+                violation_cls(
+                    "PS-163",
+                    str(readme),
+                    (
+                        "README badge block is missing a Read-the-Docs "
+                        "badge — every scitex package shipping RTD docs "
+                        "should expose the build status. Add: "
+                        "<a href='https://<pkg>.readthedocs.io/en/latest/'>"
+                        "<img src='https://img.shields.io/readthedocs/"
+                        "<pkg>?label=Read%20the%20Docs' alt='Read the "
+                        "Docs'></a>. See scitex-io README header."
+                    ),
+                )
+            )
+
+    # ---- PS-159: figure / table numbering must be 1, 2, 3, ... ----------
+    fig_nums = [int(n) for n in _RE_FIGURE_CAPTION.findall(text)]
+    tab_nums = [int(n) for n in _RE_TABLE_CAPTION.findall(text)]
+    if fig_nums or tab_nums:
+        details_parts: list[str] = []
+        f_issue = _numbering_issues(fig_nums, "Figure")
+        if f_issue:
+            details_parts.append(f_issue)
+        t_issue = _numbering_issues(tab_nums, "Table")
+        if t_issue:
+            details_parts.append(t_issue)
+        if details_parts:
+            out.append(
+                violation_cls(
+                    "PS-159",
+                    str(readme),
+                    (
+                        f"figure/table numbering is broken: "
+                        f"{'; '.join(details_parts)}. Re-number "
+                        f"sequentially starting at 1. See scitex-stats "
+                        f"README for the caption style."
+                    ),
+                )
+            )
+
+    # ---- PS-160: every captionable figure/table needs a caption ---------
+    n_fig_capt = len(fig_nums)
+    n_tab_capt = len(tab_nums)
+    n_fig = _count_captionable_figures(text)
+    n_tab = _count_captionable_tables(text)
+    if n_fig > n_fig_capt:
+        out.append(
+            violation_cls(
+                "PS-160",
+                str(readme),
+                (
+                    f"{n_fig} figures/mermaid blocks but {n_fig_capt} "
+                    f"Figure captions — every figure must have a "
+                    f"'<sub><b>Figure N.</b> ...</sub>' caption "
+                    f"(exception: badges + logo + icon footer). See "
+                    f"scitex-stats README for the caption style."
+                ),
+            )
+        )
+    if n_tab > n_tab_capt:
+        out.append(
+            violation_cls(
+                "PS-160",
+                str(readme),
+                (
+                    f"{n_tab} tables but {n_tab_capt} Table captions — "
+                    f"every table must have a '<sub><b>Table N.</b> "
+                    f"...</sub>' caption. Problem and Solution table is "
+                    f"the only table exempt from this rule. See "
+                    f"scitex-stats README for the caption style."
+                ),
+            )
+        )

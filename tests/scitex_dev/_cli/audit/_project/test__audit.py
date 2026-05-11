@@ -82,6 +82,9 @@ def _violations_for(repo: Path, name: str) -> list[str]:
     )
 
     check_readme_structure(repo, Violation, out)
+    from scitex_dev._cli.audit._project._audit import check_codecov_target
+
+    check_codecov_target(repo, Violation, out)
     return [v.rule for v in out]
 
 
@@ -1302,6 +1305,228 @@ def test_ps155_silent_on_two_p_center_rows(tmp_path):
     assert "PS-155" not in rules
 
 
+# ---- PS-159: figure / table numbering must be 1, 2, 3, ... -------------
+
+
+def _readme_with_captions(figure_captions: str = "", table_captions: str = "") -> str:
+    """README that satisfies most rules; caller injects caption text."""
+    return (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _GOOD_BADGES_BLOCK
+        + _good_pas_table()
+        + "## Demo\n\nSee figure below.\n\n"
+        + figure_captions
+        + _GOOD_INSTALL
+        + "## Architecture\n\n"
+        + "```mermaid\nflowchart LR\n    A --> B\n```\n\n"
+        + '<p align="center"><sub><b>Figure 1.</b> arch.</sub></p>\n\n'
+        + table_captions
+        + "## 2 Interfaces\n\nPython API and CLI.\n\n"
+        + "## Part of SciTeX\n\nPart of SciTeX.\n"
+    )
+
+
+def test_ps159_fires_when_figure_1_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    # Mermaid arch block exists; caption uses Figure 2 and Figure 3 — no Figure 1.
+    body = (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _GOOD_BADGES_BLOCK
+        + _good_pas_table()
+        + "## Demo\n\n"
+        + '<img src="docs/a.png" alt="a">\n\n'
+        + '<p align="center"><sub><b>Figure 2.</b> A.</sub></p>\n\n'
+        + '<img src="docs/b.png" alt="b">\n\n'
+        + '<p align="center"><sub><b>Figure 3.</b> B.</sub></p>\n\n'
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + '<p align="center"><sub><b>Figure 1.</b> arch.</sub></p>\n\n'
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    # Actually drop Figure 1 to make the test meaningful:
+    body = body.replace(
+        '<p align="center"><sub><b>Figure 1.</b> arch.</sub></p>\n\n', ""
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-159" in rules
+
+
+def test_ps159_fires_when_figure_numbers_have_gap(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _GOOD_BADGES_BLOCK
+        + _good_pas_table()
+        + "## Demo\n\n"
+        + '<img src="docs/a.png" alt="a">\n\n'
+        + '<p align="center"><sub><b>Figure 1.</b> A.</sub></p>\n\n'
+        + '<img src="docs/b.png" alt="b">\n\n'
+        + '<p align="center"><sub><b>Figure 3.</b> B.</sub></p>\n\n'
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-159" in rules
+
+
+def test_ps159_fires_when_figure_number_duplicated(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _GOOD_BADGES_BLOCK
+        + _good_pas_table()
+        + "## Demo\n\n"
+        + '<img src="docs/a.png" alt="a">\n\n'
+        + '<p align="center"><sub><b>Figure 1.</b> A.</sub></p>\n\n'
+        + '<img src="docs/b.png" alt="b">\n\n'
+        + '<p align="center"><sub><b>Figure 2.</b> B.</sub></p>\n\n'
+        + '<img src="docs/c.png" alt="c">\n\n'
+        + '<p align="center"><sub><b>Figure 2.</b> C.</sub></p>\n\n'
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-159" in rules
+
+
+def test_ps159_silent_on_sequential_figure_numbers(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _GOOD_BADGES_BLOCK
+        + _good_pas_table()
+        + "## Demo\n\n"
+        + '<img src="docs/a.png" alt="a">\n\n'
+        + '<p align="center"><sub><b>Figure 1.</b> A.</sub></p>\n\n'
+        + '<img src="docs/b.png" alt="b">\n\n'
+        + '<p align="center"><sub><b>Figure 2.</b> B.</sub></p>\n\n'
+        + '<img src="docs/c.png" alt="c">\n\n'
+        + '<p align="center"><sub><b>Figure 3.</b> C.</sub></p>\n\n'
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + '<p align="center"><sub><b>Figure 4.</b> arch.</sub></p>\n\n'
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-159" not in rules
+
+
+def test_ps159_silent_when_no_figures_or_tables(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    # _clean_readme has a mermaid arch block (captionable figure) but no
+    # `<b>Figure N.</b>` captions at all — PS-159 stays quiet (it only
+    # fires when at least one numbered caption exists). PS-160 is the
+    # one that catches the missing caption.
+    (repo / "README.md").write_text(_clean_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS-159" not in rules
+
+
+# ---- PS-160: every figure / table needs a caption ----------------------
+
+
+def test_ps160_fires_when_mermaid_block_has_no_caption(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    # _clean_readme has a mermaid arch block but no Figure caption.
+    (repo / "README.md").write_text(_clean_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS-160" in rules
+
+
+def test_ps160_fires_when_img_data_figure_has_no_caption(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _GOOD_BADGES_BLOCK
+        + _good_pas_table()
+        + "## Demo\n\n"
+        + '<img src="docs/hilbert.png" alt="hilbert">\n\n'
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + '<p align="center"><sub><b>Figure 1.</b> arch.</sub></p>\n\n'
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    # 2 captionable (img + mermaid) but only 1 caption.
+    assert "PS-160" in rules
+
+
+def test_ps160_silent_when_every_figure_has_caption(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _GOOD_BADGES_BLOCK
+        + _good_pas_table()
+        + "## Demo\n\n"
+        + '<img src="docs/hilbert.png" alt="hilbert">\n\n'
+        + '<p align="center"><sub><b>Figure 1.</b> Hilbert.</sub></p>\n\n'
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + '<p align="center"><sub><b>Figure 2.</b> arch.</sub></p>\n\n'
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-160" not in rules
+
+
+def test_ps160_silent_for_pas_and_details_tables(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    # P&S table + a <details>-wrapped extras table, plus mermaid arch
+    # WITH a caption. Should be PS-160-silent (both tables are exempt;
+    # mermaid is captioned).
+    body = (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _GOOD_BADGES_BLOCK
+        + _good_pas_table()
+        + "## Demo\n\nNo figures here.\n\n"
+        + '## Installation\n\n```bash\nuv pip install "demo[all]"\n```\n\n'
+        + "<details><summary>Extras</summary>\n\n"
+        + "| extra | description |\n|-------|-------------|\n| all | x |\n\n"
+        + "</details>\n\n"
+        + _GOOD_ARCH_MERMAID
+        + '<p align="center"><sub><b>Figure 1.</b> arch.</sub></p>\n\n'
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-160" not in rules
+
+
+def test_ps160_fires_when_pipe_table_has_no_caption(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _GOOD_BADGES_BLOCK
+        + _good_pas_table()
+        + "## Demo\n\nSome data:\n\n"
+        + "| col1 | col2 |\n|------|------|\n| a | b |\n\n"
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + '<p align="center"><sub><b>Figure 1.</b> arch.</sub></p>\n\n'
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-160" in rules
+
+
 # ---------------------------------------------------------------------------
 # PS-107 / PS-109 / PS-110 / PS-111 / PS-112 — README convention rules
 # ---------------------------------------------------------------------------
@@ -1420,3 +1645,227 @@ def test_readme_rules_silent_when_readme_missing(tmp_path):
     rules = _violations_for(repo, "demo")
     for code in ("PS-107", "PS-109", "PS-110", "PS-111", "PS-112"):
         assert code not in rules
+
+
+# ---------------------------------------------------------------------------
+# PS-161: codecov.yml coverage target must be >= 90% (not auto)
+# ---------------------------------------------------------------------------
+
+
+def test_ps161_silent_when_target_is_90(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "codecov.yml").write_text(
+        "coverage:\n"
+        "  status:\n"
+        "    project:\n"
+        "      default:\n"
+        "        target: 90%\n"
+        "    patch:\n"
+        "      default:\n"
+        "        target: 90%\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS-161" not in rules
+
+
+def test_ps161_fires_when_project_target_below_90(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "codecov.yml").write_text(
+        "coverage:\n  status:\n    project:\n      default:\n        target: 80%\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS-161" in rules
+
+
+def test_ps161_fires_when_target_is_auto(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "codecov.yml").write_text(
+        "coverage:\n  status:\n    project:\n      default:\n        target: auto\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS-161" in rules
+
+
+def test_ps161_silent_when_codecov_yml_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    rules = _violations_for(repo, "demo")
+    assert "PS-161" not in rules
+
+
+def test_ps161_fires_when_patch_target_below_90(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "codecov.yml").write_text(
+        "coverage:\n"
+        "  status:\n"
+        "    project:\n"
+        "      default:\n"
+        "        target: 90%\n"
+        "    patch:\n"
+        "      default:\n"
+        "        target: 50%\n"
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS-161" in rules
+
+
+# ---------------------------------------------------------------------------
+# PS-162: README badge block must contain a Codecov badge
+# ---------------------------------------------------------------------------
+
+
+_BADGES_BLOCK_WITH_CODECOV = (
+    "<!-- scitex-badges:start -->\n"
+    '<p align="center">'
+    '<a href="x"><img src="https://img.shields.io/pypi/v/demo" alt="PyPI"></a>'
+    "</p>\n"
+    '<p align="center">'
+    '<a href="https://codecov.io/gh/owner/demo">'
+    '<img src="https://codecov.io/gh/owner/demo/branch/develop/graph/badge.svg" '
+    'alt="Coverage"></a>'
+    '<a href="https://demo.readthedocs.io/en/latest/">'
+    '<img src="https://img.shields.io/readthedocs/demo?label=Read%20the%20Docs" '
+    'alt="Read the Docs"></a>'
+    "</p>\n"
+    "<!-- scitex-badges:end -->\n\n"
+)
+
+_BADGES_BLOCK_WITHOUT_CODECOV = (
+    "<!-- scitex-badges:start -->\n"
+    '<p align="center">'
+    '<a href="x"><img src="https://img.shields.io/pypi/v/demo" alt="PyPI"></a>'
+    "</p>\n"
+    '<p align="center">'
+    '<a href="https://demo.readthedocs.io/en/latest/">'
+    '<img src="https://img.shields.io/readthedocs/demo?label=Read%20the%20Docs" '
+    'alt="Read the Docs"></a>'
+    "</p>\n"
+    "<!-- scitex-badges:end -->\n\n"
+)
+
+_BADGES_BLOCK_WITHOUT_RTD = (
+    "<!-- scitex-badges:start -->\n"
+    '<p align="center">'
+    '<a href="x"><img src="https://img.shields.io/pypi/v/demo" alt="PyPI"></a>'
+    "</p>\n"
+    '<p align="center">'
+    '<a href="https://codecov.io/gh/owner/demo">'
+    '<img src="https://codecov.io/gh/owner/demo/branch/develop/graph/badge.svg" '
+    'alt="Coverage"></a>'
+    "</p>\n"
+    "<!-- scitex-badges:end -->\n\n"
+)
+
+_BADGES_BLOCK_RTD_OWN = (
+    "<!-- scitex-badges:start -->\n"
+    '<p align="center">'
+    '<a href="x"><img src="https://img.shields.io/pypi/v/demo" alt="PyPI"></a>'
+    "</p>\n"
+    '<p align="center">'
+    '<a href="https://codecov.io/gh/owner/demo">'
+    '<img src="https://codecov.io/gh/owner/demo/branch/develop/graph/badge.svg" '
+    'alt="Coverage"></a>'
+    '<a href="https://demo.readthedocs.io/en/latest/">'
+    '<img src="https://readthedocs.org/projects/demo/badge/?version=latest" '
+    'alt="Docs"></a>'
+    "</p>\n"
+    "<!-- scitex-badges:end -->\n\n"
+)
+
+
+def _readme_with_custom_badges(block: str) -> str:
+    return (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + block
+        + _good_pas_table()
+        + "## Demo\n\n![Hilbert](docs/hilbert.png)\n\n"
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + '<p align="center"><sub><b>Figure 1.</b> arch.</sub></p>\n\n'
+        + "## 2 Interfaces\n\nPython API and CLI.\n\n"
+        + "## Part of SciTeX\n\nPart of SciTeX.\n"
+    )
+
+
+def test_ps162_silent_when_codecov_badge_present(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(
+        _readme_with_custom_badges(_BADGES_BLOCK_WITH_CODECOV)
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS-162" not in rules
+
+
+def test_ps162_fires_when_codecov_badge_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(
+        _readme_with_custom_badges(_BADGES_BLOCK_WITHOUT_CODECOV)
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS-162" in rules
+
+
+def test_ps162_silent_when_badges_block_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    # _full_compliant_readme assumes no badges block — use a minimal
+    # README missing the markers entirely.
+    body = (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _good_pas_table()
+        + "## Demo\n\n![Hilbert](docs/hilbert.png)\n\n"
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + '<p align="center"><sub><b>Figure 1.</b> arch.</sub></p>\n\n'
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-162" not in rules
+
+
+# ---------------------------------------------------------------------------
+# PS-163: README badge block must contain a Read-the-Docs badge
+# ---------------------------------------------------------------------------
+
+
+def test_ps163_silent_when_shields_rtd_badge_present(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(
+        _readme_with_custom_badges(_BADGES_BLOCK_WITH_CODECOV)
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS-163" not in rules
+
+
+def test_ps163_silent_when_readthedocs_org_badge_present(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_readme_with_custom_badges(_BADGES_BLOCK_RTD_OWN))
+    rules = _violations_for(repo, "demo")
+    assert "PS-163" not in rules
+
+
+def test_ps163_fires_when_rtd_badge_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(
+        _readme_with_custom_badges(_BADGES_BLOCK_WITHOUT_RTD)
+    )
+    rules = _violations_for(repo, "demo")
+    assert "PS-163" in rules
+
+
+def test_ps163_silent_when_badges_block_missing(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _good_pas_table()
+        + "## Demo\n\n![Hilbert](docs/hilbert.png)\n\n"
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + '<p align="center"><sub><b>Figure 1.</b> arch.</sub></p>\n\n'
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-163" not in rules
