@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] CI and Codecov Setup for SciTeX Packages
-  [DETAILS] Adopted 2026-05. Documents the GitHub Actions test.yml shape, codecov-action@v5 invocation, the `if: always() && matrix.python-version == 'X'` upload pattern (so coverage uploads even when tests fail), the `.[all,dev]` install line (so optional-dep loaders actually run), the canonical codecov.yml ignore patterns (_sphinx_html, _skills, _completion.py, tests, examples), CODECOV_TOKEN secret setup (sourced from ~/.dotfiles/.../codecov.txt via 000_ACCESS_TOKENS.src), and the two-row badge layout that exposes it on README. Use when wiring coverage on a new SciTeX peer or debugging why a badge shows "unknown".
+  [DETAILS] Adopted 2026-05. Documents the GitHub Actions test.yml shape, codecov-action@v5 invocation, the `if: always() && matrix.python-version == 'X'` upload pattern (so coverage uploads even when tests fail), the `.[all,dev]` install line (so optional-dep loaders actually run), the canonical codecov.yml ignore patterns (_sphinx_html, _skills, _completion.py, tests, examples), the `codecov.branch: develop` line that points the unbranched badge at develop (since main is just a release-mirror), CODECOV_TOKEN secret setup (sourced from ~/.dotfiles/.../codecov.txt via 000_ACCESS_TOKENS.src), and the two-row badge layout that exposes it on README. Use when wiring coverage on a new SciTeX peer or debugging why a badge shows "unknown" / a stale number.
 tags: [scitex-general-package-ci-codecov]
 ---
 
@@ -75,6 +75,11 @@ else identical across packages:
 ```yaml
 codecov:
   require_ci_to_pass: false
+  # Treat develop as the de-facto default branch — main is a stable
+  # release mirror that only fast-forwards from develop, so develop
+  # is where coverage uploads land. This makes the unbranched badge
+  # endpoint (/graph/badge.svg) follow develop's value.
+  branch: develop
 
 coverage:
   status:
@@ -101,11 +106,28 @@ comment:
 
 Rationale:
 
+- `codecov.branch: develop` — the codecov page's headline number and
+  the unbranched `/graph/badge.svg` follow develop. Without this, the
+  badge points at `main` (the release-mirror branch) and shows the
+  stale number from the last release-cut while develop has long since
+  moved on. Every SciTeX peer uses this.
 - `_sphinx_html/` is generated HTML; never covered.
 - `_skills/` is markdown documentation; not executable.
 - `_completion.py` (and `_cli/_completion.py`) are shell-completion shims —
   pure boilerplate, no real logic to test.
 - `tests/` and `examples/` shouldn't count toward their own coverage.
+
+### README badge URL
+
+For belt-and-suspenders robustness against any codecov-side config
+drift, the README badge can also pin develop explicitly:
+
+```markdown
+[![Coverage (develop)](https://codecov.io/gh/<org>/<repo>/branch/develop/graph/badge.svg)](https://codecov.io/gh/<org>/<repo>/branch/develop)
+```
+
+This always renders develop's number regardless of dashboard
+settings. Recommended in addition to `codecov.branch: develop`.
 
 ## CODECOV_TOKEN secret
 
