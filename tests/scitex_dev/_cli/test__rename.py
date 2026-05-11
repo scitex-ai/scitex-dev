@@ -13,6 +13,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip("click")
+
 from click.testing import CliRunner
 
 from scitex_dev._cli._root import main

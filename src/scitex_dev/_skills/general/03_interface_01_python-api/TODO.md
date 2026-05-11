@@ -27,7 +27,7 @@ Strike (`~~item~~`) when done. Foundations shipped in scitex-dev `feat-python-ap
 - [ ] Audit Pattern B (conditional `__all__.append`) — likely scitex-stats, figrecipe.
 - [ ] Submodule `__all__` — every exposed submodule should declare its own.
 - [ ] `@supports_return_as` placement — must be in `__init__.py`, not `_<name>.py`.
-- [ ] Migrate inline `try/except ImportError` to `try_import_optional` across standalones.
+- [ ] Migrate inline `try/except ImportError` to `try_import_optional` across standalones. Rule code reserved: **PA-302** (impl deferred — auditor `_audit.py` needs split before adding; pattern: AST `Try` node whose `body` contains a non-stdlib `Import`/`ImportFrom` plus an assignment `<NAME>_AVAILABLE = True` and whose `ImportError` handler assigns `<NAME>_AVAILABLE = False`). Progress: scitex-io `_load_modules/_optuna.py` + `_save_modules/_optuna_study_as_csv_and_pngs.py` migrated 2026-05-11.
 - [ ] Drop `try/except ImportError: pass` around `from scitex_dev import …` — scitex-dev is hard dep now.
 - [ ] **scitex-io**: 15+ bare `except:` blocks (`_load_modules/_catboost.py`, `_H5Explorer.py`, `_glob.py`, `_save_modules/_{hdf5,csv,image,excel,zarr}.py`).
 - [ ] **scitex-cloud**: 15+ per-service custom Exception classes — collapse to `ScitexError(code=…)`.

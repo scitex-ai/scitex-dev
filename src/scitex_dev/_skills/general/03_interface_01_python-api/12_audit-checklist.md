@@ -35,6 +35,7 @@ Run before tagging a release. Tick each item or document the deviation in the PR
 - [ ] (A) `None`-assigned names still appear in `__all__`.
 - [ ] No top-level `import <optional-dep>` outside try/except.
 - [ ] If a feature surface has a flag, it's named `<FEATURE>_AVAILABLE` and is `True`/`False` (not `None`/object).
+- [ ] (A-planned, **PA-302**) Inline `try/except ImportError` pairs assigning `<NAME>_AVAILABLE` migrate to `scitex_dev.try_import_optional(...)`. The helper records `(extra, pkg)` so `last_install_hint(name)` can render `pip install <pkg>[<extra>]` at error sites.
 
 ## §4 — Docstrings
 
