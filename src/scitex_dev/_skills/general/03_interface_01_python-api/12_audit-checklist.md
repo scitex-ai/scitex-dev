@@ -36,6 +36,7 @@ Run before tagging a release. Tick each item or document the deviation in the PR
 - [ ] No top-level `import <optional-dep>` outside try/except.
 - [ ] If a feature surface has a flag, it's named `<FEATURE>_AVAILABLE` and is `True`/`False` (not `None`/object).
 - [ ] (A-planned, **PA-302**) Inline `try/except ImportError` pairs assigning `<NAME>_AVAILABLE` migrate to `scitex_dev.try_import_optional(...)`. The helper records `(extra, pkg)` so `last_install_hint(name)` can render `pip install <pkg>[<extra>]` at error sites.
+- [ ] (A-planned, **PA-303**) Test files MUST wrap module-top imports of optional third-party deps in `pytest.importorskip(...)`. An unguarded `import <dep>` at the top of a test file fails at collection if the dep is absent, aborting ALL tests in the run and silently masking real failures (incident 2026-05-11: scitex-io stuck at 79 % on Codecov for weeks because `import optuna` blocked collection).
 
 ## §4 — Docstrings
 

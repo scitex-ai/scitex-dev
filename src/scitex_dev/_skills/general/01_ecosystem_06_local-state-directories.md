@@ -46,6 +46,28 @@ The package's `.gitignore` contains a single line that excludes everything *exce
 
 Rationale: the dir must exist on first clone (so `PathManager` doesn't have to `mkdir` and accidentally expose permission bugs), but its *contents* must never leak — they are per-host, per-run, often large, and sometimes sensitive. Seeing `runtime/` appear in a `git status` is an immediate signal that something wrote where it shouldn't, or that `.gitignore` was not set up.
 
+### `.scitex/dev/config.yaml` — tracked, not gitignored
+
+The audit-tool config (`<repo>/.scitex/dev/config.yaml` — root
+whitelist for `audit-project`) MUST travel with the repo, otherwise CI
+applies a different whitelist than local and audit results diverge
+mysteriously. Use file-level exclusion under `.scitex/` so the
+negation rule applies (a `.scitex/` dir-level exclusion blocks
+negation):
+
+```gitignore
+# <project-root>/.gitignore
+.scitex/*
+!.scitex/dev/
+.scitex/dev/*
+!.scitex/dev/config.yaml
+```
+
+Incident 2026-05-11: a scitex-io codecov.yml PS-103 violation kept
+firing in CI even after local whitelist was added, because the entire
+`.scitex/` directory was gitignored and the negation never reached the
+config file.
+
 ## 2. `<pkg-short>` — prefix-stripping rule
 
 `<pkg-short>` is the package name with the `scitex-` prefix removed. Packages that don't carry the prefix use their name as-is.
