@@ -22,7 +22,7 @@ from . import rules  # noqa: F401  (kept for legacy attribute access)
 # `lookup("STX-XXX")` directly. The aliases are gone.
 
 # Names that refer to the scitex package (skip linting on these)
-STX_NAMES = frozenset(("stx", "scitex"))
+STX_NAMES = frozenset(("stx", "scitex", "scitex_io"))
 
 # Modules to skip for axes hints
 AXES_SKIP = frozenset(

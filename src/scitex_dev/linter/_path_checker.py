@@ -28,15 +28,19 @@ def check_stx_io_path(checker, node: ast.Call) -> None:
     if isinstance(func.value, ast.Attribute):
         if (
             isinstance(func.value.value, ast.Name)
-            and func.value.value.id in ("stx", "scitex")
+            and func.value.value.id in ("stx", "scitex", "scitex_io")
             and func.value.attr == "io"
         ):
             is_stx_io = True
-    # Also: io.save(...) if io was imported from stx
     elif isinstance(func.value, ast.Name):
-        resolved = checker._imports.get(func.value.id, "")
-        if "scitex" in resolved and "io" in resolved:
+        # scitex_io.save(...) — bare top-level package call
+        if func.value.id == "scitex_io":
             is_stx_io = True
+        else:
+            # io.save(...) if io was imported from stx
+            resolved = checker._imports.get(func.value.id, "")
+            if "scitex" in resolved and "io" in resolved:
+                is_stx_io = True
 
     if not is_stx_io:
         return

@@ -4,14 +4,15 @@ PS-141: README.md must have a `## Demo` section whose body contains at
 least one visual element (markdown image, non-shield HTML `<img>`,
 or fenced ```mermaid block).
 
-PS-142: README.md must have a `## Architecture` section whose body
-contains at least one of: ```mermaid fence, ASCII text diagram
-(fenced code block ≥10 lines), file-tree characters
-(`├──`/`└──`/`│`), or `<img>` tag.
+PS-142: README.md must have a `## Architecture` (or equivalent
+`## How it works` / `## How It Works`) section whose body contains
+at least one of: ```mermaid fence, ASCII text diagram (fenced code
+block ≥10 lines), file-tree characters (`├──`/`└──`/`│`), or
+`<img>` tag.
 
 PS-143: section H2 headers appear in canonical order. The expected
 order (skipping any optional or omitted section) is:
-    Problem and Solution → Installation → Architecture →
+    Problem and Solution → Installation → Architecture / How it works →
     <N> Interfaces → Demo → Quick Start → Part of SciTeX
 
 PS-144: `## Problem and Solution` table cells must (a) contain at
@@ -39,7 +40,10 @@ _SECTION_PATTERNS: dict[str, re.Pattern[str]] = {
         re.MULTILINE | re.IGNORECASE,
     ),
     "installation": re.compile(r"^##\s+Installation\b", re.MULTILINE | re.IGNORECASE),
-    "architecture": re.compile(r"^##\s+Architecture\b", re.MULTILINE | re.IGNORECASE),
+    "architecture": re.compile(
+        r"^##\s+(?:Architecture|How\s+it\s+works|How\s+It\s+Works)\b",
+        re.MULTILINE | re.IGNORECASE,
+    ),
     "interfaces": re.compile(
         r"^##\s+(?:Three|Four|Five|Six|\d+)\s+Interfaces\b",
         re.MULTILINE | re.IGNORECASE,
@@ -216,8 +220,16 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
     if len(text) < _MIN_README_BYTES:
         return
 
-    # ---- PS-141: ## Demo + visual content ---------------------------------
+    # ---- PS-141 / PS-142: visual content (Demo or Architecture, one is enough) -
+    # The "one diagram" rule: README must have a visual somewhere between
+    # Demo and Architecture, but not necessarily in both. Demo and
+    # Architecture sections themselves are still both required.
     demo = _section_body(text, "demo")
+    arch = _section_body(text, "architecture")
+    demo_has_visual = demo is not None and _has_visual_content(demo[0])
+    arch_has_visual = arch is not None and _has_architecture_content(arch[0])
+    visual_anywhere = demo_has_visual or arch_has_visual
+
     if demo is None:
         out.append(
             violation_cls(
@@ -226,34 +238,31 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
                 "missing mandatory `## Demo` section",
             )
         )
-    else:
-        body, _s, _e = demo
-        if not _has_visual_content(body):
-            out.append(
-                violation_cls(
-                    "PS-141",
-                    str(readme),
-                    (
-                        "`## Demo` section has no visual content — add a "
-                        "markdown image, mermaid fence, or non-badge "
-                        "`<img>`"
-                    ),
-                )
+    elif not visual_anywhere:
+        out.append(
+            violation_cls(
+                "PS-141",
+                str(readme),
+                (
+                    "`## Demo` and `## Architecture` both lack visual "
+                    "content — add a markdown image, mermaid fence, or "
+                    "`<img>` to at least one"
+                ),
             )
+        )
 
     # ---- PS-142: ## Architecture + diagram/tree content -------------------
-    arch = _section_body(text, "architecture")
     if arch is None:
         out.append(
             violation_cls(
                 "PS-142",
                 str(readme),
-                "missing mandatory `## Architecture` section",
+                "missing mandatory `## Architecture` (or `## How it works`) section",
             )
         )
     else:
         body, _s, _e = arch
-        if not _has_architecture_content(body):
+        if not _has_architecture_content(body) and not demo_has_visual:
             out.append(
                 violation_cls(
                     "PS-142",
