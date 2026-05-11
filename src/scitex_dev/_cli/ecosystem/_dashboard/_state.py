@@ -324,6 +324,52 @@ def _enrich_tests_collect(state: PackageState) -> None:
         state.tests_collected = int(m.group(1))
 
 
+def _enrich_tests_from_pytest_cache(state: PackageState) -> None:
+    """Read the previous pytest run's results from `.pytest_cache/`.
+
+    Pytest persists every collected nodeid (`v/cache/nodeids`) and a
+    dict of last-run failures (`v/cache/lastfailed`). We just read
+    these files — no subprocess, no pytest invocation, no minutes of
+    waiting. Costs <1ms per pkg.
+
+    Effect on the dashboard's Test column: shows real
+    `F<failed> (<passed>/<total>)` from the last actual run, refreshed
+    automatically whenever the user (or CI) runs pytest locally.
+    Falls back silently if `.pytest_cache/` is missing — pkg has
+    never been pytest-run, so we let `_enrich_deep` fill the
+    file-count fallback.
+    """
+    import json as _json
+
+    repo = Path(state.local_path)
+    if not repo.is_dir():
+        return
+    cache_dir = repo / ".pytest_cache" / "v" / "cache"
+    nodeids_path = cache_dir / "nodeids"
+    if not nodeids_path.is_file():
+        return
+    try:
+        nodeids = _json.loads(nodeids_path.read_text())
+    except (OSError, _json.JSONDecodeError):
+        return
+    if not isinstance(nodeids, list):
+        return
+    total = len(nodeids)
+
+    failed = 0
+    lastfailed_path = cache_dir / "lastfailed"
+    if lastfailed_path.is_file():
+        try:
+            lf = _json.loads(lastfailed_path.read_text())
+            if isinstance(lf, dict):
+                failed = len(lf)
+        except (OSError, _json.JSONDecodeError):
+            failed = 0
+
+    state.tests_failed = failed
+    state.tests_passed = max(0, total - failed)
+
+
 def _enrich_tests_run(state: PackageState) -> None:
     """Run pytest for real (heavy). Populates passed/failed.
 
@@ -730,6 +776,11 @@ def gather_ecosystem_state(
         per_pkg_enrichers.append(_enrich_pypi)
     if "deep" in enrichers:
         per_pkg_enrichers.append(_enrich_deep)
+        # Free pytest-results read from `.pytest_cache/` (sub-ms per pkg).
+        # Shows real passed/failed from the LAST actual pytest run
+        # without spawning anything. Pkgs with no prior run fall back
+        # to the `_enrich_deep` file-count.
+        per_pkg_enrichers.append(_enrich_tests_from_pytest_cache)
     if "tests-collect" in enrichers:
         # Cheap: pytest --collect-only -q inside each pkg's own venv.
         # Gives real test counts (parametrize cases included) instead of
