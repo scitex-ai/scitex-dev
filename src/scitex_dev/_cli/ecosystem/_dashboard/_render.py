@@ -206,6 +206,8 @@ def _legend_text() -> Text:
     parts.append(Text("Glyphs: ", style="bold dim"))
     parts.append(Text("N/C", style="dim"))
     parts.append(Text(" not yet computed (live, fills in)  ·  ", style="dim"))
+    parts.append(Text("—", style="dim"))
+    parts.append(Text(" PyPI: confirmed unpublished  ·  ", style="dim"))
     parts.append(Text("0", style="green"))
     parts.append(Text(" clean  ·  ", style="dim"))
     parts.append(Text("N", style="yellow"))
@@ -267,8 +269,21 @@ def _color_version_cell(state: "PackageState", col: str) -> Text:
     }.get(col, "")
 
     if not val_raw:
-        # `-` for missing tag/pyproject; `N/C` for not-fetched network values.
-        placeholder = "N/C" if col in ("pypi", "release") else "-"
+        # `-` for missing tag/pyproject; networked columns split:
+        #   pypi  — N/C while lookup is pending, `—` once a 404
+        #           confirms the package isn't published, `?` on
+        #           network error so the user knows to retry.
+        #   release — N/C while pending (gh-release has no separate
+        #           lookup-done flag yet; treat as legacy).
+        if col == "pypi":
+            if getattr(state, "pypi_lookup_done", False):
+                placeholder = "—"  # confirmed not on PyPI
+            else:
+                placeholder = "N/C"  # not yet computed
+        elif col == "release":
+            placeholder = "N/C"
+        else:
+            placeholder = "-"
         return Text(placeholder, style="dim")
 
     canonical = _normalise_version(state.version_pyproject)

@@ -43,6 +43,7 @@ class PackageState:
     version_dynamic: bool = False  # uses setuptools-scm
     tag_latest: str = ""
     pypi_latest: str = ""
+    pypi_lookup_done: bool = False  # True once PyPI was queried (200 or 404)
 
     # Drift summary (computed)
     drift_local: str = ""  # ✓ / V≠T / V<T / V>T
@@ -924,24 +925,34 @@ def _gather_one(pkg: str, info: dict, verbosity: int) -> PackageState:
 
 
 def _enrich_pypi(state: PackageState) -> None:
-    """Resolve PyPI latest version. Networked; cache 60s upstream."""
+    """Resolve PyPI latest version via the JSON API.
+
+    Sets ``state.pypi_lookup_done = True`` on every reachable response
+    (200 → version filled; 404 → confirmed unpublished). Network /
+    timeout errors leave ``pypi_lookup_done = False`` so the renderer
+    can distinguish "not yet computed" from "confirmed missing".
+
+    Previously this called the experimental ``pip index versions``,
+    whose stderr noise + brittle output format silently dropped some
+    packages — they rendered as `N/C` even when on PyPI.
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    url = f"https://pypi.org/pypi/{state.pkg}/json"
     try:
-        out = subprocess.check_output(
-            ["pip", "index", "versions", state.pkg],
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=10,
-        )
-    except (
-        subprocess.CalledProcessError,
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-    ):
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = _json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            state.pypi_lookup_done = True
         return
-    m = re.search(r"\(([^)]+)\)", out)
-    if m:
-        state.pypi_latest = m.group(1).strip()
-        state.drift_pypi = _compute_drift_pypi(state.tag_latest, state.pypi_latest)
+    except (urllib.error.URLError, TimeoutError, _json.JSONDecodeError):
+        return
+    state.pypi_latest = (data.get("info") or {}).get("version", "") or ""
+    state.pypi_lookup_done = True
+    state.drift_pypi = _compute_drift_pypi(state.tag_latest, state.pypi_latest)
 
 
 def gather_ecosystem_state(
