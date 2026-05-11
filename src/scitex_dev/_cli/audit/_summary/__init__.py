@@ -91,6 +91,12 @@ CATALOG: dict[str, set[str]] = {
             "role",
             "session",
             "completion",
+            # Shell names — surface as final positional of `completion <shell>`
+            "bash",
+            "zsh",
+            "fish",
+            "powershell",
+            "pwsh",
             "stats",
             "quality",
             "installation",

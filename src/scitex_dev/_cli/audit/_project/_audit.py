@@ -1627,16 +1627,40 @@ def _suggest_test_location(
 
 
 def _test_has_src_match(test_file: Path, rel: Path, src_pkg: Path) -> bool:
-    """Does the test name correspond to an existing src file under the same rel dir?"""
+    """Does the test name correspond to an existing src file under the
+    same rel dir?
+
+    Direct match: ``test__foo.py`` ↔ ``_foo.py``,
+                  ``test_foo.py``  ↔  ``foo.py``.
+
+    Descriptor suffix: ``test__foo_real.py``, ``test__foo_branches.py``,
+    ``test__foo_round_trip.py`` etc. — when the literal candidate is
+    missing, strip trailing ``_<descriptor>`` segments and try again so
+    a single src file can host multiple themed test modules without
+    tripping the orphan rule.
+    """
     name = test_file.name
+
+    def _direct(stem: str, prefix: str) -> bool:
+        return (src_pkg / rel.parent / f"{prefix}{stem}.py").is_file()
+
+    def _with_descriptor_strip(stem: str, prefix: str) -> bool:
+        # Greedy strip from the right: foo_round_trip → foo_round → foo.
+        parts = stem.split("_")
+        while len(parts) > 1:
+            parts.pop()
+            if _direct("_".join(parts), prefix):
+                return True
+        return False
+
     m = _PRIVATE_TEST_RE.match(name)
     if m:
-        candidate = src_pkg / rel.parent / f"_{m.group(1)}.py"
-        return candidate.is_file()
+        stem = m.group(1)
+        return _direct(stem, "_") or _with_descriptor_strip(stem, "_")
     m = _PUBLIC_TEST_RE.match(name)
     if m:
-        candidate = src_pkg / rel.parent / f"{m.group(1)}.py"
-        return candidate.is_file()
+        stem = m.group(1)
+        return _direct(stem, "") or _with_descriptor_strip(stem, "")
     return False  # malformed test name — caller may flag separately
 
 
