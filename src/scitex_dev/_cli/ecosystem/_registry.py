@@ -1707,6 +1707,77 @@ def register_ecosystem_commands(main_group):
             click.echo("\nstopped.", err=True)
 
     @dashboard.command(
+        "tui",
+        epilog=(
+            "Keys:\n"
+            "  /          start filter\n"
+            "  Escape     clear filter\n"
+            "  r          refresh data\n"
+            "  q          quit\n"
+            "  j/k ↓/↑    navigate rows\n"
+            "  g / G      jump to top / bottom\n"
+            "\n"
+            "Example:\n"
+            "  $ scitex-dev ecosystem dashboard tui\n"
+            "  $ scitex-dev ecosystem dashboard tui -p scitex-io,scitex-stats\n"
+            "  $ scitex-dev ecosystem dashboard tui -vv\n"
+        ),
+    )
+    @click.option(
+        "-v",
+        "verbosity",
+        count=True,
+        default=1,
+        help="Add -v / -vv / -vvv for more columns.",
+    )
+    @click.option(
+        "--package",
+        "-p",
+        multiple=True,
+        help="Limit to specific packages (comma-separated or repeat the flag).",
+    )
+    @click.option(
+        "--jobs",
+        "-j",
+        default=16,
+        show_default=True,
+        type=int,
+        help="Concurrent worker threads for enrichment.",
+    )
+    def dashboard_tui(verbosity, package, jobs):
+        """htop-style TUI with live keystroke filter.
+
+        Requires the optional `textual` package. Install with:
+          pip install textual
+        """
+        raw_pkgs: list[str] = []
+        for entry in package:
+            raw_pkgs.extend(p.strip() for p in entry.split(",") if p.strip())
+        if "all" in raw_pkgs:
+            packages_arg: list[str] | None = None
+        elif raw_pkgs:
+            seen: set[str] = set()
+            packages_arg = []
+            for p in raw_pkgs:
+                if p not in seen:
+                    seen.add(p)
+                    packages_arg.append(p)
+        else:
+            packages_arg = None
+
+        try:
+            from ._dashboard._tui import run_tui
+        except ImportError as exc:
+            click.echo(f"error: {exc}", err=True)
+            raise SystemExit(2)
+
+        try:
+            run_tui(verbosity=verbosity, packages=packages_arg, workers=jobs)
+        except ImportError as exc:
+            click.echo(f"error: {exc}", err=True)
+            raise SystemExit(2)
+
+    @dashboard.command(
         "export",
         epilog=(
             "Example:\n"
