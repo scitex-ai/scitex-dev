@@ -59,8 +59,19 @@ class PackageState:
     audit_errors: int = -1  # -1 = not run
     audit_warnings: int = -1
 
-    # CI
+    # CI — latest conclusion of EACH workflow on develop, deduped by
+    # workflow name. Lets the dashboard show "F<failed> (passed/total)"
+    # over all workflows attached to the branch, not just the most
+    # recent run of any workflow.
     ci_status: str = ""  # success / failure / in_progress / cancelled / ""
+    ci_workflows_passed: int = -1
+    ci_workflows_failed: int = -1
+    ci_workflows_running: int = -1
+
+    # GitHub Releases — separate from `tag_latest` (git tag local). A
+    # tag without a Release means PyPI was published but no release
+    # notes / asset was attached. Diff = a release-management gap.
+    gh_release_latest: str = ""
 
     # Per-package dev venv state ("real" / "symlink" / "missing").
     # Cheap (one `os.lstat`), always computed because it's the canary
@@ -615,7 +626,20 @@ def _enrich_audit(state: PackageState) -> None:
 
 
 def _enrich_ci(state: PackageState) -> None:
-    """Latest GH Actions test workflow conclusion on develop."""
+    """Latest GH Actions run of EVERY workflow on develop, deduped by
+    workflow name. Populates:
+
+      state.ci_status            — overall ('failure' if any failed,
+                                   'in_progress' if any running, else
+                                   'success' / first conclusion).
+      state.ci_workflows_passed
+      state.ci_workflows_failed
+      state.ci_workflows_running
+
+    One `gh run list --limit 50` per pkg (still parallel via the pool).
+    50 is enough to cover all distinct workflows for a normal scitex
+    pkg; we dedupe by `name` keeping the most-recent each.
+    """
     if not state.exists_locally:
         return
     try:
@@ -626,14 +650,13 @@ def _enrich_ci(state: PackageState) -> None:
                 "list",
                 "-R",
                 f"ywatanabe1989/{state.pkg}",
-                "--workflow=test.yml",
                 "--branch=develop",
-                "--limit=1",
-                "--json=status,conclusion",
+                "--limit=50",
+                "--json=name,status,conclusion,createdAt",
             ],
             stderr=subprocess.DEVNULL,
             text=True,
-            timeout=10,
+            timeout=15,
         )
     except (
         subprocess.CalledProcessError,
@@ -649,8 +672,86 @@ def _enrich_ci(state: PackageState) -> None:
         return
     if not rows:
         return
-    row = rows[0]
-    state.ci_status = row.get("conclusion") or row.get("status") or ""
+
+    # Dedupe by workflow name, keep most-recent (rows are returned
+    # in descending createdAt order, so first wins).
+    latest: dict[str, dict] = {}
+    for row in rows:
+        name = row.get("name") or ""
+        if not name or name in latest:
+            continue
+        latest[name] = row
+
+    passed = failed = running = 0
+    for r in latest.values():
+        concl = (r.get("conclusion") or "").lower()
+        status = (r.get("status") or "").lower()
+        if concl == "success":
+            passed += 1
+        elif concl == "failure":
+            failed += 1
+        elif status in {"in_progress", "queued", "requested", "pending"}:
+            running += 1
+        elif concl == "cancelled":
+            pass  # ignore cancelled in the counts
+        else:
+            # Unknown / skipped — don't count.
+            pass
+
+    state.ci_workflows_passed = passed
+    state.ci_workflows_failed = failed
+    state.ci_workflows_running = running
+
+    # Aggregate single status: failure dominates, then in-progress,
+    # then success. Preserves the existing ci_status semantics for
+    # callers that read it as a single string.
+    if failed > 0:
+        state.ci_status = "failure"
+    elif running > 0:
+        state.ci_status = "in_progress"
+    elif passed > 0:
+        state.ci_status = "success"
+    elif latest:
+        state.ci_status = (next(iter(latest.values())).get("conclusion") or "").lower()
+
+
+def _enrich_gh_release(state: PackageState) -> None:
+    """Latest GitHub Release tag for the package's repo.
+
+    A tag without an attached release is a release-management gap —
+    PyPI got published but no release notes/asset landed. Exposed as a
+    separate column from `tag_latest` (git tag).
+    """
+    if not state.exists_locally:
+        return
+    try:
+        out = subprocess.check_output(
+            [
+                "gh",
+                "release",
+                "view",
+                "--repo",
+                f"ywatanabe1989/{state.pkg}",
+                "--json",
+                "tagName",
+            ],
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=10,
+        )
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        FileNotFoundError,
+    ):
+        return
+    import json as _json
+
+    try:
+        data = _json.loads(out)
+    except _json.JSONDecodeError:
+        return
+    state.gh_release_latest = (data.get("tagName") or "").strip()
 
 
 def _compute_drift_local(version: str, tag: str) -> str:
@@ -805,6 +906,10 @@ def gather_ecosystem_state(
         # workflow. Parallel via the shared pool keeps wall-clock
         # bounded; cost is N rate-limit charges instead of 1.
         per_pkg_enrichers.append(_enrich_ci)
+    if "gh-release" in enrichers:
+        # `gh release view` per-pkg. Latest published release tag —
+        # separate from local git tag.
+        per_pkg_enrichers.append(_enrich_gh_release)
 
     has_work = per_pkg_enrichers or bulk_enrichers
     if has_work:

@@ -36,6 +36,7 @@ _TIERS: list[list[str]] = [
         "venv",
         "ver",
         "tag",
+        "release",
         "pypi",
         "tests",
         "cov",
@@ -50,6 +51,7 @@ _TIERS: list[list[str]] = [
         "venv",
         "ver",
         "tag",
+        "release",
         "pypi",
         "tests",
         "cov",
@@ -67,6 +69,7 @@ _TIERS: list[list[str]] = [
         "skip",
         "ver",
         "tag",
+        "release",
         "pypi",
         "tests",
         "cov",
@@ -98,6 +101,7 @@ _COL_GROUP = {
     "venv": "Env",
     "ver": "Version",
     "tag": "Version",
+    "release": "Version",
     "pypi": "Version",
     "drift_local": "Version",
     "drift_pypi": "Version",
@@ -123,6 +127,7 @@ _COL_TO_ENRICHER: dict[str, str] = {
     "warn": "audit",
     "skip": "audit",
     "pypi": "pypi",
+    "release": "gh-release",
     "ci": "ci",
     "rtd": "deep",
     "skills": "deep",
@@ -153,6 +158,7 @@ _COL_NAMES = {
     "venv": ".venv",
     "ver": "pyproject.toml",
     "tag": "git tag",
+    "release": "GH Release",
     "pypi": "PyPI",
     "drift_local": "Drift",
     "drift_pypi": "PyPI Drift",
@@ -250,12 +256,13 @@ def _color_version_cell(state: "PackageState", col: str) -> Text:
     val_raw = {
         "ver": state.version_pyproject,
         "tag": state.tag_latest,
+        "release": state.gh_release_latest,
         "pypi": state.pypi_latest,
     }.get(col, "")
 
     if not val_raw:
-        # `-` for missing tag/pyproject; `N/C` for not-fetched PyPI.
-        placeholder = "N/C" if col == "pypi" else "-"
+        # `-` for missing tag/pyproject; `N/C` for not-fetched network values.
+        placeholder = "N/C" if col in ("pypi", "release") else "-"
         return Text(placeholder, style="dim")
 
     canonical = _normalise_version(state.version_pyproject)
@@ -270,6 +277,43 @@ def _color_version_cell(state: "PackageState", col: str) -> Text:
     if canonical and own and canonical != own:
         return Text(val_raw, style="red")
     return Text(val_raw, style="green" if canonical and own else "")
+
+
+def _format_pass_fail_cell(
+    *,
+    passed: int,
+    failed: int,
+    fallback_collected: int = -1,
+    fallback_count: int = -1,
+    width: int = 4,
+) -> Text:
+    """Shared renderer for `F<failed> (<passed>/<total>)` cells.
+
+    Used by both the Test column (pytest pass/fail) and the CI column
+    (workflows pass/fail). Numbers are right-padded to `width` digits
+    so columns visually align across rows — `F  3 (1890/1893)` lines
+    up under `F 32 (1608/1640)`.
+
+    Priority order (Test column): real run results > collected-only
+    count > test-file count > N/C. CI column passes only `passed` /
+    `failed`.
+    """
+    if passed >= 0 or failed >= 0:
+        f = max(0, failed)
+        p = max(0, passed)
+        total = p + f
+        t = Text()
+        if f > 0:
+            t.append(f"F{f:>{width}d} ", style="red bold")
+        else:
+            t.append(f"F{f:>{width}d} ", style="green")
+        t.append(f"({p:>{width}d}/{total:>{width}d})")
+        return t
+    if fallback_collected >= 0:
+        return Text(str(fallback_collected), style="dim")
+    if fallback_count >= 0:
+        return Text(f"{fallback_count}f", style="dim italic")
+    return Text("N/C", style="dim")
 
 
 def _color_ci(s: str) -> Text:
@@ -304,7 +348,7 @@ def _cell(state: PackageState, col: str) -> Text | str:
             "symlink": Text("symlink", style="red"),
             "missing": Text("·", style="dim"),
         }.get(s, Text(s or "N/C", style="dim"))
-    if col in ("ver", "tag", "pypi"):
+    if col in ("ver", "tag", "release", "pypi"):
         return _color_version_cell(state, col)
     if col == "branch":
         b = state.branch or "-"
@@ -314,6 +358,14 @@ def _cell(state: PackageState, col: str) -> Text | str:
     if col == "last":
         return state.last_commit_iso[:10] if state.last_commit_iso else "-"
     if col == "ci":
+        # Prefer the rich per-workflow counts; fall back to the
+        # single-status glyph when the new fields aren't populated
+        # (older PackageState payloads, JSON cache rehydrates).
+        if state.ci_workflows_passed >= 0 or state.ci_workflows_failed >= 0:
+            return _format_pass_fail_cell(
+                passed=state.ci_workflows_passed,
+                failed=state.ci_workflows_failed,
+            )
         return _color_ci(state.ci_status)
     if col == "rtd":
         return state.rtd_status or Text("N/C", style="dim")
@@ -324,27 +376,12 @@ def _cell(state: PackageState, col: str) -> Text | str:
     if col == "py_apis":
         return _color_count(state.py_apis)
     if col == "tests":
-        # Priority: real pytest run > pytest --collect-only > test-file count > N/C.
-        # Real run renders as `F<failed> (<passed>/<total>)` with the F red
-        # when failed > 0; collected-only renders as `<n>` (dim); legacy file
-        # count renders as `<n>f` (very dim) to distinguish "we didn't actually
-        # run anything, this is just files on disk".
-        if state.tests_passed >= 0 or state.tests_failed >= 0:
-            failed = max(0, state.tests_failed)
-            passed = max(0, state.tests_passed)
-            total = passed + failed
-            t = Text()
-            if failed > 0:
-                t.append(f"F{failed} ", style="red bold")
-            else:
-                t.append("0 ", style="green")
-            t.append(f"({passed}/{total})")
-            return t
-        if state.tests_collected >= 0:
-            return Text(str(state.tests_collected), style="dim")
-        if state.tests_count >= 0:
-            return Text(f"{state.tests_count}f", style="dim italic")
-        return Text("N/C", style="dim")
+        return _format_pass_fail_cell(
+            passed=state.tests_passed,
+            failed=state.tests_failed,
+            fallback_collected=state.tests_collected,
+            fallback_count=state.tests_count,
+        )
     if col == "cov":
         return (
             f"{state.coverage:.0%}" if state.coverage >= 0 else Text("N/C", style="dim")
