@@ -1522,7 +1522,24 @@ def register_ecosystem_commands(main_group):
         is_flag=True,
         help="Emit JSON instead of the Rich table (alias for `dashboard export --format json`).",
     )
-    def dashboard_list(verbosity, package, jobs, as_json):
+    @click.option(
+        "--with-tests",
+        type=click.Choice(["off", "collect", "run"]),
+        default="off",
+        show_default=True,
+        help=(
+            "Populate the pytest column with real data:  "
+            "`off` (default) shows the cheap test-file count;  "
+            "`collect` runs `pytest --collect-only` per pkg "
+            "(~3-10s/pkg) and shows the parametrize-aware test count;  "
+            "`run` actually runs pytest per pkg (~30-300s each) and "
+            "shows `F<failed> (<passed>/<total>)` with the F red on "
+            "failures. Both `collect` and `run` invoke pytest INSIDE "
+            "each pkg's `<pkg>/.venv/` and skip pkgs whose venv is a "
+            "symlink or missing."
+        ),
+    )
+    def dashboard_list(verbosity, package, jobs, as_json, with_tests):
         """Live ecosystem dashboard. Visible columns at the current
         verbosity are always computed (verbosity ≠ depth); cells fill
         in via `rich.live.Live` first-come-first-served as each future
@@ -1540,11 +1557,39 @@ def register_ecosystem_commands(main_group):
 
         cols = cols_for_verbosity(verbosity)
         enrichers = enrichers_for_cols(cols)
+        # `--with-tests` opt-ins enrich `tests_collected` / `tests_passed`
+        # & `tests_failed` so the pytest column can show the real
+        # `F NN (NN/NN)` format instead of just the file count.
+        if with_tests == "collect":
+            enrichers.add("tests-collect")
+        elif with_tests == "run":
+            enrichers.add("tests-run")
+
+        # `-p` accepts repeats AND comma-separated values, plus the
+        # literal `all` (expands to every registered pkg). Mirrors
+        # `audit-all`'s argument style.
+        #   -p scitex-io -p scitex-stats     → ["scitex-io", "scitex-stats"]
+        #   -p scitex-io,scitex-stats        → ["scitex-io", "scitex-stats"]
+        #   -p all                           → None (all pkgs)
+        raw_pkgs: list[str] = []
+        for entry in package:
+            raw_pkgs.extend(p.strip() for p in entry.split(",") if p.strip())
+        if "all" in raw_pkgs:
+            packages_arg: list[str] | None = None
+        elif raw_pkgs:
+            seen: set[str] = set()
+            packages_arg = []
+            for p in raw_pkgs:
+                if p not in seen:
+                    seen.add(p)
+                    packages_arg.append(p)
+        else:
+            packages_arg = None
 
         if as_json:
             states = gather_ecosystem_state(
                 verbosity=verbosity,
-                packages=list(package) or None,
+                packages=packages_arg,
                 workers=jobs,
                 enrichers=enrichers,
             )
@@ -1579,7 +1624,7 @@ def register_ecosystem_commands(main_group):
         ) as live:
             gather_ecosystem_state(
                 verbosity=verbosity,
-                packages=list(package) or None,
+                packages=packages_arg,
                 workers=jobs,
                 on_update=_on_update,
                 enrichers=enrichers,

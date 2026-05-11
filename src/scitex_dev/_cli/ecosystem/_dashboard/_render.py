@@ -324,7 +324,27 @@ def _cell(state: PackageState, col: str) -> Text | str:
     if col == "py_apis":
         return _color_count(state.py_apis)
     if col == "tests":
-        return _color_count(state.tests_count)
+        # Priority: real pytest run > pytest --collect-only > test-file count > N/C.
+        # Real run renders as `F<failed> (<passed>/<total>)` with the F red
+        # when failed > 0; collected-only renders as `<n>` (dim); legacy file
+        # count renders as `<n>f` (very dim) to distinguish "we didn't actually
+        # run anything, this is just files on disk".
+        if state.tests_passed >= 0 or state.tests_failed >= 0:
+            failed = max(0, state.tests_failed)
+            passed = max(0, state.tests_passed)
+            total = passed + failed
+            t = Text()
+            if failed > 0:
+                t.append(f"F{failed} ", style="red bold")
+            else:
+                t.append("0 ", style="green")
+            t.append(f"({passed}/{total})")
+            return t
+        if state.tests_collected >= 0:
+            return Text(str(state.tests_collected), style="dim")
+        if state.tests_count >= 0:
+            return Text(f"{state.tests_count}f", style="dim italic")
+        return Text("N/C", style="dim")
     if col == "cov":
         return (
             f"{state.coverage:.0%}" if state.coverage >= 0 else Text("N/C", style="dim")

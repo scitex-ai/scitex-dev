@@ -73,7 +73,10 @@ class PackageState:
     skills_count: int = -1
     mcp_tools: int = -1
     py_apis: int = -1
-    tests_count: int = -1
+    tests_count: int = -1  # file count (legacy; cheap, basic enricher)
+    tests_collected: int = -1  # pytest --collect-only -q result (medium cost)
+    tests_passed: int = -1  # actual pytest run (heavy; --with-test-run)
+    tests_failed: int = -1  # actual pytest run (heavy; --with-test-run)
     coverage: float = -1.0
     loc: int = -1
 
@@ -271,6 +274,96 @@ def _enrich_deep(state: PackageState) -> None:
     state.skills_count = _count_files(skills_root, "*.md")
     state.tests_count = _count_files(repo / "tests", "test_*.py")
     state.loc = _count_loc(src_root)
+
+
+def _enrich_tests_collect(state: PackageState) -> None:
+    """Run ``pytest --collect-only -q`` inside the pkg's own venv.
+
+    Populates ``tests_collected`` — the real number of pytest test items
+    (test functions / parametrize cases), not the file count. Costs
+    ~3-10s per pkg (pytest startup dominates). Uses
+    ``<repo>/.venv/bin/python -m pytest`` so each pkg's own resolved
+    deps decide what imports cleanly.
+
+    Skips silently when the venv is a symlink or missing (those pkgs
+    haven't been isolated yet; the dashboard already flags them via
+    the `.venv` column).
+    """
+    repo = Path(state.local_path)
+    if not repo.is_dir():
+        return
+    venv_python = repo / ".venv" / "bin" / "python"
+    if state.venv_state != "real" or not venv_python.is_file():
+        return
+    tests_dir = repo / "tests"
+    if not tests_dir.is_dir():
+        return
+    try:
+        out = subprocess.check_output(
+            [
+                str(venv_python),
+                "-m",
+                "pytest",
+                "--collect-only",
+                "-q",
+                "--no-header",
+                str(tests_dir),
+            ],
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.CalledProcessError as exc:
+        out = exc.output or ""
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return
+    # Last non-empty line is usually like "143 tests collected in 0.31s"
+    # or "error during collection".
+    m = re.search(r"(\d+)\s+tests?\s+collected", out)
+    if m:
+        state.tests_collected = int(m.group(1))
+
+
+def _enrich_tests_run(state: PackageState) -> None:
+    """Run pytest for real (heavy). Populates passed/failed.
+
+    Off by default. Enable via the dashboard's `--with-test-run` flag
+    or the corresponding enricher key. Cost: 30-300s per pkg depending
+    on test suite size; some pkgs (scitex-cloud, scitex-scholar) may
+    take much longer.
+    """
+    repo = Path(state.local_path)
+    if not repo.is_dir():
+        return
+    venv_python = repo / ".venv" / "bin" / "python"
+    if state.venv_state != "real" or not venv_python.is_file():
+        return
+    tests_dir = repo / "tests"
+    if not tests_dir.is_dir():
+        return
+    try:
+        proc = subprocess.run(
+            [
+                str(venv_python),
+                "-m",
+                "pytest",
+                "-q",
+                "--no-header",
+                "--tb=no",
+                str(tests_dir),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+        out = (proc.stdout or "") + "\n" + (proc.stderr or "")
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return
+    # Summary line shape: "5 failed, 138 passed, 2 skipped in 3.45s"
+    passed = re.search(r"(\d+)\s+passed", out)
+    failed = re.search(r"(\d+)\s+failed", out)
+    state.tests_passed = int(passed.group(1)) if passed else 0
+    state.tests_failed = int(failed.group(1)) if failed else 0
 
 
 def _enrich_audit_bulk(
@@ -637,6 +730,16 @@ def gather_ecosystem_state(
         per_pkg_enrichers.append(_enrich_pypi)
     if "deep" in enrichers:
         per_pkg_enrichers.append(_enrich_deep)
+    if "tests-collect" in enrichers:
+        # Cheap: pytest --collect-only -q inside each pkg's own venv.
+        # Gives real test counts (parametrize cases included) instead of
+        # the basic enricher's test-file count.
+        per_pkg_enrichers.append(_enrich_tests_collect)
+    if "tests-run" in enrichers:
+        # Heavy: actually run pytest inside each pkg's own venv and
+        # parse the passed/failed summary. Populates the `F NN (NN/NN)`
+        # cell format. Cost: 30-300s per pkg.
+        per_pkg_enrichers.append(_enrich_tests_run)
     # Bulk enrichers (one task per fn, processes ALL states at once).
     # Both replace per-pkg subprocess fan-outs with a single batched
     # call: audit-all <pkgs...> as one subprocess; one GraphQL query
