@@ -1,4 +1,4 @@
-"""README structure rules — PS-141, PS-142, PS-143, PS-144.
+"""README structure rules — PS-141..144, PS-152..155.
 
 PS-141: README.md must have a `## Demo` OR `## Quick Start` section,
 and a visual element (markdown image, non-shield HTML `<img>`, or
@@ -21,6 +21,26 @@ order (skipping any optional or omitted section) is:
 PS-144: `## Problem and Solution` table cells must (a) contain at
 least one `**bold**` span, (b) keep bold coverage ≤ 30% of cell
 text, and (c) stay ≤ 200 characters per cell (one sentence per cell).
+
+PS-152: split `## Problem` + `## Solution` headings detected — must
+be merged into a single `## Problem and Solution` table (one row
+per pain point); see scitex-io README for the canonical form.
+
+PS-153: `## Architecture` (or `## How it works`) body contains a
+file-tree (`├──`/`└──`/`│`) but no ```mermaid fence — the
+file tree is duplicate information already in `_sphinx_html/` and
+`autoapi`. Replace with a `mermaid flowchart` showing
+logic/workflow.
+
+PS-154: `## Installation` section must start with one
+`uv pip install "<pkg>[all]"` fenced bash line; any per-module
+extras matrix table must live inside a `<details>` block.
+
+PS-155: badge row between `<!-- scitex-badges:start -->` and
+`<!-- scitex-badges:end -->` must split into exactly two
+`<p align="center">` rows (row 1: PyPI / Python / RTD; row 2:
+Tests / Install Test / Coverage). See scitex-io README header for
+the canonical form.
 """
 
 from __future__ import annotations
@@ -59,6 +79,17 @@ _SECTION_PATTERNS: dict[str, re.Pattern[str]] = {
     "part_of_scitex": re.compile(
         r"^##\s+Part\s+of\s+SciTeX\b", re.MULTILINE | re.IGNORECASE
     ),
+    # PS-152: standalone `## Problem` / `## Solution` headings (NOT the
+    # canonical merged `## Problem and Solution`). The negative lookahead
+    # rules out the merged form so this only fires on the split variants.
+    "problem_only": re.compile(
+        r"^##\s+Problems?(?!\s+(?:and|s\s+and)\s+Solutions?)\b",
+        re.MULTILINE | re.IGNORECASE,
+    ),
+    "solution_only": re.compile(
+        r"^##\s+Solutions?\b",
+        re.MULTILINE | re.IGNORECASE,
+    ),
 }
 
 # Canonical order (skipped sections collapse — only the relative order matters).
@@ -86,6 +117,23 @@ _RE_BADGE_HOST = re.compile(
 # Architecture content (PS-142) — wider net than PS-141.
 _RE_TREE_CHARS = re.compile(r"[├└│]")
 _RE_FENCED_BLOCK = re.compile(r"```([^\n]*)\n(.*?)```", re.DOTALL)
+
+# PS-154 — Installation: detect `uv pip install …` fenced bash blocks.
+_RE_UV_PIP_INSTALL = re.compile(
+    r"```(?:bash|sh|shell|console)?\s*\n[^\n`]*?uv\s+pip\s+install\b",
+    re.IGNORECASE,
+)
+_RE_DETAILS_OPEN = re.compile(r"<details\b", re.IGNORECASE)
+_RE_DETAILS_CLOSE = re.compile(r"</details\s*>", re.IGNORECASE)
+# PS-154: pipe-table detection (≥2 contiguous lines starting with `|`).
+_RE_PIPE_TABLE = re.compile(r"^\|[^\n]*\n\|[\s\-:|]+\|", re.MULTILINE)
+
+# PS-155 — canonical badge block markers and inner row count.
+_RE_BADGES_BLOCK = re.compile(
+    r"<!--\s*scitex-badges:start\s*-->(.*?)<!--\s*scitex-badges:end\s*-->",
+    re.DOTALL | re.IGNORECASE,
+)
+_RE_P_CENTER_OPEN = re.compile(r"<p\s+align\s*=\s*['\"]center['\"]\s*>", re.IGNORECASE)
 
 
 def _slice_section(text: str, start: int, end: int) -> str:
@@ -146,6 +194,11 @@ def _check_section_order(text: str) -> list[str]:
     """
     found: list[tuple[int, str]] = []  # (offset, name)
     for name, pat in _SECTION_PATTERNS.items():
+        # Only canonical-order sections participate in PS-143; auxiliary
+        # patterns (e.g. PS-152 `problem_only` / `solution_only`) are
+        # skipped here.
+        if name not in _CANONICAL_ORDER:
+            continue
         m = pat.search(text)
         if m:
             found.append((m.start(), name))
@@ -313,3 +366,111 @@ def check_readme_structure(repo: Path, violation_cls: type, out: list) -> None:
                             f"row {row_idx} {col_label}: {issue}",
                         )
                     )
+
+    # ---- PS-152: split `## Problem` / `## Solution` headings -------------
+    # Fire when either standalone heading appears WITHOUT a merged
+    # `## Problem and Solution` already present.
+    if pas is None:
+        prob_only = _SECTION_PATTERNS["problem_only"].search(text)
+        sol_only = _SECTION_PATTERNS["solution_only"].search(text)
+        if prob_only is not None or sol_only is not None:
+            out.append(
+                violation_cls(
+                    "PS-152",
+                    str(readme),
+                    (
+                        "split `## Problem` + `## Solution` sections "
+                        "detected — merge into one `## Problem and "
+                        "Solution` table (one row per pain point); see "
+                        "scitex-io README for the canonical form"
+                    ),
+                )
+            )
+
+    # ---- PS-153: Architecture file-tree without mermaid fence ------------
+    if arch is not None:
+        body, _s, _e = arch
+        if _RE_TREE_CHARS.search(body) and not _RE_MERMAID_FENCE.search(body):
+            out.append(
+                violation_cls(
+                    "PS-153",
+                    str(readme),
+                    (
+                        "Architecture/How-it-works section contains a "
+                        "file tree but no mermaid diagram — replace the "
+                        "file tree with a `mermaid flowchart` that shows "
+                        "logic / workflow; see scitex-io README §1. The "
+                        "directory tree is duplicate information already "
+                        "in `_sphinx_html/` and `autoapi`"
+                    ),
+                )
+            )
+
+    # ---- PS-154: Installation section structure --------------------------
+    install = _section_body(text, "installation")
+    if install is not None:
+        body, _s, _e = install
+        has_uv_pip = bool(_RE_UV_PIP_INSTALL.search(body))
+        if not has_uv_pip:
+            out.append(
+                violation_cls(
+                    "PS-154",
+                    str(readme),
+                    (
+                        "Installation section should start with one "
+                        '`uv pip install "<pkg>[all]"` line; per-module '
+                        "extras matrix must live inside a `<details>` "
+                        "block. See scitex-io README §Installation"
+                    ),
+                )
+            )
+        else:
+            # Check: any pipe-table outside of <details>...</details>?
+            # Build a "stripped" body with <details>…</details> regions
+            # blanked, then look for pipe-tables in the remainder.
+            stripped = body
+            # Naive but safe: repeatedly remove the first <details>...</details>.
+            while True:
+                m_open = _RE_DETAILS_OPEN.search(stripped)
+                if not m_open:
+                    break
+                m_close = _RE_DETAILS_CLOSE.search(stripped, m_open.end())
+                if not m_close:
+                    # Unterminated <details> — blank to end of section.
+                    stripped = stripped[: m_open.start()]
+                    break
+                stripped = stripped[: m_open.start()] + stripped[m_close.end() :]
+            if _RE_PIPE_TABLE.search(stripped):
+                out.append(
+                    violation_cls(
+                        "PS-154",
+                        str(readme),
+                        (
+                            "Installation section has an extras matrix "
+                            "table outside a `<details>` block — wrap "
+                            "the matrix in `<details><summary>…</summary>"
+                            "…</details>`. See scitex-io README "
+                            "§Installation"
+                        ),
+                    )
+                )
+
+    # ---- PS-155: badge row must be two <p align="center"> rows -----------
+    m_block = _RE_BADGES_BLOCK.search(text)
+    if m_block is not None:
+        inner = m_block.group(1)
+        p_count = len(_RE_P_CENTER_OPEN.findall(inner))
+        if p_count != 2:
+            out.append(
+                violation_cls(
+                    "PS-155",
+                    str(readme),
+                    (
+                        f"badge row should split into two centered rows "
+                        f'(found {p_count} `<p align="center">` blocks)'
+                        f" — row 1: PyPI / Python / Read the Docs, row "
+                        f"2: Tests / Install Test / Coverage. See "
+                        f"scitex-io README header for the canonical form"
+                    ),
+                )
+            )

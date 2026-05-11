@@ -506,6 +506,71 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
+            "PS-152",
+            "§1",
+            (
+                "README.md has separate `## Problem` and/or `## Solution` "
+                "H2 sections instead of a single merged "
+                "`## Problem and Solution` table (one row per pain "
+                "point). See scitex-io README for the canonical form."
+            ),
+            slug="readme-split-problem-solution",
+        ),
+        Rule(
+            "PS-153",
+            "§1",
+            (
+                "README.md `## Architecture` (or `## How it works`) "
+                "section contains a file tree (`├──`/`└──`/`│`) but "
+                "no ```mermaid fence. The directory tree is duplicate "
+                "information already in `_sphinx_html/` and `autoapi`. "
+                "Replace it with a `mermaid flowchart` showing the "
+                "logic/workflow — see scitex-io README §1."
+            ),
+            slug="readme-architecture-filetree-not-mermaid",
+        ),
+        Rule(
+            "PS-154",
+            "§1",
+            (
+                "README.md `## Installation` section must start with one "
+                '`uv pip install "<pkg>[all]"` fenced bash line; any '
+                "per-module extras matrix table must live inside a "
+                "`<details>` block. See scitex-io README §Installation."
+            ),
+            slug="readme-installation-not-canonical",
+        ),
+        Rule(
+            "PS-155",
+            "§1",
+            (
+                "README.md badge row between `<!-- scitex-badges:start "
+                "-->` and `<!-- scitex-badges:end -->` should split "
+                'into exactly two `<p align="center">` rows — row 1: '
+                "PyPI / Python / Read the Docs; row 2: Tests / Install "
+                "Test / Coverage. See scitex-io README header for the "
+                "canonical form."
+            ),
+            slug="readme-badge-row-not-two-rows",
+        ),
+        Rule(
+            "PS-156",
+            "§1",
+            (
+                "examples/ directory contains only `.py` scripts and no "
+                "`.ipynb` notebooks — prefer Jupyter notebooks for "
+                "examples so users can read prose + code + output side "
+                "by side and execute in-place. Reference: "
+                "https://github.com/ywatanabe1989/scitex-seizure-metrics/"
+                "tree/develop/examples (every example is .ipynb). Some "
+                "packages (e.g. scitex-io) document a script-style "
+                "examples set in their README and may keep .py files; "
+                "mix .py and .ipynb freely — the rule only fires when "
+                "examples/ has .py files and ZERO .ipynb files."
+            ),
+            slug="examples-no-ipynb",
+        ),
+        Rule(
             "PS-140",
             "§2",
             (
@@ -842,6 +907,11 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS-145": "W",  # cross-package state read (bake-in: warn first)
     "PS-146": "E",  # pip-install side-effect (clear violation)
     "PS-147": "W",  # eval-form shell completion (bake-in: warn first)
+    "PS-152": "W",  # README split Problem/Solution headings (warn)
+    "PS-153": "W",  # README architecture file-tree, no mermaid (warn)
+    "PS-154": "W",  # README installation not canonical (warn)
+    "PS-155": "I",  # README badge row not two centered rows (info)
+    "PS-156": "I",  # examples/ has .py but zero .ipynb (info)
     "PS-150": "W",  # [dev] missing scitex-dev pin — audit gate silently skips
     "PS-151": "W",  # scitex-dev pin floor < known-good (rule corpus drift)
     # src ↔ tests mirror — load-bearing for CI confidence
@@ -922,6 +992,11 @@ _SLUGS: dict[str, str] = {
     "PS-142": "readme-missing-architecture-diagram",
     "PS-143": "readme-missing-badge-row",
     "PS-144": "readme-missing-pypi-status",
+    "PS-152": "readme-split-problem-solution",
+    "PS-153": "readme-architecture-filetree-not-mermaid",
+    "PS-154": "readme-installation-not-canonical",
+    "PS-155": "readme-badge-row-not-two-rows",
+    "PS-156": "examples-no-ipynb",
     "PS-150": "dev-extras-missing-scitex-dev",
     "PS-151": "dev-extras-scitex-dev-floor-too-old",
     # §2 src↔tests already slugged at definition (PS-201–PS-205)
@@ -1172,6 +1247,26 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
                     "examples/ exists but contains no .py/.ipynb/.sh",
                 )
             )
+        else:
+            # PS-156: prefer .ipynb examples — fires only when examples/
+            # has runnable .py files but zero .ipynb. Packages that mix
+            # .py and .ipynb (or are pure-.ipynb) are silent.
+            py_count = sum(1 for p in runnable if p.suffix == ".py")
+            ipynb_count = sum(1 for p in runnable if p.suffix == ".ipynb")
+            if py_count > 0 and ipynb_count == 0:
+                out.append(
+                    Violation(
+                        "PS-156",
+                        str(examples),
+                        (
+                            f"examples/ has {py_count} `.py` script(s) "
+                            "and zero `.ipynb` notebooks — prefer "
+                            "Jupyter notebooks (see "
+                            "scitex-seizure-metrics/examples/). Mixed "
+                            ".py + .ipynb is also fine."
+                        ),
+                    )
+                )
 
     for dirname, why in _FORBIDDEN_TOP_DIRS.items():
         candidate = repo / dirname

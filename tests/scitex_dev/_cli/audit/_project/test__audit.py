@@ -1110,6 +1110,199 @@ def test_ps144_silent_on_well_formed_cell(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# PS-152 / PS-153 / PS-154 / PS-155 — extended README structure rules
+# ---------------------------------------------------------------------------
+
+
+_GOOD_BADGES_BLOCK = (
+    "<!-- scitex-badges:start -->\n"
+    '<p align="center">'
+    '<a href="x"><img src="https://img.shields.io/pypi/v/x" alt="PyPI"></a>'
+    "</p>\n"
+    '<p align="center">'
+    '<a href="x"><img src="https://img.shields.io/badge/tests-x" alt="Tests"></a>'
+    "</p>\n"
+    "<!-- scitex-badges:end -->\n\n"
+)
+
+_GOOD_INSTALL = '## Installation\n\n```bash\nuv pip install "demo[all]"\n```\n\n'
+
+_GOOD_ARCH_MERMAID = "## Architecture\n\n```mermaid\nflowchart LR\n    A --> B\n```\n\n"
+
+
+def _clean_readme():
+    """README that satisfies PS-141..148 + PS-152..155."""
+    return (
+        "# demo\n\n"
+        '<p align="center"><img src="docs/scitex-logo.png" alt="logo"></p>\n\n'
+        + _GOOD_BADGES_BLOCK
+        + _good_pas_table()
+        + "## Demo\n\n![Hilbert](docs/hilbert.png)\n\n"
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + "## 2 Interfaces\n\nPython API and CLI.\n\n"
+        + "## Part of SciTeX\n\nPart of SciTeX.\n"
+    )
+
+
+# ---- PS-152: split Problem / Solution -----------------------------------
+
+
+def test_ps152_fires_on_split_problem_solution(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        _README_HEADER
+        + "## Problem\n\nThings hurt.\n\n"
+        + "## Solution\n\nWe fix them.\n\n"
+        + "## Demo\n\n![x](y.png)\n\n"
+        + "## Installation\n\n```bash\nuv pip install demo\n```\n\n"
+        + "## Architecture\n\n```mermaid\nflowchart LR\nA-->B\n```\n\n"
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-152" in rules
+
+
+def test_ps152_fires_on_problem_only(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        _README_HEADER
+        + "## Problem\n\nThings hurt.\n\n"
+        + "## Demo\n\n![x](y.png)\n\n"
+        + "## Installation\n\n```bash\nuv pip install demo\n```\n\n"
+        + "## Architecture\n\n```mermaid\nflowchart LR\nA-->B\n```\n\n"
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-152" in rules
+
+
+def test_ps152_silent_on_merged_problem_and_solution(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_clean_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS-152" not in rules
+
+
+# ---- PS-153: Architecture file-tree without mermaid ---------------------
+
+
+def test_ps153_fires_when_architecture_has_filetree_without_mermaid(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    # _full_compliant_readme() uses a pure file-tree Architecture body.
+    (repo / "README.md").write_text(_full_compliant_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS-153" in rules
+
+
+def test_ps153_silent_when_architecture_is_mermaid(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_clean_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS-153" not in rules
+
+
+# ---- PS-154: Installation canonical form --------------------------------
+
+
+def test_ps154_fires_when_no_uv_pip_install_line(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    # _full_compliant_readme() uses `pip install demo`, not `uv pip install`.
+    (repo / "README.md").write_text(_full_compliant_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS-154" in rules
+
+
+def test_ps154_fires_when_extras_table_outside_details(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        _README_HEADER
+        + _good_pas_table()
+        + "## Demo\n\n![x](y.png)\n\n"
+        + "## Installation\n\n"
+        + "```bash\nuv pip install demo\n```\n\n"
+        + "| extra | description |\n"
+        + "|-------|-------------|\n"
+        + "| all   | everything  |\n\n"
+        + _GOOD_ARCH_MERMAID
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-154" in rules
+
+
+def test_ps154_silent_on_canonical_installation(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_clean_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS-154" not in rules
+
+
+def test_ps154_silent_when_extras_table_inside_details(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    body = (
+        _README_HEADER
+        + _good_pas_table()
+        + "## Demo\n\n![x](y.png)\n\n"
+        + "## Installation\n\n"
+        + "```bash\nuv pip install demo\n```\n\n"
+        + "<details><summary>Extras</summary>\n\n"
+        + "| extra | description |\n"
+        + "|-------|-------------|\n"
+        + "| all   | everything  |\n\n"
+        + "</details>\n\n"
+        + _GOOD_ARCH_MERMAID
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-154" not in rules
+
+
+# ---- PS-155: badge row layout -------------------------------------------
+
+
+def test_ps155_fires_when_badge_block_has_no_p_center_rows(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    # _README_HEADER has an empty <!-- scitex-badges:start/end --> block
+    # (zero <p align="center"> opening tags inside it).
+    (repo / "README.md").write_text(_full_compliant_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS-155" in rules
+
+
+def test_ps155_fires_when_badge_block_has_one_row(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    header = (
+        "# demo\n\n"
+        "<!-- scitex-badges:start -->\n"
+        '<p align="center"><img src="x" alt="PyPI"></p>\n'
+        "<!-- scitex-badges:end -->\n\n"
+    )
+    body = (
+        header
+        + _good_pas_table()
+        + "## Demo\n\n![x](y.png)\n\n"
+        + _GOOD_INSTALL
+        + _GOOD_ARCH_MERMAID
+        + "## 2 Interfaces\n\nx\n\n## Part of SciTeX\n\nx\n"
+    )
+    (repo / "README.md").write_text(body)
+    rules = _violations_for(repo, "demo")
+    assert "PS-155" in rules
+
+
+def test_ps155_silent_on_two_p_center_rows(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_clean_readme())
+    rules = _violations_for(repo, "demo")
+    assert "PS-155" not in rules
+
+
+# ---------------------------------------------------------------------------
 # PS-107 / PS-109 / PS-110 / PS-111 / PS-112 — README convention rules
 # ---------------------------------------------------------------------------
 
