@@ -398,6 +398,17 @@ def _enrich_tests_run(state: PackageState) -> None:
     tests_dir = repo / "tests"
     if not tests_dir.is_dir():
         return
+    # Run with `--cov` so the same invocation populates coverage.xml,
+    # which we parse below. pytest-cov is in every peer's [dev] extras
+    # (cross-cutting test dep); if the plugin isn't installed, --cov is
+    # silently ignored and we just don't get a coverage number.
+    import_name = state.pkg.replace("-", "_")
+    cov_target = repo / "src" / import_name
+    cov_args = (
+        ["--cov", str(cov_target), "--cov-report=xml:.coverage.xml"]
+        if cov_target.is_dir()
+        else []
+    )
     try:
         proc = subprocess.run(
             [
@@ -407,11 +418,13 @@ def _enrich_tests_run(state: PackageState) -> None:
                 "-q",
                 "--no-header",
                 "--tb=no",
+                *cov_args,
                 str(tests_dir),
             ],
             capture_output=True,
             text=True,
             timeout=600,
+            cwd=str(repo),
         )
         out = (proc.stdout or "") + "\n" + (proc.stderr or "")
     except (FileNotFoundError, subprocess.TimeoutExpired):
@@ -421,6 +434,20 @@ def _enrich_tests_run(state: PackageState) -> None:
     failed = re.search(r"(\d+)\s+failed", out)
     state.tests_passed = int(passed.group(1)) if passed else 0
     state.tests_failed = int(failed.group(1)) if failed else 0
+
+    # Parse coverage.xml — pytest-cov writes a Cobertura XML with the
+    # overall `line-rate` attribute (0.0 - 1.0) on the root element.
+    cov_xml = repo / ".coverage.xml"
+    if cov_xml.is_file():
+        import xml.etree.ElementTree as _ET
+
+        try:
+            root = _ET.parse(cov_xml).getroot()
+            rate = root.get("line-rate")
+            if rate is not None:
+                state.coverage = float(rate)
+        except (OSError, _ET.ParseError, ValueError):
+            pass
 
 
 def _enrich_audit_bulk(

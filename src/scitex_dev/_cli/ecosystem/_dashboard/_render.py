@@ -304,9 +304,13 @@ def _format_pass_fail_cell(
         total = p + f
         t = Text()
         if f > 0:
+            # Real failures — red `F<n>` prefix is the alarm signal.
             t.append(f"F{f:>{width}d} ", style="red bold")
         else:
-            t.append(f"F{f:>{width}d} ", style="green")
+            # Clean run — drop the `F` so a glance distinguishes
+            # passing rows from failing ones. The space pad keeps the
+            # `(<p>/<t>)` column visually aligned with `F<n>` rows.
+            t.append(f" {f:>{width}d} ", style="green")
         t.append(f"({p:>{width}d}/{total:>{width}d})")
         return t
     if fallback_collected >= 0:
@@ -422,10 +426,20 @@ def render_table(states: list[PackageState], verbosity: int = 1) -> Table:
         caption=_legend_text(),
         caption_justify="left",
         caption_style="",
-        expand=False,
+        # Expand to fill the full terminal width. Without this Rich
+        # uses the table's natural minimum width and truncates headers
+        # (`Audit Error` → `A…`) even when there's plenty of room.
+        expand=True,
     )
+    # `no_wrap=True` keeps cells on one line; `overflow="ellipsis"`
+    # collapses long values to `…` only when truly necessary (e.g. on
+    # a narrow split-pane). The Package column gets a generous min so
+    # `scitex-agent-container` stays unabridged on any sane terminal.
     for i, col in enumerate(cols):
-        table.add_column(_column_header(cols, i), no_wrap=True)
+        kwargs: dict = {"no_wrap": True, "overflow": "ellipsis"}
+        if col == "pkg":
+            kwargs["min_width"] = 22
+        table.add_column(_column_header(cols, i), **kwargs)
     for state in ordered_states:
         table.add_row(*[_cell(state, c) for c in cols])
     return table
