@@ -966,13 +966,20 @@ def test_ps141_fires_when_demo_section_missing(tmp_path):
 
 
 def test_ps141_fires_when_demo_section_has_no_visual(tmp_path):
+    # PS-141 fires only when BOTH Demo and Architecture lack a visual
+    # — the "one diagram is enough, but at least one is required" rule.
+    # Strip visuals from both sections so the violation can surface.
     repo = _make_repo(tmp_path, "demo")
-    (repo / "README.md").write_text(
-        _full_compliant_readme().replace(
-            "## Demo\n\n![Hilbert](docs/hilbert.png)",
-            "## Demo\n\nLook at this cool thing.",
-        )
+    body = _full_compliant_readme()
+    body = body.replace(
+        "## Demo\n\n![Hilbert](docs/hilbert.png)",
+        "## Demo\n\nLook at this cool thing.",
     )
+    body = body.replace(
+        "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```",
+        "## Architecture\n\nThis package is a flat single module.",
+    )
+    (repo / "README.md").write_text(body)
     rules = _violations_for(repo, "demo")
     assert "PS-141" in rules
 
@@ -1001,13 +1008,20 @@ def test_ps142_fires_when_architecture_section_missing(tmp_path):
 
 
 def test_ps142_fires_when_architecture_section_has_no_diagram(tmp_path):
+    # Architecture lacks a diagram AND Demo also lacks one — without
+    # both being empty, PS-142's "one diagram is enough" fallback kicks
+    # in and suppresses the violation.
     repo = _make_repo(tmp_path, "demo")
-    (repo / "README.md").write_text(
-        _full_compliant_readme().replace(
-            "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```",
-            "## Architecture\n\nThis package is a flat single module.",
-        )
+    body = _full_compliant_readme()
+    body = body.replace(
+        "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```",
+        "## Architecture\n\nThis package is a flat single module.",
     )
+    body = body.replace(
+        "## Demo\n\n![Hilbert](docs/hilbert.png)",
+        "## Demo\n\nLook at this cool thing.",
+    )
+    (repo / "README.md").write_text(body)
     rules = _violations_for(repo, "demo")
     assert "PS-142" in rules
 
