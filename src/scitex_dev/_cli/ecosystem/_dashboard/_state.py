@@ -451,17 +451,88 @@ def _enrich_tests_run(state: PackageState) -> None:
 
     # Parse coverage.xml — pytest-cov writes a Cobertura XML with the
     # overall `line-rate` attribute (0.0 - 1.0) on the root element.
+    # Also persist the parsed value to the coverage cache so subsequent
+    # dashboard refreshes don't have to re-run pytest (which is the
+    # whole point of --with-tests=run being opt-in).
     cov_xml = repo / ".coverage.xml"
     if cov_xml.is_file():
-        import xml.etree.ElementTree as _ET
+        rate = _parse_coverage_xml(cov_xml)
+        if rate is not None:
+            state.coverage = rate
+            from . import _coverage_cache
 
-        try:
-            root = _ET.parse(cov_xml).getroot()
-            rate = root.get("line-rate")
+            fp = _coverage_cache.target_fingerprint(repo)
+            if fp is not None:
+                _coverage_cache.save(
+                    state.pkg,
+                    target_fp=fp,
+                    coverage=rate,
+                    source="tests-run",
+                )
+
+
+def _parse_coverage_xml(cov_xml: Path) -> float | None:
+    """Parse Cobertura `line-rate` attribute (0..1) from a coverage.xml.
+
+    Returns None if the file is malformed or missing the attribute.
+    """
+    import xml.etree.ElementTree as _ET
+
+    try:
+        root = _ET.parse(cov_xml).getroot()
+        rate = root.get("line-rate")
+        if rate is None:
+            return None
+        return float(rate)
+    except (OSError, _ET.ParseError, ValueError):
+        return None
+
+
+def _enrich_coverage(state: "PackageState") -> None:
+    """Cheap coverage enricher — reads local coverage.xml + cache.
+
+    Cascade (fastest first):
+      1. <repo>/coverage.xml or <repo>/.coverage.xml exists → parse +
+         cache the line-rate. Wins on freshness when pytest just ran.
+      2. Coverage cache hit (keyed by git HEAD SHA) → use cached value.
+         Survives dashboard refreshes without re-running anything.
+      3. Cache miss + no XML → leave state.coverage at -1 ("N/C").
+         The heavy `--with-tests run` path will populate the cache on
+         its next invocation.
+
+    Dirty trees are never cached (per `_coverage_cache.target_fingerprint`).
+    Cost: O(1) stat + cache file read per pkg; ~µs in the common case.
+    """
+    repo = Path(state.local_path)
+    if not repo.is_dir():
+        return
+
+    # 1. Fresh local coverage.xml wins.
+    for fname in ("coverage.xml", ".coverage.xml"):
+        cov_xml = repo / fname
+        if cov_xml.is_file():
+            rate = _parse_coverage_xml(cov_xml)
             if rate is not None:
-                state.coverage = float(rate)
-        except (OSError, _ET.ParseError, ValueError):
-            pass
+                state.coverage = rate
+                from . import _coverage_cache
+
+                fp = _coverage_cache.target_fingerprint(repo)
+                if fp is not None:
+                    _coverage_cache.save(
+                        state.pkg,
+                        target_fp=fp,
+                        coverage=rate,
+                        source=fname,
+                    )
+                return
+
+    # 2. Cache lookup by commit SHA.
+    from . import _coverage_cache
+
+    fp = _coverage_cache.target_fingerprint(repo)
+    cached = _coverage_cache.load(state.pkg, target_fp=fp)
+    if cached is not None:
+        state.coverage = cached
 
 
 def _enrich_audit_bulk(
@@ -924,6 +995,10 @@ def gather_ecosystem_state(
         # without spawning anything. Pkgs with no prior run fall back
         # to the `_enrich_deep` file-count.
         per_pkg_enrichers.append(_enrich_tests_from_pytest_cache)
+        # Cheap coverage read: local coverage.xml + commit-SHA-keyed
+        # cache. Sub-ms per pkg; populates the Coverage column without
+        # requiring the heavy `--with-tests run` path.
+        per_pkg_enrichers.append(_enrich_coverage)
     if "tests-collect" in enrichers:
         # Cheap: pytest --collect-only -q inside each pkg's own venv.
         # Gives real test counts (parametrize cases included) instead of
