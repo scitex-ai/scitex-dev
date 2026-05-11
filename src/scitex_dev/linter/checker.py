@@ -295,6 +295,51 @@ class SciTeXChecker(ast.NodeVisitor):
         check_assignment(self, node)
         self.generic_visit(node)
 
+    # -- Numeric-literal visitor (NL001) --
+
+    def visit_Constant(self, node: ast.Constant) -> None:
+        """Flag integer literals ≥ 1_000 written without `_` separators
+        (STX-NL001 / PEP 515 — see
+        `_skills/general/03_interface_01_python-api/14_numeric-literals.md`).
+
+        Carve-outs:
+        - bool / float / complex / str / bytes / None — skipped.
+        - abs(value) < 1000 — under threshold.
+        - source segment already contains `_` — already conformant.
+        - source segment is non-decimal (`0x…`, `0o…`, `0b…`) — left
+          alone; the PEP applies but the rule keeps its scope narrow.
+        - `# noqa: STX-NL001` on the line — explicit suppression for
+          identifiers that read as a whole (years, ports, codes).
+        """
+        # Only int literals; explicitly reject bool (`True is 1`).
+        if not isinstance(node.value, int) or isinstance(node.value, bool):
+            self.generic_visit(node)
+            return
+        if abs(node.value) < 1000:
+            self.generic_visit(node)
+            return
+        # Need the original source segment to see if `_` was used —
+        # `node.value` normalises `21_600` and `21600` to the same int.
+        src = ast.get_source_segment("\n".join(self.source_lines), node)
+        if src is None or "_" in src:
+            self.generic_visit(node)
+            return
+        if src.startswith(("0x", "0o", "0b", "0X", "0O", "0B")):
+            # Non-decimal — same PEP applies but the rule keeps its
+            # scope narrow to base-10 quantities for now.
+            self.generic_visit(node)
+            return
+        line = (
+            self.source_lines[node.lineno - 1]
+            if node.lineno - 1 < len(self.source_lines)
+            else ""
+        )
+        if _is_allowed_by_comment(line, "STX-NL001"):
+            self.generic_visit(node)
+            return
+        self._add(rules.NL001, node.lineno, node.col_offset, line)
+        self.generic_visit(node)
+
     # -- Call visitors (Phase 2) --
 
     def visit_Call(self, node: ast.Call) -> None:
@@ -318,10 +363,10 @@ class SciTeXChecker(ast.NodeVisitor):
                     mod_name = func.value.attr  # use "stats" from scipy.stats
 
             # Check stx.io path patterns before skipping stx.* calls
-            if mod_name in ("stx", "scitex") or (
+            if mod_name in ("stx", "scitex", "scitex_io") or (
                 isinstance(func.value, ast.Attribute)
                 and isinstance(func.value.value, ast.Name)
-                and func.value.value.id in ("stx", "scitex")
+                and func.value.value.id in ("stx", "scitex", "scitex_io")
             ):
                 self._check_stx_io_path(node)
                 return
@@ -355,12 +400,12 @@ class SciTeXChecker(ast.NodeVisitor):
 
                 # to_csv / savefig -- skip on non-data/figure objects
                 if rule in (rules.IO004, rules.IO007):
-                    if mod_name in ("stx", "scitex", "os", "sys", "Path"):
+                    if mod_name in ("stx", "scitex", "scitex_io", "os", "sys", "Path"):
                         return
 
                 # FM rules: exempt stx.*/fr.*/figrecipe.* calls
                 if rule.category == "figure":
-                    _exempt = ("stx", "scitex", "fr", "figrecipe")
+                    _exempt = ("stx", "scitex", "scitex_io", "fr", "figrecipe")
                     if mod_name in _exempt:
                         return
                     # Check root of chained call: fr.fig.set_size_inches()
@@ -443,7 +488,7 @@ class SciTeXChecker(ast.NodeVisitor):
             if isinstance(deco, ast.Attribute):
                 if (
                     isinstance(deco.value, ast.Name)
-                    and deco.value.id in ("stx", "scitex")
+                    and deco.value.id in ("stx", "scitex", "scitex_io")
                     and deco.attr == "session"
                 ):
                     return True
@@ -459,7 +504,7 @@ class SciTeXChecker(ast.NodeVisitor):
             if isinstance(deco, ast.Call) and isinstance(deco.func, ast.Attribute):
                 if (
                     isinstance(deco.func.value, ast.Name)
-                    and deco.func.value.id in ("stx", "scitex")
+                    and deco.func.value.id in ("stx", "scitex", "scitex_io")
                     and deco.func.attr == "module"
                 ):
                     return True
@@ -467,7 +512,7 @@ class SciTeXChecker(ast.NodeVisitor):
             if isinstance(deco, ast.Attribute):
                 if (
                     isinstance(deco.value, ast.Name)
-                    and deco.value.id in ("stx", "scitex")
+                    and deco.value.id in ("stx", "scitex", "scitex_io")
                     and deco.attr == "module"
                 ):
                     return True

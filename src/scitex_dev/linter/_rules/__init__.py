@@ -26,9 +26,18 @@ from ._base import Rule
 from ._error_handling import EH001
 from ._lookup import lookup
 from ._lookup import reset as reset_lookup_cache  # noqa: F401
+from ._numeric_literals import NL001
 
-ALL_RULES = {EH001.id: EH001}
+ALL_RULES = {EH001.id: EH001, NL001.id: NL001}
 
 SEVERITY_ORDER = {"error": 2, "warning": 1, "info": 0}
 
-__all__ = ["Rule", "ALL_RULES", "SEVERITY_ORDER", "lookup", "reset_lookup_cache", "EH001"]
+__all__ = [
+    "Rule",
+    "ALL_RULES",
+    "SEVERITY_ORDER",
+    "lookup",
+    "reset_lookup_cache",
+    "EH001",
+    "NL001",
+]
