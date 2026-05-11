@@ -1164,7 +1164,10 @@ class Violation:
 
 # Test-name patterns: split into private (test__name.py) and public (test_name.py).
 # The leading-underscore in the source becomes a double underscore in the test.
-_PRIVATE_TEST_RE = re.compile(r"^test__([A-Za-z0-9][A-Za-z0-9_]*)\.py$")
+# Captured group allows optional extra leading underscores so dunder sources
+# like `__main__.py` (test `test___main__.py`) are recognised as having a
+# valid src mirror.
+_PRIVATE_TEST_RE = re.compile(r"^test__(_*[A-Za-z0-9][A-Za-z0-9_]*)\.py$")
 _PUBLIC_TEST_RE = re.compile(r"^test_([A-Za-z0-9][A-Za-z0-9_]*)\.py$")
 
 # Allowed at tests/ root. STRICT: only pytest infrastructure files —

@@ -203,6 +203,16 @@ def test_ps204_fires_on_orphan_test(tmp_path):
     assert "PS-204" in rules
 
 
+def test_ps204_silent_for_dunder_main(tmp_path):
+    """Regression: src/<pkg>/__main__.py paired with tests/<pkg>/test___main__.py
+    is the correct mirror — must NOT be flagged as orphan."""
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "src" / "demo" / "__main__.py").write_text("def main(): pass\n")
+    (repo / "tests" / "demo" / "test___main__.py").write_text("def test_main(): pass\n")
+    rules = _violations_for(repo, "demo")
+    assert "PS-204" not in rules
+
+
 def test_ps205_fires_on_wrong_prefix(tmp_path):
     """Source `_foo.py` (private) tested by `test_foo.py` (single _) is wrong."""
     repo = _make_repo(tmp_path, "demo")
