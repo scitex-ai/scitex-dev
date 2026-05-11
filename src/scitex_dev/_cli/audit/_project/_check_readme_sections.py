@@ -577,29 +577,14 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
             )
         )
 
-    # PS-131 — exactly one `<details open>` inside `## <N> Interfaces`.
-    iface_h = _RE_INTERFACES_HEADING.search(full)
-    if iface_h is not None:
-        # Slice out the interfaces section (until next H2 or EOF).
-        section_start = iface_h.end()
-        next_h = _RE_NEXT_H2.search(full, pos=section_start)
-        section = full[section_start : next_h.start() if next_h else len(full)]
-        n_open = len(_RE_DETAILS_OPEN_TAG.findall(section))
-        if n_open < 1:
-            out.append(
-                violation_cls(
-                    "PS-131",
-                    str(readme),
-                    (
-                        "README.md `## <N> Interfaces` section has 0 "
-                        "`<details open>` block(s); expected at least 1 "
-                        "(the primary interface, or all top-rated "
-                        "interfaces when tied). The primary's minimal "
-                        "example doubles as the quick-start, so it must "
-                        "be expanded by default."
-                    ),
-                )
-            )
+    # PS-131 — `<details open>` inside `## <N> Interfaces` is OPTIONAL.
+    # The original rule required at least one expanded block (the
+    # primary interface, doubling as the quick-start). Since the README
+    # template now ships a top-of-file `## Quick Start` section that
+    # carries that role, no interface needs to be expanded by default —
+    # all four can be collapsed. This block is kept as documentation;
+    # remove it entirely when the historical reference is no longer
+    # needed.
 
     # PS-123 — `Full X reference` links must deep-link, not bare RTD root.
     bad_links: list[str] = []
