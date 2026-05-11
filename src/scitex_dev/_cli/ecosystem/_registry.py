@@ -2044,7 +2044,17 @@ def register_ecosystem_commands(main_group):
         type=int,
         help="Run packages in parallel. Audits within a package stay serial.",
     )
-    def ecosystem_audit_all(distributions, as_json, severity, jobs):
+    @click.option(
+        "--no-version-check",
+        is_flag=True,
+        help=(
+            "Skip the pre-audit check that compares the installed "
+            "scitex-dev version against PyPI's latest. Useful on "
+            "air-gapped boxes or when you intentionally want to run "
+            "an older rule corpus."
+        ),
+    )
+    def ecosystem_audit_all(distributions, as_json, severity, jobs, no_version_check):
         """Run every audit-* on each DISTRIBUTION; aggregate exit codes.
 
         DISTRIBUTIONS accepts: a single name, multiple names as separate
@@ -2059,6 +2069,18 @@ def register_ecosystem_commands(main_group):
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         from ..._ecosystem._core import ECOSYSTEM
+
+        # Self-freshness check: warn (don't block) if installed
+        # scitex-dev is older than PyPI's latest. Stale auditors
+        # produced six false-positives on scitex-io in 2026-05; this
+        # gate makes the staleness visible up front.
+        if not no_version_check and not as_json:
+            try:
+                from ..audit._version_check import warn_if_stale
+
+                warn_if_stale()
+            except Exception:
+                pass  # never let the freshness check break the audit
 
         # Expand input: split on commas, flatten, then resolve `all`.
         raw: list[str] = []
