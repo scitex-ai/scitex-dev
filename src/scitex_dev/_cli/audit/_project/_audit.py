@@ -571,6 +571,33 @@ RULES: dict[str, Rule] = {
             slug="examples-no-ipynb",
         ),
         Rule(
+            "PS-157",
+            "§1",
+            (
+                "README.md codecov badge URL is unbranched "
+                "(`codecov.io/<owner>/<pkg>/graph/badge.svg`) — pin a "
+                "branch so the badge doesn't render 'unknown' when "
+                "uploads only land on develop. Use "
+                "`codecov.io/<owner>/<pkg>/branch/develop/graph/"
+                "badge.svg`. See scitex-io README header for the "
+                "canonical form."
+            ),
+            slug="readme-codecov-badge-unbranched",
+        ),
+        Rule(
+            "PS-158",
+            "§1",
+            (
+                "README.md Read-the-Docs badge uses readthedocs.org's "
+                "own /badge endpoint which bakes the literal label "
+                "'docs' into the SVG. Switch to the shields.io proxy "
+                "so the visible label matches the project: "
+                "`img.shields.io/readthedocs/<pkg>?label=Read%20the%20"
+                "Docs`. See scitex-io README header."
+            ),
+            slug="readme-rtd-badge-baked-label",
+        ),
+        Rule(
             "PS-140",
             "§2",
             (
@@ -912,6 +939,8 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS-154": "W",  # README installation not canonical (warn)
     "PS-155": "I",  # README badge row not two centered rows (info)
     "PS-156": "I",  # examples/ has .py but zero .ipynb (info)
+    "PS-157": "W",  # codecov badge URL unbranched (warn)
+    "PS-158": "I",  # RTD badge uses readthedocs.org baked label (info)
     "PS-150": "W",  # [dev] missing scitex-dev pin — audit gate silently skips
     "PS-151": "W",  # scitex-dev pin floor < known-good (rule corpus drift)
     # src ↔ tests mirror — load-bearing for CI confidence
@@ -997,6 +1026,8 @@ _SLUGS: dict[str, str] = {
     "PS-154": "readme-installation-not-canonical",
     "PS-155": "readme-badge-row-not-two-rows",
     "PS-156": "examples-no-ipynb",
+    "PS-157": "readme-codecov-badge-unbranched",
+    "PS-158": "readme-rtd-badge-baked-label",
     "PS-150": "dev-extras-missing-scitex-dev",
     "PS-151": "dev-extras-scitex-dev-floor-too-old",
     # §2 src↔tests already slugged at definition (PS-201–PS-205)
