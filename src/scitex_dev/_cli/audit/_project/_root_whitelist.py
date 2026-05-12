@@ -44,6 +44,10 @@ SPEC_DEFAULT_FILES: frozenset[str] = frozenset(
         "SECURITY.md",  # GitHub community-health file (sibling of CONTRIBUTING)
         "pyproject.toml",
         "Makefile",
+        # Codecov config — canonical location is repo root (see
+        # `_skills/general/02_package_11_ci-and-codecov.md`). Without
+        # this entry the canonical CI wiring trips PS-103.
+        "codecov.yml",
         # Node-ecosystem canonical manifests for any pkg shipping a
         # frontend (scitex-ui, hybrids). Like `pyproject.toml` but for
         # npm — no canonical alternative location.

@@ -1057,6 +1057,8 @@ _ALLOWED_ENV_PREFIXES = (
     "MPLCONFIGDIR",
     "CI",
     "GITHUB_",
+    # `gh` CLI's canonical token env var; widely used alongside GITHUB_TOKEN.
+    "GH_TOKEN",
     "GITLAB_",
     "RUNNER_",
     "AWS_",

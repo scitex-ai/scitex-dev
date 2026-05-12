@@ -25,8 +25,14 @@ GITIGNORED/
 
 # WIP directories
 scitex/
-.scitex/
 src/scitex_dev/app/
+
+# .scitex/ — runtime state, gitignored except for tracked dev config.
+# See _skills/general/01_ecosystem_06_local-state-directories.md.
+.scitex/*
+!.scitex/dev/
+.scitex/dev/*
+!.scitex/dev/config.yaml
 
 # Hook logs and pending
 docs/to_claude

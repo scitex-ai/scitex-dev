@@ -19,8 +19,9 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import click
 import pytest
+
+click = pytest.importorskip("click")
 
 from scitex_dev._cli.audit._summary import FLAT_KEEPERS
 from scitex_dev._cli.audit._summary._audit import (

@@ -18,10 +18,9 @@ import importlib.metadata as im
 import re
 from pathlib import Path
 
-try:
-    import yaml
-except ImportError:  # pragma: no cover
-    yaml = None
+from scitex_dev import try_import_optional
+
+yaml = try_import_optional("yaml", extra="cli-audit", pkg="scitex-dev")
 
 
 def _parse_frontmatter(text: str) -> dict | None:
