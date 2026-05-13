@@ -22,7 +22,7 @@ else:
     # Names below MUST match the actual registered command names. Anything
     # not listed here falls through to the "Other" section in --help.
     COMMAND_CATEGORIES = [
-        ("Ecosystem", ["doctor", "ecosystem"]),
+        ("Ecosystem", ["doctor", "ecosystem", "creds"]),
         ("Development", ["show-config", "rename-symbols"]),
         ("Documentation", ["docs", "search-docs", "skills"]),
         ("Interface", ["mcp", "list-python-apis"]),
@@ -440,8 +440,10 @@ else:
     # -------------------------------------------------------------------
 
     from ._mcp_cmds import register_mcp_commands
+    from .creds import register_creds_commands
 
     register_mcp_commands(main)
+    register_creds_commands(main)
 
     # -------------------------------------------------------------------
     # linter — engine moved here from scitex-linter (soft migration)
