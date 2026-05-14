@@ -3,15 +3,101 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
 from pathlib import Path
 
 import pytest
 
-from scitex_dev._creds import _rotate
 from scitex_dev._creds._rotate import (
     rotate_all,
     validate_source,
 )
+
+
+# -------- gh shim helpers ------------------------------------------------
+
+
+def _install_gh_shim(
+    bin_dir: Path,
+    *,
+    remote_sha: str | None = None,
+    set_secret_ok: bool = True,
+    set_var_ok: bool = True,
+) -> Path:
+    """Create an executable `gh` shim at ``bin_dir/gh`` and a call-log file.
+
+    The shim dispatches on ``$1 $2`` (e.g. ``variable get``, ``secret set``,
+    ``variable set``) and appends one short token per call to the log so
+    tests can assert how many times each verb was invoked.
+    """
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    log = bin_dir / "calls.log"
+    log.write_text("")
+    sha = remote_sha if remote_sha is not None else ""
+    var_get_rc = 0 if remote_sha is not None else 1
+    secret_set_rc = 0 if set_secret_ok else 1
+    var_set_rc = 0 if set_var_ok else 1
+    script = f"""#!/usr/bin/env bash
+verb="$1 $2"
+case "$verb" in
+  "variable get")
+    echo "var_get" >> "{log}"
+    [ {var_get_rc} -eq 0 ] && echo "{sha}"
+    exit {var_get_rc};;
+  "secret set")
+    echo "secret" >> "{log}"
+    exit {secret_set_rc};;
+  "variable set")
+    echo "var_set" >> "{log}"
+    exit {var_set_rc};;
+  *)
+    exit 0;;
+esac
+"""
+    gh = bin_dir / "gh"
+    gh.write_text(script)
+    gh.chmod(gh.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    # Also stage a noop `git` so `_detect_repo_for_package` falls back to
+    # the registry rather than trying the real git on PATH.
+    git = bin_dir / "git"
+    git.write_text("#!/usr/bin/env bash\nexit 1\n")
+    git.chmod(git.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    return log
+
+
+def _count_calls(log: Path) -> dict[str, int]:
+    counts = {"secret": 0, "var_get": 0, "var_set": 0}
+    if log.exists():
+        for line in log.read_text().splitlines():
+            line = line.strip()
+            if line in counts:
+                counts[line] += 1
+    return counts
+
+
+@pytest.fixture
+def gh_env(tmp_path):
+    """Yield a path-builder for installing gh shims with a clean PATH.
+
+    Returns a function ``install(...)`` that places a shim and returns the
+    call-log path. Restores PATH on exit.
+    """
+    bin_dir = tmp_path / "bin"
+    saved_path = os.environ.get("PATH")
+    os.environ["PATH"] = f"{bin_dir}{os.pathsep}{saved_path}"
+
+    def install(**kwargs):
+        return _install_gh_shim(bin_dir, **kwargs)
+
+    try:
+        yield install
+    finally:
+        if saved_path is None:
+            os.environ.pop("PATH", None)
+        else:
+            os.environ["PATH"] = saved_path
+
 
 # -------- helpers --------------------------------------------------------
 
@@ -33,200 +119,426 @@ def _write(tmp_path: Path, data) -> Path:
 # -------- validate_source -----------------------------------------------
 
 
-def test_validate_source_returns_state_on_good_file(tmp_path):
+def test_validate_source_returns_state_on_good_file_state_is_not_none(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     p = _write(tmp_path, _GOOD_PAYLOAD)
     state = validate_source(p)
     assert state is not None
+
+
+def test_validate_source_returns_state_on_good_file_state_sha256(tmp_path):
+    # Arrange
+    # Act
+    # Assert
+    p = _write(tmp_path, _GOOD_PAYLOAD)
+    state = validate_source(p)
     assert state.sha256
+
+
+def test_validate_source_returns_state_on_good_file_state_byte_count_len_p_read_text_encode(tmp_path):
+    # Arrange
+    # Act
+    # Assert
+    p = _write(tmp_path, _GOOD_PAYLOAD)
+    state = validate_source(p)
     assert state.byte_count == len(p.read_text().encode("utf-8"))
 
 
 def test_validate_source_missing_file_silent(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     assert validate_source(tmp_path / "no.json") is None
 
 
 def test_validate_source_parse_error_raises(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     p = _write(tmp_path, "{not json")
     with pytest.raises(ValueError):
         validate_source(p)
 
 
 def test_validate_source_missing_oauth_key_raises(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     p = _write(tmp_path, {"foo": "bar"})
     with pytest.raises(ValueError):
         validate_source(p)
 
 
 def test_validate_source_expired_silent_ms(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     p = _write(tmp_path, {"claudeAiOauth": {"expiresAt": 1_000}})
     assert validate_source(p, now_ms=lambda: 2_000_000_000_000) is None
 
 
 def test_validate_source_expired_silent_seconds(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     p = _write(tmp_path, {"claudeAiOauth": {"expires_at": 100}})
     assert validate_source(p, now_ms=lambda: 2_000_000_000_000) is None
 
 
-# -------- rotate_all (mocked subprocess) --------------------------------
+# -------- rotate_all (real subprocess against a `gh` shim on PATH) -------
 
 
-class _Run:
-    """Minimal stand-in for subprocess.CompletedProcess."""
-
-    def __init__(self, returncode=0, stdout="", stderr=""):
-        self.returncode = returncode
-        self.stdout = stdout
-        self.stderr = stderr
+_ONE_PKG = {"scitex-io": {"github_repo": "ywatanabe1989/scitex-io"}}
+_NO_LOCAL = lambda _: None  # noqa: E731 — short, single-use
 
 
-def _patch_gh(monkeypatch, *, remote_sha=None, set_secret_ok=True, set_var_ok=True):
-    """Patch the four gh-touching helpers + which()."""
-    monkeypatch.setattr(_rotate.shutil, "which", lambda _: "/usr/bin/gh")
-    calls = {"secret": 0, "var_get": 0, "var_set": 0}
-
-    def fake_run(argv, **kwargs):
-        if argv[:3] == ["gh", "variable", "get"]:
-            calls["var_get"] += 1
-            if remote_sha is None:
-                return _Run(returncode=1, stderr="not found")
-            return _Run(returncode=0, stdout=remote_sha + "\n")
-        if argv[:3] == ["gh", "secret", "set"]:
-            calls["secret"] += 1
-            return _Run(
-                returncode=0 if set_secret_ok else 1,
-                stderr="" if set_secret_ok else "boom",
-            )
-        if argv[:3] == ["gh", "variable", "set"]:
-            calls["var_set"] += 1
-            return _Run(
-                returncode=0 if set_var_ok else 1, stderr="" if set_var_ok else "boom"
-            )
-        if argv[:2] == ["git", "-C"] or argv[:1] == ["git"]:
-            # _detect_repo_for_package falls back to registry on failure.
-            return _Run(returncode=1, stdout="")
-        return _Run(returncode=0)
-
-    monkeypatch.setattr(_rotate.subprocess, "run", fake_run)
-    # Also stub out check_output (used by _detect_repo_for_package).
-    monkeypatch.setattr(
-        _rotate.subprocess,
-        "check_output",
-        lambda *a, **k: (_ for _ in ()).throw(FileNotFoundError()),
-    )
-    return calls
-
-
-def _only_first_pkg(monkeypatch):
-    """Pin ECOSYSTEM to a single deterministic package for tests."""
-    monkeypatch.setattr(
-        _rotate,
-        "ECOSYSTEM",
-        {"scitex-io": {"github_repo": "ywatanabe1989/scitex-io"}},
-    )
-    monkeypatch.setattr(_rotate, "get_local_path", lambda _: None)
-
-
-def test_rotate_all_sha_match_skips_gh(monkeypatch, tmp_path):
+def test_rotate_all_sha_match_skips_gh_len_results_1(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
     src = _write(tmp_path, _GOOD_PAYLOAD)
     state = validate_source(src)
-    _only_first_pkg(monkeypatch)
-    calls = _patch_gh(monkeypatch, remote_sha=state.sha256)
+    log = gh_env(remote_sha=state.sha256)
 
-    results = rotate_all(source_path=src, dry_run=False)
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert len(results) == 1
+
+
+def test_rotate_all_sha_match_skips_gh_results_0_status_unchanged(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
+    src = _write(tmp_path, _GOOD_PAYLOAD)
+    state = validate_source(src)
+    log = gh_env(remote_sha=state.sha256)
+
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert results[0].status == "unchanged"
+
+
+def test_rotate_all_sha_match_skips_gh_calls_secret_0(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
+    src = _write(tmp_path, _GOOD_PAYLOAD)
+    state = validate_source(src)
+    log = gh_env(remote_sha=state.sha256)
+
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert calls["secret"] == 0
+
+
+def test_rotate_all_sha_match_skips_gh_calls_var_set_0(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
+    src = _write(tmp_path, _GOOD_PAYLOAD)
+    state = validate_source(src)
+    log = gh_env(remote_sha=state.sha256)
+
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert calls["var_set"] == 0
 
 
-def test_rotate_all_sha_mismatch_rotates(monkeypatch, tmp_path):
+def test_rotate_all_sha_mismatch_rotates_results_0_status_rotated(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
     src = _write(tmp_path, _GOOD_PAYLOAD)
-    _only_first_pkg(monkeypatch)
-    calls = _patch_gh(monkeypatch, remote_sha="deadbeef")
+    log = gh_env(remote_sha="deadbeef")
 
-    results = rotate_all(source_path=src, dry_run=False)
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert results[0].status == "rotated"
+
+
+def test_rotate_all_sha_mismatch_rotates_calls_secret_1(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
+    src = _write(tmp_path, _GOOD_PAYLOAD)
+    log = gh_env(remote_sha="deadbeef")
+
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert calls["secret"] == 1
+
+
+def test_rotate_all_sha_mismatch_rotates_calls_var_set_1(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
+    src = _write(tmp_path, _GOOD_PAYLOAD)
+    log = gh_env(remote_sha="deadbeef")
+
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert calls["var_set"] == 1
 
 
-def test_rotate_all_missing_remote_skipped(monkeypatch, tmp_path):
+def test_rotate_all_missing_remote_skipped_results_0_status_skipped(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
     src = _write(tmp_path, _GOOD_PAYLOAD)
-    # Registry entry has no github_repo and no local clone.
-    monkeypatch.setattr(_rotate, "ECOSYSTEM", {"phantom-pkg": {}})
-    monkeypatch.setattr(_rotate, "get_local_path", lambda _: None)
-    _patch_gh(monkeypatch)
+    gh_env()
+    eco = {"phantom-pkg": {}}  # no github_repo
 
-    results = rotate_all(source_path=src, dry_run=False)
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        ecosystem=eco,
+        local_path_lookup=_NO_LOCAL,
+    )
     assert results[0].status == "skipped"
+
+
+def test_rotate_all_missing_remote_skipped_no_remote_in_results_0_message(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
+    src = _write(tmp_path, _GOOD_PAYLOAD)
+    gh_env()
+    eco = {"phantom-pkg": {}}  # no github_repo
+
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        ecosystem=eco,
+        local_path_lookup=_NO_LOCAL,
+    )
     assert "no remote" in results[0].message
 
 
-def test_rotate_all_json_parse_error_raises(monkeypatch, tmp_path):
+def test_rotate_all_json_parse_error_raises(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
     src = _write(tmp_path, "{nope")
-    monkeypatch.setattr(_rotate.shutil, "which", lambda _: "/usr/bin/gh")
+    gh_env()
     with pytest.raises(ValueError):
         rotate_all(source_path=src)
 
 
-def test_rotate_all_missing_oauth_raises(monkeypatch, tmp_path):
+def test_rotate_all_missing_oauth_raises(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
     src = _write(tmp_path, {"foo": "bar"})
-    monkeypatch.setattr(_rotate.shutil, "which", lambda _: "/usr/bin/gh")
+    gh_env()
     with pytest.raises(ValueError):
         rotate_all(source_path=src)
 
 
-def test_rotate_all_expired_token_silent(monkeypatch, tmp_path):
+def test_rotate_all_expired_token_silent(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
     src = _write(tmp_path, {"claudeAiOauth": {"expiresAt": 1}})
-    monkeypatch.setattr(_rotate.shutil, "which", lambda _: "/usr/bin/gh")
+    gh_env()
     # Should return empty list — no per-repo activity.
     assert rotate_all(source_path=src) == []
 
 
-def test_rotate_all_dry_run_makes_no_gh_set(monkeypatch, tmp_path):
+def test_rotate_all_dry_run_makes_no_gh_set_results_0_status_dry_run(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
     src = _write(tmp_path, _GOOD_PAYLOAD)
-    _only_first_pkg(monkeypatch)
-    calls = _patch_gh(monkeypatch, remote_sha="deadbeef")
+    log = gh_env(remote_sha="deadbeef")
 
-    results = rotate_all(source_path=src, dry_run=True)
+    results = rotate_all(
+        source_path=src,
+        dry_run=True,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert results[0].status == "dry-run"
+
+
+def test_rotate_all_dry_run_makes_no_gh_set_calls_secret_0(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
+    src = _write(tmp_path, _GOOD_PAYLOAD)
+    log = gh_env(remote_sha="deadbeef")
+
+    results = rotate_all(
+        source_path=src,
+        dry_run=True,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert calls["secret"] == 0
+
+
+def test_rotate_all_dry_run_makes_no_gh_set_calls_var_set_0(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
+    src = _write(tmp_path, _GOOD_PAYLOAD)
+    log = gh_env(remote_sha="deadbeef")
+
+    results = rotate_all(
+        source_path=src,
+        dry_run=True,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert calls["var_set"] == 0
 
 
-def test_rotate_all_force_overrides_match(monkeypatch, tmp_path):
+def test_rotate_all_force_overrides_match_results_0_status_rotated(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
     src = _write(tmp_path, _GOOD_PAYLOAD)
     state = validate_source(src)
-    _only_first_pkg(monkeypatch)
-    calls = _patch_gh(monkeypatch, remote_sha=state.sha256)
+    log = gh_env(remote_sha=state.sha256)
 
-    results = rotate_all(source_path=src, dry_run=False, force=True)
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        force=True,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert results[0].status == "rotated"
+
+
+def test_rotate_all_force_overrides_match_calls_secret_1(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
+    src = _write(tmp_path, _GOOD_PAYLOAD)
+    state = validate_source(src)
+    log = gh_env(remote_sha=state.sha256)
+
+    results = rotate_all(
+        source_path=src,
+        dry_run=False,
+        force=True,
+        ecosystem=_ONE_PKG,
+        local_path_lookup=_NO_LOCAL,
+    )
+    calls = _count_calls(log)
     assert calls["secret"] == 1
 
 
-def test_rotate_all_only_and_exclude_filters(monkeypatch, tmp_path):
+def test_rotate_all_only_and_exclude_filters_r_package_for_r_in_only_pkg_a(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
     src = _write(tmp_path, _GOOD_PAYLOAD)
-    monkeypatch.setattr(
-        _rotate,
-        "ECOSYSTEM",
-        {
-            "pkg-a": {"github_repo": "o/a"},
-            "pkg-b": {"github_repo": "o/b"},
-            "pkg-c": {"github_repo": "o/c"},
-        },
+    gh_env(remote_sha="x")
+    eco = {
+        "pkg-a": {"github_repo": "o/a"},
+        "pkg-b": {"github_repo": "o/b"},
+        "pkg-c": {"github_repo": "o/c"},
+    }
+    only = rotate_all(
+        source_path=src,
+        only=["pkg-a"],
+        dry_run=True,
+        ecosystem=eco,
+        local_path_lookup=_NO_LOCAL,
     )
-    monkeypatch.setattr(_rotate, "get_local_path", lambda _: None)
-    _patch_gh(monkeypatch, remote_sha="x")
-
-    only = rotate_all(source_path=src, only=["pkg-a"], dry_run=True)
     assert [r.package for r in only] == ["pkg-a"]
-    excluded = rotate_all(source_path=src, exclude=["pkg-b"], dry_run=True)
+    excluded = rotate_all(
+        source_path=src,
+        exclude=["pkg-b"],
+        dry_run=True,
+        ecosystem=eco,
+        local_path_lookup=_NO_LOCAL,
+    )
+
+
+def test_rotate_all_only_and_exclude_filters_r_package_for_r_in_excluded_pkg_a_pkg_c(tmp_path, gh_env):
+    # Arrange
+    # Act
+    # Assert
+    src = _write(tmp_path, _GOOD_PAYLOAD)
+    gh_env(remote_sha="x")
+    eco = {
+        "pkg-a": {"github_repo": "o/a"},
+        "pkg-b": {"github_repo": "o/b"},
+        "pkg-c": {"github_repo": "o/c"},
+    }
+    only = rotate_all(
+        source_path=src,
+        only=["pkg-a"],
+        dry_run=True,
+        ecosystem=eco,
+        local_path_lookup=_NO_LOCAL,
+    )
+    excluded = rotate_all(
+        source_path=src,
+        exclude=["pkg-b"],
+        dry_run=True,
+        ecosystem=eco,
+        local_path_lookup=_NO_LOCAL,
+    )
     assert [r.package for r in excluded] == ["pkg-a", "pkg-c"]
 
 
-def test_rotate_all_gh_missing_raises(monkeypatch, tmp_path):
+def test_rotate_all_gh_missing_raises(tmp_path):
+    """With an empty PATH (no `gh`), rotate_all must raise."""
+    # Arrange
+    # Act
+    # Assert
     src = _write(tmp_path, _GOOD_PAYLOAD)
-    monkeypatch.setattr(_rotate.shutil, "which", lambda _: None)
-    with pytest.raises(RuntimeError):
-        rotate_all(source_path=src)
+    saved = os.environ.get("PATH")
+    os.environ["PATH"] = ""
+    try:
+        with pytest.raises(RuntimeError):
+            rotate_all(source_path=src)
+    finally:
+        if saved is None:
+            os.environ.pop("PATH", None)
+        else:
+            os.environ["PATH"] = saved

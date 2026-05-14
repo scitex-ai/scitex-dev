@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Timestamp: "2026-05-14 23:52:08 (ywatanabe)"
+# File: /home/ywatanabe/proj/scitex-dev/src/scitex_dev/_audit_disclaimer.py
+
+
 """Sufficiency disclaimer printed at the end of every audit-* run.
 
 Auditors check necessity (codified rules pass) but cannot judge
@@ -5,8 +11,6 @@ sufficiency (whether the package is genuinely well-organized,
 documented, and useful). Surfacing this on every run keeps consumers
 honest about the audit's limits.
 """
-
-from __future__ import annotations
 
 import os as _os
 
@@ -86,7 +90,7 @@ def _disclaimer_text() -> str:
     """
     return (
         f"audited by scitex-dev v{_scitex_dev_version()}\n"
-        "note: passing this audit is necessary but not sufficient for "
+        "note: passing this audit is necessary but may not be sufficient for "
         f"SciTeX standards — see `{_skills_root()}/general/` for the "
         "full quality checklist (content accuracy, prose clarity, "
         "naming taste, etc.)."
@@ -107,3 +111,5 @@ def emit_skill_hints() -> None:
     if _os.environ.get("SCITEX_DEV_NO_AUDIT_DISCLAIMER"):
         return
     click.echo(_skill_hints_text(), err=True)
+
+# EOF

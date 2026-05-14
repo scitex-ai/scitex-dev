@@ -26,9 +26,24 @@ from ._base import Rule
 from ._error_handling import EH001
 from ._lookup import lookup
 from ._lookup import reset as reset_lookup_cache  # noqa: F401
+from ._no_mocks import NM001, NM002, NM003
 from ._numeric_literals import NL001
+from ._test_quality import TQ001, TQ002, TQ003, TQ004, TQ005, TQ006, TQ007
 
-ALL_RULES = {EH001.id: EH001, NL001.id: NL001}
+ALL_RULES = {
+    EH001.id: EH001,
+    NL001.id: NL001,
+    NM001.id: NM001,
+    NM002.id: NM002,
+    NM003.id: NM003,
+    TQ001.id: TQ001,
+    TQ002.id: TQ002,
+    TQ003.id: TQ003,
+    TQ004.id: TQ004,
+    TQ005.id: TQ005,
+    TQ006.id: TQ006,
+    TQ007.id: TQ007,
+}
 
 SEVERITY_ORDER = {"error": 2, "warning": 1, "info": 0}
 
@@ -40,4 +55,14 @@ __all__ = [
     "reset_lookup_cache",
     "EH001",
     "NL001",
+    "NM001",
+    "NM002",
+    "NM003",
+    "TQ001",
+    "TQ002",
+    "TQ003",
+    "TQ004",
+    "TQ005",
+    "TQ006",
+    "TQ007",
 ]

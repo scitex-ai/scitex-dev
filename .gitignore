@@ -33,6 +33,7 @@ src/scitex_dev/app/
 !.scitex/dev/
 .scitex/dev/*
 !.scitex/dev/config.yaml
+!.scitex/dev/cli-audit-dict.yaml
 
 # Hook logs and pending
 docs/to_claude

@@ -1817,12 +1817,15 @@ def _audit_one(
     package: str,
     behavioral: bool = False,
     timeout: float = 30.0,
+    ep_value_for=None,
 ) -> tuple[str, list[Violation]]:
     """Audit a single package; return (status, violations).
 
     Status is one of: "ok", "warn", "skip-mcp", "not-found", "not-auditable".
     """
-    ep_value = _ep_value_for(package)
+    if ep_value_for is None:
+        ep_value_for = _ep_value_for
+    ep_value = ep_value_for(package)
     if ep_value is None:
         return "not-found", []
     if _is_mcp_server_entry(ep_value):
@@ -1864,27 +1867,29 @@ def _emit_human(package: str, status: str, violations: list[Violation]) -> None:
             f"info  {package}: MCP / protocol server — skipped (use audit-mcp-tools when available)"
         )
         return
+    from .._emit import emit as _emit
+
     if status == "not-found":
         # No console script is a legitimate state for utility packages
         # (types, base/core libraries, etc.) — audit-cli can't enforce
         # a CLI convention on a package that has no CLI. Surface as info.
-        click.echo(f"info  {package}: no console script — skipped")
+        _emit("info", f"{package}: no console script — skipped")
         return
     if status.startswith("not-auditable"):
-        click.echo(f"error {package}: {status}", err=True)
+        _emit("error", f"{package}: {status}", err=True)
         return
     from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
     if status == "ok":
-        click.echo(f"ok    {package}: no CLI convention violations")
+        _emit("success", f"{package}: no CLI convention violations")
         emit_disclaimer()
         return
     sev = _max_severity(violations)
-    label = "error" if sev == "error" else "warn "
+    level = "error" if sev == "error" else "warning"
     noun = "error(s)" if sev == "error" else "warning(s)"
-    click.echo(f"{label} {package}: {len(violations)} {noun}")
+    _emit(level, f"{package}: {len(violations)} {noun}")
     for v in violations:
-        click.echo(f"  [{v.rule}] {v.command}: {v.message}")
+        _emit(level, f"  [{v.rule}] {v.command}: {v.message}")
     emit_disclaimer()
     emit_skill_hints()
 
@@ -1923,7 +1928,9 @@ def run_audit(
             rec = {"package": package, "status": f"skip-{reason}", "violations": []}
             _emit_json([rec], registry_provenance or "single-package mode")
         else:
-            click.echo(f"skip  {package}: {reason}")
+            from .._emit import emit as _emit_skip
+
+            _emit_skip("skip", f"{package}: {reason}")
         return 0
 
     status, violations = _audit_one(package, behavioral=behavioral, timeout=timeout)

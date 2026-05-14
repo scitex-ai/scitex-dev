@@ -368,15 +368,28 @@ _SAFE_MOUNT_CALL = re.compile(r"\bsafe_mount\s*\(")
 _PLAIN_MOUNT_CALL = re.compile(r"\.\s*mount\s*\(")
 
 
-def _check_bridge_pattern(package: str, out: list[Violation]) -> None:
+def _check_bridge_pattern(
+    package: str,
+    out: list[Violation],
+    *,
+    read_bridge_source=None,
+    resolve_mcp_server=None,
+) -> None:
     """§1 — umbrella bridge must use `safe_mount` (or equivalent), not hand-wrap.
 
     Exempt when the standalone has no `<pkg>._mcp_server.mcp`: the bridge
     cannot `safe_mount` a non-existent server, so hand-wrapping is the
     only available option. The §1 rule only applies when the bridge
     *could* mount but chose not to.
+
+    The optional ``read_bridge_source`` / ``resolve_mcp_server`` callables
+    let tests inject fakes without monkey-patching the module.
     """
-    src = _read_bridge_source(package)
+    if read_bridge_source is None:
+        read_bridge_source = _read_bridge_source
+    if resolve_mcp_server is None:
+        resolve_mcp_server = _resolve_mcp_server
+    src = read_bridge_source(package)
     if src is None:
         # No bridge → not flagged here; presence is checked under §6 parity.
         return
@@ -389,7 +402,7 @@ def _check_bridge_pattern(package: str, out: list[Violation]) -> None:
         # Standalone-side check: if `<pkg>._mcp_server.mcp` doesn't
         # resolve, hand-wrap is the only option. Don't penalise the
         # standalone for the umbrella's choice when no alternative exists.
-        if _resolve_mcp_server(package) is None:
+        if resolve_mcp_server(package) is None:
             return
         out.append(
             Violation(
@@ -660,12 +673,14 @@ def run_audit_mcp(
     except ImportError:
         should_skip_audit = lambda *_a, **_k: (False, "")  # noqa: E731
     skip, reason = should_skip_audit(package, "audit-mcp-tools")
+    from .._emit import emit as _emit
+
     if skip:
         if output_json:
             rec = {"package": package, "status": f"skip-{reason}", "violations": []}
             _emit_json([rec], "single-package mode (mcp)")
         else:
-            click.echo(f"skip  {package}: {reason}")
+            _emit("skip", f"{package}: {reason}")
         return 0
     status, violations = _audit_one_mcp(package, behavioral=behavioral, timeout=timeout)
     violations = _filter_violations(violations, rules, exclude, min_severity)
@@ -680,10 +695,11 @@ def run_audit_mcp(
         _emit_json([rec], "single-package mode (mcp)")
     else:
         if status == "no-mcp-server":
-            click.echo(f"info  {package}: no `_mcp_server.mcp` found — skipped")
+            _emit("info", f"{package}: no `_mcp_server.mcp` found — skipped")
         elif status == "skip-not-standalone":
-            click.echo(
-                f"info  {package}: not an MCP standalone (umbrella or protocol-server) — skipped"
+            _emit(
+                "info",
+                f"{package}: not an MCP standalone (umbrella or protocol-server) — skipped",
             )
         else:
             _emit_human(package, status, violations)

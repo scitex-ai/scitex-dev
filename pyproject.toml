@@ -16,6 +16,7 @@ keywords = ["scitex", "developer-tools", "documentation", "llm-friendly", "mcp"]
 # 3.10 (tomllib is stdlib only from 3.11+; the pyproject linter needs it).
 dependencies = [
     "scitex-config>=0.3.0",
+    "scitex-logging>=0.1.0",
     "newb>=0.3.0",
     'tomli>=2.0; python_version < "3.11"',
 ]
@@ -30,9 +31,13 @@ dev = [
     "fastmcp>=2.0.0",
     "pyyaml>=6.0",
     "textual>=0.50.0",
-    # PS-150: tests/develop/test_audit.py invokes `scitex-dev ecosystem audit-all`
-    # via shutil.which; without this entry the gate silently skips in fresh venvs.
-    "scitex-dev>=0.11.5",
+    # NOTE: do NOT add `scitex-dev>=X.Y` here — it creates an unresolvable
+    # circular dependency in CI (the local editable install resolves to
+    # `0.1.dev1+g<sha>` via setuptools-scm, which fails `>=0.11.5`). The
+    # `scitex-dev` console script is provided by the package itself once
+    # `pip install -e .[dev]` runs, so PS-150's `shutil.which` check still
+    # works. If the meta-audit test must hard-fail (not skip) when the CLI
+    # is absent, gate it explicitly rather than via this circular pin.
 ]
 cli-audit = ["click>=8.0.0", "pyyaml>=6.0"]
 tui = ["textual>=0.50.0"]

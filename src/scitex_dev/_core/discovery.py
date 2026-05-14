@@ -24,27 +24,40 @@ _ENTRY_POINT_GROUP = "scitex_dev.docs"
 _cache: Optional[dict[str, str]] = None
 
 
-def discover_packages() -> dict[str, str]:
+def discover_packages(
+    *,
+    entry_points_fn=None,
+    ecosystem: Optional[dict] = None,
+    use_cache: bool = True,
+) -> dict[str, str]:
     """Discover all ecosystem packages, merging entry points with ECOSYSTEM.
 
     Uses entry points as primary source, then fills in missing packages
     from ECOSYSTEM dict with a warning for each missing entry point.
+
+    ``entry_points_fn`` / ``ecosystem`` are test-injection seams (default
+    behavior is unchanged when both are ``None``). When either is supplied,
+    or ``use_cache`` is False, the result bypasses the module cache.
 
     Returns:
         Dict mapping package name → Python module name.
         e.g. {"scitex-writer": "scitex_writer", "figrecipe": "figrecipe"}
     """
     global _cache
-    if _cache is not None:
+    injected = entry_points_fn is not None or ecosystem is not None
+    if use_cache and not injected and _cache is not None:
         return _cache
 
     packages = {}
 
     # 1. Entry points (primary — these packages registered correctly)
     try:
-        from importlib.metadata import entry_points
+        if entry_points_fn is None:
+            from importlib.metadata import entry_points
 
-        eps = entry_points(group=_ENTRY_POINT_GROUP)
+            eps = entry_points(group=_ENTRY_POINT_GROUP)
+        else:
+            eps = entry_points_fn(group=_ENTRY_POINT_GROUP)
         for ep in eps:
             packages[ep.name] = ep.value
     except Exception:
@@ -52,7 +65,10 @@ def discover_packages() -> dict[str, str]:
 
     # 2. Fill in from ECOSYSTEM (source of truth for all packages)
     try:
-        from .._ecosystem import ECOSYSTEM
+        if ecosystem is None:
+            from .._ecosystem import ECOSYSTEM
+        else:
+            ECOSYSTEM = ecosystem
 
         from importlib.metadata import PackageNotFoundError, distribution
 
@@ -83,7 +99,8 @@ def discover_packages() -> dict[str, str]:
     except ImportError:
         logger.debug("ECOSYSTEM not available for fallback discovery")
 
-    _cache = packages
+    if use_cache and not injected:
+        _cache = packages
     return packages
 
 

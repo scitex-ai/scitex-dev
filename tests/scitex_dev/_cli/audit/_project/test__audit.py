@@ -112,14 +112,28 @@ _GOOD_README = (
 # ---------------------------------------------------------------------------
 
 
-def test_rules_have_unique_codes_and_sections():
+def test_rules_have_unique_codes_and_sections_len_codes_len_set_codes():
+    # Arrange
+    # Act
+    # Assert
     codes = list(RULES.keys())
     assert len(codes) == len(set(codes)), "duplicate rule codes"
+    sections = {r.section for r in RULES.values()}
+
+
+def test_rules_have_unique_codes_and_sections_sections_1_2_3_4():
+    # Arrange
+    # Act
+    # Assert
+    codes = list(RULES.keys())
     sections = {r.section for r in RULES.values()}
     assert sections >= {"§1", "§2", "§3", "§4"}
 
 
 def test_rule_namespace_is_ps():
+    # Arrange
+    # Act
+    # Assert
     assert all(c.startswith("PS") for c in RULES)
 
 
@@ -130,11 +144,17 @@ def test_rule_namespace_is_ps():
 
 def test_ps101_fires_when_pyproject_missing(tmp_path):
     # Bare dir, no pyproject
+    # Arrange
+    # Act
+    # Assert
     rules = _violations_for(tmp_path, "demo")
     assert "PS-101" in rules
 
 
 def test_ps102_fires_on_forbidden_top_level_dir(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path)
     (repo / "mgmt").mkdir()
     rules = _violations_for(repo, "demo-pkg")
@@ -142,6 +162,9 @@ def test_ps102_fires_on_forbidden_top_level_dir(tmp_path):
 
 
 def test_ps103_fires_on_top_level_junk(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path)
     (repo / "tmp_quick.py").write_text("x = 1\n")
     rules = _violations_for(repo, "demo-pkg")
@@ -149,6 +172,9 @@ def test_ps103_fires_on_top_level_junk(tmp_path):
 
 
 def test_ps104_fires_on_playground(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path)
     (repo / ".playground").mkdir()
     rules = _violations_for(repo, "demo-pkg")
@@ -162,6 +188,9 @@ def test_ps104_fires_on_playground(tmp_path):
 
 def test_ps201_fires_when_tests_pkg_parent_missing(tmp_path):
     """src/<pkg>/ exists, tests/ exists, but no tests/<pkg>/ parent."""
+    # Arrange
+    # Act
+    # Assert
     (tmp_path / "pyproject.toml").write_text('[project]\nname = "demo"\n')
     src = tmp_path / "src" / "demo"
     src.mkdir(parents=True)
@@ -172,6 +201,9 @@ def test_ps201_fires_when_tests_pkg_parent_missing(tmp_path):
 
 
 def test_ps202_fires_on_unmatched_subdir(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "src" / "demo" / "sub").mkdir()
     (repo / "src" / "demo" / "sub" / "x.py").write_text("def f(): pass\n")
@@ -180,6 +212,9 @@ def test_ps202_fires_on_unmatched_subdir(tmp_path):
 
 
 def test_ps203_fires_on_loose_top_level_test(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "tests" / "test__cache.py").write_text("def test_x(): assert True\n")
     rules = _violations_for(repo, "demo")
@@ -188,6 +223,9 @@ def test_ps203_fires_on_loose_top_level_test(tmp_path):
 
 def test_ps203_strict_no_meta_test_exemption(tmp_path):
     """Strict: any test_*.py at tests/ root violates, even meta-tests."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "tests" / "test_examples.py").write_text("def test_x(): assert True\n")
     rules = _violations_for(repo, "demo")
@@ -195,6 +233,9 @@ def test_ps203_strict_no_meta_test_exemption(tmp_path):
 
 
 def test_ps204_fires_on_orphan_test(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "tests" / "demo" / "test_nonexistent.py").write_text(
         "def test_x(): assert True\n"
@@ -206,6 +247,9 @@ def test_ps204_fires_on_orphan_test(tmp_path):
 def test_ps204_silent_for_dunder_main(tmp_path):
     """Regression: src/<pkg>/__main__.py paired with tests/<pkg>/test___main__.py
     is the correct mirror — must NOT be flagged as orphan."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "src" / "demo" / "__main__.py").write_text("def main(): pass\n")
     (repo / "tests" / "demo" / "test___main__.py").write_text("def test_main(): pass\n")
@@ -215,6 +259,9 @@ def test_ps204_silent_for_dunder_main(tmp_path):
 
 def test_ps205_fires_on_wrong_prefix(tmp_path):
     """Source `_foo.py` (private) tested by `test_foo.py` (single _) is wrong."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "src" / "demo" / "_foo.py").write_text("def f(): pass\n")
     (repo / "tests" / "demo" / "test_foo.py").write_text("def test_f(): pass\n")
@@ -223,6 +270,9 @@ def test_ps205_fires_on_wrong_prefix(tmp_path):
 
 
 def test_ps206_fires_on_placeholder_test(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "tests" / "demo" / "test_foo.py").write_text(
         "# Add your tests here\n"
@@ -235,6 +285,9 @@ def test_ps206_fires_on_placeholder_test(tmp_path):
 
 
 def test_ps206_silent_when_real_test_present(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "tests" / "demo" / "test_foo.py").write_text(
         "def test_f():\n    assert True\n"
@@ -246,6 +299,9 @@ def test_ps206_silent_when_real_test_present(tmp_path):
 
 def test_ps206_silent_for_factory_assigned_test(tmp_path):
     """`test_x = make_*(...)` is a valid pytest collectable, not a placeholder."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "tests" / "demo" / "test_skills.py").write_text(
         "from somewhere import make_skill_quality_tests\n"
@@ -262,6 +318,9 @@ def test_ps206_silent_for_factory_assigned_test(tmp_path):
 
 
 def test_ps301_fires_on_top_level_htmlcov(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "htmlcov").mkdir()
     rules = _violations_for(repo, "demo")
@@ -269,6 +328,9 @@ def test_ps301_fires_on_top_level_htmlcov(tmp_path):
 
 
 def test_ps302_fires_on_unrecognized_subdir(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "tests" / "weird_extra_dir").mkdir()
     rules = _violations_for(repo, "demo")
@@ -276,6 +338,9 @@ def test_ps302_fires_on_unrecognized_subdir(tmp_path):
 
 
 def test_ps302_silent_for_known_categories(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     for sub in ["scripts", "examples", "skills", "agentic", "integration", "e2e"]:
         (repo / "tests" / sub).mkdir()
@@ -284,6 +349,9 @@ def test_ps302_silent_for_known_categories(tmp_path):
 
 
 def test_ps303_fires_on_example_without_test(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     (repo / "examples" / "01_demo.py").write_text("print('demo')\n")
@@ -292,6 +360,9 @@ def test_ps303_fires_on_example_without_test(tmp_path):
 
 
 def test_ps303_silent_when_test_present(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     (repo / "examples" / "01_demo.py").write_text("print('demo')\n")
@@ -309,6 +380,9 @@ def test_ps303_silent_when_test_present(tmp_path):
 
 
 def test_ps401_fires_when_to_claude_not_gitignored(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "docs" / "to_claude").mkdir(parents=True)
     rules = _violations_for(repo, "demo")
@@ -316,6 +390,9 @@ def test_ps401_fires_when_to_claude_not_gitignored(tmp_path):
 
 
 def test_ps401_silent_when_to_claude_is_gitignored(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "docs" / "to_claude").mkdir(parents=True)
     (repo / ".gitignore").write_text("docs/to_claude/\n")
@@ -331,6 +408,9 @@ def test_ps401_silent_when_to_claude_is_gitignored(tmp_path):
 def test_audit_project_returns_2_when_repo_missing():
     # Pass an obviously-missing distribution and no repo override
     # → resolver fails, returns 2.
+    # Arrange
+    # Act
+    # Assert
     rc = audit_project("nonexistent-pkg-zzz", repo=None)
     assert rc == 2
 
@@ -343,6 +423,9 @@ def test_audit_project_clean_repo_returns_0(tmp_path):
     compliant real-world README to pass. That's covered by per-rule
     negative tests; here we just confirm the structural rules pass.
     """
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_GOOD_README)
     (repo / "examples").mkdir(exist_ok=True)
@@ -379,6 +462,9 @@ def test_audit_project_clean_repo_returns_0(tmp_path):
 
 
 def test_audit_project_dirty_repo_returns_1(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "mgmt").mkdir()  # forbidden top-level dir
     rc = audit_project("demo", repo=repo)
@@ -386,6 +472,9 @@ def test_audit_project_dirty_repo_returns_1(tmp_path):
 
 
 def test_audit_project_rule_filter_restricts(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "mgmt").mkdir()  # PS-102
     (repo / "tmp_quick.py").write_text("x=1\n")  # PS-103
@@ -408,6 +497,9 @@ def test_audit_project_rule_filter_restricts(tmp_path):
 
 
 def test_ps108_fires_on_prefix_cluster(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     src = repo / "src" / "demo"
     (src / "_cli_a.py").write_text("")
@@ -418,6 +510,9 @@ def test_ps108_fires_on_prefix_cluster(tmp_path):
 
 
 def test_ps108_silent_below_threshold(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     src = repo / "src" / "demo"
     (src / "_cli_a.py").write_text("")
@@ -427,6 +522,9 @@ def test_ps108_silent_below_threshold(tmp_path):
 
 
 def test_ps108_silent_when_subpkg_absorbs_cluster(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     src = repo / "src" / "demo"
     (src / "_cli").mkdir()
@@ -438,7 +536,10 @@ def test_ps108_silent_when_subpkg_absorbs_cluster(tmp_path):
     assert "PS-108" not in rules
 
 
-def test_ps108_rolls_up_multiple_clusters(tmp_path):
+def test_ps108_rolls_up_multiple_clusters_len_out_1(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     src = repo / "src" / "demo"
     for n in ("a", "b", "c"):
@@ -451,6 +552,23 @@ def test_ps108_rolls_up_multiple_clusters(tmp_path):
     out: list = []
     check_flat_layout(src, Violation, out)
     assert len(out) == 1
+
+
+def test_ps108_rolls_up_multiple_clusters_cli__in_out_0_detail_and_skills__in_out(tmp_path):
+    # Arrange
+    # Act
+    # Assert
+    repo = _make_repo(tmp_path, "demo")
+    src = repo / "src" / "demo"
+    for n in ("a", "b", "c"):
+        (src / f"_cli_{n}.py").write_text("")
+        (src / f"_skills_{n}.py").write_text("")
+    # Direct call: assert single rolled-up violation mentions both prefixes.
+    from scitex_dev._cli.audit._project._audit import Violation
+    from scitex_dev._cli.audit._project._check_flat_layout import check_flat_layout
+
+    out: list = []
+    check_flat_layout(src, Violation, out)
     assert "cli_*" in out[0].detail and "skills_*" in out[0].detail
 
 
@@ -459,9 +577,12 @@ def test_ps108_rolls_up_multiple_clusters(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_ps204_hint_suggests_move_on_unique_basename(tmp_path):
+def test_ps204_hint_suggests_move_on_unique_basename_len_ps204_1(tmp_path):
     """Refactor scenario: src/<pkg>/foo.py moved to src/<pkg>/sub/foo.py;
     the orphan test_foo.py should be told where to relocate."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "src" / "demo" / "sub").mkdir()
     (repo / "src" / "demo" / "sub" / "foo.py").write_text("def f(): pass\n")
@@ -472,14 +593,68 @@ def test_ps204_hint_suggests_move_on_unique_basename(tmp_path):
     _check_mirror(repo, "demo", out)
     ps204 = [v for v in out if v.rule == "PS-204"]
     assert len(ps204) == 1
+
+
+def test_ps204_hint_suggests_move_on_unique_basename_src_likely_moved_in_ps204_0_detail(tmp_path):
+    """Refactor scenario: src/<pkg>/foo.py moved to src/<pkg>/sub/foo.py;
+    the orphan test_foo.py should be told where to relocate."""
+    # Arrange
+    # Act
+    # Assert
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "src" / "demo" / "sub").mkdir()
+    (repo / "src" / "demo" / "sub" / "foo.py").write_text("def f(): pass\n")
+    (repo / "tests" / "demo" / "test_foo.py").write_text("def test_x(): pass\n")
+    out: list = []
+    from scitex_dev._cli.audit._project._audit import _check_mirror
+
+    _check_mirror(repo, "demo", out)
+    ps204 = [v for v in out if v.rule == "PS-204"]
     assert "src likely moved" in ps204[0].detail
+
+
+def test_ps204_hint_suggests_move_on_unique_basename_sub_foo_py_in_ps204_0_detail(tmp_path):
+    """Refactor scenario: src/<pkg>/foo.py moved to src/<pkg>/sub/foo.py;
+    the orphan test_foo.py should be told where to relocate."""
+    # Arrange
+    # Act
+    # Assert
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "src" / "demo" / "sub").mkdir()
+    (repo / "src" / "demo" / "sub" / "foo.py").write_text("def f(): pass\n")
+    (repo / "tests" / "demo" / "test_foo.py").write_text("def test_x(): pass\n")
+    out: list = []
+    from scitex_dev._cli.audit._project._audit import _check_mirror
+
+    _check_mirror(repo, "demo", out)
+    ps204 = [v for v in out if v.rule == "PS-204"]
     assert "sub/foo.py" in ps204[0].detail
+
+
+def test_ps204_hint_suggests_move_on_unique_basename_tests_demo_sub_test_foo_py_in_ps204_0_de(tmp_path):
+    """Refactor scenario: src/<pkg>/foo.py moved to src/<pkg>/sub/foo.py;
+    the orphan test_foo.py should be told where to relocate."""
+    # Arrange
+    # Act
+    # Assert
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "src" / "demo" / "sub").mkdir()
+    (repo / "src" / "demo" / "sub" / "foo.py").write_text("def f(): pass\n")
+    (repo / "tests" / "demo" / "test_foo.py").write_text("def test_x(): pass\n")
+    out: list = []
+    from scitex_dev._cli.audit._project._audit import _check_mirror
+
+    _check_mirror(repo, "demo", out)
+    ps204 = [v for v in out if v.rule == "PS-204"]
     assert "tests/demo/sub/test_foo.py" in ps204[0].detail
 
 
-def test_ps204_hint_lists_siblings_when_no_basename_match(tmp_path):
+def test_ps204_hint_lists_siblings_when_no_basename_match_len_ps204_1(tmp_path):
     """When no src file matches the expected basename, list what *is* in the
     mirror dir so the agent can correlate."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "src" / "demo" / "bar.py").write_text("def f(): pass\n")
     (repo / "src" / "demo" / "baz.py").write_text("def f(): pass\n")
@@ -491,6 +666,24 @@ def test_ps204_hint_lists_siblings_when_no_basename_match(tmp_path):
     ps204 = [v for v in out if v.rule == "PS-204"]
     assert len(ps204) == 1
     detail = ps204[0].detail
+
+
+def test_ps204_hint_lists_siblings_when_no_basename_match_bar_py_in_detail_and_baz_py_in_detail(tmp_path):
+    """When no src file matches the expected basename, list what *is* in the
+    mirror dir so the agent can correlate."""
+    # Arrange
+    # Act
+    # Assert
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "src" / "demo" / "bar.py").write_text("def f(): pass\n")
+    (repo / "src" / "demo" / "baz.py").write_text("def f(): pass\n")
+    (repo / "tests" / "demo" / "test_qux.py").write_text("def test_x(): pass\n")
+    out: list = []
+    from scitex_dev._cli.audit._project._audit import _check_mirror
+
+    _check_mirror(repo, "demo", out)
+    ps204 = [v for v in out if v.rule == "PS-204"]
+    detail = ps204[0].detail
     assert "bar.py" in detail and "baz.py" in detail
 
 
@@ -500,6 +693,9 @@ def test_ps204_hint_lists_siblings_when_no_basename_match(tmp_path):
 
 
 def test_ps106_fires_when_no_coverage_badge(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text("# demo\n\nA package.\n")
     rules = _violations_for(repo, "demo")
@@ -507,6 +703,9 @@ def test_ps106_fires_when_no_coverage_badge(tmp_path):
 
 
 def test_ps106_silent_with_codecov_badge(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(
         "# demo\n\n[![cov](https://codecov.io/gh/x/y/graph/badge.svg)](https://codecov.io/gh/x/y)\n"
@@ -516,6 +715,9 @@ def test_ps106_silent_with_codecov_badge(tmp_path):
 
 
 def test_ps106_silent_with_shields_codecov_badge(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(
         "# demo\n\n![cov](https://img.shields.io/codecov/c/github/x/y)\n"
@@ -526,6 +728,9 @@ def test_ps106_silent_with_shields_codecov_badge(tmp_path):
 
 def test_ps106_silent_when_readme_missing(tmp_path):
     """No README → PS-101/future PS-107 catches it; PS-106 stays quiet."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     rules = _violations_for(repo, "demo")
     assert "PS-106" not in rules
@@ -537,6 +742,9 @@ def test_ps106_silent_when_readme_missing(tmp_path):
 
 
 def test_ps501_fires_when_main_lacks_stx_session(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     (repo / "examples" / "01_demo.py").write_text(
@@ -547,6 +755,9 @@ def test_ps501_fires_when_main_lacks_stx_session(tmp_path):
 
 
 def test_ps501_silent_with_stx_session(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     (repo / "examples" / "01_demo.py").write_text(
@@ -558,6 +769,9 @@ def test_ps501_silent_with_stx_session(tmp_path):
 
 def test_ps501_silent_when_no_def_main(tmp_path):
     """Pure imperative scripts without main() are a separate concern."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     (repo / "examples" / "01_demo.py").write_text("print('hi')\n")
@@ -566,6 +780,9 @@ def test_ps501_silent_when_no_def_main(tmp_path):
 
 
 def test_ps502_fires_on_empty_out_dir(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     (repo / "examples" / "01_demo.py").write_text("def main(): pass\nmain()")
@@ -575,6 +792,9 @@ def test_ps502_fires_on_empty_out_dir(tmp_path):
 
 
 def test_ps502_silent_when_out_dir_has_content(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     (repo / "examples" / "01_demo.py").write_text("def main(): pass\nmain()")
@@ -589,6 +809,9 @@ def test_ps502_silent_when_out_dir_has_content(tmp_path):
 
 def test_ps502_silent_when_only_ipynb_owns_stem(tmp_path):
     """`.ipynb`-only stems: `_out/` is legacy, do not flag."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     (repo / "examples" / "01_demo.ipynb").write_text(
@@ -606,6 +829,9 @@ def test_ps502_silent_when_only_ipynb_owns_stem(tmp_path):
 
 
 def test_ps503_fires_when_out_dir_has_no_finished_success(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     (repo / "examples" / "01_demo.py").write_text("def main(): pass\nmain()")
@@ -619,6 +845,9 @@ def test_ps503_fires_when_out_dir_has_no_finished_success(tmp_path):
 
 def test_ps503_silent_when_only_ipynb_owns_stem(tmp_path):
     """`.ipynb`-only stems: cell outputs ARE the demo, no FINISHED_SUCCESS needed."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     (repo / "examples" / "01_demo.ipynb").write_text(
@@ -633,6 +862,9 @@ def test_ps503_silent_when_only_ipynb_owns_stem(tmp_path):
 
 
 def test_ps503_silent_when_finished_success_id_present(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     out_dir = repo / "examples" / "01_demo_out"
@@ -672,6 +904,9 @@ def _code_cell(source, outputs=()):
 
 
 def test_ps504_fires_when_notebook_has_no_outputs(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -683,6 +918,9 @@ def test_ps504_fires_when_notebook_has_no_outputs(tmp_path):
 
 
 def test_ps504_silent_when_notebook_has_outputs(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -701,6 +939,9 @@ def test_ps504_silent_when_notebook_has_outputs(tmp_path):
 
 
 def test_ps506_fires_when_notebook_imports_mpl_without_inline_magic(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -723,6 +964,9 @@ def test_ps506_fires_when_notebook_imports_mpl_without_inline_magic(tmp_path):
 
 
 def test_ps506_silent_when_inline_magic_present(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -745,6 +989,9 @@ def test_ps506_silent_when_inline_magic_present(tmp_path):
 
 
 def test_ps507_fires_when_notebook_imports_mpl_without_plt_show(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -766,7 +1013,10 @@ def test_ps507_fires_when_notebook_imports_mpl_without_plt_show(tmp_path):
     assert "PS-507" in rules
 
 
-def test_ps506_507_silent_when_notebook_does_not_import_mpl(tmp_path):
+def test_ps506_507_silent_when_notebook_does_not_import_mpl_ps_506_not_in_rules(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -780,6 +1030,24 @@ def test_ps506_507_silent_when_notebook_does_not_import_mpl(tmp_path):
     )
     rules = _violations_for(repo, "demo")
     assert "PS-506" not in rules
+
+
+def test_ps506_507_silent_when_notebook_does_not_import_mpl_ps_507_not_in_rules(tmp_path):
+    # Arrange
+    # Act
+    # Assert
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "examples").mkdir(exist_ok=True)
+    _write_notebook(
+        repo / "examples" / "01_demo.ipynb",
+        [
+            _code_cell(
+                "x = 1\nprint(x)",
+                outputs=[{"output_type": "stream", "name": "stdout", "text": "1\n"}],
+            )
+        ],
+    )
+    rules = _violations_for(repo, "demo")
     assert "PS-507" not in rules
 
 
@@ -789,6 +1057,9 @@ def test_ps506_507_silent_when_notebook_does_not_import_mpl(tmp_path):
 
 
 def test_ps505_fires_when_ipynb_test_uses_subprocess_python(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -807,6 +1078,9 @@ def test_ps505_fires_when_ipynb_test_uses_subprocess_python(tmp_path):
 
 
 def test_ps505_silent_when_ipynb_test_uses_nbconvert(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -825,6 +1099,9 @@ def test_ps505_silent_when_ipynb_test_uses_nbconvert(tmp_path):
 
 
 def test_ps508_fires_on_stderr_stream_warning(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -847,6 +1124,9 @@ def test_ps508_fires_on_stderr_stream_warning(tmp_path):
 
 
 def test_ps508_fires_on_error_output_with_warning_class(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -870,6 +1150,9 @@ def test_ps508_fires_on_error_output_with_warning_class(tmp_path):
 
 
 def test_ps508_silent_on_clean_stdout(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -889,6 +1172,9 @@ def test_ps508_silent_on_clean_stdout(tmp_path):
 
 def test_ps508_silent_on_real_exception_not_warning(tmp_path):
     """`output_type=error` for a real exception (KeyError, ValueError) is not a warning."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -912,6 +1198,9 @@ def test_ps508_silent_on_real_exception_not_warning(tmp_path):
 
 
 def test_ps505_silent_when_ipynb_test_uses_nbval(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "examples").mkdir(exist_ok=True)
     _write_notebook(
@@ -968,6 +1257,9 @@ def _full_compliant_readme():
 
 
 def test_ps141_fires_when_demo_section_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(
         _README_HEADER
@@ -985,6 +1277,9 @@ def test_ps141_fires_when_demo_section_has_no_visual(tmp_path):
     # PS-141 fires only when BOTH Demo and Architecture lack a visual
     # — the "one diagram is enough, but at least one is required" rule.
     # Strip visuals from both sections so the violation can surface.
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _full_compliant_readme()
     body = body.replace(
@@ -1001,6 +1296,9 @@ def test_ps141_fires_when_demo_section_has_no_visual(tmp_path):
 
 
 def test_ps141_silent_with_mermaid_demo(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _full_compliant_readme().replace(
         "## Demo\n\n![Hilbert](docs/hilbert.png)",
@@ -1012,6 +1310,9 @@ def test_ps141_silent_with_mermaid_demo(tmp_path):
 
 
 def test_ps142_fires_when_architecture_section_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(
         _full_compliant_readme().replace(
@@ -1027,6 +1328,9 @@ def test_ps142_fires_when_architecture_section_has_no_diagram(tmp_path):
     # Architecture lacks a diagram AND Demo also lacks one — without
     # both being empty, PS-142's "one diagram is enough" fallback kicks
     # in and suppresses the violation.
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _full_compliant_readme()
     body = body.replace(
@@ -1043,6 +1347,9 @@ def test_ps142_fires_when_architecture_section_has_no_diagram(tmp_path):
 
 
 def test_ps142_silent_with_filetree(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_full_compliant_readme())
     rules = _violations_for(repo, "demo")
@@ -1054,6 +1361,9 @@ def test_ps143_fires_when_architecture_appears_before_installation(tmp_path):
     # Installation (Quick Start lives between Problem-and-Solution and
     # Installation per the new canonical order). The misordering this
     # test now checks is Architecture before Installation.
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         _README_HEADER
@@ -1070,6 +1380,9 @@ def test_ps143_fires_when_architecture_appears_before_installation(tmp_path):
 
 
 def test_ps143_silent_on_canonical_order(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_full_compliant_readme())
     rules = _violations_for(repo, "demo")
@@ -1077,6 +1390,9 @@ def test_ps143_silent_on_canonical_order(tmp_path):
 
 
 def test_ps144_fires_when_cell_has_no_bold(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _full_compliant_readme().replace(
         "| 1 | **Hilbert** under-doubles positive freqs at low f0/fs. | "
@@ -1090,6 +1406,9 @@ def test_ps144_fires_when_cell_has_no_bold(tmp_path):
 
 
 def test_ps144_fires_when_entire_cell_is_bold(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _full_compliant_readme().replace(
         "| 1 | **Hilbert** under-doubles positive freqs at low f0/fs. | "
@@ -1103,6 +1422,9 @@ def test_ps144_fires_when_entire_cell_is_bold(tmp_path):
 
 
 def test_ps144_fires_when_cell_too_long(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     long_text = "x " * 110  # 220+ chars
     body = _full_compliant_readme().replace(
@@ -1116,6 +1438,9 @@ def test_ps144_fires_when_cell_too_long(tmp_path):
 
 
 def test_ps144_silent_on_well_formed_cell(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_full_compliant_readme())
     rules = _violations_for(repo, "demo")
@@ -1162,6 +1487,9 @@ def _clean_readme():
 
 
 def test_ps152_fires_on_split_problem_solution(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         _README_HEADER
@@ -1178,6 +1506,9 @@ def test_ps152_fires_on_split_problem_solution(tmp_path):
 
 
 def test_ps152_fires_on_problem_only(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         _README_HEADER
@@ -1193,6 +1524,9 @@ def test_ps152_fires_on_problem_only(tmp_path):
 
 
 def test_ps152_silent_on_merged_problem_and_solution(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_clean_readme())
     rules = _violations_for(repo, "demo")
@@ -1203,6 +1537,9 @@ def test_ps152_silent_on_merged_problem_and_solution(tmp_path):
 
 
 def test_ps153_fires_when_architecture_has_filetree_without_mermaid(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     # _full_compliant_readme() uses a pure file-tree Architecture body.
     (repo / "README.md").write_text(_full_compliant_readme())
@@ -1211,6 +1548,9 @@ def test_ps153_fires_when_architecture_has_filetree_without_mermaid(tmp_path):
 
 
 def test_ps153_silent_when_architecture_is_mermaid(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_clean_readme())
     rules = _violations_for(repo, "demo")
@@ -1221,6 +1561,9 @@ def test_ps153_silent_when_architecture_is_mermaid(tmp_path):
 
 
 def test_ps154_fires_when_no_uv_pip_install_line(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     # _full_compliant_readme() uses `pip install demo`, not `uv pip install`.
     (repo / "README.md").write_text(_full_compliant_readme())
@@ -1229,6 +1572,9 @@ def test_ps154_fires_when_no_uv_pip_install_line(tmp_path):
 
 
 def test_ps154_fires_when_extras_table_outside_details(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         _README_HEADER
@@ -1248,6 +1594,9 @@ def test_ps154_fires_when_extras_table_outside_details(tmp_path):
 
 
 def test_ps154_silent_on_canonical_installation(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_clean_readme())
     rules = _violations_for(repo, "demo")
@@ -1255,6 +1604,9 @@ def test_ps154_silent_on_canonical_installation(tmp_path):
 
 
 def test_ps154_silent_when_extras_table_inside_details(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         _README_HEADER
@@ -1279,6 +1631,9 @@ def test_ps154_silent_when_extras_table_inside_details(tmp_path):
 
 
 def test_ps155_fires_when_badge_block_has_no_p_center_rows(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     # _README_HEADER has an empty <!-- scitex-badges:start/end --> block
     # (zero <p align="center"> opening tags inside it).
@@ -1288,6 +1643,9 @@ def test_ps155_fires_when_badge_block_has_no_p_center_rows(tmp_path):
 
 
 def test_ps155_fires_when_badge_block_has_one_row(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     header = (
         "# demo\n\n"
@@ -1309,6 +1667,9 @@ def test_ps155_fires_when_badge_block_has_one_row(tmp_path):
 
 
 def test_ps155_silent_on_two_p_center_rows(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_clean_readme())
     rules = _violations_for(repo, "demo")
@@ -1338,6 +1699,9 @@ def _readme_with_captions(figure_captions: str = "", table_captions: str = "") -
 
 
 def test_ps159_fires_when_figure_1_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     # Mermaid arch block exists; caption uses Figure 2 and Figure 3 — no Figure 1.
     body = (
@@ -1365,6 +1729,9 @@ def test_ps159_fires_when_figure_1_missing(tmp_path):
 
 
 def test_ps159_fires_when_figure_numbers_have_gap(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         "# demo\n\n"
@@ -1386,6 +1753,9 @@ def test_ps159_fires_when_figure_numbers_have_gap(tmp_path):
 
 
 def test_ps159_fires_when_figure_number_duplicated(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         "# demo\n\n"
@@ -1409,6 +1779,9 @@ def test_ps159_fires_when_figure_number_duplicated(tmp_path):
 
 
 def test_ps159_silent_on_sequential_figure_numbers(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         "# demo\n\n"
@@ -1433,6 +1806,9 @@ def test_ps159_silent_on_sequential_figure_numbers(tmp_path):
 
 
 def test_ps159_silent_when_no_figures_or_tables(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     # _clean_readme has a mermaid arch block (captionable figure) but no
     # `<b>Figure N.</b>` captions at all — PS-159 stays quiet (it only
@@ -1447,6 +1823,9 @@ def test_ps159_silent_when_no_figures_or_tables(tmp_path):
 
 
 def test_ps160_fires_when_mermaid_block_has_no_caption(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     # _clean_readme has a mermaid arch block but no Figure caption.
     (repo / "README.md").write_text(_clean_readme())
@@ -1455,6 +1834,9 @@ def test_ps160_fires_when_mermaid_block_has_no_caption(tmp_path):
 
 
 def test_ps160_fires_when_img_data_figure_has_no_caption(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         "# demo\n\n"
@@ -1475,6 +1857,9 @@ def test_ps160_fires_when_img_data_figure_has_no_caption(tmp_path):
 
 
 def test_ps160_silent_when_every_figure_has_caption(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         "# demo\n\n"
@@ -1495,6 +1880,9 @@ def test_ps160_silent_when_every_figure_has_caption(tmp_path):
 
 
 def test_ps160_silent_for_pas_and_details_tables(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     # P&S table + a <details>-wrapped extras table, plus mermaid arch
     # WITH a caption. Should be PS-160-silent (both tables are exempt;
@@ -1519,6 +1907,9 @@ def test_ps160_silent_for_pas_and_details_tables(tmp_path):
 
 
 def test_ps160_fires_when_pipe_table_has_no_caption(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         "# demo\n\n"
@@ -1543,6 +1934,9 @@ def test_ps160_fires_when_pipe_table_has_no_caption(tmp_path):
 
 
 def test_ps107_fires_on_missing_sections(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     # Body is over 200 bytes but lacks any of the required H2 sections.
     (repo / "README.md").write_text(
@@ -1553,6 +1947,9 @@ def test_ps107_fires_on_missing_sections(tmp_path):
 
 
 def test_ps107_silent_on_canonical_readme(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_GOOD_README)
     rules = _violations_for(repo, "demo")
@@ -1560,6 +1957,9 @@ def test_ps107_silent_on_canonical_readme(tmp_path):
 
 
 def test_ps107_accepts_quickstart_one_word(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _GOOD_README.replace("## Quick Start", "## Quickstart")
     (repo / "README.md").write_text(body)
@@ -1569,6 +1969,9 @@ def test_ps107_accepts_quickstart_one_word(tmp_path):
 
 def test_ps107_silent_when_readme_too_small(tmp_path):
     """Tiny placeholder READMEs should not be audited."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text("# demo\n")
     rules = _violations_for(repo, "demo")
@@ -1576,6 +1979,9 @@ def test_ps107_silent_when_readme_too_small(tmp_path):
 
 
 def test_ps109_fires_when_pypi_badge_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _GOOD_README.replace(
         "[![PyPI](https://badge.fury.io/py/demo.svg)](https://pypi.org/project/demo/)\n",
@@ -1587,6 +1993,9 @@ def test_ps109_fires_when_pypi_badge_missing(tmp_path):
 
 
 def test_ps109_silent_with_shields_pypi_badge(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _GOOD_README.replace(
         "https://badge.fury.io/py/demo.svg",
@@ -1598,6 +2007,9 @@ def test_ps109_silent_with_shields_pypi_badge(tmp_path):
 
 
 def test_ps110_fires_when_four_freedoms_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _GOOD_README.split(">Four Freedoms")[0]
     (repo / "README.md").write_text(body + ("filler " * 30))
@@ -1606,6 +2018,9 @@ def test_ps110_fires_when_four_freedoms_missing(tmp_path):
 
 
 def test_ps110_silent_with_four_freedoms(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_GOOD_README)
     rules = _violations_for(repo, "demo")
@@ -1613,6 +2028,9 @@ def test_ps110_silent_with_four_freedoms(tmp_path):
 
 
 def test_ps111_fires_with_banned_email(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_GOOD_README + "\nContact: ywatanabe@scitex.ai\n")
     rules = _violations_for(repo, "demo")
@@ -1620,6 +2038,9 @@ def test_ps111_fires_with_banned_email(tmp_path):
 
 
 def test_ps111_silent_without_banned_email(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_GOOD_README)
     rules = _violations_for(repo, "demo")
@@ -1627,6 +2048,9 @@ def test_ps111_silent_without_banned_email(tmp_path):
 
 
 def test_ps112_fires_when_logo_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _GOOD_README.replace(
         '<p align="center"><img src="docs/scitex-logo-blue-cropped.png" alt="SciTeX" width="400"></p>\n\n',
@@ -1639,6 +2063,9 @@ def test_ps112_fires_when_logo_missing(tmp_path):
 
 def test_ps112_silent_with_assets_images_path(tmp_path):
     """docs/assets/images/scitex-logo-*.png path is also valid."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = _GOOD_README.replace(
         "docs/scitex-logo-blue-cropped.png",
@@ -1651,6 +2078,9 @@ def test_ps112_silent_with_assets_images_path(tmp_path):
 
 def test_readme_rules_silent_when_readme_missing(tmp_path):
     """No README → all PS-107/109/110/111/112 stay quiet (PS-101 covers it)."""
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     rules = _violations_for(repo, "demo")
     for code in ("PS-107", "PS-109", "PS-110", "PS-111", "PS-112"):
@@ -1663,6 +2093,9 @@ def test_readme_rules_silent_when_readme_missing(tmp_path):
 
 
 def test_ps161_silent_when_target_is_90(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "codecov.yml").write_text(
         "coverage:\n"
@@ -1679,6 +2112,9 @@ def test_ps161_silent_when_target_is_90(tmp_path):
 
 
 def test_ps161_fires_when_project_target_below_90(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "codecov.yml").write_text(
         "coverage:\n  status:\n    project:\n      default:\n        target: 80%\n"
@@ -1688,6 +2124,9 @@ def test_ps161_fires_when_project_target_below_90(tmp_path):
 
 
 def test_ps161_fires_when_target_is_auto(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "codecov.yml").write_text(
         "coverage:\n  status:\n    project:\n      default:\n        target: auto\n"
@@ -1697,12 +2136,18 @@ def test_ps161_fires_when_target_is_auto(tmp_path):
 
 
 def test_ps161_silent_when_codecov_yml_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     rules = _violations_for(repo, "demo")
     assert "PS-161" not in rules
 
 
 def test_ps161_fires_when_patch_target_below_90(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "codecov.yml").write_text(
         "coverage:\n"
@@ -1798,6 +2243,9 @@ def _readme_with_custom_badges(block: str) -> str:
 
 
 def test_ps162_silent_when_codecov_badge_present(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(
         _readme_with_custom_badges(_BADGES_BLOCK_WITH_CODECOV)
@@ -1807,6 +2255,9 @@ def test_ps162_silent_when_codecov_badge_present(tmp_path):
 
 
 def test_ps162_fires_when_codecov_badge_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(
         _readme_with_custom_badges(_BADGES_BLOCK_WITHOUT_CODECOV)
@@ -1816,6 +2267,9 @@ def test_ps162_fires_when_codecov_badge_missing(tmp_path):
 
 
 def test_ps162_silent_when_badges_block_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     # _full_compliant_readme assumes no badges block — use a minimal
     # README missing the markers entirely.
@@ -1840,6 +2294,9 @@ def test_ps162_silent_when_badges_block_missing(tmp_path):
 
 
 def test_ps163_silent_when_shields_rtd_badge_present(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(
         _readme_with_custom_badges(_BADGES_BLOCK_WITH_CODECOV)
@@ -1849,6 +2306,9 @@ def test_ps163_silent_when_shields_rtd_badge_present(tmp_path):
 
 
 def test_ps163_silent_when_readthedocs_org_badge_present(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(_readme_with_custom_badges(_BADGES_BLOCK_RTD_OWN))
     rules = _violations_for(repo, "demo")
@@ -1856,6 +2316,9 @@ def test_ps163_silent_when_readthedocs_org_badge_present(tmp_path):
 
 
 def test_ps163_fires_when_rtd_badge_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     (repo / "README.md").write_text(
         _readme_with_custom_badges(_BADGES_BLOCK_WITHOUT_RTD)
@@ -1865,6 +2328,9 @@ def test_ps163_fires_when_rtd_badge_missing(tmp_path):
 
 
 def test_ps163_silent_when_badges_block_missing(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     repo = _make_repo(tmp_path, "demo")
     body = (
         "# demo\n\n"

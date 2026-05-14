@@ -30,6 +30,9 @@ def _codes(violations) -> set[str]:
 
 
 def test_rules_registry_covers_documented_codes():
+    # Arrange
+    # Act
+    # Assert
     expected = {
         "PA-101",
         "PA-102",
@@ -41,6 +44,8 @@ def test_rules_registry_covers_documented_codes():
         "PA-301",
         "PA-304",  # umbrella imports inside standalone source (2026-05-06)
         "PA-305",  # playwright source must call capture_debug_artifacts_async
+        "PA-306",  # no-mocks: forbid mock library/symbols/fixtures (2026-05-14)
+        "PA-307",  # test-quality: mirrors linter STX-TQ001-007 (2026-05-14)
         "PA-501",
     }
     assert expected == set(RULES)
@@ -50,11 +55,17 @@ def test_rules_registry_covers_documented_codes():
 
 
 def test_PA101_missing_all(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     init = _write_init(tmp_path, "from __future__ import annotations\n")
     assert "PA-101" in _codes(_audit_init(init, "fakepkg"))
 
 
 def test_PA102_unbound_name_in_all(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "__version__ = '0.0.0+local'\n"
@@ -66,6 +77,9 @@ def test_PA102_unbound_name_in_all(tmp_path):
 
 def test_PA102_silent_for_pep562_lazy_getattr(tmp_path):
     """PEP 562 lazy `__getattr__` dispatch counts names as bound."""
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "__version__ = '0.0.0+local'\n"
@@ -82,6 +96,9 @@ def test_PA102_silent_for_pep562_lazy_getattr(tmp_path):
 
 
 def test_PA103_private_name_in_all(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "__version__ = '0.0.0+local'\n"
@@ -93,6 +110,9 @@ def test_PA103_private_name_in_all(tmp_path):
 
 
 def test_PA104_third_party_in_all(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "from numpy import ndarray\n"
@@ -107,6 +127,9 @@ def test_PA104_third_party_in_all(tmp_path):
 
 
 def test_PA201_version_missing_from_all(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "from importlib.metadata import version\n"
@@ -117,7 +140,10 @@ def test_PA201_version_missing_from_all(tmp_path):
     assert "PA-201" in _codes(_audit_init(init, "fakepkg"))
 
 
-def test_PA202_bare_string_version(tmp_path):
+def test_PA202_bare_string_version_pa_202_in_codes(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "__version__ = '1.2.3'\n"
@@ -126,11 +152,27 @@ def test_PA202_bare_string_version(tmp_path):
     init = _write_init(tmp_path, body)
     codes = _codes(_audit_init(init, "fakepkg"))
     assert "PA-202" in codes
+
+
+def test_PA202_bare_string_version_pa_203_in_codes(tmp_path):
+    # Arrange
+    # Act
+    # Assert
+    body = (
+        "from __future__ import annotations\n"
+        "__version__ = '1.2.3'\n"
+        "__all__ = ['__version__']\n"
+    )
+    init = _write_init(tmp_path, body)
+    codes = _codes(_audit_init(init, "fakepkg"))
     assert "PA-203" in codes  # fallback string is not '0.0.0+local'
 
 
-def test_PA202_clean_with_aliased_import(tmp_path):
+def test_PA202_clean_with_aliased_import_pa_202_not_in_codes(tmp_path):
     """`from importlib.metadata import version as _v; __version__ = _v(...)` is canonical."""
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "from importlib.metadata import version as _v, PackageNotFoundError\n"
@@ -143,10 +185,31 @@ def test_PA202_clean_with_aliased_import(tmp_path):
     init = _write_init(tmp_path, body)
     codes = _codes(_audit_init(init, "fakepkg"))
     assert "PA-202" not in codes
+
+
+def test_PA202_clean_with_aliased_import_pa_203_not_in_codes(tmp_path):
+    """`from importlib.metadata import version as _v; __version__ = _v(...)` is canonical."""
+    # Arrange
+    # Act
+    # Assert
+    body = (
+        "from __future__ import annotations\n"
+        "from importlib.metadata import version as _v, PackageNotFoundError\n"
+        "try:\n"
+        "    __version__ = _v('fakepkg')\n"
+        "except PackageNotFoundError:\n"
+        "    __version__ = '0.0.0+local'\n"
+        "__all__ = ['__version__']\n"
+    )
+    init = _write_init(tmp_path, body)
+    codes = _codes(_audit_init(init, "fakepkg"))
     assert "PA-203" not in codes
 
 
 def test_PA203_clean_when_canonical_fallback(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "from importlib.metadata import PackageNotFoundError, version\n"
@@ -167,6 +230,9 @@ def test_PA203_clean_when_canonical_fallback(tmp_path):
 
 
 def test_PA301_top_level_optional_import(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "import h5py\n"  # third-party, top-level — drift
@@ -178,6 +244,9 @@ def test_PA301_top_level_optional_import(tmp_path):
 
 
 def test_PA301_clean_when_wrapped(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "try:\n"
@@ -195,6 +264,9 @@ def test_PA301_clean_when_wrapped(tmp_path):
 
 
 def test_PA501_missing_future_annotations(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     body = "__version__ = '0.0.0+local'\n__all__ = ['__version__']\n"
     init = _write_init(tmp_path, body)
     assert "PA-501" in _codes(_audit_init(init, "fakepkg"))
@@ -204,6 +276,9 @@ def test_PA501_missing_future_annotations(tmp_path):
 
 
 def test_canonical_init_has_no_violations(tmp_path):
+    # Arrange
+    # Act
+    # Assert
     body = (
         "from __future__ import annotations\n"
         "from importlib.metadata import PackageNotFoundError, version\n"
@@ -221,3 +296,45 @@ def test_canonical_init_has_no_violations(tmp_path):
     init = _write_init(tmp_path, body)
     violations = _audit_init(init, "fakepkg")
     assert violations == [], f"unexpected: {[(v.rule, v.detail) for v in violations]}"
+
+
+# --- §3 PA-306 no-mocks -----------------------------------------------------
+
+
+def test_PA306_flags_unittest_mock_import(tmp_path):
+    # Arrange
+    # Act
+    # Assert
+    from scitex_dev._cli.audit._api._audit import _audit_no_mocks
+
+    init = _write_init(tmp_path, "from __future__ import annotations\n")
+    (init.parent / "impl.py").write_text(
+        "from unittest.mock import patch\ndef f():\n    return patch\n"
+    )
+    codes = _codes(_audit_no_mocks(init, "fakepkg", "fakepkg"))
+    assert "PA-306" in codes
+
+
+def test_PA306_flags_pytest_mocker_fixture(tmp_path):
+    # Arrange
+    # Act
+    # Assert
+    from scitex_dev._cli.audit._api._audit import _audit_no_mocks
+
+    init = _write_init(tmp_path, "from __future__ import annotations\n")
+    (init.parent / "test_x.py").write_text(
+        "def test_thing(mocker, tmp_path):\n    return tmp_path\n"
+    )
+    codes = _codes(_audit_no_mocks(init, "fakepkg", "fakepkg"))
+    assert "PA-306" in codes
+
+
+def test_PA306_clean_source_passes(tmp_path):
+    # Arrange
+    # Act
+    # Assert
+    from scitex_dev._cli.audit._api._audit import _audit_no_mocks
+
+    init = _write_init(tmp_path, "from __future__ import annotations\n")
+    (init.parent / "impl.py").write_text("def f(tmp_path):\n    return tmp_path\n")
+    assert _audit_no_mocks(init, "fakepkg", "fakepkg") == []

@@ -17,6 +17,8 @@ from pathlib import Path
 
 import click
 
+from .._emit import emit as _emit
+
 
 @dataclass(frozen=True)
 class Rule:
@@ -24,6 +26,7 @@ class Rule:
     section: str
     message: str
     slug: str = ""  # short, human-readable kebab-case name
+    severity: str = "warning"  # "warning" | "error" — drives audit headline
 
 
 RULES: dict[str, Rule] = {
@@ -96,6 +99,40 @@ RULES: dict[str, Rule] = {
             "Wire via `from scitex_browser.debugging import "
             "capture_debug_artifacts_async`.",
             "playwright-without-debug-capture",
+        ),
+        # §3 No mocks (no exceptions)
+        Rule(
+            "PA-306",
+            "§3",
+            "mock library / symbol / fixture in package source — the SciTeX "
+            "ecosystem forbids mocks without exception. Replace with a real "
+            "fake, real fixture (tmp_path, subprocess), or hand-rolled stub "
+            "class. Covers `unittest.mock` / `mock` / `pytest_mock` imports, "
+            "Mock/MagicMock/AsyncMock/patch/mock_open/PropertyMock/"
+            "create_autospec/MockerFixture symbols, and pytest "
+            "`mocker`/`monkeypatch` fixture parameters. See the linter rule "
+            "`STX-NM001/NM002/NM003` for the in-process equivalent.",
+            "no-mocks",
+            severity="error",
+        ),
+        # §3 Test quality (post-no-mock theater guards)
+        Rule(
+            "PA-307",
+            "§3",
+            "test-quality violation — every test in this package's test "
+            "tree must satisfy: (TQ001) at least one assertion; (TQ002) "
+            "`# Arrange`/`# Act`/`# Assert` marker comments in order; "
+            "(TQ003) descriptive name (≥3 word-tokens after `test_`); "
+            "(TQ004) no state mutation in session/module/package-scope "
+            "fixtures; (TQ005) yield (not return) for resource-acquiring "
+            "fixtures; (TQ006) no top-level if/else in parametrized test "
+            "bodies; (TQ007) exactly one assertion per test. Detected by "
+            "running the linter's `STX-TQ001-007` rules across tests/ + "
+            "conftest.py. The combination ensures CI red names exactly "
+            "which behaviour broke. See `_skills/general/"
+            "02_package_13_test-quality.md`.",
+            "test-quality",
+            severity="error",
         ),
         # §5 Type hints
         Rule(
@@ -310,6 +347,228 @@ def _audit_playwright_capture(
                     "`capture_debug_artifacts_async` call in module",
                 )
             )
+    return out
+
+
+_MOCK_MODULES_AUDIT = frozenset({"mock", "unittest.mock", "pytest_mock"})
+_MOCK_SYMBOLS_AUDIT = frozenset(
+    {
+        "Mock",
+        "MagicMock",
+        "AsyncMock",
+        "NonCallableMock",
+        "NonCallableMagicMock",
+        "PropertyMock",
+        "patch",
+        "mock_open",
+        "create_autospec",
+        "sentinel",
+        "ANY",
+        "MockerFixture",
+    }
+)
+_MOCK_FIXTURE_PARAMS_AUDIT = frozenset({"mocker", "monkeypatch"})
+
+
+def _audit_test_quality(
+    init_path: Path, distribution: str, import_name: str
+) -> list[Violation]:
+    """PA-307 — run the linter's STX-TQ001-007 detection across the
+    repo's `tests/` (and `conftest.py`) and re-emit each finding as a
+    PA-307 violation. Avoids duplicating the AST detection logic that
+    already lives in `scitex_dev.linter.checker`.
+    """
+    out: list[Violation] = []
+    pkg_root = init_path.parent  # <repo>/src/<pkg>/
+    src_parent = pkg_root.parent
+    repo_root = src_parent.parent if src_parent.name == "src" else src_parent
+
+    # Scope: tests/ tree (recursively, all *.py) + every conftest.py
+    # under the repo. Fixtures often live in conftest.py and TQ004/TQ005
+    # apply to them.
+    tests_dir = repo_root / "tests"
+    candidates: list[Path] = []
+    if tests_dir.is_dir():
+        candidates.extend(sorted(tests_dir.rglob("*.py")))
+    for conftest in repo_root.rglob("conftest.py"):
+        # Skip site-packages and venvs.
+        parts = conftest.parts
+        if any(
+            seg in parts
+            for seg in (
+                "__pycache__",
+                "build",
+                "dist",
+                ".tox",
+                "site-packages",
+                ".venv",
+                "venv",
+            )
+        ):
+            continue
+        if conftest not in candidates:
+            candidates.append(conftest)
+
+    if not candidates:
+        return out
+
+    # Re-use the linter's detection rather than duplicate the AST logic.
+    try:
+        from scitex_dev.linter.checker import lint_file
+    except ImportError:
+        return out
+
+    rel_anchor = repo_root
+    for py_file in candidates:
+        parts = py_file.parts
+        if any(
+            seg in parts
+            for seg in (
+                "__pycache__",
+                "build",
+                "dist",
+                ".tox",
+                "site-packages",
+                ".venv",
+                "venv",
+            )
+        ):
+            continue
+        try:
+            issues = lint_file(str(py_file))
+        except Exception:
+            continue
+        for issue in issues:
+            rule_id = getattr(issue.rule, "id", "") or ""
+            if not rule_id.startswith("STX-TQ"):
+                continue
+            try:
+                rel = py_file.relative_to(rel_anchor)
+            except ValueError:
+                rel = py_file
+            out.append(
+                Violation(
+                    "PA-307",
+                    f"{distribution}: {rel}:{issue.line}",
+                    f"{rule_id}: {issue.rule.message[:160]}",
+                )
+            )
+    return out
+
+
+def _audit_no_mocks(
+    init_path: Path, distribution: str, import_name: str
+) -> list[Violation]:
+    """PA-306 — flag any mock-library import, symbol, or fixture
+    parameter anywhere in the repo (src/, tests/, examples/, dev
+    scripts). The no-mock rule is intentionally exception-free.
+    """
+    out: list[Violation] = []
+    pkg_root = init_path.parent  # <repo>/src/<pkg>/
+    # Try to locate the repo root so tests/ and examples/ are also scanned.
+    # init_path layout is conventionally `<repo>/src/<pkg>/__init__.py`,
+    # but a couple of packages keep the source flat at `<repo>/<pkg>/`.
+    src_parent = pkg_root.parent
+    repo_root = src_parent.parent if src_parent.name == "src" else src_parent
+    scan_roots: list[Path] = [pkg_root]
+    for extra in ("tests", "examples", "scripts"):
+        candidate = repo_root / extra
+        if candidate.is_dir() and candidate not in scan_roots:
+            scan_roots.append(candidate)
+
+    seen: set[Path] = set()
+    rel_anchor = repo_root if repo_root != pkg_root else pkg_root.parent
+    for root in scan_roots:
+        for py_file in sorted(root.rglob("*.py")):
+            if py_file in seen:
+                continue
+            seen.add(py_file)
+            parts = py_file.parts
+            if any(
+                seg in parts
+                for seg in (
+                    "__pycache__",
+                    "build",
+                    "dist",
+                    ".tox",
+                    "site-packages",
+                    ".venv",
+                    "venv",
+                )
+            ):
+                continue
+            try:
+                text = py_file.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if not any(
+                tok in text
+                for tok in ("mock", "Mock", "patch", "monkeypatch", "mocker")
+            ):
+                continue
+            try:
+                tree = ast.parse(text, filename=str(py_file))
+            except SyntaxError:
+                continue
+            try:
+                rel = py_file.relative_to(rel_anchor)
+            except ValueError:
+                rel = py_file
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name in _MOCK_MODULES_AUDIT:
+                            out.append(
+                                Violation(
+                                    "PA-306",
+                                    f"{distribution}: {rel}:{node.lineno}",
+                                    f"`import {alias.name}` — mocks are forbidden",
+                                )
+                            )
+                elif isinstance(node, ast.ImportFrom):
+                    mod = node.module or ""
+                    if mod in _MOCK_MODULES_AUDIT:
+                        out.append(
+                            Violation(
+                                "PA-306",
+                                f"{distribution}: {rel}:{node.lineno}",
+                                f"`from {mod} import ...` — mocks are forbidden",
+                            )
+                        )
+                    elif mod == "unittest":
+                        for alias in node.names:
+                            if alias.name == "mock":
+                                out.append(
+                                    Violation(
+                                        "PA-306",
+                                        f"{distribution}: {rel}:{node.lineno}",
+                                        "`from unittest import mock` — mocks are forbidden",
+                                    )
+                                )
+                                break
+                    for alias in node.names:
+                        if alias.name in _MOCK_SYMBOLS_AUDIT:
+                            out.append(
+                                Violation(
+                                    "PA-306",
+                                    f"{distribution}: {rel}:{node.lineno}",
+                                    f"imports mock symbol `{alias.name}` — forbidden",
+                                )
+                            )
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for arg in (
+                        list(node.args.args)
+                        + list(node.args.kwonlyargs)
+                        + list(getattr(node.args, "posonlyargs", []))
+                    ):
+                        if arg.arg in _MOCK_FIXTURE_PARAMS_AUDIT:
+                            out.append(
+                                Violation(
+                                    "PA-306",
+                                    f"{distribution}: {rel}:{arg.lineno}",
+                                    f"`{arg.arg}` fixture parameter — mocks are forbidden",
+                                )
+                            )
     return out
 
 
@@ -810,7 +1069,7 @@ def audit_api(
                 )
             )
         else:
-            click.echo(f"skip  {distribution}: {reason}")
+            _emit("skip", f"{distribution}: {reason}")
         return 0
 
     import_name = _import_name(distribution)
@@ -819,8 +1078,9 @@ def audit_api(
         # Skipped, not failed: many packages run audit-all from CI before
         # `pip install -e .` (e.g. when scitex_dev is the only install).
         # Treat absence as "no API surface to check" rather than an error.
-        click.echo(
-            f"info  {distribution}: cannot locate __init__.py for "
+        _emit(
+            "info",
+            f"{distribution}: cannot locate __init__.py for "
             f"'{import_name}' — package not importable, skipped.",
             err=True,
         )
@@ -830,8 +1090,9 @@ def audit_api(
     try:
         im.version(distribution)
     except im.PackageNotFoundError:
-        click.echo(
-            f"audit-api: warn — distribution metadata for '{distribution}' "
+        _emit(
+            "warning",
+            f"audit-api: distribution metadata for '{distribution}' "
             "not found (continuing with source-only checks)",
             err=True,
         )
@@ -839,6 +1100,8 @@ def audit_api(
     violations = _audit_init(init_path, distribution)
     violations.extend(_audit_umbrella_imports(init_path, distribution, import_name))
     violations.extend(_audit_playwright_capture(init_path, distribution, import_name))
+    violations.extend(_audit_no_mocks(init_path, distribution, import_name))
+    violations.extend(_audit_test_quality(init_path, distribution, import_name))
     if rules:
         violations = [v for v in violations if v.rule in rules]
 
@@ -863,13 +1126,25 @@ def audit_api(
     from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
     if not violations:
-        click.echo(f"ok  {distribution}: no Python API violations")
+        _emit("success", f"{distribution}: no Python API violations")
         emit_disclaimer()
         return 0
 
-    click.echo(f"warn  {distribution}: {len(violations)} violation(s)")
+    # Compute the highest severity across all fired rules. The headline
+    # ("error" vs "warning") and exit code track that — so packages
+    # that break error-severity rules (NM/TQ) fail CI gates, while
+    # warning-only violations don't.
+    has_error = any(
+        getattr(RULES.get(v.rule), "severity", "warning") == "error" for v in violations
+    )
+    headline_level = "error" if has_error else "warning"
+    _emit(headline_level, f"{distribution}: {len(violations)} violation(s)")
+    # Per-violation lines use the rule's own severity so a mixed run shows
+    # each rule at its actual level (warnings for PA-301, errors for PA-307).
     for v in violations:
-        click.echo(v.format())
+        sev = getattr(RULES.get(v.rule), "severity", "warning")
+        line = v.format()
+        _emit(sev, line)
     emit_disclaimer()
     emit_skill_hints()
-    return 1
+    return 2 if has_error else 1

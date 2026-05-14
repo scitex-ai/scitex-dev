@@ -9,4 +9,7 @@ import scitex_dev.plt.mpl as mpl_mod  # noqa: E402
 
 
 def test_mpl_module_loads():
+    # Arrange
+    # Act
+    # Assert
     assert hasattr(mpl_mod, "__path__")

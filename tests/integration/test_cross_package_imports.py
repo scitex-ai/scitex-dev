@@ -15,20 +15,45 @@ in its source tree. Two outcomes:
   test is SKIPPED via `pytest.importorskip`. The umbrella's CI
   (which installs every peer) catches cross-package renames.
 """
+
 import pytest
 
 # ===== AUTO-GENERATED: cross-package imports =====
 CROSS_PACKAGE_IMPORTS = [
-    'scitex',
-    'scitex._mcp_tools',
-    'scitex_config',
-    'scitex_config._ecosystem',
-    'scitex_events',
+    "scitex",
+    "scitex._mcp_tools",
+    "scitex_config",
+    "scitex_config._ecosystem",
+    "scitex_events",
+    "scitex_logging",
 ]
 # ===== END AUTO-GENERATED =====
 
 
 @pytest.mark.parametrize("module_name", CROSS_PACKAGE_IMPORTS)
-def test_cross_package_import(module_name):
-    """Importing scitex-dev's declared cross-package dependency must succeed."""
-    pytest.importorskip(module_name)
+def test_cross_package_import_returns_non_none_module(module_name):
+    # Arrange
+    # Act
+    mod = pytest.importorskip(module_name)
+    # Assert
+    assert mod is not None
+
+
+@pytest.mark.parametrize("module_name", CROSS_PACKAGE_IMPORTS)
+def test_cross_package_import_module_name_matches_request(module_name):
+    # Arrange
+    # Act
+    mod = pytest.importorskip(module_name)
+    # Assert
+    assert getattr(mod, "__name__", "") == module_name
+
+
+@pytest.mark.parametrize("module_name", CROSS_PACKAGE_IMPORTS)
+def test_cross_package_import_module_has_real_spec(module_name):
+    # Real modules always set `__spec__` (PEP 451). Catches the case
+    # where something injected a `types.SimpleNamespace` into sys.modules.
+    # Arrange
+    # Act
+    mod = pytest.importorskip(module_name)
+    # Assert
+    assert mod.__spec__ is not None

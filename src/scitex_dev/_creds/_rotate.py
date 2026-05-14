@@ -117,9 +117,22 @@ def validate_source(
     )
 
 
-def _detect_repo_for_package(name: str) -> str | None:
-    """Return ``owner/repo`` for a package, preferring the local clone."""
-    local = get_local_path(name)
+def _detect_repo_for_package(
+    name: str,
+    *,
+    ecosystem: dict | None = None,
+    local_path_lookup=None,
+) -> str | None:
+    """Return ``owner/repo`` for a package, preferring the local clone.
+
+    ``ecosystem`` / ``local_path_lookup`` are injection hooks for tests so
+    they don't need to monkey-patch module-level state.
+    """
+    if local_path_lookup is None:
+        local_path_lookup = get_local_path
+    if ecosystem is None:
+        ecosystem = ECOSYSTEM
+    local = local_path_lookup(name)
     if local is not None and (local / ".git").exists():
         try:
             out = subprocess.check_output(
@@ -137,7 +150,7 @@ def _detect_repo_for_package(name: str) -> str | None:
         if out:
             return _normalise_remote_url(out)
     # Fall back to the recorded registry URL.
-    info = ECOSYSTEM.get(name) or {}
+    info = ecosystem.get(name) or {}
     repo = info.get("github_repo")
     return repo or None
 
@@ -207,8 +220,12 @@ def _rotate_one(
     *,
     dry_run: bool,
     force: bool,
+    ecosystem: dict | None = None,
+    local_path_lookup=None,
 ) -> RotateResult:
-    repo = _detect_repo_for_package(package)
+    repo = _detect_repo_for_package(
+        package, ecosystem=ecosystem, local_path_lookup=local_path_lookup
+    )
     if not repo:
         return RotateResult(
             package=package, repo=None, status="skipped", message="no remote"
@@ -261,6 +278,8 @@ def rotate_all(
     source_path: Path = CREDENTIALS_PATH,
     dry_run: bool = False,
     force: bool = False,
+    ecosystem: dict | None = None,
+    local_path_lookup=None,
 ) -> list[RotateResult]:
     """Rotate the credential across every (or a filtered set of) repo.
 
@@ -275,7 +294,8 @@ def rotate_all(
     if source is None:
         return []
 
-    pkg_list = list(packages) if packages is not None else list(ECOSYSTEM.keys())
+    eco = ecosystem if ecosystem is not None else ECOSYSTEM
+    pkg_list = list(packages) if packages is not None else list(eco.keys())
     if only:
         only_set = set(only)
         pkg_list = [p for p in pkg_list if p in only_set]
@@ -283,7 +303,17 @@ def rotate_all(
         excl = set(exclude)
         pkg_list = [p for p in pkg_list if p not in excl]
 
-    return [_rotate_one(pkg, source, dry_run=dry_run, force=force) for pkg in pkg_list]
+    return [
+        _rotate_one(
+            pkg,
+            source,
+            dry_run=dry_run,
+            force=force,
+            ecosystem=eco,
+            local_path_lookup=local_path_lookup,
+        )
+        for pkg in pkg_list
+    ]
 
 
 # EOF

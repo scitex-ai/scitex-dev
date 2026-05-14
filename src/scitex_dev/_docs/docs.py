@@ -43,6 +43,10 @@ def get_docs(
     packages: Optional[list[str]] = None,
     format: Optional[str] = None,
     page: Optional[str] = None,
+    *,
+    _discover_fn=None,
+    _root_fn=None,
+    _sphinx_fn=None,
 ) -> Any:
     """Get documentation for one, several, or all installed SciTeX packages.
 
@@ -72,19 +76,35 @@ def get_docs(
             "Use either package= (singular) or packages= (plural), not both"
         )
 
+    discover = _discover_fn if _discover_fn is not None else discover_packages
+
     # Single package — unwrap
     if package is not None:
-        return _get_one(package, format=format, page=page)
+        return _get_one(
+            package,
+            format=format,
+            page=page,
+            _discover_fn=discover,
+            _root_fn=_root_fn,
+            _sphinx_fn=_sphinx_fn,
+        )
 
     # Multiple or all packages
     if packages is None:
-        discovered = discover_packages()
+        discovered = discover()
         packages = list(discovered.keys())
 
     results = {}
     for pkg in packages:
         try:
-            results[pkg] = _get_one(pkg, format=format, page=page)
+            results[pkg] = _get_one(
+                pkg,
+                format=format,
+                page=page,
+                _discover_fn=discover,
+                _root_fn=_root_fn,
+                _sphinx_fn=_sphinx_fn,
+            )
         except LookupError:
             logger.warning("Package %s not found, skipping", pkg)
 
@@ -95,6 +115,9 @@ def build_docs(
     package: Optional[str] = None,
     output_dir: Optional[Path] = None,
     formats: Optional[list[str]] = None,
+    *,
+    _discover_fn=None,
+    _sphinx_fn=None,
 ) -> dict[str, Any]:
     """Build docs from Sphinx source for one or all packages.
 
@@ -115,7 +138,10 @@ def build_docs(
     if formats is None:
         formats = ["html"]
 
-    discovered = discover_packages()
+    discover = _discover_fn if _discover_fn is not None else discover_packages
+    sphinx = _sphinx_fn if _sphinx_fn is not None else get_sphinx_source
+
+    discovered = discover()
 
     if package is not None:
         targets = {package: discovered.get(package)}
@@ -131,7 +157,7 @@ def build_docs(
     for pkg_name, module_name in targets.items():
         if module_name is None:
             continue
-        sphinx_src = get_sphinx_source(module_name)
+        sphinx_src = sphinx(module_name)
         if sphinx_src is None:
             results[pkg_name] = {"error": "No Sphinx source found"}
             continue
@@ -158,6 +184,9 @@ def search_docs(
     package: Optional[str] = None,
     packages: Optional[list[str]] = None,
     max_results: int = 10,
+    *,
+    _discover_fn=None,
+    _get_one_fn=None,
 ) -> list[dict[str, Any]]:
     """Search documentation across one, several, or all SciTeX packages.
 
@@ -178,17 +207,20 @@ def search_docs(
     query_terms = query_lower.split()
     results = []
 
+    discover = _discover_fn if _discover_fn is not None else discover_packages
+    get_one = _get_one_fn if _get_one_fn is not None else _get_one
+
     # Determine which packages to search
     if package is not None:
         search_targets = {package: None}
     elif packages is not None:
         search_targets = {p: None for p in packages}
     else:
-        search_targets = discover_packages()
+        search_targets = discover()
 
     for pkg_name in search_targets:
         try:
-            manifest = get_docs(package=pkg_name)
+            manifest = get_one(pkg_name)
         except LookupError:
             continue
 
@@ -260,9 +292,17 @@ def _get_one(
     package: str,
     format: Optional[str] = None,
     page: Optional[str] = None,
+    *,
+    _discover_fn=None,
+    _root_fn=None,
+    _sphinx_fn=None,
 ) -> Any:
     """Get docs for a single package, following the resolution chain."""
-    discovered = discover_packages()
+    discover = _discover_fn if _discover_fn is not None else discover_packages
+    root_lookup = _root_fn if _root_fn is not None else get_package_root
+    sphinx_lookup = _sphinx_fn if _sphinx_fn is not None else get_sphinx_source
+
+    discovered = discover()
     module_name = discovered.get(package)
 
     if module_name is None:
@@ -271,7 +311,7 @@ def _get_one(
         )
 
     # 1. Try pre-built _sphinx_html/
-    pkg_root = get_package_root(module_name)
+    pkg_root = root_lookup(module_name)
     if pkg_root is not None:
         docs_dir = pkg_root / "_sphinx_html"
         result = _resolve_from_built(docs_dir, format=format, page=page)
@@ -279,7 +319,7 @@ def _get_one(
             return _enrich_manifest(result, package)
 
     # 2. Try Sphinx _build/
-    sphinx_src = get_sphinx_source(module_name)
+    sphinx_src = sphinx_lookup(module_name)
     if sphinx_src is not None:
         build_dir = sphinx_src / "_build"
         result = _resolve_from_built(

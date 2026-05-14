@@ -35,31 +35,35 @@ def _sudo_run(cmd: list[str], input_data: bytes | None = None) -> None:
     )
 
 
-def write_text(path: Path, content: str, use_sudo: bool = False) -> None:
+def write_text(
+    path: Path, content: str, use_sudo: bool = False, *, runner=None
+) -> None:
     """Write text to file, optionally via sudo."""
     if not use_sudo:
         path.write_text(content)
         return
-    _sudo_run(["tee", str(path)], input_data=content.encode())
+    (runner or _sudo_run)(["tee", str(path)], input_data=content.encode())
 
 
-def rename_path(src: Path, dst: Path, use_sudo: bool = False) -> None:
+def rename_path(src: Path, dst: Path, use_sudo: bool = False, *, runner=None) -> None:
     """Rename (move) a path, optionally via sudo."""
     if not use_sudo:
         src.rename(dst)
         return
-    _sudo_run(["mv", str(src), str(dst)])
+    (runner or _sudo_run)(["mv", str(src), str(dst)])
 
 
-def unlink_path(path: Path, use_sudo: bool = False) -> None:
+def unlink_path(path: Path, use_sudo: bool = False, *, runner=None) -> None:
     """Remove a file or symlink, optionally via sudo."""
     if not use_sudo:
         path.unlink()
         return
-    _sudo_run(["rm", str(path)])
+    (runner or _sudo_run)(["rm", str(path)])
 
 
-def mkdir(path: Path, parents: bool = False, use_sudo: bool = False) -> None:
+def mkdir(
+    path: Path, parents: bool = False, use_sudo: bool = False, *, runner=None
+) -> None:
     """Create directory, optionally via sudo."""
     if not use_sudo:
         path.mkdir(parents=parents, exist_ok=True)
@@ -68,23 +72,23 @@ def mkdir(path: Path, parents: bool = False, use_sudo: bool = False) -> None:
     if parents:
         cmd.append("-p")
     cmd.append(str(path))
-    _sudo_run(cmd)
+    (runner or _sudo_run)(cmd)
 
 
-def rmdir(path: Path, use_sudo: bool = False) -> None:
+def rmdir(path: Path, use_sudo: bool = False, *, runner=None) -> None:
     """Remove empty directory, optionally via sudo."""
     if not use_sudo:
         path.rmdir()
         return
-    _sudo_run(["rmdir", str(path)])
+    (runner or _sudo_run)(["rmdir", str(path)])
 
 
-def symlink_to(link: Path, target: str, use_sudo: bool = False) -> None:
+def symlink_to(link: Path, target: str, use_sudo: bool = False, *, runner=None) -> None:
     """Create a symlink, optionally via sudo."""
     if not use_sudo:
         link.symlink_to(target)
         return
-    _sudo_run(["ln", "-s", target, str(link)])
+    (runner or _sudo_run)(["ln", "-s", target, str(link)])
 
 
 # EOF

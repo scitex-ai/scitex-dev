@@ -23,8 +23,18 @@ from ._rules import (  # noqa: F401
     ALL_RULES,
     EH001,
     NL001,
+    NM001,
+    NM002,
+    NM003,
     Rule,
     SEVERITY_ORDER,
+    TQ001,
+    TQ002,
+    TQ003,
+    TQ004,
+    TQ005,
+    TQ006,
+    TQ007,
 )
 from ._rules import lookup as _lookup
 
@@ -33,7 +43,7 @@ from ._rules import lookup as _lookup
 # no longer defines. Plugin-shipped rules with the matching id get
 # returned transparently; truly missing ids raise AttributeError so
 # typos still surface.
-_RULE_PREFIXES = ("S", "I", "IO", "PA", "ST", "EH", "P", "FM", "NL")
+_RULE_PREFIXES = ("S", "I", "IO", "PA", "ST", "EH", "P", "FM", "NL", "NM", "TQ")
 
 
 def __getattr__(name: str):

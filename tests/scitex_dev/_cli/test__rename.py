@@ -40,7 +40,10 @@ def repo(tmp_path):
     return tmp_path
 
 
-def test_quiet_one_line_summary_on_dry_run(repo):
+def test_quiet_one_line_summary_on_dry_run_result_exit_code_0(repo):
+    # Arrange
+    # Act
+    # Assert
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -55,10 +58,32 @@ def test_quiet_one_line_summary_on_dry_run(repo):
         ],
     )
     assert result.exit_code == 0, result.output
+
+
+def test_quiet_one_line_summary_on_dry_run_would_rename_1_files_1_matches_0_collisi(repo):
+    # Arrange
+    # Act
+    # Assert
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "rename-symbols",
+            "old_func",
+            "new_func",
+            "--root",
+            str(repo),
+            "--dry-run",
+            "-q",
+        ],
+    )
     assert "would rename: 1 files / 1 matches / 0 collisions" in result.output
 
 
-def test_quiet_one_line_summary_on_real_run(repo):
+def test_quiet_one_line_summary_on_real_run_result_exit_code_0(repo):
+    # Arrange
+    # Act
+    # Assert
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -72,15 +97,54 @@ def test_quiet_one_line_summary_on_real_run(repo):
         ],
     )
     assert result.exit_code == 0, result.output
+
+
+def test_quiet_one_line_summary_on_real_run_renamed_1_files_1_matches_0_collisions_i(repo):
+    # Arrange
+    # Act
+    # Assert
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "rename-symbols",
+            "old_func",
+            "new_func",
+            "--root",
+            str(repo),
+            "-q",
+        ],
+    )
     assert "renamed: 1 files / 1 matches / 0 collisions" in result.output
+
+
+def test_quiet_one_line_summary_on_real_run_repo_a_py_read_text_new_func_n(repo):
+    # Arrange
+    # Act
+    # Assert
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "rename-symbols",
+            "old_func",
+            "new_func",
+            "--root",
+            str(repo),
+            "-q",
+        ],
+    )
     assert (repo / "a.py").read_text() == "new_func()\n"
 
 
-def test_allow_dirty_skips_uncommitted_check(repo):
+def test_allow_dirty_skips_uncommitted_check_blocked_exit_code_0(repo):
     """Without --allow-dirty, a dirty tree blocks the rename. With the
     flag, the rename proceeds — letting callers chain multiple regex
     passes within one logical change."""
     # Make the tree dirty:
+    # Arrange
+    # Act
+    # Assert
     (repo / "a.py").write_text("old_func()\nold_func()\n")
 
     runner = CliRunner()
@@ -98,6 +162,46 @@ def test_allow_dirty_skips_uncommitted_check(repo):
         ],
     )
     assert blocked.exit_code != 0
+
+    # With --allow-dirty: succeeds, file is rewritten.
+    ok = runner.invoke(
+        main,
+        [
+            "rename-symbols",
+            "old_func",
+            "new_func",
+            "--root",
+            str(repo),
+            "-q",
+            "--allow-dirty",
+        ],
+    )
+
+
+def test_allow_dirty_skips_uncommitted_check_uncommitted_changes_in_blocked_output(repo):
+    """Without --allow-dirty, a dirty tree blocks the rename. With the
+    flag, the rename proceeds — letting callers chain multiple regex
+    passes within one logical change."""
+    # Make the tree dirty:
+    # Arrange
+    # Act
+    # Assert
+    (repo / "a.py").write_text("old_func()\nold_func()\n")
+
+    runner = CliRunner()
+
+    # Without --allow-dirty: should report the uncommitted-changes error.
+    blocked = runner.invoke(
+        main,
+        [
+            "rename-symbols",
+            "old_func",
+            "new_func",
+            "--root",
+            str(repo),
+            "-q",
+        ],
+    )
     assert "Uncommitted changes" in blocked.output
 
     # With --allow-dirty: succeeds, file is rewritten.
@@ -113,11 +217,94 @@ def test_allow_dirty_skips_uncommitted_check(repo):
             "--allow-dirty",
         ],
     )
+
+
+def test_allow_dirty_skips_uncommitted_check_ok_exit_code_0(repo):
+    """Without --allow-dirty, a dirty tree blocks the rename. With the
+    flag, the rename proceeds — letting callers chain multiple regex
+    passes within one logical change."""
+    # Make the tree dirty:
+    # Arrange
+    # Act
+    # Assert
+    (repo / "a.py").write_text("old_func()\nold_func()\n")
+
+    runner = CliRunner()
+
+    # Without --allow-dirty: should report the uncommitted-changes error.
+    blocked = runner.invoke(
+        main,
+        [
+            "rename-symbols",
+            "old_func",
+            "new_func",
+            "--root",
+            str(repo),
+            "-q",
+        ],
+    )
+
+    # With --allow-dirty: succeeds, file is rewritten.
+    ok = runner.invoke(
+        main,
+        [
+            "rename-symbols",
+            "old_func",
+            "new_func",
+            "--root",
+            str(repo),
+            "-q",
+            "--allow-dirty",
+        ],
+    )
     assert ok.exit_code == 0, ok.output
+
+
+def test_allow_dirty_skips_uncommitted_check_repo_a_py_read_text_new_func_nnew_func_n(repo):
+    """Without --allow-dirty, a dirty tree blocks the rename. With the
+    flag, the rename proceeds — letting callers chain multiple regex
+    passes within one logical change."""
+    # Make the tree dirty:
+    # Arrange
+    # Act
+    # Assert
+    (repo / "a.py").write_text("old_func()\nold_func()\n")
+
+    runner = CliRunner()
+
+    # Without --allow-dirty: should report the uncommitted-changes error.
+    blocked = runner.invoke(
+        main,
+        [
+            "rename-symbols",
+            "old_func",
+            "new_func",
+            "--root",
+            str(repo),
+            "-q",
+        ],
+    )
+
+    # With --allow-dirty: succeeds, file is rewritten.
+    ok = runner.invoke(
+        main,
+        [
+            "rename-symbols",
+            "old_func",
+            "new_func",
+            "--root",
+            str(repo),
+            "-q",
+            "--allow-dirty",
+        ],
+    )
     assert (repo / "a.py").read_text() == "new_func()\nnew_func()\n"
 
 
-def test_quiet_reports_zero_matches_cleanly(repo):
+def test_quiet_reports_zero_matches_cleanly_result_exit_code_0(repo):
+    # Arrange
+    # Act
+    # Assert
     runner = CliRunner()
     result = runner.invoke(
         main,
@@ -132,6 +319,25 @@ def test_quiet_reports_zero_matches_cleanly(repo):
         ],
     )
     assert result.exit_code == 0, result.output
+
+
+def test_quiet_reports_zero_matches_cleanly_would_rename_0_files_0_matches_0_collisi(repo):
+    # Arrange
+    # Act
+    # Assert
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "rename-symbols",
+            "no_such_symbol",
+            "new",
+            "--root",
+            str(repo),
+            "--dry-run",
+            "-q",
+        ],
+    )
     assert "would rename: 0 files / 0 matches / 0 collisions" in result.output
 
 

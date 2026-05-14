@@ -28,12 +28,28 @@ except ImportError:
 render_markdown = _newb_render_markdown
 
 
-def _find_skills_dir(distribution: str) -> Path:
+def _find_skills_dir(
+    distribution: str,
+    *,
+    ecosystem: dict | None = None,
+    local_path_lookup=None,
+) -> Path:
     """Locate ``_skills/<distribution>/`` for a given ecosystem package.
 
     Resolution: ``<local_path>/src/<import_name>/_skills/<distribution>/``.
+
+    ``ecosystem`` / ``local_path_lookup`` are test-injection hooks so
+    callers can supply a synthetic registry without monkey-patching.
     """
-    from ..._ecosystem import ECOSYSTEM, get_local_path
+    if ecosystem is None or local_path_lookup is None:
+        from ..._ecosystem import ECOSYSTEM as _ECO, get_local_path as _gpl
+
+        if ecosystem is None:
+            ecosystem = _ECO
+        if local_path_lookup is None:
+            local_path_lookup = _gpl
+    ECOSYSTEM = ecosystem
+    get_local_path = local_path_lookup
 
     if distribution not in ECOSYSTEM:
         raise ValueError(
@@ -61,6 +77,7 @@ def self_explain(
     model: str = "claude-haiku-4-5",
     runs_per_prompt: int = 1,
     _runner: Optional[Any] = None,
+    skills_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """Have an agent (mounted with only this package's skills) self-explain.
 
@@ -88,7 +105,8 @@ def self_explain(
         populated from ``skills_dir.name``, which is the distribution
         name in the SciTeX layout (``_skills/<dist>/``).
     """
-    skills_dir = _find_skills_dir(distribution)
+    if skills_dir is None:
+        skills_dir = _find_skills_dir(distribution)
     return _newb_run(
         skills_dir,
         model=model,

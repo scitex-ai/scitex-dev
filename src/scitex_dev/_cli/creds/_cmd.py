@@ -119,6 +119,12 @@ def _register_rotate_all(creds: click.Group) -> None:
         non-zero if any repo reports `error`. Exits 0 silently if the
         local credentials file is missing or its OAuth token has expired
         (operator must `claude /login` first; don't push a stale token).
+
+        \b
+        Example:
+          $ scitex-dev creds rotate-all --dry-run
+          $ scitex-dev creds rotate-all --yes
+          $ scitex-dev creds rotate-all --only scitex-io --only scitex-stats --yes
         """
         source_path = source or CREDENTIALS_PATH
 
@@ -233,6 +239,12 @@ def _register_install_cron(creds: click.Group) -> None:
 
         \b
         Logs to ~/.scitex/dev/logs/creds-rotate.log (size-rotated at 1 MiB).
+
+        \b
+        Example:
+          $ scitex-dev creds install-cron --dry-run
+          $ scitex-dev creds install-cron --yes
+          $ scitex-dev creds install-cron --interval-minutes 30 --yes
         """
         if dry_run:
             line = cron_mod.install(interval_minutes, dry_run=True)
@@ -255,10 +267,26 @@ def _register_install_cron(creds: click.Group) -> None:
 def _register_uninstall_cron(creds: click.Group) -> None:
     @creds.command("uninstall-cron")
     @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=False,
+        help="Show how many managed lines would be removed without writing.",
+    )
+    @click.option(
         "-y", "--yes", is_flag=True, default=False, help="Confirm the uninstall."
     )
-    def uninstall_cron_cmd(yes: bool) -> None:
-        """Remove the managed crontab line."""
+    def uninstall_cron_cmd(dry_run: bool, yes: bool) -> None:
+        """Remove the managed crontab line.
+
+        \b
+        Example:
+          $ scitex-dev creds uninstall-cron --dry-run
+          $ scitex-dev creds uninstall-cron --yes
+        """
+        if dry_run:
+            preview = cron_mod.uninstall(dry_run=True)
+            click.echo(f"would remove {preview} managed line(s).")
+            return
         if not yes:
             preview = cron_mod.uninstall(dry_run=True)
             click.echo(

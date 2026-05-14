@@ -141,6 +141,28 @@ class SciTeXChecker(ast.NodeVisitor):
         self._check_import_from(module, node)
         self.generic_visit(node)
 
+    # Mock-related module / symbol names. The no-mock rule is intentionally
+    # exception-free: any presence of these in a SciTeX codebase is a
+    # violation.
+    _MOCK_MODULES = frozenset({"mock", "unittest.mock", "pytest_mock"})
+    _MOCK_SYMBOLS = frozenset(
+        {
+            "Mock",
+            "MagicMock",
+            "AsyncMock",
+            "NonCallableMock",
+            "NonCallableMagicMock",
+            "PropertyMock",
+            "patch",
+            "mock_open",
+            "create_autospec",
+            "sentinel",
+            "ANY",
+            "MockerFixture",
+        }
+    )
+    _MOCK_FIXTURE_PARAMS = frozenset({"mocker", "monkeypatch"})
+
     def _check_import(self, module_name: str, node: ast.Import) -> None:
         """Check bare `import X` statements."""
         line = self._get_source(node.lineno)
@@ -160,6 +182,10 @@ class SciTeXChecker(ast.NodeVisitor):
 
         if module_name == "logging":
             self._add(_lk("STX-I007"), node.lineno, node.col_offset, line)
+
+        # NM001 — no-mock imports (no exceptions)
+        if module_name in self._MOCK_MODULES:
+            self._add(rules.NM001, node.lineno, node.col_offset, line)
 
     def _check_import_from(self, module: str, node: ast.ImportFrom) -> None:
         """Check `from X import Y` statements."""
@@ -187,6 +213,24 @@ class SciTeXChecker(ast.NodeVisitor):
         # from argparse import *
         if module == "argparse" and self._is_script:
             self._add(_lk("STX-S003"), node.lineno, node.col_offset, line)
+
+        # NM001 — no-mock imports (no exceptions)
+        # `from unittest.mock import ...`, `from mock import ...`,
+        # `from pytest_mock import MockerFixture`, `from unittest import mock`.
+        if module in self._MOCK_MODULES:
+            self._add(rules.NM001, node.lineno, node.col_offset, line)
+        elif module == "unittest":
+            for alias in node.names:
+                if alias.name == "mock":
+                    self._add(rules.NM001, node.lineno, node.col_offset, line)
+                    break
+
+        # NM003 — mock symbols imported by name (Mock, MagicMock, patch, ...).
+        # Catches `from somewhere import Mock` regardless of source module.
+        for alias in node.names:
+            if alias.name in self._MOCK_SYMBOLS:
+                self._add(rules.NM003, node.lineno, node.col_offset, line)
+                break
 
     # -- Try/Except visitor (EH001) --
 
@@ -454,6 +498,16 @@ class SciTeXChecker(ast.NodeVisitor):
             elif func.id == "open" and self._has_session_decorator:
                 line = self._get_source(node.lineno)
                 self._add(rules.PA002, node.lineno, node.col_offset, line)
+            # NM003 — bare call to a mock symbol: Mock(), MagicMock(), patch(...)
+            elif func.id in self._MOCK_SYMBOLS:
+                line = self._get_source(node.lineno)
+                self._add(rules.NM003, node.lineno, node.col_offset, line)
+
+        # NM003 — attribute call to a mock symbol: mock.patch(...),
+        # unittest.mock.MagicMock(...), pytest_mock.MockerFixture(...).
+        if isinstance(func, ast.Attribute) and func.attr in self._MOCK_SYMBOLS:
+            line = self._get_source(node.lineno)
+            self._add(rules.NM003, node.lineno, node.col_offset, line)
 
     # -- stx.io path checking (delegated to _path_checker) --
 
@@ -468,7 +522,323 @@ class SciTeXChecker(ast.NodeVisitor):
     def _REQUIRED_INJECTED(self):
         return set(self.config.required_injected)
 
+    # Names that count as a "real" pytest-style assertion construct when
+    # used inside a `test_*` function body. Detected as either a Call
+    # (e.g. `pytest.raises(ValueError)`) or a With-context item.
+    _TQ001_PYTEST_ASSERT_ATTRS = frozenset(
+        {"raises", "warns", "fail", "deprecated_call", "skip", "xfail"}
+    )
+
+    # State-mutation method names that flag a session/module-scope fixture.
+    _TQ004_MUTATION_ATTRS = frozenset(
+        {
+            "insert",
+            "write",
+            "write_text",
+            "write_bytes",
+            "writelines",
+            "append",
+            "update",
+            "set",
+            "save",
+            "delete",
+            "remove",
+            "unlink",
+            "mkdir",
+            "rmdir",
+            "touch",
+        }
+    )
+
+    # Resource-acquisition call names that flag a `return`-not-`yield` fixture.
+    _TQ005_RESOURCE_NAMES = frozenset(
+        {"open", "connect", "urlopen", "socket", "Session", "TemporaryFile"}
+    )
+
+    def _tq001_is_test_file(self) -> bool:
+        """True iff the current file looks like a pytest test file.
+
+        Pytest's own collection rules (filename `test_*.py` / `*_test.py`,
+        or located under a `tests/` directory) are the same signal we use
+        here — we only want TQ001 firing on files pytest will actually run.
+        """
+        parts = Path(self.filepath).parts
+        name = Path(self.filepath).name
+        return (
+            name.startswith("test_")
+            or name.endswith("_test.py")
+            or any(seg in {"tests", "test"} for seg in parts)
+        )
+
+    @classmethod
+    def _tq_is_pytest_fixture(cls, node) -> tuple[bool, str | None]:
+        """Return (is_fixture, scope) for a function. scope is one of
+        'function' / 'class' / 'module' / 'package' / 'session' / None
+        (default = function when not specified)."""
+        for deco in node.decorator_list:
+            # @pytest.fixture (bare)
+            if (
+                isinstance(deco, ast.Attribute)
+                and deco.attr == "fixture"
+                and isinstance(deco.value, ast.Name)
+                and deco.value.id == "pytest"
+            ):
+                return True, "function"
+            # @fixture (bare, after `from pytest import fixture`)
+            if isinstance(deco, ast.Name) and deco.id == "fixture":
+                return True, "function"
+            # @pytest.fixture(scope="session", ...) or @fixture(...)
+            if isinstance(deco, ast.Call):
+                f = deco.func
+                is_pytest_fixture = (
+                    isinstance(f, ast.Attribute)
+                    and f.attr == "fixture"
+                    and isinstance(f.value, ast.Name)
+                    and f.value.id == "pytest"
+                ) or (isinstance(f, ast.Name) and f.id == "fixture")
+                if is_pytest_fixture:
+                    scope = "function"
+                    for kw in deco.keywords:
+                        if kw.arg == "scope" and isinstance(kw.value, ast.Constant):
+                            scope = str(kw.value.value)
+                    return True, scope
+        return False, None
+
+    @staticmethod
+    def _tq_has_parametrize(node) -> bool:
+        """True iff the function is decorated with a `parametrize` form:
+        `@pytest.mark.parametrize(...)`, `@mark.parametrize(...)`,
+        or bare `@parametrize(...)` after `from pytest.mark import parametrize`.
+        """
+        for deco in node.decorator_list:
+            f = deco.func if isinstance(deco, ast.Call) else deco
+            if isinstance(f, ast.Attribute) and f.attr == "parametrize":
+                # @pytest.mark.parametrize  (Attribute on Attribute)
+                if isinstance(f.value, ast.Attribute) and f.value.attr == "mark":
+                    return True
+                # @mark.parametrize  (Attribute on Name "mark")
+                if isinstance(f.value, ast.Name) and f.value.id == "mark":
+                    return True
+            # @parametrize  (bare Name)
+            if isinstance(f, ast.Name) and f.id == "parametrize":
+                return True
+        return False
+
+    @classmethod
+    def _tq004_body_mutates_state(cls, node) -> bool:
+        """True iff the function body contains a state-mutation call
+        (insert/write/append/update/set/save method, or a writable open)."""
+        for sub in ast.walk(node):
+            if not isinstance(sub, ast.Call):
+                continue
+            f = sub.func
+            if isinstance(f, ast.Attribute) and f.attr in cls._TQ004_MUTATION_ATTRS:
+                return True
+            # `open(path, "w")` / `open(path, "a")`
+            if (
+                isinstance(f, ast.Name)
+                and f.id == "open"
+                and len(sub.args) >= 2
+                and isinstance(sub.args[1], ast.Constant)
+                and isinstance(sub.args[1].value, str)
+                and any(m in sub.args[1].value for m in ("w", "a", "x", "+"))
+            ):
+                return True
+        return False
+
+    @classmethod
+    def _tq005_acquires_resource(cls, node) -> bool:
+        """True iff the body has a call to a resource-acquiring constructor."""
+        for sub in ast.walk(node):
+            if not isinstance(sub, ast.Call):
+                continue
+            f = sub.func
+            if isinstance(f, ast.Name) and f.id in cls._TQ005_RESOURCE_NAMES:
+                return True
+            if isinstance(f, ast.Attribute) and f.attr in cls._TQ005_RESOURCE_NAMES:
+                return True
+        return False
+
+    @staticmethod
+    def _tq005_returns_not_yields(node) -> bool:
+        """True iff the body has a top-level `return <expr>` AND no `yield`
+        anywhere. Returning a freshly-acquired resource bypasses cleanup."""
+        has_yield = False
+        has_return_value = False
+        for sub in ast.walk(node):
+            if isinstance(sub, (ast.Yield, ast.YieldFrom)):
+                has_yield = True
+                break
+            if isinstance(sub, ast.Return) and sub.value is not None:
+                has_return_value = True
+        return has_return_value and not has_yield
+
+    @staticmethod
+    def _tq006_body_has_toplevel_if(node) -> bool:
+        """True iff the function body has an `if` at the top level (not
+        nested inside another statement)."""
+        for stmt in node.body:
+            if isinstance(stmt, ast.If):
+                return True
+        return False
+
+    @staticmethod
+    def _tq003_name_word_count(name: str) -> int:
+        """Count the word-tokens after the `test_` prefix. Splits on `_`,
+        drops empties, drops leading 'test'."""
+        if not name.startswith("test_"):
+            return -1
+        rest = name[len("test_") :]
+        tokens = [t for t in rest.split("_") if t]
+        return len(tokens)
+
+    def _tq002_missing_aaa_markers(self, node) -> str:
+        """Return a short reason string if the test body is missing AAA
+        marker comments (`# Arrange`, `# Act`, `# Assert`) in order, or
+        an empty string if all three are present and ordered.
+
+        Markers are matched case-insensitively. Descriptive text after
+        the keyword is allowed (`# Arrange: build the fixture`).
+        """
+        start = node.lineno  # 1-indexed
+        end = getattr(node, "end_lineno", None) or len(self.source_lines)
+        # source_lines is 0-indexed; the function body lives at
+        # indices [start, end). The decorator-line case is rare for tests.
+        body = self.source_lines[start:end]
+        seen = {"arrange": -1, "act": -1, "assert": -1}
+        for i, raw in enumerate(body):
+            text = raw.strip()
+            if not text.startswith("#"):
+                continue
+            # Strip "#" + whitespace.
+            comment = text.lstrip("#").strip().lower()
+            for kw in seen:
+                if seen[kw] != -1:
+                    continue
+                # Match "arrange" / "arrange:" / "arrange — note" forms.
+                if (
+                    comment == kw
+                    or comment.startswith(kw + ":")
+                    or comment.startswith(kw + " ")
+                ):
+                    seen[kw] = i
+                    break
+        missing = [k.capitalize() for k, v in seen.items() if v == -1]
+        if missing:
+            return "missing " + "/".join(missing) + " marker"
+        # Order check: arrange < act < assert.
+        a, b, c = seen["arrange"], seen["act"], seen["assert"]
+        if not (a < b < c):
+            return "AAA markers are out of order"
+        return ""
+
+    @classmethod
+    def _tq007_count_assertions(cls, node) -> int:
+        """Count assertions in a function body:
+        - every `ast.Assert` (recursive, includes inside if/for/while/with);
+        - every call to `pytest.raises` / `pytest.warns` / `pytest.fail` /
+          `pytest.deprecated_call` (treated as one assertion each).
+        """
+        count = 0
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Assert):
+                count += 1
+                continue
+            if isinstance(sub, ast.Call):
+                f = sub.func
+                if (
+                    isinstance(f, ast.Attribute)
+                    and f.attr in cls._TQ001_PYTEST_ASSERT_ATTRS
+                ):
+                    count += 1
+                elif isinstance(f, ast.Name) and f.id in cls._TQ001_PYTEST_ASSERT_ATTRS:
+                    count += 1
+        return count
+
+    @classmethod
+    def _tq001_function_has_assertion(cls, node) -> bool:
+        """True iff a `test_*` body contains a real assertion construct.
+
+        Counts:
+          - any `ast.Assert` anywhere in the body (including nested);
+          - any call to `pytest.raises(...)` / `pytest.warns(...)` /
+            `pytest.fail(...)` / `pytest.deprecated_call(...)` /
+            `pytest.skip(...)` / `pytest.xfail(...)`;
+          - any `with pytest.raises(...)` / `with pytest.warns(...)`
+            context-manager use.
+        """
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Assert):
+                return True
+            if isinstance(sub, ast.Call):
+                f = sub.func
+                if (
+                    isinstance(f, ast.Attribute)
+                    and f.attr in cls._TQ001_PYTEST_ASSERT_ATTRS
+                ):
+                    return True
+                # Bare `raises(...)` after `from pytest import raises`.
+                if isinstance(f, ast.Name) and f.id in cls._TQ001_PYTEST_ASSERT_ATTRS:
+                    return True
+        return False
+
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        # NM002 — `mocker` / `monkeypatch` fixture parameters (no exceptions).
+        for arg in (
+            list(node.args.args)
+            + list(node.args.kwonlyargs)
+            + list(getattr(node.args, "posonlyargs", []))
+        ):
+            if arg.arg in self._MOCK_FIXTURE_PARAMS:
+                line = self._get_source(arg.lineno)
+                self._add(rules.NM002, arg.lineno, arg.col_offset, line)
+        # TQ001 / TQ002 / TQ003 / TQ006 / TQ007 — test-function rules
+        # (gated on test files).
+        if node.name.startswith("test_") and self._tq001_is_test_file():
+            # TQ001 — no assertion → green-bar theater.
+            assertion_count = self._tq007_count_assertions(node)
+            if assertion_count == 0:
+                line = self._get_source(node.lineno)
+                self._add(rules.TQ001, node.lineno, node.col_offset, line)
+            # TQ007 — more than one assertion in one test (when first
+            # assert fails, the rest is silently skipped).
+            elif assertion_count > 1:
+                line = self._get_source(node.lineno)
+                self._add(rules.TQ007, node.lineno, node.col_offset, line)
+            # TQ002 — AAA marker comments must be present and in order.
+            aaa_reason = self._tq002_missing_aaa_markers(node)
+            if aaa_reason:
+                line = self._get_source(node.lineno)
+                self._add(rules.TQ002, node.lineno, node.col_offset, line)
+            # TQ003 — test name has <3 word-tokens after `test_`.
+            if self._tq003_name_word_count(node.name) < 3:
+                line = self._get_source(node.lineno)
+                self._add(rules.TQ003, node.lineno, node.col_offset, line)
+            # TQ006 — top-level if/else inside a parametrized test.
+            if self._tq_has_parametrize(node) and self._tq006_body_has_toplevel_if(
+                node
+            ):
+                line = self._get_source(node.lineno)
+                self._add(rules.TQ006, node.lineno, node.col_offset, line)
+
+        # TQ004 / TQ005 — fixture rules (gated on test files; any function
+        # with @pytest.fixture, name doesn't have to start with `test_`).
+        if self._tq001_is_test_file():
+            is_fixture, scope = self._tq_is_pytest_fixture(node)
+            if is_fixture:
+                # TQ004 — session/module scope + state-mutation body.
+                if scope in {"session", "module", "package"} and (
+                    self._tq004_body_mutates_state(node)
+                ):
+                    line = self._get_source(node.lineno)
+                    self._add(rules.TQ004, node.lineno, node.col_offset, line)
+                # TQ005 — resource acquisition + return-not-yield.
+                if self._tq005_acquires_resource(
+                    node
+                ) and self._tq005_returns_not_yields(node):
+                    line = self._get_source(node.lineno)
+                    self._add(rules.TQ005, node.lineno, node.col_offset, line)
+
         if self._has_session_deco(node):
             self._has_session_decorator = True
             self._check_session_return(node)

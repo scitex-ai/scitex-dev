@@ -117,7 +117,11 @@ def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if proc.returncode > 1:  # 1 = no matches (ok), >1 = error
             return None
-        paths = [Path(line) for line in proc.stdout.strip().splitlines() if line]
+        # Sort to guarantee deterministic ordering across preview / execute
+        # passes. ripgrep with --threads >1 returns matches as workers
+        # complete, so iteration order depends on FS racing — that drifted
+        # the content `file_id` between passes and broke `skip_ids`.
+        paths = sorted(Path(line) for line in proc.stdout.strip().splitlines() if line)
         return paths
     except (subprocess.TimeoutExpired, OSError):
         return None

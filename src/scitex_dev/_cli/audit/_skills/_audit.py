@@ -16,6 +16,7 @@ from pathlib import Path
 
 import click
 
+from .._emit import emit as _emit
 from ...._ecosystem._skills import skills_audit_core as _core
 from . import _audit_v2 as _v2
 
@@ -472,6 +473,7 @@ def audit_skills(
     json_out: bool = False,
     rules: set[str] | None = None,
     fix: bool = False,
+    skills_dir: Path | None = None,
 ) -> int:
     """Audit `<distribution>` against the skills checklist. Warn-only.
 
@@ -511,10 +513,11 @@ def audit_skills(
                 )
             )
         else:
-            click.echo(f"skip  {distribution}: {reason}")
+            _emit("skip", f"{distribution}: {reason}")
         return 0
 
-    skills_dir = _locate_skills_dir(distribution)
+    if skills_dir is None:
+        skills_dir = _locate_skills_dir(distribution)
     violations: list[Violation] = []
 
     canonical_dir = _check_layout(skills_dir, distribution, violations)
@@ -558,8 +561,9 @@ def audit_skills(
         # Same as audit-api: not every package ships a `_skills/` directory,
         # and audit-all may run before `pip install -e .`. Skip rather than
         # fail.
-        click.echo(
-            f"info  {distribution}: no `_skills/` directory found — skipped.",
+        _emit(
+            "info",
+            f"{distribution}: no `_skills/` directory found — skipped.",
             err=True,
         )
         return 0
@@ -567,13 +571,13 @@ def audit_skills(
     from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
     if not violations:
-        click.echo(f"ok  {distribution}: no skills violations")
+        _emit("success", f"{distribution}: no skills violations")
         emit_disclaimer()
         return 0
 
-    click.echo(f"warn  {distribution}: {len(violations)} violation(s)")
+    _emit("warning", f"{distribution}: {len(violations)} violation(s)")
     for v in violations:
-        click.echo(v.format())
+        _emit("warning", v.format())
     emit_disclaimer()
     emit_skill_hints()
     return 1

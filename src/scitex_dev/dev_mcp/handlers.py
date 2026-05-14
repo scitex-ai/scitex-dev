@@ -16,12 +16,15 @@ from .._core.types import Result
 
 async def list_versions_handler(
     packages: list[str] | None = None,
+    *,
+    _list_versions_fn=None,
 ) -> str:
     """Report the installed version of every SciTeX package (scitex, scitex-io, scitex-stats, figrecipe, scitex-writer, scitex-scholar, scitex-notebook, scitex-audio, scitex-clew, scitex-dev, scitex-linter, …). Use when the user asks "what versions of scitex do I have?", "list ecosystem versions", "show every scitex-* version", or before a release to see the current state. Optionally filter to a subset with `packages=[...]`."""
-    from .._release.versions import list_versions
+    if _list_versions_fn is None:
+        from .._release.versions import list_versions as _list_versions_fn
 
     return wrap_as_mcp(
-        list_versions,
+        _list_versions_fn,
         idempotent=True,
         packages=packages,
     )

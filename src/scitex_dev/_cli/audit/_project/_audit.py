@@ -2057,7 +2057,9 @@ def audit_project(
     skip, reason = should_skip_audit(distribution, "audit-project")
     if skip:
         if not json_out:
-            click.echo(f"skip  {distribution}: {reason}")
+            from .._emit import emit as _emit_skip
+
+            _emit_skip("skip", f"{distribution}: {reason}")
         return 0
     info = ECOSYSTEM.get(distribution, {})
     category = info.get("category", "library")
@@ -2198,24 +2200,31 @@ def audit_project(
                 err=True,
             )
 
+    from .._emit import emit as _emit
+
     if not visible:
         # No findings at the requested severity floor.
-        click.echo(f"ok  {distribution}: no project-structure violations")
+        _emit("success", f"{distribution}: no project-structure violations")
         _emit_deferred_reminder()
         emit_disclaimer()
         return exit_code
 
     n_w = sum(1 for v in visible if v.severity == "W")
     n_i = sum(1 for v in visible if v.severity == "I")
-    label = "fail" if exit_code else "warn"
-    summary = f"{label}  {distribution} ({repo_root}): {n_errors} error(s)"
+    headline_level = "error" if exit_code else "warning"
+    summary = f"{distribution} ({repo_root}): {n_errors} error(s)"
     if n_w:
         summary += f", {n_w} warning(s)"
     if n_i:
         summary += f", {n_i} info"
-    click.echo(summary)
+    _emit(headline_level, summary)
     for v in visible:
-        click.echo(v.format())
+        sev = (
+            "error"
+            if getattr(v, "severity", "W") == "E"
+            else ("warning" if getattr(v, "severity", "W") == "W" else "info")
+        )
+        _emit(sev, v.format())
     _emit_deferred_reminder()
     emit_disclaimer()
     emit_skill_hints()

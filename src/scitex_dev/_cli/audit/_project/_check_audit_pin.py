@@ -37,6 +37,13 @@ _RUNTIME_BLOCK_RE = re.compile(
     r"^dependencies\s*=\s*\[(.*?)^\]", re.MULTILINE | re.DOTALL
 )
 _PIN_RE = re.compile(r'"scitex-dev(?:\[[^\]]*\])?(?:>=([0-9][0-9.]*))?"')
+# scitex-dev itself cannot pin scitex-dev — that's an unresolvable
+# circular dependency (pip cannot satisfy `scitex-dev>=0.11.5` against
+# the local editable install resolving to `0.1.dev1+g<sha>` via
+# setuptools-scm). The audit gate is exempt for the package that
+# *provides* the audit gate.
+_NAME_RE = re.compile(r'^\s*name\s*=\s*"([^"]+)"', re.MULTILINE)
+_SELF_NAME = "scitex-dev"
 
 
 def _version_lt(a: str, b: str) -> bool:
@@ -53,6 +60,14 @@ def check_audit_pin(repo: Path, Violation: type, out: list[Any]) -> None:
     if not pyproject.is_file():
         return
     txt = pyproject.read_text(errors="ignore")
+
+    # Exempt scitex-dev itself — it cannot pin itself without an
+    # unresolvable circular dependency in CI's fresh venv. The package
+    # *provides* the audit gate, so demanding it depend on a published
+    # version of itself is structurally wrong.
+    name_match = _NAME_RE.search(txt)
+    if name_match and name_match.group(1).strip() == _SELF_NAME:
+        return
 
     rt = _RUNTIME_BLOCK_RE.search(txt)
     dv = _DEV_BLOCK_RE.search(txt)

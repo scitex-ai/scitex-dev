@@ -37,19 +37,37 @@ HANDLER_NAMES = [
 
 def test_all_handlers_exposed():
     """Every handler in __all__ is importable and async."""
+    # Arrange
+    # Act
+    # Assert
     for name in HANDLER_NAMES:
         h = getattr(dev_mcp, name)
         assert asyncio.iscoroutinefunction(h), f"{name} not async"
 
 
-def test_list_versions_handler_runs(monkeypatch):
-    """list_versions_handler returns valid JSON wrapping a mocked list_versions."""
-    import scitex_dev._release.versions as vmod
-
-    monkeypatch.setattr(
-        vmod, "list_versions", lambda packages=None: {"scitex-dev": "0.0.0"}
+def test_list_versions_handler_runs_payload_success_is_true():
+    """list_versions_handler returns valid JSON wrapping an injected list_versions."""
+    # Arrange
+    # Act
+    # Assert
+    out = asyncio.run(
+        handlers.list_versions_handler(
+            _list_versions_fn=lambda packages=None: {"scitex-dev": "0.0.0"},
+        )
     )
-    out = asyncio.run(handlers.list_versions_handler())
     payload = json.loads(out)
     assert payload["success"] is True
+
+
+def test_list_versions_handler_runs_payload_data_scitex_dev_0_0_0():
+    """list_versions_handler returns valid JSON wrapping an injected list_versions."""
+    # Arrange
+    # Act
+    # Assert
+    out = asyncio.run(
+        handlers.list_versions_handler(
+            _list_versions_fn=lambda packages=None: {"scitex-dev": "0.0.0"},
+        )
+    )
+    payload = json.loads(out)
     assert payload["data"] == {"scitex-dev": "0.0.0"}

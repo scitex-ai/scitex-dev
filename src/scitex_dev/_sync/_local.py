@@ -86,7 +86,12 @@ def _build_sync_commands(
     return cmds
 
 
-def _check_ahead_state(host: HostConfig, dir_name: str) -> dict[str, Any]:
+def _check_ahead_state(
+    host: HostConfig,
+    dir_name: str,
+    *,
+    subprocess_run=None,
+) -> dict[str, Any]:
     """Inspect the remote working copy's position vs. its upstream.
 
     Returns a dict with ``status`` in:
@@ -115,8 +120,9 @@ def _check_ahead_state(host: HostConfig, dir_name: str) -> dict[str, Any]:
     )
     ssh_args = _build_ssh_args(host)
     ssh_args.append(remote_cmd)
+    runner = subprocess_run if subprocess_run is not None else subprocess.run
     try:
-        result = subprocess.run(ssh_args, capture_output=True, text=True, timeout=60)
+        result = runner(ssh_args, capture_output=True, text=True, timeout=60)
         stdout = result.stdout.strip()
         if result.returncode != 0:
             return {
@@ -146,7 +152,14 @@ def _check_ahead_state(host: HostConfig, dir_name: str) -> dict[str, Any]:
 
 
 def _sync_one_package(
-    host: HostConfig, dir_name: str, stash: bool, install: bool, safe: bool = True
+    host: HostConfig,
+    dir_name: str,
+    stash: bool,
+    install: bool,
+    safe: bool = True,
+    *,
+    subprocess_run=None,
+    check_ahead_state_fn=None,
 ) -> dict[str, Any]:
     """Sync a single package on a remote host.
 
@@ -155,8 +168,12 @@ def _sync_one_package(
     This matches the user instruction: if remote is ahead, compare and
     skip when a decision is unclear.
     """
+    check_ahead = (
+        check_ahead_state_fn if check_ahead_state_fn is not None else _check_ahead_state
+    )
+    runner = subprocess_run if subprocess_run is not None else subprocess.run
     if safe:
-        ahead = _check_ahead_state(host, dir_name)
+        ahead = check_ahead(host, dir_name)
         if ahead["status"] in {"ahead", "diverged"}:
             return {
                 "status": f"skipped_{ahead['status']}",
@@ -182,7 +199,7 @@ def _sync_one_package(
     ssh_args.append(remote_cmd)
 
     try:
-        result = subprocess.run(ssh_args, capture_output=True, text=True, timeout=120)
+        result = runner(ssh_args, capture_output=True, text=True, timeout=120)
         stdout = result.stdout.strip()
         stderr = result.stderr.strip()
 
@@ -212,6 +229,8 @@ def sync_host(
     safe: bool = True,
     confirm: bool = False,
     config: DevConfig | None = None,
+    *,
+    host_packages_fn=None,
 ) -> dict[str, Any]:
     """Sync packages to a remote host via SSH.
 
@@ -250,7 +269,10 @@ def sync_host(
     if config is None:
         config = load_config()
 
-    host_pkgs = _get_host_packages(host, config)
+    get_host_pkgs = (
+        host_packages_fn if host_packages_fn is not None else _get_host_packages
+    )
+    host_pkgs = get_host_pkgs(host, config)
     if packages:
         host_pkgs = [(n, d) for n, d in host_pkgs if n in packages]
 
@@ -290,6 +312,9 @@ def sync_all(
     safe: bool = True,
     confirm: bool = False,
     config: DevConfig | None = None,
+    *,
+    sync_host_fn=None,
+    enabled_hosts_fn=None,
 ) -> dict[str, Any]:
     """Sync packages across all enabled hosts.
 
@@ -323,14 +348,17 @@ def sync_all(
     if config is None:
         config = load_config()
 
-    enabled = get_enabled_hosts(config)
+    enabled_fn = enabled_hosts_fn if enabled_hosts_fn is not None else get_enabled_hosts
+    do_sync_host = sync_host_fn if sync_host_fn is not None else sync_host
+
+    enabled = enabled_fn(config)
     if hosts:
         enabled = [h for h in enabled if h.name in hosts]
 
     if not confirm:
         # Dry-run: no SSH needed, compute locally
         return {
-            host.name: sync_host(
+            host.name: do_sync_host(
                 host,
                 packages=packages,
                 stash=stash,
@@ -347,7 +375,7 @@ def sync_all(
     with ThreadPoolExecutor(max_workers=len(enabled) or 1) as executor:
         futures = {
             executor.submit(
-                sync_host,
+                do_sync_host,
                 host,
                 packages=packages,
                 stash=stash,

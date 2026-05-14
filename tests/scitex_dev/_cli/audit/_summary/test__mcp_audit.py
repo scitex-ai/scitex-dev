@@ -16,97 +16,181 @@ from scitex_dev._cli.audit._summary._mcp_audit import (
 
 class TestNameDerivation:
     def test_import_name_replaces_hyphen(self):
+        # Arrange
+        # Act
+        # Assert
         assert _import_name("scitex-cloud") == "scitex_cloud"
 
-    def test_short_name(self):
+    def test_short_name_strips_scitex_prefix(self):
+        # Arrange
+        # Act
+        # Assert
         assert _short_name("scitex-cloud") == "cloud"
 
-    def test_short_name_umbrella(self):
+    def test_short_name_keeps_umbrella_name_unchanged(self):
+        # Arrange
+        # Act
+        # Assert
         assert _short_name("scitex") == "scitex"
 
-    def test_short_name_compound_uses_underscore(self):
+    def test_short_name_compound_uses_underscore_short_name_scitex_orochi_mcp_orochi_mcp(self):
         # Compound names must produce a valid Python identifier suffix
         # so they can serve as both tool prefix and bridge-file basename.
+        # Arrange
+        # Act
+        # Assert
         assert _short_name("scitex-orochi-mcp") == "orochi_mcp"
+
+
+    def test_short_name_compound_uses_underscore_short_name_scitex_cloud_mcp_cloud_mcp(self):
+        # Compound names must produce a valid Python identifier suffix
+        # so they can serve as both tool prefix and bridge-file basename.
+        # Arrange
+        # Act
+        # Assert
         assert _short_name("scitex-cloud-mcp") == "cloud_mcp"
 
 
 class TestSkipNonStandalone:
-    def test_umbrella_skipped(self):
+    def test_umbrella_package_is_skipped(self):
+        # Arrange
+        # Act
+        # Assert
         from scitex_dev._cli.audit._summary._mcp_audit import _should_skip
 
         assert _should_skip("scitex") is True
 
-    def test_mcp_server_packages_skipped(self):
+    def test_mcp_server_packages_skipped_should_skip_scitex_cloud_mcp_is_true(self):
+        # Arrange
+        # Act
+        # Assert
         from scitex_dev._cli.audit._summary._mcp_audit import _should_skip
 
         assert _should_skip("scitex-cloud-mcp") is True
+
+
+    def test_mcp_server_packages_skipped_should_skip_scitex_orochi_server_is_true(self):
+        # Arrange
+        # Act
+        # Assert
+        from scitex_dev._cli.audit._summary._mcp_audit import _should_skip
+
         assert _should_skip("scitex-orochi-server") is True
 
-    def test_normal_package_not_skipped(self):
+    def test_normal_package_not_skipped_should_skip_scitex_cloud_is_false(self):
+        # Arrange
+        # Act
+        # Assert
         from scitex_dev._cli.audit._summary._mcp_audit import _should_skip
 
         assert _should_skip("scitex-cloud") is False
+
+
+    def test_normal_package_not_skipped_should_skip_scitex_stats_is_false(self):
+        # Arrange
+        # Act
+        # Assert
+        from scitex_dev._cli.audit._summary._mcp_audit import _should_skip
+
         assert _should_skip("scitex-stats") is False
 
-    def test_audit_one_returns_skip_status(self):
+    def test_audit_one_returns_skip_status_status_skip_not_standalone(self):
+        # Arrange
+        # Act
+        # Assert
         from scitex_dev._cli.audit._summary._mcp_audit import _audit_one_mcp
 
         status, violations = _audit_one_mcp("scitex")
         assert status == "skip-not-standalone"
+
+
+    def test_audit_one_returns_skip_status_violations(self):
+        # Arrange
+        # Act
+        # Assert
+        from scitex_dev._cli.audit._summary._mcp_audit import _audit_one_mcp
+
+        status, violations = _audit_one_mcp("scitex")
         assert violations == []
 
 
 class TestToolNamingOK:
-    def test_canonical_verb_noun(self):
+    def test_canonical_verb_noun_passes(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_tool_naming("scitex-cloud", ["cloud_repo_clone"], out)
         assert out == []
 
     def test_bare_verb_with_object_in_params(self):
         # `io_save` — bare verb is fine; save takes the object via a param.
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_tool_naming("scitex-io", ["io_save"], out)
         assert out == []
 
-    def test_bare_verb_audio_speak(self):
+    def test_bare_verb_audio_speak_is_accepted(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_tool_naming("scitex-audio", ["audio_speak"], out)
         assert out == []
 
 
 class TestToolNamingFlagged:
-    def test_double_prefix(self):
+    def test_double_prefix_in_tool_name_is_flagged(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_tool_naming("scitex-dev", ["dev_dev_bulk_rename"], out)
         rules = [v.rule for v in out]
         assert "§1" in rules
 
-    def test_synonym_ls(self):
+    def test_ls_synonym_for_list_is_flagged(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_tool_naming("scitex-io", ["io_ls_files"], out)
         assert any(v.rule == "§2" and "synonym" in v.message for v in out)
 
-    def test_double_underscore_typo(self):
+    def test_double_underscore_typo_is_flagged(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_tool_naming("scitex-io", ["io__save"], out)
         # Either §2 typo or naming violation — message should mention `__`
         assert any("__" in v.message for v in out)
 
-    def test_bare_needs_noun(self):
+    def test_bare_verb_list_needs_noun_object(self):
         # `cloud_list` — bare `list` needs a noun.
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_tool_naming("scitex-cloud", ["cloud_list"], out)
         assert any(v.rule == "§2" and "needs" in v.message for v in out)
 
-    def test_uppercase_rejected(self):
+    def test_uppercase_tool_name_rejected_as_non_snake(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_tool_naming("scitex-io", ["io_SaveFile"], out)
         assert any("snake_case" in v.message for v in out)
 
 
 class TestSkillsPair:
-    def test_present(self):
+    def test_both_skills_present_yields_no_violations(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_skills_pair(
             "scitex-cloud", {"cloud_skills_list", "cloud_skills_get"}, out
@@ -114,76 +198,175 @@ class TestSkillsPair:
         assert out == []
 
     def test_present_under_convention_a_bare(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_skills_pair("scitex-cloud", {"skills_list", "skills_get"}, out)
         assert out == []
 
-    def test_missing_both(self):
+    def test_missing_both_skills_emits_two_violations_len_out_2(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_skills_pair("scitex-cloud", {"repo_clone"}, out)
         assert len(out) == 2
+
+
+    def test_missing_both_skills_emits_two_violations_all_v_rule_5_for_v_in_out(self):
+        # Arrange
+        # Act
+        # Assert
+        out: list[Violation] = []
+        _check_skills_pair("scitex-cloud", {"repo_clone"}, out)
         assert all(v.rule == "§5" for v in out)
 
-    def test_missing_one(self):
+    def test_missing_one_skill_emits_single_violation_len_out_1(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
         _check_skills_pair("scitex-cloud", {"cloud_skills_list"}, out)
         assert len(out) == 1
+
+
+    def test_missing_one_skill_emits_single_violation_skills_get_in_out_0_message(self):
+        # Arrange
+        # Act
+        # Assert
+        out: list[Violation] = []
+        _check_skills_pair("scitex-cloud", {"cloud_skills_list"}, out)
         assert "skills_get" in out[0].message
 
 
 class TestBridgePattern:
-    def test_no_bridge_no_violation(self, monkeypatch):
-        from scitex_dev._cli.audit._summary import _mcp_audit as mod
-
-        monkeypatch.setattr(mod, "_read_bridge_source", lambda pkg: None)
+    def test_no_bridge_no_violation(self):
+        # Arrange
+        # Act
+        # Assert
         out: list[Violation] = []
-        _check_bridge_pattern("scitex-bogus", out)
+        _check_bridge_pattern("scitex-bogus", out, read_bridge_source=lambda pkg: None)
         assert out == []
 
-    def test_safe_mount_bridge_clean(self, monkeypatch):
-        from scitex_dev._cli.audit._summary import _mcp_audit as mod
-
+    def test_safe_mount_bridge_clean(self):
+        # Arrange
+        # Act
+        # Assert
         src = (
             "from ._compat import safe_mount\n"
             "def register_cloud_tools(mcp):\n"
             "    safe_mount(mcp, sub_mcp, namespace='cloud')\n"
         )
-        monkeypatch.setattr(mod, "_read_bridge_source", lambda pkg: src)
         out: list[Violation] = []
-        _check_bridge_pattern("scitex-cloud", out)
+        _check_bridge_pattern("scitex-cloud", out, read_bridge_source=lambda pkg: src)
         assert out == []
 
-    def test_hand_wrap_flagged(self, monkeypatch):
-        from scitex_dev._cli.audit._summary import _mcp_audit as mod
-
+    def test_hand_wrap_flagged_len_out_1(self):
+        # Arrange
+        # Act
+        # Assert
         src = "@mcp.tool()\nasync def audio_speak(text: str) -> str:\n    pass\n"
-        monkeypatch.setattr(mod, "_read_bridge_source", lambda pkg: src)
-        # Also mock `_resolve_mcp_server` — the bridge-pattern check
-        # consults it to decide whether hand-wrap is the only available
-        # option (when the standalone has no `_mcp_server.mcp`, hand-wrap
-        # is forgiven). Force a non-None to keep the §1 enforcement
-        # active regardless of which peer standalones happen to be
-        # installed in the test env (locally vs CI differ).
-        monkeypatch.setattr(mod, "_resolve_mcp_server", lambda pkg: object())
+        # `resolve_mcp_server` injection: force a non-None so §1 enforcement
+        # is active regardless of which peer standalones are installed.
         out: list[Violation] = []
-        _check_bridge_pattern("scitex-audio", out)
+        _check_bridge_pattern(
+            "scitex-audio",
+            out,
+            read_bridge_source=lambda pkg: src,
+            resolve_mcp_server=lambda pkg: object(),
+        )
         assert len(out) == 1
+
+
+    def test_hand_wrap_flagged_out_0_rule_1(self):
+        # Arrange
+        # Act
+        # Assert
+        src = "@mcp.tool()\nasync def audio_speak(text: str) -> str:\n    pass\n"
+        # `resolve_mcp_server` injection: force a non-None so §1 enforcement
+        # is active regardless of which peer standalones are installed.
+        out: list[Violation] = []
+        _check_bridge_pattern(
+            "scitex-audio",
+            out,
+            read_bridge_source=lambda pkg: src,
+            resolve_mcp_server=lambda pkg: object(),
+        )
         assert out[0].rule == "§1"
+
+
+    def test_hand_wrap_flagged_hand_wrap_in_out_0_message(self):
+        # Arrange
+        # Act
+        # Assert
+        src = "@mcp.tool()\nasync def audio_speak(text: str) -> str:\n    pass\n"
+        # `resolve_mcp_server` injection: force a non-None so §1 enforcement
+        # is active regardless of which peer standalones are installed.
+        out: list[Violation] = []
+        _check_bridge_pattern(
+            "scitex-audio",
+            out,
+            read_bridge_source=lambda pkg: src,
+            resolve_mcp_server=lambda pkg: object(),
+        )
         assert "hand-wrap" in out[0].message
 
-    def test_direct_mount_flagged(self, monkeypatch):
+    def test_direct_mount_flagged_len_out_1(self):
         """`mcp.mount(...)` without `safe_mount` is now drift (§1)."""
-        from scitex_dev._cli.audit._summary import _mcp_audit as mod
-
+        # Arrange
+        # Act
+        # Assert
         src = (
             "def register_io_tools(mcp):\n"
             "    from scitex_io._mcp.server import mcp as io_mcp\n"
             "    mcp.mount(io_mcp)\n"
         )
-        monkeypatch.setattr(mod, "_read_bridge_source", lambda pkg: src)
         out: list[Violation] = []
-        _check_bridge_pattern("scitex-io", out)
+        _check_bridge_pattern("scitex-io", out, read_bridge_source=lambda pkg: src)
         assert len(out) == 1
+
+
+    def test_direct_mount_flagged_out_0_rule_1(self):
+        """`mcp.mount(...)` without `safe_mount` is now drift (§1)."""
+        # Arrange
+        # Act
+        # Assert
+        src = (
+            "def register_io_tools(mcp):\n"
+            "    from scitex_io._mcp.server import mcp as io_mcp\n"
+            "    mcp.mount(io_mcp)\n"
+        )
+        out: list[Violation] = []
+        _check_bridge_pattern("scitex-io", out, read_bridge_source=lambda pkg: src)
         assert out[0].rule == "§1"
+
+
+    def test_direct_mount_flagged_direct_mcp_mount_in_out_0_message(self):
+        """`mcp.mount(...)` without `safe_mount` is now drift (§1)."""
+        # Arrange
+        # Act
+        # Assert
+        src = (
+            "def register_io_tools(mcp):\n"
+            "    from scitex_io._mcp.server import mcp as io_mcp\n"
+            "    mcp.mount(io_mcp)\n"
+        )
+        out: list[Violation] = []
+        _check_bridge_pattern("scitex-io", out, read_bridge_source=lambda pkg: src)
         assert "direct `mcp.mount" in out[0].message
+
+
+    def test_direct_mount_flagged_safe_mount_in_out_0_message(self):
+        """`mcp.mount(...)` without `safe_mount` is now drift (§1)."""
+        # Arrange
+        # Act
+        # Assert
+        src = (
+            "def register_io_tools(mcp):\n"
+            "    from scitex_io._mcp.server import mcp as io_mcp\n"
+            "    mcp.mount(io_mcp)\n"
+        )
+        out: list[Violation] = []
+        _check_bridge_pattern("scitex-io", out, read_bridge_source=lambda pkg: src)
         assert "safe_mount" in out[0].message

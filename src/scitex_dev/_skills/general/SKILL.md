@@ -57,6 +57,9 @@ Project structure split into one leaf per top-level directory:
 - [02_package_08_quality.md](02_package_08_quality.md) — Repository-level quality (AGPL, Four Freedoms, README rules, GitHub setup)
 - [02_package_09_browser-automation-debugging.md](02_package_09_browser-automation-debugging.md) — Playwright debug-artifact capture for every browser-automation file (PA-305 rule)
 - [02_package_10_dev-venv-isolation.md](02_package_10_dev-venv-isolation.md) — Real isolated `<pkg-root>/.venv/` per peer (no symlinks to `~/.venv`); CI-parity local dev setup; `scitex-dev ecosystem install --venv per-package` (default)
+- [02_package_11_ci-and-codecov.md](02_package_11_ci-and-codecov.md) — CI test.yml + codecov.yml + badge wiring; `if: always()` so coverage uploads on failure
+- [02_package_12_no-mocks.md](02_package_12_no-mocks.md) — No `unittest.mock`/`pytest-mock`/`monkeypatch`, no exceptions; replacement menu (inject + fake → real collaborator → delete); enforced by STX-NM001/002/003 (linter, error) + PA-306 (auditor)
+- [02_package_13_test-quality.md](02_package_13_test-quality.md) — TQ family — every test must satisfy: descriptive name (≥3 words after `test_`), AAA marker comments (`# Arrange`/`# Act`/`# Assert` in order), exactly one assertion. Enforced by STX-TQ001-007 (linter, error/warning).
 
 ### 3. Interfaces — how do users and agents touch *this* package?
 - [03_interface_00_overview.md](03_interface_00_overview.md) — Five interfaces: overview and delegation chain
@@ -78,6 +81,7 @@ Project structure split into one leaf per top-level directory:
 - [05_development_06_subprocess-coverage.md](05_development_06_subprocess-coverage.md) — Subprocess coverage wiring (parallel + COVERAGE_PROCESS_START + `.pth` shim) — unlocks 10-20 points when tests spawn `python -m` children
 - [05_development_07_demo-smoke-tests.md](05_development_07_demo-smoke-tests.md) — Parametrised smoke test over every `_demo_*.py` and `__main__`-bearing `_test_*.py` module — catches NameError, removed APIs, tuple-unpack bugs
 - [05_development_08_coverage-push-playbook.md](05_development_08_coverage-push-playbook.md) — End-to-end playbook for taking a package 30% → 90% Codecov without `omit` shortcuts (subprocess wiring → demo smoke → tree-API feedback → refactor → long-tail unit tests)
+- [05_development_09_ecosystem-tq-migration.md](05_development_09_ecosystem-tq-migration.md) — Per-peer migration playbook for the no-mocks + test-quality rules. Canonical four-pass sequence (NM → TQ003 → TQ002 → TQ007), subagent dispatch template, verification gate, common gotchas (importorskip placeholders, smoke-import theater, watchdog tests, state-leak), and the rollback contract.
 
 ### 8. Ecosystem quality — periodic cross-package audits, run when something feels off
 - [98_quality_01_failure-playbook.md](98_quality_01_failure-playbook.md) — Severity-tagged cookbook of ecosystem failure modes

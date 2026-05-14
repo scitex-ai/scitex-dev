@@ -54,7 +54,12 @@ def _get_default_export_dest() -> Path:
     return Path.home() / ".claude" / "skills" / "scitex"
 
 
-def _find_skills_dir(module_name: str, pip_name: str) -> Optional[Path]:
+def _find_skills_dir(
+    module_name: str,
+    pip_name: str,
+    *,
+    _root_fn=None,
+) -> Optional[Path]:
     """Find the skills directory for a package.
 
     Resolution chain:
@@ -62,7 +67,8 @@ def _find_skills_dir(module_name: str, pip_name: str) -> Optional[Path]:
         2. Legacy layout: <pkg_root>/skills/  (has SKILL.md)
         3. Legacy docs: <pkg_root>/docs/MASTER/skills/
     """
-    root = get_package_root(module_name)
+    root_lookup = _root_fn if _root_fn is not None else get_package_root
+    root = root_lookup(module_name)
     if root is None:
         return None
 
@@ -165,6 +171,10 @@ def _collect_skills_from_dir(
 
 def list_skills(
     package: Optional[str] = None,
+    *,
+    _discover_fn=None,
+    _root_fn=None,
+    _version_fn=None,
 ) -> dict[str, list[dict[str, str]]]:
     """List all skills across the ecosystem or for a specific package.
 
@@ -172,7 +182,11 @@ def list_skills(
         Dict mapping package name -> list of skill info dicts.
         Each dict has: name, path, description, version.
     """
-    packages = discover_packages()
+    discover = _discover_fn if _discover_fn is not None else discover_packages
+    root_lookup = _root_fn if _root_fn is not None else get_package_root
+    version_lookup = _version_fn if _version_fn is not None else _get_package_version
+
+    packages = discover()
 
     if package:
         if package not in packages:
@@ -183,19 +197,19 @@ def list_skills(
 
     for pkg_name, module_name in packages.items():
         # 1. Standard per-package skills
-        skills_dir = _find_skills_dir(module_name, pkg_name)
+        skills_dir = _find_skills_dir(module_name, pkg_name, _root_fn=root_lookup)
         if skills_dir is not None:
-            version = _get_package_version(pkg_name)
+            version = version_lookup(pkg_name)
             skills = _collect_skills_from_dir(skills_dir, version)
             if skills:
                 result[pkg_name] = skills
 
         # 2. Extra skill namespaces (e.g., _skills/general/ in scitex-python)
-        root = get_package_root(module_name)
+        root = root_lookup(module_name)
         if root is not None:
             extra_skills_root = root / "_skills"
             if extra_skills_root.is_dir():
-                version = _get_package_version(pkg_name)
+                version = version_lookup(pkg_name)
                 for sub_dir in sorted(extra_skills_root.iterdir()):
                     if not sub_dir.is_dir():
                         continue
@@ -279,6 +293,9 @@ def export_skills(
     clean: bool = False,
     source: str = "installed",
     link: bool = False,
+    _discover_fn=None,
+    _root_fn=None,
+    _version_fn=None,
 ) -> dict[str, list[Path]]:
     """Export skills to dest. Files are written as ``<dest>/<pkg-name>/SKILL.md``.
 
@@ -311,7 +328,12 @@ def export_skills(
 
     clean_stale_dist_info()
 
-    all_skills = list_skills(package=package)
+    all_skills = list_skills(
+        package=package,
+        _discover_fn=_discover_fn,
+        _root_fn=_root_fn,
+        _version_fn=_version_fn,
+    )
 
     if clean:
         for pkg_name in all_skills:
