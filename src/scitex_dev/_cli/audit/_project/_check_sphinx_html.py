@@ -1,4 +1,4 @@
-"""PS121 / PS122 / PS124-PS127 — Sphinx + Read the Docs setup.
+"""PS-121 / PS-122 / PS-124-PS-127 — Sphinx + Read the Docs setup.
 
 scitex-cloud serves per-package docs from the in-wheel
 ``src/<pkg>/_sphinx_html/`` bundle. The canonical refresh path is a
@@ -44,10 +44,10 @@ def _src_pkg_with_html(repo: Path) -> Path | None:
 
 
 def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
-    """Append PS121 / PS122 violations.
+    """Append PS-121 / PS-122 violations.
 
-    PS121 — sphinx source exists but ``_sphinx_html/index.html`` is missing.
-    PS122 — sphinx source exists but ``.github/workflows/docs.yml`` is missing.
+    PS-121 — sphinx source exists but ``_sphinx_html/index.html`` is missing.
+    PS-122 — sphinx source exists but ``.github/workflows/docs.yml`` is missing.
     """
     if not _has_sphinx_source(repo):
         return
@@ -55,7 +55,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
     if _src_pkg_with_html(repo) is None:
         out.append(
             violation_cls(
-                "PS121",
+                "PS-121",
                 str(repo / "src"),
                 (
                     "package has docs/sphinx/conf.py but no "
@@ -72,7 +72,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
     if not docs_yml.is_file():
         out.append(
             violation_cls(
-                "PS122",
+                "PS-122",
                 str(docs_yml),
                 (
                     "package has docs/sphinx/ but no docs.yml CI workflow. "
@@ -84,7 +84,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
             )
         )
 
-    # PS124 — `.readthedocs.yaml` (or .yml) must exist.
+    # PS-124 — `.readthedocs.yaml` (or .yml) must exist.
     rtd_yaml = repo / ".readthedocs.yaml"
     rtd_yml = repo / ".readthedocs.yml"
     rtd_path = (
@@ -93,7 +93,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
     if rtd_path is None:
         out.append(
             violation_cls(
-                "PS124",
+                "PS-124",
                 str(rtd_yaml),
                 (
                     "package has docs/sphinx/ but no .readthedocs.yaml at "
@@ -104,7 +104,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
             )
         )
     else:
-        # PS125 — `.readthedocs.yaml` shape check.
+        # PS-125 — `.readthedocs.yaml` shape check.
         try:
             rtd_text = rtd_path.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -128,7 +128,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
         if missing:
             out.append(
                 violation_cls(
-                    "PS125",
+                    "PS-125",
                     str(rtd_path),
                     (
                         ".readthedocs config deviates from the canonical "
@@ -139,12 +139,12 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
                 )
             )
 
-    # PS126 — `docs/sphinx/requirements.txt` with canonical pinned deps.
+    # PS-126 — `docs/sphinx/requirements.txt` with canonical pinned deps.
     docs_req = repo / "docs" / "sphinx" / "requirements.txt"
     if not docs_req.is_file():
         out.append(
             violation_cls(
-                "PS126",
+                "PS-126",
                 str(docs_req),
                 (
                     "package has docs/sphinx/ but no requirements.txt. "
@@ -163,7 +163,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
         if not all(pat.search(req_text) for pat in _CANONICAL_DOCS_DEPS):
             out.append(
                 violation_cls(
-                    "PS126",
+                    "PS-126",
                     str(docs_req),
                     (
                         "docs/sphinx/requirements.txt is missing one or more "
@@ -174,7 +174,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
                 )
             )
 
-    # PS128 — `.gitignore` must NOT exclude `src/<pkg>/_sphinx_html/` —
+    # PS-128 — `.gitignore` must NOT exclude `src/<pkg>/_sphinx_html/` —
     # scitex-cloud serves from the bundled in-wheel HTML, which must be
     # tracked. Symptom: CI fails with hatchling 'Forced include not found'.
     gitignore = repo / ".gitignore"
@@ -190,7 +190,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
         ):
             out.append(
                 violation_cls(
-                    "PS128",
+                    "PS-128",
                     str(gitignore),
                     (
                         ".gitignore excludes src/<pkg>/_sphinx_html/ — but "
@@ -201,7 +201,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
                 )
             )
 
-    # PS127 — pyproject.toml [project.urls] Documentation entry.
+    # PS-127 — pyproject.toml [project.urls] Documentation entry.
     pyproject = repo / "pyproject.toml"
     if pyproject.is_file():
         try:
@@ -216,7 +216,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
         ):
             out.append(
                 violation_cls(
-                    "PS127",
+                    "PS-127",
                     str(pyproject),
                     (
                         "pyproject.toml [project.urls] has no Documentation "

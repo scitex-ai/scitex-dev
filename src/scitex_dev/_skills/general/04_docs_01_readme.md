@@ -1,10 +1,19 @@
 ---
-name: readme-organization
-description: Canonical README.md template for every SciTeX package — required section order (one-liner → install → quickstart → interfaces → status/CI badges → links → licence → Four-Freedoms footer), badge set (PyPI version, CI, coverage, RTD, licence), collapsible blocks for long examples, `import scitex` (never `as stx`) in all snippets, absence of the ywatanabe@ signature, and the intra-README link contract that external RTD/Sphinx builds depend on. Use when scaffolding a new repo's README or auditing one for ecosystem drift.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Readme Organization
+  [DETAILS] Canonical README.md template for every SciTeX package — required section order (one-liner → install → quickstart → interfaces → status/CI badges → links → licence → Four-Freedoms footer), badge set (PyPI version, CI, coverage, RTD, licence), collapsible blocks for long examples, `import scitex` (never `as stx`) in all snippets, absence of the ywatanabe@ signature, and the intra-README link contract that external RTD/Sphinx builds depend on. Use when scaffolding a new repo's README or auditing one for ecosystem drift.
+tags: [scitex-general-docs-readme]
 ---
 
 # README Organization (SciTeX)
+
+## Reference package
+
+When in doubt about any rule on this page, mirror
+[**scitex-io**](https://github.com/ywatanabe1989/scitex-io/blob/develop/README.md).
+It is the canonical example of every convention here — badge layout,
+section ordering, blockquote callouts, mermaid sizing, `<details>`
+collapsing, Problem/Solution cell length, hook integration recipe.
 
 ## Standard Section Order
 
@@ -25,17 +34,20 @@ identity (logo + tagline + install link) → CI status (badges) → content.
 
 ---
 
-## Problem
-## Solution
+## Problem and Solution                ← one combined H2; table layout
 <details><summary>Supported Formats / Feature Table</summary></details>
-## Installation
+## Quick Start                          ← top-level, tight runnable demo
+## Installation                         ← one `uv pip install pkg[all]` line
+## How it works (or `## Architecture`)  ← subsections explaining design;
+                                          one diagram total is enough
+                                          (see PS-141 / PS-142 below)
 ## <N> Interfaces (Python · CLI · MCP · Skills · HTTP optional)
-  ← The primary interface (highest star rating) is `<details open>` —
-    its minimal example doubles as the quick-start. NO separate
-    `## Quick Start` H2 (PS131; duplicates the primary interface block).
-    NO standalone `## Modules` H2 either (PS132; duplicates autoapi
+  ← All four interface blocks MAY be collapsed `<details>` — no longer
+    required to have at least one `<details open>` (PS-131 relaxed).
+    NO standalone `## Modules` H2 either (PS-132; duplicates autoapi
     and drifts).
 ## Lint Rules (if applicable)
+## Claude Code Integration as a Hook (if applicable)
 ## Part of SciTeX
 
 **Required first paragraph** (one standardized line):
@@ -77,6 +89,112 @@ inconsistent across the ecosystem).
 
 ```
 
+## Presentation conventions (adopted 2026-05)
+
+### Quick Start (top-level H2)
+
+A `## Quick Start` H2 sits between **Problem and Solution** and
+**Installation**. It contains one tight runnable code block (≈10–25
+lines) demonstrating the package's primary value, with a round-trip
+assertion if applicable. This replaces the old role of the primary
+`<details open>` interface block. With Quick Start present, every
+interface inside `## <N> Interfaces` can be collapsed (PS-131 relaxed).
+
+### Installation (one-liner)
+
+```markdown
+## Installation
+
+```bash
+uv pip install "<pkg>[all]"
+```
+```
+
+No prose. The per-module extras matrix goes inside a `<details>`
+collapsible directly below. Drop redundant explanations of why `uv` is
+faster than `pip`; users either know or follow the link.
+
+### How it works (numbered subsections)
+
+`## How it works` (or the older `## Architecture` — both are accepted
+by the auditor, PS-142) breaks into `### 1.`, `### 2.`, `### 3.`
+subsections, each focused on one design choice. Use one mermaid
+diagram between Demo and Architecture/How-it-works — the "one diagram
+is enough" rule (PS-141 visual-anywhere). Mermaid init config keeps
+the diagram compact:
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 20, 'rankSpacing': 40, 'curve': 'linear'}, 'themeVariables': {'fontSize': '12px'}}}%%
+```
+
+### Blockquote (`>`) callouts for high-signal asides
+
+Use `>` to set apart rules, edge cases, opt-in extras, and "watch out"
+notes. Every continuation line must carry the `>` prefix so markdown
+renders one connected callout (not a broken-multi-line quote):
+
+```markdown
+> **Absolute paths bypass routing.** `sio.save(df, "/data/x.csv")`
+> writes to `/data/x.csv` as-is — caller-anchored routing (§2) only
+> applies when the path is relative.
+```
+
+### Problem and Solution: one sentence per cell
+
+The `## Problem and Solution` table cells must each be a single
+sentence (≤ 200 chars per cell, PS-144). Drop trailing examples and
+"impossible to track" amplifications — the table is a scannable
+summary, not an essay.
+
+| # | Problem | Solution |
+|---|---|---|
+| 1 | **Format zoo** — every format has its own API. | **One call** dispatches across 30+ formats. |
+
+### Badge row: PyPI · Python · RTD / Tests · Install · Coverage
+
+Two centered rows wrapped in `<!-- scitex-badges:start --> ... :end -->`:
+
+```html
+<p align="center">
+<a href="https://pypi.org/project/<pkg>/"><img src="https://img.shields.io/pypi/v/<pkg>.svg" alt="PyPI"></a>
+<a href="https://pypi.org/project/<pkg>/"><img src="https://img.shields.io/pypi/pyversions/<pkg>.svg" alt="Python"></a>
+<a href="https://<pkg>.readthedocs.io/en/latest/"><img src="https://readthedocs.org/projects/<pkg>/badge/?version=latest" alt="Read the Docs"></a>
+</p>
+<p align="center">
+<a href="...test.yml"><img src=".../test.yml/badge.svg" alt="Tests"></a>
+<a href="...install-test.yml"><img src=".../install-test.yml/badge.svg" alt="Install Test"></a>
+<a href="https://codecov.io/gh/<owner>/<pkg>"><img src="https://codecov.io/gh/<owner>/<pkg>/graph/badge.svg" alt="Coverage"></a>
+</p>
+```
+
+Drop the AGPL license badge — license is already metadata in
+`pyproject.toml` and visible on the PyPI page.
+
+### Claude Code Integration as a Hook (optional)
+
+If the package ships lint rules, add a `## Claude Code Integration as
+a Hook` section after `## Lint Rules`. Ship the hook script at
+`examples/<pkg>_lint.sh` (self-contained — no dependency on the
+maintainer's dotfiles). Include `settings.json` snippet that wires it
+to `PostToolUse` with matcher `Edit|Write|MultiEdit`. See
+[scitex-io's hook](https://github.com/ywatanabe1989/scitex-io/blob/develop/examples/scitex_io_lint.sh)
+for the template.
+
+### Interface ratings (`⭐`)
+
+Star ratings are **required** on every interface summary (drop only
+the trailing parenthetical tags like `— for AI Agents` /
+`— for AI Agent Discovery`, PS-118). Use 1–3 stars per interface
+reflecting its primacy:
+
+```markdown
+<details>
+<summary><strong>Python API ⭐⭐⭐</strong></summary>
+```
+
+The deprecated `> **Interfaces:** ...` callout at the top of SKILL.md
+files is forbidden (PS-116) — stars belong on summaries only.
+
 ## Badge Row (SciTeX Style)
 
 ```markdown
@@ -93,15 +211,15 @@ inconsistent across the ecosystem).
 The README's `## <N> Interfaces` section contains one `<details>` block
 per interface. Star ratings live on the `<summary>` (not in a separate
 callout); strip parenthetical expansions and `-- for AI Agents` /
-`— for AI Agent Discovery` tails (audit rule **PS118**).
+`— for AI Agent Discovery` tails (audit rule **PS-118**).
 
-**The primary interface(s) use `<details open>`** and carry `(primary)`
-after the stars. The primary is the interface with the highest star
-rating; when multiple interfaces tie at the highest rating (e.g. CLI
-⭐⭐⭐ AND Skills ⭐⭐⭐), open ALL of them. Their minimal example(s)
-double as the quick-start — there is no separate `## Quick Start` H2
-(audit rule **PS131**: at least one interface block is `<details
-open>`).
+**All blocks may be collapsed** (`<details>` without `open`). The
+historical requirement to mark at least one as `<details open>` is no
+longer enforced (audit rule **PS-131** relaxed). Optionally still mark
+the primary as `<details open>` when its example doubles as a
+quick-start and the package omits a top-level `## Quick Start`
+section — but most packages now ship a top-level `## Quick Start`
+that carries that role, so every interface block stays collapsed.
 
 ```markdown
 <details>
@@ -110,9 +228,9 @@ open>`).
 > **[Full API reference](<deeplink>)**
 </details>
 
-<details open>
-<summary><strong>CLI Commands ⭐⭐⭐ (primary)</strong></summary>
-[Minimal command examples — doubles as the quick-start]
+<details>
+<summary><strong>CLI Commands ⭐⭐</strong></summary>
+[Minimal command examples]
 > **[Full CLI reference](<deeplink>)** · run `<pkg> --help-recursive` for the live tree.
 </details>
 
@@ -123,16 +241,27 @@ open>`).
 </details>
 
 <details>
-<summary><strong>Skills ⭐⭐</strong></summary>
+<summary><strong>Skills ⭐</strong></summary>
 [Skill table + `<pkg> skills list`]
 > **[Full skills directory](https://github.com/ywatanabe1989/<pkg>/tree/develop/src/<import>/_skills/<pkg>)**
 </details>
 ```
 
+Star ratings are **required** on every interface summary (PS-120) —
+they signal which interface is the package's primary user surface.
+Drop only the trailing parenthetical tags like
+`— for AI Agents` / `— for AI Agent Discovery` (PS-118); keep the
+stars.
+
+> **Reference package: `scitex-io`** — the canonical example of every
+> rule on this page. When in doubt, mirror its README structure, badge
+> layout, section ordering, blockquote-callout style, mermaid sizing,
+> `<details>` collapsing, and Problem/Solution cell length.
+
 ### Canonical "Full X reference" deep-link patterns
 
 Each `Full X` link **must** be a deep-link, not a bare RTD root URL
-(audit rule **PS123**). The deep-link points into the bundled
+(audit rule **PS-123**). The deep-link points into the bundled
 `_sphinx_html/` (also surfaced via Read the Docs):
 
 | Interface  | Canonical deep-link                                                          |
@@ -181,7 +310,7 @@ PACKAGE is part of [**SciTeX**](https://scitex.ai).
 
 ## SciTeX-Specific Rules
 
-- **No `ywatanabe@scitex.ai`** in footer — community project (audit: **PS111**)
+- **No `ywatanabe@scitex.ai`** in footer — community project (audit: **PS-111**)
 - **`import scitex`** and **`import scitex as stx`** are both acceptable
   in code blocks; pick one and stay consistent within a single README.
   (Reality: the umbrella canonical README and most skill docs use `as stx`;
@@ -190,7 +319,7 @@ PACKAGE is part of [**SciTeX**](https://scitex.ai).
 - **Match quickstart.rst** — README Quickstart and Sphinx quickstart should show the same examples
 - **Add Logo and Icon** — either `docs/assets/images/{scitex-logo-blue-cropped.png,scitex-icon-navy-inverted.png}`
   or `docs/{scitex-logo-blue-cropped.png,scitex-icon-navy-inverted.png}`
-  is accepted (audit: **PS112** for the top logo).
+  is accepted (audit: **PS-112** for the top logo).
 
 ## Canonical Template + Audit Rules
 
@@ -202,12 +331,12 @@ sections:
 
 | Code  | Enforces                                                            |
 |-------|---------------------------------------------------------------------|
-| PS106 | Coverage badge in the first ~4 KB                                   |
-| PS107 | Required H2 sections: `## Installation`, `## Quick Start`, `## Part of SciTeX` |
-| PS109 | PyPI version badge in the first ~4 KB                               |
-| PS110 | Four Freedoms for Research blockquote present                       |
-| PS111 | Banned personal email `ywatanabe@scitex.ai` absent                  |
-| PS112 | SciTeX logo image in the first ~4 KB                                |
+| PS-106 | Coverage badge in the first ~4 KB                                   |
+| PS-107 | Required H2 sections: `## Installation`, `## Quick Start`, `## Part of SciTeX` |
+| PS-109 | PyPI version badge in the first ~4 KB                               |
+| PS-110 | Four Freedoms for Research blockquote present                       |
+| PS-111 | Banned personal email `ywatanabe@scitex.ai` absent                  |
+| PS-112 | SciTeX logo image in the first ~4 KB                                |
 
 ---
 
@@ -261,11 +390,26 @@ This repository provides `scitex`, the orchestration layer of the SciTeX ecosyst
 
 ### Installation
 
+Every package's README **must** lead the Installation section with
+`uv pip install <package>[all]` as the recommended form. uv's parallel
+Rust resolver handles the SciTeX dep set in 1-3 min where pip's serial
+backtracker can take 30+ min on the full extras. Plain `pip install`
+remains supported and SHOULD be shown alongside as the fallback, never
+removed. See sibling rule
+[02_package_10_dev-venv-isolation.md](02_package_10_dev-venv-isolation.md)
+for the per-package `.venv/` convention this works with.
+
+The umbrella `scitex` README is canonical:
+
 ``` markdown
 ## Installation
 
 ```bash
-pip install scitex[all]                # Recommended: everything (may take >1 hour on first install — see Installation Tips)
+# Recommended — uv resolver (10-30× faster than pip on the full extras set)
+uv pip install scitex[all]
+
+# Plain pip — slower (~30-90 min on first install; see Installation Tips)
+pip install scitex[all]
 ```
 
 <details>

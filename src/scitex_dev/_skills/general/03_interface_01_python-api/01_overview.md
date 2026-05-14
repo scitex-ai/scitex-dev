@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-overview
-description: Design principles for every SciTeX package's Python API — minimal public surface, no logic duplication, `__init__.py` as the contract, hide internals behind `_`, decorators applied at import boundary, optional features fail soft.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Overview
+  [DETAILS] Design principles for every SciTeX package's Python API — minimal public surface, no logic duplication, `__init__.py` as the contract, hide internals behind `_`, decorators applied at import boundary, optional features fail soft.
+tags: [scitex-general-interface-python-api-overview]
 ---
 
 # Overview

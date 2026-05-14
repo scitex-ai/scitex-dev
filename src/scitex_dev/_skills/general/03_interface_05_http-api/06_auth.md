@@ -1,7 +1,8 @@
 ---
-name: interface-http-api-auth
-description: Authentication posture — canonical pattern is nginx (or another reverse proxy) in front, doing token / mTLS / OAuth check and forwarding to an unauthenticated upstream. scitex-dev ships a `require_token` middleware for local-dev mode where running a proxy is overkill. Don't bake bespoke auth into individual packages — that's how orochi's stopgap query-string token happened. Token storage, secret rotation, and HTTPS termination live at the proxy layer.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api Auth
+  [DETAILS] Authentication posture — canonical pattern is nginx (or another reverse proxy) in front, doing token / mTLS / OAuth check and forwarding to an unauthenticated upstream. scitex-dev ships a `require_token` middleware for local-dev mode where running a proxy is overkill. Don't bake bespoke auth into individual packages — that's how orochi's stopgap query-string token happened. Token storage, secret rotation, and HTTPS termination live at the proxy layer.
+tags: [scitex-general-interface-http-api-auth]
 ---
 
 # Authentication

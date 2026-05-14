@@ -1,7 +1,8 @@
 ---
-name: skills-numbered-prefix-convention
-description: Two-level `NN_<category>_NN_<topic>.md` numbering rule for `_skills/` leaves — `01-09` interfaces (quick start, Python API, CLI, MCP), `10-19` features, `20-29` meta. Gives a fresh agent an implicit reading order so SKILL.md links are sortable. Use whenever a package's skill count exceeds 3-4 leaves.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills Numbered Prefix Convention
+  [DETAILS] Two-level `NN_<category>_NN_<topic>.md` numbering rule for `_skills/` leaves — `01-09` interfaces (quick start, Python API, CLI, MCP), `10-19` features, `20-29` meta. Gives a fresh agent an implicit reading order so SKILL.md links are sortable. Use whenever a package's skill count exceeds 3-4 leaves.
+tags: [scitex-general-interface-skills-numbered-prefix-convention]
 ---
 
 # Numbered-Prefix File Convention
@@ -12,27 +13,31 @@ Once a package has more than 3-4 skill files, use **numbered prefixes** so scite
 
 | Range | Purpose | Examples |
 |---|---|---|
-| `01-09` | Interfaces — quick start, Python API, CLI, MCP | `01_quick-start.md`, `02_python-api.md`, `03_cli-reference.md`, `04_mcp-tools.md` |
-| `10-19` | Features — one focused capability per file | `10_save-and-load.md`, `11_centralized-config.md`, `12_supported-formats.md` |
-| `20-29` | Meta — env vars, lint rules, release notes | `20_env-vars.md`, `21_linting-rules.md` |
+| `01-09` | Onboarding + interfaces — install, quick start, Python API, CLI, MCP, HTTP | `01_installation.md`, `02_quick-start.md`, `03_python-api.md`, `04_cli-reference.md`, `05_mcp-tools.md`, `06_http-api.md` |
+| `10-19` | Workflows — one focused capability per file | `10_save-and-load.md`, `11_centralized-config.md`, `12_supported-formats.md` |
+| `20-29` | Meta — env vars, config, logging | `20_env-vars.md`, `21_config.md`, `22_logging.md` |
+| `30-39` | Architecture / internals (optional) | `30_architecture.md` |
+| `40-49` | Lessons / playground (optional) | `40_lessons.md` |
 
 ## Reasoning
 
 A fresh agent landing on the package can read 01-04 to understand the surface in under 5 minutes, then drill into a 10-series file only when relevant. Without numbering the index has no implicit reading order; with numbering the SKILL.md links are sortable.
 
-## Standard-5 leaf set (>70% adoption)
+## Standard-7 leaf set
 
-Every package should ship these five leaves. The 12-package audit (Tier A + B) shows them as near-universal — when missing, it is because the package genuinely lacks that interface.
+Every package should ship these seven leaves (mandatory or conditional on the package's interfaces). The auditor enforces presence via SK-105–SK-111 — see [12_quality-checklist.md](12_quality-checklist.md).
 
-| Leaf | Adoption | Required when |
-|---|---|---|
-| `01_quick-start.md` | 11/12 | always — 30-second tour, install + import + smallest useful example |
-| `02_python-api.md` | 10/12 | the package exposes a Python API (almost every package) |
-| `03_cli-reference.md` | 9/12 | the package ships a CLI |
-| `04_mcp-tools.md` | 9/12 | the package registers MCP tools |
-| `20_env-vars.md` | 11/12 | the package reads any `SCITEX_<MODULE>_*` env var |
+| Leaf | Required when |
+|---|---|
+| `01_installation.md` | always |
+| `02_quick-start.md` | always |
+| `03_python-api.md` | package exposes Python API |
+| `04_cli-reference.md` | package ships CLI |
+| `05_mcp-tools.md` | package registers MCP tools |
+| `06_http-api.md` | package ships HTTP routes |
+| `20_env-vars.md` | package reads any `SCITEX_<MODULE>_*` env var |
 
-Beyond these five, leaves are package-specific (workflows in 10–19, deeper meta in 20–29, architecture in 30+). The scaffold in [13_standard-template.md](13_standard-template.md) creates all five as the starting point.
+Beyond these seven, leaves are package-specific (workflows in 10–19, deeper meta in 20–29, architecture in 30+, lessons in 40+). The scaffold in [13_standard-template.md](13_standard-template.md) creates the standard set as the starting point.
 
 ## Rules
 

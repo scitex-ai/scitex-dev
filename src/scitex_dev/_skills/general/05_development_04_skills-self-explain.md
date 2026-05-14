@@ -1,3 +1,10 @@
+---
+description: |
+  [TOPIC] Development Skills Self Explain
+  [DETAILS] .
+tags: [scitex-general-development-skills-self-explain]
+---
+
 <!-- ---
 !-- Tags: scitex-general, scitex-package, skills, self-explain, docs
 !-- ---->

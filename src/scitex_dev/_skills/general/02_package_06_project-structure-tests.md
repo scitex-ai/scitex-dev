@@ -1,7 +1,8 @@
 ---
-name: package-tests
-description: `./tests/` for a SciTeX package — pytest-driven, controlled by `pyproject.toml`. The mandatory `tests/<pkg>/` parent (1:1 mirror of `src/<pkg>/`), allowed sibling subdirs (scripts/examples/skills/agentic/integration/e2e/github_actions/coverage/logs/reports/custom), public/private filename convention with double-underscore for private (`test__foo.py` mirrors `_foo.py`), the small set of "meta tests" allowed at `tests/` root, the `audit-project` rules (PS201–PS206, PS302), and the historical `sync_tests_with_source.sh` precedent. Drop the source-as-comments pattern — it's noise.
-tags: [scitex-python, scitex-general, scitex-package, project-structure, tests]
+description: |
+  [TOPIC] Package Tests
+  [DETAILS] `./tests/` for a SciTeX package — pytest-driven, controlled by `pyproject.toml`. The mandatory `tests/<pkg>/` parent (1:1 mirror of `src/<pkg>/`), allowed sibling subdirs (scripts/examples/skills/agentic/integration/e2e/github_actions/coverage/logs/reports/custom), public/private filename convention with double-underscore for private (`test__foo.py` mirrors `_foo.py`), the small set of "meta tests" allowed at `tests/` root, the `audit-project` rules (PS-201–PS-206, PS-302), and the historical `sync_tests_with_source.sh` precedent. Drop the source-as-comments pattern — it's noise.
+tags: [scitex-general-package-project-structure-tests]
 ---
 
 # `./tests` — pytest-driven, mirrors `./src`
@@ -10,7 +11,7 @@ tags: [scitex-python, scitex-general, scitex-package, project-structure, tests]
 
 ## Mandatory `tests/<pkg>/` parent
 
-Every package has a `tests/<pkg>/` parent that mirrors `src/<pkg>/` 1:1. **Even when most tests are flat-by-submodule, the `<pkg>` parent must exist.** Audit rule: `PS201`.
+Every package has a `tests/<pkg>/` parent that mirrors `src/<pkg>/` 1:1. **Even when most tests are flat-by-submodule, the `<pkg>` parent must exist.** Audit rule: `PS-201`.
 
 ```
 src/<pkg>/                          tests/<pkg>/
@@ -26,7 +27,7 @@ src/<pkg>/                          tests/<pkg>/
 
 ## Public / private filename convention
 
-A leading underscore in the source marks the module **private**. The mirroring test uses **double underscore** between `test` and the basename to echo the source's leading `_` — making the public/private status visible at a glance. PS205 enforces this.
+A leading underscore in the source marks the module **private**. The mirroring test uses **double underscore** between `test` and the basename to echo the source's leading `_` — making the public/private status visible at a glance. PS-205 enforces this.
 
 | Source | Test |
 | :--- | :--- |
@@ -38,7 +39,7 @@ A leading underscore in the source marks the module **private**. The mirroring t
 
 ## Allowed `tests/` subdirectories
 
-Tests are organized into a **fixed set of literal subdirectories**. Anything else triggers `PS302`. Only `<pkg>` is variable; everything else is a literal name:
+Tests are organized into a **fixed set of literal subdirectories**. Anything else triggers `PS-302`. Only `<pkg>` is variable; everything else is a literal name:
 
 | Subdir | Tracked? | Mirrors / contains |
 | :--- | :--- | :--- |
@@ -57,7 +58,7 @@ Tests are organized into a **fixed set of literal subdirectories**. Anything els
 
 ## Allowed at `tests/` root (NOT in a subdir) — strict
 
-`PS203` is **strict**: the only files allowed directly at `tests/` root
+`PS-203` is **strict**: the only files allowed directly at `tests/` root
 are pytest infrastructure files. Every test file must live in one of the
 allowed subdirectories — there is no "meta test" exemption.
 
@@ -93,25 +94,65 @@ extending the allowed-subdirs list rather than letting drift back into
 - `pytest.ini` / `[tool.pytest.ini_options]` lives in `pyproject.toml`.
 - `conftest.py` at `tests/` root is fine; subdir-scoped `conftest.py` files (`tests/<pkg>/conftest.py`) are also fine.
 
+## Integration tests (`_real.py`)
+
+The `_real` suffix denotes integration tests that exercise real I/O
+against the same src module that `test_X.py` covers with mocks. PS-204
+sees `test_X_real.py` as an orphan because no `_X_real.py` source file
+exists, but this is by design.
+
+**Canonical placement** — keep them out of the PS-204 mirror scope:
+
+```
+tests/integration/<mirror>/test_X_real.py       # mirrors src/<pkg>/<mirror>/_X.py
+```
+
+PS-204 only scans `tests/<pkg>/<mirror>/`, so `tests/integration/`
+is silently skipped while `pytest tests/` still collects it.
+
+Each subdirectory of `tests/integration/` needs an `__init__.py` so
+pytest's rootdir-import mode disambiguates basename collisions when
+two integration files share the same name (e.g. one
+`test__zarr_real.py` under `_load_modules` and another under
+`_save_modules`).
+
+## Module-top imports of optional deps must `pytest.importorskip`
+
+Any unguarded `import <optional-dep>` at the top of a test file fails
+at **collection** if the dep is absent — pytest aborts the run, no
+coverage is uploaded, and Codecov shows a stale or empty number.
+
+Required pattern:
+
+```python
+import pytest
+h5py = pytest.importorskip("h5py")
+```
+
+Rule code: **PA-303** (planned). Real-world incident: scitex-io
+sat at 79 % on Codecov for weeks because `import optuna` at the top of
+two test modules silently blocked collection. Once removed, the
+underlying coverage moved 12 pp.
+
 ## Auditor coverage
 
 `scitex-dev ecosystem audit-project <distribution>` enforces this layout:
 
-- **PS201** — missing `tests/<pkg>/` parent
-- **PS202** — `src/<pkg>/<sub>/` has files but no `tests/<pkg>/<sub>/`
-- **PS203** — *strict*: any `test_*.py` at `tests/` root (only `__init__.py` and `conftest.py` allowed)
-- **PS204** — orphan test (no matching `src/<pkg>/<path>/...`); detail
+- **PS-201** — missing `tests/<pkg>/` parent
+- **PS-202** — `src/<pkg>/<sub>/` has files but no `tests/<pkg>/<sub>/`
+- **PS-203** — *strict*: any `test_*.py` at `tests/` root (only `__init__.py` and `conftest.py` allowed)
+- **PS-204** — orphan test (no matching `src/<pkg>/<path>/...`); detail
   is *enriched*: when exactly one src file shares the expected basename,
   the violation suggests the relocate target; otherwise it lists the
   files actually present in the mirror dir so you can correlate
-- **PS205** — wrong public/private prefix
-- **PS206** — placeholder-only test (no `def test_` or `class Test`)
-- **PS207** — empty test mirror directory (mirror dir exists but contains
+- **PS-205** — wrong public/private prefix
+- **PS-206** — placeholder-only test (no `def test_` or `class Test`)
+- **PS-207** — empty test mirror directory (mirror dir exists but contains
   no `test_*.py`, while the corresponding `src/<pkg>/<sub>/` has source
   files); src-aware so it never flags fixture trees that legitimately have
   no source counterpart
-- **PS302** — unrecognized subdir at `tests/` root
-- **PS303** — `examples/<name>` without matching `tests/examples/test_<name>.py`
+- **PS-302** — unrecognized subdir at `tests/` root
+- **PS-303** — `examples/<name>` without matching `tests/examples/test_<name>.py`
 
 ## Historical: `sync_tests_with_source.sh` and source-as-comments
 

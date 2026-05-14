@@ -3,7 +3,7 @@
 Rules cover the `(A)`-marked items from
 `scitex-python/src/scitex/_skills/general/03_interface_01_python-api/12_audit-checklist.md`.
 
-Numbering: `PA<§><idx>` (e.g. PA101 = §1 rule 01). Mirrors the `S<n>` / `M<n>`
+Numbering: `PA<§><idx>` (e.g. PA-101 = §1 rule 01). Mirrors the `S<n>` / `M<n>`
 rule-numbering used elsewhere in scitex-dev.
 """
 
@@ -17,38 +17,130 @@ from pathlib import Path
 
 import click
 
+from .._emit import emit as _emit
+
 
 @dataclass(frozen=True)
 class Rule:
     code: str
     section: str
     message: str
+    slug: str = ""  # short, human-readable kebab-case name
+    severity: str = "warning"  # "warning" | "error" — drives audit headline
 
 
 RULES: dict[str, Rule] = {
     r.code: r
     for r in [
         # §1 Naming and visibility
-        Rule("PA101", "§1", "`__all__` is missing from __init__.py"),
-        Rule("PA102", "§1", "name listed in __all__ is not bound in __init__.py"),
-        Rule("PA103", "§1", "name in __all__ starts with underscore"),
-        Rule("PA104", "§1", "third-party symbol is re-exported via __all__"),
-        # §2 Version strategy
-        Rule("PA201", "§2", "`__version__` is missing from __all__"),
+        Rule("PA-101", "§1", "`__all__` is missing from __init__.py", "all-missing"),
         Rule(
-            "PA202",
+            "PA-102",
+            "§1",
+            "name listed in __all__ is not bound in __init__.py",
+            "all-name-unbound",
+        ),
+        Rule(
+            "PA-103",
+            "§1",
+            "name in __all__ starts with underscore",
+            "all-private-name",
+        ),
+        Rule(
+            "PA-104",
+            "§1",
+            "third-party symbol is re-exported via __all__",
+            "all-third-party",
+        ),
+        # §2 Version strategy
+        Rule(
+            "PA-201",
+            "§2",
+            "`__version__` is missing from __all__",
+            "version-not-in-all",
+        ),
+        Rule(
+            "PA-202",
             "§2",
             "`__version__` not derived from importlib.metadata.version(...)",
+            "version-not-from-metadata",
         ),
-        Rule("PA203", "§2", 'fallback for __version__ should be "0.0.0+local"'),
+        Rule(
+            "PA-203",
+            "§2",
+            'fallback for __version__ should be "0.0.0+local"',
+            "version-fallback-wrong",
+        ),
         # §3 Lazy imports / optional deps
         Rule(
-            "PA301",
+            "PA-301",
             "§3",
             "top-level `import` outside try/except may break on missing optional dep",
+            "top-level-optional-import",
+        ),
+        Rule(
+            "PA-304",
+            "§3",
+            "umbrella import `scitex.<sub>` / `import scitex` inside standalone "
+            "source — drags the umbrella `__init__.py` and its lazy re-export "
+            "machinery into every call. Use `scitex_<sub>` (peer standalone) "
+            "instead. See _skills/general/03_interface_01_python-api/"
+            "11_import-conventions.md.",
+            "umbrella-import-in-standalone",
+        ),
+        Rule(
+            "PA-305",
+            "§3",
+            "module imports `playwright.async_api` (live browser automation) "
+            "but does not call `capture_debug_artifacts_async` — every "
+            "decision point in a Playwright flow must capture screenshot + "
+            "HTML so selector regressions are diagnosable post-mortem. See "
+            "`_skills/general/02_package_09_browser-automation-debugging.md`. "
+            "Wire via `from scitex_browser.debugging import "
+            "capture_debug_artifacts_async`.",
+            "playwright-without-debug-capture",
+        ),
+        # §3 No mocks (no exceptions)
+        Rule(
+            "PA-306",
+            "§3",
+            "mock library / symbol / fixture in package source — the SciTeX "
+            "ecosystem forbids mocks without exception. Replace with a real "
+            "fake, real fixture (tmp_path, subprocess), or hand-rolled stub "
+            "class. Covers `unittest.mock` / `mock` / `pytest_mock` imports, "
+            "Mock/MagicMock/AsyncMock/patch/mock_open/PropertyMock/"
+            "create_autospec/MockerFixture symbols, and pytest "
+            "`mocker`/`monkeypatch` fixture parameters. See the linter rule "
+            "`STX-NM001/NM002/NM003` for the in-process equivalent.",
+            "no-mocks",
+            severity="error",
+        ),
+        # §3 Test quality (post-no-mock theater guards)
+        Rule(
+            "PA-307",
+            "§3",
+            "test-quality violation — every test in this package's test "
+            "tree must satisfy: (TQ001) at least one assertion; (TQ002) "
+            "`# Arrange`/`# Act`/`# Assert` marker comments in order; "
+            "(TQ003) descriptive name (≥3 word-tokens after `test_`); "
+            "(TQ004) no state mutation in session/module/package-scope "
+            "fixtures; (TQ005) yield (not return) for resource-acquiring "
+            "fixtures; (TQ006) no top-level if/else in parametrized test "
+            "bodies; (TQ007) exactly one assertion per test. Detected by "
+            "running the linter's `STX-TQ001-007` rules across tests/ + "
+            "conftest.py. The combination ensures CI red names exactly "
+            "which behaviour broke. See `_skills/general/"
+            "02_package_13_test-quality.md`.",
+            "test-quality",
+            severity="error",
         ),
         # §5 Type hints
-        Rule("PA501", "§5", "`from __future__ import annotations` is missing"),
+        Rule(
+            "PA-501",
+            "§5",
+            "`from __future__ import annotations` is missing",
+            "missing-future-annotations",
+        ),
     ]
 }
 
@@ -62,11 +154,12 @@ class Violation:
     def format(self) -> str:
         r = RULES.get(self.rule)
         section = r.section if r else "?"
-        return f"  [{self.rule} {section}] {self.where}: {self.detail}"
+        slug = f" {r.slug}" if r and r.slug else ""
+        return f"  [{self.rule} {section}{slug}] {self.where}: {self.detail}"
 
 
 # Heuristic: imports from these packages are "third-party" — symbols pulled
-# from them and re-exported via __all__ violate PA104.
+# from them and re-exported via __all__ violate PA-104.
 _THIRD_PARTY_ROOTS = frozenset(
     {
         "numpy",
@@ -85,7 +178,7 @@ _THIRD_PARTY_ROOTS = frozenset(
 )
 
 # Stdlib roots whose top-level `import x` is benign and should not trigger
-# PA301 even outside try/except.
+# PA-301 even outside try/except.
 _STDLIB_SAFE_ROOTS = frozenset(
     {
         "os",
@@ -171,6 +264,450 @@ def _locate_init(import_name: str) -> Path | None:
     return origin if origin.name == "__init__.py" else None
 
 
+def _audit_playwright_capture(
+    init_path: Path, distribution: str, import_name: str
+) -> list[Violation]:
+    """PA-305 — every module that imports `playwright.async_api` (a sign
+    of live browser automation) must contain at least one
+    `capture_debug_artifacts_async` call. Helper-routed callers can opt
+    in via `from scitex_browser.debugging import capture_debug_artifacts_async`
+    (presence-only check; semantics not enforced).
+
+    The auditor doesn't check call frequency or coverage — just
+    presence-or-absence. Reviewers should still apply the stepwise
+    rule from `02_package_09_browser-automation-debugging.md`.
+    """
+    out: list[Violation] = []
+    # The rule applies to packages that USE playwright in production. We
+    # exempt scitex-browser itself (it's the home of the helper and may
+    # have helper-implementation modules without consumer-style calls).
+    if import_name == "scitex_browser":
+        return out
+    pkg_root = init_path.parent
+    for py_file in sorted(pkg_root.rglob("*.py")):
+        parts = py_file.parts
+        if any(
+            seg in parts
+            for seg in (
+                "__pycache__",
+                "build",
+                "dist",
+                ".tox",
+                "site-packages",
+                "tests",
+                "examples",
+                "docs",
+            )
+        ):
+            continue
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        # Cheap pre-check: skip files that don't even mention playwright.
+        if "playwright" not in text:
+            continue
+        try:
+            tree = ast.parse(text, filename=str(py_file))
+        except SyntaxError:
+            continue
+        imports_playwright = False
+        calls_capture = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                mod = node.module or ""
+                if mod == "playwright.async_api" or mod.startswith(
+                    "playwright.async_api."
+                ):
+                    imports_playwright = True
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name == "playwright.async_api" or alias.name.startswith(
+                        "playwright.async_api."
+                    ):
+                        imports_playwright = True
+            # Calls — both bare `capture_debug_artifacts_async(...)` and
+            # `something.capture_debug_artifacts_async(...)` (e.g. via
+            # an instance method that delegates).
+            elif isinstance(node, ast.Call):
+                f = node.func
+                if isinstance(f, ast.Name) and f.id == "capture_debug_artifacts_async":
+                    calls_capture = True
+                elif (
+                    isinstance(f, ast.Attribute)
+                    and f.attr == "capture_debug_artifacts_async"
+                ):
+                    calls_capture = True
+        if imports_playwright and not calls_capture:
+            out.append(
+                Violation(
+                    "PA-305",
+                    f"{distribution}: {py_file.relative_to(pkg_root.parent)}",
+                    "imports `playwright.async_api` but no "
+                    "`capture_debug_artifacts_async` call in module",
+                )
+            )
+    return out
+
+
+_MOCK_MODULES_AUDIT = frozenset({"mock", "unittest.mock", "pytest_mock"})
+_MOCK_SYMBOLS_AUDIT = frozenset(
+    {
+        "Mock",
+        "MagicMock",
+        "AsyncMock",
+        "NonCallableMock",
+        "NonCallableMagicMock",
+        "PropertyMock",
+        "patch",
+        "mock_open",
+        "create_autospec",
+        "sentinel",
+        "ANY",
+        "MockerFixture",
+    }
+)
+_MOCK_FIXTURE_PARAMS_AUDIT = frozenset({"mocker", "monkeypatch"})
+
+
+def _audit_test_quality(
+    init_path: Path, distribution: str, import_name: str
+) -> list[Violation]:
+    """PA-307 — run the linter's STX-TQ001-007 detection across the
+    repo's `tests/` (and `conftest.py`) and re-emit each finding as a
+    PA-307 violation. Avoids duplicating the AST detection logic that
+    already lives in `scitex_dev.linter.checker`.
+    """
+    out: list[Violation] = []
+    pkg_root = init_path.parent  # <repo>/src/<pkg>/
+    src_parent = pkg_root.parent
+    repo_root = src_parent.parent if src_parent.name == "src" else src_parent
+
+    # Scope: tests/ tree (recursively, all *.py) + every conftest.py
+    # under the repo. Fixtures often live in conftest.py and TQ004/TQ005
+    # apply to them.
+    tests_dir = repo_root / "tests"
+    candidates: list[Path] = []
+    if tests_dir.is_dir():
+        candidates.extend(sorted(tests_dir.rglob("*.py")))
+    for conftest in repo_root.rglob("conftest.py"):
+        # Skip site-packages and venvs.
+        parts = conftest.parts
+        if any(
+            seg in parts
+            for seg in (
+                "__pycache__",
+                "build",
+                "dist",
+                ".tox",
+                "site-packages",
+                ".venv",
+                "venv",
+            )
+        ):
+            continue
+        if conftest not in candidates:
+            candidates.append(conftest)
+
+    if not candidates:
+        return out
+
+    # Re-use the linter's detection rather than duplicate the AST logic.
+    try:
+        from scitex_dev.linter.checker import lint_file
+    except ImportError:
+        return out
+
+    rel_anchor = repo_root
+    for py_file in candidates:
+        parts = py_file.parts
+        if any(
+            seg in parts
+            for seg in (
+                "__pycache__",
+                "build",
+                "dist",
+                ".tox",
+                "site-packages",
+                ".venv",
+                "venv",
+            )
+        ):
+            continue
+        try:
+            issues = lint_file(str(py_file))
+        except Exception:
+            continue
+        for issue in issues:
+            rule_id = getattr(issue.rule, "id", "") or ""
+            if not rule_id.startswith("STX-TQ"):
+                continue
+            try:
+                rel = py_file.relative_to(rel_anchor)
+            except ValueError:
+                rel = py_file
+            out.append(
+                Violation(
+                    "PA-307",
+                    f"{distribution}: {rel}:{issue.line}",
+                    f"{rule_id}: {issue.rule.message[:160]}",
+                )
+            )
+    return out
+
+
+def _audit_no_mocks(
+    init_path: Path, distribution: str, import_name: str
+) -> list[Violation]:
+    """PA-306 — flag any mock-library import, symbol, or fixture
+    parameter anywhere in the repo (src/, tests/, examples/, dev
+    scripts). The no-mock rule is intentionally exception-free.
+    """
+    out: list[Violation] = []
+    pkg_root = init_path.parent  # <repo>/src/<pkg>/
+    # Try to locate the repo root so tests/ and examples/ are also scanned.
+    # init_path layout is conventionally `<repo>/src/<pkg>/__init__.py`,
+    # but a couple of packages keep the source flat at `<repo>/<pkg>/`.
+    src_parent = pkg_root.parent
+    repo_root = src_parent.parent if src_parent.name == "src" else src_parent
+    scan_roots: list[Path] = [pkg_root]
+    for extra in ("tests", "examples", "scripts"):
+        candidate = repo_root / extra
+        if candidate.is_dir() and candidate not in scan_roots:
+            scan_roots.append(candidate)
+
+    seen: set[Path] = set()
+    rel_anchor = repo_root if repo_root != pkg_root else pkg_root.parent
+    for root in scan_roots:
+        for py_file in sorted(root.rglob("*.py")):
+            if py_file in seen:
+                continue
+            seen.add(py_file)
+            parts = py_file.parts
+            if any(
+                seg in parts
+                for seg in (
+                    "__pycache__",
+                    "build",
+                    "dist",
+                    ".tox",
+                    "site-packages",
+                    ".venv",
+                    "venv",
+                )
+            ):
+                continue
+            try:
+                text = py_file.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if not any(
+                tok in text
+                for tok in ("mock", "Mock", "patch", "monkeypatch", "mocker")
+            ):
+                continue
+            try:
+                tree = ast.parse(text, filename=str(py_file))
+            except SyntaxError:
+                continue
+            try:
+                rel = py_file.relative_to(rel_anchor)
+            except ValueError:
+                rel = py_file
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name in _MOCK_MODULES_AUDIT:
+                            out.append(
+                                Violation(
+                                    "PA-306",
+                                    f"{distribution}: {rel}:{node.lineno}",
+                                    f"`import {alias.name}` — mocks are forbidden",
+                                )
+                            )
+                elif isinstance(node, ast.ImportFrom):
+                    mod = node.module or ""
+                    if mod in _MOCK_MODULES_AUDIT:
+                        out.append(
+                            Violation(
+                                "PA-306",
+                                f"{distribution}: {rel}:{node.lineno}",
+                                f"`from {mod} import ...` — mocks are forbidden",
+                            )
+                        )
+                    elif mod == "unittest":
+                        for alias in node.names:
+                            if alias.name == "mock":
+                                out.append(
+                                    Violation(
+                                        "PA-306",
+                                        f"{distribution}: {rel}:{node.lineno}",
+                                        "`from unittest import mock` — mocks are forbidden",
+                                    )
+                                )
+                                break
+                    for alias in node.names:
+                        if alias.name in _MOCK_SYMBOLS_AUDIT:
+                            out.append(
+                                Violation(
+                                    "PA-306",
+                                    f"{distribution}: {rel}:{node.lineno}",
+                                    f"imports mock symbol `{alias.name}` — forbidden",
+                                )
+                            )
+                elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for arg in (
+                        list(node.args.args)
+                        + list(node.args.kwonlyargs)
+                        + list(getattr(node.args, "posonlyargs", []))
+                    ):
+                        if arg.arg in _MOCK_FIXTURE_PARAMS_AUDIT:
+                            out.append(
+                                Violation(
+                                    "PA-306",
+                                    f"{distribution}: {rel}:{arg.lineno}",
+                                    f"`{arg.arg}` fixture parameter — mocks are forbidden",
+                                )
+                            )
+    return out
+
+
+def _audit_umbrella_imports(
+    init_path: Path, distribution: str, import_name: str
+) -> list[Violation]:
+    """PA-304 — flag `from scitex.X` / `import scitex.X` / `import scitex`
+    inside standalone source.
+
+    Only **module-level** imports are flagged. Function-scoped (lazy)
+    imports don't drag the umbrella when the package is imported as a
+    library — they fire only when the function is actually called.
+    The PA-304 cost concern is module-import time, not call time.
+
+    Exemptions:
+    - The umbrella `scitex` package itself (its source legitimately
+      references `scitex.<sub>`).
+    - Function-scoped imports (`def f(): import scitex …`).
+    - Class-method-scoped imports.
+    - Imports inside `if __name__ == "__main__":` blocks (only run on
+      direct module invocation).
+    """
+    out: list[Violation] = []
+    if import_name == "scitex":
+        return out
+    pkg_root = init_path.parent
+
+    def _is_dunder_main_if(node: ast.AST) -> bool:
+        if not isinstance(node, ast.If):
+            return False
+        test = node.test
+        if not isinstance(test, ast.Compare) or len(test.comparators) != 1:
+            return False
+        if not isinstance(test.ops[0], ast.Eq):
+            return False
+        for a, b in (
+            (test.left, test.comparators[0]),
+            (test.comparators[0], test.left),
+        ):
+            if (
+                isinstance(a, ast.Name)
+                and a.id == "__name__"
+                and isinstance(b, ast.Constant)
+                and b.value == "__main__"
+            ):
+                return True
+        return False
+
+    def _is_umbrella_private(mod: str) -> bool:
+        """`scitex._<name>[…]` — umbrella-private (no peer standalone)."""
+        if not mod.startswith("scitex."):
+            return False
+        first = mod[len("scitex.") :].split(".", 1)[0]
+        return first.startswith("_")
+
+    def _flag(mod: str) -> bool:
+        if mod == "scitex":
+            return True
+        if mod.startswith("scitex.") and not _is_umbrella_private(mod):
+            return True
+        return False
+
+    def _scan_module_level(body: list[ast.stmt], py_file: Path) -> None:
+        """Walk only top-level statements + control-flow descendants.
+        Skip function and class bodies (lazy) and `if __name__ == ...`."""
+        for stmt in body:
+            if _is_dunder_main_if(stmt):
+                continue
+            # Recurse into module-level if/try/with — imports there ARE
+            # eager. Skip Function/AsyncFunction/ClassDef bodies.
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                continue
+            if isinstance(stmt, ast.ImportFrom):
+                mod = stmt.module or ""
+                if _flag(mod):
+                    out.append(
+                        Violation(
+                            "PA-304",
+                            f"{distribution}: {py_file.relative_to(pkg_root.parent)}:{stmt.lineno}",
+                            f"from {mod} import ... — replace with peer standalone import",
+                        )
+                    )
+            elif isinstance(stmt, ast.Import):
+                for alias in stmt.names:
+                    name = alias.name
+                    if _flag(name):
+                        out.append(
+                            Violation(
+                                "PA-304",
+                                f"{distribution}: {py_file.relative_to(pkg_root.parent)}:{stmt.lineno}",
+                                f"import {name} — replace with peer standalone import",
+                            )
+                        )
+            elif isinstance(stmt, (ast.If, ast.Try, ast.With, ast.AsyncWith)):
+                # Module-level if/try/with — descend into bodies.
+                children: list[ast.stmt] = []
+                children.extend(getattr(stmt, "body", []) or [])
+                children.extend(getattr(stmt, "orelse", []) or [])
+                children.extend(getattr(stmt, "finalbody", []) or [])
+                for h in getattr(stmt, "handlers", []) or []:
+                    children.extend(getattr(h, "body", []) or [])
+                _scan_module_level(children, py_file)
+
+    for py_file in sorted(pkg_root.rglob("*.py")):
+        parts = py_file.parts
+        if any(
+            seg in parts
+            for seg in (
+                "__pycache__",
+                "build",
+                "dist",
+                ".tox",
+                "site-packages",
+                # Tutorial/demo subpackages — `import scitex` is the
+                # canonical end-user idiom, not a library-cost concern.
+                "examples",
+                "docs",
+            )
+        ):
+            continue
+        # Filename pattern for in-tree demos (e.g. scitex-stats's
+        # tests/categorical/_demo_chi2.py). Same exemption as `examples/`
+        # — these are runnable demonstrations of the API surface, not
+        # library code that consumers import.
+        if py_file.name.startswith("_demo_") or py_file.name.startswith("demo_"):
+            continue
+        try:
+            text = py_file.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        try:
+            tree = ast.parse(text, filename=str(py_file))
+        except SyntaxError:
+            continue
+        if isinstance(tree, ast.Module):
+            _scan_module_level(tree.body, py_file)
+    return out
+
+
 def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
     src = init_path.read_text()
     tree = ast.parse(src, filename=str(init_path))
@@ -188,7 +725,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
         "all": None,
         "version_nodes": [],
         # Local names bound to `importlib.metadata.version` (incl. aliases like
-        # `from importlib.metadata import version as _v`). Used by PA202.
+        # `from importlib.metadata import version as _v`). Used by PA-202.
         "version_aliases": {"version"},
     }
 
@@ -208,7 +745,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 ):
                     out.append(
                         Violation(
-                            "PA301",
+                            "PA-301",
                             where,
                             f"`import {alias.name}` at module top-level "
                             "(wrap in try/except ImportError if optional)",
@@ -224,7 +761,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 local = alias.asname or alias.name
                 bound_names.add(local)
                 # Record `from importlib.metadata import version [as X]` aliases
-                # so PA202 recognizes the canonical pattern through any alias.
+                # so PA-202 recognizes the canonical pattern through any alias.
                 if mod == "importlib.metadata" and alias.name == "version":
                     aliases = state["version_aliases"]
                     assert isinstance(aliases, set)
@@ -244,7 +781,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                     if node.level == 0:
                         out.append(
                             Violation(
-                                "PA301",
+                                "PA-301",
                                 where,
                                 f"`from {mod} import ...` at module top-level "
                                 "(wrap in try/except ImportError if optional)",
@@ -330,7 +867,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
                 # Pytest collects any module-level callable; PEP 562 lets a
                 # module expose names dynamically without binding them at
                 # import time. Treat each `name == "..."` literal inside
-                # __getattr__ as a bound name so PA102 doesn't false-fire.
+                # __getattr__ as a bound name so PA-102 doesn't false-fire.
                 if node.name == "__getattr__":
                     for sub in ast.walk(node):
                         # Pattern A: `if name == "X":`
@@ -380,22 +917,24 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
     # §5
     if not has_future_annotations:
         out.append(
-            Violation("PA501", where, "add `from __future__ import annotations`")
+            Violation("PA-501", where, "add `from __future__ import annotations`")
         )
 
     # §1
     if all_names is None:
-        out.append(Violation("PA101", where, "declare `__all__ = [...]`"))
+        out.append(Violation("PA-101", where, "declare `__all__ = [...]`"))
     else:
         for n in all_names:
             if n.startswith("_") and n not in {"__version__"}:
                 out.append(
-                    Violation("PA103", where, f"'{n}' is private but listed in __all__")
+                    Violation(
+                        "PA-103", where, f"'{n}' is private but listed in __all__"
+                    )
                 )
             if n not in bound_names:
                 out.append(
                     Violation(
-                        "PA102",
+                        "PA-102",
                         where,
                         f"'{n}' is in __all__ but not imported/defined in __init__.py",
                     )
@@ -403,14 +942,14 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
             if n in third_party_bound:
                 out.append(
                     Violation(
-                        "PA104",
+                        "PA-104",
                         where,
                         f"'{n}' resolves to a third-party symbol — re-export breaks the API surface",
                     )
                 )
 
     # §2 — version strategy
-    # PA201 only fires when __version__ is actually defined. Modules that
+    # PA-201 only fires when __version__ is actually defined. Modules that
     # delegate everything (sys.modules aliases, e.g. scitex-plt → figrecipe)
     # don't define __version__ themselves.
     if (
@@ -418,7 +957,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
         and "__version__" not in all_names
         and "__version__" in bound_names
     ):
-        out.append(Violation("PA201", where, "add `__version__` to __all__"))
+        out.append(Violation("PA-201", where, "add `__version__` to __all__"))
 
     if version_nodes:
         raw_aliases = state["version_aliases"]
@@ -431,7 +970,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
         if not uses_metadata:
             out.append(
                 Violation(
-                    "PA202",
+                    "PA-202",
                     where,
                     "compute __version__ via importlib.metadata.version('<dist>') "
                     "with PackageNotFoundError fallback",
@@ -441,7 +980,7 @@ def _audit_init(init_path: Path, distribution: str) -> list[Violation]:
             if fb != "0.0.0+local":
                 out.append(
                     Violation(
-                        "PA203",
+                        "PA-203",
                         where,
                         f"fallback is {fb!r}; use '0.0.0+local' (PEP 440 local segment)",
                     )
@@ -508,27 +1047,61 @@ def audit_api(
     int
         Exit code: 0 = no violations, 1 = violations, 2 = could not import.
     """
+    # Category-aware skip — see `should_skip_audit` in _ecosystem._core.
+    try:
+        from ...._ecosystem import should_skip_audit
+    except ImportError:
+        should_skip_audit = lambda *_a, **_k: (False, "")  # noqa: E731
+    skip, reason = should_skip_audit(distribution, "audit-python-apis")
+    if skip:
+        if json_out:
+            import json
+
+            click.echo(
+                json.dumps(
+                    {
+                        "distribution": distribution,
+                        "init": None,
+                        "skipped": reason,
+                        "violations": [],
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            _emit("skip", f"{distribution}: {reason}")
+        return 0
+
     import_name = _import_name(distribution)
     init_path = _locate_init(import_name)
     if init_path is None:
-        click.echo(
-            f"audit-api: cannot locate __init__.py for '{distribution}' "
-            f"(import name '{import_name}'). Is it installed?",
+        # Skipped, not failed: many packages run audit-all from CI before
+        # `pip install -e .` (e.g. when scitex_dev is the only install).
+        # Treat absence as "no API surface to check" rather than an error.
+        _emit(
+            "info",
+            f"{distribution}: cannot locate __init__.py for "
+            f"'{import_name}' — package not importable, skipped.",
             err=True,
         )
-        return 2
+        return 0
 
     # Probe distribution metadata to surface missing-install issues early.
     try:
         im.version(distribution)
     except im.PackageNotFoundError:
-        click.echo(
-            f"audit-api: warn — distribution metadata for '{distribution}' "
+        _emit(
+            "warning",
+            f"audit-api: distribution metadata for '{distribution}' "
             "not found (continuing with source-only checks)",
             err=True,
         )
 
     violations = _audit_init(init_path, distribution)
+    violations.extend(_audit_umbrella_imports(init_path, distribution, import_name))
+    violations.extend(_audit_playwright_capture(init_path, distribution, import_name))
+    violations.extend(_audit_no_mocks(init_path, distribution, import_name))
+    violations.extend(_audit_test_quality(init_path, distribution, import_name))
     if rules:
         violations = [v for v in violations if v.rule in rules]
 
@@ -550,11 +1123,28 @@ def audit_api(
         )
         return 0 if not violations else 1
 
+    from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
+
     if not violations:
-        click.echo(f"ok  {distribution}: no Python API violations")
+        _emit("success", f"{distribution}: no Python API violations")
+        emit_disclaimer()
         return 0
 
-    click.echo(f"warn  {distribution}: {len(violations)} violation(s)")
+    # Compute the highest severity across all fired rules. The headline
+    # ("error" vs "warning") and exit code track that — so packages
+    # that break error-severity rules (NM/TQ) fail CI gates, while
+    # warning-only violations don't.
+    has_error = any(
+        getattr(RULES.get(v.rule), "severity", "warning") == "error" for v in violations
+    )
+    headline_level = "error" if has_error else "warning"
+    _emit(headline_level, f"{distribution}: {len(violations)} violation(s)")
+    # Per-violation lines use the rule's own severity so a mixed run shows
+    # each rule at its actual level (warnings for PA-301, errors for PA-307).
     for v in violations:
-        click.echo(v.format())
-    return 1
+        sev = getattr(RULES.get(v.rule), "severity", "warning")
+        line = v.format()
+        _emit(sev, line)
+    emit_disclaimer()
+    emit_skill_hints()
+    return 2 if has_error else 1

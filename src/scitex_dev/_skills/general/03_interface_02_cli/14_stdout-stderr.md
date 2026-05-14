@@ -1,8 +1,8 @@
 ---
-name: interface-cli-streams
-description: SciTeX CLI stdout/stderr discipline — stdout for data/JSON, stderr for logs. `cmd --json | jq ...` must work uncontaminated.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Streams
+  [DETAILS] SciTeX CLI stdout/stderr discipline — stdout for data/JSON, stderr for logs. `cmd --json | jq ...` must work uncontaminated.
+tags: [scitex-general-interface-cli-stdout-stderr]
 ---
 
 # §8. stdout vs stderr

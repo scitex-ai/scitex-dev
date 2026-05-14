@@ -1,7 +1,8 @@
 ---
-name: skills-general-inheritance
-description: How ecosystem-wide `general/` skills (this very directory's rules) reach every install — scitex-dev carries a synced mirror at `src/scitex_dev/_skills/general/`, parallel to its own `src/scitex_dev/_skills/scitex-dev/`. `scitex-dev skills export` ships both as separate namespaces under `~/.claude/skills/scitex/`. Source of truth stays in scitex-python; sync runs at scitex-dev release time.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills General Inheritance
+  [DETAILS] How ecosystem-wide `general/` skills (this very directory's rules) reach every install — scitex-dev carries a synced mirror at `src/scitex_dev/_skills/general/`, parallel to its own `src/scitex_dev/_skills/scitex-dev/`. `scitex-dev skills export` ships both as separate namespaces under `~/.claude/skills/scitex/`. Source of truth stays in scitex-python; sync runs at scitex-dev release time.
+tags: [scitex-general-interface-skills-general-skills-inheritance]
 ---
 
 # General-Skills Inheritance
@@ -25,7 +26,7 @@ src/scitex_dev/_skills/
     01_ecosystem_01_*.md
     ...
     03_interface_04_skills/
-      00_index.md
+      SKILL.md
       01_overview.md
       ...
 ```

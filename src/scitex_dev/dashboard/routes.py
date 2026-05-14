@@ -59,7 +59,7 @@ def register_routes(app: Flask) -> None:
     def api_packages():
         """Get local package versions only (fast)."""
         try:
-            from ..versions import list_versions
+            from .._release.versions import list_versions
 
             return jsonify(list_versions())
         except Exception as e:
@@ -69,7 +69,7 @@ def register_routes(app: Flask) -> None:
     def api_fix_mismatches():
         """Detect and fix version mismatches. POST with confirm=true to execute."""
         try:
-            from ..fix import fix_mismatches
+            from .._release.fix import fix_mismatches
 
             data = request.get_json(silent=True) or {}
             result = fix_mismatches(
@@ -87,7 +87,7 @@ def register_routes(app: Flask) -> None:
     def api_config():
         """Get current configuration."""
         try:
-            from ..config import config_to_dict, get_config_path, load_config
+            from .._core.config import config_to_dict, get_config_path, load_config
 
             config = load_config()
             return jsonify(config_to_dict(config, config_path=get_config_path()))
@@ -109,7 +109,7 @@ def register_routes(app: Flask) -> None:
         try:
             packages = request.args.getlist("package") or None
             hosts = request.args.getlist("host") or None
-            from ..config import get_enabled_hosts, load_config
+            from .._core.config import get_enabled_hosts, load_config
             from ..ssh import check_all_hosts
 
             config = load_config()
@@ -130,7 +130,7 @@ def register_routes(app: Flask) -> None:
         try:
             packages = request.args.getlist("package") or None
             remotes = request.args.getlist("remote") or None
-            from ..github import check_all_remotes
+            from .._release.github import check_all_remotes
 
             data = check_all_remotes(packages=packages, remotes=remotes)
             return jsonify(data)
@@ -143,7 +143,7 @@ def register_routes(app: Flask) -> None:
         try:
             packages = request.args.getlist("package") or None
             versions = request.args.getlist("version") or None
-            from ..rtd import check_all_rtd
+            from .._release.rtd import check_all_rtd
 
             data = check_all_rtd(packages=packages, versions=versions)
             return jsonify(data)
@@ -164,10 +164,10 @@ def _get_all_version_data(force_refresh: bool = False) -> dict[str, Any]:
     dict
         Combined version data.
     """
-    from ..config import get_enabled_hosts, get_enabled_remotes, load_config
-    from ..github import check_all_remotes
+    from .._core.config import get_enabled_hosts, get_enabled_remotes, load_config
+    from .._release.github import check_all_remotes
     from ..ssh import check_all_hosts
-    from ..versions import list_versions
+    from .._release.versions import list_versions
 
     config = load_config()
 

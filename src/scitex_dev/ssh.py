@@ -9,7 +9,7 @@ from __future__ import annotations
 import subprocess
 from typing import Any
 
-from .config import DevConfig, HostConfig, get_enabled_hosts, load_config
+from ._core.config import DevConfig, HostConfig, get_enabled_hosts, load_config
 
 
 def get_remote_version(host: HostConfig, package: str) -> dict[str, Any]:

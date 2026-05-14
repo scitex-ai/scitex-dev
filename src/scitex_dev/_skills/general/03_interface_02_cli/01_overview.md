@@ -1,8 +1,8 @@
 ---
-name: interface-cli-overview
-description: SciTeX CLI convention — overview and scope. What's covered (every entry point in pyproject.toml [project.scripts]) vs what isn't (third-party CLIs).
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Overview
+  [DETAILS] SciTeX CLI convention — overview and scope. What's covered (every entry point in pyproject.toml [project.scripts]) vs what isn't (third-party CLIs).
+tags: [scitex-general-interface-cli-overview]
 ---
 
 # SciTeX CLI Convention — Overview

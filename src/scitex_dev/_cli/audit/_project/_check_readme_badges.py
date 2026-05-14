@@ -1,4 +1,4 @@
-"""PS106 — README must surface a coverage badge.
+"""PS-106 — README must surface a coverage badge.
 
 Detects either:
 - shields.io coverage badge (`img.shields.io/codecov/...` or
@@ -43,16 +43,16 @@ def has_coverage_badge(readme: Path) -> bool:
 
 
 def check_coverage_badge(repo: Path, violation_cls: type, out: list) -> None:
-    """Append a PS106 violation if README has no coverage badge."""
+    """Append a PS-106 violation if README has no coverage badge."""
     readme = repo / "README.md"
     if not readme.is_file():
-        # PS101 / a future PS107 will catch missing README; don't double-flag.
+        # PS-101 / a future PS-107 will catch missing README; don't double-flag.
         return
     if has_coverage_badge(readme):
         return
     out.append(
         violation_cls(
-            "PS106",
+            "PS-106",
             str(readme),
             (
                 "no coverage badge in the first ~4 KB of README.md. "

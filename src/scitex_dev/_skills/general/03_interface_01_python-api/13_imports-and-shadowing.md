@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-imports-and-shadowing
-description: Import resolution rules for scitex submodules that intentionally shadow stdlib names (`scitex.os`, `scitex.io`, `scitex.logging`, `scitex.path`). Bare `import os` always resolves to stdlib (PEP 328 absolute imports); scitex submodules require an explicit `from . import` or full path. Aliasing rules to preserve the visual distinction. When `importlib.import_module` is justified.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Imports And Shadowing
+  [DETAILS] Import resolution rules for scitex submodules that intentionally shadow stdlib names (`scitex.os`, `scitex.io`, `scitex.logging`, `scitex.path`). Bare `import os` always resolves to stdlib (PEP 328 absolute imports); scitex submodules require an explicit `from . import` or full path. Aliasing rules to preserve the visual distinction. When `importlib.import_module` is justified.
+tags: [scitex-general-interface-python-api-imports-and-shadowing]
 ---
 
 # Imports and Stdlib Shadowing
@@ -146,7 +147,7 @@ Static checks:
 - Grep for `import os as scitex_*`, `import io as scitex_*`, etc. → flag.
 - Verify package README documents the alias pattern when the package's namespace appears in the shadowing inventory above.
 
-Linter rule (planned): **PA011** — flag stdlib-name aliasing patterns above; suggest the canonical form.
+Linter rule (planned): **PA-011** — flag stdlib-name aliasing patterns above; suggest the canonical form.
 
 ## See also
 

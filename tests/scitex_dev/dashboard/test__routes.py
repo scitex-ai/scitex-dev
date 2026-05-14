@@ -8,6 +8,9 @@ pytest.importorskip("flask")
 
 
 def test_register_routes_attaches_endpoints():
+    # Arrange
+    # Act
+    # Assert
     from flask import Flask
 
     from scitex_dev.dashboard._routes import register_routes

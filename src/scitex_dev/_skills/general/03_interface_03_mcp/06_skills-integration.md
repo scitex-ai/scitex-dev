@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-skills-integration
-description: SciTeX MCP — every package exposes `<pkg>_skills_list` and `<pkg>_skills_get` via scitex_dev so agents can discover and read package skills.
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp Skills Integration
+  [DETAILS] SciTeX MCP — every package exposes `<pkg>_skills_list` and `<pkg>_skills_get` via scitex_dev so agents can discover and read package skills.
+tags: [scitex-general-interface-mcp-skills-integration]
 ---
 
 # §5. Skills integration

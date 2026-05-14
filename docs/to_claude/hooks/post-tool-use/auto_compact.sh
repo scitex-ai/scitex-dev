@@ -49,7 +49,7 @@ if [[ -f "$HELPER_SCRIPT" ]]; then
 fi
 
 # Consume stdin (required by hook protocol)
-cat > /dev/null
+cat >/dev/null
 
 # --- Counter logic ---
 COMPACT_THRESHOLD=30
@@ -77,10 +77,21 @@ fi
 # Increment
 COUNT=$((COUNT + 1))
 
+# Pre-compact notification (3 steps before compact)
+NOTIFY_THRESHOLD=$((COMPACT_THRESHOLD - 3))
+if [[ $COUNT -eq $NOTIFY_THRESHOLD ]]; then
+    # Notify via scitex notification (non-blocking)
+    (scitex notification send \
+        --message "Compact in 3 steps (count: $COUNT/$COMPACT_THRESHOLD). Save important context to memory/issues now." \
+        --title "Pre-Compact Warning" \
+        --level warning 2>/dev/null || true) &
+    disown 2>/dev/null || true
+fi
+
 # Check if threshold reached
 if [[ $COUNT -ge $COMPACT_THRESHOLD ]]; then
     # Reset counter
-    echo 0 > "$COUNTER_FILE"
+    echo 0 >"$COUNTER_FILE"
 
     # Send /compact if running in screen
     if [[ -n "${STY:-}" ]]; then
@@ -90,7 +101,7 @@ if [[ $COUNT -ge $COMPACT_THRESHOLD ]]; then
         disown 2>/dev/null || true
     fi
 else
-    echo "$COUNT" > "$COUNTER_FILE"
+    echo "$COUNT" >"$COUNTER_FILE"
 fi
 
 # Never block

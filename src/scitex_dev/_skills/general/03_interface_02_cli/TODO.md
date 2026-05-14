@@ -1,7 +1,8 @@
 ---
-name: TODO
-description: SciTeX CLI Convention — Open TODOs — see file body for details.
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Todo
+  [DETAILS] SciTeX CLI Convention — Open TODOs — see file body for details.
+tags: [scitex-general-interface-cli-TODO]
 ---
 
 # SciTeX CLI Convention — Open TODOs

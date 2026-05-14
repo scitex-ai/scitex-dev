@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-overview
-description: SciTeX MCP convention — overview, when to add a tool, fastmcp as canonical SDK, audience.
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp Overview
+  [DETAILS] SciTeX MCP convention — overview, when to add a tool, fastmcp as canonical SDK, audience.
+tags: [scitex-general-interface-mcp-overview]
 ---
 
 # SciTeX MCP Convention — Overview
@@ -22,7 +22,7 @@ Do **not** add MCP tools for things that should stay user-only (interactive edit
 
 ## Canonical SDK
 
-- **`fastmcp`** is the only SDK SciTeX packages use. Both 2.x and 3.x are supported via the [`safe_mount` shim](../03_interface_02_cli/00_index.md) in `scitex._mcp_tools._compat`.
+- **`fastmcp`** is the only SDK SciTeX packages use. Both 2.x and 3.x are supported via the [`safe_mount` shim](../03_interface_02_cli/SKILL.md) in `scitex._mcp_tools._compat`.
 - Each package owns a single `FastMCP` instance, exposed at `scitex_<pkg>._mcp_server.mcp` (or equivalent module path).
 
 ## Audience

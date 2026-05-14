@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-decorators
-description: Apply `@supports_return_as` (and similar cross-cutting decorators) at the import boundary in `__init__.py`, not inside the implementation file. Recommended-where-applicable, not required — leaf packages without scitex-dev dep can skip. Conditional application via try/except. Preserves single decorator-stack inspection point.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Decorators
+  [DETAILS] Apply `@supports_return_as` (and similar cross-cutting decorators) at the import boundary in `__init__.py`, not inside the implementation file. Recommended-where-applicable, not required — leaf packages without scitex-dev dep can skip. Conditional application via try/except. Preserves single decorator-stack inspection point.
+tags: [scitex-general-interface-python-api-decorators-post-import]
 ---
 
 # Decorators (Post-Import Application)

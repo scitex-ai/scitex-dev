@@ -27,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from ..config import DevConfig, HostConfig, get_enabled_hosts, load_config
+from .._core.config import DevConfig, HostConfig, get_enabled_hosts, load_config
 from .._sync import _build_ssh_args, _build_sync_commands, _get_host_packages, sync_all
 
 
@@ -102,6 +102,10 @@ def collect_state(
     hosts: list[str] | None = None,
     packages: list[str] | None = None,
     config: DevConfig | None = None,
+    *,
+    origin_sha_fn=None,
+    local_sha_fn=None,
+    remote_sha_fn=None,
 ) -> dict[str, Any]:
     """Gather origin/develop, localhost, and per-host SHAs.
 
@@ -113,6 +117,10 @@ def collect_state(
     """
     if config is None:
         config = load_config()
+
+    origin_fn = origin_sha_fn if origin_sha_fn is not None else _origin_sha
+    local_fn = local_sha_fn if local_sha_fn is not None else _local_sha
+    remote_fn = remote_sha_fn if remote_sha_fn is not None else _remote_sha
 
     enabled = get_enabled_hosts(config)
     if hosts:
@@ -132,8 +140,8 @@ def collect_state(
             {
                 "pkg": pkg.name,
                 "dir": path.name,
-                "origin": _origin_sha(path),
-                "localhost": _local_sha(path),
+                "origin": origin_fn(path),
+                "localhost": local_fn(path),
                 "cells": {},
             }
         )
@@ -150,9 +158,7 @@ def collect_state(
 
     if pairs:
         with ThreadPoolExecutor(max_workers=min(16, len(pairs))) as ex:
-            fut_map = {
-                ex.submit(_remote_sha, h, r["dir"]): (h.name, r) for h, r in pairs
-            }
+            fut_map = {ex.submit(remote_fn, h, r["dir"]): (h.name, r) for h, r in pairs}
             for fut in as_completed(fut_map):
                 host_name, row = fut_map[fut]
                 try:
@@ -244,6 +250,10 @@ def dry_run_commands(
     packages: list[str] | None = None,
     config: DevConfig | None = None,
     only_out_of_sync: bool = True,
+    *,
+    origin_sha_fn=None,
+    local_sha_fn=None,
+    remote_sha_fn=None,
 ) -> dict[str, Any]:
     """Build the exact shell commands per (host, pkg) without executing.
 
@@ -253,7 +263,14 @@ def dry_run_commands(
     if config is None:
         config = load_config()
 
-    state = collect_state(hosts=hosts, packages=packages, config=config)
+    state = collect_state(
+        hosts=hosts,
+        packages=packages,
+        config=config,
+        origin_sha_fn=origin_sha_fn,
+        local_sha_fn=local_sha_fn,
+        remote_sha_fn=remote_sha_fn,
+    )
     enabled_map = {h.name: h for h in get_enabled_hosts(config)}
 
     target_pairs: set[tuple[str, str]] = set()
@@ -285,6 +302,10 @@ def packages_audit(
     packages: list[str] | None = None,
     unsafe: bool = False,
     config: DevConfig | None = None,
+    *,
+    origin_sha_fn=None,
+    local_sha_fn=None,
+    remote_sha_fn=None,
 ) -> dict[str, Any]:
     """Top-level entry consumed by the CLI.
 
@@ -293,8 +314,16 @@ def packages_audit(
     if config is None:
         config = load_config()
 
+    sha_kwargs = dict(
+        origin_sha_fn=origin_sha_fn,
+        local_sha_fn=local_sha_fn,
+        remote_sha_fn=remote_sha_fn,
+    )
+
     if mode == "observe":
-        state = collect_state(hosts=hosts, packages=packages, config=config)
+        state = collect_state(
+            hosts=hosts, packages=packages, config=config, **sha_kwargs
+        )
         return {
             "mode": "observe",
             "table": render_table(state),
@@ -305,12 +334,16 @@ def packages_audit(
     if mode == "dry-run":
         return {
             "mode": "dry-run",
-            "commands": dry_run_commands(hosts=hosts, packages=packages, config=config),
+            "commands": dry_run_commands(
+                hosts=hosts, packages=packages, config=config, **sha_kwargs
+            ),
         }
 
     if mode == "apply":
         # Restrict to out-of-sync pairs to avoid wasted work.
-        state = collect_state(hosts=hosts, packages=packages, config=config)
+        state = collect_state(
+            hosts=hosts, packages=packages, config=config, **sha_kwargs
+        )
         oos = out_of_sync_pairs(state)
         if not oos:
             return {"mode": "apply", "results": {}, "note": "already in sync"}

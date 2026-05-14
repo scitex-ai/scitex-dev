@@ -1,8 +1,8 @@
 ---
-name: interface-cli-catalog
-description: SciTeX CLI recommended noun & verb vocabulary — common nouns by domain, transitive verbs by group, intransitive verbs (exception candidates), synonym avoidance.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Catalog
+  [DETAILS] SciTeX CLI recommended noun & verb vocabulary — common nouns by domain, transitive verbs by group, intransitive verbs (exception candidates), synonym avoidance.
+tags: [scitex-general-interface-cli-noun-verb-catalog]
 ---
 
 # §1d. Recommended noun & verb catalog

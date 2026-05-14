@@ -1,7 +1,8 @@
 ---
-name: TODO
-description: Python API skill — open TODOs — see file body for details.
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Todo
+  [DETAILS] Python API skill — open TODOs — see file body for details.
+tags: [scitex-general-interface-python-api-TODO]
 ---
 
 <!-- ---
@@ -18,7 +19,7 @@ Strike (`~~item~~`) when done. Foundations shipped in scitex-dev `feat-python-ap
 
 - `from scitex_dev import try_import_optional, last_install_hint, InstallHint` — optional-import helper.
 - `from scitex_dev import ScitexError, ErrorCode, classify_exception` — canonical structured exception.
-- `scitex-dev ecosystem audit-python-apis <dist> [--json] [--rule PA101 …]` — auditor with 9 rules: PA101–104 (§1), PA201–203 (§2), PA301 (§3), PA501 (§5). Mirrors `list-python-apis`; sits next to `audit-cli` and `audit-mcp-tools` under `ecosystem`.
+- `scitex-dev ecosystem audit-python-apis <dist> [--json] [--rule PA-101 …]` — auditor with 9 rules: PA-101–104 (§1), PA-201–203 (§2), PA-301 (§3), PA-501 (§5). Mirrors `list-python-apis`; sits next to `audit-cli` and `audit-mcp-tools` under `ecosystem`.
 
 ## Drift to fix in existing packages
 
@@ -26,7 +27,8 @@ Strike (`~~item~~`) when done. Foundations shipped in scitex-dev `feat-python-ap
 - [ ] Audit Pattern B (conditional `__all__.append`) — likely scitex-stats, figrecipe.
 - [ ] Submodule `__all__` — every exposed submodule should declare its own.
 - [ ] `@supports_return_as` placement — must be in `__init__.py`, not `_<name>.py`.
-- [ ] Migrate inline `try/except ImportError` to `try_import_optional` across standalones.
+- [ ] Migrate inline `try/except ImportError` to `try_import_optional` across standalones. Rule code reserved: **PA-302** (impl deferred — auditor `_audit.py` needs split before adding; pattern: AST `Try` node whose `body` contains a non-stdlib `Import`/`ImportFrom` plus an assignment `<NAME>_AVAILABLE = True` and whose `ImportError` handler assigns `<NAME>_AVAILABLE = False`). Progress: scitex-io `_load_modules/_optuna.py` + `_save_modules/_optuna_study_as_csv_and_pngs.py` migrated 2026-05-11; 8 sibling packages migrated 2026-05-11 (scitex-io, writer, agent-container, audio, scholar, python, dev, dsp).
+- [ ] **PA-303** — Test files MUST wrap module-top imports of optional third-party deps in `pytest.importorskip(...)`. Pattern: AST scan under `tests/` for `Import`/`ImportFrom` at module scope where the imported root is NOT in `[project] dependencies` AND no preceding `pytest.importorskip("<dep>")` exists. Why: an unguarded import that fails at collection aborts ALL tests in the run, masking everything else; coverage upload is then skipped, and Codecov shows a stale or missing number. Real-world incident: scitex-io was stuck at 79% on Codecov for weeks because `import optuna` in two test modules silently blocked test collection.
 - [ ] Drop `try/except ImportError: pass` around `from scitex_dev import …` — scitex-dev is hard dep now.
 - [ ] **scitex-io**: 15+ bare `except:` blocks (`_load_modules/_catboost.py`, `_H5Explorer.py`, `_glob.py`, `_save_modules/_{hdf5,csv,image,excel,zarr}.py`).
 - [ ] **scitex-cloud**: 15+ per-service custom Exception classes — collapse to `ScitexError(code=…)`.
@@ -53,10 +55,10 @@ Strike (`~~item~~`) when done. Foundations shipped in scitex-dev `feat-python-ap
 - [ ] **§6** decorator placement (cross-file AST scan).
 - [ ] **§7** submodule `__all__` declarations.
 - [ ] **§9** introspection ladder (`-v|-vv|-vvv` exists + behaves per spec).
-- [ ] **§11** PA1101 — stdlib-name aliasing (`import os as scitex_os`).
+- [ ] **§11** PA-1101 — stdlib-name aliasing (`import os as scitex_os`).
 - [ ] **§12** cross-interface parity — separate `audit-ecosystem` command vs. inlined.
-- [ ] PA502+ `Any` tolerance with `# audit: polymorphic` suppression marker.
-- [ ] PA901–904 (§9 errors): custom Exception subclasses outside scitex-dev; bare `except:`; `raise … as e` without `from e`; `print(...)` at library scope.
+- [ ] PA-502+ `Any` tolerance with `# audit: polymorphic` suppression marker.
+- [ ] PA-901–904 (§9 errors): custom Exception subclasses outside scitex-dev; bare `except:`; `raise … as e` without `from e`; `print(...)` at library scope.
 
 ## scitex-dev follow-ups
 

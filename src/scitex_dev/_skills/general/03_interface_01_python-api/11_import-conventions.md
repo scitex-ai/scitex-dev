@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-import-conventions
-description: Standalone vs umbrella import conventions. `pip install scitex-io` → `import scitex_io as sio`. `pip install scitex` → `import scitex.io as sio`. Skills and READMEs document both forms. Inside package source, use the standalone form. In umbrella docs, write `import scitex` (never `as stx`).
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Import Conventions
+  [DETAILS] Standalone vs umbrella import conventions. `pip install scitex-io` → `import scitex_io as sio`. `pip install scitex` → `import scitex.io as sio`. Skills and READMEs document both forms. Inside package source, use the standalone form. In umbrella docs, write `import scitex` (never `as stx`).
+tags: [scitex-general-interface-python-api-import-conventions]
 ---
 
 # Import Conventions
@@ -28,6 +29,31 @@ pip install scitex-io   → import scitex_io as sio   ✓
 - **Skill / README examples MUST show both forms** side-by-side, with a one-line note on when each applies. Readers land on the skill without knowing which install path they took.
 - **Inside the package's own source code**: use the standalone form (`from scitex_io import save`) — the package cannot assume the umbrella is installed alongside it.
 - **In ecosystem docs that assume the umbrella**: use `import scitex` (not `import scitex as stx`) in all examples. Aliases belong to the user, not the documentation.
+
+## Hard rule — no umbrella imports inside standalone source
+
+**OK** in `src/scitex_xxx/`:    `from scitex_yyy import foo`
+**NG** in `src/scitex_xxx/`:    `from scitex.yyy import foo` / `import scitex.yyy` / `import scitex`
+
+The umbrella is a re-export shim. When standalone source imports
+`scitex.yyy`, Python must first import `scitex`'s `__init__.py` —
+which sets up the lazy re-export machinery for **every** subpackage in
+the umbrella. On NFS-mounted home directories (HPC, shared workstations)
+this turns a single `scitex-scholar` CLI invocation into hundreds of
+small `stat()` calls across the whole umbrella tree. A standalone
+package that imports its peer through `scitex_yyy` only pays for
+`scitex_yyy`.
+
+This applies recursively to peer standalones too:
+`scitex-scholar` calling `scitex.dict.DotDict` should be
+`scitex_dict.DotDict`. The umbrella version goes through one extra
+indirection (`scitex.dict` → `scitex_dict`) but the cost is the
+umbrella's `__init__.py` setup, not the indirection itself.
+
+Audited by **PA-304** (`audit-python-apis`). Triggers as `error` on any
+`from scitex.X` / `import scitex.X` / `import scitex` line inside
+`src/<pkg>/**/*.py` of a standalone package (i.e. any package whose
+`import_name` in the registry is not `scitex`).
 
 ## Side-by-side example (copy into package skills)
 

@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-tool-naming
-description: SciTeX MCP tool naming — `<pkg>_<verb>_<noun>` snake_case, mirrors the CLI subcommand tree, examples per package.
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp Tool Naming
+  [DETAILS] SciTeX MCP tool naming — `<pkg>_<verb>_<noun>` snake_case, mirrors the CLI subcommand tree, examples per package.
+tags: [scitex-general-interface-mcp-tool-naming]
 ---
 
 # §2. Tool naming — `<pkg>_<verb>_<noun>`
@@ -38,6 +38,7 @@ Every MCP tool name has the shape:
 - **Hyphen → underscore** when crossing from CLI to MCP. CLI `bulk-rename` → MCP `bulk_rename`.
 - **Group → underscore** as well. CLI `ecosystem list` (noun group + verb) → MCP `ecosystem_list`.
 - **No double-prefix.** When the bridge calls `safe_mount(... namespace="dev")`, the standalone defines `bulk_rename`; the mount adds `dev_` → final name `dev_bulk_rename`. The standalone source must NOT also define `dev_bulk_rename` directly, or you'd get `dev_dev_bulk_rename` after the mount.
+- **Standalone tools MUST use bare names.** New packages register tools without the package prefix (`run_test`, `db_build`, `openneuro_fetch`); the umbrella adds the namespace at mount time. Standalones that pre-prefix every tool with their own short name (the 2026-05-06 scitex-dataset case: 21 tools all named `dataset_<x>`) force the umbrella to either choose double-prefix (`dataset_dataset_x`) or skip the namespace and lose the single-source-of-truth property. The auditor in [08_audit-mcp-tools.md](08_audit-mcp-tools.md) flags this. Only legacy packages whose source already prefixes (`scitex-io`'s `io_save`) keep that shape — and they mount via `safe_mount(mcp, sub_mcp)` without a namespace, see [02_server-registration.md](02_server-registration.md).
 
 ## Synonym discipline
 

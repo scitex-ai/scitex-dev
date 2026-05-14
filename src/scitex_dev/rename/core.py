@@ -189,6 +189,9 @@ def execute_rename(
     extra_excludes: list[str] | None = None,
     force: bool = False,
     skip_ids: list[str] | None = None,
+    *,
+    uncommitted_check_fn=None,
+    safety_check_fn=None,
     **kwargs: Any,
 ) -> RenameResult:
     """Execute rename with safety checks.
@@ -217,7 +220,12 @@ def execute_rename(
     RenameResult
         Results of the rename operation.
     """
-    if not force and has_uncommitted_changes(directory):
+    uncommitted_fn = (
+        uncommitted_check_fn
+        if uncommitted_check_fn is not None
+        else has_uncommitted_changes
+    )
+    if not force and uncommitted_fn(directory):
         return _make_error_result(
             pattern,
             replacement,
@@ -238,10 +246,10 @@ def execute_rename(
         skip_ids=skip_ids or [],
         **kwargs,
     )
-    return bulk_rename(config)
+    return bulk_rename(config, safety_check_fn=safety_check_fn)
 
 
-def bulk_rename(config: RenameConfig) -> RenameResult:
+def bulk_rename(config: RenameConfig, *, safety_check_fn=None) -> RenameResult:
     """Execute bulk rename operation.
 
     Parameters
@@ -257,8 +265,11 @@ def bulk_rename(config: RenameConfig) -> RenameResult:
     directory = str(Path(config.directory).resolve())
 
     # Safety: block dangerous directories and require git for live runs
+    safety_fn = (
+        safety_check_fn if safety_check_fn is not None else check_directory_safety
+    )
     if not config.dry_run:
-        safety_error = check_directory_safety(directory)
+        safety_error = safety_fn(directory)
         if safety_error:
             return _make_error_result(
                 config.pattern,

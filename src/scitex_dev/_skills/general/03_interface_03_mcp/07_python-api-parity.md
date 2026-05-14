@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-python-api-parity
-description: SciTeX MCP ↔ Python API parity — same logical name, same arg names/types, same JSON output shape. Concrete contract with examples.
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp Python Api Parity
+  [DETAILS] SciTeX MCP ↔ Python API parity — same logical name, same arg names/types, same JSON output shape. Concrete contract with examples.
+tags: [scitex-general-interface-mcp-python-api-parity]
 ---
 
 # §6. Python API ↔ MCP parity

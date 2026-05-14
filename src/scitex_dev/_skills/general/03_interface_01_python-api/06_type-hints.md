@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-type-hints
-description: `from __future__ import annotations` mandatory at top of every module. Type-hint every public function parameter and return. Use Union/Literal/Optional from typing; avoid bare Any unless genuinely polymorphic. Match docstring types with annotations — single source of truth.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Type Hints
+  [DETAILS] `from __future__ import annotations` mandatory at top of every module. Type-hint every public function parameter and return. Use Union/Literal/Optional from typing; avoid bare Any unless genuinely polymorphic. Match docstring types with annotations — single source of truth.
+tags: [scitex-general-interface-python-api-type-hints]
 ---
 
 # Type Hints
@@ -133,4 +134,4 @@ mypy --strict src/scitex_io
 pyright src/scitex_io
 ```
 
-Linter rule (planned): **PA009** — every public function (in `__all__`) must have annotations on all parameters and a return type.
+Linter rule (planned): **PA-009** — every public function (in `__all__`) must have annotations on all parameters and a return type.

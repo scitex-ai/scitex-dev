@@ -1,7 +1,8 @@
 ---
-name: interface-http-api-error-envelope
-description: Canonical error response shape — `ErrorResponse` Pydantic model with `error`, `code` (links to `scitex_dev._errors.ErrorCode`), `detail`, `remediation`, `timestamp`. HTTP status code matches the error semantics. Avoid leaking stack traces in production. FastAPI's `HTTPException` integrates cleanly.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api Error Envelope
+  [DETAILS] Canonical error response shape — `ErrorResponse` Pydantic model with `error`, `code` (links to `scitex_dev._errors.ErrorCode`), `detail`, `remediation`, `timestamp`. HTTP status code matches the error semantics. Avoid leaking stack traces in production. FastAPI's `HTTPException` integrates cleanly.
+tags: [scitex-general-interface-http-api-error-envelope]
 ---
 
 # Error Envelope

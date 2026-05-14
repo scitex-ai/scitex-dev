@@ -9,10 +9,9 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-try:
-    import yaml
-except ImportError:  # pragma: no cover
-    yaml = None
+from scitex_dev import try_import_optional
+
+yaml = try_import_optional("yaml", extra="cli-audit", pkg="scitex-dev")
 
 
 KNOWN_TAGS = {

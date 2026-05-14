@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-audit-checklist
-description: Release-gate checklist for a package's Python API. Run before tagging a release. Mirrors the structure of the CLI and MCP audit checklists. (A) markers indicate items the planned `audit-api` linter will automate.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Audit Checklist
+  [DETAILS] Release-gate checklist for a package's Python API. Run before tagging a release. Mirrors the structure of the CLI and MCP audit checklists. (A) markers indicate items the planned `audit-api` linter will automate.
+tags: [scitex-general-interface-python-api-audit-checklist]
 ---
 
 # Python API Audit Checklist
@@ -10,7 +11,7 @@ Run before tagging a release. Tick each item or document the deviation in the PR
 
 `(A)` = automated by **`scitex-dev ecosystem audit-python-apis <distribution>`** (shipped — parallels `ecosystem audit-cli`, `ecosystem audit-mcp-tools`; mirrors the `list-python-apis` introspection command).
 
-**Shipped rules** (rule code → checklist item): PA101 (§1 `__all__` present), PA102 (§1 every name bound), PA103 (§1 no `_`-prefixed in `__all__`), PA104 (§1 no third-party re-export), PA201 (§2 `__version__` in `__all__`), PA202 (§2 `importlib.metadata.version()` pattern), PA203 (§2 `"0.0.0+local"` fallback), PA301 (§3 top-level optional import flagged unless wrapped), PA501 (§5 `from __future__ import annotations`). Run with `--json` for machine-readable output, `--rule PA101 --rule PA202 ...` to scope. See [TODO.md](TODO.md) for deferred rules.
+**Shipped rules** (rule code → checklist item): PA-101 (§1 `__all__` present), PA-102 (§1 every name bound), PA-103 (§1 no `_`-prefixed in `__all__`), PA-104 (§1 no third-party re-export), PA-201 (§2 `__version__` in `__all__`), PA-202 (§2 `importlib.metadata.version()` pattern), PA-203 (§2 `"0.0.0+local"` fallback), PA-301 (§3 top-level optional import flagged unless wrapped), PA-501 (§5 `from __future__ import annotations`). Run with `--json` for machine-readable output, `--rule PA-101 --rule PA-202 ...` to scope. See [TODO.md](TODO.md) for deferred rules.
 
 ## §1 — Naming and visibility
 
@@ -34,6 +35,8 @@ Run before tagging a release. Tick each item or document the deviation in the PR
 - [ ] (A) `None`-assigned names still appear in `__all__`.
 - [ ] No top-level `import <optional-dep>` outside try/except.
 - [ ] If a feature surface has a flag, it's named `<FEATURE>_AVAILABLE` and is `True`/`False` (not `None`/object).
+- [ ] (A-planned, **PA-302**) Inline `try/except ImportError` pairs assigning `<NAME>_AVAILABLE` migrate to `scitex_dev.try_import_optional(...)`. The helper records `(extra, pkg)` so `last_install_hint(name)` can render `pip install <pkg>[<extra>]` at error sites.
+- [ ] (A-planned, **PA-303**) Test files MUST wrap module-top imports of optional third-party deps in `pytest.importorskip(...)`. An unguarded `import <dep>` at the top of a test file fails at collection if the dep is absent, aborting ALL tests in the run and silently masking real failures (incident 2026-05-11: scitex-io stuck at 79 % on Codecov for weeks because `import optuna` blocked collection).
 
 ## §4 — Docstrings
 

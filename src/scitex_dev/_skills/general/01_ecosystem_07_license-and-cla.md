@@ -1,7 +1,8 @@
 ---
-name: license-and-cla
-description: Ecosystem-wide policy for licensing (SPDX `AGPL-3.0-only`) and the Contributor License Agreement gate. Covers the AGPL-only rationale, the `cla.yml` workflow template, the strict `signatures/cla.json` shape that the CLA action requires (object with `signedContributors`, NOT a bare array), recovery from the size-3 crash, the `pull_request_target` base-branch trap, and the bootstrap + audit recipes.
-tags: [scitex-python, scitex-general, scitex-ecosystem, license, cla, compliance]
+description: |
+  [TOPIC] License And Cla
+  [DETAILS] Ecosystem-wide policy for licensing (SPDX `AGPL-3.0-only`) and the Contributor License Agreement gate. Covers the AGPL-only rationale, the `cla.yml` workflow template, the strict `signatures/cla.json` shape that the CLA action requires (object with `signedContributors`, NOT a bare array), recovery from the size-3 crash, the `pull_request_target` base-branch trap, and the bootstrap + audit recipes.
+tags: [scitex-general-ecosystem-license-and-cla]
 ---
 
 # License and CLA (ecosystem policy)
@@ -22,7 +23,7 @@ SciTeX ships under AGPL v3.0 to enforce the [Four Freedoms](https://www.gnu.org/
 license = "AGPL-3.0-only"
 ```
 
-- This is the [PEP 639](https://peps.python.org/pep-0639/) SPDX expression. Any other value triggers `E5C11_invalid_pep639_license`.
+- This is the [PEP 639](https://peps.python.org/pep-0639/) SPDX expression. Any other value triggers `REL-11_invalid_pep639_license`.
 - Do **NOT** add a `License :: …` trove classifier — PEP 639 deprecated those alongside SPDX adoption. setuptools ≥80 rejects builds containing one (`E5C13_orphan_license_classifier`).
 
 ### Required `LICENSE` file
@@ -165,9 +166,9 @@ done
 ## Rule codes
 
 ### Existing (in `scitex_dev._pyproject_lint`)
-- `E5C11_invalid_pep639_license` — pyproject `license` is not the SPDX expression `"AGPL-3.0-only"`.
+- `REL-11_invalid_pep639_license` — pyproject `license` is not the SPDX expression `"AGPL-3.0-only"`.
 - `E5C13_orphan_license_classifier` — `License :: …` trove classifier present (rejected by setuptools ≥80).
 
 ### Future (TODO, 0.9.x)
-- `E5C12_missing_cla_workflow` — repo has no `.github/workflows/cla.yml`.
+- `REL-12_missing_cla_workflow` — repo has no `.github/workflows/cla.yml`.
 - `E5C14_malformed_cla_signatures` — `signatures/cla.json` on `cla-signatures` branch is not a JSON object with key `signedContributors`.

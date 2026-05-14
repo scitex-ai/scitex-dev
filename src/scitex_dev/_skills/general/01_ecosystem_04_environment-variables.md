@@ -1,7 +1,8 @@
 ---
-name: ecosystem-environment-variables
-description: Canonical environment-variable naming convention for every SciTeX package — `SCITEX_<MODULE_NAME>_*` prefix rule (never bare `SCITEX_*` except the ecosystem-wide `SCITEX_DIR` relocator), per-package `SCITEX_<PKG>_CONFIG` override, adapter pattern for framework-owned vars (Django/Postgres/Vite settings translate inside their own config — never let framework names leak into SciTeX-owned code), and the mandate that every package document its own env vars in an `NN_env-vars.md` leaf inside its `_skills/`. Use when adding a new env var, auditing drift, or wiring an external-tool adapter.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Ecosystem Environment Variables
+  [DETAILS] Canonical environment-variable naming convention for every SciTeX package — `SCITEX_<MODULE_NAME>_*` prefix rule (never bare `SCITEX_*` except the ecosystem-wide `SCITEX_DIR` relocator), per-package `SCITEX_<PKG>_CONFIG` override, adapter pattern for framework-owned vars (Django/Postgres/Vite settings translate inside their own config — never let framework names leak into SciTeX-owned code), and the mandate that every package document its own env vars in an `NN_env-vars.md` leaf inside its `_skills/`. Use when adding a new env var, auditing drift, or wiring an external-tool adapter.
+tags: [scitex-general-ecosystem-environment-variables]
 ---
 
 # Environment Variable Naming

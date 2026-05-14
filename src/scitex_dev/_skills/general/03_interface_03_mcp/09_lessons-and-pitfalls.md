@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-lessons
-description: SciTeX MCP — concrete lessons and pitfalls from the 2026-04-30 dev.py mount refactor. Specific failure modes that took hours to diagnose and how to avoid them.
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp Lessons
+  [DETAILS] SciTeX MCP — concrete lessons and pitfalls from the 2026-04-30 dev.py mount refactor. Specific failure modes that took hours to diagnose and how to avoid them.
+tags: [scitex-general-interface-mcp-lessons-and-pitfalls]
 ---
 
 # §8. Lessons and pitfalls

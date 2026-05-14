@@ -1,7 +1,8 @@
 ---
-name: TODO
-description: SciTeX MCP Convention — Open TODOs — see file body for details.
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Todo
+  [DETAILS] SciTeX MCP Convention — Open TODOs — see file body for details.
+tags: [scitex-general-interface-mcp-TODO]
 ---
 
 # SciTeX MCP Convention — Open TODOs
@@ -89,7 +90,7 @@ For each conversion:
 ## Documentation
 
 - [x] Split monolithic `03_interface_03_mcp.md` into per-section files (this directory).
-- [x] Remove the legacy `03_interface_03_mcp.md` flat file. Parent `general/SKILL.md` now points at `03_interface_03_mcp/00_index.md`.
+- [x] Remove the legacy `03_interface_03_mcp.md` flat file. Parent `general/SKILL.md` now points at `03_interface_03_mcp/SKILL.md`.
 
 ## Reference example
 

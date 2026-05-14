@@ -1,0 +1,82 @@
+[
+  {
+    "package": "scitex",
+    "name": "audio_speak",
+    "title": "Speak text through a TTS backend (ElevenLabs \u2192 LuxTTS \u2192 gTTS \u2192 pyttsx3 fallback ",
+    "score": 2.0,
+    "scope": "mcp",
+    "match_type": "mcp_tool"
+  },
+  {
+    "package": "scitex-io",
+    "name": "io_list_formats",
+    "title": "List every file extension scitex-io can save or load. Use to discover supported ",
+    "score": 2.0,
+    "scope": "mcp",
+    "match_type": "mcp_tool"
+  },
+  {
+    "package": "figrecipe",
+    "name": "plt_plot",
+    "title": "Create a publication-ready matplotlib figure from a single declarative spec dict",
+    "score": 2.0,
+    "scope": "mcp",
+    "match_type": "mcp_tool"
+  },
+  {
+    "package": "figrecipe",
+    "name": "plt_reproduce",
+    "title": "Regenerate a figure bit-for-bit from its saved YAML recipe \u2014 the core reproducib",
+    "score": 2.0,
+    "scope": "mcp",
+    "match_type": "mcp_tool"
+  },
+  {
+    "package": "scitex-plt",
+    "name": "save",
+    "title": "Save a figure as image and recipe. Unified API with fig.savefig().",
+    "score": 2.0,
+    "scope": "api",
+    "match_type": "function"
+  },
+  {
+    "package": "figrecipe",
+    "name": "save",
+    "title": "Save a figure as image and recipe. Unified API with fig.savefig().",
+    "score": 2.0,
+    "scope": "api",
+    "match_type": "function"
+  },
+  {
+    "package": "scitex-plt",
+    "name": "save_bundle",
+    "title": "Save figure as a layered bundle (ZIP format).",
+    "score": 2.0,
+    "scope": "api",
+    "match_type": "function"
+  },
+  {
+    "package": "figrecipe",
+    "name": "save_bundle",
+    "title": "Save figure as a layered bundle (ZIP format).",
+    "score": 2.0,
+    "scope": "api",
+    "match_type": "function"
+  },
+  {
+    "package": "scitex-bridge",
+    "name": "save_with_recipe",
+    "title": "Save figure with both CSV and figrecipe recipe.",
+    "score": 2.0,
+    "scope": "api",
+    "match_type": "function"
+  },
+  {
+    "package": "scitex-plt",
+    "name": "signature",
+    "title": "Compute verification signature for a saved figure.",
+    "score": 2.0,
+    "scope": "api",
+    "match_type": "function"
+  }
+]

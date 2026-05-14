@@ -27,6 +27,20 @@ GITIGNORED/
 scitex/
 src/scitex_dev/app/
 
+# .scitex/ — runtime state, gitignored except for tracked dev config.
+# See _skills/general/01_ecosystem_06_local-state-directories.md.
+.scitex/*
+!.scitex/dev/
+.scitex/dev/*
+!.scitex/dev/config.yaml
+!.scitex/dev/cli-audit-dict.yaml
+
 # Hook logs and pending
 docs/to_claude
 .playwright-cli/
+
+# Tooling artefacts that land at repo root
+catboost_info/
+# @stx.session fallback when SDIR_RUN can't be resolved (script run
+# outside its dir) — should not be tracked.
+unknown_out/

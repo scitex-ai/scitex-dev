@@ -10,18 +10,21 @@ All handlers return structured Result JSON via wrap_as_mcp.
 from __future__ import annotations
 
 
-from ..mcp_utils import wrap_as_mcp
-from ..types import Result
+from .._ecosystem._mcp import wrap_as_mcp
+from .._core.types import Result
 
 
 async def list_versions_handler(
     packages: list[str] | None = None,
+    *,
+    _list_versions_fn=None,
 ) -> str:
     """Report the installed version of every SciTeX package (scitex, scitex-io, scitex-stats, figrecipe, scitex-writer, scitex-scholar, scitex-notebook, scitex-audio, scitex-clew, scitex-dev, scitex-linter, …). Use when the user asks "what versions of scitex do I have?", "list ecosystem versions", "show every scitex-* version", or before a release to see the current state. Optionally filter to a subset with `packages=[...]`."""
-    from ..versions import list_versions
+    if _list_versions_fn is None:
+        from .._release.versions import list_versions as _list_versions_fn
 
     return wrap_as_mcp(
-        list_versions,
+        _list_versions_fn,
         idempotent=True,
         packages=packages,
     )
@@ -29,7 +32,7 @@ async def list_versions_handler(
 
 async def get_config_handler() -> str:
     """Show the active `DevConfig` — which hosts are configured, which packages are registered in the ecosystem, default HPC partition / time / memory, editable-install paths. Use when the user asks "show my dev config", "what hosts does scitex-dev know?", "dump the config", or is debugging why `sync` / `test_hpc_run` can't find a host."""
-    from ..config import config_to_dict, get_config_path, load_config
+    from .._core.config import config_to_dict, get_config_path, load_config
 
     def _get_config():
         config = load_config()
@@ -180,7 +183,7 @@ async def sync_handler(
     remote working copies that have unpushed commits so we never
     clobber work. Pass safe=False to force pull regardless.
     """
-    from ..sync import sync_all
+    from .._sync import sync_all
 
     return wrap_as_mcp(
         sync_all,
@@ -198,7 +201,7 @@ async def sync_local_handler(
     confirm: bool = False,
 ) -> str:
     """`pip install -e .` every SciTeX package in the local ecosystem — ensures imports resolve to the working-tree version, not the last PyPI release. Use whenever the user asks to "install all scitex packages in editable mode", "make pip see my local changes", "sync local editable installs", "reinstall after cloning fresh", or is fixing a version mismatch introduced by `pip install scitex`."""
-    from ..sync import sync_local
+    from .._sync import sync_local
 
     return wrap_as_mcp(
         sync_local,
@@ -213,7 +216,7 @@ async def remote_diff_handler(
     packages: list[str] | None = None,
 ) -> str:
     """SSH to each configured remote host and run `git status` / `git diff` across every SciTeX repo — surfaces work that still lives only on gpu01 / laptop / HPC. Use when the user asks "is anything uncommitted on my other machines?", "show remote diffs", "what have I changed on the HPC?", or before a sync to check for drift."""
-    from ..sync_remote import remote_diff
+    from .._sync import remote_diff
 
     return wrap_as_mcp(
         remote_diff,
@@ -231,7 +234,7 @@ async def remote_commit_handler(
     confirm: bool = False,
 ) -> str:
     """SSH to a remote host and `git commit` (+ optionally `git push`) dirty changes across SciTeX repos — useful for rescuing work left behind on an HPC session or another machine. Use when the user asks to "commit what's on gpu01", "save the HPC-side changes", "push remote work to origin", "grab that half-finished change I made on the lab server". Pass `confirm=True` to actually commit (default previews)."""
-    from ..sync_remote import remote_commit
+    from .._sync import remote_commit
 
     return wrap_as_mcp(
         remote_commit,
@@ -253,7 +256,7 @@ async def pull_local_handler(
     stash: bool = True,
 ) -> str:
     """`git pull` every local SciTeX repo from origin — with an optional `git stash` first to survive dirty trees. Drop-in replacement for walking each `~/proj/scitex-*` folder and running `git pull`. Use when the user asks to "update all my local scitex repos", "pull origin on every package", "sync local with GitHub", "stash and pull all scitex", or at session start."""
-    from ..sync_remote import pull_local
+    from .._sync import pull_local
 
     return wrap_as_mcp(
         pull_local,
@@ -338,7 +341,7 @@ async def fix_mismatches_handler(
     confirm: bool = False,
 ) -> str:
     """Scan every SciTeX package (locally and on every configured remote host) for installed-version drift against `pyproject.toml`, and restore consistency via `pip install` + `git pull`. Use whenever the user asks "are all my scitex installs in sync?", "fix version mismatches", "why is scitex-io saying 0.3.1 on gpu01 but 0.3.2 here?", "audit and repair ecosystem versions", or before a release/demo where version drift would bite. Defaults to dry-run; pass `confirm=True` to actually install."""
-    from ..fix import fix_mismatches
+    from .._release.fix import fix_mismatches
 
     return wrap_as_mcp(
         fix_mismatches,
@@ -358,7 +361,7 @@ async def skills_list_handler(
     package: str | None = None,
 ) -> str:
     """Enumerate every skill page shipped by every SciTeX package — scitex-io's `01_save-and-load`, scitex-stats' `01_test-catalog`, figrecipe's `02_plot-types`, scitex-writer's `13_claims`, etc. Use whenever the user asks "what skill pages exist?", "list all scitex skills", "what docs are shipped with these packages?", or is discovering learning resources. Filter to one package with `package='scitex-io'`."""
-    from ..skills import list_skills
+    from .._ecosystem._skills.skills import list_skills
 
     return wrap_as_mcp(list_skills, idempotent=True, package=package)
 
@@ -368,7 +371,7 @@ async def skills_get_handler(
     name: str,
 ) -> str:
     """Fetch the full Markdown of one skill page — e.g. `package='scitex-io', name='01_save-and-load'` returns that file's contents. Use whenever the user asks "show me the scitex-io quick-start skill", "read the figrecipe composition skill", "get the claims skill page from scitex-writer", or is diving into a specific guide. Pair with `skills_list_handler` to discover names."""
-    from ..skills import get_skill
+    from .._ecosystem._skills.skills import get_skill
 
     return wrap_as_mcp(get_skill, idempotent=True, package=package, name=name)
 

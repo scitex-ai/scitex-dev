@@ -1,7 +1,8 @@
 ---
-name: skills-troubleshooting
-description: Common `scitex-dev skills` failure modes and fixes — missing entry points, flat `_skills/` layout the exporter cannot discover, leaves lacking frontmatter or empty descriptions. Use as the first stop when `skills export` says "no skills found" or files are skipped.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills Troubleshooting
+  [DETAILS] Common `scitex-dev skills` failure modes and fixes — missing entry points, flat `_skills/` layout the exporter cannot discover, leaves lacking frontmatter or empty descriptions. Use as the first stop when `skills export` says "no skills found" or files are skipped.
+tags: [scitex-general-interface-skills-troubleshooting]
 ---
 
 # Troubleshooting

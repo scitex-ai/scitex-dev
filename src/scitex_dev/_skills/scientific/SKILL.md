@@ -1,17 +1,18 @@
 ---
 name: scientific
-description: Scientific-methodology skills for the SciTeX ecosystem — publication-quality figures, statistics, experiment reproducibility. Distinct from `general/` (which covers package engineering) and per-package skills (which cover package-specific APIs). Load when authoring analysis scripts, preparing figures for manuscripts, or checking scientific rigour of ecosystem output.
+description: |
+  [WHAT] Scientific-methodology skills for the SciTeX ecosystem — publication-quality figures, statistics, experiment reproducibility. Distinct from `general/` (which covers package engineering) and per-package skills (which cover package-specific APIs). Load when authoring analysis scripts, preparing figures for manuscripts, or checking scientific rigour of ecosystem output.
+  [WHEN] Authoring analysis scripts, preparing figures or PDF reports for manuscripts, or auditing scientific outputs of any ecosystem package.
+  [HOW] Read SKILL.md as the index, then drill into the numbered sub-skill leaves (`01_figures_*`, `02_research-project_*`, `03_reporting_*`) for the relevant topic.
+tags: [scitex-scientific]
 user-invocable: false
 primary_interface: mixed
-tags: [scitex-python, scitex-scientific, scitex-package, research, paper]
-invocation:
-  - "how should my figure look for a paper"
-  - "comparison plot rules"
-  - "multi-panel layout standards"
-  - "PDF report layout"
-  - "which stats test should I use"
-context_tokens_total: 1200
-canonical-location: scitex-python/src/scitex/_skills/scientific/SKILL.md
+interfaces:
+  python: 0-3
+  cli: 0-3
+  mcp: 0-3
+  skills: 3
+  http: 0
 ---
 
 # SciTeX Scientific Standards
@@ -21,6 +22,9 @@ canonical-location: scitex-python/src/scitex/_skills/scientific/SKILL.md
 These complement (never duplicate) the engineering rules in [../general/SKILL.md](../general/SKILL.md). General covers *how a package is built*; scientific covers *how the research outputs should look*.
 
 ## Sub-skills
+
+### 0. Planning
+- [00_planning_01_hypotheses-agreement.md](00_planning_01_hypotheses-agreement.md) — Numbered, falsifiable hypotheses (H1/H2/...) with metric + prediction + baseline + falsification. Required **before** writing any experiment script. Research-project counterpart of the architecture agreement for pip packages.
 
 ### 1. Figures
 - [01_figures_01_standards.md](01_figures_01_standards.md) — Universal scientific-figure standards: comparison rules (shared color scale, aligned axes), multi-panel layout, color maps, PDF report layout. Pairs with `figrecipe/21_scientific-figure-patterns.md` for matplotlib code.
@@ -34,3 +38,18 @@ Project structure split into one leaf per top-level directory:
 - [02_research-project_05_project-structure-examples.md](02_research-project_05_project-structure-examples.md) — Numbered examples + `_out/` artefacts; how research-project examples differ from package examples
 - [02_research-project_06_project-structure-tests.md](02_research-project_06_project-structure-tests.md) — `tests/scripts/` mandatory parent, allowed subdirs, public/private mirroring, `audit-project` rules
 - [02_research-project_07_config-and-parameters.md](02_research-project_07_config-and-parameters.md) — `@stx.session` and the `CONFIG` object (`SDIR_OUT`, `SDIR_RUN`, YAML deep-merge, CLI/env overrides). Use when adding parameters to a script, debugging config resolution, or auditing an experiment for reproducibility.
+- [02_research-project_08_cohort-datasets.md](02_research-project_08_cohort-datasets.md) — Multi-dataset projects: uniform `data/<cohort>/{capsules,src}/` tree, mirrored `scripts/cohorts/<cohort>/dataset/` and `tests/scripts/cohorts/<cohort>/dataset/`, generic filenames + cohort-in-path, `shared/` orchestrator pattern.
+- [02_research-project_09_id-readability-and-data-immutability.md](02_research-project_09_id-readability-and-data-immutability.md) — UUID/random upstream IDs → readable ordinal symlinks (provenance preserved in target name); raw data stays compressed in `src/capsules/`; extractions in mirrored `src/capsules_extracted/`; strategies for very large datasets.
+- [02_research-project_10_naming-and-numbering.md](02_research-project_10_naming-and-numbering.md) — Three rules: zero-fill all numbering to max-ID width (lex-sort = numeric-sort); mirror naming across `scripts/` / `tests/` / `data/`; cohort/group context in the path, not the filename.
+
+### 3. Reporting
+- [03_reporting_01_pdf-reports.md](03_reporting_01_pdf-reports.md) — Recurring scientific PDF analysis reports — timestamped filenames, mandatory section structure, navigable bookmarks (`fpdf2` / `pikepdf`), aspect-preserving figure embedding, size management for email (<10 MB, DPI/ghostscript/split), and delivery tracking via email + issue-tracker comment.
+
+### 4. Clew adoption — translating any project into a Clew-verifiable form
+- [04_clew_01_dag-as-map-and-evidence.md](04_clew_01_dag-as-map-and-evidence.md) — Conceptual: same SHA-256 DAG in two modes — *map* (live, read-write, used during build/exploration by agents and authors) and *evidence* (post-hoc, read-only, used by reviewers). Read first when adopting Clew on any project.
+- [04_clew_02_translation-playbook.md](04_clew_02_translation-playbook.md) — Universal agent prompt: 5 inputs (CAPSULE_ID, CAPSULE_PATH, QUESTIONS_PATH, ORACLE_PATH, WORKDIR), tier dispatch (easy / notebook / medium / hard), agent-vs-verifier split, scoring schema, DONE signal. Loadable as `spec.skills.required` on any sac agent yaml.
+- [04_clew_03_translation-template.md](04_clew_03_translation-template.md) — Concrete project skeleton: pre-flight checklist, agent-vs-verifier directory layout, clean-DAG Makefile pattern, six-step procedure (inputs → pre-flight → scaffold → implement+iterate → validity gate → DONE).
+- [04_clew_04_translation-notebook-delta.md](04_clew_04_translation-notebook-delta.md) — Notebook-cohort delta: two-stage flow (`scitex-notebook convert` → flat `.py` → standard SciTeX translation), kernel/determinism/cached-API rules, per-`eval_mode` scoring (range / str / llm).
+
+### 5. Private skills for consumer projects (research repos, paper repos, internal apps)
+- [05_private-skills_01_consumer-project.md](05_private-skills_01_consumer-project.md) — 4-layer skill stack (public-package, fleet-private, consumer-project private, gitignored notes), where each lives, decision tree for "where does this new agent-facing doc go?", lift-up rule (transient → reusable → public), concrete `paper-scitex-clew` layout. Pairs with `../general/03_interface_04_skills/06_public-vs-private.md` (which is for *package* authors); this leaf is for *consumer* projects.

@@ -117,7 +117,11 @@ def _rg_find_content_matches(directory: str, config: RenameConfig) -> list[Path]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if proc.returncode > 1:  # 1 = no matches (ok), >1 = error
             return None
-        paths = [Path(line) for line in proc.stdout.strip().splitlines() if line]
+        # Sort to guarantee deterministic ordering across preview / execute
+        # passes. ripgrep with --threads >1 returns matches as workers
+        # complete, so iteration order depends on FS racing — that drifted
+        # the content `file_id` between passes and broke `skip_ids`.
+        paths = sorted(Path(line) for line in proc.stdout.strip().splitlines() if line)
         return paths
     except (subprocess.TimeoutExpired, OSError):
         return None
@@ -135,11 +139,15 @@ def find_matching_files(
     if need_content_match:
         rg_results = _rg_find_content_matches(directory, config)
         if rg_results is not None:
-            # Apply Python-level filters rg can't handle
+            # Apply Python-level filters rg can't handle. Extension filtering
+            # only kicks in when no explicit `scope` glob is set — same as
+            # the slow path below.
             return [
                 p
                 for p in rg_results
-                if not p.is_symlink() and not should_exclude_path(p, config)
+                if not p.is_symlink()
+                and not should_exclude_path(p, config)
+                and (config.scope or matches_include_extensions(p, config))
             ]
 
     # Fallback: Python glob

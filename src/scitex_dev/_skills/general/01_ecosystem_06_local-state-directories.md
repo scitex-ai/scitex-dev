@@ -1,8 +1,8 @@
 ---
-name: ecosystem-local-state-directories
-description: Canonical filesystem layout for every scitex-* package's local state — config, logs, caches, PID files, workspace dirs. Two roots (`<project>/.scitex/<pkg-short>/` and `~/.scitex/<pkg-short>/`), project overrides user, always via PathManager.
-user-invocable: false
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Ecosystem Local State Directories
+  [DETAILS] Canonical filesystem layout for every scitex-* package's local state — config, logs, caches, PID files, workspace dirs. Two roots (`<project>/.scitex/<pkg-short>/` and `~/.scitex/<pkg-short>/`), project overrides user, always via PathManager.
+tags: [scitex-general-ecosystem-local-state-directories]
 ---
 
 # Local State Directories — Canonical Layout
@@ -46,6 +46,28 @@ The package's `.gitignore` contains a single line that excludes everything *exce
 
 Rationale: the dir must exist on first clone (so `PathManager` doesn't have to `mkdir` and accidentally expose permission bugs), but its *contents* must never leak — they are per-host, per-run, often large, and sometimes sensitive. Seeing `runtime/` appear in a `git status` is an immediate signal that something wrote where it shouldn't, or that `.gitignore` was not set up.
 
+### `.scitex/dev/config.yaml` — tracked, not gitignored
+
+The audit-tool config (`<repo>/.scitex/dev/config.yaml` — root
+whitelist for `audit-project`) MUST travel with the repo, otherwise CI
+applies a different whitelist than local and audit results diverge
+mysteriously. Use file-level exclusion under `.scitex/` so the
+negation rule applies (a `.scitex/` dir-level exclusion blocks
+negation):
+
+```gitignore
+# <project-root>/.gitignore
+.scitex/*
+!.scitex/dev/
+.scitex/dev/*
+!.scitex/dev/config.yaml
+```
+
+Incident 2026-05-11: a scitex-io codecov.yml PS-103 violation kept
+firing in CI even after local whitelist was added, because the entire
+`.scitex/` directory was gitignored and the negation never reached the
+config file.
+
 ## 2. `<pkg-short>` — prefix-stripping rule
 
 `<pkg-short>` is the package name with the `scitex-` prefix removed. Packages that don't carry the prefix use their name as-is.
@@ -75,6 +97,51 @@ Applies uniformly to config file resolution; packages may extend it to state fil
 | 4 | User scope | `~/.scitex/<pkg-short>/config.yaml` |
 
 **Note on `$SCITEX_DIR`.** `SCITEX_DIR` is *not* a step in this chain — it **transforms the meaning of the user-scope root** (step 4). Setting `SCITEX_DIR=/mnt/fast-ssd/scitex` makes `~/.scitex/<pkg-short>/` resolve to `/mnt/fast-ssd/scitex/<pkg-short>/` everywhere. See §6.
+
+## 3.5. Auto-creation: lazy mkdir, never via pip-install hooks
+
+`pip install <pkg>` must **not** create `~/.scitex/<pkg-short>/` or any
+of its sub-directories. Reasons:
+
+1. Modern Python packaging (`pyproject.toml` + hatchling/setuptools)
+   has no clean post-install hook; using setuptools `cmdclass` to
+   bolt one on is fragile and breaks `pip install --user` /
+   wheel-only installs.
+2. CI runners and container builds run `pip install` in fresh
+   environments; touching `~/.scitex/` there is unwanted side-effect
+   pollution. Wheels should be inert.
+3. `$SCITEX_DIR` relocation (§6) breaks if the package hardcodes
+   `~/.scitex/...` at install time instead of resolving at runtime.
+
+**Required pattern**: every code path that writes inside
+`~/.scitex/<pkg-short>/` calls `mkdir(parents=True, exist_ok=True)`
+on the immediate parent before writing. `PathManager` (§7) bakes this
+in. A separate `<pkg> init` command may exist for users who want an
+explicit "seed everything now" step, but it is never the ONLY way to
+populate the directory.
+
+```python
+# YES — lazy, $SCITEX_DIR-aware, idempotent
+def _ensure_cache_dir() -> Path:
+    p = path_manager.get_cache_dir()  # resolves SCITEX_DIR / scope chain
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+# NO — install-time side effect, no $SCITEX_DIR awareness
+# in setup.py / pyproject.toml [tool.hatch.build.hooks]
+def post_install():
+    Path("~/.scitex/scholar/cache").expanduser().mkdir(parents=True, exist_ok=True)
+```
+
+The `runtime/.gitkeep` and `runtime/README.md` seed files (§4b) ship
+inside the **wheel** under `src/<import>/templates/runtime/` and are
+materialised by `PathManager` on first use, not by an install hook.
+
+**Audit — `PS-146 local-state-pip-install-side-effect`**: parses
+`pyproject.toml` for hatch `[tool.hatch.build.hooks.<name>]` entries
+whose hook script contains a `Path.home() / .scitex/...` mkdir, and
+flags setuptools `cmdclass` overriding `install`/`develop`. Severity
+`E` (hard fail) — the rule is unambiguous and the fix is mechanical.
 
 ## 4. What goes where
 
@@ -106,6 +173,54 @@ Intent: regenerable outputs — things each host / each run writes for itself, n
 | `export/` | Outputs of `scitex-dev skills export` and similar one-shot generators |
 
 Subdirectory layout within `runtime/` is up to each package, but **no per-package state may live outside its own root**.
+
+### 4c. Interactive REPL output cache (`runtime/cache/`)
+
+Packages that auto-route user file output based on caller context (the
+canonical example is `scitex_io.save()`) hit a special case when the
+caller is an interactive REPL, IPython kernel, or `python -i` — there
+is no script file to anchor a sibling `_out/` directory to. The
+convention adopted 2026-05 is to write to:
+
+```
+$SCITEX_DIR/<pkg-short>/runtime/cache/<path>
+```
+
+defaulting to `~/.scitex/<pkg-short>/runtime/cache/<path>` when
+`$SCITEX_DIR` is unset.
+
+**Why under `runtime/cache/`** — these writes are regenerable, not
+configuration, and they pollute fast (every interactive `save()`
+produces a file). `cache/` is the explicit ephemeral bucket per §4b.
+
+**Why honour `$SCITEX_DIR`** — interactive output volume can be large;
+relocating the whole user-scope tree with `SCITEX_DIR=/mnt/fast-ssd/scitex`
+must also relocate the REPL cache.
+
+**Required pattern** in source code:
+
+```python
+import os as _os
+
+def _interactive_cache_dir(pkg_short: str) -> str:
+    base = _os.environ.get(
+        "SCITEX_DIR",
+        _os.path.join(_os.path.expanduser("~"), ".scitex"),
+    )
+    sdir = _os.path.join(base, pkg_short, "runtime", "cache")
+    _os.makedirs(sdir, exist_ok=True)   # lazy mkdir per §3.5
+    return sdir
+```
+
+**Reference implementation:** `scitex_io._save.save()` (the IPython /
+`<stdin>` / `env_type in {"ipython", "interactive"}` branch). Pattern
+applies to any future package that auto-routes outputs based on caller
+context — e.g., a hypothetical `scitex_plt.save_fig()` should follow
+the same rule and write to `~/.scitex/plt/runtime/cache/` when called
+interactively.
+
+This is distinct from `~/.scitex/<pkg-short>/cache/` (without `runtime/`),
+which §5 forbids — the canonical bucket is always under `runtime/`.
 
 ## 5. Forbidden locations
 
@@ -197,6 +312,61 @@ Tempted to add config to `~/.scitex/<your-pkg>/config.yaml` for a fact other pac
 
 The `runtime/` directory follows the same rule: `<pkg-short>/runtime/` is exclusively for *that* package's regenerable state. Never write into another package's `runtime/`.
 
+### 9.5. Plugin-port pattern — never hardcode another package's tree
+
+Even READS of another package's user-state directory are forbidden.
+Concretely, a package X must NOT contain code like:
+
+```python
+# ❌ X knows about Y's tree.
+extra = Path.home() / ".scitex" / "<other-pkg-short>" / "shared" / "agents"
+if extra.is_dir():
+    search_dirs.append(extra)
+```
+
+If X needs to give downstream consumers (Y) a way to extend its
+behaviour, it exposes a **plugin port** — a colon-separated env var
+that Y populates from Y's own tree:
+
+```python
+# ✓ X reads only from its own tree + an env-var slot.
+SEARCH_DIRS = [
+    Path.home() / ".scitex" / "<x-pkg-short>" / "agents",
+    *[Path(p).expanduser()
+      for p in os.environ.get("SCITEX_<X>_YAML_DIRS", "").split(":") if p.strip()],
+]
+```
+
+Y then wires the plugin port from its own startup script:
+
+```bash
+# In Y's startup (Y's responsibility, not X's)
+export SCITEX_<X>_YAML_DIRS=\
+    ~/.scitex/<y-pkg-short>/agents:\
+    ~/.scitex/<y-pkg-short>/runtime/extra-agents
+```
+
+Why this matters:
+- X stays standalone; tests don't break when Y is uninstalled.
+- Removing or renaming Y doesn't ripple into X's source tree.
+- The dependency direction is explicit (Y depends on X, never the
+  reverse) and documented in env vars, not hidden in path literals.
+
+The same rule applies to **env vars**: X must not read
+`SCITEX_<Y>_*` (e.g. `SCITEX_OROCHI_HOSTNAME` from a non-orochi
+package). If X needs the same fact, it owns its own
+`SCITEX_<X>_*` var or — better — calls the owning package's API
+(see "Worked example — machine identity" above).
+
+**Audit — `PS-145 local-state-cross-package-read`**: greps every
+`*.py` under `src/` for `~/.scitex/<other-pkg>/` literals and
+`SCITEX_<OTHER>_*` env-var reads (only when surrounded by
+`os.environ` / `os.getenv` context — bare module constants like
+`SCITEX_LOGGING_AVAILABLE = True` set by `try/except ImportError`
+do not trip). Skips docstrings and `#` comments. Implementation
+in `scitex_dev._cli.audit._project._check_local_state`,
+severity `W` during bake-in.
+
 ## 10. Related
 
 - `03_interface_02_cli/12_config-and-env.md` §6b — config-file resolution uses this layout.
@@ -209,11 +379,15 @@ The `runtime/` directory follows the same rule: `<pkg-short>/runtime/` is exclus
 
 - [ ] Every disk write goes under `<project>/.scitex/<pkg-short>/` or `~/.scitex/<pkg-short>/` — nowhere else.
 - [ ] `<pkg-short>` is the pip name with the `scitex-` prefix stripped (e.g. `scitex-dev` → `dev`); non-prefixed packages use their bare name.
+- [ ] Primary config file is named `config.yaml`; never `<pkg>_config.yaml`, never `<pkg>.yaml`.
 - [ ] `<pkg-short>/runtime/` exists with `.gitkeep` + `README.md` committed; everything else under it gitignored.
 - [ ] `.gitignore` exempts `.gitkeep` and `README.md` inside `runtime/` (`!.scitex/*/runtime/.gitkeep`, `!.scitex/*/runtime/README.md`).
 - [ ] All paths resolve through `PathManager` — no `Path.home() / ".scitex/..."` literals in source.
 - [ ] No writes to forbidden locations (`~/.cache/scitex/`, `~/.config/scitex/`, `~/.<pkg>/`, `./.scitex/<pkg>.yaml`, `/tmp/scitex-<pkg>-*`).
+- [ ] **`pip install <pkg>` does not create `~/.scitex/<pkg-short>/`** (no post-install hooks, no setuptools cmdclass mkdir). Directory is created lazily on first write — see §3.5.
+- [ ] **No writes or reads outside the package's own tree** — `~/.scitex/<other-pkg>/...` literals and `SCITEX_<OTHER>_*` env-var reads are forbidden in source. Use the plugin-port pattern (§9.5) for downstream extensibility.
 - [ ] Setting `SCITEX_DIR=/some/other/path` relocates *every* user-scope read/write — verified by smoke test.
 - [ ] Project scope is always a directory (`<project>/.scitex/<pkg-short>/`), never a single file at `<project>/.scitex/<pkg>.yaml`.
 - [ ] If the package consumes another package's domain fact (machine name, SLURM cluster, …), it imports that package's API rather than re-deriving the answer.
 - [ ] Migration shims from legacy paths are time-boxed (one minor version) — no permanent back-compat read paths.
+- [ ] **Shell-completion install** writes a cache file under `~/.scitex/<pkg-short>/runtime/completion/<binary>` and a source line in the user's rc — never an `eval "$(_<PKG>_COMPLETE=...)"` line that re-invokes the binary on every shell start. See `03_interface_02_cli/03_required-introspection-commands.md`.

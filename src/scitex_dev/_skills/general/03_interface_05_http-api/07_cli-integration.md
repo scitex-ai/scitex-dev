@@ -1,7 +1,8 @@
 ---
-name: interface-http-api-cli-integration
-description: Every package shipping HTTP exposes `<cli> http start` as the canonical launch command. Standard flags (`--host`, `--port`, `--reload`). Port conventions (avoid stdlib defaults). Env-var prefix `SCITEX_<PKG>_HTTP_*`. Don't auto-start servers as a side-effect of import.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api Cli Integration
+  [DETAILS] Every package shipping HTTP exposes `<cli> http start` as the canonical launch command. Standard flags (`--host`, `--port`, `--reload`). Port conventions (avoid stdlib defaults). Env-var prefix `SCITEX_<PKG>_HTTP_*`. Don't auto-start servers as a side-effect of import.
+tags: [scitex-general-interface-http-api-cli-integration]
 ---
 
 # CLI Integration

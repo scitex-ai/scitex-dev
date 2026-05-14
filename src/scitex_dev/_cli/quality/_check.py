@@ -4,9 +4,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-from ..._pyproject_lint import lint_pyproject
-from ..._release_publisher import publish_release
-from ..._rtd_onboard import onboard_rtd
+from ..._ecosystem._release.pyproject_lint import lint_pyproject
+from ..._release.publisher import publish_release
+from ..._release.rtd_onboard import onboard_rtd
 
 SCRIPTS = Path(__file__).parent.parent.parent.parent.parent / "scripts" / "quality"
 
@@ -107,30 +107,35 @@ def audit_ecosystem(
     return subprocess.call(args)
 
 
+import click
+
+
+@click.group(name="_check")
+def _main_group():
+    """Minimal Click dispatcher: `python -m scitex_dev._cli.quality._check <cmd>`."""
+
+
+@_main_group.command("audit_docs", help="Run doc-example auditor")
+@click.option("--projects-root", default=None)
+def _cmd_audit_docs(projects_root):
+    sys.exit(audit_docs(projects_root=projects_root) or 0)
+
+
+@_main_group.command("audit_scope", help="Run test-scope auditor")
+@click.option("--projects-root", default=None)
+def _cmd_audit_scope(projects_root):
+    sys.exit(audit_scope(projects_root=projects_root) or 0)
+
+
+@_main_group.command("audit_lines", help="Run line-limit auditor")
+def _cmd_audit_lines():
+    sys.exit(audit_lines() or 0)
+
+
 def _main(argv=None):
-    """Minimal argv dispatcher so `python -m scitex_dev._cli.quality._check <cmd>` works."""
-    import argparse
-
-    parser = argparse.ArgumentParser(prog="scitex_dev._cli.quality._check")
-    sub = parser.add_subparsers(dest="cmd", required=True)
-
-    p_docs = sub.add_parser("audit_docs", help="Run doc-example auditor")
-    p_docs.add_argument("--projects-root", default=None)
-
-    p_scope = sub.add_parser("audit_scope", help="Run test-scope auditor")
-    p_scope.add_argument("--projects-root", default=None)
-
-    sub.add_parser("audit_lines", help="Run line-limit auditor")
-
-    args = parser.parse_args(argv)
-    if args.cmd == "audit_docs":
-        return audit_docs(projects_root=args.projects_root)
-    if args.cmd == "audit_scope":
-        return audit_scope(projects_root=args.projects_root)
-    if args.cmd == "audit_lines":
-        return audit_lines()
-    parser.error(f"Unknown subcommand: {args.cmd}")
+    """Backwards-compatible callable for `python -m ...`."""
+    _main_group.main(args=argv, standalone_mode=False)
 
 
 if __name__ == "__main__":
-    sys.exit(_main())
+    _main_group()

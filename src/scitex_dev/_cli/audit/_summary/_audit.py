@@ -381,6 +381,46 @@ def _check_help_format(cmd: click.BaseCommand, full: str, out: list[Violation]) 
         )
 
 
+# Version pattern accepted in the root help text. Matches the canonical
+# `<cli> (vX.Y.Z) — ...` form used by scitex-dev/scitex-io as well as a
+# bare `vX.Y.Z` token elsewhere in the help. Pre-release suffixes
+# (rc1, dev0, post1, a2, b3) are accepted because importlib.metadata
+# returns them verbatim.
+_VERSION_IN_HELP_RE = re.compile(
+    r"\bv?\d+\.\d+(?:\.\d+)?(?:[.\-_]?(?:rc|dev|post|a|b)\d+)?\b"
+)
+
+
+def _check_root_help_has_version(
+    cmd: click.BaseCommand, full: str, out: list[Violation]
+) -> None:
+    """§4 — the root command's --help MUST include the package version.
+
+    Operators reading `<cli> --help` should see which version they're
+    on without a separate `<cli> --version` call. The convention is the
+    canonical opening line `<cli> (vX.Y.Z) — <one-line description>`,
+    but any `vX.Y.Z` token in the root command's help/epilog satisfies
+    the rule. (Pass-through entry points are exempt — checked by the
+    caller.)
+    """
+    blocks = []
+    for attr in ("help", "epilog"):
+        v = getattr(cmd, attr, None)
+        if v:
+            blocks.append(v)
+    text = "\n".join(blocks)
+    if not text or not _VERSION_IN_HELP_RE.search(text):
+        out.append(
+            Violation(
+                full,
+                "§4",
+                "root --help does not show the package version — add the "
+                "canonical opening line `<cli> (vX.Y.Z) — <description>` "
+                "(use importlib.metadata.version() so the literal stays in sync)",
+            )
+        )
+
+
 # Convention flags — when a leaf exposes one of these capabilities, it MUST
 # use the canonical spelling per `08_universal-flags.md` "Convention flags"
 # section. Maps non-canonical synonyms → canonical form.
@@ -427,12 +467,27 @@ def _check_universal_flags(
     _check_convention_flags(cmd, full, out)
 
     if is_root:
-        if not ({"--version", "-V"} & flags):
+        if "--version" not in flags or "-V" not in flags:
+            missing = ", ".join(sorted({"--version", "-V"} - flags))
             out.append(
                 Violation(
                     full,
                     "§2",
-                    "top-level missing --version/-V flag",
+                    f"top-level missing {missing} (both long AND short forms required: `@click.version_option('-V', '--version', prog_name='<cli>')`)",
+                )
+            )
+        # Click's canonical way to register short -h is via
+        # `context_settings={"help_option_names": ["-h", "--help"]}`,
+        # which doesn't surface in cmd.params. Honor it before flagging.
+        ctx_help = set((cmd.context_settings or {}).get("help_option_names") or [])
+        help_names = flags | ctx_help
+        if "--help" not in help_names or "-h" not in help_names:
+            missing = ", ".join(sorted({"--help", "-h"} - help_names))
+            out.append(
+                Violation(
+                    full,
+                    "§2",
+                    f"top-level missing {missing} (both required: `context_settings={{'help_option_names': ['-h', '--help']}}`)",
                 )
             )
         if "--help-recursive" not in flags:
@@ -491,6 +546,22 @@ def _check_universal_flags(
             )
 
 
+def _has_required_positional(cmd: click.BaseCommand) -> bool:
+    """True iff ``cmd`` declares at least one required positional argument.
+
+    A bare transitive verb at the top level is acceptable when it takes
+    its object as a positional argument (`<cli> <verb> <OBJECT>`) — the
+    object is right there, just not concatenated into the subcommand
+    name. Compare ``pip install <pkg>``, ``git commit -m``, ``pytest
+    <path>``: ergonomic, unambiguous, no `<verb>-<noun>` clutter. The
+    auditor's §1 rule recognises this shape and skips the warning.
+    """
+    for p in getattr(cmd, "params", []) or []:
+        if isinstance(p, click.Argument) and getattr(p, "required", False):
+            return True
+    return False
+
+
 def _walk(
     cmd: click.BaseCommand,
     path: list[str],
@@ -508,6 +579,12 @@ def _walk(
 
     # §2 universal flag presence.
     _check_universal_flags(cmd, full, is_root, out)
+
+    # §4 root --help must show the package version. Pass-through entry
+    # points are exempt because their help is forwarded verbatim from
+    # the upstream tool.
+    if is_root and not _is_pass_through(cmd):
+        _check_root_help_has_version(cmd, full, out)
 
     if not is_root:
         # §1c — pass-through entry points are exempt from §1 / §1d / §4.
@@ -547,13 +624,16 @@ def _walk(
                 and not is_compound
                 and len(path) == 1
                 and "noun" not in labels
+                and not _has_required_positional(cmd)
             ):
                 out.append(
                     Violation(
                         full,
                         "§1",
                         f"bare transitive verb at top level — needs an object; "
-                        f"use '{name}-<object>' or nest under a noun",
+                        f"use '{name}-<object>' or nest under a noun, OR add "
+                        f"a required positional argument that IS the object "
+                        f"(e.g. '{name} <SOURCE>')",
                     )
                 )
         else:
@@ -587,125 +667,22 @@ def _walk(
 
 # --------------------------------------------------------------------- #
 # argparse adapter — wrap an argparse.ArgumentParser tree as click nodes #
+#                                                                       #
+# Implementation lives in `scitex_dev._audit_argparse_adapter` (outside  #
+# the `_cli/` subtree) so the §11 walker — which scans `_cli/**/*.py`    #
+# for any `import argparse` — does not flag the auditor itself. The     #
+# adapter is essential: it lets the auditor wrap legacy argparse-based  #
+# CLIs in third-party packages and check them under the same rules as   #
+# Click CLIs.                                                            #
 # --------------------------------------------------------------------- #
 
+from ...._core.audit_argparse_adapter import (  # noqa: E402
+    StopBeforeParse as _StopBeforeParse,
+    intercept_parse_calls as _intercept_parse_calls,
+    wrap_argparse as _wrap_argparse,
+)
 
-class _SyntheticOption:
-    """Minimal Click-Option duck-type for `_flag_names()`."""
-
-    def __init__(self, opts: list[str]):
-        self.opts = list(opts)
-        self.secondary_opts: list[str] = []
-
-
-class _ArgparseLeaf(click.Command):
-    """Click.Command wrapper around a leaf argparse parser."""
-
-    def __init__(self, name, help_text, epilog, params_):
-        super().__init__(
-            name=name,
-            callback=lambda: None,
-            help=help_text or None,
-            epilog=epilog or None,
-        )
-        self.params = params_  # type: ignore[assignment]
-
-
-class _ArgparseGroup(click.Group):
-    """Click.Group wrapper around an argparse parser with subparsers."""
-
-    def __init__(self, name, help_text, epilog, params_, commands):
-        super().__init__(
-            name=name,
-            callback=lambda: None,
-            help=help_text or None,
-            epilog=epilog or None,
-        )
-        self.params = params_  # type: ignore[assignment]
-        self.commands = commands
-
-
-def _argparse_subcommands(parser) -> dict[str, object]:
-    import argparse as _ap
-
-    out: dict[str, object] = {}
-    for action in getattr(parser, "_actions", []) or []:
-        if isinstance(action, _ap._SubParsersAction):
-            for name, sp in action.choices.items():
-                out[name] = sp
-    return out
-
-
-def _argparse_flag_params(parser) -> list[_SyntheticOption]:
-    import argparse as _ap
-
-    params: list[_SyntheticOption] = []
-    for action in getattr(parser, "_actions", []) or []:
-        if isinstance(action, _ap._SubParsersAction):
-            continue
-        if not getattr(action, "option_strings", None):
-            continue  # positional argument
-        params.append(_SyntheticOption(list(action.option_strings)))
-    return params
-
-
-def _wrap_argparse(parser, name: str | None = None) -> click.BaseCommand:
-    name = name or getattr(parser, "prog", None) or "<root>"
-    name = name.split()[0] if isinstance(name, str) else "<root>"
-    help_text = (getattr(parser, "description", "") or "").strip()
-    epilog = (getattr(parser, "epilog", "") or "").strip()
-    params = _argparse_flag_params(parser)
-    children_raw = _argparse_subcommands(parser)
-    if children_raw:
-        commands = {n: _wrap_argparse(sp, n) for n, sp in children_raw.items()}
-        return _ArgparseGroup(name, help_text, epilog, params, commands)
-    return _ArgparseLeaf(name, help_text, epilog, params)
-
-
-class _StopBeforeParse(Exception):
-    """Sentinel used to abort `main()` once it constructs its argparse parser."""
-
-
-import contextlib as _contextlib  # noqa: E402  -- needed by the helpers below
-
-
-@_contextlib.contextmanager
-def _intercept_parse_calls(captured: list[object]):
-    """Patch `argparse.ArgumentParser.parse_args/parse_known_args` and
-    `click.BaseCommand.main` to capture the receiver and raise
-    `_StopBeforeParse` instead of actually executing the CLI.
-
-    Any list passed in receives one append per intercepted call.
-
-    Restores all three patched methods on exit, even if the wrapped block raises.
-    """
-    import argparse as _ap
-
-    real_pa = _ap.ArgumentParser.parse_args
-    real_pka = _ap.ArgumentParser.parse_known_args
-    real_click_main = click.BaseCommand.main
-
-    def _fake_pa(self, *a, **kw):
-        captured.append(self)
-        raise _StopBeforeParse()
-
-    def _fake_pka(self, *a, **kw):
-        captured.append(self)
-        raise _StopBeforeParse()
-
-    def _fake_click_main(self, *a, **kw):
-        captured.append(self)
-        raise _StopBeforeParse()
-
-    _ap.ArgumentParser.parse_args = _fake_pa  # type: ignore[assignment]
-    _ap.ArgumentParser.parse_known_args = _fake_pka  # type: ignore[assignment]
-    click.BaseCommand.main = _fake_click_main  # type: ignore[assignment]
-    try:
-        yield
-    finally:
-        _ap.ArgumentParser.parse_args = real_pa  # type: ignore[assignment]
-        _ap.ArgumentParser.parse_known_args = real_pka  # type: ignore[assignment]
-        click.BaseCommand.main = real_click_main  # type: ignore[assignment]
+import contextlib as _contextlib  # noqa: E402  -- needed by helpers below
 
 
 class _PackageTimeout(Exception):
@@ -963,6 +940,67 @@ def _check_introspection(
             )
         )
 
+    # §1a — shell-completion subcommands are MANDATORY for every CLI:
+    # `install-shell-completion` (writes the script to ~/.config/...) and
+    # `print-shell-completion` (prints to stdout). Without them, users get
+    # nothing on `<pkg> <TAB>`. Codified 2026-05-06 after scitex-scholar
+    # shipped without either subcommand and the gap surfaced only when a
+    # human noticed `scitex-scholar install` failed.
+    for required in ("install-shell-completion", "print-shell-completion"):
+        if required not in cmd.commands:
+            out.append(
+                Violation(
+                    package,
+                    "§1a",
+                    f"missing required top-level command {required!r} — "
+                    "without it `<pkg> <TAB>` produces nothing. Wire via "
+                    "`scitex_dev._cli._completion.attach_shell_completion(group, "
+                    f'prog_name="{package}")`.',
+                )
+            )
+
+    # §1a — `<pkg> skills {list, get, install}` group required when the
+    # package ships a `_skills/` directory. Lets users introspect and
+    # install the bundled skills without having to discover scitex-dev.
+    if _package_ships_skills(package):
+        skills = cmd.commands.get("skills")
+        if skills is None or not isinstance(skills, click.Group):
+            out.append(
+                Violation(
+                    package,
+                    "§1a",
+                    "missing required 'skills' command group "
+                    "({list, get, install}) — package ships _skills/ but "
+                    "exposes no CLI to list/get/install them",
+                )
+            )
+        else:
+            for verb in ("list", "get", "install"):
+                if verb not in skills.commands:
+                    out.append(
+                        Violation(
+                            f"{package} skills",
+                            "§1a",
+                            f"missing required '{verb}' subcommand under 'skills'",
+                        )
+                    )
+
+
+def _package_ships_skills(package: str) -> bool:
+    """True if `<pkg>/src/<import_name>/_skills/<package>/` exists."""
+    import importlib.util
+
+    import_name = package.replace("-", "_")
+    spec = importlib.util.find_spec(import_name)
+    if spec is None or not spec.submodule_search_locations:
+        return False
+    from pathlib import Path as _Path
+
+    for loc in spec.submodule_search_locations:
+        if (_Path(loc) / "_skills" / package).is_dir():
+            return True
+    return False
+
 
 def _expected_env_prefix(package: str) -> str | None:
     """Compute `SCITEX_<PKG>_` prefix for a scitex-* package.
@@ -1019,6 +1057,8 @@ _ALLOWED_ENV_PREFIXES = (
     "MPLCONFIGDIR",
     "CI",
     "GITHUB_",
+    # `gh` CLI's canonical token env var; widely used alongside GITHUB_TOKEN.
+    "GH_TOKEN",
     "GITLAB_",
     "RUNNER_",
     "AWS_",
@@ -1397,6 +1437,64 @@ def _extract_names(payload) -> set[str]:
     return set()
 
 
+def _check_option_positional_ordering(
+    package: str, root: click.BaseCommand, out: list[Violation]
+) -> None:
+    """§10 — options on either side of the SOURCE positional must work.
+
+    Click's ``invoke_without_command=True`` group with a positional
+    argument treats anything *after* the positional as a subcommand
+    name, so the natural ``cli <SOURCE> --flag value`` form crashes.
+    The fix is a pre-Click ``argv`` reorder hook wired into the
+    console-script entry (and ``__main__.py``).
+
+    Static check (no subprocess): when the root command is a Click
+    Group with ``invoke_without_command=True`` AND has a top-level
+    positional argument, the registered console-script value must NOT
+    point at the click group itself — it must point at a wrapper
+    function (commonly ``cli_entrypoint``) that calls
+    ``sys.argv[1:] = _reorder_argv(sys.argv[1:])`` before handing off
+    to the group. See `interface-cli-option-positional-ordering`.
+    """
+    if not isinstance(root, click.Group):
+        return
+    if not getattr(root, "invoke_without_command", False):
+        return
+    if not _has_required_positional(root) and not any(
+        isinstance(p, click.Argument) for p in (root.params or [])
+    ):
+        return
+    ep_value = _ep_value_for(package)
+    if ep_value is None:
+        return
+    # Resolve the entry-point object and compare against the click group.
+    mod_name, _, obj_name = ep_value.partition(":")
+    try:
+        import importlib
+
+        mod = importlib.import_module(mod_name)
+        ep_obj = getattr(mod, obj_name, None)
+    except Exception:
+        return
+    # If the entry-point IS the click group (or one of its standard
+    # decorated forms), there's no chance to rewrite argv.
+    if ep_obj is root or (
+        isinstance(ep_obj, click.BaseCommand) and ep_obj.name == root.name
+    ):
+        out.append(
+            Violation(
+                package,
+                "§10",
+                f"top-level group has a positional but the console-script "
+                f"entry ({ep_value}) is the click group itself — "
+                f"`cli <SOURCE> --flag value` will fail with 'No such "
+                f"command'. Wire a `cli_entrypoint()` wrapper that "
+                f"reorders sys.argv before calling the group "
+                f"(see interface-cli-option-positional-ordering).",
+            )
+        )
+
+
 def _check_cli_framework(package: str, out: list[Violation]) -> None:
     """§11 — CLI framework conformance.
 
@@ -1428,14 +1526,30 @@ def _check_cli_framework(package: str, out: list[Violation]) -> None:
     from pathlib import Path as _P
 
     ep_file = _P(spec.origin)
-    # Audit the entry-point file + every other .py in its directory
-    # (the package's _cli/ submodule typically lives next to it).
-    cli_dir = ep_file.parent
-    py_files = [ep_file] + [
-        p
-        for p in cli_dir.rglob("*.py")
-        if p != ep_file and "__pycache__" not in p.parts
-    ]
+    # Walk only files that are actually part of the CLI tree:
+    #   * the entry-point file itself
+    #   * every .py under a `_cli/` subdir of the entry-point's parent
+    #     (the canonical Click submodule layout: pkg/_cli/__init__.py
+    #     plus pkg/_cli/_*.py command files)
+    # Recursing into the whole package root produced false positives for
+    # stats library files (posthoc/_*.py), linter rule modules, even
+    # this auditor itself — none of those are CLI entry-points and any
+    # argparse import there is unrelated to §11.
+    py_files = [ep_file]
+    cli_subdir = ep_file.parent / "_cli"
+    if cli_subdir.is_dir():
+        py_files += [
+            p
+            for p in cli_subdir.rglob("*.py")
+            if p != ep_file and "__pycache__" not in p.parts
+        ]
+    elif ep_file.parent.name == "_cli":
+        # Entry-point already lives inside _cli/ — sweep its siblings.
+        py_files += [
+            p
+            for p in ep_file.parent.rglob("*.py")
+            if p != ep_file and "__pycache__" not in p.parts
+        ]
 
     import re as _re
 
@@ -1477,6 +1591,88 @@ def _ep_value_for(package: str) -> str | None:
         if ep.name == package:
             return ep.value
     return None
+
+
+def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
+    """§2 — CLI source must not call `click.confirm`, `click.prompt`,
+    `getpass.getpass`, or built-in `input`.
+
+    Mutating actions are gated by `--yes`/`-y` (refuse with non-zero exit
+    otherwise). Read flows are expected to fail loud with a clear error,
+    not pause for input. Agentic / cron / CI invocations cannot answer a
+    Y/n prompt — they hang, then time out — so any blocking-stdin call
+    is a silent reliability bomb.
+
+    Static AST scan over `src/<pkg>/**/*.py`. Skips obvious non-CLI
+    directories (`tests/`, `examples/`, `docs/`).
+    """
+    import ast
+    import importlib.util
+    from pathlib import Path
+
+    import_name = package.replace("-", "_")
+    spec = importlib.util.find_spec(import_name)
+    if spec is None or spec.origin is None:
+        return
+    pkg_root = Path(spec.origin).parent
+    if not pkg_root.exists():
+        return
+
+    forbidden = {
+        (
+            "click",
+            "confirm",
+        ): "click.confirm() — use `--yes`/`-y` and refuse-without-yes instead",
+        (
+            "click",
+            "prompt",
+        ): "click.prompt() — accept the value as a CLI option/flag instead",
+        (
+            "getpass",
+            "getpass",
+        ): "getpass.getpass() — accept secret via env var or --password-file",
+        ("getpass", "getuser"): None,  # informational, not a prompt — exempt
+    }
+    forbidden_bare = {"input"}  # builtin input()
+
+    for py in pkg_root.rglob("*.py"):
+        if any(s in py.parts for s in ("__pycache__", "tests", "examples", "docs")):
+            continue
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
+        except (OSError, SyntaxError):
+            continue
+        rel = py.relative_to(pkg_root.parent)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            f = node.func
+            # click.confirm(...) / getpass.getpass(...)
+            if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name):
+                key = (f.value.id, f.attr)
+                msg = forbidden.get(key)
+                if msg is None and key not in forbidden:
+                    continue
+                if msg is None:
+                    continue  # exempt entry
+                out.append(
+                    Violation(
+                        package,
+                        "§2",
+                        f"interactive prompt at {rel}:{node.lineno} — {msg}",
+                    )
+                )
+            # bare input(...) — exempt if it's `input.button-primary` etc.
+            elif isinstance(f, ast.Name) and f.id in forbidden_bare:
+                out.append(
+                    Violation(
+                        package,
+                        "§2",
+                        f"interactive `input()` at {rel}:{node.lineno} — "
+                        "CLIs must be non-interactive; accept value via "
+                        "option/flag or fail with a clear error.",
+                    )
+                )
 
 
 def _check_startup_speed(
@@ -1539,25 +1735,58 @@ def _check_startup_speed(
 # --------------------------------------------------------------------- #
 
 # Severity tiers — used by --severity to gate which findings are reported.
+#
+# Per 2026-05-06 directive: any rule that has been live long enough to ship a
+# documented spec is `error` (CI must fail). Demote a rule back to `warn` only
+# after a concrete false-positive lands on develop. `info` is reserved for
+# purely advisory categorizations (pass-through entry-points) that cannot
+# describe a violation.
 RULE_SEVERITY: dict[str, str] = {
     "§1": "error",
     "§1a": "error",
     "§1b": "error",
     "§1c": "info",
-    "§1d": "warn",
+    "§1d": "error",
     "§1e": "info",
-    "§2": "warn",
-    "§3": "warn",
-    "§4": "warn",
+    "§2": "error",
+    "§3": "error",
+    "§4": "error",
     "§5": "error",
-    "§6a": "warn",
-    "§6b": "warn",
-    "§7": "warn",
-    "§8": "warn",
-    "§10": "warn",  # CLI startup speed (slow import → slow tab completion)
-    "§11": "warn",  # CLI framework conformance (Click canonical; argparse banned)
+    # §6 (Python API ↔ MCP tool parity). Promoted back to error 2026-05-08
+    # at user direction: severity must match the rule corpus's intent —
+    # if it's a real violation, label it as one. False-positives on
+    # utility-heavy packages should be addressed via per-package
+    # allowlists (skip_rules in test_audit.py) or a tightened threshold,
+    # not by globally demoting the rule to warn.
+    "§6": "error",
+    "§6a": "error",
+    "§6b": "error",
+    "§7": "error",
+    "§8": "error",
+    "§10": "error",
+    "§11": "error",
+    # PA-304: umbrella imports (scitex.X / import scitex) inside standalone
+    # source. Drags umbrella __init__ + lazy re-export setup into every call
+    # — measurable on NFS-mounted homes (HPC). Codified 2026-05-06 after the
+    # scitex-scholar 2.7s cold-import surfaced on Spartan.
+    "PA-304": "error",
+    # PA-305: playwright.async_api imported without capture_debug_artifacts_async
+    # call. Codified 2026-05-06 — every browser-automation decision point must
+    # capture screenshot+HTML so selector regressions are diagnosable
+    # post-mortem. See _skills/general/02_package_09_browser-automation-debugging.md.
+    "PA-305": "error",
 }
 SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}
+
+
+def _max_severity(violations: list[Violation]) -> str:
+    """Highest severity present among violations; 'info' if list is empty."""
+    best = "info"
+    for v in violations:
+        sev = RULE_SEVERITY.get(v.rule, "warn")
+        if SEVERITY_ORDER[sev] > SEVERITY_ORDER[best]:
+            best = sev
+    return best
 
 
 def _filter_violations(
@@ -1588,12 +1817,15 @@ def _audit_one(
     package: str,
     behavioral: bool = False,
     timeout: float = 30.0,
+    ep_value_for=None,
 ) -> tuple[str, list[Violation]]:
     """Audit a single package; return (status, violations).
 
     Status is one of: "ok", "warn", "skip-mcp", "not-found", "not-auditable".
     """
-    ep_value = _ep_value_for(package)
+    if ep_value_for is None:
+        ep_value_for = _ep_value_for
+    ep_value = ep_value_for(package)
     if ep_value is None:
         return "not-found", []
     if _is_mcp_server_entry(ep_value):
@@ -1617,7 +1849,9 @@ def _audit_one(
     _check_config_help(cmd, package, out)
     _scan_env_vars(package, out)
     _check_startup_speed(package, out)
+    _check_no_interactive_prompts(package, out)
     _check_cli_framework(package, out)
+    _check_option_positional_ordering(package, cmd, out)
     if behavioral:
         _check_behavioral(package, out, cmd, timeout=timeout)
     return ("ok" if not out else "warn"), out
@@ -1633,18 +1867,31 @@ def _emit_human(package: str, status: str, violations: list[Violation]) -> None:
             f"info  {package}: MCP / protocol server — skipped (use audit-mcp-tools when available)"
         )
         return
+    from .._emit import emit as _emit
+
     if status == "not-found":
-        click.echo(f"error {package}: no console script registered", err=True)
+        # No console script is a legitimate state for utility packages
+        # (types, base/core libraries, etc.) — audit-cli can't enforce
+        # a CLI convention on a package that has no CLI. Surface as info.
+        _emit("info", f"{package}: no console script — skipped")
         return
     if status.startswith("not-auditable"):
-        click.echo(f"error {package}: {status}", err=True)
+        _emit("error", f"{package}: {status}", err=True)
         return
+    from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
+
     if status == "ok":
-        click.echo(f"ok    {package}: no CLI convention violations")
+        _emit("success", f"{package}: no CLI convention violations")
+        emit_disclaimer()
         return
-    click.echo(f"warn  {package}: {len(violations)} warning(s)")
+    sev = _max_severity(violations)
+    level = "error" if sev == "error" else "warning"
+    noun = "error(s)" if sev == "error" else "warning(s)"
+    _emit(level, f"{package}: {len(violations)} {noun}")
     for v in violations:
-        click.echo(f"  [{v.rule}] {v.command}: {v.message}")
+        _emit(level, f"  [{v.rule}] {v.command}: {v.message}")
+    emit_disclaimer()
+    emit_skill_hints()
 
 
 def _emit_json(records: list[dict], registry_provenance: str) -> None:
@@ -1668,6 +1915,24 @@ def run_audit(
     timeout: float = 30.0,
 ) -> int:
     """Audit a single package (single-target mode)."""
+    # Category-aware skip: archived packages, templates, etc. — see
+    # `scitex_dev._ecosystem._core.should_skip_audit` for the per-auditor
+    # category map.
+    try:
+        from ...._ecosystem import should_skip_audit
+    except ImportError:
+        should_skip_audit = lambda *_a, **_k: (False, "")  # noqa: E731
+    skip, reason = should_skip_audit(package, "audit-cli")
+    if skip:
+        if output_json:
+            rec = {"package": package, "status": f"skip-{reason}", "violations": []}
+            _emit_json([rec], registry_provenance or "single-package mode")
+        else:
+            from .._emit import emit as _emit_skip
+
+            _emit_skip("skip", f"{package}: {reason}")
+        return 0
+
     status, violations = _audit_one(package, behavioral=behavioral, timeout=timeout)
     violations = _filter_violations(violations, rules, exclude, min_severity)
     if not violations and status == "warn":
@@ -1681,9 +1946,13 @@ def run_audit(
         _emit_json([rec], registry_provenance or "single-package mode")
     else:
         _emit_human(package, status, violations)
-    if status == "not-found" or status.startswith("not-auditable"):
+    if status.startswith("not-auditable"):
         return 2
-    return 0
+    if status == "not-found":
+        # Legitimate "no CLI" — exit 0, audit-cli has nothing to enforce.
+        return 0
+    # Exit 1 if any violation reaches `error` severity. Warnings alone exit 0.
+    return 1 if _max_severity(violations) == "error" else 0
 
 
 def run_audit_all(
@@ -1734,6 +2003,7 @@ def run_audit_all(
 
     records: list[dict] = []
     counts = {"ok": 0, "warn": 0, "skip-mcp": 0, "not-found": 0, "not-auditable": 0}
+    any_error = False
     for name, ep, hint in targets:
         if hint == "not-found":
             status, violations = "not-found", []
@@ -1758,6 +2028,8 @@ def run_audit_all(
             status = "ok"
         if not output_json:
             _emit_human(name, status, violations)
+        if _max_severity(violations) == "error" or status.startswith("not-auditable"):
+            any_error = True
         records.append(
             {
                 "package": name,
@@ -1778,4 +2050,4 @@ def run_audit_all(
             f"{counts['skip-mcp']} skipped (MCP), "
             f"{counts['not-found']} not-found, {counts['not-auditable']} not-auditable"
         )
-    return 0
+    return 1 if any_error else 0

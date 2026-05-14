@@ -1,7 +1,8 @@
 ---
-name: interface-http-api-endpoints
-description: REST endpoint conventions — noun-based URLs (`/papers`, `/papers/{id}`), HTTP verbs map to actions (GET=read, POST=create, PUT=replace, DELETE=remove), JSON request/response, Pydantic models for validation, OpenAPI auto-docs at `/docs`. Path style matches CLI's noun-verb convention so the two interfaces stay legible side by side.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api Endpoints
+  [DETAILS] REST endpoint conventions — noun-based URLs (`/papers`, `/papers/{id}`), HTTP verbs map to actions (GET=read, POST=create, PUT=replace, DELETE=remove), JSON request/response, Pydantic models for validation, OpenAPI auto-docs at `/docs`. Path style matches CLI's noun-verb convention so the two interfaces stay legible side by side.
+tags: [scitex-general-interface-http-api-endpoint-conventions]
 ---
 
 # Endpoint Conventions
@@ -145,4 +146,4 @@ If you publish the API publicly, link `/docs` from your README.
 - `response_model=` declared on every non-trivial endpoint.
 - `/docs` reachable and accurate.
 
-Linter rule (planned): **PA1xx-style** — see [09_audit-checklist.md](09_audit-checklist.md) and [TODO.md](TODO.md).
+Linter rule (planned): **PA-1xx-style** — see [09_audit-checklist.md](09_audit-checklist.md) and [TODO.md](TODO.md).

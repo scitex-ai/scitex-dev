@@ -1,8 +1,8 @@
 ---
-name: interface-mcp-server-registration
-description: SciTeX MCP server registration — single FastMCP per package, mount pattern from the scitex umbrella, conventions A vs B for tool naming under namespace mount.
-user-invocable: false
-tags: [scitex-python, scitex-general, mcp]
+description: |
+  [TOPIC] Interface Mcp Server Registration
+  [DETAILS] SciTeX MCP server registration — single FastMCP per package, mount pattern from the scitex umbrella, conventions A vs B for tool naming under namespace mount.
+tags: [scitex-general-interface-mcp-server-registration]
 ---
 
 # §1. Server registration — single source of truth + mount

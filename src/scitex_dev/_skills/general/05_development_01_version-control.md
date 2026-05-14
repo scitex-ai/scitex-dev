@@ -1,7 +1,8 @@
 ---
-name: version-control-management
-description: Core version-control workflow across the SciTeX ecosystem — branch model (`main` stable + `develop` integration + `feature/*`), semver tagging and `vX.Y.Z` annotated tags, ecosystem release waves (upstream packages published before downstream consumers), release gates (tests + audits + docs build green, no dirty working tree, version bumped in pyproject.toml and `__init__.__version__`), and conflict-resolution policy for multi-repo feature branches. Use when cutting a release, auditing branch hygiene, or planning a cross-package version bump.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Version Control Management
+  [DETAILS] Core version-control workflow across the SciTeX ecosystem — branch model (`main` stable + `develop` integration + `feature/*`), semver tagging and `vX.Y.Z` annotated tags, ecosystem release waves (upstream packages published before downstream consumers), release gates (tests + audits + docs build green, no dirty working tree, version bumped in pyproject.toml and `__init__.__version__`), and conflict-resolution policy for multi-repo feature branches. Use when cutting a release, auditing branch hygiene, or planning a cross-package version bump.
+tags: [scitex-general-development-version-control]
 ---
 
 # SciTeX Version Management (Core Workflow)
@@ -40,6 +41,73 @@ Recommendation: Level 4 (Hosts)
 ```
 
 Speak the recommendation and numbered choices. Wait for user to select a number, then execute that level.
+
+## Preflight: respect the working tree
+
+Before any `ecosystem pull` / `install` / `checkout` (or release-cut
+step below), check **each target package's** state. Two conditions
+can swallow work or hide regressions:
+
+### 1. Uncommitted local changes
+
+```bash
+git -C ~/proj/<pkg> status --porcelain
+```
+
+If non-empty, decide per file:
+
+- **Commit** — real work (e.g. a doc revision, a source fix). Stage
+  the intentional files only; do not `git add -A` blindly.
+- **Stash** — transient experiment you'll come back to. Use a named
+  stash (`git stash push -m "<reason>" -- <paths>`).
+- **Discard / gitignore** — runtime artefacts (e.g.
+  `.scitex/<pkg-short>/runtime/*.sqlite`, build caches). These
+  belong in `.gitignore`, not in a stash; if you see them dirty
+  repeatedly, fix the ignore pattern.
+
+`ecosystem pull` will fail noisily on dirty trees — that's the
+desired behaviour. Do not silence it with `--force` flags.
+
+### 2. Not on `develop`
+
+```bash
+git -C ~/proj/<pkg> rev-parse --abbrev-ref HEAD
+```
+
+If the current branch isn't `develop`:
+
+- **Feature branch with unmerged work** — finish or abandon
+  intentionally; do **not** `ecosystem checkout develop` until the
+  branch is reconciled. A pending feature branch with `↑N` commits
+  ahead of develop is real work in flight.
+- **Feature branch already merged into develop** — delete it:
+  ```bash
+  git -C ~/proj/<pkg> branch -d <branch>           # local
+  git -C ~/proj/<pkg> push origin --delete <branch> # remote
+  ```
+  Then `git checkout develop` and proceed.
+- **Detached HEAD / stale tag checkout** — `git checkout develop`
+  first; investigate why HEAD wasn't at a branch tip.
+
+### 3. Upstream tracking
+
+```bash
+git -C ~/proj/<pkg> branch -vv | head -5
+```
+
+Verify each tracked branch's upstream points at `origin/<branch>`,
+not a stale fork or local mirror. A misconfigured upstream
+(`scitex/develop` localhost-Gitea instead of `origin/develop`)
+produces phantom `↑N` / `↓N` counts and breaks `ecosystem dashboard`.
+Fix with:
+
+```bash
+git -C ~/proj/<pkg> branch --set-upstream-to=origin/develop develop
+```
+
+After preflight, the rest of this skill (and the `/update-scitex`
+command) assumes every target is on `develop`, clean, and tracking
+the right remote.
 
 ## Pre-Push CI Check
 

@@ -1,7 +1,8 @@
 ---
-name: scitex-ecosystem-quality-failure-playbook
-description: Per-symptom cookbook for the failure modes encountered across the SciTeX ecosystem. Paired with 99_quality_02_checklist.md — §99 is the strategic runbook, §98 is the cookbook. Each symptom carries a severity (CRITICAL / HIGH / MEDIUM / LOW) so an autonomous agent triages top-down.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Scitex Ecosystem Quality Failure Playbook
+  [DETAILS] Per-symptom cookbook for the failure modes encountered across the SciTeX ecosystem. Paired with 99_quality_02_checklist.md — §99 is the strategic runbook, §98 is the cookbook. Each symptom carries a severity (CRITICAL / HIGH / MEDIUM / LOW) so an autonomous agent triages top-down.
+tags: [scitex-general-quality-failure-playbook]
 ---
 
 # SciTeX Quality Failure Playbook
@@ -22,6 +23,7 @@ Cookbook of the specific symptoms observed during ecosystem-wide remediation pas
 | **CRITICAL** | Publish-to-PyPI `invalid-publisher: no corresponding publisher` | trusted publishing not configured on PyPI (or form silently discarded the save) | See §3 — verify "Manage current publishers" lists the entry after submit |
 | **HIGH** | Downstream `ModuleNotFoundError` for something that IS in git | new submodule added after last tag; PyPI wheel is stale | See §4 — bump version + re-release |
 | **HIGH** | `pytest: command not found` | `pip install -e .[dev]` but no `[dev]` extra defined | add explicit `pip install pytest pytest-cov` to workflow |
+| **HIGH** | First CI push of a new feature fails at test-collection: `ModuleNotFoundError: No module named '<dep>'` (e.g. `fastmcp`) | Package has an optional `[X]` extra for the new feature, tests import the dep unconditionally, but `[dep]` is missing from `[dev]` so bare `pip install -e .[dev]` cannot collect those tests. | **Pick one and stay consistent**: (a) add the optional dep to `[dev]` so `[dev]` = union of "test infra + every test-imported optional"; (b) gate the tests with `pytest.importorskip("<dep>")`. The boundary rule is in [01_ecosystem_02_dependency-and-version-pinning.md `[dev]` extras completeness](01_ecosystem_02_dependency-and-version-pinning.md) — features owned by *this* package go in `[dev]`; sibling-scitex integration imports use `importorskip`. |
 | **HIGH** | `isinstance(obj, plotly.graph_objs.Figure)` → `NoneType has no attribute 'graph_objs'` | optional plotly fell back to `None`, check was unconditional | helper that short-circuits when dep is `None` — see §5 |
 | **HIGH** | `Doc-Drift Nightly` fails with `cannot import scitex_<x>` | downstream pkg not pulled by `.[all]` | add explicit `pip install scitex-<x>` after the `.[all]` line, or fix `[x]` extra |
 | **MEDIUM** | `assert func() is True` fails on numpy 2 runners | `np.any()`/`np.all()` return `np.True_`; `np.True_ is not True` | coerce at return: `return bool(np.any(...))` — see §5 |
@@ -33,7 +35,7 @@ Cookbook of the specific symptoms observed during ecosystem-wide remediation pas
 | **LOW** | `Doc-Drift Nightly` cancelled | 10-minute `timeout-minutes` hit by pip resolver backtracking | bump to 25 min, or constrain sphinx version to avoid backtracking |
 | **LOW** | `coverage < fail_under` even though tests all pass | aspirational threshold; real coverage is lower | lower `fail_under` to current floor; raise again when new tests land |
 | **LOW** | Skill quality `§2.prefix: MANIFEST.md filename must match NN_kebab-name.md` | MANIFEST.md is a system file, not a leaf | upgrade scitex-dev to a version where the checker exempts `SYSTEM_FILES = {"MANIFEST.md"}` |
-| **LOW** | Skill quality `§3.index-monolith: SKILL.md > 4096B` | bloated frontmatter description | trim `description:` — it gets copied into skill-matching prompts; verbose prose costs tokens without helping trigger rates |
+| **LOW** | Skill quality `§3.index-monolith: SKILL.md > 6144B` | bloated frontmatter description or substantive content leaked into the index | trim `description:` (auto-derived from `what`/`when`/`how` — keep those concise); promote any prose section to a leaf |
 | **LOW** | Skill quality `§4.monolith: NN_foo.md > 10240B` | leaf grew unmanageably | split into two leaves with new prefixes, link both from `SKILL.md`, prefer topical split over length-based |
 
 ## 2. Triage order
@@ -227,7 +229,7 @@ before any test runs.
 ``"License :: OSI Approved :: ..."`` classifier in favour of the
 ``license = "AGPL-3.0-only"`` SPDX expression. setuptools 80+ refuses
 the build when *both* are present. After our 2026-04-28a normalization
-to SPDX (E5C11), 41 ecosystem packages still carried the legacy
+to SPDX (REL-11), 41 ecosystem packages still carried the legacy
 classifier alongside the new SPDX form.
 
 **Detection** is automated in

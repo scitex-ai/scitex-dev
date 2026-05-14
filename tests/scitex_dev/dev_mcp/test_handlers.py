@@ -1,9 +1,8 @@
 """Smoke tests for scitex_dev.dev_mcp.handlers — exercise async handlers with mocks.
 
-The dev_mcp package depends on a `scitex_dev.mcp_utils` module that may not be
-present in every install (it's wired up by the MCP entry-point). If the import
-fails we skip the test rather than fail collection — PS202 only requires that
-this test file exists at the mirror path.
+handlers.py imports `wrap_as_mcp` from `scitex_dev._mcp` (the post-0.11
+collapsed package). If the import fails for any reason (e.g. partial
+install) we skip rather than fail collection.
 """
 
 from __future__ import annotations
@@ -38,19 +37,37 @@ HANDLER_NAMES = [
 
 def test_all_handlers_exposed():
     """Every handler in __all__ is importable and async."""
+    # Arrange
+    # Act
+    # Assert
     for name in HANDLER_NAMES:
         h = getattr(dev_mcp, name)
         assert asyncio.iscoroutinefunction(h), f"{name} not async"
 
 
-def test_list_versions_handler_runs(monkeypatch):
-    """list_versions_handler returns valid JSON wrapping a mocked list_versions."""
-    import scitex_dev.versions as vmod
-
-    monkeypatch.setattr(
-        vmod, "list_versions", lambda packages=None: {"scitex-dev": "0.0.0"}
+def test_list_versions_handler_runs_payload_success_is_true():
+    """list_versions_handler returns valid JSON wrapping an injected list_versions."""
+    # Arrange
+    # Act
+    # Assert
+    out = asyncio.run(
+        handlers.list_versions_handler(
+            _list_versions_fn=lambda packages=None: {"scitex-dev": "0.0.0"},
+        )
     )
-    out = asyncio.run(handlers.list_versions_handler())
     payload = json.loads(out)
     assert payload["success"] is True
+
+
+def test_list_versions_handler_runs_payload_data_scitex_dev_0_0_0():
+    """list_versions_handler returns valid JSON wrapping an injected list_versions."""
+    # Arrange
+    # Act
+    # Assert
+    out = asyncio.run(
+        handlers.list_versions_handler(
+            _list_versions_fn=lambda packages=None: {"scitex-dev": "0.0.0"},
+        )
+    )
+    payload = json.loads(out)
     assert payload["data"] == {"scitex-dev": "0.0.0"}

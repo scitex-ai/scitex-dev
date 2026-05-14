@@ -1,7 +1,8 @@
 ---
-name: package-scripts
-description: `./scripts/` for a SciTeX *package* — maintenance and scientific analysis (research scripts, one-off pipelines). Not shipped. Free to depend on the full SciTeX umbrella, third-party tools, anything. Helpers used by multiple scripts go in `./scripts/utils/`. The `./scripts/makefile/` subdir is documented separately in [02_package_04_project-structure-makefile.md](02_package_04_project-structure-makefile.md). Anything that produces a result worth keeping should graduate into `./examples/` (as a demo) or `./src/` (as a public API).
-tags: [scitex-python, scitex-general, scitex-package, project-structure, scripts]
+description: |
+  [TOPIC] Package Scripts
+  [DETAILS] `./scripts/` for a SciTeX *package* — maintenance and scientific analysis (research scripts, one-off pipelines). Not shipped. Free to depend on the full SciTeX umbrella, third-party tools, anything. Helpers used by multiple scripts go in `./scripts/utils/`. The `./scripts/makefile/` subdir is documented separately in [02_package_04_project-structure-makefile.md](02_package_04_project-structure-makefile.md). Anything that produces a result worth keeping should graduate into `./examples/` (as a demo) or `./src/` (as a public API).
+tags: [scitex-general-package-project-structure-scripts]
 ---
 
 # `./scripts` — maintenance or scientific analysis

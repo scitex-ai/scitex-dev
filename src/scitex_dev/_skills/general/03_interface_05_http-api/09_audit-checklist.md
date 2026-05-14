@@ -1,7 +1,8 @@
 ---
-name: interface-http-api-audit-checklist
-description: Release-gate checklist for a package's HTTP API. Run before tagging a release. Mirrors the structure of CLI / MCP / Python-API audit checklists. (A) markers indicate items the planned `audit-http` linter will automate.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Http Api Audit Checklist
+  [DETAILS] Release-gate checklist for a package's HTTP API. Run before tagging a release. Mirrors the structure of CLI / MCP / Python-API audit checklists. (A) markers indicate items the planned `audit-http` linter will automate.
+tags: [scitex-general-interface-http-api-audit-checklist]
 ---
 
 # HTTP API Audit Checklist

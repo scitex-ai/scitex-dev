@@ -40,6 +40,7 @@ from ._audit import (
     _filter_violations,
     _isolated_streams,
     _load_registry,
+    _max_severity,
     _PackageTimeout,
     _violation_to_dict,
     _watchdog,
@@ -136,7 +137,11 @@ def _read_bridge_source(package: str) -> str | None:
     """Read `scitex/_mcp_tools/<short>.py`; None if absent."""
     short = _short_name(package)
     try:
-        import scitex._mcp_tools as bridge_pkg
+        # Auditing the umbrella's private bridge package by design — this
+        # is the one place where the umbrella path is intentional, not a
+        # PA-304 violation. Use a function-local import (lazy) so PA-304's
+        # module-level scan exempts it.
+        import scitex._mcp_tools as bridge_pkg  # noqa: PA-304
     except Exception:
         return None
     pkg_dir = Path(getattr(bridge_pkg, "__file__", "")).parent
@@ -363,9 +368,28 @@ _SAFE_MOUNT_CALL = re.compile(r"\bsafe_mount\s*\(")
 _PLAIN_MOUNT_CALL = re.compile(r"\.\s*mount\s*\(")
 
 
-def _check_bridge_pattern(package: str, out: list[Violation]) -> None:
-    """§1 — umbrella bridge must use `safe_mount` (or equivalent), not hand-wrap."""
-    src = _read_bridge_source(package)
+def _check_bridge_pattern(
+    package: str,
+    out: list[Violation],
+    *,
+    read_bridge_source=None,
+    resolve_mcp_server=None,
+) -> None:
+    """§1 — umbrella bridge must use `safe_mount` (or equivalent), not hand-wrap.
+
+    Exempt when the standalone has no `<pkg>._mcp_server.mcp`: the bridge
+    cannot `safe_mount` a non-existent server, so hand-wrapping is the
+    only available option. The §1 rule only applies when the bridge
+    *could* mount but chose not to.
+
+    The optional ``read_bridge_source`` / ``resolve_mcp_server`` callables
+    let tests inject fakes without monkey-patching the module.
+    """
+    if read_bridge_source is None:
+        read_bridge_source = _read_bridge_source
+    if resolve_mcp_server is None:
+        resolve_mcp_server = _resolve_mcp_server
+    src = read_bridge_source(package)
     if src is None:
         # No bridge → not flagged here; presence is checked under §6 parity.
         return
@@ -375,6 +399,11 @@ def _check_bridge_pattern(package: str, out: list[Violation]) -> None:
     has_hand_wrap = bool(_HAND_WRAP_DECORATOR.search(src))
 
     if has_hand_wrap and not (has_safe_mount or has_plain_mount):
+        # Standalone-side check: if `<pkg>._mcp_server.mcp` doesn't
+        # resolve, hand-wrap is the only option. Don't penalise the
+        # standalone for the umbrella's choice when no alternative exists.
+        if resolve_mcp_server(package) is None:
+            return
         out.append(
             Violation(
                 package,
@@ -410,6 +439,18 @@ def _python_api_names(package: str) -> set[str]:
     attributes), and keeps only callables that are NOT classes/types. Classes
     are exposed as API but are rarely wrapped as MCP tools — including them
     in the parity check produces false positives.
+
+    Two layouts are accepted, matching the two patterns in the
+    SciTeX ecosystem:
+
+    1. **Flat** — `pkg.<verb>_<noun>(...)` (the original convention).
+       Used by scitex-stats, scitex-io, etc.
+    2. **Nested** — `pkg.<noun>.<verb>(...)` (the CLI-mirror form).
+       Each noun submodule re-exports verbs under their bare names;
+       this auditor flattens them to `<noun>_<verb>` for the parity
+       comparison so the MCP tool naming convention still applies
+       (a tool named ``agent_list`` matches either ``pkg.agent_list``
+       or ``pkg.agent.list``).
     """
     import inspect as _inspect
 
@@ -426,7 +467,33 @@ def _python_api_names(package: str) -> set[str]:
         if not isinstance(n, str):
             continue
         val = getattr(mod, n, None)
-        if val is None or _inspect.isclass(val) or _inspect.ismodule(val):
+        if val is None or _inspect.isclass(val):
+            continue
+        if _inspect.ismodule(val):
+            # Nested-form noun submodule. Walk its public verbs and
+            # surface them as `<noun>_<verb>` so the parity check can
+            # match an MCP tool named the same way. Skip submodules
+            # without an explicit __all__ — those tend to be deep
+            # internals, not the package's CLI-tree mirror.
+            sub_names = getattr(val, "__all__", None)
+            if sub_names is None:
+                continue
+            for sub_n in sub_names:
+                if not isinstance(sub_n, str):
+                    continue
+                sub_val = getattr(val, sub_n, None)
+                if (
+                    sub_val is None
+                    or _inspect.isclass(sub_val)
+                    or _inspect.ismodule(sub_val)
+                    or not callable(sub_val)
+                ):
+                    continue
+                # Trailing underscore is the Python idiom for keyword
+                # aliasing (`import_`, `class_`); strip before joining
+                # so `pkg.db.import_` matches MCP `db_import`.
+                clean_verb = sub_n.rstrip("_")
+                out.add(f"{n}_{clean_verb}")
             continue
         if callable(val):
             out.add(n)
@@ -601,6 +668,20 @@ def run_audit_mcp(
     timeout: float = 30.0,
 ) -> int:
     """Audit a single package's MCP surface (single-target mode)."""
+    try:
+        from ...._ecosystem import should_skip_audit
+    except ImportError:
+        should_skip_audit = lambda *_a, **_k: (False, "")  # noqa: E731
+    skip, reason = should_skip_audit(package, "audit-mcp-tools")
+    from .._emit import emit as _emit
+
+    if skip:
+        if output_json:
+            rec = {"package": package, "status": f"skip-{reason}", "violations": []}
+            _emit_json([rec], "single-package mode (mcp)")
+        else:
+            _emit("skip", f"{package}: {reason}")
+        return 0
     status, violations = _audit_one_mcp(package, behavioral=behavioral, timeout=timeout)
     violations = _filter_violations(violations, rules, exclude, min_severity)
     if not violations and status == "warn":
@@ -614,14 +695,17 @@ def run_audit_mcp(
         _emit_json([rec], "single-package mode (mcp)")
     else:
         if status == "no-mcp-server":
-            click.echo(f"info  {package}: no `_mcp_server.mcp` found — skipped")
+            _emit("info", f"{package}: no `_mcp_server.mcp` found — skipped")
         elif status == "skip-not-standalone":
-            click.echo(
-                f"info  {package}: not an MCP standalone (umbrella or protocol-server) — skipped"
+            _emit(
+                "info",
+                f"{package}: not an MCP standalone (umbrella or protocol-server) — skipped",
             )
         else:
             _emit_human(package, status, violations)
-    return 0 if status not in ("",) and not status.startswith("not-auditable") else 2
+    if status.startswith("not-auditable"):
+        return 2
+    return 1 if _max_severity(violations) == "error" else 0
 
 
 def run_audit_mcp_all(
@@ -680,6 +764,7 @@ def run_audit_mcp_all(
         "skip-not-standalone": 0,
         "not-auditable": 0,
     }
+    any_error = False
     for name in targets:
         wall_budget = max(timeout + 5.0, 10.0)
         try:
@@ -701,6 +786,9 @@ def run_audit_mcp_all(
             # Don't spam the human report with one line per non-MCP package.
             if status not in ("no-mcp-server", "skip-not-standalone"):
                 _emit_human(name, status, violations)
+
+        if _max_severity(violations) == "error" or status.startswith("not-auditable"):
+            any_error = True
 
         records.append(
             {
@@ -743,4 +831,4 @@ def run_audit_mcp_all(
             f"{counts['skip-not-standalone']} skip-not-standalone, "
             f"{counts['not-auditable']} not-auditable\n"
         )
-    return 0
+    return 1 if any_error else 0

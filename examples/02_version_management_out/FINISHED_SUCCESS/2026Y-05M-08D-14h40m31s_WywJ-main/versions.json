@@ -1,0 +1,1565 @@
+{
+  "scitex": {
+    "local": {
+      "pyproject_toml": "2.28.14",
+      "installed": "2.28.14"
+    },
+    "git": {
+      "latest_tag": "v2.28.4",
+      "branch": "feat/factor-out-from-umbrella",
+      "commits_since_tag": 36,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "da36cc86"
+    },
+    "remote": {
+      "pypi": "2.28.13"
+    },
+    "status": "unreleased",
+    "issues": [
+      "pyproject.toml (2.28.14) != git tag (2.28.4)",
+      "local (2.28.14) > pypi (2.28.13) - ready to release"
+    ]
+  },
+  "scitex-io": {
+    "local": {
+      "pyproject_toml": "0.2.14",
+      "installed": "0.2.14"
+    },
+    "git": {
+      "latest_tag": "v0.2.14",
+      "branch": "develop",
+      "commits_since_tag": 21,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "5b6892c"
+    },
+    "remote": {
+      "pypi": "0.2.14"
+    },
+    "status": "mismatch",
+    "issues": [
+      "21 commit(s) since 0.2.14 but version not bumped"
+    ]
+  },
+  "scitex-stats": {
+    "local": {
+      "pyproject_toml": "0.2.17",
+      "installed": "0.2.17"
+    },
+    "git": {
+      "latest_tag": "v0.2.17",
+      "branch": "develop",
+      "commits_since_tag": 47,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "b4f0dbe"
+    },
+    "remote": {
+      "pypi": "0.2.17"
+    },
+    "status": "mismatch",
+    "issues": [
+      "47 commit(s) since 0.2.17 but version not bumped"
+    ]
+  },
+  "scitex-clew": {
+    "local": {
+      "pyproject_toml": "0.2.8",
+      "installed": "0.2.8"
+    },
+    "git": {
+      "latest_tag": "v0.2.8",
+      "branch": "develop",
+      "commits_since_tag": 81,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "98f1673"
+    },
+    "remote": {
+      "pypi": "0.2.8"
+    },
+    "status": "mismatch",
+    "issues": [
+      "81 commit(s) since 0.2.8 but version not bumped"
+    ]
+  },
+  "scitex-cloud": {
+    "local": {
+      "pyproject_toml": "0.17.4-alpha",
+      "installed": "0.17.4a0"
+    },
+    "git": {
+      "latest_tag": "v0.17.5",
+      "branch": "develop",
+      "commits_since_tag": 28,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "e441f96b"
+    },
+    "remote": {
+      "pypi": "0.16.1"
+    },
+    "status": "unreleased",
+    "issues": [
+      "pyproject.toml (0.17.4-alpha) != git tag (0.17.5)",
+      "local (0.17.4-alpha) > pypi (0.16.1) - ready to release"
+    ]
+  },
+  "figrecipe": {
+    "local": {
+      "pyproject_toml": "0.28.8",
+      "installed": "0.28.8"
+    },
+    "git": {
+      "latest_tag": "v0.28.7",
+      "branch": "develop",
+      "commits_since_tag": 66,
+      "dirty": false,
+      "ahead": 180,
+      "behind": 0,
+      "short_hash": "fa4f654"
+    },
+    "remote": {
+      "pypi": "0.28.8"
+    },
+    "status": "mismatch",
+    "issues": [
+      "pyproject.toml (0.28.8) != git tag (0.28.7)",
+      "180 commit(s) ahead of remote"
+    ]
+  },
+  "newb": {
+    "local": {
+      "pyproject_toml": "0.25.0",
+      "installed": "0.25.0"
+    },
+    "git": {
+      "latest_tag": "v0.25.0",
+      "branch": "develop",
+      "commits_since_tag": 9,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "fcb7594"
+    },
+    "remote": {
+      "pypi": "0.25.0"
+    },
+    "status": "mismatch",
+    "issues": [
+      "9 commit(s) since 0.25.0 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "openalex-local": {
+    "local": {
+      "pyproject_toml": "0.7.5",
+      "installed": "0.7.5"
+    },
+    "git": {
+      "latest_tag": "v0.7.4",
+      "branch": "develop",
+      "commits_since_tag": 20,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "5f9582e"
+    },
+    "remote": {
+      "pypi": "0.7.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "pyproject.toml (0.7.5) != git tag (0.7.4)"
+    ]
+  },
+  "crossref-local": {
+    "local": {
+      "pyproject_toml": "0.7.3",
+      "installed": "0.7.3"
+    },
+    "git": {
+      "latest_tag": "v0.7.3",
+      "branch": "develop",
+      "commits_since_tag": 18,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "38db3b7"
+    },
+    "remote": {
+      "pypi": "0.7.3"
+    },
+    "status": "mismatch",
+    "issues": [
+      "18 commit(s) since 0.7.3 but version not bumped"
+    ]
+  },
+  "scitex-writer": {
+    "local": {
+      "pyproject_toml": "2.16.2",
+      "installed": "2.16.2"
+    },
+    "git": {
+      "latest_tag": "v2.16.1",
+      "branch": "chore/test-tree-migration",
+      "commits_since_tag": 43,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "929f297"
+    },
+    "remote": {
+      "pypi": "2.16.3"
+    },
+    "status": "outdated",
+    "issues": [
+      "pyproject.toml (2.16.2) != git tag (2.16.1)",
+      "local (2.16.2) < pypi (2.16.3) - outdated"
+    ]
+  },
+  "scitex-linter": {
+    "local": {
+      "pyproject_toml": "0.3.5",
+      "installed": "0.3.5"
+    },
+    "git": {
+      "latest_tag": "v0.3.5",
+      "branch": "develop",
+      "commits_since_tag": 72,
+      "dirty": true,
+      "ahead": 2,
+      "behind": 0,
+      "short_hash": "089961d"
+    },
+    "remote": {
+      "pypi": "0.3.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "72 commit(s) since 0.3.5 but version not bumped",
+      "uncommitted changes",
+      "2 commit(s) ahead of remote"
+    ]
+  },
+  "scitex-dataset": {
+    "local": {
+      "pyproject_toml": "0.3.7",
+      "installed": "0.3.7"
+    },
+    "git": {
+      "latest_tag": "v0.3.7",
+      "branch": "develop",
+      "commits_since_tag": 52,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "5911f2c"
+    },
+    "remote": {
+      "pypi": "0.3.7"
+    },
+    "status": "mismatch",
+    "issues": [
+      "52 commit(s) since 0.3.7 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "socialia": {
+    "local": {
+      "pyproject_toml": "0.5.9",
+      "installed": "0.5.9"
+    },
+    "git": {
+      "latest_tag": "v0.5.8",
+      "branch": "develop",
+      "commits_since_tag": 13,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "95228f9"
+    },
+    "remote": {
+      "pypi": "0.5.9"
+    },
+    "status": "mismatch",
+    "issues": [
+      "pyproject.toml (0.5.9) != git tag (0.5.8)"
+    ]
+  },
+  "pip-project-template": {
+    "local": {
+      "pyproject_toml": "0.1.0",
+      "installed": "0.1.1"
+    },
+    "git": {
+      "latest_tag": "v0.1.1",
+      "branch": "develop",
+      "commits_since_tag": 0,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "0062c7f"
+    },
+    "remote": {
+      "pypi": "0.1.0"
+    },
+    "status": "mismatch",
+    "issues": [
+      "pyproject.toml (0.1.0) != installed (0.1.1)",
+      "pyproject.toml (0.1.0) != git tag (0.1.1)"
+    ]
+  },
+  "scitex-container": {
+    "local": {
+      "pyproject_toml": "0.1.10",
+      "installed": "0.1.10"
+    },
+    "git": {
+      "latest_tag": "v0.1.10",
+      "branch": "develop",
+      "commits_since_tag": 45,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "28d8d24"
+    },
+    "remote": {
+      "pypi": "0.1.10"
+    },
+    "status": "mismatch",
+    "issues": [
+      "45 commit(s) since 0.1.10 but version not bumped"
+    ]
+  },
+  "scitex-ssh": {
+    "local": {
+      "pyproject_toml": "1.0.0",
+      "installed": "1.0.0"
+    },
+    "git": {
+      "latest_tag": "v0.2.6",
+      "branch": "develop",
+      "commits_since_tag": 58,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "8a1a85d"
+    },
+    "remote": {
+      "pypi": "1.0.0"
+    },
+    "status": "mismatch",
+    "issues": [
+      "pyproject.toml (1.0.0) != git tag (0.2.6)"
+    ]
+  },
+  "scitex-ui": {
+    "local": {
+      "pyproject_toml": "0.4.8",
+      "installed": "0.4.8"
+    },
+    "git": {
+      "latest_tag": "v0.4.8",
+      "branch": "develop",
+      "commits_since_tag": 58,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "0e50ca1"
+    },
+    "remote": {
+      "pypi": "0.4.8"
+    },
+    "status": "mismatch",
+    "issues": [
+      "58 commit(s) since 0.4.8 but version not bumped"
+    ]
+  },
+  "scitex-app": {
+    "local": {
+      "pyproject_toml": "0.2.6",
+      "installed": "0.2.6"
+    },
+    "git": {
+      "latest_tag": "v0.2.6",
+      "branch": "develop",
+      "commits_since_tag": 40,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "3dbc0e9"
+    },
+    "remote": {
+      "pypi": "0.2.6"
+    },
+    "status": "mismatch",
+    "issues": [
+      "40 commit(s) since 0.2.6 but version not bumped"
+    ]
+  },
+  "scitex-audio": {
+    "local": {
+      "pyproject_toml": "0.2.11",
+      "installed": "0.2.11"
+    },
+    "git": {
+      "latest_tag": "v0.2.11",
+      "branch": "develop",
+      "commits_since_tag": 43,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "e227d4a"
+    },
+    "remote": {
+      "pypi": "0.2.11"
+    },
+    "status": "mismatch",
+    "issues": [
+      "43 commit(s) since 0.2.11 but version not bumped"
+    ]
+  },
+  "scitex-parallel": {
+    "local": {
+      "pyproject_toml": "0.1.6",
+      "installed": "0.1.6"
+    },
+    "git": {
+      "latest_tag": "v0.1.6",
+      "branch": "develop",
+      "commits_since_tag": 23,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "2a75caa"
+    },
+    "remote": {
+      "pypi": "0.1.6"
+    },
+    "status": "mismatch",
+    "issues": [
+      "23 commit(s) since 0.1.6 but version not bumped"
+    ]
+  },
+  "scitex-types": {
+    "local": {
+      "pyproject_toml": "0.1.4",
+      "installed": "0.1.4"
+    },
+    "git": {
+      "latest_tag": "v0.1.4",
+      "branch": "develop",
+      "commits_since_tag": 27,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "cc38135"
+    },
+    "remote": {
+      "pypi": "0.1.4"
+    },
+    "status": "mismatch",
+    "issues": [
+      "27 commit(s) since 0.1.4 but version not bumped"
+    ]
+  },
+  "scitex-path": {
+    "local": {
+      "pyproject_toml": "0.1.5",
+      "installed": "0.1.5"
+    },
+    "git": {
+      "latest_tag": "v0.1.5",
+      "branch": "develop",
+      "commits_since_tag": 27,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "a03d2fd"
+    },
+    "remote": {
+      "pypi": "0.1.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "27 commit(s) since 0.1.5 but version not bumped"
+    ]
+  },
+  "scitex-repro": {
+    "local": {
+      "pyproject_toml": "0.1.4",
+      "installed": "0.1.4"
+    },
+    "git": {
+      "latest_tag": "v0.1.4",
+      "branch": "develop",
+      "commits_since_tag": 34,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "544272d"
+    },
+    "remote": {
+      "pypi": "0.1.4"
+    },
+    "status": "mismatch",
+    "issues": [
+      "34 commit(s) since 0.1.4 but version not bumped"
+    ]
+  },
+  "scitex-compat": {
+    "local": {
+      "pyproject_toml": "0.1.6",
+      "installed": "0.1.6"
+    },
+    "git": {
+      "latest_tag": "v0.1.6",
+      "branch": "develop",
+      "commits_since_tag": 23,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "e41ec4a"
+    },
+    "remote": {
+      "pypi": "0.1.6"
+    },
+    "status": "mismatch",
+    "issues": [
+      "23 commit(s) since 0.1.6 but version not bumped"
+    ]
+  },
+  "scitex-etc": {
+    "local": {
+      "pyproject_toml": "0.1.6",
+      "installed": "0.1.6"
+    },
+    "git": {
+      "latest_tag": "v0.1.6",
+      "branch": "develop",
+      "commits_since_tag": 26,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "43a4e98"
+    },
+    "remote": {
+      "pypi": "0.1.6"
+    },
+    "status": "mismatch",
+    "issues": [
+      "26 commit(s) since 0.1.6 but version not bumped"
+    ]
+  },
+  "scitex-gists": {
+    "local": {
+      "pyproject_toml": "0.1.5",
+      "installed": "0.1.5"
+    },
+    "git": {
+      "latest_tag": "v0.1.5",
+      "branch": "develop",
+      "commits_since_tag": 27,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "3aca132"
+    },
+    "remote": {
+      "pypi": "0.1.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "27 commit(s) since 0.1.5 but version not bumped"
+    ]
+  },
+  "scitex-audit": {
+    "local": {
+      "pyproject_toml": "0.1.5",
+      "installed": "0.1.5"
+    },
+    "git": {
+      "latest_tag": "v0.1.5",
+      "branch": "develop",
+      "commits_since_tag": 30,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "852db07"
+    },
+    "remote": {
+      "pypi": "0.1.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "30 commit(s) since 0.1.5 but version not bumped"
+    ]
+  },
+  "scitex-core": {
+    "local": {
+      "pyproject_toml": "0.2.8",
+      "installed": "0.2.8"
+    },
+    "git": {
+      "latest_tag": "v0.2.8",
+      "branch": "develop",
+      "commits_since_tag": 35,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "f1d9ba8"
+    },
+    "remote": {
+      "pypi": "0.2.8"
+    },
+    "status": "mismatch",
+    "issues": [
+      "35 commit(s) since 0.2.8 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-db": {
+    "local": {
+      "pyproject_toml": "0.1.8",
+      "installed": "0.1.8"
+    },
+    "git": {
+      "latest_tag": "v0.1.8",
+      "branch": "develop",
+      "commits_since_tag": 41,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "1fe8fcb"
+    },
+    "remote": {
+      "pypi": "0.1.8"
+    },
+    "status": "mismatch",
+    "issues": [
+      "41 commit(s) since 0.1.8 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-scholar": {
+    "local": {
+      "pyproject_toml": "1.3.1",
+      "installed": "1.3.1"
+    },
+    "git": {
+      "latest_tag": "v1.3.1",
+      "branch": "develop",
+      "commits_since_tag": 2,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "6048586"
+    },
+    "remote": {
+      "pypi": "1.3.1"
+    },
+    "status": "mismatch",
+    "issues": [
+      "2 commit(s) since 1.3.1 but version not bumped"
+    ]
+  },
+  "scitex-seizure-metrics": {
+    "local": {
+      "pyproject_toml": "0.1.0",
+      "installed": "0.1.0"
+    },
+    "git": {
+      "latest_tag": "v0.1.0",
+      "branch": "develop",
+      "commits_since_tag": 5,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "ba79306"
+    },
+    "remote": {
+      "pypi": "0.1.0"
+    },
+    "status": "mismatch",
+    "issues": [
+      "5 commit(s) since 0.1.0 but version not bumped"
+    ]
+  },
+  "scitex-template": {
+    "local": {
+      "pyproject_toml": "0.6.5",
+      "installed": "0.6.5"
+    },
+    "git": {
+      "latest_tag": "v0.6.5",
+      "branch": "develop",
+      "commits_since_tag": 35,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "5b03666"
+    },
+    "remote": {
+      "pypi": "0.6.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "35 commit(s) since 0.6.5 but version not bumped"
+    ]
+  },
+  "scitex-dev": {
+    "local": {
+      "pyproject_toml": "0.11.5",
+      "installed": "0.11.5"
+    },
+    "git": {
+      "latest_tag": "v0.11.5",
+      "branch": "develop",
+      "commits_since_tag": 48,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "15730e8"
+    },
+    "remote": {
+      "pypi": "0.11.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "48 commit(s) since 0.11.5 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-agent-container": {
+    "local": {
+      "pyproject_toml": "0.13.0",
+      "installed": "0.13.0"
+    },
+    "git": {
+      "latest_tag": "v0.13.0",
+      "branch": "develop",
+      "commits_since_tag": 114,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "b7fdd8a"
+    },
+    "remote": {
+      "pypi": "0.13.0"
+    },
+    "status": "mismatch",
+    "issues": [
+      "114 commit(s) since 0.13.0 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-orochi": {
+    "local": {
+      "pyproject_toml": "0.16.2",
+      "installed": "0.16.2"
+    },
+    "git": {
+      "latest_tag": "v0.16.2",
+      "branch": "feat/zoo-reversible-autonomy",
+      "commits_since_tag": 92,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "862238c"
+    },
+    "remote": {
+      "pypi": "0.16.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "92 commit(s) since 0.16.2 but version not bumped"
+    ]
+  },
+  "singularity-template": {
+    "local": {
+      "pyproject_toml": null,
+      "installed": null
+    },
+    "git": {
+      "latest_tag": "v0.1",
+      "branch": "develop",
+      "commits_since_tag": 10,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "95f79fe"
+    },
+    "remote": {
+      "pypi": null
+    },
+    "status": "mismatch",
+    "issues": [
+      "uncommitted changes"
+    ]
+  },
+  "scitex-str": {
+    "local": {
+      "pyproject_toml": "0.1.8",
+      "installed": "0.1.8"
+    },
+    "git": {
+      "latest_tag": "v0.1.8",
+      "branch": "develop",
+      "commits_since_tag": 33,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "df2ea68"
+    },
+    "remote": {
+      "pypi": "0.1.8"
+    },
+    "status": "mismatch",
+    "issues": [
+      "33 commit(s) since 0.1.8 but version not bumped"
+    ]
+  },
+  "scitex-logging": {
+    "local": {
+      "pyproject_toml": "0.1.3",
+      "installed": "0.1.3"
+    },
+    "git": {
+      "latest_tag": "v0.1.3",
+      "branch": "develop",
+      "commits_since_tag": 40,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "f04ef4c"
+    },
+    "remote": {
+      "pypi": "0.1.3"
+    },
+    "status": "mismatch",
+    "issues": [
+      "40 commit(s) since 0.1.3 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-dict": {
+    "local": {
+      "pyproject_toml": "0.1.4",
+      "installed": "0.1.4"
+    },
+    "git": {
+      "latest_tag": "v0.1.4",
+      "branch": "develop",
+      "commits_since_tag": 26,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "445fc5a"
+    },
+    "remote": {
+      "pypi": "0.1.4"
+    },
+    "status": "mismatch",
+    "issues": [
+      "26 commit(s) since 0.1.4 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-browser": {
+    "local": {
+      "pyproject_toml": "0.1.14",
+      "installed": "0.1.14"
+    },
+    "git": {
+      "latest_tag": "v0.1.14",
+      "branch": "develop",
+      "commits_since_tag": 43,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "e78e0f7"
+    },
+    "remote": {
+      "pypi": "0.1.14"
+    },
+    "status": "mismatch",
+    "issues": [
+      "43 commit(s) since 0.1.14 but version not bumped"
+    ]
+  },
+  "scitex-config": {
+    "local": {
+      "pyproject_toml": "0.3.2",
+      "installed": "0.3.2"
+    },
+    "git": {
+      "latest_tag": "v0.3.2",
+      "branch": "develop",
+      "commits_since_tag": 29,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "0a327bd"
+    },
+    "remote": {
+      "pypi": "0.3.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "29 commit(s) since 0.3.2 but version not bumped"
+    ]
+  },
+  "scitex-events": {
+    "local": {
+      "pyproject_toml": "0.1.2",
+      "installed": "0.1.2"
+    },
+    "git": {
+      "latest_tag": "v0.1.2",
+      "branch": "develop",
+      "commits_since_tag": 28,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "3c534b4"
+    },
+    "remote": {
+      "pypi": "0.1.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "28 commit(s) since 0.1.2 but version not bumped"
+    ]
+  },
+  "scitex-hpc": {
+    "local": {
+      "pyproject_toml": "0.7.2",
+      "installed": "0.7.2"
+    },
+    "git": {
+      "latest_tag": "v0.7.2",
+      "branch": "develop",
+      "commits_since_tag": 43,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "4fd1c01"
+    },
+    "remote": {
+      "pypi": "0.7.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "43 commit(s) since 0.7.2 but version not bumped"
+    ]
+  },
+  "scitex-decorators": {
+    "local": {
+      "pyproject_toml": "0.1.9",
+      "installed": "0.1.9"
+    },
+    "git": {
+      "latest_tag": "v0.1.9",
+      "branch": "develop",
+      "commits_since_tag": 37,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "695fc43"
+    },
+    "remote": {
+      "pypi": "0.1.9"
+    },
+    "status": "mismatch",
+    "issues": [
+      "37 commit(s) since 0.1.9 but version not bumped"
+    ]
+  },
+  "scitex-pd": {
+    "local": {
+      "pyproject_toml": "0.1.2",
+      "installed": "0.1.2"
+    },
+    "git": {
+      "latest_tag": "v0.1.2",
+      "branch": "develop",
+      "commits_since_tag": 33,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "b54e8c2"
+    },
+    "remote": {
+      "pypi": "0.1.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "33 commit(s) since 0.1.2 but version not bumped"
+    ]
+  },
+  "scitex-plt": {
+    "local": {
+      "pyproject_toml": "0.24.4",
+      "installed": "0.24.4"
+    },
+    "git": {
+      "latest_tag": "v0.24.4",
+      "branch": "develop",
+      "commits_since_tag": 35,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "7e67c7e"
+    },
+    "remote": {
+      "pypi": "0.24.4"
+    },
+    "status": "mismatch",
+    "issues": [
+      "35 commit(s) since 0.24.4 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-nn": {
+    "local": {
+      "pyproject_toml": "0.1.10",
+      "installed": "0.1.9"
+    },
+    "git": {
+      "latest_tag": "v0.1.9",
+      "branch": "develop",
+      "commits_since_tag": 10,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "23479af"
+    },
+    "remote": {
+      "pypi": "0.1.10"
+    },
+    "status": "mismatch",
+    "issues": [
+      "pyproject.toml (0.1.10) != installed (0.1.9)",
+      "pyproject.toml (0.1.10) != git tag (0.1.9)"
+    ]
+  },
+  "scitex-ml": {
+    "local": {
+      "pyproject_toml": "0.1.0",
+      "installed": "0.1.0"
+    },
+    "git": {
+      "latest_tag": "v0.1.0",
+      "branch": "develop",
+      "commits_since_tag": 6,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "bb0e8fa"
+    },
+    "remote": {
+      "pypi": "0.1.0"
+    },
+    "status": "mismatch",
+    "issues": [
+      "6 commit(s) since 0.1.0 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-genai": {
+    "local": {
+      "pyproject_toml": "0.1.0",
+      "installed": "0.1.0"
+    },
+    "git": {
+      "latest_tag": "v0.1.0",
+      "branch": "develop",
+      "commits_since_tag": 6,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "85bc3ee"
+    },
+    "remote": {
+      "pypi": "0.1.0"
+    },
+    "status": "mismatch",
+    "issues": [
+      "6 commit(s) since 0.1.0 but version not bumped"
+    ]
+  },
+  "scitex-gen": {
+    "local": {
+      "pyproject_toml": "0.1.7",
+      "installed": "0.1.7"
+    },
+    "git": {
+      "latest_tag": "v0.1.7",
+      "branch": "develop",
+      "commits_since_tag": 36,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "90b08c5"
+    },
+    "remote": {
+      "pypi": "0.1.7"
+    },
+    "status": "mismatch",
+    "issues": [
+      "36 commit(s) since 0.1.7 but version not bumped"
+    ]
+  },
+  "scitex-dsp": {
+    "local": {
+      "pyproject_toml": "0.1.7",
+      "installed": "0.1.6"
+    },
+    "git": {
+      "latest_tag": "v0.1.6",
+      "branch": "develop",
+      "commits_since_tag": 14,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "511067f"
+    },
+    "remote": {
+      "pypi": "0.1.7"
+    },
+    "status": "mismatch",
+    "issues": [
+      "pyproject.toml (0.1.7) != installed (0.1.6)",
+      "pyproject.toml (0.1.7) != git tag (0.1.6)",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-benchmark": {
+    "local": {
+      "pyproject_toml": "0.1.4",
+      "installed": "0.1.4"
+    },
+    "git": {
+      "latest_tag": "v0.1.4",
+      "branch": "develop",
+      "commits_since_tag": 32,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "3e7647d"
+    },
+    "remote": {
+      "pypi": "0.1.4"
+    },
+    "status": "mismatch",
+    "issues": [
+      "32 commit(s) since 0.1.4 but version not bumped"
+    ]
+  },
+  "scitex-bridge": {
+    "local": {
+      "pyproject_toml": "0.1.9",
+      "installed": "0.1.9"
+    },
+    "git": {
+      "latest_tag": "v0.1.9",
+      "branch": "develop",
+      "commits_since_tag": 37,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "453424e"
+    },
+    "remote": {
+      "pypi": "0.1.9"
+    },
+    "status": "mismatch",
+    "issues": [
+      "37 commit(s) since 0.1.9 but version not bumped"
+    ]
+  },
+  "scitex-capture": {
+    "local": {
+      "pyproject_toml": "0.1.2",
+      "installed": "0.1.2"
+    },
+    "git": {
+      "latest_tag": "v0.1.2",
+      "branch": "develop",
+      "commits_since_tag": 42,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "c346589"
+    },
+    "remote": {
+      "pypi": "0.1.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "42 commit(s) since 0.1.2 but version not bumped"
+    ]
+  },
+  "scitex-context": {
+    "local": {
+      "pyproject_toml": "0.1.2",
+      "installed": "0.1.2"
+    },
+    "git": {
+      "latest_tag": "v0.1.2",
+      "branch": "develop",
+      "commits_since_tag": 26,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "81b8eb3"
+    },
+    "remote": {
+      "pypi": "0.1.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "26 commit(s) since 0.1.2 but version not bumped"
+    ]
+  },
+  "scitex-cv": {
+    "local": {
+      "pyproject_toml": "0.1.3",
+      "installed": "0.1.3"
+    },
+    "git": {
+      "latest_tag": "v0.1.3",
+      "branch": "develop",
+      "commits_since_tag": 25,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "3701bce"
+    },
+    "remote": {
+      "pypi": "0.1.3"
+    },
+    "status": "mismatch",
+    "issues": [
+      "25 commit(s) since 0.1.3 but version not bumped"
+    ]
+  },
+  "scitex-datetime": {
+    "local": {
+      "pyproject_toml": "0.1.2",
+      "installed": "0.1.2"
+    },
+    "git": {
+      "latest_tag": "v0.1.2",
+      "branch": "develop",
+      "commits_since_tag": 28,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "5ff6a87"
+    },
+    "remote": {
+      "pypi": "0.1.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "28 commit(s) since 0.1.2 but version not bumped"
+    ]
+  },
+  "scitex-git": {
+    "local": {
+      "pyproject_toml": "0.1.3",
+      "installed": "0.1.3"
+    },
+    "git": {
+      "latest_tag": "v0.1.3",
+      "branch": "develop",
+      "commits_since_tag": 28,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "699f1b3"
+    },
+    "remote": {
+      "pypi": "0.1.3"
+    },
+    "status": "mismatch",
+    "issues": [
+      "28 commit(s) since 0.1.3 but version not bumped"
+    ]
+  },
+  "scitex-introspect": {
+    "local": {
+      "pyproject_toml": "0.1.5",
+      "installed": "0.1.5"
+    },
+    "git": {
+      "latest_tag": "v0.1.5",
+      "branch": "develop",
+      "commits_since_tag": 29,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "241be3c"
+    },
+    "remote": {
+      "pypi": "0.1.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "29 commit(s) since 0.1.5 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-linalg": {
+    "local": {
+      "pyproject_toml": "0.1.2",
+      "installed": "0.1.2"
+    },
+    "git": {
+      "latest_tag": "v0.1.2",
+      "branch": "develop",
+      "commits_since_tag": 35,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "ff129d1"
+    },
+    "remote": {
+      "pypi": "0.1.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "35 commit(s) since 0.1.2 but version not bumped"
+    ]
+  },
+  "scitex-msword": {
+    "local": {
+      "pyproject_toml": "0.1.2",
+      "installed": "0.1.2"
+    },
+    "git": {
+      "latest_tag": "v0.1.2",
+      "branch": "develop",
+      "commits_since_tag": 32,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "60c7c8d"
+    },
+    "remote": {
+      "pypi": "0.1.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "32 commit(s) since 0.1.2 but version not bumped"
+    ]
+  },
+  "scitex-notebook": {
+    "local": {
+      "pyproject_toml": "0.1.2",
+      "installed": "0.1.2"
+    },
+    "git": {
+      "latest_tag": "v0.1.2",
+      "branch": "develop",
+      "commits_since_tag": 58,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "10560e0"
+    },
+    "remote": {
+      "pypi": "0.1.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "58 commit(s) since 0.1.2 but version not bumped"
+    ]
+  },
+  "scitex-notification": {
+    "local": {
+      "pyproject_toml": "0.2.5",
+      "installed": "0.2.5"
+    },
+    "git": {
+      "latest_tag": "v0.2.5",
+      "branch": "develop",
+      "commits_since_tag": 48,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "7596b04"
+    },
+    "remote": {
+      "pypi": "0.2.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "48 commit(s) since 0.2.5 but version not bumped"
+    ]
+  },
+  "scitex-os": {
+    "local": {
+      "pyproject_toml": "0.1.3",
+      "installed": "0.1.3"
+    },
+    "git": {
+      "latest_tag": "v0.1.3",
+      "branch": "develop",
+      "commits_since_tag": 22,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "416c09e"
+    },
+    "remote": {
+      "pypi": "0.1.3"
+    },
+    "status": "mismatch",
+    "issues": [
+      "22 commit(s) since 0.1.3 but version not bumped"
+    ]
+  },
+  "scitex-resource": {
+    "local": {
+      "pyproject_toml": "0.3.4",
+      "installed": "0.3.4"
+    },
+    "git": {
+      "latest_tag": "v0.3.4",
+      "branch": "develop",
+      "commits_since_tag": 31,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "0536ba6"
+    },
+    "remote": {
+      "pypi": "0.3.4"
+    },
+    "status": "mismatch",
+    "issues": [
+      "31 commit(s) since 0.3.4 but version not bumped"
+    ]
+  },
+  "scitex-security": {
+    "local": {
+      "pyproject_toml": "0.1.2",
+      "installed": "0.1.2"
+    },
+    "git": {
+      "latest_tag": "v0.1.2",
+      "branch": "develop",
+      "commits_since_tag": 32,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "eb97411"
+    },
+    "remote": {
+      "pypi": "0.1.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "32 commit(s) since 0.1.2 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-session": {
+    "local": {
+      "pyproject_toml": "0.1.5",
+      "installed": "0.1.5"
+    },
+    "git": {
+      "latest_tag": "v0.1.5",
+      "branch": "develop",
+      "commits_since_tag": 28,
+      "dirty": true,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "dd54385"
+    },
+    "remote": {
+      "pypi": "0.1.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "28 commit(s) since 0.1.5 but version not bumped",
+      "uncommitted changes"
+    ]
+  },
+  "scitex-sh": {
+    "local": {
+      "pyproject_toml": "0.1.2",
+      "installed": "0.1.2"
+    },
+    "git": {
+      "latest_tag": "v0.1.2",
+      "branch": "develop",
+      "commits_since_tag": 25,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "253c9db"
+    },
+    "remote": {
+      "pypi": "0.1.2"
+    },
+    "status": "mismatch",
+    "issues": [
+      "25 commit(s) since 0.1.2 but version not bumped"
+    ]
+  },
+  "scitex-tex": {
+    "local": {
+      "pyproject_toml": "0.1.5",
+      "installed": "0.1.5"
+    },
+    "git": {
+      "latest_tag": "v0.1.5",
+      "branch": "develop",
+      "commits_since_tag": 29,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "a231ebb"
+    },
+    "remote": {
+      "pypi": "0.1.5"
+    },
+    "status": "mismatch",
+    "issues": [
+      "29 commit(s) since 0.1.5 but version not bumped"
+    ]
+  },
+  "scitex-web": {
+    "local": {
+      "pyproject_toml": "0.1.4",
+      "installed": "0.1.4"
+    },
+    "git": {
+      "latest_tag": "v0.1.4",
+      "branch": "develop",
+      "commits_since_tag": 34,
+      "dirty": false,
+      "ahead": 0,
+      "behind": 0,
+      "short_hash": "8e73213"
+    },
+    "remote": {
+      "pypi": "0.1.4"
+    },
+    "status": "mismatch",
+    "issues": [
+      "34 commit(s) since 0.1.4 but version not bumped"
+    ]
+  }
+}

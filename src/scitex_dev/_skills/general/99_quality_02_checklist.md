@@ -1,7 +1,8 @@
 ---
-name: ecosystem-quality-checklist
-description: Periodic ecosystem-wide quality checklist — run during `/speak-and-call` passes or manually between release waves. Each section lists what to verify, how to run the check, and the canonical fix — covering README consistency, Sphinx build health, CI status across all repos, PyPI ↔ git-tag ↔ pyproject version alignment, skills-tree quality (via `03_interface_04_skills/12_quality-checklist.md`), CLI noun-verb conformance (via `scitex-dev quality audit-cli`), frontmatter health (via `scitex-dev quality audit-frontmatter`), docs drift, and test-coverage regressions. Use as the strategic runbook when the ecosystem feels off, after a release wave, or on a fixed cadence. Append-only findings log at the end of the file; each pass timestamps new entries.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Ecosystem Quality Checklist
+  [DETAILS] Periodic ecosystem-wide quality checklist — run during `/speak-and-call` passes or manually between release waves. Each section lists what to verify, how to run the check, and the canonical fix — covering README consistency, Sphinx build health, CI status across all repos, PyPI ↔ git-tag ↔ pyproject version alignment, skills-tree quality (via `03_interface_04_skills/12_quality-checklist.md`), CLI noun-verb conformance (via `scitex-dev quality audit-cli`), frontmatter health (via `scitex-dev quality audit-frontmatter`), docs drift, and test-coverage regressions. Use as the strategic runbook when the ecosystem feels off, after a release wave, or on a fixed cadence. Append-only findings log at the end of the file; each pass timestamps new entries.
+tags: [scitex-general-quality-checklist]
 ---
 
 # SciTeX Ecosystem — Periodic Quality Checklist
@@ -78,7 +79,15 @@ test bug; **LOW** cosmetic. Full cookbook (~18 patterns):
 
 Leaf packages (scitex-io, scitex-stats, etc.) MUST NOT import the
 `scitex` umbrella in their tests — only in `scripts/` or `examples/`.
-Cross-package imports use `pytest.importorskip`.
+Cross-**scitex**-package imports use `pytest.importorskip` so a clean
+sibling-less venv still collects.
+
+> Optional 3rd-party deps that power *this* package's own feature
+> (e.g. `fastmcp` for a package's own MCP server) follow the opposite
+> rule: include them in `[dev]` and run the tests unconditionally. The
+> full boundary lives in
+> [01_ecosystem_02_dependency-and-version-pinning.md `[dev]` extras
+> completeness](01_ecosystem_02_dependency-and-version-pinning.md).
 
 **Check:** `scripts/audit_test_scope.py --projects-root $HOME/proj` in
 scitex-python. Reports every test-level `import scitex` / bare sibling.

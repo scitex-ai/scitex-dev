@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "scitex-dev"
-version = "0.11.1"
+dynamic = ["version"]
 description = "Shared developer utilities for the SciTeX ecosystem"
 readme = "README.md"
 license = "AGPL-3.0-only"
@@ -16,6 +16,7 @@ keywords = ["scitex", "developer-tools", "documentation", "llm-friendly", "mcp"]
 # 3.10 (tomllib is stdlib only from 3.11+; the pyproject linter needs it).
 dependencies = [
     "scitex-config>=0.3.0",
+    "scitex-logging>=0.1.0",
     "newb>=0.3.0",
     'tomli>=2.0; python_version < "3.11"',
 ]
@@ -23,8 +24,23 @@ dependencies = [
 [project.optional-dependencies]
 cli = ["click>=8.0.0"]
 mcp = ["fastmcp>=2.0.0"]
-dev = ["click>=8.0.0", "pytest>=7.0.0", "pytest-cov>=4.0.0"]
+dev = [
+    "click>=8.0.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "fastmcp>=2.0.0",
+    "pyyaml>=6.0",
+    "textual>=0.50.0",
+    # NOTE: do NOT add `scitex-dev>=X.Y` here — it creates an unresolvable
+    # circular dependency in CI (the local editable install resolves to
+    # `0.1.dev1+g<sha>` via setuptools-scm, which fails `>=0.11.5`). The
+    # `scitex-dev` console script is provided by the package itself once
+    # `pip install -e .[dev]` runs, so PS-150's `shutil.which` check still
+    # works. If the meta-audit test must hard-fail (not skip) when the CLI
+    # is absent, gate it explicitly rather than via this circular pin.
+]
 cli-audit = ["click>=8.0.0", "pyyaml>=6.0"]
+tui = ["textual>=0.50.0"]
 docs = [
     "sphinx>=7.0",
     "sphinx-rtd-theme>=2.0",
@@ -38,6 +54,7 @@ all = [
     "scitex-dev[dev]",
     "scitex-dev[docs]",
     "scitex-dev[cli-audit]",
+    "scitex-dev[tui]",
 ]
 
 [project.scripts]
@@ -53,6 +70,10 @@ scitex-dev = "scitex_dev"
 Homepage = "https://github.com/ywatanabe1989/scitex-dev"
 Repository = "https://github.com/ywatanabe1989/scitex-dev"
 Documentation = "https://scitex-dev.readthedocs.io/"
+
+[tool.setuptools_scm]
+# Empty body: derive version from latest git tag (vX.Y.Z → X.Y.Z).
+# Eliminates pyproject↔tag drift; release flow is `git tag vX.Y.Z && git push --tags`.
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -76,3 +97,14 @@ markers = [
     "skill_quality: structural checklist tests (§1–§4)",
     "skill_trigger: trigger-rate tests (live claude -p, slow, non-deterministic)",
 ]
+
+# Subprocess coverage wiring: see
+# src/scitex_dev/_skills/general/05_development_06_subprocess-coverage.md.
+# parallel=true → each child writes its own .coverage.<host>.<pid> shard so
+# `coverage combine` can merge them. concurrency covers both subprocess.run
+# spawns and threaded test code. source pins to the import name so coverage
+# excludes site-packages noise.
+[tool.coverage.run]
+parallel = true
+source = ["scitex_dev"]
+concurrency = ["multiprocessing", "thread"]

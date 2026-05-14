@@ -1,8 +1,8 @@
 ---
-name: interface-cli-checklist
-description: SciTeX CLI manual audit checklist — covers all sections. Run before shipping a CLI. Items marked (A) are auto-checked by `scitex-dev ecosystem audit-cli`; the rest are manual.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Checklist
+  [DETAILS] SciTeX CLI manual audit checklist — covers all sections. Run before shipping a CLI. Items marked (A) are auto-checked by `scitex-dev ecosystem audit-cli`; the rest are manual.
+tags: [scitex-general-interface-cli-audit-checklist]
 ---
 
 # §9. Audit checklist

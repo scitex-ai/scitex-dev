@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="https://scitex-dev.readthedocs.io/">Full Documentation</a> · <code>pip install scitex-dev</code>
+  <a href="https://scitex-dev.readthedocs.io/">Full Documentation</a> · <code>uv pip install scitex-dev[all]</code>
 </p>
 
 ---
@@ -30,6 +30,7 @@
 | 2 | **Skills scattered across ~70 source repos** -- AI agents can't discover them; humans can't review them | **`scitex-dev skills list / get / export`** -- aggregate every package's `_skills/` and symlink them into `~/.claude/skills/scitex/` for live-edit dev loops |
 | 3 | **Coordinated releases need ten manual steps** -- bump version, push tag, watch CI, verify PyPI, deploy — done per-package, multiplied by 70 | **`scitex-dev ecosystem sync` + `check-versions` + `start-dashboard`** -- one-shot install/sync across hosts, version-mismatch detection, and a web dashboard with the live state |
 | 4 | **Bulk renames across 70 repos break cross-references** -- import paths, doc references, symlinks — `sed -i` corrupts something every time | **`scitex-dev rename-symbols`** -- atomic rename with cross-reference updates, regex support, dry-run preview, git-safety guards |
+| 5 | **Lint rules drift from the API they enforce** -- a renamed function in figrecipe leaves the rule pointing at a nonexistent symbol, and the bug only shows up months later | **`scitex-dev linter`** (engine, formerly `scitex-linter`) -- aggregates per-package rule plugins via the `scitex_dev.linter.plugins` entry point. Rules ship in the package whose API they enforce, so rename + rule + test land in one PR. Doc-block linting for `.py` / `.ipynb` / `.md` / `.rst`. `scitex-dev linter sweep` walks every package's README + docs in one shot |
 
 ## Installation
 
@@ -68,6 +69,74 @@ local-state locations:
 Project-local wins when both exist. Both are optional.
 
 </details>
+
+## Architecture
+
+```
+scitex_dev/
+├── _cli/
+│   ├── audit/                ← rule corpus (PA*, PS*, SK*, §*)
+│   │   ├── _api/             ← Python-API rules (PA-1xx)
+│   │   ├── _project/         ← project-structure rules (PS-1xx, PS-5xx)
+│   │   ├── _skills/          ← skill-file rules (SK-1xx)
+│   │   └── _summary/         ← CLI/MCP §-rules + audit-all wrapper
+│   ├── ecosystem/            ← cross-package commands (audit-all, list, …)
+│   └── _skills.py            ← `scitex-dev skills` group
+├── _ecosystem/               ← shared helpers (skill-quality, ECOSYSTEM map)
+├── _skills/                  ← canonical skill-file corpus shipped to agents
+└── testing/                  ← `audit_all_for_package` pytest helper
+```
+
+Audit rules live alongside the code they check. Each rule has a
+docstring, an entry in `RULES`, a severity in `_SEVERITY_OVERRIDES`,
+and at least one unit test under `tests/.../_audit/_project/`.
+
+## Demo
+
+```mermaid
+flowchart LR
+    A["scitex-dev ecosystem<br/>audit-all <pkg>"] --> B[audit-cli]
+    A --> C[audit-mcp-tools]
+    A --> D[audit-skills]
+    A --> E[audit-python-apis]
+    A --> F[audit-project]
+    B & C & D & E & F --> G{any error?}
+    G -- "yes" --> H["exit 1<br/>(CI fails)"]
+    G -- "no" --> I["exit 0<br/>(CI green)"]
+```
+
+`scitex-dev` is a CLI/audit tool — its "demo" is the audit running on a
+package. Sample output (run on `scitex-io`):
+
+```
+=== audit-cli ===
+ok    scitex-io: no CLI convention violations
+
+=== audit-mcp-tools ===
+ok  scitex-io: no MCP convention violations
+
+=== audit-skills ===
+ok  scitex-io: no skills violations
+
+=== audit-python-apis ===
+ok  scitex-io: no Python API violations
+
+=== audit-project ===
+ok  scitex-io: no project-structure violations
+```
+
+Failure mode (sample, scitex-dsp before the Hilbert fix):
+
+```
+=== audit-project ===
+fail  scitex-dsp (/home/ywatanabe/proj/scitex-dsp): 2 error(s)
+  [E] [PS-141 §1] README.md: missing mandatory `## Demo` section
+  [E] [PS-503 §5] examples/01_demo_out: no FINISHED_SUCCESS/<session_id>/ subdir
+```
+
+See [`examples/`](examples/) for runnable demos that exercise
+`scitex-dev`'s own commands (search, version-management, docs
+aggregation).
 
 ## Four Interfaces
 

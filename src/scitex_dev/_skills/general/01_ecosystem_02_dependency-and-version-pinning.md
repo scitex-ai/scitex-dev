@@ -1,7 +1,8 @@
 ---
-name: ecosystem-dependency-and-version-pinning
-description: Dependency hygiene and version-pinning rules across the SciTeX 3-layer cascade — what each package may depend on (upstream only, never downstream), how to declare minima (`>=X.Y` for scitex-* pkgs, exact pin only for security patches), optional-extras pattern (`pip install scitex[plt,stats]`), coordinated release waves so downstream consumers can bump their minima immediately, detection of circular/skipping deps, and the "when you bump, bump consumers' minima" rule. Use when editing any `pyproject.toml`, planning a release wave, or auditing cross-package version drift.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Ecosystem Dependency And Version Pinning
+  [DETAILS] Dependency hygiene and version-pinning rules across the SciTeX 3-layer cascade — what each package may depend on (upstream only, never downstream), how to declare minima (`>=X.Y` for scitex-* pkgs, exact pin only for security patches), optional-extras pattern (`pip install scitex[plt,stats]`), coordinated release waves so downstream consumers can bump their minima immediately, detection of circular/skipping deps, and the "when you bump, bump consumers' minima" rule. Use when editing any `pyproject.toml`, planning a release wave, or auditing cross-package version drift.
+tags: [scitex-general-ecosystem-dependency-and-version-pinning]
 ---
 
 # Dependency Hygiene & Version Pinning
@@ -56,6 +57,48 @@ Downstream is **standalone**, not **zero-dep**. Third-party runtime deps (numpy,
 - [ ] `pip install <pkg>` in a clean venv produces a working package with no other `scitex-*` installed.
 
 Good example (`figrecipe`): `matplotlib`, `numpy`, `ruamel.yaml`, `scipy`, `click`, `rich` — six tight runtime deps, everything else (Pillow, seaborn, scitex integration) behind extras.
+
+## `[dev]` extras completeness — fastmcp lesson, 2026-05-02
+
+**Rule.** `[dev]` MUST install every dependency that this package's own
+test suite imports unconditionally. The only legitimate way to leave
+something out of `[dev]` is to also gate the tests with
+`pytest.importorskip(...)`. Pick one.
+
+The boundary is **whose feature is being tested**:
+
+| Tested feature lives in… | `[dev]` does | Tests do |
+|---|---|---|
+| **This package's own `src/`** (e.g. `scitex-notebook`'s MCP server uses `fastmcp`) | Pull the optional 3rd-party dep in so a fresh `pip install -e .[dev]` runs the full suite. **Do NOT** `importorskip`. | Run unconditionally — the feature is yours; commit to testing it. |
+| **A sibling `scitex-*` package** (cross-cascade integration test) | Leave the sibling out. Listing it pulls in heavy transitive deps, can shadow editable installs ([03_interface_03_mcp/09 lesson 4](../03_interface_03_mcp/09_lessons-and-pitfalls.md)), and re-introduces lockstep coupling. | `pytest.importorskip("scitex_<sibling>")` — exists when the sibling is around, skips cleanly when not. |
+| **A 3rd-party dep this package merely *integrates with*** (e.g. matplotlib plot test) | Pragmatic — include if every CI matrix entry has it; skip if some dimensions deliberately exclude it. | Match the `[dev]` choice. |
+
+**Symmetric pyproject pattern.** When a package has an optional feature
+extra `[X]` (e.g. `[mcp]`) AND the test suite covers that feature, the
+`[dev]` extra must include the same dep:
+
+```toml
+[project.optional-dependencies]
+mcp = ["fastmcp>=2.0"]                # production users opt in
+dev = [
+    "pytest>=7.0", "pytest-cov>=4.0", "ruff",
+    # Optional features whose tests live in the suite — installed in
+    # [dev] so a fresh `pip install -e .[dev]` runs the full suite.
+    "fastmcp>=2.0",
+]
+```
+
+**Why this matters.** A bare `pip install -e .[dev]` is the canonical
+contributor-onboarding command and what every CI workflow runs
+([02_package_07_github-actions.md](../02_package_07_github-actions.md)).
+If `[dev]` is incomplete, contributors hit `ModuleNotFoundError` at
+test-collection time and CI breaks on the first push that touches the
+feature. The 2026-05-02 scitex-notebook MCP refactor hit this exact
+failure mode on its first push to `develop`.
+
+**Detection.** `audit-project`'s `PS-210` check flags any pyproject extra
+whose declared deps are referenced unconditionally from `tests/` but
+missing from `[dev]`.
 
 ## Optional Dependency Pattern
 

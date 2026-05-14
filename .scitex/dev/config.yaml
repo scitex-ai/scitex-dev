@@ -1,0 +1,13 @@
+# Per-repo overrides for scitex-dev auditors.
+# See _skills/general/01_ecosystem_06_local-state-directories.md and
+# _skills/general/02_package_06_project-structure-tests.md for the full
+# config schema and rule index.
+
+audit:
+  # Whitelisted top-level directories/files that PS-103 would otherwise
+  # flag as "junk at repo root". Empty for now; add an entry only when the
+  # artefact genuinely belongs in this repo's root (otherwise relocate to
+  # ./.dev/ or ./GITIGNORED/).
+  root-whitelist:
+    dirs: []
+    files: []

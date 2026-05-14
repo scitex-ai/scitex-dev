@@ -29,7 +29,7 @@ def register_skills_commands(main_group):
             $ scitex-dev skills list --json
             $ scitex-dev skills list --package scitex-io
         """
-        from ...skills import list_skills
+        from ..._ecosystem._skills.skills import drift_warning, list_skills
 
         result = list_skills(package=package)
         if as_json:
@@ -45,6 +45,12 @@ def register_skills_commands(main_group):
                 for s in items:
                     desc = f" -- {s['description']}" if s["description"] else ""
                     click.echo(f"  {s['name']}{desc}")
+            # Non-blocking drift signal: cached skills older than the
+            # installed package version. Stderr only; never prompts.
+            for pkg in result:
+                w = drift_warning(pkg)
+                if w:
+                    click.echo(w, err=True)
 
     @skills.command("get")
     @click.argument("package")
@@ -61,7 +67,10 @@ def register_skills_commands(main_group):
             $ scitex-dev skills get scitex-stats hypothesis-testing --json
             $ scitex-dev skills get all
         """
-        from ...skills import get_skill, list_skills
+        from ..._ecosystem._skills.skills import (
+            get_skill,
+            list_skills,
+        )
 
         if package == "all":
             all_skills = list_skills()
@@ -91,10 +100,126 @@ def register_skills_commands(main_group):
                 )
             else:
                 click.echo(content)
+            # Non-blocking drift signal: cached skill older than installed.
+            # Stderr only; never prompts.
+            w = drift_warning(package)
+            if w:
+                click.echo(w, err=True)
         else:
             target = f"'{name}' in " if name else ""
             click.echo(f"Skill {target}package '{package}' not found.", err=True)
             raise SystemExit(1)
+
+    @skills.command("init")
+    @click.option(
+        "--package",
+        "pip_name",
+        required=True,
+        help="pip distribution name (e.g. `my-package`).",
+    )
+    @click.option(
+        "--import-name",
+        default=None,
+        help="Python import name (default: pip-name with `-` → `_`).",
+    )
+    @click.option(
+        "--dest",
+        type=click.Path(),
+        default=None,
+        help="Target directory (default: src/<import>/_skills/<pip-name>/).",
+    )
+    @click.option(
+        "--with-cli/--no-cli", default=True, help="Include 04_cli-reference.md."
+    )
+    @click.option("--with-mcp/--no-mcp", default=False, help="Include 05_mcp-tools.md.")
+    @click.option(
+        "--with-http/--no-http", default=False, help="Include 06_http-api.md."
+    )
+    @click.option("--with-env/--no-env", default=True, help="Include 20_env-vars.md.")
+    @click.option("--force", is_flag=True, help="Overwrite existing files.")
+    @click.option("--dry-run", is_flag=True, help="Preview without writing.")
+    @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def skills_init(
+        pip_name,
+        import_name,
+        dest,
+        with_cli,
+        with_mcp,
+        with_http,
+        with_env,
+        force,
+        dry_run,
+        as_json,
+        yes,
+    ):
+        """Scaffold a `_skills/<pip-name>/` tree per the standard template.
+
+        \b
+        Examples:
+          scitex-dev skills init --package my-package
+          scitex-dev skills init --package scitex-foo --with-mcp --with-http
+          scitex-dev skills init --package my-package --dest /tmp/skills/ --dry-run
+        """
+        del yes  # accepted for §2 compliance; init honours --dry-run for preview
+        import json as _json
+        from pathlib import Path
+
+        from ..._ecosystem._skills._scaffold import (
+            build_plan,
+            scaffold_package_skills,
+        )
+
+        imp = import_name or pip_name.replace("-", "_")
+        target = Path(dest) if dest else Path("src") / imp / "_skills" / pip_name
+        plan = build_plan(
+            pip_name=pip_name,
+            import_name=imp,
+            dest=target,
+            with_cli=with_cli,
+            with_mcp=with_mcp,
+            with_http=with_http,
+            with_env=with_env,
+        )
+
+        if dry_run:
+            payload = {
+                "dest": str(plan.dest),
+                "files": sorted(plan.files.keys()),
+            }
+            if as_json:
+                click.echo(_json.dumps(payload, indent=2))
+            else:
+                click.echo(f"Would scaffold {len(plan.files)} files at {plan.dest}/")
+                for name in payload["files"]:
+                    click.echo(f"  {name}")
+            return
+
+        written, skipped = scaffold_package_skills(plan, force=force)
+        if as_json:
+            click.echo(
+                _json.dumps(
+                    {
+                        "dest": str(plan.dest),
+                        "written": [str(p) for p in written],
+                        "skipped": [str(p) for p in skipped],
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            click.echo(
+                f"Scaffolded {len(written)} files at {plan.dest}/"
+                + (
+                    f" ({len(skipped)} skipped — use --force to overwrite)"
+                    if skipped
+                    else ""
+                )
+            )
+            for p in written:
+                click.echo(f"  + {p.name}")
+            for p in skipped:
+                click.echo(f"  . {p.name} (exists)")
 
     # ----- Canonical: `skills install` (replaces `export` + `collect`) -----
     @skills.command("install")
@@ -151,7 +276,7 @@ def register_skills_commands(main_group):
         import os as _os
         from pathlib import Path
 
-        from ...skills import export_skills, list_skills
+        from ..._ecosystem._skills.skills import export_skills, list_skills
 
         # Default to ~/.scitex/dev/skills/ (peer to other ~/.scitex/<pkg>/ stores)
         target = Path(dest) if dest else Path.home() / ".scitex" / "dev" / "skills"
@@ -233,11 +358,11 @@ def register_skills_commands(main_group):
         """Export skills to ~/.claude/skills/scitex/."""
         import json as json_mod
         from pathlib import Path
-        from ...skills import _get_default_export_dest, export_skills
+        from ..._ecosystem._skills.skills import _get_default_export_dest, export_skills
 
         target = Path(dest) if dest else _get_default_export_dest()
         if dry_run:
-            from ...skills import list_skills
+            from ..._ecosystem._skills.skills import list_skills
 
             result = {
                 k: [e["name"] + ".md" for e in v]
@@ -265,7 +390,7 @@ def register_skills_commands(main_group):
     # command going forward because the destination is always required —
     # callers can't be surprised by a hidden default like `export`'s
     # `~/.claude/skills/scitex/`.
-    @skills.command("self-explain")
+    @skills.command("explain-self")
     @click.argument("distribution")
     @click.option("--model", default="claude-haiku-4-5", help="Claude model id.")
     @click.option(
@@ -313,6 +438,37 @@ def register_skills_commands(main_group):
             click.echo(render_markdown(result), nl=False)
         else:
             click.echo(_json.dumps(result, indent=2))
+
+    # Deprecated alias for backward compatibility.
+    @skills.command("self-explain", hidden=True)
+    @click.argument("distribution")
+    @click.option("--model", default="claude-haiku-4-5", help="Claude model id.")
+    @click.option(
+        "--runs", default=1, type=int, help="Runs per prompt (>1 returns lists)."
+    )
+    @click.option(
+        "--format",
+        "out_format",
+        type=click.Choice(["json", "markdown"]),
+        default="json",
+    )
+    @click.option("--json", "as_json", is_flag=True, default=False)
+    @click.pass_context
+    def skills_self_explain_alias(ctx, distribution, model, runs, out_format, as_json):
+        """Deprecated alias for `skills explain-self`.
+
+        \b
+        Example:
+            $ scitex-dev skills self-explain scitex-io
+        """
+        ctx.invoke(
+            skills_self_explain,
+            distribution=distribution,
+            model=model,
+            runs=runs,
+            out_format=out_format,
+            as_json=as_json,
+        )
 
     @skills.command("expand-tags")
     @click.argument("tag")
@@ -394,7 +550,7 @@ def register_skills_commands(main_group):
         import json as json_mod
         from pathlib import Path
 
-        from ...skills import export_skills, list_skills
+        from ..._ecosystem._skills.skills import export_skills, list_skills
 
         target = Path(destination)
         if dry_run:

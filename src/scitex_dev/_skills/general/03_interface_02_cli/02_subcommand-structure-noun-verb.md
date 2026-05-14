@@ -1,8 +1,8 @@
 ---
-name: interface-cli-noun-verb
-description: SciTeX CLI subcommand grammar — chain shape `<cli> <noun> [<noun> …] <verb>`, transitive vs intransitive verbs, tree vs compound-leaf, ambiguous tokens.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Noun Verb
+  [DETAILS] SciTeX CLI subcommand grammar — chain shape `<cli> <noun> [<noun> …] <verb>`, transitive vs intransitive verbs, tree vs compound-leaf, ambiguous tokens.
+tags: [scitex-general-interface-cli-subcommand-structure-noun-verb]
 ---
 
 # §1. Subcommand structure — noun-verb
@@ -58,6 +58,25 @@ Chain shape:
 | `<cli> list`      | ✗        | no object anywhere                     | **never**                      |
 | `<cli> job`       | ✗        | trailing noun, no action               | **never** (unless exception)   |
 
+## Polysemous "show-me-X" leaves under a noun group
+
+A small set of tokens (`status`, `logs`, `log`, `info`, `health`,
+`summary`, `report`) are technically nouns but read as
+intransitive-verb shorthand for "report this thing's status / logs /
+…". They are allowed as **leaf tokens under a noun group**:
+
+```
+<cli> agent status                   # ok — noun group + polysemous leaf
+<cli> job logs                       # ok — same shape
+```
+
+They are still **forbidden as bare top-level leaves** — `<cli> status`
+fails §1 (no object). The catalog labels them as `{noun, verb-i}`; the
+auditor's polysemous-escape lets them through specifically when nested.
+
+This avoids both the `show-status`/`list-logs` compound clutter and the
+audit's strict "leaf must be verb" complaint.
+
 ## Ambiguous tokens (noun+verb in English)
 
 - Words like `list`, `start`, `run`, `package`, `host`, `job`, `shell`, `doctor` are grammatically both.
@@ -90,11 +109,38 @@ The `scitex-dev ecosystem audit-cli` linter ([07_audit-cli.md](07_audit-cli.md))
 ## Anti-patterns
 
 ```
-<cli> list                              # bare transitive verb
+<cli> list                              # bare transitive verb (no object)
 <cli> dashboard                         # trailing noun (use start-dashboard)
 <cli> create resource <name>            # verb before noun
 <cli> resource send heartbeat           # compound verb split
 ```
+
+## Exception — verb with required positional object
+
+A bare transitive verb at the top level is **acceptable** when it
+takes its object as a required positional argument:
+
+```
+<cli> install <pkg>                     # ok — object is the positional
+<cli> commit -m "..."                   # ok — same shape
+<cli> verify <SOURCE>                   # ok — SOURCE is the object
+```
+
+Compare `pip install <pkg>`, `git commit`, `pytest <path>` — ergonomic,
+unambiguous, no `<verb>-<noun>` clutter. The auditor's §1 rule has a
+matching exception (`_has_required_positional`): if the leaf declares
+at least one required positional argument, the warning is suppressed.
+
+This means the design choice between
+`<cli> verify-package <SOURCE>` (hyphenated compound) and
+`<cli> verify <SOURCE>` (verb + positional) is up to taste. **Both pass
+the audit.** Pick the one that reads better to your users — for action
+verbs whose object is *the* positional, the second form is almost
+always cleaner.
+
+Pure pytest-style — `<cli> <SOURCE>` with no verb at all (positional
+on the group itself) — is also fine and even more concise; pick this
+when there's a single dominant action and verbs would just be noise.
 
 ## Rationale
 

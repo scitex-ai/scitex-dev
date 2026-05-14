@@ -4,7 +4,7 @@ Rules cover the automatable items from
 `scitex-dev/src/scitex_dev/_skills/general/02_package_01_project-structure.md`
 (and its sibling `scientific/02_research-project_01_project-structure.md`).
 
-Numbering: ``PS<§><idx>`` (PS = Project Structure), e.g. PS201 = §2 rule 01.
+Numbering: ``PS<§><idx>`` (PS = Project Structure), e.g. PS-201 = §2 rule 01.
 Mirrors the ``PA<n>`` / ``SK<n>`` / ``M<n>`` pattern of sibling auditors.
 """
 
@@ -22,30 +22,49 @@ class Rule:
     code: str
     section: str
     message: str
+    # Severity drives the audit's exit code:
+    #   E (error)   — at least one E finding fails the audit (exit 1)
+    #   W (warning) — printed but does not fail (exit 0 if no E findings)
+    #   I (info)    — printed only with --severity info; never fails
+    # Default W keeps existing rules backward-compatible until each is
+    # explicitly tagged. Promote to E when the rule is well-tested and the
+    # ecosystem has already been brought into compliance.
+    severity: str = "W"
+    # Short kebab-case human-readable name (e.g. "examples-need-finished-success").
+    # Surfaces in `audit-all` output as `[CODE §X slug] …` so reviewers can
+    # read intent without cross-referencing rule numbers.
+    slug: str = ""
 
 
 RULES: dict[str, Rule] = {
     r.code: r
     for r in [
         # §1 Top-level layout ---------------------------------------------------
-        Rule("PS101", "§1", "missing pyproject.toml at repo root"),
         Rule(
-            "PS102",
+            "PS-101",
+            "§1",
+            "missing pyproject.toml at repo root",
+            slug="pyproject-missing",
+        ),
+        Rule(
+            "PS-102",
             "§1",
             "forbidden top-level dir present (use the canonical location instead)",
+            slug="top-level-forbidden-dir",
         ),
         Rule(
-            "PS103",
+            "PS-103",
             "§1",
             "top-level junk file (move to ./.dev/<category>/ or delete)",
+            slug="top-level-junk-file",
         ),
         Rule(
-            "PS104",
+            "PS-104",
             "§1",
             "uses `.playground/` — collapsed into `.dev/` for easier typing",
         ),
         Rule(
-            "PS105",
+            "PS-105",
             "§1",
             (
                 "package registers console_scripts but has no `__main__.py` — "
@@ -56,7 +75,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS106",
+            "PS-106",
             "§1",
             (
                 "README.md is missing a coverage badge — every scitex-* "
@@ -69,7 +88,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS107",
+            "PS-107",
             "§1",
             (
                 "README.md is missing required H2 sections "
@@ -79,7 +98,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS109",
+            "PS-109",
             "§1",
             (
                 "README.md is missing a PyPI version badge "
@@ -88,7 +107,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS110",
+            "PS-110",
             "§1",
             (
                 "README.md is missing the Four Freedoms for Research "
@@ -96,7 +115,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS111",
+            "PS-111",
             "§1",
             (
                 "README.md contains a banned personal email "
@@ -104,7 +123,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS112",
+            "PS-112",
             "§1",
             (
                 "README.md is missing a SciTeX logo image at the top "
@@ -112,7 +131,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS113",
+            "PS-113",
             "§1",
             (
                 "README.md is missing a SciTeX icon footer — centered "
@@ -120,7 +139,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS114",
+            "PS-114",
             "§1",
             (
                 "README.md `## Problem and Solution` section is prose-only — "
@@ -129,7 +148,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS115",
+            "PS-115",
             "§1",
             (
                 "README.md `## Part of SciTeX` section does not open with "
@@ -138,7 +157,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS108",
+            "PS-108",
             "§1",
             (
                 "flat package layout: ≥3 sibling `.py` files at `src/<pkg>/` "
@@ -149,7 +168,21 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS116",
+            "PS-108b",
+            "§1",
+            (
+                "topical clutter: >15 flat `.py` files at `src/<pkg>/` root "
+                "(or any subpackage) without shared prefix. PS-108 only "
+                "catches prefix clusters; this catches the second mess "
+                "pattern — many flat files sharing a topic but no prefix. "
+                "Group into `_release/`, `_docs/`, `_core/`, `_quality/` "
+                "subpackages by topical responsibility (single-file "
+                "orphans stay flat). See "
+                "general/02_package_02_project-structure-src.md."
+            ),
+        ),
+        Rule(
+            "PS-116",
             "§1",
             (
                 "README.md uses the deprecated `> **Interfaces:** ...` "
@@ -159,7 +192,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS117",
+            "PS-117",
             "§1",
             (
                 'README.md has a duplicate badge block: a `<p align="center">` '
@@ -170,7 +203,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS118",
+            "PS-118",
             "§1",
             (
                 "README.md interface section header carries a banned "
@@ -180,7 +213,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS119",
+            "PS-119",
             "§1",
             (
                 "README.md contains a `> **SciTeX users**: pip install scitex "
@@ -190,7 +223,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS120",
+            "PS-120",
             "§1",
             (
                 "README.md `## Part of SciTeX` section is missing the "
@@ -201,7 +234,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS121",
+            "PS-121",
             "§1",
             (
                 "package has `docs/sphinx/conf.py` but no "
@@ -213,7 +246,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS122",
+            "PS-122",
             "§1",
             (
                 "package has `docs/sphinx/` but no "
@@ -224,7 +257,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS123",
+            "PS-123",
             "§1",
             (
                 "README.md interface section has a `Full X reference` link "
@@ -236,7 +269,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS124",
+            "PS-124",
             "§1",
             (
                 "package has `docs/sphinx/` but no `.readthedocs.yaml` (or "
@@ -246,7 +279,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS125",
+            "PS-125",
             "§1",
             (
                 "`.readthedocs.yaml` deviates from the canonical SciTeX "
@@ -257,7 +290,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS126",
+            "PS-126",
             "§1",
             (
                 "`docs/sphinx/requirements.txt` is missing or doesn't pin "
@@ -269,7 +302,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS127",
+            "PS-127",
             "§1",
             (
                 "`pyproject.toml [project.urls]` has no "
@@ -280,7 +313,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS128",
+            "PS-128",
             "§1",
             (
                 "`.gitignore` excludes `src/<pkg>/_sphinx_html/` but the "
@@ -291,7 +324,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS129",
+            "PS-129",
             "§1",
             (
                 "package source references `SCITEX_<MODULE>_*` env vars "
@@ -302,7 +335,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS130",
+            "PS-130",
             "§1",
             (
                 "README has `## Environment Variables` AND `.env.example` "
@@ -312,7 +345,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS131",
+            "PS-131",
             "§1",
             (
                 "README.md `## <N> Interfaces` section must have at least "
@@ -323,7 +356,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS132",
+            "PS-132",
             "§1",
             (
                 "README.md has a standalone `## Modules` H2 (a hand-curated "
@@ -334,39 +367,444 @@ RULES: dict[str, Rule] = {
                 "cover this."
             ),
         ),
+        Rule(
+            "PS-133",
+            "§1",
+            (
+                "missing CLA.md at repo root — every public scitex-* package "
+                "needs a Contributor License Agreement so external PRs can be "
+                "merged without legal ambiguity. Use the canonical CLA.md "
+                "from any current sibling package as the template."
+            ),
+        ),
+        Rule(
+            "PS-134",
+            "§1",
+            (
+                "missing CHANGELOG.md at repo root — every shipping package "
+                "needs a Keep-a-Changelog-style file so consumers can see "
+                "what changed across versions. New packages start with an "
+                "[Unreleased] section."
+            ),
+        ),
+        Rule(
+            "PS-135",
+            "§1",
+            (
+                "missing CONTRIBUTING.md at repo root — every public package "
+                "needs contributor guidance (branch naming, test workflow, "
+                "PR conventions). Use the canonical CONTRIBUTING.md from "
+                "any current sibling package as the template."
+            ),
+        ),
+        Rule(
+            "PS-136",
+            "§1",
+            (
+                "missing or empty examples/ directory at repo root — every "
+                "scitex-* package must show working code: at least one "
+                "runnable `examples/<NN_>name.py` (or `.ipynb`) demonstrating "
+                "the primary use case. Without examples, agents and humans "
+                "have to grep tests/ to learn the API. See `_skills/general/"
+                "02_package_01_project-structure.md`."
+            ),
+        ),
+        Rule(
+            "PS-137",
+            "§1",
+            (
+                "missing README.md at repo root — every package's first-touch "
+                "documentation surface. Use the canonical template at "
+                "`_skills/general/04_docs_01_readme_template.md`."
+            ),
+        ),
+        Rule(
+            "PS-138",
+            "§1",
+            (
+                "missing LICENSE at repo root — every public scitex-* "
+                "package must declare its license. Accepted: `LICENSE`, "
+                "`LICENSE.md`, or `LICENSE.txt`. The umbrella ships AGPL-3.0 "
+                "with the Four-Freedoms-for-Research footer."
+            ),
+        ),
+        Rule(
+            "PS-138b",
+            "§1",
+            (
+                "LICENSE file exists but content does not match SPDX "
+                "declaration `AGPL-3.0-only` — likely a copyright stub "
+                "instead of the full AGPL-3.0 text. The on-disk license "
+                "must contain the full GNU AGPL v3 license, not just a "
+                "title + copyright line. See "
+                "`_skills/general/01_ecosystem_07_license-and-cla.md`."
+            ),
+        ),
+        Rule(
+            "PS-139",
+            "§1",
+            (
+                "pyproject.toml lists `scitex` (the umbrella) as a dependency "
+                "or extras member. This creates a circular drag: the umbrella "
+                "depends on standalones, so a standalone depending on the "
+                "umbrella means installing one pulls the entire ecosystem and "
+                "every `import scitex_<pkg>` traverses the umbrella's lazy "
+                "re-export __init__. Replace with the specific peer "
+                "standalone(s) (e.g. `scitex-session>=0.1.0`). See "
+                "`_skills/general/03_interface_01_python-api/"
+                "11_import-conventions.md`."
+            ),
+        ),
+        Rule(
+            "PS-141",
+            "§1",
+            (
+                "README.md is missing a mandatory `## Demo` section "
+                "containing at least one visual element. Accepted (inside "
+                "the section body): Markdown image `![alt](path.png)`, "
+                'HTML `<img src="…">` pointing at a non-shields.io URL, '
+                "or a fenced ```mermaid block. Demos drive discovery; "
+                "every package must show what it does, not just describe "
+                "it."
+            ),
+        ),
+        Rule(
+            "PS-142",
+            "§1",
+            (
+                "README.md is missing a mandatory `## Architecture` "
+                "section. Accepted body forms: a fenced ```mermaid block, "
+                "an ASCII text diagram (fenced code block ≥10 lines), a "
+                "file-tree listing (lines containing `├──`/`└──`/`│`), or "
+                "an `<img>` tag. Even small packages should sketch their "
+                "module layout so readers see structure at a glance."
+            ),
+        ),
+        Rule(
+            "PS-143",
+            "§1",
+            (
+                "README.md sections do not appear in canonical order. The "
+                "expected order (skipping any section the package omits) "
+                "is: `Problem and Solution` → `Installation` → "
+                "`Architecture` → `<N> Interfaces` → `Demo` → "
+                "`Quick Start` (optional) → `Part of SciTeX`. Re-order "
+                "the H2 headers; drift accumulates fast across packages "
+                "if order is left to taste."
+            ),
+        ),
+        Rule(
+            "PS-144",
+            "§1",
+            (
+                "README.md `## Problem and Solution` table cells violate "
+                "bold-emphasis rules. A cell must (a) contain at least "
+                "one `**bold**` span, (b) bold ≤ 30 % of the cell's text "
+                "(bolding entire sentences defeats emphasis), and (c) be "
+                "≤ 200 characters per cell (long prose belongs in section "
+                "body, not a row). Bold the key noun phrase only."
+            ),
+        ),
+        Rule(
+            "PS-152",
+            "§1",
+            (
+                "README.md has separate `## Problem` and/or `## Solution` "
+                "H2 sections instead of a single merged "
+                "`## Problem and Solution` table (one row per pain "
+                "point). See scitex-io README for the canonical form."
+            ),
+            slug="readme-split-problem-solution",
+        ),
+        Rule(
+            "PS-153",
+            "§1",
+            (
+                "README.md `## Architecture` (or `## How it works`) "
+                "section contains a file tree (`├──`/`└──`/`│`) but "
+                "no ```mermaid fence. The directory tree is duplicate "
+                "information already in `_sphinx_html/` and `autoapi`. "
+                "Replace it with a `mermaid flowchart` showing the "
+                "logic/workflow — see scitex-io README §1."
+            ),
+            slug="readme-architecture-filetree-not-mermaid",
+        ),
+        Rule(
+            "PS-154",
+            "§1",
+            (
+                "README.md `## Installation` section must start with one "
+                '`uv pip install "<pkg>[all]"` fenced bash line; any '
+                "per-module extras matrix table must live inside a "
+                "`<details>` block. See scitex-io README §Installation."
+            ),
+            slug="readme-installation-not-canonical",
+        ),
+        Rule(
+            "PS-155",
+            "§1",
+            (
+                "README.md badge row between `<!-- scitex-badges:start "
+                "-->` and `<!-- scitex-badges:end -->` should split "
+                'into exactly two `<p align="center">` rows — row 1: '
+                "PyPI / Python / Read the Docs; row 2: Tests / Install "
+                "Test / Coverage. See scitex-io README header for the "
+                "canonical form."
+            ),
+            slug="readme-badge-row-not-two-rows",
+        ),
+        Rule(
+            "PS-156",
+            "§1",
+            (
+                "examples/ directory contains only `.py` scripts and no "
+                "`.ipynb` notebooks — prefer Jupyter notebooks for "
+                "examples so users can read prose + code + output side "
+                "by side and execute in-place. Reference: "
+                "https://github.com/ywatanabe1989/scitex-seizure-metrics/"
+                "tree/develop/examples (every example is .ipynb). Some "
+                "packages (e.g. scitex-io) document a script-style "
+                "examples set in their README and may keep .py files; "
+                "mix .py and .ipynb freely — the rule only fires when "
+                "examples/ has .py files and ZERO .ipynb files."
+            ),
+            slug="examples-no-ipynb",
+        ),
+        Rule(
+            "PS-157",
+            "§1",
+            (
+                "README.md codecov badge URL is unbranched "
+                "(`codecov.io/<owner>/<pkg>/graph/badge.svg`) — pin a "
+                "branch so the badge doesn't render 'unknown' when "
+                "uploads only land on develop. Use "
+                "`codecov.io/<owner>/<pkg>/branch/develop/graph/"
+                "badge.svg`. See scitex-io README header for the "
+                "canonical form."
+            ),
+            slug="readme-codecov-badge-unbranched",
+        ),
+        Rule(
+            "PS-158",
+            "§1",
+            (
+                "README.md Read-the-Docs badge uses readthedocs.org's "
+                "own /badge endpoint which bakes the literal label "
+                "'docs' into the SVG. Switch to the shields.io proxy "
+                "so the visible label matches the project: "
+                "`img.shields.io/readthedocs/<pkg>?label=Read%20the%20"
+                "Docs`. See scitex-io README header."
+            ),
+            slug="readme-rtd-badge-baked-label",
+        ),
+        Rule(
+            "PS-159",
+            "§1",
+            (
+                "README.md figure / table caption numbering is broken — "
+                "`<b>Figure N.</b>` and `<b>Table N.</b>` captions must "
+                "form [1, 2, 3, ...] with no gaps, no duplicates, "
+                "starting at 1. See scitex-stats README for the "
+                "canonical caption form: "
+                '`<p align="center"><sub><b>Figure N.</b> caption '
+                "...</sub></p>`."
+            ),
+            slug="readme-figures-tables-numbering",
+        ),
+        Rule(
+            "PS-160",
+            "§1",
+            (
+                "README.md has a figure or table without a caption — "
+                "every `<img>` data figure (excluding badges, the "
+                "centered logo, and the icon footer) and every "
+                "```mermaid``` fenced block must have a "
+                "`<sub><b>Figure N.</b> ...</sub>` caption; every "
+                "pipe-table (except the Problem and Solution table and "
+                "tables inside `<details>`) must have a "
+                "`<sub><b>Table N.</b> ...</sub>` caption. See "
+                "scitex-stats README for the canonical caption form."
+            ),
+            slug="readme-figures-tables-missing-caption",
+        ),
+        Rule(
+            "PS-161",
+            "§1",
+            (
+                "codecov.yml project/patch coverage target is below 90% "
+                "(or set to `auto`/`auto-target`) — pin a fixed `target: "
+                "90%` so the coverage bar is visible. See scitex-io "
+                "codecov.yml for the canonical config."
+            ),
+            slug="readme-codecov-coverage-target-too-low",
+        ),
+        Rule(
+            "PS-162",
+            "§1",
+            (
+                "README.md badge block (`<!-- scitex-badges:start -->...`) "
+                "is missing a Codecov coverage badge — every public "
+                "scitex package should expose CI coverage. See scitex-io "
+                "README header for the canonical form."
+            ),
+            slug="readme-missing-codecov-badge",
+        ),
+        Rule(
+            "PS-163",
+            "§1",
+            (
+                "README.md badge block (`<!-- scitex-badges:start -->...`) "
+                "is missing a Read-the-Docs badge — every scitex package "
+                "shipping RTD docs should expose the build status. See "
+                "scitex-io README header for the canonical form."
+            ),
+            slug="readme-missing-rtd-badge",
+        ),
+        Rule(
+            "PS-140",
+            "§2",
+            (
+                "package source has cross-package imports (`scitex_<X>` "
+                "peer or `scitex.<X>` umbrella) but no "
+                "`tests/integration/test_cross_package_imports.py` runtime "
+                "gate, OR the gate's `CROSS_PACKAGE_IMPORTS` list is "
+                "stale (missing some imports / contains removed ones). "
+                "Without this gate, renames in peer standalones surface "
+                "as silent ModuleNotFoundError at user runtime — the "
+                "scitex_io._load_cache rename was undetected for weeks "
+                "because of this gap. Regenerate via "
+                "`python /tmp/write-integration-tests.py <pkg-dir>` "
+                "(or the equivalent scitex-dev subcommand)."
+            ),
+        ),
         # §2 src ↔ tests mirror -------------------------------------------------
         Rule(
-            "PS201",
+            "PS-201",
             "§2",
             "src/<pkg>/ exists but tests/<pkg>/ is missing — every package needs the tests/<pkg>/ parent",
+            slug="tests-pkg-parent-missing",
         ),
         Rule(
-            "PS202",
+            "PS-202",
             "§2",
             "src/<pkg>/<sub>/ has files but tests/<pkg>/<sub>/ is missing",
+            slug="src-tests-mirror-dir-missing",
         ),
         Rule(
-            "PS203",
+            "PS-203",
             "§2",
             "loose test_*.py at tests/ root that should live inside tests/<pkg>/...",
+            slug="loose-top-level-test",
         ),
         Rule(
-            "PS204",
+            "PS-204",
             "§2",
             "orphan test file: tests/<pkg>/<path>/test_*.py with no matching src/<pkg>/<path>/*.py",
+            slug="orphan-test-file",
         ),
         Rule(
-            "PS205",
+            "PS-205",
             "§2",
             "wrong public/private prefix (private `_foo.py` must be tested by `test__foo.py`, not `test_foo.py`)",
+            slug="test-name-prefix-mismatch",
         ),
         Rule(
-            "PS206",
+            "PS-145",
+            "§1",
+            (
+                "source reads another scitex package's user-state tree "
+                "(`~/.scitex/<other-pkg>/...`) or `SCITEX_<OTHER>_*` env "
+                "var directly. Cross-package state coupling breaks "
+                "`SCITEX_DIR` relocation and standalone-ability. Use the "
+                "plugin-port pattern: expose your own `SCITEX_<THIS>_*_DIRS` "
+                "slot and let consumers populate it. See "
+                "_skills/general/01_ecosystem_06_local-state-directories.md "
+                "§9.5."
+            ),
+            slug="local-state-cross-package-read",
+        ),
+        Rule(
+            "PS-146",
+            "§1",
+            (
+                "pyproject.toml declares an install-time hook (hatch build "
+                "hook or setuptools cmdclass) that creates `~/.scitex/"
+                "<pkg-short>/` — `pip install` side-effects break wheel "
+                "inertness, fresh-CI runs, and `$SCITEX_DIR` relocation. "
+                "Drop the hook and rely on lazy `PathManager` mkdir on "
+                "first write (§3.5)."
+            ),
+            slug="local-state-pip-install-side-effect",
+        ),
+        Rule(
+            "PS-147",
+            "§1",
+            (
+                "source writes an eval-form shell-completion line "
+                '(`eval "$(_<NAME>_COMPLETE=bash_source <bin>)"`) into '
+                "the user's rc file. The eval form re-invokes the binary "
+                "on every shell start (~0.4s/binary). Use the cache-file "
+                "pattern instead: generate the completion once into "
+                "`~/.scitex/<pkg-short>/runtime/completion/<binary>` and "
+                "have rc `source` it. See _skills/general/03_interface_02_"
+                "cli/03_required-introspection-commands.md."
+            ),
+            slug="local-state-eval-completion",
+        ),
+        Rule(
+            "PS-150",
+            "§1",
+            (
+                "pyproject.toml `[project.optional-dependencies.dev]` does not "
+                "declare `scitex-dev` (or `scitex-dev[cli-audit]`). "
+                '`tests/develop/test_audit.py` calls `shutil.which("scitex-dev")` '
+                "and pytest.skip()s when absent — i.e. the audit-conformance gate "
+                "silently does NOT run in CI's fresh venv. Add `scitex-dev>=0.11.5` "
+                "(or current latest) to `[dev]` so the gate fires."
+            ),
+        ),
+        Rule(
+            "PS-151",
+            "§1",
+            (
+                "scitex-dev pin floor in `[dev]` is below the known-good version "
+                "(currently 0.11.5). Older scitex-dev releases ship a smaller / "
+                "differently-classified rule corpus, so the same package gets "
+                "different audit verdicts depending on which scitex-dev wheel "
+                "PyPI happens to surface. Bump the floor to the current minimum."
+            ),
+        ),
+        Rule(
+            "PS-206",
             "§2",
             "placeholder-only test (no `def test_` or `class Test`)",
         ),
         Rule(
-            "PS207",
+            "PS-206b",
+            "§2",
+            (
+                "import-smoke-only test (`def test_*` exists but the file "
+                "has no assertion at all — `assert`, `pytest.raises`, "
+                "`mock.assert_*`, `self.assertX`, etc.). Pure "
+                "`importlib.import_module(...)` smokes pass PS-206 + PS-202 "
+                "without exercising behaviour. Add a real assertion or "
+                "delete the file."
+            ),
+        ),
+        Rule(
+            "PS-210",
+            "§2",
+            (
+                "`[dev]` extras incomplete — an optional `[X]` extra dep is "
+                "imported unguarded by the test suite but missing from `[dev]` "
+                "(see _skills/general/01_ecosystem_02_dependency-and-version-"
+                "pinning.md `[dev]` extras completeness — fastmcp lesson, "
+                "2026-05-02). A bare `pip install -e .[dev]` will fail at "
+                "test-collection."
+            ),
+        ),
+        Rule(
+            "PS-207",
             "§2",
             (
                 "empty test directory (no `test_*.py` files, only `__pycache__/` "
@@ -377,22 +815,22 @@ RULES: dict[str, Rule] = {
         ),
         # §3 tests/ subdirectory convention -------------------------------------
         Rule(
-            "PS301",
+            "PS-301",
             "§3",
             "top-level ./htmlcov/ exists — coverage reports should live in tests/coverage/ (gitignored)",
         ),
         Rule(
-            "PS302",
+            "PS-302",
             "§3",
             "unrecognized subdir at tests/ root (must be tests/<pkg>/ or one of the known categories: scripts/examples/skills/agentic/integration/e2e/github_actions/coverage/logs/reports/custom)",
         ),
         Rule(
-            "PS303",
+            "PS-303",
             "§3",
             "examples/<name>.{py,sh,ipynb} has no matching tests/examples/test_<name>.py",
         ),
         Rule(
-            "PS501",
+            "PS-501",
             "§5",
             (
                 "examples/<n>_*.py main() does not use @stx.session — the "
@@ -406,7 +844,7 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
-            "PS502",
+            "PS-502",
             "§5",
             (
                 "examples/<n>_*_out/ exists but is empty (or contains only "
@@ -416,19 +854,289 @@ RULES: dict[str, Rule] = {
                 "example doesn't yet work."
             ),
         ),
+        Rule(
+            "PS-503",
+            "§5",
+            (
+                "examples/<n>_*_out/ has no FINISHED_SUCCESS/<session_id>/ "
+                "subdir — the demo's already-run artefacts must be tracked "
+                "in git so users see them on GitHub. Run the example once "
+                "with @stx.session and commit the FINISHED_SUCCESS dir."
+            ),
+            slug="examples-need-finished-success",
+        ),
+        Rule(
+            "PS-504",
+            "§5",
+            (
+                "examples/<n>.ipynb has no committed cell outputs — looks "
+                "nbstripped. GitHub renders cell outputs inline, so the "
+                "demo is invisible without them. Re-run the notebook and "
+                "commit with outputs intact."
+            ),
+        ),
+        Rule(
+            "PS-505",
+            "§5",
+            (
+                "examples/<n>.ipynb has a sibling test "
+                "tests/examples/test_<n>.py but the test does not invoke "
+                "`nbconvert --execute` or `pytest --nbval` — runpy/import "
+                "tricks don't execute notebooks. Mirror the .py "
+                "smoke-test convention with one of those commands."
+            ),
+        ),
+        Rule(
+            "PS-506",
+            "§5",
+            (
+                "examples/<n>.ipynb imports matplotlib but lacks the "
+                "`%matplotlib inline` cell magic — figure outputs won't "
+                "embed in the notebook, so GitHub-rendered cells will be "
+                "blank. Add `%matplotlib inline` near the top."
+            ),
+        ),
+        Rule(
+            "PS-507",
+            "§5",
+            (
+                "examples/<n>.ipynb imports matplotlib but does not call "
+                "`plt.show()` (or rely on inline auto-display) — figures "
+                "may not appear in the rendered cell outputs. Call "
+                "`plt.show()` explicitly after each plot."
+            ),
+        ),
+        Rule(
+            "PS-508",
+            "§5",
+            (
+                "examples/<n>.ipynb contains warning output in committed "
+                "cells (DeprecationWarning, UserWarning, FutureWarning, "
+                "RuntimeWarning, or stderr-stream `Warning:` text). "
+                "Demos must be clean — silence the warning at the source, "
+                "filter it explicitly with `warnings.filterwarnings`, or "
+                "fix the underlying cause before re-running and committing."
+            ),
+        ),
         # §4 docs/ structure ----------------------------------------------------
         Rule(
-            "PS401",
+            "PS-401",
             "§4",
             "./docs/to_claude/ is tracked — must be gitignored (local-machine agent context, not part of the shipped repo)",
         ),
         Rule(
-            "PS402",
+            "PS-402",
             "§4",
             "top-level ./assets/ exists — figures/screenshots belong under ./docs/assets/",
         ),
     ]
 }
+
+# Severity escalation table.
+#
+# Per 2026-05-06 directive: every rule that ships a concrete spec defaults to
+# E (error → fails CI). Demote back to W only after a documented false
+# positive lands on develop. New rules MAY start at W during their initial
+# bake-in, but the bar for staying W is "active false-positive history",
+# not "we haven't promoted it yet".
+#
+# E (error) — fails CI; the rule is well-tested and the fix is mechanical.
+# W (warn)  — prints, doesn't fail; for rules with active false-positive
+#             history that haven't been demoted yet.
+# I (info)  — printed only with --severity info; never fails. Use for
+#             purely advisory categorizations (no actionable violation).
+_SEVERITY_OVERRIDES: dict[str, str] = {
+    # Structural — must hold for any package
+    "PS-101": "E",  # missing pyproject.toml
+    "PS-102": "E",  # forbidden top-level dir (logs/, mgmt/, ...)
+    "PS-103": "E",  # top-level junk file
+    "PS-104": "E",  # uses .playground/
+    "PS-105": "E",  # console_scripts present but no __main__.py
+    # README content — every public package follows the convention
+    "PS-106": "E",
+    "PS-107": "E",
+    "PS-108": "E",
+    "PS-108b": "E",
+    "PS-109": "E",
+    "PS-110": "E",
+    "PS-111": "E",
+    "PS-112": "E",
+    "PS-113": "E",
+    "PS-114": "E",
+    "PS-115": "E",
+    "PS-116": "E",
+    "PS-117": "E",
+    "PS-118": "E",
+    "PS-119": "E",
+    "PS-120": "E",
+    "PS-123": "E",
+    "PS-129": "E",
+    "PS-130": "E",
+    "PS-131": "E",
+    "PS-132": "E",
+    # Sphinx / RTD bundle
+    "PS-121": "E",
+    "PS-122": "E",
+    "PS-124": "E",
+    "PS-125": "E",
+    "PS-126": "E",
+    "PS-127": "E",
+    "PS-128": "E",
+    # Community files — every public package needs them
+    "PS-133": "E",  # CLA.md
+    "PS-134": "E",  # CHANGELOG.md
+    "PS-135": "E",  # CONTRIBUTING.md
+    "PS-136": "E",  # examples/
+    "PS-137": "E",  # README.md
+    "PS-138": "E",  # LICENSE present
+    "PS-138b": "E",  # LICENSE content matches SPDX (no stub)
+    "PS-139": "E",  # pyproject.toml depends on scitex umbrella (anti-pattern)
+    "PS-140": "E",  # missing/stale tests/integration/test_cross_package_imports.py
+    "PS-141": "E",  # README missing `## Demo` with visual content
+    "PS-142": "E",  # README missing `## Architecture` with diagram/tree
+    "PS-145": "W",  # cross-package state read (bake-in: warn first)
+    "PS-146": "E",  # pip-install side-effect (clear violation)
+    "PS-147": "W",  # eval-form shell completion (bake-in: warn first)
+    "PS-152": "W",  # README split Problem/Solution headings (warn)
+    "PS-153": "W",  # README architecture file-tree, no mermaid (warn)
+    "PS-154": "W",  # README installation not canonical (warn)
+    "PS-155": "I",  # README badge row not two centered rows (info)
+    "PS-156": "I",  # examples/ has .py but zero .ipynb (info)
+    "PS-157": "W",  # codecov badge URL unbranched (warn)
+    "PS-158": "I",  # RTD badge uses readthedocs.org baked label (info)
+    "PS-159": "W",  # README figure/table numbering broken (warn)
+    "PS-160": "W",  # README figure/table missing caption (warn)
+    "PS-161": "W",  # codecov.yml coverage target below 90 (warn)
+    "PS-162": "W",  # README missing Codecov badge (warn)
+    "PS-163": "W",  # README missing Read-the-Docs badge (warn)
+    "PS-150": "W",  # [dev] missing scitex-dev pin — audit gate silently skips
+    "PS-151": "W",  # scitex-dev pin floor < known-good (rule corpus drift)
+    # src ↔ tests mirror — load-bearing for CI confidence
+    "PS-201": "E",
+    "PS-202": "E",
+    "PS-203": "E",
+    "PS-204": "E",
+    "PS-205": "E",
+    "PS-206": "E",  # placeholder-only test (no `def test_*` / `class Test*` at all)
+    "PS-206b": "W",  # has `def test_*` but body has no assertion (import-smoke only)
+    "PS-207": "E",  # empty test directory
+    "PS-210": "E",  # [dev] extras incomplete
+    "PS-301": "E",  # top-level htmlcov/
+    "PS-302": "E",  # unrecognized tests/ subdir
+    "PS-303": "E",  # examples/<n>.py without tests/examples/test_<n>.py
+    "PS-401": "E",  # docs/to_claude/ tracked
+    "PS-402": "E",  # top-level assets/
+    "PS-501": "E",  # examples missing @stx.session
+    "PS-502": "E",  # empty examples/<n>_out/
+    "PS-503": "E",  # examples/<n>_out/ missing FINISHED_SUCCESS/<id>/
+    "PS-504": "E",  # .ipynb has no committed cell outputs
+    "PS-505": "E",  # .ipynb test does not nbconvert / nbval
+    "PS-506": "E",  # .ipynb missing %matplotlib inline
+    "PS-507": "E",  # .ipynb missing plt.show()
+    "PS-508": "E",  # .ipynb has warning output in committed cells
+}
+
+# Human-readable kebab-case slugs. Surfaced inline in audit output as
+# `[CODE §X slug]` so reviewers can read intent without cross-referencing
+# rule numbers. Backfilled in batches; missing entries render in the old
+# `[CODE §X]` form (no breakage). New rules SHOULD include a slug from
+# definition.
+_SLUGS: dict[str, str] = {
+    # §1 — top-level layout already slugged at definition (PS-101–PS-103)
+    "PS-104": "uses-playground-dir",
+    "PS-105": "main-py-missing",
+    # README structure
+    "PS-106": "readme-missing-coverage-badge",
+    "PS-107": "readme-missing-h2-sections",
+    "PS-108": "readme-missing-license-badge",
+    "PS-108b": "readme-missing-pypi-py-version-badge",
+    "PS-109": "readme-missing-pypi-version-badge",
+    "PS-110": "readme-missing-four-freedoms",
+    "PS-111": "readme-personal-email",
+    "PS-112": "readme-missing-logo",
+    "PS-113": "readme-banned-emoji",
+    "PS-114": "readme-banned-marketing",
+    "PS-115": "readme-missing-architecture",
+    "PS-116": "readme-banned-buzzword",
+    "PS-117": "readme-missing-quickstart",
+    "PS-118": "readme-missing-installation",
+    "PS-119": "readme-missing-part-of-scitex",
+    "PS-120": "readme-cli-help-out-of-sync",
+    "PS-123": "readme-banned-future-claim",
+    "PS-129": "readme-banned-trademark-symbol",
+    "PS-130": "readme-missing-related-projects",
+    "PS-131": "readme-missing-citation",
+    "PS-132": "readme-missing-roadmap",
+    # Sphinx / RTD
+    "PS-121": "rtd-onboarding-missing",
+    "PS-122": "rtd-config-missing",
+    "PS-124": "sphinx-conf-missing",
+    "PS-125": "sphinx-makefile-missing",
+    "PS-126": "sphinx-extensions-bad",
+    "PS-127": "sphinx-theme-bad",
+    "PS-128": "sphinx-build-broken",
+    # Community files
+    "PS-133": "missing-cla",
+    "PS-134": "missing-changelog",
+    "PS-135": "missing-contributing",
+    "PS-136": "missing-examples-dir",
+    "PS-137": "missing-readme",
+    "PS-138": "missing-license",
+    "PS-138b": "license-stub-mismatched",
+    "PS-139": "pyproject-depends-on-umbrella",
+    "PS-140": "cross-package-imports-test-missing",
+    "PS-141": "readme-missing-demo",
+    "PS-142": "readme-missing-architecture-diagram",
+    "PS-143": "readme-missing-badge-row",
+    "PS-144": "readme-missing-pypi-status",
+    "PS-152": "readme-split-problem-solution",
+    "PS-153": "readme-architecture-filetree-not-mermaid",
+    "PS-154": "readme-installation-not-canonical",
+    "PS-155": "readme-badge-row-not-two-rows",
+    "PS-156": "examples-no-ipynb",
+    "PS-157": "readme-codecov-badge-unbranched",
+    "PS-158": "readme-rtd-badge-baked-label",
+    "PS-159": "readme-figures-tables-numbering",
+    "PS-160": "readme-figures-tables-missing-caption",
+    "PS-161": "readme-codecov-coverage-target-too-low",
+    "PS-162": "readme-missing-codecov-badge",
+    "PS-163": "readme-missing-rtd-badge",
+    "PS-150": "dev-extras-missing-scitex-dev",
+    "PS-151": "dev-extras-scitex-dev-floor-too-old",
+    # §2 src↔tests already slugged at definition (PS-201–PS-205)
+    "PS-206": "test-placeholder-only",
+    "PS-206b": "test-import-smoke-only",
+    "PS-207": "empty-test-dir",
+    "PS-210": "dev-extras-incomplete",
+    # §3 docs / examples
+    "PS-301": "top-level-htmlcov",
+    "PS-302": "tests-unknown-subdir",
+    "PS-303": "example-without-test",
+    # §4 docs/to_claude
+    "PS-401": "docs-to-claude-tracked",
+    "PS-402": "top-level-assets",
+    # §5 examples + notebooks (PS-503 already slugged)
+    "PS-501": "example-without-stx-session",
+    "PS-502": "examples-out-empty",
+    "PS-504": "ipynb-no-cell-outputs",
+    "PS-505": "ipynb-test-not-nbconvert",
+    "PS-506": "ipynb-missing-matplotlib-inline",
+    "PS-507": "ipynb-missing-plt-show",
+    "PS-508": "ipynb-warning-in-output",
+}
+
+
+# Apply the overrides — replace each tagged Rule with a promoted copy that
+# carries both the (optional) severity override and the (optional) slug.
+def _patch(rule: Rule) -> Rule:
+    sev = _SEVERITY_OVERRIDES.get(rule.code, rule.severity)
+    slug = rule.slug or _SLUGS.get(rule.code, "")
+    if sev == rule.severity and slug == rule.slug:
+        return rule
+    return Rule(rule.code, rule.section, rule.message, sev, slug)
+
+
+RULES = {code: _patch(rule) for code, rule in RULES.items()}
 
 
 @dataclass
@@ -440,7 +1148,14 @@ class Violation:
     def format(self) -> str:
         r = RULES.get(self.rule)
         section = r.section if r else "?"
-        return f"  [{self.rule} {section}] {self.where}: {self.detail}"
+        sev = r.severity if r else "W"
+        slug = f" {r.slug}" if r and r.slug else ""
+        return f"  [{sev}] [{self.rule} {section}{slug}] {self.where}: {self.detail}"
+
+    @property
+    def severity(self) -> str:
+        r = RULES.get(self.rule)
+        return r.severity if r else "W"
 
 
 # ---------------------------------------------------------------------------
@@ -449,7 +1164,10 @@ class Violation:
 
 # Test-name patterns: split into private (test__name.py) and public (test_name.py).
 # The leading-underscore in the source becomes a double underscore in the test.
-_PRIVATE_TEST_RE = re.compile(r"^test__([A-Za-z0-9][A-Za-z0-9_]*)\.py$")
+# Captured group allows optional extra leading underscores so dunder sources
+# like `__main__.py` (test `test___main__.py`) are recognised as having a
+# valid src mirror.
+_PRIVATE_TEST_RE = re.compile(r"^test__(_*[A-Za-z0-9][A-Za-z0-9_]*)\.py$")
 _PUBLIC_TEST_RE = re.compile(r"^test_([A-Za-z0-9][A-Za-z0-9_]*)\.py$")
 
 # Allowed at tests/ root. STRICT: only pytest infrastructure files —
@@ -471,7 +1189,7 @@ _MIRROR_EXEMPT_CATEGORIES = frozenset({"template", "dataset"})
 
 # Recognized test-category subdirectories at tests/ root.
 # A repo's tests/ subdirs must come from this set (or be the package mirror
-# tests/<pkg>/). Anything else is flagged as PS207.
+# tests/<pkg>/). Anything else is flagged as PS-207.
 # See _skills/general/02_package_01_project-structure.md §"./tests".
 _KNOWN_TEST_SUBDIRS = frozenset(
     {
@@ -486,6 +1204,8 @@ _KNOWN_TEST_SUBDIRS = frozenset(
         "logs",  # pytest run logs — gitignored
         "reports",  # agent-generated summaries — optional
         "custom",  # legacy: tests with no source counterpart
+        "develop",  # dev-hygiene tests (audit conformance, etc.) —
+        # generated by `scitex-dev ecosystem write-audit-test`
         "__pycache__",  # always present, never our concern
     }
 )
@@ -527,6 +1247,11 @@ _FORBIDDEN_TOP_DIRS = {
     "htmlcov": "coverage reports should live in tests/coverage/",
     "assets": "use ./docs/assets/ instead",
     ".playground": "collapsed into .dev/ for easier typing",
+    "logs": "runtime artifact — move to ./GITIGNORED/logs/ or ./tests/logs/ and add to .gitignore",
+    "catboost_info": "CatBoost training artifact — must be gitignored (add `catboost_info/` to .gitignore)",
+    "signatures": "scratch dir — move to ./GITIGNORED/signatures/ if needed locally",
+    "scitex": "orphan module dir — the real package lives in src/<pkg>/. Use a hidden ./.scitex/ for runtime state, never a visible ./scitex/.",
+    "unknown_out": "@stx.session output landed at repo root — re-run from a script directory or set CONFIG.SDIR_RUN. Move the dir aside if you need to keep it.",
 }
 
 # Top-level junk-file patterns (substring match on the basename).
@@ -577,27 +1302,102 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
 
 
 def _check_top_level(repo: Path, out: list[Violation]) -> None:
-    """PS101 / PS102 / PS103 / PS104 / PS105."""
+    """PS-101 / PS-102 / PS-103 / PS-104 / PS-105 / PS-133-PS-135."""
     if not (repo / "pyproject.toml").is_file():
-        out.append(Violation("PS101", str(repo), "no pyproject.toml at repo root"))
+        out.append(Violation("PS-101", str(repo), "no pyproject.toml at repo root"))
+
+    # PS-133-PS-138: required community files at repo root.
+    # LICENSE has no extension (PEP-639 / ecosystem convention); accept LICENSE
+    # or LICENSE.md or LICENSE.txt.
+    for code, fname in (
+        ("PS-133", "CLA.md"),
+        ("PS-134", "CHANGELOG.md"),
+        ("PS-135", "CONTRIBUTING.md"),
+        ("PS-137", "README.md"),
+    ):
+        if not (repo / fname).is_file():
+            out.append(Violation(code, str(repo), f"missing {fname}"))
+    from ._check_license import check_license_content, find_license
+
+    license_path = find_license(repo)
+    if license_path is None:
+        out.append(
+            Violation("PS-138", str(repo), "missing LICENSE (or LICENSE.md/.txt)")
+        )
+    else:
+        try:
+            spdx_match = _spdx_from_pyproject(repo)
+        except Exception:
+            spdx_match = None
+        violation_msg = check_license_content(license_path, spdx_match)
+        if violation_msg:
+            out.append(Violation("PS-138b", str(repo), violation_msg))
+
+    # PS-136: examples/ must exist and have at least one runnable file.
+    examples = repo / "examples"
+    if not examples.is_dir():
+        out.append(Violation("PS-136", str(repo), "no examples/ directory"))
+    else:
+        runnable = [
+            p
+            for p in examples.rglob("*")
+            if p.is_file()
+            and p.suffix in {".py", ".ipynb", ".sh"}
+            and not p.name.startswith("__")
+            and "__pycache__" not in p.parts
+        ]
+        if not runnable:
+            out.append(
+                Violation(
+                    "PS-136",
+                    str(examples),
+                    "examples/ exists but contains no .py/.ipynb/.sh",
+                )
+            )
+        else:
+            # PS-156: prefer .ipynb examples — fires only when examples/
+            # has runnable .py files but zero .ipynb. Packages that mix
+            # .py and .ipynb (or are pure-.ipynb) are silent.
+            py_count = sum(1 for p in runnable if p.suffix == ".py")
+            ipynb_count = sum(1 for p in runnable if p.suffix == ".ipynb")
+            if py_count > 0 and ipynb_count == 0:
+                out.append(
+                    Violation(
+                        "PS-156",
+                        str(examples),
+                        (
+                            f"examples/ has {py_count} `.py` script(s) "
+                            "and zero `.ipynb` notebooks — prefer "
+                            "Jupyter notebooks (see "
+                            "scitex-seizure-metrics/examples/). Mixed "
+                            ".py + .ipynb is also fine."
+                        ),
+                    )
+                )
 
     for dirname, why in _FORBIDDEN_TOP_DIRS.items():
         candidate = repo / dirname
         if candidate.is_dir():
-            code = "PS104" if dirname == ".playground" else "PS102"
+            code = "PS-104" if dirname == ".playground" else "PS-102"
             out.append(Violation(code, str(candidate), why))
 
-    for child in repo.iterdir():
-        if child.is_file() and _JUNK_FILE_RE.match(child.name):
-            out.append(
-                Violation(
-                    "PS103",
-                    str(child),
-                    f"top-level junk file: {child.name}",
-                )
-            )
+    # PS-103: anything at repo root that is not in the strict baseline,
+    # not hidden, and not whitelisted via .scitex/dev/config.yaml.
+    from ._root_whitelist import _suggest_relocation, list_violations
 
-    # PS105: console_scripts present but no __main__.py — `python -m <pkg>`
+    for basename, kind in list_violations(repo):
+        out.append(
+            Violation(
+                "PS-103",
+                str(repo / basename),
+                (
+                    f"top-level {kind}: {basename} "
+                    f"({_suggest_relocation(basename, kind)})"
+                ),
+            )
+        )
+
+    # PS-105: console_scripts present but no __main__.py — `python -m <pkg>`
     # would fail with "No module named <pkg>.__main__".
     pyp = repo / "pyproject.toml"
     if pyp.is_file():
@@ -615,7 +1415,7 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
                     if not (pkg_dir / "__main__.py").is_file():
                         out.append(
                             Violation(
-                                "PS105",
+                                "PS-105",
                                 str(pkg_dir),
                                 f"missing {pkg_dir.name}/__main__.py — "
                                 "`python -m " + pkg_dir.name + "` will fail. "
@@ -640,32 +1440,32 @@ def _check_mirror(
     distribution: str,
     out: list[Violation],
 ) -> None:
-    """PS201 / PS202 / PS203 / PS204 / PS205 — src ↔ tests mirror."""
+    """PS-201 / PS-202 / PS-203 / PS-204 / PS-205 — src ↔ tests mirror."""
     src_pkg = _src_pkg_dir(repo, distribution)
     tests_root = _tests_root(repo)
     if src_pkg is None or tests_root is None:
         # Without either side, mirror checks don't apply (a different rule
-        # — PS101 / future PS105 — will catch missing structure).
+        # — PS-101 / future PS-105 — will catch missing structure).
         return
 
     import_name = _import_name(distribution)
     tests_pkg = tests_root / import_name
 
-    # PS201: tests/<pkg>/ must exist
+    # PS-201: tests/<pkg>/ must exist
     if not tests_pkg.is_dir():
         out.append(
             Violation(
-                "PS201",
+                "PS-201",
                 str(tests_root),
                 f"missing `tests/{import_name}/` parent — needed even when most tests are flat",
             )
         )
         # Without the parent we can't run the deeper mirror checks meaningfully.
-        # Still scan PS203 / loose top-level test files.
+        # Still scan PS-203 / loose top-level test files.
         _check_loose_top_level_tests(tests_root, src_pkg, import_name, out)
         return
 
-    # PS203: any test_*.py at tests/ root that's not a known meta-test
+    # PS-203: any test_*.py at tests/ root that's not a known meta-test
     _check_loose_top_level_tests(tests_root, src_pkg, import_name, out)
 
     # Walk src/<pkg>/ — every directory with .py files needs a mirror.
@@ -681,13 +1481,13 @@ def _check_mirror(
         if not mirror_dir.is_dir():
             out.append(
                 Violation(
-                    "PS202",
+                    "PS-202",
                     str(src_dir),
                     f"no matching tests/{import_name}/{rel}/",
                 )
             )
 
-    # PS205: per-file public/private prefix consistency.
+    # PS-205: per-file public/private prefix consistency.
     # For each src .py file, expected test name lives under tests/<pkg>/<rel>/.
     # When src has BOTH a public `foo.py` AND a private `_foo.py` in the
     # same directory (rare but legitimate — see scitex-dev dashboard), each
@@ -708,7 +1508,7 @@ def _check_mirror(
         wrong_name = f"test_{stem.lstrip('_')}.py" if is_private else f"test__{stem}.py"
         target_dir = tests_pkg / rel.parent
         if not target_dir.is_dir():
-            continue  # PS202 already flagged this
+            continue  # PS-202 already flagged this
         # Both-variant guard: if the "other" src file also exists, the file
         # at wrong_path is its legitimate test, not a misnamed copy of ours.
         if is_private:
@@ -721,7 +1521,7 @@ def _check_mirror(
         if wrong_path.is_file():
             out.append(
                 Violation(
-                    "PS205",
+                    "PS-205",
                     str(wrong_path),
                     (
                         f"private `{rel.name}` should be tested by `{expected_name}` "
@@ -733,7 +1533,7 @@ def _check_mirror(
                 )
             )
 
-    # PS204: orphan test files — every test_*.py under tests/<pkg>/ should
+    # PS-204: orphan test files — every test_*.py under tests/<pkg>/ should
     # have a matching src counterpart. Hinter is built once and reused so
     # the basename index is amortized across all orphans in this package.
     from ._check_orphan_hint import build_orphan_hinter
@@ -742,7 +1542,7 @@ def _check_mirror(
     for test_file in tests_pkg.rglob("test_*.py"):
         rel = test_file.relative_to(tests_pkg)
         if not _test_has_src_match(test_file, rel, src_pkg):
-            out.append(Violation("PS204", str(test_file), _hint(rel)))
+            out.append(Violation("PS-204", str(test_file), _hint(rel)))
 
 
 def _has_py(d: Path) -> bool:
@@ -760,7 +1560,7 @@ def _is_git_ignored(path: Path, repo: Path) -> bool:
 
     Returns False when git is unavailable or the path isn't inside a git
     repo — non-git checkouts (sdist installs, tarball extracts) still
-    get full PS202 coverage. Used to skip src subdirs that exist locally
+    get full PS-202 coverage. Used to skip src subdirs that exist locally
     but won't ship in the wheel (e.g. src/<pkg>/app/ if it's listed in
     .gitignore as a developer-only scratch area).
     """
@@ -790,7 +1590,7 @@ def _check_loose_top_level_tests(
     import_name: str,
     out: list[Violation],
 ) -> None:
-    """PS203 — loose test_*.py at tests/ root that should be under tests/<pkg>/."""
+    """PS-203 — loose test_*.py at tests/ root that should be under tests/<pkg>/."""
     for child in tests_root.iterdir():
         if not child.is_file() or not child.name.startswith("test_"):
             continue
@@ -800,7 +1600,7 @@ def _check_loose_top_level_tests(
         suggestion = _suggest_test_location(child.name, src_pkg, import_name)
         out.append(
             Violation(
-                "PS203",
+                "PS-203",
                 str(child),
                 suggestion or f"move under tests/{import_name}/...",
             )
@@ -827,28 +1627,52 @@ def _suggest_test_location(
 
 
 def _test_has_src_match(test_file: Path, rel: Path, src_pkg: Path) -> bool:
-    """Does the test name correspond to an existing src file under the same rel dir?"""
+    """Does the test name correspond to an existing src file under the
+    same rel dir?
+
+    Direct match: ``test__foo.py`` ↔ ``_foo.py``,
+                  ``test_foo.py``  ↔  ``foo.py``.
+
+    Descriptor suffix: ``test__foo_real.py``, ``test__foo_branches.py``,
+    ``test__foo_round_trip.py`` etc. — when the literal candidate is
+    missing, strip trailing ``_<descriptor>`` segments and try again so
+    a single src file can host multiple themed test modules without
+    tripping the orphan rule.
+    """
     name = test_file.name
+
+    def _direct(stem: str, prefix: str) -> bool:
+        return (src_pkg / rel.parent / f"{prefix}{stem}.py").is_file()
+
+    def _with_descriptor_strip(stem: str, prefix: str) -> bool:
+        # Greedy strip from the right: foo_round_trip → foo_round → foo.
+        parts = stem.split("_")
+        while len(parts) > 1:
+            parts.pop()
+            if _direct("_".join(parts), prefix):
+                return True
+        return False
+
     m = _PRIVATE_TEST_RE.match(name)
     if m:
-        candidate = src_pkg / rel.parent / f"_{m.group(1)}.py"
-        return candidate.is_file()
+        stem = m.group(1)
+        return _direct(stem, "_") or _with_descriptor_strip(stem, "_")
     m = _PUBLIC_TEST_RE.match(name)
     if m:
-        candidate = src_pkg / rel.parent / f"{m.group(1)}.py"
-        return candidate.is_file()
+        stem = m.group(1)
+        return _direct(stem, "") or _with_descriptor_strip(stem, "")
     return False  # malformed test name — caller may flag separately
 
 
 def _check_tests_subdir_convention(
     repo: Path, distribution: str, out: list[Violation]
 ) -> None:
-    """PS301 / PS302 / PS303 — tests/ root layout."""
-    # PS301: top-level htmlcov/ should be tests/coverage/.
+    """PS-301 / PS-302 / PS-303 — tests/ root layout."""
+    # PS-301: top-level htmlcov/ should be tests/coverage/.
     if (repo / "htmlcov").is_dir():
         out.append(
             Violation(
-                "PS301",
+                "PS-301",
                 str(repo / "htmlcov"),
                 "rename to tests/coverage/ and gitignore (replaces top-level ./htmlcov/)",
             )
@@ -858,7 +1682,7 @@ def _check_tests_subdir_convention(
     if tests_root is None:
         return
 
-    # PS302: every subdir at tests/ root must be either tests/<pkg>/ (the
+    # PS-302: every subdir at tests/ root must be either tests/<pkg>/ (the
     # package mirror) or one of the known categories.
     import_name = _import_name(distribution)
     for child in tests_root.iterdir():
@@ -872,14 +1696,14 @@ def _check_tests_subdir_convention(
             continue  # transient junk; ignore
         out.append(
             Violation(
-                "PS302",
+                "PS-302",
                 str(child),
                 f"unrecognized: rename to tests/{import_name}/{child.name}/ "
                 "or move to one of the known categories",
             )
         )
 
-    # PS303: every examples/<file> should have a matching tests/examples/test_<stem>.py.
+    # PS-303: every examples/<file> should have a matching tests/examples/test_<stem>.py.
     examples_dir = repo / "examples"
     tests_examples = tests_root / "examples"
     if examples_dir.is_dir():
@@ -896,7 +1720,7 @@ def _check_tests_subdir_convention(
             if not expected.is_file():
                 out.append(
                     Violation(
-                        "PS303",
+                        "PS-303",
                         str(ex),
                         f"missing matching tests/examples/test_{ex.stem}.py",
                     )
@@ -904,19 +1728,48 @@ def _check_tests_subdir_convention(
 
 
 def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
-    """PS206 — placeholder-only test (no `def test_` / `class Test` / `test_x = factory()`).
+    """PS-206 + PS-206b — placeholder-only / import-smoke-only test detection.
 
-    Recognises three pytest-collectable shapes:
-    - `def test_*` at module level
-    - `class Test*` at module level
-    - `test_*` module-level assignment (e.g. `test_foo = make_tests(...)`) —
-      pytest collects any module-level callable named `test_*`.
+    PS-206 (ERROR): file has no `def test_*` / `class Test*` / `test_x = factory()`
+    at all — pytest will not collect anything from it.
+
+    PS-206b (WARN): file has a collectable test but no assertion-like call in
+    the entire module. Catches the auto-generated importlib smoke pattern:
+
+        def test_module_imports():
+            importlib.import_module("scitex_db._foo")
+
+    which passes PS-202 (mirror exists) + PS-206 (test fn present) without
+    exercising any behaviour.
     """
     tests_root = _tests_root(repo)
     if tests_root is None:
         return
-    has_def_or_class_re = re.compile(r"^\s*(def\s+test_|class\s+Test)", re.MULTILINE)
+    has_def_or_class_re = re.compile(
+        # Accept `def test_*`, `async def test_*`, or `class Test*`.
+        r"^\s*(?:async\s+)?(def\s+test_|class\s+Test)",
+        re.MULTILINE,
+    )
     has_factory_assign_re = re.compile(r"^test_[A-Za-z0-9_]*\s*=", re.MULTILINE)
+    # Any of these counts as "exercises behaviour":
+    # - bare `assert ...`
+    # - pytest.raises / pytest.warns
+    # - unittest TestCase.assertX (assertEqual, assertTrue, etc.)
+    # - mock assertions (.assert_called*, .assert_not_called)
+    # - hypothesis property-test entry (`@given(...)` implies real assertions
+    #   inside the function body, even when the assert keyword isn't used)
+    has_assertion_re = re.compile(
+        r"\bassert\b"
+        r"|pytest\.raises\("
+        r"|pytest\.warns\("
+        r"|self\.assert[A-Z][A-Za-z]*\("
+        r"|\.assert_called(_with|_once[A-Za-z_]*|_)?\("
+        r"|\.assert_not_called\("
+        r"|@given\("
+    )
+    # Opt-out marker for legitimate import-smoke tests (rare — e.g. .ipynb-only
+    # examples mirrored as smoke). Place this comment anywhere in the file.
+    optout_re = re.compile(r"#\s*PS-206b:\s*import-smoke-allowed", re.IGNORECASE)
     for test_file in tests_root.rglob("test_*.py"):
         if _is_blacklisted(test_file, tests_root):
             continue
@@ -928,21 +1781,39 @@ def _check_placeholder_tests(repo: Path, out: list[Violation]) -> None:
         marker = "# Start of Source Code from:"
         if marker in text:
             text = text.split(marker, 1)[0]
-        if has_def_or_class_re.search(text):
-            continue
-        if has_factory_assign_re.search(text):
-            continue
-        out.append(
-            Violation(
-                "PS206",
-                str(test_file),
-                "placeholder-only — add `def test_*`, `class Test*`, or `test_x = factory()`",
-            )
+        has_test = has_def_or_class_re.search(text) or has_factory_assign_re.search(
+            text
         )
+        if not has_test:
+            out.append(
+                Violation(
+                    "PS-206",
+                    str(test_file),
+                    "placeholder-only — add `def test_*`, `class Test*`, or `test_x = factory()`",
+                )
+            )
+            continue
+        # PS-206b: has a test fn, but no assertion anywhere in the module.
+        if optout_re.search(text):
+            continue
+        if not has_assertion_re.search(text):
+            out.append(
+                Violation(
+                    "PS-206b",
+                    str(test_file),
+                    (
+                        "import-smoke-only — has `def test_*` but no assertion "
+                        "(`assert`, `pytest.raises`, `mock.assert_*`, "
+                        "`self.assertX`, `@given`). Add a real check or "
+                        "delete the file. Opt-out: add a "
+                        "`# PS-206b: import-smoke-allowed` comment."
+                    ),
+                )
+            )
 
 
 def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) -> None:
-    """PS207 — empty test mirror directory.
+    """PS-207 — empty test mirror directory.
 
     Flags a `tests/<pkg>/<sub>/` that exists but contains no `test_*.py`
     files, WHEN the corresponding `src/<pkg>/<sub>/` does have source
@@ -999,7 +1870,7 @@ def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) 
 
         out.append(
             Violation(
-                "PS207",
+                "PS-207",
                 str(sub),
                 f"empty test directory mirrors {src_counterpart} ({len(src_py)} src "
                 f"files) — move corresponding test_*.py files in or remove the dir.",
@@ -1008,7 +1879,7 @@ def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) 
 
 
 def _check_docs_structure(repo: Path, out: list[Violation]) -> None:
-    """PS401 / PS402 — docs/ layout."""
+    """PS-401 / PS-402 — docs/ layout."""
     docs = repo / "docs"
     to_claude = docs / "to_claude"
     if to_claude.is_dir():
@@ -1028,9 +1899,89 @@ def _check_docs_structure(repo: Path, out: list[Violation]) -> None:
         if not ignored:
             out.append(
                 Violation(
-                    "PS401",
+                    "PS-401",
                     str(to_claude),
                     "add `docs/to_claude/` (or `**/to_claude/`) to .gitignore",
+                )
+            )
+
+
+def check_codecov_target(repo: Path, violation_cls: type, out: list) -> None:
+    """PS-161: codecov.yml must pin a project/patch coverage target >= 90%.
+
+    Skipped when codecov.yml is absent (separate rules cover codecov
+    setup), when YAML parsing fails, or when the relevant key is missing.
+    Fires once per below-threshold target ('project' and/or 'patch').
+    """
+    cfg = repo / "codecov.yml"
+    if not cfg.is_file():
+        return
+    try:
+        import yaml  # type: ignore[import-untyped]
+    except ImportError:
+        return
+    try:
+        data = yaml.safe_load(cfg.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, yaml.YAMLError):
+        return
+    if not isinstance(data, dict):
+        return
+    try:
+        status = data["coverage"]["status"]
+    except (KeyError, TypeError):
+        return
+    if not isinstance(status, dict):
+        return
+
+    def _parse_target(raw):
+        """Return (numeric_value, is_auto_or_unparseable)."""
+        if isinstance(raw, (int, float)):
+            return float(raw), False
+        if isinstance(raw, str):
+            s = raw.strip().rstrip("%").strip()
+            if s.lower() in ("auto", "auto-target"):
+                return None, True
+            try:
+                return float(s), False
+            except ValueError:
+                return None, False  # unparseable string → skip
+        return None, False
+
+    for kind in ("project", "patch"):
+        block = status.get(kind)
+        if not isinstance(block, dict):
+            continue
+        default = block.get("default")
+        if not isinstance(default, dict):
+            continue
+        if "target" not in default:
+            continue
+        raw = default["target"]
+        value, is_auto = _parse_target(raw)
+        if is_auto:
+            out.append(
+                violation_cls(
+                    "PS-161",
+                    str(cfg),
+                    (
+                        f"codecov.yml {kind}/patch target is "
+                        f"{raw!r} (< 90%) — set target: 90% so "
+                        f"the bar is visible. See scitex-io "
+                        f"codecov.yml for the canonical config."
+                    ),
+                )
+            )
+        elif value is not None and value < 90:
+            out.append(
+                violation_cls(
+                    "PS-161",
+                    str(cfg),
+                    (
+                        f"codecov.yml {kind}/patch target is "
+                        f"{value:g} (< 90%) — set target: 90% so "
+                        f"the bar is visible. See scitex-io "
+                        f"codecov.yml for the canonical config."
+                    ),
                 )
             )
 
@@ -1046,8 +1997,9 @@ def audit_project(
     repo: Path | None = None,
     json_out: bool = False,
     rules: set[str] | None = None,
+    severity: str = "error",
 ) -> int:
-    """Audit `<distribution>` against the project-structure checklist. Warn-only.
+    """Audit `<distribution>` against the project-structure checklist.
 
     Parameters
     ----------
@@ -1059,11 +2011,17 @@ def audit_project(
         Emit machine-readable output on stdout.
     rules : set of str, optional
         If given, only run these rule codes.
+    severity : {"error","warning","info"}
+        Minimum severity to print AND to drive the exit code.
+        - ``"error"``  (default): print E findings only; exit 1 iff ≥1 E.
+        - ``"warning"``: print E + W findings; exit 1 iff ≥1 E.
+        - ``"info"``: print everything; exit 1 iff ≥1 E.
+        W and I findings never fail CI on their own.
 
     Returns
     -------
     int
-        Exit code: 0 = no violations, 1 = violations, 2 = could not locate.
+        Exit code: 0 = no E-level violations, 1 = ≥1 E violation, 2 = could not locate.
     """
     repo_root = _resolve_repo_root(distribution, repo)
     violations: list[Violation] = []
@@ -1090,17 +2048,20 @@ def audit_project(
         )
         return 2
 
-    # Look up the registry entry to decide which rules apply.
+    # Category-aware skip — see `should_skip_audit` in _ecosystem._core.
     try:
-        from ...._ecosystem import ECOSYSTEM
+        from ...._ecosystem import ECOSYSTEM, should_skip_audit
     except ImportError:
         ECOSYSTEM = {}
-    info = ECOSYSTEM.get(distribution, {})
-    if info.get("archived"):
-        # Archived entries are read-only history — don't flag.
+        should_skip_audit = lambda *_a, **_k: (False, "")  # noqa: E731
+    skip, reason = should_skip_audit(distribution, "audit-project")
+    if skip:
         if not json_out:
-            click.echo(f"skip  {distribution}: archived")
+            from .._emit import emit as _emit_skip
+
+            _emit_skip("skip", f"{distribution}: {reason}")
         return 0
+    info = ECOSYSTEM.get(distribution, {})
     category = info.get("category", "library")
     skip_mirror = category in _MIRROR_EXEMPT_CATEGORIES
 
@@ -1113,12 +2074,16 @@ def audit_project(
     _check_docs_structure(repo_root, violations)
     src_pkg = _src_pkg_dir(repo_root, distribution)
     if src_pkg is not None:
-        from ._check_flat_layout import check_flat_layout
+        from ._check_flat_layout import check_flat_layout, check_topical_clutter
 
         check_flat_layout(src_pkg, Violation, violations)
+        check_topical_clutter(src_pkg, Violation, violations)
     from ._check_readme_badges import check_coverage_badge
 
     check_coverage_badge(repo_root, Violation, violations)
+    from ._check_readme_badge_position import check_badge_position
+
+    check_badge_position(repo_root, Violation, violations)
     from ._check_readme_sections import check_readme_sections
 
     check_readme_sections(repo_root, Violation, violations)
@@ -1131,9 +2096,62 @@ def audit_project(
     from ._check_examples import check_examples_conventions
 
     check_examples_conventions(repo_root, Violation, violations)
+    from ._check_readme_structure import check_readme_structure
+
+    check_readme_structure(repo_root, Violation, violations)
+    check_codecov_target(repo_root, Violation, violations)
+    from ._check_dev_extras_complete import check_dev_extras_complete
+
+    check_dev_extras_complete(repo_root, Violation, violations)
+    from ._check_umbrella_dep_and_integration import (
+        check_ps139_umbrella_dep,
+        check_ps140_integration_gate,
+    )
+
+    check_ps139_umbrella_dep(repo_root, Violation, violations)
+    check_ps140_integration_gate(repo_root, distribution, Violation, violations)
+    from ._check_audit_pin import check_audit_pin
+
+    check_audit_pin(repo_root, Violation, violations)
+    from ._check_local_state import (
+        check_ps145_cross_package_read,
+        check_ps146_pip_install_side_effect,
+        check_ps147_eval_form_completion,
+    )
+
+    check_ps145_cross_package_read(repo_root, distribution, Violation, violations)
+    check_ps146_pip_install_side_effect(repo_root, Violation, violations)
+    check_ps147_eval_form_completion(repo_root, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]
+
+    # Project-type dispatch: drop findings for rule families that don't
+    # apply to this project (PS rules only fire for `pip` projects, RP
+    # rules only for `research`). Honours the user's `audit.skip` list too.
+    from .._config import load_config
+
+    cfg = load_config(repo_root)
+    # Track findings that the project-type filter would have dropped —
+    # specifically PS-103 violations on `deferred`-type projects. The
+    # auditor doesn't fire them (deferred opts out) but we surface a
+    # one-line warning so the operator has a visible TODO list when
+    # revisiting cleanup.
+    deferred_dropped: list[Violation] = (
+        [v for v in violations if v.rule == "PS-103"]
+        if "deferred" in cfg.project_types
+        else []
+    )
+    violations = [
+        v for v in violations if cfg.applies(v.rule) and v.rule not in cfg.skip
+    ]
+
+    # Severity filtering: print everything ≥ the requested floor.
+    _floor = {"error": {"E"}, "warning": {"E", "W"}, "info": {"E", "W", "I"}}
+    visible_set = _floor.get(severity, _floor["error"])
+    visible = [v for v in violations if v.severity in visible_set]
+    n_errors = sum(1 for v in violations if v.severity == "E")
+    exit_code = 1 if n_errors > 0 else 0
 
     if json_out:
         import json as _json
@@ -1144,20 +2162,70 @@ def audit_project(
                     "distribution": distribution,
                     "repo": str(repo_root),
                     "violations": [
-                        {"rule": v.rule, "where": v.where, "detail": v.detail}
-                        for v in violations
+                        {
+                            "rule": v.rule,
+                            "where": v.where,
+                            "detail": v.detail,
+                            "severity": v.severity,
+                        }
+                        for v in visible
                     ],
+                    "exit_code": exit_code,
+                    "errors": n_errors,
                 },
                 indent=2,
             )
         )
-        return 0 if not violations else 1
+        return exit_code
 
-    if not violations:
-        click.echo(f"ok  {distribution}: no project-structure violations")
-        return 0
+    from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
-    click.echo(f"warn  {distribution} ({repo_root}): {len(violations)} violation(s)")
-    for v in violations:
-        click.echo(v.format())
-    return 1
+    def _emit_deferred_reminder() -> None:
+        if not deferred_dropped:
+            return
+        click.echo(
+            f"  [defer] {distribution}: {len(deferred_dropped)} PS-103 "
+            f"finding(s) suppressed by `project-type: deferred`. "
+            f"Re-review when time permits — entries currently at root "
+            f"that the strict baseline would flag:",
+            err=True,
+        )
+        for v in deferred_dropped[:10]:
+            basename = Path(v.where).name
+            click.echo(f"    - {basename}", err=True)
+        if len(deferred_dropped) > 10:
+            click.echo(
+                f"    … +{len(deferred_dropped) - 10} more (run with "
+                f"`--severity warning` against a non-deferred config to see all)",
+                err=True,
+            )
+
+    from .._emit import emit as _emit
+
+    if not visible:
+        # No findings at the requested severity floor.
+        _emit("success", f"{distribution}: no project-structure violations")
+        _emit_deferred_reminder()
+        emit_disclaimer()
+        return exit_code
+
+    n_w = sum(1 for v in visible if v.severity == "W")
+    n_i = sum(1 for v in visible if v.severity == "I")
+    headline_level = "error" if exit_code else "warning"
+    summary = f"{distribution} ({repo_root}): {n_errors} error(s)"
+    if n_w:
+        summary += f", {n_w} warning(s)"
+    if n_i:
+        summary += f", {n_i} info"
+    _emit(headline_level, summary)
+    for v in visible:
+        sev = (
+            "error"
+            if getattr(v, "severity", "W") == "E"
+            else ("warning" if getattr(v, "severity", "W") == "W" else "info")
+        )
+        _emit(sev, v.format())
+    _emit_deferred_reminder()
+    emit_disclaimer()
+    emit_skill_hints()
+    return exit_code

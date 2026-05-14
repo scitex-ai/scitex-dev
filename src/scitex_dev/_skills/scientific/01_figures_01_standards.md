@@ -1,8 +1,8 @@
 ---
-name: scientific-figures
-description: Universal, library-agnostic standards for publication-quality scientific figures — comparison rules (shared colour scale, aligned axes, consistent sample-size annotations), multi-panel layout grids, colour-map selection for categorical vs continuous vs divergent data, typography and legend placement, PDF-report layout (aspect, DPI, bleed), and how to justify breaking each rule. Pairs with `figrecipe/21_scientific-figure-patterns.md` for matplotlib-specific implementation code. Use when designing any figure for a manuscript, poster, or talk; when reviewing a plot for common pitfalls; or when auditing an ecosystem output for scientific rigour.
-canonical-location: scitex-python/src/scitex/_skills/scientific/01_figures_01_standards.md
-tags: [scitex-dev, scitex-package]
+description: |
+  [TOPIC] Scientific Figures
+  [DETAILS] Universal, library-agnostic standards for publication-quality scientific figures — comparison rules (shared colour scale, aligned axes, consistent sample-size annotations), multi-panel layout grids, colour-map selection for categorical vs continuous vs divergent data, typography and legend placement, PDF-report layout (aspect, DPI, bleed), and how to justify breaking each rule. Pairs with `figrecipe/21_scientific-figure-patterns.md` for matplotlib-specific implementation code. Use when designing any figure for a manuscript, poster, or talk; when reviewing a plot for common pitfalls; or when auditing an ecosystem output for scientific rigour.
+tags: [scitex-scientific-figures-standards]
 ---
 
 # Scientific Figure Standards (universal principles)

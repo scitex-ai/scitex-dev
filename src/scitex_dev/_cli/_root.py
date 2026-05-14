@@ -22,49 +22,16 @@ else:
     # Names below MUST match the actual registered command names. Anything
     # not listed here falls through to the "Other" section in --help.
     COMMAND_CATEGORIES = [
-        ("Ecosystem", ["doctor", "ecosystem"]),
+        ("Ecosystem", ["doctor", "ecosystem", "creds"]),
         ("Development", ["show-config", "rename-symbols"]),
         ("Documentation", ["docs", "search-docs", "skills"]),
         ("Interface", ["mcp", "list-python-apis"]),
         ("Shell", ["install-tab-completion"]),
     ]
 
-    class CategorizedGroup(click.Group):
-        """Custom Click group that displays commands organized by category."""
+    from .._ecosystem.click_helpers import make_categorized_group
 
-        def format_commands(self, ctx, formatter):
-            commands = {}
-            for subcommand in self.list_commands(ctx):
-                cmd = self.get_command(ctx, subcommand)
-                if cmd is not None and not cmd.hidden:
-                    commands[subcommand] = cmd
-
-            if not commands:
-                return
-
-            displayed = set()
-
-            for category_name, category_commands in COMMAND_CATEGORIES:
-                category_items = []
-                for name in category_commands:
-                    if name in commands and name not in displayed:
-                        cmd = commands[name]
-                        help_text = cmd.get_short_help_str(limit=formatter.width)
-                        category_items.append((name, help_text))
-                        displayed.add(name)
-
-                if category_items:
-                    with formatter.section(category_name):
-                        formatter.write_dl(category_items)
-
-            uncategorized = [
-                (name, commands[name].get_short_help_str(limit=formatter.width))
-                for name in sorted(commands.keys())
-                if name not in displayed
-            ]
-            if uncategorized:
-                with formatter.section("Other"):
-                    formatter.write_dl(uncategorized)
+    CategorizedGroup = make_categorized_group(COMMAND_CATEGORIES)
 
     def _command_to_dict(
         cmd: click.Command,
@@ -374,78 +341,18 @@ else:
                 else:
                     click.echo(f"  {item}")
 
-    @main.command(
-        "rename",
-        hidden=True,
-        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
-    )
-    @click.pass_context
-    def rename_deprecated(ctx):
-        """(deprecated) Renamed to `rename-symbols`."""
-        click.echo(
-            "error: `scitex-dev rename` was renamed to `scitex-dev rename-symbols`.\n"
-            "Re-run with: scitex-dev rename-symbols <old> <new> [...]",
-            err=True,
-        )
-        ctx.exit(2)
+    # rename-symbols + the hidden `rename` deprecation alias live in
+    # _cli/_rename.py. Extracted to keep _root.py under the line budget
+    # and to give the bulk-rename surface a focused module to grow into.
+    from ._rename import register as _register_rename
 
-    @main.command("rename-symbols")
-    @click.argument("old_name")
-    @click.argument("new_name")
-    @click.option("--root", default=".", help="Root directory for rename.")
-    @click.option("--dry-run", is_flag=True, help="Preview without renaming.")
-    @click.option("--regex", is_flag=True, help="Treat pattern as Python regex.")
-    @click.option(
-        "--exclude",
-        multiple=True,
-        help="Exclude paths containing this substring. Repeatable.",
-    )
-    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-    def rename_symbols(old_name, new_name, root, dry_run, regex, exclude, as_json, yes):
-        """Bulk rename with cross-reference updates. Supports --regex for regex patterns.
-
-        \b
-        Example:
-            $ scitex-dev rename-symbols old_func new_func --dry-run
-            $ scitex-dev rename-symbols old_func new_func --yes
-            $ scitex-dev rename-symbols 'old_(\\w+)' 'new_\\1' --regex --dry-run
-        """
-        del yes  # accepted for §2; use --dry-run for preview, omit for apply
-        from ._utils import wrap_as_cli
-
-        extra_excludes = list(exclude) if exclude else []
-
-        if dry_run:
-            from .. import preview_rename
-
-            wrap_as_cli(
-                preview_rename,
-                as_json=as_json,
-                pattern=old_name,
-                replacement=new_name,
-                directory=root,
-                regex=regex,
-                extra_excludes=extra_excludes,
-            )
-        else:
-            from .. import execute_rename
-
-            wrap_as_cli(
-                execute_rename,
-                as_json=as_json,
-                pattern=old_name,
-                replacement=new_name,
-                directory=root,
-                regex=regex,
-                extra_excludes=extra_excludes,
-            )
+    _register_rename(main)
 
     # -------------------------------------------------------------------
     # Documentation commands
     # -------------------------------------------------------------------
 
-    from ._dispatch import docs_click_group
+    from .._core.dispatch import docs_click_group
 
     docs_grp = docs_click_group(package="scitex-dev")
     main.add_command(docs_grp)
@@ -532,224 +439,29 @@ else:
     # Integration commands
     # -------------------------------------------------------------------
 
-    @main.group(invoke_without_command=True)
-    @click.option(
-        "--help-recursive", is_flag=True, help="Show help for all subcommands."
-    )
-    @click.pass_context
-    def mcp(ctx, help_recursive):
-        """MCP (Model Context Protocol) server commands."""
-        if help_recursive:
-            _print_mcp_help_recursive(ctx)
-            ctx.exit(0)
-        elif ctx.invoked_subcommand is None:
-            click.echo(ctx.get_help())
+    from ._mcp_cmds import register_mcp_commands
+    from .creds import register_creds_commands
 
-    def _print_mcp_help_recursive(ctx):
-        fake_parent = click.Context(click.Group(), info_name="scitex-dev")
-        parent_ctx = click.Context(mcp, info_name="mcp", parent=fake_parent)
+    register_mcp_commands(main)
+    register_creds_commands(main)
 
-        click.secho("=== scitex-dev mcp ===", fg="cyan", bold=True)
-        click.echo(mcp.get_help(parent_ctx))
+    # -------------------------------------------------------------------
+    # linter — engine moved here from scitex-linter (soft migration)
+    # `linter` is a noun per the noun-verb CLI convention (audit-cli §1).
+    # -------------------------------------------------------------------
 
-        for name in sorted(mcp.list_commands(ctx) or []):
-            cmd = mcp.get_command(ctx, name)
-            if cmd is None:
-                continue
-            click.echo()
-            click.secho(f"=== scitex-dev mcp {name} ===", fg="cyan", bold=True)
-            with click.Context(cmd, info_name=name, parent=parent_ctx) as sub_ctx:
-                click.echo(cmd.get_help(sub_ctx))
+    try:
+        from ..linter.cli import main_group as _linter_group
 
-    @mcp.command("start")
-    @click.option(
-        "--dry-run", is_flag=True, help="Print what would be done; do not start."
-    )
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-    def mcp_start(dry_run, yes):
-        """Start the scitex-dev MCP server.
-
-        \b
-        Example:
-            $ scitex-dev mcp start
-            $ scitex-dev mcp start --dry-run
-        """
-        del yes  # accepted for §2; mcp start is non-interactive
-        if dry_run:
-            click.echo("would start scitex-dev MCP server (fastmcp on stdio)")
-            return
-        try:
-            from .._mcp._server import mcp as mcp_server
-        except ImportError as e:
-            raise click.ClickException(
-                f"Failed to import MCP server. "
-                f"Install fastmcp: pip install scitex-dev[mcp]\n{e}"
-            ) from e
-
-        click.echo("Starting scitex-dev MCP server...")
-        mcp_server.run()
-
-    @mcp.command("doctor")
-    def mcp_doctor():
-        """Check MCP server dependencies and configuration.
-
-        \b
-        Example:
-            $ scitex-dev mcp doctor
-        """
-        click.echo("Checking MCP dependencies...")
-
-        try:
-            import fastmcp
-
-            click.echo(f"  [OK] fastmcp {fastmcp.__version__}")
-        except ImportError:
-            click.echo("  [!!] fastmcp not installed")
-            click.echo("    Install with: pip install scitex-dev[mcp]")
-            return
-
-        try:
-            from .._mcp._server import mcp as mcp_server
-
-            import asyncio
-
-            tool_count = len(asyncio.run(mcp_server.list_tools()))
-            click.echo(f"  [OK] MCP server loaded ({tool_count} tools)")
-        except Exception as e:
-            click.echo(f"  [!!] MCP server error: {e}")
-            return
-
-        click.echo()
-        click.echo("MCP server is ready.")
-        click.echo("Run with: scitex-dev mcp start")
-
-    @mcp.command(
-        "installation",
-        hidden=True,
-        context_settings={"ignore_unknown_options": True},
-    )
-    @click.pass_context
-    def mcp_installation_deprecated(ctx):
-        """(deprecated) Renamed to `show-installation`."""
-        click.echo(
-            "error: `scitex-dev mcp installation` was renamed to "
-            "`scitex-dev mcp show-installation`.\n"
-            "Re-run with: scitex-dev mcp show-installation",
-            err=True,
+        _linter_group.name = "linter"
+        _linter_group.short_help = (
+            "AST-based linter (was scitex-linter). Plugins register rules "
+            "via entry-point group `scitex_dev.linter.plugins` "
+            "(legacy `scitex_linter.plugins` still honoured)."
         )
-        ctx.exit(2)
-
-    @mcp.command("show-installation")
-    @click.option(
-        "--json",
-        "as_json",
-        is_flag=True,
-        help="Emit JSON manifest of MCP install instructions.",
-    )
-    def mcp_show_installation(as_json):
-        """Show installation instructions for MCP server integration.
-
-        \b
-        Example:
-            $ scitex-dev mcp show-installation
-            $ scitex-dev mcp show-installation --json
-        """
-        if as_json:
-            import json as _json
-
-            click.echo(
-                _json.dumps(
-                    {
-                        "install": "pip install scitex-dev[mcp]",
-                        "mcp_servers": {
-                            "scitex-dev": {
-                                "command": "scitex-dev",
-                                "args": ["mcp", "start"],
-                            },
-                        },
-                        "verify": [
-                            "scitex-dev mcp doctor",
-                            "scitex-dev mcp list-tools",
-                        ],
-                    },
-                    indent=2,
-                )
-            )
-            return
-        click.echo("Install scitex-dev with MCP support:")
-        click.echo()
-        click.echo("  pip install scitex-dev[mcp]")
-        click.echo()
-        click.echo("Add to your MCP client configuration:")
-        click.echo()
-        click.echo("  {")
-        click.echo('    "mcpServers": {')
-        click.echo('      "scitex-dev": {')
-        click.echo('        "command": "scitex-dev",')
-        click.echo('        "args": ["mcp", "start"]')
-        click.echo("      }")
-        click.echo("    }")
-        click.echo("  }")
-        click.echo()
-        click.echo("Verify with:")
-        click.echo("  scitex-dev mcp doctor")
-        click.echo("  scitex-dev mcp list-tools")
-
-    @mcp.command("list-tools")
-    @click.option(
-        "-v", "--verbose", count=True, help="Verbosity: -v sig, -vv +desc, -vvv full."
-    )
-    @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
-    def mcp_list_tools(verbose, as_json):
-        """List available MCP tools.
-
-        \b
-        Example:
-            $ scitex-dev mcp list-tools
-            $ scitex-dev mcp list-tools -vv
-            $ scitex-dev mcp list-tools --json
-        """
-        try:
-            from .._mcp._server import mcp as mcp_server
-        except ImportError as e:
-            raise click.ClickException(
-                f"fastmcp not installed. Install with: pip install scitex-dev[mcp]\n{e}"
-            ) from e
-
-        import asyncio
-
-        tools = asyncio.run(mcp_server.list_tools())
-        total = len(tools)
-
-        if as_json:
-            from ..types import RESULT_SCHEMA
-
-            output = {
-                "result_envelope": RESULT_SCHEMA,
-                "total": total,
-                "tools": [
-                    {"name": t.name, "description": t.description or ""} for t in tools
-                ],
-            }
-            click.echo(json.dumps(output, indent=2))
-            return
-
-        click.secho(f"scitex-dev MCP: {total} tools", fg="cyan", bold=True)
-        click.echo(
-            "Returns: Result{success, data, error, error_code, context, hints_on_error}"
-        )
-        click.echo()
-
-        for tool in sorted(tools, key=lambda t: t.name):
-            if verbose == 0:
-                click.echo(f"  {tool.name}")
-            else:
-                click.echo(f"  {tool.name}")
-                if tool.description:
-                    desc = tool.description.split("\n")[0].strip()
-                    click.echo(f"    {desc}")
-                click.echo(f"    -> Result")
-                click.echo()
+        main.add_command(_linter_group)
+    except Exception:
+        pass
 
     # -------------------------------------------------------------------
     # list-python-apis

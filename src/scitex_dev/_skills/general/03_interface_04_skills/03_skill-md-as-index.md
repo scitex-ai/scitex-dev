@@ -1,7 +1,8 @@
 ---
-name: skills-skill-md-as-index
-description: SKILL.md is an index file only — frontmatter (name, description, tags, allowed-tools, primary_interface, interfaces), one-line interface header, prose intro, "Installation & import" snippet, and grouped links to numbered leaves. Substantive content goes in focused leaf files. Includes the converged template (>70% adoption across the ecosystem) and per-leaf authoring rules.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills Skill Md As Index
+  [DETAILS] SKILL.md is an index file only — frontmatter (name, description, tags, allowed-tools, primary_interface, interfaces), one-line interface header, prose intro, "Installation & import" snippet, and grouped links to numbered leaves. Substantive content goes in focused leaf files. Includes the converged template (>70% adoption across the ecosystem) and per-leaf authoring rules.
+tags: [scitex-general-interface-skills-skill-md-as-index]
 ---
 
 # SKILL.md as Index, Sub-skills as Leaves
@@ -103,10 +104,10 @@ def save(obj, path, makedirs=True, ...):
 
 ## Size Limits
 
-- SKILL.md: ≤ ~4 KB / ~80 lines (index discipline)
+- SKILL.md: ≤ ~6 KB / ~120 lines (index discipline; bumped 2026-05 from 4 KB / 80 lines to fit structured 3W1H frontmatter)
 - Each leaf: ≤ ~10 KB / ~200 lines, one focused topic per file
 
-If a leaf exceeds 10 KB, split it. If SKILL.md exceeds 80 lines, the content has leaked from a leaf back into the index — promote it to a new leaf.
+If a leaf exceeds 10 KB, split it. If SKILL.md exceeds 120 lines, the content has leaked from a leaf back into the index — promote it to a new leaf.
 
 ## Cross-references
 

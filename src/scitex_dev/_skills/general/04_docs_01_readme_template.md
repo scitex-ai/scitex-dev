@@ -1,10 +1,42 @@
+---
+description: |
+  [TOPIC] Docs Readme Template
+  [DETAILS] .
+tags: [scitex-general-docs-readme-template]
+---
+
 # Canonical SciTeX README Template
 
 Literal template for every SciTeX package README.md. Replace `<PACKAGE>`
 (distribution name, e.g. `scitex-io`), `<MODULE>` (import name, e.g.
 `scitex_io`), and `<TAGLINE>` (one-line value proposition) before
-committing. The audit rules PS107 / PS109 / PS110 / PS111 / PS112
+committing. The audit rules PS-107 / PS-109 / PS-110 / PS-111 / PS-112 / PS-133
 enforce the load-bearing parts of this template.
+
+**Reference implementations** (look at these first when in doubt):
+
+- `~/proj/figrecipe/README.md` — original canonical layout
+- `~/proj/newb/README.md` — secondary worked example with the same shape
+
+## Header order (load-bearing)
+
+```
+# <PACKAGE>
+<centered logo>            (width=400, docs/scitex-logo-blue-cropped.png)
+<centered tagline>         (<b>...</b>)
+<centered Full Doc · pip>  (anchor + <code>)
+<centered badges>          (figrecipe form: <p align="center"> with <a><img></a>)
+[optional > blockquote]    (one-line build/auth disclaimer)
+---
+## Problem and Solution
+```
+
+The badges go **just below the Full-Documentation line**, NOT above.
+Use the centered HTML form (`<p align="center"> ... <a href=...><img
+src=...></a> ... </p>`) — NOT the left-aligned `[![…]]()` markdown
+form. Inline images render as a row, centered.
+
+## Literal template
 
 ```markdown
 # <PACKAGE>
@@ -22,12 +54,14 @@ enforce the load-bearing parts of this template.
 </p>
 
 <!-- scitex-badges:start -->
-[![PyPI](https://img.shields.io/pypi/v/<PACKAGE>.svg)](https://pypi.org/project/<PACKAGE>/)
-[![Python](https://img.shields.io/pypi/pyversions/<PACKAGE>.svg)](https://pypi.org/project/<PACKAGE>/)
-[![Tests](https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/test.yml/badge.svg)](https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/test.yml)
-[![Coverage](https://codecov.io/gh/ywatanabe1989/<PACKAGE>/graph/badge.svg)](https://codecov.io/gh/ywatanabe1989/<PACKAGE>)
-[![Docs](https://readthedocs.org/projects/<PACKAGE>/badge/?version=latest)](https://<PACKAGE>.readthedocs.io/en/latest/)
-[![License: AGPL v3](https://img.shields.io/badge/license-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+<p align="center">
+  <a href="https://pypi.org/project/<PACKAGE>/"><img src="https://img.shields.io/pypi/v/<PACKAGE>.svg" alt="PyPI"></a>
+  <a href="https://pypi.org/project/<PACKAGE>/"><img src="https://img.shields.io/pypi/pyversions/<PACKAGE>.svg" alt="Python"></a>
+  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/test.yml"><img src="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
+  <a href="https://codecov.io/gh/ywatanabe1989/<PACKAGE>"><img src="https://codecov.io/gh/ywatanabe1989/<PACKAGE>/graph/badge.svg" alt="Coverage"></a>
+  <a href="https://<PACKAGE>.readthedocs.io/en/latest/"><img src="https://readthedocs.org/projects/<PACKAGE>/badge/?version=latest" alt="Docs"></a>
+  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/license-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
+</p>
 <!-- scitex-badges:end -->
 
 ---
@@ -42,7 +76,16 @@ enforce the load-bearing parts of this template.
 
 ## Installation
 
+> **Recommended**: `uv pip install <PACKAGE>[all]` —
+> uv's Rust resolver handles the SciTeX dep set in 1-3 min where
+> pip's serial backtracker can take 30+ min on the full extras.
+> Plain `pip install` still works; the install block below shows both.
+
 ```bash
+# Recommended — uv resolver
+uv pip install <PACKAGE>[all]
+
+# Plain pip also works
 pip install <PACKAGE>
 ```
 
@@ -80,12 +123,13 @@ Each rule warns (never errors) and fires from
 
 | Code  | Enforces                                                        |
 |-------|-----------------------------------------------------------------|
-| PS106 | Coverage badge present in first ~4 KB                           |
-| PS107 | Required H2 sections: `## Installation`, `## Quick Start`, `## Part of SciTeX` |
-| PS109 | PyPI version badge present in first ~4 KB                       |
-| PS110 | Four Freedoms for Research blockquote present                   |
-| PS111 | Banned personal email `ywatanabe@scitex.ai` not present         |
-| PS112 | SciTeX logo image present in first ~4 KB                        |
+| PS-106 | Coverage badge present in first ~4 KB                           |
+| PS-107 | Required H2 sections: `## Installation`, `## Quick Start`, `## Part of SciTeX` |
+| PS-109 | PyPI version badge present in first ~4 KB                       |
+| PS-110 | Four Freedoms for Research blockquote present                   |
+| PS-111 | Banned personal email `ywatanabe@scitex.ai` not present         |
+| PS-112 | SciTeX logo image present in first ~4 KB                        |
+| PS-133 | Badges block placed below the Full-Doc line in the centered `<p align="center">` form (figrecipe-style); not above the logo and not in `[![…]]()` markdown form |
 
 ## Acceptable Variants
 
@@ -94,7 +138,7 @@ Each rule warns (never errors) and fires from
   the wild). Banner variants (`scitex-logo-banner.png`) are also
   acceptable as long as the basename starts with `scitex-logo`.
 - Quick Start heading: `## Quick Start` or `## Quickstart` (both
-  pass PS107).
+  pass PS-107).
 - PyPI badge: `badge.fury.io/py/<pkg>.svg` or
   `img.shields.io/pypi/v/<pkg>.svg`.
 - `import` idiom in code blocks: both `import scitex` and

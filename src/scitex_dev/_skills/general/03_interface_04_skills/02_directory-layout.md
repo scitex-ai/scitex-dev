@@ -1,7 +1,8 @@
 ---
-name: skills-directory-layout
-description: Where `_skills/` sits in a package — `src/<pkg>/_skills/<pip-name>/` for standalone packages and `src/scitex/<module>/_skills/` for submodules within scitex-python. Includes the rules that every public module must have a SKILL.md, real files only (no symlinks), and the legacy `skills/` path is read-only.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills Directory Layout
+  [DETAILS] Where `_skills/` sits in a package — `src/<pkg>/_skills/<pip-name>/` for standalone packages and `src/scitex/<module>/_skills/` for submodules within scitex-python. Includes the rules that every public module must have a SKILL.md, real files only (no symlinks), and the legacy `skills/` path is read-only.
+tags: [scitex-general-interface-skills-directory-layout]
 ---
 
 # Skills Directory Layout

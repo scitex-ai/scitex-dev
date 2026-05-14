@@ -1,0 +1,15 @@
+# scitex-dev project-level CLI audit dictionary.
+#
+# Adds nouns and verbs that aren't in the bundled English catalog or Moby
+# POS list but are legitimate domain terms in this package's CLI.
+#
+# Merged with `~/.scitex/dev/cli-audit-dict.yaml` (user-level) at audit
+# time. Project entries take precedence on collision.
+
+nouns:
+  # Short form of "credentials" — used in `scitex-dev creds <verb>` for
+  # the ecosystem-wide CLAUDE_CODE_CREDENTIALS_JSON rotation.
+  - creds
+
+transitive_verbs: []
+intransitive_verbs: []

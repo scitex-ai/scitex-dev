@@ -1,7 +1,8 @@
 ---
-name: package-examples
-description: `./examples/` for a SciTeX package — runnable demos, mandatory numbered prefix (`01_<descriptive-name>.{py,sh,ipynb}`), `_out/` artefacts committed to git so users see them on GitHub, `00_run_all.sh` dispatcher, matched 1:1 by `tests/examples/test_<stem>.py`. Use SciTeX where applicable (`@stx.session`, `stx.io`, `stx.plt`); examples are free to import the umbrella `scitex`. Include agentic demos (MCP-tool prompts, Skills invocation patterns) where the package exposes those interfaces.
-tags: [scitex-python, scitex-general, scitex-package, project-structure, examples]
+description: |
+  [TOPIC] Package Examples
+  [DETAILS] `./examples/` for a SciTeX package — runnable demos, mandatory numbered prefix (`01_<descriptive-name>.{py,sh,ipynb}`), `_out/` artefacts committed to git so users see them on GitHub, `00_run_all.sh` dispatcher, matched 1:1 by `tests/examples/test_<stem>.py`. Use SciTeX where applicable (`@stx.session`, `stx.io`, `stx.plt`); examples are free to import the umbrella `scitex`. Include agentic demos (MCP-tool prompts, Skills invocation patterns) where the package exposes those interfaces.
+tags: [scitex-general-package-project-structure-examples]
 ---
 
 # `./examples` — runnable demos
@@ -145,7 +146,7 @@ examples/01_load_save.py            →  tests/examples/test_01_load_save.py
 examples/02_plot_summary.py         →  tests/examples/test_02_plot_summary.py
 ```
 
-PS303 of `audit-project` flags an example without a matching test.
+PS-303 of `audit-project` flags an example without a matching test.
 
 ## Agentic demos
 

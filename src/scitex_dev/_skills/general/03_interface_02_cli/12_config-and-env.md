@@ -1,8 +1,8 @@
 ---
-name: interface-cli-config-env
-description: SciTeX CLI config and env vars — SCITEX_<PKG>_* namespace, config.yaml precedence (--config > env > project > user).
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Config Env
+  [DETAILS] SciTeX CLI config and env vars — SCITEX_<PKG>_* namespace, config.yaml precedence (--config > env > project > user).
+tags: [scitex-general-interface-cli-config-and-env]
 ---
 
 # §6. Config + env vars

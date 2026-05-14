@@ -1,7 +1,8 @@
 ---
-name: scitex-readthedocs
-description: How to onboard, configure and verify Read the Docs projects for SciTeX ecosystem packages — covers token loading, project import, default-branch handling, build triggering and bulk operations.
-tags: [scitex, docs, rtd, devops]
+description: |
+  [TOPIC] Scitex Readthedocs
+  [DETAILS] How to onboard, configure and verify Read the Docs projects for SciTeX ecosystem packages — covers token loading, project import, default-branch handling, build triggering and bulk operations.
+tags: [scitex-general-docs-rtd]
 ---
 
 # Read the Docs — SciTeX ecosystem playbook

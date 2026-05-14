@@ -48,18 +48,33 @@ def register_ecosystem_commands(main_group):
     @click.option("--package", "-p", multiple=True, help="Specific packages to check.")
     @click.option("--versions", is_flag=True, help="Include version details.")
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    def ecosystem_list(package, versions, as_json):
+    @click.option(
+        "--names-only",
+        "-q",
+        is_flag=True,
+        help=(
+            "Print only the package names, one per line. Pipe-friendly: "
+            "`scitex-dev ecosystem list -q | xargs scitex-dev ecosystem audit-all`."
+        ),
+    )
+    def ecosystem_list(package, versions, as_json, names_only):
         """List packages in the SciTeX ecosystem.
 
         \b
         Example:
             $ scitex-dev ecosystem list
             $ scitex-dev ecosystem list --json
+            $ scitex-dev ecosystem list -q                # names only
             $ scitex-dev ecosystem list -p scitex-io --versions
         """
         from ..._ecosystem import ECOSYSTEM, get_all_packages
 
         pkgs = list(package) if package else get_all_packages()
+
+        if names_only:
+            for pkg in pkgs:
+                click.echo(pkg)
+            return
 
         if versions:
             from ... import list_versions
@@ -403,6 +418,317 @@ def register_ecosystem_commands(main_group):
             jobs=jobs_n,
             on_progress=on_progress,
         )
+
+    # ---------------------------------------------------------------
+    # Bootstrap / cross-machine ops: clone | checkout | pull | install
+    # ---------------------------------------------------------------
+
+    def _git_progress(idx, total, name, status, msg):
+        mark = {"ok": "✓", "err": "✗", "skip": "·", "dry": "·"}.get(status, "?")
+        click.echo(f"[{idx}/{total}] {mark} {name}: {msg}", err=True)
+
+    @ecosystem.command("clone")
+    @click.option("--dest", default="~/proj", show_default=True, help="Parent dir.")
+    @click.option("--branch", default="develop", show_default=True)
+    @click.option("--https", is_flag=True, help="Use https:// URLs (default ssh).")
+    @click.option("--package", "-p", multiple=True, help="Specific packages.")
+    @click.option("--jobs", "-j", default=4, show_default=True, type=int)
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=True,
+        help="(default) Print what would run; do nothing. Pass --yes to apply.",
+    )
+    @click.option("--json", "as_json", is_flag=True)
+    @click.option(
+        "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
+    )
+    def ecosystem_clone(dest, branch, https, package, jobs, dry_run, as_json, yes):
+        """Clone every ecosystem repo into DEST (default ~/proj/).
+
+        \b
+        Default is dry-run — pass --yes to actually clone.
+
+        \b
+        Example:
+          $ scitex-dev ecosystem clone                # preview (dry-run)
+          $ scitex-dev ecosystem clone --yes          # apply
+          $ scitex-dev ecosystem clone --dest /scratch/proj --yes
+          $ scitex-dev ecosystem clone --https --branch main --yes
+          $ scitex-dev ecosystem clone -p scitex-io --yes
+        """
+        from pathlib import Path as _Path
+
+        from ..._ecosystem._git_ops import clone_all
+
+        # Dry-run is default; --yes overrides to apply for real.
+        effective_dry_run = dry_run and not yes
+        results = clone_all(
+            dest=_Path(dest),
+            branch=branch,
+            use_ssh=not https,
+            packages=list(package) or None,
+            jobs=jobs,
+            dry_run=effective_dry_run,
+            on_progress=None if as_json else _git_progress,
+        )
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {k: {"exit": v[0], "msg": v[1]} for k, v in results.items()},
+                    indent=2,
+                )
+            )
+        rc = 0 if all(v[0] == 0 for v in results.values()) else 1
+        raise SystemExit(rc)
+
+    @ecosystem.command("checkout")
+    @click.argument("branch")
+    @click.option("--package", "-p", multiple=True, help="Specific packages.")
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=True,
+        help="(default) Print what would run; do nothing. Pass --yes to apply.",
+    )
+    @click.option(
+        "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
+    )
+    @click.option("--json", "as_json", is_flag=True)
+    def ecosystem_checkout(branch, package, dry_run, yes, as_json):
+        """`git checkout <branch>` in every ecosystem clone.
+
+        \b
+        Default is dry-run — pass --yes to actually checkout.
+
+        \b
+        Example:
+          $ scitex-dev ecosystem checkout develop          # preview
+          $ scitex-dev ecosystem checkout develop --yes    # apply
+          $ scitex-dev ecosystem checkout main -p scitex-io --yes
+        """
+        from ..._ecosystem._core import ECOSYSTEM as _ECO
+        from ..._ecosystem._git_ops import checkout_all
+
+        if dry_run and not yes:
+            for n, info in _ECO.items():
+                if info.get("archived") or (package and n not in package):
+                    continue
+                click.echo(f"would run in {info['local_path']}: git checkout {branch}")
+            raise SystemExit(0)
+        results = checkout_all(
+            branch=branch,
+            packages=list(package) or None,
+            on_progress=None if as_json else _git_progress,
+        )
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {k: {"exit": v[0], "msg": v[1]} for k, v in results.items()},
+                    indent=2,
+                )
+            )
+        rc = 0 if all(v[0] == 0 for v in results.values()) else 1
+        raise SystemExit(rc)
+
+    @ecosystem.command("pull")
+    @click.option(
+        "--no-rebase", is_flag=True, help="Use plain git pull (default --rebase)."
+    )
+    @click.option("--package", "-p", multiple=True, help="Specific packages.")
+    @click.option("--jobs", "-j", default=4, show_default=True, type=int)
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=True,
+        help="(default) Print what would run; do nothing. Pass --yes to apply.",
+    )
+    @click.option(
+        "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
+    )
+    @click.option("--json", "as_json", is_flag=True)
+    def ecosystem_pull(no_rebase, package, jobs, dry_run, yes, as_json):
+        """`git pull --rebase` in every ecosystem clone (parallel).
+
+        \b
+        Default is dry-run — pass --yes to actually pull.
+
+        \b
+        Example:
+          $ scitex-dev ecosystem pull              # preview
+          $ scitex-dev ecosystem pull --yes        # apply
+          $ scitex-dev ecosystem pull --yes -j 8
+          $ scitex-dev ecosystem pull -p scitex-io --yes
+        """
+        from ..._ecosystem._git_ops import pull_all
+
+        if dry_run and not yes:
+            from ..._ecosystem._core import ECOSYSTEM as _ECO
+
+            for n, info in _ECO.items():
+                if info.get("archived") or (package and n not in package):
+                    continue
+                cmd = "git pull" + ("" if no_rebase else " --rebase")
+                click.echo(f"would run in {info['local_path']}: {cmd}")
+            raise SystemExit(0)
+        results = pull_all(
+            rebase=not no_rebase,
+            packages=list(package) or None,
+            jobs=jobs,
+            on_progress=None if as_json else _git_progress,
+        )
+        if as_json:
+            import json as _json
+
+            click.echo(
+                _json.dumps(
+                    {k: {"exit": v[0], "msg": v[1]} for k, v in results.items()},
+                    indent=2,
+                )
+            )
+        rc = 0 if all(v[0] == 0 for v in results.values()) else 1
+        raise SystemExit(rc)
+
+    @ecosystem.command("install")
+    @click.option(
+        "--source",
+        type=click.Choice(["editable", "pypi"]),
+        default="editable",
+        show_default=True,
+        help="editable: pip install -e <local>; pypi: pip install <name> from PyPI.",
+    )
+    @click.option("--extras", default="", help="Comma-separated extras (e.g. dev,mcp).")
+    @click.option(
+        "--venv",
+        type=click.Choice(["per-package", "current"]),
+        default="per-package",
+        show_default=True,
+        help=(
+            "per-package (DEFAULT): create ~/proj/<pkg>/.venv/ if missing "
+            "and install INTO that venv — yields the canonical CI-parity "
+            "layout where each package's [dev]/[all] extras are exercised "
+            "in isolation. If ~/proj/<pkg>/.venv is a symlink (typically "
+            "to ~/.venv from a shared-dev setup), it is REPLACED with a "
+            "real venv so the deps don't bleed into the global one. "
+            "current (opt-in): install into the running Python (shared "
+            "dev venv) — use only when you intentionally want every peer "
+            "installed into the same env."
+        ),
+    )
+    @click.option("--package", "-p", multiple=True, help="Specific packages.")
+    @click.option("--jobs", "-j", default=1, show_default=True, type=int)
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=True,
+        help="(default) Print what would run; do nothing. Pass --yes to apply.",
+    )
+    @click.option("--json", "as_json", is_flag=True)
+    @click.option(
+        "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
+    )
+    @click.option(
+        "--with-completions/--no-completions",
+        default=True,
+        show_default=True,
+        help=(
+            "After pip install, run `<binary> install-shell-completion --yes` "
+            "for every package whose console script lands on PATH. Generates "
+            "the per-package cache file under ~/.scitex/<pkg-short>/runtime/"
+            "completion/ and a single source line in your rc."
+        ),
+    )
+    @click.option(
+        "--completion-shell",
+        type=click.Choice(["bash", "zsh", "fish"]),
+        default="bash",
+        show_default=True,
+        help="Shell to wire completions for (used with --with-completions).",
+    )
+    def ecosystem_install(
+        source,
+        extras,
+        venv,
+        package,
+        jobs,
+        dry_run,
+        as_json,
+        yes,
+        with_completions,
+        completion_shell,
+    ):
+        """`pip install` every ecosystem package.
+
+        \b
+        Default is dry-run — pass --yes to actually install.
+
+        \b
+        Example:
+          $ scitex-dev ecosystem install                              # preview (dry-run, per-package — DEFAULT)
+          $ scitex-dev ecosystem install --extras all,dev --yes -j 4  # CI-parity install: per-pkg .venv each
+          $ scitex-dev ecosystem install --venv current --yes         # legacy: install everything into running venv
+          $ scitex-dev ecosystem install --source pypi --yes
+          $ scitex-dev ecosystem install -p scitex-io --extras dev --yes
+        """
+        from ..._ecosystem._git_ops import install_all, install_completions_all
+
+        # Dry-run is default; --yes overrides to apply for real.
+        effective_dry_run = dry_run and not yes
+        results = install_all(
+            source=source,
+            extras=extras,
+            venv=venv,
+            packages=list(package) or None,
+            jobs=jobs,
+            dry_run=effective_dry_run,
+            on_progress=None if as_json else _git_progress,
+        )
+
+        completion_results: dict | None = None
+        if with_completions:
+            # Only attempt for packages that pip-installed successfully —
+            # a binary on PATH for a package whose pip install just failed
+            # is at best stale, at worst missing.
+            ok_pkgs = [name for name, (rc, _) in results.items() if rc == 0]
+            if ok_pkgs:
+                if not as_json:
+                    click.echo(
+                        f"\nWiring shell completions ({completion_shell}) for "
+                        f"{len(ok_pkgs)} package(s)…",
+                        err=True,
+                    )
+                completion_results = install_completions_all(
+                    shell=completion_shell,
+                    packages=ok_pkgs,
+                    jobs=jobs,
+                    dry_run=effective_dry_run,
+                    on_progress=None if as_json else _git_progress,
+                )
+
+        if as_json:
+            import json as _json
+
+            payload = {k: {"exit": v[0], "msg": v[1]} for k, v in results.items()}
+            if completion_results is not None:
+                payload = {
+                    "install": payload,
+                    "completions": {
+                        k: {"exit": v[0], "msg": v[1]}
+                        for k, v in completion_results.items()
+                    },
+                }
+            click.echo(_json.dumps(payload, indent=2))
+
+        rc = 0 if all(v[0] == 0 for v in results.values()) else 1
+        if completion_results is not None and any(
+            v[0] != 0 for v in completion_results.values()
+        ):
+            rc = max(rc, 1)
+        raise SystemExit(rc)
 
     @ecosystem.command("sync-remote", hidden=True)
     @click.option(
@@ -755,10 +1081,10 @@ def register_ecosystem_commands(main_group):
             "Examples:\n"
             "  $ scitex-dev ecosystem audit-python-apis scitex-io\n"
             "  $ scitex-dev ecosystem audit-python-apis scitex-io --json\n"
-            "  $ scitex-dev ecosystem audit-python-apis scitex-io --rule PA101 --rule PA202\n"
+            "  $ scitex-dev ecosystem audit-python-apis scitex-io --rule PA-101 --rule PA-202\n"
             "\n"
-            "Foundation rules (PA<§><idx>): PA101–104 (§1 naming/visibility),\n"
-            "PA201–203 (§2 version), PA301 (§3 lazy imports), PA501 (§5 future\n"
+            "Foundation rules (PA<§><idx>): PA-101–104 (§1 naming/visibility),\n"
+            "PA-201–203 (§2 version), PA-301 (§3 lazy imports), PA-501 (§5 future\n"
             "annotations). See general/03_interface_01_python-api/12_audit-checklist.md."
         ),
     )
@@ -768,7 +1094,7 @@ def register_ecosystem_commands(main_group):
         "--rule",
         "rules",
         multiple=True,
-        help="Restrict to specific rule codes (e.g. --rule PA101). Repeatable.",
+        help="Restrict to specific rule codes (e.g. --rule PA-101). Repeatable.",
     )
     def ecosystem_audit_python_apis(distribution, json_out, rules):
         """Check a package's Python API against the §1–§5 audit checklist."""
@@ -793,12 +1119,12 @@ def register_ecosystem_commands(main_group):
             "Examples:\n"
             "  $ scitex-dev ecosystem audit-skills scitex-io\n"
             "  $ scitex-dev ecosystem audit-skills scitex-io --json\n"
-            "  $ scitex-dev ecosystem audit-skills scitex-io --rule SK210 --rule SK211\n"
+            "  $ scitex-dev ecosystem audit-skills scitex-io --rule SK-210 --rule SK-211\n"
             "\n"
-            "Foundation rules (SK<§><idx>): SK101–104 (§1 layout), SK201–203\n"
-            "(§2 naming), SK210–211 (§2a no header/footer above frontmatter),\n"
-            "SK301–302 (§3 SKILL.md as index), SK401 (§4 leaf size), SK601\n"
-            "(§6 no `import scitex as stx`), SK701–704 (frontmatter required\n"
+            "Foundation rules (SK<§><idx>): SK-101–104 (§1 layout), SK-201–203\n"
+            "(§2 naming), SK-210–211 (§2a no header/footer above frontmatter),\n"
+            "SK-301–302 (§3 SKILL.md as index), SK-401 (§4 leaf size), SK-601\n"
+            "(§6 no `import scitex as stx`), SK-701–704 (frontmatter required\n"
             "fields). See general/03_interface_04_skills/12_quality-checklist.md."
         ),
     )
@@ -808,9 +1134,17 @@ def register_ecosystem_commands(main_group):
         "--rule",
         "rules",
         multiple=True,
-        help="Restrict to specific rule codes (e.g. --rule SK210). Repeatable.",
+        help="Restrict to specific rule codes (e.g. --rule SK-210). Repeatable.",
     )
-    def ecosystem_audit_skills(distribution, json_out, rules):
+    @click.option(
+        "--fix",
+        is_flag=True,
+        help=(
+            "Auto-fix mechanically resolvable rules (SK-705/SK-709/SK-710). "
+            "Rewrites only frontmatter; idempotent."
+        ),
+    )
+    def ecosystem_audit_skills(distribution, json_out, rules, fix):
         """Check a package's `_skills/<pip-name>/` against the §1–§FM checklist."""
         from ..audit import _skills as _cli_audit_skills
 
@@ -819,6 +1153,7 @@ def register_ecosystem_commands(main_group):
                 distribution,
                 json_out=json_out,
                 rules=set(rules) if rules else None,
+                fix=fix,
             )
         )
 
@@ -828,10 +1163,10 @@ def register_ecosystem_commands(main_group):
             "Project-structure auditor.\n"
             "\n"
             "Foundation rules (PS<§><idx>):\n"
-            "  PS101–104  §1 top-level layout (pyproject, forbidden dirs, junk)\n"
-            "  PS201–206  §2 src ↔ tests mirror (parent, mirror, prefix, orphan, placeholder)\n"
-            "  PS301–303  §3 tests/ subdir convention (htmlcov, unknown subdirs, examples)\n"
-            "  PS401–402  §4 docs/ structure (to_claude gitignored, assets location)\n"
+            "  PS-101–104  §1 top-level layout (pyproject, forbidden dirs, junk)\n"
+            "  PS-201–206  §2 src ↔ tests mirror (parent, mirror, prefix, orphan, placeholder)\n"
+            "  PS-301–303  §3 tests/ subdir convention (htmlcov, unknown subdirs, examples)\n"
+            "  PS-401–402  §4 docs/ structure (to_claude gitignored, assets location)\n"
             "\n"
             "See _skills/general/02_package_01_project-structure-root.md for the\n"
             "full convention; ditto _skills/scientific/02_research-project_01_project-structure-root.md\n"
@@ -851,16 +1186,28 @@ def register_ecosystem_commands(main_group):
         "--rule",
         "rules",
         multiple=True,
-        help="Restrict to specific rule codes (e.g. --rule PS201). Repeatable.",
+        help="Restrict to specific rule codes (e.g. --rule PS-201). Repeatable.",
     )
-    def ecosystem_audit_project(distribution, repo_path, json_out, rules):
+    @click.option(
+        "--severity",
+        type=click.Choice(["error", "warning", "info"]),
+        default="error",
+        show_default=True,
+        help=(
+            "Minimum severity floor. 'error' prints E findings only and exits 1 "
+            "iff ≥1 E. 'warning' prints E+W. 'info' prints everything. "
+            "W/I findings never fail CI on their own."
+        ),
+    )
+    def ecosystem_audit_project(distribution, repo_path, json_out, rules, severity):
         """Check a package's project-structure against the canonical layout.
 
         \b
         Example:
             $ scitex-dev ecosystem audit-project scitex-io
             $ scitex-dev ecosystem audit-project scitex-dev --json
-            $ scitex-dev ecosystem audit-project scitex-stats --rule PS108
+            $ scitex-dev ecosystem audit-project scitex-stats --rule PS-108
+            $ scitex-dev ecosystem audit-project scitex-io --severity warning
         """
         from pathlib import Path
 
@@ -881,8 +1228,73 @@ def register_ecosystem_commands(main_group):
                 repo=repo,
                 json_out=json_out,
                 rules=set(rules) if rules else None,
+                severity=severity,
             )
         )
+
+    # ------------------------------------------------------------------ #
+    # init-config — write a `.scitex/dev/config.yaml` from the heuristic #
+    # so the user can confirm + commit the project's type.               #
+    # ------------------------------------------------------------------ #
+    @ecosystem.command("init-config")
+    @click.option(
+        "--repo",
+        "repo_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        default=".",
+        show_default=True,
+        help="Project root (defaults to cwd).",
+    )
+    @click.option(
+        "--project-type",
+        "project_types",
+        multiple=True,
+        type=click.Choice(["pip", "research"]),
+        help="Override the heuristic guess. Repeatable for hybrid repos.",
+    )
+    @click.option(
+        "--force",
+        is_flag=True,
+        help="Overwrite an existing .scitex/dev/config.yaml.",
+    )
+    @click.option("--yes", "-y", is_flag=True, help="Confirm destructive write.")
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print the target path and detected project types without writing.",
+    )
+    def ecosystem_init_config(repo_path, project_types, force, yes, dry_run):
+        """Write `.scitex/dev/config.yaml` from the heuristic guess.
+
+        \b
+        Example:
+            $ scitex-dev ecosystem init-config
+            $ scitex-dev ecosystem init-config --project-type research --yes
+            $ scitex-dev ecosystem init-config --project-type pip --project-type research
+            $ scitex-dev ecosystem init-config --dry-run
+        """
+        del yes  # accepted for §2 compliance; --force gates overwrite
+        from pathlib import Path
+
+        from ..audit._config import detect_project_types, write_config
+
+        repo = Path(repo_path).expanduser().resolve()
+        types = (
+            list(project_types) if project_types else sorted(detect_project_types(repo))
+        )
+        if dry_run:
+            target = repo / ".scitex" / "dev" / "config.yaml"
+            click.echo(f"# would write: {target}  (project-type: {', '.join(types)})")
+            return
+        try:
+            written = write_config(repo, project_types=types, overwrite=force)
+        except FileExistsError as e:
+            click.echo(
+                f"refuse: {e} already exists; pass --force to overwrite.",
+                err=True,
+            )
+            raise SystemExit(1)
+        click.echo(f"wrote: {written}  (project-type: {', '.join(types)})")
 
     # ------------------------------------------------------------------ #
     # audit-summary — cross-leaf, cross-auditor violation counts. The   #
@@ -1058,20 +1470,565 @@ def register_ecosystem_commands(main_group):
             fg="green",
         )
 
+    @ecosystem.group("dashboard")
+    def dashboard():
+        """Ecosystem health dashboard (TUI / GUI / export).
+
+        \b
+        Subcommands:
+          list    one-shot snapshot table (good for piping / `watch`)
+          start   live-refresh TUI (or --gui for the Dash web view)
+          export  machine-readable dump (json / csv / md)
+
+        Verbosity flag (-v / -vv / -vvv) controls column count across
+        all three. -vvv pulls every cached field; same data layer feeds
+        all surfaces (`gather_ecosystem_state`).
+        """
+
+    @dashboard.command(
+        "list",
+        epilog=(
+            "Example:\n"
+            "  $ scitex-dev ecosystem dashboard list -vv\n"
+            "  $ scitex-dev ecosystem dashboard list --json | jq\n"
+        ),
+    )
+    @click.option(
+        "-v",
+        "verbosity",
+        count=True,
+        default=1,
+        help="Add -v / -vv / -vvv for more columns.",
+    )
+    @click.option("--package", "-p", multiple=True, help="Limit to specific packages.")
+    @click.option(
+        "--jobs",
+        "-j",
+        "jobs",
+        default=16,
+        show_default=True,
+        type=int,
+        help=(
+            "Concurrent worker threads. All enrichment tasks "
+            "(pypi + deep + ci + audit at -vvv) share one pool — "
+            "264 tasks for the full ecosystem. Bump to 32-64 to "
+            "shorten -vvv wall-clock; cap by GitHub API rate-limit "
+            "(~5000/hr) and local CPU."
+        ),
+    )
+    @click.option(
+        "--json",
+        "as_json",
+        is_flag=True,
+        help="Emit JSON instead of the Rich table (alias for `dashboard export --format json`).",
+    )
+    @click.option(
+        "--with-tests",
+        type=click.Choice(["off", "collect", "run"]),
+        default="off",
+        show_default=True,
+        help=(
+            "Populate the pytest column with real data:  "
+            "`off` (default) shows the cheap test-file count;  "
+            "`collect` runs `pytest --collect-only` per pkg "
+            "(~3-10s/pkg) and shows the parametrize-aware test count;  "
+            "`run` actually runs pytest per pkg (~30-300s each) and "
+            "shows `F<failed> (<passed>/<total>)` with the F red on "
+            "failures. Both `collect` and `run` invoke pytest INSIDE "
+            "each pkg's `<pkg>/.venv/` and skip pkgs whose venv is a "
+            "symlink or missing."
+        ),
+    )
+    def dashboard_list(verbosity, package, jobs, as_json, with_tests):
+        """Live ecosystem dashboard. Visible columns at the current
+        verbosity are always computed (verbosity ≠ depth); cells fill
+        in via `rich.live.Live` first-come-first-served as each future
+        completes — PyPI HTTP, gh-api CI (one GraphQL batch), audit
+        (one `audit-all` subprocess).
+        """
+        import time
+
+        from ._dashboard import gather_ecosystem_state
+        from ._dashboard._render import (
+            cols_for_verbosity,
+            enrichers_for_cols,
+            render_table,
+        )
+
+        cols = cols_for_verbosity(verbosity)
+        enrichers = enrichers_for_cols(cols)
+        # `--with-tests` opt-ins enrich `tests_collected` / `tests_passed`
+        # & `tests_failed` so the pytest column can show the real
+        # `F NN (NN/NN)` format instead of just the file count.
+        if with_tests == "collect":
+            enrichers.add("tests-collect")
+        elif with_tests == "run":
+            enrichers.add("tests-run")
+
+        # `-p` accepts repeats AND comma-separated values, plus the
+        # literal `all` (expands to every registered pkg). Mirrors
+        # `audit-all`'s argument style.
+        #   -p scitex-io -p scitex-stats     → ["scitex-io", "scitex-stats"]
+        #   -p scitex-io,scitex-stats        → ["scitex-io", "scitex-stats"]
+        #   -p all                           → None (all pkgs)
+        raw_pkgs: list[str] = []
+        for entry in package:
+            raw_pkgs.extend(p.strip() for p in entry.split(",") if p.strip())
+        if "all" in raw_pkgs:
+            packages_arg: list[str] | None = None
+        elif raw_pkgs:
+            seen: set[str] = set()
+            packages_arg = []
+            for p in raw_pkgs:
+                if p not in seen:
+                    seen.add(p)
+                    packages_arg.append(p)
+        else:
+            packages_arg = None
+
+        if as_json:
+            states = gather_ecosystem_state(
+                verbosity=verbosity,
+                packages=packages_arg,
+                workers=jobs,
+                enrichers=enrichers,
+            )
+            from ._dashboard import _export as exp
+
+            click.echo(exp.to_json(states))
+            return
+
+        from rich.console import Console
+        from rich.live import Live
+
+        console = Console()
+
+        # Always live-stream. Even at v=0/1 we may have audit/pypi/CI
+        # columns visible that need computation; the basic gather is
+        # sub-second so Live engagement cost is negligible.
+        last_paint = [0.0]
+        states_box: list = []
+
+        def _on_update(states):
+            states_box[:] = states
+            now = time.monotonic()
+            if now - last_paint[0] >= 0.25:
+                live.update(render_table(states, verbosity=verbosity))
+                last_paint[0] = now
+
+        with Live(
+            render_table([], verbosity=verbosity),
+            console=console,
+            refresh_per_second=4,
+            transient=False,
+        ) as live:
+            gather_ecosystem_state(
+                verbosity=verbosity,
+                packages=packages_arg,
+                workers=jobs,
+                on_update=_on_update,
+                enrichers=enrichers,
+            )
+            # Final paint to ensure the last-completion delta lands.
+            live.update(render_table(states_box, verbosity=verbosity))
+
+    @dashboard.command(
+        "start",
+        epilog=(
+            "Example:\n"
+            "  $ scitex-dev ecosystem dashboard start -vv\n"
+            "  $ scitex-dev ecosystem dashboard start --gui   # web view (deferred)\n"
+            "  $ scitex-dev ecosystem dashboard start --interval 10\n"
+        ),
+    )
+    @click.option("-v", "verbosity", count=True, default=1)
+    @click.option(
+        "--gui", is_flag=True, help="Launch the Dash web view at 127.0.0.1:8050."
+    )
+    @click.option(
+        "--interval", type=float, default=5.0, help="TUI refresh interval (seconds)."
+    )
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print refresh plan (verbosity, interval, package count) and exit without rendering.",
+    )
+    @click.option(
+        "-y",
+        "--yes",
+        "yes",
+        is_flag=True,
+        help="No-op confirmation flag retained for §2 audit-cli compliance.",
+    )
+    def dashboard_start(verbosity, gui, interval, dry_run, yes):
+        """Live-refresh dashboard. TUI by default; --gui for the web view."""
+        if dry_run:
+            click.echo(
+                f"would render: verbosity={verbosity} interval={interval}s "
+                f"gui={'yes' if gui else 'no'}"
+            )
+            return
+        del yes  # accepted for compliance; nothing to confirm
+        if gui:
+            click.echo(
+                "error: --gui (Dash web view) is not yet wired into the v0 dashboard.\n"
+                "       Use `dashboard list` for a snapshot or `dashboard export` for a dump.",
+                err=True,
+            )
+            raise SystemExit(2)
+
+        from rich.console import Console
+        from rich.live import Live
+
+        from ._dashboard import gather_ecosystem_state
+        from ._dashboard._render import render_table
+
+        console = Console()
+        try:
+            with Live(
+                render_table(
+                    gather_ecosystem_state(verbosity=verbosity), verbosity=verbosity
+                ),
+                console=console,
+                refresh_per_second=4,
+                screen=False,
+            ) as live:
+                import time
+
+                while True:
+                    time.sleep(interval)
+                    live.update(
+                        render_table(
+                            gather_ecosystem_state(verbosity=verbosity),
+                            verbosity=verbosity,
+                        )
+                    )
+        except KeyboardInterrupt:
+            click.echo("\nstopped.", err=True)
+
+    @dashboard.command(
+        "start-tui",
+        epilog=(
+            "Keys:\n"
+            "  /          start filter\n"
+            "  Escape     clear filter\n"
+            "  r          refresh data\n"
+            "  q          quit\n"
+            "  j/k ↓/↑    navigate rows\n"
+            "  g / G      jump to top / bottom\n"
+            "\n"
+            "Example:\n"
+            "  $ scitex-dev ecosystem dashboard start-tui\n"
+            "  $ scitex-dev ecosystem dashboard start-tui -p scitex-io,scitex-stats\n"
+            "  $ scitex-dev ecosystem dashboard start-tui -vv\n"
+        ),
+    )
+    @click.option(
+        "-v",
+        "verbosity",
+        count=True,
+        default=1,
+        help="Add -v / -vv / -vvv for more columns.",
+    )
+    @click.option(
+        "--package",
+        "-p",
+        multiple=True,
+        help="Limit to specific packages (comma-separated or repeat the flag).",
+    )
+    @click.option(
+        "--jobs",
+        "-j",
+        default=16,
+        show_default=True,
+        type=int,
+        help="Concurrent worker threads for enrichment.",
+    )
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print plan (verbosity, package count) and exit without launching the TUI.",
+    )
+    @click.option(
+        "-y",
+        "--yes",
+        "yes",
+        is_flag=True,
+        help="No-op confirmation flag retained for §2 audit-cli compliance.",
+    )
+    def dashboard_tui(verbosity, package, jobs, dry_run, yes):
+        """htop-style TUI with live keystroke filter.
+
+        Requires the optional `textual` package. Install with:
+          pip install textual
+        """
+        raw_pkgs: list[str] = []
+        for entry in package:
+            raw_pkgs.extend(p.strip() for p in entry.split(",") if p.strip())
+        if "all" in raw_pkgs:
+            packages_arg: list[str] | None = None
+        elif raw_pkgs:
+            seen: set[str] = set()
+            packages_arg = []
+            for p in raw_pkgs:
+                if p not in seen:
+                    seen.add(p)
+                    packages_arg.append(p)
+        else:
+            packages_arg = None
+
+        del yes  # accepted for §2 compliance
+        if dry_run:
+            n = len(packages_arg) if packages_arg else "all"
+            click.echo(
+                f"would launch TUI: verbosity={verbosity} packages={n} jobs={jobs}"
+            )
+            return
+
+        try:
+            from ._dashboard._tui import run_tui
+        except ImportError as exc:
+            click.echo(f"error: {exc}", err=True)
+            raise SystemExit(2)
+
+        try:
+            run_tui(verbosity=verbosity, packages=packages_arg, workers=jobs)
+        except ImportError as exc:
+            click.echo(f"error: {exc}", err=True)
+            raise SystemExit(2)
+
+    @dashboard.command(
+        "export",
+        epilog=(
+            "Example:\n"
+            "  $ scitex-dev ecosystem dashboard export --format json | jq\n"
+            "  $ scitex-dev ecosystem dashboard export --format csv > state.csv\n"
+            "  $ scitex-dev ecosystem dashboard export --format md   # paste into README\n"
+        ),
+    )
+    @click.option(
+        "--format",
+        "fmt",
+        type=click.Choice(["json", "csv", "md"]),
+        default="json",
+    )
+    @click.option(
+        "-v",
+        "verbosity",
+        count=True,
+        default=3,
+        help="Default -vvv (all columns) for export.",
+    )
+    @click.option("--package", "-p", multiple=True)
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print row count + format that would be emitted; no payload written.",
+    )
+    @click.option(
+        "-y",
+        "--yes",
+        "yes",
+        is_flag=True,
+        help="No-op confirmation flag retained for §2 audit-cli compliance.",
+    )
+    def dashboard_export(fmt, verbosity, package, dry_run, yes):
+        """Machine-readable dump of the dashboard state."""
+        from ._dashboard import _export as exp
+        from ._dashboard import gather_ecosystem_state
+
+        states = gather_ecosystem_state(
+            verbosity=verbosity, packages=list(package) or None
+        )
+        if dry_run:
+            click.echo(
+                f"would emit: format={fmt} rows={len(states)} verbosity={verbosity}"
+            )
+            return
+        del yes
+        if fmt == "json":
+            click.echo(exp.to_json(states))
+        elif fmt == "csv":
+            click.echo(exp.to_csv(states))
+        elif fmt == "md":
+            click.echo(exp.to_markdown(states))
+
+    @ecosystem.command("list-audit-rules")
+    @click.option(
+        "--auditor",
+        type=click.Choice(["api", "project", "skills", "release", "all"]),
+        default="all",
+        help="Limit output to one auditor's rule corpus.",
+    )
+    @click.option(
+        "--json", "as_json", is_flag=True, help="Emit JSON instead of a table."
+    )
+    def ecosystem_list_audit_rules(auditor, as_json):
+        """List every registered audit rule (id, section, message).
+
+        Walks the four code-side rule registries:
+
+        \b
+          api      — PA*  (audit-python-apis)
+          project  — PS*  (audit-project)
+          skills   — SK*  (audit-skills)
+          release  — E5C* (pyproject_lint, surfaces inside audit-project)
+
+        \b
+        Examples:
+          $ scitex-dev ecosystem list-audit-rules
+          $ scitex-dev ecosystem list-audit-rules --auditor project
+          $ scitex-dev ecosystem list-audit-rules --json | jq
+
+        Note: audit-cli and audit-mcp-tools use §-numbered violations
+        defined inline (no central registry), so they're not listed
+        here. Their conventions live in
+        `_skills/general/03_interface_02_cli/` and
+        `_skills/general/03_interface_03_mcp/`.
+        """
+        import json as _json
+
+        sources: dict[str, list[dict]] = {}
+
+        def _push(name: str, items):
+            if items:
+                sources[name] = items
+
+        if auditor in ("api", "all"):
+            from ..audit._api._audit import RULES as PA_RULES
+
+            _push(
+                "api",
+                [
+                    {
+                        "id": r.code,
+                        "slug": getattr(r, "slug", "") or "",
+                        "section": r.section,
+                        "message": r.message,
+                    }
+                    for r in PA_RULES.values()
+                ],
+            )
+        if auditor in ("project", "all"):
+            from ..audit._project._audit import RULES as PS_RULES
+
+            _push(
+                "project",
+                [
+                    {
+                        "id": r.code,
+                        "slug": getattr(r, "slug", "") or "",
+                        "section": r.section,
+                        "message": r.message,
+                        "severity": getattr(r, "severity", "?"),
+                    }
+                    for r in PS_RULES.values()
+                ],
+            )
+        if auditor in ("skills", "all"):
+            from ..audit._skills._audit import RULES as SK_RULES
+
+            _push(
+                "skills",
+                [
+                    {
+                        "id": r.code,
+                        "slug": getattr(r, "slug", "") or "",
+                        "section": r.section,
+                        "message": r.message,
+                    }
+                    for r in SK_RULES.values()
+                ],
+            )
+        if auditor in ("release", "all"):
+            # pyproject_lint declares E5C* rules implicitly via per-check
+            # functions; pull canonical (rule_id, severity, summary) from
+            # the module docstring + check_*-name → finding.rule mapping.
+            release_rules = [
+                {
+                    "id": "REL-5",
+                    "slug": "implicit-deps-not-declared",
+                    "section": "release",
+                    "message": "implicit deps not declared",
+                },
+                {
+                    "id": "REL-9",
+                    "slug": "skills-not-bundled",
+                    "section": "release",
+                    "message": "_skills/ ships but build excludes it",
+                },
+                {
+                    "id": "REL-10",
+                    "slug": "duplicate-toml-table",
+                    "section": "release",
+                    "message": "duplicate TOML table",
+                },
+                {
+                    "id": "REL-11",
+                    "slug": "license-deprecated-form",
+                    "section": "release",
+                    "message": "deprecated PEP 621 license form",
+                },
+                {
+                    "id": "REL-12",
+                    "slug": "min-version-pin-missing",
+                    "section": "release",
+                    "message": "dependency missing >= lower bound",
+                },
+                {
+                    "id": "REL-21",
+                    "slug": "version-drift",
+                    "section": "release",
+                    "message": "pyproject ↔ tag ↔ PyPI version drift",
+                },
+                {
+                    "id": "REL-41",
+                    "slug": "readme-missing-interfaces-callout",
+                    "section": "release",
+                    "message": "README missing Interfaces callout",
+                },
+                {
+                    "id": "REL-31",
+                    "slug": "internal-api-leak",
+                    "section": "release",
+                    "message": "internal API leak (private re-exported)",
+                },
+            ]
+            _push("release", release_rules)
+
+        if as_json:
+            click.echo(_json.dumps(sources, indent=2))
+            return
+
+        for name, items in sources.items():
+            click.secho(f"\n=== {name} ({len(items)} rules) ===", fg="cyan")
+            for r in items:
+                sev = f" [{r['severity']}]" if "severity" in r else ""
+                slug = r.get("slug", "")
+                slug_str = f"  {slug}" if slug else ""
+                click.echo(
+                    f"  {r['id']:7} {r['section']:5}{sev}{slug_str:40s}  {r['message']}"
+                )
+
     @ecosystem.command(
         "audit-all",
         epilog=(
             "Examples:\n"
             "  $ scitex-dev ecosystem audit-all scitex-io\n"
+            "  $ scitex-dev ecosystem audit-all scitex-io scitex-stats\n"
+            "  $ scitex-dev ecosystem audit-all scitex-io,scitex-stats\n"
+            "  $ scitex-dev ecosystem audit-all all --severity error\n"
             "  $ scitex-dev ecosystem audit-all scitex-io --json\n"
             "\n"
-            "Runs every audit-* command on a single distribution and\n"
-            "aggregates exit codes (overall exit=1 if any auditor reports\n"
-            "violations). For cross-leaf rollups across the whole ecosystem,\n"
-            "use `audit-summary` instead."
+            "Runs every audit-* on each given distribution and\n"
+            "aggregates exit codes (overall exit=1 if any auditor on any\n"
+            "package reports violations). Pass `all` to run across every\n"
+            "registered ecosystem package. For cross-leaf rollups across\n"
+            "the whole ecosystem with cross-pkg dedup, use audit-summary\n"
+            "instead."
         ),
     )
-    @click.argument("distribution")
+    @click.argument("distributions", nargs=-1, required=True)
     @click.option("--json", "as_json", is_flag=True, help="Emit JSON output.")
     @click.option(
         "--severity",
@@ -1079,11 +2036,63 @@ def register_ecosystem_commands(main_group):
         default="warn",
         help="Minimum severity to report (passed through to each auditor).",
     )
-    def ecosystem_audit_all(distribution, as_json, severity):
-        """Run every audit-* on DISTRIBUTION; aggregate exit codes."""
+    @click.option(
+        "--jobs",
+        "-j",
+        default=1,
+        show_default=True,
+        type=int,
+        help="Run packages in parallel. Audits within a package stay serial.",
+    )
+    @click.option(
+        "--no-version-check",
+        is_flag=True,
+        help=(
+            "Skip the pre-audit check that compares the installed "
+            "scitex-dev version against PyPI's latest. Useful on "
+            "air-gapped boxes or when you intentionally want to run "
+            "an older rule corpus."
+        ),
+    )
+    def ecosystem_audit_all(distributions, as_json, severity, jobs, no_version_check):
+        """Run every audit-* on each DISTRIBUTION; aggregate exit codes.
+
+        DISTRIBUTIONS accepts: a single name, multiple names as separate
+        args, comma-separated names, or the literal `all` to expand to
+        every registered ecosystem package.
+        """
         import json as _json
+        import os as _os
+        import shutil as _shutil
         import subprocess
         import sys as _sys
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        from ..._ecosystem._core import ECOSYSTEM
+
+        # Self-freshness check: warn (don't block) if installed
+        # scitex-dev is older than PyPI's latest. Stale auditors
+        # produced six false-positives on scitex-io in 2026-05; this
+        # gate makes the staleness visible up front.
+        if not no_version_check and not as_json:
+            try:
+                from ..audit._version_check import warn_if_stale
+
+                warn_if_stale()
+            except Exception:
+                pass  # never let the freshness check break the audit
+
+        # Expand input: split on commas, flatten, then resolve `all`.
+        raw: list[str] = []
+        for d in distributions:
+            raw.extend(p.strip() for p in d.split(",") if p.strip())
+        if "all" in raw:
+            pkgs = list(ECOSYSTEM.keys())
+        else:
+            pkgs = []
+            for name in raw:
+                if name not in pkgs:
+                    pkgs.append(name)
 
         # Order: cheap-to-fast → slow. Each audit-* honours --json + --severity
         # idempotently. audit-summary excluded — it's the cross-leaf rollup.
@@ -1095,49 +2104,741 @@ def register_ecosystem_commands(main_group):
             "audit-project",
         ]
 
-        results: dict = {}
-        overall_exit = 0
-        # Resolve sibling `scitex-dev` console script. Falls back to PATH lookup.
-        import shutil as _shutil
-
+        sub_env = {**_os.environ, "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1"}
         scitex_dev_bin = _shutil.which("scitex-dev") or "scitex-dev"
-        for a in audits:
-            cmd = [scitex_dev_bin, "ecosystem", a, distribution]
-            if as_json:
-                cmd.append("--json")
-            # audit-cli + audit-summary support --severity; others ignore unknowns
-            if a == "audit-cli":
-                cmd += ["--severity", severity]
-            try:
+
+        def _run_one(distribution: str) -> tuple[str, int, dict]:
+            results: dict = {}
+            pkg_exit = 0
+            for a in audits:
+                cmd = [scitex_dev_bin, "ecosystem", a, distribution]
                 if as_json:
-                    r = subprocess.run(cmd, capture_output=True, text=True)
-                    payload = r.stdout.strip() or "null"
-                    try:
-                        results[a] = {
-                            "exit": r.returncode,
-                            "data": _json.loads(payload),
-                        }
-                    except _json.JSONDecodeError:
-                        results[a] = {"exit": r.returncode, "raw": payload}
-                else:
-                    click.echo(f"\n=== {a} ===", err=True)
-                    r = subprocess.run(cmd)
-                    results[a] = {"exit": r.returncode}
-            except Exception as e:
-                click.echo(f"error: {a} failed to launch: {e}", err=True)
-                results[a] = {"exit": 1, "error": str(e)}
-                overall_exit = 1
-                continue
-            if r.returncode != 0:
-                overall_exit = 1
+                    cmd.append("--json")
+                if a == "audit-cli":
+                    cmd += ["--severity", severity]
+                try:
+                    if as_json or len(pkgs) > 1:
+                        # Capture so multi-pkg output stays grouped.
+                        r = subprocess.run(
+                            cmd, capture_output=True, text=True, env=sub_env
+                        )
+                        if as_json:
+                            payload = r.stdout.strip() or "null"
+                            try:
+                                results[a] = {
+                                    "exit": r.returncode,
+                                    "data": _json.loads(payload),
+                                }
+                            except _json.JSONDecodeError:
+                                results[a] = {
+                                    "exit": r.returncode,
+                                    "raw": payload,
+                                }
+                        else:
+                            results[a] = {
+                                "exit": r.returncode,
+                                "stdout": r.stdout,
+                                "stderr": r.stderr,
+                            }
+                    else:
+                        click.echo(f"\n=== {a} ===", err=True)
+                        r = subprocess.run(cmd, env=sub_env)
+                        results[a] = {"exit": r.returncode}
+                except Exception as e:
+                    click.echo(
+                        f"error: {a} on {distribution} failed to launch: {e}",
+                        err=True,
+                    )
+                    results[a] = {"exit": 1, "error": str(e)}
+                    pkg_exit = 1
+                    continue
+                if r.returncode != 0:
+                    pkg_exit = 1
+            return distribution, pkg_exit, results
+
+        all_results: dict[str, dict] = {}
+        overall_exit = 0
+
+        if jobs <= 1 or len(pkgs) <= 1:
+            for d in pkgs:
+                if not as_json and len(pkgs) > 1:
+                    click.echo(f"\n###### {d} ######", err=True)
+                name, rc, res = _run_one(d)
+                all_results[name] = res
+                if not as_json and len(pkgs) > 1:
+                    for a, r in res.items():
+                        click.echo(f"\n=== {name} :: {a} ===", err=True)
+                        if r.get("stdout"):
+                            click.echo(r["stdout"])
+                        if r.get("stderr"):
+                            click.echo(r["stderr"], err=True)
+                if rc != 0:
+                    overall_exit = 1
+        else:
+            with ThreadPoolExecutor(max_workers=jobs) as ex:
+                futs = {ex.submit(_run_one, d): d for d in pkgs}
+                for f in as_completed(futs):
+                    name, rc, res = f.result()
+                    all_results[name] = res
+                    if not as_json:
+                        click.echo(f"\n###### {name} ######", err=True)
+                        for a, r in res.items():
+                            click.echo(f"\n=== {name} :: {a} ===", err=True)
+                            if r.get("stdout"):
+                                click.echo(r["stdout"])
+                            if r.get("stderr"):
+                                click.echo(r["stderr"], err=True)
+                    if rc != 0:
+                        overall_exit = 1
 
         if as_json:
             click.echo(
                 _json.dumps(
-                    {"distribution": distribution, "results": results}, indent=2
+                    {
+                        "distributions": pkgs,
+                        "results": all_results,
+                        "exit_code": overall_exit,
+                    },
+                    indent=2,
                 )
             )
+        else:
+            from ..._audit_disclaimer import emit_disclaimer, emit_skill_hints
+
+            if len(pkgs) > 1:
+                click.echo("", err=True)
+                click.echo(f"summary: audited {len(pkgs)} package(s)", err=True)
+                fails = [
+                    n
+                    for n, res in all_results.items()
+                    if any(r.get("exit", 0) != 0 for r in res.values())
+                ]
+                if fails:
+                    click.echo(f"  failures: {', '.join(sorted(fails))}", err=True)
+                else:
+                    click.echo("  all packages pass", err=True)
+            click.echo("", err=True)
+            emit_disclaimer()
+            if overall_exit:
+                emit_skill_hints()
         _sys.exit(overall_exit)
+
+    @ecosystem.command(
+        "clean-root",
+        epilog=(
+            "Examples:\n"
+            "  $ scitex-dev ecosystem clean-root figrecipe                  # preview\n"
+            "  $ scitex-dev ecosystem clean-root figrecipe --yes            # move\n"
+            "  $ scitex-dev ecosystem clean-root all -j 8                   # preview all\n"
+            "  $ scitex-dev ecosystem clean-root scitex-io,figrecipe --yes  # bulk\n"
+            "\n"
+            "Moves every PS-103 root violation in DISTRIBUTIONS into\n"
+            "<repo>/.scitex/dev/runtime/root-violations/<YYYYmmdd-HHMMSS>/.\n"
+            "Non-destructive: nothing is deleted. The quarantine dir is\n"
+            "gitignored via the standard `.scitex/*/runtime/*` rule. To\n"
+            "permanently delete after review, `rm -rf` the timestamped\n"
+            "subdir. To restore, `mv` the entries back.\n"
+            "\n"
+            "Default is dry-run; pass --yes to apply. Use --keep-screenshots\n"
+            "etc. (or per-pkg `audit.root-whitelist` in .scitex/dev/config.yaml)\n"
+            "to whitelist legitimate roots before cleaning."
+        ),
+    )
+    @click.argument("distributions", nargs=-1, required=True)
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=True,
+        help="(default) Print what would move; do nothing. Pass --yes to apply.",
+    )
+    @click.option(
+        "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
+    )
+    @click.option("--json", "as_json", is_flag=True, help="Emit JSON output.")
+    @click.option(
+        "--jobs",
+        "-j",
+        default=1,
+        show_default=True,
+        type=int,
+        help="Run packages in parallel.",
+    )
+    def ecosystem_clean_root(distributions, dry_run, yes, as_json, jobs):
+        """Move PS-103 root violations into <repo>/.scitex/dev/runtime/root-violations/<ts>/."""
+        import json as _json
+        import sys as _sys
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from pathlib import Path
+
+        from ..._ecosystem._core import ECOSYSTEM
+        from ..audit._project._root_whitelist import clean_root_violations
+
+        raw: list[str] = []
+        for d in distributions:
+            raw.extend(p.strip() for p in d.split(",") if p.strip())
+        if "all" in raw:
+            pkgs = list(ECOSYSTEM.keys())
+        else:
+            pkgs = []
+            for name in raw:
+                if name not in pkgs:
+                    pkgs.append(name)
+
+        effective_dry_run = dry_run and not yes
+
+        def _clean_one(pkg: str) -> tuple[str, dict]:
+            info = ECOSYSTEM.get(pkg)
+            if info is None:
+                return pkg, {"exit": 2, "error": "unknown package"}
+            repo = Path(info["local_path"]).expanduser()
+            if not repo.is_dir():
+                return pkg, {"exit": 2, "error": f"local_path missing: {repo}"}
+            try:
+                target, viols = clean_root_violations(repo, dry_run=effective_dry_run)
+            except Exception as e:
+                return pkg, {"exit": 1, "error": str(e)}
+            return pkg, {
+                "exit": 0,
+                "count": len(viols),
+                "target": str(target) if target else None,
+                "moved": [{"name": n, "kind": k} for n, k in viols],
+                "dry_run": effective_dry_run,
+            }
+
+        all_results: dict[str, dict] = {}
+        if jobs <= 1 or len(pkgs) <= 1:
+            for d in pkgs:
+                name, res = _clean_one(d)
+                all_results[name] = res
+        else:
+            with ThreadPoolExecutor(max_workers=jobs) as ex:
+                futs = {ex.submit(_clean_one, d): d for d in pkgs}
+                for f in as_completed(futs):
+                    name, res = f.result()
+                    all_results[name] = res
+
+        total = sum(r.get("count", 0) for r in all_results.values())
+        worst = max((r.get("exit", 0) for r in all_results.values()), default=0)
+
+        if as_json:
+            click.echo(
+                _json.dumps(
+                    {
+                        "distributions": pkgs,
+                        "dry_run": effective_dry_run,
+                        "total_violations": total,
+                        "results": all_results,
+                    },
+                    indent=2,
+                )
+            )
+            _sys.exit(worst)
+
+        action = "would move" if effective_dry_run else "moved"
+        for pkg in pkgs:
+            res = all_results[pkg]
+            if res.get("error"):
+                click.echo(f"  err   {pkg}: {res['error']}", err=True)
+                continue
+            cnt = res["count"]
+            if cnt == 0:
+                click.echo(f"  ok    {pkg}: no root violations")
+                continue
+            tgt = res.get("target") or ""
+            click.echo(f"  {action:9} {pkg}: {cnt} entries → {tgt}")
+            for entry in res.get("moved", []):
+                click.echo(f"      {entry['kind']:4}  {entry['name']}")
+
+        click.echo("")
+        if effective_dry_run:
+            click.echo(
+                f"Preview: {total} entries across {len(pkgs)} package(s). "
+                "Re-run with --yes to apply.",
+                err=True,
+            )
+        else:
+            click.echo(
+                f"Moved: {total} entries across {len(pkgs)} package(s) "
+                "into per-repo .scitex/dev/runtime/root-violations/<ts>/.",
+                err=True,
+            )
+        _sys.exit(worst)
+
+    @ecosystem.command(
+        "install-audit-gate",
+        epilog=(
+            "Examples:\n"
+            "  $ scitex-dev ecosystem install-audit-gate scitex-types\n"
+            "  $ scitex-dev ecosystem install-audit-gate scitex-io --force\n"
+            "  $ scitex-dev ecosystem install-audit-gate scitex-io --dry-run\n"
+            "\n"
+            "Wires the audit-conformance gate into the package's own\n"
+            "test suite by materialising `tests/develop/test_audit.py`.\n"
+            "The generated test calls\n"
+            "`scitex_dev.testing.audit_all_for_package(<pkg>)` and\n"
+            "fails when any error-severity violation is reported, so\n"
+            "the existing `Test` workflow surfaces audit drift — no\n"
+            "separate `.github/workflows/audit.yml` needed. Also\n"
+            "creates `tests/develop/__init__.py` and an empty\n"
+            "`tests/conftest.py` if either is missing.\n"
+            "\n"
+            "This does NOT generate stub tests for the package's source\n"
+            "modules — it ONLY installs the canonical audit gate.\n"
+            "Quality of source-coverage tests is the package author's\n"
+            "responsibility (see PS-206 / PS-206b for the rules that\n"
+            "enforce non-trivial test bodies).\n"
+        ),
+    )
+    @click.argument("distribution")
+    @click.option("--force", is_flag=True, help="Overwrite an existing test_audit.py.")
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print the target paths and contents without writing.",
+    )
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def ecosystem_install_audit_gate(distribution, force, dry_run, yes):
+        """Install the audit-conformance gate test for DISTRIBUTION.
+
+        Wires `scitex-dev ecosystem audit-all <pkg>` into the package's
+        test suite as `tests/develop/test_audit.py`. Does NOT generate
+        stub tests for source modules.
+        """
+        del yes  # generation is non-destructive when --force is absent
+        from ..._ecosystem import ECOSYSTEM, get_local_path
+
+        if distribution not in ECOSYSTEM:
+            click.echo(f"error: '{distribution}' not in ECOSYSTEM", err=True)
+            raise SystemExit(2)
+        info = ECOSYSTEM[distribution]
+        if info.get("archived"):
+            click.echo(f"skip  {distribution}: archived", err=True)
+            raise SystemExit(0)
+
+        local = get_local_path(distribution)
+        if local is None or not local.exists():
+            click.echo(
+                f"error: local path for '{distribution}' missing: {local}",
+                err=True,
+            )
+            raise SystemExit(2)
+
+        tests = local / "tests"
+        develop = tests / "develop"
+        target = develop / "test_audit.py"
+        develop_init = develop / "__init__.py"
+        conftest = tests / "conftest.py"
+
+        test_content = (
+            '"""Audit conformance — runs `scitex-dev ecosystem audit-all`\n'
+            "on this package as a normal test. Generated by\n"
+            "`scitex-dev ecosystem install-audit-gate`. Re-run that command\n"
+            "after upgrading scitex-dev to refresh any pin in [dev].\n"
+            "\n"
+            "Bypass (exceptions / temporal remedy):\n"
+            "    SCITEX_DEV_SKIP_AUDIT=1 python -m pytest .\n"
+            "\n"
+            "Use when remediating pre-existing violations or developing\n"
+            "without the audit corpus available locally. CI for release\n"
+            "branches MUST NOT set this — drift goes silent.\n"
+            '"""\n'
+            "\n"
+            "import shutil\n"
+            "\n"
+            "import pytest\n"
+            "\n"
+            "\n"
+            "def test_audit_all_clean():\n"
+            '    if shutil.which("scitex-dev") is None:\n'
+            "        pytest.skip(\n"
+            '            "scitex-dev not installed — add `scitex-dev[cli-audit]` "\n'
+            '            "to [project.optional-dependencies.dev]"\n'
+            "        )\n"
+            "    from scitex_dev.testing import audit_all_for_package\n"
+            "\n"
+            f"    audit_all_for_package({distribution!r})\n"
+        )
+        develop_init_content = (
+            '"""Dev-hygiene tests — audit conformance, etc.\n'
+            "\n"
+            "Tests in this directory exercise the package's compliance\n"
+            "with ecosystem-wide rules (CLI/MCP/skills/project structure)\n"
+            "via `scitex-dev ecosystem audit-all`. They are not unit tests\n"
+            "of the package's own logic; those live under tests/<pkg>/.\n"
+            '"""\n'
+        )
+        conftest_content = (
+            '"""Pytest fixtures and rootdir marker for this package.\n'
+            "\n"
+            "An empty conftest.py at tests/ is the canonical SciTeX\n"
+            "convention (audit-project PS-208) — it pins the pytest\n"
+            "rootdir and gives downstream fixtures a home.\n"
+            '"""\n'
+        )
+
+        # Each entry: (path, content, force_required_to_overwrite).
+        # tests/develop/__init__.py and tests/conftest.py are *only*
+        # written when missing — they're shared infrastructure, never
+        # owned by the audit-test feature. The test_audit.py file IS
+        # owned: --force overwrites it on every regeneration.
+        plan = [
+            (target, test_content, True),
+            (develop_init, develop_init_content, False),
+            (conftest, conftest_content, False),
+        ]
+
+        if dry_run:
+            for path, content, _ in plan:
+                click.echo(f"# would write: {path}")
+                click.echo(content)
+                click.echo()
+            return
+
+        for path, content, owned in plan:
+            if path.exists():
+                if owned and not force:
+                    click.echo(
+                        f"error: {path} already exists (pass --force to overwrite)",
+                        err=True,
+                    )
+                    raise SystemExit(1)
+                if not owned:
+                    # Don't touch user-owned conftest/__init__ if present.
+                    continue
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+            click.echo(f"wrote {path}")
+
+    # Deprecated alias — write-audit-test was misleading (read like
+    # "auto-generate stub tests"); the actual behaviour is "install the
+    # audit-conformance gate". Kept hidden for one minor release so
+    # external scripts/CI that call the old name don't break.
+    @ecosystem.command("write-audit-test", hidden=True)
+    @click.argument("distribution")
+    @click.option("--force", is_flag=True)
+    @click.option("--dry-run", is_flag=True)
+    @click.option("--yes", "-y", is_flag=True)
+    @click.pass_context
+    def ecosystem_write_audit_test_deprecated(ctx, distribution, force, dry_run, yes):
+        """(deprecated) Use `install-audit-gate`."""
+        click.secho(
+            "warning: `scitex-dev ecosystem write-audit-test` is deprecated; "
+            "use `scitex-dev ecosystem install-audit-gate` (same behaviour, "
+            "honest name).",
+            fg="yellow",
+            err=True,
+        )
+        ctx.invoke(
+            ecosystem_install_audit_gate,
+            distribution=distribution,
+            force=force,
+            dry_run=dry_run,
+            yes=yes,
+        )
+
+    @ecosystem.command(
+        "test-remote",
+        epilog=(
+            "Examples:\n"
+            "  $ scitex-dev ecosystem test-remote --host bm198 scitex-io\n"
+            "  $ scitex-dev ecosystem test-remote --host bm198 --all --audit-only\n"
+            "  $ scitex-dev ecosystem test-remote --host bm198 --dry-run scitex-stats\n"
+            "\n"
+            "rsync local checkouts to HOST, SSH in, install (`pip install -e .[dev]`),\n"
+            "run pytest with `-n auto` (xdist when available), stream output, and\n"
+            "propagate the exit code. Excludes `.git/`, `__pycache__/`, `*.egg-info/`,\n"
+            "`_sphinx_html/`, `GITIGNORED/`, `.scitex/`. With `--all`, fans out across\n"
+            "every non-archived ECOSYSTEM package in parallel; failed packages are\n"
+            "summarised at the end. Use this to offload heavy parallel runs to a host\n"
+            "with spare cores when the local box is loaded."
+        ),
+    )
+    @click.argument("packages", nargs=-1)
+    @click.option(
+        "--host",
+        required=True,
+        help="SSH host alias (e.g. `bm198`, `spartan-bm198`). Must be reachable "
+        "via `ssh <host>` non-interactively (use ~/.ssh/config).",
+    )
+    @click.option(
+        "--all",
+        "all_packages",
+        is_flag=True,
+        help="Run on every non-archived ECOSYSTEM package (ignores PACKAGES).",
+    )
+    @click.option(
+        "--audit-only",
+        is_flag=True,
+        help="Only run `tests/develop/test_audit.py`, not the full test tree.",
+    )
+    @click.option(
+        "--jobs",
+        "-j",
+        type=int,
+        default=4,
+        show_default=True,
+        help="Max packages to run concurrently when --all is set.",
+    )
+    @click.option(
+        "--remote-base",
+        default="~/.scitex/dev/test-remote",
+        show_default=True,
+        help=(
+            "Parent directory on HOST where each package is rsynced. "
+            "Default is a sandbox under ~/.scitex/ so HOST's own "
+            "~/proj/<pkg> working checkouts are never touched."
+        ),
+    )
+    @click.option(
+        "--remote-prelude",
+        default="",
+        help=(
+            "Shell snippet executed on HOST before `python3 -m venv` "
+            "runs. Use to source environment files or load modules "
+            "(e.g. `module load Python/3.11.3` on Spartan)."
+        ),
+    )
+    @click.option(
+        "--remote-python",
+        default="python3",
+        show_default=True,
+        help="Python binary on HOST used for `-m venv`. Override when the "
+        "default `python3` resolves to <3.11 (e.g. `python3.11`).",
+    )
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print the rsync + ssh commands that would run; don't execute.",
+    )
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def ecosystem_test_remote(
+        packages,
+        host,
+        all_packages,
+        audit_only,
+        jobs,
+        remote_base,
+        remote_prelude,
+        remote_python,
+        dry_run,
+        yes,
+    ):
+        """Run pytest on HOST against rsynced local checkouts."""
+        del yes  # non-destructive on local; remote installs are idempotent
+        import shlex
+        import subprocess as _sp
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        from ..._ecosystem import ECOSYSTEM, get_local_path
+
+        if all_packages:
+            targets = [n for n, info in ECOSYSTEM.items() if not info.get("archived")]
+        else:
+            if not packages:
+                click.echo("error: no PACKAGES given (and --all not set)", err=True)
+                raise SystemExit(2)
+            targets = list(packages)
+            for n in targets:
+                if n not in ECOSYSTEM:
+                    click.echo(f"error: '{n}' not in ECOSYSTEM", err=True)
+                    raise SystemExit(2)
+
+        # rsync exclusions — keep payload small and avoid shipping build artefacts
+        # that would confuse a fresh install on the remote.
+        rsync_excludes = [
+            ".git/",
+            "__pycache__/",
+            "*.egg-info/",
+            "_sphinx_html/",
+            "GITIGNORED/",
+            ".scitex/",
+            ".pytest_cache/",
+            ".mypy_cache/",
+            ".ruff_cache/",
+            "build/",
+            "dist/",
+            "*.pyc",
+        ]
+        excl_args = []
+        for e in rsync_excludes:
+            excl_args.extend(["--exclude", e])
+
+        test_path = "tests/develop/" if audit_only else "tests/"
+
+        def _run_one(pkg: str) -> tuple[str, int, str]:
+            local = get_local_path(pkg)
+            if local is None or not local.exists():
+                return pkg, 2, f"local checkout missing: {local}"
+            # Per-package layout on HOST. Source and venv live in sibling
+            # subtrees so rsync --delete on `src/` never wipes the venv.
+            #   <remote_base>/<pkg>/src/     ← rsync target (working tree)
+            #   <remote_base>/<pkg>/.venv/   ← persistent per-package venv
+            remote_root = f"{remote_base}/{pkg}"
+            remote_src = f"{remote_root}/src"
+            remote_venv = f"{remote_root}/.venv"
+            # Don't quote remote paths — single-quoting kills tilde expansion
+            # (`'~/foo'` → literal `~/foo`). Internal-controlled values, no
+            # spaces in defaults; if a custom --remote-base contains shell
+            # specials the user owns the breakage.
+            ssh_mkdir = ["ssh", host, f"mkdir -p {remote_src}"]
+            rsync_cmd = [
+                "rsync",
+                "-az",
+                "--delete",
+                *excl_args,
+                f"{local}/",
+                f"{host}:{remote_src}/",
+            ]
+            # Remote one-liner:
+            #   1. create the per-package venv if missing,
+            #   2. activate it,
+            #   3. `pip install -e .[dev]` (with bare-`.` fallback) +
+            #      scitex-dev[cli-audit] for the audit gate,
+            #   4. pytest -n auto when xdist is available, otherwise serial.
+            prelude = (remote_prelude + "; ") if remote_prelude else ""
+            # Tilde-bearing paths intentionally left UNQUOTED so the remote
+            # shell expands `~` to $HOME. Internal-controlled, no spaces.
+            # SCITEX_DEV_REGISTRY exported so audit-project / audit-cli
+            # read the bootstrap-written override YAML, not HOST's
+            # bundled ECOSYSTEM (which would point at HOST's own
+            # ~/proj/<pkg>).
+            remote_script = (
+                f"set -e; "
+                f"export SCITEX_DEV_REGISTRY={registry_remote}; "
+                f"{prelude}"
+                f"if [ ! -f {remote_venv}/bin/activate ]; then "
+                f"  {remote_python} -m venv {remote_venv}; "
+                f"fi; "
+                f". {remote_venv}/bin/activate; "
+                f"cd {remote_src}; "
+                f"python -m pip install --quiet --upgrade pip; "
+                f"python -m pip install -e '.[dev]' --quiet || "
+                f"python -m pip install -e . --quiet; "
+                # Install scitex-dev editable from the bootstrap-synced
+                # local copy so the audit corpus on HOST matches the
+                # version running locally (no PyPI drift). Two-step
+                # to dodge pip's editable-with-extras parsing of `~`:
+                # editable install first (path-only), then non-editable
+                # extras install against the same path picks up the
+                # cli-audit dependencies.
+                f"python -m pip install -e {scitex_dev_remote} --quiet; "
+                f"python -m pip install {scitex_dev_remote}[cli-audit] --quiet; "
+                f"python -m pip install pytest-xdist --quiet || true; "
+                f"if python -c 'import xdist' 2>/dev/null; then "
+                f"  python -m pytest -n auto --tb=short {test_path}; "
+                f"else "
+                f"  python -m pytest --tb=short {test_path}; "
+                f"fi"
+            )
+            ssh_cmd = ["ssh", host, "bash", "-lc", shlex.quote(remote_script)]
+
+            if dry_run:
+                lines = [
+                    "# " + " ".join(shlex.quote(a) for a in ssh_mkdir),
+                    "# " + " ".join(shlex.quote(a) for a in rsync_cmd),
+                    "# " + " ".join(shlex.quote(a) for a in ssh_cmd),
+                ]
+                return pkg, 0, "\n".join(lines)
+
+            # mkdir + rsync (sequential — required before ssh)
+            for cmd in (ssh_mkdir, rsync_cmd):
+                r = _sp.run(cmd, capture_output=True, text=True)
+                if r.returncode != 0:
+                    return pkg, r.returncode, r.stderr.strip() or r.stdout.strip()
+            # pytest run — capture output for the parallel summary
+            r = _sp.run(ssh_cmd, capture_output=True, text=True)
+            tail = (r.stdout + r.stderr).strip().splitlines()
+            tail = "\n".join(tail[-25:]) if len(tail) > 25 else "\n".join(tail)
+            return pkg, r.returncode, tail
+
+        if dry_run:
+            for pkg in targets:
+                _, _, out = _run_one(pkg)
+                click.echo(f"--- {pkg} ---")
+                click.echo(out)
+            return
+
+        click.echo(
+            f"# test-remote: host={host}, packages={len(targets)}, "
+            f"jobs={jobs}, audit_only={audit_only}"
+        )
+
+        # Bootstrap: sync the local scitex-dev checkout once, before any
+        # per-package run. Each per-package venv installs scitex-dev
+        # editable from this synced copy so the audit corpus on HOST
+        # exactly matches what's running locally — no PyPI version drift.
+        scitex_dev_local = get_local_path("scitex-dev")
+        if scitex_dev_local is None or not scitex_dev_local.exists():
+            click.echo("error: local scitex-dev checkout missing", err=True)
+            raise SystemExit(2)
+        scitex_dev_remote = f"{remote_base}/scitex-dev/src"
+        click.echo("# bootstrap: rsync local scitex-dev → HOST")
+        boot_mkdir = _sp.run(
+            ["ssh", host, f"mkdir -p {scitex_dev_remote}"],
+            capture_output=True,
+            text=True,
+        )
+        if boot_mkdir.returncode != 0:
+            click.echo(f"error: bootstrap mkdir failed: {boot_mkdir.stderr}", err=True)
+            raise SystemExit(boot_mkdir.returncode)
+        boot_rsync = _sp.run(
+            [
+                "rsync",
+                "-az",
+                "--delete",
+                *excl_args,
+                f"{scitex_dev_local}/",
+                f"{host}:{scitex_dev_remote}/",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if boot_rsync.returncode != 0:
+            click.echo(f"error: bootstrap rsync failed: {boot_rsync.stderr}", err=True)
+            raise SystemExit(boot_rsync.returncode)
+
+        # Bootstrap (continued): write a registry override YAML on HOST
+        # so audit-all reads paths under our sandbox, not HOST's own
+        # ~/proj/<pkg> working checkouts. Without this, audit-project
+        # (PS-134/PS-210/...) reads HOST-local paths and audits the wrong
+        # files. The override flows in via SCITEX_DEV_REGISTRY in the
+        # remote_script env (per scitex-dev's §6b cascade).
+        import yaml as _yaml
+
+        override = {}
+        for nm, info in ECOSYSTEM.items():
+            ov = dict(info)
+            ov["local_path"] = f"{remote_base}/{nm}/src"
+            override[nm] = ov
+        registry_remote = f"{remote_base}/.ecosystem-override.yaml"
+        registry_yaml = _yaml.safe_dump(override, sort_keys=False)
+        write_cmd = ["ssh", host, f"cat > {registry_remote}"]
+        write_proc = _sp.run(
+            write_cmd, input=registry_yaml, capture_output=True, text=True
+        )
+        if write_proc.returncode != 0:
+            click.echo(
+                f"error: registry override write failed: {write_proc.stderr}",
+                err=True,
+            )
+            raise SystemExit(write_proc.returncode)
+        click.echo(f"# bootstrap: wrote registry override to {registry_remote}")
+        results: dict[str, tuple[int, str]] = {}
+        with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+            futures = {pool.submit(_run_one, p): p for p in targets}
+            for f in as_completed(futures):
+                pkg, code, tail = f.result()
+                status = "ok" if code == 0 else f"FAIL({code})"
+                click.echo(f"[{status:>8}] {pkg}")
+                results[pkg] = (code, tail)
+
+        failed = [(p, c, t) for p, (c, t) in results.items() if c != 0]
+        click.echo("")
+        click.echo(f"# summary: {len(results) - len(failed)} ok, {len(failed)} failed")
+        for p, c, t in failed:
+            click.echo(f"\n--- {p} (exit {c}) ---")
+            click.echo(t)
+        raise SystemExit(0 if not failed else 1)
 
     @ecosystem.command("start-dashboard")
     @click.option("--port", default=8050, type=int, help="Port to serve on.")

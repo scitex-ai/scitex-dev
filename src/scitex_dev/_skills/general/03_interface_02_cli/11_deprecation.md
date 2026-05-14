@@ -1,8 +1,8 @@
 ---
-name: interface-cli-deprecation
-description: SciTeX CLI deprecation policy — renamed commands hard-error with redirect (exit 2). Parameter-level deprecation warns once per shell session.
-user-invocable: false
-tags: [scitex-python, scitex-general, cli]
+description: |
+  [TOPIC] Interface Cli Deprecation
+  [DETAILS] SciTeX CLI deprecation policy — renamed commands hard-error with redirect (exit 2). Parameter-level deprecation warns once per shell session.
+tags: [scitex-general-interface-cli-deprecation]
 ---
 
 # §5. Deprecation redirect — hard error

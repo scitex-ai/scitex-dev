@@ -1,7 +1,8 @@
 ---
-name: interface-python-api-introspection
-description: The `list-python-apis -v|-vv|-vvv` ladder + `--json` flag mandated for every package. Module-level via `scitex introspect api <pkg>`. CLI parity with `mcp list-tools` ladder. Used by ecosystem audit tools and LLM agents to discover API.
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Interface Python Api Introspection
+  [DETAILS] The `list-python-apis -v|-vv|-vvv` ladder + `--json` flag mandated for every package. Module-level via `scitex introspect api <pkg>`. CLI parity with `mcp list-tools` ladder. Used by ecosystem audit tools and LLM agents to discover API.
+tags: [scitex-general-interface-python-api-introspection-commands]
 ---
 
 # API Introspection Commands

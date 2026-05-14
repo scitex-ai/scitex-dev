@@ -146,6 +146,29 @@ case "$FILE_PATH" in
 esac
 ```
 
+## Agent Identity System
+
+### Environment Variables for Agent Roles
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `CLAUDE_AGENT_ROLE` | Identifies the agent's role (used by hooks to apply role-specific rules) | `telegram`, `worker` |
+| `CLAUDE_AGENT_ID` | Unique identifier for the agent instance | `telegram-master` |
+
+These variables are set in the agent's launch script (e.g., `cldt` sets `CLAUDE_AGENT_ROLE=telegram` and `CLAUDE_AGENT_ID=telegram-master`). Hooks can check these variables to apply role-specific enforcement rules.
+
+### enforce_background_subagents.sh (PreToolUse — Task)
+
+Ensures the Telegram agent never blocks its message loop by requiring all subagent (Task/Agent) calls to use `run_in_background: true`.
+
+- **Activates only when** `CLAUDE_AGENT_ROLE=telegram`
+- **Checks** the `Task` tool for `run_in_background: true`
+- **Blocks** (exit 2) if a Task call would run in the foreground
+- **Ignores** non-Task tools and non-telegram agent roles
+- Has `--self-test` capability for verification
+
+This hook complements `enforce_delegation.sh` (which enforces timeout/background rules on Bash commands for the orchestrator).
+
 ## Environment Variables
 
 For email notifications, set these in your shell:

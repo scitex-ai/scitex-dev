@@ -8,7 +8,7 @@ import json
 import sys
 from typing import Any, Callable
 
-from ..types import Result
+from .._core.types import Result
 
 
 def handle_result(
@@ -94,7 +94,7 @@ def wrap_as_cli(
     **kwargs
         Arguments to pass to ``fn``.
     """
-    from ..errors import classify_exception
+    from .._core.errors import classify_exception
 
     try:
         data = fn(**kwargs)

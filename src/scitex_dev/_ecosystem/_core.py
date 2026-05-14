@@ -25,6 +25,16 @@ class PackageInfo(TypedDict, total=False):
     been GitHub-archived (read-only) and superseded. The CLA / quality /
     publish auditors should skip archived entries by default; the entry is
     kept in the registry so historical references resolve.
+
+    `umbrella_subcommand` (optional) — the name this package mounts as
+    under the umbrella ``scitex`` CLI / MCP server. For ``scitex-<x>`` the
+    default is the part after ``scitex-`` (so ``scitex-dataset`` →
+    ``dataset``). Branded packages without the prefix (``socialia`` →
+    ``social``, ``figrecipe`` → ``plt``) MUST set this explicitly; the
+    umbrella shim and ``audit-cli §5b`` / ``audit-mcp-tools §1`` read it
+    to know how to rewrite the program name and validate the mount
+    namespace. See
+    ``_skills/general/03_interface_02_cli/05a_umbrella-passthrough.md``.
     """
 
     local_path: str
@@ -33,6 +43,7 @@ class PackageInfo(TypedDict, total=False):
     import_name: str
     category: str
     archived: bool
+    umbrella_subcommand: str
 
 
 # Ordered dict - order matters for display
@@ -107,13 +118,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_writer",
         "category": "library",
     },
-    "scitex-linter": {
-        "local_path": "~/proj/scitex-linter",
-        "pypi_name": "scitex-linter",
-        "github_repo": "ywatanabe1989/scitex-linter",
-        "import_name": "scitex_linter",
-        "category": "library",
-    },
     "scitex-dataset": {
         "local_path": "~/proj/scitex-dataset",
         "pypi_name": "scitex-dataset",
@@ -127,22 +131,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/socialia",
         "import_name": "socialia",
         "category": "external-lib",
-    },
-    "scitex-research-template": {
-        "local_path": "~/proj/scitex-research-template",
-        "pypi_name": "scitex-research-template",
-        "github_repo": "ywatanabe1989/scitex-research-template",
-        "import_name": "scitex_research_template",
-        "category": "template",
-        "archived": True,  # superseded by scitex-template
-    },
-    "pip-project-template": {
-        "local_path": "~/proj/pip-project-template",
-        "pypi_name": "pip-project-template",
-        "github_repo": "ywatanabe1989/pip-project-template",
-        "import_name": "pip_project_template",
-        "category": "template",
-        "archived": True,  # superseded by scitex-template
     },
     "scitex-container": {
         "local_path": "~/proj/scitex-container",
@@ -235,13 +223,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_audit",
         "category": "library",
     },
-    "scitex-core": {
-        "local_path": "~/proj/scitex-core",
-        "pypi_name": "scitex-core",
-        "github_repo": "ywatanabe1989/scitex-core",
-        "import_name": "scitex_core",
-        "category": "library",
-    },
     "scitex-db": {
         "local_path": "~/proj/scitex-db",
         "pypi_name": "scitex-db",
@@ -254,6 +235,13 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "pypi_name": "scitex-scholar",
         "github_repo": "ywatanabe1989/scitex-scholar",
         "import_name": "scitex_scholar",
+        "category": "library",
+    },
+    "scitex-seizure-metrics": {
+        "local_path": "~/proj/scitex-seizure-metrics",
+        "pypi_name": "scitex-seizure-metrics",
+        "github_repo": "ywatanabe1989/scitex-seizure-metrics",
+        "import_name": "scitex_seizure_metrics",
         "category": "library",
     },
     "scitex-template": {
@@ -283,14 +271,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/scitex-orochi",
         "import_name": "scitex_orochi",
         "category": "library",
-    },
-    "singularity-template": {
-        "local_path": "~/proj/singularity_template",
-        "pypi_name": "singularity-template",
-        "github_repo": "ywatanabe1989/singularity_template",
-        "import_name": "singularity_template",
-        "category": "template",
-        "archived": True,  # superseded by scitex-template
     },
     "scitex-str": {
         "local_path": "~/proj/scitex-str",
@@ -367,6 +347,20 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "pypi_name": "scitex-nn",
         "github_repo": "ywatanabe1989/scitex-nn",
         "import_name": "scitex_nn",
+        "category": "library",
+    },
+    "scitex-ml": {
+        "local_path": "~/proj/scitex-ml",
+        "pypi_name": "scitex-ml",
+        "github_repo": "ywatanabe1989/scitex-ml",
+        "import_name": "scitex_ml",
+        "category": "library",
+    },
+    "scitex-genai": {
+        "local_path": "~/proj/scitex-genai",
+        "pypi_name": "scitex-genai",
+        "github_repo": "ywatanabe1989/scitex-genai",
+        "import_name": "scitex_genai",
         "category": "library",
     },
     "scitex-gen": {
@@ -502,13 +496,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_sh",
         "category": "library",
     },
-    "scitex-skills": {
-        "local_path": "~/proj/scitex-skills",
-        "pypi_name": "scitex-skills",
-        "github_repo": "ywatanabe1989/scitex-skills",
-        "import_name": "scitex_skills",
-        "category": "library",
-    },
     "scitex-tex": {
         "local_path": "~/proj/scitex-tex",
         "pypi_name": "scitex-tex",
@@ -536,6 +523,45 @@ def get_local_path(package: str) -> Optional[Path]:
 def get_all_packages() -> List[str]:
     """Get list of all ecosystem package names."""
     return list(ECOSYSTEM.keys())
+
+
+# --------------------------------------------------------------------- #
+# Category-aware audit skip                                              #
+# --------------------------------------------------------------------- #
+
+# Per-auditor list of ECOSYSTEM categories that don't apply.
+# `archived` is short-circuited separately (every auditor skips archived).
+_CATEGORY_SKIP: dict[str, frozenset[str]] = {
+    "audit-cli": frozenset({"template"}),
+    "audit-mcp-tools": frozenset({"template", "dataset", "umbrella"}),
+    "audit-skills": frozenset(),
+    "audit-python-apis": frozenset({"template"}),
+    "audit-project": frozenset(),
+}
+
+
+def should_skip_audit(package: str, auditor: str) -> tuple[bool, str]:
+    """Return (skip, reason) for running `auditor` on `package`.
+
+    `auditor` is one of the keys in `_CATEGORY_SKIP`. Unknown auditors
+    return (False, "") — fail open so a typo doesn't silently skip.
+
+    Skip semantics:
+    - archived packages are skipped for *every* auditor.
+    - per-auditor categories listed in _CATEGORY_SKIP are skipped.
+    - unknown package (not in ECOSYSTEM) is NOT skipped — the auditor's
+      own not-found path will handle it.
+    """
+    info = ECOSYSTEM.get(package)
+    if info is None:
+        return False, ""
+    if info.get("archived"):
+        return True, "archived"
+    cat = info.get("category", "")
+    skip_set = _CATEGORY_SKIP.get(auditor, frozenset())
+    if cat in skip_set:
+        return True, f"category={cat}"
+    return False, ""
 
 
 # EOF

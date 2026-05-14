@@ -13,6 +13,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
@@ -24,6 +25,34 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          # Fallback chain: prefer [all,dev] so optional-dep code paths
+          # (yaml, fastmcp, textual) get exercised. Falls back to [dev] then
+          # plain editable so a packaging hiccup doesn't strand CI.
+          pip install -e ".[all,dev]" || pip install -e ".[dev]" || pip install -e .
       - name: Run tests
-        run: pytest tests/
+        run: |
+          pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
+      - name: Upload coverage to Codecov
+        if: always() && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  install-check:
+    # Companion to `test` — confirms the bare package (no extras) is
+    # `pip install -e .`-able and `import scitex_dev` succeeds. Catches
+    # `[project] dependencies` drift that the test matrix masks because
+    # it installs `[all,dev]`.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install -e .
+          .venv/bin/python -c "import scitex_dev; print(scitex_dev.__version__)"

@@ -1,8 +1,8 @@
 ---
-name: skills-editable-installation
-description: How skill sources resolve under editable (`pip install -e`) vs wheel (PyPI) installs. Editable installs symlink to the source tree so edits are live; wheel installs use the bundled copy inside the wheel.
-user-invocable: false
-tags: [scitex-python, scitex-general, scitex-package, meta]
+description: |
+  [TOPIC] Skills Editable Installation
+  [DETAILS] How skill sources resolve under editable (`pip install -e`) vs wheel (PyPI) installs. Editable installs symlink to the source tree so edits are live; wheel installs use the bundled copy inside the wheel.
+tags: [scitex-general-interface-skills-editable-installation]
 ---
 
 # Editable vs PyPI Install — Skill Source Resolution
