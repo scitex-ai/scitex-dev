@@ -2448,19 +2448,22 @@ def register_ecosystem_commands(main_group):
             "import pytest\n"
             "\n"
             "\n"
+            "@pytest.mark.skipif(\n"
+            '    shutil.which("scitex-dev") is None,\n'
+            '    reason="scitex-dev not installed — add `scitex-dev[cli-audit]` '
+            'to [project.optional-dependencies.dev]",\n'
+            ")\n"
             "def test_audit_all_clean():\n"
             "    # Arrange\n"
-            '    if shutil.which("scitex-dev") is None:\n'
-            "        pytest.skip(\n"
-            '            "scitex-dev not installed — add `scitex-dev[cli-audit]` "\n'
-            '            "to [project.optional-dependencies.dev]"\n'
-            "        )\n"
             "    from scitex_dev.testing import audit_all_for_package\n"
             "\n"
             "    # Act\n"
-            f"    audit_all_for_package({distribution!r})\n"
-            "    # Assert — audit_all_for_package raises AssertionError on\n"
-            "    # any unexpected finding; reaching this point means clean.\n"
+            f"    result = audit_all_for_package({distribution!r})\n"
+            "\n"
+            "    # Assert — audit_all_for_package returns None on a clean\n"
+            "    # audit and raises AssertionError on any unexpected finding,\n"
+            "    # so reaching this point with result is None means clean.\n"
+            "    assert result is None\n"
         )
         develop_init_content = (
             '"""Dev-hygiene tests — audit conformance, etc.\n'
