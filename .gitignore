@@ -44,3 +44,4 @@ catboost_info/
 # @stx.session fallback when SDIR_RUN can't be resolved (script run
 # outside its dir) — should not be tracked.
 unknown_out/
+.coverage.*
