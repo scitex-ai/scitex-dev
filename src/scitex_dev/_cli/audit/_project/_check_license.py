@@ -19,7 +19,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-import tomllib as _tomllib
+try:
+    import tomllib as _tomllib  # Python 3.11+
+except ModuleNotFoundError:
+    import tomli as _tomllib  # type: ignore[no-redef]
 
 
 # Unmistakable AGPL-3.0 signature lines. Stubs almost never include
