@@ -7,6 +7,32 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.16] — 2026-05-15
+
+### Added (audit rules)
+- **PS-164** — workflow-naming convention (one-file-per-check; descriptive
+  filenames; short top-level `name:` labels).
+- **PS-211** / **PS-212** — `tests/smoke/` and `tests/e2e/` directory rules.
+
+### Changed
+- **PS-122** — RTD detection is now content-based (looks for a `sphinx-build`
+  step) rather than filename-based, so the rule survives workflow renames.
+- Workflow files renamed to the PS-164 convention:
+  - `docs.yml` -> `rtd-sphinx-build-on-ubuntu-latest.yml`
+  - `newb.yml` -> `newb-docs-quality-on-ubuntu-latest.yml`
+  - `publish-pypi.yml` -> `pypi-publish-and-github-release-on-tag.yml`
+  - `quality-audit.yml` -> `scitex-dev-quality-audit-on-ubuntu-latest.yml`
+  - `sync-main.yml` -> `sync-main-to-release-tag-on-push.yml`
+  - `test.yml` -> split into `pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml`
+    and `import-smoke-on-ubuntu-py3-12.yml`.
+- README badges normalized to `shields.io` short labels
+  (`docs`, `tests`, `install-check`, `quality`, `cov`).
+
+### Fixed
+- `audit/_project` — resolve `_spdx_from_pyproject` undefined reference.
+- `audit/license` — `tomli` fallback for Python 3.10 (`tomllib` is 3.11+).
+- `audit` — `skip_rules` now matches `ERRO:`-prefixed lines and reads stderr.
+
 ## [0.11.5] — 2026-05-07
 
 ### Fixed
