@@ -64,6 +64,69 @@ The lint is *the source of truth* for ecosystem invariants. When a new
 regression is discovered, the response is to add a rule + unit test —
 not to remind the agent in conversation.
 
+## Bug-pattern lessons (distilled from real campaign catches)
+
+The PA-306 / TQ migration campaigns surfaced three recurring bug
+*classes*. Future audit-rule and linter-rule authors should detect the
+class, not just the specific instance:
+
+### 1. Truthy-fallback validators silently swallow non-dict falsy values
+
+```python
+# BAD — `or {}` swallows e.g. spec.get(K) == 0, [], "", False, treating
+# them as if the key were absent. If a downstream consumer expected a
+# dict and got a falsy non-None value, this hides the schema error:
+config = spec.get("ecosystem") or {}
+
+# GOOD — explicit is-None check, then explicit type check:
+raw = spec.get("ecosystem")
+if raw is None:
+    config = {}
+elif not isinstance(raw, dict):
+    raise TypeError(f"ecosystem must be a dict, got {type(raw).__name__}")
+else:
+    config = raw
+```
+
+A SAC/PA rule that flags `spec.get(K) or {}` / `... or []` / `... or ""`
+is a high-signal lint. The fix is mechanical.
+
+### 2. `pytest.importorskip` does NOT guard prior `import` lines
+
+`pytest.importorskip("h5py")` only skips a test module if it appears
+**before** any `import` line that depends on `h5py`. Re-orderings
+break the guard silently:
+
+```python
+# BAD — the bare `import h5py` runs first; importorskip never fires:
+import h5py
+import pytest
+pytest.importorskip("h5py")  # too late
+
+# GOOD — guard the actual import line itself:
+import pytest
+h5py = pytest.importorskip("h5py")
+```
+
+A TQ-family rule that detects "bare `import <opt-dep>` at top of test
+file followed by `pytest.importorskip("<opt-dep>")`" is mechanical and
+catches the whole class.
+
+### 3. Hardcoded filename in audit rules — detect by content, not name
+
+The PS-122 fix: the original RTD-build rule keyed on the literal
+filenames `readthedocs.yml` / `.readthedocs.yaml`. Packages that ship
+a RTD build under a PS-164-compliant descriptive name
+(`rtd-build-on-ubuntu-latest.yml`) were silently flagged as
+RTD-less even though their CI absolutely built RTD.
+
+**Lesson for audit-rule authors**: detect a capability by *content*
+markers (e.g. `sphinx-build` invocation, `peaceiris/actions-gh-pages`
+action, a `python -m fastmcp ...` SDK marker), never by filename
+literal. Filename conventions are the user's to set; the audit rule
+must be filename-agnostic and grep the file body for the capability
+signature.
+
 ## Code-pattern lint (`scitex-dev linter`)
 
 `pyproject_lint` above checks the *package shape*. For anti-patterns

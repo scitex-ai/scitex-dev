@@ -1,4 +1,4 @@
-name: Quality Audit
+name: quality
 
 # Nightly ecosystem-wide static audit — catches regressions like the missing
 # scitex-config dep that broke 6 PyPI packages on 2026-04-28. Outputs a JSON

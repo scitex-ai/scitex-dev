@@ -131,6 +131,25 @@ Each rule warns (never errors) and fires from
 | PS-112 | SciTeX logo image present in first ~4 KB                        |
 | PS-133 | Badges block placed below the Full-Doc line in the centered `<p align="center">` form (figrecipe-style); not above the logo and not in `[![…]]()` markdown form |
 
+## Workflow status badges — use `?label=...` short labels
+
+The literal template above uses the simple `test.yml/badge.svg` form.
+Packages that follow PS-164 ship descriptive workflow filenames
+(`pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml`), which makes the
+default GitHub badge text unreadable. Switch to shields.io with an
+explicit `?label=...`:
+
+```html
+<a href="https://github.com/<owner>/<PACKAGE>/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml">
+  <img src="https://img.shields.io/github/actions/workflow/status/<owner>/<PACKAGE>/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests"
+       alt="tests">
+</a>
+```
+
+The badge URL keys on the (descriptive) filename; the rendered short
+label keys on shields.io. Don't rename the workflow file to match the
+label — the descriptive filename is required by PS-164.
+
 ## Acceptable Variants
 
 - Logo path: either `docs/scitex-logo-blue-cropped.png` or

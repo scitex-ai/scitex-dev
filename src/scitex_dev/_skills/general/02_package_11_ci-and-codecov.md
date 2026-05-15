@@ -267,6 +267,36 @@ invocation:
 Only adopt this once the package is already ≥ 90 %; setting it earlier
 just makes CI permanently red.
 
+## Dev-bootstrap MUST install marker-providing packages
+
+The `[dev]` extras (or whatever extras the bootstrap installs) MUST
+include every package that registers a pytest marker / collector
+plugin the test suite uses. The campaign found two recurring offenders:
+
+- **`pytest-asyncio`** — without it, `@pytest.mark.asyncio` decorated
+  tests emit `PytestUnknownMarkWarning` and the coroutine body never
+  awaits anything (the test silently "passes" by doing nothing).
+- **`fastmcp`** — without it, MCP-server tests skip via
+  `pytest.importorskip("fastmcp")` and the entire MCP surface goes
+  un-exercised in CI; the badge is green for the wrong reason.
+
+Both belong in `[project.optional-dependencies].dev` (or `.test`, if
+the package splits them) and must be installed by every CI workflow
+that runs `pytest tests/`. Verify with:
+
+```bash
+.venv/bin/python -c "import pytest_asyncio, fastmcp; print('ok')"
+```
+
+If this fails after `pip install -e .[dev]`, the extras are missing the
+package. Add it; do not paper over with a workflow-level
+`pip install pytest-asyncio` — the dev-bootstrap is the source of
+truth for "everything a developer needs to run the suite".
+
+The bootstrap gap manifests as confusing
+`PytestUnknownMarkWarning: Unknown pytest.mark.asyncio` lines in the
+CI log; that warning is the symptom of this rule being violated.
+
 ## Test-file imports of optional deps must `pytest.importorskip`
 
 Any `import <optional-dep>` at module top of a test file MUST be

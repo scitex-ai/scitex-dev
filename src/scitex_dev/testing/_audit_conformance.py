@@ -79,11 +79,17 @@ def audit_all_for_package(
         # Match by rule id alone — the surrounding marker is incidental.
         skipped: list[str] = []
         non_skipped: list[str] = []
-        for line in proc.stdout.splitlines():
+        for line in (proc.stdout + "\n" + proc.stderr).splitlines():
             stripped = line.lstrip()
-            # Accept any line whose first bracketed token contains a rule id
-            # (avoids false-positives on prose that happens to mention a rule).
-            if not (stripped.startswith("[") or stripped.startswith("[E]")):
+            # Accept any line whose first bracketed token contains a rule id.
+            # Current auditors prefix with a coloured level word (`ERRO: `,
+            # `WARN: `) — strip a trailing-colon word before the bracket
+            # check so the rule id is reachable.
+            head = stripped.split(":", 1)
+            payload = (
+                head[1].lstrip() if len(head) == 2 and head[0].isalpha() else stripped
+            )
+            if not (payload.startswith("[") or payload.startswith("[E]")):
                 continue
             matched = [r for r in skip_rules if f"[{r} " in line or f"[{r}]" in line]
             if matched:

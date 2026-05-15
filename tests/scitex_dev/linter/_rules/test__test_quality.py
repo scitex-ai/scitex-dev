@@ -111,6 +111,22 @@ def test_tq002_silent_when_markers_present_and_ordered():
     assert "STX-TQ002" not in fired
 
 
+def test_tq002_fires_when_markers_are_combined_on_one_line():
+    # Arrange — combined form `# Arrange / Act / Assert` is rejected;
+    # each marker must appear on its own line in order.
+    src = (
+        "def test_returns_one_plus_one_equals_two():\n"
+        "    # Arrange / Act / Assert\n"
+        "    x = 1\n"
+        "    y = x + 1\n"
+        "    assert y == 2\n"
+    )
+    # Act
+    fired = _ids(src)
+    # Assert
+    assert "STX-TQ002" in fired
+
+
 def test_tq002_allows_descriptive_text_after_keyword():
     # Arrange — descriptive suffix should not change detection
     src = (

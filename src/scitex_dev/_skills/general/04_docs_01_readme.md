@@ -170,6 +170,28 @@ Two centered rows wrapped in `<!-- scitex-badges:start --> ... :end -->`:
 Drop the AGPL license badge — license is already metadata in
 `pyproject.toml` and visible on the PyPI page.
 
+#### Badge label convention: shields.io with explicit `?label=...`
+
+Workflow filenames are deliberately descriptive
+(`pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml`), which makes the
+default GitHub Actions badge text unreadable. Use **shields.io's
+`github/actions/workflow/status` endpoint with an explicit `?label=`
+short label**. The badge URL keys on the filename (long, descriptive);
+the short label keys on shields.io (so the rendered badge stays
+scannable). Example:
+
+```html
+<a href="https://github.com/<owner>/<repo>/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml">
+  <img src="https://img.shields.io/github/actions/workflow/status/<owner>/<repo>/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests"
+       alt="tests">
+</a>
+```
+
+Apply the same pattern to every workflow badge (`label=install`,
+`label=docs`, `label=audit`, …). Do NOT rename the workflow file to
+match the short label — the descriptive filename is required by PS-164
+for the GitHub Actions UI; the README badge label is purely cosmetic.
+
 ### Claude Code Integration as a Hook (optional)
 
 If the package ships lint rules, add a `## Claude Code Integration as

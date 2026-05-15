@@ -179,6 +179,51 @@ real binary will catch it. The mock-based version caught neither.
 The full refactor is visible in commit history under `_creds/_rotate.py`
 and `tests/scitex_dev/_creds/test__rotate.py` from 2026-05-14.
 
+## Shared fixtures the campaign produced
+
+The PA-306 conversion campaign distilled two reusable fixtures that
+replace the most common mock idioms. Lift them into `conftest.py`
+rather than re-implementing per file:
+
+- **`subprocess_shim`** — writes a real fake binary into
+  `tmp_path/bin/<name>`, prepends `$PATH`, returns a calls-log path.
+  Replaces `unittest.mock.patch("subprocess.check_output")` and the
+  whole family of "I just want to assert we called `gh variable get`"
+  tests. The shim is a real shell script; it exercises the real
+  `subprocess` codepath end-to-end and fails honestly if the
+  production call shape changes.
+- **`env_save_restore`** — `yield`-based fixture that snapshots and
+  restores `os.environ` mutations across a test. Replaces every
+  `monkeypatch.setenv(...)` pattern.
+
+## Real production dataclasses, not `SimpleNamespace`-as-config
+
+A `MagicMock`-shaped or `types.SimpleNamespace`-shaped config object
+passed to production code is a mock under a different name: it answers
+every attribute lookup the test author thought to write, and silently
+diverges from the production dataclass schema. **Always instantiate the
+real production dataclass** (`AgentConfig(name="...", ...)` etc.). If
+the dataclass has many required fields, give them sensible defaults
+upstream rather than dodging it with `SimpleNamespace`. The
+field-rename-breaks-tests property is what we want.
+
+## Honest delete > dishonest rewrite
+
+For a test file that was pure mock theater — every assertion was
+`mock.assert_called_with(...)`, no production-state observation — the
+right move is **delete the file** and replace it with a real
+integration test that observes outcome state. NOT a line-by-line
+rewrite that preserves the original assertions: the original test had
+negative value; preserving its shape preserves the negative value.
+
+## Whole-file lint gate: TQ + NM clear *together*
+
+The PostToolUse `run_lint.sh` hook treats TQ002/TQ007 (AAA markers +
+single assertion) and NM001–003 (no mocks) as a single gate: a save
+is rejected if either set is dirty. Partial cleanups — "I removed the
+mocks, the TQ002 markers come next PR" — are blocked by design. A
+half-clean file invites drift; clear both at once.
+
 ## When the replacement feels too expensive
 
 Three signals that the test isn't worth keeping:

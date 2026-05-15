@@ -81,10 +81,11 @@ TQ002 = Rule(
     category="testing",
     message=(
         "Test function body is missing one or more AAA-structure marker "
-        "comments (`# Arrange` / `# Act` / `# Assert`) — or the markers "
-        "are out of order. Every test must have all three, in order, so "
-        "both the author and the reviewer can see the AAA structure at "
-        "a glance."
+        "comments. Each of `# Arrange`, `# Act`, `# Assert` must appear "
+        "on its own line in order. Combined forms like "
+        "`# Arrange / Act / Assert` or `# Act / Assert` are rejected. "
+        "Every test must have all three, in order, so both the author "
+        "and the reviewer can see the AAA structure at a glance."
     ),
     suggestion=(
         "Add the three marker comments at the top level of the function "

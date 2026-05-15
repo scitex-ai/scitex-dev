@@ -8,13 +8,20 @@
 
 <p align="center"><b>Shared developer utilities for the SciTeX ecosystem</b></p>
 
+<!-- scitex-badges:start -->
 <p align="center">
-  <a href="https://badge.fury.io/py/scitex-dev"><img src="https://badge.fury.io/py/scitex-dev.svg" alt="PyPI version"></a>
-  <a href="https://scitex-dev.readthedocs.io/"><img src="https://readthedocs.org/projects/scitex-dev/badge/?version=latest" alt="Documentation"></a>
-  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/test.yml"><img src="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
-  <a href="https://codecov.io/gh/ywatanabe1989/scitex-dev"><img src="https://img.shields.io/codecov/c/github/ywatanabe1989/scitex-dev" alt="Coverage"></a>
-  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="License: AGPL-3.0"></a>
+  <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/v/scitex-dev?label=pypi" alt="pypi"></a>
+  <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/pyversions/scitex-dev?label=python" alt="python"></a>
+  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/rtd-sphinx-build-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/rtd-sphinx-build-on-ubuntu-latest.yml?branch=develop&label=docs" alt="docs"></a>
 </p>
+<p align="center">
+  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests" alt="tests"></a>
+  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=install-check" alt="install-check"></a>
+  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=quality" alt="quality"></a>
+  <a href="https://codecov.io/gh/ywatanabe1989/scitex-dev"><img src="https://img.shields.io/codecov/c/github/ywatanabe1989/scitex-dev/develop?label=cov" alt="cov"></a>
+  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?label=license" alt="License: AGPL-3.0"></a>
+</p>
+<!-- scitex-badges:end -->
 
 <p align="center">
   <a href="https://scitex-dev.readthedocs.io/">Full Documentation</a> · <code>uv pip install scitex-dev[all]</code>

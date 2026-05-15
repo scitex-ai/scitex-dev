@@ -764,6 +764,18 @@ RULES: dict[str, Rule] = {
             ),
         ),
         Rule(
+            "PS-164",
+            "§1",
+            (
+                "GitHub Actions workflow naming/structure violates convention "
+                "(one file = one check, descriptive kebab-case filename; see "
+                "_skills/general/02_package_12_workflows-naming.md). Three "
+                "sub-checks: vague filename in denylist, multi-job file with "
+                "unrelated job IDs, or `name:` field mismatching the filename."
+            ),
+            slug="workflow-naming",
+        ),
+        Rule(
             "PS-151",
             "§1",
             (
@@ -812,6 +824,33 @@ RULES: dict[str, Rule] = {
                 "Either move the corresponding `tests/<sub>/test_*.py` files in, "
                 "or remove the empty dir."
             ),
+        ),
+        Rule(
+            "PS-211",
+            "§2",
+            (
+                "missing `tests/smoke/` layer (fast <60s subprocess-driven CLI "
+                "happy-path tests). Every SciTeX package with a CLI should keep "
+                "a small set of subprocess-level smoke tests that run on every "
+                "PR. Required: ≥1 `tests/smoke/test_*.py` AND register the "
+                "`smoke` pytest marker in `[tool.pytest.ini_options].markers`. "
+                "Opt-out: `[tool.scitex_dev]\\nno_cli = true` in pyproject.toml. "
+                "Severity W during ecosystem adoption — will promote to E."
+            ),
+            slug="tests-smoke-layer-missing",
+        ),
+        Rule(
+            "PS-212",
+            "§2",
+            (
+                "missing `tests/e2e/` layer (slow end-to-end workflows against "
+                "real subsystems). Required: ≥1 `tests/e2e/test_*.py`, register "
+                "the `e2e` pytest marker, and gate execution via the `RUN_E2E=1` "
+                "env var so the suite is skipped by default. Opt-out: "
+                "`[tool.scitex_dev]\\nno_e2e = true` in pyproject.toml. "
+                "Severity W during ecosystem adoption — will promote to E."
+            ),
+            slug="tests-e2e-layer-missing",
         ),
         # §3 tests/ subdirectory convention -------------------------------------
         Rule(
@@ -1011,6 +1050,7 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS-163": "W",  # README missing Read-the-Docs badge (warn)
     "PS-150": "W",  # [dev] missing scitex-dev pin — audit gate silently skips
     "PS-151": "W",  # scitex-dev pin floor < known-good (rule corpus drift)
+    "PS-164": "W",  # workflow naming/structure (warn-only during adoption)
     # src ↔ tests mirror — load-bearing for CI confidence
     "PS-201": "E",
     "PS-202": "E",
@@ -1021,6 +1061,8 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS-206b": "W",  # has `def test_*` but body has no assertion (import-smoke only)
     "PS-207": "E",  # empty test directory
     "PS-210": "E",  # [dev] extras incomplete
+    "PS-211": "W",  # tests/smoke/ layer missing — W during ecosystem adoption
+    "PS-212": "W",  # tests/e2e/ layer missing  — W during ecosystem adoption
     "PS-301": "E",  # top-level htmlcov/
     "PS-302": "E",  # unrecognized tests/ subdir
     "PS-303": "E",  # examples/<n>.py without tests/examples/test_<n>.py
@@ -1198,7 +1240,8 @@ _KNOWN_TEST_SUBDIRS = frozenset(
         "skills",  # structural tests for _skills/
         "agentic",  # agentic-trigger tests (LLM invokes the skill)
         "integration",  # cross-module / cross-package
-        "e2e",  # end-to-end pipelines
+        "smoke",  # fast (<60s) CLI happy-path subprocess tests (PS-211)
+        "e2e",  # end-to-end pipelines (PS-212)
         "github_actions",
         "coverage",  # HTML / XML reports — gitignored
         "logs",  # pytest run logs — gitignored
@@ -1317,7 +1360,11 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
     ):
         if not (repo / fname).is_file():
             out.append(Violation(code, str(repo), f"missing {fname}"))
-    from ._check_license import check_license_content, find_license
+    from ._check_license import (
+        check_license_content,
+        find_license,
+        spdx_from_pyproject,
+    )
 
     license_path = find_license(repo)
     if license_path is None:
@@ -1326,7 +1373,7 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
         )
     else:
         try:
-            spdx_match = _spdx_from_pyproject(repo)
+            spdx_match = spdx_from_pyproject(repo)
         except Exception:
             spdx_match = None
         violation_msg = check_license_content(license_path, spdx_match)
@@ -2113,6 +2160,9 @@ def audit_project(
     from ._check_audit_pin import check_audit_pin
 
     check_audit_pin(repo_root, Violation, violations)
+    from ._check_workflows_naming import check_ps164_workflow_naming
+
+    check_ps164_workflow_naming(repo_root, Violation, violations)
     from ._check_local_state import (
         check_ps145_cross_package_read,
         check_ps146_pip_install_side_effect,
@@ -2122,6 +2172,14 @@ def audit_project(
     check_ps145_cross_package_read(repo_root, distribution, Violation, violations)
     check_ps146_pip_install_side_effect(repo_root, Violation, violations)
     check_ps147_eval_form_completion(repo_root, Violation, violations)
+    if not skip_mirror:
+        from ._check_smoke_e2e_layers import (
+            check_ps211_smoke_layer,
+            check_ps212_e2e_layer,
+        )
+
+        check_ps211_smoke_layer(repo_root, Violation, violations)
+        check_ps212_e2e_layer(repo_root, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]

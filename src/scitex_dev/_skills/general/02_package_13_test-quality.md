@@ -38,6 +38,52 @@ TQ closes those doors. The canonical contract:
 | `STX-TQ006` | warning | Top-level `if`/`else` inside a `@pytest.mark.parametrize`-decorated test (hides multi-intent) |
 | `STX-TQ007` | error | More than one assertion in a single test function (`assert` statements + `with pytest.raises(...)` blocks combined) |
 
+## TQ002 marker format — three separate comment lines
+
+The TQ002 parser is strict by design: it requires **three separate
+single-line comments** spelled exactly `# Arrange`, `# Act`,
+`# Assert`, in that order, each on its own line. Combined forms are
+silently rejected because the rule's purpose is structural visibility:
+
+```python
+# BAD — silently rejected (TQ002 fires):
+# Arrange / Act / Assert
+result = fn(x)
+assert result == 42
+
+# BAD — silently rejected:
+# Act / Assert
+with pytest.raises(ValueError):
+    fn(bad_input)
+
+# GOOD:
+# Arrange
+x = 1
+# Act
+result = fn(x)
+# Assert
+assert result == 42
+```
+
+### `pytest.raises` and the `# Act` / `# Assert` split
+
+`pytest.raises` is the one shape where Act and Assert appear to merge.
+Resolve it by binding the context manager under `# Act` and entering
+it under `# Assert`:
+
+```python
+def test_validate_raises_typeerror_for_non_string_input():
+    # Arrange
+    bad_input = 42
+    # Act
+    ctx = pytest.raises(TypeError)
+    # Assert
+    with ctx:
+        validate(bad_input)
+```
+
+The same shape applies to `pytest.warns`.
+
 ## The canonical shape
 
 ```python
