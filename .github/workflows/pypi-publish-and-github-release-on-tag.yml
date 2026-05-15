@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: pypi
 
 # Opt-in: a `git push origin <v-tag>` does NOT trigger publishing.
 # Run explicitly via:
