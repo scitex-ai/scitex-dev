@@ -2,9 +2,16 @@
 
 scitex-cloud serves per-package docs from the in-wheel
 ``src/<pkg>/_sphinx_html/`` bundle. The canonical refresh path is a
-GitHub Actions workflow (``.github/workflows/docs.yml``) that rebuilds
-and auto-commits the bundle on every push to main/develop. RTD also
-builds the same source tree so the live site stays in sync.
+GitHub Actions workflow that rebuilds and auto-commits the bundle on
+every push to main/develop. RTD also builds the same source tree so
+the live site stays in sync.
+
+PS-122 historically required ``.github/workflows/docs.yml`` by name.
+After the ecosystem-wide workflow-naming rename (PS-164), the
+canonical filename is now descriptive (e.g.
+``rtd-sphinx-build-on-ubuntu-latest.yml``). PS-122 therefore detects
+the RTD/Sphinx workflow by *content* — any workflow that runs
+``sphinx-build``, ``make html``, or references RTD satisfies the rule.
 
 All checks fire only when the package has a Sphinx source tree
 (``docs/sphinx/conf.py``). Packages without docs skip these rules.
@@ -29,6 +36,33 @@ def _has_sphinx_source(repo: Path) -> bool:
     return (repo / "docs" / "sphinx" / "conf.py").is_file()
 
 
+# PS-122 content-based detection: any workflow that builds Sphinx docs
+# satisfies the rule, regardless of filename.
+_RTD_WORKFLOW_PATTERNS = (
+    re.compile(r"\bsphinx-build\b"),
+    re.compile(r"\bmake\s+html\b"),
+    re.compile(r"readthedocs", re.IGNORECASE),
+)
+
+
+def _has_rtd_workflow(repo: Path) -> bool:
+    """Return True iff at least one ``.github/workflows/*.y(a)ml`` file
+    contains a sphinx-build / make html / RTD reference."""
+    workflows_dir = repo / ".github" / "workflows"
+    if not workflows_dir.is_dir():
+        return False
+    for wf in workflows_dir.iterdir():
+        if wf.suffix not in (".yml", ".yaml") or not wf.is_file():
+            continue
+        try:
+            text = wf.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if any(pat.search(text) for pat in _RTD_WORKFLOW_PATTERNS):
+            return True
+    return False
+
+
 def _src_pkg_with_html(repo: Path) -> Path | None:
     """Return the first ``src/<pkg>/`` dir whose ``_sphinx_html/index.html``
     exists, else None."""
@@ -47,7 +81,9 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
     """Append PS-121 / PS-122 violations.
 
     PS-121 — sphinx source exists but ``_sphinx_html/index.html`` is missing.
-    PS-122 — sphinx source exists but ``.github/workflows/docs.yml`` is missing.
+    PS-122 — sphinx source exists but no ``.github/workflows/*.yml``
+             runs sphinx-build / make html (detected by content, not
+             filename — see PS-164 for the rename context).
     """
     if not _has_sphinx_source(repo):
         return
@@ -63,23 +99,24 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
                     "serves docs from the in-wheel _sphinx_html/ — without "
                     "it the package is invisible at "
                     "https://scitex.ai/apps/docs/. Refresh via the canonical "
-                    "CI workflow (.github/workflows/docs.yml) or manually."
+                    "RTD/Sphinx CI workflow or manually."
                 ),
             )
         )
 
-    docs_yml = repo / ".github" / "workflows" / "docs.yml"
-    if not docs_yml.is_file():
+    if not _has_rtd_workflow(repo):
         out.append(
             violation_cls(
                 "PS-122",
-                str(docs_yml),
+                str(repo / ".github" / "workflows"),
                 (
-                    "package has docs/sphinx/ but no docs.yml CI workflow. "
-                    "Auto-refreshing _sphinx_html/ in CI is the canonical "
-                    "pattern (see scitex-ssh as reference). Manual refresh "
-                    "drifts; CI keeps the bundle fresh on every push to "
-                    "main/develop."
+                    "package has docs/sphinx/ but no .github/workflows/*.yml "
+                    "runs sphinx-build / make html. Auto-refreshing "
+                    "_sphinx_html/ in CI is the canonical pattern (see "
+                    "scitex-ssh as reference). Manual refresh drifts; CI "
+                    "keeps the bundle fresh on every push to main/develop. "
+                    "PS-122 detects the workflow by content, not filename — "
+                    "any workflow running sphinx-build satisfies the rule."
                 ),
             )
         )
