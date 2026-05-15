@@ -6,6 +6,34 @@ import json
 
 import click
 
+from ..._ecosystem.click_helpers import make_categorized_group
+
+# Names below MUST match the actual registered command names. Anything
+# not listed here falls through to the "Other" section in --help.
+ECOSYSTEM_COMMAND_CATEGORIES = [
+    (
+        "Audit",
+        [
+            "audit-all",
+            "audit-cli",
+            "audit-mcp-tools",
+            "audit-project",
+            "audit-python-apis",
+            "audit-skills",
+            "audit-summary",
+            "list-audit-rules",
+            "install-audit-gate",
+        ],
+    ),
+    ("Git", ["clone", "switch", "pull"]),
+    ("Install", ["install", "sync", "check-versions"]),
+    ("Discovery", ["list", "show-graph", "show-stats", "dashboard"]),
+    ("Testing", ["test-remote"]),
+    ("Maintenance", ["init-config", "clean-root"]),
+]
+
+_EcosystemCategorizedGroup = make_categorized_group(ECOSYSTEM_COMMAND_CATEGORIES)
+
 
 def register_ecosystem_commands(main_group):
     """Register ecosystem command group on the main CLI.
@@ -15,7 +43,7 @@ def register_ecosystem_commands(main_group):
     can be registered on it from outside this module.
     """
 
-    @main_group.group(invoke_without_command=True)
+    @main_group.group(cls=_EcosystemCategorizedGroup, invoke_without_command=True)
     @click.option(
         "--help-recursive", is_flag=True, help="Show help for all subcommands."
     )
@@ -484,7 +512,7 @@ def register_ecosystem_commands(main_group):
         rc = 0 if all(v[0] == 0 for v in results.values()) else 1
         raise SystemExit(rc)
 
-    @ecosystem.command("checkout")
+    @ecosystem.command("switch")
     @click.argument("branch")
     @click.option("--package", "-p", multiple=True, help="Specific packages.")
     @click.option(
@@ -497,17 +525,17 @@ def register_ecosystem_commands(main_group):
         "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
     )
     @click.option("--json", "as_json", is_flag=True)
-    def ecosystem_checkout(branch, package, dry_run, yes, as_json):
-        """`git checkout <branch>` in every ecosystem clone.
+    def ecosystem_switch(branch, package, dry_run, yes, as_json):
+        """`git switch <branch>` in every ecosystem clone.
 
         \b
-        Default is dry-run — pass --yes to actually checkout.
+        Default is dry-run — pass --yes to actually switch.
 
         \b
         Example:
-          $ scitex-dev ecosystem checkout develop          # preview
-          $ scitex-dev ecosystem checkout develop --yes    # apply
-          $ scitex-dev ecosystem checkout main -p scitex-io --yes
+          $ scitex-dev ecosystem switch develop          # preview
+          $ scitex-dev ecosystem switch develop --yes    # apply
+          $ scitex-dev ecosystem switch main -p scitex-io --yes
         """
         from ..._ecosystem._core import ECOSYSTEM as _ECO
         from ..._ecosystem._git_ops import checkout_all
@@ -516,7 +544,7 @@ def register_ecosystem_commands(main_group):
             for n, info in _ECO.items():
                 if info.get("archived") or (package and n not in package):
                     continue
-                click.echo(f"would run in {info['local_path']}: git checkout {branch}")
+                click.echo(f"would run in {info['local_path']}: git switch {branch}")
             raise SystemExit(0)
         results = checkout_all(
             branch=branch,
@@ -534,6 +562,24 @@ def register_ecosystem_commands(main_group):
             )
         rc = 0 if all(v[0] == 0 for v in results.values()) else 1
         raise SystemExit(rc)
+
+    @ecosystem.command(
+        "checkout",
+        hidden=True,
+        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    )
+    @click.pass_context
+    def ecosystem_checkout_deprecated(ctx):
+        """(deprecated) Renamed to `switch`. Removed in 0.12.0."""
+        click.echo(
+            "warning: `scitex-dev ecosystem checkout` was renamed to "
+            "`scitex-dev ecosystem switch`. Will be removed in 0.12.0.",
+            err=True,
+        )
+        target = ecosystem.get_command(ctx, "switch")
+        if target is None:
+            ctx.exit(2)
+        target.main(args=ctx.args, standalone_mode=False, parent=ctx.parent)
 
     @ecosystem.command("pull")
     @click.option(
@@ -1539,7 +1585,19 @@ def register_ecosystem_commands(main_group):
             "symlink or missing."
         ),
     )
-    def dashboard_list(verbosity, package, jobs, as_json, with_tests):
+    @click.option(
+        "--sort",
+        "sort_by",
+        type=click.Choice(["name", "loc", "tests", "coverage", "commit"]),
+        default="name",
+        show_default=True,
+        help=(
+            "Sort rows by: name (alpha), loc (project size, src lines), "
+            "tests (test count), coverage (%), commit (last-commit recency)."
+        ),
+    )
+    @click.option("--reverse", "-r", is_flag=True, help="Reverse sort order.")
+    def dashboard_list(verbosity, package, jobs, as_json, with_tests, sort_by, reverse):
         """Live ecosystem dashboard. Visible columns at the current
         verbosity are always computed (verbosity ≠ depth); cells fill
         in via `rich.live.Live` first-come-first-served as each future
@@ -1586,6 +1644,40 @@ def register_ecosystem_commands(main_group):
         else:
             packages_arg = None
 
+        # Sort rows. Rows missing the sort field (still streaming, or
+        # enricher disabled at this verbosity) sort to the bottom
+        # regardless of direction so they don't muddy the top.
+        def _sort_key(s):
+            if sort_by == "name":
+                return (0, s.pkg)
+            if sort_by == "loc":
+                return (1 if s.loc < 0 else 0, -s.loc if reverse else s.loc)
+            if sort_by == "tests":
+                t = max(s.tests_collected, s.tests_count)
+                return (1 if t < 0 else 0, -t if reverse else t)
+            if sort_by == "coverage":
+                return (
+                    1 if s.coverage < 0 else 0,
+                    -s.coverage if reverse else s.coverage,
+                )
+            if sort_by == "commit":
+                return (1 if not s.last_commit_iso else 0, s.last_commit_iso)
+            return (0, s.pkg)
+
+        def _sorted(states):
+            sorted_states = sorted(states, key=_sort_key)
+            # For numeric keys, _sort_key already negates the value when
+            # reverse=True so missing rows stay last. For name/commit we
+            # apply Python's reverse= AFTER the tuple sort, but keep the
+            # missing-last bucket intact by reversing each bucket.
+            if reverse and sort_by in ("name", "commit"):
+                bucketed = (
+                    [s for s in sorted_states if _sort_key(s)[0] == 0],
+                    [s for s in sorted_states if _sort_key(s)[0] == 1],
+                )
+                return list(reversed(bucketed[0])) + bucketed[1]
+            return sorted_states
+
         if as_json:
             states = gather_ecosystem_state(
                 verbosity=verbosity,
@@ -1595,7 +1687,7 @@ def register_ecosystem_commands(main_group):
             )
             from ._dashboard import _export as exp
 
-            click.echo(exp.to_json(states))
+            click.echo(exp.to_json(_sorted(states)))
             return
 
         from rich.console import Console
@@ -1613,7 +1705,7 @@ def register_ecosystem_commands(main_group):
             states_box[:] = states
             now = time.monotonic()
             if now - last_paint[0] >= 0.25:
-                live.update(render_table(states, verbosity=verbosity))
+                live.update(render_table(_sorted(states), verbosity=verbosity))
                 last_paint[0] = now
 
         with Live(
@@ -1630,14 +1722,15 @@ def register_ecosystem_commands(main_group):
                 enrichers=enrichers,
             )
             # Final paint to ensure the last-completion delta lands.
-            live.update(render_table(states_box, verbosity=verbosity))
+            live.update(render_table(_sorted(states_box), verbosity=verbosity))
 
     @dashboard.command(
         "start",
         epilog=(
             "Example:\n"
             "  $ scitex-dev ecosystem dashboard start -vv\n"
-            "  $ scitex-dev ecosystem dashboard start --gui   # web view (deferred)\n"
+            "  $ scitex-dev ecosystem dashboard start --gui\n"
+            "  $ scitex-dev ecosystem dashboard start --gui --port 9000 --background\n"
             "  $ scitex-dev ecosystem dashboard start --interval 10\n"
         ),
     )
@@ -1647,6 +1740,24 @@ def register_ecosystem_commands(main_group):
     )
     @click.option(
         "--interval", type=float, default=5.0, help="TUI refresh interval (seconds)."
+    )
+    @click.option("--port", default=8050, type=int, help="(--gui) Port to serve on.")
+    @click.option("--host", default="0.0.0.0", help="(--gui) Host to bind to.")
+    @click.option("--debug", is_flag=True, help="(--gui) Enable debug/reload mode.")
+    @click.option(
+        "--no-browser",
+        is_flag=True,
+        help="(--gui) Do not open browser automatically.",
+    )
+    @click.option(
+        "--force",
+        is_flag=True,
+        help="(--gui) Kill existing process on the port.",
+    )
+    @click.option(
+        "--background",
+        is_flag=True,
+        help="(--gui) Run dashboard in a background process.",
     )
     @click.option(
         "--dry-run",
@@ -1660,22 +1771,49 @@ def register_ecosystem_commands(main_group):
         is_flag=True,
         help="No-op confirmation flag retained for §2 audit-cli compliance.",
     )
-    def dashboard_start(verbosity, gui, interval, dry_run, yes):
+    def dashboard_start(
+        verbosity,
+        gui,
+        interval,
+        port,
+        host,
+        debug,
+        no_browser,
+        force,
+        background,
+        dry_run,
+        yes,
+    ):
         """Live-refresh dashboard. TUI by default; --gui for the web view."""
         if dry_run:
-            click.echo(
-                f"would render: verbosity={verbosity} interval={interval}s "
-                f"gui={'yes' if gui else 'no'}"
-            )
+            if gui:
+                click.echo(
+                    f"would launch dashboard on {host}:{port} "
+                    f"(background={background}, debug={debug}, force={force})"
+                )
+            else:
+                click.echo(
+                    f"would render: verbosity={verbosity} interval={interval}s gui=no"
+                )
             return
         del yes  # accepted for compliance; nothing to confirm
         if gui:
-            click.echo(
-                "error: --gui (Dash web view) is not yet wired into the v0 dashboard.\n"
-                "       Use `dashboard list` for a snapshot or `dashboard export` for a dump.",
-                err=True,
-            )
-            raise SystemExit(2)
+            if background:
+                from ...dashboard.app import run_background
+
+                run_background(host=host, port=port, force=force)
+                click.echo(f"Dashboard started in background on {host}:{port}")
+            else:
+                from ...dashboard import run_dashboard
+
+                run_dashboard(
+                    port=port,
+                    host=host,
+                    debug=debug,
+                    open_browser=not no_browser,
+                    force=force,
+                )
+            return
 
         from rich.console import Console
         from rich.live import Live
@@ -2840,55 +2978,38 @@ def register_ecosystem_commands(main_group):
             click.echo(t)
         raise SystemExit(0 if not failed else 1)
 
-    @ecosystem.command("start-dashboard")
-    @click.option("--port", default=8050, type=int, help="Port to serve on.")
-    @click.option("--host", default="0.0.0.0", help="Host to bind to.")
-    @click.option("--debug", is_flag=True, help="Enable debug/reload mode.")
-    @click.option(
-        "--no-browser", is_flag=True, help="Do not open browser automatically."
-    )
-    @click.option("--force", is_flag=True, help="Kill existing process on the port.")
-    @click.option(
-        "--background", is_flag=True, help="Run dashboard in a background process."
-    )
-    @click.option(
-        "--dry-run", is_flag=True, help="Print what would be done; do not start."
-    )
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    @ecosystem.command("start-dashboard", hidden=True)
+    @click.option("--port", default=8050, type=int)
+    @click.option("--host", default="0.0.0.0")
+    @click.option("--debug", is_flag=True)
+    @click.option("--no-browser", is_flag=True)
+    @click.option("--force", is_flag=True)
+    @click.option("--background", is_flag=True)
+    @click.option("--dry-run", is_flag=True)
+    @click.option("--yes", "-y", is_flag=True)
+    @click.pass_context
     def ecosystem_start_dashboard(
-        port, host, debug, no_browser, force, background, dry_run, yes
+        ctx, port, host, debug, no_browser, force, background, dry_run, yes
     ):
-        """Launch the ecosystem dashboard web UI.
-
-        \b
-        Example:
-            $ scitex-dev ecosystem start-dashboard
-            $ scitex-dev ecosystem start-dashboard --port 9000 --background
-            $ scitex-dev ecosystem start-dashboard --dry-run
-        """
-        del yes  # accepted for §2; dashboard launch is non-interactive
-        if dry_run:
-            click.echo(
-                f"would launch dashboard on {host}:{port} "
-                f"(background={background}, debug={debug}, force={force})"
-            )
-            return
-        if background:
-            # Delegate to run_background so log + pid land under
-            # ~/.scitex/dev/runtime/ per 01_arch_06_local-state-directories.md.
-            from ...dashboard.app import run_background
-
-            run_background(host=host, port=port, force=force)
-            click.echo(f"Dashboard started in background on {host}:{port}")
-        else:
-            from ...dashboard import run_dashboard
-
-            run_dashboard(
-                port=port,
-                host=host,
-                debug=debug,
-                open_browser=not no_browser,
-                force=force,
-            )
+        """(deprecated) Use `scitex-dev ecosystem dashboard start --gui`. Removed in 0.12.0."""
+        click.echo(
+            "warning: `scitex-dev ecosystem start-dashboard` was moved to "
+            "`scitex-dev ecosystem dashboard start --gui`. Will be removed in 0.12.0.",
+            err=True,
+        )
+        ctx.invoke(
+            dashboard_start,
+            verbosity=1,
+            gui=True,
+            interval=5.0,
+            port=port,
+            host=host,
+            debug=debug,
+            no_browser=no_browser,
+            force=force,
+            background=background,
+            dry_run=dry_run,
+            yes=yes,
+        )
 
     return ecosystem
