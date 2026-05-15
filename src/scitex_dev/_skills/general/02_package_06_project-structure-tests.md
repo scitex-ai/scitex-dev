@@ -46,11 +46,12 @@ Tests are organized into a **fixed set of literal subdirectories**. Anything els
 | `tests/<pkg>/` | ✅ | 1:1 mirror of `src/<pkg>/` (the bulk of unit tests) |
 | `tests/scripts/` | ✅ | mirror of `./scripts/` |
 | `tests/examples/` | ✅ | one `test_<example-stem>.py` per file in `./examples/` |
-| `tests/skills/` | ✅ | structural tests for shipped `_skills/` (skill linter, layout) |
+| `tests/develop/` | ✅ | **canonical** home for auto-generated scitex-dev gate tests (audit conformance + skills quality). Replaces the deprecated `tests/skills/`. |
+| `tests/skills/` | deprecated | legacy structural tests for shipped `_skills/` — migrate into `tests/develop/`. `tests/integration/test_audit_conformance.py` was a duplicate of the develop-gate audit and has been **deleted**. |
 | `tests/agentic/` | ✅ | agentic-trigger tests — LLM invokes the skill / MCP tool / CLI and we assert the right path fires |
 | `tests/integration/` | ✅ | Python-level cross-module / cross-package tests |
 | `tests/smoke/` | ✅ | **fast (<60s)** subprocess-driven CLI happy-path tests; marker `smoke`; runs on every PR (PS-211) |
-| `tests/e2e/` | ✅ | **slow** end-to-end workflows against real subsystems; marker `e2e`; gated by `RUN_E2E=1`, skipped by default (PS-212) |
+| `tests/e2e/` | ✅ | **mandatory** end-to-end workflows against real subsystems; marker `e2e`; **runs on every PR by default** — NOT gated by `RUN_E2E=1`. Per-test `pytest.mark.skipif` only when a specific subsystem (apptainer, fastmcp, GPU, NAS) is missing on the runner. (PS-212) |
 | `tests/github_actions/` | ✅ | local GitHub Actions runner config (`act`/Apptainer) |
 | `tests/coverage/` | gitignored | HTML / XML coverage reports (replaces a top-level `./htmlcov/`) |
 | `tests/logs/` | gitignored | pytest run logs, captured stdout/stderr |
@@ -80,7 +81,7 @@ Where the old "meta tests" go now:
 | :--- | :--- |
 | `test_examples.py` | `tests/examples/test_run_all.py` |
 | `test_integration.py` | `tests/integration/test_<name>.py` |
-| `test_skills_quality.py` | `tests/skills/test_quality.py` |
+| `test_skills_quality.py` | `tests/develop/test_quality.py` (canonical; `tests/skills/` is deprecated) |
 | `test_cli.py`, `test_api.py`, `test_server.py` | `tests/<pkg>/test_<name>.py` (mirror the src module being driven) |
 | `test___version__.py`, `test___main__.py` | `tests/<pkg>/test___version__.py` etc. (they mirror `__version__.py` / `__main__.py`) |
 | `test__install_guide.py`, `test__optional_deps.py` | `tests/integration/` or `tests/<pkg>/` depending on what they actually exercise |
@@ -145,7 +146,7 @@ budget, and CI trigger:
 | `tests/<pkg>/` | very fast | every PR | unit-level behaviour (mocked I/O OK where guarded) |
 | `tests/integration/` | fast/medium | every PR | Python-level cross-module wiring (real objects, no subprocess) |
 | `tests/smoke/` | **<60s total** | every PR | subprocess-driven CLI happy paths — `subprocess.run(["<cli>", "...", "--help"])` etc. |
-| `tests/e2e/` | slow (minutes) | `RUN_E2E=1` only | full workflows against real subsystems (network, GPU, NAS, …) |
+| `tests/e2e/` | slow (minutes) | **every PR** (mandatory) | full workflows against real subsystems (network, GPU, NAS, …); per-test `skipif` only for missing subsystems |
 
 ### Naming + budget
 
@@ -164,47 +165,49 @@ does not emit `PytestUnknownMarkWarning`:
 [tool.pytest.ini_options]
 markers = [
     "smoke: fast CLI happy-path tests (<60s, runs on every PR)",
-    "e2e: end-to-end workflows (slow, gated by RUN_E2E=1)",
+    "e2e: end-to-end workflows against real subsystems (mandatory on every PR)",
 ]
 ```
 
 Apply markers via `pytestmark = pytest.mark.smoke` at module top, or per
 test with `@pytest.mark.smoke`.
 
-### E2E skip strategy
+### E2E skip strategy — subsystem-aware, NOT env-gated
 
-E2E tests must be **skipped by default** so a bare `pytest` stays fast.
-Use a module-level skip gate (or a `conftest.py` collection hook):
+E2E tests are **mandatory**: a bare `pytest` MUST collect and run them.
+Earlier drafts of this leaf said E2E was opt-in via `RUN_E2E=1` — that
+was wrong. The blanket skip-gate manufactures false confidence (CI is
+green because nothing ran) and is removed.
 
-```python
-# tests/e2e/conftest.py
-import os, pytest
-
-if not os.environ.get("RUN_E2E"):
-    collect_ignore_glob = ["test_*.py"]
-```
-
-Or per-module:
+The only legitimate skip is **per-test, keyed to a missing subsystem**:
 
 ```python
 # tests/e2e/test_<workflow>.py
-import os, pytest
+import shutil
+import pytest
 
-pytestmark = [
-    pytest.mark.e2e,
-    pytest.mark.skipif(
-        not os.environ.get("RUN_E2E"),
-        reason="set RUN_E2E=1 to run end-to-end workflows",
-    ),
-]
+pytestmark = pytest.mark.e2e
+
+@pytest.mark.skipif(shutil.which("apptainer") is None,
+                    reason="apptainer not installed on this runner")
+def test_full_pipeline_runs_against_real_container():
+    ...
+
+fastmcp = pytest.importorskip("fastmcp")  # only if dep missing
 ```
+
+Acceptable skip predicates: missing CLI binary (`shutil.which`), missing
+import (`importorskip`), missing GPU (`torch.cuda.is_available()`),
+missing network endpoint, missing credential. NOT acceptable: a blanket
+`os.environ.get("RUN_E2E")` check.
 
 ### Conftest expectations
 
 - `tests/smoke/conftest.py` — fixtures for spinning a tmpdir / fake home;
   no network.
-- `tests/e2e/conftest.py` — owns the `RUN_E2E` skip gate; may instantiate
-  real clients (NAS, cloud, GPU runners).
+- `tests/e2e/conftest.py` — fixtures only; **no blanket skip gate**. May
+  instantiate real clients (NAS, cloud, GPU runners) inside fixtures that
+  themselves `pytest.skip(...)` when the subsystem is absent.
 
 ### Opt-out for packages without a CLI
 
