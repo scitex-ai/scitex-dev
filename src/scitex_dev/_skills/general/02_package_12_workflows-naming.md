@@ -107,6 +107,37 @@ row. Keep at least one substantive token shared between filename and
 Warning-only during adoption. Promote to error once the ecosystem is
 clean.
 
+## Standardized badge labels
+
+README shields.io badges use a fixed short vocabulary so the
+ecosystem-wide README sweep can scan badge rows uniformly. Every
+`https://img.shields.io/...` URL in the README must carry
+`?label=<short>` where `<short>` is one of:
+
+| Label           | What it badges                                             |
+|-----------------|------------------------------------------------------------|
+| `pypi`          | PyPI latest-version (`/pypi/v/<pkg>`).                     |
+| `python`        | Supported Python versions (`/pypi/pyversions/<pkg>`).      |
+| `docs`          | RTD / Sphinx build status (workflow status badge).         |
+| `tests`         | pytest matrix workflow status.                             |
+| `install-check` | Import-smoke workflow status.                              |
+| `quality`       | scitex-dev quality audit workflow status.                  |
+| `cov`           | Codecov coverage badge (`/codecov/c/github/...`).          |
+
+Reference implementation: the badge block in scitex-agent-container's
+`README.md` (`<!-- scitex-badges:start -->` … `<!-- scitex-badges:end -->`).
+
+Audited by PS-166 (severity `W` during adoption). The auditor warns on:
+
+1. Shields URLs whose `?label=...` value is not in the allowed set
+   (e.g. `label=Tests` → use `tests`; `label=Coverage` → use `cov`).
+2. Workflow / PyPI / Codecov shields URLs missing `?label=` entirely
+   (the auto-generated label is non-standard, so we require an explicit
+   override).
+
+Static badges (e.g. `https://img.shields.io/badge/license-MIT-blue`) are
+exempt — they're not part of the standardized status row.
+
 ## Migration
 
 ```bash
