@@ -19,6 +19,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
+import tomllib as _tomllib
+
 
 # Unmistakable AGPL-3.0 signature lines. Stubs almost never include
 # Section 13 ("Remote Network Interaction") because it's the longest
@@ -30,6 +32,27 @@ _AGPL_SIGNATURES = (
 )
 
 _LICENSE_FILES = ("LICENSE", "LICENSE.md", "LICENSE.txt")
+
+
+def spdx_from_pyproject(repo: Path) -> Optional[str]:
+    """Return the SPDX `license = "..."` string from *repo*/pyproject.toml.
+
+    Returns None if pyproject.toml is missing, unparseable, lacks a
+    `[project].license` key, or sets it to a non-string (e.g. the legacy
+    table form `{text = "..."}` or `{file = "..."}`). PS-138b treats a
+    None return as "can't validate, skip content check".
+    """
+    pyproject = repo / "pyproject.toml"
+    if not pyproject.is_file():
+        return None
+    try:
+        data = _tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    except (OSError, _tomllib.TOMLDecodeError):
+        return None
+    lic = data.get("project", {}).get("license")
+    if isinstance(lic, str):
+        return lic.strip() or None
+    return None
 
 
 def find_license(repo: Path) -> Optional[Path]:
