@@ -63,6 +63,33 @@ or `build` + `build-docs`). If they don't (e.g. `test` + `install-check`,
 or `lint` + `docs`), split into two files. The "common stem" rule
 captures matrix-style fanout vs. unrelated concerns.
 
+### Carve-outs to the splitting heuristic
+
+Two patterns are explicitly NOT split-violations even when job IDs look
+unrelated at a glance:
+
+1. **Matrix fan-out.** A single test matrix across Python versions /
+   OSes / extras is one logical check; the GitHub UI already shows one
+   row per matrix cell, so we don't need separate files. Captured by
+   the common-stem rule above.
+2. **Build → publish → release pipelines.** A release workflow that
+   chains `build` → `test-built-wheel` → `publish-pypi` → `create-github-release`
+   is one logical pipeline whose later jobs depend on earlier ones via
+   `needs:`. The job IDs don't share a stem, but splitting them across
+   files would break the artifact handoff. The auditor (PS-164) treats
+   a workflow as a pipeline (and skips the multi-job check) when at
+   least one job has a `needs:` edge pointing inside the same file.
+
+### Filename ↔ `name:` token-overlap (linter)
+
+PS-164's check (3) measures Jaccard similarity between the filename
+stem and the workflow's `name:` slug. Zero-token-overlap drift (e.g.
+filename `pytest-on-ubuntu-py3-11-3-12-3-13.yml` with `name: Quality
+Gate`) is rejected because branch protection keys on display name and a
+reviewer scanning the Actions tab can no longer correlate filename to
+row. Keep at least one substantive token shared between filename and
+`name:`.
+
 ## Audit
 
 `PS-164` (severity `W` — warning) scans `.github/workflows/` for:
