@@ -1360,7 +1360,11 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
     ):
         if not (repo / fname).is_file():
             out.append(Violation(code, str(repo), f"missing {fname}"))
-    from ._check_license import check_license_content, find_license
+    from ._check_license import (
+        check_license_content,
+        find_license,
+        spdx_from_pyproject,
+    )
 
     license_path = find_license(repo)
     if license_path is None:
@@ -1369,7 +1373,7 @@ def _check_top_level(repo: Path, out: list[Violation]) -> None:
         )
     else:
         try:
-            spdx_match = _spdx_from_pyproject(repo)
+            spdx_match = spdx_from_pyproject(repo)
         except Exception:
             spdx_match = None
         violation_msg = check_license_content(license_path, spdx_match)
