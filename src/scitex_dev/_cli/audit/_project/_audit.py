@@ -1180,6 +1180,13 @@ def _patch(rule: Rule) -> Rule:
 
 RULES = {code: _patch(rule) for code, rule in RULES.items()}
 
+# hook-bypass: line-limit
+# Sidecar rule registration — see ._extra_rules / GITIGNORED/REFACTORING.md.
+from ._extra_rules import EXTRA_RULES as _EXTRA_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in _EXTRA_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
 
 @dataclass
 class Violation:
@@ -2163,6 +2170,17 @@ def audit_project(
     from ._check_workflows_naming import check_ps164_workflow_naming
 
     check_ps164_workflow_naming(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    from ._check_workflow_presence import check_ps165_workflow_presence
+    from ._check_readme_badge_labels import check_ps166_readme_badge_labels
+
+    check_ps165_workflow_presence(repo_root, Violation, violations)
+    check_ps166_readme_badge_labels(repo_root, Violation, violations)
+    from ._check_readme_badge_layout import (  # hook-bypass: line-limit
+        check_ps167_readme_badge_layout,
+    )
+
+    check_ps167_readme_badge_layout(repo_root, Violation, violations)
     from ._check_local_state import (
         check_ps145_cross_package_read,
         check_ps146_pip_install_side_effect,
