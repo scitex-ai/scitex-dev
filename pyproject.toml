@@ -18,6 +18,7 @@ dependencies = [
     "scitex-config>=0.3.0",
     "scitex-logging>=0.1.0",
     "newb>=0.3.0",
+    "pyyaml>=6.0",
     'tomli>=2.0; python_version < "3.11"',
 ]
 
@@ -83,6 +84,7 @@ scitex_dev = [
     "skills/*.md",
     "skills/references/*.md",
     "_skills/**/*",
+    "_branding/*.yaml",
     "_cli/audit/_summary/data/*",
     "_sphinx_html/**/*",
     "_sphinx_html/**/.[!.]*",
