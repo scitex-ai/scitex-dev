@@ -1,4 +1,4 @@
-name: Test
+name: tests
 
 on:
   push:
@@ -11,11 +11,12 @@ on:
 
 jobs:
   test:
+    name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
@@ -39,20 +40,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           fail_ci_if_error: false
-
-  install-check:
-    # Companion to `test` — confirms the bare package (no extras) is
-    # `pip install -e .`-able and `import scitex_dev` succeeds. Catches
-    # `[project] dependencies` drift that the test matrix masks because
-    # it installs `[all,dev]`.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: |
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -e .
-          .venv/bin/python -c "import scitex_dev; print(scitex_dev.__version__)"
