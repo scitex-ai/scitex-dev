@@ -156,10 +156,15 @@ def audit_local_brand_glue(pkg_root: Path, brand_key: str) -> list[dict]:
         except (OSError, UnicodeDecodeError):
             continue
         rel = str(path.relative_to(pkg_root))
-        # _branding.py with env-driven brand identity is the duplicated-
-        # central-helper anti-pattern. A _branding.py without that marker
-        # (e.g. pure docstring text-rebranding utilities) is tolerated.
-        if path.name == "_branding.py" and _FORBIDDEN_BRANDING_FILE_MARKER.search(text):
+        # A local _branding.py is flagged only when it defines get_env
+        # WITHOUT delegating to scitex_dev._branding. A file that imports
+        # the central registry and exposes thin wrappers (for back-compat)
+        # is the intended migration end-state.
+        if (
+            path.name == "_branding.py"
+            and _FORBIDDEN_BRANDING_FILE_MARKER.search(text)
+            and "scitex_dev._branding" not in text
+        ):
             violations.append(
                 {
                     "code": "PS-201",
