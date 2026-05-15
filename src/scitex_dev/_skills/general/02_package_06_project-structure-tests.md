@@ -48,8 +48,9 @@ Tests are organized into a **fixed set of literal subdirectories**. Anything els
 | `tests/examples/` | ✅ | one `test_<example-stem>.py` per file in `./examples/` |
 | `tests/skills/` | ✅ | structural tests for shipped `_skills/` (skill linter, layout) |
 | `tests/agentic/` | ✅ | agentic-trigger tests — LLM invokes the skill / MCP tool / CLI and we assert the right path fires |
-| `tests/integration/` | ✅ | cross-module / cross-package tests |
-| `tests/e2e/` | ✅ | end-to-end pipeline tests |
+| `tests/integration/` | ✅ | Python-level cross-module / cross-package tests |
+| `tests/smoke/` | ✅ | **fast (<60s)** subprocess-driven CLI happy-path tests; marker `smoke`; runs on every PR (PS-211) |
+| `tests/e2e/` | ✅ | **slow** end-to-end workflows against real subsystems; marker `e2e`; gated by `RUN_E2E=1`, skipped by default (PS-212) |
 | `tests/github_actions/` | ✅ | local GitHub Actions runner config (`act`/Apptainer) |
 | `tests/coverage/` | gitignored | HTML / XML coverage reports (replaces a top-level `./htmlcov/`) |
 | `tests/logs/` | gitignored | pytest run logs, captured stdout/stderr |
@@ -134,6 +135,88 @@ sat at 79 % on Codecov for weeks because `import optuna` at the top of
 two test modules silently blocked collection. Once removed, the
 underlying coverage moved 12 pp.
 
+## Layered testing convention — `tests/smoke/` and `tests/e2e/`
+
+The four test layers form a pyramid; each has a distinct role, speed
+budget, and CI trigger:
+
+| Layer | Speed | Trigger | What it tests |
+| :--- | :--- | :--- | :--- |
+| `tests/<pkg>/` | very fast | every PR | unit-level behaviour (mocked I/O OK where guarded) |
+| `tests/integration/` | fast/medium | every PR | Python-level cross-module wiring (real objects, no subprocess) |
+| `tests/smoke/` | **<60s total** | every PR | subprocess-driven CLI happy paths — `subprocess.run(["<cli>", "...", "--help"])` etc. |
+| `tests/e2e/` | slow (minutes) | `RUN_E2E=1` only | full workflows against real subsystems (network, GPU, NAS, …) |
+
+### Naming + budget
+
+- `tests/smoke/test_*.py` — keep tight; **≤8 smoke tests per package** is a
+  good ceiling. Smoke is for "the binary launches and the obvious paths
+  don't crash", not feature coverage.
+- `tests/e2e/test_*.py` — **≤5 workflow tests per package**. Each test
+  exercises one realistic end-to-end story.
+
+### Pytest markers (must be registered)
+
+Both markers MUST be declared in `pyproject.toml` so `-m smoke` / `-m e2e`
+does not emit `PytestUnknownMarkWarning`:
+
+```toml
+[tool.pytest.ini_options]
+markers = [
+    "smoke: fast CLI happy-path tests (<60s, runs on every PR)",
+    "e2e: end-to-end workflows (slow, gated by RUN_E2E=1)",
+]
+```
+
+Apply markers via `pytestmark = pytest.mark.smoke` at module top, or per
+test with `@pytest.mark.smoke`.
+
+### E2E skip strategy
+
+E2E tests must be **skipped by default** so a bare `pytest` stays fast.
+Use a module-level skip gate (or a `conftest.py` collection hook):
+
+```python
+# tests/e2e/conftest.py
+import os, pytest
+
+if not os.environ.get("RUN_E2E"):
+    collect_ignore_glob = ["test_*.py"]
+```
+
+Or per-module:
+
+```python
+# tests/e2e/test_<workflow>.py
+import os, pytest
+
+pytestmark = [
+    pytest.mark.e2e,
+    pytest.mark.skipif(
+        not os.environ.get("RUN_E2E"),
+        reason="set RUN_E2E=1 to run end-to-end workflows",
+    ),
+]
+```
+
+### Conftest expectations
+
+- `tests/smoke/conftest.py` — fixtures for spinning a tmpdir / fake home;
+  no network.
+- `tests/e2e/conftest.py` — owns the `RUN_E2E` skip gate; may instantiate
+  real clients (NAS, cloud, GPU runners).
+
+### Opt-out for packages without a CLI
+
+Packages with no CLI surface (e.g. a pure-library tool) exempt themselves
+from PS-211 (and implicitly PS-212) via pyproject.toml:
+
+```toml
+[tool.scitex_dev]
+no_cli = true     # exempts PS-211 (and PS-212)
+# no_e2e = true   # exempts PS-212 only
+```
+
 ## Auditor coverage
 
 `scitex-dev ecosystem audit-project <distribution>` enforces this layout:
@@ -151,6 +234,13 @@ underlying coverage moved 12 pp.
   no `test_*.py`, while the corresponding `src/<pkg>/<sub>/` has source
   files); src-aware so it never flags fixture trees that legitimately have
   no source counterpart
+- **PS-211** *(W)* — `tests/smoke/` missing OR the `smoke` pytest marker
+  not registered in `pyproject.toml`. Severity warning during ecosystem
+  adoption; promoted to error once all packages have a smoke layer.
+  Opt-out: `[tool.scitex_dev] no_cli = true`.
+- **PS-212** *(W)* — `tests/e2e/` missing OR the `e2e` pytest marker not
+  registered. Severity warning during adoption.
+  Opt-out: `[tool.scitex_dev] no_e2e = true` (or `no_cli = true`).
 - **PS-302** — unrecognized subdir at `tests/` root
 - **PS-303** — `examples/<name>` without matching `tests/examples/test_<name>.py`
 
