@@ -7,6 +7,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.17] — 2026-05-16
+
+### Added
+- **Branding registry + PS-2xx audit** — single source of truth for
+  package branding, with PS-2xx rules auditing README / pyproject /
+  docs against the registry. Ships the new `scitex_dev._branding`
+  module (`get`, `get_env`, `register_method_aliases`) that figrecipe,
+  socialia, and other ecosystem packages consume.
+- **Ecosystem CLI** — `--help` now organizes subcommands by category;
+  added `bulk` fan-out for running a command across all packages;
+  `list --category <name>` filters packages by category.
+
+### Changed
+- Audit refinements:
+  - **PS-167** — refined detection logic to reduce false positives.
+  - **PS-201** — shim tolerance: allow thin re-export shims to satisfy
+    the rule without tripping the audit.
+  - **PS-202 / PS-204** — test path convention now mirrors source path.
+- Test infrastructure: split `test.yml` into a pytest matrix and an
+  import-smoke job; renamed workflow files for clarity.
+
 ## [0.11.16] — 2026-05-15
 
 ### Added (audit rules)

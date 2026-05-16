@@ -8,24 +8,24 @@
 
 <p align="center"><b>Shared developer utilities for the SciTeX ecosystem</b></p>
 
-<!-- scitex-badges:start -->
-<p align="center">
-  <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/v/scitex-dev?label=pypi" alt="pypi"></a>
-  <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/pyversions/scitex-dev?label=python" alt="python"></a>
-  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/rtd-sphinx-build-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/rtd-sphinx-build-on-ubuntu-latest.yml?branch=develop&label=docs" alt="docs"></a>
-</p>
-<p align="center">
-  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests" alt="tests"></a>
-  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=install-check" alt="install-check"></a>
-  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=quality" alt="quality"></a>
-  <a href="https://codecov.io/gh/ywatanabe1989/scitex-dev"><img src="https://img.shields.io/codecov/c/github/ywatanabe1989/scitex-dev/develop?label=cov" alt="cov"></a>
-  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?label=license" alt="License: AGPL-3.0"></a>
-</p>
-<!-- scitex-badges:end -->
-
 <p align="center">
   <a href="https://scitex-dev.readthedocs.io/">Full Documentation</a> · <code>uv pip install scitex-dev[all]</code>
 </p>
+
+<!-- scitex-badges:start -->
+<p align="center">
+  <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/v/scitex-dev?label=PyPI" alt="PyPI"></a>
+  <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/pyversions/scitex-dev?label=Python" alt="Python"></a>
+  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/rtd-sphinx-build-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/rtd-sphinx-build-on-ubuntu-latest.yml?branch=develop&label=RTD" alt="RTD"></a>
+  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?label=License" alt="License"></a>
+</p>
+<p align="center">
+  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=Tests" alt="Tests"></a>
+  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=Install-Check" alt="Install-Check"></a>
+  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=Quality" alt="Quality"></a>
+  <a href="https://codecov.io/gh/ywatanabe1989/scitex-dev"><img src="https://img.shields.io/codecov/c/github/ywatanabe1989/scitex-dev/develop?label=CodeCov" alt="CodeCov"></a>
+</p>
+<!-- scitex-badges:end -->
 
 ---
 

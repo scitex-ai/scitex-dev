@@ -10,13 +10,19 @@ tags: [scitex-general-docs-readme-template]
 Literal template for every SciTeX package README.md. Replace `<PACKAGE>`
 (distribution name, e.g. `scitex-io`), `<MODULE>` (import name, e.g.
 `scitex_io`), and `<TAGLINE>` (one-line value proposition) before
-committing. The audit rules PS-107 / PS-109 / PS-110 / PS-111 / PS-112 / PS-133
-enforce the load-bearing parts of this template.
+committing. The audit rules PS-107 / PS-109 / PS-110 / PS-111 / PS-112 /
+PS-133 / **PS-167 (badge layout)** enforce the load-bearing parts of
+this template.
 
-**Reference implementations** (look at these first when in doubt):
+**Reference implementation (canonical)**:
 
-- `~/proj/figrecipe/README.md` — original canonical layout
-- `~/proj/newb/README.md` — secondary worked example with the same shape
+- `~/proj/scitex-agent-container/README.md` — current canonical layout
+  for the badge block (markers + two centered rows; see PS-167).
+
+**Secondary reference implementations** (older worked examples):
+
+- `~/proj/figrecipe/README.md`
+- `~/proj/newb/README.md`
 
 ## Header order (load-bearing)
 
@@ -38,8 +44,28 @@ form. Inline images render as a row, centered.
 
 ## Literal template
 
+The badge block uses the **canonical SAC layout** (PS-167):
+
+- Order of preamble: H1 → centered logo → centered **tagline**
+  (`<p align="center"><b>...</b></p>`) → centered Full-Doc + install
+  line → badge block.
+- Badge block is wrapped in `<!-- scitex-badges:start -->` … `<!--
+  scitex-badges:end -->` markers (the markers WRAP the rows, never
+  the other way around — embedding `<!-- scitex-badges:start -->`
+  inside a `<p align="center">` is a PS-167 violation).
+- The block contains **exactly two** `<p align="center">` rows:
+  - **Row 1 — package-metadata badges**: `pypi`, `python`, `docs`.
+  - **Row 2 — CI/health badges**: `tests`, `install-check`,
+    `quality`, `cov`.
+- Every badge image is served from `img.shields.io/...` (so it can
+  carry an explicit `?label=<short>` — see PS-166's allowed
+  vocabulary: `pypi`, `python`, `docs`, `tests`, `install-check`,
+  `quality`, `cov`). Raw `github.com/.../badge.svg`,
+  `readthedocs.org/projects/.../badge`, and `badge.fury.io` forms
+  are PS-167 violations because they cannot carry a short label.
+
 ```markdown
-# <PACKAGE>
+# <PACKAGE> (<code><PACKAGE></code>)
 
 <p align="center">
   <a href="https://scitex.ai">
@@ -50,17 +76,20 @@ form. Inline images render as a row, centered.
 <p align="center"><b><TAGLINE></b></p>
 
 <p align="center">
-  <a href="https://<PACKAGE>.readthedocs.io/">Full Documentation</a> · <code>pip install <PACKAGE></code>
+  <a href="https://<PACKAGE>.readthedocs.io/">Full Documentation</a> · <code>uv pip install <PACKAGE>[all]</code>
 </p>
 
 <!-- scitex-badges:start -->
 <p align="center">
-  <a href="https://pypi.org/project/<PACKAGE>/"><img src="https://img.shields.io/pypi/v/<PACKAGE>.svg" alt="PyPI"></a>
-  <a href="https://pypi.org/project/<PACKAGE>/"><img src="https://img.shields.io/pypi/pyversions/<PACKAGE>.svg" alt="Python"></a>
-  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/test.yml"><img src="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/test.yml/badge.svg" alt="Tests"></a>
-  <a href="https://codecov.io/gh/ywatanabe1989/<PACKAGE>"><img src="https://codecov.io/gh/ywatanabe1989/<PACKAGE>/graph/badge.svg" alt="Coverage"></a>
-  <a href="https://<PACKAGE>.readthedocs.io/en/latest/"><img src="https://readthedocs.org/projects/<PACKAGE>/badge/?version=latest" alt="Docs"></a>
-  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/license-AGPL_v3-blue.svg" alt="License: AGPL v3"></a>
+  <a href="https://pypi.org/project/<PACKAGE>/"><img src="https://img.shields.io/pypi/v/<PACKAGE>?label=pypi" alt="pypi"></a>
+  <a href="https://pypi.org/project/<PACKAGE>/"><img src="https://img.shields.io/pypi/pyversions/<PACKAGE>?label=python" alt="python"></a>
+  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/rtd-sphinx-build-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/rtd-sphinx-build-on-ubuntu-latest.yml?branch=develop&label=docs" alt="docs"></a>
+</p>
+<p align="center">
+  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests" alt="tests"></a>
+  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=install-check" alt="install-check"></a>
+  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=quality" alt="quality"></a>
+  <a href="https://codecov.io/gh/ywatanabe1989/<PACKAGE>"><img src="https://img.shields.io/codecov/c/github/ywatanabe1989/<PACKAGE>/develop?label=cov" alt="cov"></a>
 </p>
 <!-- scitex-badges:end -->
 
@@ -130,6 +159,8 @@ Each rule warns (never errors) and fires from
 | PS-111 | Banned personal email `ywatanabe@scitex.ai` not present         |
 | PS-112 | SciTeX logo image present in first ~4 KB                        |
 | PS-133 | Badges block placed below the Full-Doc line in the centered `<p align="center">` form (figrecipe-style); not above the logo and not in `[![…]]()` markdown form |
+| PS-166 | Every shields.io badge uses one of the short labels `pypi`, `python`, `docs`, `tests`, `install-check`, `quality`, `cov` |
+| PS-167 | Badge block uses `<!-- scitex-badges:start -->`...`:end -->` markers wrapping exactly TWO `<p align="center">` rows (metadata + CI), with every image from `img.shields.io/...` |
 
 ## Workflow status badges — use `?label=...` short labels
 

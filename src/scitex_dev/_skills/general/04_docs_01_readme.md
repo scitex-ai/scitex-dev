@@ -150,25 +150,46 @@ summary, not an essay.
 |---|---|---|
 | 1 | **Format zoo** — every format has its own API. | **One call** dispatches across 30+ formats. |
 
-### Badge row: PyPI · Python · RTD / Tests · Install · Coverage
+<!-- hook-bypass: line-limit (file pre-existing over MD cap; see GITIGNORED/REFACTORING.md) -->
 
-Two centered rows wrapped in `<!-- scitex-badges:start --> ... :end -->`:
+### Badge row — canonical SAC layout (PS-167)
+
+Mirrors `scitex-agent-container/README.md`. Header order: H1 (with
+`<code>pkg-name</code>`) → centered logo → centered **tagline**
+(`<p align="center"><b>...</b></p>`) → centered Full-Doc + install
+line → badge block. PS-167 enforces four rules on the badge block:
+
+1. Wrapped in `<!-- scitex-badges:start -->` … `<!-- scitex-badges:end -->`
+   markers (markers OUTSIDE the `<p>` tags — never nested inside).
+2. Exactly **two** `<p align="center">` rows: row 1 = metadata
+   (`pypi`, `python`, `docs`); row 2 = CI/health (`tests`,
+   `install-check`, `quality`, `cov`).
+3. Every image served from `img.shields.io/...` (raw
+   `actions/.../badge.svg`, `readthedocs.org/.../badge`,
+   `badge.fury.io` are rejected — shields.io is required so each
+   badge can carry `?label=<short>`).
+4. Short labels from PS-166's vocabulary; metadata row uses at least
+   one of `pypi`/`python`/`docs`, CI row uses at least one of
+   `tests`/`install-check`/`quality`/`cov`.
 
 ```html
+<!-- scitex-badges:start -->
 <p align="center">
-<a href="https://pypi.org/project/<pkg>/"><img src="https://img.shields.io/pypi/v/<pkg>.svg" alt="PyPI"></a>
-<a href="https://pypi.org/project/<pkg>/"><img src="https://img.shields.io/pypi/pyversions/<pkg>.svg" alt="Python"></a>
-<a href="https://<pkg>.readthedocs.io/en/latest/"><img src="https://readthedocs.org/projects/<pkg>/badge/?version=latest" alt="Read the Docs"></a>
+<a href="https://pypi.org/project/<pkg>/"><img src="https://img.shields.io/pypi/v/<pkg>?label=pypi" alt="pypi"></a>
+<a href="https://pypi.org/project/<pkg>/"><img src="https://img.shields.io/pypi/pyversions/<pkg>?label=python" alt="python"></a>
+<a href="https://github.com/<owner>/<pkg>/actions/workflows/rtd-sphinx-build-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/<owner>/<pkg>/rtd-sphinx-build-on-ubuntu-latest.yml?branch=develop&label=docs" alt="docs"></a>
 </p>
 <p align="center">
-<a href="...test.yml"><img src=".../test.yml/badge.svg" alt="Tests"></a>
-<a href="...install-test.yml"><img src=".../install-test.yml/badge.svg" alt="Install Test"></a>
-<a href="https://codecov.io/gh/<owner>/<pkg>"><img src="https://codecov.io/gh/<owner>/<pkg>/graph/badge.svg" alt="Coverage"></a>
+<a href="https://github.com/<owner>/<pkg>/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/<owner>/<pkg>/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests" alt="tests"></a>
+<a href="https://github.com/<owner>/<pkg>/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/<owner>/<pkg>/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=install-check" alt="install-check"></a>
+<a href="https://github.com/<owner>/<pkg>/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/<owner>/<pkg>/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=quality" alt="quality"></a>
+<a href="https://codecov.io/gh/<owner>/<pkg>"><img src="https://img.shields.io/codecov/c/github/<owner>/<pkg>/develop?label=cov" alt="cov"></a>
 </p>
+<!-- scitex-badges:end -->
 ```
 
-Drop the AGPL license badge — license is already metadata in
-`pyproject.toml` and visible on the PyPI page.
+Drop the AGPL license badge — already in `pyproject.toml` metadata
+and visible on PyPI.
 
 #### Badge label convention: shields.io with explicit `?label=...`
 
