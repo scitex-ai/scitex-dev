@@ -426,15 +426,32 @@ def _cell(state: PackageState, col: str) -> Text | str:
     return "?"
 
 
-def render_table(states: list[PackageState], verbosity: int = 1) -> Table:
+def render_table(
+    states: list[PackageState],
+    verbosity: int = 1,
+    *,
+    host: str | None = None,
+) -> Table:
     """Return a Rich Table for the requested verbosity tier.
 
     Sorts most-recently-edited first (top → bottom = newest → oldest).
     The last-edited timestamp considers uncommitted working-tree
     changes, not just the last commit — see `_last_commit_iso` in
     `_state.py`. Ties broken by package name.
+
+    ``host`` (optional) is shown in the table title so it's obvious
+    which machine's checkouts the data describes — distinguishes
+    `dashboard list` (local) from `dashboard list --host spartan`
+    (remote). Defaults to the current short hostname when omitted.
     """
     cols = _TIERS[max(0, min(verbosity, len(_TIERS) - 1))]
+    if host is None:
+        import socket
+
+        try:
+            host = socket.gethostname().split(".", 1)[0] or "local"
+        except OSError:
+            host = "local"
 
     # Sort newest → oldest, with packages missing a timestamp at the
     # bottom. Two-pass keeps the logic straightforward without trying
@@ -451,7 +468,7 @@ def render_table(states: list[PackageState], verbosity: int = 1) -> Table:
     ordered_states = dated + undated
 
     table = Table(
-        title=f"scitex ecosystem  ·  v={verbosity}  ·  {len(states)} packages",
+        title=f"scitex ecosystem  ·  @{host}  ·  v={verbosity}  ·  {len(states)} packages",
         title_style="bold cyan",
         header_style="bold",
         caption=_legend_text(),

@@ -97,7 +97,7 @@ def _render_remote_dashboard(
         return
 
     with Live(
-        render_table([], verbosity=verbosity),
+        render_table([], verbosity=verbosity, host=host),
         console=console,
         refresh_per_second=2,
         transient=False,
@@ -117,8 +117,8 @@ def _render_remote_dashboard(
                 last_rows = _json.loads(line)
             except _json.JSONDecodeError:
                 continue
-            live.update(render_table(_states(), verbosity=verbosity))
-        live.update(render_table(_states(), verbosity=verbosity))
+            live.update(render_table(_states(), verbosity=verbosity, host=host))
+        live.update(render_table(_states(), verbosity=verbosity, host=host))
 
     try:
         rc = proc.wait(timeout=10)
@@ -131,7 +131,7 @@ def _render_remote_dashboard(
             f"remote `dashboard list` on {host} exited {rc}:\n--- stderr ---\n{err}"
         )
 
-    console.print(render_table(_states(), verbosity=verbosity))
+    console.print(render_table(_states(), verbosity=verbosity, host=host))
 
 
 def _shquote(s: str) -> str:
