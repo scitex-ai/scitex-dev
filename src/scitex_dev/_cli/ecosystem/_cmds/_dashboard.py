@@ -20,15 +20,21 @@ def _render_remote_dashboard(
     with_tests: str,
     as_json: bool,
 ) -> None:
-    """Run `dashboard list --json` on `host` over ssh, render the result.
+    """Stream `dashboard list --json-stream` from `host`; render live.
 
-    Renders with the local `render_table` against `PackageState`
-    objects reconstructed via `PackageState.from_dict`. If `as_json`
-    is requested, the remote's JSON is forwarded verbatim — caller
-    workflows that `| jq` keep working.
+    Uses ``--json-stream`` (one JSON snapshot per line, emitted after
+    each enricher batch completes) so the local view fills in
+    incrementally — same UX as a local `dashboard list`. Without this,
+    ssh blocks for the full ~40s while the remote runs every enricher.
+
+    If ``as_json`` is requested, the last (= most complete) snapshot
+    is forwarded verbatim.
     """
     import json as _json
     import subprocess
+
+    from rich.console import Console
+    from rich.live import Live
 
     from .._dashboard._render import render_table
     from .._dashboard._state import PackageState
@@ -38,7 +44,7 @@ def _render_remote_dashboard(
         "ecosystem",
         "dashboard",
         "list",
-        "--json",
+        "--json-stream",
         "-j",
         str(jobs),
         "--with-tests",
@@ -50,49 +56,82 @@ def _render_remote_dashboard(
         remote_cmd_parts.extend(["-p", p])
     remote_cmd = " ".join(remote_cmd_parts)
     # `bash -lc` so the user's PATH (incl. ~/.env-*/bin) is sourced.
+    # `-o BatchMode=yes` avoids interactive password prompts hanging.
     ssh_cmd = [
         "ssh",
+        "-o",
+        "BatchMode=yes",
         host,
         f"bash -lc {_shquote(remote_cmd)}",
     ]
     try:
-        proc = subprocess.run(
+        proc = subprocess.Popen(
             ssh_cmd,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=600,
+            bufsize=1,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+    except FileNotFoundError as e:
         raise click.ClickException(f"ssh to {host} failed: {e}")
-    if proc.returncode != 0:
-        raise click.ClickException(
-            f"remote `dashboard list` on {host} exited {proc.returncode}:\n"
-            f"--- stderr ---\n{proc.stderr.strip()[:2000]}"
-        )
-    raw = proc.stdout.strip()
-    # Remote may print login-shell banners before the JSON. Slice from
-    # the first '[' to the matching trailing ']' (the payload shape is
-    # always a JSON array of dicts).
-    start = raw.find("[")
-    end = raw.rfind("]")
-    if start < 0 or end < start:
-        raise click.ClickException(
-            f"remote payload from {host} is not JSON:\n{raw[:500]}"
-        )
-    payload = raw[start : end + 1]
-    if as_json:
-        click.echo(payload)
-        return
-    try:
-        rows = _json.loads(payload)
-    except _json.JSONDecodeError as e:
-        raise click.ClickException(
-            f"could not parse remote JSON from {host}: {e}\n{payload[:500]}"
-        )
-    states = [PackageState.from_dict(r) for r in rows]
-    from rich.console import Console
 
-    Console().print(render_table(states, verbosity=verbosity))
+    last_rows: list = []
+    console = Console()
+
+    def _states() -> list:
+        return [PackageState.from_dict(r) for r in last_rows]
+
+    if as_json:
+        # No live render — just drain to EOF and forward the final snapshot.
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            line = line.strip()
+            if not line.startswith("["):
+                continue
+            try:
+                last_rows = _json.loads(line)
+            except _json.JSONDecodeError:
+                continue
+        proc.wait(timeout=10)
+        click.echo(_json.dumps(last_rows, indent=2, default=str))
+        return
+
+    with Live(
+        render_table([], verbosity=verbosity),
+        console=console,
+        refresh_per_second=2,
+        transient=False,
+        screen=True,
+    ) as live:
+        live.console.print(
+            f"[dim]streaming from {host} over ssh — first snapshot lands "
+            f"after the cheap basic-gather batch (~1-2s); full enrichment "
+            f"~30-60s on a cold cache[/dim]"
+        )
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            line = line.strip()
+            if not line.startswith("["):
+                continue
+            try:
+                last_rows = _json.loads(line)
+            except _json.JSONDecodeError:
+                continue
+            live.update(render_table(_states(), verbosity=verbosity))
+        live.update(render_table(_states(), verbosity=verbosity))
+
+    try:
+        rc = proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        rc = -1
+    if rc != 0 and not last_rows:
+        err = (proc.stderr.read() if proc.stderr else "")[:2000]
+        raise click.ClickException(
+            f"remote `dashboard list` on {host} exited {rc}:\n--- stderr ---\n{err}"
+        )
+
+    console.print(render_table(_states(), verbosity=verbosity))
 
 
 def _shquote(s: str) -> str:
@@ -173,6 +212,16 @@ def register(ecosystem):
         help="Emit JSON instead of the Rich table (alias for `dashboard export --format json`).",
     )
     @click.option(
+        "--json-stream",
+        is_flag=True,
+        hidden=True,
+        help=(
+            "Internal: emit one JSON snapshot per line as enrichers "
+            "complete (newline-delimited JSON of the full state list). "
+            "Used by `--host` to render remote progress incrementally."
+        ),
+    )
+    @click.option(
         "--with-tests",
         type=click.Choice(["off", "collect", "run"]),
         default="off",
@@ -203,7 +252,9 @@ def register(ecosystem):
             "the local renderer."
         ),
     )
-    def dashboard_list(verbosity, package, jobs, as_json, with_tests, host):
+    def dashboard_list(
+        verbosity, package, jobs, as_json, json_stream, with_tests, host
+    ):
         """Live ecosystem dashboard. Visible columns at the current
         verbosity are always computed (verbosity ≠ depth); cells fill
         in via `rich.live.Live` first-come-first-served as each future
@@ -265,6 +316,28 @@ def register(ecosystem):
                     packages_arg.append(p)
         else:
             packages_arg = None
+
+        if json_stream:
+            # Emit one JSON snapshot per line as enrichers complete.
+            # Used by --host to stream remote progress incrementally.
+            import json as _json
+            import sys as _sys
+
+            def _emit(states):
+                _sys.stdout.write(
+                    _json.dumps([s.to_dict() for s in states], default=str)
+                )
+                _sys.stdout.write("\n")
+                _sys.stdout.flush()
+
+            gather_ecosystem_state(
+                verbosity=verbosity,
+                packages=packages_arg,
+                workers=jobs,
+                on_update=_emit,
+                enrichers=enrichers,
+            )
+            return
 
         if as_json:
             states = gather_ecosystem_state(
