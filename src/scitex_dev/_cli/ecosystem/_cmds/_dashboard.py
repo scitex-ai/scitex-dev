@@ -11,6 +11,95 @@ intentionally back-compat shims, not new surface.
 import click
 
 
+def _render_remote_dashboard(
+    *,
+    host: str,
+    verbosity: int,
+    packages: list,
+    jobs: int,
+    with_tests: str,
+    as_json: bool,
+) -> None:
+    """Run `dashboard list --json` on `host` over ssh, render the result.
+
+    Renders with the local `render_table` against `PackageState`
+    objects reconstructed via `PackageState.from_dict`. If `as_json`
+    is requested, the remote's JSON is forwarded verbatim — caller
+    workflows that `| jq` keep working.
+    """
+    import json as _json
+    import subprocess
+
+    from .._dashboard._render import render_table
+    from .._dashboard._state import PackageState
+
+    remote_cmd_parts = [
+        "scitex-dev",
+        "ecosystem",
+        "dashboard",
+        "list",
+        "--json",
+        "-j",
+        str(jobs),
+        "--with-tests",
+        with_tests,
+    ]
+    if verbosity > 1:
+        remote_cmd_parts.append("-" + "v" * (verbosity - 1))
+    for p in packages:
+        remote_cmd_parts.extend(["-p", p])
+    remote_cmd = " ".join(remote_cmd_parts)
+    # `bash -lc` so the user's PATH (incl. ~/.env-*/bin) is sourced.
+    ssh_cmd = [
+        "ssh",
+        host,
+        f"bash -lc {_shquote(remote_cmd)}",
+    ]
+    try:
+        proc = subprocess.run(
+            ssh_cmd,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        raise click.ClickException(f"ssh to {host} failed: {e}")
+    if proc.returncode != 0:
+        raise click.ClickException(
+            f"remote `dashboard list` on {host} exited {proc.returncode}:\n"
+            f"--- stderr ---\n{proc.stderr.strip()[:2000]}"
+        )
+    raw = proc.stdout.strip()
+    # Remote may print login-shell banners before the JSON. Slice from
+    # the first '[' to the matching trailing ']' (the payload shape is
+    # always a JSON array of dicts).
+    start = raw.find("[")
+    end = raw.rfind("]")
+    if start < 0 or end < start:
+        raise click.ClickException(
+            f"remote payload from {host} is not JSON:\n{raw[:500]}"
+        )
+    payload = raw[start : end + 1]
+    if as_json:
+        click.echo(payload)
+        return
+    try:
+        rows = _json.loads(payload)
+    except _json.JSONDecodeError as e:
+        raise click.ClickException(
+            f"could not parse remote JSON from {host}: {e}\n{payload[:500]}"
+        )
+    states = [PackageState.from_dict(r) for r in rows]
+    from rich.console import Console
+
+    Console().print(render_table(states, verbosity=verbosity))
+
+
+def _shquote(s: str) -> str:
+    """POSIX shell single-quote a string for embedding in `bash -lc '...'`."""
+    return "'" + s.replace("'", "'\"'\"'") + "'"
+
+
 def register(ecosystem):
     # Back-compat shim: the deprecated bare-noun command must be registered
     # BEFORE the live `dashboard` Group below so the Group definition
@@ -100,7 +189,21 @@ def register(ecosystem):
             "symlink or missing."
         ),
     )
-    def dashboard_list(verbosity, package, jobs, as_json, with_tests):
+    @click.option(
+        "--host",
+        default=None,
+        help=(
+            "SSH host whose ~/proj/ checkouts should be inspected "
+            "instead of the local machine's. Useful when active "
+            "development has moved to a remote (e.g. Spartan) so the "
+            "local clones drift behind. Requires `scitex-dev` "
+            "installed on the remote. Implementation: ssh runs "
+            "`scitex-dev ecosystem dashboard list --json [flags]` on "
+            "the remote, the result is deserialised and rendered with "
+            "the local renderer."
+        ),
+    )
+    def dashboard_list(verbosity, package, jobs, as_json, with_tests, host):
         """Live ecosystem dashboard. Visible columns at the current
         verbosity are always computed (verbosity ≠ depth); cells fill
         in via `rich.live.Live` first-come-first-served as each future
@@ -115,6 +218,22 @@ def register(ecosystem):
             enrichers_for_cols,
             render_table,
         )
+
+        # --host: shell out to remote scitex-dev for the JSON payload,
+        # deserialise into PackageState objects, then render locally.
+        # Lets a developer working on Spartan see Spartan's clone state
+        # from a local terminal without re-implementing the gatherer
+        # over ssh.
+        if host:
+            _render_remote_dashboard(
+                host=host,
+                verbosity=verbosity,
+                packages=list(package),
+                jobs=jobs,
+                with_tests=with_tests,
+                as_json=as_json,
+            )
+            return
 
         cols = cols_for_verbosity(verbosity)
         enrichers = enrichers_for_cols(cols)

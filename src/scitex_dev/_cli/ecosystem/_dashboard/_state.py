@@ -96,6 +96,18 @@ class PackageState:
     def to_dict(self) -> dict:
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, d: dict) -> "PackageState":
+        """Rebuild a state from a `to_dict()` payload.
+
+        Unknown keys are dropped silently so payloads emitted by a
+        newer/older scitex-dev still load.
+        """
+        from dataclasses import fields as _fields
+
+        names = {f.name for f in _fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in names})
+
 
 def _git(repo: Path, *args: str, default: str = "") -> str:
     try:
