@@ -27,6 +27,8 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from typing import Callable, Mapping
 
@@ -168,6 +170,135 @@ def _default_sac_runner(
     )
 
 
+# ---------------------------------------------------------------------------
+# sac sidecar busy probe
+# ---------------------------------------------------------------------------
+#
+# The cron job dispatches via ``sac agents send``, which has a hard 120 s
+# server-side timeout. When an agent is mid-turn from a previous round,
+# the new send blocks for the full 120 s before failing — and the next
+# agent's send is delayed in turn. Three busy agents = 6 minutes lost,
+# and the 10-minute cron interval starts to overflow.
+#
+# sac's A2A sidecar exposes a non-spec observability route at
+# ``/agents/<name>/_active`` returning ``{"tasks": [...]}``. We probe it
+# before each ``dispatch_fix_turn`` and skip the agent if any task is
+# active. The check is fail-open: any HTTP / parse / timeout error
+# returns False (treat as not-busy) — under-skipping is recoverable
+# (one wasted 120 s send), over-skipping silently mutes the watcher.
+
+# Short on purpose. The endpoint is in-process on the sidecar and
+# returns instantly when reachable; a long wait defeats the whole point
+# of probing before the 120 s send.
+_BUSY_PROBE_TIMEOUT_S = 5.0
+
+
+def _default_http_runner(url: str, timeout: float) -> tuple[int, bytes]:
+    """Real ``urllib`` GET. Tests pass their own fake.
+
+    Returns ``(status_code, body_bytes)``. Raises on transport failure
+    (connection refused, timeout, etc.) — :func:`_is_agent_busy`
+    catches everything and reports not-busy.
+    """
+    req = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+        return resp.getcode(), resp.read()
+
+
+def _is_agent_busy(
+    host: str,
+    a2a_port: int,
+    agent: str,
+    *,
+    http_runner: Callable[[str, float], tuple[int, bytes]] | None = None,
+) -> bool:
+    """True iff the sac sidecar's /_active route reports any tasks for ``agent``.
+
+    Endpoint: ``http://{host}:{a2a_port}/agents/{agent}/_active``.
+
+    Response shape: ``{"tasks": [{"id", "state", "last_event_at"}, ...]}``.
+    Non-empty ``tasks`` → busy.
+
+    Fail-open contract: on any request failure (timeout, 404, non-200,
+    JSON parse error, missing ``tasks`` key, runner exception of any
+    kind) return ``False``. Better to over-dispatch (and eat one 120 s
+    sac-send timeout) than silently skip every round because the probe
+    is misconfigured.
+    """
+    runner = http_runner or _default_http_runner
+    url = f"http://{host}:{a2a_port}/agents/{agent}/_active"
+    try:
+        status, body = runner(url, _BUSY_PROBE_TIMEOUT_S)
+    except Exception:  # stx-allow: fallback (reason: fail-open per docstring)
+        return False
+    if status != 200:
+        return False
+    try:
+        data = json.loads(body.decode("utf-8") if isinstance(body, bytes) else body)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    tasks = data.get("tasks")
+    if not isinstance(tasks, list):
+        return False
+    return len(tasks) > 0
+
+
+# ---------------------------------------------------------------------------
+# state.db resolution — agent → (host, a2a_port)
+# ---------------------------------------------------------------------------
+
+
+def _resolve_agent_endpoint(
+    agent: str,
+    *,
+    sac_runner: Callable[..., subprocess.CompletedProcess] | None = None,
+) -> tuple[str, int] | None:
+    """Return ``(host, a2a_port)`` for ``agent``'s live state.db row, or None.
+
+    Uses ``sac db query --table=instances --where=... --json``. None is
+    returned when the agent has no live row, no a2a_port, or sac db
+    fails — the caller treats None as "can't probe, assume not busy"
+    (fail-open, consistent with :func:`_is_agent_busy`).
+    """
+    runner = sac_runner or _default_sac_runner
+    where = f"name='{agent}' AND ended_at IS NULL"
+    args = [
+        "db",
+        "query",
+        "--table",
+        "instances",
+        "--where",
+        where,
+        "--json",
+        "--limit",
+        "1",
+    ]
+    try:
+        r = runner(args, input_text="")
+    except Exception:  # stx-allow: fallback (reason: probe fail-open)
+        return None
+    if r.returncode != 0:
+        return None
+    try:
+        rows = json.loads(r.stdout or "[]")
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(rows, list) or not rows:
+        return None
+    row = rows[0]
+    if not isinstance(row, dict):
+        return None
+    host = row.get("host")
+    port = row.get("a2a_port")
+    if not isinstance(host, str) or not host:
+        return None
+    if not isinstance(port, int) or port <= 0:
+        return None
+    return host, port
+
+
 def build_fix_prompt(repo: str, reds: list[str]) -> str:
     """Return the agent-facing fix prompt for a red repo."""
     body = "\n".join(reds)
@@ -277,6 +408,26 @@ def run_once(
                 )
             )
             continue
+
+        # Skip when the agent has active work — prevents the 120s
+        # sac-send timeout from cascading and overflowing the 10-min
+        # cron interval. Endpoint and lookup are both fail-open so a
+        # broken probe degrades to over-dispatch, not silent muting.
+        endpoint = _resolve_agent_endpoint(agent, sac_runner=sac_runner)
+        if endpoint is not None:
+            host, port = endpoint
+            if _is_agent_busy(host, port, agent):
+                print(f"  skip: {agent} has active task(s)", file=out)
+                results.append(
+                    AgentResult(
+                        agent=agent,
+                        repo=repo,
+                        red_workflows=tuple(reds),
+                        dispatched=False,
+                        dispatch_output="",
+                    )
+                )
+                continue
 
         print(f"  dispatching fix turn to {agent} ...", file=out)
         try:
