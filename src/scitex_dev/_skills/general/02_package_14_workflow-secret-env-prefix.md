@@ -82,6 +82,7 @@ allowed without a `<PKG>_` prefix:
 | `PYPI_API_TOKEN`              | Reserved name for PyPI publish (we use OIDC, but legacy workflows exist).  |
 | `ACTIONS_RUNNER_DEBUG`        | GitHub Actions diagnostic toggle.                                          |
 | `ACTIONS_STEP_DEBUG`          | GitHub Actions diagnostic toggle.                                          |
+| `CLA_PERSONAL_ACCESS_TOKEN`   | contributor-assistant action PAT — per-action convention, same value across repos that opt into the CLA gate. |
 
 If a future cross-cutting credential joins the rotate-all corpus, add
 its bare name here and update the auditor's exception list in the same
