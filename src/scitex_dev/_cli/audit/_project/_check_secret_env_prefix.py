@@ -59,6 +59,47 @@ EXCEPTION_SECRETS: frozenset[str] = frozenset(
 # never matched.
 _RE_SECRET_REF = re.compile(r"\$\{\{\s*secrets\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 
+# Only enforce PS-168 on names that LOOK like credentials. A plain
+# `DEBUG_FLAG` or `BUILD_NUMBER` secret isn't subject to the rotation
+# discipline that PS-168 is trying to protect. Match credential
+# keywords as underscore-bounded tokens anywhere in the name.
+_RE_KEY_LIKE = re.compile(
+    r"(?:^|_)("
+    r"TOKEN|KEY|KEYS|SECRET|SECRETS|CREDENTIAL|CREDENTIALS|"
+    r"PASSWORD|PASSWD|PAT|AUTH|OAUTH"
+    r")(?:$|_)",
+    re.IGNORECASE,
+)
+
+
+def _is_key_like(name: str) -> bool:
+    """True iff ``name`` looks like a credential / token secret.
+
+    PS-168's discipline targets rotatable credentials; non-credential
+    config secrets (debug flags, resource caps, build metadata) sit
+    outside the rule's protected surface and would just be noise.
+    """
+    return bool(_RE_KEY_LIKE.search(name))
+
+
+def _ecosystem_pkg_prefixes() -> tuple[str, ...]:
+    """Return per-pkg uppercase prefixes for every known ECOSYSTEM entry.
+
+    Used to allow cross-package borrows in PS-168: a workflow that
+    invokes another scitex-* package's CLI (e.g. ``newb``) legitimately
+    reads ``secrets.NEWB_ANTHROPIC_API_KEY``. The receiving repo isn't
+    free-styling — it's adopting the source package's prefix discipline.
+
+    Failures are tolerated (test-time, missing ECOSYSTEM, etc.) so PS-168
+    falls back to "only the local prefix passes" when discovery breaks.
+    """
+    try:
+        from scitex_dev._ecosystem._core import ECOSYSTEM
+
+        return tuple(name.upper().replace("-", "_") + "_" for name in sorted(ECOSYSTEM))
+    except Exception:
+        return ()
+
 
 # Per-package prefix aliases. Some distributions have a long canonical
 # name plus a short historical alias. Both are accepted so operators
@@ -110,23 +151,39 @@ def _violations_in_text(
     text: str,
     prefixes: tuple[str, ...] | str,
     exceptions: frozenset[str] = EXCEPTION_SECRETS,
+    cross_pkg_prefixes: tuple[str, ...] | None = None,
+    only_key_like: bool = True,
 ) -> list[tuple[int, str]]:
     """Return (line_number, secret_name) pairs that violate PS-168.
 
+    Scope filters (both applied):
+
+    * ``only_key_like=True`` skips names that don't look like a
+      credential / token (no TOKEN / KEY / SECRET / CREDENTIAL /
+      PASSWORD / PAT / AUTH / OAUTH suffix). Non-key config secrets
+      sit outside the rotation discipline.
+    * ``cross_pkg_prefixes`` lists ecosystem-wide per-package prefixes
+      (e.g. ``("NEWB_", "SCITEX_DEV_", ...)``). A name starting with
+      any of these passes — a workflow that invokes another package's
+      tool legitimately borrows that package's prefix.
+
     ``prefixes`` may be a single string (back-compat) or a tuple of
     accepted prefixes — a name passes if it starts with ANY of them.
-    A 1-based line number is returned so it matches editor / GitHub
-    UI conventions.
     """
     if isinstance(prefixes, str):
         prefixes = (prefixes,)
+    cross_pkg_prefixes = cross_pkg_prefixes or ()
     out: list[tuple[int, str]] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
         for m in _RE_SECRET_REF.finditer(line):
             name = m.group(1)
             if name in exceptions:
                 continue
+            if only_key_like and not _is_key_like(name):
+                continue
             if any(name.startswith(p) for p in prefixes):
+                continue
+            if any(name.startswith(p) for p in cross_pkg_prefixes):
                 continue
             out.append((lineno, name))
     return out
@@ -146,13 +203,16 @@ def check_ps168_secret_env_prefix(
     """
     prefix = _distribution_prefix(distribution)
     prefixes = _distribution_prefixes(distribution)
+    cross_pkg_prefixes = _ecosystem_pkg_prefixes()
     for path in _iter_workflow_files(repo):
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
         rel = str(path.relative_to(repo))
-        for lineno, name in _violations_in_text(text, prefixes):
+        for lineno, name in _violations_in_text(
+            text, prefixes, cross_pkg_prefixes=cross_pkg_prefixes
+        ):
             out.append(
                 violation_cls(
                     "PS-168",

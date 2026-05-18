@@ -90,12 +90,25 @@ PR.
 ## Audit (PS-168)
 
 `PS-168` (severity `E`) scans every `.github/workflows/*.yml` under the
-repo. For each `${{ secrets.<NAME> }}` reference it checks:
+repo. For each `${{ secrets.<NAME> }}` reference it applies four
+filters in order — the rule only fires when ALL of them say "in scope
+AND non-conformant":
 
-1. `<NAME>` is NOT in the exception list above, AND
-2. `<NAME>` does NOT start with the package's `<PKG>_` prefix.
+1. **Key-like only.** `<NAME>` must look like a credential / token —
+   end of name (or word-bounded) `_TOKEN`, `_KEY`, `_SECRET`,
+   `_CREDENTIAL(S)`, `_PASSWORD`, `_PAT`, `_AUTH`, `_OAUTH`. A plain
+   `BUILD_NUMBER` or `DEBUG_FLAG` secret isn't subject to the
+   rotation discipline PS-168 protects and would just be noise.
+2. **Not in the exception list** above (the rotate-all targets +
+   tool-pinned names).
+3. **Doesn't start with the package's own `<PKG>_` prefix.**
+4. **Doesn't start with another ECOSYSTEM package's `<PKG>_` prefix.**
+   Cross-package borrows are legitimate: a workflow that invokes
+   another scitex package's CLI (e.g. `newb`) using its own secret
+   (`NEWB_ANTHROPIC_API_KEY`) is adopting the source package's prefix
+   discipline — it's not free-styling.
 
-When both are true, the auditor reports:
+When all four say "violation", the auditor reports:
 
 ```
 ERRO: <pkg>: [PS-168 §1 secret-env-prefix-missing] <relpath>:<lineno>:
