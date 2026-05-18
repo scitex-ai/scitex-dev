@@ -50,6 +50,9 @@ EXCEPTION_SECRETS: frozenset[str] = frozenset(
         # GitHub Actions runner-debug toggles.
         "ACTIONS_RUNNER_DEBUG",
         "ACTIONS_STEP_DEBUG",
+        # contributor-assistant action's PAT (per-action convention,
+        # shared across repos that opt into the CLA gate).
+        "CLA_PERSONAL_ACCESS_TOKEN",
     }
 )
 
