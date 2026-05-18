@@ -174,20 +174,20 @@ class TestViolationsInText:
         assert result == []
 
     def test_line_number_is_one_based_on_third_line(self) -> None:
-        # Arrange
-        text = "line one\nline two\n${{ secrets.UNPREFIXED }}\n"
+        # Arrange — name must be key-like (TOKEN suffix) to be in scope.
+        text = "line one\nline two\n${{ secrets.UNPREFIXED_TOKEN }}\n"
         # Act
         result = _violations_in_text(text, prefixes="NEWB_")
         # Assert
-        assert result == [(3, "UNPREFIXED")]
+        assert result == [(3, "UNPREFIXED_TOKEN")]
 
     def test_whitespace_inside_interpolation_braces_is_tolerated(self) -> None:
-        # Arrange
-        text = "${{   secrets  .  FOO_BAR  }}\n"
+        # Arrange — name must be key-like (KEY suffix) to be in scope.
+        text = "${{   secrets  .  FOO_API_KEY  }}\n"
         # Act
         result = _violations_in_text(text, prefixes="NEWB_")
         # Assert
-        assert result == [(1, "FOO_BAR")]
+        assert result == [(1, "FOO_API_KEY")]
 
     def test_correctly_prefixed_secret_is_never_flagged(self) -> None:
         # Arrange
@@ -260,7 +260,7 @@ class TestCheckPS168Integration:
             "name: t\non: [push]\njobs:\n  j:\n    runs-on: ubuntu-latest\n"
             "    steps:\n"
             "      - run: echo ${{ secrets.SCITEX_AGENT_CONTAINER_NAS_KEY }}\n"
-            "      - run: echo ${{ secrets.OTHER_UNPREFIXED }}\n"
+            "      - run: echo ${{ secrets.OTHER_UNPREFIXED_TOKEN }}\n"
         )
         _write_workflow(tmp_path, "ci-on-ubuntu.yml", body)
         out: list = []
@@ -278,7 +278,7 @@ class TestCheckPS168Integration:
         body = (
             "name: t\non: [push]\njobs:\n  j:\n    runs-on: ubuntu-latest\n"
             "    steps:\n"
-            "      - run: echo ${{ secrets.OTHER_UNPREFIXED }}\n"
+            "      - run: echo ${{ secrets.OTHER_UNPREFIXED_TOKEN }}\n"
         )
         _write_workflow(tmp_path, "ci-on-ubuntu.yml", body)
         out: list = []
@@ -287,7 +287,7 @@ class TestCheckPS168Integration:
             tmp_path, "scitex-agent-container", _StubViolation, out
         )
         # Assert
-        assert "SCITEX_AGENT_CONTAINER_OTHER_UNPREFIXED" in out[0].detail
+        assert "SCITEX_AGENT_CONTAINER_OTHER_UNPREFIXED_TOKEN" in out[0].detail
 
     def test_single_violation_records_exact_line_number_in_where(
         self, tmp_path: Path
@@ -300,7 +300,7 @@ class TestCheckPS168Integration:
             "  j:\n"
             "    runs-on: ubuntu-latest\n"
             "    steps:\n"
-            "      - run: ${{ secrets.UNPREFIXED }}\n"
+            "      - run: ${{ secrets.UNPREFIXED_TOKEN }}\n"
         )
         _write_workflow(tmp_path, "x-on-ubuntu.yml", body)
         out: list = []
