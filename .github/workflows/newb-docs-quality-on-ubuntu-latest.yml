@@ -44,7 +44,12 @@ jobs:
 
       - name: Run newb (verbose so the log shows per-prompt timing)
         env:
-          NEWB_ANTHROPIC_API_KEY: ${{ secrets.NEWB_ANTHROPIC_API_KEY }}
+          # Read from the prefix-disciplined secret name in this repo
+          # (PS-168), then export under the env-var name `newb` itself
+          # expects (NEWB_ANTHROPIC_API_KEY). The secret's repo-side
+          # name owns the prefix discipline; the env-var the tool reads
+          # stays what the tool documents.
+          NEWB_ANTHROPIC_API_KEY: ${{ secrets.SCITEX_DEV_NEWB_ANTHROPIC_API_KEY }}
           # Resource caps so an attacker who hijacked the docs-reading
           # agent can't DoS via memory/pid exhaustion. Generous enough
           # for pip wheel-building (~1-2 GB transient peak).
@@ -53,7 +58,7 @@ jobs:
           NEWB_HARDEN_CPUS: "2"
         run: |
           if [ -z "${NEWB_ANTHROPIC_API_KEY}" ]; then
-            echo "::error::secrets.NEWB_ANTHROPIC_API_KEY is not set on this repo." >&2
+            echo "::error::secrets.SCITEX_DEV_NEWB_ANTHROPIC_API_KEY is not set on this repo." >&2
             exit 1
           fi
           newb . --json -vv > newb-report.json
