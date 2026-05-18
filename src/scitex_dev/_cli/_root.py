@@ -247,6 +247,13 @@ else:
         """(deprecated) Folds into `audit-project` (LOC-limits). Removed in 0.11.0."""
         raise SystemExit(_cli_quality.audit_lines())
 
+    # Umbrella-only pin freshness audit. Designed to fire from the
+    # umbrella package's CI; on any other package it exits 0, so it's
+    # safe to wire into a shared CI step.
+    from .audit._umbrella_pins import cli as _umbrella_pins_cli
+
+    ecosystem_group.add_command(_umbrella_pins_cli, name="audit-umbrella-pins")
+
     # ----- Deprecation shim: `scitex-dev quality <cmd>` → ecosystem -----
     @main.group("quality", hidden=True)
     def _quality_deprecated():
