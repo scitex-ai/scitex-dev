@@ -204,15 +204,11 @@ _RE_SCITEX_USERS_HINT = re.compile(
 )
 
 
-# PS-120 — standardized "Part of SciTeX" umbrella one-liner. After the
-# PS-115 opener, the section must mention all three: the umbrella install
-# (`pip install scitex[<extra>]`), the Python alias (`scitex.<module>`),
-# and the CLI alias (`scitex <subcommand>`). We check for each token
-# independently inside the section window so wording can vary.
-_RE_UMBRELLA_INSTALL = re.compile(r"pip\s+install\s+scitex\[[^\]]+\]", re.IGNORECASE)
-_RE_UMBRELLA_PYTHON = re.compile(r"`scitex\.[a-zA-Z_]\w*`")
-_RE_UMBRELLA_CLI = re.compile(r"`scitex\s+[a-zA-Z][\w-]*", re.IGNORECASE)
-_PART_OF_UMBRELLA_LOOKAHEAD = 1024
+# PS-120 retired 2026-05-18 — see the section-presence-only check below;
+# the umbrella one-liner content rule (pip install scitex[…] +
+# scitex.<module> + scitex <subcommand> tokens) was too strict and
+# clashed with the `uv pip install` recommendation. PS-116 already
+# guards the section's existence.
 
 
 # PS-123 — `Full X` link must deep-link, not bare RTD root.
@@ -257,50 +253,6 @@ def _readme_is_substantive(readme: Path) -> bool:
         return readme.stat().st_size >= _MIN_README_BYTES
     except OSError:
         return False
-
-
-def _has_console_script(repo: Path) -> bool:
-    """True iff the package's pyproject.toml registers any
-    ``[project.scripts]`` entry. Used to skip PS-120's ``scitex <subcommand>``
-    CLI-token requirement on library-only packages — demanding a CLI alias
-    when no CLI exists would force a misleading lint-satisfaction edit.
-    """
-    pyproj = repo / "pyproject.toml"
-    if not pyproj.is_file():
-        return False
-    try:
-        try:
-            import tomllib
-        except ImportError:
-            import tomli as tomllib  # type: ignore[no-redef]
-        data = tomllib.loads(pyproj.read_text(encoding="utf-8"))
-    except Exception:
-        return False
-    scripts = (data.get("project") or {}).get("scripts") or {}
-    return bool(scripts)
-
-
-def _is_external_lib_repo(repo: Path) -> bool:
-    """True iff ``repo``'s absolute path matches an ECOSYSTEM entry whose
-    category is ``external-lib`` (figrecipe, socialia, newb,
-    crossref-local, openalex-local, …) — packages that intentionally
-    sit outside the ``scitex.<module>`` umbrella and so shouldn't be
-    held to PS-120's umbrella one-liner.
-    """
-    try:
-        from scitex_dev._ecosystem._core import ECOSYSTEM
-    except Exception:
-        return False
-    target = str(Path(repo).expanduser().resolve())
-    for info in ECOSYSTEM.values():
-        if info.get("category") != "external-lib":
-            continue
-        local = info.get("local_path")
-        if not local:
-            continue
-        if str(Path(local).expanduser().resolve()) == target:
-            return True
-    return False
 
 
 def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
@@ -614,37 +566,10 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
             )
         )
 
-    # PS-120 — standardized 'Part of SciTeX' umbrella one-liner. Within the
-    # ~1 KB after `## Part of SciTeX`, expect all three tokens:
-    #   - `pip install scitex[<extra>]`
-    #   - a `scitex.<module>` Python alias in backticks
-    #   - a `scitex <subcommand>` CLI alias in backticks
-    #
-    # Skip for `external-lib` category packages (figrecipe, socialia,
-    # newb, crossref-local, openalex-local, …) — they intentionally
-    # don't fold under the `scitex.<module>` umbrella; demanding the
-    # tokens produces false positives. Built-in `library` and `umbrella`
-    # entries still get checked.
-    if pos_part is not None and not _is_external_lib_repo(repo):
-        window = full[pos_part.end() : pos_part.end() + _PART_OF_UMBRELLA_LOOKAHEAD]
-        missing_bits: list[str] = []
-        if not _RE_UMBRELLA_INSTALL.search(window):
-            missing_bits.append("`pip install scitex[<extra>]`")
-        if not _RE_UMBRELLA_PYTHON.search(window):
-            missing_bits.append("`scitex.<module>`")
-        if not _RE_UMBRELLA_CLI.search(window) and _has_console_script(repo):
-            missing_bits.append("`scitex <subcommand>`")
-        if missing_bits:
-            out.append(
-                violation_cls(
-                    "PS-120",
-                    str(readme),
-                    (
-                        "README.md '## Part of SciTeX' is missing the "
-                        "standardized umbrella one-liner — needs: "
-                        + ", ".join(missing_bits)
-                        + ". See _skills/general/04_docs_01_readme.md "
-                        "for the canonical sentence."
-                    ),
-                )
-            )
+    # PS-120 — retired 2026-05-18 (was: standardized "Part of SciTeX"
+    # umbrella one-liner). Section existence is already covered by
+    # PS-116; demanding three specific tokens (`pip install scitex[…]`,
+    # `scitex.<module>`, `scitex <subcommand>`) inside the section was
+    # too strict and forced `pip install` wording even where the
+    # ecosystem rule is to recommend `uv pip`. The user retired the
+    # rule; the section-presence check above is the canonical guard.
