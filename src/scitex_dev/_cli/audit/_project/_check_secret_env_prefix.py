@@ -60,15 +60,41 @@ EXCEPTION_SECRETS: frozenset[str] = frozenset(
 _RE_SECRET_REF = re.compile(r"\$\{\{\s*secrets\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
 
 
+# Per-package prefix aliases. Some distributions have a long canonical
+# name plus a short historical alias. Both are accepted so operators
+# don't have to rename battle-tested secrets that already follow the
+# short form. Add entries here ONLY for distributions whose alias is
+# in widespread, documented use (not freshly invented short names).
+_PREFIX_ALIASES: dict[str, tuple[str, ...]] = {
+    # scitex-agent-container ↔ SAC_. `sac` is the CLI executable name,
+    # documented in every spec.yaml and dotfiles config; SAC_* secrets
+    # predate the longer SCITEX_AGENT_CONTAINER_* form.
+    "scitex-agent-container": ("SAC_",),
+}
+
+
+def _distribution_prefixes(distribution: str) -> tuple[str, ...]:
+    """Return all valid per-package prefixes for ``distribution``.
+
+    The first entry is the canonical form (distribution uppercased +
+    hyphens → underscores + ``_``). Any aliases registered in
+    ``_PREFIX_ALIASES`` follow. A secret name matching ANY of the
+    returned prefixes satisfies PS-168.
+    """
+    canonical = distribution.upper().replace("-", "_") + "_"
+    aliases = _PREFIX_ALIASES.get(distribution, ())
+    return (canonical, *aliases)
+
+
 def _distribution_prefix(distribution: str) -> str:
     """Return the canonical per-package prefix (e.g. `NEWB_`).
 
-    The package distribution name (``pyproject.toml [project].name``)
-    is uppercased and hyphens are replaced with underscores. A trailing
-    underscore separator is appended so the resulting string is a
-    direct ``startswith`` check.
+    Convenience wrapper retained for the violation message (we report
+    the canonical form to the operator even when an alias would also
+    have passed — guides toward consistency without erroring on the
+    accepted alias form).
     """
-    return distribution.upper().replace("-", "_") + "_"
+    return _distribution_prefixes(distribution)[0]
 
 
 def _iter_workflow_files(repo: Path) -> Iterable[Path]:
@@ -82,22 +108,25 @@ def _iter_workflow_files(repo: Path) -> Iterable[Path]:
 
 def _violations_in_text(
     text: str,
-    prefix: str,
+    prefixes: tuple[str, ...] | str,
     exceptions: frozenset[str] = EXCEPTION_SECRETS,
 ) -> list[tuple[int, str]]:
     """Return (line_number, secret_name) pairs that violate PS-168.
 
-    A 1-based line number is returned so it matches editor / GitHub UI
-    conventions. Splitting on ``\\n`` and scanning each line keeps the
-    line numbers honest in the face of multi-line YAML scalars.
+    ``prefixes`` may be a single string (back-compat) or a tuple of
+    accepted prefixes — a name passes if it starts with ANY of them.
+    A 1-based line number is returned so it matches editor / GitHub
+    UI conventions.
     """
+    if isinstance(prefixes, str):
+        prefixes = (prefixes,)
     out: list[tuple[int, str]] = []
     for lineno, line in enumerate(text.splitlines(), start=1):
         for m in _RE_SECRET_REF.finditer(line):
             name = m.group(1)
             if name in exceptions:
                 continue
-            if name.startswith(prefix):
+            if any(name.startswith(p) for p in prefixes):
                 continue
             out.append((lineno, name))
     return out
@@ -116,13 +145,14 @@ def check_ps168_secret_env_prefix(
     output composes with editor jump-to-line tooling.
     """
     prefix = _distribution_prefix(distribution)
+    prefixes = _distribution_prefixes(distribution)
     for path in _iter_workflow_files(repo):
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
         rel = str(path.relative_to(repo))
-        for lineno, name in _violations_in_text(text, prefix):
+        for lineno, name in _violations_in_text(text, prefixes):
             out.append(
                 violation_cls(
                     "PS-168",

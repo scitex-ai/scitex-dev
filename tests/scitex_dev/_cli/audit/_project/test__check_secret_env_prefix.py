@@ -126,7 +126,7 @@ class TestViolationsInText:
         # Arrange
         text = _CLEAN_WORKFLOW
         # Act
-        result = _violations_in_text(text, prefix="NEWB_")
+        result = _violations_in_text(text, prefixes="NEWB_")
         # Assert
         assert result == []
 
@@ -134,7 +134,7 @@ class TestViolationsInText:
         # Arrange
         text = _VIOLATING_WORKFLOW
         # Act
-        result = _violations_in_text(text, prefix="NEWB_")
+        result = _violations_in_text(text, prefixes="NEWB_")
         # Assert
         assert len(result) == 2
 
@@ -142,7 +142,7 @@ class TestViolationsInText:
         # Arrange
         text = _VIOLATING_WORKFLOW
         # Act
-        result = _violations_in_text(text, prefix="NEWB_")
+        result = _violations_in_text(text, prefixes="NEWB_")
         # Assert
         assert "CLAUDE_CREDENTIALS_JSON" in {name for _, name in result}
 
@@ -150,7 +150,7 @@ class TestViolationsInText:
         # Arrange
         text = _VIOLATING_WORKFLOW
         # Act
-        result = _violations_in_text(text, prefix="NEWB_")
+        result = _violations_in_text(text, prefixes="NEWB_")
         # Assert
         assert "MY_API_KEY" in {name for _, name in result}
 
@@ -160,7 +160,7 @@ class TestViolationsInText:
         # Arrange
         text = _MIXED_WORKFLOW
         # Act
-        result = _violations_in_text(text, prefix="NEWB_")
+        result = _violations_in_text(text, prefixes="NEWB_")
         # Assert
         assert [name for _, name in result] == ["OPENAI_KEY"]
 
@@ -169,7 +169,7 @@ class TestViolationsInText:
         body_lines = [f"echo '${{{{ secrets.{name} }}}}'" for name in EXCEPTION_SECRETS]
         text = "\n".join(body_lines) + "\n"
         # Act
-        result = _violations_in_text(text, prefix="UNRELATED_PKG_")
+        result = _violations_in_text(text, prefixes="UNRELATED_PKG_")
         # Assert
         assert result == []
 
@@ -177,7 +177,7 @@ class TestViolationsInText:
         # Arrange
         text = "line one\nline two\n${{ secrets.UNPREFIXED }}\n"
         # Act
-        result = _violations_in_text(text, prefix="NEWB_")
+        result = _violations_in_text(text, prefixes="NEWB_")
         # Assert
         assert result == [(3, "UNPREFIXED")]
 
@@ -185,7 +185,7 @@ class TestViolationsInText:
         # Arrange
         text = "${{   secrets  .  FOO_BAR  }}\n"
         # Act
-        result = _violations_in_text(text, prefix="NEWB_")
+        result = _violations_in_text(text, prefixes="NEWB_")
         # Assert
         assert result == [(1, "FOO_BAR")]
 
@@ -193,7 +193,7 @@ class TestViolationsInText:
         # Arrange
         text = "env:\n  X: ${{ secrets.NEWB_SOMETHING }}\n"
         # Act
-        result = _violations_in_text(text, prefix="NEWB_")
+        result = _violations_in_text(text, prefixes="NEWB_")
         # Assert
         assert result == []
 
