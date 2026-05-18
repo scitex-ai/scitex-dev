@@ -1,0 +1,139 @@
+"""PS-168 — Per-package secret + env-var prefix in GitHub Actions workflows.
+
+Spec: ``_skills/general/02_package_14_workflow-secret-env-prefix.md``.
+
+Every ``${{ secrets.<NAME> }}`` reference under ``.github/workflows/*.yml``
+must either:
+
+1. Begin with the package's ``<PKG>_`` prefix (distribution name
+   uppercased, hyphens → underscores), OR
+2. Appear in the small exception list of cross-cutting / tool-pinned
+   names (``CLAUDE_CODE_CREDENTIALS_JSON``, ``GH_TOKEN``,
+   ``CODECOV_TOKEN``, ``GHCR_PAT``, ``GITHUB_TOKEN``, ``NPM_TOKEN``,
+   ``PYPI_API_TOKEN``, plus the GitHub-Actions debug toggles).
+
+Rationale: ``scitex-dev creds rotate-all`` rotates the cross-cutting
+names ecosystem-wide; per-package secrets that picked the same surface
+name (e.g. ``CLAUDE_CREDENTIALS_JSON`` in `newb`) were silently skipped
+by rotate-all and went stale. The prefix discipline makes the two sets
+disjoint by construction.
+
+Detection: a simple regex over the workflow text — not a full YAML
+parse — because GitHub Actions interpolation syntax ``${{ secrets.X }}``
+appears in any context (string value, multiline scalar, …) and the
+regex is robust to indentation while a YAML parser would have to
+re-walk every node. We also scan ``env:`` blocks for an analogous
+``env.<NAME>`` reference (rare; the secret-ref path is canonical).
+"""
+
+from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Any, Iterable
+
+# Cross-cutting / tool-pinned names that legitimately exist without a
+# per-package prefix. Keep this list in lockstep with the skill leaf
+# (02_package_14_workflow-secret-env-prefix.md §Exception list).
+EXCEPTION_SECRETS: frozenset[str] = frozenset(
+    {
+        # Rotate-all ecosystem-wide credential.
+        "CLAUDE_CODE_CREDENTIALS_JSON",
+        # Tool-pinned (gh CLI, GitHub Actions itself).
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        # Third-party-pinned service tokens.
+        "CODECOV_TOKEN",
+        "GHCR_PAT",
+        "NPM_TOKEN",
+        "PYPI_API_TOKEN",
+        # GitHub Actions runner-debug toggles.
+        "ACTIONS_RUNNER_DEBUG",
+        "ACTIONS_STEP_DEBUG",
+    }
+)
+
+# Match `${{ secrets.<NAME> }}` (and the analogous env. form) tolerating
+# whitespace around the dot and the closing braces. NAME is captured.
+# Anchored to `secrets.` / `env.` so a bare `${{ matrix.X }}` etc. is
+# never matched.
+_RE_SECRET_REF = re.compile(r"\$\{\{\s*secrets\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}")
+
+
+def _distribution_prefix(distribution: str) -> str:
+    """Return the canonical per-package prefix (e.g. `NEWB_`).
+
+    The package distribution name (``pyproject.toml [project].name``)
+    is uppercased and hyphens are replaced with underscores. A trailing
+    underscore separator is appended so the resulting string is a
+    direct ``startswith`` check.
+    """
+    return distribution.upper().replace("-", "_") + "_"
+
+
+def _iter_workflow_files(repo: Path) -> Iterable[Path]:
+    wf_dir = repo / ".github" / "workflows"
+    if not wf_dir.is_dir():
+        return []
+    return sorted(
+        p for p in wf_dir.iterdir() if p.is_file() and p.suffix in {".yml", ".yaml"}
+    )
+
+
+def _violations_in_text(
+    text: str,
+    prefix: str,
+    exceptions: frozenset[str] = EXCEPTION_SECRETS,
+) -> list[tuple[int, str]]:
+    """Return (line_number, secret_name) pairs that violate PS-168.
+
+    A 1-based line number is returned so it matches editor / GitHub UI
+    conventions. Splitting on ``\\n`` and scanning each line keeps the
+    line numbers honest in the face of multi-line YAML scalars.
+    """
+    out: list[tuple[int, str]] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        for m in _RE_SECRET_REF.finditer(line):
+            name = m.group(1)
+            if name in exceptions:
+                continue
+            if name.startswith(prefix):
+                continue
+            out.append((lineno, name))
+    return out
+
+
+def check_ps168_secret_env_prefix(
+    repo: Path,
+    distribution: str,
+    violation_cls: type,
+    out: list[Any],
+) -> None:
+    """Append PS-168 violations for `.github/workflows/`.
+
+    One violation per offending ``secrets.<NAME>`` reference, with the
+    workflow path + 1-based line number in the ``where`` field so the
+    output composes with editor jump-to-line tooling.
+    """
+    prefix = _distribution_prefix(distribution)
+    for path in _iter_workflow_files(repo):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        rel = str(path.relative_to(repo))
+        for lineno, name in _violations_in_text(text, prefix):
+            out.append(
+                violation_cls(
+                    "PS-168",
+                    f"{rel}:{lineno}",
+                    (
+                        f'secret name "{name}" should be prefixed '
+                        f'"{prefix}{name}" (per-package secrets in '
+                        f"`.github/workflows/` must carry the "
+                        f"`{prefix}` prefix; cross-cutting names "
+                        f"are allow-listed — see "
+                        f"_skills/general/02_package_14_workflow-secret-env-prefix.md)."
+                    ),
+                )
+            )

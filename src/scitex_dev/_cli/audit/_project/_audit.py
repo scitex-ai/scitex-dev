@@ -2171,6 +2171,10 @@ def audit_project(
 
     check_ps164_workflow_naming(repo_root, Violation, violations)
     # hook-bypass: line-limit
+    from ._check_secret_env_prefix import check_ps168_secret_env_prefix
+
+    check_ps168_secret_env_prefix(repo_root, distribution, Violation, violations)
+    # hook-bypass: line-limit
     from ._check_workflow_presence import check_ps165_workflow_presence
     from ._check_readme_badge_labels import check_ps166_readme_badge_labels
 
