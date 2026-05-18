@@ -218,12 +218,17 @@ def test_run_once_all_green_returns_no_red_result():
 
 
 def test_run_once_red_repo_dispatches_when_not_dry_run():
-    # Arrange
+    # Arrange — sac_runner sees `db query` (busy-probe, returns empty
+    # row so dispatch proceeds) AND `agents send` (the real dispatch).
     gh = _gh_runner_for(_GH_JSON_FIXTURE)
     sac_calls: list = []
 
     def sac(args, *, input_text=""):
         sac_calls.append(args)
+        # db query returns an empty JSON list → busy probe sees no
+        # active row → falls through (no probe possible, treat as not-busy).
+        if args and args[0] == "db":
+            return _FakeCompletedProcess(returncode=0, stdout="[]")
         return _FakeCompletedProcess(returncode=0, stdout="ok")
 
     out = io.StringIO()
@@ -235,8 +240,10 @@ def test_run_once_red_repo_dispatches_when_not_dry_run():
         sac_runner=sac,
         out=out,
     )
-    # Assert
-    assert len(sac_calls) == 1
+    # Assert — exactly one `agents send` call dispatched (db query is
+    # the busy-probe; this assertion targets the dispatch surface).
+    send_calls = [c for c in sac_calls if c and c[0] == "agents" and c[1] == "send"]
+    assert len(send_calls) == 1
 
 
 def test_run_once_dispatches_to_named_agent():
@@ -246,6 +253,8 @@ def test_run_once_dispatches_to_named_agent():
 
     def sac(args, *, input_text=""):
         sac_calls.append(args)
+        if args and args[0] == "db":
+            return _FakeCompletedProcess(returncode=0, stdout="[]")
         return _FakeCompletedProcess(returncode=0, stdout="ok")
 
     out = io.StringIO()
@@ -258,7 +267,8 @@ def test_run_once_dispatches_to_named_agent():
         out=out,
     )
     # Assert
-    assert sac_calls[0][:3] == ["agents", "send", "agent-x"]
+    send_calls = [c for c in sac_calls if c and c[0] == "agents" and c[1] == "send"]
+    assert send_calls[0][:3] == ["agents", "send", "agent-x"]
 
 
 def test_run_once_only_agent_filters_other_agents():
@@ -292,4 +302,118 @@ def test_run_once_records_error_when_gh_fails():
     assert results[0].error is not None
 
 
+# ---------------------------------------------------------------------------
+# _is_agent_busy — fail-open semantics against the sac /_active endpoint
+# ---------------------------------------------------------------------------
+
+
+def _http_runner_returning(status: int, body: bytes):
+    """Return a fake HTTP runner that always replies with (status, body)."""
+
+    def _runner(url: str, timeout: float) -> tuple[int, bytes]:
+        return status, body
+
+    return _runner
+
+
+def _http_runner_raising(exc: Exception):
+    def _runner(url: str, timeout: float) -> tuple[int, bytes]:
+        raise exc
+
+    return _runner
+
+
+def test_is_agent_busy_returns_true_when_tasks_list_non_empty():
+    # Arrange
+    runner = _http_runner_returning(200, b'{"tasks":[{"id":"t1","state":"running"}]}')
+    # Act
+    busy = _ci_watch._is_agent_busy("h", 1234, "a", http_runner=runner)
+    # Assert
+    assert busy is True
+
+
+def test_is_agent_busy_returns_false_when_tasks_list_empty():
+    # Arrange
+    runner = _http_runner_returning(200, b'{"tasks":[]}')
+    # Act
+    busy = _ci_watch._is_agent_busy("h", 1234, "a", http_runner=runner)
+    # Assert
+    assert busy is False
+
+
+def test_is_agent_busy_fails_open_on_404_response():
+    # Arrange
+    runner = _http_runner_returning(404, b'{"error":"unknown agent"}')
+    # Act
+    busy = _ci_watch._is_agent_busy("h", 1234, "a", http_runner=runner)
+    # Assert
+    assert busy is False
+
+
+def test_is_agent_busy_fails_open_on_runner_exception():
+    # Arrange
+    runner = _http_runner_raising(TimeoutError("probe timeout"))
+    # Act
+    busy = _ci_watch._is_agent_busy("h", 1234, "a", http_runner=runner)
+    # Assert
+    assert busy is False
+
+
+def test_is_agent_busy_fails_open_on_non_json_body():
+    # Arrange
+    runner = _http_runner_returning(200, b"not json")
+    # Act
+    busy = _ci_watch._is_agent_busy("h", 1234, "a", http_runner=runner)
+    # Assert
+    assert busy is False
+
+
+def test_is_agent_busy_fails_open_when_tasks_key_missing():
+    # Arrange
+    runner = _http_runner_returning(200, b'{"other":"shape"}')
+    # Act
+    busy = _ci_watch._is_agent_busy("h", 1234, "a", http_runner=runner)
+    # Assert
+    assert busy is False
+
+
 # EOF
+def test_run_once_skips_dispatch_when_agent_busy():
+    """When the busy-probe sees active tasks, sac agents send is NOT called."""
+    # Arrange
+    gh = _gh_runner_for(_GH_JSON_FIXTURE)
+    sac_calls: list = []
+
+    def sac(args, *, input_text=""):
+        sac_calls.append(args)
+        # db query returns a live row → busy probe gets a (host, port).
+        if args and args[0] == "db":
+            return _FakeCompletedProcess(
+                returncode=0,
+                stdout='[{"host":"h","a2a_port":12345}]',
+            )
+        return _FakeCompletedProcess(returncode=0, stdout="ok")
+
+    # HTTP probe returns a non-empty tasks list → busy → must skip.
+    busy_http = _http_runner_returning(
+        200, b'{"tasks":[{"id":"t1","state":"running"}]}'
+    )
+
+    # Swap the module-level default http runner so _is_agent_busy uses it.
+    saved = _ci_watch._default_http_runner
+    _ci_watch._default_http_runner = busy_http  # type: ignore[assignment]
+    try:
+        out = io.StringIO()
+        # Act
+        _ci_watch.run_once(
+            agents_to_repos={"agent-x": "owner/repo"},
+            dry_run=False,
+            gh_runner=gh,
+            sac_runner=sac,
+            out=out,
+        )
+    finally:
+        _ci_watch._default_http_runner = saved  # type: ignore[assignment]
+    # Assert — busy was detected, dispatch was skipped (only db query happened).
+    send_calls = [c for c in sac_calls if c and c[0] == "agents" and c[1] == "send"]
+    assert send_calls == []
