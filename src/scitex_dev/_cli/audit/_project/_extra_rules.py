@@ -9,6 +9,7 @@ Today's contents:
 - PS-165 — workflow-presence (per category)
 - PS-166 — readme-badge-label-mismatch
 - PS-167 — readme-badge-layout
+- PS-168 — workflow-secret-env-prefix-missing
 
 When `_audit.py` is split per-rule (see GITIGNORED/REFACTORING.md), this
 sidecar can be removed and each rule co-located with its check module.
@@ -71,5 +72,23 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "W",
         "readme-badge-layout",
+    ),
+    (
+        "PS-168",
+        "§1",
+        (
+            "GitHub Actions workflow references a `${{ secrets.<NAME> }}` "
+            "or `${{ env.<NAME> }}` whose <NAME> is per-project but does "
+            "not carry the package's `<PKG>_` prefix (and is not in the "
+            "cross-cutting exception list — CLAUDE_CODE_CREDENTIALS_JSON, "
+            "GH_TOKEN, CODECOV_TOKEN, GHCR_PAT, GITHUB_TOKEN, NPM_TOKEN, "
+            "PYPI_API_TOKEN, ACTIONS_*_DEBUG). Without the prefix, "
+            "`scitex-dev creds rotate-all` cannot distinguish the secret "
+            "from the ecosystem-wide rotate target and silently skips it. "
+            "Rename via `gh secret set <PKG>_<NAME>` + workflow `sed`. See "
+            "_skills/general/02_package_14_workflow-secret-env-prefix.md."
+        ),
+        "E",
+        "secret-env-prefix-missing",
     ),
 ]
