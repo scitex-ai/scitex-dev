@@ -222,17 +222,11 @@ RULES: dict[str, Rule] = {
                 "(extras like `pip install scitex[ssh]` drift)."
             ),
         ),
-        Rule(
-            "PS-120",
-            "§1",
-            (
-                "README.md `## Part of SciTeX` section is missing the "
-                "standardized umbrella one-liner. After the `is part of "
-                "[SciTeX]` opener, mention `pip install scitex[<extra>]` "
-                "AND `scitex.<module>` AND `scitex <subcommand>` so users "
-                "see how the package fits the umbrella."
-            ),
-        ),
+        # PS-120 retired 2026-05-18 — the umbrella one-liner content
+        # check (pip install scitex[…] + scitex.<module> + scitex <subcmd>
+        # tokens) was too strict and clashed with the `uv pip install`
+        # recommendation. PS-116 already guards `## Part of SciTeX`
+        # section presence; that's sufficient for the surface contract.
         Rule(
             "PS-121",
             "§1",
@@ -1007,7 +1001,7 @@ _SEVERITY_OVERRIDES: dict[str, str] = {
     "PS-117": "E",
     "PS-118": "E",
     "PS-119": "E",
-    "PS-120": "E",
+    # PS-120 retired 2026-05-18 (umbrella one-liner content rule).
     "PS-123": "E",
     "PS-129": "E",
     "PS-130": "E",
@@ -1103,7 +1097,7 @@ _SLUGS: dict[str, str] = {
     "PS-117": "readme-missing-quickstart",
     "PS-118": "readme-missing-installation",
     "PS-119": "readme-missing-part-of-scitex",
-    "PS-120": "readme-cli-help-out-of-sync",
+    # PS-120 retired 2026-05-18.
     "PS-123": "readme-banned-future-claim",
     "PS-129": "readme-banned-trademark-symbol",
     "PS-130": "readme-missing-related-projects",
@@ -2170,6 +2164,10 @@ def audit_project(
     from ._check_workflows_naming import check_ps164_workflow_naming
 
     check_ps164_workflow_naming(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    from ._check_secret_env_prefix import check_ps168_secret_env_prefix
+
+    check_ps168_secret_env_prefix(repo_root, distribution, Violation, violations)
     # hook-bypass: line-limit
     from ._check_workflow_presence import check_ps165_workflow_presence
     from ._check_readme_badge_labels import check_ps166_readme_badge_labels

@@ -96,6 +96,18 @@ class PackageState:
     def to_dict(self) -> dict:
         return asdict(self)
 
+    @classmethod
+    def from_dict(cls, d: dict) -> "PackageState":
+        """Rebuild a state from a `to_dict()` payload.
+
+        Unknown keys are dropped silently so payloads emitted by a
+        newer/older scitex-dev still load.
+        """
+        from dataclasses import fields as _fields
+
+        names = {f.name for f in _fields(cls)}
+        return cls(**{k: v for k, v in d.items() if k in names})
+
 
 def _git(repo: Path, *args: str, default: str = "") -> str:
     try:
@@ -490,19 +502,22 @@ def _parse_coverage_xml(cov_xml: Path) -> float | None:
 
 
 def _enrich_coverage(state: "PackageState") -> None:
-    """Cheap coverage enricher — reads local coverage.xml + cache.
+    """Cheap coverage enricher — local coverage.xml + cache + Codecov.
 
     Cascade (fastest first):
       1. <repo>/coverage.xml or <repo>/.coverage.xml exists → parse +
          cache the line-rate. Wins on freshness when pytest just ran.
       2. Coverage cache hit (keyed by git HEAD SHA) → use cached value.
          Survives dashboard refreshes without re-running anything.
-      3. Cache miss + no XML → leave state.coverage at -1 ("N/C").
-         The heavy `--with-tests run` path will populate the cache on
-         its next invocation.
+      3. Codecov public JSON API → fetch latest branch coverage from
+         the package's published CI uploads. Cached locally so we hit
+         the network at most once per HEAD-SHA.
+      4. Still nothing → leave state.coverage at -1 ("N/C").
 
     Dirty trees are never cached (per `_coverage_cache.target_fingerprint`).
-    Cost: O(1) stat + cache file read per pkg; ~µs in the common case.
+    Cost: steps 1+2 are O(1) file stats; step 3 is one HTTPS GET per
+    pkg with a 5 s timeout, parallelised by the dashboard's thread
+    pool. The result is cached so subsequent dashboards skip the GET.
     """
     repo = Path(state.local_path)
     if not repo.is_dir():
@@ -534,6 +549,90 @@ def _enrich_coverage(state: "PackageState") -> None:
     cached = _coverage_cache.load(state.pkg, target_fp=fp)
     if cached is not None:
         state.coverage = cached
+        return
+
+    # 3. Codecov fallback. The package's CI uploads coverage.xml on
+    # every test run; the API serves the latest commit's totals.
+    rate = _fetch_codecov_rate(state.pkg, repo)
+    if rate is not None:
+        state.coverage = rate
+        if fp is not None:
+            _coverage_cache.save(
+                state.pkg,
+                target_fp=fp,
+                coverage=rate,
+                source="codecov",
+            )
+
+
+def _fetch_codecov_rate(pkg: str, repo: Path) -> float | None:
+    """Fetch latest branch coverage from Codecov's public API.
+
+    Returns a float in ``[0, 1]`` on success, ``None`` on any failure
+    (network, 404, parse error). Public API needs no auth for public
+    repos. Service URL pattern:
+      https://codecov.io/api/v2/github/<owner>/repos/<pkg>/branches/<branch>
+    """
+    import json as _json
+    import urllib.request as _urlreq
+
+    owner = _git_owner(repo)
+    branch = _git_current_branch(repo) or "develop"
+    if not owner:
+        return None
+    url = f"https://codecov.io/api/v2/github/{owner}/repos/{pkg}/branches/{branch}"
+    req = _urlreq.Request(url, headers={"Accept": "application/json"})
+    try:
+        with _urlreq.urlopen(req, timeout=5) as resp:
+            if resp.status != 200:
+                return None
+            raw = resp.read().decode("utf-8", errors="replace")
+        # Codecov occasionally embeds raw control chars (commit messages)
+        # that strict json rejects — sanitize C0 controls before parsing.
+        raw = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", raw)
+        data = _json.loads(raw)
+    except Exception:
+        return None
+    # Codecov payload shape: {..., "head_commit": {"totals": {"coverage": <0-100>}}}
+    totals = (data.get("head_commit") or {}).get("totals") or {}
+    cov = totals.get("coverage")
+    if cov is None:
+        return None
+    try:
+        return float(cov) / 100.0
+    except (TypeError, ValueError):
+        return None
+
+
+def _git_owner(repo: Path) -> str | None:
+    """Parse `origin`'s GitHub owner from .git/config."""
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo), "config", "--get", "remote.origin.url"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    url = (proc.stdout or "").strip()
+    # git@github.com:<owner>/<repo>.git or https://github.com/<owner>/<repo>.git
+    m = re.search(r"github\.com[:/]([^/]+)/[^/]+?(?:\.git)?$", url)
+    return m.group(1) if m else None
+
+
+def _git_current_branch(repo: Path) -> str | None:
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo), "branch", "--show-current"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    branch = (proc.stdout or "").strip()
+    return branch or None
 
 
 def _enrich_audit_bulk(

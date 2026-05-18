@@ -10,6 +10,9 @@ nouns:
   # Short form of "credentials" — used in `scitex-dev creds <verb>` for
   # the ecosystem-wide CLAUDE_CODE_CREDENTIALS_JSON rotation.
   - creds
+  # The crontab-managed scheduled-job surface — `scitex-dev cron <verb>`
+  # (list / install / remove / status / run).
+  - cron
 
 transitive_verbs: []
 intransitive_verbs: []
