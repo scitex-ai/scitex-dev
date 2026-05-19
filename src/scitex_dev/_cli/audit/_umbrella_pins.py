@@ -99,7 +99,14 @@ def audit_umbrella_pins(repo: Path) -> list[str]:
     return violations
 
 
-@click.command("audit-umbrella-pins")
+@click.command(
+    "audit-umbrella-pins",
+    epilog=(
+        "Example:\n"
+        "  $ scitex-dev ecosystem audit-umbrella-pins .\n"
+        "  $ scitex-dev ecosystem audit-umbrella-pins /home/me/proj/scitex-python --allow-network-error\n"
+    ),
+)
 @click.argument(
     "path",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
@@ -111,7 +118,11 @@ def audit_umbrella_pins(repo: Path) -> list[str]:
     help="Treat PyPI lookup failures as warnings, not errors (exit 0).",
 )
 def cli(path: Path, allow_network_error: bool) -> None:
-    """Audit umbrella pin freshness vs PyPI latest."""
+    """Audit umbrella pin freshness vs PyPI latest.
+
+    Example:
+        $ scitex-dev ecosystem audit-umbrella-pins .
+    """
     violations = audit_umbrella_pins(path)
     if not violations:
         click.echo(f"SUCC: {path}/pyproject.toml: all umbrella pins fresh")
