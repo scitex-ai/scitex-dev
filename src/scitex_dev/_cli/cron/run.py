@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import click
 
-from . import _ci_watch
+from . import _ci_watch, _quota_keepalive
 from ._jobs import JOB_REGISTRY
 
 
@@ -67,6 +67,15 @@ def register(group: click.Group) -> None:
                 # Don't crash the cron loop on a transient gh hiccup —
                 # just exit non-zero so the log records the failure.
                 raise SystemExit(1)
+            return
+
+        if name == "quota-keepalive":
+            # Self-gating keepalive — fires only when the 2.5-hour interval
+            # has elapsed (see _quota_keepalive.run_once). A keepalive miss
+            # is recoverable (the next 30-min tick retries), so we always
+            # exit 0 here: the log records any error but the cron loop must
+            # not be marked failed for a transient `claude` hiccup.
+            _quota_keepalive.run_once()
             return
 
         # Defensive — registry has an entry but no handler. Reaching here
