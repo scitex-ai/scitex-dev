@@ -2151,6 +2151,10 @@ def audit_project(
     from ._check_dev_extras_complete import check_dev_extras_complete
 
     check_dev_extras_complete(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    from ._check_optional_deps_guarded import check_ps148_optional_deps_guarded
+
+    check_ps148_optional_deps_guarded(repo_root, distribution, Violation, violations)
     from ._check_umbrella_dep_and_integration import (
         check_ps139_umbrella_dep,
         check_ps140_integration_gate,

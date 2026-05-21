@@ -6,6 +6,7 @@ land here and are merged at import time. Each entry is the same shape
 
 Today's contents:
 
+- PS-148 — optional-dep-unguarded-in-src (source-side mirror of PS-210)
 - PS-165 — workflow-presence (per category)
 - PS-166 — readme-badge-label-mismatch
 - PS-167 — readme-badge-layout
@@ -90,5 +91,26 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "E",
         "secret-env-prefix-missing",
+    ),
+    (
+        "PS-148",
+        "§3",
+        (
+            "a lib declared under `[project.optional-dependencies]` is "
+            "imported UNGUARDED at module top of `src/`. A fresh "
+            "`pip install <peer>` (no extras) then `import <peer>` would "
+            "raise ModuleNotFoundError even though the package builds and "
+            "its own test suite passes (the dev venv has the extra). Guard "
+            "each import with `try_import_optional(..., extra=<extra>, "
+            "pkg=<peer>)` (canonical) or a `try/except ImportError` block. "
+            "Source-side mirror of the test-side PS-210. Severity W during "
+            "ecosystem adoption (22 peers / ~1000 sites flagged at launch; "
+            "promote to E once the heavy-dep leaks are guarded). See "
+            "_skills/general/03_interface_01_python-api/"
+            "04_lazy-imports-and-optional-deps.md and "
+            "01_ecosystem_02_dependency-and-version-pinning.md."
+        ),
+        "W",
+        "optional-dep-unguarded-in-src",
     ),
 ]
