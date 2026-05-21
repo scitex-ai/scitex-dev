@@ -103,11 +103,14 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "its own test suite passes (the dev venv has the extra). Guard "
             "each import with `try_import_optional(..., extra=<extra>, "
             "pkg=<peer>)` (canonical) or a `try/except ImportError` block. "
-            "Source-side mirror of the test-side PS-210. See _skills/general/"
-            "03_interface_01_python-api/04_lazy-imports-and-optional-deps.md "
-            "and 01_ecosystem_02_dependency-and-version-pinning.md."
+            "Source-side mirror of the test-side PS-210. Severity W during "
+            "ecosystem adoption (22 peers / ~1000 sites flagged at launch; "
+            "promote to E once the heavy-dep leaks are guarded). See "
+            "_skills/general/03_interface_01_python-api/"
+            "04_lazy-imports-and-optional-deps.md and "
+            "01_ecosystem_02_dependency-and-version-pinning.md."
         ),
-        "E",
+        "W",
         "optional-dep-unguarded-in-src",
     ),
 ]
