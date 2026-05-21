@@ -76,11 +76,10 @@ def register_mcp_commands(main: click.Group) -> click.Group:
             return
 
         try:
-            import asyncio
-
             from .._mcp._server import mcp as mcp_server
+            from .._ecosystem._mcp import get_tools_sync
 
-            tool_count = len(asyncio.run(mcp_server.list_tools()))
+            tool_count = len(get_tools_sync(mcp_server))
             click.echo(f"  [OK] MCP server loaded ({tool_count} tools)")
         except Exception as e:
             click.echo(f"  [!!] MCP server error: {e}")
@@ -209,9 +208,9 @@ def register_mcp_commands(main: click.Group) -> click.Group:
                 f"fastmcp not installed. Install with: pip install scitex-dev[mcp]\n{e}"
             ) from e
 
-        import asyncio
+        from .._ecosystem._mcp import get_tools_sync
 
-        tools = asyncio.run(mcp_server.list_tools())
+        tools = list(get_tools_sync(mcp_server).values())
         total = len(tools)
 
         if as_json:

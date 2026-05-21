@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import pytest
 
 from scitex_dev._cli.audit._summary._audit import Violation
 from scitex_dev._cli.audit._summary._mcp_audit import (
@@ -33,7 +34,9 @@ class TestNameDerivation:
         # Assert
         assert _short_name("scitex") == "scitex"
 
-    def test_short_name_compound_uses_underscore_short_name_scitex_orochi_mcp_orochi_mcp(self):
+    def test_short_name_compound_uses_underscore_short_name_scitex_orochi_mcp_orochi_mcp(
+        self,
+    ):
         # Compound names must produce a valid Python identifier suffix
         # so they can serve as both tool prefix and bridge-file basename.
         # Arrange
@@ -41,8 +44,9 @@ class TestNameDerivation:
         # Assert
         assert _short_name("scitex-orochi-mcp") == "orochi_mcp"
 
-
-    def test_short_name_compound_uses_underscore_short_name_scitex_cloud_mcp_cloud_mcp(self):
+    def test_short_name_compound_uses_underscore_short_name_scitex_cloud_mcp_cloud_mcp(
+        self,
+    ):
         # Compound names must produce a valid Python identifier suffix
         # so they can serve as both tool prefix and bridge-file basename.
         # Arrange
@@ -68,7 +72,6 @@ class TestSkipNonStandalone:
 
         assert _should_skip("scitex-cloud-mcp") is True
 
-
     def test_mcp_server_packages_skipped_should_skip_scitex_orochi_server_is_true(self):
         # Arrange
         # Act
@@ -84,7 +87,6 @@ class TestSkipNonStandalone:
         from scitex_dev._cli.audit._summary._mcp_audit import _should_skip
 
         assert _should_skip("scitex-cloud") is False
-
 
     def test_normal_package_not_skipped_should_skip_scitex_stats_is_false(self):
         # Arrange
@@ -102,7 +104,6 @@ class TestSkipNonStandalone:
 
         status, violations = _audit_one_mcp("scitex")
         assert status == "skip-not-standalone"
-
 
     def test_audit_one_returns_skip_status_violations(self):
         # Arrange
@@ -213,7 +214,6 @@ class TestSkillsPair:
         _check_skills_pair("scitex-cloud", {"repo_clone"}, out)
         assert len(out) == 2
 
-
     def test_missing_both_skills_emits_two_violations_all_v_rule_5_for_v_in_out(self):
         # Arrange
         # Act
@@ -229,7 +229,6 @@ class TestSkillsPair:
         out: list[Violation] = []
         _check_skills_pair("scitex-cloud", {"cloud_skills_list"}, out)
         assert len(out) == 1
-
 
     def test_missing_one_skill_emits_single_violation_skills_get_in_out_0_message(self):
         # Arrange
@@ -278,7 +277,6 @@ class TestBridgePattern:
         )
         assert len(out) == 1
 
-
     def test_hand_wrap_flagged_out_0_rule_1(self):
         # Arrange
         # Act
@@ -294,7 +292,6 @@ class TestBridgePattern:
             resolve_mcp_server=lambda pkg: object(),
         )
         assert out[0].rule == "§1"
-
 
     def test_hand_wrap_flagged_hand_wrap_in_out_0_message(self):
         # Arrange
@@ -326,7 +323,6 @@ class TestBridgePattern:
         _check_bridge_pattern("scitex-io", out, read_bridge_source=lambda pkg: src)
         assert len(out) == 1
 
-
     def test_direct_mount_flagged_out_0_rule_1(self):
         """`mcp.mount(...)` without `safe_mount` is now drift (§1)."""
         # Arrange
@@ -340,7 +336,6 @@ class TestBridgePattern:
         out: list[Violation] = []
         _check_bridge_pattern("scitex-io", out, read_bridge_source=lambda pkg: src)
         assert out[0].rule == "§1"
-
 
     def test_direct_mount_flagged_direct_mcp_mount_in_out_0_message(self):
         """`mcp.mount(...)` without `safe_mount` is now drift (§1)."""
@@ -356,7 +351,6 @@ class TestBridgePattern:
         _check_bridge_pattern("scitex-io", out, read_bridge_source=lambda pkg: src)
         assert "direct `mcp.mount" in out[0].message
 
-
     def test_direct_mount_flagged_safe_mount_in_out_0_message(self):
         """`mcp.mount(...)` without `safe_mount` is now drift (§1)."""
         # Arrange
@@ -370,3 +364,42 @@ class TestBridgePattern:
         out: list[Violation] = []
         _check_bridge_pattern("scitex-io", out, read_bridge_source=lambda pkg: src)
         assert "safe_mount" in out[0].message
+
+
+class TestListTools:
+    """`_list_tools` must work on FastMCP 2.x (get_tools dict) and 3.x (list).
+
+    Regression guard: it previously called `mcp.list_tools()` directly, which
+    raised `AttributeError` on FastMCP 2.x. It now routes through the
+    `get_tools_sync` version-bridge shim.
+    """
+
+    @staticmethod
+    def _server():
+        FastMCP = pytest.importorskip("fastmcp").FastMCP
+        mcp = FastMCP("test-server")
+
+        @mcp.tool()
+        def cloud_repo_clone(url: str) -> str:
+            """Clone a repo."""
+            return url
+
+        return mcp
+
+    def test_list_tools_on_fastmcp_server_returns_a_list(self):
+        # Arrange
+        from scitex_dev._cli.audit._summary._mcp_audit import _list_tools
+
+        # Act
+        tools = _list_tools(self._server())
+        # Assert
+        assert isinstance(tools, list)
+
+    def test_list_tools_includes_registered_tool_by_name(self):
+        # Arrange
+        from scitex_dev._cli.audit._summary._mcp_audit import _list_tools
+
+        # Act
+        names = [getattr(t, "name", "") for t in _list_tools(self._server())]
+        # Assert
+        assert "cloud_repo_clone" in names

@@ -25,7 +25,6 @@ human/JSON emitters.
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import re
 from pathlib import Path
@@ -121,16 +120,16 @@ def _resolve_mcp_server(package: str):
 
 
 def _list_tools(mcp_instance) -> list:
-    """Run `mcp.list_tools()` synchronously; return a list of FunctionTool."""
-    try:
-        return asyncio.run(mcp_instance.list_tools())
-    except RuntimeError:
-        # Already in an event loop — rare in CLI context, but handle gracefully.
-        loop = asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(mcp_instance.list_tools())
-        finally:
-            loop.close()
+    """List a FastMCP server's tools; return a list of Tool/FunctionTool.
+
+    Routes through `get_tools_sync` (the FastMCP 2.x/3.x version bridge) so the
+    audit works on both: FastMCP 2.x exposes `get_tools()` (dict) while 3.x
+    renamed it to `list_tools()` (list). The shim returns `{name: Tool}`; the
+    callers here only need a list of objects with a `.name`.
+    """
+    from scitex_dev._ecosystem._mcp import get_tools_sync
+
+    return list(get_tools_sync(mcp_instance).values())
 
 
 def _read_bridge_source(package: str) -> str | None:
