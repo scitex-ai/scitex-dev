@@ -1,5 +1,5 @@
 CLI Mixin
-========
+=========
 
 Each SciTeX package can add a standardized ``docs`` subcommand with
 minimal boilerplate using ``scitex-dev``'s CLI mixin.
@@ -52,4 +52,6 @@ API
 ---
 
 .. autofunction:: scitex_dev.cli.register_docs_subcommand
+   :no-index:
 .. autofunction:: scitex_dev.cli.docs_click_group
+   :no-index:

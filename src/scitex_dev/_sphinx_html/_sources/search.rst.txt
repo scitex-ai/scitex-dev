@@ -50,6 +50,6 @@ Scopes
 API
 ---
 
-.. autofunction:: scitex_dev.search.search
-.. autofunction:: scitex_dev.search.parse_query
-.. autofunction:: scitex_dev.search.score_text
+.. autofunction:: scitex_dev._docs.search.search
+.. autofunction:: scitex_dev._docs.search.parse_query
+.. autofunction:: scitex_dev._docs.search.score_text
