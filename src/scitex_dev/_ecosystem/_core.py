@@ -547,6 +547,7 @@ def should_skip_audit(package: str, auditor: str) -> tuple[bool, str]:
     return (False, "") — fail open so a typo doesn't silently skip.
 
     Skip semantics:
+
     - archived packages are skipped for *every* auditor.
     - per-auditor categories listed in _CATEGORY_SKIP are skipped.
     - unknown package (not in ECOSYSTEM) is NOT skipped — the auditor's
