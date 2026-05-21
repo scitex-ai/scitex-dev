@@ -205,9 +205,9 @@ def check_mcp_server() -> list[dict]:
 
     try:
         from scitex_dev._mcp._server import mcp as mcp_server
-        import asyncio
+        from scitex_dev._ecosystem._mcp import get_tools_sync
 
-        tool_count = len(asyncio.run(mcp_server.list_tools()))
+        tool_count = len(get_tools_sync(mcp_server))
         results.append(_result("MCP server tools", "ok", f"{tool_count} tools loaded"))
     except Exception as exc:
         results.append(_result("MCP server tools", "fail", str(exc)))
