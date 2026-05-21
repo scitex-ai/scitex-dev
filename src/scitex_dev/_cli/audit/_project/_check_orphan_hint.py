@@ -20,6 +20,8 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
+from .._fd import fd_find_files
+
 
 _DEFAULT_DETAIL = "no matching src file (orphan test)"
 _MAX_SIBLINGS = 6
@@ -35,7 +37,7 @@ def _expected_src_basename(test_filename: str) -> str | None:
 def _index_src_basenames(src_pkg: Path) -> dict[str, list[Path]]:
     """{basename: [absolute paths]} for every .py under src_pkg (excl. __init__)."""
     index: dict[str, list[Path]] = defaultdict(list)
-    for p in src_pkg.rglob("*.py"):
+    for p in fd_find_files(src_pkg, glob="*.py"):
         if p.name == "__init__.py":
             continue
         index[p.name].append(p)

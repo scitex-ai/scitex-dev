@@ -23,6 +23,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+      - name: Install fd (Rust file finder; audit file discovery requires it)
+        run: |
+          # The audit-all conformance test exercises fd-backed file
+          # discovery, which fails loud if fd is absent (no silent
+          # fallback). Debian/Ubuntu ships the binary as `fdfind`, which
+          # the discovery helper accepts.
+          sudo apt-get update && sudo apt-get install -y fd-find
+          fdfind --version
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
