@@ -16,6 +16,7 @@ from ..._ecosystem.click_helpers import make_categorized_group
 from ._categories import ECOSYSTEM_COMMAND_CATEGORIES
 from ._cmds import (
     _audit_all,
+    _audit_github_state,
     _audit_per_target,
     _audit_summary,
     _clean,
@@ -78,6 +79,7 @@ def register_ecosystem_commands(main_group):
     _git.register(ecosystem)
     _audit_per_target.register(ecosystem)
     _audit_summary.register(ecosystem)
+    _audit_github_state.register(ecosystem)
     _dashboard.register(ecosystem)
     _audit_all.register(ecosystem)
     _clean.register(ecosystem)

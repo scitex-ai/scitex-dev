@@ -91,4 +91,22 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "E",
         "secret-env-prefix-missing",
     ),
+    (
+        "PS-171",
+        "§2",
+        (
+            "CI uploads coverage to Codecov but the repo lacks a "
+            "canonical `codecov.yml` (or it is present without the "
+            "`codecov.branch: develop` pin). The pin keeps the unbranched "
+            "badge following develop instead of the lagging main mirror; "
+            "the ignore list drops non-executable surfaces (_sphinx_html/, "
+            "_skills/, _completion.py, tests/, examples/). Note: the "
+            "Codecov GitHub App install (the 'Please install the Codecov "
+            "app' PR-comment warning) is a user-web-only action and is NOT "
+            "covered by this file rule. Severity W during adoption — see "
+            "_skills/general/02_package_11_ci-and-codecov.md."
+        ),
+        "W",
+        "codecov-config-missing",
+    ),
 ]

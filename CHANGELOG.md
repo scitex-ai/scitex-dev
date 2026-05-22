@@ -7,6 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **PS-171 codecov-config** (project audit, severity W) — a package whose
+  CI uploads coverage to Codecov must ship a repo-root `codecov.yml`
+  pinned to `codecov.branch: develop`. Flags missing config and the
+  missing-develop-pin shape drift. (The Codecov GitHub App install — the
+  "Please install the Codecov app" PR-comment warning — is a
+  user-web-only action and is intentionally NOT covered by this file
+  rule.)
+- **PS-172 default-branch** (`ecosystem audit-github-state`, severity E) —
+  live `gh api` check that every SciTeX repo's GitHub default branch is
+  `main` (the convention: `main` = public default, `develop` =
+  integration). New `scitex-dev ecosystem audit-github-state [--json]
+  [-p PKG]` command and the injectable `_ecosystem._github_state`
+  checker (unit-tested with a real recorded API shape, no mocks).
+
 ## [0.11.17] — 2026-05-16
 
 ### Added

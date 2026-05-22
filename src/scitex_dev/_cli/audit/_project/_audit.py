@@ -2179,6 +2179,11 @@ def audit_project(
     )
 
     check_ps167_readme_badge_layout(repo_root, Violation, violations)
+    from ._check_codecov_config import (  # hook-bypass: line-limit
+        check_ps171_codecov_config,
+    )
+
+    check_ps171_codecov_config(repo_root, Violation, violations)
     from ._check_local_state import (
         check_ps145_cross_package_read,
         check_ps146_pip_install_side_effect,
