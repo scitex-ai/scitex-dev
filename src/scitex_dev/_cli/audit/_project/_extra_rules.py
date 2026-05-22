@@ -7,6 +7,7 @@ land here and are merged at import time. Each entry is the same shape
 Today's contents:
 
 - PS-148 — optional-dep-unguarded-in-src (source-side mirror of PS-210)
+- PS-149 — hard-dep-overreach (heavy HARD dep used feature-only; inverse of PS-148)
 - PS-165 — workflow-presence (per category)
 - PS-166 — readme-badge-label-mismatch
 - PS-167 — readme-badge-layout
@@ -112,5 +113,29 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "W",
         "optional-dep-unguarded-in-src",
+    ),
+    (
+        "PS-149",
+        "§3",
+        (
+            "a heavy/niche lib (torch, tensorflow, figrecipe, scitex-app, "
+            "…) is declared HARD via `[project.dependencies]` but imported "
+            "ONLY in a feature / non-core part of `src/` — never the public "
+            "`__init__` surface, the CLI entry, or the MCP-server entry. "
+            "Every minimal `pip install <peer>` over-pulls it; container & "
+            "sandbox builds bloat; the ecosystem graph gets denser than it "
+            "needs to be. Move the dep to `[project.optional-dependencies]` "
+            "(two-bucket: bare = minimal, `[all]` = batteries-included) and "
+            "guard each import with `try_import_optional(..., pkg=<peer>)`. "
+            "Framework/foundational deps the public surface needs (click, "
+            "fastmcp, mcp, fastapi, scitex-dev, scitex-config) are NEVER "
+            "flagged. Inverse of PS-148. Severity W during adoption — see "
+            "_skills/general/"
+            "01_ecosystem_02_dependency-and-version-pinning.md and "
+            "03_interface_01_python-api/"
+            "04_lazy-imports-and-optional-deps.md."
+        ),
+        "W",
+        "hard-dep-overreach",
     ),
 ]
