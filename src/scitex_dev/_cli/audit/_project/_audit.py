@@ -745,6 +745,21 @@ RULES: dict[str, Rule] = {
             ),
             slug="local-state-eval-completion",
         ),
+        # hook-bypass: line-limit
+        Rule(
+            "PS-148",
+            "§1",
+            (
+                "unresolved git conflict marker(s) in a tracked text file "
+                "(src/, tests/, docs/, examples/). An aborted merge/rebase "
+                "can leave the 7-char conflict markers inside triple-quoted "
+                "strings, fenced code blocks, or YAML/JSON where ruff/"
+                "pyright won't catch them. Resolve the conflict and remove "
+                "the markers before committing."
+            ),
+            severity="E",
+            slug="conflict-markers",
+        ),
         Rule(
             "PS-150",
             "§1",
@@ -2188,6 +2203,10 @@ def audit_project(
     check_ps145_cross_package_read(repo_root, distribution, Violation, violations)
     check_ps146_pip_install_side_effect(repo_root, Violation, violations)
     check_ps147_eval_form_completion(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    from ._check_conflict_markers import check_ps148_conflict_markers
+
+    check_ps148_conflict_markers(repo_root, Violation, violations)
     if not skip_mirror:
         from ._check_smoke_e2e_layers import (
             check_ps211_smoke_layer,
