@@ -2119,6 +2119,17 @@ def audit_project(
         _check_placeholder_tests(repo_root, violations)
         _check_empty_test_dirs(repo_root, distribution, violations)
     _check_tests_subdir_convention(repo_root, distribution, violations)
+    # hook-bypass: line-limit
+    # RP-2xx: research projects mirror scripts/ ↔ tests/scripts/ instead of
+    # src/<pkg>/ ↔ tests/<pkg>/. Fired only when `research` is in the
+    # project-types; the PS package-publish rules drop for pure-research
+    # (no `pip` ⇒ applies("PS-*") is False). See _check_research_mirror.
+    from .._config import load_config as _load_cfg_for_research
+
+    if "research" in _load_cfg_for_research(repo_root).project_types:
+        from ._check_research_mirror import check_research_mirror
+
+        check_research_mirror(repo_root, violations)
     _check_docs_structure(repo_root, violations)
     src_pkg = _src_pkg_dir(repo_root, distribution)
     if src_pkg is not None:
