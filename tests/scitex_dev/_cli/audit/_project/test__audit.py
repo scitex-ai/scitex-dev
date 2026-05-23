@@ -130,11 +130,15 @@ def test_rules_have_unique_codes_and_sections_sections_1_2_3_4():
     assert sections >= {"§1", "§2", "§3", "§4"}
 
 
-def test_rule_namespace_is_ps():
+def test_rule_namespace_is_ps_or_rp():
     # Arrange
     # Act
     # Assert
-    assert all(c.startswith("PS") for c in RULES)
+    # The project auditor hosts two rule families: PS-* (package-publish,
+    # routed to project-type `pip`) and RP-* (research-project mirror,
+    # routed to project-type `research`). `applies()` in _config/_loader.py
+    # gates each family by project-type.
+    assert all(c.startswith(("PS", "RP")) for c in RULES)
 
 
 # ---------------------------------------------------------------------------
@@ -554,7 +558,9 @@ def test_ps108_rolls_up_multiple_clusters_len_out_1(tmp_path):
     assert len(out) == 1
 
 
-def test_ps108_rolls_up_multiple_clusters_cli__in_out_0_detail_and_skills__in_out(tmp_path):
+def test_ps108_rolls_up_multiple_clusters_cli__in_out_0_detail_and_skills__in_out(
+    tmp_path,
+):
     # Arrange
     # Act
     # Assert
@@ -595,7 +601,9 @@ def test_ps204_hint_suggests_move_on_unique_basename_len_ps204_1(tmp_path):
     assert len(ps204) == 1
 
 
-def test_ps204_hint_suggests_move_on_unique_basename_src_likely_moved_in_ps204_0_detail(tmp_path):
+def test_ps204_hint_suggests_move_on_unique_basename_src_likely_moved_in_ps204_0_detail(
+    tmp_path,
+):
     """Refactor scenario: src/<pkg>/foo.py moved to src/<pkg>/sub/foo.py;
     the orphan test_foo.py should be told where to relocate."""
     # Arrange
@@ -613,7 +621,9 @@ def test_ps204_hint_suggests_move_on_unique_basename_src_likely_moved_in_ps204_0
     assert "src likely moved" in ps204[0].detail
 
 
-def test_ps204_hint_suggests_move_on_unique_basename_sub_foo_py_in_ps204_0_detail(tmp_path):
+def test_ps204_hint_suggests_move_on_unique_basename_sub_foo_py_in_ps204_0_detail(
+    tmp_path,
+):
     """Refactor scenario: src/<pkg>/foo.py moved to src/<pkg>/sub/foo.py;
     the orphan test_foo.py should be told where to relocate."""
     # Arrange
@@ -631,7 +641,9 @@ def test_ps204_hint_suggests_move_on_unique_basename_sub_foo_py_in_ps204_0_detai
     assert "sub/foo.py" in ps204[0].detail
 
 
-def test_ps204_hint_suggests_move_on_unique_basename_tests_demo_sub_test_foo_py_in_ps204_0_de(tmp_path):
+def test_ps204_hint_suggests_move_on_unique_basename_tests_demo_sub_test_foo_py_in_ps204_0_de(
+    tmp_path,
+):
     """Refactor scenario: src/<pkg>/foo.py moved to src/<pkg>/sub/foo.py;
     the orphan test_foo.py should be told where to relocate."""
     # Arrange
@@ -668,7 +680,9 @@ def test_ps204_hint_lists_siblings_when_no_basename_match_len_ps204_1(tmp_path):
     detail = ps204[0].detail
 
 
-def test_ps204_hint_lists_siblings_when_no_basename_match_bar_py_in_detail_and_baz_py_in_detail(tmp_path):
+def test_ps204_hint_lists_siblings_when_no_basename_match_bar_py_in_detail_and_baz_py_in_detail(
+    tmp_path,
+):
     """When no src file matches the expected basename, list what *is* in the
     mirror dir so the agent can correlate."""
     # Arrange
@@ -1013,7 +1027,9 @@ def test_ps507_fires_when_notebook_imports_mpl_without_plt_show(tmp_path):
     assert "PS-507" in rules
 
 
-def test_ps506_507_silent_when_notebook_does_not_import_mpl_ps_506_not_in_rules(tmp_path):
+def test_ps506_507_silent_when_notebook_does_not_import_mpl_ps_506_not_in_rules(
+    tmp_path,
+):
     # Arrange
     # Act
     # Assert
@@ -1032,7 +1048,9 @@ def test_ps506_507_silent_when_notebook_does_not_import_mpl_ps_506_not_in_rules(
     assert "PS-506" not in rules
 
 
-def test_ps506_507_silent_when_notebook_does_not_import_mpl_ps_507_not_in_rules(tmp_path):
+def test_ps506_507_silent_when_notebook_does_not_import_mpl_ps_507_not_in_rules(
+    tmp_path,
+):
     # Arrange
     # Act
     # Assert

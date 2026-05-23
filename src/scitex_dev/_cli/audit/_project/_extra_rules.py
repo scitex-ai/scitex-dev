@@ -12,6 +12,7 @@ Today's contents:
 - PS-166 — readme-badge-label-mismatch
 - PS-167 — readme-badge-layout
 - PS-168 — workflow-secret-env-prefix-missing
+- RP-201/202/204/205 — research-project scripts ↔ tests/scripts mirror
 
 When `_audit.py` is split per-rule (see GITIGNORED/REFACTORING.md), this
 sidecar can be removed and each rule co-located with its check module.
@@ -137,5 +138,42 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "W",
         "hard-dep-overreach",
+    ),
+    # ── RP-2xx: research-project mirror (scripts ↔ tests/scripts) ──
+    # Research projects (project-type: research) have no src/<pkg>/ — their
+    # primary code lives in ./scripts/, mirrored by tests/scripts/. These
+    # are the research-flavoured siblings of PS-201/202/204/205. The
+    # auditor only fires them when `research` is in the project-types
+    # (applies() routes RP -> research; see _config/_loader.py). Severity W
+    # during ecosystem adoption (matches the PS-211/212 warn-first
+    # precedent). See _skills/general/02_package_15_research-project.md and
+    # _skills/scientific/02_research-project_06_project-structure-tests.md.
+    (
+        "RP-201",
+        "§2",
+        "missing `tests/scripts/` parent — mandatory mirror of ./scripts/",
+        "W",
+        "research-tests-scripts-parent-missing",
+    ),
+    (
+        "RP-202",
+        "§2",
+        "scripts/<sub>/ has .py files but no matching tests/scripts/<sub>/",
+        "W",
+        "research-scripts-subdir-no-mirror",
+    ),
+    (
+        "RP-204",
+        "§2",
+        "orphan test under tests/scripts/ — no scripts/ counterpart",
+        "W",
+        "research-orphan-test",
+    ),
+    (
+        "RP-205",
+        "§2",
+        "public/private test-name prefix mismatch under tests/scripts/",
+        "W",
+        "research-test-prefix-mismatch",
     ),
 ]
