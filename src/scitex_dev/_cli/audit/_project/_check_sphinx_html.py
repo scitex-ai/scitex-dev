@@ -78,17 +78,58 @@ def _src_pkg_with_html(repo: Path) -> Path | None:
 
 
 def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
-    """Append PS-121 / PS-122 violations.
+    """Append PS-121 / PS-122 / PS-169 violations.
+
+    The ``_sphinx_html/`` bundling contract is a 2x2 matrix over
+    (docs/sphinx source present, ``_sphinx_html/`` bundle present):
+
+    | docs source | bundle | verdict                                  |
+    |-------------|--------|------------------------------------------|
+    | yes         | yes    | OK                                       |
+    | yes         | no     | WARNING — PS-121 (scitex-cloud serves     |
+    |             |        |   nothing for this package)              |
+    | no          | yes    | WARNING — PS-169 (likely stale bundle —   |
+    |             |        |   the source the HTML was built from is  |
+    |             |        |   gone; rebuild + verify or drop it)     |
+    | no          | no     | OK (package opts out of docs)            |
 
     PS-121 — sphinx source exists but ``_sphinx_html/index.html`` is missing.
     PS-122 — sphinx source exists but no ``.github/workflows/*.yml``
              runs sphinx-build / make html (detected by content, not
              filename — see PS-164 for the rename context).
+    PS-169 — ``_sphinx_html/`` bundled but no ``docs/sphinx/conf.py``
+             source — the bundle can no longer be regenerated from this
+             repo, so it is almost certainly stale.
     """
-    if not _has_sphinx_source(repo):
+    has_source = _has_sphinx_source(repo)
+    bundle = _src_pkg_with_html(repo)
+
+    # PS-169 — bundle without source. Fires independently of the
+    # source-present rules below, so it must be checked before the
+    # `not has_source` early return.
+    if not has_source and bundle is not None:
+        out.append(
+            violation_cls(
+                "PS-169",
+                str(bundle),
+                (
+                    "package ships src/<pkg>/_sphinx_html/ but has no "
+                    "docs/sphinx/conf.py source tree to rebuild it from. "
+                    "The bundled HTML scitex-cloud serves at "
+                    "https://scitex.ai/apps/docs/ is almost certainly "
+                    "stale (built from sources that no longer exist). "
+                    "Either restore the docs/sphinx/ source and refresh "
+                    "the bundle via the canonical RTD/Sphinx CI workflow, "
+                    "or drop the _sphinx_html/ bundle if the package no "
+                    "longer documents itself."
+                ),
+            )
+        )
+
+    if not has_source:
         return
 
-    if _src_pkg_with_html(repo) is None:
+    if bundle is None:
         out.append(
             violation_cls(
                 "PS-121",

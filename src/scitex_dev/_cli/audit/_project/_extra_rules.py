@@ -10,6 +10,7 @@ Today's contents:
 - PS-166 — readme-badge-label-mismatch
 - PS-167 — readme-badge-layout
 - PS-168 — workflow-secret-env-prefix-missing
+- PS-169 — sphinx-html-bundle-stale (bundle without docs source)
 
 When `_audit.py` is split per-rule (see GITIGNORED/REFACTORING.md), this
 sidecar can be removed and each rule co-located with its check module.
@@ -90,5 +91,22 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "E",
         "secret-env-prefix-missing",
+    ),
+    (
+        "PS-169",
+        "§1",
+        (
+            "package ships `src/<pkg>/_sphinx_html/` but has no "
+            "`docs/sphinx/conf.py` source to rebuild it from. The bundle "
+            "scitex-cloud serves at https://scitex.ai/apps/docs/ is almost "
+            "certainly stale (its source no longer exists). Restore "
+            "docs/sphinx/ and refresh via the canonical RTD/Sphinx CI "
+            "workflow, or drop the bundle if the package no longer "
+            "documents itself. Completes the `_sphinx_html/` bundling "
+            "contract opposite PS-121 (source-without-bundle). Severity W "
+            "during adoption — see _skills/general/04_docs_02_sphinx.md."
+        ),
+        "W",
+        "sphinx-html-bundle-stale",
     ),
 ]

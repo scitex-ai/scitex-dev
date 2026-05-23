@@ -86,6 +86,15 @@ def _make_pkg_with_sphinx(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _make_pkg_bundle_without_source(tmp_path: Path) -> Path:
+    """Ship src/<pkg>/_sphinx_html/index.html but NO docs/sphinx/conf.py
+    source — the PS-169 stale-bundle case."""
+    pkg_html = tmp_path / "src" / "demo_pkg" / "_sphinx_html"
+    pkg_html.mkdir(parents=True)
+    (pkg_html / "index.html").write_text("<html/>")
+    return tmp_path
+
+
 # ===== _has_rtd_workflow =====
 
 
@@ -189,3 +198,69 @@ class TestPS122RegressionRenamedWorkflow:
         check_sphinx_html(repo, _StubViolation, out)
         # Assert
         assert not any(v.rule == "PS-122" for v in out)
+
+
+# ===== check_sphinx_html (PS-169 bundling contract) =====
+
+
+class TestPS169BundleWithoutSource:
+    """PS-169 completes the `_sphinx_html/` bundling contract: it fires
+    on a bundle shipped without a docs/sphinx/ source to rebuild from
+    (the stale-bundle quadrant), the inverse of PS-121."""
+
+    def test_bundle_without_source_fires_PS169(self, tmp_path: Path) -> None:
+        # Arrange: _sphinx_html/index.html present, no docs/sphinx/conf.py.
+        repo = _make_pkg_bundle_without_source(tmp_path)
+        out: list = []
+        # Act
+        check_sphinx_html(repo, _StubViolation, out)
+        # Assert
+        assert any(v.rule == "PS-169" for v in out)
+
+    def test_bundle_without_source_points_at_html_dir(self, tmp_path: Path) -> None:
+        # Arrange
+        repo = _make_pkg_bundle_without_source(tmp_path)
+        out: list = []
+        # Act
+        check_sphinx_html(repo, _StubViolation, out)
+        # Assert
+        ps169 = next(v for v in out if v.rule == "PS-169")
+        assert ps169.where.endswith("_sphinx_html")
+
+    def test_source_with_bundle_does_not_fire_PS169(self, tmp_path: Path) -> None:
+        # Arrange: both docs source AND bundle present — the OK quadrant.
+        repo = _make_pkg_with_sphinx(tmp_path)
+        out: list = []
+        # Act
+        check_sphinx_html(repo, _StubViolation, out)
+        # Assert
+        assert not any(v.rule == "PS-169" for v in out)
+
+    def test_source_without_bundle_does_not_fire_PS169(self, tmp_path: Path) -> None:
+        # Arrange: docs source but no bundle — PS-121 territory, NOT PS-169.
+        (tmp_path / "docs" / "sphinx").mkdir(parents=True)
+        (tmp_path / "docs" / "sphinx" / "conf.py").write_text(_SPHINX_CONF)
+        out: list = []
+        # Act
+        check_sphinx_html(tmp_path, _StubViolation, out)
+        # Assert
+        assert not any(v.rule == "PS-169" for v in out)
+
+    def test_no_docs_no_bundle_does_not_fire_PS169(self, tmp_path: Path) -> None:
+        # Arrange: package opts out of docs entirely — the other OK quadrant.
+        (tmp_path / "src" / "demo_pkg").mkdir(parents=True)
+        out: list = []
+        # Act
+        check_sphinx_html(tmp_path, _StubViolation, out)
+        # Assert
+        assert not any(v.rule == "PS-169" for v in out)
+
+    def test_bundle_without_source_does_not_fire_PS121(self, tmp_path: Path) -> None:
+        # Arrange: PS-121 must NOT fire when there is no docs source —
+        # the two rules are mutually exclusive across the matrix.
+        repo = _make_pkg_bundle_without_source(tmp_path)
+        out: list = []
+        # Act
+        check_sphinx_html(repo, _StubViolation, out)
+        # Assert
+        assert not any(v.rule == "PS-121" for v in out)
