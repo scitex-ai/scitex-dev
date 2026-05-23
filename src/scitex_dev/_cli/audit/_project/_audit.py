@@ -2207,6 +2207,12 @@ def audit_project(
     check_ps145_cross_package_read(repo_root, distribution, Violation, violations)
     check_ps146_pip_install_side_effect(repo_root, Violation, violations)
     check_ps147_eval_form_completion(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    # PS-173: ADR format — only fires when docs/adr/ exists (presence is
+    # recommended, not mandated). Scope = all project kinds.
+    from ._check_adr import check_ps173_adr_format
+
+    check_ps173_adr_format(repo_root, violations)
     if not skip_mirror:
         from ._check_smoke_e2e_layers import (
             check_ps211_smoke_layer,

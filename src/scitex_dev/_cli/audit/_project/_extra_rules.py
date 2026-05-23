@@ -12,6 +12,7 @@ Today's contents:
 - PS-166 — readme-badge-label-mismatch
 - PS-167 — readme-badge-layout
 - PS-168 — workflow-secret-env-prefix-missing
+- PS-173 — adr-format (filename + lean-template sections, when docs/adr/ exists)
 - RP-201/202/204/205 — research-project scripts ↔ tests/scripts mirror
 
 When `_audit.py` is split per-rule (see GITIGNORED/REFACTORING.md), this
@@ -138,6 +139,27 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "W",
         "hard-dep-overreach",
+    ),
+    (
+        "PS-173",
+        "§1",
+        (
+            "Architecture Decision Record (ADR) format. ADRs are a "
+            "recommended (not mandated) ecosystem convention; a repo with "
+            "NO `docs/adr/` gets no finding. But once `docs/adr/` exists, "
+            "every `*.md` must be named `NNNN-<kebab-slug>.md` (4-digit "
+            "zero-padded sequential prefix) and follow the LEAN template — "
+            "a title (H1) plus `## Status` / `## Context` / `## Decision` / "
+            "`## Consequences`. Section detection is tolerant of the proven "
+            "scitex-agent-container exemplar shapes: `**Status:**` bold-line "
+            "counts as Status, `## Problem` as Context, `## Decisions` as "
+            "Decision. Scope = all project kinds (package / research / grant "
+            "/ draft). Severity W during adoption — see "
+            "_skills/general/02_package_01_project-structure-root.md "
+            "§'Architecture Decision Records (ADRs)'."
+        ),
+        "W",
+        "adr-format",
     ),
     # ── RP-2xx: research-project mirror (scripts ↔ tests/scripts) ──
     # Research projects (project-type: research) have no src/<pkg>/ — their
