@@ -70,6 +70,13 @@ class ProjectConfig:
             "deferred",
         }:
             return False
+        # PS-173 (ADR format) is cross-cutting — ADRs are an ecosystem
+        # convention for ALL project kinds (package / research / grant /
+        # draft), not just pip packages. It only fires when docs/adr/
+        # exists, so applying it everywhere costs nothing for repos
+        # without ADRs.
+        if code == "PS-173":
+            return True
         prefix = code[:2]
         if prefix == "PS":
             return "pip" in self.project_types
