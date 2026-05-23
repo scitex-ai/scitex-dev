@@ -31,14 +31,12 @@ from __future__ import annotations
 from pathlib import Path
 
 # Reuse the package-mirror primitives so the research mirror stays in
-# lockstep with the canonical logic (private/public test regexes, the
-# descriptor-strip orphan tolerance, the gitignore-aware src-dir walk).
+# lockstep with the canonical logic (the descriptor-strip orphan
+# tolerance, the gitignore-aware src-dir walk).
 from ._audit import (
     Violation,
     _has_py,
     _is_git_ignored,
-    _PRIVATE_TEST_RE,
-    _PUBLIC_TEST_RE,
     _test_has_src_match,
 )
 
