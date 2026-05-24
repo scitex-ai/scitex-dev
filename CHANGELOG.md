@@ -7,6 +7,28 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.1] — 2026-05-24
+
+### Fixed
+- **audit-project orphan-hinter fd regression (#63)** — 0.12.0 switched the
+  PS-204 orphan-test hinter's file discovery from stdlib `rglob` to the Rust
+  `fd`/`fdfind` tool with NO fallback, so `audit-project` hard-crashed with
+  `FdNotFoundError` on any runner without `fd` (e.g. GitHub `ubuntu-latest`),
+  turning the quality CI red ecosystem-wide. `fd_find_files` now keeps `fd`
+  as the preferred fast path but, when it is absent, emits a **loud warning**
+  (`RuntimeWarning`, "fd/fdfind not found on PATH — falling back to slower
+  stdlib scan; install fd for speed") and falls back to a stdlib `rglob`
+  walk so the audit runs to completion. No silent fallback, no hard crash by
+  default.
+
+### Added
+- **`audit.require-fd` strict knob** — a repo may opt into fail-loud-on-missing
+  -fd via `.scitex/dev/config.yaml` `audit.require-fd: true` (or pyproject
+  `[tool.scitex_dev] audit.require_fd = true`). When enabled and `fd` is
+  absent, the orphan-hinter raises `FdNotFoundError` instead of falling back —
+  for CI that wants to guarantee the fast path ran. The resolver mirrors
+  `is_mcp_parity_exempt`'s pyproject + config.yaml resolution.
+
 ## [0.12.0] — 2026-05-24
 
 ### Added

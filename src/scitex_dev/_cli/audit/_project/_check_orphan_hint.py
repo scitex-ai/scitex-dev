@@ -13,10 +13,18 @@ Strategy (no git, no history walking):
    useful signal.
 
 Pure stdlib, deterministic, works on uncommitted file moves.
+
+File discovery is `fd`-preferred (fast) but degrades loudly to a stdlib
+walk when `fd` is absent (see `.._fd.fd_find_files`). A repo may opt into
+strict-fd via `.scitex/dev/config.yaml` `audit.require-fd: true` or
+pyproject `[tool.scitex_dev] audit.require_fd` — then fd-absence raises
+`FdNotFoundError` instead of falling back. The resolver mirrors
+`_summary._mcp_parity.is_mcp_parity_exempt`.
 """
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -27,6 +35,66 @@ _DEFAULT_DETAIL = "no matching src file (orphan test)"
 _MAX_SIBLINGS = 6
 
 
+# --------------------------------------------------------------------- #
+# require-fd strict knob — per-repo opt-in (mirrors is_mcp_parity_exempt) #
+# --------------------------------------------------------------------- #
+
+_TOOL_BLOCK_RE = re.compile(
+    r"^\[tool\.scitex[_-]dev\](.*?)(?=^\[|\Z)",
+    re.MULTILINE | re.DOTALL,
+)
+# pyproject: [tool.scitex_dev] with `require_fd = true` (flat) or
+# `audit.require_fd = true` (dotted) — accept both spellings.
+_REQUIRE_FD_RE = re.compile(
+    r"^\s*(?:audit\.)?require_fd\s*=\s*true\s*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+# .scitex/dev/config.yaml: audit.require-fd: true
+_YAML_REQUIRE_FD_RE = re.compile(
+    r"^\s*require-fd\s*:\s*true\s*$",
+    re.MULTILINE | re.IGNORECASE,
+)
+
+
+def is_require_fd(repo: Path | None) -> bool:
+    """Return True when `repo` opts into strict-fd (fail loud when fd absent).
+
+    pyproject.toml ``[tool.scitex_dev] audit.require_fd = true`` is the
+    primary; ``.scitex/dev/config.yaml`` ``audit.require-fd: true`` is
+    honored for convention parity. Either form makes the orphan-hinter's
+    file discovery raise `FdNotFoundError` instead of warning + falling
+    back to the stdlib walk.
+
+    Parameters
+    ----------
+    repo
+        Repo root being audited. When None, returns False (no opt-in).
+    """
+    if repo is None:
+        return False
+
+    pyproject = repo / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            txt = pyproject.read_text(errors="ignore")
+        except OSError:
+            txt = ""
+        m = _TOOL_BLOCK_RE.search(txt)
+        if m is not None and _REQUIRE_FD_RE.search(m.group(1)):
+            return True
+
+    cfg = repo / ".scitex" / "dev" / "config.yaml"
+    if cfg.is_file():
+        try:
+            cfg_txt = cfg.read_text(errors="ignore")
+        except OSError:
+            cfg_txt = ""
+        if _YAML_REQUIRE_FD_RE.search(cfg_txt):
+            return True
+
+    return False
+
+
 def _expected_src_basename(test_filename: str) -> str | None:
     """test_foo.py → foo.py; test__foo.py → _foo.py; else None."""
     if not test_filename.startswith("test_") or not test_filename.endswith(".py"):
@@ -34,10 +102,10 @@ def _expected_src_basename(test_filename: str) -> str | None:
     return test_filename[len("test_") :]  # keeps the leading "_" for private tests
 
 
-def _index_src_basenames(src_pkg: Path) -> dict[str, list[Path]]:
+def _index_src_basenames(src_pkg: Path, *, require_fd: bool) -> dict[str, list[Path]]:
     """{basename: [absolute paths]} for every .py under src_pkg (excl. __init__)."""
     index: dict[str, list[Path]] = defaultdict(list)
-    for p in fd_find_files(src_pkg, glob="*.py"):
+    for p in fd_find_files(src_pkg, glob="*.py", require_fd=require_fd):
         if p.name == "__init__.py":
             continue
         index[p.name].append(p)
@@ -48,8 +116,11 @@ def build_orphan_hinter(src_pkg: Path, repo: Path):
     """Return a `hint(test_file, test_relpath) -> str` closure.
 
     Indexing happens once per audit so the per-orphan call is O(1).
+    File discovery is `fd`-preferred; absence warns + falls back to the
+    stdlib walk unless this `repo` opts into strict-fd (`audit.require-fd`),
+    in which case fd-absence raises `FdNotFoundError`.
     """
-    index = _index_src_basenames(src_pkg)
+    index = _index_src_basenames(src_pkg, require_fd=is_require_fd(repo))
     pkg_rel = src_pkg.relative_to(repo)
 
     def hint(test_relpath: Path) -> str:
