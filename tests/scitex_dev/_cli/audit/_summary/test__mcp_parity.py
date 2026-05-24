@@ -13,6 +13,7 @@ from scitex_dev._cli.audit._summary._mcp_parity import (
     _check_api_parity,
     _parity_violations,
     _python_api_names,
+    _repo_root_from_import,
     is_mcp_parity_exempt,
 )
 
@@ -178,6 +179,30 @@ class TestPythonApiNames:
         assert "agent_list" in names
 
 
+def _build_importable_repo(
+    tmp_path, import_name: str, *, config_body: str = ""
+) -> "Path":
+    """Create a real src-layout repo importable via find_spec; return its root.
+
+    Layout: <root>/pyproject.toml + <root>/src/<import_name>/__init__.py, plus
+    an optional <root>/.scitex/dev/config.yaml. Returns the repo root.
+    """
+    from pathlib import Path
+
+    root = tmp_path / f"{import_name}-repo"
+    pkg = root / "src" / import_name
+    pkg.mkdir(parents=True)
+    (root / "pyproject.toml").write_text(
+        f'[project]\nname = "{import_name.replace("_", "-")}"\nversion = "0.0.0"\n'
+    )
+    (pkg / "__init__.py").write_text("\n")
+    if config_body:
+        cfg_dir = root / ".scitex" / "dev"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "config.yaml").write_text(config_body)
+    return Path(root)
+
+
 class TestAuditedRepoRoot:
     def test_unknown_package_resolves_to_none(self):
         # Arrange
@@ -186,3 +211,66 @@ class TestAuditedRepoRoot:
         root = _audited_repo_root(package)
         # Assert
         assert root is None
+
+    def test_repo_root_from_import_resolves_src_layout_root(self, tmp_path):
+        """_repo_root_from_import walks find_spec up to the pyproject root."""
+        # Arrange
+        import sys
+
+        repo = _build_importable_repo(tmp_path, "scitex_parityimp")
+        sys.path.insert(0, str(repo / "src"))
+        try:
+            # Act
+            resolved = _repo_root_from_import("scitex-parityimp")
+        finally:
+            sys.path.remove(str(repo / "src"))
+            sys.modules.pop("scitex_parityimp", None)
+        # Assert
+        assert resolved == repo
+
+    def test_repo_root_from_import_none_for_unimportable_package(self):
+        """_repo_root_from_import returns None when the package cannot import."""
+        # Arrange
+        package = "scitex-no-such-importable-package"
+        # Act
+        resolved = _repo_root_from_import(package)
+        # Assert
+        assert resolved is None
+
+    def test_audited_repo_root_falls_back_to_import_when_registry_absent(
+        self, tmp_path
+    ):
+        """_audited_repo_root uses the import tree when the registry path is absent."""
+        # Arrange
+        import sys
+
+        repo = _build_importable_repo(tmp_path, "scitex_parityfallback")
+        sys.path.insert(0, str(repo / "src"))
+        try:
+            # Act
+            resolved = _audited_repo_root("scitex-parityfallback")
+        finally:
+            sys.path.remove(str(repo / "src"))
+            sys.modules.pop("scitex_parityfallback", None)
+        # Assert
+        assert resolved == repo
+
+    def test_exemption_read_from_import_resolved_tree_config(self, tmp_path):
+        """is_mcp_parity_exempt honors a config-only flag on the import-resolved tree."""
+        # Arrange
+        import sys
+
+        repo = _build_importable_repo(
+            tmp_path,
+            "scitex_parityexempt",
+            config_body="audit:\n  mcp-parity-exempt: true\n",
+        )
+        sys.path.insert(0, str(repo / "src"))
+        try:
+            # Act
+            exempt = is_mcp_parity_exempt("scitex-parityexempt")
+        finally:
+            sys.path.remove(str(repo / "src"))
+            sys.modules.pop("scitex_parityexempt", None)
+        # Assert
+        assert exempt is True

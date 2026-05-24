@@ -57,19 +57,60 @@ _YAML_MCP_PARITY_EXEMPT_RE = re.compile(
 )
 
 
+def _repo_root_from_import(package: str) -> Path | None:
+    """Resolve the package's repo root from the installed/checked-out tree.
+
+    Walks up from the import location (``src/<pkg>/__init__.py``) to the
+    repo root that holds ``pyproject.toml``. Mirrors audit-project's
+    ``_resolve_repo_root`` so the §6 exemption can be read from the tree
+    that is actually being audited — critical in CI, where the editable
+    install lives at ``$GITHUB_WORKSPACE`` and the ecosystem registry's
+    fixed ``local_path`` does not exist on the runner.
+    """
+    import importlib.util
+
+    import_name = _import_name(package)
+    try:
+        spec = importlib.util.find_spec(import_name)
+    except (ImportError, ValueError, ModuleNotFoundError):
+        return None
+    if spec is None or not spec.submodule_search_locations:
+        return None
+    for loc in spec.submodule_search_locations:
+        # src/<pkg>/__init__.py → repo root is two levels up (src layout)
+        candidate = Path(loc).parent.parent
+        if (candidate / "pyproject.toml").is_file():
+            return candidate
+        # flat layout fallback
+        candidate = Path(loc).parent
+        if (candidate / "pyproject.toml").is_file():
+            return candidate
+    return None
+
+
 def _audited_repo_root(package: str) -> Path | None:
-    """Best-effort local checkout path for `package` from the registry."""
+    """Best-effort local checkout path for `package`.
+
+    Prefers the ecosystem registry's ``local_path`` (the dev workstation
+    case), then falls back to the installed/checked-out tree via
+    ``find_spec``. The fallback is what makes the §6 exemption work in CI,
+    where the registry path is absent but the package is editable-installed
+    from the checkout.
+    """
     try:
         from ...._ecosystem import get_local_path
     except ImportError:
-        return None
-    try:
-        path = get_local_path(package)
-    except Exception:
-        return None
-    if path is None:
-        return None
-    return path if path.is_dir() else None
+        get_local_path = None  # type: ignore[assignment]
+
+    if get_local_path is not None:
+        try:
+            path = get_local_path(package)
+        except Exception:
+            path = None
+        if path is not None and path.is_dir():
+            return path
+
+    return _repo_root_from_import(package)
 
 
 def is_mcp_parity_exempt(package: str, repo: Path | None = None) -> bool:
