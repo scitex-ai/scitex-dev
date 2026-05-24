@@ -7,6 +7,37 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-05-24
+
+### Added
+- **`mcp_parity_exempt` per-package opt-out** — packages may declare
+  `[tool.scitex_dev] mcp_parity_exempt` in `pyproject.toml` to opt out of
+  the §6 MCP-parity audit rule, replacing transitional `skip_rules=("§6",)`
+  hacks in downstream test suites (#62).
+- **Research project-type (RP-2xx)** — research projects skip publish-only
+  rules while keeping the universal mirror/structure rules (#58).
+- **PS-173** — ADR format audit (filename convention + lean-template sections).
+- **PS-149** — hard-dependency overreach (heavy lib declared as a hard dep but
+  used feature-only) (#53).
+- **PS-168** — per-package secret-exception config via `pyproject.toml` (#52).
+- **PS-148** — downstream optional-deps guarded in `src/` (severity W during
+  ecosystem adoption) (#51).
+- **quota-keepalive** managed cron job (#50).
+
+### Changed
+- **Ecosystem registry: `scitex-cloud` → `scitex-hub`** — renamed the cloud
+  package identity in the ecosystem registry (#61).
+- **audit-all** — parallelized per-audit dispatch with `fd`-backed file
+  discovery for faster ecosystem audits (#49).
+- **MCP tool listing** — routed through `get_tools_sync` for FastMCP 2.x/3.x
+  compatibility (#47).
+- **Sphinx** — fixed 11 warnings and enforced `-W` (warnings-as-errors) on the
+  develop docs gate (#48).
+
+### Fixed
+- CI `_sphinx_html` commit-back step made non-fatal.
+- Codecov PR comments disabled to stop email noise.
+
 ## [0.11.17] — 2026-05-16
 
 ### Added
