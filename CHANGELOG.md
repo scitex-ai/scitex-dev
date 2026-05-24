@@ -7,6 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.2] — 2026-05-24
+
+### Fixed
+- **§6 MCP-parity exemption unreadable in CI** — `is_mcp_parity_exempt`
+  resolved the audited package's repo root only via the ecosystem registry's
+  fixed `local_path` (`get_local_path`). On CI runners that path does not
+  exist (the package is editable-installed from `$GITHUB_WORKSPACE`), so a
+  declared exemption (`.scitex/dev/config.yaml audit.mcp-parity-exempt: true`
+  or pyproject `[tool.scitex_dev] mcp_parity_exempt`) was never read and §6
+  fired for exempt packages (e.g. figrecipe's 74 matplotlib-mirror MCP tools)
+  regardless of the checked-out config. `_audited_repo_root` now falls back to
+  resolving the repo root from the installed tree via `importlib.util
+  .find_spec` (mirroring audit-project's `_resolve_repo_root`), so the
+  exemption is read from the tree actually being audited.
+
 ## [0.12.1] — 2026-05-24
 
 ### Fixed
