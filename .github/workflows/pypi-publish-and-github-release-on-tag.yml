@@ -53,12 +53,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install fd (Rust file finder; audit file discovery requires it)
+      - name: Install fd (Rust file finder; preferred fast path for audit discovery)
         run: |
           # The audit-all conformance test exercises fd-backed file
-          # discovery, which fails loud if fd is absent (no silent
-          # fallback). Debian/Ubuntu ships the binary as `fdfind`, which
-          # the discovery helper accepts.
+          # discovery. fd is the preferred accelerator: when absent the
+          # helper warns loudly and falls back to a stdlib walk (never a
+          # silent fallback, never a hard crash). We install it here so CI
+          # always runs the fast path. Debian/Ubuntu ships the binary as
+          # `fdfind`, which the discovery helper accepts.
           sudo apt-get update && sudo apt-get install -y fd-find
           fdfind --version
       - name: Install (best-effort fallback chain)
