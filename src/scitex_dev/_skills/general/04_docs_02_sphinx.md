@@ -73,6 +73,15 @@ The workflow:
 
 Reference workflow: `scitex-ssh/.github/workflows/docs.yml`.
 
+**Keeping `-W` strict without whack-a-moling docstrings:** `sphinx-build
+-W` is correct but bites on benign failure modes (autodoc docstring reST
+noise, `_sphinx_html` commit-back GH006, missing-peer autodoc imports,
+math renderer). The canonical `conf.py` + workflow defenses for each —
+`suppress_warnings = ["docutils"]`, `continue-on-error` commit-back,
+`autodoc_mock_imports`, `sphinx.ext.mathjax` — live in
+[`04_docs_04_robust-ci.md`](04_docs_04_robust-ci.md). Reference
+implementation: `scitex-seizure-metrics` (PR #6).
+
 Manual fallback (if CI is unavailable):
 
 ```bash
