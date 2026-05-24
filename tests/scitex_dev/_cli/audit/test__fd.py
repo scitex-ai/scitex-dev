@@ -1,11 +1,11 @@
 """Tests for the Rust `fd`-backed audit file discovery helper.
 
 No mocks: the discovery test runs the real `fd` binary against a real
-temp tree; the fail-loud tests really clear `fd`/`fdfind` from PATH and
-assert the loud error + install hint; the fallback tests really remove
-only the `fd`/`fdfind` directories from PATH and assert the stdlib walk
-still discovers files AND announces loudly (warns) by default, or raises
-under the strict `require_fd` knob.
+temp tree; the fail-loud tests really clear PATH so `fd`/`fdfind` cannot
+resolve and assert the loud error + install hint; the fallback tests
+really clear PATH and assert the stdlib walk still discovers files AND
+announces loudly (warns) by default, or raises under the strict
+`require_fd` knob.
 """
 
 from __future__ import annotations
@@ -44,26 +44,25 @@ def empty_path():
 
 @pytest.fixture
 def path_without_fd():
-    """Drop only the dirs that contain `fd`/`fdfind` from PATH; restore after.
+    """Really clear PATH so neither `fd` nor `fdfind` resolves; restore after.
 
-    Leaves the rest of PATH intact so the stdlib fallback runs in a
-    realistic environment (other tools still resolve). Reproduces the
-    GitHub `ubuntu-latest` situation where `fd` simply is not installed.
+    Reproduces the GitHub `ubuntu-latest` situation where `fd` is absent.
+    Dir-level stripping is unreliable when `fd`/`fdfind` lives in a system
+    dir reachable via more than one PATH entry (e.g. `/bin` → `/usr/bin`
+    symlink on Debian, where the CI `fd-find` package installs `fdfind`),
+    so we clear PATH outright. The fd-absent codepath (`_rglob_find_files`
+    + config reads) is pure stdlib and never shells out, so an empty PATH
+    is safe here.
     """
-    saved = os.environ.get("PATH", "")
-    fd_dirs = {
-        os.path.dirname(resolved)
-        for name in ("fd", "fdfind")
-        if (resolved := shutil.which(name))
-    }
-    kept = [
-        entry for entry in saved.split(os.pathsep) if entry and entry not in fd_dirs
-    ]
-    os.environ["PATH"] = os.pathsep.join(kept)
+    saved = os.environ.get("PATH")
+    os.environ["PATH"] = ""
     try:
         yield
     finally:
-        os.environ["PATH"] = saved
+        if saved is None:
+            os.environ.pop("PATH", None)
+        else:
+            os.environ["PATH"] = saved
 
 
 def test_fd_binary_raises_loudly_when_missing(empty_path):

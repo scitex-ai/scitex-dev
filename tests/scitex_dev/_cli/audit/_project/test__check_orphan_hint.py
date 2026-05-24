@@ -28,25 +28,24 @@ _HAS_FD = shutil.which("fd") is not None or shutil.which("fdfind") is not None
 
 @pytest.fixture
 def path_without_fd():
-    """Drop only the dirs that contain `fd`/`fdfind` from PATH; restore after.
+    """Really clear PATH so neither `fd` nor `fdfind` resolves; restore after.
 
-    Reproduces the GitHub `ubuntu-latest` runner where `fd` is not
-    installed, so the hinter's file discovery must take the stdlib path.
+    Reproduces the GitHub `ubuntu-latest` runner where `fd` is absent.
+    Dir-level stripping is unreliable when `fd`/`fdfind` lives in a system
+    dir reachable via more than one PATH entry (e.g. `/bin` → `/usr/bin`
+    symlink on Debian, where the CI `fd-find` package installs `fdfind`),
+    so we clear PATH outright. The hinter's fd-absent codepath (stdlib
+    walk + config reads) never shells out, so an empty PATH is safe here.
     """
-    saved = os.environ.get("PATH", "")
-    fd_dirs = {
-        os.path.dirname(resolved)
-        for name in ("fd", "fdfind")
-        if (resolved := shutil.which(name))
-    }
-    kept = [
-        entry for entry in saved.split(os.pathsep) if entry and entry not in fd_dirs
-    ]
-    os.environ["PATH"] = os.pathsep.join(kept)
+    saved = os.environ.get("PATH")
+    os.environ["PATH"] = ""
     try:
         yield
     finally:
-        os.environ["PATH"] = saved
+        if saved is None:
+            os.environ.pop("PATH", None)
+        else:
+            os.environ["PATH"] = saved
 
 
 def _make_project(tmp_path: Path) -> tuple[Path, Path]:
