@@ -5,10 +5,13 @@ description: |
   `.github/workflows/*.yml` MUST carry a `<PKG>_` prefix where `<PKG>` is the
   package's distribution name uppercased with hyphens converted to underscores
   (e.g. `newb` → `NEWB_`, `scitex-agent-container` → `SCITEX_AGENT_CONTAINER_`).
-  A short exception list covers cross-cutting names that `scitex-dev creds
-  rotate-all` deliberately targets (`CLAUDE_CODE_CREDENTIALS_JSON`), tool-pinned
-  envs (`GH_TOKEN`, `GITHUB_TOKEN`), and third-party-named tokens
-  (`CODECOV_TOKEN`, `GHCR_PAT`). Audited by PS-168.
+  A short ecosystem-default exception list covers cross-cutting names that
+  `scitex-dev creds rotate-all` deliberately targets (`CLAUDE_CODE_CREDENTIALS_JSON`),
+  tool-pinned envs (`GH_TOKEN`, `GITHUB_TOKEN`), and third-party-named tokens
+  (`CODECOV_TOKEN`, `GHCR_PAT`). A package may EXTEND that default (never
+  replace it) with per-package extras under
+  `[tool.scitex_dev.audit] ps168_secret_exceptions` in its `pyproject.toml`.
+  Audited by PS-168.
 tags: [scitex-general-package-workflow-secret-env-prefix]
 ---
 
@@ -88,6 +91,45 @@ If a future cross-cutting credential joins the rotate-all corpus, add
 its bare name here and update the auditor's exception list in the same
 PR.
 
+## Per-package exceptions (pyproject extras)
+
+The ecosystem-default list above is the right home for *cross-cutting*
+names. A name that only one package legitimately needs — a one-off
+legacy token, a vendor secret that genuinely can't carry the `<PKG>_`
+prefix — belongs in that package's own `pyproject.toml`, not in the
+central list. Declare it under `[tool.scitex_dev.audit]`:
+
+```toml
+[tool.scitex_dev.audit]
+ps168_secret_exceptions = [
+    "LEGACY_DEPLOY_TOKEN",   # one comment per entry explaining WHY
+]
+```
+
+The auditor reads this list for the package under audit and **unions**
+it with the ecosystem default — the package list *extends*, never
+*replaces*, the default. A package that declares nothing still inherits
+the full ecosystem default.
+
+Why per-package instead of central:
+
+- **Scope** — an exception is package-scoped knowledge; the package
+  owns it.
+- **Reviewability** — the package's PR carries both the workflow that
+  uses the secret AND the exception entry; one place for the reviewer.
+- **No central drift** — a one-off in one repo never pollutes the
+  shared list every other package inherits.
+
+Notes:
+
+- The canonical TOML namespace is `[tool.scitex_dev.audit]` (underscore).
+  The hyphenated `[tool.scitex-dev.audit]` is also accepted.
+- A malformed `pyproject.toml`, a wrong type (anything other than a list
+  of strings), or a missing section yields **no** extras — PS-168 falls
+  back to the ecosystem default. A broken pyproject can never silently
+  widen the allow-list.
+- Non-string entries in the list are dropped silently.
+
 ## Audit (PS-168)
 
 `PS-168` (severity `E`) scans every `.github/workflows/*.yml` under the
@@ -100,8 +142,8 @@ AND non-conformant":
    `_CREDENTIAL(S)`, `_PASSWORD`, `_PAT`, `_AUTH`, `_OAUTH`. A plain
    `BUILD_NUMBER` or `DEBUG_FLAG` secret isn't subject to the
    rotation discipline PS-168 protects and would just be noise.
-2. **Not in the exception list** above (the rotate-all targets +
-   tool-pinned names).
+2. **Not in the merged exception list** — the ecosystem default above
+   UNION the package's own `ps168_secret_exceptions` pyproject extras.
 3. **Doesn't start with the package's own `<PKG>_` prefix.**
 4. **Doesn't start with another ECOSYSTEM package's `<PKG>_` prefix.**
    Cross-package borrows are legitimate: a workflow that invokes

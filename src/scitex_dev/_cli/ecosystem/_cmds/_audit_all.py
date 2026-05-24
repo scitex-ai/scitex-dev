@@ -38,7 +38,18 @@ def register(ecosystem):
         default=1,
         show_default=True,
         type=int,
-        help="Run packages in parallel. Audits within a package stay serial.",
+        help="Run packages in parallel.",
+    )
+    @click.option(
+        "--audit-jobs",
+        default=0,
+        show_default=True,
+        type=int,
+        help=(
+            "Concurrent audits within a single package "
+            "(0 = run all audits at once). Each audit is an independent "
+            "subprocess, so this is the main wall-clock win."
+        ),
     )
     @click.option(
         "--no-version-check",
@@ -50,7 +61,9 @@ def register(ecosystem):
             "an older rule corpus."
         ),
     )
-    def ecosystem_audit_all(distributions, as_json, severity, jobs, no_version_check):
+    def ecosystem_audit_all(
+        distributions, as_json, severity, jobs, audit_jobs, no_version_check
+    ):
         """Run every audit-* on each DISTRIBUTION; aggregate exit codes.
 
         DISTRIBUTIONS accepts: a single name, multiple names as separate
@@ -103,89 +116,102 @@ def register(ecosystem):
         sub_env = {**_os.environ, "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1"}
         scitex_dev_bin = _shutil.which("scitex-dev") or "scitex-dev"
 
-        def _run_one(distribution: str) -> tuple[str, int, dict]:
-            results: dict = {}
-            pkg_exit = 0
-            for a in audits:
-                cmd = [scitex_dev_bin, "ecosystem", a, distribution]
-                if as_json:
-                    cmd.append("--json")
-                if a == "audit-cli":
-                    cmd += ["--severity", severity]
+        # Per-audit concurrency. 0 = run all audits for a package at once.
+        # Each audit is an independent subprocess (no shared state), so the
+        # bottleneck is process wall-clock — threads suffice and avoid the
+        # pickling cost of a process pool. Output is always captured, never
+        # streamed, so concurrent subprocesses can't interleave on the
+        # terminal; results are reassembled in the fixed `audits` order
+        # below for deterministic reporting.
+        per_pkg_workers = audit_jobs if audit_jobs > 0 else len(audits)
+        per_pkg_workers = max(1, min(per_pkg_workers, len(audits)))
+
+        def _run_audit(distribution: str, a: str) -> tuple[str, dict]:
+            cmd = [scitex_dev_bin, "ecosystem", a, distribution]
+            if as_json:
+                cmd.append("--json")
+            if a == "audit-cli":
+                cmd += ["--severity", severity]
+            try:
+                r = subprocess.run(cmd, capture_output=True, text=True, env=sub_env)
+            except Exception as e:
+                click.echo(
+                    f"error: {a} on {distribution} failed to launch: {e}",
+                    err=True,
+                )
+                return a, {"exit": 1, "error": str(e)}
+            if as_json:
+                payload = r.stdout.strip() or "null"
                 try:
-                    if as_json or len(pkgs) > 1:
-                        # Capture so multi-pkg output stays grouped.
-                        r = subprocess.run(
-                            cmd, capture_output=True, text=True, env=sub_env
-                        )
-                        if as_json:
-                            payload = r.stdout.strip() or "null"
-                            try:
-                                results[a] = {
-                                    "exit": r.returncode,
-                                    "data": _json.loads(payload),
-                                }
-                            except _json.JSONDecodeError:
-                                results[a] = {
-                                    "exit": r.returncode,
-                                    "raw": payload,
-                                }
-                        else:
-                            results[a] = {
-                                "exit": r.returncode,
-                                "stdout": r.stdout,
-                                "stderr": r.stderr,
-                            }
-                    else:
-                        click.echo(f"\n=== {a} ===", err=True)
-                        r = subprocess.run(cmd, env=sub_env)
-                        results[a] = {"exit": r.returncode}
-                except Exception as e:
-                    click.echo(
-                        f"error: {a} on {distribution} failed to launch: {e}",
-                        err=True,
-                    )
-                    results[a] = {"exit": 1, "error": str(e)}
-                    pkg_exit = 1
-                    continue
-                if r.returncode != 0:
-                    pkg_exit = 1
+                    return a, {"exit": r.returncode, "data": _json.loads(payload)}
+                except _json.JSONDecodeError:
+                    return a, {"exit": r.returncode, "raw": payload}
+            return a, {
+                "exit": r.returncode,
+                "stdout": r.stdout,
+                "stderr": r.stderr,
+            }
+
+        def _run_one(distribution: str) -> tuple[str, int, dict]:
+            collected: dict = {}
+            if per_pkg_workers == 1:
+                for a in audits:
+                    _, res = _run_audit(distribution, a)
+                    collected[a] = res
+            else:
+                with ThreadPoolExecutor(max_workers=per_pkg_workers) as ex:
+                    futs = [ex.submit(_run_audit, distribution, a) for a in audits]
+                    for f in as_completed(futs):
+                        a, res = f.result()
+                        collected[a] = res
+            # Reassemble in the fixed `audits` order — deterministic output
+            # regardless of which audit finished first.
+            results = {a: collected[a] for a in audits}
+            pkg_exit = 1 if any(r.get("exit", 0) != 0 for r in results.values()) else 0
             return distribution, pkg_exit, results
 
         all_results: dict[str, dict] = {}
         overall_exit = 0
 
-        if jobs <= 1 or len(pkgs) <= 1:
+        multi = len(pkgs) > 1
+
+        def _emit_pkg(name: str, res: dict) -> None:
+            """Print one package's captured audit output in audit order."""
+            if as_json:
+                return
+            if multi:
+                click.echo(f"\n###### {name} ######", err=True)
+            for a in audits:
+                r = res[a]
+                header = f"\n=== {name} :: {a} ===" if multi else f"\n=== {a} ==="
+                click.echo(header, err=True)
+                if r.get("stdout"):
+                    click.echo(r["stdout"])
+                if r.get("stderr"):
+                    click.echo(r["stderr"], err=True)
+
+        # Run packages. When multiple packages run in parallel, collect all
+        # results first, then print in the input `pkgs` order so the summary
+        # is deterministic regardless of completion order.
+        if jobs <= 1 or not multi:
             for d in pkgs:
-                if not as_json and len(pkgs) > 1:
-                    click.echo(f"\n###### {d} ######", err=True)
                 name, rc, res = _run_one(d)
                 all_results[name] = res
-                if not as_json and len(pkgs) > 1:
-                    for a, r in res.items():
-                        click.echo(f"\n=== {name} :: {a} ===", err=True)
-                        if r.get("stdout"):
-                            click.echo(r["stdout"])
-                        if r.get("stderr"):
-                            click.echo(r["stderr"], err=True)
+                _emit_pkg(name, res)
                 if rc != 0:
                     overall_exit = 1
         else:
             with ThreadPoolExecutor(max_workers=jobs) as ex:
                 futs = {ex.submit(_run_one, d): d for d in pkgs}
+                rc_by_pkg: dict[str, int] = {}
                 for f in as_completed(futs):
                     name, rc, res = f.result()
                     all_results[name] = res
-                    if not as_json:
-                        click.echo(f"\n###### {name} ######", err=True)
-                        for a, r in res.items():
-                            click.echo(f"\n=== {name} :: {a} ===", err=True)
-                            if r.get("stdout"):
-                                click.echo(r["stdout"])
-                            if r.get("stderr"):
-                                click.echo(r["stderr"], err=True)
-                    if rc != 0:
-                        overall_exit = 1
+                    rc_by_pkg[name] = rc
+            for d in pkgs:
+                _emit_pkg(d, all_results[d])
+                if rc_by_pkg[d] != 0:
+                    overall_exit = 1
 
         if as_json:
             click.echo(

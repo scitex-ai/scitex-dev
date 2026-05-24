@@ -76,11 +76,11 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_clew",
         "category": "library",
     },
-    "scitex-cloud": {
-        "local_path": "~/proj/scitex-cloud",
-        "pypi_name": "scitex-cloud",
-        "github_repo": "ywatanabe1989/scitex-cloud",
-        "import_name": "scitex_cloud",
+    "scitex-hub": {
+        "local_path": "~/proj/scitex-hub",
+        "pypi_name": "scitex-hub",
+        "github_repo": "ywatanabe1989/scitex-hub",
+        "import_name": "scitex_hub",
         "category": "library",
     },
     "figrecipe": {
@@ -547,6 +547,7 @@ def should_skip_audit(package: str, auditor: str) -> tuple[bool, str]:
     return (False, "") — fail open so a typo doesn't silently skip.
 
     Skip semantics:
+
     - archived packages are skipped for *every* auditor.
     - per-auditor categories listed in _CATEGORY_SKIP are skipped.
     - unknown package (not in ECOSYSTEM) is NOT skipped — the auditor's

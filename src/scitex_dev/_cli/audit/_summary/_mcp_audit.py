@@ -25,7 +25,6 @@ human/JSON emitters.
 
 from __future__ import annotations
 
-import asyncio
 import importlib
 import re
 from pathlib import Path
@@ -52,22 +51,9 @@ from ._audit import (
 # --------------------------------------------------------------------- #
 
 
-def _import_name(package: str) -> str:
-    """`scitex-cloud` → `scitex_cloud`."""
-    return package.replace("-", "_")
-
-
-def _short_name(package: str) -> str:
-    """`scitex-cloud` → `cloud`; `scitex-cloud-mcp` → `cloud_mcp`; `scitex` → `scitex`.
-
-    Always a valid Python identifier suffix (no hyphens), usable both as a
-    tool-name prefix and as a bridge-file basename.
-    """
-    if package == "scitex":
-        return "scitex"
-    if package.startswith("scitex-"):
-        return package[len("scitex-") :].replace("-", "_")
-    return package.replace("-", "_")
+# `_import_name` / `_short_name` are extracted to `_mcp_names` so the §6
+# parity split (`_mcp_parity`) can reuse them without a circular import.
+from ._mcp_names import _import_name, _short_name  # noqa: E402,F401
 
 
 # Packages we never audit as MCP standalones (they have no user-facing
@@ -121,16 +107,16 @@ def _resolve_mcp_server(package: str):
 
 
 def _list_tools(mcp_instance) -> list:
-    """Run `mcp.list_tools()` synchronously; return a list of FunctionTool."""
-    try:
-        return asyncio.run(mcp_instance.list_tools())
-    except RuntimeError:
-        # Already in an event loop — rare in CLI context, but handle gracefully.
-        loop = asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(mcp_instance.list_tools())
-        finally:
-            loop.close()
+    """List a FastMCP server's tools; return a list of Tool/FunctionTool.
+
+    Routes through `get_tools_sync` (the FastMCP 2.x/3.x version bridge) so the
+    audit works on both: FastMCP 2.x exposes `get_tools()` (dict) while 3.x
+    renamed it to `list_tools()` (list). The shim returns `{name: Tool}`; the
+    callers here only need a list of objects with a `.name`.
+    """
+    from scitex_dev._ecosystem._mcp import get_tools_sync
+
+    return list(get_tools_sync(mcp_instance).values())
 
 
 def _read_bridge_source(package: str) -> str | None:
@@ -428,112 +414,17 @@ def _check_bridge_pattern(
 
 
 # --------------------------------------------------------------------- #
-# §6 — Python API parity                                                 #
+# §6 — Python API parity (extracted to `_mcp_parity`)                    #
 # --------------------------------------------------------------------- #
-
-
-def _python_api_names(package: str) -> set[str]:
-    """Return the set of public *function* names exported by `scitex_<pkg>`.
-
-    Best-effort: imports the top-level module, reads `__all__` (or non-private
-    attributes), and keeps only callables that are NOT classes/types. Classes
-    are exposed as API but are rarely wrapped as MCP tools — including them
-    in the parity check produces false positives.
-
-    Two layouts are accepted, matching the two patterns in the
-    SciTeX ecosystem:
-
-    1. **Flat** — `pkg.<verb>_<noun>(...)` (the original convention).
-       Used by scitex-stats, scitex-io, etc.
-    2. **Nested** — `pkg.<noun>.<verb>(...)` (the CLI-mirror form).
-       Each noun submodule re-exports verbs under their bare names;
-       this auditor flattens them to `<noun>_<verb>` for the parity
-       comparison so the MCP tool naming convention still applies
-       (a tool named ``agent_list`` matches either ``pkg.agent_list``
-       or ``pkg.agent.list``).
-    """
-    import inspect as _inspect
-
-    import_name = _import_name(package)
-    try:
-        mod = importlib.import_module(import_name)
-    except Exception:
-        return set()
-    names = getattr(mod, "__all__", None)
-    if names is None:
-        names = [n for n in dir(mod) if not n.startswith("_")]
-    out: set[str] = set()
-    for n in names:
-        if not isinstance(n, str):
-            continue
-        val = getattr(mod, n, None)
-        if val is None or _inspect.isclass(val):
-            continue
-        if _inspect.ismodule(val):
-            # Nested-form noun submodule. Walk its public verbs and
-            # surface them as `<noun>_<verb>` so the parity check can
-            # match an MCP tool named the same way. Skip submodules
-            # without an explicit __all__ — those tend to be deep
-            # internals, not the package's CLI-tree mirror.
-            sub_names = getattr(val, "__all__", None)
-            if sub_names is None:
-                continue
-            for sub_n in sub_names:
-                if not isinstance(sub_n, str):
-                    continue
-                sub_val = getattr(val, sub_n, None)
-                if (
-                    sub_val is None
-                    or _inspect.isclass(sub_val)
-                    or _inspect.ismodule(sub_val)
-                    or not callable(sub_val)
-                ):
-                    continue
-                # Trailing underscore is the Python idiom for keyword
-                # aliasing (`import_`, `class_`); strip before joining
-                # so `pkg.db.import_` matches MCP `db_import`.
-                clean_verb = sub_n.rstrip("_")
-                out.add(f"{n}_{clean_verb}")
-            continue
-        if callable(val):
-            out.add(n)
-    return out
-
-
-def _check_api_parity(package: str, tool_names: set[str], out: list[Violation]) -> None:
-    """§6 — every Python API should map to an MCP tool (and vice versa)."""
-    py_apis = _python_api_names(package)
-    if not py_apis:
-        return  # cannot establish parity; not the auditor's place to invent it.
-
-    short = _short_name(package)
-    # Normalize MCP names to compare against bare Python names.
-    mcp_normalized = {n.removeprefix(f"{short}_") for n in tool_names}
-
-    missing_in_mcp = py_apis - mcp_normalized
-    if missing_in_mcp and len(missing_in_mcp) > len(py_apis) * 0.5:
-        out.append(
-            Violation(
-                package,
-                "§6",
-                f"{len(missing_in_mcp)}/{len(py_apis)} Python APIs have no "
-                f"matching MCP tool (sample: {sorted(missing_in_mcp)[:3]})",
-            )
-        )
-
-    # Orphan check (warn-tier; small set is normal for envelope tools).
-    orphans = mcp_normalized - py_apis
-    skill_tools = {"skills_list", "skills_get"}
-    interesting_orphans = orphans - skill_tools
-    if interesting_orphans and len(interesting_orphans) > 3:
-        out.append(
-            Violation(
-                package,
-                "§6",
-                f"{len(interesting_orphans)} MCP tools have no matching Python API "
-                f"(sample: {sorted(interesting_orphans)[:3]})",
-            )
-        )
+# The §6 parity/orphan check and its per-package `mcp_parity_exempt`
+# opt-out live in `_mcp_parity` so this orchestrator stays under the
+# per-file line budget. Re-exported here to preserve the `_audit_one_mcp`
+# call site and any external importers.
+from ._mcp_parity import (  # noqa: E402
+    _check_api_parity,
+    _python_api_names,  # noqa: F401  -- re-export for parity-test importers
+    is_mcp_parity_exempt,  # noqa: F401  -- re-export for convenience
+)
 
 
 # --------------------------------------------------------------------- #

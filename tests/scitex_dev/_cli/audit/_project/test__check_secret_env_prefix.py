@@ -12,7 +12,10 @@ from pathlib import Path
 
 from scitex_dev._cli.audit._project._check_secret_env_prefix import (
     EXCEPTION_SECRETS,
+    EXCEPTION_SECRETS_DEFAULT,
     _distribution_prefix,
+    _exception_secrets_for,
+    _read_pyproject_extra_exceptions,
     _violations_in_text,
     check_ps168_secret_env_prefix,
 )
@@ -308,3 +311,201 @@ class TestCheckPS168Integration:
         check_ps168_secret_env_prefix(tmp_path, "newb", _StubViolation, out)
         # Assert
         assert out[0].where == ".github/workflows/x-on-ubuntu.yml:7"
+
+
+# ===== per-package exception config (PS-168 pyproject extras) =====
+
+
+# A secret name that is key-like (TOKEN suffix), NOT in the ecosystem
+# default, and NOT prefixed for the `newb` distribution. Without a
+# per-package extra it is a PS-168 violation; declaring it as an extra
+# exception suppresses the violation.
+_LEGACY_SECRET_WORKFLOW = """\
+name: legacy-deploy
+on: [push]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "${{ secrets.LEGACY_DEPLOY_TOKEN }}"
+"""
+
+
+def _write_pyproject(repo: Path, body: str) -> None:
+    (repo / "pyproject.toml").write_text(body, encoding="utf-8")
+
+
+def _pyproject_with_extras(*names: str) -> str:
+    entries = ",\n    ".join(f'"{n}"' for n in names)
+    return (
+        "[project]\n"
+        'name = "newb"\n'
+        "[tool.scitex_dev.audit]\n"
+        f"ps168_secret_exceptions = [\n    {entries},\n]\n"
+    )
+
+
+class TestReadPyprojectExtraExceptions:
+    def test_missing_pyproject_returns_empty_set(self, tmp_path: Path) -> None:
+        # Arrange — bare repo, no pyproject.toml
+        repo = tmp_path
+        # Act
+        result = _read_pyproject_extra_exceptions(repo)
+        # Assert
+        assert result == frozenset()
+
+    def test_pyproject_without_audit_section_returns_empty_set(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange
+        _write_pyproject(tmp_path, '[project]\nname = "newb"\n')
+        # Act
+        result = _read_pyproject_extra_exceptions(tmp_path)
+        # Assert
+        assert result == frozenset()
+
+    def test_declared_extras_are_read_as_frozenset(self, tmp_path: Path) -> None:
+        # Arrange
+        _write_pyproject(tmp_path, _pyproject_with_extras("LEGACY_DEPLOY_TOKEN"))
+        # Act
+        result = _read_pyproject_extra_exceptions(tmp_path)
+        # Assert
+        assert result == frozenset({"LEGACY_DEPLOY_TOKEN"})
+
+    def test_hyphenated_tool_namespace_is_also_accepted(self, tmp_path: Path) -> None:
+        # Arrange — [tool.scitex-dev.audit] (hyphenated spelling)
+        body = (
+            '[project]\nname = "newb"\n'
+            "[tool.scitex-dev.audit]\n"
+            'ps168_secret_exceptions = ["LEGACY_DEPLOY_TOKEN"]\n'
+        )
+        _write_pyproject(tmp_path, body)
+        # Act
+        result = _read_pyproject_extra_exceptions(tmp_path)
+        # Assert
+        assert result == frozenset({"LEGACY_DEPLOY_TOKEN"})
+
+    def test_non_string_entries_are_dropped(self, tmp_path: Path) -> None:
+        # Arrange — a mixed list with an int that must be ignored
+        body = (
+            '[project]\nname = "newb"\n'
+            "[tool.scitex_dev.audit]\n"
+            'ps168_secret_exceptions = ["GOOD_TOKEN", 42]\n'
+        )
+        _write_pyproject(tmp_path, body)
+        # Act
+        result = _read_pyproject_extra_exceptions(tmp_path)
+        # Assert
+        assert result == frozenset({"GOOD_TOKEN"})
+
+    def test_wrong_type_for_extras_returns_empty_set(self, tmp_path: Path) -> None:
+        # Arrange — ps168_secret_exceptions is a string, not a list
+        body = (
+            '[project]\nname = "newb"\n'
+            "[tool.scitex_dev.audit]\n"
+            'ps168_secret_exceptions = "NOT_A_LIST"\n'
+        )
+        _write_pyproject(tmp_path, body)
+        # Act
+        result = _read_pyproject_extra_exceptions(tmp_path)
+        # Assert
+        assert result == frozenset()
+
+    def test_malformed_toml_returns_empty_set(self, tmp_path: Path) -> None:
+        # Arrange — invalid TOML must not raise, just yield no extras
+        _write_pyproject(tmp_path, "this is = = not valid toml [[[\n")
+        # Act
+        result = _read_pyproject_extra_exceptions(tmp_path)
+        # Assert
+        assert result == frozenset()
+
+
+class TestExceptionSecretsFor:
+    def test_no_pyproject_falls_back_to_ecosystem_default(self, tmp_path: Path) -> None:
+        # Arrange — repo without pyproject declares no extras
+        repo = tmp_path
+        # Act
+        result = _exception_secrets_for(repo)
+        # Assert
+        assert result == EXCEPTION_SECRETS_DEFAULT
+
+    def test_declared_extras_extend_the_default(self, tmp_path: Path) -> None:
+        # Arrange
+        _write_pyproject(tmp_path, _pyproject_with_extras("LEGACY_DEPLOY_TOKEN"))
+        # Act
+        result = _exception_secrets_for(tmp_path)
+        # Assert
+        assert result == EXCEPTION_SECRETS_DEFAULT | {"LEGACY_DEPLOY_TOKEN"}
+
+    def test_default_members_are_never_lost_when_extras_declared(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange
+        _write_pyproject(tmp_path, _pyproject_with_extras("LEGACY_DEPLOY_TOKEN"))
+        # Act
+        result = _exception_secrets_for(tmp_path)
+        # Assert
+        assert "CLAUDE_CODE_CREDENTIALS_JSON" in result
+
+
+class TestCheckPS168PerPackageExceptions:
+    def test_undeclared_legacy_secret_is_flagged_as_violation(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — workflow uses a non-default, un-prefixed secret; no extras
+        _write_workflow(tmp_path, "legacy-on-ubuntu.yml", _LEGACY_SECRET_WORKFLOW)
+        _write_pyproject(tmp_path, '[project]\nname = "newb"\n')
+        out: list = []
+        # Act
+        check_ps168_secret_env_prefix(tmp_path, "newb", _StubViolation, out)
+        # Assert
+        assert len(out) == 1
+
+    def test_declared_extra_secret_suppresses_the_violation(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — same workflow, but the secret is declared as an extra
+        _write_workflow(tmp_path, "legacy-on-ubuntu.yml", _LEGACY_SECRET_WORKFLOW)
+        _write_pyproject(tmp_path, _pyproject_with_extras("LEGACY_DEPLOY_TOKEN"))
+        out: list = []
+        # Act
+        check_ps168_secret_env_prefix(tmp_path, "newb", _StubViolation, out)
+        # Assert
+        assert out == []
+
+    def test_default_exception_still_passes_when_extras_declared(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — workflow uses an ecosystem-default secret; pkg declares
+        # an unrelated extra. The default must still be honoured.
+        body = (
+            "name: t\non: [push]\njobs:\n  j:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: echo ${{ secrets.GH_TOKEN }}\n"
+        )
+        _write_workflow(tmp_path, "ci-on-ubuntu.yml", body)
+        _write_pyproject(tmp_path, _pyproject_with_extras("LEGACY_DEPLOY_TOKEN"))
+        out: list = []
+        # Act
+        check_ps168_secret_env_prefix(tmp_path, "newb", _StubViolation, out)
+        # Assert
+        assert out == []
+
+    def test_declared_extra_does_not_excuse_other_unprefixed_secret(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — declaring one extra must not widen the allow-list to a
+        # different un-prefixed secret in the same workflow.
+        body = (
+            "name: t\non: [push]\njobs:\n  j:\n    runs-on: ubuntu-latest\n"
+            "    steps:\n"
+            "      - run: echo ${{ secrets.LEGACY_DEPLOY_TOKEN }}\n"
+            "      - run: echo ${{ secrets.OTHER_RANDOM_TOKEN }}\n"
+        )
+        _write_workflow(tmp_path, "ci-on-ubuntu.yml", body)
+        _write_pyproject(tmp_path, _pyproject_with_extras("LEGACY_DEPLOY_TOKEN"))
+        out: list = []
+        # Act
+        check_ps168_secret_env_prefix(tmp_path, "newb", _StubViolation, out)
+        # Assert — exactly the un-declared secret remains flagged
+        assert [("OTHER_RANDOM_TOKEN" in v.detail) for v in out] == [True]

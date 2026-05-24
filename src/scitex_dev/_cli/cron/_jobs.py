@@ -65,6 +65,24 @@ def _ci_watch_command() -> str:
     return f"mkdir -p $(dirname {log}); scitex-dev cron exec ci-watch >> {log} 2>&1"
 
 
+def _quota_keepalive_command() -> str:
+    """The shell line installed for the ``quota-keepalive`` cron job.
+
+    Same shape as ``ci-watch``: invoke the console script so the line
+    stays stable across virtual-env shuffles, ``mkdir -p`` the log dir
+    first, append output to a per-job log.
+
+    The crontab schedule is ``*/30 * * * *`` (every 30 minutes), but the
+    body self-gates to fire only every 2.5 hours — see
+    ``_quota_keepalive.run_once`` for why 2.5 h cannot be one cron
+    interval and how the timestamp gate enforces exact spacing.
+    """
+    log = "$HOME/.scitex/dev/logs/cron-quota-keepalive.log"
+    return (
+        f"mkdir -p $(dirname {log}); scitex-dev cron exec quota-keepalive >> {log} 2>&1"
+    )
+
+
 JOB_REGISTRY: Mapping[str, JobSpec] = {
     "ci-watch": JobSpec(
         name="ci-watch",
@@ -74,6 +92,18 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "Poll each sac agent's owned repo for CI red on develop; "
             "dispatch a fix-forward A2A turn to the responsible agent "
             "when failures are seen."
+        ),
+    ),
+    "quota-keepalive": JobSpec(
+        name="quota-keepalive",
+        # Crontab ticks every 30 min; the body self-gates to a 2.5-hour
+        # cadence (2.5 h is not expressible as a single cron interval).
+        schedule="*/30 * * * *",
+        command=_quota_keepalive_command(),
+        description=(
+            "Fire a trivial 'hello' turn every 2.5 hours (self-gated) to "
+            "pre-start Claude's rolling 5-hour quota window, so real work "
+            "begins against a window that is already partway elapsed."
         ),
     ),
     # Future entries land here. Suggested naming pattern: short

@@ -65,10 +65,11 @@ src/<pkg>/_sphinx_html/         # bundled in the wheel; refreshed at release
 **Canonical refresh path: GitHub Actions** (`.github/workflows/docs.yml`).
 The workflow:
 1. Builds Sphinx HTML on every push/PR.
-2. PRs use `sphinx-build -W` (treat warnings as errors → catches breakage early).
-3. Pushes to `main`/`develop` rebuild without `-W`, copy the output to
-   `src/<pkg>/_sphinx_html/`, and auto-commit when it changes
-   (`[skip ci]` to avoid loops).
+2. Every build uses `sphinx-build -W --keep-going` (warnings-as-errors
+   on BOTH PRs and `main`/`develop` pushes → a warning can never land).
+3. `main`/`develop` pushes additionally copy the output to
+   `src/<pkg>/_sphinx_html/` and auto-commit when it changes (the
+   commit-message guard, not a skip-ci token, prevents rebuild loops).
 
 Reference workflow: `scitex-ssh/.github/workflows/docs.yml`.
 

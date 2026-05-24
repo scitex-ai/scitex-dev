@@ -522,11 +522,10 @@ def mcp_list_tools(verbose, as_json):
     _KNOWN_TOOLS = ["linter_check", "linter_check_source", "linter_list_rules"]
     tools = []
     try:
-        import asyncio
-
         from ._server import mcp as mcp_server
+        from .._ecosystem._mcp import get_tools_sync
 
-        tools = asyncio.run(mcp_server.list_tools())
+        tools = list(get_tools_sync(mcp_server).values())
     except Exception:
         pass
 

@@ -195,6 +195,7 @@ share one rule definition — schemas can't drift.
 - `./docs/sphinx/_build/` — local Sphinx build output. Gitignored.
 - `./docs/assets/` — figures, screenshots, diagrams referenced from README and other docs.
 - `./docs/to_claude/` — agent context files (guidelines, hooks, examples). **Must be gitignored** — local-machine artifacts, not part of the shipped repo.
+- `./docs/adr/` — Architecture Decision Records. See [Architecture Decision Records (ADRs)](#architecture-decision-records-adrs) below.
 - `./GITIGNORED/` — catch-all file-based scratch channel.
 
 ### Production-served Sphinx HTML — bundled in `src/<pkg>/_sphinx_html/`
@@ -207,6 +208,57 @@ src/<pkg>/_sphinx_html/         # bundled in the wheel; refreshed at release
 ```
 
 `scitex_dev.docs.get_docs(format="html")` resolves first to the in-wheel `_sphinx_html/`, then falls back to local `_build/`. See [04_docs_02_sphinx.md](04_docs_02_sphinx.md) for full release recipe.
+
+## Architecture Decision Records (ADRs)
+
+An **ADR** captures one significant architectural decision: the context that forced it, the decision taken, and the consequences. ADRs are a **recommended (not mandated)** ecosystem convention — a repo with no `docs/adr/` is fine. But the moment you *do* keep ADRs, they follow a fixed shape so they stay scannable across the ecosystem.
+
+**Scope: all project kinds** — package, research, grant, draft. Any repo with non-obvious architectural decisions benefits.
+
+### Location + filename
+
+ADRs live at `docs/adr/NNNN-<kebab-slug>.md`:
+
+- `NNNN` — 4-digit zero-padded **sequential** number (`0001`, `0002`, …). The sequence is the chronological order decisions were taken.
+- `<kebab-slug>` — lowercase kebab-case summary (`isolation-hardening`, `a2a-v1-compliance`).
+
+```
+docs/adr/
+├── 0001-isolation-hardening.md
+├── 0002-runtime-home-directory.md
+└── 0003-a2a-v1-compliance.md
+```
+
+### Lean template (exactly five sections)
+
+```markdown
+# ADR: <Short title> (<YYYY-MM-DD>)
+
+## Status
+Proposed | Accepted | Superseded by ADR-NNNN | Deprecated.
+
+## Context
+The forces at play — what problem / pressure forced a decision. (A
+`## Problem` heading is the common synonym and is accepted.)
+
+## Decision
+What we decided to do, stated as a positive assertion.
+
+## Consequences
+What becomes easier and what becomes harder as a result — the
+trade-offs, follow-ups, and things now ruled out.
+```
+
+Keep it lean. The proven exemplar set is **`scitex-agent-container/docs/adr/`** (0001 isolation-hardening, 0004 a2a-v1-compliance, 0009 claude-setup-delivery) — mirror that depth and tone. Tolerated variants the auditor accepts: `**Status:**` as a bold-line instead of an H2; `## Problem` in place of `## Context`; `## Decisions` (plural) in place of `## Decision`. Sections beyond the five (Implementation, Rationale, References, Addendum, …) are welcome — the five are the *minimum*.
+
+### Enforcement (PS-173, warn during adoption)
+
+`scitex-dev ecosystem audit-project` runs **PS-173** *only when `docs/adr/` exists*:
+
+- (a) every `*.md` matches `NNNN-<kebab-slug>.md` (4-digit prefix, kebab slug);
+- (b) each ADR has a title (H1) plus Status / Context / Decision / Consequences.
+
+A repo with **no** `docs/adr/` produces **no finding** (presence is recommended, not mandated). Severity is **W during adoption** — promote to E once the ecosystem's ADR dirs comply.
 
 ## `./templates` — wheel-vs-git payload separation
 

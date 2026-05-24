@@ -2119,6 +2119,17 @@ def audit_project(
         _check_placeholder_tests(repo_root, violations)
         _check_empty_test_dirs(repo_root, distribution, violations)
     _check_tests_subdir_convention(repo_root, distribution, violations)
+    # hook-bypass: line-limit
+    # RP-2xx: research projects mirror scripts/ ↔ tests/scripts/ instead of
+    # src/<pkg>/ ↔ tests/<pkg>/. Fired only when `research` is in the
+    # project-types; the PS package-publish rules drop for pure-research
+    # (no `pip` ⇒ applies("PS-*") is False). See _check_research_mirror.
+    from .._config import load_config as _load_cfg_for_research
+
+    if "research" in _load_cfg_for_research(repo_root).project_types:
+        from ._check_research_mirror import check_research_mirror
+
+        check_research_mirror(repo_root, violations)
     _check_docs_structure(repo_root, violations)
     src_pkg = _src_pkg_dir(repo_root, distribution)
     if src_pkg is not None:
@@ -2151,6 +2162,14 @@ def audit_project(
     from ._check_dev_extras_complete import check_dev_extras_complete
 
     check_dev_extras_complete(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    from ._check_optional_deps_guarded import check_ps148_optional_deps_guarded
+
+    check_ps148_optional_deps_guarded(repo_root, distribution, Violation, violations)
+    # hook-bypass: line-limit
+    from ._check_hard_dep_overreach import check_ps149_hard_dep_overreach
+
+    check_ps149_hard_dep_overreach(repo_root, distribution, Violation, violations)
     from ._check_umbrella_dep_and_integration import (
         check_ps139_umbrella_dep,
         check_ps140_integration_gate,
@@ -2188,6 +2207,12 @@ def audit_project(
     check_ps145_cross_package_read(repo_root, distribution, Violation, violations)
     check_ps146_pip_install_side_effect(repo_root, Violation, violations)
     check_ps147_eval_form_completion(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    # PS-173: ADR format — only fires when docs/adr/ exists (presence is
+    # recommended, not mandated). Scope = all project kinds.
+    from ._check_adr import check_ps173_adr_format
+
+    check_ps173_adr_format(repo_root, violations)
     if not skip_mirror:
         from ._check_smoke_e2e_layers import (
             check_ps211_smoke_layer,

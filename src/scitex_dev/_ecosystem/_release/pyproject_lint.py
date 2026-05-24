@@ -29,7 +29,7 @@ Rules
   `license = {text = "..."}` (deprecated PEP 621 form).
 - ``REL-21_dirty_release_state`` — pyproject version, latest git tag, and
   PyPI latest must agree (within drift tolerance). Caught the
-  scitex-stats / scitex-cloud / scitex-orochi tag-vs-PyPI drift.
+  scitex-stats / scitex-hub / scitex-orochi tag-vs-PyPI drift.
 
 Each check returns a list of ``LintFinding`` records. The CLI maps them
 to ``scitex-dev quality lint-pyproject [--fix] [--strict]``.
@@ -89,7 +89,7 @@ ECOSYSTEM_IMPORTS_TO_DIST: dict[str, str] = {
     "scitex_events": "scitex-events",
     "scitex_hpc": "scitex-hpc",
     "scitex_clew": "scitex-clew",
-    "scitex_cloud": "scitex-cloud",
+    "scitex_hub": "scitex-hub",
     "scitex_browser": "scitex-browser",
     "scitex_app": "scitex-app",
     "scitex_ui": "scitex-ui",

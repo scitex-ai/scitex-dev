@@ -338,13 +338,13 @@ with proper exit code.</p>
 <dd><p>Return (skip, reason) for running <cite>auditor</cite> on <cite>package</cite>.</p>
 <p><cite>auditor</cite> is one of the keys in <cite>_CATEGORY_SKIP</cite>. Unknown auditors
 return (False, “”) — fail open so a typo doesn’t silently skip.</p>
-<p>Skip semantics:
-- archived packages are skipped for <em>every</em> auditor.
-- per-auditor categories listed in _CATEGORY_SKIP are skipped.
-- unknown package (not in ECOSYSTEM) is NOT skipped — the auditor’s</p>
-<blockquote>
-<div><p>own not-found path will handle it.</p>
-</div></blockquote>
+<p>Skip semantics:</p>
+<ul class="simple">
+<li><p>archived packages are skipped for <em>every</em> auditor.</p></li>
+<li><p>per-auditor categories listed in _CATEGORY_SKIP are skipped.</p></li>
+<li><p>unknown package (not in ECOSYSTEM) is NOT skipped — the auditor’s
+own not-found path will handle it.</p></li>
+</ul>
 </dd></dl>
 
 </section>
@@ -428,16 +428,18 @@ empty list if the source is silently absent/expired — that is the
 import name, umbrella attr, alias, display, method-prefix, env-prefix).
 See <code class="docutils literal notranslate"><span class="pre">registry.yaml</span></code> for entries and <code class="docutils literal notranslate"><span class="pre">BRANDING_TRANSLATION_REGISTRY_PLAN.md</span></code>
 for design rationale.</p>
-<dl class="simple">
-<dt>Runtime API (minimal — only what figrecipe + socialia need):</dt><dd><p>get(brand_key, field)               -&gt; str
-translate(name, <a href="#id1"><span class="problematic" id="id2">*</span></a>, from_brand, to_brand) -&gt; str
-register_method_aliases(cls, <a href="#id3"><span class="problematic" id="id4">*</span></a>, brand_key) -&gt; None
-get_env(key, <a href="#id5"><span class="problematic" id="id6">*</span></a>, brand_key, default=None) -&gt; str | None</p>
-</dd>
-<dt>Plus low-level helpers used by the auditor:</dt><dd><p>get_brand(brand_key) -&gt; Brand
-iter_brands() -&gt; Iterator[tuple[str, Brand]]</p>
-</dd>
-</dl>
+<p>Runtime API (minimal — only what figrecipe + socialia need):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">get</span><span class="p">(</span><span class="n">brand_key</span><span class="p">,</span> <span class="n">field</span><span class="p">)</span>               <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="n">translate</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">from_brand</span><span class="p">,</span> <span class="n">to_brand</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="n">register_method_aliases</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">brand_key</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<span class="n">get_env</span><span class="p">(</span><span class="n">key</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">brand_key</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+</pre></div>
+</div>
+<p>Plus low-level helpers used by the auditor:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">get_brand</span><span class="p">(</span><span class="n">brand_key</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Brand</span>
+<span class="n">iter_brands</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Brand</span><span class="p">]]</span>
+</pre></div>
+</div>
 <dl class="py class">
 <dt class="sig sig-object py" id="scitex_dev._branding.Brand">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">scitex_dev._branding.</span></span><span class="sig-name descname"><span class="pre">Brand</span></span><a class="reference internal" href="_modules/scitex_dev/_branding/_helpers.html#Brand"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#scitex_dev._branding.Brand" title="Link to this definition"></a></dt>

@@ -7,10 +7,24 @@ must either:
 
 1. Begin with the package's ``<PKG>_`` prefix (distribution name
    uppercased, hyphens → underscores), OR
-2. Appear in the small exception list of cross-cutting / tool-pinned
-   names (``CLAUDE_CODE_CREDENTIALS_JSON``, ``GH_TOKEN``,
-   ``CODECOV_TOKEN``, ``GHCR_PAT``, ``GITHUB_TOKEN``, ``NPM_TOKEN``,
-   ``PYPI_API_TOKEN``, plus the GitHub-Actions debug toggles).
+2. Appear in the exception list of cross-cutting / tool-pinned names.
+   The list is the union of:
+
+   * the ecosystem default (``EXCEPTION_SECRETS_DEFAULT`` —
+     ``CLAUDE_CODE_CREDENTIALS_JSON``, ``GH_TOKEN``, ``CODECOV_TOKEN``,
+     ``GHCR_PAT``, ``GITHUB_TOKEN``, ``NPM_TOKEN``, ``PYPI_API_TOKEN``,
+     the GitHub-Actions debug toggles, ``CLA_PERSONAL_ACCESS_TOKEN``),
+     and
+   * per-package extras declared in the audited package's
+     ``pyproject.toml`` under
+     ``[tool.scitex_dev.audit] ps168_secret_exceptions``. The package
+     list **extends** the default (it never replaces it), so a package
+     that declares nothing still inherits the full ecosystem default.
+
+   Per-package extras keep an exception scoped to the package that
+   actually needs it — the PR that adds the workflow using the secret
+   also carries the exception entry, one place for the reviewer — and
+   stop one package's one-off from polluting the central list.
 
 Rationale: ``scitex-dev creds rotate-all`` rotates the cross-cutting
 names ecosystem-wide; per-package secrets that picked the same surface
@@ -32,10 +46,20 @@ import re
 from pathlib import Path
 from typing import Any, Iterable
 
+try:
+    import tomllib  # 3.11+
+except ImportError:  # pragma: no cover — 3.10 path
+    import tomli as tomllib  # type: ignore[no-redef]
+
 # Cross-cutting / tool-pinned names that legitimately exist without a
 # per-package prefix. Keep this list in lockstep with the skill leaf
 # (02_package_14_workflow-secret-env-prefix.md §Exception list).
-EXCEPTION_SECRETS: frozenset[str] = frozenset(
+#
+# This is the ECOSYSTEM DEFAULT — the fallback when a package declares
+# no per-package extras. Per-package additions live in pyproject.toml
+# under ``[tool.scitex_dev.audit] ps168_secret_exceptions`` and EXTEND
+# this set (see ``_exception_secrets_for``).
+EXCEPTION_SECRETS_DEFAULT: frozenset[str] = frozenset(
     {
         # Rotate-all ecosystem-wide credential.
         "CLAUDE_CODE_CREDENTIALS_JSON",
@@ -55,6 +79,58 @@ EXCEPTION_SECRETS: frozenset[str] = frozenset(
         "CLA_PERSONAL_ACCESS_TOKEN",
     }
 )
+
+# Back-compat alias. The default-only set was previously named
+# ``EXCEPTION_SECRETS``; keep the name resolvable for callers and tests
+# that import it. New code should prefer ``EXCEPTION_SECRETS_DEFAULT``.
+EXCEPTION_SECRETS: frozenset[str] = EXCEPTION_SECRETS_DEFAULT
+
+
+def _read_pyproject_extra_exceptions(repo: Path) -> frozenset[str]:
+    """Return per-package PS-168 secret exceptions from ``pyproject.toml``.
+
+    Reads the list at
+    ``[tool.scitex_dev.audit] ps168_secret_exceptions`` (the canonical
+    ``tool.scitex_dev`` namespace; ``tool.scitex-dev`` is also accepted
+    for the hyphenated form). Non-string entries are dropped. Any
+    failure (missing file, malformed TOML, wrong type) returns the empty
+    set so PS-168 falls back to the ecosystem default — a broken
+    pyproject must never silently widen the exception list.
+    """
+    pp = repo / "pyproject.toml"
+    if not pp.is_file():
+        return frozenset()
+    try:
+        data = tomllib.loads(pp.read_text(encoding="utf-8"))
+    except Exception:
+        return frozenset()
+    tool = data.get("tool")
+    if not isinstance(tool, dict):
+        return frozenset()
+    # Accept both the canonical underscore namespace and the hyphenated
+    # spelling some pyprojects use for [tool.*] tables.
+    sd = tool.get("scitex_dev")
+    if not isinstance(sd, dict):
+        sd = tool.get("scitex-dev")
+    if not isinstance(sd, dict):
+        return frozenset()
+    audit = sd.get("audit")
+    if not isinstance(audit, dict):
+        return frozenset()
+    extras = audit.get("ps168_secret_exceptions")
+    if not isinstance(extras, list):
+        return frozenset()
+    return frozenset(x for x in extras if isinstance(x, str))
+
+
+def _exception_secrets_for(repo: Path) -> frozenset[str]:
+    """Ecosystem default UNION any per-package extras for ``repo``.
+
+    The package list extends — never replaces — the default, so a
+    package that declares nothing still gets the full ecosystem default.
+    """
+    return EXCEPTION_SECRETS_DEFAULT | _read_pyproject_extra_exceptions(repo)
+
 
 # Match `${{ secrets.<NAME> }}` (and the analogous env. form) tolerating
 # whitespace around the dot and the closing braces. NAME is captured.
@@ -203,10 +279,15 @@ def check_ps168_secret_env_prefix(
     One violation per offending ``secrets.<NAME>`` reference, with the
     workflow path + 1-based line number in the ``where`` field so the
     output composes with editor jump-to-line tooling.
+
+    The exception list is the ecosystem default UNION any per-package
+    extras the audited package declares in its ``pyproject.toml`` under
+    ``[tool.scitex_dev.audit] ps168_secret_exceptions``.
     """
     prefix = _distribution_prefix(distribution)
     prefixes = _distribution_prefixes(distribution)
     cross_pkg_prefixes = _ecosystem_pkg_prefixes()
+    exceptions = _exception_secrets_for(repo)
     for path in _iter_workflow_files(repo):
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
@@ -214,7 +295,10 @@ def check_ps168_secret_env_prefix(
             continue
         rel = str(path.relative_to(repo))
         for lineno, name in _violations_in_text(
-            text, prefixes, cross_pkg_prefixes=cross_pkg_prefixes
+            text,
+            prefixes,
+            exceptions=exceptions,
+            cross_pkg_prefixes=cross_pkg_prefixes,
         ):
             out.append(
                 violation_cls(
