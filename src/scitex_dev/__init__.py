@@ -159,7 +159,7 @@ _LAZY_ATTRS: dict[str, str] = {
     "wait_all_pypi": "_release.ci",
     "wait_for_workflow": "_release.ci",
     # deploy
-    "deploy_scitex_cloud": "_release.deploy",
+    "deploy_scitex_hub": "_release.deploy",
     "verify_production": "_release.deploy",
     # skills
     "verify_docs_and_skills": "_docs.skills",

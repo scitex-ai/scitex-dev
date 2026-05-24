@@ -415,11 +415,11 @@ packages:
     pypi_name: figrecipe
     github_repo: ywatanabe1989/figrecipe
     import_name: figrecipe
-  - name: scitex-cloud
-    local_path: ~/proj/scitex-cloud
-    pypi_name: scitex-cloud
-    github_repo: ywatanabe1989/scitex-cloud
-    import_name: scitex_cloud
+  - name: scitex-hub
+    local_path: ~/proj/scitex-hub
+    pypi_name: scitex-hub
+    github_repo: ywatanabe1989/scitex-hub
+    import_name: scitex_hub
   - name: scitex-writer
     local_path: ~/proj/scitex-writer
     pypi_name: scitex-writer
@@ -443,7 +443,7 @@ hosts:
     user: ywatanabe
     role: staging
     enabled: true
-  - name: scitex-cloud
+  - name: scitex-hub
     hostname: scitex.ai
     user: deploy
     role: prod

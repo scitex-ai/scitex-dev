@@ -10,12 +10,12 @@ import subprocess
 from typing import Any
 
 
-def deploy_scitex_cloud(
+def deploy_scitex_hub(
     host: str = "nas",
     branch: str = "develop",
     confirm: bool = False,
 ) -> dict[str, Any]:
-    """Deploy scitex-cloud on a remote host.
+    """Deploy scitex-hub on a remote host.
 
     Stops Docker, pulls code, builds Vite, restarts Docker.
     Docker must be stopped before Vite build to avoid OOM.

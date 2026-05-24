@@ -22,7 +22,7 @@ def register(ecosystem):
             "the same commit gives the same numbers across machines.\n"
             "\n"
             "Excluded by default: scitex (umbrella), scitex-orochi,\n"
-            "scitex-cloud. Pass --include-meta to include them."
+            "scitex-hub. Pass --include-meta to include them."
         ),
     )
     @click.option(
@@ -52,7 +52,7 @@ def register(ecosystem):
     @click.option(
         "--include-meta",
         is_flag=True,
-        help="Include scitex / scitex-orochi / scitex-cloud (skipped by default).",
+        help="Include scitex / scitex-orochi / scitex-hub (skipped by default).",
     )
     @click.option(
         "--json",
@@ -72,7 +72,7 @@ def register(ecosystem):
             else ["python-apis", "skills", "project", "cli", "mcp-tools"]
         )
 
-        skip = set() if include_meta else {"scitex", "scitex-orochi", "scitex-cloud"}
+        skip = set() if include_meta else {"scitex", "scitex-orochi", "scitex-hub"}
         leaves = sorted(name for name in ECOSYSTEM.keys() if name not in skip)
 
         def _audit_one(leaf, auditor):

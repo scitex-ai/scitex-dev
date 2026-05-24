@@ -158,8 +158,8 @@ def register(ecosystem):
             "  §6  Python-API ↔ MCP-tool parity\n"
             "\n"
             "\b\nExamples:\n"
-            "  $ scitex-dev ecosystem audit-mcp-tools scitex-cloud\n"
-            "  $ scitex-dev ecosystem audit-mcp-tools scitex-cloud --behavioral\n"
+            "  $ scitex-dev ecosystem audit-mcp-tools scitex-hub\n"
+            "  $ scitex-dev ecosystem audit-mcp-tools scitex-hub --behavioral\n"
             "  $ scitex-dev ecosystem audit-mcp-tools --all --json > mcp-drift.json"
         ),
     )

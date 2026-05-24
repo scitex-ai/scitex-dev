@@ -132,7 +132,7 @@ _HEAVY_DISTS: frozenset[str] = frozenset(
         # Heavy scitex peers (large surface + transitive matplotlib/figrecipe)
         "scitex-app",
         "scitex-scholar",
-        "scitex-cloud",
+        "scitex-hub",
         # Web automation (browser binaries)
         "playwright",
         "selenium",

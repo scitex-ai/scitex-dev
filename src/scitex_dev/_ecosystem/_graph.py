@@ -76,7 +76,7 @@ TIER_MAP: Dict[str, str] = {
     "scitex": "apps",
     "scitex-writer": "apps",
     "scitex-scholar": "apps",
-    "scitex-cloud": "apps",
+    "scitex-hub": "apps",
     "scitex-template": "apps",
 }
 
