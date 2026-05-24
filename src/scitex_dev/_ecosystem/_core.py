@@ -76,11 +76,11 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_clew",
         "category": "library",
     },
-    "scitex-cloud": {
-        "local_path": "~/proj/scitex-cloud",
-        "pypi_name": "scitex-cloud",
-        "github_repo": "ywatanabe1989/scitex-cloud",
-        "import_name": "scitex_cloud",
+    "scitex-hub": {
+        "local_path": "~/proj/scitex-hub",
+        "pypi_name": "scitex-hub",
+        "github_repo": "ywatanabe1989/scitex-hub",
+        "import_name": "scitex_hub",
         "category": "library",
     },
     "figrecipe": {

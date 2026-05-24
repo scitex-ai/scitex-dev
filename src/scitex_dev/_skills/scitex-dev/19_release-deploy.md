@@ -43,10 +43,10 @@ All packages must show "ok" before proceeding.
 - **CLI**: `scitex-dev ecosystem sync --host nas --confirm`
 - **MCP**: `mcp__scitex__dev_ecosystem_sync(hosts=["nas"], confirm=True)`
 
-### 16. deploy_scitex_cloud — [Custom] scitex-cloud NAS deploy
+### 16. deploy_scitex_hub — [Custom] scitex-hub NAS deploy
 
-- **Python**: `from scitex_dev.deploy import deploy_scitex_cloud`
-  - `deploy_scitex_cloud(host="nas", branch="develop", confirm=False)` → `{host, commands, outputs, status}`
+- **Python**: `from scitex_dev.deploy import deploy_scitex_hub`
+  - `deploy_scitex_hub(host="nas", branch="develop", confirm=False)` → `{host, commands, outputs, status}`
 - **CLI**:
   ```bash
   ssh nas "cd ~/proj/scitex-cloud && git pull origin develop"
@@ -54,7 +54,7 @@ All packages must show "ok" before proceeding.
   ssh nas "cd ~/proj/scitex-cloud && npm install && npx vite build"
   ssh nas "cd ~/proj/scitex-cloud && docker compose up -d"
   ```
-- **MCP**: via `deploy_scitex_cloud` Python API (planned as MCP tool)
+- **MCP**: via `deploy_scitex_hub` Python API (planned as MCP tool)
 
 **Important:** Stop Docker before Vite build to avoid OOM on NAS.
 

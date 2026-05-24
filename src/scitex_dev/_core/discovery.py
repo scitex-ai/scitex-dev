@@ -190,7 +190,7 @@ def _get_package_root_fast(module_name: str) -> Optional[Path]:
     return None
 
 
-_CORE_PACKAGES = {"scitex", "scitex-cloud"}
+_CORE_PACKAGES = {"scitex", "scitex-hub"}
 
 
 def get_package_metadata(pip_name: str) -> Optional[dict]:
