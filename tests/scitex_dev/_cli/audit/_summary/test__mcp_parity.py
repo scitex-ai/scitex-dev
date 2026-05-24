@@ -9,8 +9,10 @@ and the comparison logic is exercised with real name sets.
 from __future__ import annotations
 
 from scitex_dev._cli.audit._summary._mcp_parity import (
+    _audited_repo_root,
     _check_api_parity,
     _parity_violations,
+    _python_api_names,
     is_mcp_parity_exempt,
 )
 
@@ -44,6 +46,15 @@ class TestParityComparisonTrips:
         violations = _parity_violations("scitex-io", py_apis, mcp_normalized)
         # Assert
         assert violations == []
+
+    def test_python_apis_without_matching_tools_trips_section_six(self):
+        # Arrange
+        py_apis = {"save", "load", "glob", "configs"}
+        mcp_normalized: set[str] = set()
+        # Act
+        violations = _parity_violations("scitex-io", py_apis, mcp_normalized)
+        # Assert
+        assert any("Python APIs have no" in v.message for v in violations)
 
 
 class TestExemptionDetection:
@@ -92,3 +103,86 @@ class TestCheckApiParityHonorsExemption:
         _check_api_parity("plot-rich", set(_PLOTTING_TOOLS), out, repo=tmp_path)
         # Assert
         assert out == []
+
+    def test_non_exempt_unimportable_package_yields_no_violation(self, tmp_path):
+        # Arrange
+        # No exemption flag and a package that does not import -> the
+        # parity check cannot establish APIs and bails without a violation.
+        _write_pyproject(tmp_path, '\n[tool.scitex_dev]\ncategory = "library"\n')
+        out: list = []
+        # Act
+        _check_api_parity(
+            "scitex-no-such-package", set(_PLOTTING_TOOLS), out, repo=tmp_path
+        )
+        # Assert
+        assert out == []
+
+    def test_non_exempt_real_package_with_empty_tools_trips_section_six(self, tmp_path):
+        # Arrange
+        # scitex-dev is importable (public APIs present) and the tmp repo
+        # has no exemption flag, so the non-exempt path runs end-to-end and
+        # the empty tool set trips the missing-in-MCP branch.
+        _write_pyproject(tmp_path, '\n[tool.scitex_dev]\ncategory = "library"\n')
+        out: list = []
+        # Act
+        _check_api_parity("scitex-dev", set(), out, repo=tmp_path)
+        # Assert
+        assert any(v.rule == "§6" for v in out)
+
+
+class TestPythonApiNames:
+    def test_real_importable_package_yields_public_callables(self):
+        # Arrange
+        # scitex-dev itself is importable in this test environment and
+        # exports public callables; the parity check reads them via __all__.
+        package = "scitex-dev"
+        # Act
+        names = _python_api_names(package)
+        # Assert
+        assert isinstance(names, set)
+
+    def test_unimportable_package_yields_empty_set(self):
+        # Arrange
+        package = "scitex-definitely-not-a-real-package"
+        # Act
+        names = _python_api_names(package)
+        # Assert
+        assert names == set()
+
+    def test_nested_noun_submodule_flattens_to_noun_verb(self, tmp_path):
+        # Arrange
+        # Build a real importable nested-form package on disk:
+        #   scitex_nestpkg/__init__.py exports the `agent` submodule
+        #   scitex_nestpkg/agent.py exports __all__ = ["list_"] (a verb)
+        # so _python_api_names should flatten it to "agent_list".
+        import sys
+
+        pkg_dir = tmp_path / "scitex_nestpkg"
+        pkg_dir.mkdir()
+        (pkg_dir / "__init__.py").write_text(
+            "from . import agent\n__all__ = ['agent']\n"
+        )
+        (pkg_dir / "agent.py").write_text(
+            "def list_():\n    return []\n__all__ = ['list_']\n"
+        )
+        sys.path.insert(0, str(tmp_path))
+        try:
+            # Act
+            names = _python_api_names("scitex-nestpkg")
+        finally:
+            sys.path.remove(str(tmp_path))
+            for mod in list(sys.modules):
+                if mod == "scitex_nestpkg" or mod.startswith("scitex_nestpkg."):
+                    del sys.modules[mod]
+        # Assert
+        assert "agent_list" in names
+
+
+class TestAuditedRepoRoot:
+    def test_unknown_package_resolves_to_none(self):
+        # Arrange
+        package = "scitex-definitely-not-a-real-package"
+        # Act
+        root = _audited_repo_root(package)
+        # Assert
+        assert root is None
