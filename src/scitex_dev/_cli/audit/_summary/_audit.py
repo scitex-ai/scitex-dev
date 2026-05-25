@@ -1112,8 +1112,23 @@ _ALLOWED_ENV_PREFIXES = (
 )
 
 
-def _is_allowed_env(var: str) -> bool:
-    return any(var == p.rstrip("_") or var.startswith(p) for p in _ALLOWED_ENV_PREFIXES)
+def _is_allowed_env(var: str, pkg_allowlist: tuple[str, ...] = ()) -> bool:
+    """True when ``var`` is allowed by the universal or per-package list.
+
+    The universal list (:data:`_ALLOWED_ENV_PREFIXES`) covers third-party
+    tools, OS conventions and well-known ML/dev frameworks. The
+    per-package layer is the opt-out declared via
+    ``[tool.scitex_dev] env_allowlist`` in the audited package's
+    ``pyproject.toml`` — see
+    :mod:`scitex_dev._cli.audit._summary._env_allowlist`. Both layers
+    apply the same "equal-to-stripped or prefix-match" semantics, so
+    callers don't have to remember which list a prefix lives in.
+    """
+    if any(var == p.rstrip("_") or var.startswith(p) for p in _ALLOWED_ENV_PREFIXES):
+        return True
+    from ._env_allowlist import is_var_in_pkg_allowlist
+
+    return is_var_in_pkg_allowlist(var, pkg_allowlist)
 
 
 @lru_cache(maxsize=1)
@@ -1131,16 +1146,41 @@ def _known_scitex_prefixes() -> tuple[str, ...]:
     return tuple(sorted(out))
 
 
-def _scan_env_vars(package: str, out: list[Violation]) -> None:
+def _scan_env_vars(
+    package: str,
+    out: list[Violation],
+    *,
+    pkg_allowlist: tuple[str, ...] | None = None,
+) -> None:
     """§6a — env vars must use `SCITEX_<PKG>_*`; bare `<PKG>_*` is forbidden.
 
     Scans the installed package's .py files. Best-effort: only flags
     obvious violations (bare-pkg prefix or non-allowed non-SCITEX vars).
+
+    Parameters
+    ----------
+    package
+        Distribution name (e.g. ``"scitex-agent-container"``).
+    out
+        Accumulator for violations.
+    pkg_allowlist
+        Per-package opt-out prefixes. When ``None`` (the default), the
+        list is read from the audited package's ``pyproject.toml``
+        ``[tool.scitex_dev] env_allowlist`` (see
+        :mod:`scitex_dev._cli.audit._summary._env_allowlist`). Pass an
+        explicit tuple (including the empty tuple ``()``) to bypass the
+        pyproject read — used by tests that operate on a synthetic
+        package tree.
     """
     expected = _expected_env_prefix(package)
     if expected is None:
         return
     bare = _bare_pkg_prefix(package)
+
+    if pkg_allowlist is None:
+        from ._env_allowlist import read_pkg_env_allowlist
+
+        pkg_allowlist = read_pkg_env_allowlist(package)
 
     try:
         dist = im.distribution(package)
@@ -1166,7 +1206,7 @@ def _scan_env_vars(package: str, out: list[Violation]) -> None:
             continue
         for m in pat.finditer(text):
             var = m.group(1) or m.group(2)
-            if not var or _is_allowed_env(var):
+            if not var or _is_allowed_env(var, pkg_allowlist):
                 continue
             if bare and var.startswith(bare):
                 found_bare.add(var)
@@ -1182,7 +1222,9 @@ def _scan_env_vars(package: str, out: list[Violation]) -> None:
                         break
                 if not matched:
                     found_wrong.add(var)
-            elif not var.startswith("SCITEX_") and not _is_allowed_env(var):
+            elif not var.startswith("SCITEX_") and not _is_allowed_env(
+                var, pkg_allowlist
+            ):
                 found_wrong.add(var)
 
     for var in sorted(found_bare):

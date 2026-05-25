@@ -74,6 +74,7 @@ Project structure split into one leaf per top-level directory:
 - [04_docs_01_readme.md](04_docs_01_readme.md) — Standard README template, sections, badges, footer
 - [04_docs_02_sphinx.md](04_docs_02_sphinx.md) — Sphinx docs, conf.py, troubleshooting
 - [04_docs_03_rtd.md](04_docs_03_rtd.md) — Read the Docs onboarding, `.readthedocs.yaml`, build config
+- [04_docs_04_robust-ci.md](04_docs_04_robust-ci.md) — Robust docs-CI: keep `sphinx-build -W` strict while defending the 4 benign failure modes (docstring reST noise → `suppress_warnings=["docutils"]`; GH006 commit-back → `continue-on-error`; missing-peer autodoc → `autodoc_mock_imports`; math → `sphinx.ext.mathjax`)
 
 ### 5. Development — version control, periodic audits, release
 - [05_development_01_version-control.md](05_development_01_version-control.md) — Branches, tags, release waves, release gates (core workflow)
