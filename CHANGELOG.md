@@ -7,6 +7,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **§6a per-package env-var allowlist (`[tool.scitex_dev] env_allowlist`)** —
+  packages that legitimately ship operator-facing env vars predating the
+  SciTeX ecosystem (acronym brands like `SAC_*`, integrations with external
+  operator tooling) can now declare the prefix in their own
+  `pyproject.toml` instead of being forced into a global
+  `SCITEX_<PKG>_*` rename that would break every running deployment.
+  Entries apply "equal-to-stripped or prefix-match" — same shape as the
+  universal allowlist — so `env_allowlist = ["SAC_"]` covers any
+  `SAC_*` var while `env_allowlist = ["GH_TOKEN"]` covers only the
+  exact name. Mirror of the existing `mcp_parity_exempt` opt-out:
+  same `[tool.scitex_dev]` namespace, same checked-out-tree
+  resolution (registry `local_path` when present, else walk up from
+  the import location), same sparingly-used contract. Helper lives
+  in the new `scitex_dev._cli.audit._summary._env_allowlist` module
+  (`read_pkg_env_allowlist` / `is_var_in_pkg_allowlist`); `_audit
+  ._is_allowed_env` and `_audit._scan_env_vars` consult it on every
+  audit-cli run. Documented in
+  `_skills/general/03_interface_02_cli/12_config-and-env.md` §6a.
+
 ## [0.12.2] — 2026-05-24
 
 ### Fixed
