@@ -85,6 +85,31 @@ def _repo_root_from_import(package: str) -> Path | None:
         candidate = Path(loc).parent
         if (candidate / "pyproject.toml").is_file():
             return candidate
+
+    # Fallback: module is in site-packages (non-editable PyPI install), so
+    # walking up from its location won't find pyproject.toml. Try common
+    # development checkout locations: $HOME/proj/<package>/ (which matches
+    # the ecosystem registry's ~/proj/<name> convention) and all
+    # /home/*/proj/<package>/ for container/multi-user environments.
+    proj_roots: list[Path] = []
+    try:
+        home_proj = Path.home() / "proj"
+        if home_proj.is_dir():
+            proj_roots.append(home_proj)
+    except Exception:
+        pass
+    try:
+        for home_dir in Path("/home").iterdir():
+            p = home_dir / "proj"
+            if p.is_dir() and p not in proj_roots:
+                proj_roots.append(p)
+    except Exception:
+        pass
+    for root in proj_roots:
+        candidate = root / package
+        if (candidate / "pyproject.toml").is_file():
+            return candidate.resolve()
+
     return None
 
 

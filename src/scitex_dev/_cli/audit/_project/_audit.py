@@ -1337,6 +1337,28 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
         candidate = Path(loc).parent
         if (candidate / "pyproject.toml").is_file():
             return candidate
+
+    # Fallback: module is in site-packages (non-editable PyPI install).
+    # Try common development checkout locations.
+    proj_roots: list[Path] = []
+    try:
+        home_proj = Path.home() / "proj"
+        if home_proj.is_dir():
+            proj_roots.append(home_proj)
+    except Exception:
+        pass
+    try:
+        for home_dir in Path("/home").iterdir():
+            p = home_dir / "proj"
+            if p.is_dir() and p not in proj_roots:
+                proj_roots.append(p)
+    except Exception:
+        pass
+    for root in proj_roots:
+        candidate = root / distribution
+        if (candidate / "pyproject.toml").is_file():
+            return candidate.resolve()
+
     return None
 
 
