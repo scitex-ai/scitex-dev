@@ -46,3 +46,5 @@ catboost_info/
 unknown_out/
 .coverage.*
 .venv
+
+.worktrees/
