@@ -23,6 +23,8 @@ from ._cmds import (
     _git,
     _install_gate,
     _list,
+    _prune_merged,
+    _sync_status,
     _test_remote,
     _versions,
 )
@@ -83,5 +85,7 @@ def register_ecosystem_commands(main_group):
     _clean.register(ecosystem)
     _install_gate.register(ecosystem)
     _test_remote.register(ecosystem)
+    _sync_status.register(ecosystem)
+    _prune_merged.register(ecosystem)
 
     return ecosystem
