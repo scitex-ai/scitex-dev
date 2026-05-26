@@ -87,7 +87,7 @@ from ._check_optional_deps_guarded import _import_roots_for, _strip_version
 # Heavy / niche integration libs. A HARD dep is a *candidate* for overreach
 # only if it appears here. Curated from the FUTURE spec examples + the
 # "heavy" heuristic in
-# `_skills/general/01_ecosystem_02_dependency-and-version-pinning.md`
+# `_skills/general/01_ecosystem/02_dependency-and-version-pinning.md`
 # (multi-GB / native-build / large-transitive / scitex-app-class surface).
 # Keyed by lowercased distribution name (hyphens preserved).
 _HEAVY_DISTS: frozenset[str] = frozenset(
@@ -156,7 +156,7 @@ _HEAVY_DISTS: frozenset[str] = frozenset(
 # needs as HARD. NEVER flag these even if they happen to be "heavy-ish".
 # A CLI that can't import click, or an MCP server that can't import
 # fastmcp, is broken — see PS-148 flavour-2 / the convention in
-# `01_ecosystem_02_dependency-and-version-pinning.md`.
+# `01_ecosystem/02_dependency-and-version-pinning.md`.
 _NEVER_FLAG: frozenset[str] = frozenset(
     {
         "click",
@@ -368,8 +368,8 @@ def check_ps149_hard_dep_overreach(
                     f"minimal, `[all]` = batteries-included) and guard each "
                     f'import with `try_import_optional("...", pkg="{distribution}")`. '
                     f"Inverse of PS-148. See _skills/general/"
-                    f"01_ecosystem_02_dependency-and-version-pinning.md and "
-                    f"03_interface_01_python-api/"
+                    f"01_ecosystem/02_dependency-and-version-pinning.md and "
+                    f"03_interface/01_python-api/"
                     f"04_lazy-imports-and-optional-deps.md."
                 ),
             )

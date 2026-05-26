@@ -1,7 +1,7 @@
 """CLI convention auditor — optional feature (install via `scitex-dev[cli-audit]`).
 
 Checks a package's Click command tree against the noun-verb convention in
-`_skills/general/03_interface-cli.md`. Warn-only.
+`_skills/general/03_interface/02_cli/SKILL.md`. Warn-only.
 
 Resolution order per token:
     1. Custom dict — `<project>/.scitex/dev/cli-audit-dict.yaml`

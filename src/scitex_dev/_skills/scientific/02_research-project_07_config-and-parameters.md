@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Repo Config And Parameters
-  [DETAILS] How SciTeX projects store and inject configuration/parameters into scripts — `./config/*.yaml` as the project-scope config tree, the auto-merged `CONFIG` object that `@stx.session` injects into main(), canonical keys (`PATH`, `PARAMS`, `DEBUG`, plus arbitrary user namespaces), deep-merge semantics (file merge + CLI override + env override), injected `SDIR_OUT`/`SDIR_RUN` path variables for deterministic save/load round trips, and how this integrates with the config-precedence chain in `01_ecosystem_06_local-state-directories.md`. Use when adding parameters to a script, debugging config resolution, or auditing an experiment for reproducibility.
+  [DETAILS] How SciTeX projects store and inject configuration/parameters into scripts — `./config/*.yaml` as the project-scope config tree, the auto-merged `CONFIG` object that `@stx.session` injects into main(), canonical keys (`PATH`, `PARAMS`, `DEBUG`, plus arbitrary user namespaces), deep-merge semantics (file merge + CLI override + env override), injected `SDIR_OUT`/`SDIR_RUN` path variables for deterministic save/load round trips, and how this integrates with the config-precedence chain in `01_ecosystem/06_local-state-directories.md`. Use when adding parameters to a script, debugging config resolution, or auditing an experiment for reproducibility.
 tags: [scitex-scientific-research-project-config-and-parameters]
 ---
 

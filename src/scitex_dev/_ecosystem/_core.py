@@ -34,7 +34,7 @@ class PackageInfo(TypedDict, total=False):
     umbrella shim and ``audit-cli §5b`` / ``audit-mcp-tools §1`` read it
     to know how to rewrite the program name and validate the mount
     namespace. See
-    ``_skills/general/03_interface_02_cli/05a_umbrella-passthrough.md``.
+    ``_skills/general/03_interface/02_cli/05a_umbrella-passthrough.md``.
     """
 
     local_path: str

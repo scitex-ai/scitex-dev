@@ -1,6 +1,6 @@
 """PS-168 — Per-package secret + env-var prefix in GitHub Actions workflows.
 
-Spec: ``_skills/general/02_package_14_workflow-secret-env-prefix.md``.
+Spec: ``_skills/general/02_package/14_workflow-secret-env-prefix.md``.
 
 Every ``${{ secrets.<NAME> }}`` reference under ``.github/workflows/*.yml``
 must either:
@@ -53,7 +53,7 @@ except ImportError:  # pragma: no cover — 3.10 path
 
 # Cross-cutting / tool-pinned names that legitimately exist without a
 # per-package prefix. Keep this list in lockstep with the skill leaf
-# (02_package_14_workflow-secret-env-prefix.md §Exception list).
+# (02_package/14_workflow-secret-env-prefix.md §Exception list).
 #
 # This is the ECOSYSTEM DEFAULT — the fallback when a package declares
 # no per-package extras. Per-package additions live in pyproject.toml
@@ -310,7 +310,7 @@ def check_ps168_secret_env_prefix(
                         f"`.github/workflows/` must carry the "
                         f"`{prefix}` prefix; cross-cutting names "
                         f"are allow-listed — see "
-                        f"_skills/general/02_package_14_workflow-secret-env-prefix.md)."
+                        f"_skills/general/02_package/14_workflow-secret-env-prefix.md)."
                     ),
                 )
             )

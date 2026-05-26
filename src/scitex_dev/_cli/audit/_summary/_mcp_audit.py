@@ -3,7 +3,7 @@
 Walks each `scitex-*` package's `_mcp_server.mcp` instance (FastMCP) and the
 matching umbrella bridge under `scitex._mcp_tools.<pkg>`; checks against the
 canonical MCP convention in
-`<scitex-python>/src/scitex/_skills/general/03_interface_03_mcp/`.
+`<scitex-python>/src/scitex/_skills/general/03_interface/03_mcp/`.
 
 Rules (matching that skill's section numbers):
 

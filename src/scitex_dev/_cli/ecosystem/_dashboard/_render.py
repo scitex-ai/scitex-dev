@@ -365,7 +365,7 @@ def _cell(state: PackageState, col: str) -> Text | str:
     if col == "skip":
         return _color_skip(state.skip_rules)
     if col == "venv":
-        # Per-package isolation status (02_package_10_dev-venv-isolation.md).
+        # Per-package isolation status (02_package/10_dev-venv-isolation.md).
         # real → green ✓ ; symlink (shared) → red ↗ ; missing → dim ·
         s = state.venv_state
         return {

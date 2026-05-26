@@ -1,7 +1,7 @@
 """PS-210 — `[dev]` extras completeness.
 
 Implements the rule from
-`_skills/general/01_ecosystem_02_dependency-and-version-pinning.md`
+`_skills/general/01_ecosystem/02_dependency-and-version-pinning.md`
 section "`[dev]` extras completeness — fastmcp lesson, 2026-05-02".
 
 Symptom this prevents: a package adds an optional feature behind an
@@ -182,7 +182,7 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
                         f"`pip install -e .[dev]` runs the full suite, or "
                         f"guard the test imports with "
                         f'`pytest.importorskip("{dep}")`. See '
-                        f"_skills/general/01_ecosystem_02_dependency-and-"
+                        f"_skills/general/01_ecosystem/02_dependency-and-"
                         f"version-pinning.md `[dev]` extras completeness."
                     ),
                 )

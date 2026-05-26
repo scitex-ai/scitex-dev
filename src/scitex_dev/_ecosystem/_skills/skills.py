@@ -127,7 +127,7 @@ def _collect_skills_from_dir(
     reproduce the directory structure under the destination.
 
     For the canonical `_skills/general/` use case this means the nested
-    `03_interface_04_skills/00_index.md` etc. files survive the round-trip.
+    `03_interface/04_skills/00_index.md` etc. files survive the round-trip.
     Legacy flat layouts (top-level `*.md` only) keep working unchanged.
     """
     skills: list[dict[str, str]] = []
@@ -373,7 +373,7 @@ def export_skills(
                 # Find canonical skill-tree root: walk up from any leaf
                 # until we hit an ancestor named pkg_name. Handles both
                 # flat layouts (one parent dir) and nested layouts like
-                # general/03_interface_04_skills/12_quality-checklist.md.
+                # general/03_interface/04_skills/12_quality-checklist.md.
                 src_root = None
                 for ancestor in [src_paths[0].parent, *src_paths[0].parents]:
                     if ancestor.name == pkg_name:
@@ -400,7 +400,7 @@ def export_skills(
 
             name = entry["name"]
             # Prefer `rel_path` (preserves nested subdirs like
-            # `03_interface_04_skills/00_index.md`); fall back to flat
+            # `03_interface/04_skills/00_index.md`); fall back to flat
             # `<name>.md` for legacy entries that predate rel_path.
             rel_path = entry.get("rel_path")
             if rel_path:

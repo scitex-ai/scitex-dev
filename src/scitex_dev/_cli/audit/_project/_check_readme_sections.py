@@ -1,8 +1,8 @@
 """README convention checks — PS-107 / PS-109 / PS-110 / PS-111 / PS-112.
 
 Codifies the SciTeX README template (see
-``_skills/general/04_docs_01_readme.md`` and the literal template at
-``_skills/general/04_docs_01_readme_template.md``). Detection mirrors
+``_skills/general/04_docs/01_readme.md`` and the literal template at
+``_skills/general/04_docs/01_readme_template.md``). Detection mirrors
 PS-106 (``_check_readme_badges.py``): cheap substring/regex scans on the
 first ~16 KB of README.md, warn-only.
 
@@ -67,7 +67,7 @@ _RE_FOUR_FREEDOMS = re.compile(
 # PS-110b — Each line of the canonical block, in order. Drift detection:
 # packages have hand-edited single freedoms (e.g. `--` instead of `—`,
 # rephrased verbs, missing AGPL closer). The blockquote should be
-# CANONICAL — copy-paste from 04_docs_01_readme_template.md, not paraphrased.
+# CANONICAL — copy-paste from 04_docs/01_readme_template.md, not paraphrased.
 # Each pattern is anchored on the leading `>` (with or without a space).
 _RE_FOUR_FREEDOMS_LINES = [
     re.compile(
@@ -290,7 +290,7 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                 (
                     "README.md is missing required H2 section(s): "
                     + ", ".join(missing)
-                    + ". See _skills/general/04_docs_01_readme_template.md "
+                    + ". See _skills/general/04_docs/01_readme_template.md "
                     "for the canonical layout."
                 ),
             )
@@ -324,7 +324,7 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                     "README.md does not contain the Four Freedoms for Research "
                     "blockquote. Append the canonical block under "
                     "`## Part of SciTeX` (see _skills/general/"
-                    "04_docs_01_readme_template.md)."
+                    "04_docs/01_readme_template.md)."
                 ),
             )
         )
@@ -351,7 +351,7 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                     (
                         f"Four Freedoms blockquote drifted from canonical text — "
                         f"missing/rephrased: {named}. Copy-paste verbatim from "
-                        f"_skills/general/04_docs_01_readme_template.md (do not paraphrase)."
+                        f"_skills/general/04_docs/01_readme_template.md (do not paraphrase)."
                     ),
                 )
             )
@@ -396,7 +396,7 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                 (
                     "README.md is missing a SciTeX icon footer (centered "
                     "scitex-icon image in the last ~2 KB). Add the canonical "
-                    "footer block — see _skills/general/04_docs_01_readme_template.md."
+                    "footer block — see _skills/general/04_docs/01_readme_template.md."
                 ),
             )
         )
@@ -439,7 +439,7 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                         "README.md '## Problem and Solution' (or '## Problem') "
                         "section is prose-only. SciTeX convention is a "
                         "markdown table with columns | # | Problem | Solution | "
-                        "— see _skills/general/04_docs_01_readme_template.md."
+                        "— see _skills/general/04_docs/01_readme_template.md."
                     ),
                 )
             )
@@ -455,7 +455,7 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                     "summary callout. Per 2026-05 convention, drop this "
                     "line and put star ratings on each interface section "
                     "header instead (e.g. '## Python API ⭐⭐⭐'). See "
-                    "_skills/general/99_quality_02_checklist.md §6."
+                    "_skills/general/09_quality/02_checklist.md §6."
                 ),
             )
         )
@@ -560,7 +560,7 @@ def check_readme_sections(repo: Path, violation_cls: type, out: list) -> None:
                     + ", ".join(sorted(set(bad_links))[:3])
                     + ". Use a deep-link to the relevant anchor page (e.g. "
                     "`/en/latest/api/<import>.html`) — see _skills/general/"
-                    "04_docs_01_readme.md 'Canonical Full X reference "
+                    "04_docs/01_readme.md 'Canonical Full X reference "
                     "deep-link patterns'."
                 ),
             )

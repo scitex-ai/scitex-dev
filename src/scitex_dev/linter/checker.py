@@ -344,7 +344,7 @@ class SciTeXChecker(ast.NodeVisitor):
     def visit_Constant(self, node: ast.Constant) -> None:
         """Flag integer literals ≥ 1_000 written without `_` separators
         (STX-NL001 / PEP 515 — see
-        `_skills/general/03_interface_01_python-api/14_numeric-literals.md`).
+        `_skills/general/03_interface/01_python-api/14_numeric-literals.md`).
 
         Carve-outs:
         - bool / float / complex / str / bytes / None — skipped.

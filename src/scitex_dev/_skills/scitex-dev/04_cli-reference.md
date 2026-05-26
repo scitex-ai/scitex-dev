@@ -46,7 +46,7 @@ Config path resolution:
 | Command | Description | Deep dive |
 |---|---|---|
 | `docs get / search / build` | View / search / rebuild aggregated docs | [16_docs-search.md](16_docs-search.md) |
-| `skills list / get / export` | Manage skills across the ecosystem | spec under `_skills/general/03_interface_04_skills/` |
+| `skills list / get / export` | Manage skills across the ecosystem | spec under `_skills/general/03_interface/04_skills/` |
 
 ## Interface
 

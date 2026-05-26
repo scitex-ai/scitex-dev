@@ -9,7 +9,7 @@ badges as a uniform row:
     pypi, python, docs, tests, install-check, quality, cov
 
 Reference implementation: scitex-agent-container README badge block.
-Spec: ``_skills/general/02_package_12_workflows-naming.md``
+Spec: ``_skills/general/02_package/12_workflows-naming.md``
 (``§Standardized badge labels``).
 
 Detection: scan README.md for ``img.shields.io/.../label=<LABEL>``
@@ -136,7 +136,7 @@ def check_ps166_readme_badge_labels(
                                 f"({url[:80]}…). Add `?label=<one of "
                                 f"{sorted(ALLOWED_LABELS)}>` so the README badge "
                                 f"row is uniform across the ecosystem. See "
-                                f"_skills/general/02_package_12_workflows-naming.md "
+                                f"_skills/general/02_package/12_workflows-naming.md "
                                 f"§Standardized badge labels."
                             ),
                         )
@@ -161,7 +161,7 @@ def check_ps166_readme_badge_labels(
                     f"shields.io badge uses non-standard label "
                     f"`label={raw}`{hint} — allowed labels are "
                     f"{sorted(ALLOWED_LABELS)}. See "
-                    f"_skills/general/02_package_12_workflows-naming.md "
+                    f"_skills/general/02_package/12_workflows-naming.md "
                     f"§Standardized badge labels."
                 ),
             )

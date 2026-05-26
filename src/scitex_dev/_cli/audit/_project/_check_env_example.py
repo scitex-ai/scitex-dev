@@ -77,7 +77,7 @@ def check_env_example(repo: Path, violation_cls: type, out: list) -> None:
                     "package source references SCITEX_<MODULE>_* env vars "
                     "but documents them in neither `.env.example` nor a "
                     "README `## Environment Variables` section. Add one "
-                    "(see _skills/general/04_docs_03_env-vars-and-state.md "
+                    "(see _skills/general/04_docs/03_env-vars-and-state.md "
                     "for both acceptable patterns)."
                 ),
             )

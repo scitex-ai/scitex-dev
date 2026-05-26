@@ -6,7 +6,7 @@ The implementation lives upstream in the standalone ``newb`` package
 (https://pypi.org/project/newb/). scitex-dev's value-add is just the
 ecosystem-aware distribution-name → ``_skills/<dist>/`` resolver.
 
-See ``general/05_development_04_skills-self-explain.md`` for the concept.
+See ``general/05_development/04_skills-self-explain.md`` for the concept.
 """
 
 from __future__ import annotations

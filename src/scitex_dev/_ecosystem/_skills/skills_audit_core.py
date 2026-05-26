@@ -25,7 +25,7 @@ SYSTEM_FILES = frozenset({"MANIFEST.md"})
 
 # Filename prefix:
 #   2-level: NN_kebab-name.md                       (e.g. 40_playground.md)
-#   3-level: NN_<group>_NN_<leaf>.md                (e.g. 01_ecosystem_01_upstream-and-downstream.md)
+#   3-level: NN_<group>_NN_<leaf>.md                (e.g. 01_ecosystem/01_upstream-and-downstream.md)
 PREFIX_RE = re.compile(
     r"^(\d{2})_[a-z0-9][a-z0-9-]*"
     r"(?:_(\d{2})_[a-z0-9][a-z0-9-]*)?"
@@ -114,7 +114,7 @@ def find_duplicate_prefixes(skills_dir: Path) -> list[tuple[int, int | None]]:
 
     For 2-level names the key is ``(group, None)``; for 3-level names it is
     ``(group, leaf)``. Different leaves under the same group (e.g.
-    ``01_ecosystem_01_*``, ``01_ecosystem_02_*``) do not collide.
+    ``01_ecosystem/01_*``, ``01_ecosystem/02_*``) do not collide.
     """
     keys: list[tuple[int, int | None]] = []
     for leaf in iter_leaves(skills_dir):

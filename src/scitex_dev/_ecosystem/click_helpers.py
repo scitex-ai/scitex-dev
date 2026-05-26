@@ -1,7 +1,7 @@
 """Reusable Click helpers shared across SciTeX ecosystem CLIs.
 
 Currently exports `CategorizedGroup` so any package's top-level CLI can
-render a grouped command list (per general/03_interface_02_cli §6).
+render a grouped command list (per general/03_interface/02_cli §6).
 
 Usage::
 

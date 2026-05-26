@@ -53,11 +53,11 @@ def _skill_hints_text() -> str:
     root = _skills_root()
     return (
         f"spec: rules live in `{root}/general/`:\n"
-        f"  PS*  → 02_package_* (project structure, README, sphinx, RTD)\n"
-        f"  §*   → 03_interface_02_cli/  (audit-cli) "
-        f"or 03_interface_03_mcp/  (audit-mcp-tools)\n"
-        f"  SK*  → 03_interface_04_skills/  (skill files)\n"
-        f"  PA*  → 03_interface_01_python-api/  (Python API rules)\n"
+        f"  PS*  → 02_package/ (project structure, README, sphinx, RTD)\n"
+        f"  §*   → 03_interface/02_cli/  (audit-cli) "
+        f"or 03_interface/03_mcp/  (audit-mcp-tools)\n"
+        f"  SK*  → 03_interface/04_skills/  (skill files)\n"
+        f"  PA*  → 03_interface/01_python-api/  (Python API rules)\n"
         f"tool docs: `{root}/scitex-dev/` — how to use scitex-dev itself "
         f"(CLI reference, ecosystem helpers, agentic-test). Not audit rules.\n"
         f"escalation: think a rule fires wrongly, is too strict, or that "
@@ -111,5 +111,6 @@ def emit_skill_hints() -> None:
     if _os.environ.get("SCITEX_DEV_NO_AUDIT_DISCLAIMER"):
         return
     click.echo(_skill_hints_text(), err=True)
+
 
 # EOF

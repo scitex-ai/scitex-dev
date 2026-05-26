@@ -45,7 +45,7 @@ SPEC_DEFAULT_FILES: frozenset[str] = frozenset(
         "pyproject.toml",
         "Makefile",
         # Codecov config — canonical location is repo root (see
-        # `_skills/general/02_package_11_ci-and-codecov.md`). Without
+        # `_skills/general/02_package/11_ci-and-codecov.md`). Without
         # this entry the canonical CI wiring trips PS-103.
         "codecov.yml",
         # Node-ecosystem canonical manifests for any pkg shipping a

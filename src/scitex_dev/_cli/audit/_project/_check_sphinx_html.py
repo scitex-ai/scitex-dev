@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-# Canonical pinned deps from `_skills/general/04_docs_02_sphinx.md`.
+# Canonical pinned deps from `_skills/general/04_docs/02_sphinx.md`.
 _CANONICAL_DOCS_DEPS = [
     re.compile(r"^\s*sphinx\s*>=\s*7", re.MULTILINE),
     re.compile(r"^\s*sphinx-rtd-theme\s*>=\s*2", re.MULTILINE),
@@ -135,7 +135,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
                 (
                     "package has docs/sphinx/ but no .readthedocs.yaml at "
                     "the repo root. RTD won't build without it. See "
-                    "_skills/general/04_docs_02_sphinx.md for the canonical "
+                    "_skills/general/04_docs/02_sphinx.md for the canonical "
                     "config."
                 ),
             )
@@ -171,7 +171,7 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
                         ".readthedocs config deviates from the canonical "
                         "SciTeX shape — missing: "
                         + ", ".join(missing)
-                        + ". See _skills/general/04_docs_02_sphinx.md."
+                        + ". See _skills/general/04_docs/02_sphinx.md."
                     ),
                 )
             )
