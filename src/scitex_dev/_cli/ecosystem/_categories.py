@@ -53,7 +53,7 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
             "clean-root",
             "init-config",
             "clone",
-            "sync-status",
+            "check-sync",
             "prune-merged",
         ],
     ),

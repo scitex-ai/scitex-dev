@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ecosystem `sync-status` — per-package develop-sha sync across hosts.
+"""ecosystem `check-sync` — per-package develop-sha sync across hosts.
 
 Read-only by default. For each ecosystem clone it reports the current
 branch, the local `develop` sha, the `origin/develop` sha, and (with
@@ -8,7 +8,7 @@ branch, the local `develop` sha, the `origin/develop` sha, and (with
 then diffs local-vs-remote `develop` and classifies the drift.
 
 The user develops on Spartan now, so the local clones routinely drift
-behind. `sync-status -h spartan` shows, at a glance, which packages are
+behind. `check-sync -h spartan` shows, at a glance, which packages are
 behind / ahead / diverged without fetching or mutating anything.
 """
 
@@ -93,14 +93,14 @@ _STATUS_STYLE = {
 
 def register(ecosystem):
     @ecosystem.command(
-        "sync-status",
+        "check-sync",
         epilog=(
             "Examples:\n"
-            "  $ scitex-dev ecosystem sync-status                       # local only\n"
-            "  $ scitex-dev ecosystem sync-status -h spartan            # diff vs spartan\n"
-            "  $ scitex-dev ecosystem sync-status -h spartan --json | jq\n"
-            "  $ scitex-dev ecosystem sync-status -p scitex-io -h spartan\n"
-            "  $ scitex-dev ecosystem sync-status -h spartan --fetch    # refresh origin first\n"
+            "  $ scitex-dev ecosystem check-sync                       # local only\n"
+            "  $ scitex-dev ecosystem check-sync -h spartan            # diff vs spartan\n"
+            "  $ scitex-dev ecosystem check-sync -h spartan --json | jq\n"
+            "  $ scitex-dev ecosystem check-sync -p scitex-io -h spartan\n"
+            "  $ scitex-dev ecosystem check-sync -h spartan --fetch    # refresh origin first\n"
             "\n"
             "Read-only: never fetches/pulls/mutates unless --fetch is\n"
             "passed (which only runs `git fetch origin develop` per repo)."
@@ -149,7 +149,7 @@ def register(ecosystem):
         # identical per-package shape, then deserialise rows[].
         remote_by_host: dict[str, dict[str, dict]] = {}
         for host in host_list:
-            remote_argv = ["ecosystem", "sync-status", "--json"]
+            remote_argv = ["ecosystem", "check-sync", "--json"]
             if fetch:
                 remote_argv.append("--fetch")
             for p in package:
@@ -165,7 +165,7 @@ def register(ecosystem):
                     parsed[row.get("package", "")] = row
             else:
                 click.echo(
-                    f"warning: remote sync-status on {host} exited {rc}: "
+                    f"warning: remote check-sync on {host} exited {rc}: "
                     f"{err.strip()[:300]}",
                     err=True,
                 )

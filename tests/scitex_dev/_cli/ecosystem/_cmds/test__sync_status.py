@@ -1,4 +1,4 @@
-"""Behavioural tests for `scitex-dev ecosystem sync-status`.
+"""Behavioural tests for `scitex-dev ecosystem check-sync`.
 
 No mocks: every test builds REAL git repositories under `tmp_path`
 (init, commit on develop, optionally branch off) and drives the command
@@ -52,7 +52,7 @@ def _develop_sha(repo: Path) -> str:
 
 
 def _invoke_sync_status(args, *, packages):
-    """Invoke sync-status with ECOSYSTEM pointed at `packages`.
+    """Invoke check-sync with ECOSYSTEM pointed at `packages`.
 
     `packages` is a dict {name: repo_path}. We build a Click group, then
     drive the command; the helper reads the real ECOSYSTEM registry, so
@@ -79,7 +79,7 @@ def _invoke_sync_status(args, *, packages):
         register_ecosystem_commands(main)
         runner = CliRunner()
         return runner.invoke(
-            main, ["ecosystem", "sync-status", *args], catch_exceptions=False
+            main, ["ecosystem", "check-sync", *args], catch_exceptions=False
         )
     finally:
         _core.ECOSYSTEM.clear()
