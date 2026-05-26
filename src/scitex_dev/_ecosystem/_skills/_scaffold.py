@@ -1,7 +1,7 @@
 """Scaffold a `_skills/<pip-name>/` directory for a SciTeX package.
 
 Backs `scitex-dev skills init`. Mirrors the standard-template spec at
-`general/03_interface_04_skills/13_standard-template.md` so a fresh
+`general/03_interface/04_skills/13_standard-template.md` so a fresh
 package starts auditor-clean.
 """
 
@@ -117,7 +117,7 @@ tags: [{tag}-cli-reference]
 |---|---|
 | `{pip} <noun> <verb>` | TODO |
 
-See `general/03_interface_02_cli/`.
+See `general/03_interface/02_cli/`.
 """
 
 _MCP_TOOLS_MD = """\
@@ -134,7 +134,7 @@ tags: [{tag}-mcp-tools]
 |---|---|
 | `{imp}_<verb>_<noun>` | TODO |
 
-See `general/03_interface_03_mcp/`.
+See `general/03_interface/03_mcp/`.
 """
 
 _HTTP_API_MD = """\
@@ -166,7 +166,7 @@ tags: [{tag}-env-vars]
 |---|---|---|
 | `SCITEX_<MODULE>_<NAME>` | `<default>` | TODO |
 
-See `general/01_ecosystem_04_environment-variables.md`.
+See `general/01_ecosystem/04_environment-variables.md`.
 """
 
 

@@ -67,7 +67,7 @@ tests/
 
 ## Auditor coverage
 
-Same `audit-project` rule set as for packages — see [`../general/02_package_06_project-structure-tests.md`](../general/02_package_06_project-structure-tests.md#auditor-coverage). For research projects, "src/<pkg>/" in the rule descriptions is replaced by "scripts/".
+Same `audit-project` rule set as for packages — see [`../general/02_package/06_project-structure-tests.md`](../general/02_package/06_project-structure-tests.md#auditor-coverage). For research projects, "src/<pkg>/" in the rule descriptions is replaced by "scripts/".
 
 ## Tests against `CONFIG` snapshots
 

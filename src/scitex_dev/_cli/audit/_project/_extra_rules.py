@@ -37,7 +37,7 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             'category = "cli-tool"). Declare the category in '
             'pyproject.toml under `[tool.scitex_dev] category = "..."` '
             "(defaults to `library`). Severity W during adoption — see "
-            "_skills/general/02_package_07b_workflow-presence.md."
+            "_skills/general/02_package/07b_workflow-presence.md."
         ),
         "W",
         "workflow-presence-missing",
@@ -51,7 +51,7 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "tests, install-check, quality, cov. Add `?label=<short>` to "
             "each shields.io badge URL. Reference: scitex-agent-container "
             "README badge block. Severity W during adoption — see "
-            "_skills/general/02_package_12_workflows-naming.md "
+            "_skills/general/02_package/12_workflows-naming.md "
             "§Standardized badge labels."
         ),
         "W",
@@ -71,8 +71,8 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "be served from `img.shields.io/...` so they carry "
             "explicit `?label=<short>` labels (see PS-166). Reference: "
             "scitex-agent-container/README.md. Severity W during "
-            "adoption — see _skills/general/04_docs_01_readme.md and "
-            "_skills/general/04_docs_01_readme_template.md."
+            "adoption — see _skills/general/04_docs/01_readme.md and "
+            "_skills/general/04_docs/01_readme_template.md."
         ),
         "W",
         "readme-badge-layout",
@@ -90,7 +90,7 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "`scitex-dev creds rotate-all` cannot distinguish the secret "
             "from the ecosystem-wide rotate target and silently skips it. "
             "Rename via `gh secret set <PKG>_<NAME>` + workflow `sed`. See "
-            "_skills/general/02_package_14_workflow-secret-env-prefix.md."
+            "_skills/general/02_package/14_workflow-secret-env-prefix.md."
         ),
         "E",
         "secret-env-prefix-missing",
@@ -109,9 +109,9 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "Source-side mirror of the test-side PS-210. Severity W during "
             "ecosystem adoption (22 peers / ~1000 sites flagged at launch; "
             "promote to E once the heavy-dep leaks are guarded). See "
-            "_skills/general/03_interface_01_python-api/"
+            "_skills/general/03_interface/01_python-api/"
             "04_lazy-imports-and-optional-deps.md and "
-            "01_ecosystem_02_dependency-and-version-pinning.md."
+            "01_ecosystem/02_dependency-and-version-pinning.md."
         ),
         "W",
         "optional-dep-unguarded-in-src",
@@ -133,8 +133,8 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "fastmcp, mcp, fastapi, scitex-dev, scitex-config) are NEVER "
             "flagged. Inverse of PS-148. Severity W during adoption — see "
             "_skills/general/"
-            "01_ecosystem_02_dependency-and-version-pinning.md and "
-            "03_interface_01_python-api/"
+            "01_ecosystem/02_dependency-and-version-pinning.md and "
+            "03_interface/01_python-api/"
             "04_lazy-imports-and-optional-deps.md."
         ),
         "W",
@@ -155,7 +155,7 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "counts as Status, `## Problem` as Context, `## Decisions` as "
             "Decision. Scope = all project kinds (package / research / grant "
             "/ draft). Severity W during adoption — see "
-            "_skills/general/02_package_01_project-structure-root.md "
+            "_skills/general/02_package/01_project-structure-root.md "
             "§'Architecture Decision Records (ADRs)'."
         ),
         "W",
@@ -168,7 +168,7 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
     # auditor only fires them when `research` is in the project-types
     # (applies() routes RP -> research; see _config/_loader.py). Severity W
     # during ecosystem adoption (matches the PS-211/212 warn-first
-    # precedent). See _skills/general/02_package_15_research-project.md and
+    # precedent). See _skills/general/01_ecosystem/10_research-project-type.md and
     # _skills/scientific/02_research-project_06_project-structure-tests.md.
     (
         "RP-201",

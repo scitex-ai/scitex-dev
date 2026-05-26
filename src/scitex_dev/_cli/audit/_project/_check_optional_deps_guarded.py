@@ -7,7 +7,7 @@ is pyproject-driven and the natural sibling of the test-side mirror PS-210
 in this same project auditor — same parse/scan machinery, opposite tree.)
 
 Implements the rule from
-`_skills/general/01_ecosystem_02_dependency-and-version-pinning.md` and the
+`_skills/general/01_ecosystem/02_dependency-and-version-pinning.md` and the
 living plan ``downstream-optional-deps-audit.md``.
 
 Symptom this prevents (the ``ModuleNotFoundError`` class of breakage):
@@ -349,7 +349,7 @@ def check_ps148_optional_deps_guarded(
                         f"ModuleNotFoundError. Wrap with `try_import_optional"
                         f'("...", extra="{extra}", pkg="{distribution}")` or a '
                         f"`try/except ImportError` guard. See _skills/general/"
-                        f"03_interface_01_python-api/"
+                        f"03_interface/01_python-api/"
                         f"04_lazy-imports-and-optional-deps.md."
                     ),
                 )

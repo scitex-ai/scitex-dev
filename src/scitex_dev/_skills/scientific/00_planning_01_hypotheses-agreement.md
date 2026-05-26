@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Hypotheses agreement (research-project equivalent of architecture agreement)
-  [DETAILS] Before writing any experiment script, agree with the user on a numbered, falsifiable list of hypotheses (H1, H2, ...) — each with a measurable observable, a predicted outcome, and a comparison baseline. Vague claims like "X works better" are non-testable and must be rejected or sharpened. The hypotheses doc is the source of truth that experiment scripts, manuscript claims, and statistical tests resolve against. Analogous to the "architecture agreement" required for pip packages before code is written. Pairs with [`./scripts`](02_research-project_02_project-structure-scripts.md) (where each H gets at least one experiment) and [`general/04_docs`](../general/04_docs_01_readme.md) (where the H list ends up summarised in the README).
+  [DETAILS] Before writing any experiment script, agree with the user on a numbered, falsifiable list of hypotheses (H1, H2, ...) — each with a measurable observable, a predicted outcome, and a comparison baseline. Vague claims like "X works better" are non-testable and must be rejected or sharpened. The hypotheses doc is the source of truth that experiment scripts, manuscript claims, and statistical tests resolve against. Analogous to the "architecture agreement" required for pip packages before code is written. Pairs with [`./scripts`](02_research-project_02_project-structure-scripts.md) (where each H gets at least one experiment) and [`general/04_docs`](../general/04_docs/01_readme.md) (where the H list ends up summarised in the README).
 tags: [scitex-scientific-planning-hypotheses-agreement]
 ---
 

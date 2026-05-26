@@ -65,7 +65,7 @@ class ScitexError(Exception):
     (often an LLM agent) needs a machine-readable category plus a human
     remediation hint. For plain Python errors raised inside a script,
     prefer the standard library exceptions (``ValueError``, ``FileNotFoundError``,
-    etc.) — see ``general/03_interface_01_python-api/09_error-handling.md``.
+    etc.) — see ``general/03_interface/01_python-api/09_error-handling.md``.
 
     Parameters
     ----------

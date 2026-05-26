@@ -1,5 +1,5 @@
 """Python API auditor — checks a SciTeX package's `__init__.py` against the
-`general/03_interface_01_python-api/12_audit-checklist.md` rules.
+`general/03_interface/01_python-api/12_audit-checklist.md` rules.
 
 Foundation scope: static AST + import-time probe of the `(A)` automated rules
 across §1 (naming/visibility), §2 (version), §3 (lazy imports), §5 (type hints).

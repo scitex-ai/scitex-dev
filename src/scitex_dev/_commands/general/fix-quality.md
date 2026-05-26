@@ -4,7 +4,7 @@ Apply the SciTeX no-mocks + test-quality migration to `$ARGUMENTS` (a
 SciTeX distribution name, default to current repo).
 
 Canonical playbook:
-`<scitex-dev>/src/scitex_dev/_skills/general/05_development_09_ecosystem-tq-migration.md`
+`<scitex-dev>/src/scitex_dev/_skills/general/05_development/09_ecosystem-tq-migration.md`
 
 Four passes, in order: NM → TQ003 → TQ002 → TQ007.
 

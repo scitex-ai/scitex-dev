@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Research Project Root
-  [DETAILS] Repo-root rules for a SciTeX *research project* (analysis pipelines, experiments) — what's allowed at the root (README, LICENSE, pyproject.toml even though research projects aren't shippable, Makefile thin dispatcher, .gitignore), forbidden top-level dirs (`mgmt`, `project_management`, `references`, `htmlcov`, top-level `assets`, `.playground`), the hidden directories `./.dev/` (scratch) and `./.old/` (hidden archive) and `./.scitex/<pkg-short>/` (project-scope scitex state — see [01_ecosystem_06_local-state-directories.md](../general/01_ecosystem_06_local-state-directories.md)), the production-ready-always invariant, anti-patterns, and a project-handoff checklist.
+  [DETAILS] Repo-root rules for a SciTeX *research project* (analysis pipelines, experiments) — what's allowed at the root (README, LICENSE, pyproject.toml even though research projects aren't shippable, Makefile thin dispatcher, .gitignore), forbidden top-level dirs (`mgmt`, `project_management`, `references`, `htmlcov`, top-level `assets`, `.playground`), the hidden directories `./.dev/` (scratch) and `./.old/` (hidden archive) and `./.scitex/<pkg-short>/` (project-scope scitex state — see [01_ecosystem/06_local-state-directories.md](../general/01_ecosystem/06_local-state-directories.md)), the production-ready-always invariant, anti-patterns, and a project-handoff checklist.
 tags: [scitex-scientific-research-project-project-structure-root]
 ---
 
@@ -9,7 +9,7 @@ tags: [scitex-scientific-research-project-project-structure-root]
 
 The repo root contains exactly the files that **must** be there. Everything else lives in a subdirectory.
 
-> Building a *pip-installable package* instead of a research project? See [`../general/02_package_01_project-structure-root.md`](../general/02_package_01_project-structure-root.md).
+> Building a *pip-installable package* instead of a research project? See [`../general/02_package/01_project-structure-root.md`](../general/02_package/01_project-structure-root.md).
 >
 > Sub-leaves of this section: [`./scripts`](02_research-project_02_project-structure-scripts.md) · [`./config + ./data`](02_research-project_03_project-structure-config-and-data.md) · [`./scripts/makefile`](02_research-project_04_project-structure-makefile.md) · [`./examples`](02_research-project_05_project-structure-examples.md) · [`./tests`](02_research-project_06_project-structure-tests.md)
 
@@ -28,7 +28,7 @@ Everything else belongs in a subdirectory. **Do not create new top-level directo
 
 ## Forbidden top-level dirs
 
-Same set as packages — see [`../general/02_package_01_project-structure-root.md`](../general/02_package_01_project-structure-root.md#forbidden-top-level-dirs):
+Same set as packages — see [`../general/02_package/01_project-structure-root.md`](../general/02_package/01_project-structure-root.md#forbidden-top-level-dirs):
 `./mgmt/`, `./project_management/`, `./references/`, `./htmlcov/`, top-level `./assets/`, `./.playground/` (collapsed into `.dev/`).
 
 ## `./docs` — human-facing documentation
@@ -45,7 +45,7 @@ Same set as packages — see [`../general/02_package_01_project-structure-root.m
 | :--- | :--- |
 | `./.dev/` | Single scratch space — sandbox tests, parking-lot ideas, half-baked experiments. Gitignored. Organize by category subdir (`./.dev/<category>/`). **Promote** valuable code out (`→ scripts/`, `examples/`) or **prune** periodically. |
 | `./.old/` | **Hide, don't delete** — keeps git history clean while removing visual noise. Acceptable to clear in a dedicated cleanup commit once nothing references it. |
-| `./.scitex/<pkg-short>/` | **Project-scope SciTeX state.** Each scitex-* package gets its own subdir for project-scoped runtime (e.g. `./.scitex/dev/runtime/` for scitex-dev's per-project state, `./.scitex/io/cache/` for scitex-io's project cache). Resolution chain and full layout are documented in [`../general/01_ecosystem_06_local-state-directories.md`](../general/01_ecosystem_06_local-state-directories.md). Gitignored by default; some packages may track config files inside it. |
+| `./.scitex/<pkg-short>/` | **Project-scope SciTeX state.** Each scitex-* package gets its own subdir for project-scoped runtime (e.g. `./.scitex/dev/runtime/` for scitex-dev's per-project state, `./.scitex/io/cache/` for scitex-io's project cache). Resolution chain and full layout are documented in [`../general/01_ecosystem/06_local-state-directories.md`](../general/01_ecosystem/06_local-state-directories.md). Gitignored by default; some packages may track config files inside it. |
 | `./.venv/` | **Project-scope Python virtualenv** (created by `python -m venv` or `uv venv`). Always gitignored. Sourced by `.envrc` (or manual `source .venv/bin/activate`). One venv per project — never share across projects. |
 | `./.envrc` | **direnv-managed per-project environment.** Loaded automatically when `cd` into the project (after `direnv allow`). Typical contents: `source .venv/bin/activate`, `export PROJECT_ROOT=$PWD`, project-local `PATH` additions. Tracked under git (no secrets); local overrides go in `.envrc.local` (gitignored). |
 | `./.env` | **App-runtime env file** (`KEY=VALUE` lines, no shell). Read by frameworks like Docker Compose, dotenv libraries, MCP servers. Distinct from `.envrc` (which is shell). Default: gitignored if it ever holds secrets; safe to track if literal-only. |
@@ -108,7 +108,7 @@ The main branch must be runnable **today**:
 - [ ] Every example has a tracked `_out/` and `tests/examples/test_*.py`
 - [ ] `./config/*.yaml` covers every parameter consumed by `./scripts/`
 - [ ] `./data/` symlinks point at canonical sources; large files gitignored
-- [ ] `./.scitex/` entries match the per-package conventions in `01_ecosystem_06_local-state-directories.md`
+- [ ] `./.scitex/` entries match the per-package conventions in `01_ecosystem/06_local-state-directories.md`
 - [ ] No half-finished work outside a `feature/*` branch
 - [ ] No top-level files outside the allowed-at-root list
 - [ ] `.dev/` has only categorized subdirs; nothing rotted >1 quarter

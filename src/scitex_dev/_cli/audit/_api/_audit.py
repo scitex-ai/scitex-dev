@@ -1,7 +1,7 @@
 """Static auditor for SciTeX Python APIs — engine + rule definitions.
 
 Rules cover the `(A)`-marked items from
-`scitex-python/src/scitex/_skills/general/03_interface_01_python-api/12_audit-checklist.md`.
+`scitex-python/src/scitex/_skills/general/03_interface/01_python-api/12_audit-checklist.md`.
 
 Numbering: `PA<§><idx>` (e.g. PA-101 = §1 rule 01). Mirrors the `S<n>` / `M<n>`
 rule-numbering used elsewhere in scitex-dev.
@@ -84,7 +84,7 @@ RULES: dict[str, Rule] = {
             "umbrella import `scitex.<sub>` / `import scitex` inside standalone "
             "source — drags the umbrella `__init__.py` and its lazy re-export "
             "machinery into every call. Use `scitex_<sub>` (peer standalone) "
-            "instead. See _skills/general/03_interface_01_python-api/"
+            "instead. See _skills/general/03_interface/01_python-api/"
             "11_import-conventions.md.",
             "umbrella-import-in-standalone",
         ),
@@ -95,7 +95,7 @@ RULES: dict[str, Rule] = {
             "but does not call `capture_debug_artifacts_async` — every "
             "decision point in a Playwright flow must capture screenshot + "
             "HTML so selector regressions are diagnosable post-mortem. See "
-            "`_skills/general/02_package_09_browser-automation-debugging.md`. "
+            "`_skills/general/02_package/09_browser-automation-debugging.md`. "
             "Wire via `from scitex_browser.debugging import "
             "capture_debug_artifacts_async`.",
             "playwright-without-debug-capture",
@@ -130,7 +130,7 @@ RULES: dict[str, Rule] = {
             "running the linter's `STX-TQ001-007` rules across tests/ + "
             "conftest.py. The combination ensures CI red names exactly "
             "which behaviour broke. See `_skills/general/"
-            "02_package_13_test-quality.md`.",
+            "02_package/13_test-quality.md`.",
             "test-quality",
             severity="error",
         ),
@@ -275,7 +275,7 @@ def _audit_playwright_capture(
 
     The auditor doesn't check call frequency or coverage — just
     presence-or-absence. Reviewers should still apply the stepwise
-    rule from `02_package_09_browser-automation-debugging.md`.
+    rule from `02_package/09_browser-automation-debugging.md`.
     """
     out: list[Violation] = []
     # The rule applies to packages that USE playwright in production. We

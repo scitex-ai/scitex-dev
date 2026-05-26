@@ -78,7 +78,7 @@ class PackageState:
     # Per-package dev venv state ("real" / "symlink" / "missing").
     # Cheap (one `os.lstat`), always computed because it's the canary
     # for the per-package isolation rule (see
-    # `_skills/general/02_package_10_dev-venv-isolation.md`).
+    # `_skills/general/02_package/10_dev-venv-isolation.md`).
     venv_state: str = ""
 
     # Deep (verbosity >= 3)
@@ -187,7 +187,7 @@ def _venv_state(repo: Path) -> str:
     - ``"real"``    — real directory (CI-parity isolated venv).
     - ``"symlink"`` — symlink, typically to a shared `~/.venv` (anti-pattern;
                       violates the per-package isolation rule, see
-                      `_skills/general/02_package_10_dev-venv-isolation.md`).
+                      `_skills/general/02_package/10_dev-venv-isolation.md`).
     - ``"missing"`` — no ``.venv`` at the repo root.
     """
     venv = repo / ".venv"

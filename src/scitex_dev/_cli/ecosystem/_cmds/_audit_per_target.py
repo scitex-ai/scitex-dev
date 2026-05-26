@@ -148,7 +148,7 @@ def register(ecosystem):
     @ecosystem.command(
         "audit-mcp-tools",
         epilog=(
-            "\b\nRules audited (per scitex `_skills/general/03_interface_03_mcp/`):\n"
+            "\b\nRules audited (per scitex `_skills/general/03_interface/03_mcp/`):\n"
             "\b\n"
             "  §1  server registration (single FastMCP, mount pattern, no double prefix)\n"
             "  §2  tool naming `<pkg>_<verb>_<noun>` snake_case\n"
@@ -282,7 +282,7 @@ def register(ecosystem):
             "\n"
             "Foundation rules (PA<§><idx>): PA-101–104 (§1 naming/visibility),\n"
             "PA-201–203 (§2 version), PA-301 (§3 lazy imports), PA-501 (§5 future\n"
-            "annotations). See general/03_interface_01_python-api/12_audit-checklist.md."
+            "annotations). See general/03_interface/01_python-api/12_audit-checklist.md."
         ),
     )
     @click.argument("distribution")
@@ -322,7 +322,7 @@ def register(ecosystem):
             "(§2 naming), SK-210–211 (§2a no header/footer above frontmatter),\n"
             "SK-301–302 (§3 SKILL.md as index), SK-401 (§4 leaf size), SK-601\n"
             "(§6 no `import scitex as stx`), SK-701–704 (frontmatter required\n"
-            "fields). See general/03_interface_04_skills/12_quality-checklist.md."
+            "fields). See general/03_interface/04_skills/12_quality-checklist.md."
         ),
     )
     @click.argument("distribution")
@@ -365,7 +365,7 @@ def register(ecosystem):
             "  PS-301–303  §3 tests/ subdir convention (htmlcov, unknown subdirs, examples)\n"
             "  PS-401–402  §4 docs/ structure (to_claude gitignored, assets location)\n"
             "\n"
-            "See _skills/general/02_package_01_project-structure-root.md for the\n"
+            "See _skills/general/02_package/01_project-structure-root.md for the\n"
             "full convention; ditto _skills/scientific/02_research-project_01_project-structure-root.md\n"
             "for research-project layout. Templates and datasets are exempt from §2."
         ),

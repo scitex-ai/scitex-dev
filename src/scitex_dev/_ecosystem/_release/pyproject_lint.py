@@ -7,7 +7,7 @@
 Codifies the regressions caught during the 2026-04-28 audit pass so an
 agent doesn't have to rediscover them by re-running the full audit
 script every time. Each rule has a stable id (`REL-5`, `REL-9`, …) keyed
-to the §-numbers in `general/99_quality_02_checklist.md` so findings
+to the §-numbers in `general/09_quality/02_checklist.md` so findings
 join the same triage flow.
 
 Rules
@@ -918,7 +918,7 @@ def check_cla_workflow_exists(repo: Path) -> list[LintFinding]:
     """Rule REL-12 — every scitex-* repo must ship a CLA gate workflow.
 
     The canonical location is `.github/workflows/cla.yml`. See
-    `_skills/general/01_ecosystem_07_license-and-cla.md` for the workflow
+    `_skills/general/01_ecosystem/07_license-and-cla.md` for the workflow
     template and the maintainer-allowlist convention.
 
     Missing → external contributors can't be gated; the project loses CLA
@@ -934,7 +934,7 @@ def check_cla_workflow_exists(repo: Path) -> list[LintFinding]:
                 message=".github/workflows/cla.yml is missing",
                 detail=(
                     "every scitex-* repo gates contributions via the CLA action; "
-                    "see _skills/general/01_ecosystem_07_license-and-cla.md"
+                    "see _skills/general/01_ecosystem/07_license-and-cla.md"
                 ),
                 fix_hint=(
                     "copy the workflow template from a sibling repo (e.g. scitex-core) "
@@ -999,7 +999,7 @@ def check_cla_signatures_shape(repo: Path) -> list[LintFinding]:
                 fix_hint=(
                     'PUT `{"signedContributors": []}` to that path on '
                     "the cla-signatures branch — see "
-                    "_skills/general/01_ecosystem_07_license-and-cla.md repair recipe"
+                    "_skills/general/01_ecosystem/07_license-and-cla.md repair recipe"
                 ),
             )
         ]

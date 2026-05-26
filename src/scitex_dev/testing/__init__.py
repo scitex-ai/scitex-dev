@@ -8,7 +8,7 @@ so the package's local pytest run includes the same audit gates that
 CI used to run as a separate workflow. See the auto-generated
 `tests/test_audit.py` template (via
 `scitex-dev ecosystem write-audit-test <pkg>`) and the skill leaf
-`_skills/general/02_package_07_github-actions.md` for the canonical
+`_skills/general/02_package/07_github-actions.md` for the canonical
 shape.
 """
 

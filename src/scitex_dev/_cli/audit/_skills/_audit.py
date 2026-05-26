@@ -1,7 +1,7 @@
 """Static auditor for SciTeX `_skills/<pip-name>/` directories — engine + rules.
 
 Rules cover the automatable items from
-`scitex-python/src/scitex/_skills/general/03_interface_04_skills/12_quality-checklist.md`.
+`scitex-python/src/scitex/_skills/general/03_interface/04_skills/12_quality-checklist.md`.
 
 Numbering: `SK<§><idx>` (e.g. SK-101 = §1 rule 01). Mirrors the `PA<n>` /
 `M<n>` rule-numbering used by the sibling `_cli_audit_api` and

@@ -48,7 +48,7 @@ except ImportError:  # pragma: no cover — only on ancient Pythons
 #
 # To add a new public name: extend `_LAZY_ATTRS`. Don't add `from .X import Y`
 # at module top — that re-introduces eager loading and slows every CLI call.
-# See `_skills/general/03_interface_02_cli/17_lazy-imports-cli-startup.md`.
+# See `_skills/general/03_interface/01_python-api/04_lazy-imports-and-optional-deps.md`.
 _LAZY_ATTRS: dict[str, str] = {
     # cli_utils
     "add_dry_run_argument": "_cli",

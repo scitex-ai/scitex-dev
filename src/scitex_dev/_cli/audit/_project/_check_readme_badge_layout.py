@@ -15,8 +15,8 @@ HTML-comment markers and split badges into two centered rows:
     <!-- scitex-badges:end -->
 
 Reference implementation: ``scitex-agent-container/README.md`` (see
-``_skills/general/04_docs_01_readme_template.md`` and
-``04_docs_01_readme.md`` for the canonicalized template + prose).
+``_skills/general/04_docs/01_readme_template.md`` and
+``04_docs/01_readme.md`` for the canonicalized template + prose).
 
 Six sub-checks (each emits a PS-167 violation):
 

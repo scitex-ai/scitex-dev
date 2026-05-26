@@ -42,7 +42,7 @@ system works.
 
 We are trying to raise the quality of the code. We want real tests — tests that actually exercise production paths, not tests that pass because everything is mocked out. We want meaningful tests, not green-bar theater.
 
-See `_skills/general/02_package_12_no-mocks.md` for the full rationale,
+See `_skills/general/02_package/12_no-mocks.md` for the full rationale,
 the replacement menu, and a worked example.
 """
 
