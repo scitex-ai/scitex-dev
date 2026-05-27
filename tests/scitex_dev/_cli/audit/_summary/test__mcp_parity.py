@@ -9,12 +9,14 @@ and the comparison logic is exercised with real name sets.
 from __future__ import annotations
 
 from scitex_dev._cli.audit._summary._mcp_parity import (
+    _allowlist_violations,
     _audited_repo_root,
     _check_api_parity,
     _parity_violations,
     _python_api_names,
     _repo_root_from_import,
     is_mcp_parity_exempt,
+    mcp_tools_allowlist,
 )
 
 
@@ -127,6 +129,118 @@ class TestCheckApiParityHonorsExemption:
         out: list = []
         # Act
         _check_api_parity("scitex-dev", set(), out, repo=tmp_path)
+        # Assert
+        assert any(v.rule == "§6" for v in out)
+
+
+class TestMcpToolsAllowlistDetection:
+    def test_pyproject_array_is_read_as_a_set(self, tmp_path):
+        # Arrange
+        _write_pyproject(
+            tmp_path,
+            "\n[tool.scitex_dev]\n"
+            'mcp_tools_allowlist = ["compute_metrics", "generate_report"]\n',
+        )
+        # Act
+        allow = mcp_tools_allowlist("plot-rich", repo=tmp_path)
+        # Assert
+        assert allow == {"compute_metrics", "generate_report"}
+
+    def test_yaml_config_list_is_read_as_a_set(self, tmp_path):
+        # Arrange
+        _write_pyproject(tmp_path, "")
+        cfg_dir = tmp_path / ".scitex" / "dev"
+        cfg_dir.mkdir(parents=True)
+        (cfg_dir / "config.yaml").write_text(
+            "audit:\n  mcp-tools-allowlist:\n    - compute_metrics\n    - reduce_dimensions\n"
+        )
+        # Act
+        allow = mcp_tools_allowlist("plot-rich", repo=tmp_path)
+        # Assert
+        assert allow == {"compute_metrics", "reduce_dimensions"}
+
+    def test_absent_allowlist_returns_none(self, tmp_path):
+        # Arrange
+        _write_pyproject(tmp_path, '\n[tool.scitex_dev]\ncategory = "library"\n')
+        # Act
+        allow = mcp_tools_allowlist("plot-rich", repo=tmp_path)
+        # Assert
+        assert allow is None
+
+
+class TestAllowlistViolations:
+    def test_registered_tools_matching_allowlist_produce_no_violation(self):
+        # Arrange
+        allowlist = {"compute_metrics", "generate_report"}
+        mcp_normalized = {"compute_metrics", "generate_report"}
+        # Act
+        violations = _allowlist_violations("scitex-ml", allowlist, mcp_normalized)
+        # Assert
+        assert violations == []
+
+    def test_skills_tools_are_permitted_without_being_listed(self):
+        # Arrange
+        allowlist = {"compute_metrics"}
+        mcp_normalized = {"compute_metrics", "skills_list", "skills_get"}
+        # Act
+        violations = _allowlist_violations("scitex-ml", allowlist, mcp_normalized)
+        # Assert
+        assert violations == []
+
+    def test_tool_not_in_allowlist_is_flagged(self):
+        # Arrange
+        allowlist = {"compute_metrics"}
+        mcp_normalized = {"compute_metrics", "secret_tool"}
+        # Act
+        violations = _allowlist_violations("scitex-ml", allowlist, mcp_normalized)
+        # Assert
+        assert any("not in mcp_tools_allowlist" in v.message for v in violations)
+
+    def test_declared_name_without_registered_tool_is_flagged(self):
+        # Arrange
+        allowlist = {"compute_metrics", "never_built"}
+        mcp_normalized = {"compute_metrics"}
+        # Act
+        violations = _allowlist_violations("scitex-ml", allowlist, mcp_normalized)
+        # Assert
+        assert any("no registered MCP tool" in v.message for v in violations)
+
+    def test_prefixed_allowlist_names_are_normalized_before_compare(self):
+        # Arrange
+        allowlist = {"ml_compute_metrics"}
+        mcp_normalized = {"compute_metrics"}
+        # Act
+        violations = _allowlist_violations("scitex-ml", allowlist, mcp_normalized)
+        # Assert
+        assert violations == []
+
+
+class TestCheckApiParityHonorsAllowlist:
+    def test_allowlist_matching_tools_yields_no_violation(self, tmp_path):
+        # Arrange
+        _write_pyproject(
+            tmp_path,
+            "\n[tool.scitex_dev]\n"
+            'mcp_tools_allowlist = ["compute_metrics", "generate_report"]\n',
+        )
+        out: list = []
+        # Act
+        _check_api_parity(
+            "plot-rich", {"compute_metrics", "generate_report"}, out, repo=tmp_path
+        )
+        # Assert
+        assert out == []
+
+    def test_allowlist_with_undeclared_tool_trips_section_six(self, tmp_path):
+        # Arrange
+        _write_pyproject(
+            tmp_path, '\n[tool.scitex_dev]\nmcp_tools_allowlist = ["compute_metrics"]\n'
+        )
+        out: list = []
+        # Act
+        _check_api_parity(
+            "plot-rich", {"compute_metrics", "rogue_tool"}, out, repo=tmp_path
+        )
         # Assert
         assert any(v.rule == "§6" for v in out)
 

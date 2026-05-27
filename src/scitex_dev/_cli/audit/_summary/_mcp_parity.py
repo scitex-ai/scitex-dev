@@ -182,6 +182,57 @@ def is_mcp_parity_exempt(package: str, repo: Path | None = None) -> bool:
     return False
 
 
+def mcp_tools_allowlist(package: str, repo: Path | None = None) -> set[str] | None:
+    """Return the package's declared MCP tool allowlist, or None if absent.
+
+    Finer-grained alternative to the all-or-nothing `mcp_parity_exempt`: a
+    package that intentionally exposes a curated MCP surface (rather than
+    mirroring its whole Python API) lists exactly the tools it means to ship.
+    When present, §6 verifies the registered tools match this set — no
+    full-API mirror required, and no blanket skip of the check.
+
+    Read from (first match wins):
+      1. ``pyproject.toml`` → ``[tool.scitex_dev] mcp_tools_allowlist = [...]``
+      2. ``.scitex/dev/config.yaml`` → ``audit: {mcp-tools-allowlist: [...]}``
+
+    Names may be bare (``compute_metrics``) or prefixed (``ml_compute_metrics``);
+    the §6 check normalizes both. ``skills_list`` / ``skills_get`` are always
+    permitted and need not be listed.
+    """
+    root = repo if repo is not None else _audited_repo_root(package)
+    if root is None:
+        return None
+
+    pyproject = root / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            import tomllib
+
+            data = tomllib.loads(pyproject.read_text(errors="ignore"))
+            value = (
+                data.get("tool", {}).get("scitex_dev", {}).get("mcp_tools_allowlist")
+            )
+            if isinstance(value, list):
+                return {str(x) for x in value}
+        except Exception:
+            pass
+
+    cfg = root / ".scitex" / "dev" / "config.yaml"
+    if cfg.is_file():
+        try:
+            import yaml
+
+            data = yaml.safe_load(cfg.read_text(errors="ignore")) or {}
+            audit = data.get("audit") or {}
+            value = audit.get("mcp-tools-allowlist")
+            if isinstance(value, list):
+                return {str(x) for x in value}
+        except Exception:
+            pass
+
+    return None
+
+
 # --------------------------------------------------------------------- #
 # §6 — Python API parity                                                 #
 # --------------------------------------------------------------------- #
@@ -282,14 +333,72 @@ def _check_api_parity(
         )
         return
 
+    short = _short_name(package)
+    # Normalize MCP names to compare against bare Python names.
+    mcp_normalized = {n.removeprefix(f"{short}_") for n in tool_names}
+
+    # Finer-grained opt-in: a declared allowlist scopes §6 to the curated
+    # surface (registered tools must match the declaration) instead of the
+    # full Python-API mirror.
+    allowlist = mcp_tools_allowlist(package, repo=repo)
+    if allowlist is not None:
+        from .._emit import emit as _emit
+
+        _emit(
+            "info",
+            f"{package}: §6 MCP-parity scoped to mcp_tools_allowlist "
+            f"({len(allowlist)} declared) — checked against the curated surface, "
+            "not the full Python API",
+        )
+        out.extend(_allowlist_violations(package, allowlist, mcp_normalized))
+        return
+
     py_apis = _python_api_names(package)
     if not py_apis:
         return  # cannot establish parity; not the auditor's place to invent it.
 
-    short = _short_name(package)
-    # Normalize MCP names to compare against bare Python names.
-    mcp_normalized = {n.removeprefix(f"{short}_") for n in tool_names}
     out.extend(_parity_violations(package, py_apis, mcp_normalized))
+
+
+def _allowlist_violations(
+    package: str, allowlist: set[str], mcp_normalized: set[str]
+) -> list[Violation]:
+    """§6 with an explicit allowlist: the registered tools must equal the
+    declared ``mcp_tools_allowlist`` (``skills_list`` / ``skills_get`` always
+    permitted). Flags tools the server exposes but didn't declare, and declared
+    names with no registered tool — finer control than the boolean exemption.
+
+    Split out (pure set comparison) so it is testable without import/registry
+    I/O, mirroring :func:`_parity_violations`.
+    """
+    out: list[Violation] = []
+    skill_tools = {"skills_list", "skills_get"}
+    short = _short_name(package)
+    allow_norm = {n.removeprefix(f"{short}_") for n in allowlist} - skill_tools
+    actual = mcp_normalized - skill_tools
+
+    undeclared = actual - allow_norm
+    if undeclared:
+        out.append(
+            Violation(
+                package,
+                "§6",
+                f"MCP tool(s) not in mcp_tools_allowlist: {sorted(undeclared)} "
+                "— add them to the allowlist or remove the tool",
+            )
+        )
+
+    missing = allow_norm - actual
+    if missing:
+        out.append(
+            Violation(
+                package,
+                "§6",
+                f"mcp_tools_allowlist names with no registered MCP tool: "
+                f"{sorted(missing)} — register the tool or fix the allowlist",
+            )
+        )
+    return out
 
 
 def _parity_violations(
@@ -332,7 +441,9 @@ def _parity_violations(
 
 __all__ = [
     "is_mcp_parity_exempt",
+    "mcp_tools_allowlist",
     "_parity_violations",
+    "_allowlist_violations",
     "_python_api_names",
     "_check_api_parity",
 ]
