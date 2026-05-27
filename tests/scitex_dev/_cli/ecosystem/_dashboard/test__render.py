@@ -90,9 +90,12 @@ def test_release_column_shown_at_default_verbosity():
     It must appear at the default verbosity tier (=1) so the
     `dashboard list` operator sees it without any extra flag.
     """
+    # Arrange
     from scitex_dev._cli.ecosystem._dashboard._render import cols_for_verbosity
 
+    # Act
     cols_v1 = cols_for_verbosity(1)
+    # Assert
     assert "release" in cols_v1
 
 
@@ -100,21 +103,25 @@ def test_release_column_is_wired_to_gh_release_enricher():
     """Visible-cols → enrichers mapping must route `release` through
     the `gh-release` enricher (NOT `pypi`, NOT `deep`), so the
     dashboard CLI computes the cell whenever the column is visible."""
+    # Arrange
     from scitex_dev._cli.ecosystem._dashboard._render import (
         enrichers_for_cols,
     )
 
+    # Act
     enrichers = enrichers_for_cols(["pkg", "release"])
+    # Assert
     assert "gh-release" in enrichers
 
 
 def test_color_version_cell_release_missing_when_tag_present():
     """The MISSING-release rendering: when `gh_release_lookup_done` is
     True and `tag_latest` is set but `gh_release_latest` is empty,
-    the cell must read `MISSING` (red bold). This is the canonical
-    2026-05-27 footgun signal — PyPI succeeded but the GH Release
-    job's awk extractor failed, so no Release got created.
+    the cell must read `MISSING`. This is the canonical 2026-05-27
+    footgun signal — PyPI succeeded but the GH Release job's awk
+    extractor failed, so no Release got created.
     """
+    # Arrange
     from scitex_dev._cli.ecosystem._dashboard._render import (
         _color_version_cell,
     )
@@ -127,7 +134,9 @@ def test_color_version_cell_release_missing_when_tag_present():
         gh_release_latest="",
         gh_release_lookup_done=True,
     )
+    # Act
     cell = _color_version_cell(state, "release")
+    # Assert
     assert "MISSING" in str(cell)
 
 
@@ -136,6 +145,7 @@ def test_color_version_cell_release_NC_when_lookup_pending():
     `gh_release_lookup_done` is False and the cell must read N/C —
     same convention as the PyPI column's pre-lookup placeholder.
     """
+    # Arrange
     from scitex_dev._cli.ecosystem._dashboard._render import (
         _color_version_cell,
     )
@@ -148,5 +158,7 @@ def test_color_version_cell_release_NC_when_lookup_pending():
         gh_release_latest="",
         gh_release_lookup_done=False,
     )
+    # Act
     cell = _color_version_cell(state, "release")
+    # Assert
     assert "N/C" in str(cell)
