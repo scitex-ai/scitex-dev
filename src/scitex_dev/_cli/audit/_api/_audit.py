@@ -264,6 +264,38 @@ def _locate_init(import_name: str) -> Path | None:
     return origin if origin.name == "__init__.py" else None
 
 
+def _type_checking_import_node_ids(tree: ast.AST) -> set[int]:
+    """Return id()s of Import/ImportFrom nodes that live *only* inside an
+    ``if TYPE_CHECKING:`` guard.
+
+    Such imports are type-only — they are never executed at runtime, so a
+    ``playwright.async_api`` import guarded this way is a type annotation
+    (e.g. ``page: Page``), not live browser automation. PA-305 must not
+    flag them; otherwise pure-logic modules that merely *type* a handed-in
+    ``Page`` (Zotero-style translators, parsers) trip the rule despite
+    never opening a browser.
+    """
+    out: set[int] = set()
+
+    def _is_type_checking_test(test: ast.expr) -> bool:
+        # `if TYPE_CHECKING:` or `if typing.TYPE_CHECKING:`
+        if isinstance(test, ast.Name) and test.id == "TYPE_CHECKING":
+            return True
+        if isinstance(test, ast.Attribute) and test.attr == "TYPE_CHECKING":
+            return True
+        return False
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If) and _is_type_checking_test(node.test):
+            # Only the `if` body is type-only; an `else:` branch runs at
+            # runtime, so its imports are not exempt.
+            for child in node.body:
+                for sub in ast.walk(child):
+                    if isinstance(sub, (ast.Import, ast.ImportFrom)):
+                        out.add(id(sub))
+    return out
+
+
 def _audit_playwright_capture(
     init_path: Path, distribution: str, import_name: str
 ) -> list[Violation]:
@@ -272,6 +304,10 @@ def _audit_playwright_capture(
     `capture_debug_artifacts_async` call. Helper-routed callers can opt
     in via `from scitex_browser.debugging import capture_debug_artifacts_async`
     (presence-only check; semantics not enforced).
+
+    Imports guarded by ``if TYPE_CHECKING:`` are ignored — they are
+    type-only (``page: Page`` annotations) and never drive a browser, so
+    they are not a sign of live automation.
 
     The auditor doesn't check call frequency or coverage — just
     presence-or-absence. Reviewers should still apply the stepwise
@@ -311,16 +347,22 @@ def _audit_playwright_capture(
             tree = ast.parse(text, filename=str(py_file))
         except SyntaxError:
             continue
+        # Imports under `if TYPE_CHECKING:` are type-only — exempt them so a
+        # `page: Page` annotation does not masquerade as live automation.
+        type_only_ids = _type_checking_import_node_ids(tree)
         imports_playwright = False
         calls_capture = False
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 mod = node.module or ""
-                if mod == "playwright.async_api" or mod.startswith(
-                    "playwright.async_api."
-                ):
+                if (
+                    mod == "playwright.async_api"
+                    or mod.startswith("playwright.async_api.")
+                ) and id(node) not in type_only_ids:
                     imports_playwright = True
             elif isinstance(node, ast.Import):
+                if id(node) in type_only_ids:
+                    continue
                 for alias in node.names:
                     if alias.name == "playwright.async_api" or alias.name.startswith(
                         "playwright.async_api."
