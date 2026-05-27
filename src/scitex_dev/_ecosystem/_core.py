@@ -496,6 +496,13 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_tex",
         "category": "library",
     },
+    "scitex-todo": {
+        "local_path": "~/proj/scitex-todo",
+        "pypi_name": "scitex-todo",
+        "github_repo": "ywatanabe1989/scitex-todo",
+        "import_name": "scitex_todo",
+        "category": "library",
+    },
     "scitex-web": {
         "local_path": "~/proj/scitex-web",
         "pypi_name": "scitex-web",
