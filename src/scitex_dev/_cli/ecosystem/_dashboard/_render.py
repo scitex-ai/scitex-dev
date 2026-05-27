@@ -273,15 +273,26 @@ def _color_version_cell(state: "PackageState", col: str) -> Text:
         #   pypi  — N/C while lookup is pending, `—` once a 404
         #           confirms the package isn't published, `?` on
         #           network error so the user knows to retry.
-        #   release — N/C while pending (gh-release has no separate
-        #           lookup-done flag yet; treat as legacy).
+        #   release — N/C while pending; once lookup_done flips, a
+        #           local tag without a matching GH Release is the
+        #           2026-05-27 footgun (PyPI ok but GH Release awk
+        #           failed). Show `MISSING` red so it sticks out next
+        #           to a populated TAG cell.
         if col == "pypi":
             if getattr(state, "pypi_lookup_done", False):
                 placeholder = "—"  # confirmed not on PyPI
             else:
                 placeholder = "N/C"  # not yet computed
         elif col == "release":
-            placeholder = "N/C"
+            if getattr(state, "gh_release_lookup_done", False):
+                if state.tag_latest:
+                    # We have a local tag but no GH Release — release
+                    # pipeline gap. Red is intentional: this is the
+                    # same severity as a PyPI-vs-pyproject divergence.
+                    return Text("MISSING", style="red bold")
+                placeholder = "—"  # confirmed no releases (also no tag)
+            else:
+                placeholder = "N/C"  # not yet computed
         else:
             placeholder = "-"
         return Text(placeholder, style="dim")
