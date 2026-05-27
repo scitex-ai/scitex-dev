@@ -338,3 +338,67 @@ def test_PA306_clean_source_passes(tmp_path):
     init = _write_init(tmp_path, "from __future__ import annotations\n")
     (init.parent / "impl.py").write_text("def f(tmp_path):\n    return tmp_path\n")
     assert _audit_no_mocks(init, "fakepkg", "fakepkg") == []
+
+
+# --- §3 PA-305 playwright-without-debug-capture -----------------------------
+
+
+def test_PA305_flags_runtime_playwright_without_capture(tmp_path):
+    # Arrange
+    from scitex_dev._cli.audit._api._audit import _audit_playwright_capture
+
+    init = _write_init(tmp_path, "from __future__ import annotations\n")
+    (init.parent / "driver.py").write_text(
+        "from playwright.async_api import async_playwright\n"
+        "async def run():\n"
+        "    async with async_playwright() as p:\n"
+        "        return p\n"
+    )
+    # Act
+    codes = _codes(_audit_playwright_capture(init, "fakepkg", "fakepkg"))
+    # Assert
+    assert "PA-305" in codes
+
+
+def test_PA305_clean_when_import_is_type_checking_only(tmp_path):
+    # Arrange
+    from scitex_dev._cli.audit._api._audit import _audit_playwright_capture
+
+    init = _write_init(tmp_path, "from __future__ import annotations\n")
+    # Type-only import: `Page` is used solely to annotate a handed-in page.
+    # The module never opens a browser, so PA-305 must stay silent.
+    (init.parent / "translator.py").write_text(
+        "from __future__ import annotations\n"
+        "from typing import TYPE_CHECKING\n"
+        "if TYPE_CHECKING:\n"
+        "    from playwright.async_api import Page\n"
+        "async def extract(page: Page) -> str:\n"
+        "    return page.url\n"
+    )
+    # Act
+    codes = _codes(_audit_playwright_capture(init, "fakepkg", "fakepkg"))
+    # Assert
+    assert "PA-305" not in codes
+
+
+def test_PA305_flags_module_level_import_even_with_type_checking_block(tmp_path):
+    # Arrange
+    from scitex_dev._cli.audit._api._audit import _audit_playwright_capture
+
+    init = _write_init(tmp_path, "from __future__ import annotations\n")
+    # A runtime (module-level) playwright import is NOT exempted just because
+    # the file also has an unrelated TYPE_CHECKING guard elsewhere.
+    (init.parent / "mixed.py").write_text(
+        "from __future__ import annotations\n"
+        "from typing import TYPE_CHECKING\n"
+        "from playwright.async_api import async_playwright\n"
+        "if TYPE_CHECKING:\n"
+        "    from collections.abc import Mapping\n"
+        "async def run() -> None:\n"
+        "    async with async_playwright() as p:\n"
+        "        _ = p\n"
+    )
+    # Act
+    codes = _codes(_audit_playwright_capture(init, "fakepkg", "fakepkg"))
+    # Assert
+    assert "PA-305" in codes
