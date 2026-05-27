@@ -263,3 +263,273 @@ def test_to_json_round_trips_gh_release_lookup_done():
     payload = json.loads(exp.to_json([s]))
     # Assert
     assert payload[0]["gh_release_lookup_done"] is True
+
+
+# ---------------------------------------------------------------------------
+# to_pdf coverage — drives the pandoc + emacs branches using real shell-
+# script fakes on PATH (STX-NM002 forbids monkeypatch). Each fake creates
+# a real .pdf file on disk so `to_pdf`'s success branch sees the artefact
+# it expects.
+# ---------------------------------------------------------------------------
+
+
+def _install_fake_pandoc(bin_dir: "object", *, exit_code: int = 0) -> None:
+    """Drop an executable `pandoc` script that creates the requested
+    output file (the `-o <path>` argument) and exits with the given
+    status. Mirrors the real pandoc CLI well enough to drive
+    `to_pdf`'s pandoc branch."""
+    import stat
+    from pathlib import Path as _Path
+
+    bin_dir = _Path(bin_dir)
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    script = bin_dir / "pandoc"
+    # The fake reads its own argv to find `-o <output>` and writes a
+    # minimal PDF magic header so `Path(output).is_file()` is True.
+    # `#!/bin/sh` (absolute) survives PATH replacement; the test
+    # strips PATH down to a single bin dir, so the kernel-level env
+    # lookup for `bash` would fail.
+    script.write_text(
+        "#!/bin/sh\n"
+        'out=""\n'
+        'while [ $# -gt 0 ]; do\n'
+        '  case "$1" in\n'
+        '    -o) out="$2"; shift 2 ;;\n'
+        '    *)  shift ;;\n'
+        '  esac\n'
+        'done\n'
+        'if [ -n "$out" ]; then printf "%%PDF-1.4\\n" > "$out"; fi\n'
+        'exit "${FAKE_PANDOC_EXIT-0}"\n'
+    )
+    script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    import os as _os
+
+    _os.environ["FAKE_PANDOC_EXIT"] = str(exit_code)
+
+
+def _install_fake_emacs(bin_dir: "object", *, exit_code: int = 0) -> None:
+    """Drop an executable `emacs` script that mimics
+    `emacs --batch <file>.org -f org-latex-export-to-pdf`: it finds
+    the `.org` filename in argv, writes a minimal PDF alongside it
+    with the same stem, and exits with the given status."""
+    import stat
+    from pathlib import Path as _Path
+
+    bin_dir = _Path(bin_dir)
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    script = bin_dir / "emacs"
+    script.write_text(
+        "#!/bin/sh\n"
+        'org=""\n'
+        'for a in "$@"; do\n'
+        '  case "$a" in\n'
+        '    *.org) org="$a" ;;\n'
+        '  esac\n'
+        'done\n'
+        'if [ -n "$org" ]; then\n'
+        '  pdf="${org%.org}.pdf"\n'
+        '  printf "%%PDF-1.4\\n" > "$pdf"\n'
+        'fi\n'
+        'exit "${FAKE_EMACS_EXIT-0}"\n'
+    )
+    script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    import os as _os
+
+    _os.environ["FAKE_EMACS_EXIT"] = str(exit_code)
+
+
+def _swap_path(bin_dir: "object") -> str:
+    """Replace ``$PATH`` so only ``bin_dir`` is visible. Returns
+    the previous PATH so callers can restore it in ``finally``."""
+    import os as _os
+
+    saved = _os.environ.get("PATH", "")
+    _os.environ["PATH"] = str(bin_dir)
+    return saved
+
+
+def _restore_path(saved: str) -> None:
+    import os as _os
+
+    _os.environ["PATH"] = saved
+    for k in ("FAKE_PANDOC_EXIT", "FAKE_EMACS_EXIT"):
+        _os.environ.pop(k, None)
+
+
+def test_to_pdf_pandoc_branch_returns_ok_on_success(tmp_path):
+    """When `pandoc` is on PATH and exits 0 after writing the PDF,
+    `to_pdf` reports status=ok with tool=pandoc."""
+    # Arrange
+    bin_dir = tmp_path / "bin"
+    _install_fake_pandoc(bin_dir, exit_code=0)
+    saved = _swap_path(bin_dir)
+    target = tmp_path / "report.pdf"
+    s = _make_state()
+    # Act
+    try:
+        result = exp.to_pdf([s], target)
+    finally:
+        _restore_path(saved)
+    # Assert
+    assert result["status"] == "ok"
+
+
+def test_to_pdf_pandoc_branch_reports_pandoc_as_the_tool(tmp_path):
+    """The result dict's `tool` field must identify which converter
+    actually produced the PDF — used by the CLI to print
+    `wrote ... via pandoc`."""
+    # Arrange
+    bin_dir = tmp_path / "bin"
+    _install_fake_pandoc(bin_dir, exit_code=0)
+    saved = _swap_path(bin_dir)
+    target = tmp_path / "report.pdf"
+    s = _make_state()
+    # Act
+    try:
+        result = exp.to_pdf([s], target)
+    finally:
+        _restore_path(saved)
+    # Assert
+    assert result["tool"] == "pandoc"
+
+
+def test_to_pdf_pandoc_branch_writes_pdf_file(tmp_path):
+    """The pandoc success path produces a real file at the requested
+    output path (not just a status dict)."""
+    # Arrange
+    bin_dir = tmp_path / "bin"
+    _install_fake_pandoc(bin_dir, exit_code=0)
+    saved = _swap_path(bin_dir)
+    target = tmp_path / "report.pdf"
+    s = _make_state()
+    # Act
+    try:
+        exp.to_pdf([s], target)
+    finally:
+        _restore_path(saved)
+    # Assert
+    assert target.is_file()
+
+
+def test_to_pdf_pandoc_failure_returns_error_status(tmp_path):
+    """When pandoc exits non-zero (e.g. missing LaTeX engine), the
+    result reports status=error so the CLI can surface it without
+    losing the .org sidecar."""
+    # Arrange
+    bin_dir = tmp_path / "bin"
+    _install_fake_pandoc(bin_dir, exit_code=1)
+    saved = _swap_path(bin_dir)
+    target = tmp_path / "report.pdf"
+    s = _make_state()
+    # Act
+    try:
+        result = exp.to_pdf([s], target)
+    finally:
+        _restore_path(saved)
+    # Assert
+    assert result["status"] == "error"
+
+
+def test_to_pdf_emacs_branch_used_when_pandoc_absent(tmp_path):
+    """If only `emacs` is on PATH (no pandoc), `to_pdf` falls back to
+    the `emacs --batch ... org-latex-export-to-pdf` pipeline and
+    reports tool=emacs on success."""
+    # Arrange — install emacs but NOT pandoc.
+    bin_dir = tmp_path / "bin"
+    _install_fake_emacs(bin_dir, exit_code=0)
+    saved = _swap_path(bin_dir)
+    target = tmp_path / "report.pdf"
+    s = _make_state()
+    # Act
+    try:
+        result = exp.to_pdf([s], target)
+    finally:
+        _restore_path(saved)
+    # Assert
+    assert result["tool"] == "emacs"
+
+
+def test_to_pdf_emacs_branch_returns_ok_on_success(tmp_path):
+    """Symmetric to the pandoc-success test — emacs success must
+    report status=ok so the CLI prints `wrote ... via emacs`."""
+    # Arrange
+    bin_dir = tmp_path / "bin"
+    _install_fake_emacs(bin_dir, exit_code=0)
+    saved = _swap_path(bin_dir)
+    target = tmp_path / "report.pdf"
+    s = _make_state()
+    # Act
+    try:
+        result = exp.to_pdf([s], target)
+    finally:
+        _restore_path(saved)
+    # Assert
+    assert result["status"] == "ok"
+
+
+def test_to_pdf_emacs_branch_relocates_pdf_to_requested_path(tmp_path):
+    """Emacs writes the PDF next to the .org under the same stem;
+    `to_pdf` moves it to the operator's requested output path when
+    they differ. The artefact must end up at the requested path."""
+    # Arrange — request the PDF in a subdirectory that differs from
+    # the org sidecar's natural location only by name; the fake
+    # emacs writes alongside the .org so `to_pdf` must rename.
+    bin_dir = tmp_path / "bin"
+    _install_fake_emacs(bin_dir, exit_code=0)
+    saved = _swap_path(bin_dir)
+    target = tmp_path / "renamed-output.pdf"
+    s = _make_state()
+    # Act
+    try:
+        exp.to_pdf([s], target)
+    finally:
+        _restore_path(saved)
+    # Assert
+    assert target.is_file()
+
+
+def test_to_pdf_emacs_failure_returns_error_status(tmp_path):
+    """When emacs exits non-zero (missing LaTeX), the result reports
+    status=error and the .org sidecar is still on disk so the
+    operator can re-run the convert by hand."""
+    # Arrange — emacs that exits 1 AND deletes nothing, so the
+    # produced.is_file() check fails too.
+    import stat
+    from pathlib import Path as _Path
+
+    bin_dir = _Path(tmp_path / "bin")
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    script = bin_dir / "emacs"
+    script.write_text("#!/bin/sh\nexit 1\n")
+    script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    saved = _swap_path(bin_dir)
+    target = tmp_path / "report.pdf"
+    s = _make_state()
+    # Act
+    try:
+        result = exp.to_pdf([s], target)
+    finally:
+        _restore_path(saved)
+    # Assert
+    assert result["status"] == "error"
+
+
+def test_to_pdf_always_writes_org_sidecar_even_when_pandoc_fails(tmp_path):
+    """The .org file is the canonical source — `to_pdf` must always
+    write it before attempting the conversion, so a failing
+    converter never destroys the operator's report."""
+    # Arrange
+    bin_dir = tmp_path / "bin"
+    _install_fake_pandoc(bin_dir, exit_code=1)
+    saved = _swap_path(bin_dir)
+    target = tmp_path / "report.pdf"
+    s = _make_state()
+    # Act
+    try:
+        result = exp.to_pdf([s], target)
+    finally:
+        _restore_path(saved)
+    # Assert
+    from pathlib import Path as _Path
+
+    assert _Path(result["org"]).is_file()
