@@ -83,3 +83,70 @@ def test_cols_for_verbosity_returns_more_cols_at_higher_verbosity_set_cols_v0_is
     cols_v0 = cols_for_verbosity(0)
     cols_v2 = cols_for_verbosity(2)
     assert set(cols_v0).issubset(set(cols_v2))
+
+
+def test_release_column_shown_at_default_verbosity():
+    """The GH-Release column was added 2026-05-27 alongside TAG/PYPI.
+    It must appear at the default verbosity tier (=1) so the
+    `dashboard list` operator sees it without any extra flag.
+    """
+    from scitex_dev._cli.ecosystem._dashboard._render import cols_for_verbosity
+
+    cols_v1 = cols_for_verbosity(1)
+    assert "release" in cols_v1
+
+
+def test_release_column_is_wired_to_gh_release_enricher():
+    """Visible-cols → enrichers mapping must route `release` through
+    the `gh-release` enricher (NOT `pypi`, NOT `deep`), so the
+    dashboard CLI computes the cell whenever the column is visible."""
+    from scitex_dev._cli.ecosystem._dashboard._render import (
+        enrichers_for_cols,
+    )
+
+    enrichers = enrichers_for_cols(["pkg", "release"])
+    assert "gh-release" in enrichers
+
+
+def test_color_version_cell_release_missing_when_tag_present():
+    """The MISSING-release rendering: when `gh_release_lookup_done` is
+    True and `tag_latest` is set but `gh_release_latest` is empty,
+    the cell must read `MISSING` (red bold). This is the canonical
+    2026-05-27 footgun signal — PyPI succeeded but the GH Release
+    job's awk extractor failed, so no Release got created.
+    """
+    from scitex_dev._cli.ecosystem._dashboard._render import (
+        _color_version_cell,
+    )
+    from scitex_dev._cli.ecosystem._dashboard._state import PackageState
+
+    state = PackageState(
+        pkg="crossref-local",
+        version_pyproject="0.7.4",
+        tag_latest="v0.7.4",
+        gh_release_latest="",
+        gh_release_lookup_done=True,
+    )
+    cell = _color_version_cell(state, "release")
+    assert "MISSING" in str(cell)
+
+
+def test_color_version_cell_release_NC_when_lookup_pending():
+    """While the gh-release enricher hasn't run yet,
+    `gh_release_lookup_done` is False and the cell must read N/C —
+    same convention as the PyPI column's pre-lookup placeholder.
+    """
+    from scitex_dev._cli.ecosystem._dashboard._render import (
+        _color_version_cell,
+    )
+    from scitex_dev._cli.ecosystem._dashboard._state import PackageState
+
+    state = PackageState(
+        pkg="scitex-foo",
+        version_pyproject="0.1.0",
+        tag_latest="v0.1.0",
+        gh_release_latest="",
+        gh_release_lookup_done=False,
+    )
+    cell = _color_version_cell(state, "release")
+    assert "N/C" in str(cell)

@@ -7,6 +7,39 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Dashboard GH-Release column (and MISSING signal)** — the `RELEASE`
+  column on `scitex-dev ecosystem dashboard list` (default verbosity)
+  now reads `MISSING` in red when a package has a local git tag but
+  the GitHub Release for that tag is absent. This is the canonical
+  signal for the 2026-05-27 footgun where the publish workflow's awk
+  release-notes extractor failed under `bash -e`, leaving PyPI
+  populated but no Release attached. The new
+  `gh_release_lookup_done` flag on `PackageState` distinguishes
+  "not yet queried" (dim `N/C`) from "queried, no release" (red
+  `MISSING`). Markdown export gained the column too.
+- **`dashboard export --format org` / `--format pdf`** — emits a
+  ywatanabe-convention Org-mode report ("the usual PDF" source) and
+  optionally converts to PDF via `pandoc` or `emacs --batch`. When
+  neither tool is on PATH the `.org` sidecar is still written and the
+  CLI prints a clear "convert on host" message (exit 0; the .org file
+  is the usable artefact). `to_pdf` always writes the `.org` next to
+  the requested `.pdf` output. The report includes a "GH-Release
+  gaps" section listing packages with a tag but no Release.
+
+### Fixed
+- **GitHub Release notes extraction never fails the publish workflow** —
+  the `Extract release notes from CHANGELOG.md` step in
+  `.github/workflows/pypi-publish-and-github-release-on-tag.yml`
+  explicitly disables `-e`, guards `CHANGELOG.md` absence, swallows
+  awk errors, and guarantees a non-empty `release-notes.md` before
+  exiting 0. Previously a missing `## [X.Y.Z]` section could fail
+  the `release` job even after PyPI had successfully published —
+  the 2026-05-27 wave bit crossref-local 0.7.4 and openalex-local
+  0.7.6 (both on PyPI, no GH Release). Note: this is scitex-dev's
+  own workflow only; downstream repos must re-sync the file (see
+  PR for the propagation note).
+
 ## [0.13.0] — 2026-05-27
 
 ### Added
