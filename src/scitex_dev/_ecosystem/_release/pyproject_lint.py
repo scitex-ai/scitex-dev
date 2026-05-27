@@ -97,7 +97,6 @@ ECOSYSTEM_IMPORTS_TO_DIST: dict[str, str] = {
     "scitex_ssh": "scitex-ssh",
     "scitex_agent_container": "scitex-agent-container",
     "scitex_template": "scitex-template",
-    "scitex_audit": "scitex-audit",
     "scitex_etc": "scitex-etc",
     "scitex_gists": "scitex-gists",
     "scitex_parallel": "scitex-parallel",
