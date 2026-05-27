@@ -7,7 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-05-27
+
 ### Added
+- **§6 per-package MCP-tool allowlist (`mcp_tools_allowlist`)** — packages that
+  intentionally expose a *curated* MCP surface (a few high-level verbs, not a
+  1:1 mirror of their Python API) can declare the exact tool names in
+  `[tool.scitex_dev] mcp_tools_allowlist` (pyproject) or
+  `audit.mcp-tools-allowlist` (`.scitex/dev/config.yaml`). §6 then verifies the
+  registered MCP surface matches the declared set — flagging undeclared tools
+  and declared-but-unregistered names — instead of the all-or-nothing
+  `mcp_parity_exempt` skip or the full-API-mirror heuristic. `skills_list` /
+  `skills_get` are always permitted. Helpers live in
+  `scitex_dev._cli.audit._summary._mcp_parity` (`mcp_tools_allowlist` /
+  `_allowlist_violations`); first adopter is scitex-ml's stateless analysis
+  CLI/MCP surface.
 - **§6a per-package env-var allowlist (`[tool.scitex_dev] env_allowlist`)** —
   packages that legitimately ship operator-facing env vars predating the
   SciTeX ecosystem (acronym brands like `SAC_*`, integrations with external
