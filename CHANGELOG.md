@@ -7,6 +7,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.2] — 2026-05-28
+
+### Added
+- **`tests/results/` accepted as a known `tests/` subdir (PS-302).** Test
+  runs produce a variety of artifacts beyond coverage (captured payloads,
+  fixture output, relocated `.coverage` data files); `tests/results/` is
+  now a first-class gitignored artifacts category alongside
+  `tests/coverage/` / `tests/logs/`. Added to `_KNOWN_TEST_SUBDIRS`, the
+  PS-302 rule text, and both project-structure skill leaves (general +
+  scientific). Backward-compatible — nothing that passed before now fails.
+
 ## [0.13.0] — 2026-05-27
 
 ### Added

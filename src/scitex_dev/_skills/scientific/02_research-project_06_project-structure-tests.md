@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Research Project Tests
-  [DETAILS] `./tests/` for a SciTeX research project — pytest-driven, same convention as for packages but the source tree being mirrored is `./scripts/` (not `./src/`). Mandatory `tests/scripts/` parent. Allowed sibling subdirs (examples/agentic/integration/e2e/github_actions/coverage/logs/reports/custom). Public/private filename convention with double-underscore for private. Same `audit-project` rule set (PS-201–PS-206 with `tests/scripts/` substituted for `tests/<pkg>/`, plus PS-302/PS-303).
+  [DETAILS] `./tests/` for a SciTeX research project — pytest-driven, same convention as for packages but the source tree being mirrored is `./scripts/` (not `./src/`). Mandatory `tests/scripts/` parent. Allowed sibling subdirs (examples/agentic/integration/e2e/github_actions/coverage/results/logs/reports/custom). Public/private filename convention with double-underscore for private. Same `audit-project` rule set (PS-201–PS-206 with `tests/scripts/` substituted for `tests/<pkg>/`, plus PS-302/PS-303).
 tags: [scitex-scientific-research-project-project-structure-tests]
 ---
 
@@ -44,6 +44,7 @@ A leading underscore in the source marks the module **private**. The mirroring t
 | `tests/e2e/` | ✅ | end-to-end pipeline tests (full `data → result` runs) |
 | `tests/github_actions/` | ✅ | local GitHub Actions runner config (`act`/Apptainer) |
 | `tests/coverage/` | gitignored | HTML / XML coverage reports |
+| `tests/results/` | gitignored | general test-run artifacts spanning topics (coverage data files, captured payloads, fixture output) |
 | `tests/logs/` | gitignored | pytest run logs, captured stdout/stderr |
 | `tests/reports/` | optional | agent-generated test summaries |
 | `tests/custom/` | ✅ | tests with no script counterpart |
