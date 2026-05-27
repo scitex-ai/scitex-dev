@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Package Tests
-  [DETAILS] `./tests/` for a SciTeX package — pytest-driven, controlled by `pyproject.toml`. The mandatory `tests/<pkg>/` parent (1:1 mirror of `src/<pkg>/`), allowed sibling subdirs (scripts/examples/skills/agentic/integration/e2e/github_actions/coverage/logs/reports/custom), public/private filename convention with double-underscore for private (`test__foo.py` mirrors `_foo.py`), the small set of "meta tests" allowed at `tests/` root, the `audit-project` rules (PS-201–PS-206, PS-302), and the historical `sync_tests_with_source.sh` precedent. Drop the source-as-comments pattern — it's noise.
+  [DETAILS] `./tests/` for a SciTeX package — pytest-driven, controlled by `pyproject.toml`. The mandatory `tests/<pkg>/` parent (1:1 mirror of `src/<pkg>/`), allowed sibling subdirs (scripts/examples/skills/agentic/integration/e2e/github_actions/coverage/results/logs/reports/custom), public/private filename convention with double-underscore for private (`test__foo.py` mirrors `_foo.py`), the small set of "meta tests" allowed at `tests/` root, the `audit-project` rules (PS-201–PS-206, PS-302), and the historical `sync_tests_with_source.sh` precedent. Drop the source-as-comments pattern — it's noise.
 tags: [scitex-general-package-project-structure-tests]
 ---
 
@@ -54,6 +54,7 @@ Tests are organized into a **fixed set of literal subdirectories**. Anything els
 | `tests/e2e/` | ✅ | **mandatory** end-to-end workflows against real subsystems; marker `e2e`; **runs on every PR by default** — NOT gated by `RUN_E2E=1`. Per-test `pytest.mark.skipif` only when a specific subsystem (apptainer, fastmcp, GPU, NAS) is missing on the runner. (PS-212) |
 | `tests/github_actions/` | ✅ | local GitHub Actions runner config (`act`/Apptainer) |
 | `tests/coverage/` | gitignored | HTML / XML coverage reports (replaces a top-level `./htmlcov/`) |
+| `tests/results/` | gitignored | general test-run artifacts spanning topics (coverage data files, captured payloads, fixture output) |
 | `tests/logs/` | gitignored | pytest run logs, captured stdout/stderr |
 | `tests/reports/` | optional | agent-generated test summaries |
 | `tests/custom/` | ✅ | legacy: tests with no source counterpart |

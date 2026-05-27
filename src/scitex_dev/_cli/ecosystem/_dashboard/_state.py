@@ -73,7 +73,14 @@ class PackageState:
     # GitHub Releases — separate from `tag_latest` (git tag local). A
     # tag without a Release means PyPI was published but no release
     # notes / asset was attached. Diff = a release-management gap.
+    # `gh_release_lookup_done` distinguishes "not yet queried"
+    # (renderer shows `N/C` dim) from "queried, no release exists"
+    # (renderer shows `MISSING` red — there IS a local tag, so the
+    # absence of a matching GH Release is a release-pipeline gap).
+    # The 2026-05-27 failure (crossref-local 0.7.4 + openalex-local 0.7.6
+    # on PyPI but no GH Release) is the canonical motivator.
     gh_release_latest: str = ""
+    gh_release_lookup_done: bool = False
 
     # Per-package dev venv state ("real" / "symlink" / "missing").
     # Cheap (one `os.lstat`), always computed because it's the canary
@@ -933,11 +940,23 @@ def _enrich_gh_release(state: PackageState) -> None:
     A tag without an attached release is a release-management gap —
     PyPI got published but no release notes/asset landed. Exposed as a
     separate column from `tag_latest` (git tag).
+
+    Sets ``state.gh_release_lookup_done = True`` on every reachable
+    response — including the "no releases exist yet" case, which
+    `gh release view` reports as a non-zero exit. That lets the
+    renderer distinguish "not yet queried" (dim N/C) from "queried,
+    no release attached to the latest tag" (red MISSING — the
+    canonical 2026-05-27 footgun where PyPI publishes succeed but the
+    awk-based release-notes extractor fails the GH-Release job).
     """
     if not state.exists_locally:
         return
+    # `gh release view` returns rc!=0 when no release exists yet; we
+    # MUST distinguish that "queried, none" answer from a transport
+    # failure. `subprocess.run` (no check) gives us the return code so
+    # we can set `gh_release_lookup_done = True` in either case.
     try:
-        out = subprocess.check_output(
+        proc = subprocess.run(
             [
                 "gh",
                 "release",
@@ -947,16 +966,23 @@ def _enrich_gh_release(state: PackageState) -> None:
                 "--json",
                 "tagName",
             ],
-            stderr=subprocess.DEVNULL,
+            capture_output=True,
             text=True,
             timeout=10,
         )
-    except (
-        subprocess.CalledProcessError,
-        subprocess.TimeoutExpired,
-        FileNotFoundError,
-    ):
+    except (subprocess.TimeoutExpired, FileNotFoundError):
         return
+
+    out = proc.stdout or ""
+    err = (proc.stderr or "").lower()
+    # The "no releases" case: gh prints `release not found` (or `no
+    # releases`) on stderr and exits 1. Treat that as a confirmed
+    # negative answer rather than a transport failure.
+    if proc.returncode != 0:
+        if "release not found" in err or "no releases" in err:
+            state.gh_release_lookup_done = True
+        return
+
     import json as _json
 
     try:
@@ -964,6 +990,7 @@ def _enrich_gh_release(state: PackageState) -> None:
     except _json.JSONDecodeError:
         return
     state.gh_release_latest = (data.get("tagName") or "").strip()
+    state.gh_release_lookup_done = True
 
 
 def _compute_drift_local(version: str, tag: str) -> str:
