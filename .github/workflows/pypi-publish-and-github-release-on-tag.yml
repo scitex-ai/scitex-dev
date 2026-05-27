@@ -135,17 +135,37 @@ jobs:
           name: dist
           path: dist
       - name: Extract release notes from CHANGELOG.md
+        # 2026-05-27: explicitly NEVER fail this step. The downstream
+        # `gh release create` consumes `release-notes.md`; under
+        # `bash -eo pipefail` (GHA default) any of these conditions
+        # used to cascade into a failed `release` job even though PyPI
+        # had already published successfully:
+        #   - CHANGELOG.md missing entirely
+        #   - awk syntax error / non-zero exit
+        #   - `## [X.Y.Z]` section absent (extractor writes empty file,
+        #     and downstream `gh release create --notes-file` rejects
+        #     an empty file when the upstream step also errored)
+        # The hardened script disables -e, guards every path, and
+        # guarantees a non-empty release-notes.md before exiting 0.
+        # See GH-Release wave 2026-05-27 (crossref-local 0.7.4 +
+        # openalex-local 0.7.6 PyPI-OK / GH-Release missing).
+        shell: bash
         run: |
+          set +e
           VERSION="${{ needs.build.outputs.version }}"
           VERSION="${VERSION#v}"
-          awk -v v="$VERSION" '
-            $0 ~ "^## \\[" v "\\]" {p=1; next}
-            p && /^## \[/ {exit}
-            p
-          ' CHANGELOG.md > release-notes.md || true
+          : > release-notes.md
+          if [ -f CHANGELOG.md ]; then
+            awk -v v="$VERSION" '
+              $0 ~ "^## \\[" v "\\]" {p=1; next}
+              p && /^## \[/ {exit}
+              p
+            ' CHANGELOG.md > release-notes.md 2>/dev/null
+          fi
           if [ ! -s release-notes.md ]; then
             echo "Release v${VERSION}. See CHANGELOG.md for details." > release-notes.md
           fi
+          exit 0
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
