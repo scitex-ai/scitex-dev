@@ -855,7 +855,7 @@ RULES: dict[str, Rule] = {
         Rule(
             "PS-302",
             "§3",
-            "unrecognized subdir at tests/ root (must be tests/<pkg>/ or one of the known categories: scripts/examples/skills/agentic/integration/e2e/github_actions/coverage/logs/reports/custom)",
+            "unrecognized subdir at tests/ root (must be tests/<pkg>/ or one of the known categories: scripts/examples/skills/agentic/integration/e2e/github_actions/coverage/results/logs/reports/custom)",
         ),
         Rule(
             "PS-303",
@@ -1245,6 +1245,8 @@ _KNOWN_TEST_SUBDIRS = frozenset(
         "e2e",  # end-to-end pipelines (PS-212)
         "github_actions",
         "coverage",  # HTML / XML reports — gitignored
+        "results",  # general test-run artifacts spanning topics
+        # (coverage data files, fixtures output, captured payloads) — gitignored
         "logs",  # pytest run logs — gitignored
         "reports",  # agent-generated summaries — optional
         "custom",  # legacy: tests with no source counterpart

@@ -7,6 +7,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-05-28
+
 ### Added
 - **Dashboard GH-Release column (and MISSING signal)** — the `RELEASE`
   column on `scitex-dev ecosystem dashboard list` (default verbosity)
@@ -26,6 +28,13 @@ versions follow [Semantic Versioning](https://semver.org/).
   is the usable artefact). `to_pdf` always writes the `.org` next to
   the requested `.pdf` output. The report includes a "GH-Release
   gaps" section listing packages with a tag but no Release.
+- **`tests/results/` accepted as a known `tests/` subdir (PS-302).** Test
+  runs produce a variety of artifacts beyond coverage (captured payloads,
+  fixture output, relocated `.coverage` data files); `tests/results/` is
+  now a first-class gitignored artifacts category alongside
+  `tests/coverage/` / `tests/logs/`. Added to `_KNOWN_TEST_SUBDIRS`, the
+  PS-302 rule text, and both project-structure skill leaves (general +
+  scientific). Backward-compatible — nothing that passed before now fails.
 
 ### Fixed
 - **GitHub Release notes extraction never fails the publish workflow** —
