@@ -11,7 +11,7 @@ tags: [scitex-scientific-research-project-project-structure-makefile]
 
 ## Same pattern as packages
 
-Same convention as for SciTeX packages — see [`../general/02_package_04_project-structure-makefile.md`](../general/02_package_04_project-structure-makefile.md) for the full rationale. The root `Makefile` is a thin dispatcher; each target's actual logic lives as one script per target under `./scripts/makefile/`:
+Same convention as for SciTeX packages — see [`../general/02_package/04_project-structure-makefile.md`](../general/02_package/04_project-structure-makefile.md) for the full rationale. The root `Makefile` is a thin dispatcher; each target's actual logic lives as one script per target under `./scripts/makefile/`:
 
 ```
 ./scripts/makefile/
@@ -62,7 +62,7 @@ What's typically **dropped** vs the package set:
 
 ## Script template
 
-Use the same bash template as packages — see [`../general/02_package_04_project-structure-makefile.md`](../general/02_package_04_project-structure-makefile.md#script-template). Logs land under `./tests/logs/`.
+Use the same bash template as packages — see [`../general/02_package/04_project-structure-makefile.md`](../general/02_package/04_project-structure-makefile.md#script-template). Logs land under `./tests/logs/`.
 
 ## Footgun: do NOT set `SHELL := /bin/bash` at the top of the Makefile
 

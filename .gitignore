@@ -45,3 +45,6 @@ catboost_info/
 # outside its dir) — should not be tracked.
 unknown_out/
 .coverage.*
+.venv
+
+.worktrees/

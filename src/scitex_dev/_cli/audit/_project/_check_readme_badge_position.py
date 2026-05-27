@@ -1,7 +1,7 @@
 """PS-133 — README badges placed below the Full-Documentation line, in the
 centered figrecipe-style ``<p align="center">`` form.
 
-Convention (see ``_skills/general/04_docs_01_readme_template.md``):
+Convention (see ``_skills/general/04_docs/01_readme_template.md``):
 
     # <PACKAGE>
     <centered logo>
@@ -80,7 +80,7 @@ def check_badge_position(repo: Path, violation_cls: type, out: list) -> None:
                     "markdown form. Convert to the centered figrecipe "
                     'form: a ``<p align="center">`` containing one '
                     "``<a href=…><img src=…></a>`` per badge. See "
-                    "_skills/general/04_docs_01_readme_template.md."
+                    "_skills/general/04_docs/01_readme_template.md."
                 ),
             )
         )
@@ -95,7 +95,7 @@ def check_badge_position(repo: Path, violation_cls: type, out: list) -> None:
                     "badges block appears BEFORE the Full-Documentation "
                     "line; canonical position is just below it. Also "
                     'convert to the centered figrecipe ``<p align="center">`` '
-                    "form. See _skills/general/04_docs_01_readme_template.md."
+                    "form. See _skills/general/04_docs/01_readme_template.md."
                 ),
             )
         )

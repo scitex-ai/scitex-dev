@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """Shared CLI tab-completion helper for every scitex-* package.
 
-Per `_skills/general/03_interface_02_cli/03_required-introspection-commands.md`
+Per `_skills/general/03_interface/02_cli/03_required-introspection-commands.md`
 §1a, every scitex-* CLI MUST expose `install-shell-completion` and
 `print-shell-completion` so users actually get `<TAB>` completion.
 

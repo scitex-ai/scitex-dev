@@ -141,6 +141,6 @@ def check_topical_clutter(
         "(e.g., `_release/` for CI/deploy/version helpers, `_docs/` for "
         "docs build + skills aggregation, `_core/` for config/errors/types, "
         "`_quality/` for linters). Single-file orphans stay flat. See "
-        "`general/02_package_02_project-structure-src.md` for decision rules."
+        "`general/02_package/02_project-structure-src.md` for decision rules."
     )
     out.append(violation_cls("PS-108b", str(src_pkg), detail))

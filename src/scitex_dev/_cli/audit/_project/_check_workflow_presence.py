@@ -19,8 +19,8 @@ Recognised categories:
                           scitex-agent-container's ops side). Same
                           baseline as ``library`` for now.
 
-Spec: ``_skills/general/01_ecosystem_09_package-categories.md`` and
-``_skills/general/02_package_07b_workflow-presence.md``.
+Spec: ``_skills/general/01_ecosystem/09_package-categories.md`` and
+``_skills/general/02_package/07b_workflow-presence.md``.
 
 Severity W during adoption — packages can self-register their category
 and rename existing workflows gradually. Promote to E once the ecosystem
@@ -178,7 +178,7 @@ def check_ps165_workflow_presence(
                 (
                     f"no GitHub Actions workflows found — every SciTeX package "
                     f"(category={category!r}) must ship the baseline workflow "
-                    f"set. See _skills/general/02_package_07b_workflow-presence.md."
+                    f"set. See _skills/general/02_package/07b_workflow-presence.md."
                 ),
             )
         )
@@ -199,7 +199,7 @@ def check_ps165_workflow_presence(
                     (
                         f"missing required workflow for category={category!r}: "
                         f"{label}. See "
-                        f"_skills/general/02_package_07b_workflow-presence.md."
+                        f"_skills/general/02_package/07b_workflow-presence.md."
                     ),
                 )
             )

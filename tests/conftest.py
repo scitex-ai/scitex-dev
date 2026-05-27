@@ -7,13 +7,14 @@ rootdir and gives downstream fixtures a home.
 Also wires subprocess coverage at module import time so child Python
 interpreters (subprocess.run([sys.executable, ...]), demo smoke tests,
 etc.) write their coverage data into the same shard pool as the parent.
-See ``src/scitex_dev/_skills/general/05_development_06_subprocess-coverage.md``.
+See ``src/scitex_dev/_skills/general/05_development/06_subprocess-coverage.md``.
 
 Critical: we force-set (not setdefault) ``COVERAGE_PROCESS_START`` and
 ``COVERAGE_FILE`` because pytest-cov has already set ``COVERAGE_FILE`` to
 a per-test tmp dir by the time conftest loads — ``setdefault`` would be a
 silent no-op and the fix would appear to "do nothing".
 """
+
 from __future__ import annotations
 
 import os

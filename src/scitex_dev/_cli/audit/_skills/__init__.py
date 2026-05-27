@@ -1,5 +1,5 @@
 """Skills auditor — checks a SciTeX package's `_skills/<pip-name>/` against the
-`general/03_interface_04_skills/12_quality-checklist.md` rules.
+`general/03_interface/04_skills/12_quality-checklist.md` rules.
 
 Foundation scope: static filesystem + frontmatter checks across §1 (layout),
 §2 (naming), §2a (no header/footer above frontmatter), §3 (SKILL.md as index),

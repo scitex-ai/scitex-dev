@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Private skills for consumer projects (research repos, paper repos, internal apps)
-  [DETAILS] Where to put project-specific agent-facing knowledge in a SciTeX *consumer* project (e.g. `paper-scitex-clew`, an internal analysis repo, a fleet ops repo) — distinct from public-package skill rules in `../general/03_interface_04_skills/06_public-vs-private.md` (which is for package authors). Covers the 4-layer skill stack (public-package, fleet-private, consumer-project-private, consumer-project gitignored notes), when content belongs in each layer, how consumer projects pull in the public skill mirror at `~/.claude/skills/scitex/...`, the lift-up rule (when a project-private note becomes reusable enough to graduate to a public package skill), and concrete examples from `paper-scitex-clew`.
+  [DETAILS] Where to put project-specific agent-facing knowledge in a SciTeX *consumer* project (e.g. `paper-scitex-clew`, an internal analysis repo, a fleet ops repo) — distinct from public-package skill rules in `../general/03_interface/04_skills/06_public-vs-private.md` (which is for package authors). Covers the 4-layer skill stack (public-package, fleet-private, consumer-project-private, consumer-project gitignored notes), when content belongs in each layer, how consumer projects pull in the public skill mirror at `~/.claude/skills/scitex/...`, the lift-up rule (when a project-private note becomes reusable enough to graduate to a public package skill), and concrete examples from `paper-scitex-clew`.
 tags: [scitex-scientific-private-skills-consumer-project]
 ---
 
@@ -11,7 +11,7 @@ A *consumer project* uses SciTeX packages but is not itself a SciTeX
 package — research repos (`paper-scitex-clew`), internal analysis
 repos, fleet-ops repos, paper-companion code bundles. The
 public-vs-private decision rule for *packages* lives in
-[`../general/03_interface_04_skills/06_public-vs-private.md`](../general/03_interface_04_skills/06_public-vs-private.md);
+[`../general/03_interface/04_skills/06_public-vs-private.md`](../general/03_interface/04_skills/06_public-vs-private.md);
 this leaf fills in the consumer side.
 
 ## The four-layer skill stack
@@ -177,7 +177,7 @@ paper-scitex-clew/                              # consumer project root
 
 ## Related
 
-- [../general/03_interface_04_skills/06_public-vs-private.md](../general/03_interface_04_skills/06_public-vs-private.md) — public-vs-private decision rule for *packages*
-- [../general/01_ecosystem_06_local-state-directories.md](../general/01_ecosystem_06_local-state-directories.md) — `~/.scitex/<pkg-short>/` and `<project>/.scitex/<pkg-short>/` layouts
+- [../general/03_interface/04_skills/06_public-vs-private.md](../general/03_interface/04_skills/06_public-vs-private.md) — public-vs-private decision rule for *packages*
+- [../general/01_ecosystem/06_local-state-directories.md](../general/01_ecosystem/06_local-state-directories.md) — `~/.scitex/<pkg-short>/` and `<project>/.scitex/<pkg-short>/` layouts
 - [02_research-project_01_project-structure-root.md](02_research-project_01_project-structure-root.md) — research-project root rules; mentions `GITIGNORED/` and `docs/to_claude/`
 - `scitex-agent-container/_skills/scitex-agent-container/18_full-agent-delegation.md` — sac peer/fleet usage including `spec.skills.required`

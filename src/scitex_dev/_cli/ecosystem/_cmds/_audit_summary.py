@@ -206,8 +206,8 @@ def register(ecosystem):
         Note: audit-cli and audit-mcp-tools use §-numbered violations
         defined inline (no central registry), so they're not listed
         here. Their conventions live in
-        `_skills/general/03_interface_02_cli/` and
-        `_skills/general/03_interface_03_mcp/`.
+        `_skills/general/03_interface/02_cli/` and
+        `_skills/general/03_interface/03_mcp/`.
         """
         import json as _json
 

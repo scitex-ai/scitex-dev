@@ -47,7 +47,7 @@ cleanup calls) is low because cleanup belongs in fixtures, not in
 the test body — if a test does need post-assert cleanup, that's the
 signal to extract a fixture.
 
-See `_skills/general/02_package_12_no-mocks.md` for the parent
+See `_skills/general/02_package/12_no-mocks.md` for the parent
 rationale and `~/.claude/skills/ywatanabe/05_testing/00_no-mocks.md`
 for the personal directive.
 """

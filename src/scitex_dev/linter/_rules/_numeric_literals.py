@@ -1,6 +1,6 @@
 """Category NL: numeric-literal rules (PEP 515 `_` separators).
 
-See `_skills/general/03_interface_01_python-api/14_numeric-literals.md`
+See `_skills/general/03_interface/01_python-api/14_numeric-literals.md`
 for the rationale and carve-outs (years, ports, HTTP codes).
 """
 
@@ -18,7 +18,7 @@ NL001 = Rule(
         "Rewrite `21600` as `21_600`, `1048576` as `1_048_576`. "
         "Identifiers that read as a whole (years, ports, HTTP codes) "
         "may stay bare — see the carve-outs in "
-        "`_skills/general/03_interface_01_python-api/14_numeric-literals.md`. "
+        "`_skills/general/03_interface/01_python-api/14_numeric-literals.md`. "
         "Suppress per-line with `# stx-allow: STX-NL001` when an identifier "
         "should not be split."
     ),

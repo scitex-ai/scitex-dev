@@ -71,7 +71,7 @@ Append-only log of mistakes that cost real time, and the rules that fix them. Re
 | Mistake | Symptom | Fix → leaf |
 |---|---|---|
 | Long prose answers with embedded options | User has to parse to find decision points | Numbered Q1/Q2 with a)/b) options + recommendation + tradeoffs table |
-| Asking three questions in one turn | User answers one, agent loses the others | Cap at 1–2 decisions per turn ([`general/03_interface_*`](../general/03_interface_00_overview.md)) |
+| Asking three questions in one turn | User answers one, agent loses the others | Cap at 1–2 decisions per turn ([`general/03_interface_*`](../general/03_interface/00_overview.md)) |
 | Saying "untestable" when paired-arms make it testable | Wrong rejection of valid hypothesis | If a comparator + metric exist, it's testable — "vague" ≠ "untestable" |
 
 ## How to add to this list

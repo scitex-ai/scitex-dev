@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Optional
 
 from ..._core.discovery import discover_packages, get_package_root
+from ._frontmatter import _parse_frontmatter, _stamp_frontmatter_field  # noqa: F811
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ def _collect_skills_from_dir(
     reproduce the directory structure under the destination.
 
     For the canonical `_skills/general/` use case this means the nested
-    `03_interface_04_skills/00_index.md` etc. files survive the round-trip.
+    `03_interface/04_skills/00_index.md` etc. files survive the round-trip.
     Legacy flat layouts (top-level `*.md` only) keep working unchanged.
     """
     skills: list[dict[str, str]] = []
@@ -335,6 +336,18 @@ def export_skills(
         _version_fn=_version_fn,
     )
 
+    # Auto-detect editable installs: when source="installed" and --link
+    # was not explicitly passed, check whether any discovered package is
+    # installed in editable mode (pip install -e). If so, enable link
+    # so source changes propagate immediately without re-export.
+    if source == "installed" and not link:
+        from ..._release.check_editable_drift import _editable_source_dir
+
+        for pkg_name in all_skills:
+            if _editable_source_dir(pkg_name) is not None:
+                link = True
+                break
+
     if clean:
         for pkg_name in all_skills:
             pkg_dir = dest / pkg_name
@@ -360,7 +373,7 @@ def export_skills(
                 # Find canonical skill-tree root: walk up from any leaf
                 # until we hit an ancestor named pkg_name. Handles both
                 # flat layouts (one parent dir) and nested layouts like
-                # general/03_interface_04_skills/12_quality-checklist.md.
+                # general/03_interface/04_skills/12_quality-checklist.md.
                 src_root = None
                 for ancestor in [src_paths[0].parent, *src_paths[0].parents]:
                     if ancestor.name == pkg_name:
@@ -387,7 +400,7 @@ def export_skills(
 
             name = entry["name"]
             # Prefer `rel_path` (preserves nested subdirs like
-            # `03_interface_04_skills/00_index.md`); fall back to flat
+            # `03_interface/04_skills/00_index.md`); fall back to flat
             # `<name>.md` for legacy entries that predate rel_path.
             rel_path = entry.get("rel_path")
             if rel_path:
@@ -452,120 +465,6 @@ def _generate_root_skill_md(dest: Path, exported: dict[str, list[Path]]) -> None
     render_root_skill_md(dest, exported)
 
 
-def cached_skill_version(package: str) -> Optional[str]:
-    """Read the version stamp from the cached SKILL.md of `package`.
-
-    Returns the value of the `version:` frontmatter field of
-    `~/.claude/skills/scitex/<package>/SKILL.md` (the location used by
-    `export_skills`), or None if the cache, file, or stamp is absent.
-    """
-    cache_root = _get_default_export_dest()
-    skill_md = cache_root / package / "SKILL.md"
-    if not skill_md.is_file():
-        return None
-    fm = _parse_frontmatter(skill_md)
-    v = fm.get("version", "").strip()
-    return v or None
-
-
-def installed_version(package: str) -> Optional[str]:
-    """Return `importlib.metadata.version(package)` or None if missing."""
-    try:
-        from importlib.metadata import version
-
-        return version(package)
-    except Exception:
-        return None
-
-
-def _is_older(cached: str, installed: str) -> bool:
-    """Best-effort cached < installed comparison.
-
-    Uses `packaging.version.Version` when available; falls back to a
-    naive lexicographic compare. False means "not strictly older" — we
-    only warn on confirmed staleness.
-    """
-    try:
-        from packaging.version import Version
-
-        return Version(cached) < Version(installed)
-    except Exception:
-        return cached != installed and cached < installed
-
-
-def drift_warning(package: str) -> Optional[str]:
-    """Return a one-line non-blocking drift warning for `package`, or None.
-
-    Emitted from `skills get` / `skills list` to stderr without
-    prompting the user (prompts would hang automated agents). The
-    cached copy is the user's working set; this function compares it
-    to the live `importlib.metadata.version()` and reports staleness.
-    """
-    cached = cached_skill_version(package)
-    inst = installed_version(package)
-    if not cached or not inst or cached == inst:
-        return None
-    if not _is_older(cached, inst):
-        return None
-    return (
-        f"warn: cached skills for {package} are from v{cached}; "
-        f"installed v{inst}. Run `scitex-dev skills install --force` to refresh."
-    )
-
-
-def _stamp_frontmatter_field(content: str, key: str, value: str) -> str:
-    """Set or insert a field in a markdown file's YAML frontmatter.
-
-    Used at `skills export` time to stamp every cached leaf with the
-    exporting package's `version` and `exported_via` fields. The
-    runtime drift check (`skills get` / `skills list`) reads these
-    stamps to compare against `importlib.metadata.version()`.
-    """
-    import re
-
-    if re.search(rf"^{key}:", content, re.MULTILINE):
-        return re.sub(
-            rf"^({key}:\s*).*$",
-            rf"\g<1>{value}",
-            content,
-            count=1,
-            flags=re.MULTILINE,
-        )
-    # Insert before the closing `---` of the frontmatter block. If the
-    # file has no frontmatter (legacy), prepend a minimal block.
-    if content.startswith("---\n"):
-        # Find the second `---\n` and insert before it.
-        end = content.find("\n---\n", 4)
-        if end != -1:
-            return content[: end + 1] + f"{key}: {value}\n" + content[end + 1 :]
-    # No frontmatter at all — prepend a minimal one.
-    return f"---\n{key}: {value}\n---\n\n" + content
-
-
-def _parse_frontmatter(path: Path) -> dict[str, str]:
-    """Parse YAML frontmatter from a markdown file."""
-    try:
-        text = path.read_text()
-    except Exception:
-        return {}
-
-    if not text.startswith("---"):
-        return {}
-
-    parts = text.split("---", 2)
-    if len(parts) < 3:
-        return {}
-
-    result = {}
-    for line in parts[1].strip().split("\n"):
-        if ":" in line:
-            key, _, value = line.partition(":")
-            result[key.strip()] = value.strip()
-    return result
-
-
-# Re-export from refactored module for backward compatibility
+# Re-export from refactored modules for backward compatibility
+from .skills_drift import cached_skill_version, drift_warning, installed_version  # noqa: F401
 from .skills_verify import verify_docs_and_skills  # noqa: F401
-
-
-# EOF

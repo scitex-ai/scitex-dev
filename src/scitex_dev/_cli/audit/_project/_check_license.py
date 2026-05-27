@@ -9,7 +9,7 @@ unmistakable AGPL-3.0 signature lines, including Section 13 ("Remote
 Network Interaction") that's nearly always missing from stubs.
 
 Only AGPL-3.0-only is enforced today — that's the ecosystem-mandated
-license per `01_ecosystem_07_license-and-cla.md`. If a package
+license per `01_ecosystem/07_license-and-cla.md`. If a package
 declares a different SPDX expression, PS-138b skips it (presence-only
 check via PS-138 still applies).
 """
@@ -88,7 +88,7 @@ def check_license_content(license_path: Path, spdx: Optional[str]) -> Optional[s
             f"declaration `AGPL-3.0-only` — missing {missing!r}. "
             f"The on-disk license must contain the full AGPL-3.0 text, "
             f"not a copyright stub. See "
-            f"`_skills/general/01_ecosystem_07_license-and-cla.md`."
+            f"`_skills/general/01_ecosystem/07_license-and-cla.md`."
         )
     return None
 

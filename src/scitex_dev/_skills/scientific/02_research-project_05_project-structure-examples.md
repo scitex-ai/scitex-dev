@@ -11,7 +11,7 @@ tags: [scitex-scientific-research-project-project-structure-examples]
 
 ## Same convention as packages
 
-The shape, numbering, `_out/` policy, and `00_run_all.sh` dispatcher are identical to the package side — see [`../general/02_package_05_project-structure-examples.md`](../general/02_package_05_project-structure-examples.md). The differences are scope-related, listed below.
+The shape, numbering, `_out/` policy, and `00_run_all.sh` dispatcher are identical to the package side — see [`../general/02_package/05_project-structure-examples.md`](../general/02_package/05_project-structure-examples.md). The differences are scope-related, listed below.
 
 ```
 ./examples/

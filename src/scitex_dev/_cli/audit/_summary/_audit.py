@@ -1727,7 +1727,7 @@ def _check_startup_speed(
     Click bash-completion calls the program once per Tab press to resolve
     dynamic completions, so a slow import = unusable tab-completion. The
     fix is PEP 562 lazy `__getattr__` in the top-level `__init__.py`
-    (see `_skills/general/03_interface_01_python-api/
+    (see `_skills/general/03_interface/01_python-api/
     04_lazy-imports-and-optional-deps.md`).
     """
     import subprocess as _sp
@@ -1815,7 +1815,7 @@ RULE_SEVERITY: dict[str, str] = {
     # PA-305: playwright.async_api imported without capture_debug_artifacts_async
     # call. Codified 2026-05-06 — every browser-automation decision point must
     # capture screenshot+HTML so selector regressions are diagnosable
-    # post-mortem. See _skills/general/02_package_09_browser-automation-debugging.md.
+    # post-mortem. See _skills/general/02_package/09_browser-automation-debugging.md.
     "PA-305": "error",
 }
 SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}

@@ -1,6 +1,6 @@
 """Programmatic checks for the SciTeX skills quality checklist.
 
-Canonical rules: src/scitex/_skills/general/21_scitex-package-quality-checklist.md
+Canonical rules: _skills/general/03_interface/04_skills/12_quality-checklist.md
 
 Shared check helpers live in ``scitex_dev._skills_audit_core``; this module
 keeps the repo-rooted SkillIssue/SkillReport API used by downstream package

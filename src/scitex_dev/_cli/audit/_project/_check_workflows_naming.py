@@ -1,6 +1,6 @@
 """PS-164 — `.github/workflows/` filename + structure convention.
 
-Spec: `_skills/general/02_package_12_workflows-naming.md`.
+Spec: `_skills/general/02_package/12_workflows-naming.md`.
 
 Three sub-checks (all severity W during adoption):
 
@@ -186,7 +186,7 @@ def check_ps164_workflow_naming(repo: Path, violation_cls: type, out: list) -> N
                         "rename to describe what runs and where (e.g. "
                         "`pytest-on-ubuntu-py3-11-3-12-3-13.yml`, "
                         "`rtd-build-on-ubuntu-latest.yml`). See "
-                        "_skills/general/02_package_12_workflows-naming.md."
+                        "_skills/general/02_package/12_workflows-naming.md."
                     ),
                 )
             )
@@ -208,7 +208,7 @@ def check_ps164_workflow_naming(repo: Path, violation_cls: type, out: list) -> N
                         f"workflow has {len(job_ids)} jobs with unrelated "
                         f"IDs ({', '.join(job_ids)}) — split into one file "
                         "per check. See "
-                        "_skills/general/02_package_12_workflows-naming.md."
+                        "_skills/general/02_package/12_workflows-naming.md."
                     ),
                 )
             )

@@ -1,7 +1,7 @@
 """Project-structure auditor — engine + rules.
 
 Rules cover the automatable items from
-`scitex-dev/src/scitex_dev/_skills/general/02_package_01_project-structure.md`
+`scitex-dev/src/scitex_dev/_skills/general/02_package/01_project-structure-root.md`
 (and its sibling `scientific/02_research-project_01_project-structure.md`).
 
 Numbering: ``PS<§><idx>`` (PS = Project Structure), e.g. PS-201 = §2 rule 01.
@@ -93,7 +93,7 @@ RULES: dict[str, Rule] = {
             (
                 "README.md is missing required H2 sections "
                 "(## Installation / ## Quick Start / ## Part of SciTeX) — "
-                "see _skills/general/04_docs_01_readme_template.md for the "
+                "see _skills/general/04_docs/01_readme_template.md for the "
                 "canonical layout."
             ),
         ),
@@ -178,7 +178,7 @@ RULES: dict[str, Rule] = {
                 "Group into `_release/`, `_docs/`, `_core/`, `_quality/` "
                 "subpackages by topical responsibility (single-file "
                 "orphans stay flat). See "
-                "general/02_package_02_project-structure-src.md."
+                "general/02_package/02_project-structure-src.md."
             ),
         ),
         Rule(
@@ -258,7 +258,7 @@ RULES: dict[str, Rule] = {
                 "pointing at the bare RTD root (e.g. "
                 "`https://<pkg>.readthedocs.io/`) instead of a deep-link "
                 "anchor page. Use the canonical deep-link per interface — "
-                "see `_skills/general/04_docs_01_readme.md` 'Canonical Full "
+                "see `_skills/general/04_docs/01_readme.md` 'Canonical Full "
                 "X reference deep-link patterns'."
             ),
         ),
@@ -269,7 +269,7 @@ RULES: dict[str, Rule] = {
                 "package has `docs/sphinx/` but no `.readthedocs.yaml` (or "
                 "`.readthedocs.yml`) at the repo root. Without it, RTD won't "
                 "build the docs. Use the canonical config — see "
-                "`_skills/general/04_docs_02_sphinx.md`."
+                "`_skills/general/04_docs/02_sphinx.md`."
             ),
         ),
         Rule(
@@ -325,7 +325,7 @@ RULES: dict[str, Rule] = {
                 "but documents them in NEITHER a README "
                 "`## Environment Variables` section NOR a `.env.example` "
                 "at repo root. Pick one — see "
-                "`_skills/general/04_docs_03_env-vars-and-state.md`."
+                "`_skills/general/04_docs/03_env-vars-and-state.md`."
             ),
         ),
         Rule(
@@ -400,7 +400,7 @@ RULES: dict[str, Rule] = {
                 "runnable `examples/<NN_>name.py` (or `.ipynb`) demonstrating "
                 "the primary use case. Without examples, agents and humans "
                 "have to grep tests/ to learn the API. See `_skills/general/"
-                "02_package_01_project-structure.md`."
+                "02_package/01_project-structure-root.md`."
             ),
         ),
         Rule(
@@ -409,7 +409,7 @@ RULES: dict[str, Rule] = {
             (
                 "missing README.md at repo root — every package's first-touch "
                 "documentation surface. Use the canonical template at "
-                "`_skills/general/04_docs_01_readme_template.md`."
+                "`_skills/general/04_docs/01_readme_template.md`."
             ),
         ),
         Rule(
@@ -431,7 +431,7 @@ RULES: dict[str, Rule] = {
                 "instead of the full AGPL-3.0 text. The on-disk license "
                 "must contain the full GNU AGPL v3 license, not just a "
                 "title + copyright line. See "
-                "`_skills/general/01_ecosystem_07_license-and-cla.md`."
+                "`_skills/general/01_ecosystem/07_license-and-cla.md`."
             ),
         ),
         Rule(
@@ -445,7 +445,7 @@ RULES: dict[str, Rule] = {
                 "every `import scitex_<pkg>` traverses the umbrella's lazy "
                 "re-export __init__. Replace with the specific peer "
                 "standalone(s) (e.g. `scitex-session>=0.1.0`). See "
-                "`_skills/general/03_interface_01_python-api/"
+                "`_skills/general/03_interface/01_python-api/"
                 "11_import-conventions.md`."
             ),
         ),
@@ -712,7 +712,7 @@ RULES: dict[str, Rule] = {
                 "`SCITEX_DIR` relocation and standalone-ability. Use the "
                 "plugin-port pattern: expose your own `SCITEX_<THIS>_*_DIRS` "
                 "slot and let consumers populate it. See "
-                "_skills/general/01_ecosystem_06_local-state-directories.md "
+                "_skills/general/01_ecosystem/06_local-state-directories.md "
                 "§9.5."
             ),
             slug="local-state-cross-package-read",
@@ -740,7 +740,7 @@ RULES: dict[str, Rule] = {
                 "on every shell start (~0.4s/binary). Use the cache-file "
                 "pattern instead: generate the completion once into "
                 "`~/.scitex/<pkg-short>/runtime/completion/<binary>` and "
-                "have rc `source` it. See _skills/general/03_interface_02_"
+                "have rc `source` it. See _skills/general/03_interface/02_"
                 "cli/03_required-introspection-commands.md."
             ),
             slug="local-state-eval-completion",
@@ -763,7 +763,7 @@ RULES: dict[str, Rule] = {
             (
                 "GitHub Actions workflow naming/structure violates convention "
                 "(one file = one check, descriptive kebab-case filename; see "
-                "_skills/general/02_package_12_workflows-naming.md). Three "
+                "_skills/general/02_package/12_workflows-naming.md). Three "
                 "sub-checks: vague filename in denylist, multi-job file with "
                 "unrelated job IDs, or `name:` field mismatching the filename."
             ),
@@ -803,7 +803,7 @@ RULES: dict[str, Rule] = {
             (
                 "`[dev]` extras incomplete — an optional `[X]` extra dep is "
                 "imported unguarded by the test suite but missing from `[dev]` "
-                "(see _skills/general/01_ecosystem_02_dependency-and-version-"
+                "(see _skills/general/01_ecosystem/02_dependency-and-version-"
                 "pinning.md `[dev]` extras completeness — fastmcp lesson, "
                 "2026-05-02). A bare `pip install -e .[dev]` will fail at "
                 "test-collection."
@@ -1233,7 +1233,7 @@ _MIRROR_EXEMPT_CATEGORIES = frozenset({"template", "dataset"})
 # Recognized test-category subdirectories at tests/ root.
 # A repo's tests/ subdirs must come from this set (or be the package mirror
 # tests/<pkg>/). Anything else is flagged as PS-207.
-# See _skills/general/02_package_01_project-structure.md §"./tests".
+# See _skills/general/02_package/01_project-structure-root.md §"./tests".
 _KNOWN_TEST_SUBDIRS = frozenset(
     {
         "scripts",  # mirror of ./scripts/ (research projects)
@@ -1286,7 +1286,7 @@ def _is_blacklisted(path: Path, root: Path) -> bool:
 
 # Forbidden top-level directories.
 _FORBIDDEN_TOP_DIRS = {
-    "mgmt": "no longer used in scitex (see _skills/general/02_package_01_project-structure.md)",
+    "mgmt": "no longer used in scitex (see _skills/general/02_package/01_project-structure-root.md)",
     "references": "no longer used in scitex",
     "htmlcov": "coverage reports should live in tests/coverage/",
     "assets": "use ./docs/assets/ instead",
@@ -1337,6 +1337,28 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
         candidate = Path(loc).parent
         if (candidate / "pyproject.toml").is_file():
             return candidate
+
+    # Fallback: module is in site-packages (non-editable PyPI install).
+    # Try common development checkout locations.
+    proj_roots: list[Path] = []
+    try:
+        home_proj = Path.home() / "proj"
+        if home_proj.is_dir():
+            proj_roots.append(home_proj)
+    except Exception:
+        pass
+    try:
+        for home_dir in Path("/home").iterdir():
+            p = home_dir / "proj"
+            if p.is_dir() and p not in proj_roots:
+                proj_roots.append(p)
+    except Exception:
+        pass
+    for root in proj_roots:
+        candidate = root / distribution
+        if (candidate / "pyproject.toml").is_file():
+            return candidate.resolve()
+
     return None
 
 
