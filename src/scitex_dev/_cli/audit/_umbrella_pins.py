@@ -1,16 +1,33 @@
 """Audit umbrella `scitex` pyproject.toml pins against PyPI latest.
 
-Enforces the doctrine that the umbrella package pins every leaf at
-``==<latest released version>``. Drift would mean the umbrella ships
-referencing leaves that are behind their latest release — defeating
-the point of release-tag-driven `git push origin v*` automation.
+The umbrella package may declare its peer dependencies in either of
+two PEP 508 styles:
+
+* `"scitex-io>=0.2.0"` — **minimum-compatible version** (normal Python
+  convention). PS-170 does NOT flag this. Reproducibility of a release
+  snapshot is the lockfile's responsibility (`uv.lock`,
+  `requirements.lock`, the release-pipeline pin file), not the
+  pyproject.toml "what versions this code is compatible with" field.
+
+* `"scitex-io==0.2.0"` — **explicit snapshot pin**. PS-170 verifies the
+  pinned version against PyPI's current latest and flags drift so the
+  umbrella's snapshot doesn't ship referencing a leaf that is behind
+  its latest release. This is the original release-tag-driven
+  `git push origin v*` automation invariant.
+
+(Earlier versions of this rule required `==` and flagged every `>=`
+declaration. That was too strict — see operator decision 2026-05-28
+Telegram msg 6793: "umbrella `>=` peers is normal Python practice,
+relax PS-170". The drift detection on explicit `==` pins is preserved
+because it catches a real bug class.)
 
 Run via:
 
     scitex-dev audit-umbrella-pins [PATH]
 
 PATH defaults to the cwd. Exits 1 on any drift so CI fails loudly.
-Network access required — queries https://pypi.org/pypi/<pkg>/json.
+Network access required for the drift check — queries
+https://pypi.org/pypi/<pkg>/json.
 
 The audit only fires on the umbrella package (pyproject.toml `name =
 "scitex"`); on any other package it exits 0 silently so it's safe to
@@ -25,14 +42,15 @@ import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 import click
 
 UMBRELLA_NAME = "scitex"
 # Match any of: scitex-X, figrecipe, newb, socialia (the publishable
-# ecosystem leaves). Optional extras spec, then ==pin. Anything looser
-# than `==` is also flagged so drift can't sneak in via `>=`.
+# ecosystem leaves). Optional extras spec, then a PEP 508 operator and
+# version. Both fields are optional (a bare `"scitex-io"` is valid
+# PEP 508).
 _PIN_LINE_RE = re.compile(
     r'"(scitex-[a-z0-9-]+|figrecipe|newb|socialia)(\[[^\]]*\])?'
     r"(==|>=|~=|<=|<|>|!=)?"
@@ -41,7 +59,8 @@ _PIN_LINE_RE = re.compile(
 _NAME_RE = re.compile(r'^\s*name\s*=\s*"([^"]+)"', re.MULTILINE)
 
 
-def _pypi_latest(pkg: str, timeout: float = 10.0) -> Optional[str]:
+def _default_pypi_latest(pkg: str, timeout: float = 10.0) -> Optional[str]:
+    """Real PyPI lookup. Returns None on any network / parse failure."""
     url = f"https://pypi.org/pypi/{pkg}/json"
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp:
@@ -51,8 +70,38 @@ def _pypi_latest(pkg: str, timeout: float = 10.0) -> Optional[str]:
         return None
 
 
-def audit_umbrella_pins(repo: Path) -> list[str]:
-    """Return a list of violation strings. Empty list = clean."""
+# Module-level alias for backwards compatibility with anything that
+# imported `_pypi_latest` from this module before the DI refactor.
+_pypi_latest = _default_pypi_latest
+
+
+def audit_umbrella_pins(
+    repo: Path,
+    *,
+    _pypi_query: Callable[[str], Optional[str]] = _default_pypi_latest,
+) -> list[str]:
+    """Return a list of violation strings. Empty list = clean.
+
+    Only fires on the umbrella package (pyproject.toml ``name = "scitex"``).
+    On any other package, returns ``[]`` silently.
+
+    Behaviour by declared pin style:
+
+    * ``"scitex-X>=A.B.C"`` (or any non-``==`` operator, or no operator
+      at all) — accepted as a minimum-compatible declaration; not
+      flagged, no PyPI lookup. The lockfile owns reproducibility.
+
+    * ``"scitex-X==A.B.C"`` — explicit snapshot pin. PyPI's current
+      latest for ``scitex-X`` is fetched; mismatch is flagged as
+      ``PS-170`` (drift). PyPI lookup failure (network / timeout) is
+      flagged as ``PS-170W`` (warning, the caller decides whether to
+      block CI on it via ``--allow-network-error``).
+
+    The ``_pypi_query`` kwarg is a DI seam for tests: pass a stub
+    callable ``(pkg: str) -> Optional[str]`` to avoid real network in
+    unit tests. PA-306 (no mocks) satisfied by dependency injection;
+    no ``unittest.mock`` or ``monkeypatch`` needed.
+    """
     pyproject = repo / "pyproject.toml"
     if not pyproject.is_file():
         return []
@@ -73,18 +122,21 @@ def audit_umbrella_pins(repo: Path) -> list[str]:
             continue
         seen.add(key)
 
-        if op != "==" or not ver:
-            violations.append(
-                f"PS-170: {pkg}{extras} declared as {op!r}{ver!r} — "
-                f"umbrella must pin with `=={'{latest}'}` so a release "
-                f"snapshot is reproducible."
-            )
+        # Only drift-check explicit `==` pins. Any other operator
+        # (>=, ~=, <=, <, >, !=) or no operator at all is a
+        # minimum-compatible declaration -- not a release-snapshot pin
+        # -- so PS-170 has nothing to verify against (no "latest" is
+        # implied). Reproducibility for release snapshots lives in the
+        # lockfile.
+        if op != "==":
             continue
 
-        latest = _pypi_latest(pkg)
+        latest = _pypi_query(pkg)
         if latest is None:
-            # PyPI query failed — don't block CI on transient network,
-            # but flag as warning. Caller decides whether to fail.
+            # PyPI query failed -- don't block CI on transient network,
+            # but flag as warning. The CLI caller decides whether to
+            # treat this as a hard failure (`--allow-network-error`
+            # downgrades it to exit 0).
             violations.append(
                 f"PS-170W: could not resolve PyPI latest for {pkg!r} "
                 f"(network/timeout). Pin declared as =={ver}."
@@ -118,9 +170,14 @@ def audit_umbrella_pins(repo: Path) -> list[str]:
     help="Treat PyPI lookup failures as warnings, not errors (exit 0).",
 )
 def cli(path: Path, allow_network_error: bool) -> None:
-    """Audit umbrella pin freshness vs PyPI latest.
+    """Audit umbrella ``==`` pin freshness vs PyPI latest.
 
-    Example:
+    Non-``==`` declarations (``>=``, ``~=``, no operator, etc.) are
+    accepted as PEP 508 minimum-compatible declarations and are NOT
+    flagged. Only explicit ``==`` pins are drift-checked against PyPI.
+
+    Example::
+
         $ scitex-dev ecosystem audit-umbrella-pins .
     """
     violations = audit_umbrella_pins(path)
