@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """ecosystem per-target audit commands: `audit-cli`, `audit-mcp-tools`,
-`audit-python-apis`, `audit-skills`, `audit-project`, `init-config`."""
+`audit-python-apis`, `audit-skills`, `audit-project`, `audit-django`,
+`init-config`."""
 
 import click
 
@@ -421,6 +422,93 @@ def register(ecosystem):
 
         raise SystemExit(
             _cli_audit_project.audit_project(
+                distribution,
+                repo=repo,
+                json_out=json_out,
+                rules=set(rules) if rules else None,
+                severity=severity,
+            )
+        )
+
+    # ------------------------------------------------------------------ #
+    # audit-django — companion to audit-project for Django apps. Checks  #
+    # the repo against ADR 0002 (scitex-django-app-standard); scitex-hub #
+    # is the green reference. Non-Django packages are skipped cleanly.   #
+    # ------------------------------------------------------------------ #
+    @ecosystem.command(
+        "audit-django",
+        epilog=(
+            'Django "apps and config" auditor (ADR 0002).\n'
+            "\n"
+            "Foundation rules (DJ<§><idx>):\n"
+            "  DJ-101-110  §1 Django project in `config/` (settings package +\n"
+            "              env-loader, urls, asgi/wsgi, manage.py default)\n"
+            "  DJ-201-204  §2 apps under `apps/` (infra/workspace, AppConfig)\n"
+            "  DJ-301-302  §3 project `templates/` + `static/`\n"
+            "  DJ-401-402  §4 `src/scitex_<name>/` pip package sibling (not nested)\n"
+            "  DJ-501-502  §5 web stack in the `[all]` extra (no `[django]` sub-extra)\n"
+            "\n"
+            "scitex-hub is the reference implementation and passes by\n"
+            "definition. Non-Django packages (no `manage.py`) are skipped.\n"
+            "See docs/adr/0002-scitex-django-app-standard.md in scitex-hub.\n"
+            "\n"
+            "Examples:\n"
+            "  $ scitex-dev ecosystem audit-django scitex-hub\n"
+            "  $ scitex-dev ecosystem audit-django scitex-hub --json\n"
+            "  $ scitex-dev ecosystem audit-django scitex-orochi --severity warning\n"
+            "  $ scitex-dev ecosystem audit-django scitex-hub --rule DJ-101"
+        ),
+    )
+    @click.argument("distribution")
+    @click.option(
+        "--repo",
+        "repo_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        default=None,
+        help="Repo root (defaults to the registry's local_path or the installed package's location).",
+    )
+    @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
+    @click.option(
+        "--rule",
+        "rules",
+        multiple=True,
+        help="Restrict to specific rule codes (e.g. --rule DJ-101). Repeatable.",
+    )
+    @click.option(
+        "--severity",
+        type=click.Choice(["error", "warning", "info"]),
+        default="error",
+        show_default=True,
+        help=(
+            "Minimum severity floor. 'error' prints E findings only and exits 1 "
+            "iff >=1 E. 'warning' prints E+W. 'info' prints everything. "
+            "W/I findings never fail CI on their own."
+        ),
+    )
+    def ecosystem_audit_django(distribution, repo_path, json_out, rules, severity):
+        """Check a Django app against the canonical "apps and config" layout.
+
+        \b
+        Example:
+            $ scitex-dev ecosystem audit-django scitex-hub
+            $ scitex-dev ecosystem audit-django scitex-orochi --json
+            $ scitex-dev ecosystem audit-django scitex-hub --rule DJ-101
+        """
+        from pathlib import Path
+
+        from ...._ecosystem import ECOSYSTEM
+        from ...audit import _django as _cli_audit_django
+
+        repo = Path(repo_path).expanduser() if repo_path else None
+        if repo is None:
+            local = ECOSYSTEM.get(distribution, {}).get("local_path")
+            if local:
+                cand = Path(local).expanduser()
+                if cand.is_dir():
+                    repo = cand
+
+        raise SystemExit(
+            _cli_audit_django.audit_django(
                 distribution,
                 repo=repo,
                 json_out=json_out,
