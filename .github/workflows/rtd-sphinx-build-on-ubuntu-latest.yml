@@ -39,6 +39,7 @@ jobs:
         run: |
           rm -rf src/scitex_dev/_sphinx_html
           cp -rf docs/sphinx/_build/html src/scitex_dev/_sphinx_html
+          rm -rf src/scitex_dev/_sphinx_html/.doctrees
           touch src/scitex_dev/_sphinx_html/.nojekyll
 
       - name: Commit refreshed HTML if it changed (develop push only)
