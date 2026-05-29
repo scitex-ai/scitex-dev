@@ -111,6 +111,7 @@ def register(ecosystem):
             "audit-skills",
             "audit-python-apis",
             "audit-project",
+            "audit-django",
         ]
 
         sub_env = {**_os.environ, "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1"}
