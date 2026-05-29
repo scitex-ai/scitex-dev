@@ -6,6 +6,15 @@
 
 import click
 
+try:
+    # SSOT for valid project types; keeps `init-config --project-type`
+    # choices in sync with the loader instead of a hand-maintained list.
+    from ...audit._config._loader import PROJECT_TYPES as _PROJECT_TYPES
+
+    _PROJECT_TYPE_CHOICES = sorted(_PROJECT_TYPES)
+except Exception:  # pragma: no cover - defensive fallback
+    _PROJECT_TYPE_CHOICES = ["deferred", "django", "pip", "research", "special"]
+
 
 def _audit_cli_epilog() -> str:
     """Build a dynamic --help epilog showing the registry cascade + entries."""
@@ -534,8 +543,12 @@ def register(ecosystem):
         "--project-type",
         "project_types",
         multiple=True,
-        type=click.Choice(["pip", "research"]),
-        help="Override the heuristic guess. Repeatable for hybrid repos.",
+        type=click.Choice(_PROJECT_TYPE_CHOICES),
+        help=(
+            "Override the heuristic guess. Repeatable for hybrid repos "
+            "(e.g. a Django app that is also a pip package: "
+            "`--project-type pip --project-type django`)."
+        ),
     )
     @click.option(
         "--force",
