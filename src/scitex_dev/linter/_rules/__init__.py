@@ -23,6 +23,7 @@ defaults if needed.
 """
 
 from ._base import Rule
+from ._cross_pkg_imports import I008
 from ._error_handling import EH001
 from ._lookup import lookup
 from ._lookup import reset as reset_lookup_cache  # noqa: F401
@@ -32,6 +33,7 @@ from ._test_quality import TQ001, TQ002, TQ003, TQ004, TQ005, TQ006, TQ007
 
 ALL_RULES = {
     EH001.id: EH001,
+    I008.id: I008,
     NL001.id: NL001,
     NM001.id: NM001,
     NM002.id: NM002,
@@ -54,6 +56,7 @@ __all__ = [
     "lookup",
     "reset_lookup_cache",
     "EH001",
+    "I008",
     "NL001",
     "NM001",
     "NM002",
