@@ -7,6 +7,28 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-05-30
+
+### Added
+- **`audit-django` auditor — the "apps and config" Django app standard
+  (ADR 0002).** New `scitex-dev ecosystem audit-django <pkg>` rule
+  (also run by `audit-all`) checks a Django repo against the canonical
+  layout codified in scitex-hub's `docs/adr/0002-scitex-django-app-standard.md`:
+  Django project in `config/` (DJ-1xx), apps under `apps/` (DJ-2xx),
+  project `templates/`+`static/` (DJ-3xx), the `src/scitex_<name>/`
+  pip-package sibling (DJ-4xx), and the web stack in the `[all]` extra
+  (DJ-5xx). Non-Django packages (no `manage.py`) are skipped; `scitex-hub`
+  is the reference implementation and passes by definition.
+
+### Fixed
+- **`init-config --project-type` now exposes all project types.** The
+  command previously offered only `Choice(["pip", "research"])` while the
+  loader SSOT is `{pip, research, special, django, deferred}`, so
+  `django`/`special`/`deferred` could only be set by hand-editing
+  `.scitex/dev/config.yaml`. The choices are now sourced from
+  `PROJECT_TYPES` (no drift) and the help documents the hybrid
+  pip+django case.
+
 ## [0.14.0] — 2026-05-28
 
 ### Added
