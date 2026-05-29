@@ -176,39 +176,50 @@ jobs:
             dist/*
 
   sync-main:
-    # Open develop→main PR so main always equals the latest released
-    # commit. Branch-protected mains require PR review; this job tries
-    # admin-merge but leaves the PR open if that isn't allowed.
+    # After a release tag is pushed, ensure `develop` exists and matches
+    # `main`. The operator's release flow uses `develop → main` as the
+    # release PR (head=develop, base=main), which interacts with the
+    # repo's `delete_branch_on_merge: true` setting:
+    #
+    #   * develop is GONE — auto-deleted by GitHub when the release PR
+    #     merged. Recreate it at main HEAD (which already contains the
+    #     release commit). This was the 2026-05-29 v0.14.1 failure mode:
+    #     the old job tried `actions/checkout@v4 ref: develop` and errored
+    #     "A branch or tag with the name 'develop' could not be found".
+    #   * develop EXISTS but is behind main — fast-forward it.
+    #   * develop EXISTS and matches main — no-op.
+    #
+    # All done via the API (no checkout-dance + git-push contortions).
+    # The checkout is rooted on `main` (always present) so the job can't
+    # fail at the checkout step on a missing develop.
     needs: publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: develop
-      - name: Open develop→main PR if diverged
+          ref: main
+      - name: Ensure develop == main (recreate or fast-forward)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          set -e
-          git fetch origin main
-          AHEAD=$(git rev-list --count origin/main..origin/develop)
-          if [ "$AHEAD" -eq 0 ]; then
-            echo "main already up-to-date with develop."
-            exit 0
-          fi
-          EXISTING=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
-          if [ -z "$EXISTING" ]; then
-            PR_URL=$(gh pr create --base main --head develop \
-              --title "release: sync main with develop" \
-              --body "Auto-opened by the release pipeline so main equals the latest released commit.")
-            EXISTING=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-            echo "Created PR #${EXISTING}"
+          set -euo pipefail
+          MAIN_SHA=$(git rev-parse main)
+          echo "main is at ${MAIN_SHA}"
+          if gh api "repos/${REPO}/branches/develop" >/tmp/dev.json 2>/dev/null; then
+            DEV_SHA=$(jq -r '.commit.sha' /tmp/dev.json)
+            if [ "${DEV_SHA}" = "${MAIN_SHA}" ]; then
+              echo "develop already at main (${MAIN_SHA}); nothing to do."
+              exit 0
+            fi
+            echo "develop=${DEV_SHA} != main=${MAIN_SHA}; fast-forwarding develop to main"
+            gh api -X PATCH "repos/${REPO}/git/refs/heads/develop" \
+              -f sha="${MAIN_SHA}" -F force=false
           else
-            echo "Reusing existing PR #${EXISTING}"
+            echo "develop branch missing (auto-deleted on release-PR merge?); recreating at main"
+            gh api -X POST "repos/${REPO}/git/refs" \
+              -f ref="refs/heads/develop" -f sha="${MAIN_SHA}"
           fi
-          gh pr merge "$EXISTING" --merge --admin \
-            || echo "Admin merge unavailable; PR left open for manual merge."
