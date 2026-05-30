@@ -7,6 +7,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- linter: host the scitex-umbrella `STX-I001`–`I007` (import hygiene) and
+  `STX-S001`–`S008` (`@stx.session` structure) rules in-house as first-class
+  engine built-ins (`_rules/_import_hygiene.py`, `_rules/_session_structure.py`,
+  registered in `_rules.ALL_RULES`). Every id, severity, category, message,
+  suggestion, and `requires` gate is preserved verbatim, so runtime behavior is
+  identical — the scitex-gated rules still fire only when scitex is installed.
+  These no longer depend on the umbrella's `scitex_dev.linter.plugins`
+  entry-point plugin; `scitex-dev linter` surfaces them straight from its own
+  registry. The plugin-loader mechanism is untouched (other leaf packages still
+  use it). Umbrella-thinning Phase A — lets the umbrella delete its
+  `scitex/_linter_plugin.py` once it pins this release.
+
 ## [0.15.0] — 2026-05-30
 
 ### Added
