@@ -22,7 +22,7 @@ def register(ecosystem) -> None:
         \b
         Verbs:
           list  — show all discovered daemon-kind jobs
-          run   — run one daemon job in the foreground
+          exec  — run one daemon job in the foreground
         """
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
@@ -62,10 +62,10 @@ def register(ecosystem) -> None:
             click.echo(f"  {j.name:30s} {j.command}")
             click.echo(f"  {'':30s} {j.description}")
 
-    @daemon.command("run")
+    @daemon.command("exec")
     @click.argument("name")
-    def daemon_run(name):
-        """Run the daemon job NAME in the foreground.
+    def daemon_exec(name):
+        """Execute the daemon job NAME in the foreground.
 
         \b
         Blocks until the process exits; the caller is responsible for
@@ -73,7 +73,7 @@ def register(ecosystem) -> None:
 
         \b
         Example:
-          $ scitex-dev ecosystem daemon run my-pkg.watcher
+          $ scitex-dev ecosystem daemon exec my-pkg.watcher
         """
         from ....jobs import jobs_of_kind
 

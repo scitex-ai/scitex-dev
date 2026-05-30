@@ -125,18 +125,34 @@ def register(ecosystem) -> None:
     @cron.command("uninstall")
     @click.option("--name", default=None, help="Remove only the named line.")
     @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=False,
+        help="Print the crontab that would result; do not touch crontab.",
+    )
+    @click.option(
         "-y", "--yes", is_flag=True, default=False, help="Confirm the crontab write."
     )
-    def cron_uninstall(name, yes):
+    def cron_uninstall(name, dry_run, yes):
         """Remove the managed crontab block (or one line).
 
         \b
         Example:
+          $ scitex-dev ecosystem cron uninstall --dry-run
           $ scitex-dev ecosystem cron uninstall --yes
           $ scitex-dev ecosystem cron uninstall --name ci-watch --yes
         """
         from ....jobs import _cron_block as cb
         from ...cron import _crontab
+
+        if dry_run:
+            current = _crontab.read_crontab()
+            if name is not None:
+                new, _ = cb.remove_line(current, name)
+            else:
+                new = cb.upsert_block(current, [])
+            click.echo(new, nl=False)
+            return
 
         if not yes:
             click.echo("Refusing to write to crontab without --yes/-y.", err=True)

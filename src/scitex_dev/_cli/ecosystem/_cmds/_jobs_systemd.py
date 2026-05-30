@@ -87,14 +87,21 @@ def register(ecosystem) -> None:
         default=False,
         help="Print the unit files that would be written; do not touch disk.",
     )
-    def systemd_install(name, dry_run):
+    @click.option(
+        "-y",
+        "--yes",
+        is_flag=True,
+        default=False,
+        help="Confirm. Required when not --dry-run.",
+    )
+    def systemd_install(name, dry_run, yes):
         """Write `<name>.service` + `<name>.timer` for systemd-kind jobs.
 
         \b
         Example:
           $ scitex-dev ecosystem systemd install --dry-run
-          $ scitex-dev ecosystem systemd install
-          $ scitex-dev ecosystem systemd install --name sac.accounts-refresh
+          $ scitex-dev ecosystem systemd install --yes
+          $ scitex-dev ecosystem systemd install --name sac.accounts-refresh --yes
         """
         from ....jobs import jobs_of_kind
         from ....jobs import _systemd as sd
@@ -107,6 +114,10 @@ def register(ecosystem) -> None:
         if not jobs:
             click.echo("No systemd-kind jobs discovered.")
             return
+
+        if not dry_run and not yes:
+            click.echo("Refusing to write unit files without --yes/-y.", err=True)
+            raise SystemExit(2)
 
         unit_dir = _unit_dir()
         for j in jobs:
@@ -133,13 +144,27 @@ def register(ecosystem) -> None:
 
     @systemd.command("uninstall")
     @click.option("--name", default=None, help="Remove only the named job's units.")
-    def systemd_uninstall(name):
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=False,
+        help="Print which unit files would be removed; do not touch disk.",
+    )
+    @click.option(
+        "-y",
+        "--yes",
+        is_flag=True,
+        default=False,
+        help="Confirm. Required when not --dry-run.",
+    )
+    def systemd_uninstall(name, dry_run, yes):
         """Remove `<name>.service` + `<name>.timer` unit files.
 
         \b
         Example:
-          $ scitex-dev ecosystem systemd uninstall
-          $ scitex-dev ecosystem systemd uninstall --name sac.accounts-refresh
+          $ scitex-dev ecosystem systemd uninstall --dry-run
+          $ scitex-dev ecosystem systemd uninstall --yes
+          $ scitex-dev ecosystem systemd uninstall --name sac.accounts-refresh --yes
         """
         from ....jobs import jobs_of_kind
 
@@ -150,6 +175,19 @@ def register(ecosystem) -> None:
                 raise click.ClickException(f"no systemd-kind job named {name!r}")
 
         unit_dir = _unit_dir()
+
+        if dry_run:
+            for j in jobs:
+                for suffix in (".service", ".timer"):
+                    path = unit_dir / f"{j.name}{suffix}"
+                    if path.exists():
+                        click.echo(f"would remove {path}")
+            return
+
+        if not yes:
+            click.echo("Refusing to remove unit files without --yes/-y.", err=True)
+            raise SystemExit(2)
+
         removed = 0
         for j in jobs:
             for suffix in (".service", ".timer"):
