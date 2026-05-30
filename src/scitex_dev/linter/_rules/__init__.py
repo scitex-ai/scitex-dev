@@ -25,19 +25,45 @@ defaults if needed.
 from ._base import Rule
 from ._cross_pkg_imports import I008
 from ._error_handling import EH001
+from ._import_hygiene import I001, I002, I003, I004, I005, I006, I007
 from ._lookup import lookup
 from ._lookup import reset as reset_lookup_cache  # noqa: F401
 from ._no_mocks import NM001, NM002, NM003
 from ._numeric_literals import NL001
+from ._session_structure import (
+    S001,
+    S002,
+    S003,
+    S004,
+    S005,
+    S006,
+    S007,
+    S008,
+)
 from ._test_quality import TQ001, TQ002, TQ003, TQ004, TQ005, TQ006, TQ007
 
 ALL_RULES = {
     EH001.id: EH001,
+    I001.id: I001,
+    I002.id: I002,
+    I003.id: I003,
+    I004.id: I004,
+    I005.id: I005,
+    I006.id: I006,
+    I007.id: I007,
     I008.id: I008,
     NL001.id: NL001,
     NM001.id: NM001,
     NM002.id: NM002,
     NM003.id: NM003,
+    S001.id: S001,
+    S002.id: S002,
+    S003.id: S003,
+    S004.id: S004,
+    S005.id: S005,
+    S006.id: S006,
+    S007.id: S007,
+    S008.id: S008,
     TQ001.id: TQ001,
     TQ002.id: TQ002,
     TQ003.id: TQ003,
@@ -56,11 +82,26 @@ __all__ = [
     "lookup",
     "reset_lookup_cache",
     "EH001",
+    "I001",
+    "I002",
+    "I003",
+    "I004",
+    "I005",
+    "I006",
+    "I007",
     "I008",
     "NL001",
     "NM001",
     "NM002",
     "NM003",
+    "S001",
+    "S002",
+    "S003",
+    "S004",
+    "S005",
+    "S006",
+    "S007",
+    "S008",
     "TQ001",
     "TQ002",
     "TQ003",
