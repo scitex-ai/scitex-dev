@@ -59,6 +59,14 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
         ],
     ),
     (
+        "Scheduled jobs",
+        [
+            "cron",
+            "systemd",
+            "daemon",
+        ],
+    ),
+    (
         "Legacy (use `bulk` instead)",
         [
             "install",

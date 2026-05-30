@@ -67,6 +67,16 @@ scitex-dev = "scitex_dev"
 [project.entry-points."scitex_dev.skills"]
 scitex-dev = "scitex_dev"
 
+# Federated scheduled-job providers. Each entry point loads to a callable
+# returning `list[scitex_dev.jobs.JobSpec]`; `scitex_dev.jobs.discover_jobs()`
+# aggregates them. scitex-dev's own built-ins are merged via an INTERNAL
+# provider (not an entry point) so they are always present and never
+# double-counted; this group is therefore reserved for *downstream*
+# packages.
+[project.entry-points."scitex_dev.jobs"]
+# (downstream packages register here, e.g.)
+# scitex-agent-container = "scitex_agent_container._jobs_plugin:provide_jobs"
+
 [project.urls]
 Homepage = "https://github.com/ywatanabe1989/scitex-dev"
 Repository = "https://github.com/ywatanabe1989/scitex-dev"

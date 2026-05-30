@@ -13,6 +13,12 @@ nouns:
   # The crontab-managed scheduled-job surface — `scitex-dev cron <verb>`
   # (list / install / remove / status / run).
   - cron
+  # The systemd user-timer surface — `scitex-dev ecosystem systemd <verb>`
+  # (list / install / uninstall) for federated scheduled jobs.
+  - systemd
+  # The long-running background-process surface —
+  # `scitex-dev ecosystem daemon <verb>` (list / exec) for federated jobs.
+  - daemon
 
 transitive_verbs: []
 intransitive_verbs: []

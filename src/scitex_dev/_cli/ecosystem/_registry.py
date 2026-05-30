@@ -22,6 +22,9 @@ from ._cmds import (
     _dashboard,
     _git,
     _install_gate,
+    _jobs_cron,
+    _jobs_daemon,
+    _jobs_systemd,
     _list,
     _prune_merged,
     _sync_status,
@@ -87,5 +90,10 @@ def register_ecosystem_commands(main_group):
     _test_remote.register(ecosystem)
     _sync_status.register(ecosystem)
     _prune_merged.register(ecosystem)
+
+    # Federated scheduled-job aggregation (scitex_dev.jobs entry-points).
+    _jobs_cron.register(ecosystem)
+    _jobs_systemd.register(ecosystem)
+    _jobs_daemon.register(ecosystem)
 
     return ecosystem
