@@ -10,6 +10,8 @@ command uses — no patching of production internals.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from click.testing import CliRunner
 
@@ -21,6 +23,24 @@ from scitex_dev.jobs import _systemd as sd
 @pytest.fixture
 def runner():
     return CliRunner()
+
+
+@pytest.fixture
+def temp_home(tmp_path):
+    """Point ``$HOME`` at a temp dir for the duration of the test.
+
+    ``Path.home()`` reads ``$HOME`` on POSIX, so the systemd CLI writes
+    its unit files under the temp tree — real filesystem, no patching.
+    """
+    prev = os.environ.get("HOME")
+    os.environ["HOME"] = str(tmp_path)
+    try:
+        yield tmp_path / ".config" / "systemd" / "user"
+    finally:
+        if prev is None:
+            os.environ.pop("HOME", None)
+        else:
+            os.environ["HOME"] = prev
 
 
 def _systemd_job():
@@ -87,6 +107,118 @@ def test_systemd_written_service_is_oneshot(tmp_path):
     service, _ = _write_units(_systemd_job(), unit_dir)
     # Assert
     assert "Type=oneshot" in service.read_text()
+
+
+# ----------------------------------------------------------------------
+# End-to-end CLI: a REAL entry-point provider (installed_job_provider) +
+# a REAL temp $HOME exercise the actual install/uninstall command paths.
+# ----------------------------------------------------------------------
+
+
+def test_cli_systemd_list_shows_provider_job(runner, installed_job_provider):
+    # Arrange
+    # Act
+    result = runner.invoke(main, ["ecosystem", "systemd", "list"])
+    # Assert
+    assert "testpkg.sysjob" in result.output
+
+
+def test_cli_systemd_install_dry_run_emits_unit(runner, installed_job_provider):
+    # Arrange
+    # Act
+    result = runner.invoke(main, ["ecosystem", "systemd", "install", "--dry-run"])
+    # Assert
+    assert "Type=oneshot" in result.output
+
+
+def test_cli_systemd_install_without_yes_refuses(runner, installed_job_provider):
+    # Arrange
+    # Act
+    result = runner.invoke(main, ["ecosystem", "systemd", "install"])
+    # Assert
+    assert result.exit_code == 2
+
+
+def test_cli_systemd_install_writes_service(runner, installed_job_provider, temp_home):
+    # Arrange
+    # Act
+    runner.invoke(main, ["ecosystem", "systemd", "install", "--yes"])
+    # Assert
+    assert (temp_home / "testpkg.sysjob.service").exists()
+
+
+def test_cli_systemd_install_prints_enable_hint(
+    runner, installed_job_provider, temp_home
+):
+    # Arrange
+    # Act
+    result = runner.invoke(main, ["ecosystem", "systemd", "install", "--yes"])
+    # Assert
+    assert "systemctl --user enable --now testpkg.sysjob.timer" in result.output
+
+
+def test_cli_systemd_uninstall_removes_units(runner, installed_job_provider, temp_home):
+    # Arrange
+    runner.invoke(main, ["ecosystem", "systemd", "install", "--yes"])
+    # Act
+    runner.invoke(main, ["ecosystem", "systemd", "uninstall", "--yes"])
+    # Assert
+    assert not (temp_home / "testpkg.sysjob.service").exists()
+
+
+def test_cli_systemd_uninstall_without_yes_refuses(
+    runner, installed_job_provider, temp_home
+):
+    # Arrange
+    runner.invoke(main, ["ecosystem", "systemd", "install", "--yes"])
+    # Act
+    result = runner.invoke(main, ["ecosystem", "systemd", "uninstall"])
+    # Assert
+    assert result.exit_code == 2
+
+
+def test_cli_systemd_uninstall_dry_run_reports_target(
+    runner, installed_job_provider, temp_home
+):
+    # Arrange
+    runner.invoke(main, ["ecosystem", "systemd", "install", "--yes"])
+    # Act
+    result = runner.invoke(main, ["ecosystem", "systemd", "uninstall", "--dry-run"])
+    # Assert
+    assert "would remove" in result.output
+
+
+def test_cli_systemd_list_json_includes_provider_job(runner, installed_job_provider):
+    # Arrange
+    import json
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "systemd", "list", "--json"])
+    # Assert
+    assert any(j["name"] == "testpkg.sysjob" for j in json.loads(result.output))
+
+
+def test_cli_systemd_install_named_unknown_errors(runner, installed_job_provider):
+    # Arrange
+    # Act
+    result = runner.invoke(
+        main, ["ecosystem", "systemd", "install", "--name", "no.such", "--dry-run"]
+    )
+    # Assert
+    assert result.exit_code != 0
+
+
+def test_cli_systemd_install_named_filters_to_one(
+    runner, installed_job_provider, temp_home
+):
+    # Arrange
+    # Act
+    runner.invoke(
+        main,
+        ["ecosystem", "systemd", "install", "--name", "testpkg.sysjob", "--yes"],
+    )
+    # Assert
+    assert (temp_home / "testpkg.sysjob.timer").exists()
 
 
 # EOF

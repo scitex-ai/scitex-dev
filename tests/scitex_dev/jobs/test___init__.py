@@ -171,6 +171,22 @@ def test_discover_jobs_skips_non_jobspec_objects():
     assert "ci-watch" in names
 
 
+def test_discover_jobs_loads_real_entry_point_provider(installed_job_provider):
+    # Arrange
+    # Act
+    names = {j.name for j in discover_jobs()}
+    # Assert
+    assert "testpkg.sysjob" in names
+
+
+def test_jobs_of_kind_finds_real_entry_point_systemd_job(installed_job_provider):
+    # Arrange
+    # Act
+    names = {j.name for j in jobs_of_kind("systemd")}
+    # Assert
+    assert "testpkg.sysjob" in names
+
+
 def test_jobs_of_kind_filters_to_requested_kind():
     # Arrange
     def daemon_provider():
