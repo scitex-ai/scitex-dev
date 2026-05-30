@@ -1,11 +1,13 @@
-"""Phase A regression: STX-I/STX-S rules are in-house, not plugin-only.
+"""Tests for the engine rule registry assembled in `_rules/__init__.py`.
 
-The scitex-umbrella's ``scitex._linter_plugin`` formerly *supplied* these
-15 rules via the ``scitex_dev.linter.plugins`` entry point. After
-umbrella-thinning Phase A the engine owns them outright. These tests
-pin that contract: every STX-I001-I007 + STX-S001-S008 id resolves from
-the engine's OWN registry even when zero plugins are loaded — so the
-umbrella can delete its ``_linter_plugin.py`` without losing any rule.
+Focus: the umbrella-thinning Phase A contract. The scitex-umbrella's
+``scitex._linter_plugin`` formerly *supplied* the 15 STX-I001-I007 +
+STX-S001-S008 rules via the ``scitex_dev.linter.plugins`` entry point.
+After Phase A the engine owns them outright in ``ALL_RULES``. These
+tests pin that every id resolves from the engine's OWN registry (no
+plugin needed) so the umbrella can delete its ``_linter_plugin.py``
+without losing any rule, and that the scitex-gated rules keep
+``requires="scitex"`` for identical runtime behavior.
 """
 
 import pytest
