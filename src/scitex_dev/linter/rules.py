@@ -22,11 +22,26 @@ __all__ = ["ALL_RULES", "Rule", "SEVERITY_ORDER"]
 from ._rules import (  # noqa: F401
     ALL_RULES,
     EH001,
+    I001,
+    I002,
+    I003,
+    I004,
+    I005,
+    I006,
+    I007,
     NL001,
     NM001,
     NM002,
     NM003,
     Rule,
+    S001,
+    S002,
+    S003,
+    S004,
+    S005,
+    S006,
+    S007,
+    S008,
     SEVERITY_ORDER,
     TQ001,
     TQ002,
@@ -37,7 +52,6 @@ from ._rules import (  # noqa: F401
     TQ007,
 )
 from ._rules import lookup as _lookup
-
 
 # PEP 562 — fall through to lookup() for any rule attribute the engine
 # no longer defines. Plugin-shipped rules with the matching id get
