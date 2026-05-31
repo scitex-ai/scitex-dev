@@ -18,6 +18,7 @@ from scitex_dev._cli.audit._django._checks import (
     check_config,
     check_deps,
     check_pip_package,
+    check_pytest_config,
     check_templates_static,
     is_django_app,
 )
@@ -298,6 +299,64 @@ def test_dj502_fires_with_django_subextra(tmp_path):
     fired = _violations(repo)
     # Assert
     assert "DJ-502" in fired
+
+
+def test_dj503_fires_with_e2e_flags_in_addopts(tmp_path):
+    # Arrange
+    repo = _make_conforming_repo(tmp_path)
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-demo"\nversion = "0.1.0"\n'
+        'dependencies = ["click>=8.0"]\n'
+        "[project.optional-dependencies]\n"
+        'all = ["Django>=5.2"]\n'
+        "[tool.pytest.ini_options]\n"
+        'addopts = "-v --headed --browser chromium"\n'
+    )
+    out: list[Violation] = []
+    # Act
+    check_pytest_config(repo, Violation, out)
+    # Assert
+    assert "DJ-503" in [v.rule for v in out]
+
+
+def test_dj503_fires_with_list_addopts(tmp_path):
+    # Arrange
+    repo = _make_conforming_repo(tmp_path)
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-demo"\nversion = "0.1.0"\n'
+        "[tool.pytest.ini_options]\n"
+        'addopts = ["-v", "--video", "on"]\n'
+    )
+    out: list[Violation] = []
+    # Act
+    check_pytest_config(repo, Violation, out)
+    # Assert
+    assert "DJ-503" in [v.rule for v in out]
+
+
+def test_dj503_silent_on_clean_addopts(tmp_path):
+    # Arrange
+    repo = _make_conforming_repo(tmp_path)
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-demo"\nversion = "0.1.0"\n'
+        "[tool.pytest.ini_options]\n"
+        'addopts = "-v --tb=short --strict-markers"\n'
+    )
+    out: list[Violation] = []
+    # Act
+    check_pytest_config(repo, Violation, out)
+    # Assert
+    assert "DJ-503" not in [v.rule for v in out]
+
+
+def test_dj503_silent_without_pytest_config(tmp_path):
+    # Arrange — conforming repo has no [tool.pytest.ini_options]
+    repo = _make_conforming_repo(tmp_path)
+    out: list[Violation] = []
+    # Act
+    check_pytest_config(repo, Violation, out)
+    # Assert
+    assert "DJ-503" not in [v.rule for v in out]
 
 
 # ---------------------------------------------------------------------------

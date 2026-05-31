@@ -410,3 +410,55 @@ def check_deps(repo: Path, violation_cls: type, out: list) -> None:
                     "fold it into `[all]` per ADR 0002 §5",
                 )
             )
+
+
+# Browser/E2E pytest flags that break headless CI when forced via addopts.
+_E2E_ADDOPTS_FLAGS = ("--headed", "--browser", "--video", "--screenshot")
+
+
+def _addopts_value(pytest_ini: dict) -> str:
+    """Normalize a pytest `addopts` value (str or list) to one string."""
+    addopts = pytest_ini.get("addopts", "")
+    if isinstance(addopts, (list, tuple)):
+        return " ".join(str(a) for a in addopts)
+    return str(addopts)
+
+
+def check_pytest_config(repo: Path, violation_cls: type, out: list) -> None:
+    """§5 (release-gate hygiene) — global pytest addopts must stay CI-safe.
+
+    The tag-release pipeline runs ``pytest tests/ -x``, which inherits
+    global ``[tool.pytest.ini_options].addopts``. Forcing browser/E2E
+    flags there breaks headless CI (DJ-503). Such tests belong behind an
+    ``e2e`` marker.
+    """
+    pyproject = repo / "pyproject.toml"
+    if not pyproject.is_file():
+        return
+    try:
+        import tomllib
+    except ImportError:  # pragma: no cover — py<3.11
+        try:
+            import tomli as tomllib  # type: ignore
+        except ImportError:
+            return
+    try:
+        with open(pyproject, "rb") as f:
+            data = tomllib.load(f)
+    except (OSError, ValueError):
+        return
+
+    pytest_ini = data.get("tool", {}).get("pytest", {}).get("ini_options", {}) or {}
+    addopts = _addopts_value(pytest_ini)
+    offenders = [flag for flag in _E2E_ADDOPTS_FLAGS if flag in addopts]
+    if offenders:
+        out.append(
+            violation_cls(
+                "DJ-503",
+                str(pyproject),
+                "global pytest addopts force browser/E2E flag(s): "
+                + ", ".join(offenders)
+                + " — gate these behind an `e2e` marker (release CI runs "
+                "`pytest tests/ -x`)",
+            )
+        )

@@ -275,6 +275,20 @@ RULES: dict[str, Rule] = {
             severity="W",
             slug="proliferated-web-subextra",
         ),
+        Rule(
+            "DJ-503",
+            "§5",
+            (
+                "global pytest addopts force browser/E2E flag(s) "
+                "(--headed/--browser/--video/--screenshot) — the tag-release "
+                "pipeline runs `pytest tests/ -x`, which inherits global "
+                "[tool.pytest.ini_options].addopts. These flags break headless "
+                "CI. Keep addopts minimal (e.g. `-v --tb=short`) and gate "
+                "browser/E2E tests behind an `e2e` marker."
+            ),
+            severity="E",
+            slug="pytest-addopts-e2e-flags",
+        ),
     ]
 }
 
@@ -401,6 +415,7 @@ def audit_django(
     _checks.check_templates_static(repo_root, Violation, violations)
     _checks.check_pip_package(repo_root, distribution, Violation, violations)
     _checks.check_deps(repo_root, Violation, violations)
+    _checks.check_pytest_config(repo_root, Violation, violations)
 
     if rules:
         violations = [v for v in violations if v.rule in rules]
