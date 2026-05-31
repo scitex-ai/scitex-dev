@@ -1072,6 +1072,7 @@ def audit_api(
     *,
     json_out: bool = False,
     rules: set[str] | None = None,
+    repo_root: Path | None = None,
 ) -> int:
     """Audit `<distribution>` against the Python API checklist. Warn-only.
 
@@ -1083,6 +1084,13 @@ def audit_api(
         Emit machine-readable output on stdout.
     rules : set of str, optional
         If given, only run these rule codes.
+    repo_root : Path, optional
+        Repository root used to load ``.scitex/dev/config.yaml``. When given,
+        the project's ``audit.skip`` list defers the named PA rules — they are
+        dropped from the violation set entirely, mirroring ``audit-project`` —
+        and a ``django`` project-type relaxes the no-mocks rule (PA-306) from
+        error to warning. When ``None`` the legacy behaviour is preserved
+        (every rule applies at its declared severity).
 
     Returns
     -------
@@ -1147,6 +1155,33 @@ def audit_api(
     if rules:
         violations = [v for v in violations if v.rule in rules]
 
+    # Per-project rule scoping — mirror ``audit-project``. A repo can defer
+    # specific PA rules via ``.scitex/dev/config.yaml`` ``audit.skip`` (with a
+    # documented reason in ``audit.reasons``), and a ``django`` project-type
+    # relaxes the no-mocks rule to a warning. Deferred rules are dropped from
+    # the violation set entirely (not merely downgraded) so they no longer
+    # drive the error-level exit code that ``audit-all`` gates on.
+    downgraded: set[str] = set()
+    if repo_root is not None:
+        from .._config import load_config
+
+        cfg = load_config(repo_root)
+        if "deferred" in cfg.project_types:
+            # `deferred` = "I know this is messy; remind me later." Mirror the
+            # project auditor: opt out of all rules for this run.
+            violations = []
+        else:
+            violations = [
+                v for v in violations if cfg.applies(v.rule) and v.rule not in cfg.skip
+            ]
+            # Django apps legitimately use test doubles for external services
+            # (HTTP, browser, telegram, ssh); the no-mocks rule (PA-306) is
+            # wrong-by-default for them, so a ``django`` project-type drops it
+            # to a warning. PA-307 (test-quality) still applies at full
+            # severity. Explicit and documented, not a silent exception.
+            if "django" in cfg.project_types:
+                downgraded.add("PA-306")
+
     if json_out:
         import json
 
@@ -1175,16 +1210,22 @@ def audit_api(
     # Compute the highest severity across all fired rules. The headline
     # ("error" vs "warning") and exit code track that — so packages
     # that break error-severity rules (NM/TQ) fail CI gates, while
-    # warning-only violations don't.
-    has_error = any(
-        getattr(RULES.get(v.rule), "severity", "warning") == "error" for v in violations
-    )
+    # warning-only violations don't. A rule relaxed for this run (e.g.
+    # PA-306 under a `django` project-type) reports at warning level so it
+    # no longer drives the error exit code or the error headline.
+    def _effective_severity(rule: str) -> str:
+        if rule in downgraded:
+            return "warning"
+        return getattr(RULES.get(rule), "severity", "warning")
+
+    has_error = any(_effective_severity(v.rule) == "error" for v in violations)
     headline_level = "error" if has_error else "warning"
     _emit(headline_level, f"{distribution}: {len(violations)} violation(s)")
-    # Per-violation lines use the rule's own severity so a mixed run shows
-    # each rule at its actual level (warnings for PA-301, errors for PA-307).
+    # Per-violation lines use the rule's effective severity so a mixed run
+    # shows each rule at its actual level (warnings for PA-301, errors for
+    # PA-307, and PA-306 as a warning when django-relaxed).
     for v in violations:
-        sev = getattr(RULES.get(v.rule), "severity", "warning")
+        sev = _effective_severity(v.rule)
         line = v.format()
         _emit(sev, line)
     emit_disclaimer()
