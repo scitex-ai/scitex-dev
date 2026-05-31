@@ -20,6 +20,30 @@ versions follow [Semantic Versioning](https://semver.org/).
   use it). Umbrella-thinning Phase A — lets the umbrella delete its
   `scitex/_linter_plugin.py` once it pins this release.
 
+## [0.16.1] — 2026-05-31
+
+### Added
+- **`audit-python-apis` honours `.scitex/dev/config.yaml` `audit.skip`
+  (PA-rule scoping).** PA-* rules can now be deferred per-project, mirroring
+  the long-standing `audit-project` mechanism (`cfg.applies(rule) and rule not
+  in cfg.skip`). A deferred rule is dropped from the violation set entirely, so
+  it no longer drives the error-level exit code that `audit-all` gates on. This
+  lets a project scope down the otherwise exception-free PA-306 (no-mocks) and
+  PA-307 (test-quality) error rules — e.g. a Django app that legitimately uses
+  test doubles for external services — without faking or deleting the rules.
+  The `audit-python-apis` CLI command now resolves the repo root (via `--repo`
+  or the registry's `local_path`, same as `audit-project`) and threads it into
+  `audit_api(..., repo_root=...)`; `repo_root=None` preserves the legacy
+  unscoped behaviour exactly. (The `_config` package already documented this as
+  "since 0.16.1".)
+- **`django` project-type relaxes PA-306 (no-mocks) to a warning.** Django apps
+  legitimately use test doubles for external services (HTTP, browser, telegram,
+  ssh), so the no-mocks rule is wrong-by-default for them. A `django`
+  project-type downgrades PA-306 from error to warning (PA-307 still applies at
+  full severity). Explicit and documented, not a silent exception. The
+  `audit.skip` path remains the general, principled mechanism; the django
+  default is a convenience on top of it.
+
 ## [0.15.0] — 2026-05-30
 
 ### Added

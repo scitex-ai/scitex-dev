@@ -296,6 +296,13 @@ def register(ecosystem):
         ),
     )
     @click.argument("distribution")
+    @click.option(
+        "--repo",
+        "repo_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        default=None,
+        help="Repo root (defaults to the registry's local_path or the installed package's location).",
+    )
     @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
     @click.option(
         "--rule",
@@ -303,15 +310,34 @@ def register(ecosystem):
         multiple=True,
         help="Restrict to specific rule codes (e.g. --rule PA-101). Repeatable.",
     )
-    def ecosystem_audit_python_apis(distribution, json_out, rules):
-        """Check a package's Python API against the §1–§5 audit checklist."""
+    def ecosystem_audit_python_apis(distribution, repo_path, json_out, rules):
+        """Check a package's Python API against the §1–§5 audit checklist.
+
+        Honours per-project rule scoping the same way `audit-project` does:
+        `.scitex/dev/config.yaml` `audit.skip` defers specific PA rules (e.g.
+        PA-306/PA-307) and a `django` project-type relaxes PA-306 (no-mocks)
+        to a warning. The repo root is taken from `--repo`, else the
+        registry's `local_path`.
+        """
+        from pathlib import Path
+
+        from ...._ecosystem import ECOSYSTEM
         from ...audit import _api as _cli_audit_api
+
+        repo = Path(repo_path).expanduser() if repo_path else None
+        if repo is None:
+            local = ECOSYSTEM.get(distribution, {}).get("local_path")
+            if local:
+                cand = Path(local).expanduser()
+                if cand.is_dir():
+                    repo = cand
 
         raise SystemExit(
             _cli_audit_api.audit_api(
                 distribution,
                 json_out=json_out,
                 rules=set(rules) if rules else None,
+                repo_root=repo,
             )
         )
 
