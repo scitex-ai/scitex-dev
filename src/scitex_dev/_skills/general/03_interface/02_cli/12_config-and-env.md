@@ -68,5 +68,5 @@ Precedence (highest first):
 - Canonical filename is always `config.yaml`.
 - Project scope overrides user scope.
 - CLI flags and env vars override both.
-- Full layout rule (two roots, prefix-stripping `scitex-dev` → `dev`, `SCITEX_DIR`, `PathManager`) lives in [`../01_ecosystem/06_local-state-directories.md`](../../01_ecosystem/06_local-state-directories.md).
+- Full layout rule (two roots, prefix-stripping `scitex-dev` → `dev`, `SCITEX_DIR`, `PathManager`) lives in [`../01_ecosystem/06_dot_scitex_directory.md`](../../01_ecosystem/06_dot_scitex_directory.md).
 - Document the fallback order in `--help`.

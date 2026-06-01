@@ -18,7 +18,7 @@ touching any `scitex-*` package. Read before the per-package tiers
 3. [03_modules-and-standalone-packages.md](03_modules-and-standalone-packages.md) — Module vs standalone package boundaries
 4. [04_environment-variables.md](04_environment-variables.md) — `SCITEX_<MODULE_NAME>_*` prefix rule; mandates per-package `NN_env-vars.md` leaf
 5. [05_re-export.md](05_re-export.md) — Umbrella `scitex.<name>` thin-re-export pattern + lazy-import guard
-6. [06_local-state-directories.md](06_local-state-directories.md) — `<project>/.scitex/<pkg-short>/` + `~/.scitex/<pkg-short>/` layout, precedence, `SCITEX_DIR`, `PathManager`
+6. [06_dot_scitex_directory.md](06_dot_scitex_directory.md) — `<project>/.scitex/<pkg-short>/` + `~/.scitex/<pkg-short>/` layout, precedence, `SCITEX_DIR`, `PathManager`
 7. [07_license-and-cla.md](07_license-and-cla.md) — AGPL-3.0-only SPDX policy, CLA workflow template, `signatures/cla.json` shape, `pull_request_target` base-branch trap, bootstrap + audit recipes
 8. [08_linter-plugins.md](08_linter-plugins.md) — Each package ships its own lint rules via the `scitex_dev.linter.plugins` entry point; `scitex-dev linter` aggregates; doc-block linting and ecosystem-wide `lint sweep`
 9. [09_package-categories.md](09_package-categories.md) — Package category taxonomy

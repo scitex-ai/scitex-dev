@@ -100,7 +100,7 @@ reintroducing the import.
 
 ## 6. Local-state root — always via `PathManager`
 
-Every package writes into exactly one subdirectory at each scope: `<project>/.scitex/<pkg-short>/` (project, wins) and `~/.scitex/<pkg-short>/` (user, fallback). Prefix-stripping: `scitex-scholar` → `scholar`. Full rules — filename conventions, forbidden locations, `SCITEX_DIR` relocation, migration — live in `01_ecosystem/06_local-state-directories.md`.
+Every package writes into exactly one subdirectory at each scope: `<project>/.scitex/<pkg-short>/` (project, wins) and `~/.scitex/<pkg-short>/` (user, fallback). Prefix-stripping: `scitex-scholar` → `scholar`. Full rules — filename conventions, forbidden locations, `SCITEX_DIR` relocation, migration — live in `01_ecosystem/06_dot_scitex_directory.md`.
 
 Inside the package, never hardcode the absolute path — resolve through `PathManager`:
 

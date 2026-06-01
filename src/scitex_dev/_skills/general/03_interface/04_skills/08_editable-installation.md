@@ -63,4 +63,4 @@ Without this split, ordinary PyPI users see no skills (because nothing on their 
 
 - [10_how-to-update.md](10_how-to-update.md) — source-of-truth locations, export command
 - [06_public-vs-private.md](06_public-vs-private.md) — where a skill belongs
-- [01_ecosystem/06_local-state-directories.md](../../01_ecosystem/06_local-state-directories.md) — canonical filesystem layout
+- [01_ecosystem/06_dot_scitex_directory.md](../../01_ecosystem/06_dot_scitex_directory.md) — canonical filesystem layout
