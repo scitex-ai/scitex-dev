@@ -2231,6 +2231,27 @@ def audit_project(
     check_ps145_cross_package_read(repo_root, distribution, Violation, violations)
     check_ps146_pip_install_side_effect(repo_root, Violation, violations)
     check_ps147_eval_form_completion(repo_root, Violation, violations)
+    # PS-PATH / PS-CLEW / PS-AGENT — paper-scitex-clew MVP lint set.
+    # Artifact-gated (only fire when PATH.yaml / clew.add_claim /
+    # scripts/agent/ are present); safe to run on every project type.
+    # See PR #97 and operator directive 2026-06-01.
+    from ._check_path_yaml import (  # hook-bypass: line-limit
+        check_ps_path_001_outer_wrapper,
+        check_ps_path_002_bare_string_leaf,
+    )
+    from ._check_clew_claims import (  # hook-bypass: line-limit
+        check_ps_agent_001_agent_script_no_claims_json,
+        check_ps_clew_001_add_claim_without_self_verify,
+    )
+
+    check_ps_path_001_outer_wrapper(repo_root, Violation, violations)
+    check_ps_path_002_bare_string_leaf(repo_root, Violation, violations)
+    check_ps_clew_001_add_claim_without_self_verify(
+        repo_root, Violation, violations
+    )
+    check_ps_agent_001_agent_script_no_claims_json(
+        repo_root, Violation, violations
+    )
     # hook-bypass: line-limit
     # PS-173: ADR format — only fires when docs/adr/ exists (presence is
     # recommended, not mandated). Scope = all project kinds.

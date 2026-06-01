@@ -13,6 +13,9 @@ Today's contents:
 - PS-167 — readme-badge-layout
 - PS-168 — workflow-secret-env-prefix-missing
 - PS-173 — adr-format (filename + lean-template sections, when docs/adr/ exists)
+- PS-PATH-001/002 — config/PATH.yaml shape (outer wrapper / bare-string leaf)
+- PS-CLEW-001 — clew.add_claim without self-verify in same module
+- PS-AGENT-001 — scripts/agent/*.py with add_claim but no claims.json terminus
 - RP-201/202/204/205 — research-project scripts ↔ tests/scripts mirror
 
 When `_audit.py` is split per-rule (see GITIGNORED/REFACTORING.md), this
@@ -197,5 +200,82 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "public/private test-name prefix mismatch under tests/scripts/",
         "W",
         "research-test-prefix-mismatch",
+    ),
+    # ── PS-PATH / PS-CLEW / PS-AGENT — paper-scitex-clew MVP lint set ──
+    # See PR #97 and operator directive 2026-06-01: skill page + lint rules
+    # both anchored on the same "template must always work" north star.
+    (
+        "PS-PATH-001",
+        "§1",
+        (
+            "config/PATH.yaml wraps its contents in an outer `PATH:` "
+            "key. @stx.session exposes the file's top-level keys "
+            "directly under `CONFIG.PATH.<KEY>`; the wrapper produces "
+            "`CONFIG.PATH.PATH.<KEY>` and crashes 100% of "
+            "`eval(CONFIG.PATH.<KEY>)` access sites with "
+            "AttributeError. Remove the outer `PATH:` line and dedent "
+            "its children one level. See "
+            "_skills/scientific/"
+            "02_research-project_03_project-structure-config-and-data.md "
+            "§`PATH.yaml` and PR #97."
+        ),
+        "E",
+        "path-yaml-outer-wrapper",
+    ),
+    (
+        "PS-PATH-002",
+        "§1",
+        (
+            "config/PATH.yaml has at least one leaf scalar value that "
+            "is not an f-string literal. Scripts always do "
+            "`eval(CONFIG.PATH.<KEY>)`; a bare `\"./data/foo\"` is "
+            "parsed as the Python expression `./data/foo` and "
+            "SyntaxErrors. Prefix every value with `f`, e.g. "
+            "`KEY: f\"./your/path\"`, even for static paths. See "
+            "_skills/scientific/"
+            "02_research-project_03_project-structure-config-and-data.md "
+            "§`PATH.yaml`."
+        ),
+        "E",
+        "path-yaml-bare-string-leaf",
+    ),
+    (
+        "PS-CLEW-001",
+        "§3",
+        (
+            "a .py file calls `clew.add_claim(...)` but never calls "
+            "`clew.verify_claim(...)` or `clew.list_claims(...)` in "
+            "the same module. Without a post-loop self-verify the "
+            "agent declares SUCCESS even when the chain of evidence "
+            "(source_file SHA-256) is silently broken. Add a "
+            "self-verify block after the registration loop: "
+            "`for c in registered: result = "
+            "clew.verify_claim(c.claim_id); assert "
+            "result['source_verified']`. Canonical pattern: "
+            "paper-scitex-clew commit 87a0f7b "
+            "(`scripts/cohorts/_shared/prompts/examples/"
+            "cohort_a_capsule_01_minimal/scripts/agent/"
+            "03_register_claims.py`). Operator directive 2026-06-01."
+        ),
+        "W",
+        "clew-add-claim-without-self-verify",
+    ),
+    (
+        "PS-AGENT-001",
+        "§3",
+        (
+            "a `scripts/agent/*.py` file calls `clew.add_claim(...)` "
+            "but no module-level or function-level call writes a real "
+            "`data/results/claims.json` file (neither "
+            "`Path(...).write_text(...)` nor "
+            "`stx.io.save(..., '...claims.json')`). The DAG terminus "
+            "MUST be a real file — the launcher's verifier reads "
+            "`data/results/claims.json` to score the run. After all "
+            "`add_claim()` calls, persist the canonical claims.json, "
+            "e.g. `Path(eval(CONFIG.PATH.CLAIMS_JSON))"
+            ".write_text(json.dumps(payload, indent=2))`."
+        ),
+        "E",
+        "agent-script-no-claims-json-terminus",
     ),
 ]
