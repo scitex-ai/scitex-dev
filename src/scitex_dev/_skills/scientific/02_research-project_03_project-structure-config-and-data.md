@@ -35,26 +35,28 @@ Centralized project parameters, loaded into `CONFIG` by `@stx.session`. **Script
 **Every value uses `f"..."` literal syntax — even static paths.** Scripts always do `eval(CONFIG.PATH.<KEY>)`; if a value is a plain `"./data/foo"` it parses to a Python expression `./data/foo` which is a `SyntaxError`. The `f` prefix makes it a valid Python f-string literal that evaluates to the path string (with any `{var}` interpolated against the local frame).
 
 ```yaml
-# config/PATH.yaml
-PATH:
-  ## Top-level (mostly symlinks; targets in .scitex/<pkg>/ or canonical data roots)
-  PAPER:    "./paper"             # → ./.scitex/writer
-  CLEW:     "./clew"              # → ./.scitex/clew
-  DATA:     "./data"
+# config/PATH.yaml — note the absence of an outer ``PATH:`` wrapper
+# (top-level keys ARE the contents of CONFIG.PATH) and the universal
+# ``f"..."`` prefix even on static paths. Both rules above strictly.
 
-  ## Per-cohort (f-strings interpolated against capsule_id, etc. at access time)
-  COHORT_A:
-    ROOT:      "./data/cohort_a_corebench"
-    SRC:       "./data/cohort_a_corebench/src"
-    INVENTORY: "./data/cohort_a_corebench/src/inventory.json"
-    RAW:       f"./data/cohort_a_corebench/src/capsules/{capsule_id}.tar.gz"
-    EXTRACTED: f"./data/cohort_a_corebench/src/capsules_extracted/{capsule_id}"
-    CAPSULE:   f"./data/cohort_a_corebench/capsules/capsule-{capsule_nn:02d}"
+## Top-level (mostly symlinks; targets in .scitex/<pkg>/ or canonical data roots)
+PAPER:    f"./paper"             # → ./.scitex/writer
+CLEW:     f"./clew"              # → ./.scitex/clew
+DATA:     f"./data"
 
-  ## Experiment outputs (write target for stx.io.save symlink_to=...)
-  RESULTS:
-    ROOT:      "./data/results"
-    CLEW_DEMO: f"./data/results/clew_demos/{exp_name}"
+## Per-cohort (f-strings interpolated against capsule_id, etc. at access time)
+COHORT_A:
+  ROOT:      f"./data/cohort_a_corebench"
+  SRC:       f"./data/cohort_a_corebench/src"
+  INVENTORY: f"./data/cohort_a_corebench/src/inventory.json"
+  RAW:       f"./data/cohort_a_corebench/src/capsules/{capsule_id}.tar.gz"
+  EXTRACTED: f"./data/cohort_a_corebench/src/capsules_extracted/{capsule_id}"
+  CAPSULE:   f"./data/cohort_a_corebench/capsules/capsule-{capsule_nn:02d}"
+
+## Experiment outputs (write target for stx.io.save symlink_to=...)
+RESULTS:
+  ROOT:      f"./data/results"
+  CLEW_DEMO: f"./data/results/clew_demos/{exp_name}"
 ```
 
 Rules:
