@@ -31,7 +31,7 @@ These do not belong to any single package and apply across the whole ecosystem. 
 
 | Variable | Purpose |
 |---|---|
-| `SCITEX_DIR` | Single lever that relocates the user-scope root from `~/.scitex` to anywhere else. See [`01_ecosystem/06_local-state-directories.md`](06_local-state-directories.md) §6. |
+| `SCITEX_DIR` | Single lever that relocates the user-scope root from `~/.scitex` to anywhere else. See [`01_ecosystem/06_dot_scitex_directory.md`](06_dot_scitex_directory.md) §6. |
 
 ## Feature Flags
 

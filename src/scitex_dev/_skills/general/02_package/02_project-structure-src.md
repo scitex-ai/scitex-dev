@@ -287,7 +287,7 @@ editable installs (`pip install -e .`), and `$SCITEX_DIR` relocation
 
 **Built artifacts** (SIFs, sandboxes, generated outputs) are user
 state — they belong under `~/.scitex/<pkg-short>/runtime/<asset-dir>/`,
-not in the wheel. See `01_ecosystem/06_local-state-directories.md` §4b.
+not in the wheel. See `01_ecosystem/06_dot_scitex_directory.md` §4b.
 
 Audit (proposed PS code): grep for `<repo>/containers/` /
 `<repo>/templates/` and flag if the package's own code reads them

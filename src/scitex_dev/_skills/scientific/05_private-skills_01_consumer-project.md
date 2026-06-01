@@ -178,6 +178,6 @@ paper-scitex-clew/                              # consumer project root
 ## Related
 
 - [../general/03_interface/04_skills/06_public-vs-private.md](../general/03_interface/04_skills/06_public-vs-private.md) — public-vs-private decision rule for *packages*
-- [../general/01_ecosystem/06_local-state-directories.md](../general/01_ecosystem/06_local-state-directories.md) — `~/.scitex/<pkg-short>/` and `<project>/.scitex/<pkg-short>/` layouts
+- [../general/01_ecosystem/06_dot_scitex_directory.md](../general/01_ecosystem/06_dot_scitex_directory.md) — `~/.scitex/<pkg-short>/` and `<project>/.scitex/<pkg-short>/` layouts
 - [02_research-project_01_project-structure-root.md](02_research-project_01_project-structure-root.md) — research-project root rules; mentions `GITIGNORED/` and `docs/to_claude/`
 - `scitex-agent-container/_skills/scitex-agent-container/18_full-agent-delegation.md` — sac peer/fleet usage including `spec.skills.required`

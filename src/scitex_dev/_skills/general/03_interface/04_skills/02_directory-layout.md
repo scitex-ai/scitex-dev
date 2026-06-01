@@ -55,4 +55,4 @@ The legacy paths are **read-only**: they are still resolvable so old packages ke
 
 - [03_skill-md-as-index.md](03_skill-md-as-index.md) — what goes in SKILL.md vs leaf files
 - [07_registration.md](07_registration.md) — entry-point wiring so the layout becomes discoverable
-- [01_ecosystem/06_local-state-directories.md](../../01_ecosystem/06_local-state-directories.md) — private skills location
+- [01_ecosystem/06_dot_scitex_directory.md](../../01_ecosystem/06_dot_scitex_directory.md) — private skills location

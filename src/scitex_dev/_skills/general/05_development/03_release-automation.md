@@ -34,7 +34,7 @@ scitex-dev ecosystem start-dashboard --background         # background process
 scitex-dev ecosystem start-dashboard --host 0.0.0.0 --port 8050 --force
 ```
 
-The dashboard reads `~/.scitex/dev/config.yaml` (or `<project>/.scitex/dev/config.yaml` if present — project overrides user; see `01_ecosystem/06_local-state-directories.md`). Project-scope config.yaml wins when both exist.
+The dashboard reads `~/.scitex/dev/config.yaml` (or `<project>/.scitex/dev/config.yaml` if present — project overrides user; see `01_ecosystem/06_dot_scitex_directory.md`). Project-scope config.yaml wins when both exist.
 
 ## CLI Commands
 

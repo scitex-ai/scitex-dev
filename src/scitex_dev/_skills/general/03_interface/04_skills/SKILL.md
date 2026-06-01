@@ -36,4 +36,4 @@ Canonical rules for the **Skills** interface (the fourth of the five — Python 
 
 - [03_interface/00_overview.md](../00_overview.md) — five-interface delegation chain
 - [03_interface/01_python-api/](../01_python-api/), [03_interface/02_cli/](../02_cli/), [03_interface/03_mcp/](../03_mcp/) — sibling interfaces
-- [01_ecosystem/06_local-state-directories.md](../../01_ecosystem/06_local-state-directories.md) — `~/.scitex/<pkg-short>/` layout for private skills
+- [01_ecosystem/06_dot_scitex_directory.md](../../01_ecosystem/06_dot_scitex_directory.md) — `~/.scitex/<pkg-short>/` layout for private skills

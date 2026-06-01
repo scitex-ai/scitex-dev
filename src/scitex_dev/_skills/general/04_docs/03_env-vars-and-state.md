@@ -90,7 +90,7 @@ inline comments) lives in `.env.example`.
 `<pkg>` reads optional config + cache from the canonical SciTeX
 local-state locations. **`<pkg-short>` strips the `scitex-` prefix**
 (e.g. `scitex-ssh` → `ssh`, `scitex-scholar` → `scholar`). See
-`01_ecosystem/06_local-state-directories.md` for the full rule.
+`01_ecosystem/06_dot_scitex_directory.md` for the full rule.
 
 | Path                              | Scope         | Purpose                              |
 |-----------------------------------|---------------|--------------------------------------|

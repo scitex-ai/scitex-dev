@@ -118,7 +118,7 @@ This prints the would-be prompt and skips the `sac agents send` call.
 
 ## Related skills
 
-- [01_ecosystem/06_local-state-directories.md](../01_ecosystem/06_local-state-directories.md)
+- [01_ecosystem/06_dot_scitex_directory.md](../01_ecosystem/06_dot_scitex_directory.md)
   — Where each managed job logs (`~/.scitex/dev/logs/cron-<name>.log`).
 - [02_package/07_github-actions.md](07_github-actions.md) —
   CI workflows referenced by `ci-watch` for green-vs-red detection.

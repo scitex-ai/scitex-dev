@@ -190,7 +190,7 @@ Adjacent to `./config/` and `./data/`, SciTeX packages may also keep **project-s
 ```
 
 - The `<pkg-short>` slug is the package name minus the `scitex-` prefix.
-- Resolution chain (project-level → user-level): `<project>/.scitex/<pkg-short>/` falls back to `~/.scitex/<pkg-short>/`. See [`../general/01_ecosystem/06_local-state-directories.md`](../general/01_ecosystem/06_local-state-directories.md) for the full layout, `SCITEX_DIR` override, and `PathManager` usage.
+- Resolution chain (project-level → user-level): `<project>/.scitex/<pkg-short>/` falls back to `~/.scitex/<pkg-short>/`. See [`../general/01_ecosystem/06_dot_scitex_directory.md`](../general/01_ecosystem/06_dot_scitex_directory.md) for the full layout, `SCITEX_DIR` override, and `PathManager` usage.
 - Default policy: gitignored (most contents are per-machine state). Some packages may track config files inside it — check the package's own `_skills/<pkg>/`.
 
 ## Audit hooks

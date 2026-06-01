@@ -109,6 +109,6 @@ wheels themselves.
 
 - `01_ecosystem/02_dependency-and-version-pinning.md` — why CI parity
   matters for the ecosystem.
-- `01_ecosystem/06_local-state-directories.md` — sibling rule that
+- `01_ecosystem/06_dot_scitex_directory.md` — sibling rule that
   `<pkg-root>/.scitex/` is for git-tracked dev state, never for venvs.
 - `scitex-dev ecosystem install --help` — the install command itself.
