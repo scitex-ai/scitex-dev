@@ -77,6 +77,20 @@ class ProjectConfig:
         # without ADRs.
         if code == "PS-173":
             return True
+        # PS-PATH-* / PS-CLEW-* / PS-AGENT-* — paper-scitex-clew MVP
+        # lint rules (PR #97, operator directive 2026-06-01). They
+        # target research-project artifacts (`config/PATH.yaml`,
+        # `scripts/agent/*.py`, `clew.add_claim` call sites) but the
+        # SciTeX hybrid pattern lets these coexist with `pip` projects
+        # too. Each rule is already artifact-gated (only fires when
+        # the relevant file exists), so applying it cross-cutting is
+        # safe and costs nothing for unrelated repos.
+        if (
+            code.startswith("PS-PATH-")
+            or code.startswith("PS-CLEW-")
+            or code.startswith("PS-AGENT-")
+        ):
+            return True
         prefix = code[:2]
         if prefix == "PS":
             return "pip" in self.project_types
