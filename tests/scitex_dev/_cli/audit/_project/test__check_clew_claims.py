@@ -149,6 +149,45 @@ def _write_agent_script(repo: Path, content: str, name: str = "03_register_claim
     return target
 
 
+def _historical_content_or_skip(rev: str) -> str:
+    """Fixture helper: return historical PATH content or skip the test.
+
+    Centralises the skip so per-test bodies stay single-assertion
+    (PA-307 §3 / TQ007 compliance).
+    """
+    content = _git_show(PAPER_REPO, rev, HISTORICAL_PATH)
+    if content is None:
+        pytest.skip(
+            f"paper-scitex-clew historical content unavailable for {rev} — "
+            "synthetic equivalent tests cover this case."
+        )
+    return content
+
+
+@pytest.fixture
+def historical_post_fix_content() -> str:
+    """commit 87a0f7b — post-self-verify shape from paper-scitex-clew."""
+    return _historical_content_or_skip("87a0f7b")
+
+
+@pytest.fixture
+def historical_635799a_content() -> str:
+    """commit 635799a — list_claims branch (no verify_claim)."""
+    return _historical_content_or_skip("635799a")
+
+
+def _run_ps_clew_001(repo: Path) -> set[str]:
+    out: list = []
+    check_ps_clew_001_add_claim_without_self_verify(repo, Violation, out)
+    return {v.rule for v in out}
+
+
+def _run_ps_agent_001(repo: Path) -> list:
+    out: list = []
+    check_ps_agent_001_agent_script_no_claims_json(repo, Violation, out)
+    return out
+
+
 # ── PS-CLEW-001 ─────────────────────────────────────────────────────────
 
 
@@ -174,26 +213,26 @@ def test_ps_clew_001_does_not_fire_on_post_self_verify_synthetic(tmp_path):
     assert "PS-CLEW-001" not in codes
 
 
-def test_ps_clew_001_does_not_fire_on_historical_post_fix(tmp_path):
+def test_ps_clew_001_does_not_fire_on_historical_post_fix(
+    tmp_path, historical_post_fix_content
+):
     """Cross-check: the canonical post-fix version (commit 87a0f7b in
-    paper-scitex-clew) must NOT flag PS-CLEW-001."""
+    paper-scitex-clew) must NOT flag PS-CLEW-001.
+
+    The skip-on-missing-fixture decision lives in
+    `historical_post_fix_content` so the body stays single-assertion.
+    """
     # Arrange
-    content = _git_show(PAPER_REPO, "87a0f7b", HISTORICAL_PATH)
-    if content is None:
-        pytest.skip(
-            "paper-scitex-clew historical content unavailable — "
-            "synthetic post-self-verify equivalent test above covers this case."
-        )
-    _write_agent_script(tmp_path, content)
+    _write_agent_script(tmp_path, historical_post_fix_content)
     # Act
-    out: list = []
-    check_ps_clew_001_add_claim_without_self_verify(tmp_path, Violation, out)
+    codes = _run_ps_clew_001(tmp_path)
     # Assert
-    codes = {v.rule for v in out}
     assert "PS-CLEW-001" not in codes
 
 
-def test_ps_clew_001_does_not_fire_on_historical_635799a(tmp_path):
+def test_ps_clew_001_does_not_fire_on_historical_635799a(
+    tmp_path, historical_635799a_content
+):
     """Cross-check: commit 635799a calls list_claims() (no
     verify_claim). Per the spec, list_claims is one of the two
     accepted self-verify forms, so the rule does NOT flag.
@@ -201,17 +240,13 @@ def test_ps_clew_001_does_not_fire_on_historical_635799a(tmp_path):
     Documents the finding: 635799a is not actually a positive-case
     fixture for PS-CLEW-001 — even though it predates the in-process
     validity gate, it satisfies the list_claims branch of the rule.
+    The skip lives in the fixture for TQ007 compliance.
     """
     # Arrange
-    content = _git_show(PAPER_REPO, "635799a", HISTORICAL_PATH)
-    if content is None:
-        pytest.skip("paper-scitex-clew historical content unavailable")
-    _write_agent_script(tmp_path, content)
+    _write_agent_script(tmp_path, historical_635799a_content)
     # Act
-    out: list = []
-    check_ps_clew_001_add_claim_without_self_verify(tmp_path, Violation, out)
-    # Assert — confirms the documented finding.
-    codes = {v.rule for v in out}
+    codes = _run_ps_clew_001(tmp_path)
+    # Assert
     assert "PS-CLEW-001" not in codes
 
 
@@ -323,19 +358,18 @@ def main():
     assert "PS-AGENT-001" not in {v.rule for v in out}
 
 
-def test_ps_agent_001_does_not_fire_on_historical_post_fix(tmp_path):
+def test_ps_agent_001_does_not_fire_on_historical_post_fix(
+    tmp_path, historical_post_fix_content
+):
     """Cross-check: paper-scitex-clew commit 87a0f7b writes
     claims.json via `claims_json.write_text(...)` where the receiver
     binds to a Path derived from CONFIG.PATH.CLAIMS_JSON. Must NOT
-    flag PS-AGENT-001."""
+    flag PS-AGENT-001. The skip lives in the fixture (TQ007 compliance).
+    """
     # Arrange
-    content = _git_show(PAPER_REPO, "87a0f7b", HISTORICAL_PATH)
-    if content is None:
-        pytest.skip("paper-scitex-clew historical content unavailable")
-    _write_agent_script(tmp_path, content)
+    _write_agent_script(tmp_path, historical_post_fix_content)
     # Act
-    out: list = []
-    check_ps_agent_001_agent_script_no_claims_json(tmp_path, Violation, out)
+    out = _run_ps_agent_001(tmp_path)
     # Assert
     assert "PS-AGENT-001" not in {v.rule for v in out}
 
@@ -371,17 +405,12 @@ def test_ps_agent_001_silent_when_no_add_claim(tmp_path):
 # ── audit_project integration ────────────────────────────────────────────
 
 
-def test_audit_project_emits_ps_clew_and_agent_in_json(tmp_path):
-    # Arrange — minimal research repo + buggy agent script.
-    import io
-    import json
-    from contextlib import redirect_stdout
-
+def _build_buggy_research_repo(repo: Path) -> None:
+    """Arrange helper: minimal research repo with a buggy agent script."""
     from scitex_dev._cli.audit._config import write_config
-    from scitex_dev._cli.audit._project._audit import audit_project
 
-    (tmp_path / ".scitex/dev").mkdir(parents=True)
-    write_config(tmp_path, project_types=["research"])
+    (repo / ".scitex/dev").mkdir(parents=True)
+    write_config(repo, project_types=["research"])
     src = '''
 import scitex_clew as clew
 def main():
@@ -389,27 +418,71 @@ def main():
         clew.add_claim(file_path="x", claim_type="value", line_number=i,
                        claim_value=str(i), source_file="y")
 '''
-    _write_agent_script(tmp_path, src)
-    (tmp_path / "scripts" / "analysis").mkdir(parents=True)
-    (tmp_path / "scripts" / "analysis" / "01_x.py").write_text("x = 1\n")
-    (tmp_path / "tests" / "scripts" / "agent").mkdir(parents=True)
-    (tmp_path / "tests" / "scripts" / "agent" / "test_03_register_claims.py").write_text(
+    _write_agent_script(repo, src)
+    (repo / "scripts" / "analysis").mkdir(parents=True)
+    (repo / "scripts" / "analysis" / "01_x.py").write_text("x = 1\n")
+    (repo / "tests" / "scripts" / "agent").mkdir(parents=True)
+    (repo / "tests" / "scripts" / "agent" / "test_03_register_claims.py").write_text(
         "def test_x():\n    assert True\n"
     )
-    (tmp_path / "tests" / "scripts" / "analysis").mkdir(parents=True)
-    (tmp_path / "tests" / "scripts" / "analysis" / "test_01_x.py").write_text(
+    (repo / "tests" / "scripts" / "analysis").mkdir(parents=True)
+    (repo / "tests" / "scripts" / "analysis" / "test_01_x.py").write_text(
         "def test_x():\n    assert True\n"
     )
-    # Act
+
+
+def _run_audit_project_json(repo: Path) -> dict:
+    """Act helper: run audit_project --json against ``repo`` and return payload."""
+    import io
+    import json
+    from contextlib import redirect_stdout
+
+    from scitex_dev._cli.audit._project._audit import audit_project
+
     buf = io.StringIO()
     with redirect_stdout(buf):
-        audit_project("demo-research", repo=tmp_path, json_out=True, severity="warning")
-    payload = json.loads(buf.getvalue())
+        audit_project("demo-research", repo=repo, json_out=True, severity="warning")
+    return json.loads(buf.getvalue())
+
+
+@pytest.fixture
+def audit_project_payload_buggy_research(tmp_path):
+    """Shared Arrange+Act: buggy research repo audit payload."""
+    _build_buggy_research_repo(tmp_path)
+    return _run_audit_project_json(tmp_path)
+
+
+def test_audit_project_emits_ps_clew_001_in_json(audit_project_payload_buggy_research):
+    # Arrange (shared via fixture)
+    payload = audit_project_payload_buggy_research
+    # Act
     by_rule = {v["rule"] for v in payload["violations"]}
     # Assert
     assert "PS-CLEW-001" in by_rule
+
+
+def test_audit_project_emits_ps_agent_001_in_json(audit_project_payload_buggy_research):
+    # Arrange (shared via fixture)
+    payload = audit_project_payload_buggy_research
+    # Act
+    by_rule = {v["rule"] for v in payload["violations"]}
+    # Assert
     assert "PS-AGENT-001" in by_rule
-    # Severity check — PS-CLEW-001 is W, PS-AGENT-001 is E.
+
+
+def test_audit_project_records_ps_clew_001_severity_w(audit_project_payload_buggy_research):
+    # Arrange (shared via fixture)
+    payload = audit_project_payload_buggy_research
+    # Act
     by_rule_record = {v["rule"]: v for v in payload["violations"]}
+    # Assert — PS-CLEW-001 is a warning.
     assert by_rule_record["PS-CLEW-001"]["severity"] == "W"
+
+
+def test_audit_project_records_ps_agent_001_severity_e(audit_project_payload_buggy_research):
+    # Arrange (shared via fixture)
+    payload = audit_project_payload_buggy_research
+    # Act
+    by_rule_record = {v["rule"]: v for v in payload["violations"]}
+    # Assert — PS-AGENT-001 is an error.
     assert by_rule_record["PS-AGENT-001"]["severity"] == "E"

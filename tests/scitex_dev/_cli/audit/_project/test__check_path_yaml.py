@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scitex_dev._cli.audit._project._audit import Violation
 from scitex_dev._cli.audit._project._check_path_yaml import (
     check_ps_path_001_outer_wrapper,
@@ -90,18 +92,33 @@ def test_ps_path_001_fires_on_outer_wrapper_real_fixture(tmp_path):
     assert "PS-PATH-001" in codes
 
 
-def test_ps_path_001_locates_wrapper_line(tmp_path):
-    # Arrange
-    _write_path_yaml(tmp_path, _BEFORE_PATH_YAML)
-    # Act
+def _ps_path_001_where_line(repo: Path) -> str:
+    """Arrange+Act helper: write BEFORE fixture, run rule, return line suffix."""
+    _write_path_yaml(repo, _BEFORE_PATH_YAML)
     out: list = []
-    check_ps_path_001_outer_wrapper(tmp_path, Violation, out)
-    # Assert — the `PATH:` line is on line 4 in the fixture (after the
-    # two comment lines and one blank). Allow tolerance of 1 line for
-    # leading whitespace handling.
+    check_ps_path_001_outer_wrapper(repo, Violation, out)
     ps_path_001 = [v for v in out if v.rule == "PS-PATH-001"][0]
-    line_str = ps_path_001.where.rsplit(":", 1)[-1]
+    return ps_path_001.where.rsplit(":", 1)[-1]
+
+
+def test_ps_path_001_where_carries_numeric_line(tmp_path):
+    # Arrange
+    # (BEFORE fixture + rule invocation delegated to helper)
+    # Act
+    line_str = _ps_path_001_where_line(tmp_path)
+    # Assert
     assert line_str.isdigit()
+
+
+def test_ps_path_001_locates_wrapper_line_in_range(tmp_path):
+    # Arrange
+    # (BEFORE fixture + rule invocation delegated to helper)
+    # The `PATH:` line is on line 4 in the fixture (after the two
+    # comment lines and one blank). Allow tolerance of 1 line for
+    # leading whitespace handling.
+    # Act
+    line_str = _ps_path_001_where_line(tmp_path)
+    # Assert
     assert 1 <= int(line_str) <= 6
 
 
@@ -205,40 +222,108 @@ def test_ps_path_002_skips_block_scalars(tmp_path):
 # ── audit_project integration (JSON path) ────────────────────────────────
 
 
-def test_audit_project_emits_ps_path_rules_in_json(tmp_path):
-    """End-to-end: audit_project --json emits PS-PATH-001/002 records
-    with `rule`, `where`, `detail`, `severity` keys consumable by the
-    pre-tool-use hook downstream."""
-    # Arrange — minimal research repo with the buggy PATH.yaml.
+def _build_buggy_path_yaml_research_repo(repo: Path) -> None:
+    """Arrange helper: minimal research repo with buggy BEFORE PATH.yaml."""
+    from scitex_dev._cli.audit._config import write_config
+
+    (repo / ".scitex/dev").mkdir(parents=True)
+    write_config(repo, project_types=["research"])
+    (repo / "scripts" / "analysis").mkdir(parents=True)
+    (repo / "scripts" / "analysis" / "01_x.py").write_text("x = 1\n")
+    (repo / "tests" / "scripts" / "analysis").mkdir(parents=True)
+    (repo / "tests" / "scripts" / "analysis" / "test_01_x.py").write_text(
+        "def test_x():\n    assert True\n"
+    )
+    _write_path_yaml(repo, _BEFORE_PATH_YAML)
+
+
+def _run_audit_project_json(repo: Path) -> dict:
+    """Act helper: run audit_project --json and return payload."""
     import io
     import json
     from contextlib import redirect_stdout
 
-    from scitex_dev._cli.audit._config import write_config
     from scitex_dev._cli.audit._project._audit import audit_project
 
-    (tmp_path / ".scitex/dev").mkdir(parents=True)
-    write_config(tmp_path, project_types=["research"])
-    (tmp_path / "scripts" / "analysis").mkdir(parents=True)
-    (tmp_path / "scripts" / "analysis" / "01_x.py").write_text("x = 1\n")
-    (tmp_path / "tests" / "scripts" / "analysis").mkdir(parents=True)
-    (tmp_path / "tests" / "scripts" / "analysis" / "test_01_x.py").write_text(
-        "def test_x():\n    assert True\n"
-    )
-    _write_path_yaml(tmp_path, _BEFORE_PATH_YAML)
-    # Act
     buf = io.StringIO()
     with redirect_stdout(buf):
-        audit_project("demo-research", repo=tmp_path, json_out=True, severity="warning")
-    payload = json.loads(buf.getvalue())
-    # Assert — both rules present, severity E recorded in the payload,
-    # and the `where` field carries `<path>:<line>` shape.
+        audit_project("demo-research", repo=repo, json_out=True, severity="warning")
+    return json.loads(buf.getvalue())
+
+
+@pytest.fixture
+def audit_payload_with_before_path_yaml(tmp_path):
+    """Shared Arrange+Act: buggy PATH.yaml research repo audit payload.
+
+    End-to-end: audit_project --json emits PS-PATH-001/002 records
+    with `rule`, `where`, `detail`, `severity` keys consumable by the
+    pre-tool-use hook downstream.
+    """
+    _build_buggy_path_yaml_research_repo(tmp_path)
+    return _run_audit_project_json(tmp_path)
+
+
+def test_audit_project_emits_ps_path_001(audit_payload_with_before_path_yaml):
+    # Arrange (shared via fixture)
+    payload = audit_payload_with_before_path_yaml
+    # Act
     by_rule = {v["rule"]: v for v in payload["violations"]}
+    # Assert
     assert "PS-PATH-001" in by_rule
+
+
+def test_audit_project_records_ps_path_001_severity_e(
+    audit_payload_with_before_path_yaml,
+):
+    # Arrange (shared via fixture)
+    payload = audit_payload_with_before_path_yaml
+    # Act
+    by_rule = {v["rule"]: v for v in payload["violations"]}
+    # Assert
     assert by_rule["PS-PATH-001"]["severity"] == "E"
+
+
+def test_audit_project_ps_path_001_where_has_path_line_shape(
+    audit_payload_with_before_path_yaml,
+):
+    # Arrange (shared via fixture)
+    payload = audit_payload_with_before_path_yaml
+    # Act
+    by_rule = {v["rule"]: v for v in payload["violations"]}
+    # Assert — `where` field carries `<path>:<line>` shape.
     assert ":" in by_rule["PS-PATH-001"]["where"]
+
+
+def test_audit_project_emits_at_least_five_ps_path_002(
+    audit_payload_with_before_path_yaml,
+):
+    # Arrange (shared via fixture)
+    payload = audit_payload_with_before_path_yaml
+    # Act
     ps_path_002_seen = [v for v in payload["violations"] if v["rule"] == "PS-PATH-002"]
+    # Assert — BEFORE fixture has 5 bare-string leaves.
     assert len(ps_path_002_seen) >= 5
-    for v in ps_path_002_seen:
-        assert v["severity"] == "E"
-        assert ":" in v["where"]
+
+
+def test_audit_project_all_ps_path_002_records_have_severity_e(
+    audit_payload_with_before_path_yaml,
+):
+    # Arrange (shared via fixture)
+    payload = audit_payload_with_before_path_yaml
+    # Act
+    ps_path_002_seen = [v for v in payload["violations"] if v["rule"] == "PS-PATH-002"]
+    severities = {v["severity"] for v in ps_path_002_seen}
+    # Assert — every PS-PATH-002 record is severity E.
+    assert severities == {"E"}
+
+
+def test_audit_project_all_ps_path_002_records_have_path_line_where(
+    audit_payload_with_before_path_yaml,
+):
+    # Arrange (shared via fixture)
+    payload = audit_payload_with_before_path_yaml
+    # Act
+    ps_path_002_seen = [v for v in payload["violations"] if v["rule"] == "PS-PATH-002"]
+    wheres_with_colon = [v for v in ps_path_002_seen if ":" in v["where"]]
+    # Assert — every record's `where` carries `<path>:<line>` shape.
+    assert len(wheres_with_colon) == len(ps_path_002_seen)
