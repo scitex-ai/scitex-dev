@@ -176,50 +176,79 @@ jobs:
             dist/*
 
   sync-main:
-    # After a release tag is pushed, ensure `develop` exists and matches
-    # `main`. The operator's release flow uses `develop → main` as the
-    # release PR (head=develop, base=main), which interacts with the
-    # repo's `delete_branch_on_merge: true` setting:
+    # After a release tag is pushed (which lives on develop), advance
+    # `main` to the tagged commit so `main` reliably tracks "last
+    # released SHA". The operator's actual release flow is:
     #
-    #   * develop is GONE — auto-deleted by GitHub when the release PR
-    #     merged. Recreate it at main HEAD (which already contains the
-    #     release commit). This was the 2026-05-29 v0.14.1 failure mode:
-    #     the old job tried `actions/checkout@v4 ref: develop` and errored
-    #     "A branch or tag with the name 'develop' could not be found".
-    #   * develop EXISTS but is behind main — fast-forward it.
-    #   * develop EXISTS and matches main — no-op.
+    #     git tag vX.Y.Z develop && git push origin vX.Y.Z
     #
-    # All done via the API (no checkout-dance + git-push contortions).
-    # The checkout is rooted on `main` (always present) so the job can't
-    # fail at the checkout step on a missing develop.
+    # i.e. the tag lives on develop's tip and develop is ahead of main
+    # by every commit since the previous release. The PRIOR sync-main
+    # logic tried to fast-forward develop TO main's SHA, which is
+    # backwards for this flow: develop has commits main doesn't, so
+    # `PATCH refs/heads/develop -f sha=MAIN_SHA -F force=false` failed
+    # with "Update is not a fast forward" (HTTP 422) on every release
+    # (v0.16.1 / v0.17.0 / v0.17.1 / v0.17.2 / v0.17.3). That failure
+    # was benign — publish + GitHub Release jobs already succeeded —
+    # but surfaced as a red workflow on every release and confused
+    # every reader of the CI dashboard.
+    #
+    # New logic (closes #105):
+    #   * tag_sha == main → no-op (already in sync, re-run of dispatch).
+    #   * tag_sha is a descendant of main (typical case) → ff main → tag.
+    #   * tag_sha is NOT a descendant of main → surface and exit non-zero
+    #     (rare; means main has commits the tag doesn't, e.g. a hotfix
+    #     landed on main without going through develop). Human handles.
     needs: publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: main
-      - name: Ensure develop == main (recreate or fast-forward)
+      - name: Resolve tag SHA (checkout-free)
+        id: ver
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          MAIN_SHA=$(git rev-parse main)
-          echo "main is at ${MAIN_SHA}"
-          if gh api "repos/${REPO}/branches/develop" >/tmp/dev.json 2>/dev/null; then
-            DEV_SHA=$(jq -r '.commit.sha' /tmp/dev.json)
-            if [ "${DEV_SHA}" = "${MAIN_SHA}" ]; then
-              echo "develop already at main (${MAIN_SHA}); nothing to do."
-              exit 0
-            fi
-            echo "develop=${DEV_SHA} != main=${MAIN_SHA}; fast-forwarding develop to main"
-            gh api -X PATCH "repos/${REPO}/git/refs/heads/develop" \
-              -f sha="${MAIN_SHA}" -F force=false
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag="${GITHUB_REF#refs/tags/}"
           else
-            echo "develop branch missing (auto-deleted on release-PR merge?); recreating at main"
-            gh api -X POST "repos/${REPO}/git/refs" \
-              -f ref="refs/heads/develop" -f sha="${MAIN_SHA}"
+            tag="${{ inputs.version }}"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          ref_sha=$(gh api "repos/${REPO}/git/refs/tags/${tag}" --jq '.object.sha')
+          # Annotated tags resolve to a tag object; peel to the commit.
+          obj_type=$(gh api "repos/${REPO}/git/refs/tags/${tag}" --jq '.object.type')
+          if [ "${obj_type}" = "tag" ]; then
+            tag_sha=$(gh api "repos/${REPO}/git/tags/${ref_sha}" --jq '.object.sha')
+          else
+            tag_sha="${ref_sha}"
+          fi
+          echo "tag_sha=${tag_sha}" >> "$GITHUB_OUTPUT"
+      - name: Advance main to the tagged commit (or no-op)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          TAG_SHA: ${{ steps.ver.outputs.tag_sha }}
+        run: |
+          set -euo pipefail
+          main_sha=$(gh api "repos/${REPO}/branches/main" --jq '.commit.sha')
+          echo "tag ${TAG} = ${TAG_SHA}"
+          echo "main      = ${main_sha}"
+          if [ "${TAG_SHA}" = "${main_sha}" ]; then
+            echo "main already at ${TAG}; nothing to do."
+            exit 0
+          fi
+          # Strict fast-forward (force=false). If main has commits the
+          # tag doesn't, this fails with HTTP 422 — the human-handled
+          # path (rare; hotfix landed on main outside the develop flow).
+          if gh api -X PATCH "repos/${REPO}/git/refs/heads/main" \
+              -f sha="${TAG_SHA}" -F force=false; then
+            echo "main fast-forwarded to ${TAG}."
+          else
+            echo "::error::main is not a descendant of ${TAG}; manual reconcile required." >&2
+            echo "::error::Likely a hotfix landed on main outside the develop flow." >&2
+            exit 1
           fi
