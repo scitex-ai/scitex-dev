@@ -7,6 +7,40 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.2] — 2026-06-03
+
+### Added
+- **`ecosystem set-branch-protection` / `unset-branch-protection`
+  commands.** Brand-wide GitHub branch-protection management.
+  Encodes the policy from lead msg a3c59d1a:
+  - 6 required CI contexts (3 pytest-matrix legs + sphinx +
+    import-smoke + audit), intersected with what each repo actually
+    publishes so we never demand a context the repo can't produce.
+  - `strict=False` on both `develop` and `main` (don't serialise the
+    parallel fleet on rebase-before-merge churn).
+  - `enforce_admins=True` on `develop` (the #117 race fix —
+    nobody bypasses CI on the integration branch).
+  - `enforce_admins=False` on `main` (the release flow needs admin-
+    merge + tag-push to fire PyPI; locking the admin out would wedge
+    releases).
+  - `required_pull_request_reviews` omitted (CI-green is the only gate).
+  - `required_linear_history=True` (matches the squash-merge convention).
+  - `allow_force_pushes` / `allow_deletions` = False.
+  CLAssistant is deliberately NOT in the required set today (documented
+  transient bot-timing failure mode; revisit when stable). Both commands
+  default to `--dry-run`; pass `--execute` to actually PUT or DELETE.
+  Sibling `unset-` is the rollback path.
+
+  Fleet-wide rollout is gated on operator confirm via lead; first
+  execution lands on scitex-dev itself for one-PR-cycle observation
+  before fleet-wide PUTs.
+
+  12 AAA + one-assert tests cover dry-run/execute semantics, per-branch
+  enforce_admins, strict/linear/reviews/force-push policy bits, the
+  no-develop-branch skip path (scitex-orochi shape), unknown-distribution
+  exit codes, and the unset rollback path. Tests use a real
+  record/replay seam on the `gh api` boundary (no `unittest.mock`).
+
 ## [0.17.1] — 2026-06-03
 
 ### Fixed

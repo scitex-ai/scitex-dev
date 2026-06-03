@@ -18,6 +18,7 @@ from ._cmds import (
     _audit_all,
     _audit_per_target,
     _audit_summary,
+    _branch_protection,
     _clean,
     _dashboard,
     _git,
@@ -90,6 +91,7 @@ def register_ecosystem_commands(main_group):
     _test_remote.register(ecosystem)
     _sync_status.register(ecosystem)
     _prune_merged.register(ecosystem)
+    _branch_protection.register(ecosystem)
 
     # Federated scheduled-job aggregation (scitex_dev.jobs entry-points).
     _jobs_cron.register(ecosystem)
