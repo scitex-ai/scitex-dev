@@ -7,6 +7,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Notes
+- Brand-wide branch protection live on scitex-dev `develop` + `main` as of
+  2026-06-03 (the policy ships in v0.17.3's `ecosystem set-branch-protection`
+  command). First fleet-wide rollout pending operator confirm via lead.
+
 ## [0.17.4] — 2026-06-03
 
 ### Fixed
