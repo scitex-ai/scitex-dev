@@ -7,6 +7,40 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.3] — 2026-06-03
+
+### Fixed
+- **`set-branch-protection` context-intersection regression (v0.17.2 only).**
+  v0.17.2 derived required contexts from workflow filenames via a prefix
+  heuristic (`pytest-matrix-on-ubuntu-py3.11` ↔ workflow `tests` etc),
+  which only matched when the filename happened to share a prefix with
+  the actual check-run name. On scitex-dev's first dry-run, only
+  `import-smoke-on-ubuntu-py3-12` survived; the 5 other ceiling contexts
+  were silently dropped. v0.17.3 swaps the heuristic for GitHub's
+  `commits/<ref>/check-runs` API — the strings the protection PUT
+  literally accepts. The intersection is now exact-string, not
+  prefix/substring. (v0.17.2 release CI didn't surface this because the
+  test seam fed shaped workflow JSON; added a new test that exercises
+  the published-checks intersection directly.)
+
+- **`unset-branch-protection` CLI verb dictionary.** v0.17.2 introduced
+  the verb `unset` which isn't in the bundled Moby POS catalog. Added
+  it to `.scitex/dev/cli-audit-dict.yaml` under `transitive_verbs` —
+  the auditor merges that file with the user-level dict at audit time.
+
+- **`test__branch_protection.py` PA-306 no-mocks violations.** v0.17.2
+  used the `monkeypatch` fixture for injection; PA-306 flags that
+  (the rule treats `monkeypatch` as a mock equivalent regardless of
+  semantic intent). Replaced with direct attribute assignment +
+  try/finally restoration in a fixture body — a real injection seam
+  by construction. Behavioural coverage unchanged.
+
+### Added
+- New test exercising the published-check-runs intersection
+  (`test_required_contexts_intersected_with_published_checks`)
+  that wouldn't have caught the v0.17.2 dropout but does pin the
+  v0.17.3 behaviour going forward.
+
 ## [0.17.2] — 2026-06-03
 
 ### Added

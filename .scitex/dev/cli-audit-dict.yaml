@@ -20,5 +20,10 @@ nouns:
   # `scitex-dev ecosystem daemon <verb>` (list / exec) for federated jobs.
   - daemon
 
-transitive_verbs: []
+transitive_verbs:
+  # `scitex-dev ecosystem unset-branch-protection` — the rollback half
+  # of the set/unset pair for GitHub branch-protection management.
+  # "unset" is standard English (Bash builtin, shell vocab) but doesn't
+  # sit in the Moby POS catalog the auditor consults.
+  - unset
 intransitive_verbs: []
