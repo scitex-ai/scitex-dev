@@ -7,6 +7,31 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.4] — 2026-06-03
+
+### Fixed
+- **Release workflow `sync-main` step (closes #105).** The prior logic
+  tried to fast-forward `develop` TO `main`'s SHA, which is backwards
+  for the operator's actual release flow:
+
+      git tag vX.Y.Z develop && git push origin vX.Y.Z
+
+  develop sits AHEAD of main with every commit since the previous
+  release, so `PATCH refs/heads/develop -f sha=MAIN_SHA -F force=false`
+  failed with "Update is not a fast forward" (HTTP 422) on v0.16.1,
+  v0.17.0, v0.17.1, v0.17.2, and v0.17.3 in a row. The failure was
+  benign — `publish` + GitHub Release already succeeded — but every
+  release showed a red workflow on the CI dashboard.
+
+  New logic advances `main` → tag SHA so `main` reliably tracks "last
+  released SHA": resolves the pushed tag (peels annotated tags to their
+  commit), no-ops if main is already there, fast-forwards main strictly
+  (force=false), and exits non-zero with a clear error if the tag isn't
+  a descendant of main (rare hotfix-on-main path; human reconciles).
+  Removes the obsolete "develop was auto-deleted by release-PR merge"
+  branch — the operator's flow doesn't run a develop→main PR, so develop
+  is never auto-deleted.
+
 ## [0.17.3] — 2026-06-03
 
 ### Fixed
