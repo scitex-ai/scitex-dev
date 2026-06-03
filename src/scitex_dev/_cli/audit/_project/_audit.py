@@ -1084,8 +1084,11 @@ _SLUGS: dict[str, str] = {
     # README structure
     "PS-106": "readme-missing-coverage-badge",
     "PS-107": "readme-missing-h2-sections",
-    "PS-108": "readme-missing-license-badge",
-    "PS-108b": "readme-missing-pypi-py-version-badge",
+    # PS-108 / PS-108b detect flat-package-layout patterns in src/, NOT
+    # README badges. (The badge-shaped slugs that used to sit here
+    # described long-retired README rules and confused every reader.)
+    "PS-108": "src-prefix-cluster-mess",
+    "PS-108b": "src-flat-py-files-over-threshold",
     "PS-109": "readme-missing-pypi-version-badge",
     "PS-110": "readme-missing-four-freedoms",
     "PS-111": "readme-personal-email",
