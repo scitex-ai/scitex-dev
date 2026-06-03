@@ -579,6 +579,31 @@ def test_ps108_rolls_up_multiple_clusters_cli__in_out_0_detail_and_skills__in_ou
 
 
 # ---------------------------------------------------------------------------
+# PS-108 / PS-108b slug regression — the `[CODE §X slug]` shown in
+# audit-all output must describe the ACTUAL rule (flat-package-layout),
+# not a long-retired README-badge rule that used to live at this code.
+# ---------------------------------------------------------------------------
+
+
+def test_ps108_slug_describes_flat_layout_not_readme_badge():
+    # Arrange
+    rule = RULES["PS-108"]
+    # Act
+    slug = rule.slug
+    # Assert
+    assert "readme" not in slug
+
+
+def test_ps108b_slug_describes_flat_layout_not_readme_badge():
+    # Arrange
+    rule = RULES["PS-108b"]
+    # Act
+    slug = rule.slug
+    # Assert
+    assert "readme" not in slug
+
+
+# ---------------------------------------------------------------------------
 # PS-204 enrichment — actionable orphan-test hints (basename + sibling listing)
 # ---------------------------------------------------------------------------
 
