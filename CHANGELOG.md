@@ -7,6 +7,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.1] — 2026-06-03
+
+### Fixed
+- **`audit-project` PS-108 / PS-108b slug labels (#101).** The violation tag
+  that audit-all prints for these flat-package-layout rules used to read
+  `[PS-108 §1 readme-missing-license-badge]` / `[PS-108b §1
+  readme-missing-pypi-py-version-badge]` — slugs from long-retired README
+  rules that confused every reader of the audit output. PS-108 / PS-108b
+  actually detect prefix-cluster mess and too-many-flat-py-files; the slugs
+  now read `src-prefix-cluster-mess` and `src-flat-py-files-over-threshold`.
+  Two AAA + one-assert regression tests guard the invariant that neither
+  slug contains the word `readme`. No behaviour change beyond the printed
+  label.
+
 ## [0.17.0] — 2026-06-01
 
 ### Added
