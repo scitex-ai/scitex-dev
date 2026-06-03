@@ -97,17 +97,23 @@ def _branch_exists(owner_repo: str, branch: str) -> bool:
     return rc == 0
 
 
-def _list_workflow_check_names(owner_repo: str) -> List[str]:
-    """Return the names of active workflows for the repo.
+def _list_published_check_names(owner_repo: str, ref: str = "develop") -> List[str]:
+    """Return the actual check-run names published at the tip of ``ref``.
 
-    Used to intersect with the required-set ceiling so we never require a
-    context the repo doesn't publish. Workflow `.name` is what GitHub
-    presents in the protection UI as the context label for single-job
-    workflows; matrix jobs publish per-leg names (e.g.
-    ``pytest-matrix-on-ubuntu-py3.11``).
+    v0.17.2 tried to derive contexts from workflow filenames (workflow
+    ``tests`` → assume ``pytest-matrix-on-ubuntu-py3.11`` etc), which
+    only worked when the filename happened to share a prefix with the
+    check-run name. The dry-run on scitex-dev exposed it — only
+    ``import-smoke-on-ubuntu-py3-12`` landed, the rest were dropped.
+
+    The actual source of truth is GitHub's ``check-runs`` API on the
+    branch tip: those are EXACTLY the strings the branch-protection PUT
+    accepts as required contexts. If the repo hasn't run CI on this ref
+    yet, the API returns an empty list and we fall back to nothing
+    required (safer than blocking on a context that doesn't yet exist).
     """
     rc, out = _gh_api(
-        "GET", f"repos/{owner_repo}/actions/workflows?per_page=100"
+        "GET", f"repos/{owner_repo}/commits/{ref}/check-runs?per_page=100"
     )
     if rc != 0:
         return []
@@ -115,27 +121,18 @@ def _list_workflow_check_names(owner_repo: str) -> List[str]:
         data = json.loads(out)
     except json.JSONDecodeError:
         return []
-    return [
-        w["name"]
-        for w in data.get("workflows", [])
-        if w.get("state") == "active"
-    ]
+    names = sorted({c.get("name", "") for c in data.get("check_runs", [])})
+    return [n for n in names if n]
 
 
 def _intersect_required(repo_contexts: List[str], ceiling: List[str]) -> List[str]:
-    """Intersection-by-prefix: a required context (e.g.
-    ``pytest-matrix-on-ubuntu-py3.11``) is kept only if the repo has a
-    workflow whose name shares the same first-token marker (so the matrix
-    leg names land via the ``tests`` workflow, ``audit`` via ``quality``,
-    etc).
+    """Exact-match intersection: return ceiling members that the repo
+    actually publishes as check-runs. The protection PUT will block any
+    PR forever on a required context that never publishes, so this MUST
+    be the strict intersection — no prefix/substring heuristic.
     """
-    out = []
-    repo_names = [n.lower() for n in repo_contexts]
-    for required in ceiling:
-        marker = required.lower().split("-")[0]
-        if any(marker in n for n in repo_names):
-            out.append(required)
-    return out
+    repo_set = set(repo_contexts)
+    return [c for c in ceiling if c in repo_set]
 
 
 def _policy_body(
@@ -222,8 +219,8 @@ def register(ecosystem):
             ["develop", "main"] if branch == "both" else [branch]
         )
 
-        workflows = _list_workflow_check_names(owner_repo)
-        contexts = _intersect_required(workflows, _DEFAULT_REQUIRED_CONTEXTS)
+        published = _list_published_check_names(owner_repo, ref="develop")
+        contexts = _intersect_required(published, _DEFAULT_REQUIRED_CONTEXTS)
 
         exit_code = 0
         for tgt in targets:
