@@ -53,3 +53,6 @@ Project structure split into one leaf per top-level directory:
 
 ### 5. Private skills for consumer projects (research repos, paper repos, internal apps)
 - [05_private-skills_01_consumer-project.md](05_private-skills_01_consumer-project.md) — 4-layer skill stack (public-package, fleet-private, consumer-project private, gitignored notes), where each lives, decision tree for "where does this new agent-facing doc go?", lift-up rule (transient → reusable → public), concrete `paper-scitex-clew` layout. Pairs with `../general/03_interface/04_skills/06_public-vs-private.md` (which is for *package* authors); this leaf is for *consumer* projects.
+
+### 6. Scitexification — translating existing code into SciTeX form
+- [06_scitexification/SKILL.md](06_scitexification/SKILL.md) — Single source of truth for the *translation act* itself, package-agnostic. 5-stage arc (io, session/config, plt, repro+clew, naming) each holding independently. Load BEFORE picking the per-chapter topic. Chapters drill into specific stage patterns; per-package APIs delegate to the per-pkg SKILL.md (`scitex-io`, `figrecipe`, `scitex-clew`, ...). Clew-specific specialization lives in `04_clew_*`; this skill is the general form.
