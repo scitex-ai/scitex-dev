@@ -73,7 +73,7 @@ each of which holds independently:
 | 1 | [01_io-patterns](01_io-patterns.md) | Every `open()` / `np.load` / `pd.read_csv` / `pickle.load` becomes `stx.io.load(...)`; every `np.save` / `pickle.dump` / `df.to_csv` becomes `stx.io.save(..., symlink_to=...)`. DAG composition (output of step N is input of step N+1) becomes visible at the filesystem level. | Your algorithm. Your data shapes. Your business logic. |
 | 2 | [02_session-config](02_session-config.md) | The script entry-point becomes `@stx.session.start(...)`; magic numbers and paths become `CONFIG.<KEY>` lookups against `config/*.yaml`; logging becomes the session logger. | Function call structure. Module organization. Test cases. |
 | 3 | [03_plt-patterns](03_plt-patterns.md) | Every `plt.savefig(...)` becomes a `stx.io.save(fig, ...)` (so the figure is bound to a session output), and every visual style choice ladders up to figrecipe's publication-quality primitives. | Figure intent (what comparison, what axis labels). What information the figure carries. |
-| 4 | [04_repro-clew](04_repro-clew.md) | Final-mile assertions (`accuracy was X%`, `effect size was Y`) become registered Clew **claims**, each evidence-bound to the file that produced it; the submission JSON is emitted by `scitex_clew.emit_submission(...)`, not hand-written. | What you are claiming. Your numbers. |
+| 4 | [04_repro-clew](04_repro-clew.md) | Final-mile assertions (`accuracy was X%`, `effect size was Y`) become registered Clew **claims**, each evidence-bound to the file that produced it; the submission JSON is composed by iterating registered claims through `scitex_clew.list_claims()` + `scitex_clew.verify_claim()` and filtering to `source_verified=True`, not hand-written. | What you are claiming. Your numbers. |
 | 5 | [05_naming-and-numbering](05_naming-and-numbering.md) | `cnn_v3_final_FIXED2.py` becomes `scripts/03_cnn.py` (zero-filled, sortable, mirrored under `tests/`); IDs and ordinals become readable symlinks per `02_research-project_09`. | Your filenames as a *concept*. The numbers themselves (after zero-fill). |
 
 Doing stages 1+2 alone gets you a *runnable* SciTeX project — stage 3+ are
@@ -147,8 +147,9 @@ exists to keep you out of:
 
 1. **Hand-writing `claims.json` / `submission.json`** even though the
    project has Clew registered. The hand-written JSON drifts from the
-   evidence-binding the registered claims actually have. Always go
-   through `scitex_clew.emit_submission(...)` — see chapter 04.
+   evidence-binding the registered claims actually have. Always compose
+   from `scitex_clew.list_claims()` + filter on
+   `scitex_clew.verify_claim(c).source_verified` — see chapter 04.
 2. **Calling `plt.savefig` from a SciTeX session script** because
    "matplotlib already wrote the file." The file lands outside the
    session's output dir, gets timestamped against the wrong run, and
@@ -174,9 +175,13 @@ exists to keep you out of:
 - ⏳ Parent + sub-tag discovery syntax (`scitexification` vs
   `scitexification.io`) requires a small extension in
   `scitex-dev/_cli/skills/_tags.py` — separate issue to be filed.
-- ⏳ Chapter 04 references `scitex_clew.emit_submission(out_path,
-  only_verified=True)` which is **not yet implemented** on the
-  scitex-clew side — separate issue to be filed.
+- ✅ Chapter 04 uses scitex-clew **primitives** (`list_claims`,
+  `verify_claim`, `render_dag`) rather than proposing a new
+  `emit_submission` API. Rationale: scitex-clew stays general-purpose;
+  the submission shape (which keys, which schema) is cohort/paper-
+  specific concern, owned by the consumer (paper-scitex-clew,
+  MNIST template, etc.) as a 10-line iterate+filter+emit helper.
+  Per operator decision (Telegram msg 125).
 - ⏳ Capsule-side discovery contract (`spec.claude.skills:
   [scitexification]` auto-loading) tracked in A2A thread `48d2324b`
   between proj-paper-scitex-clew ↔ proj-scitex-dev.
