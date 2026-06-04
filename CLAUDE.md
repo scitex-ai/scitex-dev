@@ -72,6 +72,15 @@ lead's HOLD with a direct named task on Telegram.
    infra** — absorb silently, do not reply, do not re-ping lead per
    occurrence. Surfaced to lead 2026-06-04 (a2a 38c2b89a.. + 0b6bb595..).
 
+4. **Heavy work runs in the BACKGROUND so the foreground stays
+   responsive.** Long bash commands → `run_in_background: true` (read
+   later). CI / publish-workflow watches → `Monitor` with a
+   selective filter. Long-running mass-edits / audits / agent-style
+   work → `Agent(... run_in_background: true)`. Operator/lead
+   messages should NEVER queue behind a >30s synchronous task.
+   (Fleet rule per lead a2a a886583e, 2026-06-04 — agent-container
+   hook enforces this across the fleet.)
+
 ## Defaults
 
 - No mocks.
