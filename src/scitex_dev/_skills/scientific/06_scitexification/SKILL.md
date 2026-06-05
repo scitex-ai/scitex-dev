@@ -5,6 +5,15 @@ description: |
   [WHEN] You have existing code that works and want to bring it into the SciTeX ecosystem with minimal rewrite, OR an agent is asked to translate a research capsule, paper supplement, or one-off notebook into a SciTeX project. Load this skill BEFORE picking the per-chapter topic.
   [HOW] Read this SKILL.md first to orient on the 5-stage translation arc; then drill into the topic chapter you need next (`01_io-patterns`, `02_session-config`, `03_plt-patterns`, `04_repro-clew`, `05_naming-and-numbering`). Per-package details (full stx.io API surface, figrecipe figure types, etc.) live in the corresponding per-pkg SKILL.md — this skill references them rather than restating.
 tags: [scitexification]
+requires:
+  # Scitexification is the translation act; the four package-level
+  # companions supply the API knowledge an agent needs to actually
+  # translate-and-resolve. Loading `scitexification` should also
+  # surface these. See 00_playbook.md §"Required companion skills".
+  - scitex-session
+  - scitex-io
+  - figrecipe
+  - scitex-clew
 user-invocable: true
 primary_interface: skills
 interfaces:
@@ -39,6 +48,18 @@ This skill is the **single source of truth** for the translation act. It is
 deliberately package-agnostic at the top level; each chapter delegates
 package-specific patterns to the corresponding per-pkg SKILL.md so the per-
 package teams own the surface area they ship.
+
+> **Canonical universal playbook — [00_playbook.md](00_playbook.md).** Read
+> this first when scitexifying any artefact. It coins the vocabulary
+> (`scitexify` / `scitexification` / `scitexified`), fixes the universal
+> contract (universal inputs, pre-flight, phase dispatch, done condition,
+> forbidden), and frames the **honest source-grounding** principle — "attempt
+> every claim, ground where possible, and when ungroundable include the
+> claim with `null` + a reason, NEVER silently omit" — as a general
+> scientific-integrity norm independent of any specific evaluator. The
+> per-chapter files (01–05) drill into stage-specific patterns; the
+> `04_clew_*` siblings are clew-tracked specialisations that compose on
+> top of the universal playbook.
 
 ## When to load this skill
 
