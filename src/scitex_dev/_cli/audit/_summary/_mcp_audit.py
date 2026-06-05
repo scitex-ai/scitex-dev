@@ -25,10 +25,6 @@ human/JSON emitters.
 
 from __future__ import annotations
 
-import importlib
-import re
-from pathlib import Path
-
 import click
 
 from . import FLAT_KEEPERS  # noqa: F401  -- reserved for future verb checks
@@ -70,42 +66,6 @@ def _should_skip(package: str) -> bool:
     return False
 
 
-def _resolve_mcp_server(package: str):
-    """Locate a `FastMCP` instance for `package`.
-
-    Tries module candidates `scitex_<pkg>._mcp_server`, `scitex_<pkg>.mcp_server`
-    and looks for a top-level `mcp` attribute that is a `FastMCP`. Returns the
-    instance or None.
-    """
-    try:
-        from fastmcp import FastMCP  # local import to keep the module light
-    except ImportError:
-        return None
-
-    import_name = _import_name(package)
-    candidates = [
-        f"{import_name}._mcp_server",
-        f"{import_name}.mcp_server",
-        f"{import_name}._mcp.server",  # scitex-io shape
-        f"{import_name}.mcp.server",
-    ]
-    for mod_name in candidates:
-        try:
-            mod = importlib.import_module(mod_name)
-        except BaseException:
-            # `BaseException` (not just `Exception`) — some packages call
-            # `sys.exit(1)` at module-import time when their preconditions
-            # fail (e.g. scitex-orochi when telegram-bot env vars are unset).
-            # SystemExit derives from BaseException, so a plain `except Exception`
-            # would let it propagate and kill the audit run.
-            continue
-        for attr in ("mcp", "server", "app"):
-            obj = getattr(mod, attr, None)
-            if isinstance(obj, FastMCP):
-                return obj
-    return None
-
-
 def _list_tools(mcp_instance) -> list:
     """List a FastMCP server's tools; return a list of Tool/FunctionTool.
 
@@ -119,298 +79,29 @@ def _list_tools(mcp_instance) -> list:
     return list(get_tools_sync(mcp_instance).values())
 
 
-def _read_bridge_source(package: str) -> str | None:
-    """Read `scitex/_mcp_tools/<short>.py`; None if absent."""
-    short = _short_name(package)
-    try:
-        # Auditing the umbrella's private bridge package by design — this
-        # is the one place where the umbrella path is intentional, not a
-        # PA-304 violation. Use a function-local import (lazy) so PA-304's
-        # module-level scan exempts it.
-        import scitex._mcp_tools as bridge_pkg  # noqa: PA-304
-    except Exception:
-        return None
-    pkg_dir = Path(getattr(bridge_pkg, "__file__", "")).parent
-    bridge = pkg_dir / f"{short}.py"
-    if not bridge.is_file():
-        return None
-    try:
-        return bridge.read_text(encoding="utf-8")
-    except OSError:
-        return None
-
-
 # --------------------------------------------------------------------- #
-# §2 / §5 — tool-name discipline                                        #
+# §2 / §5 — tool-name discipline (extracted to `_mcp_tool_naming`)       #
+# §1     — bridge / mount-pattern discipline (extracted to `_mcp_bridge`)#
 # --------------------------------------------------------------------- #
-
-
-# Banned synonyms — same "Avoid" column as the CLI catalog.
-_TOOL_NAME_SYNONYMS: dict[str, str] = {
-    "ls": "list",
-    "rm": "delete",
-    "drop": "delete",
-    "destroy": "delete",
-    "enumerate": "list",
-    "display": "show",
-    "print": "show",
-    "cat": "show",
-    "view": "show",
-    "new": "create",
-    "make": "create",
-    "edit": "update",
-    "modify": "update",
-}
-
-# Verbs whose object is implicit (passed as a parameter) — `io_save`, `audio_speak`,
-# `stats_run` — bare `<pkg>_<verb>` is acceptable per the §2 examples table.
-_OBJECT_FROM_PARAM_VERBS = {
-    "save",
-    "load",
-    "read",
-    "write",
-    "fetch",
-    "download",
-    "upload",
-    "speak",
-    "say",
-    "play",
-    "render",
-    "compose",
-    "plot",
-    "build",
-    "run",
-    "execute",
-    "exec",
-    "compile",
-    "convert",
-    "import",
-    "export",
-    "send",
-    "publish",
-    "deploy",
-    "ship",
-    "init",
-    "start",
-    "stop",
-    "validate",
-    "check",
-    "test",
-    "lint",
-    "format",
-    "audit",
-    "sync",
-    "pull",
-    "push",
-    "commit",
-    "open",
-    "close",
-    "reset",
-    "restore",
-}
-
-# Verbs that need a noun in the tool name (object isn't implicit).
-_VERBS_NEED_NOUN = {
-    "list",
-    "show",
-    "get",
-    "find",
-    "search",
-    "describe",
-    "inspect",
-    "delete",
-    "remove",
-    "purge",
-    "create",
-    "add",
-    "update",
-    "edit",
-    "rename",
-    "move",
-}
-
-
-_VALID_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
-
-
-def _check_tool_naming(
-    package: str, tool_names: list[str], out: list[Violation]
-) -> None:
-    """§2 — `<pkg>_<verb>_<noun>` snake_case + no banned synonyms / shapes."""
-    short = _short_name(package)
-    expected_prefix = f"{short}_"
-
-    for raw in tool_names:
-        # snake_case sanity
-        if not _VALID_NAME.match(raw):
-            out.append(
-                Violation(
-                    f"{package}::{raw}",
-                    "§2",
-                    f"tool name '{raw}' not snake_case (expected lowercase + underscores only)",
-                )
-            )
-            continue
-
-        # Double-prefix detection (e.g. dev_dev_bulk_rename after a bad mount)
-        if raw.startswith(f"{short}_{short}_"):
-            out.append(
-                Violation(
-                    f"{package}::{raw}",
-                    "§1",
-                    f"double-prefix '{short}_{short}_*' — likely a Convention A "
-                    "standalone whose tools already include the package prefix",
-                )
-            )
-            continue
-
-        # The tool name as visible from the umbrella must start with `<short>_`.
-        # Standalone-source names omit it under Convention A (mount adds it);
-        # we only check the prefix when the name is already prefixed.
-        if "_" not in raw:
-            out.append(
-                Violation(
-                    f"{package}::{raw}",
-                    "§2",
-                    f"tool name '{raw}' has no verb_noun split — single-token "
-                    "tools are forbidden; use `<verb>_<noun>` even for read tools",
-                )
-            )
-            continue
-
-        # If the name is prefixed, strip and inspect the verb_noun tail.
-        body = raw[len(expected_prefix) :] if raw.startswith(expected_prefix) else raw
-        parts = body.split("_")
-        # Bare-verb name `<pkg>_<verb>` is allowed when the verb naturally takes
-        # its object as a parameter (`io_save`, `audio_speak`). Only flag when
-        # the verb belongs to the "needs-noun" set (`list`, `show`, `delete`, …).
-        if len(parts) < 2:
-            verb = parts[0]
-            # Only flag when the verb genuinely needs a noun (`list`, `show`,
-            # `delete`, …). Bare `<pkg>_<verb>` is fine when the verb takes
-            # its object as a parameter (`io_save`, `audio_speak`, `audio_transcribe`).
-            if verb in _VERBS_NEED_NOUN:
-                out.append(
-                    Violation(
-                        f"{package}::{raw}",
-                        "§2",
-                        f"tool name '{raw}' uses bare verb '{verb}' which needs "
-                        f"a noun — use '{expected_prefix}{verb}_<noun>' "
-                        f"(e.g. '{expected_prefix}{verb}_packages')",
-                    )
-                )
-            continue
-
-        verb = parts[0]
-        if verb in _TOOL_NAME_SYNONYMS:
-            preferred = _TOOL_NAME_SYNONYMS[verb]
-            out.append(
-                Violation(
-                    f"{package}::{raw}",
-                    "§2",
-                    f"banned synonym verb '{verb}' — use '{preferred}' "
-                    f"(rename to '{expected_prefix}{preferred}_{'_'.join(parts[1:])}')",
-                )
-            )
-
-        # Double-underscore typo class
-        if "__" in raw:
-            out.append(
-                Violation(
-                    f"{package}::{raw}",
-                    "§2",
-                    f"tool name '{raw}' has '__' — typo class, use single underscore",
-                )
-            )
-
-
-def _check_skills_pair(
-    package: str, tool_names: set[str], out: list[Violation]
-) -> None:
-    """§5 — `<pkg>_skills_list` and `<pkg>_skills_get` must exist."""
-    short = _short_name(package)
-    for required in (f"{short}_skills_list", f"{short}_skills_get"):
-        # Tools may be registered with or without the prefix depending on
-        # convention; accept either.
-        bare = required[len(short) + 1 :]
-        if required not in tool_names and bare not in tool_names:
-            out.append(
-                Violation(
-                    package,
-                    "§5",
-                    f"missing required skills tool '{required}' "
-                    f"(or '{bare}' under Convention A standalone source)",
-                )
-            )
-
-
-# --------------------------------------------------------------------- #
-# §1 — bridge / mount-pattern discipline                                 #
-# --------------------------------------------------------------------- #
-
-
-_HAND_WRAP_DECORATOR = re.compile(r"@\s*mcp\s*\.\s*tool\s*\(")
-_SAFE_MOUNT_CALL = re.compile(r"\bsafe_mount\s*\(")
-_PLAIN_MOUNT_CALL = re.compile(r"\.\s*mount\s*\(")
-
-
-def _check_bridge_pattern(
-    package: str,
-    out: list[Violation],
-    *,
-    read_bridge_source=None,
-    resolve_mcp_server=None,
-) -> None:
-    """§1 — umbrella bridge must use `safe_mount` (or equivalent), not hand-wrap.
-
-    Exempt when the standalone has no `<pkg>._mcp_server.mcp`: the bridge
-    cannot `safe_mount` a non-existent server, so hand-wrapping is the
-    only available option. The §1 rule only applies when the bridge
-    *could* mount but chose not to.
-
-    The optional ``read_bridge_source`` / ``resolve_mcp_server`` callables
-    let tests inject fakes without monkey-patching the module.
-    """
-    if read_bridge_source is None:
-        read_bridge_source = _read_bridge_source
-    if resolve_mcp_server is None:
-        resolve_mcp_server = _resolve_mcp_server
-    src = read_bridge_source(package)
-    if src is None:
-        # No bridge → not flagged here; presence is checked under §6 parity.
-        return
-    short = _short_name(package)
-    has_safe_mount = bool(_SAFE_MOUNT_CALL.search(src))
-    has_plain_mount = bool(_PLAIN_MOUNT_CALL.search(src))
-    has_hand_wrap = bool(_HAND_WRAP_DECORATOR.search(src))
-
-    if has_hand_wrap and not (has_safe_mount or has_plain_mount):
-        # Standalone-side check: if `<pkg>._mcp_server.mcp` doesn't
-        # resolve, hand-wrap is the only option. Don't penalise the
-        # standalone for the umbrella's choice when no alternative exists.
-        if resolve_mcp_server(package) is None:
-            return
-        out.append(
-            Violation(
-                package,
-                "§1",
-                f"umbrella bridge `scitex/_mcp_tools/{short}.py` "
-                "hand-wraps tools — convert to `safe_mount(mcp, sub_mcp, namespace=…)` "
-                "(see scitex/_mcp_tools/cloud.py)",
-            )
-        )
-        return  # don't double-report
-
-    if has_plain_mount and not has_safe_mount:
-        out.append(
-            Violation(
-                package,
-                "§1",
-                f"umbrella bridge `scitex/_mcp_tools/{short}.py` "
-                "uses direct `mcp.mount(...)` — replace with `safe_mount(mcp, sub_mcp)` "
-                "from `scitex._mcp_tools._compat` for FastMCP 2.x/3.x portability",
-            )
-        )
+# Same line-budget rationale as the §6 split (`_mcp_parity`). Re-exported
+# here to preserve every existing call site and test import.
+from ._mcp_tool_naming import (  # noqa: E402
+    _check_skills_pair,
+    _check_tool_naming,
+    _OBJECT_FROM_PARAM_VERBS,  # noqa: F401  -- re-export for future use
+    _TOOL_NAME_SYNONYMS,  # noqa: F401  -- re-export for test importers
+    _VALID_NAME,  # noqa: F401  -- re-export for test importers
+    _VERBS_NEED_NOUN,  # noqa: F401  -- re-export for test importers
+)
+from ._mcp_bridge import (  # noqa: E402
+    _check_bridge_pattern,
+    _default_import_bridge_pkg,  # noqa: F401  -- re-export for test injection
+    _HAND_WRAP_DECORATOR,  # noqa: F401  -- re-export for test importers
+    _PLAIN_MOUNT_CALL,  # noqa: F401  -- re-export for test importers
+    _read_bridge_source,
+    _resolve_mcp_server,
+    _SAFE_MOUNT_CALL,  # noqa: F401  -- re-export for test importers
+)
 
 
 # --------------------------------------------------------------------- #

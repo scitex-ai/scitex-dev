@@ -403,3 +403,96 @@ class TestListTools:
         names = [getattr(t, "name", "") for t in _list_tools(self._server())]
         # Assert
         assert "cloud_repo_clone" in names
+
+
+class TestReadBridgeSourceNamespacePackage:
+    """Regression for the namespace-package `__file__=None` TypeError that
+    used to crash `test_audit_all_clean` ecosystem-wide and force admin-merge
+    on every scitex-* PR.
+
+    Previously: `Path(getattr(bridge_pkg, "__file__", "")).parent`. When
+    the attribute *exists* and is None (namespace package), `getattr`'s
+    default `""` does NOT fire, so `Path(None)` raised TypeError instead
+    of "no concrete bridge file". No-mock regression — uses a real
+    SimpleNamespace as the injected bridge package.
+    """
+
+    def test_namespace_pkg_with_none_file_returns_none_not_raises(self):
+        # Arrange
+        import types
+        from scitex_dev._cli.audit._summary._mcp_audit import _read_bridge_source
+
+        fake_namespace_pkg = types.SimpleNamespace(__file__=None)
+
+        # Act
+        result = _read_bridge_source(
+            "scitex-anything", import_bridge_pkg=lambda: fake_namespace_pkg
+        )
+
+        # Assert
+        assert result is None  # MUST NOT raise TypeError
+
+    def test_missing_file_attr_also_returns_none(self):
+        # Arrange — also defensively covers the "attribute absent" case
+        # (which the original getattr default would have handled).
+        import types
+        from scitex_dev._cli.audit._summary._mcp_audit import _read_bridge_source
+
+        fake_pkg_no_file = types.SimpleNamespace()  # no __file__ attr at all
+
+        # Act
+        result = _read_bridge_source(
+            "scitex-anything", import_bridge_pkg=lambda: fake_pkg_no_file
+        )
+
+        # Assert
+        assert result is None
+
+    def test_import_failure_returns_none(self):
+        # Arrange — the existing "bridge pkg can't be imported" path
+        # still returns None (not crash) when the importer raises.
+        from scitex_dev._cli.audit._summary._mcp_audit import _read_bridge_source
+
+        def _raises_on_import():
+            raise ImportError("synthetic — bridge unavailable")
+
+        # Act
+        result = _read_bridge_source(
+            "scitex-anything", import_bridge_pkg=_raises_on_import
+        )
+
+        # Assert
+        assert result is None
+
+    def test_check_bridge_pattern_swallows_namespace_pkg_via_default_reader(self):
+        # Arrange — end-to-end: with the *real* default reader, when the
+        # umbrella resolves as a namespace pkg the orchestrator must not
+        # crash. We can't easily install a namespace umbrella in CI, but
+        # we can prove the contract: `_check_bridge_pattern` reads via
+        # `_read_bridge_source` and treats None as "no bridge → no violation".
+        import types
+        from scitex_dev._cli.audit._summary._audit import Violation
+        from scitex_dev._cli.audit._summary._mcp_audit import (
+            _check_bridge_pattern,
+            _read_bridge_source,
+        )
+
+        fake_namespace_pkg = types.SimpleNamespace(__file__=None)
+
+        def _reader(package: str):
+            return _read_bridge_source(
+                package, import_bridge_pkg=lambda: fake_namespace_pkg
+            )
+
+        out: list[Violation] = []
+
+        # Act — must not raise TypeError
+        _check_bridge_pattern(
+            "scitex-anything",
+            out,
+            read_bridge_source=_reader,
+            resolve_mcp_server=lambda pkg: object(),
+        )
+
+        # Assert
+        assert out == []
