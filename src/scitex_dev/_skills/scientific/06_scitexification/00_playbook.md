@@ -75,6 +75,30 @@ is needed. If not, list all five — the duplication is harmless. The
 canonical short-form everyone should learn is: **"to scitexify you need
 session, io, plt, and clew."**
 
+#### Tag vs filename: how loading the umbrella surfaces this playbook
+
+`SKILL.md` carries the umbrella tag `[scitexification]`. This playbook
+file carries the narrower tag
+`[scitex-scientific-scitexification-playbook]`. The two are NOT meant
+to be loaded by separate `spec.skills.required` entries — that would
+double-count the same content. The contract is:
+
+- A SAC agent loads the **umbrella** tag (`scitexification`) via
+  `spec.skills.required`.
+- The skills export tool mounts `~/.claude/skills/scitex/scitexification/`
+  with **every sibling `.md` under the `06_scitexification/` directory
+  in scitex-dev's `_skills/scientific/`** — including this `00_playbook.md`,
+  the (future) `01_io-patterns.md` … `05_naming-and-numbering.md`
+  chapters, and the umbrella `SKILL.md` itself.
+- An agent that loads `scitexification` therefore gets both the SKILL.md
+  overview AND this playbook in its skills context, without needing to
+  list the narrower tag separately.
+
+The narrower tag exists so a downstream skill that needs to reference
+*only this playbook* (e.g. an internal cross-reference, a `requires:`
+fold in a future per-chapter skill) can do so without pulling the whole
+umbrella. For the SAC agent yaml, **always use the umbrella tag**.
+
 ### Stand-alone reading
 
 A human reading this playbook without an agent runtime should open the
@@ -187,7 +211,7 @@ src = Path(SRC)
 results_dir   = src / "results"
 has_results     = results_dir.exists() and any(results_dir.iterdir())
 has_notebook    = bool(list(src.rglob("*.ipynb")))
-has_repro_doc   = (src / "REPRODUCING.md").exists() or (src / "README.md").exists()
+has_repro_doc   = (src / "REPRODUCING.md").exists()
 
 if has_results:
     phase = "read"        # parse existing result files — fastest
@@ -198,6 +222,14 @@ elif has_repro_doc:
 else:
     phase = "infer"       # explore code/ + data/, infer the entry point
 ```
+
+Note: `has_repro_doc` triggers on `REPRODUCING.md` specifically, not on
+the more common `README.md`. A `README.md` is too broad a signal —
+many notebook capsules carry a stub `README.md` that documents the
+project at a glance rather than the *reproduction recipe*. Triggering
+`repro-doc` on it would misroute the agent into looking for run
+commands that aren't there. The narrower `REPRODUCING.md` convention
+matches the existing `04_clew_02` playbook for the same reason.
 
 | Phase | Stage-1 tool |
 |---|---|
@@ -288,6 +320,17 @@ The general rule:
   claim entries equals the *count* of expected goals — independent of
   how many entries are `null`.
 
+Schema note (layer-agnostic): the WRONG/RIGHT example above uses
+`{answer, source}` for grounded claims and `{answer, reason}` for null
+claims — two key sets. The playbook stays agnostic to the final shape;
+downstream evaluators typically prefer one of two uniform schemas:
+(a) **always carry both keys** with the unused one set to `null`
+(`{answer, source, reason}` everywhere — easiest to parse uniformly);
+or (b) **a single `evidence` field** that is either a file path string
+or a reason string, with the discriminator being how it parses. Pick
+whichever the consuming evaluator wants; the integrity contract is
+about the *presence* of the entry, not the key set.
+
 ### Separation of concerns: filtering is downstream
 
 If a downstream evaluator does need to filter the agent's output (a
@@ -338,7 +381,11 @@ the oracle); this list is the universal floor.
 
 - Silent omission of an ungroundable claim (see Honest Grounding).
 - Hand-writing the results / claims JSON instead of composing it from
-  registered claims via the appropriate API.
+  registered claims via the appropriate API (e.g. iterate over
+  registered claims via the project's claim-store API — `scitex_clew.
+  list_claims()` for clew-tracked projects, the equivalent claim-store
+  iterator for any other evaluator). Hand-written JSON drifts from the
+  evidence-binding the registered claims actually carry.
 - `matplotlib.pyplot.savefig(...)` directly — figures must enter the
   DAG via `stx.io.save`.
 - Modifying the source-of-translation in `$SRC` (read-only by
