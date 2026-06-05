@@ -314,6 +314,128 @@ Trying to cram all dimensions into one panel via novel encodings (a
 glyph with seven properties, a 3D plot with colour and size and
 animation) almost always produces a panel the reader cannot decode.
 
+### 9. No direct numbers outside config — reproducibility hard-rule
+
+**Every number that appears anywhere in the project — plot scripts,
+analysis scripts, statistical-test thresholds, training
+hyperparameters, manuscript text, figure captions, results-section
+prose — MUST come from a project config file. Hardcoded direct
+numbers anywhere are forbidden.**
+
+This is the strong generalisation of §7 (config-driven figure
+parameters). §7 says "colours and representative-subject IDs live
+in config." §9 says **every load-bearing number lives in config —
+nothing is hardcoded.**
+
+#### The hard-rule (no exceptions for "small" numbers)
+
+| Where you'd be tempted to hardcode | Where it must live |
+|---|---|
+| `EPOCHS = 50` in `train.py` | `config/TRAINING.yaml` |
+| `P_THRESHOLD = 0.05` in `stats.py` | `config/STATS.yaml` |
+| `"accuracy was 0.847"` in `results.tex` | `config/RESULTS.yaml` (resolved via `\vclaim{}`) |
+| `xlim=(0, 30)` in `plot_fig1.py` | `config/PLOT_BOUNDS.yaml` |
+| `dpi=300` in a figure save call | `config/RENDER.yaml` |
+| `random_seed = 42` in any script | `config/REPRO.yaml` |
+| `cohort_post_day = 100` in any filter | `config/COHORT.yaml` |
+
+The rule applies to **every** number with semantic load — anything
+that influences a downstream result, a figure shape, a statistical
+test outcome, a sample selection, a reported claim.
+
+It does **NOT** apply to numbers that are pure programming
+incidentals (`return -1`, `len(items) - 1`, `range(3)` for unrolling
+a 3-element loop). The question to ask is: *if this number changed,
+would a scientific claim or a figure or a stat change with it?* If
+yes → config. If no → leave it.
+
+#### Why this is a hard-rule
+
+- **Reproducibility.** A reviewer running the project on a fresh
+  checkout reads the configs once and knows every load-bearing
+  number. A reviewer chasing hardcoded numbers across 30 plot
+  scripts hits one inconsistency and the audit collapses.
+- **Single source of truth.** When a parameter changes (operator
+  decides to use `40 epochs` instead of `50`), it's a one-line
+  edit. When the same parameter is hardcoded in three places, a
+  partial edit creates a silent inconsistency that surfaces months
+  later.
+- **Provenance.** The config file enters the DAG and is committed
+  with each registered claim. The provenance trail for every paper
+  number is "this number came from `config/X.yaml` resolved at
+  session start, traced via `@stx.session.CONFIG.X`, registered
+  as `\vclaim{...}`."
+- **Audit-ability.** `grep -rE '\b[0-9]+\.?[0-9]*\b' scripts/` in a
+  scitexified project should return matches that are either (a)
+  in config-resolution call sites (`CONFIG.X.value`) or (b) pure
+  programming incidentals. Any non-trivial bare number found in a
+  plot or analysis script is a flow violation flagged by the
+  audit.
+
+#### Config tree convention
+
+Per
+[`02_research-project_03_project-structure-config-and-data.md`](02_research-project_03_project-structure-config-and-data.md),
+the config tree lives at:
+
+```
+<proj-root>/config/
+├── PATH.yaml          # filesystem paths (resolved via eval(CONFIG.PATH.X))
+├── COLORS.yaml        # figure colour scheme (§6 + §7)
+├── REPRESENTATIVE.yaml # fixed representative subject (§5 + §7)
+├── TRAINING.yaml      # epochs, learning rate, batch size, ...
+├── STATS.yaml         # p-thresholds, multiple-comparison method, ...
+├── COHORT.yaml        # n_sz, n_ic, post-day cutoffs, ...
+├── RESULTS.yaml       # numbers cited in the manuscript (resolved via \vclaim{})
+└── ...
+```
+
+The split between files is conventional (one file per concern), not
+prescribed — what matters is that **every load-bearing number lives
+in one of these files**, with a single canonical name resolvable
+via the scitex.session CONFIG injection.
+
+#### What this enforces upstream and downstream
+
+- **Upstream (analysis scripts).** Every analysis script reads its
+  parameters from `CONFIG.<KEY>` at session start. No magic numbers
+  inside the function bodies. `@stx.session.start(...)` is the
+  mechanism (see
+  [`02_research-project_07_config-and-parameters.md`](02_research-project_07_config-and-parameters.md)).
+- **Downstream (manuscript).** Every number cited in the paper
+  resolves through a registered claim (`\vclaim{...}`) whose value
+  was emitted by a scripted analysis that read from config — see
+  scitex-writer's `13_claims.md` for the registration mechanism.
+  The same number appears in: the config file (as the source), in
+  `claims.json` (as the registered value), in the manuscript (as
+  the `\vclaim{}` resolution). One number, three locations,
+  one source of truth.
+
+#### Anti-patterns
+
+- "We use 50 epochs because it's a round number" — at minimum, put
+  `50` in `config/TRAINING.yaml` so the round-number-because-vibes
+  rationale is visible in one place.
+- "I'll just hardcode `0.847` here as the result number; the script
+  produces the same value every time." → No. Register it as a
+  `\vclaim{}` so the manuscript-to-script provenance is mechanical.
+- "This script is small; the config file would be larger than the
+  script." → Doesn't matter; the audit-ability and single-source
+  rules don't scale with script size.
+
+#### Cross-references
+
+- [§7](#7-config-driven-figure-parameters-cross-figure) — the
+  figure-specific instance of this principle (colours,
+  representative-subject IDs). §9 promotes the principle to all
+  numbers.
+- [`02_research-project_03_project-structure-config-and-data.md`](02_research-project_03_project-structure-config-and-data.md)
+  — the canonical project config tree shape.
+- [`02_research-project_07_config-and-parameters.md`](02_research-project_07_config-and-parameters.md)
+  — the `@stx.session.CONFIG` injection contract.
+- `~/.claude/skills/scitex/scitex-writer/_skills/scitex-writer/13_claims.md`
+  — the `\vclaim{}` registration mechanism for manuscript numbers.
+
 ## Honest grounding (carryover from scitexification)
 
 These principles compose with the honest-grounding norm from
@@ -347,6 +469,12 @@ These principles compose with the honest-grounding norm from
   + marker shape + edge style + opacity) to encode "everything we
   measured" → violates #8. Split the panel; the reader cannot
   decode six channels.
+- Hardcoding `EPOCHS = 50` in `train.py` → violates #9. Move it to
+  `config/TRAINING.yaml`. The audit grep over the scripts tree should
+  find no bare load-bearing numbers.
+- Citing `accuracy was 0.847` in `results.tex` as a literal → violates
+  #9 (and the manuscript-claim provenance contract). Register a
+  `\vclaim{...}` whose value resolves to the script-produced number.
 - Re-ordering the results section without re-numbering the figures
   (or vice versa) → #3.
 - Showing a derived/analyzed quantity without ever showing the raw
