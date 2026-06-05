@@ -241,6 +241,79 @@ This generalises §5 (representative subject) and §6 (colour scheme)
 into a single discipline: **cross-figure parameters live in config,
 not in scripts.**
 
+### 8. Visual encoding channels — dimensionality of representation
+
+A figure can encode only a finite number of **data dimensions** in a
+single panel. Each dimension maps to a **visual channel**, and the
+channels have a precedence (some channels carry information more
+reliably than others). The decision "how do I represent N data
+elements in one figure?" is the decision "which N channels do I use,
+in what precedence order?"
+
+This is classic data-viz theory (Bertin's *visual variables*) framed
+for scientific figures.
+
+#### The precedence ladder
+
+| Channel | What it encodes | Precedence |
+|---|---|---|
+| **Position on an axis** (1D) | A single value. | Strongest — the eye reads position accurately. |
+| **Position in 2D (x, y)** | Two values (or one as `x` and one as `y`). | Next strongest — joint position is the basis of every scatter, every line plot, every heatmap. |
+| **Colour** | A third value (continuous → colormap, categorical → palette). | Next — colour reads as ordinal / categorical more reliably than as exact value. |
+| **Spatial layout / faceting** | A discrete grouping variable (one panel per cohort, one row per condition). | Used when colour is exhausted or the comparison demands separate panels. |
+| **3D depth** | A fourth continuous value. | Weakest — depth perception is fragile in 2D media; use sparingly. |
+
+#### "How to represent N elements" — the enumeration
+
+- **1 element** → position along one axis (a bar, a single value on
+  a number line).
+- **2 elements** → 2D position (a scatter point, a heatmap cell, an
+  image pixel — `(x, y)` jointly).
+- **3 elements** → 2D position + one more channel: usually
+  **colour** (`(x, y, c)` → a coloured scatter; a heatmap value);
+  occasionally **3D** (`(x, y, z)` axes) or **faceting** (`(x, y)`
+  per panel of a grid that varies a third grouping variable).
+- **4 elements** → 2D position + colour + size (marker size scales
+  with the fourth value); OR 2D position + colour + facet rows /
+  facet columns.
+- **5+ elements** → either multi-panel composition (compose more
+  than one figure; the multi-panel rules in
+  [§3](#3-results-section-order-must-equal-figure-order) and
+  [§4](#4-no-undefined-before-use--figures-follow-a-dependency-graph)
+  apply) or dimensionality-reduction first (PCA / UMAP / t-SNE; the
+  reduced 2D representation becomes the position channel and the
+  number of "elements" drops back to 2-3).
+
+#### The precedence principle
+
+Use the strongest available channel first. Promoting a value from
+"colour" to "position on an axis" (when there's a free axis to spend)
+**makes the comparison easier to read**. Demoting a value from
+"position" to "colour" (when an axis is needed for something more
+load-bearing) **trades reading accuracy for compactness**.
+
+The decision is per-panel: each panel `a./b./c.` makes its own
+encoding choice based on what it's trying to show. The agreement
+artefact from
+`~/.claude/skills/scitex/scitex-writer/41_figure-first-communication.md`
+(step 2: per-panel intent sentence) is where this decision is
+recorded — "panel `a.` shows X vs Y as a 2D scatter coloured by
+cohort" makes the encoding explicit.
+
+#### When you've run out of channels
+
+If a panel needs to encode more data dimensions than the available
+channels permit, the answer is **split the panel** (per
+[§3](#3-results-section-order-must-equal-figure-order) on
+results-order = figure-order) or **summarise first** (per
+[§2](#2-representative-before-grouped) representative-before-grouped:
+show one representative slice as a separate panel, then the aggregate
+over the missing dimension).
+
+Trying to cram all dimensions into one panel via novel encodings (a
+glyph with seven properties, a 3D plot with colour and size and
+animation) almost always produces a panel the reader cannot decode.
+
 ## Honest grounding (carryover from scitexification)
 
 These principles compose with the honest-grounding norm from
@@ -270,6 +343,10 @@ These principles compose with the honest-grounding norm from
   explanation → #5.
 - "Treatment is blue in `Fig 1`, then orange in `Fig 3` because
   orange looks nicer here" → #6.
+- A single panel using six visual channels at once (3D + colour + size
+  + marker shape + edge style + opacity) to encode "everything we
+  measured" → violates #8. Split the panel; the reader cannot
+  decode six channels.
 - Re-ordering the results section without re-numbering the figures
   (or vice versa) → #3.
 - Showing a derived/analyzed quantity without ever showing the raw
