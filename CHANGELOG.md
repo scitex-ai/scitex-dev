@@ -7,6 +7,52 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.5] — 2026-06-05
+
+### Fixed
+- **`audit-mcp` no longer crashes on namespace-pkg `__file__=None` (#116).**
+  `_check_bridge_pattern` → `_read_bridge_source` did
+  `Path(getattr(bridge_pkg, "__file__", "")).parent`. When the umbrella's
+  `scitex._mcp_tools` resolved as a *namespace package* (no concrete
+  `__init__.py`), the `__file__` attribute *existed* and was `None` —
+  `getattr`'s default `""` did NOT fire (the default only kicks in when
+  the attribute is missing), and `Path(None)` raised `TypeError`. This
+  crashed `tests/develop/test_audit.py::test_audit_all_clean` on every
+  scitex-* PR's audit step and forced an admin-merge across the
+  ecosystem. Treat `__file__ is None` as "no concrete bridge file" —
+  semantically equivalent to a missing bridge, which the §1 rule
+  already handles silently (presence is checked under §6 parity).
+  No-mock regression test (`TestReadBridgeSourceNamespacePackage`)
+  pins the contract with a real `types.SimpleNamespace(__file__=None)`.
+
+### Refactored
+- **`_mcp_audit.py` split (line-cap rationale).** Same convention as
+  the existing §6 split (`_mcp_parity.py`):
+  - §2/§5 tool-name discipline → new `_mcp_tool_naming.py`
+  - §1     bridge / mount-pattern → new `_mcp_bridge.py`
+  Orchestrator drops 725 → 420 lines. Every public symbol is
+  re-exported from `_mcp_audit`, so external importers and the test
+  suite work unchanged.
+
+### Docs
+- **`general/01_ecosystem/11_model-serving-vs-consumption.md` (#115).**
+  New ecosystem-wide rule: LLM serving (scitex-genai: multi-provider
+  client + vLLM/LiteLLM recipe) is decoupled from agent-runtime
+  consumption (scitex-agent-container / sac, via `ProviderSpec`
+  `base_url`). Contract is an HTTP endpoint (OpenAI/Anthropic-compat),
+  never a Python import — the two packages stay completely decoupled
+  (neither imports the other). Only the URL+token cross the boundary
+  at runtime.
+- **`CLAUDE.md` persistent agent spec (#114).** Operator-facing
+  persistent charter for `proj-scitex-dev` (ecosystem orchestrator
+  role + cross-repo write gating).
+- **Scitexification overview `SKILL.md` (#111).** Review-only SSoT
+  for "the translation act" of converting external code/projects into
+  the SciTeX idiom.
+- **`06_dot_scitex_directory.md` §4d worked example + §4b rows (#112).**
+  Concrete dotfiles-tracked `~/.scitex/` flow + `containers/` and
+  `bin/` rows in the local-state layout reference.
+
 ### Notes
 - Brand-wide branch protection live on scitex-dev `develop` + `main` as of
   2026-06-03 (the policy ships in v0.17.3's `ecosystem set-branch-protection`
