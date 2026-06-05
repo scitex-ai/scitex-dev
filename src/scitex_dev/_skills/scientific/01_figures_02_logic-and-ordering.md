@@ -405,11 +405,9 @@ via the scitex.session CONFIG injection.
 - **Downstream (manuscript).** Every number cited in the paper
   resolves through a registered claim (`\vclaim{...}`) whose value
   was emitted by a scripted analysis that read from config — see
-  scitex-writer's `13_claims.md` for the registration mechanism.
-  The same number appears in: the config file (as the source), in
-  `claims.json` (as the registered value), in the manuscript (as
-  the `\vclaim{}` resolution). One number, three locations,
-  one source of truth.
+  scitex-writer's `13_claims.md`. The same number appears in the
+  config file, in `claims.json`, and in the manuscript via
+  `\vclaim{}` — one number, three locations, one source of truth.
 
 #### Anti-patterns
 
@@ -422,6 +420,19 @@ via the scitex.session CONFIG injection.
 - "This script is small; the config file would be larger than the
   script." → Doesn't matter; the audit-ability and single-source
   rules don't scale with script size.
+
+#### Why this rule exists — the clew claim-DAG terminator argument
+
+§9 and scitex-writer 14's per-artefact symlink chain are the
+**necessary conditions** for the scitex-clew claim DAG to terminate
+cleanly. Every leaf of `clew dag --claims` must end at a
+source-of-truth surface — a config value (§9) or a data artefact
+under `./data/` (the symlink chain). A hardcoded number inline is a
+dangling leaf that `clew rerun-claims` cannot re-derive. §9 closes
+leaves for **numbers**; the symlink chain closes leaves for
+**artefacts** — complementary necessary conditions for the DAG to
+connect end-to-end. The scitexify honest-grounding norm at the DAG
+level: a missing provenance edge IS silent-attrition.
 
 #### Cross-references
 
