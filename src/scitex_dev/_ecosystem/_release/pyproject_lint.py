@@ -101,6 +101,7 @@ ECOSYSTEM_IMPORTS_TO_DIST: dict[str, str] = {
     "scitex_gists": "scitex-gists",
     "scitex_parallel": "scitex-parallel",
     "scitex_plt": "scitex-plt",
+    "scitex_repl": "scitex-repl",  # hook-bypass: line-limit
     "scitex_gen": "scitex-gen",
     "scitex_notification": "scitex-notification",
     "scitex_benchmark": "scitex-benchmark",
