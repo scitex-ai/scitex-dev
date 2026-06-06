@@ -65,6 +65,27 @@ def _ci_watch_command() -> str:
     return f"mkdir -p $(dirname {log}); scitex-dev cron exec ci-watch >> {log} 2>&1"
 
 
+def _worktree_gc_command() -> str:
+    """The shell line installed for the ``worktree-gc`` cron job.
+
+    Same shape as ``ci-watch`` / ``quota-keepalive``: invoke the console
+    script so the line stays stable across virtual-env shuffles,
+    ``mkdir -p`` the log dir first, append output to a per-job log.
+
+    Schedule rationale: every 6 hours is conservative — a single sweep
+    is short (find git dirs, ``git worktree list``, mtime check), and
+    proj-scitex-agent-container is concurrently working on the
+    RELOCATION half (stopping ``.claude/worktrees`` from being created
+    in the first place), so the cleanup loop's load will fall over
+    time. Until that ships, 4 sweeps per day keeps the orphan count
+    bounded without spending CI on a constant background walk.
+    """
+    log = "$HOME/.scitex/dev/logs/cron-worktree-gc.log"
+    return (
+        f"mkdir -p $(dirname {log}); scitex-dev cron exec worktree-gc >> {log} 2>&1"
+    )
+
+
 def _quota_keepalive_command() -> str:
     """The shell line installed for the ``quota-keepalive`` cron job.
 
@@ -104,6 +125,19 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "Fire a trivial 'hello' turn every 2.5 hours (self-gated) to "
             "pre-start Claude's rolling 5-hour quota window, so real work "
             "begins against a window that is already partway elapsed."
+        ),
+    ),
+    "worktree-gc": JobSpec(
+        name="worktree-gc",
+        # Every 6 hours: 4 sweeps per day, generous headroom over the
+        # mtime threshold (default 3 days). See _worktree_gc_command's
+        # docstring for the schedule rationale.
+        schedule="0 */6 * * *",
+        command=_worktree_gc_command(),
+        description=(
+            "Periodic cleanup of stale `.claude/worktrees/` directories "
+            "left behind by subagents. mtime-gated, git-worktree-aware, "
+            "never touches the operator's `.worktrees/`. See _worktree_gc."
         ),
     ),
     # Future entries land here. Suggested naming pattern: short
