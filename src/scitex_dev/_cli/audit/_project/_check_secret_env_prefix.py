@@ -66,6 +66,14 @@ EXCEPTION_SECRETS_DEFAULT: frozenset[str] = frozenset(
         # Tool-pinned (gh CLI, GitHub Actions itself).
         "GH_TOKEN",
         "GITHUB_TOKEN",
+        # Personal Access Token in the gh-CLI convention — single
+        # cross-cutting PAT used by org-wide workflows (e.g.
+        # contributor-assistant when configured under the GH_ namespace
+        # rather than the older CLA_ name). The ``GITHUB_`` prefix is
+        # reserved by GitHub Actions on the secret-name surface, so
+        # ``GH_PERSONAL_ACCESS_TOKEN`` is the canonical substitute when
+        # operators want a clearly-namespaced shared PAT.
+        "GH_PERSONAL_ACCESS_TOKEN",
         # Third-party-pinned service tokens.
         "CODECOV_TOKEN",
         "GHCR_PAT",
