@@ -80,7 +80,6 @@ config file.
 | `scitex-clew` | `clew` | `~/.scitex/clew/` |
 | `scitex-cloud` | `cloud` | `~/.scitex/cloud/` |
 | `scitex-writer` | `writer` | `~/.scitex/writer/` |
-| `scitex-linter` | `linter` | `~/.scitex/linter/` |
 | `figrecipe` | `figrecipe` | `~/.scitex/figrecipe/` |
 | `crossref-local` | `crossref-local` | `~/.scitex/crossref-local/` |
 | `openalex-local` | `openalex-local` | `~/.scitex/openalex-local/` |

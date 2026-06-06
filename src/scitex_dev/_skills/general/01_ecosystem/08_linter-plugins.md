@@ -114,9 +114,9 @@ This is what catches READMEs that *teach* the wrong API — a class of bug nothi
 
 ## Migration status (2026-Q2)
 
-- **Engine**: `scitex-dev` ships it. The legacy `scitex-linter` package is a thin alias that still works; the `scitex-linter` console script and `python -m scitex_linter` are kept for the soft-migration window.
+- **Engine**: `scitex-dev` ships the linter. The legacy `scitex-linter` package is retired and no longer maintained; use `scitex-dev linter <subcommand>` as the canonical entry point.
 - **Plugins**: `figrecipe` ships P001-P009 + FM001-FM009. Other packages with `_linter_plugin.py` declared: `scitex_io`, `scitex_stats`, `scitex_audio`, `scitex_clew`, `scitex_notification`. Engine-shipped (legacy) rules `S*`, `I*`, `IO*`, `PA*`, `ST*`, `EH*` will migrate into their owning packages over subsequent releases.
-- **Console scripts**: `scitex-dev linter <subcommand>` is the canonical path. `scitex-linter <subcommand>` aliases it.
+- **Console scripts**: `scitex-dev linter <subcommand>` is the canonical path.
 
 ## Related
 
