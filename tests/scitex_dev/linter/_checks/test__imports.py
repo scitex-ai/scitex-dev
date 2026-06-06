@@ -78,7 +78,7 @@ def test_predicate_allows_public_peer_module():
 
 def test_cross_package_private_from_import_is_flagged():
     # Arrange
-    src = "from scitex_gen._numeric._norm import to_even\n"
+    src = "from scitex_gen._numeric._norm import to_z\n"
     # Act
     ids = _i008_ids(src, "src/scitex_dsp/_filt.py")
     # Assert
@@ -105,7 +105,7 @@ def test_cross_package_importing_private_name_is_flagged():
 
 def test_public_peer_import_is_not_flagged():
     # Arrange
-    src = "from scitex_gen import to_even\n"
+    src = "from scitex_gen import to_z\n"
     # Act
     ids = _i008_ids(src, "src/scitex_dsp/_filt.py")
     # Assert
@@ -114,7 +114,7 @@ def test_public_peer_import_is_not_flagged():
 
 def test_same_package_private_import_is_not_flagged():
     # Arrange
-    src = "from scitex_gen._numeric._norm import to_even\n"
+    src = "from scitex_gen._numeric._norm import to_z\n"
     # Act
     ids = _i008_ids(src, "src/scitex_gen/_top.py")
     # Assert
