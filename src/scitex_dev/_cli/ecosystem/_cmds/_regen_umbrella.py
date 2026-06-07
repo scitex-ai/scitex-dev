@@ -171,11 +171,15 @@ def _diff_lazy_attrs(
 
 def register(ecosystem):
     @ecosystem.command(
-        "regen-umbrella",
+        # Named ``audit-umbrella`` (verb prefix) to satisfy audit-cli §1
+        # leaf-token verb rule. The `--write` follow-up will add a sibling
+        # ``regen-umbrella`` action (verb form unambiguous when paired
+        # with the audit-only command above).
+        "audit-umbrella",
         epilog=(
             "Examples:\n"
-            "  $ scitex-dev ecosystem regen-umbrella --check\n"
-            "  $ scitex-dev ecosystem regen-umbrella --check --json\n"
+            "  $ scitex-dev ecosystem audit-umbrella --check\n"
+            "  $ scitex-dev ecosystem audit-umbrella --check --json\n"
             "\n"
             "Read-only drift detector between ECOSYSTEM (the registry) and\n"
             "the local scitex-python checkout (umbrella pyproject + __init__).\n"
@@ -200,7 +204,7 @@ def register(ecosystem):
         "follow-up PR with cross-repo write safety gate.",
     )
     @click.option("--json", "json_out", is_flag=True, help="Machine-readable JSON.")
-    def regen_umbrella(mode, json_out):
+    def audit_umbrella(mode, json_out):
         """Audit umbrella surfaces against the ECOSYSTEM registry SSoT."""
         if mode == "write":
             raise click.ClickException(

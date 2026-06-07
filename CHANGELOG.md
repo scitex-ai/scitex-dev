@@ -108,7 +108,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   become the single source of truth for the umbrella's `[all]` extras /
   `lazy_attrs` map / `EXTERNAL_REEXPORTS` / MCP+CLI mounts. This PR is
   the data prerequisite; the generator + audit-rule (`scitex-dev
-  ecosystem regen-umbrella`) lands in a follow-up so the umbrella-side
+  ecosystem audit-umbrella`) lands in a follow-up so the umbrella-side
   changes can be staged through the lead approval gate.
 - Brand-wide branch protection live on scitex-dev `develop` + `main` as of
   2026-06-03 (the policy ships in v0.17.3's `ecosystem set-branch-protection`
