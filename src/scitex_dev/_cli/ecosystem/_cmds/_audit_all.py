@@ -61,8 +61,30 @@ def register(ecosystem):
             "an older rule corpus."
         ),
     )
+    @click.option(
+        "--path",
+        "explicit_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        default=None,
+        help=(
+            "Audit a SPECIFIC checkout path (e.g. a git worktree). "
+            "Lets worktree-based agents self-verify before pushing instead "
+            "of relying on CI. When given, the path is threaded through to "
+            "every sub-auditor's `--path` option (alias of the legacy "
+            "`--repo`); the distribution NAME is still required and is "
+            "used for skill/rule lookup only — the source under audit is "
+            "rooted at this path. Only ONE distribution may be passed "
+            "with --path."
+        ),
+    )
     def ecosystem_audit_all(
-        distributions, as_json, severity, jobs, audit_jobs, no_version_check
+        distributions,
+        as_json,
+        severity,
+        jobs,
+        audit_jobs,
+        no_version_check,
+        explicit_path,
     ):
         """Run every audit-* on each DISTRIBUTION; aggregate exit codes.
 
@@ -103,6 +125,18 @@ def register(ecosystem):
                 if name not in pkgs:
                     pkgs.append(name)
 
+        # --path scoping: only ONE distribution may be paired with a
+        # specific path. A worktree IS one repo, even if `audit-all` is
+        # nominally polyrepo-capable; rolling up multiple distributions
+        # against one path is a bug magnet.
+        if explicit_path and len(pkgs) != 1:
+            click.echo(
+                "error: --path requires exactly ONE distribution "
+                f"(got {len(pkgs)}: {', '.join(pkgs) or '<empty>'}).",
+                err=True,
+            )
+            _sys.exit(2)
+
         # Order: cheap-to-fast → slow. Each audit-* honours --json + --severity
         # idempotently. audit-summary excluded — it's the cross-leaf rollup.
         audits = [
@@ -133,6 +167,19 @@ def register(ecosystem):
                 cmd.append("--json")
             if a == "audit-cli":
                 cmd += ["--severity", severity]
+            # Thread --path through to every sub-auditor that accepts it.
+            # audit-cli / audit-mcp-tools / audit-skills don't accept a
+            # repo-path flag yet (their checks run against the registry-
+            # resolved location); skip them so we don't error on unknown
+            # option. The 3 that DO accept --path are project/django/
+            # python-apis — exactly the ones surfacing the worktree pain
+            # (PS-2xx / DJ-1xx / PA-1xx).
+            if explicit_path and a in (
+                "audit-project",
+                "audit-django",
+                "audit-python-apis",
+            ):
+                cmd += ["--path", str(explicit_path)]
             try:
                 r = subprocess.run(cmd, capture_output=True, text=True, env=sub_env)
             except Exception as e:
