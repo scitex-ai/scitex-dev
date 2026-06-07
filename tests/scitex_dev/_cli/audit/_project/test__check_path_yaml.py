@@ -327,3 +327,130 @@ def test_audit_project_all_ps_path_002_records_have_path_line_where(
     wheres_with_colon = [v for v in ps_path_002_seen if ":" in v["where"]]
     # Assert — every record's `where` carries `<path>:<line>` shape.
     assert len(wheres_with_colon) == len(ps_path_002_seen)
+
+
+# ---------------------------------------------------------------------------
+# Worktree-checkout skip — the file walker must never treat
+# `.worktrees/` or `.claude/worktrees/` paths as canonical source.
+# Lead-approved 2026-06-07 after PR #130 (worktree-gc) surfaced PS-PATH-001
+# fires from stale operator worktree checkouts on scitex-dev develop.
+# ---------------------------------------------------------------------------
+
+
+from scitex_dev._cli.audit._project._check_path_yaml import (  # noqa: E402
+    _is_in_worktree_checkout,
+    _path_yaml_files,
+)
+
+
+def test_is_in_worktree_checkout_accepts_worktrees():
+    # Arrange
+    parts = (
+        "home", "u", "proj", "myrepo", ".worktrees", "feat-x", "config", "PATH.yaml",
+    )
+    # Act
+    result = _is_in_worktree_checkout(parts)
+    # Assert
+    assert result is True
+
+
+def test_is_in_worktree_checkout_accepts_claude_worktrees_pair():
+    # Arrange
+    parts = (
+        "home", "u", "proj", "myrepo", ".claude", "worktrees", "agent-1",
+        "config", "PATH.yaml",
+    )
+    # Act
+    result = _is_in_worktree_checkout(parts)
+    # Assert
+    assert result is True
+
+
+def test_is_in_worktree_checkout_rejects_lone_claude():
+    # Arrange — `.claude/` alone (no `worktrees` child) must NOT be
+    # skipped so a `.claude/skills/` etc. file is still audited.
+    parts = (
+        "home", "u", "proj", "myrepo", ".claude", "skills", "config", "PATH.yaml",
+    )
+    # Act
+    result = _is_in_worktree_checkout(parts)
+    # Assert
+    assert result is False
+
+
+def test_is_in_worktree_checkout_rejects_canonical_source():
+    # Arrange
+    parts = ("home", "u", "proj", "myrepo", "config", "PATH.yaml")
+    # Act
+    result = _is_in_worktree_checkout(parts)
+    # Assert
+    assert result is False
+
+
+def test_is_in_worktree_checkout_rejects_substring_lookalike():
+    # Arrange — directory literally named ``foo.worktrees`` must not be
+    # mistaken for the guarded segment. Skip is component-equality, not
+    # substring.
+    parts = (
+        "home", "u", "proj", "myrepo", "foo.worktrees", "config", "PATH.yaml",
+    )
+    # Act
+    result = _is_in_worktree_checkout(parts)
+    # Assert
+    assert result is False
+
+
+def _build_repo_with_canonical_clean_and_stale_worktree(tmp_path):
+    """Helper: build a repo whose canonical config/PATH.yaml is CLEAN
+    but whose `.worktrees/` and `.claude/worktrees/` siblings carry the
+    BUGGY pre-PR-97 fixture.
+
+    This is the lead-specified shape: the SAME violation file under
+    `.worktrees/` must NOT cause a fire, but the same file under
+    canonical `config/` DOES (the bidirectional pin lives in
+    `_DOES_fire_for_violation_under_canonical_config` below)."""
+    repo = tmp_path / "myrepo"
+    (repo / "config").mkdir(parents=True)
+    (repo / "config" / "PATH.yaml").write_text(_AFTER_PATH_YAML, encoding="utf-8")
+    (repo / ".worktrees" / "stale-branch" / "config").mkdir(parents=True)
+    (repo / ".worktrees" / "stale-branch" / "config" / "PATH.yaml").write_text(
+        _BEFORE_PATH_YAML, encoding="utf-8"
+    )
+    (repo / ".claude" / "worktrees" / "agent-stale" / "config").mkdir(parents=True)
+    (repo / ".claude" / "worktrees" / "agent-stale" / "config" / "PATH.yaml").write_text(
+        _BEFORE_PATH_YAML, encoding="utf-8"
+    )
+    return repo
+
+
+def test_path_yaml_files_yields_only_canonical_when_worktrees_present(tmp_path):
+    # Arrange
+    repo = _build_repo_with_canonical_clean_and_stale_worktree(tmp_path)
+    # Act
+    yielded = list(_path_yaml_files(repo))
+    # Assert
+    assert len(yielded) == 1
+
+
+def test_path_yaml_files_yielded_path_is_canonical_config(tmp_path):
+    # Arrange
+    repo = _build_repo_with_canonical_clean_and_stale_worktree(tmp_path)
+    # Act
+    yielded = list(_path_yaml_files(repo))
+    # Assert
+    assert yielded[0].as_posix().endswith("/myrepo/config/PATH.yaml")
+
+
+def test_path_yaml_files_DOES_fire_for_violation_under_canonical_config(tmp_path):
+    # Arrange — the SAME buggy file as the worktree fixture, but
+    # placed at the canonical `<repo>/config/PATH.yaml`. The walker
+    # must find it AND the rule check must fire — so the skip above
+    # is the worktree guardrail, not a swallow.
+    repo = tmp_path / "myrepo-with-canonical-bug"
+    (repo / "config").mkdir(parents=True)
+    (repo / "config" / "PATH.yaml").write_text(_BEFORE_PATH_YAML, encoding="utf-8")
+    out: list = []
+    # Act
+    check_ps_path_001_outer_wrapper(repo, Violation, out)
+    # Assert
+    assert any(v.rule == "PS-PATH-001" for v in out)
