@@ -8,6 +8,36 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **ECOSYSTEM registry split into `_registry.py` + new packages (#132).**
+  `scitex_dev._ecosystem._core` was a 569-line file mixing the
+  60-entry `ECOSYSTEM` dict with the audit-skip helpers; the data table
+  now lives in `scitex_dev._ecosystem._registry` (pure data,
+  intentionally > 512 lines per project line-limit exception) and
+  `_core.py` keeps the helpers + re-exports `ECOSYSTEM` / `PackageInfo`
+  for backwards compat. Every existing
+  `from scitex_dev._ecosystem._core import ECOSYSTEM` import path is
+  preserved.
+
+  Four packages added to `ECOSYSTEM`:
+  - `scitex-audit` (PyPI: scitex-audit, GH: ywatanabe1989/scitex-audit)
+    — security audit orchestrator. Mounted as `scitex.audit` (umbrella
+    lazy_attr + `[audit]` extra) but was missing from this registry, so
+    `audit-all` and umbrella-extras reconciliation didn't know about
+    it. This was the #132 blocker.
+  - `scitex-core` — core infrastructure / fundamental utilities.
+  - `scitex-math` — math utilities (parity helpers, etc.).
+  - `scitex-linter` (`archived=True`) — kept for historical refs; the
+    AST-linter rules now live in `scitex-dev` (>=0.16.0,
+    `scitex_dev.linter._rules`).
+
+  And `scitex-bridge` flagged `archived=True` (GH-archived 2026 —
+  cross-module adapter shim superseded by inline integration in
+  `scitex-stats` / `scitex-plt`).
+
+  `ECOSYSTEM_IMPORTS_TO_DIST` in `_release/pyproject_lint.py` (REL-5
+  scanner) gains `scitex_audit`, `scitex_core`, `scitex_math` so the
+  implicit-deps lint recognises imports of those modules.
+
 - **`worktree-gc` managed cron job** (`scitex_dev._cli.cron._worktree_gc`).
   Periodic cleanup of stale `.claude/worktrees/` directories that
   subagents leave behind when they crash, get killed, or make changes
@@ -40,6 +70,12 @@ versions follow [Semantic Versioning](https://semver.org/).
   - `SCITEX_WORKTREE_GC_MAX_AGE_DAYS` — mtime threshold (default 3).
 
 ### Notes
+- The SSoT promotion (operator request 2026-06-07): ECOSYSTEM is to
+  become the single source of truth for the umbrella's `[all]` extras /
+  `lazy_attrs` map / `EXTERNAL_REEXPORTS` / MCP+CLI mounts. This PR is
+  the data prerequisite; the generator + audit-rule (`scitex-dev
+  ecosystem regen-umbrella`) lands in a follow-up so the umbrella-side
+  changes can be staged through the lead approval gate.
 - Brand-wide branch protection live on scitex-dev `develop` + `main` as of
   2026-06-03 (the policy ships in v0.17.3's `ecosystem set-branch-protection`
   command). First fleet-wide rollout pending operator confirm via lead.
