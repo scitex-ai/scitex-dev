@@ -104,6 +104,32 @@ def _quota_keepalive_command() -> str:
     )
 
 
+def _task_harvest_command() -> str:
+    """The shell line installed for the ``task-harvest`` cron job.
+
+    Same shape as ``ci-watch`` / ``worktree-gc`` / ``quota-keepalive``:
+    invoke the console script so the line stays stable across
+    virtual-env shuffles, ``mkdir -p`` the log dir first, append
+    output to a per-job log.
+
+    Schedule rationale: every 6 hours (``0 */6 * * *``) — the harvest
+    walks the shared task store, re-checks blockers, and (in the
+    follow-up that adds Phase-2 dispatch) a2a-escalates RUNNABLE
+    tasks to their owning agents. 4 sweeps per day keeps
+    consumption-rate pressure on the board without spamming agent
+    inboxes. Operator-tunable: change the schedule HERE (one diff +
+    one test) and re-install.
+
+    Body lives in ``_task_harvest.run_once``; the operator-facing
+    PROTOCOL lives in ``scitex_todo._skills.scitex-todo.40_task-harvest``
+    (the skill the operator commissioned, scitex-todo PR #72).
+    """
+    log = "$HOME/.scitex/dev/logs/cron-task-harvest.log"
+    return (
+        f"mkdir -p $(dirname {log}); scitex-dev cron exec task-harvest >> {log} 2>&1"
+    )
+
+
 JOB_REGISTRY: Mapping[str, JobSpec] = {
     "ci-watch": JobSpec(
         name="ci-watch",
@@ -138,6 +164,25 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "Periodic cleanup of stale `.claude/worktrees/` directories "
             "left behind by subagents. mtime-gated, git-worktree-aware, "
             "never touches the operator's `.worktrees/`. See _worktree_gc."
+        ),
+    ),
+    "task-harvest": JobSpec(
+        name="task-harvest",
+        # Every 6 hours: 4 harvest sweeps per day over the shared
+        # ~/.scitex/todo/tasks.yaml board. Matches the q6h default the
+        # operator picked in the skill (scitex-todo PR #72,
+        # 40_task-harvest.md). Operator may want q1h during a busy
+        # phase or q12h during a quiet phase — change THIS schedule
+        # (one diff + one test) and re-install.
+        schedule="0 */6 * * *",
+        command=_task_harvest_command(),
+        description=(
+            "scitex-todo task-harvest: classify the shared "
+            "~/.scitex/todo/tasks.yaml (blocked vs runnable + blocker "
+            "kind), log an audit line, return a structured result the "
+            "follow-up PRs extend with Phase-1 walk + Phase-2 a2a "
+            "dispatch. Protocol: skill 40_task-harvest. See "
+            "_task_harvest.run_once."
         ),
     ),
     # Future entries land here. Suggested naming pattern: short
