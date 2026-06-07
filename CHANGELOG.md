@@ -8,6 +8,28 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`audit-all --path PATH` (lead task #40 part a) — quick fleet unblock.**
+  Worktree-based agents could not self-verify the audit before pushing:
+  `audit-all scitex-X` resolves the package NAME to the registry's
+  `local_path` / the editable install location, ignoring whatever
+  checkout the agent is actually editing. Today on scitex-todo (5+
+  iterations) and agent-container's develop, every new PR has been
+  grinding on inherited test-quality debt that the agent can't see
+  locally — fix blind → push → CI fails → loop. `--path` lets the
+  caller point the audit at an explicit checkout (their worktree)
+  instead. Pass-through: each path-aware sub-auditor (`audit-project`
+  / `audit-django` / `audit-python-apis`) gets `--path PATH` on its
+  argv; `audit-cli` / `audit-mcp-tools` / `audit-skills` are
+  intentionally NOT extended (they audit registry-resolved code) —
+  added a TODO for a follow-up. The three path-aware sub-auditors
+  also gain `--path` as a direct alias of the existing `--repo` flag
+  so calling them by hand from a worktree works the same way.
+  
+  Only one distribution may be paired with `--path` (a worktree IS one
+  repo); `audit-all --path /wt scitex-io scitex-stats` errors with
+  exit code 2. Diff-aware audit (part b of lead task #40, opt-in
+  `--new-only` / `--since develop`) lands in a follow-up PR.
+
 - **REL-50 umbrella SSoT-drift audit + `audit-umbrella --write` + allowlist
   expansion (PR-A2).** Extends PR-A:
   - New `check_umbrella_ssot_drift` (REL-50) in
