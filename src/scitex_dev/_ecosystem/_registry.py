@@ -49,6 +49,34 @@ class PackageInfo(TypedDict, total=False):
     ``audit-mcp-tools §1`` read it to know how to rewrite the program
     name and validate the mount namespace. See
     ``_skills/general/03_interface/02_cli/05a_umbrella-passthrough.md``.
+
+    Umbrella SSoT fields (optional, all consumed by
+    ``scitex_dev._ecosystem._umbrella``; defaults are *derived* from
+    ``import_name`` so most entries don't need to set them):
+
+    - ``umbrella_lazy_short`` — the ``scitex.<short>`` lazy-module
+      alias name. Default = ``import_name.removeprefix("scitex_")``.
+      Set explicitly for branded packages (``socialia`` → ``"social"``,
+      ``figrecipe`` → ``"fig"``).
+    - ``umbrella_extra`` — the ``scitex[<extra>]`` extra-group name
+      shipped in the umbrella's ``[project.optional-dependencies]``.
+      Default = ``umbrella_lazy_short`` (same name as the alias). Set
+      explicitly when the extra name differs from the alias.
+    - ``umbrella_external`` — the peer import target used in
+      ``EXTERNAL_REEXPORTS`` (the lazy-loader bridge that makes
+      ``import scitex.<short>.<sub>`` resolve to the peer standalone).
+      Default = ``import_name`` (e.g. ``scitex_io``). Set explicitly
+      when the umbrella alias points at a *sub*-module of the peer
+      (e.g. ``media`` → ``"scitex_etc.media"``).
+    - ``umbrella_core_dep`` — ``True`` iff this peer is pinned in the
+      umbrella's core ``dependencies`` (always installed), not just an
+      optional extra. Default ``False``.
+    - ``umbrella_skip`` — ``True`` iff this entry should NOT be auto-
+      mounted by the SSoT generator (e.g. ``scitex-dev`` itself is
+      installed but exposes no ``scitex.dev`` lazy_attr beyond the
+      in-tree shim; optional peers like ``scitex-hub`` are mounted
+      via the auxiliary ``_umbrella.AUX_MOUNTS`` table instead so
+      ``[all]`` can deliberately exclude them). Default ``False``.
     """
 
     local_path: str
@@ -58,6 +86,11 @@ class PackageInfo(TypedDict, total=False):
     category: str
     archived: bool
     umbrella_subcommand: str
+    umbrella_lazy_short: str
+    umbrella_extra: str
+    umbrella_external: str
+    umbrella_core_dep: bool
+    umbrella_skip: bool
 
 
 # Ordered dict — order matters for display.

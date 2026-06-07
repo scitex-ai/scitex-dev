@@ -28,6 +28,7 @@ from ._cmds import (
     _jobs_systemd,
     _list,
     _prune_merged,
+    _regen_umbrella,
     _sync_status,
     _test_remote,
     _versions,
@@ -92,6 +93,7 @@ def register_ecosystem_commands(main_group):
     _sync_status.register(ecosystem)
     _prune_merged.register(ecosystem)
     _branch_protection.register(ecosystem)
+    _regen_umbrella.register(ecosystem)
 
     # Federated scheduled-job aggregation (scitex_dev.jobs entry-points).
     _jobs_cron.register(ecosystem)

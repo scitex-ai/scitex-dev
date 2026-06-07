@@ -8,6 +8,33 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`scitex-dev ecosystem audit-umbrella --check` + SSoT resolver (PR-A).**
+  Read-only drift detector between the ECOSYSTEM registry and the local
+  `scitex-python` umbrella's `[all]` aggregator / `lazy_attrs` / 
+  `EXTERNAL_REEXPORTS` surfaces. Operator 2026-06-07: ECOSYSTEM is the
+  single source of truth; the umbrella is a namespace, not a re-curated
+  list. Adds:
+  - `PackageInfo` schema fields (`umbrella_lazy_short`, `umbrella_extra`,
+    `umbrella_external`, `umbrella_core_dep`, `umbrella_skip`) — all
+    optional; defaults are derived from `import_name` so most entries
+    don't need to populate them.
+  - `scitex_dev._ecosystem._umbrella` resolver (`expected_all_extras`,
+    `expected_lazy_attrs`, `expected_external_reexports`,
+    `iter_primary_mounts`, `mount_of`, `umbrella_core_deps`,
+    plus `AUX_MOUNTS` for one-peer-powering-many-aliases cases and
+    `HAND_CURATED_EXTRAS` for 3rd-party / dev tooling groups that stay
+    hand-maintained per operator's exclude policy).
+  - `ecosystem audit-umbrella` Click command — `--check` is read-only
+    and lints umbrella drift; `--json` emits a machine-readable
+    payload; `--write` is intentionally deferred (cross-repo write
+    gate via lead/operator path, separate PR).
+
+  Optional-peer policy (`scitex-hub` powers `cloud` / `module` /
+  `project`) is preserved: those mounts ship in `AUX_MOUNTS` with
+  `in_all=False` so `[all]` stays installable without `scitex-hub`.
+  Audit-rule (REL-50) that fails CI on drift is reserved for the
+  follow-up PR.
+
 - **`scitex-repl` added to `ECOSYSTEM` (operator-flagged follow-on).**
   Shipped to PyPI as v0.1.1 on 2026-06-06 alongside the scitex-math
   release wave; was missing from the registry. Adds the entry to
