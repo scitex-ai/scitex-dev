@@ -235,8 +235,9 @@ def test_worktree_at_yields_a_real_checkout(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     _seed_repo(repo)
-    # Act + Assert
+    # Act
     with worktree_at(repo, "develop") as base:
+        # Assert
         assert (base / "README.md").is_file()
 
 
@@ -263,7 +264,8 @@ def test_worktree_at_raises_on_unknown_ref(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     _seed_repo(repo)
-    # Act + Assert
+    # Act
+    # Assert
     with pytest.raises(DiffAwareSetupError):
         with worktree_at(repo, "does-not-exist"):
             pass
@@ -276,7 +278,8 @@ def test_worktree_at_raises_when_path_is_not_git(tmp_path):
 
     bare = tmp_path / "not-a-repo"
     bare.mkdir()
-    # Act + Assert
+    # Act
+    # Assert
     with pytest.raises(DiffAwareSetupError):
         with worktree_at(bare, "develop"):
             pass
