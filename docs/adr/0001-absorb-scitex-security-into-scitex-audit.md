@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed (2026-06-07) — awaiting lead sanity-check before any code change.
+Accepted (2026-06-07). Lead sanity-checked the inventory + wave structure and
+locked the three open-question answers (see §Notes). Execution starts as W1.
 
 ## Context
 
@@ -210,15 +211,27 @@ in the same wave that scitex-audit 0.2.0 ships.
 | **W2** (next regen sweep) | `scitex-dev` ecosystem-version reconciliation bumps minima across registered consumers | Single-consumer rule means this is essentially a no-op for security; primary value is the registry/CHANGELOG record. |
 | **W3** (~1 release later) | optional `scitex-security` PyPI yank | Only if PyPI dist statistics show zero active downloads. |
 
-### What this ADR does NOT decide
+### Locked decisions (lead, 2026-06-07)
 
-- The fate of the `scitex-security` PyPI name post-shim (yank vs. keep
-  the deprecated alias forever). Re-evaluated at W3.
-- Whether `~/.scitex/security/` path migration is automatic
-  (one-shot `_paths.py` symlink) or manual (release note). Flagged
-  for lead.
-- Whether the `scitex-security` console script keeps its name or
-  becomes `scitex-audit github`. Flagged for lead.
+- **CLI rename, hard-error redirect.** The console script becomes
+  `scitex-audit github` (subsumed into scitex-audit's noun-verb CLI).
+  The `scitex-security` entry-point survives in W1's shim release ONLY
+  as a hard-error redirect per CLI-deprecation skill 11 §5: prints
+  `error: scitex-security was absorbed into scitex-audit. Re-run with:
+  scitex-audit github`, exits `2`. **Not a silent working alias.**
+- **`~/.scitex/security/` migration is automatic.** `scitex_audit._paths`
+  detects a legacy `~/.scitex/security/` dir on first import after
+  upgrade, symlinks it to `~/.scitex/audit/github-alerts/` (or
+  best-effort moves + logs once if the symlink isn't possible on the
+  platform). No manual user step — per operator's no-manual-steps rule.
+- **PyPI yank at W3.** `scitex-security` on PyPI gets yanked at W3 once
+  reconcile-versions confirms zero active downstream pins. The
+  deprecated re-export shim does not survive indefinitely — per
+  operator's no-deprecation-tombstones lean.
+- **Same-wave consumer migration (no-tombstones).** scitex-audit's
+  `_github.py` switches to the NATIVE `from scitex_audit.github import
+  …` in the SAME W1 PR — it does not transitionally import the shim.
+  The shim exists only for external PyPI users we don't control.
 
 ## Consequences
 
@@ -272,10 +285,12 @@ in the same wave that scitex-audit 0.2.0 ships.
   - scitex-audit: https://github.com/ywatanabe1989/scitex-audit (0.1.7, AGPL-3.0)
   - scitex-security: https://github.com/ywatanabe1989/scitex-security (0.1.4, AGPL-3.0)
   - Registry: `src/scitex_dev/_ecosystem/_registry.py` lines 217-228 (audit), 577-583 (security)
-- Open questions for lead sanity-check (in priority order):
-  1. CLI fate: keep `scitex-security` console-script name (alias to
-     scitex-audit) vs. rename to `scitex-audit github`?
-  2. `~/.scitex/security/` path migration: auto-symlink in
-     `_paths.py` vs. release-note-only?
-  3. PyPI `scitex-security` long-term: yank at W3, or keep the
-     deprecated shim indefinitely as a courtesy alias?
+- Open questions resolved by lead on 2026-06-07 (see §Decision /
+  "Locked decisions"):
+  1. CLI fate → **rename to `scitex-audit github`**; old name is a
+     skill-11 hard-error redirect.
+  2. `~/.scitex/security/` migration → **automatic symlink** in
+     `scitex_audit._paths`.
+  3. PyPI long-term → **yank at W3**.
+  Plus: per no-tombstones, scitex-audit's internal `_github.py`
+  consumer migrates to the native module in the SAME W1 PR.
