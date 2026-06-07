@@ -32,6 +32,10 @@ dev = [
     "fastmcp>=2.0.0",
     "pyyaml>=6.0",
     "textual>=0.50.0",
+    # tomlkit is consumed by `audit-umbrella --write` (umbrella-regen extra).
+    # PS-210 §2 requires dev-extras-completeness: any dep behind a per-feature
+    # extra must also be in `[dev]` so the full test suite resolves cleanly.
+    "tomlkit>=0.12.0",
     # NOTE: do NOT add `scitex-dev>=X.Y` here — it creates an unresolvable
     # circular dependency in CI (the local editable install resolves to
     # `0.1.dev1+g<sha>` via setuptools-scm, which fails `>=0.11.5`). The
