@@ -2,7 +2,8 @@
 
 ## Status
 
-Proposed (2026-06-07) — awaiting lead sanity-check before any code change.
+Accepted (2026-06-07). Lead sanity-checked and locked the three open-question
+answers (see §Locked decisions). Execution starts as W1-reverse.
 
 Supersedes ADR-0001 (`docs/adr/0001-absorb-scitex-security-into-scitex-audit.md`).
 
@@ -216,17 +217,32 @@ on PyPI as the absorbing release we're now reversing).
 | 5.4 | scitex-python | Merge the umbrella reversal PR. | scitex-security 0.2.0 on PyPI. |
 | 5.5 | scitex-dev | Close the on-hold scitex-security #12 with a pointer comment. | Phase 5.2 merged. |
 
-### What this ADR does NOT decide
+### Locked decisions (lead, 2026-06-07)
 
-- Whether to also yank `scitex-audit 0.2.0` from PyPI. **Decided
-  above: NO** (yanks break installed callers and pile churn on
-  external users we don't control). Re-evaluated never; the
-  decision is "let the deprecated path exist on PyPI permanently."
-- The exact verb-noun shape of the new scitex-security CLI when
-  combining audit-runner + GH-alerts. Suggested: `scitex-security
-  check` for the multi-tool scan (matches scitex-audit 0.2.0's
-  `audit(.)` entry), `scitex-security github check` for GH-alerts.
-  Flag for lead.
+- **Versions.** scitex-security **0.2.0** is the absorbing release
+  (reusing the version number that the cancelled #12 had reserved).
+  scitex-audit **0.3.0** is the deprecated shim release. **No PyPI
+  yank** of scitex-audit 0.2.0 — it stays as historical. **No 1.0.0
+  bump** — semver stays honest until there's a real API-stability
+  guarantee.
+- **CLI verb-noun shape.** `scitex-security check` = intransitive
+  full multi-tool sweep (bandit + shellcheck + pip-audit + github);
+  `scitex-security github check` = noun(github)-verb(check) for the
+  GH-alerts subset. Matches the ecosystem noun-verb catalog. The
+  scitex-audit 0.3.0 shim CLI is a hard-error exit-2 redirect per
+  CLI-deprecation skill 11 §5 — no warn-cycle, no tombstone.
+- **Cancel #12 cleanly AFTER Phase 1.** Close `ywatanabe1989/scitex-security#12`
+  with a comment pointing at the new absorbing PR, BUT only AFTER
+  Phase 1 (scitex-security 0.2.0) ships, so the thread is never lost
+  mid-flight.
+- **Same-wave consumer migration (no-tombstones).** Internal callers
+  flip to `from scitex_security.<X>` in the SAME PR that lands the
+  absorbing release. The shim exists only for external PyPI users we
+  don't control.
+- **Explicit `gh --head <branch> --base <branch>` on every PR.**
+  Carryover lesson from W1's cwd-detect misfires.
+- **All scitex-dev PRs target `develop`.** Carryover from the
+  branch-routing decision earlier in the day.
 
 ### History note (provenance — important for future readers)
 
