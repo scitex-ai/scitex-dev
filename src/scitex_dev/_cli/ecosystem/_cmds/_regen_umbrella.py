@@ -28,6 +28,7 @@ import click
 from ...._ecosystem._registry import ECOSYSTEM
 from ...._ecosystem._umbrella import (
     HAND_CURATED_EXTRAS,
+    IN_TREE_SHIM_LAZY_ATTRS,
     expected_all_extras,
     expected_external_reexports,
     expected_lazy_attrs,
@@ -142,7 +143,17 @@ def _diff_lazy_attrs(
     expected: list[tuple[str, str | None]],
     actual: dict[str, str | None],
 ) -> list[str]:
-    """Render lazy_attr drift: missing aliases + wrong externals + extras."""
+    """Render lazy_attr drift: missing aliases + wrong externals + extras.
+
+    Suppresses two classes of false-positive drift:
+
+    - ``external`` mismatches for shorts in :data:`IN_TREE_SHIM_LAZY_ATTRS`
+      (the umbrella ships ``scitex.<short>`` as an in-tree dir with no
+      peer ``external="…"``; the registry's expected external is the
+      *eventual* externalization target, not a drift).
+    - ``EXTRA in umbrella`` for in-tree shim shorts (canvas/cli/fts/…)
+      that have no peer at all.
+    """
     lines = ["== lazy_attrs (scitex/__init__.py) =="]
     exp_map = dict(expected)
     drift = False
@@ -151,19 +162,22 @@ def _diff_lazy_attrs(
             lines.append(f"  - MISSING declaration: {short} (expected external={ext})")
             drift = True
             continue
-        if actual[short] != ext:
+        if actual[short] != ext and short not in IN_TREE_SHIM_LAZY_ATTRS:
             lines.append(
                 f"  ~ external mismatch for `{short}`: "
                 f"expected={ext!r}, actual={actual[short]!r}"
             )
             drift = True
     for short, ext in actual.items():
-        if short not in exp_map:
-            lines.append(
-                f"  + EXTRA declaration (not in registry): "
-                f"{short} (external={ext!r})"
-            )
-            drift = True
+        if short in exp_map:
+            continue
+        if short in IN_TREE_SHIM_LAZY_ATTRS:
+            continue
+        lines.append(
+            f"  + EXTRA declaration (not in registry): "
+            f"{short} (external={ext!r})"
+        )
+        drift = True
     if not drift:
         lines.append("  (no drift)")
     return lines
@@ -180,13 +194,16 @@ def register(ecosystem):
             "Examples:\n"
             "  $ scitex-dev ecosystem audit-umbrella --check\n"
             "  $ scitex-dev ecosystem audit-umbrella --check --json\n"
+            "  $ scitex-dev ecosystem audit-umbrella --write\n"
             "\n"
-            "Read-only drift detector between ECOSYSTEM (the registry) and\n"
-            "the local scitex-python checkout (umbrella pyproject + __init__).\n"
+            "Drift detector between ECOSYSTEM (the registry) and the local\n"
+            "scitex-python checkout (umbrella pyproject + __init__).\n"
             "\n"
-            "Exits 0 on no-drift, 1 on drift. The --write mode is intentionally\n"
-            "deferred (operator-edited umbrella; SSoT writes need separate\n"
-            "review path)."
+            "Exits 0 on no-drift, 1 on drift (--check), or 0 on successful\n"
+            "regen (--write). --write only regenerates the [all] aggregator\n"
+            "block; lazy_attrs and EXTERNAL_REEXPORTS edits are still\n"
+            "surfaced via --check (apply by hand until the marker-based\n"
+            "Python-source regen lands)."
         ),
     )
     @click.option(
@@ -200,17 +217,15 @@ def register(ecosystem):
         "--write",
         "mode",
         flag_value="write",
-        help="(NOT IMPLEMENTED) write back to umbrella; reserved for a "
-        "follow-up PR with cross-repo write safety gate.",
+        help="Regenerate [project.optional-dependencies].all in the "
+        "umbrella's pyproject.toml in-place. The umbrella checkout MUST "
+        "be clean against origin/develop (safety gate). Lazy_attrs and "
+        "EXTERNAL_REEXPORTS edits are still surfaced via --check and "
+        "must be applied by hand.",
     )
     @click.option("--json", "json_out", is_flag=True, help="Machine-readable JSON.")
     def audit_umbrella(mode, json_out):
         """Audit umbrella surfaces against the ECOSYSTEM registry SSoT."""
-        if mode == "write":
-            raise click.ClickException(
-                "--write is not implemented yet (cross-repo write safety gate "
-                "is the operator's local scitex-python tree; PR-A is read-only)."
-            )
         root = _umbrella_root()
         if not root.is_dir():
             raise click.ClickException(
@@ -224,6 +239,32 @@ def register(ecosystem):
         exp_all = set(expected_all_extras())
         exp_lazy = expected_lazy_attrs()
         exp_ext = expected_external_reexports()
+
+        # Strip in-tree shims from the EXTERNAL_REEXPORTS drift surface —
+        # those shorts are legitimately absent from the EXTERNAL_REEXPORTS
+        # map (they're in-tree dirs, not external aliases).
+        exp_ext_clean = {
+            k: v for k, v in exp_ext.items() if k not in IN_TREE_SHIM_LAZY_ATTRS
+        }
+        actual_ext_clean = {
+            k: v for k, v in actual_ext.items() if k not in IN_TREE_SHIM_LAZY_ATTRS
+        }
+
+        if mode == "write":
+            from ...._ecosystem._umbrella_write import write_umbrella
+
+            result = write_umbrella(root, exp_all=exp_all)
+            click.echo(result.summary)
+            if result.modified:
+                click.echo(
+                    "\n[NOTE] Only [project.optional-dependencies].all is "
+                    "regenerated by --write in PR-A2. The lazy_attrs "
+                    "(src/scitex/__init__.py) and EXTERNAL_REEXPORTS "
+                    "(src/scitex/re_export.py) edits are still surfaced via "
+                    "--check; apply them by hand from the --check output "
+                    "until the marker-based --write lands in a follow-up."
+                )
+            return
 
         if json_out:
             import json as _json
@@ -240,8 +281,8 @@ def register(ecosystem):
                     "actual": sorted(actual_lazy.items()),
                 },
                 "external_reexports": {
-                    "expected": sorted(exp_ext.items()),
-                    "actual": sorted(actual_ext.items()),
+                    "expected": sorted(exp_ext_clean.items()),
+                    "actual": sorted(actual_ext_clean.items()),
                 },
             }
             click.echo(_json.dumps(payload, indent=2, sort_keys=True))
@@ -251,15 +292,24 @@ def register(ecosystem):
             for line in _diff_lazy_attrs(exp_lazy, actual_lazy):
                 click.echo(line)
             for line in _diff_sets(
-                "EXTERNAL_REEXPORTS", set(exp_ext.items()), set(actual_ext.items())
+                "EXTERNAL_REEXPORTS",
+                set(exp_ext_clean.items()),
+                set(actual_ext_clean.items()),
             ):
                 click.echo(line)
-        # Drift exit code: 1 iff any of the three has drift.
+        # Drift exit code: 1 iff any of the three has drift, allowlists honoured.
         any_drift = (
             exp_all != actual_all
-            or any(actual_lazy.get(s) != e for s, e in exp_lazy)
-            or any(s not in dict(exp_lazy) for s in actual_lazy)
-            or exp_ext != actual_ext
+            or any(
+                actual_lazy.get(s) != e
+                for s, e in exp_lazy
+                if s not in IN_TREE_SHIM_LAZY_ATTRS
+            )
+            or any(
+                s not in dict(exp_lazy) and s not in IN_TREE_SHIM_LAZY_ATTRS
+                for s in actual_lazy
+            )
+            or exp_ext_clean != actual_ext_clean
         )
         sys.exit(1 if any_drift else 0)
 
