@@ -8,6 +8,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`scitex-repl` added to `ECOSYSTEM` (operator-flagged follow-on).**
+  Shipped to PyPI as v0.1.1 on 2026-06-06 alongside the scitex-math
+  release wave; was missing from the registry. Adds the entry to
+  `_registry.py` and the `scitex_repl → scitex-repl` row to
+  `ECOSYSTEM_IMPORTS_TO_DIST` in `_release/pyproject_lint.py` (REL-5
+  implicit-deps scanner).
+
 - **ECOSYSTEM registry split into `_registry.py` + new packages (#132).**
   `scitex_dev._ecosystem._core` was a 569-line file mixing the
   60-entry `ECOSYSTEM` dict with the audit-skip helpers; the data table

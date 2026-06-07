@@ -100,6 +100,7 @@ ECOSYSTEM_IMPORTS_TO_DIST: dict[str, str] = {
     "scitex_audit": "scitex-audit",
     "scitex_core": "scitex-core",
     "scitex_math": "scitex-math",
+    "scitex_repl": "scitex-repl",
     "scitex_etc": "scitex-etc",
     "scitex_gists": "scitex-gists",
     "scitex_parallel": "scitex-parallel",

@@ -524,6 +524,16 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_os",
         "category": "library",
     },
+    "scitex-repl": {
+        # Interactive REPL helpers (embed, less, paste). Added
+        # 2026-06-07 — shipped to PyPI as v0.1.1 on 2026-06-06
+        # (alongside the scitex-math v0.1.x release wave).
+        "local_path": "~/proj/scitex-repl",
+        "pypi_name": "scitex-repl",
+        "github_repo": "ywatanabe1989/scitex-repl",
+        "import_name": "scitex_repl",
+        "category": "library",
+    },
     "scitex-resource": {
         "local_path": "~/proj/scitex-resource",
         "pypi_name": "scitex-resource",
