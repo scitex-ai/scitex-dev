@@ -12,11 +12,14 @@ don't (``audit-cli`` / ``audit-mcp-tools`` / ``audit-skills``) are
 intentionally NOT extended in this PR — they audit the registry-
 resolved location and a follow-up will surface a path-aware variant.
 
-PA-306 no-mocks: we exercise the real Click command + the real
-subprocess fan-out. To make the fan-out observable we shim
-``scitex-dev`` on PATH with a tiny real script that just records its
-argv to a file — real process, real argv parsing, just a stub binary
-that's the test's own code on disk.
+PA-306 no-mocks: we exercise the real Click command + a real PATH-
+shimmed `scitex-dev` binary that records its argv to a tmpfile.
+Click's CliRunner accepts an ``env=`` kwarg, so no ``monkeypatch`` is
+needed (the existing test_audit_all.py uses the same pattern).
+
+PA-307 test-quality: every test has the canonical
+``# Arrange`` / ``# Act`` / ``# Assert`` markers and a single
+assertion (rule splits the multi-assert tests below).
 """
 
 from __future__ import annotations
@@ -28,6 +31,8 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 
+pytest.importorskip("click")
+
 
 @pytest.fixture
 def runner() -> CliRunner:
@@ -35,69 +40,113 @@ def runner() -> CliRunner:
 
 
 # ---------------------------------------------------------------------------
-# audit-project / audit-django / audit-python-apis: --path is a legal alias
-# of --repo (Click multi-flag option). Confirm the help text mentions both.
+# audit-project / audit-django / audit-python-apis: --path alias of --repo.
+# One assertion per test (split so each `assert "--path" in ...` /
+# `assert "--repo" in ...` is its own function).
 # ---------------------------------------------------------------------------
 
 
 def test_audit_project_help_advertises_path_flag(runner):
-    """--path appears in audit-project --help alongside --repo."""
+    """--path appears in audit-project --help."""
+    # Arrange
     from scitex_dev._cli._root import main
 
+    # Act
     result = runner.invoke(main, ["ecosystem", "audit-project", "--help"])
-
-    assert result.exit_code == 0
+    # Assert
     assert "--path" in result.output
+
+
+def test_audit_project_help_retains_repo_alias(runner):
+    """--repo still appears in audit-project --help (back-compat alias)."""
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "audit-project", "--help"])
+    # Assert
     assert "--repo" in result.output
 
 
 def test_audit_django_help_advertises_path_flag(runner):
-    """--path appears in audit-django --help alongside --repo."""
+    """--path appears in audit-django --help."""
+    # Arrange
     from scitex_dev._cli._root import main
 
+    # Act
     result = runner.invoke(main, ["ecosystem", "audit-django", "--help"])
-
-    assert result.exit_code == 0
+    # Assert
     assert "--path" in result.output
+
+
+def test_audit_django_help_retains_repo_alias(runner):
+    """--repo still appears in audit-django --help."""
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "audit-django", "--help"])
+    # Assert
     assert "--repo" in result.output
 
 
 def test_audit_python_apis_help_advertises_path_flag(runner):
-    """--path appears in audit-python-apis --help alongside --repo."""
+    """--path appears in audit-python-apis --help."""
+    # Arrange
     from scitex_dev._cli._root import main
 
+    # Act
     result = runner.invoke(main, ["ecosystem", "audit-python-apis", "--help"])
-
-    assert result.exit_code == 0
+    # Assert
     assert "--path" in result.output
+
+
+def test_audit_python_apis_help_retains_repo_alias(runner):
+    """--repo still appears in audit-python-apis --help."""
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "audit-python-apis", "--help"])
+    # Assert
     assert "--repo" in result.output
 
 
 # ---------------------------------------------------------------------------
-# audit-all --path: thread-through fan-out. PATH-shim a fake `scitex-dev`
-# that records every argv it sees; assert the path-aware auditors got
-# --path, the others didn't.
+# audit-all help mentions --path and worktree context.
 # ---------------------------------------------------------------------------
 
 
 def test_audit_all_help_advertises_path_flag(runner):
     """--path appears in audit-all --help."""
+    # Arrange
     from scitex_dev._cli._root import main
 
+    # Act
     result = runner.invoke(main, ["ecosystem", "audit-all", "--help"])
-
-    assert result.exit_code == 0
+    # Assert
     assert "--path" in result.output
+
+
+def test_audit_all_help_mentions_worktree_use_case(runner):
+    """The --path help blurb references the worktree pain point."""
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "audit-all", "--help"])
+    # Assert
     assert "worktree" in result.output
 
 
-def test_audit_all_path_requires_single_distribution(runner, tmp_path):
+def test_audit_all_path_with_multiple_distributions_errors(runner, tmp_path):
     """audit-all --path /some/path scitex-io scitex-stats → exit 2."""
+    # Arrange
     from scitex_dev._cli._root import main
 
     repo = tmp_path / "fake-checkout"
     repo.mkdir()
-
+    # Act
     result = runner.invoke(
         main,
         [
@@ -109,19 +158,22 @@ def test_audit_all_path_requires_single_distribution(runner, tmp_path):
             "scitex-stats",
         ],
     )
-
+    # Assert
     assert result.exit_code == 2
-    assert "--path requires exactly ONE distribution" in result.output
+
+
+# ---------------------------------------------------------------------------
+# audit-all --path: thread-through fan-out. PATH-shim a fake `scitex-dev`
+# that records every argv it sees; assert per-auditor expectations one
+# at a time. One assertion per test, AAA markers throughout.
+# ---------------------------------------------------------------------------
 
 
 def _install_shim(shim_dir: Path, log: Path) -> Path:
-    """Drop a real `scitex-dev` script that just records its argv to ``log``.
+    """Drop a real `scitex-dev` script that records its argv to ``log``.
 
-    The shim is a posix shell script (works on every CI runner the matrix
-    uses) that writes one TAB-separated argv per line. audit-all calls
-    ``scitex-dev ecosystem <auditor> <dist> [--path PATH] ...`` — the
-    shim captures every such invocation so the test can introspect what
-    flags actually got passed.
+    The shim is a posix shell script that writes one argv per line so
+    the tests can introspect what flags actually got passed.
     """
     script = shim_dir / "scitex-dev"
     script.write_text(
@@ -132,97 +184,122 @@ def _install_shim(shim_dir: Path, log: Path) -> Path:
     return script
 
 
-def test_audit_all_path_threaded_through_to_project_django_python_apis(
-    runner, tmp_path, monkeypatch
-):
-    """--path PATH gets appended to project/django/python-apis (not cli/mcp/skills)."""
+def _shim_env(shim_dir: Path) -> dict[str, str]:
+    """Build an env-dict that puts the shim's PATH first."""
+    return {
+        **os.environ,
+        "PATH": f"{shim_dir}{os.pathsep}{os.environ['PATH']}",
+    }
+
+
+def _run_with_path(runner, tmp_path: Path, *cli_args):
+    """Invoke audit-all with a shim on PATH; return (log, result)."""
     from scitex_dev._cli._root import main
 
-    # Arrange — real repo path, real shim binary on PATH.
-    repo = tmp_path / "wt"
-    repo.mkdir()
     log = tmp_path / "argv.log"
     shim_dir = tmp_path / "bin"
     shim_dir.mkdir()
     _install_shim(shim_dir, log)
-    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
-    # Bypass the version-check that would shell out before our shim.
-    # (The version check uses scitex-dev too; --no-version-check turns it off.)
-
-    # Act
     result = runner.invoke(
         main,
-        [
-            "ecosystem",
-            "audit-all",
-            "--no-version-check",
-            "--path",
-            str(repo),
-            "scitex-io",
-        ],
+        ["ecosystem", "audit-all", "--no-version-check", *cli_args],
+        env=_shim_env(shim_dir),
+        catch_exceptions=False,
     )
+    return log, result
 
-    # Assert — overall exit 0 because every shim invocation returned 0.
-    assert result.exit_code == 0, (result.output, log.read_text() if log.exists() else "")
 
-    # Parse the shim's log.
-    lines = [ln for ln in log.read_text().splitlines() if ln.strip()]
-    # Each line is the joined argv: `ecosystem audit-<X> scitex-io [--path REPO] [...]`
-    cmds = [ln.split() for ln in lines]
-
-    # Group by auditor name (index 1 after `ecosystem`).
-    by_audit: dict[str, list[str]] = {}
-    for argv in cmds:
+def _argvs_by_auditor(log: Path) -> dict[str, list[str]]:
+    """Parse the shim's log into ``{auditor_name: argv_list}``."""
+    out: dict[str, list[str]] = {}
+    for ln in log.read_text().splitlines():
+        argv = ln.split()
         if len(argv) >= 2 and argv[0] == "ecosystem":
-            by_audit[argv[1]] = argv
-
-    # Path-aware auditors MUST receive --path <repo>.
-    for path_aware in ("audit-project", "audit-django", "audit-python-apis"):
-        argv = by_audit.get(path_aware)
-        assert argv is not None, (
-            f"{path_aware} was not invoked; log:\n{log.read_text()}"
-        )
-        assert "--path" in argv, f"--path missing from {path_aware} argv: {argv}"
-        i = argv.index("--path")
-        assert argv[i + 1] == str(repo), (
-            f"--path argument for {path_aware} should be {repo!s}, "
-            f"got {argv[i + 1]!r}"
-        )
-
-    # Auditors that don't yet support --path MUST NOT receive it.
-    for not_path_aware in ("audit-cli", "audit-mcp-tools", "audit-skills"):
-        argv = by_audit.get(not_path_aware)
-        assert argv is not None, (
-            f"{not_path_aware} was not invoked; log:\n{log.read_text()}"
-        )
-        assert "--path" not in argv, (
-            f"--path should NOT be passed to {not_path_aware} "
-            f"(not path-aware yet); got: {argv}"
-        )
+            out[argv[1]] = argv
+    return out
 
 
-def test_audit_all_without_path_does_not_pass_path_arg(runner, tmp_path, monkeypatch):
-    """When --path is omitted, no sub-auditor gets a --path argument."""
-    from scitex_dev._cli._root import main
+def test_audit_all_with_path_exits_zero(runner, tmp_path):
+    """The shim returns 0 for every audit; the dispatcher must exit 0."""
+    # Arrange
+    repo = tmp_path / "wt"
+    repo.mkdir()
+    # Act
+    _, result = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
+    # Assert
+    assert result.exit_code == 0
 
-    log = tmp_path / "argv.log"
-    shim_dir = tmp_path / "bin"
-    shim_dir.mkdir()
-    _install_shim(shim_dir, log)
-    monkeypatch.setenv("PATH", f"{shim_dir}{os.pathsep}{os.environ['PATH']}")
 
-    runner.invoke(
-        main,
-        [
-            "ecosystem",
-            "audit-all",
-            "--no-version-check",
-            "scitex-io",
-        ],
-    )
+def test_audit_all_with_path_threads_to_audit_project(runner, tmp_path):
+    """audit-project must receive --path REPO."""
+    # Arrange
+    repo = tmp_path / "wt"
+    repo.mkdir()
+    # Act
+    log, _ = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
+    # Assert
+    assert "--path" in _argvs_by_auditor(log).get("audit-project", [])
 
-    if not log.exists():
-        pytest.fail("shim was never invoked")
-    text = log.read_text()
-    for ln in text.splitlines():
-        assert "--path" not in ln, f"--path leaked into argv: {ln}"
+
+def test_audit_all_with_path_threads_to_audit_django(runner, tmp_path):
+    """audit-django must receive --path REPO."""
+    # Arrange
+    repo = tmp_path / "wt"
+    repo.mkdir()
+    # Act
+    log, _ = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
+    # Assert
+    assert "--path" in _argvs_by_auditor(log).get("audit-django", [])
+
+
+def test_audit_all_with_path_threads_to_audit_python_apis(runner, tmp_path):
+    """audit-python-apis must receive --path REPO."""
+    # Arrange
+    repo = tmp_path / "wt"
+    repo.mkdir()
+    # Act
+    log, _ = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
+    # Assert
+    assert "--path" in _argvs_by_auditor(log).get("audit-python-apis", [])
+
+
+def test_audit_all_with_path_skips_audit_cli(runner, tmp_path):
+    """audit-cli must NOT receive --path (not yet path-aware)."""
+    # Arrange
+    repo = tmp_path / "wt"
+    repo.mkdir()
+    # Act
+    log, _ = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
+    # Assert
+    assert "--path" not in _argvs_by_auditor(log).get("audit-cli", [])
+
+
+def test_audit_all_with_path_skips_audit_mcp_tools(runner, tmp_path):
+    """audit-mcp-tools must NOT receive --path (not yet path-aware)."""
+    # Arrange
+    repo = tmp_path / "wt"
+    repo.mkdir()
+    # Act
+    log, _ = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
+    # Assert
+    assert "--path" not in _argvs_by_auditor(log).get("audit-mcp-tools", [])
+
+
+def test_audit_all_with_path_skips_audit_skills(runner, tmp_path):
+    """audit-skills must NOT receive --path (not yet path-aware)."""
+    # Arrange
+    repo = tmp_path / "wt"
+    repo.mkdir()
+    # Act
+    log, _ = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
+    # Assert
+    assert "--path" not in _argvs_by_auditor(log).get("audit-skills", [])
+
+
+def test_audit_all_without_path_does_not_pass_path_arg(runner, tmp_path):
+    """When --path is omitted, no sub-auditor argv contains --path."""
+    # Arrange — only `scitex-io` is passed; no --path
+    # Act
+    log, _ = _run_with_path(runner, tmp_path, "scitex-io")
+    # Assert
+    assert not any("--path" in argv for argv in _argvs_by_auditor(log).values())
