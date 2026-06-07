@@ -56,6 +56,7 @@ __all__ = [
     "AUX_MOUNTS",
     "AuxMount",
     "HAND_CURATED_EXTRAS",
+    "IN_TREE_SHIM_LAZY_ATTRS",
     "Mount",
     "default_lazy_short",
     "default_external",
@@ -211,6 +212,42 @@ HAND_CURATED_EXTRAS: frozenset[str] = frozenset(
         "dt",
         # In-tree shim modules without a peer standalone
         "schema",
+        # Aux-mount aliases — one peer powers multiple `scitex.<short>`
+        # aliases (lead 2026-06-07 PR-A2 approval: these are LEGIT
+        # umbrella aliases backed by AUX_MOUNTS, NOT cruft). The owning
+        # peer's primary [extra] already covers the dependency.
+        "diagram",  # figrecipe.diagram (owned by figrecipe primary [plt])
+        "media",  # scitex_etc.media (owned by scitex-etc primary [etc])
+        "torch",  # scitex_linalg (owned by scitex-linalg primary [linalg])
+        "tunnel",  # scitex_ssh (owned by scitex-ssh primary [ssh])
+    }
+)
+
+
+# In-tree shim lazy_attrs the umbrella ships *without* a peer external —
+# the dir lives in ``src/scitex/<short>/`` and the alias is just a Python
+# module name with no ``external="…"`` argument. Drift detector treats
+# these as legitimately ``external=None`` and suppresses the
+# external-mismatch finding (lead 2026-06-07 PR-A2 approval option (a)).
+#
+# Distinct from HAND_CURATED_EXTRAS (which is about pyproject [extras]):
+# this set is about ``__init__.py`` lazy_attr declarations.
+IN_TREE_SHIM_LAZY_ATTRS: frozenset[str] = frozenset(
+    {
+        # Real peer that ships an in-tree shim instead of external import.
+        # Operator may later choose to externalize these or keep the shim;
+        # either way, drift on ``external`` field stays silent.
+        "dev",  # scitex.dev shim → eventually `external="scitex_dev"`
+        "fig",  # scitex.fig shim → eventually `external="figrecipe"`
+        "plt",  # scitex.plt shim → eventually `external="scitex_plt"`
+        "session",  # scitex.session shim → eventually `external="scitex_session"`
+        "social",  # scitex.social shim → eventually `external="socialia"`
+        # In-tree modules with no peer at all — drift never resolves.
+        "canvas",
+        "cli",
+        "fts",
+        "schema",
+        "usage",
     }
 )
 

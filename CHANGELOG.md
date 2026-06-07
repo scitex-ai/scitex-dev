@@ -8,6 +8,39 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **REL-50 umbrella SSoT-drift audit + `audit-umbrella --write` + allowlist
+  expansion (PR-A2).** Extends PR-A:
+  - New `check_umbrella_ssot_drift` (REL-50) in
+    `_release/pyproject_lint.py`: fires HIGH on every missing/extra
+    `scitex[<extra>]` self-reference in the umbrella's `[all]` aggregator,
+    measured against the ECOSYSTEM resolver. Auto-skips for non-umbrella
+    packages; auto-degrades to LOW (skip) if the resolver fails to
+    import (so the auditor never crashes on its own deps).
+  - `_ecosystem/_umbrella.py`:
+    - HAND_CURATED_EXTRAS gains the 4 aux-mount aliases the lead
+      approved as legit (`diagram` / `media` / `torch` / `tunnel`) so
+      they stop surfacing as drift.
+    - New `IN_TREE_SHIM_LAZY_ATTRS` allowlist (`dev` / `fig` / `plt` /
+      `session` / `social` + `canvas` / `cli` / `fts` / `schema` /
+      `usage`) — suppresses the "external mismatch" / "EXTRA in umbrella"
+      drift for in-tree shim lazy_attrs (external=None is correct).
+  - `audit-umbrella --write` (lazy import of `tomlkit`): regenerates
+    `[project.optional-dependencies].all` in the umbrella's
+    pyproject.toml in place, preserving comments + whitespace.
+    Hand-curated entries (`scitex[heavy]`, `scitex[dev]`, etc.) are
+    merged through verbatim. New `[umbrella-regen]` extra on scitex-dev
+    holds the tomlkit dep (added to `[all]`).
+  - Lazy_attrs (`src/scitex/__init__.py`) and EXTERNAL_REEXPORTS
+    (`src/scitex/re_export.py`) regen is intentionally out of scope:
+    those need marker-based replacement to safely preserve surrounding
+    code; `--check` still surfaces them and the lead applies them by
+    hand alongside the `--write` output.
+
+  Safety-gate: `--write` refuses if the umbrella git checkout has
+  uncommitted edits to `pyproject.toml` or `src/scitex/` (the operator-
+  edited local-SSoT rule). Other tree noise (`.scitex/clew/runtime/`,
+  `.worktrees/`) is correctly ignored.
+
 - **`scitex-dev ecosystem audit-umbrella --check` + SSoT resolver (PR-A).**
   Read-only drift detector between the ECOSYSTEM registry and the local
   `scitex-python` umbrella's `[all]` aggregator / `lazy_attrs` / 
