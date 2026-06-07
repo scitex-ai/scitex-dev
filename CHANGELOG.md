@@ -8,6 +8,41 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`audit-all --new-only --since BASE_REF` (lead task #40 part b) —
+  diff-aware audit.** New PRs were grinding on *inherited* violations
+  the agent didn't introduce: scitex-todo iterated 5+ times on PRE-
+  existing `TQ002`/`TQ007` debt, agent-container's develop hit the
+  same. `--new-only` runs the full audit twice — at HEAD (current
+  checkout) and at the base ref (default `develop`, override with
+  `--since`) — and reports ONLY the net-new findings; the strict
+  full audit stays the default.
+
+  Algorithm: stage the base ref via `git worktree add --detach` into
+  a tmpdir (so the caller's HEAD never moves; auto-removed via
+  try/finally), spawn a child `scitex-dev ecosystem audit-all --path
+  BASE_PATH` against it, parse each auditor's stdout into stable
+  `ViolationKey(rule, file:line, msg_excerpt[:60])` tuples on both
+  sides, and emit `HEAD-keys − BASE-keys`. First-cut identity is
+  intentionally simple — a refactor that shifts every line flags
+  every finding on that file as "new" (accurate-ish, since the agent
+  did do the change). Refinement (line-anchor fuzzy match) lands in
+  a follow-up if it bites.
+
+  Wire-up:
+  - `--new-only` + `--since BASE_REF` on `audit-all`. Same single-
+    distribution constraint as `--path` (a diff-aware run is one
+    repo's diff).
+  - New module `scitex_dev._cli.audit._diff` (`worktree_at`,
+    `compute_net_new`, `filter_to_net_new_lines`,
+    `ViolationKey`, `DiffAwareSetupError`).
+  - Setup failure (bad ref, dirty index, missing git) degrades to a
+    warning + strict-audit fallback instead of crashing.
+
+  Unblocks scitex-todo + clew + every future worktree agent. Pairs
+  with `audit-all --path` (#137 / lead task #40a) — `--path` lets
+  the agent point the audit at the worktree; `--new-only` lets the
+  audit ignore debt the agent inherited.
+
 - **`audit-all --path PATH` (lead task #40 part a) — quick fleet unblock.**
   Worktree-based agents could not self-verify the audit before pushing:
   `audit-all scitex-X` resolves the package NAME to the registry's
