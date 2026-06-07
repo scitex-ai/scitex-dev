@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import click
 
-from . import _ci_watch, _quota_keepalive
+from . import _ci_watch, _quota_keepalive, _worktree_gc
 from ._jobs import JOB_REGISTRY
 
 
@@ -76,6 +76,17 @@ def register(group: click.Group) -> None:
             # exit 0 here: the log records any error but the cron loop must
             # not be marked failed for a transient `claude` hiccup.
             _quota_keepalive.run_once()
+            return
+
+        if name == "worktree-gc":
+            # Best-effort cleanup loop — a per-worktree git error must
+            # not crash the cron. The structured result captures every
+            # decision; we exit non-zero only if the WHOLE pass failed
+            # (no roots discoverable, etc.) so a clean log distinguishes
+            # "ran, removed N, refused M" from "couldn't run at all".
+            result = _worktree_gc.run_once(dry_run=dry_run)
+            if result.error is not None:
+                raise SystemExit(1)
             return
 
         # Defensive — registry has an entry but no handler. Reaching here

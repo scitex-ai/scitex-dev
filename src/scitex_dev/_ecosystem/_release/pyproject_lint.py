@@ -97,6 +97,10 @@ ECOSYSTEM_IMPORTS_TO_DIST: dict[str, str] = {
     "scitex_ssh": "scitex-ssh",
     "scitex_agent_container": "scitex-agent-container",
     "scitex_template": "scitex-template",
+    "scitex_audit": "scitex-audit",
+    "scitex_core": "scitex-core",
+    "scitex_math": "scitex-math",
+    "scitex_repl": "scitex-repl",
     "scitex_etc": "scitex-etc",
     "scitex_gists": "scitex-gists",
     "scitex_parallel": "scitex-parallel",
@@ -1005,6 +1009,89 @@ def check_cla_signatures_shape(repo: Path) -> list[LintFinding]:
     return []
 
 
+def check_umbrella_ssot_drift(
+    repo: Path,
+    pyproject_data: dict[str, Any],
+    package_name: str,
+) -> list[LintFinding]:
+    """Rule REL-50 — umbrella pyproject must match the ECOSYSTEM resolver.
+
+    Fires only when auditing the umbrella ``scitex`` package. Compares
+    ``[project.optional-dependencies].all`` against
+    :func:`scitex_dev._ecosystem._umbrella.expected_all_extras` (with
+    :data:`HAND_CURATED_EXTRAS` filtered out on both sides) and emits
+    HIGH-severity findings for each missing or extra ``scitex[<extra>]``
+    self-reference.
+
+    The lazy_attrs / EXTERNAL_REEXPORTS surfaces aren't covered here —
+    they live in ``src/scitex/__init__.py`` and ``re_export.py``
+    respectively, which need a Python-source-level audit; that lands as
+    a separate rule alongside the marker-based ``--write`` extension.
+
+    Caught the 2026-06-07 drift batch: 7 ECOSYSTEM peers
+    (core/hpc/math/newb/seizure-metrics/ssh/todo) were live but missing
+    from the umbrella's ``[all]`` aggregator; the archived
+    ``scitex-bridge`` / ``scitex-linter`` were still present.
+
+    Non-umbrella packages: returns ``[]`` (no-op) — drift only makes
+    sense relative to the registry-driven aggregator.
+    """
+    if package_name != "scitex":
+        return []
+    try:
+        from .._umbrella import HAND_CURATED_EXTRAS, expected_all_extras
+    except Exception as e:  # noqa: BLE001
+        # scitex-dev not importable from its own audit path → degrade
+        # gracefully (the test_audit pipeline runs against installed pkg
+        # form; we never want the importer to crash the auditor).
+        return [
+            LintFinding(
+                rule="REL-50_umbrella_ssot_drift",
+                severity="LOW",
+                message=f"could not import _umbrella resolver: {e}",
+                detail="REL-50 check skipped",
+            )
+        ]
+    opt = (pyproject_data.get("project") or {}).get("optional-dependencies") or {}
+    actual = set()
+    for spec in opt.get("all") or []:
+        m = re.match(r"^\s*scitex\[([\w.-]+)\]", spec)
+        if m and m.group(1) not in HAND_CURATED_EXTRAS:
+            actual.add(f"scitex[{m.group(1)}]")
+    expected = set(expected_all_extras())
+    findings: list[LintFinding] = []
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    for spec in missing:
+        findings.append(
+            LintFinding(
+                rule="REL-50_umbrella_ssot_drift",
+                severity="HIGH",
+                message=f"[all] missing `{spec}` (registry-derived)",
+                detail="umbrella's [all] aggregator is out of sync with ECOSYSTEM",
+                fix_hint=(
+                    "run `scitex-dev ecosystem audit-umbrella --write` "
+                    "OR manually add the entry to [project.optional-dependencies].all"
+                ),
+            )
+        )
+    for spec in extra:
+        findings.append(
+            LintFinding(
+                rule="REL-50_umbrella_ssot_drift",
+                severity="HIGH",
+                message=f"[all] has `{spec}` but ECOSYSTEM does not (or it's archived)",
+                detail="archived peers should be removed from the umbrella's [all]",
+                fix_hint=(
+                    "run `scitex-dev ecosystem audit-umbrella --write` "
+                    "OR manually drop the entry from [project.optional-dependencies].all"
+                ),
+            )
+        )
+    _ = repo  # unused — kept for signature parity with siblings
+    return findings
+
+
 def lint_pyproject(repo: Path, package_name: str | None = None) -> LintReport:
     """Run every rule against `repo/pyproject.toml`. Used by CLI + tests."""
     pyproject = repo / "pyproject.toml"
@@ -1043,6 +1130,7 @@ def lint_pyproject(repo: Path, package_name: str | None = None) -> LintReport:
     rep.findings.extend(check_readme_interfaces_callout(repo, rep.package))
     rep.findings.extend(check_cla_workflow_exists(repo))
     rep.findings.extend(check_cla_signatures_shape(repo))
+    rep.findings.extend(check_umbrella_ssot_drift(repo, data, rep.package))
     return rep
 
 
@@ -1060,4 +1148,5 @@ __all__ = [
     "check_release_alignment",
     "check_cla_workflow_exists",
     "check_cla_signatures_shape",
+    "check_umbrella_ssot_drift",
 ]

@@ -297,11 +297,18 @@ def register(ecosystem):
     )
     @click.argument("distribution")
     @click.option(
+        "--path",
         "--repo",
         "repo_path",
         type=click.Path(exists=True, file_okay=False, dir_okay=True),
         default=None,
-        help="Repo root (defaults to the registry's local_path or the installed package's location).",
+        help=(
+            "Repo root to audit (defaults to the registry's local_path or "
+            "the installed package's location). Use `--path` when running "
+            "from a git worktree so the audit sees the worktree's source "
+            "instead of the editable install — lets worktree agents "
+            "self-verify before pushing. `--repo` is a legacy alias."
+        ),
     )
     @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
     @click.option(
@@ -408,11 +415,18 @@ def register(ecosystem):
     )
     @click.argument("distribution")
     @click.option(
+        "--path",
         "--repo",
         "repo_path",
         type=click.Path(exists=True, file_okay=False, dir_okay=True),
         default=None,
-        help="Repo root (defaults to the registry's local_path or the installed package's location).",
+        help=(
+            "Repo root to audit (defaults to the registry's local_path or "
+            "the installed package's location). Use `--path` when running "
+            "from a git worktree so the audit sees the worktree's source "
+            "instead of the editable install — lets worktree agents "
+            "self-verify before pushing. `--repo` is a legacy alias."
+        ),
     )
     @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
     @click.option(
@@ -496,11 +510,18 @@ def register(ecosystem):
     )
     @click.argument("distribution")
     @click.option(
+        "--path",
         "--repo",
         "repo_path",
         type=click.Path(exists=True, file_okay=False, dir_okay=True),
         default=None,
-        help="Repo root (defaults to the registry's local_path or the installed package's location).",
+        help=(
+            "Repo root to audit (defaults to the registry's local_path or "
+            "the installed package's location). Use `--path` when running "
+            "from a git worktree so the audit sees the worktree's source "
+            "instead of the editable install — lets worktree agents "
+            "self-verify before pushing. `--repo` is a legacy alias."
+        ),
     )
     @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
     @click.option(

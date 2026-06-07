@@ -33,6 +33,36 @@ from pathlib import Path
 from typing import Iterable
 
 
+def _is_in_worktree_checkout(parts: tuple[str, ...]) -> bool:
+    """True iff ``parts`` traverses an operator / subagent git-worktree
+    checkout — paths the audit walker must NEVER treat as canonical
+    source.
+
+    Two segments are guarded:
+
+      * ``.worktrees/`` — the operator's own ``git worktree add`` sibling
+        checkouts. They live inside the repo but carry old branches'
+        files (e.g. PATH.yaml pre-PR-97 fix), so walking into them
+        surfaces stale violations on develop's audit even though the
+        canonical source is already correct.
+      * ``.claude/worktrees/`` — subagent-spawned worktrees from
+        ``Agent(isolation="worktree")``. Same problem shape; same fix.
+        Note this segment is matched on the *pair* ``(".claude",
+        "worktrees")`` so a hypothetical ``.claude/skills/`` etc. isn't
+        accidentally skipped.
+
+    Lead-approved 2026-06-07 after PR #130 (worktree-gc) wedged on
+    PS-PATH-001 fires under both segments. Mirrors the same blind-spot
+    fix Task #42 made for the sac walkers.
+    """
+    for i, part in enumerate(parts):
+        if part == ".worktrees":
+            return True
+        if part == ".claude" and i + 1 < len(parts) and parts[i + 1] == "worktrees":
+            return True
+    return False
+
+
 def _path_yaml_files(repo: Path) -> Iterable[Path]:
     """Yield every ``config/PATH.yaml`` (and ``configs/PATH.yaml``) under
     ``repo``.
@@ -57,6 +87,11 @@ def _path_yaml_files(repo: Path) -> Iterable[Path]:
                 or ".bloat-bak-" in part
                 for part in p.parts
             ):
+                continue
+            # Skip git-worktree checkouts (operator's .worktrees/ and
+            # subagent .claude/worktrees/). They carry transient branch
+            # state — never canonical source. See _is_in_worktree_checkout.
+            if _is_in_worktree_checkout(p.parts):
                 continue
             if p in seen:
                 continue

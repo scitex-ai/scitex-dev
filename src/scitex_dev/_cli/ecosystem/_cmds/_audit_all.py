@@ -61,8 +61,55 @@ def register(ecosystem):
             "an older rule corpus."
         ),
     )
+    @click.option(
+        "--path",
+        "explicit_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        default=None,
+        help=(
+            "Audit a SPECIFIC checkout path (e.g. a git worktree). "
+            "Lets worktree-based agents self-verify before pushing instead "
+            "of relying on CI. When given, the path is threaded through to "
+            "every sub-auditor's `--path` option (alias of the legacy "
+            "`--repo`); the distribution NAME is still required and is "
+            "used for skill/rule lookup only — the source under audit is "
+            "rooted at this path. Only ONE distribution may be passed "
+            "with --path."
+        ),
+    )
+    @click.option(
+        "--new-only",
+        is_flag=True,
+        help=(
+            "Diff-aware audit (lead task #40b): report only NET-NEW "
+            "violations vs the base ref (default `develop`; override with "
+            "--since). Inherited debt the PR didn't introduce stops "
+            "blocking new PRs; the strict full audit stays the default. "
+            "Requires git on PATH and a clean working tree (the base ref "
+            "is staged via `git worktree add --detach`). Only ONE "
+            "distribution may be paired with --new-only."
+        ),
+    )
+    @click.option(
+        "--since",
+        "since_ref",
+        default="develop",
+        show_default=True,
+        help=(
+            "Base ref for --new-only diff. Stages a temporary worktree at "
+            "this ref so the caller's HEAD never moves; cleans up after."
+        ),
+    )
     def ecosystem_audit_all(
-        distributions, as_json, severity, jobs, audit_jobs, no_version_check
+        distributions,
+        as_json,
+        severity,
+        jobs,
+        audit_jobs,
+        no_version_check,
+        explicit_path,
+        new_only,
+        since_ref,
     ):
         """Run every audit-* on each DISTRIBUTION; aggregate exit codes.
 
@@ -103,6 +150,30 @@ def register(ecosystem):
                 if name not in pkgs:
                     pkgs.append(name)
 
+        # --path scoping: only ONE distribution may be paired with a
+        # specific path. A worktree IS one repo, even if `audit-all` is
+        # nominally polyrepo-capable; rolling up multiple distributions
+        # against one path is a bug magnet.
+        if explicit_path and len(pkgs) != 1:
+            click.echo(
+                "error: --path requires exactly ONE distribution "
+                f"(got {len(pkgs)}: {', '.join(pkgs) or '<empty>'}).",
+                err=True,
+            )
+            _sys.exit(2)
+
+        # --new-only scoping: same single-distribution constraint. The
+        # diff-aware compare runs audit-all twice (HEAD + base worktree)
+        # against ONE distribution; rolling up multiple dists into one
+        # diff would just confuse the violation-key set arithmetic.
+        if new_only and len(pkgs) != 1:
+            click.echo(
+                "error: --new-only requires exactly ONE distribution "
+                f"(got {len(pkgs)}: {', '.join(pkgs) or '<empty>'}).",
+                err=True,
+            )
+            _sys.exit(2)
+
         # Order: cheap-to-fast → slow. Each audit-* honours --json + --severity
         # idempotently. audit-summary excluded — it's the cross-leaf rollup.
         audits = [
@@ -133,6 +204,19 @@ def register(ecosystem):
                 cmd.append("--json")
             if a == "audit-cli":
                 cmd += ["--severity", severity]
+            # Thread --path through to every sub-auditor that accepts it.
+            # audit-cli / audit-mcp-tools / audit-skills don't accept a
+            # repo-path flag yet (their checks run against the registry-
+            # resolved location); skip them so we don't error on unknown
+            # option. The 3 that DO accept --path are project/django/
+            # python-apis — exactly the ones surfacing the worktree pain
+            # (PS-2xx / DJ-1xx / PA-1xx).
+            if explicit_path and a in (
+                "audit-project",
+                "audit-django",
+                "audit-python-apis",
+            ):
+                cmd += ["--path", str(explicit_path)]
             try:
                 r = subprocess.run(cmd, capture_output=True, text=True, env=sub_env)
             except Exception as e:
@@ -170,6 +254,77 @@ def register(ecosystem):
             results = {a: collected[a] for a in audits}
             pkg_exit = 1 if any(r.get("exit", 0) != 0 for r in results.values()) else 0
             return distribution, pkg_exit, results
+
+        # --new-only orchestration: stage the base ref via worktree-
+        # detach + run the SAME audit-all against the base path + diff
+        # the violation key sets against the HEAD run + re-emit only
+        # net-new findings. Falls back to strict audit on setup failure
+        # (caller sees a warning, not a crash).
+        if new_only and not as_json:
+            from pathlib import Path as _Path
+
+            from ...audit._diff import (
+                DiffAwareSetupError,
+                compute_net_new,
+                filter_to_net_new_lines,
+                worktree_at,
+            )
+
+            head_path = _Path(explicit_path).expanduser() if explicit_path else _Path.cwd()
+            distribution = pkgs[0]
+            # Run audit-all against HEAD first; reuse the existing
+            # dispatch path so behaviour matches strict mode 1:1.
+            _, _head_exit, head_results = _run_one(distribution)
+            head_combined = "\n".join(
+                (res.get("stdout") or "") + "\n" + (res.get("stderr") or "")
+                for res in head_results.values()
+            )
+            try:
+                with worktree_at(head_path, since_ref) as base_path:
+                    # Spawn audit-all in a child process pointed at the
+                    # base worktree. We deliberately use the same
+                    # scitex-dev binary the dispatcher already resolved
+                    # so the rule corpus matches across the diff.
+                    base_cmd = [
+                        scitex_dev_bin,
+                        "ecosystem",
+                        "audit-all",
+                        distribution,
+                        "--path",
+                        str(base_path),
+                        "--no-version-check",
+                    ]
+                    base_proc = subprocess.run(
+                        base_cmd,
+                        capture_output=True,
+                        text=True,
+                        env=sub_env,
+                    )
+                    base_combined = base_proc.stdout + "\n" + base_proc.stderr
+            except DiffAwareSetupError as e:
+                click.echo(
+                    f"warning: --new-only setup failed ({e}); "
+                    "falling back to strict audit.",
+                    err=True,
+                )
+                # Print the HEAD run unfiltered, exit per its result.
+                click.echo(head_combined)
+                _sys.exit(_head_exit)
+
+            net_new = compute_net_new(
+                head_combined, base_combined, distribution=distribution
+            )
+            filtered = filter_to_net_new_lines(
+                head_combined, net_new, distribution=distribution
+            )
+            click.echo(filtered)
+            click.echo("", err=True)
+            click.echo(
+                f"--new-only: {len(net_new)} net-new violation(s) "
+                f"({distribution} HEAD vs {since_ref})",
+                err=True,
+            )
+            _sys.exit(1 if net_new else 0)
 
         all_results: dict[str, dict] = {}
         overall_exit = 0

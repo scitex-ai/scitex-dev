@@ -7,6 +7,203 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`audit-all --new-only --since BASE_REF` (lead task #40 part b) —
+  diff-aware audit.** New PRs were grinding on *inherited* violations
+  the agent didn't introduce: scitex-todo iterated 5+ times on PRE-
+  existing `TQ002`/`TQ007` debt, agent-container's develop hit the
+  same. `--new-only` runs the full audit twice — at HEAD (current
+  checkout) and at the base ref (default `develop`, override with
+  `--since`) — and reports ONLY the net-new findings; the strict
+  full audit stays the default.
+
+  Algorithm: stage the base ref via `git worktree add --detach` into
+  a tmpdir (so the caller's HEAD never moves; auto-removed via
+  try/finally), spawn a child `scitex-dev ecosystem audit-all --path
+  BASE_PATH` against it, parse each auditor's stdout into stable
+  `ViolationKey(rule, file:line, msg_excerpt[:60])` tuples on both
+  sides, and emit `HEAD-keys − BASE-keys`. First-cut identity is
+  intentionally simple — a refactor that shifts every line flags
+  every finding on that file as "new" (accurate-ish, since the agent
+  did do the change). Refinement (line-anchor fuzzy match) lands in
+  a follow-up if it bites.
+
+  Wire-up:
+  - `--new-only` + `--since BASE_REF` on `audit-all`. Same single-
+    distribution constraint as `--path` (a diff-aware run is one
+    repo's diff).
+  - New module `scitex_dev._cli.audit._diff` (`worktree_at`,
+    `compute_net_new`, `filter_to_net_new_lines`,
+    `ViolationKey`, `DiffAwareSetupError`).
+  - Setup failure (bad ref, dirty index, missing git) degrades to a
+    warning + strict-audit fallback instead of crashing.
+
+  Unblocks scitex-todo + clew + every future worktree agent. Pairs
+  with `audit-all --path` (#137 / lead task #40a) — `--path` lets
+  the agent point the audit at the worktree; `--new-only` lets the
+  audit ignore debt the agent inherited.
+
+- **`audit-all --path PATH` (lead task #40 part a) — quick fleet unblock.**
+  Worktree-based agents could not self-verify the audit before pushing:
+  `audit-all scitex-X` resolves the package NAME to the registry's
+  `local_path` / the editable install location, ignoring whatever
+  checkout the agent is actually editing. Today on scitex-todo (5+
+  iterations) and agent-container's develop, every new PR has been
+  grinding on inherited test-quality debt that the agent can't see
+  locally — fix blind → push → CI fails → loop. `--path` lets the
+  caller point the audit at an explicit checkout (their worktree)
+  instead. Pass-through: each path-aware sub-auditor (`audit-project`
+  / `audit-django` / `audit-python-apis`) gets `--path PATH` on its
+  argv; `audit-cli` / `audit-mcp-tools` / `audit-skills` are
+  intentionally NOT extended (they audit registry-resolved code) —
+  added a TODO for a follow-up. The three path-aware sub-auditors
+  also gain `--path` as a direct alias of the existing `--repo` flag
+  so calling them by hand from a worktree works the same way.
+  
+  Only one distribution may be paired with `--path` (a worktree IS one
+  repo); `audit-all --path /wt scitex-io scitex-stats` errors with
+  exit code 2. Diff-aware audit (part b of lead task #40, opt-in
+  `--new-only` / `--since develop`) lands in a follow-up PR.
+
+- **REL-50 umbrella SSoT-drift audit + `audit-umbrella --write` + allowlist
+  expansion (PR-A2).** Extends PR-A:
+  - New `check_umbrella_ssot_drift` (REL-50) in
+    `_release/pyproject_lint.py`: fires HIGH on every missing/extra
+    `scitex[<extra>]` self-reference in the umbrella's `[all]` aggregator,
+    measured against the ECOSYSTEM resolver. Auto-skips for non-umbrella
+    packages; auto-degrades to LOW (skip) if the resolver fails to
+    import (so the auditor never crashes on its own deps).
+  - `_ecosystem/_umbrella.py`:
+    - HAND_CURATED_EXTRAS gains the 4 aux-mount aliases the lead
+      approved as legit (`diagram` / `media` / `torch` / `tunnel`) so
+      they stop surfacing as drift.
+    - New `IN_TREE_SHIM_LAZY_ATTRS` allowlist (`dev` / `fig` / `plt` /
+      `session` / `social` + `canvas` / `cli` / `fts` / `schema` /
+      `usage`) — suppresses the "external mismatch" / "EXTRA in umbrella"
+      drift for in-tree shim lazy_attrs (external=None is correct).
+  - `audit-umbrella --write` (lazy import of `tomlkit`): regenerates
+    `[project.optional-dependencies].all` in the umbrella's
+    pyproject.toml in place, preserving comments + whitespace.
+    Hand-curated entries (`scitex[heavy]`, `scitex[dev]`, etc.) are
+    merged through verbatim. New `[umbrella-regen]` extra on scitex-dev
+    holds the tomlkit dep (added to `[all]`).
+  - Lazy_attrs (`src/scitex/__init__.py`) and EXTERNAL_REEXPORTS
+    (`src/scitex/re_export.py`) regen is intentionally out of scope:
+    those need marker-based replacement to safely preserve surrounding
+    code; `--check` still surfaces them and the lead applies them by
+    hand alongside the `--write` output.
+
+  Safety-gate: `--write` refuses if the umbrella git checkout has
+  uncommitted edits to `pyproject.toml` or `src/scitex/` (the operator-
+  edited local-SSoT rule). Other tree noise (`.scitex/clew/runtime/`,
+  `.worktrees/`) is correctly ignored.
+
+- **`scitex-dev ecosystem audit-umbrella --check` + SSoT resolver (PR-A).**
+  Read-only drift detector between the ECOSYSTEM registry and the local
+  `scitex-python` umbrella's `[all]` aggregator / `lazy_attrs` / 
+  `EXTERNAL_REEXPORTS` surfaces. Operator 2026-06-07: ECOSYSTEM is the
+  single source of truth; the umbrella is a namespace, not a re-curated
+  list. Adds:
+  - `PackageInfo` schema fields (`umbrella_lazy_short`, `umbrella_extra`,
+    `umbrella_external`, `umbrella_core_dep`, `umbrella_skip`) — all
+    optional; defaults are derived from `import_name` so most entries
+    don't need to populate them.
+  - `scitex_dev._ecosystem._umbrella` resolver (`expected_all_extras`,
+    `expected_lazy_attrs`, `expected_external_reexports`,
+    `iter_primary_mounts`, `mount_of`, `umbrella_core_deps`,
+    plus `AUX_MOUNTS` for one-peer-powering-many-aliases cases and
+    `HAND_CURATED_EXTRAS` for 3rd-party / dev tooling groups that stay
+    hand-maintained per operator's exclude policy).
+  - `ecosystem audit-umbrella` Click command — `--check` is read-only
+    and lints umbrella drift; `--json` emits a machine-readable
+    payload; `--write` is intentionally deferred (cross-repo write
+    gate via lead/operator path, separate PR).
+
+  Optional-peer policy (`scitex-hub` powers `cloud` / `module` /
+  `project`) is preserved: those mounts ship in `AUX_MOUNTS` with
+  `in_all=False` so `[all]` stays installable without `scitex-hub`.
+  Audit-rule (REL-50) that fails CI on drift is reserved for the
+  follow-up PR.
+
+- **`scitex-repl` added to `ECOSYSTEM` (operator-flagged follow-on).**
+  Shipped to PyPI as v0.1.1 on 2026-06-06 alongside the scitex-math
+  release wave; was missing from the registry. Adds the entry to
+  `_registry.py` and the `scitex_repl → scitex-repl` row to
+  `ECOSYSTEM_IMPORTS_TO_DIST` in `_release/pyproject_lint.py` (REL-5
+  implicit-deps scanner).
+
+- **ECOSYSTEM registry split into `_registry.py` + new packages (#132).**
+  `scitex_dev._ecosystem._core` was a 569-line file mixing the
+  60-entry `ECOSYSTEM` dict with the audit-skip helpers; the data table
+  now lives in `scitex_dev._ecosystem._registry` (pure data,
+  intentionally > 512 lines per project line-limit exception) and
+  `_core.py` keeps the helpers + re-exports `ECOSYSTEM` / `PackageInfo`
+  for backwards compat. Every existing
+  `from scitex_dev._ecosystem._core import ECOSYSTEM` import path is
+  preserved.
+
+  Four packages added to `ECOSYSTEM`:
+  - `scitex-audit` (PyPI: scitex-audit, GH: ywatanabe1989/scitex-audit)
+    — security audit orchestrator. Mounted as `scitex.audit` (umbrella
+    lazy_attr + `[audit]` extra) but was missing from this registry, so
+    `audit-all` and umbrella-extras reconciliation didn't know about
+    it. This was the #132 blocker.
+  - `scitex-core` — core infrastructure / fundamental utilities.
+  - `scitex-math` — math utilities (parity helpers, etc.).
+  - `scitex-linter` (`archived=True`) — kept for historical refs; the
+    AST-linter rules now live in `scitex-dev` (>=0.16.0,
+    `scitex_dev.linter._rules`).
+
+  And `scitex-bridge` flagged `archived=True` (GH-archived 2026 —
+  cross-module adapter shim superseded by inline integration in
+  `scitex-stats` / `scitex-plt`).
+
+  `ECOSYSTEM_IMPORTS_TO_DIST` in `_release/pyproject_lint.py` (REL-5
+  scanner) gains `scitex_audit`, `scitex_core`, `scitex_math` so the
+  implicit-deps lint recognises imports of those modules.
+
+- **`worktree-gc` managed cron job** (`scitex_dev._cli.cron._worktree_gc`).
+  Periodic cleanup of stale `.claude/worktrees/` directories that
+  subagents leave behind when they crash, get killed, or make changes
+  the operator never lands. mtime-gated (default 3 days), git-worktree-
+  aware (uses `git worktree remove` + `prune`, never `rm -rf`), and
+  hard-guardrailed to refuse any path that is not under
+  `.claude/worktrees/` — the operator's own `.worktrees/` directory is
+  never touched even if its registered path is older than the threshold.
+
+  Schedule: `0 */6 * * *` (every 6 hours, 4 sweeps per day). Logs to
+  `~/.scitex/dev/logs/cron-worktree-gc.log`. Install fleet-wide with:
+
+  ```bash
+  scitex-dev cron install worktree-gc
+  ```
+
+  Coordinates with proj-scitex-agent-container, which owns the
+  RELOCATION half (stopping `.claude/worktrees/` from being created in
+  the first place — the canonical path will move to `.worktrees/` at
+  the repo root). Until that lands, this GC is the continuous cleanup
+  loop. Motivation: the operator's host accumulated 56 stale worktrees
+  before a hand-edited host cron + script were installed on 2026-06-07;
+  this PR formalises that script as a managed scitex-dev job so the
+  cleanup ships with the package and installs fleet-wide instead of
+  living as a per-host shell script.
+
+  Env-var overrides for ops:
+  - `SCITEX_WORKTREE_GC_ROOTS` — colon-separated search roots (default
+    `~`).
+  - `SCITEX_WORKTREE_GC_MAX_AGE_DAYS` — mtime threshold (default 3).
+
+### Notes
+- The SSoT promotion (operator request 2026-06-07): ECOSYSTEM is to
+  become the single source of truth for the umbrella's `[all]` extras /
+  `lazy_attrs` map / `EXTERNAL_REEXPORTS` / MCP+CLI mounts. This PR is
+  the data prerequisite; the generator + audit-rule (`scitex-dev
+  ecosystem audit-umbrella`) lands in a follow-up so the umbrella-side
+  changes can be staged through the lead approval gate.
+- Brand-wide branch protection live on scitex-dev `develop` + `main` as of
+  2026-06-03 (the policy ships in v0.17.3's `ecosystem set-branch-protection`
+  command). First fleet-wide rollout pending operator confirm via lead.
+
 ## [0.17.5] — 2026-06-05
 
 ### Fixed
@@ -52,11 +249,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 - **`06_dot_scitex_directory.md` §4d worked example + §4b rows (#112).**
   Concrete dotfiles-tracked `~/.scitex/` flow + `containers/` and
   `bin/` rows in the local-state layout reference.
-
-### Notes
-- Brand-wide branch protection live on scitex-dev `develop` + `main` as of
-  2026-06-03 (the policy ships in v0.17.3's `ecosystem set-branch-protection`
-  command). First fleet-wide rollout pending operator confirm via lead.
 
 ## [0.17.4] — 2026-06-03
 
