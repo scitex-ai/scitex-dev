@@ -62,4 +62,60 @@ def test_list_jobs_includes_ci_watch():
     assert "ci-watch" in names
 
 
+# ---------------------------------------------------------------------------
+# worktree-gc — the third registered job. Pins the registry shape per the
+# §3 "Adding a new job" checklist in the cron-management skill: every new
+# entry must come with a test that asserts the schedule + command + log
+# path exactly so a typo in the registry can't ship silently.
+# ---------------------------------------------------------------------------
+
+
+def test_registry_has_worktree_gc_entry():
+    # Arrange
+    # Act
+    # Assert
+    assert "worktree-gc" in _jobs.JOB_REGISTRY
+
+
+def test_worktree_gc_name_matches_registry_key():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("worktree-gc")
+    # Assert
+    assert spec.name == "worktree-gc"
+
+
+def test_worktree_gc_schedule_is_every_six_hours():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("worktree-gc")
+    # Assert
+    assert spec.schedule == "0 */6 * * *"
+
+
+def test_worktree_gc_command_invokes_scitex_dev_cron_exec():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("worktree-gc")
+    # Assert
+    assert "scitex-dev cron exec worktree-gc" in spec.command
+
+
+def test_worktree_gc_command_writes_to_named_log_file():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("worktree-gc")
+    # Assert
+    assert "/.scitex/dev/logs/cron-worktree-gc.log" in spec.command
+
+
+def test_worktree_gc_description_mentions_managed_segment():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("worktree-gc")
+    # Assert — the guardrail must be obvious from the registry alone, so
+    # `scitex-dev cron list` shows operators which directory is touched.
+    assert ".claude/worktrees" in spec.description
+
+
 # EOF

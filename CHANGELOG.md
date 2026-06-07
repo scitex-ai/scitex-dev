@@ -7,6 +7,43 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`worktree-gc` managed cron job** (`scitex_dev._cli.cron._worktree_gc`).
+  Periodic cleanup of stale `.claude/worktrees/` directories that
+  subagents leave behind when they crash, get killed, or make changes
+  the operator never lands. mtime-gated (default 3 days), git-worktree-
+  aware (uses `git worktree remove` + `prune`, never `rm -rf`), and
+  hard-guardrailed to refuse any path that is not under
+  `.claude/worktrees/` — the operator's own `.worktrees/` directory is
+  never touched even if its registered path is older than the threshold.
+
+  Schedule: `0 */6 * * *` (every 6 hours, 4 sweeps per day). Logs to
+  `~/.scitex/dev/logs/cron-worktree-gc.log`. Install fleet-wide with:
+
+  ```bash
+  scitex-dev cron install worktree-gc
+  ```
+
+  Coordinates with proj-scitex-agent-container, which owns the
+  RELOCATION half (stopping `.claude/worktrees/` from being created in
+  the first place — the canonical path will move to `.worktrees/` at
+  the repo root). Until that lands, this GC is the continuous cleanup
+  loop. Motivation: the operator's host accumulated 56 stale worktrees
+  before a hand-edited host cron + script were installed on 2026-06-07;
+  this PR formalises that script as a managed scitex-dev job so the
+  cleanup ships with the package and installs fleet-wide instead of
+  living as a per-host shell script.
+
+  Env-var overrides for ops:
+  - `SCITEX_WORKTREE_GC_ROOTS` — colon-separated search roots (default
+    `~`).
+  - `SCITEX_WORKTREE_GC_MAX_AGE_DAYS` — mtime threshold (default 3).
+
+### Notes
+- Brand-wide branch protection live on scitex-dev `develop` + `main` as of
+  2026-06-03 (the policy ships in v0.17.3's `ecosystem set-branch-protection`
+  command). First fleet-wide rollout pending operator confirm via lead.
+
 ## [0.17.5] — 2026-06-05
 
 ### Fixed
@@ -52,11 +89,6 @@ versions follow [Semantic Versioning](https://semver.org/).
 - **`06_dot_scitex_directory.md` §4d worked example + §4b rows (#112).**
   Concrete dotfiles-tracked `~/.scitex/` flow + `containers/` and
   `bin/` rows in the local-state layout reference.
-
-### Notes
-- Brand-wide branch protection live on scitex-dev `develop` + `main` as of
-  2026-06-03 (the policy ships in v0.17.3's `ecosystem set-branch-protection`
-  command). First fleet-wide rollout pending operator confirm via lead.
 
 ## [0.17.4] — 2026-06-03
 
