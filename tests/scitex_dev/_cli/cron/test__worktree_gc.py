@@ -33,31 +33,39 @@ from scitex_dev._cli.cron import _jobs, _worktree_gc
 def test_is_managed_path_accepts_claude_worktrees():
     # Arrange
     p = "/home/u/proj/myrepo/.claude/worktrees/agent-1"
-    # Act / Assert
-    assert _worktree_gc._is_managed_path(p) is True
+    # Act
+    result = _worktree_gc._is_managed_path(p)
+    # Assert
+    assert result is True
 
 
 def test_is_managed_path_rejects_bare_worktrees():
     # Arrange — the operator's own worktrees dir (no .claude prefix).
     p = "/home/u/proj/myrepo/.worktrees/feature-x"
-    # Act / Assert
-    assert _worktree_gc._is_managed_path(p) is False
+    # Act
+    result = _worktree_gc._is_managed_path(p)
+    # Assert
+    assert result is False
 
 
 def test_is_managed_path_rejects_random_path():
     # Arrange
     p = "/home/u/proj/myrepo/src/main.py"
-    # Act / Assert
-    assert _worktree_gc._is_managed_path(p) is False
+    # Act
+    result = _worktree_gc._is_managed_path(p)
+    # Assert
+    assert result is False
 
 
 def test_is_managed_path_rejects_substring_lookalike():
-    # Arrange — a directory literally named ``foo.claude.worktrees`` must
-    # not be mistaken for the managed segment. The substring check
+    # Arrange — a directory literally named ``foo.claude.worktrees``
+    # must not be mistaken for the managed segment. The substring check
     # requires a leading slash on ``.claude/worktrees/``.
     p = "/home/u/foo.claude.worktrees/agent-1"
-    # Act / Assert
-    assert _worktree_gc._is_managed_path(p) is False
+    # Act
+    result = _worktree_gc._is_managed_path(p)
+    # Assert
+    assert result is False
 
 
 # ---------------------------------------------------------------------------
@@ -101,25 +109,30 @@ class _ScriptedGitRunner:
         return _FakeCompleted(returncode=1, stderr="no scripted answer")
 
 
-def test_list_registered_worktrees_filters_to_managed_segment():
-    # Arrange — fake porcelain output with one managed worktree, one
-    # protected, one totally unrelated.
-    porcelain = (
-        "worktree /home/u/proj/myrepo\n"
-        "HEAD abc\n"
-        "branch refs/heads/develop\n"
-        "\n"
-        "worktree /home/u/proj/myrepo/.claude/worktrees/agent-1\n"
-        "HEAD def\n"
-        "branch refs/heads/feat/x\n"
-        "\n"
-        "worktree /home/u/proj/myrepo/.worktrees/operator-x\n"
-        "HEAD ghi\n"
-        "branch refs/heads/operator-x\n"
-    )
+# Shared helper — builds the standard "managed + protected" porcelain
+# string. Tests assemble specifics around it; the helper keeps the
+# multi-worktree fixture out of every test body so each test stays
+# single-assertion (STX-TQ007).
+_PORCELAIN_HEADER = (
+    "worktree /home/u/proj/myrepo\n"
+    "HEAD abc\n"
+    "branch refs/heads/develop\n"
+    "\n"
+    "worktree /home/u/proj/myrepo/.claude/worktrees/agent-1\n"
+    "HEAD def\n"
+    "branch refs/heads/feat/x\n"
+    "\n"
+    "worktree /home/u/proj/myrepo/.worktrees/operator-x\n"
+    "HEAD ghi\n"
+    "branch refs/heads/operator-x\n"
+)
+
+
+def test_list_registered_worktrees_yields_the_managed_segment_path():
+    # Arrange
     runner = _ScriptedGitRunner().when(
         lambda argv: argv[-3:] == ["worktree", "list", "--porcelain"],
-        _FakeCompleted(returncode=0, stdout=porcelain),
+        _FakeCompleted(returncode=0, stdout=_PORCELAIN_HEADER),
     )
     # Act
     out = _worktree_gc._list_registered_worktrees("/home/u/proj/myrepo", runner)
@@ -141,18 +154,20 @@ def test_list_registered_worktrees_returns_empty_on_git_failure():
 
 # ---------------------------------------------------------------------------
 # _gc_one_worktree — the per-worktree decision: gate by guardrail, by
-# mtime, then call git worktree remove.
+# mtime, then call git worktree remove. Tests split one-assert-per-body
+# to satisfy STX-TQ007; a shared helper builds the boilerplate so each
+# body stays small.
 # ---------------------------------------------------------------------------
 
 
-def test_gc_one_worktree_refuses_path_outside_managed_segment(tmp_path):
-    # Arrange — even if the caller bypassed the list filter, the per-
-    # worktree boundary re-checks the guardrail. This is defence in
-    # depth and the test must keep that property pinned.
+def _gc_call_outside_segment(tmp_path):
+    """Set up a `_gc_one_worktree` call against a NON-managed path so the
+    per-worktree boundary guardrail kicks in. Returns (outcome, runner)
+    so the caller can assert on either the outcome OR the runner state
+    independently (STX-TQ007: one assert per test)."""
     bad = tmp_path / "regular-dir"
     bad.mkdir()
     runner = _ScriptedGitRunner()
-    # Act
     out = _worktree_gc._gc_one_worktree(
         repo=str(tmp_path),
         path=str(bad),
@@ -161,20 +176,39 @@ def test_gc_one_worktree_refuses_path_outside_managed_segment(tmp_path):
         git_runner=runner,
         dry_run=False,
     )
+    return out, runner
+
+
+def test_gc_one_worktree_outside_segment_action_is_errored(tmp_path):
+    # Arrange
+    # Act
+    out, _ = _gc_call_outside_segment(tmp_path)
     # Assert
     assert out.action == "errored"
+
+
+def test_gc_one_worktree_outside_segment_detail_names_guardrail(tmp_path):
+    # Arrange
+    # Act
+    out, _ = _gc_call_outside_segment(tmp_path)
+    # Assert
     assert "guardrail" in out.detail
-    # And critically: git was never called.
+
+
+def test_gc_one_worktree_outside_segment_never_calls_git(tmp_path):
+    # Arrange
+    # Act
+    _, runner = _gc_call_outside_segment(tmp_path)
+    # Assert — the per-worktree boundary refused before any git call.
     assert runner.calls == []
 
 
-def test_gc_one_worktree_skips_fresh(tmp_path):
-    # Arrange — build a path with the managed segment in it.
+def _gc_call_fresh(tmp_path):
+    """A managed worktree whose mtime is "right now" → skipped-fresh."""
     repo = tmp_path / "proj" / "myrepo"
     wt = repo / ".claude" / "worktrees" / "agent-fresh"
     wt.mkdir(parents=True)
     runner = _ScriptedGitRunner()
-    # Act — mtime is "right now", threshold 1 day → fresh.
     out = _worktree_gc._gc_one_worktree(
         repo=str(repo),
         path=str(wt),
@@ -183,50 +217,77 @@ def test_gc_one_worktree_skips_fresh(tmp_path):
         git_runner=runner,
         dry_run=False,
     )
+    return out, runner
+
+
+def test_gc_one_worktree_fresh_action_is_skipped_fresh(tmp_path):
+    # Arrange
+    # Act
+    out, _ = _gc_call_fresh(tmp_path)
     # Assert
     assert out.action == "skipped-fresh"
+
+
+def test_gc_one_worktree_fresh_never_calls_git(tmp_path):
+    # Arrange
+    # Act
+    _, runner = _gc_call_fresh(tmp_path)
+    # Assert
     assert runner.calls == []
 
 
-def test_gc_one_worktree_removes_stale(tmp_path):
-    # Arrange
+def _gc_call_stale(tmp_path):
+    """A managed worktree backdated 10 days → removed (mtime > threshold)."""
     repo = tmp_path / "proj" / "myrepo"
     wt = repo / ".claude" / "worktrees" / "agent-stale"
     wt.mkdir(parents=True)
-    # Backdate mtime to 10 days ago — well past the default 3-day
-    # threshold, comfortable margin against clock jitter.
     old = time.time() - 10 * 86400
     os.utime(wt, (old, old))
     runner = _ScriptedGitRunner().when(
         lambda argv: argv[-3:-1] == ["worktree", "remove"],
         _FakeCompleted(returncode=0, stdout="removed"),
     )
-    # Act
     out = _worktree_gc._gc_one_worktree(
         repo=str(repo),
         path=str(wt),
         now_epoch=time.time(),
-        max_age_seconds=86400.0,  # 1-day threshold → 10d is stale
+        max_age_seconds=86400.0,
         git_runner=runner,
         dry_run=False,
     )
+    return out, runner
+
+
+def test_gc_one_worktree_stale_action_is_removed(tmp_path):
+    # Arrange
+    # Act
+    out, _ = _gc_call_stale(tmp_path)
     # Assert
     assert out.action == "removed"
-    assert any(
-        argv[-2:] == ["worktree", "remove"] or argv[-3:-1] == ["worktree", "remove"]
+
+
+def test_gc_one_worktree_stale_invokes_git_worktree_remove(tmp_path):
+    # Arrange
+    # Act
+    _, runner = _gc_call_stale(tmp_path)
+    saw_remove = any(
+        argv[-2:] == ["worktree", "remove"]
+        or argv[-3:-1] == ["worktree", "remove"]
         for argv in runner.calls
     )
+    # Assert
+    assert saw_remove is True
 
 
-def test_gc_one_worktree_honours_dry_run(tmp_path):
-    # Arrange
+def _gc_call_dry_run(tmp_path):
+    """A stale managed worktree with dry_run=True → reports `removed` but
+    never invokes git."""
     repo = tmp_path / "proj" / "myrepo"
     wt = repo / ".claude" / "worktrees" / "agent-dry"
     wt.mkdir(parents=True)
     old = time.time() - 10 * 86400
     os.utime(wt, (old, old))
     runner = _ScriptedGitRunner()
-    # Act
     out = _worktree_gc._gc_one_worktree(
         repo=str(repo),
         path=str(wt),
@@ -235,15 +296,35 @@ def test_gc_one_worktree_honours_dry_run(tmp_path):
         git_runner=runner,
         dry_run=True,
     )
-    # Assert — dry-run reports the intended action but never invokes git.
+    return out, runner
+
+
+def test_gc_one_worktree_dry_run_action_is_removed(tmp_path):
+    # Arrange
+    # Act
+    out, _ = _gc_call_dry_run(tmp_path)
+    # Assert
     assert out.action == "removed"
+
+
+def test_gc_one_worktree_dry_run_detail_says_dry_run(tmp_path):
+    # Arrange
+    # Act
+    out, _ = _gc_call_dry_run(tmp_path)
+    # Assert
     assert "dry-run" in out.detail
+
+
+def test_gc_one_worktree_dry_run_never_calls_git(tmp_path):
+    # Arrange
+    # Act
+    _, runner = _gc_call_dry_run(tmp_path)
+    # Assert
     assert runner.calls == []
 
 
-def test_gc_one_worktree_skips_on_git_refusal(tmp_path):
-    # Arrange — git refuses (dirty / locked). The worktree must be left
-    # alone; the result must be "skipped-refused"; no force happens.
+def _gc_call_git_refusal(tmp_path):
+    """A stale managed worktree where git refuses (dirty / locked)."""
     repo = tmp_path / "proj" / "myrepo"
     wt = repo / ".claude" / "worktrees" / "agent-dirty"
     wt.mkdir(parents=True)
@@ -251,11 +332,8 @@ def test_gc_one_worktree_skips_on_git_refusal(tmp_path):
     os.utime(wt, (old, old))
     runner = _ScriptedGitRunner().when(
         lambda argv: argv[-3:-1] == ["worktree", "remove"],
-        _FakeCompleted(
-            returncode=1, stderr="fatal: working tree is dirty"
-        ),
+        _FakeCompleted(returncode=1, stderr="fatal: working tree is dirty"),
     )
-    # Act
     out = _worktree_gc._gc_one_worktree(
         repo=str(repo),
         path=str(wt),
@@ -264,24 +342,45 @@ def test_gc_one_worktree_skips_on_git_refusal(tmp_path):
         git_runner=runner,
         dry_run=False,
     )
+    return out, wt
+
+
+def test_gc_one_worktree_git_refusal_action_is_skipped_refused(tmp_path):
+    # Arrange
+    # Act
+    out, _ = _gc_call_git_refusal(tmp_path)
     # Assert
     assert out.action == "skipped-refused"
+
+
+def test_gc_one_worktree_git_refusal_detail_carries_git_message(tmp_path):
+    # Arrange
+    # Act
+    out, _ = _gc_call_git_refusal(tmp_path)
+    # Assert
     assert "dirty" in out.detail
-    # Worktree directory must still exist — never destroyed by force.
+
+
+def test_gc_one_worktree_git_refusal_leaves_directory_intact(tmp_path):
+    # Arrange
+    # Act
+    _, wt = _gc_call_git_refusal(tmp_path)
+    # Assert — never force-removed.
     assert wt.exists()
 
 
 # ---------------------------------------------------------------------------
-# run_once — end-to-end smoke. The hardest invariant: even when a
-# repo also has a registered ``.worktrees/`` entry (protected),
-# ``git worktree remove`` is NEVER called for it.
+# run_once — end-to-end smoke. The hardest invariant: when a repo has
+# both a `.claude/worktrees/<managed>` AND a `.worktrees/<protected>`
+# entry registered, `git worktree remove` is NEVER called for the
+# protected one.
 # ---------------------------------------------------------------------------
 
 
-def test_run_once_never_calls_remove_on_protected_path(tmp_path):
-    # Arrange — one repo with BOTH a managed and a protected worktree
-    # registered. The protected one is stale (so mtime alone would
-    # green-light it); the guardrail is what saves it.
+def _run_once_managed_and_protected(tmp_path):
+    """Build the end-to-end fixture with BOTH a managed and a protected
+    stale worktree registered; return (result, runner, managed_path,
+    protected_path) so each test can assert one property."""
     repo = tmp_path / "proj" / "myrepo"
     repo.mkdir(parents=True)
     managed = repo / ".claude" / "worktrees" / "agent-stale"
@@ -299,7 +398,6 @@ def test_run_once_never_calls_remove_on_protected_path(tmp_path):
         "\n"
         f"worktree {protected}\n"
     )
-
     runner = (
         _ScriptedGitRunner()
         .when(
@@ -307,7 +405,6 @@ def test_run_once_never_calls_remove_on_protected_path(tmp_path):
             _FakeCompleted(returncode=0, stdout=porcelain),
         )
         .when(
-            # Only the managed path should hit this matcher in argv.
             lambda argv: argv[-2:-1] == ["remove"],
             _FakeCompleted(returncode=0),
         )
@@ -316,49 +413,97 @@ def test_run_once_never_calls_remove_on_protected_path(tmp_path):
             _FakeCompleted(returncode=0),
         )
     )
-
     out_buf = io.StringIO()
-    # Act
     result = _worktree_gc.run_once(
         roots=[str(tmp_path)],
         max_age_days=1.0,
         git_runner=runner,
         out=out_buf,
     )
+    return result, runner, managed, protected
 
-    # Assert — exactly one removal, and it was the MANAGED worktree.
-    assert result.removed == 1
-    assert result.scanned == 1  # protected never enters per_worktree
+
+def test_run_once_protected_never_in_remove_calls(tmp_path):
+    # Arrange
+    # Act
+    _, runner, _, protected = _run_once_managed_and_protected(tmp_path)
     remove_calls = [
         argv for argv in runner.calls
         if "remove" in argv and "worktree" in argv
     ]
-    assert len(remove_calls) == 1
-    # The path argument of the remove call MUST be the managed one.
-    assert str(managed) in remove_calls[0]
-    assert str(protected) not in remove_calls[0]
+    protected_seen = any(str(protected) in argv for argv in remove_calls)
+    # Assert — this is the single highest-stakes invariant of this PR.
+    assert protected_seen is False
 
 
-def test_run_once_skips_when_no_roots_usable(tmp_path):
-    # Arrange — point at a non-existent root.
-    out_buf = io.StringIO()
+def test_run_once_managed_is_removed(tmp_path):
+    # Arrange
     # Act
+    result, _, _, _ = _run_once_managed_and_protected(tmp_path)
+    # Assert
+    assert result.removed == 1
+
+
+def test_run_once_protected_not_scanned(tmp_path):
+    # Arrange
+    # Act
+    result, _, _, _ = _run_once_managed_and_protected(tmp_path)
+    # Assert — protected was filtered out before per_worktree even runs.
+    assert result.scanned == 1
+
+
+def test_run_once_remove_call_targets_the_managed_path(tmp_path):
+    # Arrange
+    # Act
+    _, runner, managed, _ = _run_once_managed_and_protected(tmp_path)
+    remove_calls = [
+        argv for argv in runner.calls
+        if "remove" in argv and "worktree" in argv
+    ]
+    # Assert
+    assert any(str(managed) in argv for argv in remove_calls)
+
+
+def _run_once_no_roots(tmp_path):
+    """Point run_once at a non-existent root → error path."""
+    out_buf = io.StringIO()
     result = _worktree_gc.run_once(
         roots=[str(tmp_path / "does-not-exist")],
         max_age_days=1.0,
         git_runner=_ScriptedGitRunner(),
         out=out_buf,
     )
+    return result
+
+
+def test_run_once_no_roots_records_error(tmp_path):
+    # Arrange
+    # Act
+    result = _run_once_no_roots(tmp_path)
     # Assert
     assert result.error is not None
-    assert result.scanned == 0
+
+
+def test_run_once_no_roots_error_names_search_roots(tmp_path):
+    # Arrange
+    # Act
+    result = _run_once_no_roots(tmp_path)
+    # Assert
     assert "no usable search roots" in result.error
 
 
-def test_run_once_env_var_overrides_threshold(monkeypatch, tmp_path):
-    # Arrange — same shape as test_run_once_never_calls_remove_on_protected_path
-    # but with the threshold set via env var to a value that should keep
-    # the (5-day-old) worktree fresh.
+def test_run_once_no_roots_scanned_is_zero(tmp_path):
+    # Arrange
+    # Act
+    result = _run_once_no_roots(tmp_path)
+    # Assert
+    assert result.scanned == 0
+
+
+def _run_once_env_threshold_keeps_5day_fresh(tmp_path):
+    """Set ``SCITEX_WORKTREE_GC_MAX_AGE_DAYS=30`` via direct os.environ
+    mutation (PA-306 forbids monkeypatch), wrap in try/finally for
+    cleanup, return the result."""
     repo = tmp_path / "proj" / "myrepo"
     managed = repo / ".claude" / "worktrees" / "agent-mediumage"
     managed.mkdir(parents=True)
@@ -368,16 +513,38 @@ def test_run_once_env_var_overrides_threshold(monkeypatch, tmp_path):
         lambda argv: argv[-3:] == ["worktree", "list", "--porcelain"],
         _FakeCompleted(returncode=0, stdout=f"worktree {managed}\n"),
     )
-    monkeypatch.setenv("SCITEX_WORKTREE_GC_MAX_AGE_DAYS", "30")
-    out_buf = io.StringIO()
+
+    env_key = "SCITEX_WORKTREE_GC_MAX_AGE_DAYS"
+    prev = os.environ.get(env_key)
+    os.environ[env_key] = "30"
+    try:
+        out_buf = io.StringIO()
+        result = _worktree_gc.run_once(
+            roots=[str(tmp_path)],
+            git_runner=runner,
+            out=out_buf,
+        )
+    finally:
+        if prev is None:
+            os.environ.pop(env_key, None)
+        else:
+            os.environ[env_key] = prev
+    return result
+
+
+def test_run_once_env_threshold_30d_no_removal_of_5day_old(tmp_path):
+    # Arrange
     # Act
-    result = _worktree_gc.run_once(
-        roots=[str(tmp_path)],
-        git_runner=runner,
-        out=out_buf,
-    )
-    # Assert — 30-day threshold, 5-day-old worktree → fresh, no removal.
+    result = _run_once_env_threshold_keeps_5day_fresh(tmp_path)
+    # Assert
     assert result.removed == 0
+
+
+def test_run_once_env_threshold_30d_skipped_fresh_recorded(tmp_path):
+    # Arrange
+    # Act
+    result = _run_once_env_threshold_keeps_5day_fresh(tmp_path)
+    # Assert
     assert result.skipped_fresh == 1
 
 
