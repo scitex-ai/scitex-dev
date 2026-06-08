@@ -27,7 +27,20 @@ def register(group: click.Group) -> None:
         default=False,
         help="Print what would be done without making changes.",
     )
-    def register_cmd(repo_path: str, workflow_name: str, dry_run: bool) -> None:
+    @click.option(
+        "--yes",
+        "-y",
+        "assume_yes",
+        is_flag=True,
+        default=False,
+        help="Skip the confirmation prompt before mutating repo settings.",
+    )
+    def register_cmd(
+        repo_path: str,
+        workflow_name: str,
+        dry_run: bool,
+        assume_yes: bool,
+    ) -> None:
         """Register a repo with the scitex-ci workflow.
 
         \b
@@ -79,6 +92,12 @@ def register(group: click.Group) -> None:
 
         workflow_dir = Path(repo_path) / ".github" / "workflows"
         workflow_file = workflow_dir / workflow_name
+
+        if not dry_run and not assume_yes:
+            click.confirm(
+                f"Mutate {owner}/{repo}: copy template + set 3 Actions Variables?",
+                abort=True,
+            )
 
         if dry_run:
             click.echo(f"[dry-run] Would copy template to {workflow_file}")
