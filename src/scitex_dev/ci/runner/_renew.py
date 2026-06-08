@@ -102,16 +102,30 @@ def register(group: click.Group) -> None:
 
 
 def _parse_slurm_time(s: str) -> int:
-    """Parse SLURM [D-]HH:MM:SS to total minutes."""
+    """Parse SLURM [D-]HH:MM:SS to total minutes.
+
+    Handles: ``HH:MM:SS``, ``MM:SS``, single digit minutes, multi-day
+    formats like ``1-05:30:00``.  Malformed input returns zero.
+    """
     s = s.strip()
+    if not s:
+        return 0
     days = 0
     if "-" in s:
-        d, s = s.split("-", 1)
-        days = int(d)
-    parts = list(map(int, s.split(":")))
+        try:
+            d, s = s.split("-", 1)
+            days = int(d)
+        except ValueError:
+            return 0
+    try:
+        parts = list(map(int, s.split(":")))
+    except ValueError:
+        return 0
     if len(parts) == 3:
         h, m, _sec = parts
     elif len(parts) == 2:
+        h, m = 0, parts[0]
+    elif len(parts) == 1:
         h, m = 0, parts[0]
     else:
         return 0
