@@ -1,0 +1,46 @@
+# scitex-dev `ci runner` private config — operator host only.
+#
+# Path: ~/.scitex/dev/ci-runner.yaml
+# Precedence: $SCITEX_DEV_CONFIG → $XDG_CONFIG_HOME/scitex/dev → ~/.scitex/dev
+# Status: GITIGNORED. ALL HPC-specific bindings live here, NEVER in committed code.
+#
+# Replace every <value> with your operator-host values, then
+# `chmod 0600 ~/.scitex/dev/ci-runner.yaml`.
+
+hpc:
+  user:       <YOUR_HPC_USER>
+  ssh_host:   <YOUR_HPC_SSH_ALIAS>              # ~/.ssh/config Host entry
+  apptainer:  </absolute/path/to/apptainer>     # use `which apptainer` from a login shell
+  # Dated SIF pin — NOT a floating "-latest" symlink. CI reproducibility
+  # must not drift when the operator repoints the symlink. Bumped deliberately.
+  sif:        </absolute/path/to/sac-scitex.sif.libxcb-YYYY-MMDD-HHMMSS>
+
+runner:
+  name:       scitex-ci-runner-01
+  labels:     [self-hosted, scitex-ci]
+  # Persistent project storage. NOT scratch — scratch is periodically purged
+  # and would wipe the runner installation + cached actions/setup-python.
+  home:       </absolute/path/on/persistent/project-storage/github_runner>
+  wrap_log:   </absolute/path/on/persistent/project-storage/github_runner/wrap.log>
+
+ci_lease:
+  # The SLURM job NAME (NOT jobid — jobids cycle). The cron filters
+  # squeue by this name; this is the scope guarantee that keeps the cron
+  # from touching the operator's other compute leases.
+  jobname:               scitex-ci-lease
+  sbatch_script:         </absolute/path/to/your-ci-lease.sh>
+  renew_threshold_min:   1440   # 24h before walltime expiry → resubmit successor
+
+github:
+  # Classic-PAT, scoped `repo + workflow + actions:variables:write`. The
+  # CLI verb `scitex-dev ci runner use github|self-hosted` PATCHes the
+  # repo Actions Variable via this token. Operator never types the
+  # variable name directly.
+  pat_env:        SCITEX_DEV_GH_PAT
+  default_repo:   <OWNER>/<REPO>
+  variable_name:  CI_RUNS_ON
+
+watchdog:
+  poll_interval_sec:  60
+  offline_grace_min:  5             # runner offline this long → auto-flip + a2a ALERT
+  alert_via:          a2a           # one of: a2a, telegram, gh_issue
