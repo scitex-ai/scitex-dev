@@ -66,18 +66,12 @@ class TestRunnerGroupRegistration:
         assert cmd is not None
         assert "CI_RUNS_ON" in cmd.help
 
-    def test_use_group_has_github_subcommand(self):
+    def test_use_command_is_leaf_with_target_argument(self):
         parent = click.Group()
         runner = register(parent)
         use = runner.get_command(click.Context(runner), "use")
         assert use is not None
-        cmd = use.get_command(click.Context(use), "github")
-        assert cmd is not None
-
-    def test_use_group_has_self_hosted_subcommand(self):
-        parent = click.Group()
-        runner = register(parent)
-        use = runner.get_command(click.Context(runner), "use")
-        assert use is not None
-        cmd = use.get_command(click.Context(use), "self-hosted")
-        assert cmd is not None
+        assert isinstance(use, click.Command)
+        assert not isinstance(use, click.Group)
+        arg_names = [p.name for p in use.params if isinstance(p, click.Argument)]
+        assert "target" in arg_names

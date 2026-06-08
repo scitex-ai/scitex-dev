@@ -1,4 +1,4 @@
-"""Tests for ``scitex_dev.ci.runner._use`` — click group structure only."""
+"""Tests for ``scitex_dev.ci.runner._use`` — click command structure only."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ import pytest
 from scitex_dev.ci.runner._use import register
 
 
-class TestUseGroupRegistration:
-    """Test that the use click group registers as a sub-group."""
+class TestUseCommandRegistration:
+    """Test that the use click command registers as a leaf command."""
 
     @pytest.fixture(autouse=True)
     def _register_use(self, monkeypatch):
@@ -20,11 +20,22 @@ class TestUseGroupRegistration:
         result = register(parent)
         assert result is None
 
-    def test_registered_as_use_subcommand(self):
+    def test_registered_as_use_command(self):
         parent = click.Group()
         runner = click.Group()
         parent.add_command(runner, name="runner")
         register(runner)
         use_cmd = runner.get_command(click.Context(runner), "use")
         assert use_cmd is not None
-        assert isinstance(use_cmd, click.Group)
+        # use is now a click.Command (not a Group)
+        assert not isinstance(use_cmd, click.Group)
+        assert isinstance(use_cmd, click.Command)
+
+    def test_use_command_has_target_argument(self):
+        parent = click.Group()
+        runner = click.Group()
+        parent.add_command(runner, name="runner")
+        register(runner)
+        use_cmd = runner.get_command(click.Context(runner), "use")
+        arg_names = [p.name for p in use_cmd.params if isinstance(p, click.Argument)]
+        assert "target" in arg_names

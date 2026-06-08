@@ -1,4 +1,4 @@
-"""``scitex-dev ci runner use github|self-hosted`` — flip CI_RUNS_ON."""
+"""``scitex-dev ci runner use <target>`` — flip CI_RUNS_ON."""
 
 from __future__ import annotations
 
@@ -10,24 +10,32 @@ from . import config
 
 
 def register(group: click.Group) -> None:
-    @group.group("use", invoke_without_command=True)
-    @click.pass_context
-    def use(ctx: click.Context) -> None:
-        """Flip CI_RUNS_ON between hosted and self-hosted."""
-        if ctx.invoked_subcommand is None:
-            click.echo(ctx.get_help())
+    @group.command()
+    @click.argument("target", type=click.Choice(["github", "self-hosted"], case_sensitive=False))
+    def use_cmd(target: str) -> None:
+        """Flip CI_RUNS_ON between hosted and self-hosted.
 
-    @use.command("github")
-    def use_github() -> None:
-        """Flip CI_RUNS_ON to hosted ubuntu-latest.
+        Sends a PATCH to the repo Actions Variable CI_RUNS_ON.
 
         \b
-        Sends a PATCH to the repo Actions Variable CI_RUNS_ON:
-          value = '"ubuntu-latest"'
+        Examples:
+          $ scitex-dev ci runner use github
+          $ scitex-dev ci runner use self-hosted
+
+        \b
+        NOTE: requires a CLASSIC PAT with actions:variables:write.
+        Set SCITEX_DEV_GH_PAT environment variable.
         """
         cfg = config.load_runner_config()
         var_name = cfg["github"]["variable_name"]
         repo = cfg["github"]["default_repo"]
+
+        if target == "github":
+            value = '"ubuntu-latest"'
+            label = "hosted"
+        else:
+            value = '["self-hosted","scitex-ci"]'
+            label = "self-hosted"
 
         result = subprocess.run(
             [
@@ -37,7 +45,7 @@ def register(group: click.Group) -> None:
                 "-X",
                 "PATCH",
                 "-f",
-                'value="ubuntu-latest"',
+                f"value={value}",
             ],
             capture_output=True,
             text=True,
@@ -45,48 +53,12 @@ def register(group: click.Group) -> None:
         )
         if result.returncode != 0:
             raise click.ClickException(
-                f"Failed to flip CI_RUNS_ON to github-hosted: {result.stderr.strip()}"
+                f"Failed to flip CI_RUNS_ON to {label}: {result.stderr.strip()}"
             )
 
-        click.echo(f"CI_RUNS_ON → 'ubuntu-latest' (hosted)")
+        click.echo(f"CI_RUNS_ON → {value} ({label})")
         click.secho(
             "NOTE: requires a CLASSIC PAT with actions:variables:write. "
             "Set SCITEX_DEV_GH_PAT environment variable.",
             fg="yellow",
         )
-
-    @use.command("self-hosted")
-    def use_self_hosted() -> None:
-        """Flip CI_RUNS_ON back to self-hosted.
-
-        \b
-        Sends a PATCH to the repo Actions Variable CI_RUNS_ON:
-          value = '["self-hosted","scitex-ci"]'
-        """
-        cfg = config.load_runner_config()
-        var_name = cfg["github"]["variable_name"]
-        repo = cfg["github"]["default_repo"]
-
-        result = subprocess.run(
-            [
-                "gh",
-                "api",
-                f"repos/{repo}/actions/variables/{var_name}",
-                "-X",
-                "PATCH",
-                "-f",
-                'value=["self-hosted","scitex-ci"]',
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode != 0:
-            raise click.ClickException(
-                f"Failed to flip CI_RUNS_ON to self-hosted: {result.stderr.strip()}"
-            )
-
-        click.echo('CI_RUNS_ON → ["self-hosted","scitex-ci"] (self-hosted)')
-
-
-# EOF
