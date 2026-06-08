@@ -22,9 +22,10 @@ else:
     # Names below MUST match the actual registered command names. Anything
     # not listed here falls through to the "Other" section in --help.
     COMMAND_CATEGORIES = [
-        ("Ecosystem", ["doctor", "ecosystem", "creds", "cron"]),
+        ("CI", ["ci"]),
         ("Development", ["show-config", "rename-symbols"]),
         ("Documentation", ["docs", "search-docs", "skills"]),
+        ("Ecosystem", ["audit-umbrella-pins", "cron", "doctor", "ecosystem", "creds"]),
         ("Interface", ["mcp", "list-python-apis"]),
         ("Shell", ["install-tab-completion"]),
     ]
@@ -453,6 +454,14 @@ else:
     register_mcp_commands(main)
     register_creds_commands(main)
     register_cron_commands(main)
+
+    # -------------------------------------------------------------------
+    # ci runner — self-hosted GitHub Actions runner lifecycle
+    # -------------------------------------------------------------------
+
+    from ..ci.runner import register_ci_runner_commands
+
+    register_ci_runner_commands(main)
 
     # -------------------------------------------------------------------
     # linter — engine moved here from scitex-linter (soft migration)
