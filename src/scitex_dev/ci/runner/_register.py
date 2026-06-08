@@ -97,12 +97,12 @@ def register(group: click.Group) -> None:
             click.echo(f"  SCITEX_CI_SIF = {cfg['hpc']['sif']}")
             return
 
-        # Mutating from here on — gate behind --yes for non-interactive safety.
+        # Mutating from here on — refuse without --yes (no interactive prompt).
         if not yes:
-            click.confirm(
-                f"Register {owner}/{repo} with scitex-ci "
-                f"(writes {workflow_name} + sets 3 Actions Variables)?",
-                abort=True,
+            raise click.ClickException(
+                f"Refusing to register {owner}/{repo} without --yes/-y "
+                f"(writes {workflow_name} + sets 3 Actions Variables). "
+                "Re-run with --yes to confirm, or --dry-run to preview."
             )
 
         # Step 1: Copy template
