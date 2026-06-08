@@ -27,3 +27,7 @@ transitive_verbs:
   # sit in the Moby POS catalog the auditor consults.
   - unset
 intransitive_verbs: []
+nouns:
+  - onboard  # `scitex-dev ci runner onboard <repo>` — copy ci.yml template into a repo
+transitive_verbs:
+  - use  # `scitex-dev ci runner use <target>` — flip CI_RUNS_ON

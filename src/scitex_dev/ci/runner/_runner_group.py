@@ -16,8 +16,7 @@ def register(ci_group: click.Group) -> click.Group:
         \b
         Verbs:
           status     — runner state + CI_RUNS_ON + xdist tuning
-          use github        — flip CI_RUNS_ON to hosted ubuntu-latest
-          use self-hosted   — flip CI_RUNS_ON back to self-hosted
+          use <target>  — flip CI_RUNS_ON (target: github|self-hosted)
           up               — start the persistent runner
           down             — deregister the runner + stop it
           renew            — renew the SLURM CI lease job
@@ -27,7 +26,6 @@ def register(ci_group: click.Group) -> click.Group:
         Example:
           $ scitex-dev ci runner status
           $ scitex-dev ci runner status --explain
-          $ scitex-dev ci runner use github
           $ scitex-dev ci runner use self-hosted
           $ scitex-dev ci runner up
           $ scitex-dev ci runner down
