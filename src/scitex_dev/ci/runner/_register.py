@@ -27,7 +27,16 @@ def register(group: click.Group) -> None:
         default=False,
         help="Print what would be done without making changes.",
     )
-    def register_cmd(repo_path: str, workflow_name: str, dry_run: bool) -> None:
+    @click.option(
+        "-y",
+        "--yes",
+        is_flag=True,
+        default=False,
+        help="Skip the confirmation prompt (required for non-interactive use).",
+    )
+    def register_cmd(
+        repo_path: str, workflow_name: str, dry_run: bool, yes: bool
+    ) -> None:
         """Register a repo with the scitex-ci workflow.
 
         \b
@@ -39,11 +48,11 @@ def register(group: click.Group) -> None:
           2. Set Actions Variable CI_RUNS_ON to '["self-hosted","scitex-ci"]'.
           3. Set Actions Variable SCITEX_CI_APPTAINER to the configured apptainer path.
           4. Set Actions Variable SCITEX_CI_SIF to the configured SIF path.
-          5. Configure fork-PR approval requirement.
+          5. Print the fork-PR approval reminder (no repo settings are mutated).
 
         \b
         Example:
-          $ scitex-dev ci runner register ../scitex-stats
+          $ scitex-dev ci runner register ../scitex-stats --yes
           $ scitex-dev ci runner register ../figrecipe --dry-run
         """
         cfg = config.load_runner_config()
@@ -86,8 +95,15 @@ def register(group: click.Group) -> None:
             click.echo('  CI_RUNS_ON = \'["self-hosted","scitex-ci"]\'')
             click.echo(f"  SCITEX_CI_APPTAINER = {cfg['hpc']['apptainer']}")
             click.echo(f"  SCITEX_CI_SIF = {cfg['hpc']['sif']}")
-            click.echo(f"[dry-run] Would set fork-PR approval on {owner}/{repo}")
             return
+
+        # Mutating from here on — gate behind --yes for non-interactive safety.
+        if not yes:
+            click.confirm(
+                f"Register {owner}/{repo} with scitex-ci "
+                f"(writes {workflow_name} + sets 3 Actions Variables)?",
+                abort=True,
+            )
 
         # Step 1: Copy template
         workflow_dir.mkdir(parents=True, exist_ok=True)
@@ -120,31 +136,13 @@ def register(group: click.Group) -> None:
         _set_var("SCITEX_CI_APPTAINER", cfg["hpc"]["apptainer"])
         _set_var("SCITEX_CI_SIF", cfg["hpc"]["sif"])
 
-        # Step 3: Set fork-PR approval requirement
-        click.echo(f"Setting fork-PR approval on {owner}/{repo}...")
-        try:
-            result = subprocess.run(
-                [
-                    "gh",
-                    "api",
-                    f"repos/{owner}/{repo}",
-                    "-X",
-                    "PATCH",
-                    "-f",
-                    "default_branch=main",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-            if result.returncode == 0:
-                click.echo(
-                    "  (Update fork-PR approval manually: "
-                    "repo Settings → Actions → "
-                    "Require approval for all outside collaborators)"
-                )
-        except Exception:
-            pass
+        # Step 3: Fork-PR approval is a manual repo setting — do NOT mutate the
+        # repo's default branch (an earlier version PATCHed default_branch=main,
+        # which is destructive and unrelated to fork-PR approval).
+        click.echo(
+            "  (Set fork-PR approval manually: repo Settings → Actions → "
+            "Require approval for all outside collaborators)"
+        )
 
         click.echo(f"\n✓ {owner}/{repo} registered with scitex-ci.")
         click.echo(f"  Review: {workflow_file}")
