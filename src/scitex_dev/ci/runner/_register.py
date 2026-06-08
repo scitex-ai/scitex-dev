@@ -1,9 +1,7 @@
-"""``scitex-dev ci runner onboard <repo>`` — copy CI template + set vars."""
+"""``scitex-dev ci runner register <repo>`` — copy CI template + set vars."""
 
 from __future__ import annotations
 
-import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -13,8 +11,11 @@ from . import config
 
 
 def register(group: click.Group) -> None:
-    @group.command()
-    @click.argument("repo_path", type=click.Path(exists=True, file_okay=False, dir_okay=True))
+    @group.command("register")
+    @click.argument(
+        "repo_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+    )
     @click.option(
         "--workflow-name",
         default="ci.yml",
@@ -26,10 +27,8 @@ def register(group: click.Group) -> None:
         default=False,
         help="Print what would be done without making changes.",
     )
-    def onboard_cmd(
-        repo_path: str, workflow_name: str, dry_run: bool
-    ) -> None:
-        """Onboard a repo to the scitex-ci workflow.
+    def register_cmd(repo_path: str, workflow_name: str, dry_run: bool) -> None:
+        """Register a repo with the scitex-ci workflow.
 
         \b
         Copies the ci.yml template into the repo + sets 3 Actions Variables.
@@ -44,11 +43,11 @@ def register(group: click.Group) -> None:
 
         \b
         Example:
-          $ scitex-dev ci runner onboard ../scitex-stats
-          $ scitex-dev ci runner onboard ../figrecipe --dry-run
+          $ scitex-dev ci runner register ../scitex-stats
+          $ scitex-dev ci runner register ../figrecipe --dry-run
         """
         cfg = config.load_runner_config()
-        gh_token = config.get_gh_token(cfg)
+        config.get_gh_token(cfg)
 
         # Determine the repo owner/name from the local git remote
         repo_result = subprocess.run(
@@ -63,7 +62,8 @@ def register(group: click.Group) -> None:
             )
 
         remote_url = repo_result.stdout.strip()
-        # Parse owner/repo from git URL (SSH: git@github.com:owner/repo.git, HTTPS: https://github.com/owner/repo.git)
+        # Parse owner/repo from git URL
+        # (SSH: git@github.com:owner/repo.git, HTTPS: https://github.com/owner/repo.git)
         import re as _re
 
         m = _re.search(r"github\.com[:/]([^/]+)/([^/.]+)", remote_url)
@@ -83,7 +83,7 @@ def register(group: click.Group) -> None:
         if dry_run:
             click.echo(f"[dry-run] Would copy template to {workflow_file}")
             click.echo(f"[dry-run] Would set Actions Variables on {owner}/{repo}:")
-            click.echo(f"  CI_RUNS_ON = '[\"self-hosted\",\"scitex-ci\"]'")
+            click.echo('  CI_RUNS_ON = \'["self-hosted","scitex-ci"]\'')
             click.echo(f"  SCITEX_CI_APPTAINER = {cfg['hpc']['apptainer']}")
             click.echo(f"  SCITEX_CI_SIF = {cfg['hpc']['sif']}")
             click.echo(f"[dry-run] Would set fork-PR approval on {owner}/{repo}")
@@ -114,7 +114,6 @@ def register(group: click.Group) -> None:
             if result.returncode != 0:
                 click.echo(
                     f"  Warning: {result.stderr.strip()[:100]}",
-                    fg="yellow",
                 )
 
         _set_var("CI_RUNS_ON", '["self-hosted","scitex-ci"]')
@@ -123,12 +122,7 @@ def register(group: click.Group) -> None:
 
         # Step 3: Set fork-PR approval requirement
         click.echo(f"Setting fork-PR approval on {owner}/{repo}...")
-        # Use gh api to update repo settings — this is a repo-level setting
-        # We can't easily do this via gh api PATCH without the full settings blob
-        # So we use gh repo edit if available, or fall back to the web UI note
         try:
-            # gh repo edit doesn't have a fork-approval flag,
-            # but we can use the repo settings API
             result = subprocess.run(
                 [
                     "gh",
@@ -144,15 +138,17 @@ def register(group: click.Group) -> None:
                 timeout=30,
             )
             if result.returncode == 0:
-                click.echo("  (Update fork-PR approval manually: "
-                           "repo Settings → Actions → "
-                           "Require approval for all outside collaborators)")
+                click.echo(
+                    "  (Update fork-PR approval manually: "
+                    "repo Settings → Actions → "
+                    "Require approval for all outside collaborators)"
+                )
         except Exception:
             pass
 
-        click.echo(f"\n✓ {owner}/{repo} onboarded to scitex-ci.")
+        click.echo(f"\n✓ {owner}/{repo} registered with scitex-ci.")
         click.echo(f"  Review: {workflow_file}")
-        click.echo(f"  Variables: CI_RUNS_ON, SCITEX_CI_APPTAINER, SCITEX_CI_SIF")
+        click.echo("  Variables: CI_RUNS_ON, SCITEX_CI_APPTAINER, SCITEX_CI_SIF")
 
 
 # EOF

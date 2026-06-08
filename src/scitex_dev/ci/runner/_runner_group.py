@@ -15,12 +15,12 @@ def register(ci_group: click.Group) -> click.Group:
 
         \b
         Verbs:
-          status     — runner state + CI_RUNS_ON + xdist tuning
-          use <target>  — flip CI_RUNS_ON (target: github|self-hosted)
-          up               — start the persistent runner
-          down             — deregister the runner + stop it
-          renew            — renew the SLURM CI lease job
-          onboard <repo>   — copy the ci.yml template into a repo
+          status            — runner state + CI_RUNS_ON + xdist tuning
+          use <target>      — flip CI_RUNS_ON (target: github|self-hosted)
+          up                — start the persistent runner
+          down              — deregister the runner + stop it
+          renew             — renew the SLURM CI lease job
+          register <repo>   — copy the ci.yml template into a repo
 
         \b
         Example:
@@ -30,7 +30,7 @@ def register(ci_group: click.Group) -> click.Group:
           $ scitex-dev ci runner up
           $ scitex-dev ci runner down
           $ scitex-dev ci runner renew
-          $ scitex-dev ci runner onboard ../figrecipe
+          $ scitex-dev ci runner register ../figrecipe
         """
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
@@ -40,14 +40,14 @@ def register(ci_group: click.Group) -> click.Group:
     from ._up import register as register_up
     from ._down import register as register_down
     from ._renew import register as register_renew
-    from ._onboard import register as register_onboard
+    from ._register import register as register_register
 
     register_status(runner)
     register_use(runner)
     register_up(runner)
     register_down(runner)
     register_renew(runner)
-    register_onboard(runner)
+    register_register(runner)
 
     return runner
 
