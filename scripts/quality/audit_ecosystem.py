@@ -376,9 +376,10 @@ def load_registry(repo_root: Path) -> dict[str, dict[str, str]]:
         return {}
     text = eco_py.read_text(encoding="utf-8")
     out: dict[str, dict[str, str]] = {}
-    # Match `"<key>": { ...inner... }` per entry.
+    # Match `"<key>": { ...inner... }` per entry.  Allow newline between key
+    # and opening brace (new _registry.py layout: multiline entries).
     for m in re.finditer(
-        r'^\s*"([\w-]+)"\s*:\s*\{(.*?)\},?\s*$',
+        r'^\s*"([\w-]+)"\s*:\s*\n?\s*(.*?)\n\s*\}',
         text,
         re.MULTILINE | re.DOTALL,
     ):
