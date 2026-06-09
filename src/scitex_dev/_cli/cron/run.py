@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import click
 
-from . import _ci_watch, _quota_keepalive, _worktree_gc
+from . import _ci_watch, _quota_keepalive, _task_harvest, _worktree_gc
 from ._jobs import JOB_REGISTRY
 
 
@@ -85,6 +85,19 @@ def register(group: click.Group) -> None:
             # (no roots discoverable, etc.) so a clean log distinguishes
             # "ran, removed N, refused M" from "couldn't run at all".
             result = _worktree_gc.run_once(dry_run=dry_run)
+            if result.error is not None:
+                raise SystemExit(1)
+            return
+
+        if name == "task-harvest":
+            # Best-effort classification + audit log of the shared
+            # ~/.scitex/todo/tasks.yaml board. A missing/malformed
+            # store sets ``result.error`` and exits non-zero so the
+            # log records the failure, but the cron loop keeps
+            # ticking — the next q6h tick re-tries the load. Phase-1
+            # walk + Phase-2 dispatch fold into this same branch in
+            # follow-up PRs without changing the dispatcher contract.
+            result = _task_harvest.run_once()
             if result.error is not None:
                 raise SystemExit(1)
             return

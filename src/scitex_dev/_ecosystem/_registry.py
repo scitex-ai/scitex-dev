@@ -575,11 +575,19 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "category": "library",
     },
     "scitex-security": {
+        # Absorbed into scitex-audit 2026-06-07 per ADR-0001 (#139).
+        # scitex-security 0.2.0 is a deprecated re-export shim of
+        # ``scitex_audit.github``; the standalone repo will be yanked from
+        # PyPI at W3 once reconcile-versions confirms zero downstream
+        # pins. Kept here with archived=True so historical refs +
+        # umbrella-extras reconciliation know not to expect an active
+        # standalone going forward (mirrors the scitex-linter precedent).
         "local_path": "~/proj/scitex-security",
         "pypi_name": "scitex-security",
         "github_repo": "ywatanabe1989/scitex-security",
         "import_name": "scitex_security",
         "category": "library",
+        "archived": True,
     },
     "scitex-session": {
         "local_path": "~/proj/scitex-session",

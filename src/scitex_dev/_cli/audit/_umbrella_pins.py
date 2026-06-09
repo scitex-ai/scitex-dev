@@ -25,7 +25,16 @@ Run via:
 
     scitex-dev audit-umbrella-pins [PATH]
 
-PATH defaults to the cwd. Exits 1 on any drift so CI fails loudly.
+PATH defaults to the cwd. PS-170 drift is **warn-only by default**
+(exit 0) so an upstream leaf release that briefly outruns the
+umbrella's ``==`` pin does not cascade into red CI on the umbrella's
+own `tests` workflow + every downstream consumer audit. Pass
+``--strict`` to restore the old fail-on-drift behaviour (use this in
+the release-pipeline pre-publish gate). See the 2026-06-09 (scitex-dev
+0.17.8) entry in CHANGELOG for the motivating incident — 0.17.7
+shipped with PS-170 severity=error and ~12 ecosystem CI reds piled up
+in the operator inbox in a single morning.
+
 Network access required for the drift check — queries
 https://pypi.org/pypi/<pkg>/json.
 
@@ -78,7 +87,7 @@ _pypi_latest = _default_pypi_latest
 def audit_umbrella_pins(
     repo: Path,
     *,
-    _pypi_query: Callable[[str], Optional[str]] = _default_pypi_latest,
+    _pypi_query: Optional[Callable[[str], Optional[str]]] = None,
 ) -> list[str]:
     """Return a list of violation strings. Empty list = clean.
 
@@ -102,6 +111,11 @@ def audit_umbrella_pins(
     unit tests. PA-306 (no mocks) satisfied by dependency injection;
     no ``unittest.mock`` or ``monkeypatch`` needed.
     """
+    # Resolve the PyPI lookup callable AT CALL TIME so tests can swap
+    # `_default_pypi_latest` at module level (the CLI path has no DI seam
+    # of its own). Avoids a stale module-import-time capture.
+    if _pypi_query is None:
+        _pypi_query = _default_pypi_latest
     pyproject = repo / "pyproject.toml"
     if not pyproject.is_file():
         return []
@@ -156,7 +170,8 @@ def audit_umbrella_pins(
     epilog=(
         "Example:\n"
         "  $ scitex-dev ecosystem audit-umbrella-pins .\n"
-        "  $ scitex-dev ecosystem audit-umbrella-pins /home/me/proj/scitex-python --allow-network-error\n"
+        "  $ scitex-dev ecosystem audit-umbrella-pins /home/me/proj/scitex-python --strict\n"
+        "  $ scitex-dev ecosystem audit-umbrella-pins . --strict --allow-network-error\n"
     ),
 )
 @click.argument(
@@ -167,18 +182,43 @@ def audit_umbrella_pins(
 @click.option(
     "--allow-network-error",
     is_flag=True,
-    help="Treat PyPI lookup failures as warnings, not errors (exit 0).",
+    help=(
+        "Only meaningful with --strict: treat PyPI lookup failures as "
+        "warnings (exit 0) instead of hard failures (exit 1)."
+    ),
 )
-def cli(path: Path, allow_network_error: bool) -> None:
+@click.option(
+    "--strict",
+    is_flag=True,
+    help=(
+        "Treat PS-170 drift as ERROR (exit 1). Default is WARN-ONLY: "
+        "drift is printed to stderr and the command exits 0, so an "
+        "upstream scitex-* leaf publishing a newer wheel before the "
+        "umbrella's `==` pin has caught up does NOT cascade into a CI "
+        "failure on every consumer / umbrella-tests workflow run. Use "
+        "--strict in the umbrella's release-pipeline pre-publish gate "
+        "where stale pins MUST block a tag push."
+    ),
+)
+def cli(path: Path, allow_network_error: bool, strict: bool) -> None:
     """Audit umbrella ``==`` pin freshness vs PyPI latest.
 
     Non-``==`` declarations (``>=``, ``~=``, no operator, etc.) are
     accepted as PEP 508 minimum-compatible declarations and are NOT
     flagged. Only explicit ``==`` pins are drift-checked against PyPI.
 
+    **Severity (2026-06-09 — scitex-dev 0.17.8):** PS-170 drift is
+    warn-only by default. The earlier error-by-default behaviour cascaded
+    into 12+ ecosystem CI failures every time a single leaf released a
+    new patch wheel ahead of the umbrella pin bump. The drift is still
+    surfaced (printed to stderr with a ``WARN:`` prefix), but exit is 0
+    so consumer CI stays green. Pass ``--strict`` to restore the old
+    fail-on-drift behaviour for release-pipeline use.
+
     Example::
 
         $ scitex-dev ecosystem audit-umbrella-pins .
+        $ scitex-dev ecosystem audit-umbrella-pins . --strict
     """
     violations = audit_umbrella_pins(path)
     if not violations:
@@ -186,9 +226,16 @@ def cli(path: Path, allow_network_error: bool) -> None:
         sys.exit(0)
 
     hard_violations = [v for v in violations if not v.startswith("PS-170W")]
+    prefix = "ERRO" if strict else "WARN"
     for v in violations:
-        click.echo(f"ERRO: {path}/pyproject.toml: {v}", err=True)
+        click.echo(f"{prefix}: {path}/pyproject.toml: {v}", err=True)
 
+    # Default (no --strict): drift is informational. Exit 0 so an
+    # upstream patch release does not turn into a fleet-wide CI red.
+    if not strict:
+        sys.exit(0)
+    # --strict: hard fail on drift; --allow-network-error downgrades
+    # the network-flake case (PS-170W only) to exit 0.
     if hard_violations or not allow_network_error:
         sys.exit(1)
     sys.exit(0)

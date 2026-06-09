@@ -118,4 +118,70 @@ def test_worktree_gc_description_mentions_managed_segment():
     assert ".claude/worktrees" in spec.description
 
 
+# ---------------------------------------------------------------------------
+# task-harvest — the fourth registered job (scitex-dev cron PR follow-up to
+# scitex-todo PR #72; operator commissioned the skill in TG msgs 325/327/
+# 332/335). Pins the registry shape per the §3 "Adding a new job" checklist
+# so a typo in the schedule / command / log path can't ship silently.
+# ---------------------------------------------------------------------------
+
+
+def test_registry_has_task_harvest_entry():
+    # Arrange
+    # Act
+    # Assert
+    assert "task-harvest" in _jobs.JOB_REGISTRY
+
+
+def test_task_harvest_name_matches_registry_key():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("task-harvest")
+    # Assert
+    assert spec.name == "task-harvest"
+
+
+def test_task_harvest_schedule_is_every_six_hours():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("task-harvest")
+    # Assert
+    assert spec.schedule == "0 */6 * * *"
+
+
+def test_task_harvest_command_invokes_scitex_dev_cron_exec():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("task-harvest")
+    # Assert
+    assert "scitex-dev cron exec task-harvest" in spec.command
+
+
+def test_task_harvest_command_writes_to_named_log_file():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("task-harvest")
+    # Assert
+    assert "/.scitex/dev/logs/cron-task-harvest.log" in spec.command
+
+
+def test_task_harvest_description_mentions_tasks_yaml():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("task-harvest")
+    # Assert — the operator's mental model is "the shared board" =
+    # ~/.scitex/todo/tasks.yaml; `scitex-dev cron list` should surface
+    # that the harvest touches the board so operators can tell apart
+    # task-harvest from the other (host-local) cron jobs.
+    assert "tasks.yaml" in spec.description
+
+
+def test_list_jobs_includes_task_harvest():
+    # Arrange
+    # Act
+    names = [s.name for s in _jobs.list_jobs()]
+    # Assert
+    assert "task-harvest" in names
+
+
 # EOF
