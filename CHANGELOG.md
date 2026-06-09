@@ -7,6 +7,43 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.8] — 2026-06-09
+
+### Fixed
+- **PS-170 severity demoted from error → warning (CI emergency fix).**
+  0.17.7 shipped with `audit-umbrella-pins` exiting 1 on any drift
+  between the umbrella's `==` pins and PyPI's current latest. The
+  umbrella's own `tests` workflow runs `scitex-dev ecosystem
+  audit-umbrella-pins .` on every push / nightly cron, so every time a
+  single scitex-* leaf published a newer patch wheel ahead of the
+  umbrella pin bump, all matrix rows turned red — 12+ ecosystem CI
+  reds flooded the operator inbox in one morning (2026-06-09 incident).
+
+  `audit-umbrella-pins` now defaults to **warn-only**: drift is still
+  surfaced (printed to stderr with a `WARN:` prefix), but exit is 0.
+  The drift is informational — reproducibility belongs in the lockfile,
+  the pin freshness is "nice to know" telemetry. Pass `--strict` to
+  restore the old fail-on-drift behaviour for the release-pipeline
+  pre-publish gate (where stale pins MUST block a tag push). The
+  `audit_umbrella_pins(...)` function signature is unchanged; the new
+  exit semantics live in the CLI wrapper. `_default_pypi_latest`
+  resolution moved from def-time default to call-time module-global
+  lookup so tests can swap the seam without `unittest.mock`.
+
+- **`load_registry` triple-path fallback for the 0.17.0+ split.**
+  The 0.11.0 layout refactor moved the ECOSYSTEM dict literal from
+  flat `scitex_dev/ecosystem.py` to `_ecosystem/_core.py`; the 0.17.0
+  REL-50 work then split it again — `_core.py` is now a pure re-export
+  shim and the dict literal lives in `_ecosystem/_registry.py`. The
+  text-scrape registry loader in `scripts/quality/audit_ecosystem.py`
+  and the nightly `scitex-dev-quality-audit` GitHub Action only had
+  `_core.py` / `ecosystem.py` in their candidate list, so on 0.17.0+
+  checkouts they read a dict-literal-free file and silently returned
+  an empty registry → the audit crashed downstream with the
+  operator-visible "FileNotFoundError on ecosystem registry file"
+  cascade. Both paths now try `_registry.py` → `_core.py` →
+  `ecosystem.py` in order, matching the layout history.
+
 ### Added
 - **`audit-all --new-only --since BASE_REF` (lead task #40 part b) —
   diff-aware audit.** New PRs were grinding on *inherited* violations
