@@ -546,7 +546,8 @@ def test_create_todo_other_validation_error_reraises():
         head_sha="abcd1234ef567890abcdef00000000000000bbbb",
     )
 
-    # Act / Assert
+    # Act
+    # Assert
     with pytest.raises(_FakeTaskValidationError):
         _ci_watch._create_todo_if_new(
             agent="proj-scitex-stats",

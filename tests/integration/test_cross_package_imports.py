@@ -26,6 +26,8 @@ CROSS_PACKAGE_IMPORTS = [
     "scitex_config._ecosystem",
     "scitex_events",
     "scitex_logging",
+    "scitex_todo._paths",
+    "scitex_todo._store",
 ]
 # ===== END AUTO-GENERATED =====
 
