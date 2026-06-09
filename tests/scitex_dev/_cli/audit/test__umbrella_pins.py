@@ -384,8 +384,10 @@ def test_cli_strict_plus_allow_network_error_exits_0(tmp_path):
 def test_cli_help_advertises_strict_flag(tmp_path):
     """The `--strict` flag must be discoverable via --help (it's the
     operator's escape hatch when they want fail-on-drift back)."""
-    # Arrange / Act
+    # Arrange
     runner = CliRunner()
+
+    # Act
     result = runner.invoke(_umbrella_pins_cli, ["--help"])
     haystack = result.output.lower()
 
