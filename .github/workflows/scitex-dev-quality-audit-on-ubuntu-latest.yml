@@ -13,9 +13,11 @@ on:
     paths:
       - "scripts/quality/audit_ecosystem.py"
       - "scripts/quality/ecosystem_list.py"
+      - "src/scitex_dev/_ecosystem/_registry.py"
       - "src/scitex_dev/_ecosystem/_core.py"
       - "src/scitex_dev/ecosystem.py"
       - ".github/workflows/quality-audit.yml"
+      - ".github/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"
 
 jobs:
   audit:
@@ -39,6 +41,9 @@ jobs:
         run: |
           set -e
           mkdir -p proj
+          # Use the dedicated ecosystem_list.py helper (added in #144)
+          # which imports `_registry.py` directly — no brittle text-scrape.
+          # This supersedes the inline regex-based clone block.
           python3 scitex-dev/scripts/quality/ecosystem_list.py 2>/dev/null | while IFS= read -r line; do
             name=$(echo "$line" | python3 -c "import json,sys; print(json.load(sys.stdin)['name'])")
             repo=$(echo "$line" | python3 -c "import json,sys; print(json.load(sys.stdin)['github_repo'])")
