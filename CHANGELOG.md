@@ -7,6 +7,48 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`ci-watch` cron now files CI-fails into scitex-todo (Task B).**
+  When a develop CI run goes red, the existing `ci-watch` 10-min poll
+  fires a fix-forward turn to the owning sac agent (existing behaviour)
+  AND files a new scitex-todo entry tagged with the (repo, workflow,
+  head_sha) identity — so the failure surfaces on the board, not just
+  on the agent's inbox. Idempotency: a re-poll on the same failing SHA
+  reuses the same task id (`ci-fail-{repo}-{workflow-slug}-{sha[:8]}`)
+  and the `TaskValidationError("duplicate task id …")` thrown by
+  scitex-todo's store is caught as a no-op skip — no duplicate todos.
+
+  Wiring:
+  - New `red_runs_for(repo)` returns rich `FailingRun(workflow, run_id,
+    head_sha)` per failure. `red_workflows_for(repo)` stays as a
+    name-only wrapper for back-compat with the existing public API.
+  - New `_resolve_todo_api(store_path=None)` lazy-imports
+    `scitex_todo._store.add_task` + `_store.TaskValidationError` (plus
+    `_paths.resolve_tasks_path` for the default store location).
+    scitex-todo is a SOFT dependency: an `ImportError` short-circuits
+    to no-op + fail-open so the dispatch loop stays alive on hosts
+    that don't have scitex-todo installed.
+  - New `_create_todo_if_new(...)` does the actual `add_task` call;
+    catches duplicate-id violations silently, re-raises any other
+    `TaskValidationError`. The `todo_api` keyword is the DI seam for
+    tests (PA-306 / STX-NM* — hand-rolled fakes, no `unittest.mock`).
+  - `run_once` threads everything together; each `AgentResult` gains
+    `todos_filed` / `todos_already_open` tuples so callers can audit
+    per-pass bookkeeping. Filing happens even on dry-run + agent-busy
+    paths because the todo is the *durable* record of the failure;
+    the sac dispatch is the *live* nudge — either being skipped
+    doesn't excuse the other.
+
+  Mapping to scitex-todo's schema (proj-scitex-todo a2a, 2026-06-09 —
+  msg `ffa6ee32`/`99d1964a`):
+  - `kind="task"` (NOT `"bug"` — bug is not in `VALID_KINDS`; we prefix
+    the title with `[CI-FAIL]` instead so the operator can grep).
+  - `status="pending"`, `assignee=<agent>`, `project=<repo basename>`,
+    `pr_url=<run URL>`, `note=` markdown block (workflow / sha / run).
+
+  Auto-close on red→green recovery is intentionally OUT of scope for
+  v1 (lead 2026-06-09 design review).
+
 ## [0.17.8] — 2026-06-09
 
 ### Fixed

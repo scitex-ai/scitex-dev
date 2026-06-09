@@ -417,3 +417,203 @@ def test_run_once_skips_dispatch_when_agent_busy():
     # Assert — busy was detected, dispatch was skipped (only db query happened).
     send_calls = [c for c in sac_calls if c and c[0] == "agents" and c[1] == "send"]
     assert send_calls == []
+
+
+# ---------------------------------------------------------------------------
+# scitex-todo hook — pure helper + DI-seam tests
+# ---------------------------------------------------------------------------
+#
+# Tests use hand-rolled fakes (PA-306 / STX-NM*). No unittest.mock, no
+# monkeypatch, no real scitex-todo import. The production code's
+# `todo_api` keyword seam is exactly the injection point.
+
+
+class _FakeTaskValidationError(Exception):
+    """Stand-in for scitex_todo._model.TaskValidationError."""
+
+
+class _FakeAddTaskCallable:
+    """Hand-rolled fake of scitex_todo._store.add_task.
+
+    Captures every call's kwargs into ``calls`` and raises ``raises``
+    when set. Mirrors the real ``add_task(store_path, /, **fields)``
+    positional shape so the production call site exercises its real
+    signature path.
+    """
+
+    def __init__(self, raises: Exception | None = None) -> None:
+        self.raises = raises
+        self.calls: list[dict] = []
+
+    def __call__(self, store_path, **kwargs) -> None:
+        self.calls.append({"store_path": store_path, **kwargs})
+        if self.raises is not None:
+            raise self.raises
+
+
+def _make_fake_todo_api(raises: Exception | None = None) -> _ci_watch._TodoApi:
+    """Build a _TodoApi populated with hand-rolled fakes."""
+    return _ci_watch._TodoApi(
+        add_task=_FakeAddTaskCallable(raises=raises),
+        validation_error_cls=_FakeTaskValidationError,
+        store_path="/tmp/fake-todo-store.yaml",
+    )
+
+
+def test_todo_task_id_normalizes_workflow_slug():
+    # Arrange
+    repo = "ywatanabe1989/scitex-stats"
+    workflow = "pytest-matrix-on-ubuntu-py3.12"
+    head_sha = "abcd1234567890abcdef00000000000000000000"
+
+    # Act
+    task_id = _ci_watch._todo_task_id_for(repo, workflow, head_sha)
+
+    # Assert
+    assert task_id == "ci-fail-scitex-stats-pytest-matrix-on-ubuntu-py3-12-abcd1234"
+
+
+def test_todo_task_id_falls_back_when_sha_empty():
+    # Arrange
+    repo = "ywatanabe1989/scitex-stats"
+    workflow = "tests"
+    head_sha = ""
+
+    # Act
+    task_id = _ci_watch._todo_task_id_for(repo, workflow, head_sha)
+
+    # Assert
+    assert task_id == "ci-fail-scitex-stats-tests-nosha"
+
+
+def test_create_todo_new_path_calls_add_task_once():
+    # Arrange
+    api = _make_fake_todo_api()
+    failing = _ci_watch.FailingRun(
+        workflow="tests",
+        run_id=42,
+        head_sha="abcd1234ef567890abcdef00000000000000bbbb",
+    )
+
+    # Act
+    created = _ci_watch._create_todo_if_new(
+        agent="proj-scitex-stats",
+        repo="ywatanabe1989/scitex-stats",
+        failing_run=failing,
+        todo_api=api,
+    )
+
+    # Assert
+    fake_add = api.add_task
+    assert created is True and len(fake_add.calls) == 1 and fake_add.calls[0][
+        "id"
+    ] == "ci-fail-scitex-stats-tests-abcd1234"
+
+
+def test_create_todo_duplicate_path_returns_false_silently():
+    # Arrange
+    dup_exc = _FakeTaskValidationError(
+        "/store.yaml: duplicate task id 'ci-fail-scitex-stats-tests-abcd1234'"
+    )
+    api = _make_fake_todo_api(raises=dup_exc)
+    failing = _ci_watch.FailingRun(
+        workflow="tests",
+        run_id=42,
+        head_sha="abcd1234ef567890abcdef00000000000000bbbb",
+    )
+
+    # Act
+    created = _ci_watch._create_todo_if_new(
+        agent="proj-scitex-stats",
+        repo="ywatanabe1989/scitex-stats",
+        failing_run=failing,
+        todo_api=api,
+    )
+
+    # Assert
+    assert created is False
+
+
+def test_create_todo_other_validation_error_reraises():
+    # Arrange
+    other_exc = _FakeTaskValidationError(
+        "/store.yaml: required field 'title' missing"
+    )
+    api = _make_fake_todo_api(raises=other_exc)
+    failing = _ci_watch.FailingRun(
+        workflow="tests",
+        run_id=42,
+        head_sha="abcd1234ef567890abcdef00000000000000bbbb",
+    )
+
+    # Act
+    # Assert
+    with pytest.raises(_FakeTaskValidationError):
+        _ci_watch._create_todo_if_new(
+            agent="proj-scitex-stats",
+            repo="ywatanabe1989/scitex-stats",
+            failing_run=failing,
+            todo_api=api,
+        )
+
+
+def test_create_todo_returns_false_when_api_missing():
+    # Arrange
+    failing = _ci_watch.FailingRun(
+        workflow="tests",
+        run_id=42,
+        head_sha="abcd1234ef567890abcdef00000000000000bbbb",
+    )
+
+    # Act — pass todo_api=None and rely on _resolve_todo_api short-circuit.
+    # In CI sandboxes without scitex-todo installed (or whenever the
+    # import path raises) the production helper degrades to no-op.
+    # We replace the module-level resolver with one that returns None
+    # so the test does not depend on the test runner's installed deps.
+    saved_resolve = _ci_watch._resolve_todo_api
+    _ci_watch._resolve_todo_api = lambda store_path=None: None  # type: ignore[assignment]
+    try:
+        created = _ci_watch._create_todo_if_new(
+            agent="proj-scitex-stats",
+            repo="ywatanabe1989/scitex-stats",
+            failing_run=failing,
+            todo_api=None,
+        )
+    finally:
+        _ci_watch._resolve_todo_api = saved_resolve  # type: ignore[assignment]
+
+    # Assert
+    assert created is False
+
+
+def test_red_runs_extracts_head_sha_and_run_id():
+    # Arrange — gh JSON now includes headSha alongside the existing fields.
+    payload = json.dumps(
+        [
+            {
+                "conclusion": "failure",
+                "workflowName": "tests",
+                "databaseId": 99,
+                "headSha": "deadbeef00000000000000000000000000000000",
+            },
+            {
+                "conclusion": "success",
+                "workflowName": "rtd",
+                "databaseId": 98,
+                "headSha": "cafef00d00000000000000000000000000000000",
+            },
+        ]
+    )
+    gh = _gh_runner_for(payload)
+
+    # Act
+    reds = _ci_watch.red_runs_for("owner/repo", gh_runner=gh)
+
+    # Assert
+    assert reds == [
+        _ci_watch.FailingRun(
+            workflow="tests",
+            run_id=99,
+            head_sha="deadbeef00000000000000000000000000000000",
+        )
+    ]
