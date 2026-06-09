@@ -25,12 +25,14 @@ instead of monkey-patching ``subprocess``.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Callable, Mapping
+from pathlib import Path
+from typing import Any, Callable, Mapping
 
 # ---------------------------------------------------------------------------
 # Agent → owned repo map
@@ -73,9 +75,33 @@ class AgentResult:
     dispatched: bool
     dispatch_output: str
     error: str | None = None
+    # Per-pass todo bookkeeping: the (workflow, sha) identities that
+    # were filed into scitex-todo on this round, and the identities
+    # that were already on file (idempotent skip). Both empty when
+    # scitex-todo is unavailable (fail-open) or when there were no
+    # red workflows to file in the first place.
+    todos_filed: tuple[str, ...] = ()
+    todos_already_open: tuple[str, ...] = ()
 
     def is_red(self) -> bool:
         return bool(self.red_workflows)
+
+
+@dataclass(frozen=True)
+class FailingRun:
+    """One workflow whose latest develop run is ``failure``.
+
+    Carries the identity tuple (``workflow``, ``run_id``, ``head_sha``)
+    that the scitex-todo hook uses as its idempotency key — same
+    (workflow, head_sha) re-detected on a later cron round must NOT
+    create a duplicate todo. ``run_id`` is fetched alongside so the
+    todo can link the operator at the failing run's GitHub Actions
+    page directly.
+    """
+
+    workflow: str
+    run_id: int
+    head_sha: str
 
 
 # ---------------------------------------------------------------------------
@@ -94,21 +120,27 @@ def _default_gh_runner(args: list[str]) -> subprocess.CompletedProcess:
     )
 
 
-def red_workflows_for(
+def red_runs_for(
     repo: str,
     *,
     gh_runner: Callable[[list[str]], subprocess.CompletedProcess] | None = None,
-) -> list[str]:
-    """Return the workflow names whose latest develop run is ``failure``.
+) -> list[FailingRun]:
+    """Return one :class:`FailingRun` per workflow whose latest develop run is ``failure``.
 
     Parses the JSON output of
 
         gh -R <repo> run list --branch develop --limit 12 \
-            --json conclusion,workflowName,databaseId
+            --json conclusion,workflowName,databaseId,headSha
 
     Only the most recent run per workflow is considered — ``gh`` returns
     runs newest-first, so the first occurrence of each ``workflowName``
     wins. Pure helper; no side-effects.
+
+    The ``headSha`` field is needed downstream by
+    :func:`_create_todo_if_new` for its idempotency key (a re-poll on
+    the same failing SHA must NOT spawn a duplicate todo). ``databaseId``
+    becomes ``run_id`` so the todo can link straight to the failing
+    run's logs page.
 
     Raises ``RuntimeError`` if ``gh`` exits non-zero — the cron job
     swallows the error per-repo so one bad repo doesn't kill the loop.
@@ -124,7 +156,7 @@ def red_workflows_for(
         "--limit",
         "12",
         "--json",
-        "conclusion,workflowName,databaseId",
+        "conclusion,workflowName,databaseId,headSha",
     ]
     r = run(args)
     if r.returncode != 0:
@@ -138,15 +170,191 @@ def red_workflows_for(
         raise RuntimeError(f"gh returned non-JSON for {repo}: {exc}") from exc
 
     seen: set[str] = set()
-    reds: list[str] = []
+    reds: list[FailingRun] = []
     for entry in data:
         name = entry.get("workflowName")
         if not name or name in seen:
             continue
         seen.add(name)
         if entry.get("conclusion") == "failure":
-            reds.append(name)
+            reds.append(
+                FailingRun(
+                    workflow=name,
+                    run_id=int(entry.get("databaseId") or 0),
+                    head_sha=str(entry.get("headSha") or ""),
+                )
+            )
     return reds
+
+
+def red_workflows_for(
+    repo: str,
+    *,
+    gh_runner: Callable[[list[str]], subprocess.CompletedProcess] | None = None,
+) -> list[str]:
+    """Return the workflow names whose latest develop run is ``failure``.
+
+    Thin name-only wrapper around :func:`red_runs_for`, preserved as the
+    historical wire shape (``list[str]``) so existing callers and tests
+    keep working unchanged after the rich-tuple refactor that lets the
+    scitex-todo hook see ``head_sha`` / ``run_id``.
+    """
+    return [r.workflow for r in red_runs_for(repo, gh_runner=gh_runner)]
+
+
+# ---------------------------------------------------------------------------
+# scitex-todo creation layer (CI-fail → todo)
+# ---------------------------------------------------------------------------
+#
+# When ci-watch spots a red workflow, we ALSO file a scitex-todo entry so
+# the failure surfaces on the agent's board, not just in the dispatched
+# fix-forward turn. Design notes:
+#
+#   * scitex-todo is a SOFT dependency. We lazy-import inside
+#     :func:`_resolve_todo_api`; an ``ImportError`` (CI sandbox without
+#     scitex-todo, fresh editable install, etc.) degrades to no-op, never
+#     blocks the dispatch loop. Same fail-open spirit as the busy-probe.
+#
+#   * Idempotency: the (repo, workflow, head_sha) tuple is hashed into a
+#     stable task id (see :func:`_todo_task_id_for`). A subsequent cron
+#     round on the SAME failing SHA reuses the id; scitex-todo's
+#     ``add_task`` raises ``TaskValidationError`` with the message
+#     ``"duplicate task id ..."`` which we catch and treat as "already
+#     filed" — no duplicate todos. proj-scitex-todo confirmed the
+#     ``"duplicate task id"`` substring is stable (see ``_model.py:368``
+#     in scitex-todo; if it ever shifts they grep our hook for sync).
+#     No dedicated exit code exists yet (CLI uses click's catch-all
+#     exit 1), so a substring match against the exception message is
+#     the available identity signal.
+#
+#   * Mapping to scitex-todo's schema (proj-scitex-todo a2a, 2026-06-09):
+#       - kind="task" (NOT "bug" — bug is not in VALID_KINDS; we prefix
+#         the title with [CI-FAIL] instead so the operator can grep).
+#       - status="pending"
+#       - assignee=<owning sac agent>
+#       - project=<repo basename>
+#       - pr_url=<GitHub Actions run URL> (no --url flag exists; pr_url
+#         is the closest free-form URL field)
+#       - note=<markdown block with workflow / SHA / run URL>
+#
+#   * Auto-close on red→green recovery is intentionally OUT of scope
+#     for v1 (lead 2026-06-09). Tracked as a follow-up.
+
+
+@dataclass(frozen=True)
+class _TodoApi:
+    """Bundle of scitex-todo entry points needed by the hook.
+
+    Lets tests substitute a hand-rolled fake (PA-306 / STX-NM*) for the
+    `add_task` callable + the `validation_error_cls` type without
+    `unittest.mock` or `monkeypatch`.
+    """
+
+    add_task: Callable[..., Any]
+    validation_error_cls: type
+    store_path: Path | None
+
+
+def _resolve_todo_api(
+    store_path: Path | None = None,
+) -> _TodoApi | None:
+    """Lazy-import scitex-todo. Returns ``None`` if not installed.
+
+    Caller treats ``None`` as "scitex-todo unavailable → skip todo
+    creation, keep going" (fail-open). This keeps scitex-todo a soft
+    dependency: ci-watch's core (red detection + sac dispatch) works
+    even on hosts that don't have scitex-todo installed.
+    """
+    try:
+        from scitex_todo._paths import resolve_tasks_path
+        from scitex_todo._store import (
+            TaskValidationError,
+            add_task,
+        )
+    except Exception:  # stx-allow: fallback (reason: scitex-todo is a soft dep)
+        return None
+    resolved = store_path if store_path is not None else resolve_tasks_path(None)
+    return _TodoApi(
+        add_task=add_task,
+        validation_error_cls=TaskValidationError,
+        store_path=resolved,
+    )
+
+
+_TODO_SLUG_RE = re.compile(r"[^a-z0-9-]+")
+
+
+def _todo_task_id_for(repo: str, workflow: str, head_sha: str) -> str:
+    """Stable id for the (repo, workflow, head_sha) tuple.
+
+    Format: ``ci-fail-{repo-basename}-{workflow-slug}-{sha[:8]}``. Same
+    failing SHA + workflow → same id → idempotent ``add_task`` (we catch
+    ``TaskValidationError("duplicate task id ...")`` upstream). The
+    workflow name is lowercased and stripped to ``[a-z0-9-]`` so spaces
+    and matrix-row qualifiers (``pytest-matrix-on-ubuntu-py3.12``)
+    round-trip safely through scitex-todo's id validation.
+    """
+    repo_slug = repo.split("/")[-1]
+    workflow_slug = _TODO_SLUG_RE.sub("-", workflow.lower()).strip("-")
+    short_sha = head_sha[:8] if head_sha else "nosha"
+    return f"ci-fail-{repo_slug}-{workflow_slug}-{short_sha}"
+
+
+def _create_todo_if_new(
+    *,
+    agent: str,
+    repo: str,
+    failing_run: FailingRun,
+    todo_api: _TodoApi | None = None,
+) -> bool:
+    """File a CI-fail todo via the scitex-todo Python API.
+
+    Returns ``True`` if a new todo was created, ``False`` if the
+    (repo, workflow, head_sha) tuple was already on file (idempotent
+    skip) OR scitex-todo is not importable (fail-open). Any other
+    ``TaskValidationError`` (real schema breakage) re-raises.
+
+    The substring match against ``"duplicate task id"`` is the
+    identity signal proj-scitex-todo's CLI exposes today; if they ever
+    add a dedicated exit code / exception subclass, swap this for the
+    typed check. The string is hard-coded in scitex-todo's
+    ``_model._validate_tasks`` (proj-scitex-todo a2a confirmed
+    stability and committed to grep on rename).
+    """
+    api = todo_api if todo_api is not None else _resolve_todo_api()
+    if api is None:
+        return False
+    task_id = _todo_task_id_for(repo, failing_run.workflow, failing_run.head_sha)
+    project = repo.split("/")[-1]
+    short_sha = failing_run.head_sha[:8] if failing_run.head_sha else "nosha"
+    title = f"[CI-FAIL] {project} / {failing_run.workflow} @ {short_sha}"
+    run_url = (
+        f"https://github.com/{repo}/actions/runs/{failing_run.run_id}"
+        if failing_run.run_id
+        else ""
+    )
+    note = (
+        f"Workflow: `{failing_run.workflow}`\n"
+        f"SHA: `{failing_run.head_sha}`\n"
+        f"Run: {run_url}"
+    )
+    try:
+        api.add_task(
+            api.store_path,
+            id=task_id,
+            title=title,
+            status="pending",
+            kind="task",
+            project=project,
+            assignee=agent,
+            pr_url=run_url,
+            note=note,
+        )
+        return True
+    except api.validation_error_cls as exc:
+        if "duplicate task id" in str(exc):
+            return False
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -339,6 +547,7 @@ def run_once(
     dry_run: bool = False,
     gh_runner: Callable[[list[str]], subprocess.CompletedProcess] | None = None,
     sac_runner: Callable[..., subprocess.CompletedProcess] | None = None,
+    todo_api: _TodoApi | None = None,
     out=None,
 ) -> list[AgentResult]:
     """Run one ci-watch pass over every (or the named) agent.
@@ -346,6 +555,13 @@ def run_once(
     Returns a list of ``AgentResult`` so callers (and tests) can inspect
     what happened. Prints progress to ``out`` (default ``sys.stdout``) in
     the same human-readable format as the bash prototype.
+
+    The ``todo_api`` seam lets tests pass a hand-rolled fake to verify
+    the CI-fail → scitex-todo bookkeeping without importing scitex-todo
+    at all (PA-306 / STX-NM* — no ``unittest.mock``). In production
+    callers leave it ``None`` so :func:`_resolve_todo_api` lazy-imports
+    scitex-todo on first need; if scitex-todo is not installed the hook
+    short-circuits to no-op and the rest of the loop is unaffected.
     """
     if out is None:
         out = sys.stdout
@@ -358,7 +574,7 @@ def run_once(
         repo = table[agent]
         print(f"=== {agent} <- {repo} ===", file=out)
         try:
-            reds = red_workflows_for(repo, gh_runner=gh_runner)
+            reds = red_runs_for(repo, gh_runner=gh_runner)
         except RuntimeError as exc:
             print(f"  error: {exc}", file=out)
             results.append(
@@ -372,6 +588,8 @@ def run_once(
                 )
             )
             continue
+
+        red_names = [r.workflow for r in reds]
 
         if not reds:
             print("  all green", file=out)
@@ -388,10 +606,40 @@ def run_once(
 
         print("  red workflows:", file=out)
         for r in reds:
-            print(f"    - {r}", file=out)
+            print(f"    - {r.workflow}", file=out)
+
+        # CI-fail → scitex-todo. Fail-open so a scitex-todo glitch never
+        # blocks the sac dispatch / fix-forward turn below. We file the
+        # todo even in dry-run + agent-busy paths because the todo is
+        # the *durable* record of the failure; the sac dispatch is the
+        # *live* nudge. Either being skipped doesn't excuse the other.
+        todos_filed: list[str] = []
+        todos_already_open: list[str] = []
+        for failing_run in reds:
+            try:
+                created = _create_todo_if_new(
+                    agent=agent,
+                    repo=repo,
+                    failing_run=failing_run,
+                    todo_api=todo_api,
+                )
+            except Exception as exc:  # stx-allow: fallback (reason: todo hook fail-open)
+                # Surface a one-line diagnostic so the operator notices
+                # if scitex-todo starts rejecting every call, but keep
+                # the loop alive.
+                print(f"  todo-hook: {failing_run.workflow}: {exc}", file=out)
+                continue
+            task_id = _todo_task_id_for(
+                repo, failing_run.workflow, failing_run.head_sha
+            )
+            if created:
+                todos_filed.append(task_id)
+                print(f"  todo: filed {task_id}", file=out)
+            else:
+                todos_already_open.append(task_id)
 
         if dry_run:
-            prompt = build_fix_prompt(repo, reds)
+            prompt = build_fix_prompt(repo, red_names)
             print(
                 f"  [dry-run] would dispatch to {agent}:",
                 file=out,
@@ -402,9 +650,11 @@ def run_once(
                 AgentResult(
                     agent=agent,
                     repo=repo,
-                    red_workflows=tuple(reds),
+                    red_workflows=tuple(red_names),
                     dispatched=False,
                     dispatch_output=prompt,
+                    todos_filed=tuple(todos_filed),
+                    todos_already_open=tuple(todos_already_open),
                 )
             )
             continue
@@ -422,26 +672,30 @@ def run_once(
                     AgentResult(
                         agent=agent,
                         repo=repo,
-                        red_workflows=tuple(reds),
+                        red_workflows=tuple(red_names),
                         dispatched=False,
                         dispatch_output="",
+                        todos_filed=tuple(todos_filed),
+                        todos_already_open=tuple(todos_already_open),
                     )
                 )
                 continue
 
         print(f"  dispatching fix turn to {agent} ...", file=out)
         try:
-            output = dispatch_fix_turn(agent, repo, reds, sac_runner=sac_runner)
+            output = dispatch_fix_turn(agent, repo, red_names, sac_runner=sac_runner)
         except RuntimeError as exc:
             print(f"  error: {exc}", file=out)
             results.append(
                 AgentResult(
                     agent=agent,
                     repo=repo,
-                    red_workflows=tuple(reds),
+                    red_workflows=tuple(red_names),
                     dispatched=False,
                     dispatch_output="",
                     error=str(exc),
+                    todos_filed=tuple(todos_filed),
+                    todos_already_open=tuple(todos_already_open),
                 )
             )
             continue
@@ -452,9 +706,11 @@ def run_once(
             AgentResult(
                 agent=agent,
                 repo=repo,
-                red_workflows=tuple(reds),
+                red_workflows=tuple(red_names),
                 dispatched=True,
                 dispatch_output=output,
+                todos_filed=tuple(todos_filed),
+                todos_already_open=tuple(todos_already_open),
             )
         )
 
