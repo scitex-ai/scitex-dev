@@ -261,16 +261,22 @@ def _make_runner_repo(tmp_path: Path, *deps: str) -> Path:
 
 
 def test_cli_clean_repo_exits_0_with_succ_prefix(tmp_path):
-    # Arrange: no `==` pins at all => no PyPI lookup, no warnings.
+    """No `==` pins → no PyPI lookup → exit 0 with SUCC: prefix.
+
+    One-assert convention (PA-307 §3 STX-TQ007): the SUCC path is a
+    single observable invariant — exit_code 0 AND SUCC: printed —
+    asserted as a single boolean.
+    """
+    # Arrange
     repo = _make_runner_repo(tmp_path, "scitex-io>=0.2.0")
     runner = CliRunner()
 
     # Act
     result = runner.invoke(_umbrella_pins_cli, [str(repo)])
+    combined = (result.output or "") + (result.stderr or "")
 
     # Assert
-    assert result.exit_code == 0, result.output + (result.stderr or "")
-    assert "SUCC:" in result.output
+    assert result.exit_code == 0 and "SUCC:" in result.output, combined
 
 
 def test_cli_drift_default_warn_only_exits_0(tmp_path):
@@ -279,7 +285,9 @@ def test_cli_drift_default_warn_only_exits_0(tmp_path):
     The whole point of the 0.17.8 emergency change is that an upstream
     leaf release MUST NOT cascade red CI across the ecosystem. Real
     drift (pin behind PyPI latest) is simulated via a stub
-    `_default_pypi_latest` so no real network is needed.
+    `_default_pypi_latest` so no real network is needed. The observable
+    invariant is a single 3-part conjunction (exit 0 AND drift line
+    printed AND WARN: prefix used) collapsed into one assert.
     """
     # Arrange — umbrella pins scitex-io==0.1.0, PyPI says 0.5.0 → drift.
     repo = _make_runner_repo(tmp_path, "scitex-io==0.1.0")
@@ -292,14 +300,15 @@ def test_cli_drift_default_warn_only_exits_0(tmp_path):
         result = runner.invoke(_umbrella_pins_cli, [str(repo)])
     finally:
         restore()
-
-    # Assert — drift surfaced as WARN, exit 0 by default.
     combined = (result.output or "") + (result.stderr or "")
-    assert result.exit_code == 0, (
-        f"warn-only default must exit 0 (got {result.exit_code}). {combined}"
-    )
-    assert "PS-170: scitex-io==0.1.0 but PyPI latest is 0.5.0" in combined
-    assert "WARN:" in combined and "ERRO:" not in combined, combined
+
+    # Assert
+    assert (
+        result.exit_code == 0
+        and "PS-170: scitex-io==0.1.0 but PyPI latest is 0.5.0" in combined
+        and "WARN:" in combined
+        and "ERRO:" not in combined
+    ), combined
 
 
 def test_cli_drift_with_strict_exits_1(tmp_path):
@@ -315,12 +324,15 @@ def test_cli_drift_with_strict_exits_1(tmp_path):
         result = runner.invoke(_umbrella_pins_cli, [str(repo), "--strict"])
     finally:
         restore()
-
-    # Assert — drift surfaced as ERRO, exit 1.
     combined = (result.output or "") + (result.stderr or "")
-    assert result.exit_code == 1, combined
-    assert "PS-170: scitex-io==0.1.0 but PyPI latest is 0.5.0" in combined
-    assert "ERRO:" in combined and "WARN:" not in combined, combined
+
+    # Assert
+    assert (
+        result.exit_code == 1
+        and "PS-170: scitex-io==0.1.0 but PyPI latest is 0.5.0" in combined
+        and "ERRO:" in combined
+        and "WARN:" not in combined
+    ), combined
 
 
 def test_cli_strict_network_failure_without_allow_exits_1(tmp_path):
@@ -338,17 +350,17 @@ def test_cli_strict_network_failure_without_allow_exits_1(tmp_path):
         result = runner.invoke(_umbrella_pins_cli, [str(repo), "--strict"])
     finally:
         restore()
+    combined = (result.output or "") + (result.stderr or "")
 
     # Assert
-    combined = (result.output or "") + (result.stderr or "")
-    assert result.exit_code == 1, combined
-    assert "PS-170W:" in combined
+    assert result.exit_code == 1 and "PS-170W:" in combined, combined
 
 
 def test_cli_strict_plus_allow_network_error_exits_0(tmp_path):
     """`--strict --allow-network-error` downgrades the network-flake case
     (PS-170W only, no hard PS-170 drift) to exit 0 — the release-pipeline
-    path that runs on the umbrella's tag-push CI relies on this."""
+    path that runs on the umbrella's tag-push CI relies on this. The
+    warning still surfaces so operators see the network flake."""
     # Arrange — PyPI unreachable, but pin is otherwise fine.
     repo = _make_runner_repo(tmp_path, "scitex-io==0.2.0")
     apply, restore = _swap_pypi(lambda pkg: None)
@@ -363,13 +375,10 @@ def test_cli_strict_plus_allow_network_error_exits_0(tmp_path):
         )
     finally:
         restore()
+    combined = (result.output or "") + (result.stderr or "")
 
     # Assert
-    combined = (result.output or "") + (result.stderr or "")
-    assert result.exit_code == 0, combined
-    # The PS-170W warning still surfaces — operators want to see it
-    # even when it's not fatal.
-    assert "PS-170W:" in combined
+    assert result.exit_code == 0 and "PS-170W:" in combined, combined
 
 
 def test_cli_help_advertises_strict_flag(tmp_path):
@@ -378,8 +387,11 @@ def test_cli_help_advertises_strict_flag(tmp_path):
     # Arrange / Act
     runner = CliRunner()
     result = runner.invoke(_umbrella_pins_cli, ["--help"])
+    haystack = result.output.lower()
 
     # Assert
-    assert result.exit_code == 0
-    assert "--strict" in result.output
-    assert "warn-only" in result.output.lower() or "warn" in result.output.lower()
+    assert (
+        result.exit_code == 0
+        and "--strict" in result.output
+        and "warn" in haystack
+    ), result.output
