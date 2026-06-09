@@ -26,4 +26,7 @@ transitive_verbs:
   # "unset" is standard English (Bash builtin, shell vocab) but doesn't
   # sit in the Moby POS catalog the auditor consults.
   - unset
+  # `scitex-dev ci runner use <target>` — flip CI_RUNS_ON for the
+  # current repo's GitHub Actions workflow.
+  - use
 intransitive_verbs: []

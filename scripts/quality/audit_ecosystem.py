@@ -366,19 +366,31 @@ def load_registry(repo_root: Path) -> dict[str, dict[str, str]]:
     auditor can resolve packages whose dirname differs from the registry key
     (e.g. `scitex` lives at `~/proj/scitex-python/`).
     """
-    # After 0.11.0 layout refactor, ecosystem.py lives at _ecosystem/_core.py.
-    # Try the new path first; fall back to the pre-refactor path so the same
-    # script can audit older repos / tags that still use the flat layout.
-    eco_py = repo_root / "src" / "scitex_dev" / "_ecosystem" / "_core.py"
-    if not eco_py.is_file():
-        eco_py = repo_root / "src" / "scitex_dev" / "ecosystem.py"
-    if not eco_py.is_file():
+    # Layout fallback chain (newest layout first):
+    #   1. 0.17.0+ — `_ecosystem/_registry.py` owns the ECOSYSTEM dict
+    #      literal; `_core.py` only does `from ._registry import ECOSYSTEM`
+    #      and so has no dict literals for the regex below to match.
+    #      (0.17.7 release exposed this: the script silently returned
+    #      an empty registry → downstream audit crashed with the
+    #      operator-visible FileNotFoundError on the ecosystem registry
+    #      file — see 0.17.8 CHANGELOG.)
+    #   2. 0.11.0 – 0.16.x — `_ecosystem/_core.py` owned the dict inline.
+    #   3. pre-0.11.0 — flat `scitex_dev/ecosystem.py` owned the dict
+    #      inline. Kept so the same script can audit older repos / tags.
+    candidates = [
+        repo_root / "src" / "scitex_dev" / "_ecosystem" / "_registry.py",
+        repo_root / "src" / "scitex_dev" / "_ecosystem" / "_core.py",
+        repo_root / "src" / "scitex_dev" / "ecosystem.py",
+    ]
+    eco_py = next((p for p in candidates if p.is_file()), None)
+    if eco_py is None:
         return {}
     text = eco_py.read_text(encoding="utf-8")
     out: dict[str, dict[str, str]] = {}
-    # Match `"<key>": { ...inner... }` per entry.
+    # Match `"<key>": { ...inner... }` per entry.  Allow newline between key
+    # and opening brace (new _registry.py layout: multiline entries).
     for m in re.finditer(
-        r'^\s*"([\w-]+)"\s*:\s*\{(.*?)\},?\s*$',
+        r'^\s*"([\w-]+)"\s*:\s*\n?\s*(.*?)\n\s*\}',
         text,
         re.MULTILINE | re.DOTALL,
     ):
