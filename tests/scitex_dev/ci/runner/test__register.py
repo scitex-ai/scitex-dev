@@ -1,0 +1,54 @@
+"""Smoke tests for the ``scitex-dev ci runner`` command group.
+
+No mocks: builds the real click group via ``register_ci_runner_commands``
+and invokes ``--help`` on each subcommand through ``CliRunner``, asserting
+the command wiring imports and renders. This guards against import errors,
+broken decorators, and missing options without exercising any side effects.
+"""
+
+from __future__ import annotations
+
+import click
+import pytest
+from click.testing import CliRunner
+
+from scitex_dev.ci.runner import register_ci_runner_commands
+
+RUNNER_SUBCOMMANDS = ["status", "use", "up", "down", "renew", "register"]
+
+
+def _build_root_group() -> click.Group:
+    @click.group()
+    def root() -> None:
+        pass
+
+    register_ci_runner_commands(root)
+    return root
+
+
+def test_ci_runner_group_help_exits_zero() -> None:
+    # Arrange
+    root = _build_root_group()
+    # Act
+    result = CliRunner().invoke(root, ["ci", "runner", "--help"])
+    # Assert
+    assert result.exit_code == 0
+
+
+@pytest.mark.parametrize("subcommand", RUNNER_SUBCOMMANDS)
+def test_ci_runner_each_subcommand_help_exits_zero(subcommand: str) -> None:
+    # Arrange
+    root = _build_root_group()
+    # Act
+    result = CliRunner().invoke(root, ["ci", "runner", subcommand, "--help"])
+    # Assert
+    assert result.exit_code == 0
+
+
+def test_ci_runner_register_help_lists_yes_flag() -> None:
+    # Arrange
+    root = _build_root_group()
+    # Act
+    result = CliRunner().invoke(root, ["ci", "runner", "register", "--help"])
+    # Assert
+    assert "--yes" in result.output
