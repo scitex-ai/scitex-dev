@@ -2194,6 +2194,14 @@ def audit_project(
 
     check_ps148_optional_deps_guarded(repo_root, distribution, Violation, violations)
     # hook-bypass: line-limit
+    from ._check_console_script_core_deps import (
+        check_ps213_console_script_core_deps,
+    )
+
+    check_ps213_console_script_core_deps(
+        repo_root, distribution, Violation, violations
+    )
+    # hook-bypass: line-limit
     from ._check_hard_dep_overreach import check_ps149_hard_dep_overreach
 
     check_ps149_hard_dep_overreach(repo_root, distribution, Violation, violations)

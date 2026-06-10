@@ -1,11 +1,24 @@
 name: import-smoke
 
-# Catches "wheel installs but `import scitex_dev` blows up at runtime"
-# — separate from the full pytest suite so a broken entry-point fails
-# fast without paying for the matrix. Companion to `tests` — confirms
-# the bare package (no extras) is `pip install -e .`-able and
-# `import scitex_dev` succeeds. Catches `[project] dependencies`
-# drift that the test matrix masks because it installs `[all,dev]`.
+# Catches two classes of dep-drift the full pytest matrix masks because
+# it installs [all,dev]:
+#
+#   (1) "wheel installs but `import scitex_dev` blows up at runtime" —
+#       a transitive runtime dep landed under `[project.optional-
+#       dependencies]` instead of `[project.dependencies]`.
+#
+#   (2) "package installs, import works, but the console-script fails
+#       to launch" — a CLI dep (click, typer, …) lives in an extra
+#       (`[cli]`, `[dev]`) so `<cli> --help` exits non-zero on a bare
+#       install. This is the PS-213 console-script-deps-must-be-core
+#       failure mode; the audit rule blocks it at PR time, this smoke
+#       blocks it again at install time so a slipped-through pin in
+#       `[project.dependencies]` is caught before merge.
+#
+# Companion to `tests` — confirms the bare package (no extras) is
+# `pip install -e .`-able, `import scitex_dev` succeeds, AND every
+# console-script declared in `[project.scripts]` returns exit-0 from
+# `--help`.
 
 on:
   push:
@@ -32,3 +45,31 @@ jobs:
           .venv/bin/pip install -e .
       - name: Import smoke
         run: .venv/bin/python -c "import scitex_dev; print(scitex_dev.__version__)"
+      - name: Console-scripts --help smoke (PS-213 enforcement at install time)
+        # Read every `[project.scripts]` entry from pyproject.toml and assert
+        # `<script> --help` exits 0 on the bare install. Any non-zero is a
+        # `[project.dependencies]` miss for a CLI dep.
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(
+            .venv/bin/python - <<'PY'
+          import sys
+          try:
+              import tomllib
+          except ModuleNotFoundError:
+              import tomli as tomllib  # py3.10 fallback (project pins py>=3.9)
+          with open("pyproject.toml", "rb") as f:
+              meta = tomllib.load(f)
+          for name in (meta.get("project", {}) or {}).get("scripts", {}) or {}:
+              print(name)
+          PY
+          )
+          if [ "${#scripts[@]}" -eq 0 ]; then
+            echo "No [project.scripts] declared — skipping CLI --help smoke."
+            exit 0
+          fi
+          for script in "${scripts[@]}"; do
+            echo "::group::$script --help"
+            .venv/bin/"$script" --help
+            echo "::endgroup::"
+          done
