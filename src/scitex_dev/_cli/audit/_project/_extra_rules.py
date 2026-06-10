@@ -164,6 +164,46 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "W",
         "adr-format",
     ),
+    (
+        "PS-213",
+        "§3",
+        (
+            "console-script-deps-must-be-core: a dep imported at "
+            "module-load on the reachability chain of any "
+            "`[project.scripts]` entry-point MUST appear in "
+            "`[project.dependencies]`. Currently the dep is satisfied "
+            "only via `[project.optional-dependencies]`, so bare "
+            "`pip install <peer>` followed by `<cli> --help` fails. "
+            "Move the dep to `[project.dependencies]` (and drop any "
+            "`try/except ImportError` graceful fallback — failing the "
+            "import is the correct CI signal, not a runtime hint). "
+            "Companion rule: PS-213i (info) emits LAZY-EXTRA-PATTERN-OK "
+            "for the permitted opposite case (function-scope import + "
+            "install hint referencing a real extra). See "
+            "_skills/general/01_ecosystem/"
+            "02_dependency-and-version-pinning.md "
+            "§console-script-deps-must-be-core."
+        ),
+        "E",
+        "core-cli-dep-missing",
+    ),
+    (
+        "PS-213i",
+        "§3",
+        (
+            "LAZY-EXTRA-PATTERN-OK: a dep declared only in "
+            "`[project.optional-dependencies].<extra>` is "
+            "lazy-imported inside a function body whose body also "
+            "raises with a `pip install <pkg>[<extra>]` install hint. "
+            "This is the canonical permitted pattern for "
+            "optional-subcommand deps; PS-213i reports it as an "
+            "info-severity signal so the operator can audit coverage "
+            "of every optional subcommand without grepping by hand. "
+            "Not a violation — info-only."
+        ),
+        "I",
+        "lazy-extra-pattern-ok",
+    ),
     # ── RP-2xx: research-project mirror (scripts ↔ tests/scripts) ──
     # Research projects (project-type: research) have no src/<pkg>/ — their
     # primary code lives in ./scripts/, mirrored by tests/scripts/. These
