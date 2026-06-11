@@ -184,4 +184,75 @@ def test_list_jobs_includes_task_harvest():
     assert "task-harvest" in names
 
 
+# ---------------------------------------------------------------------------
+# cred-distribute — the fifth registered job. Subsumes the operator's host-
+# side `~/.scitex/push-freshest-cred-to-spartan.sh` per directive 2026-06-11.
+# Pins the registry shape per the §3 "Adding a new job" checklist so a typo
+# in the schedule / command / log path can't ship silently.
+# ---------------------------------------------------------------------------
+
+
+def test_registry_has_cred_distribute_entry():
+    # Arrange
+    # Act
+    # Assert
+    assert "cred-distribute" in _jobs.JOB_REGISTRY
+
+
+def test_cred_distribute_name_matches_registry_key():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("cred-distribute")
+    # Assert
+    assert spec.name == "cred-distribute"
+
+
+def test_cred_distribute_schedule_is_every_two_hours_on_the_hour():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("cred-distribute")
+    # Assert — matches the operator's spartan-cred-push cadence.
+    assert spec.schedule == "0 */2 * * *"
+
+
+def test_cred_distribute_command_invokes_scitex_dev_cron_exec():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("cred-distribute")
+    # Assert
+    assert "scitex-dev cron exec cred-distribute" in spec.command
+
+
+def test_cred_distribute_command_writes_to_named_log_file():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("cred-distribute")
+    # Assert
+    assert "/.scitex/dev/logs/cron-cred-distribute.log" in spec.command
+
+
+def test_cred_distribute_description_mentions_sac_distribute_verb():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("cred-distribute")
+    # Assert — `scitex-dev cron list` should make obvious what shells out.
+    assert "sac accounts distribute" in spec.description
+
+
+def test_cred_distribute_description_mentions_config_path():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("cred-distribute")
+    # Assert — operator needs to find the YAML knob without reading source.
+    assert "cred-distribute.yaml" in spec.description
+
+
+def test_list_jobs_includes_cred_distribute():
+    # Arrange
+    # Act
+    names = [s.name for s in _jobs.list_jobs()]
+    # Assert
+    assert "cred-distribute" in names
+
+
 # EOF
