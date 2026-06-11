@@ -26,6 +26,7 @@ from ._cmds import (
     _jobs_cron,
     _jobs_systemd,
     _list,
+    _up,
     _prune_merged,
     _regen_umbrella,
     _sync_status,
@@ -101,5 +102,10 @@ def register_ecosystem_commands(main_group):
     # daemon` subcommand was removed as a duplicate surface.
     _jobs_cron.register(ecosystem)
     _jobs_systemd.register(ecosystem)
+
+    # Headline ecosystem-up one-shot: discover_jobs() → install all
+    # kinds + (with --yes) systemctl enable+start each. Operator's
+    # "register systemd once and the ecosystem stays reconciled" UX.
+    _up.register(ecosystem)
 
     return ecosystem
