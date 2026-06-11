@@ -7,6 +7,61 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.17.11] - 2026-06-11
+
+### Added
+- **`scitex_dev.jobs` federated job contract — `service`/`timer`/`cron` taxonomy.**
+  Refactor of the existing `JobSpec` dataclass + the `scitex_dev.jobs`
+  entry-point group into the canonical aggregator contract the
+  operator commissioned. Three explicit kinds replace the prior
+  overloaded `kind="systemd"`+empty-schedule footgun:
+    - `kind="service"` — long-running `--user` Service. The 8051
+      scitex-todo dashboard, long-poll listeners, etc. `Restart=`
+      from new `restart_policy` field; `on_boot_sec` materialises as
+      `ExecStartPre=/bin/sleep <N>`. Schedule MUST be empty.
+    - `kind="timer"` — periodic Timer + oneshot Service.
+      `on_unit_active_sec` carries the cadence; schedule is a
+      fallback cron expr we derive from. Restart MUST stay `"no"`.
+    - `kind="cron"` — crontab line. Schedule MUST be a 5-field cron
+      expression. systemd-specific fields MUST be None.
+  `JobSpec.validate()` runs at `__post_init__` and raises
+  `ValueError` on every invalid combination — 13 invariants pinned
+  by tests. (#153)
+- **`scitex-dev ecosystem up` one-shot reconciler.** Reads every
+  `scitex_dev.jobs` provider via `discover_jobs()` and installs all
+  of them in one command — managed crontab block for `kind="cron"`,
+  systemd `--user` units for `kind="service"`/`kind="timer"`, plus
+  `systemctl daemon-reload` + `enable --now` each (with `--yes`).
+  Per-unit failure is isolated and logged; the loop keeps reconciling.
+  `--install-master-unit` writes
+  `~/.config/systemd/user/scitex-dev-ecosystem-reconcile.service`
+  (Type=oneshot, ExecStartPre=/bin/sleep 30, ExecStart=
+  `scitex-dev ecosystem up --yes`, WantedBy=default.target) so the
+  whole ecosystem reconciles on every boot — one master unit,
+  no per-package systemctl ceremony. (#154)
+- **`cred-distribute` managed cron.** Subsumes the operator's
+  ad-hoc `~/.scitex/push-freshest-cred-to-spartan.sh` host crontab
+  (marker `# spartan-cred-push`) into the JOB_REGISTRY. Per-host
+  shell-out to `sac accounts distribute --to-host <h> --account <a>`
+  every 2h, config-driven host list at
+  `~/.scitex/dev/cred-distribute.yaml` (auto-bootstrapped on first
+  tick). Fail-open during the proj-scitex-agent-container rollout
+  window: missing `sac` binary or "no such command" stderr → SKIP +
+  exit 0 (cron stays green). (#152)
+
+### Changed
+- **Drop `ecosystem daemon` CLI** — folded into `ecosystem systemd`
+  since both `kind="service"` (long-running) and `kind="timer"`
+  (periodic) now flow through the unified systemd installer.
+  Clean break, no back-compat alias (operator no-future-debt rule).
+
+### Migration
+- Leaf packages that previously declared `kind="systemd"` should
+  rename to `kind="timer"`. `kind="daemon"` → `kind="service"`. The
+  new `JobSpec.__post_init__` validate() raises a clear
+  `ValueError` naming the broken invariant if a stale leaf is
+  installed against this release.
+
 ### Added
 - **`ci-watch` cron now files CI-fails into scitex-todo (Task B).**
   When a develop CI run goes red, the existing `ci-watch` 10-min poll
