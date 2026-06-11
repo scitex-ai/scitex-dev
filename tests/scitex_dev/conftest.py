@@ -27,23 +27,25 @@ _PROVIDER_SRC = textwrap.dedent(
         return [
             JobSpec(
                 name="testpkg.sysjob",
+                kind="timer",
                 schedule="0 */4 * * *",
                 command="testpkg go",
-                description="test systemd job",
-                kind="systemd",
+                description="test systemd timer job",
                 on_boot_sec="15min",
                 on_unit_active_sec="4h",
                 timeout_sec=99,
             ),
             JobSpec(
-                name="testpkg.dmn",
-                schedule="* * * * *",
-                command="echo testpkg-daemon",
-                description="test daemon job",
-                kind="daemon",
+                name="testpkg.svc",
+                kind="service",
+                schedule="",
+                command="echo testpkg-service",
+                description="test long-running service job",
+                on_boot_sec="15s",
+                restart_policy="on-failure",
             ),
         ]
-    """
+"""
 )
 
 

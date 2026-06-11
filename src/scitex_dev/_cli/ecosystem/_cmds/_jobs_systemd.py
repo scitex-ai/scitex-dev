@@ -52,7 +52,7 @@ def register(ecosystem) -> None:
         """
         from ....jobs import jobs_of_kind
 
-        jobs = jobs_of_kind("systemd")
+        jobs = jobs_of_kind("timer") + jobs_of_kind("service")
         if as_json:
             import json
 
@@ -106,7 +106,7 @@ def register(ecosystem) -> None:
         from ....jobs import jobs_of_kind
         from ....jobs import _systemd as sd
 
-        jobs = jobs_of_kind("systemd")
+        jobs = jobs_of_kind("timer") + jobs_of_kind("service")
         if name is not None:
             jobs = [j for j in jobs if j.name == name]
             if not jobs:
@@ -121,26 +121,36 @@ def register(ecosystem) -> None:
 
         unit_dir = _unit_dir()
         for j in jobs:
-            service = sd.build_service_unit(j)
-            timer = sd.build_timer_unit(j)
+            service_text = sd.build_service_unit(j)
+            timer_text = (
+                sd.build_timer_unit(j) if j.kind == "timer" else None
+            )
             if dry_run:
                 click.echo(f"# {j.name}.service")
-                click.echo(service)
-                click.echo(f"# {j.name}.timer")
-                click.echo(timer)
+                click.echo(service_text)
+                if timer_text is not None:
+                    click.echo(f"# {j.name}.timer")
+                    click.echo(timer_text)
                 continue
             unit_dir.mkdir(parents=True, exist_ok=True)
-            (unit_dir / f"{j.name}.service").write_text(service, encoding="utf-8")
-            (unit_dir / f"{j.name}.timer").write_text(timer, encoding="utf-8")
+            (unit_dir / f"{j.name}.service").write_text(
+                service_text, encoding="utf-8"
+            )
             click.echo(f"wrote {unit_dir / (j.name + '.service')}")
-            click.echo(f"wrote {unit_dir / (j.name + '.timer')}")
+            if timer_text is not None:
+                (unit_dir / f"{j.name}.timer").write_text(
+                    timer_text, encoding="utf-8"
+                )
+                click.echo(f"wrote {unit_dir / (j.name + '.timer')}")
 
         if not dry_run:
             click.echo("")
             click.echo("Enable with:")
             click.echo("  systemctl --user daemon-reload")
             for j in jobs:
-                click.echo(f"  systemctl --user enable --now {j.name}.timer")
+                click.echo(
+                    f"  systemctl --user enable --now {sd.systemd_unit_name(j)}"
+                )
 
     @systemd.command("uninstall")
     @click.option("--name", default=None, help="Remove only the named job's units.")
@@ -168,7 +178,7 @@ def register(ecosystem) -> None:
         """
         from ....jobs import jobs_of_kind
 
-        jobs = jobs_of_kind("systemd")
+        jobs = jobs_of_kind("timer") + jobs_of_kind("service")
         if name is not None:
             jobs = [j for j in jobs if j.name == name]
             if not jobs:

@@ -49,7 +49,7 @@ def _systemd_job():
         schedule="0 */4 * * *",
         command="mockpkg refresh --all",
         description="mock systemd job",
-        kind="systemd",
+        kind="timer",
         on_boot_sec="15min",
         on_unit_active_sec="4h",
         timeout_sec=120,
