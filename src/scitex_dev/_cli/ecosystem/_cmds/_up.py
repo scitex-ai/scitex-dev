@@ -76,27 +76,66 @@ from ....jobs import _systemd as sd
 
 MASTER_UNIT_NAME = "scitex-dev-ecosystem-reconcile.service"
 
-MASTER_UNIT_TEXT = """\
-[Unit]
-Description=SciTeX ecosystem reconciler — runs `scitex-dev ecosystem up --yes` to bring up every JobSpec
-Documentation=https://github.com/ywatanabe1989/scitex-dev
-After=network-online.target
-Wants=network-online.target
 
-[Service]
-Type=oneshot
-# Wait 30 s after boot so DNS / network are settled before the
-# reconcile starts shelling out to systemctl / crontab / gh.
-ExecStartPre=/bin/sleep 30
-ExecStart=/usr/bin/env scitex-dev ecosystem up --yes
-StandardOutput=journal
-StandardError=journal
-RemainAfterExit=no
-TimeoutStartSec=300s
+def build_master_unit_text() -> str:
+    """Return the master reconcile unit text.
 
-[Install]
-WantedBy=default.target
-"""
+    Built dynamically (not a module-level constant) so the
+    ``ExecStart=`` line carries the absolute path to ``scitex-dev`` as
+    resolved from the operator's ambient PATH — same fix as
+    :func:`scitex_dev.jobs._systemd.resolve_execstart`. systemd
+    ``--user`` runs under a deliberately minimal PATH that excludes
+    most Python venvs; emitting a bare ``scitex-dev`` would 127 on
+    every boot.
+
+    ``RemainAfterExit=yes`` so ``systemctl --user enable --now
+    scitex-dev-ecosystem-reconcile.service`` returns immediately
+    once ExecStart exits cleanly. Without it, oneshot units flip
+    back to inactive the moment ExecStart returns and the operator's
+    ``enable --now`` would hang or report failure on a successful run.
+    """
+    from ....jobs._systemd import resolve_execstart
+
+    execstart = resolve_execstart("scitex-dev ecosystem up --yes")
+    return (
+        "[Unit]\n"
+        "Description=SciTeX ecosystem reconciler — runs "
+        "`scitex-dev ecosystem up --yes` to bring up every JobSpec\n"
+        "Documentation=https://github.com/ywatanabe1989/scitex-dev\n"
+        "After=network-online.target\n"
+        "Wants=network-online.target\n"
+        "\n"
+        "[Service]\n"
+        "Type=oneshot\n"
+        "# Wait 30 s after boot so DNS / network are settled before the\n"
+        "# reconcile starts shelling out to systemctl / crontab / gh.\n"
+        "ExecStartPre=/bin/sleep 30\n"
+        f"ExecStart={execstart}\n"
+        "StandardOutput=journal\n"
+        "StandardError=journal\n"
+        # Stay active after ExecStart exits so `enable --now` returns
+        # immediately on a clean reconcile rather than reporting the
+        # oneshot as inactive-then-failed.
+        "RemainAfterExit=yes\n"
+        "TimeoutStartSec=300s\n"
+        "\n"
+        "[Install]\n"
+        "WantedBy=default.target\n"
+    )
+
+
+# Back-compat shim — the previous module exposed ``MASTER_UNIT_TEXT``
+# as a constant. We keep the name resolvable so existing tests / docs
+# don't break, but the value is computed lazily via ``__getattr__`` so
+# the absolute-path resolution honours the LIVE PATH at call time
+# (rather than baking in scitex-dev's path at module-import time, which
+# is fragile during editable installs or first-time setup).
+
+
+def __getattr__(name):
+    if name == "MASTER_UNIT_TEXT":
+        return build_master_unit_text()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _unit_dir() -> Path:
@@ -165,7 +204,10 @@ def _write_master_unit(unit_dir: Path) -> Path:
     """
     unit_dir.mkdir(parents=True, exist_ok=True)
     path = unit_dir / MASTER_UNIT_NAME
-    path.write_text(MASTER_UNIT_TEXT, encoding="utf-8")
+    # Call the builder live so the absolute-path resolution honours the
+    # PATH of the process running `ecosystem up --install-master-unit`
+    # (which IS the operator's interactive shell with scitex-dev on it).
+    path.write_text(build_master_unit_text(), encoding="utf-8")
     return path
 
 

@@ -26,6 +26,9 @@ under ``~/.config/systemd/user/``.
 
 from __future__ import annotations
 
+import shlex
+import shutil
+
 from .. import jobs as _jobs
 
 DEFAULT_ON_BOOT_SEC = "15min"
@@ -93,6 +96,49 @@ def _on_boot_sec_to_seconds(value: str) -> int:
     return n or 0
 
 
+def resolve_execstart(command: str, *, which=shutil.which) -> str:
+    """Return an ``ExecStart=`` value with the first token absolutised.
+
+    systemd ``--user`` services run under a deliberately minimal PATH
+    (``/usr/local/bin:/usr/bin:/bin``) that excludes the operator's
+    Python venv and most ecosystem installs. If we emit a relative
+    command name like ``scitex-todo board --port 8051`` the unit fails
+    to start with ``status=127/EXEC`` (command not found) and any
+    leaf service silently flaps.
+
+    Resolution rules:
+
+    * The first token of ``command`` is looked up via :func:`shutil.which`
+      (which honours the ambient PATH of the process running
+      ``ecosystem up``, which IS the operator's full PATH). If found,
+      its absolute path replaces the token.
+    * If ``which`` returns ``None`` (binary not yet on PATH), fall back
+      to ``/usr/bin/env <command>`` — the unit will still fail to start
+      with the same 127 systemd surfaces, but at least the operator
+      sees a clear error rather than a silent miss-resolution.
+    * If the first token is already absolute (starts with ``/``), pass
+      through unchanged — the leaf has been explicit.
+
+    Args/tokens are preserved verbatim via ``shlex``-style splitting
+    + re-joining so a quoted arg with spaces survives the round-trip.
+
+    The ``which`` keyword is a test seam (fake-callable returns the
+    desired resolution); the production default is :func:`shutil.which`.
+    """
+    tokens = shlex.split(command)
+    if not tokens:
+        return command
+    head, *tail = tokens
+    if head.startswith("/"):
+        return command
+    resolved = which(head)
+    if resolved:
+        return shlex.join([resolved, *tail])
+    # Fallback — keep current behaviour. systemd will still fail with
+    # exec=127 but the error is on the operator's PATH, not on us.
+    return f"/usr/bin/env {command}"
+
+
 def build_service_unit(job: _jobs.JobSpec) -> str:
     """Return the ``.service`` unit text for ``job``.
 
@@ -122,7 +168,7 @@ def _build_oneshot_service_unit(job: _jobs.JobSpec) -> str:
         "",
         "[Service]",
         "Type=oneshot",
-        f"ExecStart=/usr/bin/env {job.command}",
+        f"ExecStart={resolve_execstart(job.command)}",
         "StandardOutput=journal",
         "StandardError=journal",
         "RemainAfterExit=no",
@@ -158,7 +204,7 @@ def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
             lines.append(f"ExecStartPre=/bin/sleep {seconds}")
     lines.extend(
         [
-            f"ExecStart=/usr/bin/env {job.command}",
+            f"ExecStart={resolve_execstart(job.command)}",
             "StandardOutput=journal",
             "StandardError=journal",
             f"Restart={job.restart_policy}",
