@@ -455,6 +455,7 @@ def run_once(
     config_path: Path | None = None,
     log_path: Path | None = None,
     sac_runner: Callable[..., subprocess.CompletedProcess] | None = None,
+    which_runner: Callable[[str], str | None] | None = None,
     now: Callable[[], float] | None = None,
 ) -> CredDistributeResult:
     """Execute one ``cred-distribute`` sweep.
@@ -463,10 +464,17 @@ def run_once(
     can decide its exit code without re-parsing the audit log. Per-host
     failures are captured in ``outcomes``; only config-level failures
     set ``error``.
+
+    ``which_runner`` is the seam over :func:`shutil.which` — tests pass
+    a real fake (``lambda name: None`` for "sac missing",
+    ``lambda name: "/fake/sac"`` for "sac present") instead of
+    monkey-patching the stdlib. The default in production is
+    :func:`shutil.which` itself.
     """
     cfg = (config_path or _default_config_path()).expanduser()
     log = (log_path or _default_log_path()).expanduser()
     runner = sac_runner or _default_sac_runner
+    which = which_runner or shutil.which
     clock = now or (lambda: __import__("time").time())
     timestamp = datetime.fromtimestamp(clock(), tz=timezone.utc).strftime(
         "%Y-%m-%dT%H:%MZ"
@@ -537,7 +545,7 @@ def run_once(
         )
 
     # --- short-circuit: sac binary missing entirely ---
-    if shutil.which("sac") is None:
+    if which("sac") is None:
         line = (
             f"[cred-distribute {timestamp}] `sac` binary not on PATH "
             f"(hosts={hosts!r}, account={account!r}); skipping sweep until "
