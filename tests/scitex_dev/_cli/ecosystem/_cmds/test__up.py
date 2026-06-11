@@ -111,6 +111,18 @@ def test_write_master_unit_unit_text_contains_execstart_to_ecosystem_up(tmp_path
     assert "scitex-dev ecosystem up --yes" in path.read_text(encoding="utf-8")
 
 
+def test_write_master_unit_unit_keeps_oneshot_remainafter_yes(tmp_path):
+    # Arrange — bug fix from host bring-up (lead msg b7ef3777): the
+    # master reconcile MUST be Type=oneshot + RemainAfterExit=yes so
+    # `systemctl --user enable --now` returns immediately on a clean
+    # reconcile rather than reporting the oneshot as flipped-back-
+    # inactive (which surfaces as "failed" under the daemon).
+    # Act
+    path = _up._write_master_unit(tmp_path)
+    # Assert
+    assert "RemainAfterExit=yes" in path.read_text(encoding="utf-8")
+
+
 def test_write_master_unit_unit_is_oneshot(tmp_path):
     # Arrange
     # Act
