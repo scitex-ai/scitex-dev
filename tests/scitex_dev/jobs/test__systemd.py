@@ -14,7 +14,7 @@ def _job():
         schedule="0 */4 * * *",
         command="sac accounts refresh --all",
         description="rotate tokens",
-        kind="systemd",
+        kind="timer",
         on_boot_sec="15min",
         on_unit_active_sec="4h",
         timeout_sec=120,
@@ -96,7 +96,7 @@ def test_timer_unit_points_at_service():
 def test_timer_default_on_boot_when_unset():
     # Arrange
     job = JobSpec(
-        name="x.y", schedule="0 * * * *", command="c", description="d", kind="systemd"
+        name="x.y", schedule="0 * * * *", command="c", description="d", kind="timer"
     )
     # Act
     text = sd.build_timer_unit(job)
