@@ -322,4 +322,60 @@ def test_run_up_without_install_master_unit_does_not_write_master(tmp_path):
     assert result.master_unit_written is False
 
 
+# --------------------------------------------------------------------- #
+# BUG C Round 2: master enable WITHOUT --now                            #
+# --------------------------------------------------------------------- #
+
+
+def test_enable_master_unit_calls_enable_without_now():
+    # Arrange — BUG C Round 2 (a2a b7ef3777, 2026-06-11): the outer
+    # `enable --now <master>` call timed out 30 s because the master
+    # ExecStart re-runs `ecosystem up --yes` which enables every leaf
+    # synchronously, and the dashboard's ExecStartPre=/bin/sleep 15
+    # blows the 30 s budget on the first leaf alone. Cure: enable
+    # without `--now`. The master is armed for boot-time activation
+    # via WantedBy=default.target; it does NOT fire immediately.
+    calls: list[list[str]] = []
+
+    def runner(args, **_):
+        calls.append(list(args))
+        return _completed(rc=0)
+
+    # Act
+    _up._enable_master_unit(systemctl_runner=runner, echo=lambda _: None)
+    # Assert — the second call is the master enable; "--now" must NOT
+    # appear anywhere in those args.
+    enable_calls = [c for c in calls if c and c[0] == "enable"]
+    assert all("--now" not in c for c in enable_calls)
+
+
+def test_enable_master_unit_still_calls_daemon_reload_before_enable():
+    # Arrange
+    calls: list[list[str]] = []
+
+    def runner(args, **_):
+        calls.append(list(args))
+        return _completed(rc=0)
+
+    # Act
+    _up._enable_master_unit(systemctl_runner=runner, echo=lambda _: None)
+    # Assert — daemon-reload precedes enable so systemd picks up the
+    # newly-written master unit file before being asked to enable it.
+    assert calls and calls[0] == ["daemon-reload"]
+
+
+def test_enable_master_unit_enable_call_targets_master_unit_name():
+    # Arrange
+    calls: list[list[str]] = []
+
+    def runner(args, **_):
+        calls.append(list(args))
+        return _completed(rc=0)
+
+    # Act
+    _up._enable_master_unit(systemctl_runner=runner, echo=lambda _: None)
+    # Assert
+    assert ["enable", _up.MASTER_UNIT_NAME] in calls
+
+
 # EOF

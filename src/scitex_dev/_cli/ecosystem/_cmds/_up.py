@@ -330,13 +330,29 @@ def _enable_master_unit(
     systemctl_runner: Callable[..., subprocess.CompletedProcess],
     echo: Callable[[str], None],
 ) -> bool:
-    """Daemon-reload + enable --now the master reconcile unit. Best-effort."""
+    """Daemon-reload + ``enable`` (NOT ``enable --now``) the master unit.
+
+    BUG C Round 2 (lead host bring-up a2a ``b7ef3777``, 2026-06-11): the
+    outer call to ``systemctl --user enable --now
+    scitex-dev-ecosystem-reconcile.service`` timed out after 30 s — the
+    master's ``ExecStart`` itself runs ``scitex-dev ecosystem up
+    --yes``, which in turn ``enable --now``s every leaf unit
+    synchronously. The dashboard's ``ExecStartPre=/bin/sleep 15``
+    blows the 30 s budget on the FIRST leaf alone.
+
+    Cure: ``enable`` (no ``--now``). The master gets registered for
+    boot-time activation (``WantedBy=default.target``); it does NOT
+    fire immediately. That's correct here because the operator just
+    finished running ``ecosystem up`` interactively — re-firing the
+    master would re-do the same work synchronously. Skipping ``--now``
+    returns instantly while still arming the boot-time reconcile loop.
+    """
     if shutil.which("systemctl") is None:
         echo("systemctl not on PATH; master unit written but not enabled")
         return False
     _systemctl(["daemon-reload"], runner=systemctl_runner, echo=echo)
     return _systemctl(
-        ["enable", "--now", MASTER_UNIT_NAME],
+        ["enable", MASTER_UNIT_NAME],
         runner=systemctl_runner,
         echo=echo,
     )
