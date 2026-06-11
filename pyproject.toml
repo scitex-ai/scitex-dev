@@ -103,6 +103,13 @@ scitex-dev = "scitex_dev"
 # double-counted; this group is therefore reserved for *downstream*
 # packages.
 [project.entry-points."scitex_dev.jobs"]
+# scitex-dev applies the dual-mode principle to itself: its own
+# package-internal crons (ci-watch / quota-keepalive / worktree-gc /
+# task-harvest / cred-distribute) live under the standalone
+# `scitex-dev cron` CLI as JOB_REGISTRY entries; its ECOSYSTEM-LEVEL
+# control-plane jobs (cross-package work) flow through the federation
+# via the entry-point below, alongside every other leaf's provider.
+scitex-dev-ecosystem = "scitex_dev._ecosystem_jobs._provider:provide_jobs"
 # (downstream packages register here, e.g.)
 # scitex-agent-container = "scitex_agent_container._jobs_plugin:provide_jobs"
 
