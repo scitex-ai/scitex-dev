@@ -90,7 +90,10 @@ jobs:
             || uv pip install --python .venv/bin/python -e ".[dev]" \
             || uv pip install --python .venv/bin/python -e .
       - name: Run tests
+        # PATH prepend so tests that subprocess-call the `scitex-dev`
+        # console script find it in the venv's bin/.
         run: |
+          export PATH="$PWD/.venv/bin:$PATH"
           .venv/bin/pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
       - name: Upload coverage to Codecov
         if: always() && matrix.python-version == '3.12'
