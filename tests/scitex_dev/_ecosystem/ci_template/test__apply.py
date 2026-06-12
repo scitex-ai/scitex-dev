@@ -331,6 +331,64 @@ def test_gate_silently_passes_when_no_protection(tmp_path):
     assert result.required_contexts == {}
 
 
+def test_poisoned_context_is_filtered_out():
+    # Arrange — a context name that is actually a serialised 404 error body
+    from scitex_dev._ecosystem.ci_template._apply import _is_poisoned_context
+    poisoned = (
+        '{"message":"Branch not protected",'
+        '"documentation_url":"https://docs.github.com/rest/branches/'
+        'branch-protection#get-status-checks-protection","status":"404"}'
+    )
+    # Act
+    flagged = _is_poisoned_context(poisoned)
+    # Assert
+    assert flagged is True
+
+
+def test_normal_context_is_not_flagged_as_poisoned():
+    # Arrange
+    from scitex_dev._ecosystem.ci_template._apply import _is_poisoned_context
+    # Act
+    flagged = _is_poisoned_context("pytest-matrix-on-ubuntu-py3.12")
+    # Assert
+    assert flagged is False
+
+
+def test_gate_silently_passes_when_only_poisoned_context_recorded(tmp_path):
+    # Arrange — simulate a legacy repo whose branch-protection contains
+    # exactly one poisoned context (a captured 404 error body). The reader
+    # must filter it out so the gate trivially passes.
+    repo = _make_repo(tmp_path)
+    poisoned = [
+        '{"message":"Branch not protected",'
+        '"documentation_url":"https://docs.github.com/rest/branches/'
+        'branch-protection#get-status-checks-protection","status":"404"}'
+    ]
+    # Wire the poisoned context into the live reader path (not the
+    # injection stub) so this test exercises the filter at the seam.
+    from scitex_dev._ecosystem.ci_template import _apply as _apply_mod
+
+    def fake_gh_api_get(endpoint):
+        import json as _json
+        return 0, _json.dumps({"contexts": poisoned})
+
+    orig = _apply_mod._gh_api_get
+    _apply_mod._gh_api_get = fake_gh_api_get
+    try:
+        result = apply(
+            repo,
+            dry_run=True,
+            owner_repo_lookup=_stub_owner_repo,
+            # Use the live _read_required_contexts which calls _gh_api_get
+            required_contexts_lookup=None,
+        )
+    finally:
+        _apply_mod._gh_api_get = orig
+    # Assert — poisoned contexts are filtered, so neither `main` nor `develop`
+    # ends up with a non-empty required-context list (no entry recorded).
+    assert result.required_contexts == {}
+
+
 # --------------------------------------------------------------------------- #
 # Dry-run vs live write
 # --------------------------------------------------------------------------- #

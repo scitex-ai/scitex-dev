@@ -280,11 +280,38 @@ def _gh_api_get(endpoint: str) -> Tuple[int, str]:
     return proc.returncode, (proc.stdout if proc.returncode == 0 else proc.stderr)
 
 
+def _is_poisoned_context(ctx: str) -> bool:
+    """Detect a context string that is actually a serialised GitHub API
+    error body (e.g. ``'{"message":"Branch not protected", …,"status":"404"}'``).
+
+    Historical: in some scitex-* repos the ``required_status_checks.contexts``
+    array contains a single literal JSON error-body string from a setup-time
+    misstep (a 404 response captured as a context name). Such "contexts" can
+    never be satisfied by any real CI job, so they would deadlock the gate
+    forever. We filter them here with a warning logged at the callsite.
+    """
+    s = (ctx or "").strip()
+    if not (s.startswith("{") and s.endswith("}")):
+        return False
+    try:
+        obj = json.loads(s)
+    except json.JSONDecodeError:
+        return False
+    return isinstance(obj, dict) and (
+        "message" in obj or "status" in obj or "documentation_url" in obj
+    )
+
+
 def _read_required_contexts(owner_repo: str, branch: str) -> List[str]:
     """Query branch-protection required_status_checks for one branch.
 
     Silently returns [] for 404 (branch not protected) so callers can
     union the result across branches without special-casing.
+
+    Also filters out *poisoned* contexts — entries whose name is a literal
+    JSON error body (see ``_is_poisoned_context``). Such contexts are real in
+    a handful of legacy scitex-* repos; treating them as required would
+    permanently block the gate because no CI job can ever emit such a name.
     """
     rc, out = _gh_api_get(
         f"repos/{owner_repo}/branches/{branch}/protection/required_status_checks"
@@ -295,7 +322,8 @@ def _read_required_contexts(owner_repo: str, branch: str) -> List[str]:
         data = json.loads(out)
     except json.JSONDecodeError:
         return []
-    return list(data.get("contexts") or [])
+    raw = list(data.get("contexts") or [])
+    return [c for c in raw if not _is_poisoned_context(c)]
 
 
 # --------------------------------------------------------------------------- #
