@@ -313,8 +313,28 @@ class SciTeXChecker(
         self._add(_lk("STX-S004"), node.lineno, node.col_offset, line)
 
     def _check_injected_params(self, node: ast.FunctionDef) -> None:
-        """Check that @stx.session function declares all INJECTED parameters."""
-        declared = {arg.arg for arg in node.args.args}
+        """Check that @stx.session function declares all INJECTED parameters.
+
+        Considers positional, positional-only, AND keyword-only args — the
+        injected pattern can legitimately live behind a ``*`` separator
+        (e.g. ``def main(data: str, *, CONFIG=stx.session.INJECTED, ...)``).
+        The previous ``args.args``-only scan missed kwonly INJECTED decls
+        and produced false-positive S006s on neurovista-style scripts.
+
+        Argument *values/annotations* are never dereferenced here — only
+        the bare ``arg.arg`` name string is read. This avoids the
+        ``AttributeError: 'NoneType' object has no attribute 'id'`` NPE
+        the legacy ``scitex._linter_plugin`` S006 raised on annotated
+        injected params (#60).
+        """
+        declared = {
+            arg.arg
+            for arg in (
+                list(node.args.args)
+                + list(node.args.kwonlyargs)
+                + list(getattr(node.args, "posonlyargs", []))
+            )
+        }
         missing = sorted(self._REQUIRED_INJECTED - declared)
         if missing:
             line = self._get_source(node.lineno)
