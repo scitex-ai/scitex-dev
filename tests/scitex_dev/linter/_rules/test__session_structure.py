@@ -189,13 +189,15 @@ def test_s006_still_fires_on_actually_missing_injected_params():
         "def main(CONFIG=stx.session.INJECTED, plt=stx.session.INJECTED):\n"
         "    return 0\n"
     )
+    expected_missing = ("COLORS", "rngg", "logger")
     # Act
     issues = _s006_issues(_lint(source))
+    msg = issues[0].rule.message if issues else ""
     # Assert
-    assert len(issues) == 1
-    msg = issues[0].rule.message
-    for p in ("COLORS", "rngg", "logger"):
-        assert p in msg, f"S006 must list {p} as missing"
+    assert len(issues) == 1 and all(p in msg for p in expected_missing), (
+        f"expected exactly 1 S006 listing {expected_missing} as missing; "
+        f"got {len(issues)} issue(s), message={msg!r}"
+    )
 
 
 def test_s006_handles_bare_function_without_any_args():
@@ -208,10 +210,12 @@ def test_s006_handles_bare_function_without_any_args():
         "def main():\n"
         "    return 0\n"
     )
+    expected_missing = ("CONFIG", "plt", "COLORS", "rngg", "logger")
     # Act
     issues = _s006_issues(_lint(source))
+    msg = issues[0].rule.message if issues else ""
     # Assert
-    assert len(issues) == 1
-    msg = issues[0].rule.message
-    for p in ("CONFIG", "plt", "COLORS", "rngg", "logger"):
-        assert p in msg
+    assert len(issues) == 1 and all(p in msg for p in expected_missing), (
+        f"expected exactly 1 S006 listing all 5 INJECTED params as missing; "
+        f"got {len(issues)} issue(s), message={msg!r}"
+    )
