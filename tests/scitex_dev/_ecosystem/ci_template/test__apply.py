@@ -374,6 +374,7 @@ def test_gate_silently_passes_when_only_poisoned_context_recorded(tmp_path):
 
     orig = _apply_mod._gh_api_get
     _apply_mod._gh_api_get = fake_gh_api_get
+    # Act
     try:
         result = apply(
             repo,
@@ -384,8 +385,7 @@ def test_gate_silently_passes_when_only_poisoned_context_recorded(tmp_path):
         )
     finally:
         _apply_mod._gh_api_get = orig
-    # Assert — poisoned contexts are filtered, so neither `main` nor `develop`
-    # ends up with a non-empty required-context list (no entry recorded).
+    # Assert
     assert result.required_contexts == {}
 
 
