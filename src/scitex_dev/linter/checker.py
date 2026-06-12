@@ -402,6 +402,17 @@ class SciTeXChecker(
         if rule is None:
             return
         if rule.requires and rule.requires not in self._available:
+            # Pillar-0 fail-loud (#TBD): tally the silent-skip so the
+            # health module can emit an L2 stderr summary the first
+            # time the count goes non-zero. Without this the
+            # `requires=` gate evaporates IO0xx coverage with zero
+            # indication — exactly the 2026-06-12 ripple-wm class.
+            try:
+                from ._health import record_rule_skip
+
+                record_rule_skip(rule.requires)
+            except Exception:  # pragma: no cover
+                pass
             return
         if rule.id in self.config.disable:
             return
