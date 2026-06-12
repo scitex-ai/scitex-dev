@@ -38,12 +38,17 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
-      - name: Set up Python 3.12
+      - name: Set up Python 3.12 (uv-managed)
         run: uv python install 3.12
-      - name: Install (no extras)
-        run: uv pip install --system -e .
+      - name: Install (no extras) in uv venv
+        # Ubuntu runner's system Python is PEP 668 externally-managed
+        # (refuses `pip install --system` style installs). uv's venv is
+        # the supported path.
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e .
       - name: Import smoke
-        run: python -c "import scitex_dev; print(scitex_dev.__version__)"
+        run: .venv/bin/python -c "import scitex_dev; print(scitex_dev.__version__)"
 
   tests:
     name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
@@ -70,19 +75,23 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }} (uv-managed)
         run: uv python install ${{ matrix.python-version }}
+      - name: Create uv venv on this matrix Python
+        # Ubuntu's system Python is PEP 668 externally-managed; uv venv
+        # is the supported route. We pin the venv to the matrix Python.
+        run: uv venv --python ${{ matrix.python-version }} .venv
       - name: Install dependencies
         run: |
           # Fallback chain: prefer [all,dev] so optional-dep code paths
           # (yaml, fastmcp, textual) get exercised. Falls back to [dev] then
           # plain editable so a packaging hiccup doesn't strand CI.
-          uv pip install --system --python ${{ matrix.python-version }} -e ".[all,dev]" \
-            || uv pip install --system --python ${{ matrix.python-version }} -e ".[dev]" \
-            || uv pip install --system --python ${{ matrix.python-version }} -e .
+          uv pip install --python .venv/bin/python -e ".[all,dev]" \
+            || uv pip install --python .venv/bin/python -e ".[dev]" \
+            || uv pip install --python .venv/bin/python -e .
       - name: Run tests
         run: |
-          pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
+          .venv/bin/pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
       - name: Upload coverage to Codecov
         if: always() && matrix.python-version == '3.12'
         uses: codecov/codecov-action@v5
