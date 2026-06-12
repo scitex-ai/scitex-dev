@@ -60,6 +60,21 @@ class LinterConfig:
     disable: list[str] = field(default_factory=list)
     enable: list[str] = field(default_factory=list)
     per_rule_severity: dict[str, str] = field(default_factory=dict)
+    category_severity_override: dict[str, str] = field(default_factory=dict)
+    """Category → severity override map, applied after ``per_rule_severity``.
+
+    Populated by :func:`load_config` from the project's
+    ``.scitex/dev/config.yaml`` ``project-type`` declaration — research-
+    typed projects flip the ``io`` and ``path`` categories from
+    ``warning`` to ``error`` so a raw ``pd.read_parquet`` / bare
+    ``open()`` blocks rather than just warns. Per the 2026-06-12
+    operator directive 12826: research-category scripts must not bypass
+    clew/io provenance silently. See Pillar 3 (#TBD).
+
+    Per-rule overrides in ``per_rule_severity`` still win — set a specific
+    rule's severity in pyproject.toml ``[tool.scitex-linter.per-rule-
+    severity]`` to opt out of the category-wide flip for that one rule.
+    """
     required_injected: list[str] = field(
         default_factory=lambda: ["CONFIG", "plt", "COLORS", "rngg", "logger"]
     )
@@ -101,8 +116,103 @@ def load_config(start_path: str | None = None) -> LinterConfig:
     env_config = _load_env()
     config_dict.update(env_config)
 
+    # Pillar 3 (#TBD, 2026-06-12 operator directive 12826): when the
+    # project is research-typed (declared in .scitex/dev/config.yaml as
+    # `project-type: research`), flip the io / path category severities
+    # from "warning" to "error" so a raw `pd.read_parquet` / bare
+    # `open()` BLOCKS the script-edit hook rather than just warning the
+    # agent. Per-rule overrides in `per_rule_severity` still win — the
+    # category map is the floor, not the ceiling.
+    if "research" in _detect_scitex_dev_project_types(start_dir):
+        existing = config_dict.get("category_severity_override", {}) or {}
+        merged = {"io": "error", "path": "error", **existing}
+        config_dict["category_severity_override"] = merged
+
     # Build LinterConfig with merged values
     return LinterConfig(**config_dict)
+
+
+def _detect_scitex_dev_project_types(start_dir: Path) -> frozenset[str]:
+    """Walk up from ``start_dir`` looking for ``.scitex/dev/config.yaml``;
+    return the declared ``project-type`` set or ``frozenset()`` if none.
+
+    Mirrors the search pattern of :func:`_load_pyproject` so the linter's
+    config resolution and the audit-project loader see the SAME root
+    (one source of truth per repo). Accepts both list and scalar shapes
+    for ``project-type`` since the schema admits either.
+
+    Pillar 3 (#TBD) uses this to decide whether to populate
+    ``category_severity_override`` with the research-mode flip.
+
+    YAML parsing prefers PyYAML; falls back to a regex line scan
+    sufficient for the simple ``project-type: research`` /
+    ``project-type: [research, pip]`` shapes so the linter does not
+    take a hard dep on PyYAML.
+    """
+    current = start_dir
+    while True:
+        candidate = current / ".scitex" / "dev" / "config.yaml"
+        if candidate.is_file():
+            return _parse_project_types_from_yaml(candidate)
+        parent = current.parent
+        if parent == current:
+            return frozenset()
+        current = parent
+
+
+def _parse_project_types_from_yaml(path: Path) -> frozenset[str]:
+    """Read ``.scitex/dev/config.yaml`` and return the ``project-type`` set.
+
+    Used internally by :func:`_detect_scitex_dev_project_types`. Separate
+    so tests can exercise the schema-tolerance path without setting up a
+    walk-up filesystem.
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return frozenset()
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        data = yaml.safe_load(text) or {}
+    except ImportError:
+        # Minimal fallback — operate on the regex shape the schema admits.
+        # Handles `project-type: research`, `project-type: [a, b]`, and
+        # block-list form `project-type:\n  - a\n  - b`.
+        import re
+
+        m = re.search(r"^project-type\s*:\s*(.+)$", text, re.MULTILINE)
+        if not m:
+            # Block-list form.
+            items: list[str] = []
+            in_block = False
+            for line in text.splitlines():
+                if re.match(r"^project-type\s*:\s*$", line):
+                    in_block = True
+                    continue
+                if in_block:
+                    m2 = re.match(r"^\s+-\s*(\S+)\s*$", line)
+                    if m2:
+                        items.append(m2.group(1))
+                    else:
+                        break
+            return frozenset(items)
+        raw = m.group(1).strip()
+        if raw.startswith("[") and raw.endswith("]"):
+            return frozenset(
+                item.strip().strip('"').strip("'")
+                for item in raw[1:-1].split(",")
+                if item.strip()
+            )
+        return frozenset({raw.strip().strip('"').strip("'")})
+    value = data.get("project-type")
+    if value is None:
+        return frozenset()
+    if isinstance(value, str):
+        return frozenset({value})
+    if isinstance(value, (list, tuple, set)):
+        return frozenset(str(v) for v in value)
+    return frozenset()
 
 
 def _load_pyproject(start_dir: Path) -> dict:
