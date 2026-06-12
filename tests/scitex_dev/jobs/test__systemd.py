@@ -72,16 +72,13 @@ def test_service_unit_execstart_falls_back_to_usr_bin_env_when_unresolved():
     )
 
 
-def test_resolve_execstart_fallback_emits_loud_user_warning(tmp_path):
-    """The /usr/bin/env fallback must emit a LOUD UserWarning so the
-    bring-up log makes the miss obvious — this is what the ywata-note-win
-    crash loop needed to be visible (it was silent for ~12 h).
+def _capture_fallback_warning(tmp_path):
+    """Drive resolve_execstart through the fallback branch and return
+    (resolved_command, list_of_recorded_warnings). Tests below each
+    assert ONE thing on this captured state — TQ007 compliance.
     """
-    # Arrange — empty interpreter bin/, which() returns None so we
-    # deterministically hit the fallback.
     import warnings as _w
 
-    # Act
     with _w.catch_warnings(record=True) as recorded:
         _w.simplefilter("always")
         resolved = sd.resolve_execstart(
@@ -89,18 +86,47 @@ def test_resolve_execstart_fallback_emits_loud_user_warning(tmp_path):
             which=lambda _n: None,
             interpreter_bindir=_empty_bindir(tmp_path),
         )
+    return resolved, recorded
 
-    # Assert — fallback string, plus a UserWarning naming the binary.
+
+def test_resolve_execstart_fallback_returns_usr_bin_env_command(tmp_path):
+    # Arrange
+    # Act
+    resolved, _recorded = _capture_fallback_warning(tmp_path)
+    # Assert
     assert resolved == "/usr/bin/env scitex-todo board"
-    matches = [
+
+
+def test_resolve_execstart_fallback_emits_a_user_warning(tmp_path):
+    """The /usr/bin/env fallback must emit a UserWarning so the bring-up
+    log makes the miss obvious — silent for ~12 h on ywata-note-win was
+    the regression we're guarding against.
+    """
+    # Arrange
+    # Act
+    _resolved, recorded = _capture_fallback_warning(tmp_path)
+    # Assert
+    user_warnings = [w for w in recorded if issubclass(w.category, UserWarning)]
+    assert user_warnings, f"expected a UserWarning; recorded={recorded!r}"
+
+
+def test_resolve_execstart_fallback_warning_names_the_unresolved_binary(tmp_path):
+    # Arrange
+    # Act
+    _resolved, recorded = _capture_fallback_warning(tmp_path)
+    # Assert — the warning text must mention the unresolved binary so
+    # an operator scanning the bring-up log can grep for it.
+    matching = [
         w
         for w in recorded
-        if issubclass(w.category, UserWarning) and "scitex-todo" in str(w.message)
+        if issubclass(w.category, UserWarning)
+        and "scitex-todo" in str(w.message)
+        and "could not resolve" in str(w.message)
     ]
-    assert matches, (
-        f"expected a UserWarning mentioning 'scitex-todo'; recorded={recorded!r}"
+    assert matching, (
+        f"expected a 'could not resolve' UserWarning mentioning 'scitex-todo'; "
+        f"recorded={recorded!r}"
     )
-    assert "could not resolve" in str(matches[0].message)
 
 
 def test_service_unit_includes_timeout():
@@ -226,8 +252,11 @@ def test_resolve_execstart_preserves_args_after_first_token(tmp_path):
 
 def test_resolve_execstart_falls_back_when_which_returns_none(tmp_path):
     # Arrange
+    import warnings as _w
+
     # Act
-    with pytest.warns(UserWarning, match="could not resolve"):
+    with _w.catch_warnings():
+        _w.simplefilter("ignore")
         resolved = sd.resolve_execstart(
             "nonexistent-binary --arg",
             which=lambda _n: None,
@@ -334,10 +363,12 @@ def test_resolve_execstart_skips_sibling_bin_when_missing(tmp_path):
 
 
 def test_default_interpreter_bindir_is_sys_executable_parent():
-    # Arrange / Act
+    # Arrange
+    expected = Path(sys.executable).resolve().parent
+    # Act
     bindir = sd._interpreter_bindir()
     # Assert — the production default reads sys.executable's parent.
-    assert bindir == Path(sys.executable).resolve().parent
+    assert bindir == expected
 
 
 # ---------------------------------------------------------------------------
@@ -353,39 +384,43 @@ def test_default_interpreter_bindir_is_sys_executable_parent():
 # ---------------------------------------------------------------------------
 
 
-def test_build_service_unit_with_stripped_path_yields_absolute_execstart(tmp_path):
-    """No-mocks regression for the ywata-note-win 12 h crash loop.
+# ywata-note-win regression repro: build a service unit from a subprocess
+# whose PATH does NOT contain the interpreter's bin/, then assert the
+# resulting ExecStart is absolute (not "/usr/bin/env ..."). Split across
+# multiple one-assert tests (STX-TQ007) sharing a module-scoped fixture so
+# the subprocess only runs once.
 
-    Spawns the current interpreter as a subprocess with PATH stripped of
-    its own bin/ (mirroring the live bug: `ecosystem up` invoked via
-    absolute venv interpreter path, no activation), has it build a
-    service unit for a binary that DOES live in the interpreter's bin/
-    (we use `python` itself — guaranteed to exist next to sys.executable),
-    and asserts the resulting ExecStart is an absolute path, NOT
-    "/usr/bin/env ...".
+
+@pytest.fixture(scope="module")
+def _stripped_path_execstart_line(tmp_path_factory):
+    """Spawn the current interpreter as a subprocess with PATH stripped of
+    its own bin/, have it build a service unit, and return the resulting
+    ExecStart line.
+
+    Mirrors the ywata-note-win env shape: `ecosystem up` was invoked via
+    the venv's absolute interpreter path with no activation, so PATH did
+    not include ~/.env-3.11/bin. The fix is verified end-to-end here: the
+    ExecStart that comes back must be absolute despite PATH lacking the
+    venv bin/.
     """
-    # Arrange — pick a target binary guaranteed to live alongside the
-    # current interpreter: the interpreter itself. (`python3` and `pip`
-    # are the other plausible picks but neither is guaranteed.)
+    tmp_path = tmp_path_factory.mktemp("stripped-path-execstart")
     interpreter_dir = Path(sys.executable).resolve().parent
-    binary_name = Path(sys.executable).name  # e.g. "python3.12"
-    assert (interpreter_dir / binary_name).is_file(), (
-        f"sanity: interpreter binary {binary_name!r} must live in "
-        f"{interpreter_dir}; this is the precondition the fix relies on."
-    )
+    binary_name = Path(sys.executable).name
+    if not (interpreter_dir / binary_name).is_file():
+        pytest.skip(
+            f"precondition: interpreter binary {binary_name!r} must live in "
+            f"{interpreter_dir}; CI runner has it relocated, skipping no-mocks repro."
+        )
 
-    # PATH that does NOT contain the interpreter's bin/, mirroring the
-    # ywata-note-win bug.
     minimal_path_parts = [
         p for p in ("/usr/local/bin", "/usr/bin", "/bin") if Path(p).is_dir()
     ]
     stripped_path = ":".join(minimal_path_parts)
-    # Sanity: the interpreter's bin/ must NOT be in our stripped PATH
-    # (otherwise we'd be testing the PATH-lookup branch, not the fix).
-    assert str(interpreter_dir) not in stripped_path.split(":"), (
-        f"test misconfigured: interpreter bin/ {interpreter_dir} unexpectedly "
-        f"appears in stripped PATH {stripped_path!r}"
-    )
+    if str(interpreter_dir) in stripped_path.split(":"):
+        pytest.skip(
+            f"precondition: interpreter bin/ {interpreter_dir} unexpectedly in "
+            f"stripped PATH {stripped_path!r}; cannot exercise the fix here."
+        )
 
     program = textwrap.dedent(
         f"""
@@ -410,13 +445,9 @@ def test_build_service_unit_with_stripped_path_yields_absolute_execstart(tmp_pat
         """
     )
 
-    # Act — subprocess inherits a minimal env: only PATH (without the
-    # venv bin/) plus PYTHONPATH so the in-tree package is importable.
     env = {
         "PATH": stripped_path,
         "HOME": os.environ.get("HOME", str(tmp_path)),
-        # PYTHONPATH lets the subprocess import our in-tree scitex_dev
-        # without relying on PATH or site-packages discovery.
         "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
         "LANG": os.environ.get("LANG", "C.UTF-8"),
     }
@@ -428,29 +459,70 @@ def test_build_service_unit_with_stripped_path_yields_absolute_execstart(tmp_pat
         env=env,
         timeout=30,
     )
-    line = result.stdout.strip()
+    return {
+        "line": result.stdout.strip(),
+        "stderr": result.stderr,
+        "stripped_path": stripped_path,
+        "interpreter_dir": interpreter_dir,
+    }
 
-    # Assert — ExecStart must be absolute, NOT "/usr/bin/env ...".
-    # That is the whole point of the fix: even when PATH lacks the venv
-    # bin/, the sibling-bin probe gives systemd an absolute path that
-    # works under its minimal user PATH.
+
+def test_stripped_path_subprocess_emits_an_execstart_line(
+    _stripped_path_execstart_line,
+):
+    # Arrange
+    captured = _stripped_path_execstart_line
+    # Act
+    line = captured["line"]
+    # Assert — the subprocess must have produced an ExecStart line at all.
     assert line.startswith("ExecStart="), (
         f"subprocess did not emit an ExecStart line; got: {line!r}\n"
-        f"stderr: {result.stderr!r}"
+        f"stderr: {captured['stderr']!r}"
     )
-    value = line[len("ExecStart=") :]
+
+
+def test_stripped_path_execstart_does_not_fall_back_to_usr_bin_env(
+    _stripped_path_execstart_line,
+):
+    """REGRESSION (ywata-note-win 12 h crash loop): the unit must not be
+    written with `/usr/bin/env <cmd>` under a stripped PATH — that form
+    crash-loops at status=127 on a real systemd user manager.
+    """
+    # Arrange
+    captured = _stripped_path_execstart_line
+    # Act
+    value = captured["line"][len("ExecStart=") :]
+    # Assert
     assert not value.startswith("/usr/bin/env "), (
         f"REGRESSION (ywata-note-win): unit ExecStart fell back to "
-        f"/usr/bin/env under a stripped PATH, which crash-loops at "
-        f"status=127 on a real systemd user manager.\n"
+        f"/usr/bin/env under a stripped PATH.\n"
         f"  ExecStart={value!r}\n"
-        f"  stripped PATH={stripped_path!r}\n"
-        f"  interpreter bin/={interpreter_dir}"
+        f"  stripped PATH={captured['stripped_path']!r}\n"
+        f"  interpreter bin/={captured['interpreter_dir']}"
     )
-    first_token = value.split()[0]
+
+
+def test_stripped_path_execstart_first_token_is_absolute(
+    _stripped_path_execstart_line,
+):
+    # Arrange
+    captured = _stripped_path_execstart_line
+    # Act
+    first_token = captured["line"][len("ExecStart=") :].split()[0]
+    # Assert
     assert first_token.startswith("/"), (
         f"ExecStart first token must be absolute, got {first_token!r}"
     )
+
+
+def test_stripped_path_execstart_first_token_exists_on_disk(
+    _stripped_path_execstart_line,
+):
+    # Arrange
+    captured = _stripped_path_execstart_line
+    # Act
+    first_token = captured["line"][len("ExecStart=") :].split()[0]
+    # Assert
     assert Path(first_token).is_file(), (
         f"ExecStart first token {first_token!r} does not exist as a file"
     )
