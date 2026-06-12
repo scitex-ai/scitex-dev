@@ -5,6 +5,14 @@ on:
     branches: [main, develop]
   pull_request:
 
+# L1 concurrency: cancel superseded PR runs only. Push runs (develop) must
+# complete because the job commits the refreshed `_sphinx_html` bundle back
+# to develop — cancelling a push run mid-commit would leave bot state
+# inconsistent.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   sphinx:
     # Skip when HEAD is the bot's own previous docs auto-commit — breaks
