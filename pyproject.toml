@@ -107,6 +107,7 @@ scitex_dev = [
     "_cli/audit/_summary/data/*",
     "_sphinx_html/**/*",
     "_sphinx_html/**/.[!.]*",
+    "_ecosystem/ci_template/templates/*.tmpl",
 ]
 
 [tool.hatch.build.targets.wheel.force-include]
