@@ -1,0 +1,81 @@
+name: release-ci
+
+# Consolidated post-merge / scheduled CI gate. Runs the FULL matrix on every
+# push to main/develop and on the nightly cron — this is the protected-branch
+# gate. PR-time runs go through pr-ci.yml (which trims docs-only edits and
+# can short-circuit the matrix; release-ci.yml never short-circuits).
+#
+# Includes:
+#   * import-smoke  — confirms `pip install -e .` + `import scitex_dev` work
+#                     on the canonical Python (3.12), no extras.
+#   * tests         — full pytest matrix 3.11/3.12/3.13 with coverage upload.
+#
+# Triggers:
+#   * push to main / develop
+#   * nightly cron 07:00 UTC (matches the pre-split per-workflow schedule)
+#   * manual dispatch
+
+on:
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  import-smoke:
+    name: import-smoke-on-ubuntu-py3-12
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+      - name: Install (no extras)
+        run: uv pip install --system -e .
+      - name: Import smoke
+        run: python -c "import scitex_dev; print(scitex_dev.__version__)"
+
+  tests:
+    name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install fd (Rust file finder; audit file discovery requires it)
+        run: |
+          sudo apt-get update && sudo apt-get install -y fd-find
+          fdfind --version
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          uv pip install --system --python ${{ matrix.python-version }} -e ".[all,dev]" \
+            || uv pip install --system --python ${{ matrix.python-version }} -e ".[dev]" \
+            || uv pip install --system --python ${{ matrix.python-version }} -e .
+      - name: Run tests
+        run: |
+          pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
+      - name: Upload coverage to Codecov
+        if: always() && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false

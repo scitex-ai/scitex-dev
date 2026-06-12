@@ -1,0 +1,92 @@
+name: pr-ci
+
+# Consolidated PR-only CI surface. Runs on pull_request to main/develop.
+# Splits the previously per-event `import-smoke` + `tests` workflows so the
+# PR path can:
+#   * cancel superseded runs (L1 concurrency)
+#   * skip docs/skills-only edits (L3 path filters)
+#   * run a single-Python smoke matrix on PRs and let `release-ci.yml`
+#     own the full 3.11/3.12/3.13 matrix at merge time (L4)
+#   * install via uv with cache-by-pyproject.toml (L5)
+#
+# Companion: release-ci.yml (push to main/develop — full matrix gate).
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '_skills/**'
+      - 'examples/**'
+      - '**.md'
+      - 'CHANGELOG.*'
+      - '.github/CODEOWNERS'
+      - '.github/ISSUE_TEMPLATE/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  import-smoke:
+    name: import-smoke-on-ubuntu-py3-12
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+      - name: Install (no extras)
+        run: uv pip install --system -e .
+      - name: Import smoke
+        run: python -c "import scitex_dev; print(scitex_dev.__version__)"
+
+  tests:
+    name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # L4: PRs get full matrix; push-into-this-workflow would degrade to
+        # py3.12 only. Since this workflow is pull_request-only, the array
+        # below is the PR path. release-ci.yml owns the post-merge gate.
+        python-version: ${{ github.event_name == 'pull_request' && fromJson('["3.11","3.12","3.13"]') || fromJson('["3.12"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install fd (Rust file finder; audit file discovery requires it)
+        run: |
+          # The audit-all conformance test exercises fd-backed file
+          # discovery, which fails loud if fd is absent (no silent
+          # fallback). Debian/Ubuntu ships the binary as `fdfind`, which
+          # the discovery helper accepts.
+          sudo apt-get update && sudo apt-get install -y fd-find
+          fdfind --version
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          # Fallback chain: prefer [all,dev] so optional-dep code paths
+          # (yaml, fastmcp, textual) get exercised. Falls back to [dev] then
+          # plain editable so a packaging hiccup doesn't strand CI.
+          uv pip install --system --python ${{ matrix.python-version }} -e ".[all,dev]" \
+            || uv pip install --system --python ${{ matrix.python-version }} -e ".[dev]" \
+            || uv pip install --system --python ${{ matrix.python-version }} -e .
+      - name: Run tests
+        run: |
+          pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
+      - name: Upload coverage to Codecov
+        if: always() && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
