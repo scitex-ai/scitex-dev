@@ -26,8 +26,12 @@ under ``~/.config/systemd/user/``.
 
 from __future__ import annotations
 
+import os
 import shlex
 import shutil
+import sys
+import warnings
+from pathlib import Path
 
 from .. import jobs as _jobs
 
@@ -96,7 +100,22 @@ def _on_boot_sec_to_seconds(value: str) -> int:
     return n or 0
 
 
-def resolve_execstart(command: str, *, which=shutil.which) -> str:
+def _interpreter_bindir() -> Path:
+    """Return ``Path(sys.executable).parent`` — the bin/ holding sibling
+    console scripts for the interpreter currently running this process.
+
+    Indirection exists so tests can monkeypatch it without having to
+    relocate the real interpreter.
+    """
+    return Path(sys.executable).resolve().parent
+
+
+def resolve_execstart(
+    command: str,
+    *,
+    which=shutil.which,
+    interpreter_bindir=_interpreter_bindir,
+) -> str:
     """Return an ``ExecStart=`` value with the first token absolutised.
 
     systemd ``--user`` services run under a deliberately minimal PATH
@@ -106,24 +125,40 @@ def resolve_execstart(command: str, *, which=shutil.which) -> str:
     to start with ``status=127/EXEC`` (command not found) and any
     leaf service silently flaps.
 
-    Resolution rules:
+    Resolution rules (tried in order — first match wins):
 
-    * The first token of ``command`` is looked up via :func:`shutil.which`
-      (which honours the ambient PATH of the process running
-      ``ecosystem up``, which IS the operator's full PATH). If found,
-      its absolute path replaces the token.
-    * If ``which`` returns ``None`` (binary not yet on PATH), fall back
-      to ``/usr/bin/env <command>`` — the unit will still fail to start
-      with the same 127 systemd surfaces, but at least the operator
-      sees a clear error rather than a silent miss-resolution.
+    1. **Interpreter sibling-bin** — ``Path(sys.executable).parent / head``.
+       The process that *writes* the unit is the same interpreter that
+       installed the console scripts. Its sibling ``bin/`` therefore
+       reliably holds ``scitex-todo``, ``scitex-dev``, ``sac``, etc.,
+       even when ``ecosystem up`` was invoked via the venv's absolute
+       interpreter (no ``activate``) and so the ambient PATH lacks
+       the venv's ``bin/`` (the live bug observed on ywata-note-win,
+       where ``scitex-todo.wake-watcher.service`` was written with
+       ``ExecStart=/usr/bin/env scitex-todo`` and crash-looped at
+       ``status=127`` for ~12 h because systemd user PATH lacks
+       ``~/.env-3.11/bin``).
+    2. **PATH lookup** — :func:`shutil.which` against the ambient PATH.
+       Catches operator binaries installed outside the interpreter's
+       bin (``/usr/local/bin/...``, ``~/.local/bin/...``, etc.).
+    3. **/usr/bin/env fallback** — last resort. Emits a *loud*
+       :class:`UserWarning` so the bring-up log makes it obvious the
+       resolution missed; the unit will still fail to start with
+       ``status=127`` under systemd's minimal PATH, but the operator
+       has a breadcrumb.
+
+    Pass-throughs:
+
     * If the first token is already absolute (starts with ``/``), pass
       through unchanged — the leaf has been explicit.
+    * Empty ``command`` returns ``command`` verbatim.
 
     Args/tokens are preserved verbatim via ``shlex``-style splitting
     + re-joining so a quoted arg with spaces survives the round-trip.
 
-    The ``which`` keyword is a test seam (fake-callable returns the
-    desired resolution); the production default is :func:`shutil.which`.
+    The ``which`` and ``interpreter_bindir`` keywords are test seams
+    (fake-callables); the production defaults are :func:`shutil.which`
+    and :func:`_interpreter_bindir`.
     """
     tokens = shlex.split(command)
     if not tokens:
@@ -131,11 +166,34 @@ def resolve_execstart(command: str, *, which=shutil.which) -> str:
     head, *tail = tokens
     if head.startswith("/"):
         return command
+
+    # 1. Interpreter sibling-bin probe — most reliable for console
+    #    scripts installed alongside the running interpreter.
+    try:
+        candidate = interpreter_bindir() / head
+    except Exception:  # pragma: no cover — defensive only
+        candidate = None
+    if candidate is not None and candidate.is_file() and os.access(candidate, os.X_OK):
+        return shlex.join([str(candidate), *tail])
+
+    # 2. PATH lookup.
     resolved = which(head)
     if resolved:
         return shlex.join([resolved, *tail])
-    # Fallback — keep current behaviour. systemd will still fail with
-    # exec=127 but the error is on the operator's PATH, not on us.
+
+    # 3. Fallback — emit a LOUD warning so a bring-up log makes the
+    #    miss obvious. systemd will still fail with exec=127, but
+    #    the operator has a clear breadcrumb instead of a silent flap.
+    warnings.warn(
+        f"resolve_execstart: could not resolve {head!r} via "
+        f"sys.executable's bin ({Path(sys.executable).parent}) nor PATH; "
+        f"falling back to '/usr/bin/env {head}'. The systemd user unit "
+        f"will likely fail with status=127 because user PATH is minimal. "
+        f"Install the binary in the interpreter's bin/ or on PATH before "
+        f"running 'ecosystem up'.",
+        UserWarning,
+        stacklevel=2,
+    )
     return f"/usr/bin/env {command}"
 
 
