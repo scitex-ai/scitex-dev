@@ -75,12 +75,20 @@ class TestSectionSixAcceptsVerbPrefixedTools:
     """#82 — single-token APIs satisfied by `<verb>_<api>` MCP tools."""
 
     def test_bare_name_match_still_counts(self):
-        # Arrange / Act / Assert
-        assert _tool_matches_api("save", "save") is True
+        # Arrange
+        tool, api = "save", "save"
+        # Act
+        result = _tool_matches_api(tool, api)
+        # Assert
+        assert result is True
 
     def test_verb_prefixed_tool_matches_single_token_api(self):
-        # Arrange / Act / Assert — submit_sbatch covers sbatch (#82 SLURM)
-        assert _tool_matches_api("submit_sbatch", "sbatch") is True
+        # Arrange — submit_sbatch covers sbatch (#82 SLURM repro).
+        tool, api = "submit_sbatch", "sbatch"
+        # Act
+        result = _tool_matches_api(tool, api)
+        # Assert
+        assert result is True
 
     def test_verb_prefixed_tool_does_not_falsely_match_unrelated_short_api(self):
         # Arrange — three corner cases that must all be checked together:
@@ -89,12 +97,9 @@ class TestSectionSixAcceptsVerbPrefixedTools:
         # (c) substring without a leading underscore does NOT match
         # Combined into one bool so the TQ007 'one assertion per test'
         # rule is satisfied while the three guards stay co-located.
+        cases = (("foo", "o"), ("compute_metrics", "metrics"), ("sbatchwrapper", "sbatch"))
         # Act
-        results = (
-            _tool_matches_api("foo", "o"),
-            _tool_matches_api("compute_metrics", "metrics"),
-            _tool_matches_api("sbatchwrapper", "sbatch"),
-        )
+        results = tuple(_tool_matches_api(t, a) for t, a in cases)
         # Assert
         assert results == (False, True, False), (
             "matcher boundaries: (foo,o)=False, (compute_metrics,metrics)=True, "
