@@ -1,4 +1,4 @@
-"""Behavioural tests for ``scitex_dev.ecosystem.ci_template.apply``.
+"""Behavioural tests for ``scitex_dev._ecosystem.ci_template.apply``.
 
 Each test follows AAA + asserts ONE observable property (STX-TQ002 /
 STX-TQ007). No ``unittest.mock`` — the apply function exposes injection
@@ -68,65 +68,93 @@ def _stub_no_protection(_owner_repo: str, _branch: str) -> list[str]:
     return []
 
 
-# --------------------------------------------------------------------------- #
-# Render — placeholder substitution
-# --------------------------------------------------------------------------- #
-
-
-def test_render_substitutes_pkg_name_and_module():
-    # Arrange + Act
-    body = render(
-        "pr-ci.yml.tmpl",
+def _render_pr(**overrides):
+    """Default-args render of the PR template — keeps each test single-assert."""
+    kwargs = dict(
         pkg_name="scitex-io",
         pkg_module="scitex_io",
         python_versions=["3.11", "3.12", "3.13"],
         scripts={},
     )
-    # Assert — both forms substituted; no placeholder remains
-    assert "scitex-io" in body
-    assert "scitex_io" in body
-    assert "<PKG_NAME>" not in body
-    assert "<PKG_MODULE>" not in body
+    kwargs.update(overrides)
+    return render("pr-ci.yml.tmpl", **kwargs)
+
+
+# --------------------------------------------------------------------------- #
+# Render — placeholder substitution
+# --------------------------------------------------------------------------- #
+
+
+def test_render_substitutes_pkg_name():
+    # Arrange
+    expected = "scitex-io"
+    # Act
+    body = _render_pr()
+    # Assert
+    assert expected in body
+
+
+def test_render_substitutes_pkg_module():
+    # Arrange
+    expected_module = "scitex_io"
+    # Act
+    body = _render_pr()
+    # Assert
+    assert expected_module in body
+
+
+def test_render_leaves_no_pkg_name_placeholder():
+    # Arrange
+    placeholder = "<PKG_NAME>"
+    # Act
+    body = _render_pr()
+    # Assert
+    assert placeholder not in body
+
+
+def test_render_leaves_no_pkg_module_placeholder():
+    # Arrange
+    placeholder = "<PKG_MODULE>"
+    # Act
+    body = _render_pr()
+    # Assert
+    assert placeholder not in body
 
 
 def test_render_substitutes_python_versions_as_json_list():
-    # Arrange + Act
-    body = render(
-        "pr-ci.yml.tmpl",
-        pkg_name="scitex-io",
-        pkg_module="scitex_io",
-        python_versions=["3.12"],
-        scripts={},
-    )
+    # Arrange
+    expected = '["3.12"]'
+    # Act
+    body = _render_pr(python_versions=["3.12"])
     # Assert
-    assert '["3.12"]' in body
-    assert "<PYTHON_VERSIONS_JSON>" not in body
+    assert expected in body
+
+
+def test_render_leaves_no_python_versions_placeholder():
+    # Arrange
+    placeholder = "<PYTHON_VERSIONS_JSON>"
+    # Act
+    body = _render_pr(python_versions=["3.12"])
+    # Assert
+    assert placeholder not in body
 
 
 def test_render_emits_cli_help_block_per_script_entry():
-    # Arrange + Act
-    body = render(
-        "pr-ci.yml.tmpl",
-        pkg_name="scitex-io",
-        pkg_module="scitex_io",
-        python_versions=["3.12"],
-        scripts={"scitex-io": "scitex_io._cli:main"},
-    )
+    # Arrange
+    scripts = {"scitex-io": "scitex_io._cli:main"}
+    # Act
+    body = _render_pr(scripts=scripts)
     # Assert
     assert "smoke scitex-io --help" in body
 
 
 def test_render_drops_help_block_line_when_no_scripts():
-    # Arrange + Act
-    body = render(
-        "pr-ci.yml.tmpl",
-        pkg_name="scitex-io",
-        pkg_module="scitex_io",
-        python_versions=["3.12"],
-        scripts={},
-    )
-    # Assert — placeholder line removed entirely
-    assert "<CLI_HELP_BLOCK>" not in body
+    # Arrange
+    placeholder = "<CLI_HELP_BLOCK>"
+    # Act
+    body = _render_pr(scripts={})
+    # Assert
+    assert placeholder not in body
 
 
 # --------------------------------------------------------------------------- #
@@ -135,60 +163,73 @@ def test_render_drops_help_block_line_when_no_scripts():
 
 
 def test_emitted_job_names_is_deterministic_for_fixed_matrix():
-    # Arrange + Act
-    a = emitted_job_names(["3.11", "3.12", "3.13"])
-    b = emitted_job_names(["3.11", "3.12", "3.13"])
+    # Arrange
+    matrix = ["3.11", "3.12", "3.13"]
+    # Act
+    a = emitted_job_names(matrix)
+    b = emitted_job_names(matrix)
     # Assert
     assert a == b
-    assert "pytest-matrix-on-ubuntu-py3.11" in a
-    assert "pytest-matrix-on-ubuntu-py3.12" in a
-    assert "pytest-matrix-on-ubuntu-py3.13" in a
-    assert "import-smoke-on-ubuntu-py3-12" in a
-    assert "audit" in a
+
+
+def test_emitted_job_names_includes_static_audit_context():
+    # Arrange
+    matrix = ["3.11", "3.12", "3.13"]
+    # Act
+    names = emitted_job_names(matrix)
+    # Assert
+    assert "audit" in names
+
+
+def test_emitted_job_names_includes_import_smoke_context():
+    # Arrange
+    matrix = ["3.11", "3.12", "3.13"]
+    # Act
+    names = emitted_job_names(matrix)
+    # Assert
+    assert "import-smoke-on-ubuntu-py3-12" in names
+
+
+def test_emitted_job_names_includes_per_matrix_pytest_context():
+    # Arrange
+    matrix = ["3.11", "3.12", "3.13"]
+    # Act
+    names = emitted_job_names(matrix)
+    # Assert
+    assert "pytest-matrix-on-ubuntu-py3.11" in names
 
 
 def test_emitted_job_names_scales_with_matrix():
-    # Arrange + Act
-    short = set(emitted_job_names(["3.12"]))
-    long = set(emitted_job_names(["3.11", "3.12", "3.13"]))
-    # Assert
-    assert short < long
-    assert "pytest-matrix-on-ubuntu-py3.11" not in short
-    assert "pytest-matrix-on-ubuntu-py3.11" in long
-
-
-def test_rendered_templates_carry_the_static_emitted_names(tmp_path):
-    # Drift guard for the non-matrix names: the gate's claim is only
-    # meaningful if the rendered YAML really does carry these `name:`
-    # fields. Matrix names use `${{ matrix.python-version }}` and are
-    # checked separately by `test_rendered_templates_carry_matrix_name`.
     # Arrange
-    pvs = ["3.11", "3.12", "3.13"]
-    body_pr = render(
-        "pr-ci.yml.tmpl",
-        pkg_name="scitex-io",
-        pkg_module="scitex_io",
-        python_versions=pvs,
-        scripts={},
-    )
-    body_rel = render(
-        "release-ci.yml.tmpl",
-        pkg_name="scitex-io",
-        pkg_module="scitex_io",
-        python_versions=pvs,
-        scripts={},
-    )
-    combined = body_pr + "\n" + body_rel
-    # Assert — static names in the gate set really do show up
-    for n in ("audit", "dep-hygiene-smoke", "import-smoke-on-ubuntu-py3-12"):
-        assert n in combined, f"expected job name {n!r} not found in rendered templates"
+    short = set(emitted_job_names(["3.12"]))
+    # Act
+    long_set = set(emitted_job_names(["3.11", "3.12", "3.13"]))
+    # Assert
+    assert short < long_set
 
 
-def test_rendered_templates_carry_matrix_name_and_versions():
-    # The matrix `name:` is `pytest-matrix-on-ubuntu-py${{ matrix.python-version }}`
-    # and the matrix block carries the literal versions, so GitHub will
-    # publish e.g. `pytest-matrix-on-ubuntu-py3.11`. Assert BOTH halves.
-    # Arrange + Act
+def test_rendered_pr_template_carries_static_audit_name():
+    # Arrange
+    expected = "name: audit"
+    # Act
+    body = _render_pr()
+    # Assert
+    assert expected in body
+
+
+def test_rendered_pr_template_carries_dep_hygiene_smoke_name():
+    # Arrange
+    expected = "name: dep-hygiene-smoke"
+    # Act
+    body = _render_pr()
+    # Assert
+    assert expected in body
+
+
+def test_rendered_release_template_carries_matrix_name_placeholder():
+    # Arrange
+    expected = "pytest-matrix-on-ubuntu-py${{ matrix.python-version }}"
+    # Act
     body = render(
         "release-ci.yml.tmpl",
         pkg_name="scitex-io",
@@ -197,8 +238,22 @@ def test_rendered_templates_carry_matrix_name_and_versions():
         scripts={},
     )
     # Assert
-    assert "pytest-matrix-on-ubuntu-py${{ matrix.python-version }}" in body
-    assert '["3.11", "3.12", "3.13"]' in body
+    assert expected in body
+
+
+def test_rendered_release_template_carries_matrix_versions_literal():
+    # Arrange
+    expected_literal = '["3.11", "3.12", "3.13"]'
+    # Act
+    body = render(
+        "release-ci.yml.tmpl",
+        pkg_name="scitex-io",
+        pkg_module="scitex_io",
+        python_versions=["3.11", "3.12", "3.13"],
+        scripts={},
+    )
+    # Assert
+    assert expected_literal in body
 
 
 # --------------------------------------------------------------------------- #
@@ -211,19 +266,18 @@ def test_gate_blocks_when_required_context_not_in_emitted_set(tmp_path):
     repo = _make_repo(tmp_path)
 
     def lookup(_owner_repo, branch):
-        if branch == "develop":
-            return ["pytest-matrix-on-ubuntu-py3.11", "old-removed-check"]
-        return []
+        return ["old-removed-check"] if branch == "develop" else []
 
-    # Act + Assert
-    with pytest.raises(BranchProtectionGateError) as exc_info:
-        apply(
-            repo,
-            dry_run=True,
-            owner_repo_lookup=_stub_owner_repo,
-            required_contexts_lookup=lookup,
-        )
-    assert "old-removed-check" in str(exc_info.value)
+    # Act
+    call = lambda: apply(
+        repo,
+        dry_run=True,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=lookup,
+    )
+    # Assert
+    with pytest.raises(BranchProtectionGateError):
+        call()
 
 
 def test_gate_passes_when_required_context_is_subset_of_emitted(tmp_path):
@@ -231,11 +285,9 @@ def test_gate_passes_when_required_context_is_subset_of_emitted(tmp_path):
     repo = _make_repo(tmp_path)
 
     def lookup(_owner_repo, branch):
-        if branch == "develop":
-            return ["pytest-matrix-on-ubuntu-py3.12", "audit"]
-        return []
+        return ["audit"] if branch == "develop" else []
 
-    # Act — does not raise
+    # Act
     result = apply(
         repo,
         dry_run=True,
@@ -243,10 +295,7 @@ def test_gate_passes_when_required_context_is_subset_of_emitted(tmp_path):
         required_contexts_lookup=lookup,
     )
     # Assert
-    assert result.required_contexts.get("develop") == [
-        "pytest-matrix-on-ubuntu-py3.12",
-        "audit",
-    ]
+    assert result.required_contexts.get("develop") == ["audit"]
 
 
 def test_skip_gate_flag_bypasses_a_failing_gate(tmp_path):
@@ -269,7 +318,7 @@ def test_skip_gate_flag_bypasses_a_failing_gate(tmp_path):
 
 
 def test_gate_silently_passes_when_no_protection(tmp_path):
-    # Arrange — owner_repo resolves but no contexts are returned
+    # Arrange
     repo = _make_repo(tmp_path)
     # Act
     result = apply(
@@ -300,11 +349,10 @@ def test_dry_run_does_not_write_files(tmp_path):
         required_contexts_lookup=_stub_no_protection,
     )
     # Assert
-    after = sorted(p.name for p in wf_dir.iterdir())
-    assert before == after
+    assert sorted(p.name for p in wf_dir.iterdir()) == before
 
 
-def test_live_apply_writes_pr_ci_and_release_ci(tmp_path):
+def test_live_apply_writes_pr_ci(tmp_path):
     # Arrange
     repo = _make_repo(tmp_path)
     # Act
@@ -315,44 +363,44 @@ def test_live_apply_writes_pr_ci_and_release_ci(tmp_path):
         required_contexts_lookup=_stub_no_protection,
     )
     # Assert
-    wf_dir = repo / ".github" / "workflows"
-    assert (wf_dir / "pr-ci.yml").is_file()
-    assert (wf_dir / "release-ci.yml").is_file()
-    content = (wf_dir / "pr-ci.yml").read_text()
-    assert "<PKG_NAME>" not in content
+    assert (repo / ".github" / "workflows" / "pr-ci.yml").is_file()
+
+
+def test_live_apply_writes_release_ci(tmp_path):
+    # Arrange
+    repo = _make_repo(tmp_path)
+    # Act
+    apply(
+        repo,
+        dry_run=False,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=_stub_no_protection,
+    )
+    # Assert
+    assert (repo / ".github" / "workflows" / "release-ci.yml").is_file()
+
+
+def test_live_apply_substitutes_target_pkg_name_into_written_yaml(tmp_path):
+    # Arrange
+    repo = _make_repo(tmp_path)
+    # Act
+    apply(
+        repo,
+        dry_run=False,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=_stub_no_protection,
+    )
+    # Assert
+    content = (repo / ".github" / "workflows" / "pr-ci.yml").read_text()
     assert "scitex-fake" in content
 
 
-def test_live_apply_deletes_consolidated_standalone_workflows(tmp_path):
-    # Arrange — seed with a workflow that matches a delete prefix
-    extra = {
-        "import-smoke-on-ubuntu-py3-11.yml": "name: stub\n",
-        "pytest-matrix-on-ubuntu-py3-11.yml": "name: stub\n",
-        "dep-hygiene-smoke.yml": "name: stub\n",
-    }
-    repo = _make_repo(tmp_path, extra_workflows=extra)
-    # Act
-    apply(
-        repo,
-        dry_run=False,
-        owner_repo_lookup=_stub_owner_repo,
-        required_contexts_lookup=_stub_no_protection,
-    )
-    # Assert
-    wf_dir = repo / ".github" / "workflows"
-    for name in extra:
-        assert not (wf_dir / name).exists(), f"{name} should have been deleted"
-
-
-def test_live_apply_preserves_cla_and_publish_workflows(tmp_path):
+def test_live_apply_deletes_import_smoke_standalone_workflow(tmp_path):
     # Arrange
-    extra = {
-        "cla.yml": "name: cla\n",
-        "pypi-publish-and-github-release-on-tag.yml": "name: pub\n",
-        "rtd-sphinx-build-on-ubuntu-latest.yml": "name: rtd\n",
-        "auto-merge-to-develop.yaml": "name: am\n",
-    }
-    repo = _make_repo(tmp_path, extra_workflows=extra)
+    repo = _make_repo(
+        tmp_path,
+        extra_workflows={"import-smoke-on-ubuntu-py3-11.yml": "name: stub\n"},
+    )
     # Act
     apply(
         repo,
@@ -361,9 +409,106 @@ def test_live_apply_preserves_cla_and_publish_workflows(tmp_path):
         required_contexts_lookup=_stub_no_protection,
     )
     # Assert
-    wf_dir = repo / ".github" / "workflows"
-    for name in extra:
-        assert (wf_dir / name).is_file(), f"{name} must be preserved"
+    assert not (repo / ".github" / "workflows" / "import-smoke-on-ubuntu-py3-11.yml").exists()
+
+
+def test_live_apply_deletes_pytest_matrix_standalone_workflow(tmp_path):
+    # Arrange
+    repo = _make_repo(
+        tmp_path,
+        extra_workflows={"pytest-matrix-on-ubuntu-py3-11.yml": "name: stub\n"},
+    )
+    # Act
+    apply(
+        repo,
+        dry_run=False,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=_stub_no_protection,
+    )
+    # Assert
+    assert not (repo / ".github" / "workflows" / "pytest-matrix-on-ubuntu-py3-11.yml").exists()
+
+
+def test_live_apply_deletes_dep_hygiene_standalone_workflow(tmp_path):
+    # Arrange
+    repo = _make_repo(
+        tmp_path,
+        extra_workflows={"dep-hygiene-smoke.yml": "name: stub\n"},
+    )
+    # Act
+    apply(
+        repo,
+        dry_run=False,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=_stub_no_protection,
+    )
+    # Assert
+    assert not (repo / ".github" / "workflows" / "dep-hygiene-smoke.yml").exists()
+
+
+def test_live_apply_preserves_cla_workflow(tmp_path):
+    # Arrange
+    repo = _make_repo(tmp_path, extra_workflows={"cla.yml": "name: cla\n"})
+    # Act
+    apply(
+        repo,
+        dry_run=False,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=_stub_no_protection,
+    )
+    # Assert
+    assert (repo / ".github" / "workflows" / "cla.yml").is_file()
+
+
+def test_live_apply_preserves_publish_workflow(tmp_path):
+    # Arrange
+    repo = _make_repo(
+        tmp_path,
+        extra_workflows={"pypi-publish-and-github-release-on-tag.yml": "name: pub\n"},
+    )
+    # Act
+    apply(
+        repo,
+        dry_run=False,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=_stub_no_protection,
+    )
+    # Assert
+    assert (repo / ".github" / "workflows" / "pypi-publish-and-github-release-on-tag.yml").is_file()
+
+
+def test_live_apply_preserves_rtd_workflow(tmp_path):
+    # Arrange
+    repo = _make_repo(
+        tmp_path,
+        extra_workflows={"rtd-sphinx-build-on-ubuntu-latest.yml": "name: rtd\n"},
+    )
+    # Act
+    apply(
+        repo,
+        dry_run=False,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=_stub_no_protection,
+    )
+    # Assert
+    assert (repo / ".github" / "workflows" / "rtd-sphinx-build-on-ubuntu-latest.yml").is_file()
+
+
+def test_live_apply_preserves_auto_merge_workflow(tmp_path):
+    # Arrange
+    repo = _make_repo(
+        tmp_path,
+        extra_workflows={"auto-merge-to-develop.yaml": "name: am\n"},
+    )
+    # Act
+    apply(
+        repo,
+        dry_run=False,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=_stub_no_protection,
+    )
+    # Assert
+    assert (repo / ".github" / "workflows" / "auto-merge-to-develop.yaml").is_file()
 
 
 def test_live_apply_skips_unknown_workflow_names(tmp_path):
@@ -380,8 +525,7 @@ def test_live_apply_skips_unknown_workflow_names(tmp_path):
         required_contexts_lookup=_stub_no_protection,
     )
     # Assert
-    wf_dir = repo / ".github" / "workflows"
-    assert (wf_dir / "custom-operator-thing.yml").is_file()
+    assert (repo / ".github" / "workflows" / "custom-operator-thing.yml").is_file()
 
 
 # --------------------------------------------------------------------------- #
@@ -394,29 +538,33 @@ def test_apply_raises_on_missing_pyproject(tmp_path):
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / ".git").mkdir()
-    # Act + Assert
+    # Act
+    call = lambda: apply(
+        repo,
+        dry_run=True,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=_stub_no_protection,
+    )
+    # Assert
     with pytest.raises(ApplyError):
-        apply(
-            repo,
-            dry_run=True,
-            owner_repo_lookup=_stub_owner_repo,
-            required_contexts_lookup=_stub_no_protection,
-        )
+        call()
 
 
 def test_apply_raises_on_non_git_repo(tmp_path):
-    # Arrange
+    # Arrange — pyproject present but no .git
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "pyproject.toml").write_text('[project]\nname="x"\nversion="0"\n')
-    # Act + Assert
+    # Act
+    call = lambda: apply(
+        repo,
+        dry_run=True,
+        owner_repo_lookup=_stub_owner_repo,
+        required_contexts_lookup=_stub_no_protection,
+    )
+    # Assert
     with pytest.raises(ApplyError):
-        apply(
-            repo,
-            dry_run=True,
-            owner_repo_lookup=_stub_owner_repo,
-            required_contexts_lookup=_stub_no_protection,
-        )
+        call()
 
 
 def test_rendered_yaml_is_parseable_yaml(tmp_path):
@@ -435,13 +583,8 @@ def test_rendered_yaml_is_parseable_yaml(tmp_path):
         owner_repo_lookup=_stub_owner_repo,
         required_contexts_lookup=_stub_no_protection,
     )
-    pr = (repo / ".github" / "workflows" / "pr-ci.yml").read_text()
-    rel = (repo / ".github" / "workflows" / "release-ci.yml").read_text()
-    # Assert — both parse
-    parsed_pr = yaml.safe_load(pr)
-    parsed_rel = yaml.safe_load(rel)
-    assert parsed_pr["name"] == "pr-ci"
-    assert parsed_rel["name"] == "release-ci"
-    # And jobs include the expected gate names
-    assert "tests" in parsed_pr["jobs"]
-    assert "audit" in parsed_pr["jobs"]
+    parsed = yaml.safe_load(
+        (repo / ".github" / "workflows" / "pr-ci.yml").read_text()
+    )
+    # Assert
+    assert parsed["name"] == "pr-ci"

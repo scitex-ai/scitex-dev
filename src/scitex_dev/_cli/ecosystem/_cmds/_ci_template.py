@@ -43,10 +43,15 @@ def register(ecosystem) -> None:
         "apply",
         epilog=(
             "Examples:\n"
-            "  $ scitex-dev ecosystem ci-template apply ../scitex-io\n"
             "  $ scitex-dev ecosystem ci-template apply ../scitex-io --dry-run\n"
+            "  $ scitex-dev ecosystem ci-template apply ../scitex-io --yes\n"
             "  $ scitex-dev ecosystem ci-template apply ../scitex-io \\\n"
-            "        --python-versions '[\"3.12\",\"3.13\"]'\n"
+            "        --python-versions '[\"3.12\",\"3.13\"]' --yes\n"
+            "\n"
+            "Mutating verb: pass --yes/-y to actually write. Without it the\n"
+            "command behaves like --dry-run (no FS mutation, prints intended\n"
+            "diff). §2 audit-cli requires explicit confirmation for mutating\n"
+            "ecosystem subcommands.\n"
         ),
     )
     @click.argument(
@@ -56,7 +61,17 @@ def register(ecosystem) -> None:
     @click.option(
         "--dry-run",
         is_flag=True,
-        help="Print intended diff; do not write or delete files.",
+        help="Print intended diff; do not write or delete files. Default "
+        "behaviour when neither --dry-run nor --yes is given.",
+    )
+    @click.option(
+        "--yes",
+        "-y",
+        "yes",
+        is_flag=True,
+        help="Actually write pr-ci.yml + release-ci.yml and delete "
+        "consolidated standalone workflows. Required for mutating apply "
+        "(§2 audit-cli convention).",
     )
     @click.option(
         "--branch",
@@ -79,11 +94,25 @@ def register(ecosystem) -> None:
     def ci_template_apply(
         repo_dir,
         dry_run,
+        yes,
         branch,
         python_versions_json,
         skip_required_check_gate,
     ):
-        """Apply the CI templates to REPO_DIR."""
+        """Apply the CI templates to REPO_DIR.
+
+        Mutating verb: defaults to dry-run unless --yes is passed. This
+        keeps the §2 audit-cli convention that every ecosystem mutator
+        needs an explicit confirmation flag.
+        """
+        if dry_run and yes:
+            click.echo(
+                "error: --dry-run and --yes are mutually exclusive",
+                err=True,
+            )
+            raise SystemExit(2)
+        # Without --yes, behave as dry-run (no FS mutation).
+        effective_dry_run = dry_run or not yes
         python_versions = None
         if python_versions_json:
             try:
@@ -106,7 +135,7 @@ def register(ecosystem) -> None:
         try:
             result = _apply(
                 repo_dir,
-                dry_run=dry_run,
+                dry_run=effective_dry_run,
                 branch=branch,
                 python_versions=python_versions,
                 skip_required_check_gate=skip_required_check_gate,
@@ -118,7 +147,7 @@ def register(ecosystem) -> None:
             click.echo(f"error: {exc}", err=True)
             raise SystemExit(2)
 
-        _render_result(result, dry_run=dry_run)
+        _render_result(result, dry_run=effective_dry_run)
 
     return ci_template
 
