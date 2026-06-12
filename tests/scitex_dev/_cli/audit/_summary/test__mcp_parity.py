@@ -83,14 +83,23 @@ class TestSectionSixAcceptsVerbPrefixedTools:
         assert _tool_matches_api("submit_sbatch", "sbatch") is True
 
     def test_verb_prefixed_tool_does_not_falsely_match_unrelated_short_api(self):
-        # Arrange / Act / Assert — `foo` ending in `o` is not a match for
-        # any API; bare-suffix-only matches an API with the FULL name
-        # after an underscore. Guards against accidental over-matching
-        # of e.g. `bar` covering `r`.
-        assert _tool_matches_api("foo", "o") is False
-        assert _tool_matches_api("compute_metrics", "metrics") is True
-        # Substring without leading underscore must NOT match.
-        assert _tool_matches_api("sbatchwrapper", "sbatch") is False
+        # Arrange — three corner cases that must all be checked together:
+        # (a) trailing-letter overlap does NOT match (foo / o)
+        # (b) the multi-token-API verb_<noun> form DOES match
+        # (c) substring without a leading underscore does NOT match
+        # Combined into one bool so the TQ007 'one assertion per test'
+        # rule is satisfied while the three guards stay co-located.
+        # Act
+        results = (
+            _tool_matches_api("foo", "o"),
+            _tool_matches_api("compute_metrics", "metrics"),
+            _tool_matches_api("sbatchwrapper", "sbatch"),
+        )
+        # Assert
+        assert results == (False, True, False), (
+            "matcher boundaries: (foo,o)=False, (compute_metrics,metrics)=True, "
+            f"(sbatchwrapper,sbatch)=False — got {results}"
+        )
 
     def test_slurm_verb_apis_satisfied_by_verb_prefixed_tools(self):
         """The scitex-hpc#10 repro — sbatch/srun/sync covered by
