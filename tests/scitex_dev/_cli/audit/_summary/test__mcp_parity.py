@@ -15,6 +15,7 @@ from scitex_dev._cli.audit._summary._mcp_parity import (
     _parity_violations,
     _python_api_names,
     _repo_root_from_import,
+    _tool_matches_api,
     is_mcp_parity_exempt,
     mcp_tools_allowlist,
 )
@@ -58,6 +59,89 @@ class TestParityComparisonTrips:
         violations = _parity_violations("scitex-io", py_apis, mcp_normalized)
         # Assert
         assert any("Python APIs have no" in v.message for v in violations)
+
+
+# --------------------------------------------------------------------- #
+# #82 — §6 must accept verb_<api> tools as matching single-token APIs   #
+# --------------------------------------------------------------------- #
+# Before this fix §2 (verb_noun tool naming) and §6 (Python-API coverage)
+# could not BOTH be satisfied for single-token APIs (the SLURM verb
+# family: sbatch / srun / squeue / sacct / scancel / salloc, plus sync /
+# rsync). The fix lets §6 treat `submit_sbatch` as covering the API
+# `sbatch`, so the package can keep §2-compliant tool names.
+
+
+class TestSectionSixAcceptsVerbPrefixedTools:
+    """#82 — single-token APIs satisfied by `<verb>_<api>` MCP tools."""
+
+    def test_bare_name_match_still_counts(self):
+        # Arrange / Act / Assert
+        assert _tool_matches_api("save", "save") is True
+
+    def test_verb_prefixed_tool_matches_single_token_api(self):
+        # Arrange / Act / Assert — submit_sbatch covers sbatch (#82 SLURM)
+        assert _tool_matches_api("submit_sbatch", "sbatch") is True
+
+    def test_verb_prefixed_tool_does_not_falsely_match_unrelated_short_api(self):
+        # Arrange / Act / Assert — `foo` ending in `o` is not a match for
+        # any API; bare-suffix-only matches an API with the FULL name
+        # after an underscore. Guards against accidental over-matching
+        # of e.g. `bar` covering `r`.
+        assert _tool_matches_api("foo", "o") is False
+        assert _tool_matches_api("compute_metrics", "metrics") is True
+        # Substring without leading underscore must NOT match.
+        assert _tool_matches_api("sbatchwrapper", "sbatch") is False
+
+    def test_slurm_verb_apis_satisfied_by_verb_prefixed_tools(self):
+        """The scitex-hpc#10 repro — sbatch/srun/sync covered by
+        submit_sbatch / dispatch_srun / sync_project."""
+        # Arrange — pretend scitex-hpc surface from the #82 issue body.
+        py_apis = {
+            "sbatch", "srun", "sync",
+            "poll_job", "fetch_result", "detect_module_system",
+            "module_load", "load_apptainer",
+        }
+        mcp_normalized = {
+            "submit_sbatch", "dispatch_srun", "sync_project",
+            "poll_job", "fetch_result", "detect_module_system",
+            "module_load", "load_apptainer",
+        }
+        # Act
+        violations = _parity_violations("scitex-hpc", py_apis, mcp_normalized)
+        # Assert — no §6 violation: every API is covered, every tool maps.
+        assert violations == [], (
+            f"§6 should accept verb_<api> as a match (#82); got {violations}"
+        )
+
+    def test_verb_prefixed_tools_are_not_counted_as_orphans(self):
+        """Symmetric direction — submit_sbatch isn't orphan when sbatch
+        is in the Python API. Prevents the §6 orphan-tool tier from
+        firing on the same scitex-hpc#10 scenario."""
+        # Arrange — 5 verb_<api> tools (orphan threshold > 3), single
+        # SLURM API. Without the fix the 5 verb_-prefixed tools would
+        # all count as orphans (none == "sbatch") and trip §6.
+        py_apis = {"sbatch"}
+        mcp_normalized = {
+            "submit_sbatch", "dispatch_sbatch", "queue_sbatch",
+            "cancel_sbatch", "resubmit_sbatch",
+        }
+        # Act
+        violations = _parity_violations("scitex-hpc", py_apis, mcp_normalized)
+        # Assert
+        assert violations == [], (
+            f"orphan check should match verb_<api> too; got {violations}"
+        )
+
+    def test_genuine_orphan_still_trips_when_no_api_matches(self):
+        """Guard rail — the fix must not silence true orphan-tool
+        violations. 5 plotting tools with zero Python APIs still trip."""
+        # Arrange
+        py_apis: set[str] = set()
+        mcp_normalized = {"plot", "scatter", "bar", "hist", "boxplot"}
+        # Act
+        violations = _parity_violations("plot-rich", py_apis, mcp_normalized)
+        # Assert
+        assert any(v.rule == "§6" for v in violations)
 
 
 class TestExemptionDetection:
