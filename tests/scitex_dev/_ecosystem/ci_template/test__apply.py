@@ -208,6 +208,33 @@ def test_emitted_job_names_scales_with_matrix():
     assert short < long_set
 
 
+def test_emitted_job_names_includes_preserved_workflow_names_by_default():
+    # Arrange
+    matrix = ["3.12"]
+    # Act
+    names = set(emitted_job_names(matrix))
+    # Assert
+    assert "CLAssistant" in names
+
+
+def test_emitted_job_names_includes_sphinx_when_default():
+    # Arrange
+    matrix = ["3.12"]
+    # Act
+    names = set(emitted_job_names(matrix))
+    # Assert
+    assert "sphinx" in names
+
+
+def test_emitted_job_names_excludes_preserved_when_flag_false():
+    # Arrange
+    matrix = ["3.12"]
+    # Act
+    names = set(emitted_job_names(matrix, include_preserved=False))
+    # Assert
+    assert "CLAssistant" not in names
+
+
 def test_rendered_pr_template_carries_static_audit_name():
     # Arrange
     expected = "name: audit"

@@ -199,13 +199,23 @@ def render(
 # --------------------------------------------------------------------------- #
 
 
-def emitted_job_names(python_versions: Sequence[str]) -> List[str]:
+def emitted_job_names(
+    python_versions: Sequence[str], *, include_preserved: bool = True
+) -> List[str]:
     """Return the sorted set of GitHub check-run names the rendered
     templates publish, given a python-versions matrix.
 
     Used by the branch-protection gate. MUST stay in lock-step with the
     ``name:`` fields in the .tmpl files; tests assert the rendered YAML
     really does publish these names (no drift).
+
+    When ``include_preserved`` is True (default), also include the
+    well-known check-run names emitted by *preserved* workflows that the
+    apply step never removes (cla.yml → ``CLAssistant``; rtd-sphinx-*.yml
+    → ``sphinx`` / ``docs``). This prevents the gate from refusing
+    repos whose ``required_status_checks`` reference those check-run
+    names. Pass ``include_preserved=False`` for tests that need the
+    pure-rendered-template set.
     """
     names = {
         "import-smoke-on-ubuntu-py3-12",
@@ -214,7 +224,21 @@ def emitted_job_names(python_versions: Sequence[str]) -> List[str]:
     }
     for pv in python_versions:
         names.add(f"pytest-matrix-on-ubuntu-py{pv}")
+    if include_preserved:
+        names.update(_preserved_workflow_job_names())
     return sorted(names)
+
+
+# Well-known check-run names from preserved workflows. These files are
+# intentionally never removed by ci-template apply (see ``_PROTECTED_*``)
+# and they publish these standard names. Kept here as a small static set
+# so the gate logic never has to read or parse YAML at apply time.
+def _preserved_workflow_job_names() -> set:
+    return {
+        "CLAssistant",   # from cla.yml
+        "sphinx",        # from rtd-sphinx-build-*.yml (most repos)
+        "docs",          # alt name some repos use for rtd-sphinx
+    }
 
 
 # --------------------------------------------------------------------------- #
