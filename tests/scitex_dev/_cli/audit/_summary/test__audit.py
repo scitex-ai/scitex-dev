@@ -1355,3 +1355,251 @@ def test_ep_value_for_ignores_non_string_script_value(tmp_path):
         result = _ep_value_for(dist)
     # Assert
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# §2 — interactive-ok marker exemption (audit-cli precision refinement)
+#
+# `_check_no_interactive_prompts` was flagging legitimately-interactive flows
+# (auth login prompts, destructive-confirm commands) as if they were
+# CI-reliability bombs. Two opt-out markers — per-call and per-file — let
+# authors document the intent without weakening the rule for accidental
+# prompts. The helpers `_has_file_interactive_ok_marker` and
+# `_line_or_above_has_interactive_ok` enforce a TIGHT scope: a marker far
+# above a call does NOT silently exempt every call below it.
+# ---------------------------------------------------------------------------
+
+
+from scitex_dev._cli.audit._summary._audit import (
+    _check_no_interactive_prompts,
+    _has_file_interactive_ok_marker,
+    _line_or_above_has_interactive_ok,
+)
+from scitex_dev._cli.audit._summary._audit import Violation as _SummaryViolation
+
+
+def _make_local_pkg_with_cli_call(tmp_path, distribution, call_lines):
+    """Build a tmp pkg with `src/<import>/_cli.py` containing the call_lines.
+
+    Returns the local_root that should be set as the ECOSYSTEM local_path.
+    """
+    import_name = distribution.replace("-", "_")
+    local_root = tmp_path / distribution
+    pkg = local_root / "src" / import_name
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("\n")
+    (pkg / "_cli.py").write_text("import click\n" + call_lines)
+    return local_root
+
+
+def test_interactive_ok_same_line_marker_exempts_call(tmp_path):
+    # Arrange — `click.prompt(...)  # audit-cli: interactive-ok — login flow`
+    # is the documented opt-out idiom for a legitimately interactive call.
+    dist = "scitex-intsame"
+    local_root = _make_local_pkg_with_cli_call(
+        tmp_path,
+        dist,
+        "click.prompt('pw')  # audit-cli: interactive-ok — login\n",
+    )
+    out: list[_SummaryViolation] = []
+    # Act
+    with _registry_override(dist, local_root):
+        _check_no_interactive_prompts(dist, out)
+    # Assert
+    assert out == []
+
+
+def test_interactive_ok_above_line_marker_exempts_call(tmp_path):
+    # Arrange — marker on the line immediately above the call (the more
+    # readable form when the call has its own keyword arguments).
+    dist = "scitex-intabove"
+    local_root = _make_local_pkg_with_cli_call(
+        tmp_path,
+        dist,
+        "# audit-cli: interactive-ok — login flow\n"
+        "click.prompt('pw', hide_input=True)\n",
+    )
+    out: list[_SummaryViolation] = []
+    # Act
+    with _registry_override(dist, local_root):
+        _check_no_interactive_prompts(dist, out)
+    # Assert
+    assert out == []
+
+
+def test_interactive_ok_above_with_blank_lines_still_exempts(tmp_path):
+    # Arrange — blank lines between the marker and the call are tolerated.
+    dist = "scitex-intblank"
+    local_root = _make_local_pkg_with_cli_call(
+        tmp_path,
+        dist,
+        "# audit-cli: interactive-ok\n\n\nclick.confirm('proceed?')\n",
+    )
+    out: list[_SummaryViolation] = []
+    # Act
+    with _registry_override(dist, local_root):
+        _check_no_interactive_prompts(dist, out)
+    # Assert
+    assert out == []
+
+
+def _tight_scope_fixture_violations(tmp_path):
+    """Build the tight-scope fixture and return the §2 violations.
+
+    Shared between the two tight-scope sentinel tests so each test asserts
+    exactly one fact (TQ007 — single-assert discipline).
+    """
+    dist = "scitex-inttight"
+    local_root = _make_local_pkg_with_cli_call(
+        tmp_path,
+        dist,
+        "# audit-cli: interactive-ok\n"
+        "click.prompt('pw')\n"
+        "x = 1\n"
+        "click.confirm('really?')\n",
+    )
+    out: list[_SummaryViolation] = []
+    with _registry_override(dist, local_root):
+        _check_no_interactive_prompts(dist, out)
+    return out
+
+
+def test_interactive_ok_does_not_propagate_past_other_code_unmarked_call_flags(
+    tmp_path,
+):
+    # Arrange — TIGHT scope sentinel: a marker that documents the FIRST
+    # call must NOT silently exempt a SECOND, unmarked call below it.
+    # Act
+    out = _tight_scope_fixture_violations(tmp_path)
+    # Assert
+    assert any("click.confirm()" in v.message for v in out)
+
+
+def test_interactive_ok_does_not_propagate_past_other_code_marked_call_exempt(
+    tmp_path,
+):
+    # Arrange — paired sentinel: the FIRST (marked) call must still be
+    # exempted; only the unmarked SECOND call should fire.
+    # Act
+    out = _tight_scope_fixture_violations(tmp_path)
+    # Assert
+    assert not any("click.prompt()" in v.message for v in out)
+
+
+def test_file_level_interactive_ok_marker_exempts_whole_file(tmp_path):
+    # Arrange — `_login.py`-style file where every call is intentional.
+    dist = "scitex-intfile"
+    local_root = _make_local_pkg_with_cli_call(
+        tmp_path,
+        dist,
+        "# audit-cli: file-interactive-ok\n"
+        "click.prompt('user')\n"
+        "click.prompt('password', hide_input=True)\n"
+        "click.confirm('confirm enrolment?')\n",
+    )
+    out: list[_SummaryViolation] = []
+    # Act
+    with _registry_override(dist, local_root):
+        _check_no_interactive_prompts(dist, out)
+    # Assert
+    assert out == []
+
+
+def test_file_level_marker_only_honoured_in_first_30_lines(tmp_path):
+    # Arrange — file-level marker far down the file (line 100+) must NOT
+    # exempt; it has to be at the top of the file or it's noise.
+    dist = "scitex-intlate"
+    padding = "\n".join(f"# padding {i}" for i in range(80))
+    local_root = _make_local_pkg_with_cli_call(
+        tmp_path,
+        dist,
+        padding + "\n# audit-cli: file-interactive-ok\nclick.prompt('pw')\n",
+    )
+    out: list[_SummaryViolation] = []
+    # Act
+    with _registry_override(dist, local_root):
+        _check_no_interactive_prompts(dist, out)
+    # Assert
+    assert any("click.prompt()" in v.message for v in out)
+
+
+def test_unmarked_call_is_still_flagged(tmp_path):
+    # Arrange — regression guard: the exemption mechanism must not weaken
+    # the rule for ordinary interactive calls.
+    dist = "scitex-intflag"
+    local_root = _make_local_pkg_with_cli_call(
+        tmp_path,
+        dist,
+        "click.prompt('value')\n",
+    )
+    out: list[_SummaryViolation] = []
+    # Act
+    with _registry_override(dist, local_root):
+        _check_no_interactive_prompts(dist, out)
+    # Assert
+    assert any("click.prompt()" in v.message for v in out)
+
+
+def test_bare_input_call_also_respects_marker(tmp_path):
+    # Arrange — bare `input(...)` exemption travels via the same marker
+    # (consistency with click.prompt / click.confirm). Some legit cases:
+    # a `migrate db` style command that asks for a typed confirmation
+    # token before truncating.
+    dist = "scitex-intinput"
+    local_root = _make_local_pkg_with_cli_call(
+        tmp_path,
+        dist,
+        "# audit-cli: interactive-ok — destructive confirm\n"
+        "input('type DROP to confirm: ')\n",
+    )
+    out: list[_SummaryViolation] = []
+    # Act
+    with _registry_override(dist, local_root):
+        _check_no_interactive_prompts(dist, out)
+    # Assert
+    assert out == []
+
+
+def test_has_file_interactive_ok_marker_finds_top_of_file_marker():
+    # Arrange
+    text = "# audit-cli: file-interactive-ok\nimport click\n"
+    # Act
+    result = _has_file_interactive_ok_marker(text)
+    # Assert
+    assert result is True
+
+
+def test_has_file_interactive_ok_marker_rejects_late_marker():
+    # Arrange — marker on line 32 is out of the 30-line search window.
+    text = (
+        "\n".join(f"# pad {i}" for i in range(31))
+        + "\n# audit-cli: file-interactive-ok\n"
+    )
+    # Act
+    result = _has_file_interactive_ok_marker(text)
+    # Assert
+    assert result is False
+
+
+def test_line_or_above_interactive_ok_accepts_trailing_documentation():
+    # Arrange — marker MUST permit a free-form tail so authors document
+    # the why (`# audit-cli: interactive-ok — login flow`).
+    lines = ["click.prompt('pw')  # audit-cli: interactive-ok — login flow"]
+    # Act
+    result = _line_or_above_has_interactive_ok(lines, 1)
+    # Assert
+    assert result is True
+
+
+def test_line_or_above_interactive_ok_rejects_non_comment_above():
+    # Arrange — a marker BLOCKED by an intervening non-comment line must
+    # NOT exempt the call below (the marker documents something else).
+    lines = [
+        "# audit-cli: interactive-ok",
+        "x = 1",
+        "click.prompt('pw')",
+    ]
+    # Act
+    result = _line_or_above_has_interactive_ok(lines, 3)
+    # Assert
+    assert result is False

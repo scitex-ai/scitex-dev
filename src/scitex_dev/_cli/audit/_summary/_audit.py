@@ -1780,6 +1780,61 @@ def _ep_value_for(package: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
+_INTERACTIVE_OK_LINE_MARKER = "# audit-cli: interactive-ok"
+_INTERACTIVE_OK_FILE_MARKER = "# audit-cli: file-interactive-ok"
+
+
+def _has_file_interactive_ok_marker(text: str) -> bool:
+    """True if the file opts out of §2 wholesale via a top-of-file marker.
+
+    Looked-for marker (case-sensitive, must appear in the first 30 lines —
+    well within any docstring + import block):
+
+        ``# audit-cli: file-interactive-ok``
+
+    Use this on files whose entire purpose is interactive (e.g.
+    ``_login.py``, an ``auth_setup`` Click command). Per-call markers
+    are preferred when only one or two calls need exempting; this
+    file-level switch is for "the whole module is intentional".
+    """
+    for line in text.split("\n", 30)[:30]:
+        if _INTERACTIVE_OK_FILE_MARKER in line:
+            return True
+    return False
+
+
+def _line_or_above_has_interactive_ok(lines: list[str], lineno: int) -> bool:
+    """True if the call at ``lineno`` (1-indexed) is exempted by a marker.
+
+    Accepted shapes (case-sensitive substring match — the message tail is
+    free-form so authors can document the why):
+
+        click.prompt(...)  # audit-cli: interactive-ok — login flow
+        # audit-cli: interactive-ok — login flow
+        click.prompt(...)
+
+    The immediately-preceding form must be on the line directly above the
+    call (skipping blank lines and other comment lines does NOT walk past
+    a non-comment, non-blank line). This keeps the exemption tight to the
+    one call it documents — a marker far above does not silently exempt
+    every call below it.
+    """
+    if lineno <= 0 or lineno > len(lines):
+        return False
+    # Same-line trailing comment.
+    if _INTERACTIVE_OK_LINE_MARKER in lines[lineno - 1]:
+        return True
+    # Immediately-preceding non-blank line (typical "comment above call"
+    # idiom). Allow intermediate blank lines, but not a non-comment line.
+    i = lineno - 2
+    while i >= 0 and not lines[i].strip():
+        i -= 1
+    if i < 0:
+        return False
+    stripped = lines[i].lstrip()
+    return stripped.startswith("#") and _INTERACTIVE_OK_LINE_MARKER in stripped
+
+
 def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
     """§2 — CLI source must not call `click.confirm`, `click.prompt`,
     `getpass.getpass`, or built-in `input`.
@@ -1792,6 +1847,27 @@ def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
 
     Static AST scan over `src/<pkg>/**/*.py`. Skips obvious non-CLI
     directories (`tests/`, `examples/`, `docs/`).
+
+    Exemptions (precision refinement — some CLI commands are LEGITIMATELY
+    interactive, e.g. an OAuth flow that prompts for a secret, or a
+    destructive command that requires a typed-out confirmation token):
+
+    * **Per-call marker** — ``# audit-cli: interactive-ok`` on the SAME
+      line as the call OR on the line immediately above (with optional
+      blank lines but no intervening non-comment line). The author is
+      asserting "this prompt is the intended UX, not a CI-reliability
+      bomb." Keep the exemption tight to ONE call: a comment far above
+      the call does NOT silently exempt every call below it.
+
+    * **Per-file marker** — ``# audit-cli: file-interactive-ok`` anywhere
+      in the first 30 lines. Exempts every prompt in the file. Use this
+      for whole modules that exist to be interactive (e.g. ``_login.py``,
+      an ``auth_setup`` Click command file).
+
+    Markers are case-sensitive substring matches; any tail after the
+    sentinel is treated as free-form documentation, so authors can write
+    why the exemption is justified (``# audit-cli: interactive-ok —
+    login flow needs the user's TOTP``) without confusing the parser.
     """
     import ast
 
@@ -1823,9 +1899,17 @@ def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
         if any(s in py.parts for s in ("__pycache__", "tests", "examples", "docs")):
             continue
         try:
-            tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
-        except (OSError, SyntaxError):
+            text = py.read_text(encoding="utf-8")
+        except OSError:
             continue
+        try:
+            tree = ast.parse(text, filename=str(py))
+        except SyntaxError:
+            continue
+        # File-level opt-out (e.g. `_login.py`) — skip the whole file.
+        if _has_file_interactive_ok_marker(text):
+            continue
+        lines = text.split("\n")
         rel = py.relative_to(pkg_root.parent)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -1839,6 +1923,8 @@ def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
                     continue
                 if msg is None:
                     continue  # exempt entry
+                if _line_or_above_has_interactive_ok(lines, node.lineno):
+                    continue  # per-call opt-out
                 out.append(
                     Violation(
                         package,
@@ -1848,6 +1934,8 @@ def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
                 )
             # bare input(...) — exempt if it's `input.button-primary` etc.
             elif isinstance(f, ast.Name) and f.id in forbidden_bare:
+                if _line_or_above_has_interactive_ok(lines, node.lineno):
+                    continue  # per-call opt-out
                 out.append(
                     Violation(
                         package,
