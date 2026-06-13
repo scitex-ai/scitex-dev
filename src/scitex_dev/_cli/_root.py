@@ -442,10 +442,12 @@ def search_docs_deprecated(query, scope, max_results, as_json):
 from ._mcp_cmds import register_mcp_commands
 from .creds import register_creds_commands
 from .cron import register_cron_commands
+from ._hooks_cli import register_hooks_commands
 
 register_mcp_commands(main)
 register_creds_commands(main)
 register_cron_commands(main)
+register_hooks_commands(main)
 
 # -------------------------------------------------------------------
 # ci runner — self-hosted GitHub Actions runner lifecycle
