@@ -76,6 +76,7 @@ from __future__ import annotations
 
 import ast
 from pathlib import Path
+from typing import Iterable
 
 try:
     import tomllib  # 3.11+
@@ -174,6 +175,214 @@ _NEVER_FLAG: frozenset[str] = frozenset(
 )
 
 
+# --- Umbrella detection (#173 Bug 2) ---------------------------------------
+#
+# The umbrella package (``scitex`` — the meta distribution) declares peer
+# libs (``numpy``, ``pandas``, …) in its core ``[project.dependencies]`` as
+# a deliberate USER-FACING CONTRACT: a user who types ``pip install scitex``
+# expects the standard scientific stack to come with it, even when no source
+# file under ``src/scitex/`` imports those libs directly (they exist for the
+# user's downstream code, not the umbrella's own).
+#
+# PS-149's heuristic ("HARD heavy dep + 0 core-surface imports → overreach")
+# is therefore wrong for umbrellas. We detect umbrella packages and silently
+# skip them so the audit never recommends demoting a user-contract dep.
+#
+# Detection order:
+#   1. **Registry (authoritative).** Names tagged ``category == "umbrella"``
+#      in ``scitex_dev._ecosystem._registry.ECOSYSTEM`` are umbrellas by
+#      contract. Computed lazily so an unrelated registry import error never
+#      breaks a per-package audit.
+#   2. **Heuristic (fallback).** A package whose ``src/<import_name>/`` tree
+#      consists ONLY of an ``__init__.py`` that is itself a thin re-export
+#      (no implementation modules siblings, no impl statements other than
+#      ``from / import`` re-export lines + comments + docstring) — i.e. a
+#      package that ships no real source of its own — is treated as an
+#      umbrella too. Catches sibling/alias umbrellas (e.g. ``scitex-code``
+#      per #173) that may not yet be tagged in the registry.
+
+
+def _registry_umbrella_dists() -> frozenset[str]:
+    """Distribution names with ``category == "umbrella"`` in the registry.
+
+    Lazy + defensive: a registry-side import error returns an empty set
+    rather than breaking the per-package audit. Cached per-process.
+    """
+    cached = getattr(_registry_umbrella_dists, "_cache", None)
+    if cached is not None:
+        return cached
+    out: set[str] = set()
+    try:  # pragma: no cover — registry import is exercised end-to-end
+        from scitex_dev._ecosystem._registry import ECOSYSTEM
+
+        for key, info in ECOSYSTEM.items():
+            if (info or {}).get("category") == "umbrella":
+                # Prefer pypi_name (matches pyproject [project].name); fall
+                # back to the registry key (which is the pypi_name today).
+                out.add((info.get("pypi_name") or key).lower())
+    except Exception:  # pragma: no cover — defensive fallback
+        pass
+    result = frozenset(out)
+    _registry_umbrella_dists._cache = result  # type: ignore[attr-defined]
+    return result
+
+
+_INIT_SIBLING_ALLOWLIST: frozenset[str] = frozenset(
+    {
+        "__init__.py",
+        "__main__.py",
+        "_version.py",
+        "_about.py",
+        "_lazy.py",
+        "py.typed",
+    }
+)
+
+
+def _has_thin_reexport_init(scan_root: Path) -> bool:
+    """True iff ``scan_root/__init__.py`` is a thin re-export shim.
+
+    "Thin re-export" requires BOTH:
+
+    1. ``__init__.py`` body is only docstring / comments / blank lines /
+       ``import`` and ``from ... import ...`` / simple ``__all__`` /
+       ``__version__`` assignments. AND at least one of those imports is
+       NOT ``from __future__`` — i.e. the file actually re-exports
+       something (a single ``from __future__ import annotations`` does
+       not make a package an umbrella).
+    2. The package directory has no other Python implementation files
+       beyond the strict ``_INIT_SIBLING_ALLOWLIST`` (``__main__``,
+       ``_version``, ``_about``, ``_lazy``, ``py.typed``). Other dunder /
+       single-underscore impl modules (``_helpers.py``, ``_plot.py``,
+       …) DO count as real implementation and disqualify the heuristic.
+
+    Tight on purpose: PS-149's whole job is "this dep is only used in
+    feature modules" — anything fancier than a pure re-export skeleton
+    should keep its overreach verdict and have an explicit registry
+    ``category = "umbrella"`` opt-out instead.
+    """
+    init = scan_root / "__init__.py"
+    if not init.is_file():
+        return False
+    try:
+        text = init.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    try:
+        tree = ast.parse(text, filename=str(init))
+    except SyntaxError:
+        return False
+    has_real_reexport = False
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom):
+            if (node.module or "") != "__future__":
+                has_real_reexport = True
+            continue
+        if isinstance(node, ast.Import):
+            has_real_reexport = True
+            continue
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+            continue  # docstring
+        if isinstance(node, ast.Assign):
+            if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                if node.targets[0].id in {"__all__", "__version__"}:
+                    continue
+            return False
+        return False
+    if not has_real_reexport:
+        return False
+    # Sibling check — strict allowlist of "shim-friendly" filenames.
+    for child in scan_root.iterdir():
+        if not child.is_file() or child.suffix not in {".py", ""}:
+            continue
+        if child.name not in _INIT_SIBLING_ALLOWLIST:
+            return False
+    return True
+
+
+def _is_umbrella_package(meta: dict, scan_root: Path) -> bool:
+    """True iff the package should be treated as an umbrella (skip PS-149).
+
+    Registry lookup first (authoritative); thin-re-export ``__init__``
+    heuristic as fallback for umbrellas not yet tagged in the registry.
+    """
+    project = meta.get("project", {}) or {}
+    name = (project.get("name") or "").strip().lower()
+    if name and name in _registry_umbrella_dists():
+        return True
+    if scan_root.is_dir() and _has_thin_reexport_init(scan_root):
+        return True
+    return False
+
+
+# --- Public AST-based import detector (#173 Bug 1) -------------------------
+#
+# The 2026-06-13 ecosystem subagent counted imports via a regex
+# ``^\s*(import|from)\s+(numpy|pandas)\b`` and reported "0 imports" for
+# files that actually imported the libs in shapes the regex missed (``import
+# X as Y`` w/ different boundary, indented imports inside functions, etc.).
+# An AST walk catches every shape; this helper is the canonical, regex-free
+# replacement we want every subagent / CLI subcommand to call instead of
+# rolling its own pattern.
+
+
+def find_module_imports(
+    text: str,
+    candidate_roots: Iterable[str],
+    *,
+    filename: str = "<input>",
+) -> set[str]:
+    """Return the subset of ``candidate_roots`` imported by Python source ``text``.
+
+    Walks the WHOLE AST (module-level + function/class/method-scoped) and
+    matches each import against ``candidate_roots`` by top-level import-root
+    (e.g. ``import numpy.fft`` counts as a hit for ``numpy``). Both ``import
+    X`` and ``from X import Y`` shapes are detected. Relative ``from .x
+    import y`` imports are first-party and never counted.
+
+    Use this — NOT a regex with ``\\b`` boundaries — when counting third-party
+    imports for audit purposes. See #173 for the regex bug it replaces.
+
+    Parameters
+    ----------
+    text : str
+        Python source.
+    candidate_roots : iterable of str
+        Top-level import roots to count, e.g. ``{"numpy", "pandas"}``.
+    filename : str, optional
+        Filename for the parse error message; cosmetic only.
+
+    Returns
+    -------
+    set of str
+        Subset of ``candidate_roots`` that ``text`` imports. Empty set if
+        ``text`` does not parse as Python (the caller decides whether to
+        treat that as a hard error).
+    """
+    candidates = set(candidate_roots)
+    if not candidates:
+        return set()
+    try:
+        tree = ast.parse(text, filename=filename)
+    except SyntaxError:
+        return set()
+    hits: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                root = alias.name.split(".", 1)[0]
+                if root in candidates:
+                    hits.add(root)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level and node.level > 0:
+                continue  # relative — first-party, never a third-party hit
+            mod = node.module or ""
+            root = mod.split(".", 1)[0] if mod else ""
+            if root in candidates:
+                hits.add(root)
+    return hits
+
+
 def _heavy_hard_dist_roots(meta: dict) -> dict[str, str]:
     """Map each candidate import-root → distribution name, for HARD heavy deps.
 
@@ -236,20 +445,26 @@ def _imports_in_module(tree: ast.Module, roots: dict[str, str]) -> set[str]:
     Walks the WHOLE tree (module-level AND function/class-scoped) — for this
     rule a lazy import inside a feature module still proves feature-only use.
     Relative imports are first-party and ignored.
+
+    Thin wrapper around :func:`find_module_imports` that takes a pre-parsed
+    AST (so PS-149's per-file scan doesn't re-parse the source twice).
     """
     hits: set[str] = set()
+    candidates = set(roots.keys())
+    if not candidates:
+        return hits
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 root = alias.name.split(".", 1)[0]
-                if root in roots:
+                if root in candidates:
                     hits.add(root)
         elif isinstance(node, ast.ImportFrom):
             if node.level and node.level > 0:
                 continue
             mod = node.module or ""
             root = mod.split(".", 1)[0] if mod else ""
-            if root in roots:
+            if root in candidates:
                 hits.add(root)
     return hits
 
@@ -309,6 +524,16 @@ def check_ps149_hard_dep_overreach(
     src_root = repo / "src"
     scan_root = src_root if src_root.is_dir() else (repo / import_name)
     if not scan_root.is_dir():
+        return
+
+    # #173 Bug 2 — umbrella packages declare HARD core deps as a user-facing
+    # contract (``pip install scitex`` ships the standard scientific stack).
+    # "0 core-surface imports" is not overreach there — by design the
+    # umbrella ships no implementation of its own. Skip the verdict so a
+    # future curation of ``_HEAVY_DISTS`` that includes e.g. ``matplotlib``
+    # never produces a false positive on the umbrella.
+    pkg_root = (src_root / import_name) if src_root.is_dir() else scan_root
+    if _is_umbrella_package(meta, pkg_root):
         return
 
     # For each candidate root, track: was it imported at all? was it ever

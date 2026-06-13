@@ -15,9 +15,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from scitex_dev._cli.audit._project._check_hard_dep_overreach import (
+    _has_thin_reexport_init,
     _heavy_hard_dist_roots,
     _is_core_surface,
+    _is_umbrella_package,
+    _registry_umbrella_dists,
     check_ps149_hard_dep_overreach,
+    find_module_imports,
 )
 
 
@@ -379,6 +383,331 @@ def test_ps149_silent_when_pyproject_absent(tmp_path):
     check_ps149_hard_dep_overreach(tmp_path, "scitex-fakepeer", _StubViolation, out)
     # Assert
     assert out == []
+
+
+# ============================================================================
+# #173 Bug 1 — find_module_imports replaces buggy regex-based counters.
+# One assertion per shape so a regression points at the exact missing shape.
+# ============================================================================
+
+
+def test_find_module_imports_bare_top_level_import():
+    # Arrange — `import numpy`
+    src = "import numpy\n"
+    # Act
+    hits = find_module_imports(src, {"numpy"})
+    # Assert
+    assert "numpy" in hits
+
+
+def test_find_module_imports_aliased_top_level_import():
+    # Arrange — `import pandas as pd` (the shape `\b`-regex with `as` boundary missed)
+    src = "import pandas as pd\n"
+    # Act
+    hits = find_module_imports(src, {"pandas"})
+    # Assert
+    assert "pandas" in hits
+
+
+def test_find_module_imports_dotted_top_level_import():
+    # Arrange — `import numpy.fft` counts as a hit for `numpy`
+    src = "import numpy.fft\n"
+    # Act
+    hits = find_module_imports(src, {"numpy"})
+    # Assert
+    assert "numpy" in hits
+
+
+def test_find_module_imports_from_simple():
+    # Arrange — `from scipy import signal`
+    src = "from scipy import signal\n"
+    # Act
+    hits = find_module_imports(src, {"scipy"})
+    # Assert
+    assert "scipy" in hits
+
+
+def test_find_module_imports_from_dotted():
+    # Arrange — `from scipy.stats import ttest_ind`
+    src = "from scipy.stats import ttest_ind\n"
+    # Act
+    hits = find_module_imports(src, {"scipy"})
+    # Assert
+    assert "scipy" in hits
+
+
+def test_find_module_imports_function_scoped():
+    # Arrange — lazy import inside a function body (regex with `^\\s*` missed this)
+    src = "def f():\n    import h5py\n    return h5py\n"
+    # Act
+    hits = find_module_imports(src, {"h5py"})
+    # Assert
+    assert "h5py" in hits
+
+
+def test_find_module_imports_method_scoped():
+    # Arrange — `from pandas.api import types` inside a method
+    src = (
+        "class C:\n"
+        "    def m(self):\n"
+        "        from pandas.api import types\n"
+        "        return types\n"
+    )
+    # Act
+    hits = find_module_imports(src, {"pandas"})
+    # Assert
+    assert "pandas" in hits
+
+
+def test_find_module_imports_ignores_relative_imports():
+    # Arrange — `from .sib import X` is first-party, never a third-party hit
+    src = "from .sibling import helper\n"
+    # Act
+    hits = find_module_imports(src, {"sibling"})
+    # Assert
+    assert hits == set()
+
+
+def test_find_module_imports_ignores_comments_and_strings():
+    # Arrange — only literal `import` statements count; comments/strings do not
+    src = '# import numpy here later\nx = "import pandas"\nimport scipy\n'
+    # Act
+    hits = find_module_imports(src, {"numpy", "pandas", "scipy"})
+    # Assert
+    assert hits == {"scipy"}
+
+
+def test_find_module_imports_ignores_uncandidate_roots():
+    # Arrange — only the requested roots are counted (no over-reporting)
+    src = "import numpy\nimport pandas\n"
+    # Act
+    hits = find_module_imports(src, {"numpy"})
+    # Assert
+    assert hits == {"numpy"}
+
+
+def test_find_module_imports_handles_unparseable_text():
+    # Arrange — broken source returns empty set rather than crashing the audit
+    src = "def f(:\n  pass\n"
+    # Act
+    hits = find_module_imports(src, {"numpy"})
+    # Assert
+    assert hits == set()
+
+
+def test_find_module_imports_empty_candidate_set_short_circuits():
+    # Arrange — no candidates → empty result, no AST parsing required
+    src = "import numpy\n"
+    # Act
+    hits = find_module_imports(src, set())
+    # Assert
+    assert hits == set()
+
+
+def test_find_module_imports_fixture_every_shape_in_one_file():
+    # Arrange — single fixture exercising every shape the bare `\\b`-regex
+    # missed (Bug 1). Acts as a regression sentinel: if the AST detector
+    # ever loses a shape this single test pinpoints it via the set diff.
+    src = (
+        "import numpy\n"
+        "import pandas as pd\n"
+        "import numpy.fft\n"
+        "from scipy import signal\n"
+        "from scipy.stats import ttest_ind\n"
+        "def f():\n"
+        "    import h5py\n"
+        "    from numpy import linalg\n"
+        "class C:\n"
+        "    def m(self):\n"
+        "        from pandas.api import types\n"
+        "# import biopython mentioned in a comment — must not count\n"
+        'doc = "import vaex in a string — must not count"\n'
+    )
+    # Act
+    hits = find_module_imports(src, {"numpy", "pandas", "scipy", "h5py"})
+    # Assert
+    assert hits == {"numpy", "pandas", "scipy", "h5py"}
+
+
+# ============================================================================
+# #173 Bug 2 — umbrella packages (`scitex` and aliases) declare HARD core
+# deps as a user contract. PS-149 must not flag them as overreach. The
+# heuristic and registry paths are exercised independently.
+# ============================================================================
+
+
+def test_registry_umbrella_dists_includes_scitex():
+    # Arrange — registry tags `scitex` as the umbrella
+    # Act
+    dists = _registry_umbrella_dists()
+    # Assert
+    assert "scitex" in dists
+
+
+def test_is_umbrella_package_via_registry_name(tmp_path):
+    # Arrange — `[project].name = "scitex"` (the registry-tagged umbrella)
+    meta = {"project": {"name": "scitex", "dependencies": ["numpy"]}}
+    pkg_root = tmp_path / "src" / "scitex"
+    pkg_root.mkdir(parents=True)
+    (pkg_root / "__init__.py").write_text("from __future__ import annotations\n")
+    # Act
+    result = _is_umbrella_package(meta, pkg_root)
+    # Assert
+    assert result is True
+
+
+def test_is_umbrella_package_registry_lookup_is_case_insensitive(tmp_path):
+    # Arrange — pyproject `name = "SciTeX"` (capitalisation drift). Registry
+    # is normalised lower-case so this still resolves to the umbrella.
+    meta = {"project": {"name": "SciTeX", "dependencies": ["numpy"]}}
+    pkg_root = tmp_path / "src" / "scitex"
+    pkg_root.mkdir(parents=True)
+    (pkg_root / "__init__.py").write_text("\n")
+    # Act
+    result = _is_umbrella_package(meta, pkg_root)
+    # Assert
+    assert result is True
+
+
+def test_is_umbrella_package_via_thin_reexport_heuristic(tmp_path):
+    # Arrange — distribution NOT in the registry, but __init__ is a thin
+    # re-export shim with no implementation siblings (catches scitex-code
+    # / future umbrella aliases per #173).
+    meta = {"project": {"name": "scitex-code", "dependencies": ["torch>=2.0"]}}
+    pkg_root = tmp_path / "src" / "scitex_code"
+    pkg_root.mkdir(parents=True)
+    (pkg_root / "__init__.py").write_text(
+        '"""scitex-code: alias re-export of scitex-python."""\n'
+        "from __future__ import annotations\n"
+        "from scitex import *  # noqa: F401,F403\n"
+        '__all__ = ["__version__"]\n'
+        '__version__ = "0.0.0"\n'
+    )
+    # Act
+    result = _is_umbrella_package(meta, pkg_root)
+    # Assert
+    assert result is True
+
+
+def test_is_umbrella_package_false_for_normal_package(tmp_path):
+    # Arrange — regular package: real impl module + meaningful __init__
+    meta = {"project": {"name": "scitex-stats", "dependencies": ["torch>=2.0"]}}
+    pkg_root = tmp_path / "src" / "scitex_stats"
+    pkg_root.mkdir(parents=True)
+    (pkg_root / "__init__.py").write_text(
+        "from __future__ import annotations\nfrom ._impl import compute\n"
+    )
+    (pkg_root / "_impl.py").write_text("def compute():\n    return 42\n")
+    # Act
+    result = _is_umbrella_package(meta, pkg_root)
+    # Assert
+    assert result is False
+
+
+def test_has_thin_reexport_init_true_for_pure_reexport(tmp_path):
+    # Arrange
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text(
+        '"""thin reexport"""\nfrom __future__ import annotations\nfrom x import y\n'
+    )
+    # Act
+    result = _has_thin_reexport_init(pkg)
+    # Assert
+    assert result is True
+
+
+def test_has_thin_reexport_init_false_when_impl_sibling_present(tmp_path):
+    # Arrange — sibling implementation module disqualifies the heuristic
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from .impl import foo\n")
+    (pkg / "impl.py").write_text("def foo():\n    return 1\n")
+    # Act
+    result = _has_thin_reexport_init(pkg)
+    # Assert
+    assert result is False
+
+
+def test_has_thin_reexport_init_false_when_init_defines_function(tmp_path):
+    # Arrange — __init__ that defines code (not just re-exports) is not thin
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("def helper():\n    return 1\n")
+    # Act
+    result = _has_thin_reexport_init(pkg)
+    # Assert
+    assert result is False
+
+
+def test_has_thin_reexport_init_allows_underscore_internal_siblings(tmp_path):
+    # Arrange — `_version.py` / `_lazy.py` style internals are allowed
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text(
+        "from __future__ import annotations\nfrom ._version import __version__\n"
+    )
+    (pkg / "_version.py").write_text('__version__ = "0.1.0"\n')
+    # Act
+    result = _has_thin_reexport_init(pkg)
+    # Assert
+    assert result is True
+
+
+def test_ps149_silent_for_umbrella_with_heavy_hard_dep(tmp_path):
+    # Arrange — `scitex` umbrella declaring `torch` HARD with zero imports.
+    # Without the umbrella skip, PS-149 would fire (heavy + dead-of-core).
+    # With it, the umbrella's user-contract dep is preserved.
+    _write(
+        tmp_path / "pyproject.toml",
+        '[project]\nname = "scitex"\ndependencies = ["torch>=2.0"]\n',
+    )
+    pkg = tmp_path / "src" / "scitex"
+    _write(pkg / "__init__.py", "from __future__ import annotations\n")
+    out: list = []
+    # Act
+    check_ps149_hard_dep_overreach(tmp_path, "scitex", _StubViolation, out)
+    # Assert
+    assert out == []
+
+
+def test_ps149_silent_for_umbrella_alias_via_heuristic(tmp_path):
+    # Arrange — `scitex-code` (not yet registry-tagged) detected via the
+    # thin-reexport fallback. Should not flag even with a heavy HARD dep.
+    _write(
+        tmp_path / "pyproject.toml",
+        '[project]\nname = "scitex-code"\ndependencies = ["torch>=2.0"]\n',
+    )
+    pkg = tmp_path / "src" / "scitex_code"
+    _write(
+        pkg / "__init__.py",
+        "from __future__ import annotations\nfrom scitex import *  # noqa: F401,F403\n",
+    )
+    out: list = []
+    # Act
+    check_ps149_hard_dep_overreach(tmp_path, "scitex-code", _StubViolation, out)
+    # Assert
+    assert out == []
+
+
+def test_ps149_still_fires_for_non_umbrella_after_umbrella_skip(tmp_path):
+    # Arrange — regression guard: the umbrella skip must NOT swallow normal
+    # packages. A regular peer with figrecipe HARD + feature-only use still
+    # gets PS-149.
+    _make_pkg(
+        tmp_path,
+        hard_deps=["figrecipe>=0.28.0"],
+        files={
+            "__init__.py": "from __future__ import annotations\nfrom ._impl import x\n",
+            "_impl.py": "def x():\n    return 1\n",
+            "_plot.py": "from __future__ import annotations\nimport figrecipe\n",
+        },
+    )
+    out: list = []
+    # Act
+    check_ps149_hard_dep_overreach(tmp_path, "scitex-fakepeer", _StubViolation, out)
+    # Assert
+    assert "PS-149" in _codes(out)
 
 
 # EOF
