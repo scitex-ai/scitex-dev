@@ -120,7 +120,6 @@ class TestClassify:
         # Assert
         assert "doctor" in FLAT_KEEPERS
 
-
     def test_catalog_verb_i_intransitive_verb_i_in__classify_doctor_or_doctor_in(self):
         # `doctor` is intransitive; flat-keeper list also covers it
         # Arrange
@@ -213,7 +212,6 @@ class TestFlagNames:
 
         assert "--json" in _flag_names(cmd)
 
-
     def test_collects_long_and_short_verbose_in__flag_names_cmd(self):
         @click.command()
         @click.option("--json", "as_json", is_flag=True)
@@ -225,7 +223,6 @@ class TestFlagNames:
             pass
 
         assert "--verbose" in _flag_names(cmd)
-
 
     def test_collects_long_and_short_v_in__flag_names_cmd(self):
         @click.command()
@@ -399,7 +396,6 @@ class TestFilterViolations:
         out = _filter_violations(vs, rules=("§1",))
         assert len(out) == 1
 
-
     def test_rule_filter_includes_only_matching_out_0_rule_1(self):
         # Arrange
         # Act
@@ -424,7 +420,6 @@ class TestFilterViolations:
         out = _filter_violations(vs, exclude=("§4",))
         assert len(out) == 1
 
-
     def test_exclude_drops_matching_out_0_rule_2(self):
         # Arrange
         # Act
@@ -444,7 +439,6 @@ class TestFilterViolations:
         out = _filter_violations(vs, min_severity="error")
         rules = [v.rule for v in out]
         assert "§1" in rules
-
 
     def test_severity_error_only_1c_not_in_rules(self):
         # §1 = error, §1c = info — only §1 should pass --severity error.
@@ -468,7 +462,6 @@ class TestFilterViolations:
         # §1c (info) does not.
         rules = {v.rule for v in out}
         assert "§1" in rules and "§4" in rules
-
 
     def test_severity_warn_includes_warn_and_error_1c_not_in_rules(self):
         # Arrange
@@ -522,7 +515,6 @@ class TestExtractNames:
         # Assert
         assert _extract_names([]) == set()
 
-
     def test_empty_list_and_dict_return_empty_set_extract_names_set_2(self):
         # Arrange
         # Act
@@ -552,7 +544,6 @@ class TestLoadRegistry:
         registry, provenance = _load_registry(None)
         assert "bundled" in provenance
 
-
     def test_default_uses_bundled_scitex_in_registry(self, env_sandbox):
         # env_sandbox fixture clears SCITEX_DEV_REGISTRY, chdirs to tmp,
         # and redirects Path.home() to tmp — so no project/user/env layer
@@ -574,7 +565,6 @@ class TestLoadRegistry:
         assert "--registry flag" in provenance
         # Bundled entries still merged in
 
-
     def test_explicit_path_wins_custom_pkg_in_registry(self, env_sandbox):
         # Arrange
         # Act
@@ -585,7 +575,6 @@ class TestLoadRegistry:
         registry, provenance = _load_registry(str(path))
         assert "custom-pkg" in registry
         # Bundled entries still merged in
-
 
     def test_explicit_path_wins_scitex_in_registry(self, env_sandbox):
         # Arrange
@@ -598,7 +587,9 @@ class TestLoadRegistry:
         # Bundled entries still merged in
         assert "scitex" in registry
 
-    def test_env_var_layer_scitex_dev_registry_in_provenance(self, env_sandbox, set_env):
+    def test_env_var_layer_scitex_dev_registry_in_provenance(
+        self, env_sandbox, set_env
+    ):
         # Arrange
         # Act
         # Assert
@@ -608,7 +599,6 @@ class TestLoadRegistry:
         set_env("SCITEX_DEV_REGISTRY", str(path))
         registry, provenance = _load_registry(None)
         assert "$SCITEX_DEV_REGISTRY" in provenance
-
 
     def test_env_var_layer_env_only_in_registry(self, env_sandbox, set_env):
         # Arrange
@@ -647,7 +637,6 @@ class TestArgparseCapture:
         wrapped = _wrap_argparse(captured, name="testcli")
         # Top-level flags survived
 
-
     def test_captures_simple_parser_isinstance_wrapped_click_group(self):
         # Arrange
         # Act
@@ -666,7 +655,6 @@ class TestArgparseCapture:
         wrapped = _wrap_argparse(captured, name="testcli")
         assert isinstance(wrapped, click.Group)
         # Top-level flags survived
-
 
     def test_captures_simple_parser_list_in_wrapped_commands(self):
         # Arrange
@@ -687,7 +675,6 @@ class TestArgparseCapture:
         assert "list" in wrapped.commands
         # Top-level flags survived
 
-
     def test_captures_simple_parser_json_in__flag_names_wrapped(self):
         # Arrange
         # Act
@@ -706,7 +693,6 @@ class TestArgparseCapture:
         wrapped = _wrap_argparse(captured, name="testcli")
         # Top-level flags survived
         assert "--json" in _flag_names(wrapped)
-
 
     def test_captures_simple_parser_verbose_in__flag_names_wrapped_or_v_in(self):
         # Arrange
@@ -739,7 +725,6 @@ class TestArgparseCapture:
         captured = _capture_root(main)
         assert captured is not None
         wrapped = _wrap_argparse(captured, name="zerocli")
-
 
     def test_captures_main_without_argv_param_foo_in__flag_names_wrapped(self):
         # Arrange
@@ -814,7 +799,6 @@ class TestIntrospectionCheck:
         rules = [v.rule for v in out]
         assert "§1a" in rules
         # Should specifically mention list-python-apis
-
 
     def test_missing_list_python_apis_any_list_python_apis_in_v_message_for_v(self):
         @click.group()
@@ -940,7 +924,6 @@ class TestAuditOneNotFound:
         status, violations = _audit_one("definitely-not-a-real-package-xyz")
         assert status == "not-found"
 
-
     def test_unknown_package_returns_not_found_status_violations(self):
         # Arrange
         # Act
@@ -959,7 +942,6 @@ class TestAuditOneNotFound:
             ep_value_for=lambda pkg: "fake.mcp_server:main",
         )
         assert status == "skip-mcp"
-
 
     def test_returns_skip_mcp_for_mcp_entry_violations(self):
         # Use the ep_value_for injection hook to make the package look like
@@ -1023,7 +1005,9 @@ class TestWatchdog:
 
 
 class TestIsolatedStreams:
-    def test_restores_stdout_after_block_this_should_be_swallowed_not_in_captured(self, capsys):
+    def test_restores_stdout_after_block_this_should_be_swallowed_not_in_captured(
+        self, capsys
+    ):
         # Arrange
         # Act
         # Assert
@@ -1038,7 +1022,6 @@ class TestIsolatedStreams:
         assert "this should be swallowed" not in captured.out
         # New writes go to the test's capsys stream — not the original.
         # Just confirm sys.stdout is non-closed and writable after exit.
-
 
     def test_restores_stdout_after_block_not_sys_stdout_closed(self, capsys):
         # Arrange
@@ -1056,8 +1039,9 @@ class TestIsolatedStreams:
         # Just confirm sys.stdout is non-closed and writable after exit.
         assert not sys.stdout.closed
 
-
-    def test_restores_stdout_after_block_sys_stdout_is_not_original_or_original_i(self, capsys):
+    def test_restores_stdout_after_block_sys_stdout_is_not_original_or_original_i(
+        self, capsys
+    ):
         # Arrange
         # Act
         # Assert
@@ -1072,3 +1056,182 @@ class TestIsolatedStreams:
         # New writes go to the test's capsys stream — not the original.
         # Just confirm sys.stdout is non-closed and writable after exit.
         assert sys.stdout is not original or original is sys.stdout
+
+
+# ---------------------------------------------------------------------------
+# Registry source-tree fallback helpers (phantom-skip fix)
+#
+# `_resolve_pkg_root` / `_resolve_dotted_module_file` / `_package_ships_skills`
+# previously used `importlib.util.find_spec` as the only resolution path, so
+# audit-summary checks (§1a skills, §2 interactive-prompts, §11 CLI framework)
+# silently skipped every locally-cloned peer the developer hadn't pip-installed.
+# Mirrors PRs #177 (audit-skills) and #178 (audit-python-apis); same no-mocks
+# contextmanager pattern.
+# ---------------------------------------------------------------------------
+
+
+from contextlib import contextmanager
+from pathlib import Path
+
+from scitex_dev._cli.audit._summary._audit import (
+    _package_ships_skills,
+    _registry_local_src,
+    _resolve_dotted_module_file,
+    _resolve_pkg_root,
+)
+
+
+@contextmanager
+def _registry_override(distribution: str, local_path: Path):
+    """Temporarily add (or replace) an ECOSYSTEM entry; restore on exit.
+
+    No-mocks-compliant: pure dict mutation + try/finally restore (NOT
+    pytest's `monkeypatch`, NOT `unittest.mock`). The sentinel `_MISSING`
+    distinguishes "key didn't exist" from "key existed with None value"
+    so restoration is exact.
+    """
+    from scitex_dev._ecosystem._registry import ECOSYSTEM
+
+    _MISSING = object()
+    before = ECOSYSTEM.get(distribution, _MISSING)
+    ECOSYSTEM[distribution] = {
+        "local_path": str(local_path),
+        "pypi_name": distribution,
+        "github_repo": f"ywatanabe1989/{distribution}",
+        "import_name": distribution.replace("-", "_"),
+        "category": "library",
+    }
+    try:
+        yield
+    finally:
+        if before is _MISSING:
+            ECOSYSTEM.pop(distribution, None)
+        else:
+            ECOSYSTEM[distribution] = before
+
+
+def test_registry_local_src_resolves_to_src_pkg_dir(tmp_path):
+    # Arrange
+    dist = "scitex-phantomsumm"
+    import_name = "scitex_phantomsumm"
+    local_root = tmp_path / "scitex-phantomsumm"
+    src_pkg = local_root / "src" / import_name
+    src_pkg.mkdir(parents=True)
+    # Act
+    with _registry_override(dist, local_root):
+        result = _registry_local_src(dist)
+    # Assert
+    assert result == src_pkg
+
+
+def test_registry_local_src_returns_none_when_local_path_missing(tmp_path):
+    # Arrange — registry entry but no on-disk path
+    dist = "scitex-ghostsumm"
+    nonexistent = tmp_path / "does-not-exist"
+    # Act
+    with _registry_override(dist, nonexistent):
+        result = _registry_local_src(dist)
+    # Assert
+    assert result is None
+
+
+def test_registry_local_src_returns_none_when_not_registered():
+    # Arrange — distribution not in ECOSYSTEM
+    # Act
+    result = _registry_local_src("scitex-unregisteredsumm")
+    # Assert
+    assert result is None
+
+
+def test_resolve_pkg_root_falls_back_to_registry(tmp_path):
+    # Arrange — non-installed package; find_spec returns None
+    dist = "scitex-phantomsumm2"
+    import_name = "scitex_phantomsumm2"
+    local_root = tmp_path / "scitex-phantomsumm2"
+    src_pkg = local_root / "src" / import_name
+    src_pkg.mkdir(parents=True)
+    # Act
+    with _registry_override(dist, local_root):
+        result = _resolve_pkg_root(dist)
+    # Assert
+    assert result == src_pkg
+
+
+def test_resolve_pkg_root_returns_none_when_unfindable():
+    # Arrange — distribution neither installed nor registered
+    # Act
+    result = _resolve_pkg_root("scitex-doesnotexistanywheresumm")
+    # Assert
+    assert result is None
+
+
+def test_resolve_dotted_module_file_falls_back_to_registry(tmp_path):
+    # Arrange — non-installed package, dotted submodule path
+    dist = "scitex-phantomsumm3"
+    import_name = "scitex_phantomsumm3"
+    local_root = tmp_path / "scitex-phantomsumm3"
+    cli_dir = local_root / "src" / import_name / "_cli"
+    cli_dir.mkdir(parents=True)
+    root_file = cli_dir / "_root.py"
+    root_file.write_text("# entry point\n")
+    # Act
+    with _registry_override(dist, local_root):
+        result = _resolve_dotted_module_file(dist, f"{import_name}._cli._root")
+    # Assert
+    assert result == root_file
+
+
+def test_resolve_dotted_module_file_falls_back_to_package_init(tmp_path):
+    # Arrange — dotted path ends at a package directory (uses __init__.py)
+    dist = "scitex-phantomsumm4"
+    import_name = "scitex_phantomsumm4"
+    local_root = tmp_path / "scitex-phantomsumm4"
+    sub_pkg = local_root / "src" / import_name / "_cli"
+    sub_pkg.mkdir(parents=True)
+    init = sub_pkg / "__init__.py"
+    init.write_text("# sub-package init\n")
+    # Act
+    with _registry_override(dist, local_root):
+        result = _resolve_dotted_module_file(dist, f"{import_name}._cli")
+    # Assert
+    assert result == init
+
+
+def test_resolve_dotted_module_file_returns_none_when_target_absent(tmp_path):
+    # Arrange — registry resolves but the dotted submodule doesn't exist
+    dist = "scitex-phantomsumm5"
+    import_name = "scitex_phantomsumm5"
+    local_root = tmp_path / "scitex-phantomsumm5"
+    (local_root / "src" / import_name).mkdir(parents=True)
+    # Act
+    with _registry_override(dist, local_root):
+        result = _resolve_dotted_module_file(dist, f"{import_name}._nothing")
+    # Assert
+    assert result is None
+
+
+def test_package_ships_skills_detects_skills_dir_via_registry(tmp_path):
+    # Arrange — non-installed peer with on-disk `_skills/<pkg>/` layout
+    dist = "scitex-phantomskills"
+    import_name = "scitex_phantomskills"
+    local_root = tmp_path / "scitex-phantomskills"
+    skills_dir = local_root / "src" / import_name / "_skills" / dist
+    skills_dir.mkdir(parents=True)
+    # Act
+    with _registry_override(dist, local_root):
+        result = _package_ships_skills(dist)
+    # Assert
+    assert result is True
+
+
+def test_package_ships_skills_returns_false_when_no_skills_dir(tmp_path):
+    # Arrange — package exists but no `_skills/` subdir
+    dist = "scitex-noskillssumm"
+    import_name = "scitex_noskillssumm"
+    local_root = tmp_path / "scitex-noskillssumm"
+    (local_root / "src" / import_name).mkdir(parents=True)
+    # Act
+    with _registry_override(dist, local_root):
+        result = _package_ships_skills(dist)
+    # Assert
+    assert result is False
