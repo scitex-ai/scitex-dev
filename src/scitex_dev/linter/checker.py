@@ -419,6 +419,15 @@ class SciTeXChecker(
         if _is_allowed_by_comment(source_line, rule.id):
             return
         sev = self.config.per_rule_severity.get(rule.id)
+        if not sev:
+            # Pillar 3 (#TBD) — category-wide severity override (e.g.
+            # research project-type flips io/path from warning→error).
+            # Per-rule override (above) still wins; category map is the
+            # floor not the ceiling. See LinterConfig.
+            cat_override = getattr(
+                self.config, "category_severity_override", {}
+            ) or {}
+            sev = cat_override.get(rule.category)
         if sev:
             rule = replace(rule, severity=sev)
         self.issues.append(

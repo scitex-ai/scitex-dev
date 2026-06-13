@@ -60,6 +60,21 @@ class LinterConfig:
     disable: list[str] = field(default_factory=list)
     enable: list[str] = field(default_factory=list)
     per_rule_severity: dict[str, str] = field(default_factory=dict)
+    category_severity_override: dict[str, str] = field(default_factory=dict)
+    """Category → severity override map, applied after ``per_rule_severity``.
+
+    Populated by :func:`load_config` from the project's
+    ``.scitex/dev/config.yaml`` ``project-type`` declaration — research-
+    typed projects flip the ``io`` and ``path`` categories from
+    ``warning`` to ``error`` so a raw ``pd.read_parquet`` / bare
+    ``open()`` blocks rather than just warns. Per the 2026-06-12
+    operator directive 12826: research-category scripts must not bypass
+    clew/io provenance silently. See Pillar 3 (#TBD).
+
+    Per-rule overrides in ``per_rule_severity`` still win — set a specific
+    rule's severity in pyproject.toml ``[tool.scitex-linter.per-rule-
+    severity]`` to opt out of the category-wide flip for that one rule.
+    """
     required_injected: list[str] = field(
         default_factory=lambda: ["CONFIG", "plt", "COLORS", "rngg", "logger"]
     )
@@ -100,6 +115,21 @@ def load_config(start_path: str | None = None) -> LinterConfig:
     # Load from environment variables (highest priority)
     env_config = _load_env()
     config_dict.update(env_config)
+
+    # Pillar 3 (#TBD, 2026-06-12 operator directive 12826): when the
+    # project is research-typed (declared in .scitex/dev/config.yaml as
+    # `project-type: research`), flip the io / path category severities
+    # from "warning" to "error" so a raw `pd.read_parquet` / bare
+    # `open()` BLOCKS the script-edit hook rather than just warning the
+    # agent. Per-rule overrides in `per_rule_severity` still win — the
+    # category map is the floor, not the ceiling. Walk-up + YAML parse
+    # lives in `_project_type.py` (src↔tests 1:1 mirror invariant).
+    from ._project_type import detect_scitex_dev_project_types
+
+    if "research" in detect_scitex_dev_project_types(start_dir):
+        existing = config_dict.get("category_severity_override", {}) or {}
+        merged = {"io": "error", "path": "error", **existing}
+        config_dict["category_severity_override"] = merged
 
     # Build LinterConfig with merged values
     return LinterConfig(**config_dict)
