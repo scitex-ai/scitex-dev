@@ -13,59 +13,121 @@ description: |
 tags: [scitexification, scitexification-session-config]
 ---
 
-<!--
-Status: STUB — landed alongside SKILL.md so the umbrella's
-`02_session-config.md` link in the "5-stage table" resolves to a real
-file instead of a 404. Full content (the canonical `@stx.session.start`
-signature, INJECTED parameter conventions, the `config/*.yaml` deep-merge
-order, the `CONFIG.<KEY>` access pattern, the per-stage logger contract,
-and the migration recipe for repos that already have argparse / hydra /
-gin) will land in a follow-up PR scoped to this chapter only — see #119
-for the five-chapter rollout plan. Cross-package details (the full
-`scitex_session` public surface) live in `scitex-session`'s own
-SKILL.md per the scitexification umbrella's delegation convention.
--->
-
 # Stage 2 — Session + config
 
 The structural step. The script's `if __name__ == "__main__": main()`
-becomes `@stx.session.start(...) def main(CONFIG=stx.session.INJECTED,
-...)`; magic numbers move to `config/*.yaml` and are read as
-`CONFIG.<KEY>`; the bare `print` calls become `logger.info / warning /
-error`. The shape of the program does not change — its entry-point and
-its parameter surface do.
+becomes an `@stx.session.start(...)`-decorated `main`; magic numbers move
+to `config/*.yaml` and are read as `CONFIG.<KEY>`; bare `print` calls
+become the injected `logger`. The program's *shape* does not change — its
+entry-point and its parameter surface do.
 
 > **What changes**: the entry-point, the parameter-reading layer, the
 > logging layer.
-> **What stays the same**: function call structure, module organization,
+> **What stays the same**: function-call structure, module organization,
 > test cases.
 
-## Translation table (sketch)
+## The decorated entry-point
 
-| Original | SciTeX equivalent |
+```python
+import scitex as stx
+
+@stx.session.start
+def main(CONFIG=stx.session.INJECTED, logger=stx.session.INJECTED,
+         plt=stx.session.INJECTED, COLORS=stx.session.INJECTED,
+         rngg=stx.session.INJECTED):
+    """Docstring becomes the --help description."""
+    df = stx.io.load(eval(CONFIG.PATH.RAW_CSV))
+    logger.info(f"loaded {len(df)} rows")
+    ...
+    return 0
+```
+
+- **Minimum** injection is `CONFIG` + `logger`; the full five-tuple
+  (`CONFIG, logger, plt, COLORS, rngg`) is supported and recommended —
+  `plt` is the session-bound `stx.plt` (Stage 3), `rngg` the seeded RNG
+  gateway (deterministic runs), `COLORS` the palette.
+- The decorator gives each run a **dated output dir** (`SDIR_OUT`) and a
+  **per-run logger**, so Stage-1 `stx.io.save(...)` lands under a
+  session-owned root automatically — no `os.makedirs`.
+
+## Config: `config/*.yaml` → `CONFIG.<KEY>`
+
+Magic numbers and paths become YAML, deep-merged across files and read by
+dotted access:
+
+```yaml
+# config/PARAMS.yaml
+THRESHOLD: 0.5
+N_FOLDS: 5
+```
+```yaml
+# config/PATH.yaml   — values are Python f-strings, evaluated at load
+RAW_CSV:     f"./data/raw.csv"
+METRICS_CSV: f"./data/metrics.csv"
+```
+```python
+CONFIG.THRESHOLD                 # 0.5
+stx.io.load(eval(CONFIG.PATH.RAW_CSV))   # PATH values are f-strings → eval
+```
+
+### Pre-flight rules (config corner cases that crash silently)
+
+```
+□ config/PATH.yaml has NO outer `PATH:` wrapper. Top-level keys are
+  exposed directly under CONFIG.PATH.<KEY>; an outer wrapper yields
+  CONFIG.PATH.PATH.<KEY> and every access site raises AttributeError.
+□ PATH values are f-strings and are cwd-relative: use f"./data/x", NOT
+  f"{ROOT}/data/x" — ROOT is not in scope at eval time.
+□ Makefile must NOT set `SHELL := /bin/bash` — it breaks @stx.session
+  under make. And `cd $(ROOT) && python3 ...` so cwd-relative f-strings
+  resolve when make runs from elsewhere.
+□ Declare all five INJECTED params explicitly; a missing one breaks the
+  DI assumptions downstream stx modules make.
+```
+
+## Migrating an existing config layer
+
+| Original | SciTeX |
 |---|---|
-| `if __name__ == "__main__": main()` | `@stx.session.start(...)` on `main` |
-| `argparse` / `sys.argv` | `CONFIG.<KEY>` against `config/*.yaml` |
-| `MAGIC_THRESHOLD = 0.5` (module scope) | `CONFIG.THRESHOLD` (one line in YAML) |
-| `print("done")` | `logger.info("done")` (injected session logger) |
-| `os.makedirs("./outputs", exist_ok=True)` | `stx.io.save(..., symlink_to=...)` under session-owned root (stage 1) |
+| `argparse` / `sys.argv` flags | move defaults to `config/PARAMS.yaml`; keep only true *invocation* flags |
+| module-scope `MAGIC = 0.5` | `CONFIG.MAGIC` (one YAML line) |
+| `hydra` / `gin` config | port the resolved values into `config/*.yaml`; drop the framework |
+| `click` CLI | the `@stx.session.start` docstring + CONFIG replaces most of it |
+| `logging.getLogger(...)` / `print` | the injected `logger` (`.info/.warning/.error`) |
 
-Full inventory and the migration corner cases (existing argparse, hydra,
-gin, click; partial-session shims; multi-entry-point CLIs) are pending
-— see the **Status** note at the top of this file.
+Don't run two config systems at once: either fully on `CONFIG` or, for a
+call site you're not migrating yet, fully on the original — mixing
+`os.path.join(...)` and `CONFIG.PATH.<KEY>` in the same script is the
+loudest tell that Stage 2 was rushed.
+
+## Worked example
+
+```python
+# BEFORE                                    # AFTER (stage 2)
+THRESH = 0.5                                 # config/PARAMS.yaml: THRESHOLD: 0.5
+def main():                                  @stx.session.start
+    df = pd.read_csv("data/raw.csv")         def main(CONFIG=stx.session.INJECTED,
+    print("loaded", len(df))                          logger=stx.session.INJECTED):
+    ...                                          df = stx.io.load(eval(CONFIG.PATH.RAW_CSV))
+if __name__ == "__main__":                       logger.info(f"loaded {len(df)}")
+    main()                                       ...
+                                                 return 0
+```
+
+Function bodies and tests are untouched; the entry-point and the
+parameter/logging layers moved.
 
 ## Follow-up
 
-- The full `scitex_session` public surface (the `@stx.session.start`
-  signature, INJECTED parameters CONFIG / plt / COLORS / rngg / logger,
-  lifecycle hooks like `on_session_start`) lives in `scitex-session`'s
-  own SKILL.md.
-- Stage 1 ([`01_io-patterns.md`](01_io-patterns.md)) is the precondition
-  — every I/O call must already be on `stx.io.{load,save}` before the
-  session-managed output dir is meaningful.
+- Full `scitex_session` surface (the `@stx.session.start` signature,
+  INJECTED params, `SDIR_OUT`/`SDIR_RUN`, YAML deep-merge + CLI/env
+  overrides, lifecycle hooks) → **`scitex-session`'s own SKILL.md**.
+- Stage 1 ([`01_io-patterns.md`](01_io-patterns.md)) is the precondition —
+  every I/O call must already be on `stx.io.{load,save}`.
 - Stage 3 ([`03_plt-patterns.md`](03_plt-patterns.md)) hooks the figure
   DAG into the session-managed output dir established here.
 
-See also: [`00_playbook.md`](00_playbook.md) for the universal
-pre-flight + done-condition; [`SKILL.md`](SKILL.md) for the 5-stage
-table this chapter belongs to.
+See also: [`00_playbook.md`](00_playbook.md) (universal pre-flight +
+done-condition), [`SKILL.md`](SKILL.md) (the 5-stage table),
+[`../02_research-project_07_config-and-parameters.md`](../02_research-project_07_config-and-parameters.md)
+(the `@stx.session` config reference).

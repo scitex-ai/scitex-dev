@@ -12,59 +12,94 @@ description: |
 tags: [scitexification, scitexification-plt]
 ---
 
-<!--
-Status: STUB — landed alongside SKILL.md so the umbrella's
-`03_plt-patterns.md` link in the "5-stage table" resolves to a real
-file instead of a 404. Full content (the inventory of every `plt.*` /
-`fig.*` call that benefits from a figrecipe primitive, the
-`stx.io.save(fig, ...)` DAG-binding semantics, the multi-panel + legend
-+ axis-label conventions, and the figrecipe `recipe` → `figure` flow)
-will land in a follow-up PR scoped to this chapter only — see #119 for
-the five-chapter rollout plan. Cross-package details (the full
-`figrecipe` primitive surface) live in `figrecipe`'s own SKILL.md per
-the scitexification umbrella's delegation convention.
--->
-
 # Stage 3 — Figure (plt) patterns
 
-The publication-quality step. `plt.savefig(...)` calls become
-`stx.io.save(fig, ..., symlink_to=...)` so the figure lands under the
-session-managed output root (DAG-bound, not loose); raw matplotlib calls
-that encode visual choices (axis labels, font sizes, colour palettes,
-multi-panel grids) get rewritten in figrecipe primitives so the look
-matches publication style without bespoke tweaking.
+The publication-quality step, and the one with the strongest provenance
+payoff. A figure is **not an image**: it is `code → recipe (YAML) →
+media`, with **DATA (csv = what is shown)** kept separate from **STYLE
+(presets = how it looks)**. `plt.savefig(...)` becomes
+`stx.io.save(fig, ...)` so the figure lands DAG-bound under the
+session-managed root *and auto-emits its source CSV* — the data half of
+every figure's evidence chain.
 
 > **What changes**: every `plt.savefig`; every place visual style is
-> encoded by hand.
-> **What stays the same**: figure intent (what comparison, what axis
-> labels), what information the figure carries.
+> hand-encoded.
+> **What stays the same**: figure intent (what comparison, which axes),
+> what information the figure carries.
 
-## Translation table (sketch)
+## The core swap
 
-| Original | SciTeX equivalent |
+```python
+fig, ax = stx.plt.subplots()          # session-bound plt (Stage 2 injects it)
+ax.plot_line(x, y)                     # figrecipe primitive
+ax.set_xyt("Time (s)", "Amplitude", "Ripple")   # x-label, y-label, title in one call
+stx.io.save(fig, "ripple.png", symlink_to=eval(CONFIG.PATH.FIG_RIPPLE))
+#   → ripple.png  +  ripple.csv   (the plotted data, auto-exported)
+```
+
+`stx.io.save(fig, ...)` is the single rule that replaces every
+`plt.savefig`. The emitted `ripple.csv` is what makes the figure a
+**verifiable artefact** — a reviewer (or a clew claim) can trace the
+rendered pixels back to the numbers, and `make repro` can re-derive both.
+
+## Translation inventory
+
+| Original | SciTeX |
 |---|---|
-| `plt.savefig("fig.png")` | `stx.io.save(fig, "fig.png", symlink_to=...)` |
-| `plt.figure(figsize=(8,6)); ax = plt.gca(); ax.set_xlabel(...); ax.set_ylabel(...); plt.tight_layout(); plt.savefig(...)` | `recipe = figrecipe.Recipe(...); fig = recipe.build(...); stx.io.save(fig, ...)` |
-| Hand-tuned colour palettes (`plt.cm.viridis(...)`) | `COLORS.<NAME>` (injected via stage 2) or `figrecipe`'s palette primitives |
-| Multi-panel layout via `plt.subplot2grid` / `gridspec` | `figrecipe`'s layout primitive (single-call, publication-style) |
+| `plt.savefig("f.png")` | `stx.io.save(fig, "f.png", symlink_to=...)` |
+| `plt.figure(); plt.plot(x,y); plt.xlabel(..); plt.ylabel(..); plt.title(..)` | `fig, ax = stx.plt.subplots(); ax.plot_line(x,y); ax.set_xyt(..,..,..)` |
+| hand-tuned colours (`plt.cm.viridis(i)`) | `COLORS.<NAME>` (injected, Stage 2) or figrecipe palette primitives |
+| `gridspec` / `subplot2grid` multi-panel | `stx.plt.subplots(nrows, ncols)` + figrecipe layout |
+| error bands by hand (`fill_between`) | `ax.plot_shaded_line(...)` / `plot_mean_ci(...)` |
+| `sns.heatmap(...)` | `ax.plot_heatmap(...)` (keeps the CSV export) |
 
-Full inventory and the corner cases (animated figures, 3D plots,
-seaborn passthrough, MNE/scientific-Python integration) are pending —
-see the **Status** note at the top of this file.
+## Figures are clew claims (the Stage 4 bridge)
+
+Because the figure carries its `.csv` and is saved under the session DAG,
+a Stage-4 claim can bind to it: *"Figure 3's pathological-channel count
+(N=42) comes from `fig3.csv`, derived from `pool.csv`, derived from
+`raw/…`."* The recipe + DATA live with the **script output**, never in
+the paper's caption dir (a stray recipe YAML there is build-invisible
+cruft). The manuscript consumes only the rendered media, by **symlink**.
+
+## Corner cases
+
+- **Throwaway / exploratory plots** — a one-off diagnostic can stay on
+  bare matplotlib, but anything that ends up in a paper, report, or claim
+  must go through `stx.plt` + `stx.io.save` so it carries its CSV.
+- **seaborn / MNE / domain plotters** — wrap the returned `fig`/`ax` and
+  still `stx.io.save(fig, ...)`; you lose the auto-CSV unless you also
+  pass the underlying data, so prefer the figrecipe primitive where one
+  exists.
+- **3D / animations** — save the figure object; the CSV export covers the
+  plotted series, not frame state. Note the limitation in the caption.
+- **Never** call `matplotlib.pyplot.savefig(...)` from a SciTeX session
+  script — it writes outside the session output dir, is invisible to
+  provenance tooling, and silently breaks `make repro`.
+
+## Worked example
+
+```python
+# BEFORE                              # AFTER (stage 3)
+plt.figure(figsize=(8,6))             fig, ax = stx.plt.subplots()
+plt.plot(t, v, color="C0")            ax.plot_line(t, v)
+plt.xlabel("t"); plt.ylabel("v")      ax.set_xyt("t", "v", "Trace")
+plt.title("Trace")                    stx.io.save(fig, "trace.png",
+plt.savefig("trace.png")                  symlink_to=eval(CONFIG.PATH.FIG_TRACE))
+#   → trace.png only                  #   → trace.png + trace.csv (DAG-bound)
+```
 
 ## Follow-up
 
-- The full `figrecipe` primitive surface (recipe / palette / layout /
-  primitive types — boxplot / violin / scatter / hist / etc.) lives in
-  `figrecipe`'s own SKILL.md.
-- Stage 1 ([`01_io-patterns.md`](01_io-patterns.md)) supplies the
-  `stx.io.save` DAG-binding hook; stage 2
-  ([`02_session-config.md`](02_session-config.md)) supplies the
-  session-managed output root.
-- Stage 4 ([`04_repro-clew.md`](04_repro-clew.md)) references stage-3
-  figure paths in registered claims so a clew claim can cite the exact
-  figure file that backs it.
+- Full figrecipe primitive surface (figure types, publication-quality
+  defaults, palette + layout primitives, the `recipe → figure` flow) →
+  **`figrecipe`'s own SKILL.md** and `scitex-plt`'s SKILL.md.
+- Stage 2 ([`02_session-config.md`](02_session-config.md)) injects the
+  session-bound `plt` + `COLORS` this chapter uses.
+- Stage 4 ([`04_repro-clew.md`](04_repro-clew.md)) registers the figure's
+  headline number as an evidence-bound claim.
 
-See also: [`00_playbook.md`](00_playbook.md) for the universal
-pre-flight + done-condition; [`SKILL.md`](SKILL.md) for the 5-stage
-table this chapter belongs to.
+See also: [`00_playbook.md`](00_playbook.md),
+[`SKILL.md`](SKILL.md),
+[`../01_figures_01_standards.md`](../01_figures_01_standards.md)
+(figure standards: generative, verifiable artefacts).
