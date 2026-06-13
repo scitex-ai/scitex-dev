@@ -203,9 +203,7 @@ def audit_project(
         check_ps213_console_script_core_deps,
     )
 
-    check_ps213_console_script_core_deps(
-        repo_root, distribution, Violation, violations
-    )
+    check_ps213_console_script_core_deps(repo_root, distribution, Violation, violations)
     # hook-bypass: line-limit
     from ._check_hard_dep_overreach import check_ps149_hard_dep_overreach
 
@@ -262,18 +260,20 @@ def audit_project(
 
     check_ps_path_001_outer_wrapper(repo_root, Violation, violations)
     check_ps_path_002_bare_string_leaf(repo_root, Violation, violations)
-    check_ps_clew_001_add_claim_without_self_verify(
-        repo_root, Violation, violations
-    )
-    check_ps_agent_001_agent_script_no_claims_json(
-        repo_root, Violation, violations
-    )
+    check_ps_clew_001_add_claim_without_self_verify(repo_root, Violation, violations)
+    check_ps_agent_001_agent_script_no_claims_json(repo_root, Violation, violations)
     # hook-bypass: line-limit
     # PS-173: ADR format — only fires when docs/adr/ exists (presence is
     # recommended, not mandated). Scope = all project kinds.
     from ._check_adr import check_ps173_adr_format
 
     check_ps173_adr_format(repo_root, violations)
+    # PS-180: runtime/ separation discipline — only fires when
+    # src/<pkg>/runtime/ exists on disk AND no .gitignore covers it.
+    # Scope = all project kinds with a src/ layout.
+    from ._check_runtime_separation import check_runtime_separation
+
+    check_runtime_separation(repo_root, Violation, violations)
     if not skip_mirror:
         from ._check_smoke_e2e_layers import (
             check_ps211_smoke_layer,
