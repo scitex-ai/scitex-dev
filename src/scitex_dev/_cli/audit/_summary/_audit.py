@@ -986,20 +986,116 @@ def _check_introspection(
                     )
 
 
-def _package_ships_skills(package: str) -> bool:
-    """True if `<pkg>/src/<import_name>/_skills/<package>/` exists."""
+# ----------------------------------------------------------------------- #
+# Package-locator helpers (registry source-tree fallback)                  #
+#                                                                         #
+# Mirrors the fix landed in PRs #177 (audit-skills) and #178 (audit-      #
+# python-apis). Several §-checks in this file resolve a package via       #
+# `importlib.util.find_spec(...)` and silently skip the check when the    #
+# package is not pip-installed in the auditor's venv. Result: §11 CLI-    #
+# framework / §2 no-interactive-prompts / §1a skills-subcommand audits   #
+# went uncalled for every locally-cloned peer, hiding real violations.   #
+#                                                                         #
+# These helpers keep `find_spec` as the primary path and fall back to the #
+# ecosystem registry's `local_path` so the audit runs against the on-disk #
+# source tree. A truly-missing package (neither installed nor registered  #
+# nor on-disk) still returns None so the legacy skip is preserved for     #
+# genuinely-unauditable inputs.                                           #
+# ----------------------------------------------------------------------- #
+
+
+def _registry_local_src(distribution: str) -> Path | None:
+    """Source-tree fallback: ``<local_path>/src/<import_name>/`` from registry.
+
+    Returns None if the registry entry is missing, has no ``local_path``,
+    or the path doesn't exist on disk. Defensive — a stale / partial
+    registry import returns None silently so the per-package audit keeps
+    working.
+    """
+    try:
+        from ...._ecosystem._registry import ECOSYSTEM
+    except Exception:  # pragma: no cover — defensive
+        return None
+    info = ECOSYSTEM.get(distribution) or {}
+    local_path = info.get("local_path")
+    if not local_path:
+        return None
+    try:
+        root = Path(local_path).expanduser()
+    except (RuntimeError, OSError):  # pragma: no cover — defensive
+        return None
+    candidate = root / "src" / distribution.replace("-", "_")
+    return candidate if candidate.is_dir() else None
+
+
+def _resolve_pkg_root(distribution: str) -> Path | None:
+    """Return ``<pkg>/`` — installed search location or registry-fallback src tree.
+
+    Used by checks that walk the package tree (e.g. ``rglob("*.py")``).
+    The returned path is the directory containing ``__init__.py`` plus the
+    rest of the package source.
+    """
     import importlib.util
 
-    import_name = package.replace("-", "_")
+    import_name = distribution.replace("-", "_")
     spec = importlib.util.find_spec(import_name)
-    if spec is None or not spec.submodule_search_locations:
-        return False
-    from pathlib import Path as _Path
+    if spec is not None and spec.submodule_search_locations:
+        return Path(next(iter(spec.submodule_search_locations)))
+    return _registry_local_src(distribution)
 
-    for loc in spec.submodule_search_locations:
-        if (_Path(loc) / "_skills" / package).is_dir():
-            return True
-    return False
+
+def _resolve_dotted_module_file(distribution: str, dotted: str) -> Path | None:
+    """Resolve ``pkg.sub.mod`` to its concrete ``.py`` file.
+
+    Tries ``importlib.util.find_spec`` first; on miss, walks the dotted
+    path under the registry-fallback source tree. Picks the package's
+    ``__init__.py`` when the final segment is a directory, otherwise the
+    ``.py`` file. Returns None if neither resolution succeeds — caller
+    should treat that as "module not present, skip".
+    """
+    import importlib.util
+
+    # ``find_spec`` raises ``ModuleNotFoundError`` when the dotted path
+    # has an unimportable parent (the common case in CI where the package
+    # is on disk but not pip-installed). Treat the raise the same as a
+    # None return — fall through to the registry source-tree walk.
+    try:
+        spec = importlib.util.find_spec(dotted)
+    except (ImportError, ValueError):
+        spec = None
+    if spec is not None and spec.origin is not None:
+        return Path(spec.origin)
+    pkg_root = _resolve_pkg_root(distribution)
+    if pkg_root is None:
+        return None
+    parts = dotted.split(".")
+    rest = parts[1:]  # parts[0] is import_name (already pkg_root)
+    if not rest:
+        init = pkg_root / "__init__.py"
+        return init if init.is_file() else None
+    sub = pkg_root
+    for p in rest[:-1]:
+        sub = sub / p
+    last = rest[-1]
+    candidate_pkg = sub / last / "__init__.py"
+    if candidate_pkg.is_file():
+        return candidate_pkg
+    candidate_mod = sub / f"{last}.py"
+    return candidate_mod if candidate_mod.is_file() else None
+
+
+def _package_ships_skills(package: str) -> bool:
+    """True if ``<pkg>/_skills/<package>/`` exists.
+
+    Uses ``_resolve_pkg_root`` so non-installed but on-disk-valid peers
+    are detected via the registry fallback (was previously returning False
+    for every such peer — a phantom that hid §1a `skills` subcommand
+    omission audits across the ecosystem).
+    """
+    pkg_root = _resolve_pkg_root(package)
+    if pkg_root is None:
+        return False
+    return (pkg_root / "_skills" / package).is_dir()
 
 
 def _expected_env_prefix(package: str) -> str | None:
@@ -1551,23 +1647,16 @@ def _check_cli_framework(package: str, out: list[Violation]) -> None:
     its directory for `import argparse` / `from argparse`. Flag any
     occurrence in a CLI module.
     """
-    import importlib.util as _ilu
-
     ep_value = _ep_value_for(package)
     if ep_value is None:
         return
     # entry-point format: "module.path:object" — locate the module file.
+    # Uses the registry-aware resolver so non-installed peers (CI / fresh
+    # checkout) still get §11 audited against their on-disk source tree.
     mod_name = ep_value.split(":", 1)[0]
-    try:
-        spec = _ilu.find_spec(mod_name)
-    except Exception:
+    ep_file = _resolve_dotted_module_file(package, mod_name)
+    if ep_file is None:
         return
-    if spec is None or spec.origin is None:
-        return
-
-    from pathlib import Path as _P
-
-    ep_file = _P(spec.origin)
     # Walk only files that are actually part of the CLI tree:
     #   * the entry-point file itself
     #   * every .py under a `_cli/` subdir of the entry-point's parent
@@ -1649,15 +1738,12 @@ def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
     directories (`tests/`, `examples/`, `docs/`).
     """
     import ast
-    import importlib.util
-    from pathlib import Path
 
-    import_name = package.replace("-", "_")
-    spec = importlib.util.find_spec(import_name)
-    if spec is None or spec.origin is None:
-        return
-    pkg_root = Path(spec.origin).parent
-    if not pkg_root.exists():
+    # Use the registry-aware resolver so non-installed peers (CI / fresh
+    # ecosystem checkout) still get §2 audited against their on-disk
+    # source tree instead of silently passing.
+    pkg_root = _resolve_pkg_root(package)
+    if pkg_root is None or not pkg_root.exists():
         return
 
     forbidden = {
