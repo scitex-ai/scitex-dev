@@ -338,10 +338,11 @@ def test_violation_key_message_excerpt_drops_embedded_lineno():
         "ERRO:   [PA-307 §3 test-quality] scitex-todo: tests/scitex_todo/x.py: "
         "TQ007 at line 204 — multi-assert\n"
     )
+    # Act
     keys1 = extract_violation_keys(sample, distribution_filter="scitex-todo")
     keys2 = extract_violation_keys(sample2, distribution_filter="scitex-todo")
-    # Act / Assert — same logical finding, two different line refs in
-    # the message; identity must collapse them.
+    # Assert — same logical finding, two different line refs in the
+    # message; identity must collapse them.
     assert keys1 == keys2
 
 
