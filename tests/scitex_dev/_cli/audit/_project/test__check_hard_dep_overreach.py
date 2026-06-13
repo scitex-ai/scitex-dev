@@ -537,7 +537,8 @@ def test_find_module_imports_fixture_every_shape_in_one_file():
 
 
 def test_registry_umbrella_dists_includes_scitex():
-    # Arrange / Act — registry tags `scitex` as the umbrella
+    # Arrange — registry tags `scitex` as the umbrella
+    # Act
     dists = _registry_umbrella_dists()
     # Assert
     assert "scitex" in dists
@@ -610,8 +611,10 @@ def test_has_thin_reexport_init_true_for_pure_reexport(tmp_path):
     (pkg / "__init__.py").write_text(
         '"""thin reexport"""\nfrom __future__ import annotations\nfrom x import y\n'
     )
-    # Act / Assert
-    assert _has_thin_reexport_init(pkg) is True
+    # Act
+    result = _has_thin_reexport_init(pkg)
+    # Assert
+    assert result is True
 
 
 def test_has_thin_reexport_init_false_when_impl_sibling_present(tmp_path):
@@ -620,8 +623,10 @@ def test_has_thin_reexport_init_false_when_impl_sibling_present(tmp_path):
     pkg.mkdir()
     (pkg / "__init__.py").write_text("from .impl import foo\n")
     (pkg / "impl.py").write_text("def foo():\n    return 1\n")
-    # Act / Assert
-    assert _has_thin_reexport_init(pkg) is False
+    # Act
+    result = _has_thin_reexport_init(pkg)
+    # Assert
+    assert result is False
 
 
 def test_has_thin_reexport_init_false_when_init_defines_function(tmp_path):
@@ -629,8 +634,10 @@ def test_has_thin_reexport_init_false_when_init_defines_function(tmp_path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("def helper():\n    return 1\n")
-    # Act / Assert
-    assert _has_thin_reexport_init(pkg) is False
+    # Act
+    result = _has_thin_reexport_init(pkg)
+    # Assert
+    assert result is False
 
 
 def test_has_thin_reexport_init_allows_underscore_internal_siblings(tmp_path):
@@ -641,8 +648,10 @@ def test_has_thin_reexport_init_allows_underscore_internal_siblings(tmp_path):
         "from __future__ import annotations\nfrom ._version import __version__\n"
     )
     (pkg / "_version.py").write_text('__version__ = "0.1.0"\n')
-    # Act / Assert
-    assert _has_thin_reexport_init(pkg) is True
+    # Act
+    result = _has_thin_reexport_init(pkg)
+    # Assert
+    assert result is True
 
 
 def test_ps149_silent_for_umbrella_with_heavy_hard_dep(tmp_path):
