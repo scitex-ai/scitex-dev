@@ -58,7 +58,9 @@ class TestHooksPath:
     """``hooks path <name>`` returns the absolute bundled-script path."""
 
     def test_prints_absolute_path_for_run_lint(self, cli, runner):
-        # Arrange / Act
+        # Arrange
+        # (no fixtures needed; the cli fixture provides the wired runner.)
+        # Act
         result = runner.invoke(cli, ["hooks", "path", "run_lint"])
         # Assert — single combined check: exit 0 AND output is the absolute
         # filesystem path of the bundled script (resolved + non-empty +
