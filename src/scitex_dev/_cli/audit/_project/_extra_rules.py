@@ -13,6 +13,7 @@ Today's contents:
 - PS-167 — readme-badge-layout
 - PS-168 — workflow-secret-env-prefix-missing
 - PS-173 — adr-format (filename + lean-template sections, when docs/adr/ exists)
+- PS-180 — runtime-separation (src/<pkg>/runtime/ must be gitignored at the package level)
 - PS-PATH-001/002 — config/PATH.yaml shape (outer wrapper / bare-string leaf)
 - PS-CLEW-001 — clew.add_claim without self-verify in same module
 - PS-AGENT-001 — scripts/agent/*.py with add_claim but no claims.json terminus
@@ -165,6 +166,27 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "adr-format",
     ),
     (
+        "PS-180",
+        "§1",
+        (
+            "ecosystem runtime/ separation discipline: a package's "
+            "`src/<pkg>/runtime/` directory exists on disk but no "
+            "`.gitignore` entry covers it. Runtime artefacts (logs, "
+            "caches, shell-completion outputs, generated state) are "
+            "user-state, not source code — they MUST NOT be tracked "
+            "by git. Add `runtime/` to `src/<pkg>/.gitignore` "
+            "(package-local, preferred), or `src/<pkg>/runtime/` to "
+            "the repo-root `.gitignore`, or `**/runtime/` (catch-all). "
+            "Per the 2026-05-17 directive: default-track everything "
+            "EXCEPT `<pkg>/runtime/`; exceptions belong in the "
+            "package's own `.gitignore`, not a global rule. See "
+            "`docs/needs-check-scitex-pkg-runtime-separation.md` and "
+            "`_skills/general/02_package/02_project-structure-src.md`."
+        ),
+        "W",
+        "ecosystem-runtime-separation",
+    ),
+    (
         "PS-213",
         "§3",
         (
@@ -268,10 +290,10 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         (
             "config/PATH.yaml has at least one leaf scalar value that "
             "is not an f-string literal. Scripts always do "
-            "`eval(CONFIG.PATH.<KEY>)`; a bare `\"./data/foo\"` is "
+            '`eval(CONFIG.PATH.<KEY>)`; a bare `"./data/foo"` is '
             "parsed as the Python expression `./data/foo` and "
             "SyntaxErrors. Prefix every value with `f`, e.g. "
-            "`KEY: f\"./your/path\"`, even for static paths. See "
+            '`KEY: f"./your/path"`, even for static paths. See '
             "_skills/scientific/"
             "02_research-project_03_project-structure-config-and-data.md "
             "§`PATH.yaml`."
