@@ -1713,15 +1713,71 @@ def _check_cli_framework(package: str, out: list[Violation]) -> None:
 
 
 def _ep_value_for(package: str) -> str | None:
-    """First console-script `module:obj` value registered under `package`."""
+    """First console-script ``module:obj`` value registered under ``package``.
+
+    Resolution order (each step proceeds to the next on miss, so a package
+    that is neither installed nor on-disk-registered still returns None):
+
+    1. **Installed metadata.** ``importlib.metadata.entry_points()`` —
+       picks up console-scripts from any peer that's been
+       ``pip install``-ed in the auditor's venv.
+    2. **On-disk pyproject (registry fallback).** When the peer is NOT
+       installed but IS in the ecosystem registry, read
+       ``<local_path>/pyproject.toml``'s ``[project.scripts]`` table and
+       return ``scripts.get(package)``. This is the upstream piece of the
+       same fail-silent class PRs #177 / #178 / #179 closed — without it
+       audit-summary's §10 / §11 / §1a checks couldn't even ask "what is
+       this package's CLI entry?" for a freshly-cloned peer, so the
+       downstream resolvers (`_resolve_dotted_module_file` etc.) never
+       ran on non-installed peers.
+
+    A truly-missing console-script (not in metadata, not in registry, or
+    registry path / pyproject missing) still returns None so callers
+    keep their "no console script — skipped" behaviour for genuinely-
+    scriptless packages.
+    """
+    # 1. Installed metadata.
     try:
         eps = im.entry_points(group="console_scripts")
-    except TypeError:
+    except TypeError:  # pragma: no cover — pre-3.10 API path
         eps = im.entry_points().get("console_scripts", [])
     for ep in eps:
         if ep.name == package:
             return ep.value
-    return None
+
+    # 2. On-disk pyproject via registry. Defensive — every parse failure
+    # falls through to None so a single malformed pyproject never breaks
+    # the per-package audit.
+    try:
+        from ...._ecosystem._registry import ECOSYSTEM
+    except Exception:  # pragma: no cover — defensive
+        return None
+    info = ECOSYSTEM.get(package) or {}
+    local_path = info.get("local_path")
+    if not local_path:
+        return None
+    try:
+        root = Path(local_path).expanduser()
+    except (RuntimeError, OSError):  # pragma: no cover — defensive
+        return None
+    pyproject = root / "pyproject.toml"
+    if not pyproject.is_file():
+        return None
+    try:
+        import tomllib
+    except ImportError:  # pragma: no cover — 3.10 path
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return None
+    try:
+        with open(pyproject, "rb") as fh:
+            meta = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    scripts = (meta.get("project") or {}).get("scripts") or {}
+    value = scripts.get(package)
+    return value if isinstance(value, str) else None
 
 
 def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:

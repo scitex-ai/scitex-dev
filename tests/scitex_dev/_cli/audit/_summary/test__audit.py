@@ -1235,3 +1235,123 @@ def test_package_ships_skills_returns_false_when_no_skills_dir(tmp_path):
         result = _package_ships_skills(dist)
     # Assert
     assert result is False
+
+
+# ---------------------------------------------------------------------------
+# `_ep_value_for` — pyproject.toml fallback (entry_points phantom)
+#
+# Without this fallback, audit-summary's §10 / §11 / §1a checks couldn't
+# even ask "what is this package's console-script entry-point?" for a peer
+# that wasn't pip-installed in the auditor's venv — so all the downstream
+# resolvers (`_resolve_dotted_module_file`, etc.) never ran. This is the
+# upstream piece of the same fail-silent class fixed in PRs #177 / #178 /
+# #179. Same no-mocks contextmanager pattern.
+# ---------------------------------------------------------------------------
+
+
+from scitex_dev._cli.audit._summary._audit import _ep_value_for
+
+
+def test_ep_value_for_falls_back_to_pyproject_scripts(tmp_path):
+    # Arrange — non-installed peer with a console-script declared only in
+    # the on-disk pyproject. The metadata lookup misses; the registry
+    # fallback must read `[project.scripts]` and return the value.
+    dist = "scitex-phantomep"
+    local_root = tmp_path / "scitex-phantomep"
+    local_root.mkdir()
+    (local_root / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-phantomep"\n\n'
+        '[project.scripts]\nscitex-phantomep = "scitex_phantomep._cli:main"\n'
+    )
+    # Act
+    with _registry_override(dist, local_root):
+        result = _ep_value_for(dist)
+    # Assert
+    assert result == "scitex_phantomep._cli:main"
+
+
+def test_ep_value_for_returns_none_when_no_scripts_section(tmp_path):
+    # Arrange — pyproject exists but no `[project.scripts]`. Caller's
+    # legacy "no console script — skipped" message stays correct.
+    dist = "scitex-noepscript"
+    local_root = tmp_path / "scitex-noepscript"
+    local_root.mkdir()
+    (local_root / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-noepscript"\n'
+    )
+    # Act
+    with _registry_override(dist, local_root):
+        result = _ep_value_for(dist)
+    # Assert
+    assert result is None
+
+
+def test_ep_value_for_returns_none_when_script_name_doesnt_match(tmp_path):
+    # Arrange — pyproject has scripts but none under the package name
+    # (registry distribution name vs script key mismatch). Must NOT
+    # invent a value.
+    dist = "scitex-mismatchscript"
+    local_root = tmp_path / "scitex-mismatchscript"
+    local_root.mkdir()
+    (local_root / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-mismatchscript"\n\n'
+        '[project.scripts]\nother-name = "scitex_mismatchscript._cli:main"\n'
+    )
+    # Act
+    with _registry_override(dist, local_root):
+        result = _ep_value_for(dist)
+    # Assert
+    assert result is None
+
+
+def test_ep_value_for_returns_none_when_pyproject_missing(tmp_path):
+    # Arrange — registry local_path exists but no pyproject.toml inside.
+    # Defensive: fallback must not crash on a freshly-`git init`ed repo.
+    dist = "scitex-noepmissingpp"
+    local_root = tmp_path / "scitex-noepmissingpp"
+    local_root.mkdir()
+    # Act
+    with _registry_override(dist, local_root):
+        result = _ep_value_for(dist)
+    # Assert
+    assert result is None
+
+
+def test_ep_value_for_returns_none_when_pyproject_unparseable(tmp_path):
+    # Arrange — invalid TOML must produce None, not crash.
+    dist = "scitex-badpp"
+    local_root = tmp_path / "scitex-badpp"
+    local_root.mkdir()
+    (local_root / "pyproject.toml").write_text("[project\nname = unclosed-bracket\n")
+    # Act
+    with _registry_override(dist, local_root):
+        result = _ep_value_for(dist)
+    # Assert
+    assert result is None
+
+
+def test_ep_value_for_returns_none_when_neither_installed_nor_registered():
+    # Arrange — distribution is not pip-installed AND not in ECOSYSTEM.
+    # SSoT for "no console script" — caller's skip is correct.
+    # Act
+    result = _ep_value_for("scitex-doesnotexistanywhereep")
+    # Assert
+    assert result is None
+
+
+def test_ep_value_for_ignores_non_string_script_value(tmp_path):
+    # Arrange — malformed `[project.scripts]` table entry whose value is
+    # not a string (e.g. a table by accident). Fallback must reject it
+    # rather than pass garbage downstream to the resolver chain.
+    dist = "scitex-malformedep"
+    local_root = tmp_path / "scitex-malformedep"
+    local_root.mkdir()
+    (local_root / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-malformedep"\n\n'
+        '[project.scripts.scitex-malformedep]\nweird = "value"\n'
+    )
+    # Act
+    with _registry_override(dist, local_root):
+        result = _ep_value_for(dist)
+    # Assert
+    assert result is None
