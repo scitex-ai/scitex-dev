@@ -95,6 +95,21 @@ MANAGED_SEGMENT: str = "/.claude/worktrees/"
 # ``MANAGED_SEGMENT``.
 PROTECTED_SEGMENT: str = "/.worktrees/"
 
+# Path prefixes that are container-local and must NEVER be interpreted by
+# a host-side ``git worktree prune``. When a worktree is created from
+# inside the agent container (``apptainer exec ... git worktree add ...``)
+# its ``.git/worktrees/<name>/gitdir`` file records a container-rooted
+# path like ``/work/<branch>/.git``. Running ``git worktree prune`` from
+# the HOST checkout fails to resolve that path — the host has no
+# ``/work`` — and git's "directory missing → dangling worktree" heuristic
+# treats the LIVE container worktree as defunct and prunes it. The fleet
+# lost integration-test worktrees twice today to this exact bug class
+# (lead-learnings/19, 2026-06-13). Host scripts cannot judge container
+# worktree liveness from outside the container; the only safe action is
+# to SKIP the prune entirely when any registered worktree's recorded
+# gitdir points at a container-only prefix.
+CONTAINER_GITDIR_PREFIXES: tuple[str, ...] = ("/work/",)
+
 
 @dataclass(frozen=True)
 class WorktreeRemoval:
@@ -185,7 +200,10 @@ def _find_repos_with_managed_worktrees(roots: list[str]) -> list[str]:
             # Prune skip dirs in-place so os.walk doesn't descend.
             dirnames[:] = [d for d in dirnames if d not in SKIP]
             base = os.path.basename(dirpath)
-            if base == "worktrees" and os.path.basename(os.path.dirname(dirpath)) == ".claude":
+            if (
+                base == "worktrees"
+                and os.path.basename(os.path.dirname(dirpath)) == ".claude"
+            ):
                 # The repo root is the dirname of ``.claude``.
                 repo = os.path.dirname(os.path.dirname(dirpath))
                 # De-dup repos found via multiple search roots.
@@ -223,7 +241,7 @@ def _list_registered_worktrees(
     paths: list[str] = []
     for line in (r.stdout or "").splitlines():
         if line.startswith("worktree "):
-            p = line[len("worktree "):].strip()
+            p = line[len("worktree ") :].strip()
             if _is_managed_path(p):
                 paths.append(p)
     return paths
@@ -313,6 +331,88 @@ def _gc_one_worktree(
     )
 
 
+def _gitdir_targets_container(gitdir_file: Path) -> bool:
+    """True iff the worktree's recorded gitdir points at a container-only
+    prefix (e.g. ``/work/<branch>/.git``).
+
+    Git stores the back-link from a registered worktree to the main repo
+    in ``<main_repo>/.git/worktrees/<name>/gitdir``. The file contains
+    the absolute path of the WORKTREE's ``.git`` (one line, trailing
+    newline). When that path lives under a container bind-mount root
+    (``/work/`` is the agent-container convention), the host cannot
+    resolve the directory — but the worktree is alive in the container.
+    Treat the gitdir as a container target so the caller skips the prune
+    rather than destroying the live worktree.
+
+    Defensive: any OSError reading the file → False (caller behaves as
+    pre-fix; we only ADD a skip, never remove one).
+    """
+    try:
+        recorded = gitdir_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    return any(recorded.startswith(p) for p in CONTAINER_GITDIR_PREFIXES)
+
+
+def _has_container_worktree(repo: str) -> bool:
+    """True iff ``<repo>/.git/worktrees/*/gitdir`` lists a container path.
+
+    Walks the main repo's worktree-registry directory and checks each
+    entry's recorded gitdir. Existing host-only worktrees still let the
+    prune through; one container entry is enough to disable the prune
+    for the whole repo (defensive — a single false positive matters far
+    more than a missed cleanup).
+    """
+    registry = Path(repo) / ".git" / "worktrees"
+    if not registry.is_dir():
+        return False
+    try:
+        entries = list(registry.iterdir())
+    except OSError:
+        return False
+    for entry in entries:
+        if not entry.is_dir():
+            continue
+        if _gitdir_targets_container(entry / "gitdir"):
+            return True
+    return False
+
+
+def _safe_prune(
+    repo: str,
+    git_runner: Callable[[list[str]], subprocess.CompletedProcess],
+    out=None,
+) -> bool:
+    """Run ``git worktree prune`` ONLY when no container-worktrees are
+    registered on this repo.
+
+    Returns True iff the prune was actually invoked. When skipped, logs
+    a one-line warning to ``out`` so a fleet operator can grep for
+    "worktree-gc: skip prune" and see exactly which repos were spared.
+
+    Why "wholesale skip" rather than "prune just the host-only entries":
+    git's ``worktree prune`` is all-or-nothing — it scans the registry
+    and removes every entry whose gitdir doesn't resolve from the
+    invoking process. There is no per-entry flag; the only way to keep
+    a container entry alive when running from the host is to NOT prune
+    at all. The cost is that a host worktree that's genuinely defunct
+    will linger one cron tick longer (until the container entry is
+    cleaned up or the repo no longer has container worktrees) — far
+    cheaper than destroying live integration-test work.
+    """
+    if _has_container_worktree(repo):
+        if out is not None:
+            print(
+                f"worktree-gc: skip prune {repo} — registry contains a "
+                f"container worktree (gitdir under /work/); host cannot "
+                f"judge its liveness. See lead-learnings/19.",
+                file=out,
+            )
+        return False
+    git_runner(["-C", repo, "worktree", "prune"])
+    return True
+
+
 def run_once(
     *,
     roots: Iterable[str] | None = None,
@@ -397,9 +497,13 @@ def run_once(
 
         # After any removals in this repo, prune the metadata so
         # ``git worktree list`` stays accurate. Best-effort; a prune
-        # failure does not abort the loop.
+        # failure does not abort the loop. Uses ``_safe_prune`` to skip
+        # the prune wholesale when ANY registered worktree's gitdir
+        # points at a container-only prefix (``/work/``) — bare prune
+        # from the host would destroy live container worktrees, see
+        # lead-learnings/19 (2026-06-13) for the fleet incident.
         if not dry_run:
-            runner(["-C", repo, "worktree", "prune"])
+            _safe_prune(repo, runner, out=out)
 
     removed = sum(1 for o in per_worktree if o.action == "removed")
     skipped_fresh = sum(1 for o in per_worktree if o.action == "skipped-fresh")
