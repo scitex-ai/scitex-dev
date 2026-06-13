@@ -17,6 +17,7 @@ from scitex_dev._cli.audit._skills._audit import (
     _check_header_footer,
     _check_index_links,
     _check_naming,
+    _locate_skills_dir,
 )
 
 
@@ -562,3 +563,133 @@ def test_audit_skills_rule_filter_restricts_violations(tmp_path):
     # Re-run with capsys to verify
     # (this test mainly exercises that filtering doesn't crash)
     assert rc in (0, 1)
+
+
+# ---------------------------------------------------------------------------
+# _locate_skills_dir — registry source-tree fallback (phantom-SK-101 fix)
+#
+# Before this fallback, `_locate_skills_dir` returned None for any package
+# not pip-installed in the auditor's venv — so packages with a perfectly
+# good on-disk `_skills/` layout fired phantom SK-101. The fallback walks
+# the package's source tree via ECOSYSTEM.local_path and resolves
+# `<local_path>/src/<import_name>/_skills/<distribution>/` (or flat
+# `_skills/` for legacy layouts).
+# ---------------------------------------------------------------------------
+
+
+def _install_registry_entry(monkeypatch, distribution: str, local_path: Path) -> None:
+    """Inject a single-entry override into the shared ECOSYSTEM dict for the test.
+
+    Restores the original mapping at teardown via monkeypatch.setitem's
+    bookkeeping. We do NOT replace ECOSYSTEM wholesale — other code paths
+    (e.g. PS-149's umbrella detection) read from the same dict during the
+    same test session and must see real entries unchanged.
+    """
+    from scitex_dev._ecosystem._registry import ECOSYSTEM
+
+    monkeypatch.setitem(
+        ECOSYSTEM,
+        distribution,
+        {
+            "local_path": str(local_path),
+            "pypi_name": distribution,
+            "github_repo": f"ywatanabe1989/{distribution}",
+            "import_name": distribution.replace("-", "_"),
+            "category": "library",
+        },
+    )
+
+
+def test_locate_skills_dir_falls_back_to_registry_source_tree(tmp_path, monkeypatch):
+    # Arrange — non-installed package with a valid on-disk sub-skill layout.
+    # find_spec("phantompkg") returns None, so the source-tree fallback is
+    # the only path that can return a non-None Path. Without it, SK-101
+    # would fire as a phantom on every locally-cloned peer.
+    dist = "scitex-phantompkg"
+    import_name = "scitex_phantompkg"
+    local_root = tmp_path / "scitex-phantompkg"
+    skills_dir = local_root / "src" / import_name / "_skills" / dist
+    skills_dir.mkdir(parents=True)
+    (skills_dir / "SKILL.md").write_text(
+        "---\nname: scitex-phantompkg\ndescription: x\ntags: [scitex-phantompkg]\n---\n"
+    )
+    _install_registry_entry(monkeypatch, dist, local_root)
+    # Act
+    result = _locate_skills_dir(dist)
+    # Assert
+    assert result == skills_dir
+
+
+def test_locate_skills_dir_falls_back_to_flat_skills_layout(tmp_path, monkeypatch):
+    # Arrange — legacy flat `_skills/` (no sub-pip-name dir). The fallback
+    # must return the flat dir so the caller can distinguish SK-102 from
+    # SK-101.
+    dist = "scitex-legacypkg"
+    import_name = "scitex_legacypkg"
+    local_root = tmp_path / "scitex-legacypkg"
+    flat_dir = local_root / "src" / import_name / "_skills"
+    flat_dir.mkdir(parents=True)
+    (flat_dir / "01_overview.md").write_text("# legacy\n")
+    _install_registry_entry(monkeypatch, dist, local_root)
+    # Act
+    result = _locate_skills_dir(dist)
+    # Assert
+    assert result == flat_dir
+
+
+def test_locate_skills_dir_returns_none_when_registry_path_missing_on_disk(
+    tmp_path, monkeypatch
+):
+    # Arrange — registry has `local_path` but the directory doesn't exist
+    # on this host (clean checkout, CI runner, etc.). The fallback must
+    # NOT crash and must return None so the caller fires a real SK-101.
+    dist = "scitex-ghostpkg"
+    nonexistent = tmp_path / "does-not-exist"
+    _install_registry_entry(monkeypatch, dist, nonexistent)
+    # Act
+    result = _locate_skills_dir(dist)
+    # Assert
+    assert result is None
+
+
+def test_locate_skills_dir_returns_none_when_neither_installed_nor_registered():
+    # Arrange — distribution is not pip-installed AND not in ECOSYSTEM.
+    # SK-101 is the correct verdict for this case (truly missing skills
+    # tree), so the fallback must NOT invent a path.
+    dist = "scitex-doesnotexistanywhere"
+    # Act
+    result = _locate_skills_dir(dist)
+    # Assert
+    assert result is None
+
+
+def test_locate_skills_dir_prefers_installed_when_both_present(tmp_path, monkeypatch):
+    # Arrange — installed package is the canonical source-of-truth (it's
+    # what users actually import); registry fallback is only consulted
+    # when find_spec fails. Use a real ecosystem peer (scitex-dev itself
+    # is installed in every venv that can run this test) and inject a
+    # bogus registry path — the returned dir must be under the install
+    # location, NOT the bogus tmp dir.
+    import importlib.util
+
+    spec = importlib.util.find_spec("scitex_dev")
+    if spec is None or not spec.submodule_search_locations:
+        pytest.skip("scitex_dev not importable; cannot verify install-precedence")
+    bogus_root = tmp_path / "bogus-scitex-dev"
+    bogus_skills = bogus_root / "src" / "scitex_dev" / "_skills" / "scitex-dev"
+    bogus_skills.mkdir(parents=True)
+    monkeypatch.setitem(
+        __import__("scitex_dev._ecosystem._registry", fromlist=["ECOSYSTEM"]).ECOSYSTEM,
+        "scitex-dev",
+        {
+            "local_path": str(bogus_root),
+            "pypi_name": "scitex-dev",
+            "github_repo": "ywatanabe1989/scitex-dev",
+            "import_name": "scitex_dev",
+            "category": "library",
+        },
+    )
+    # Act
+    result = _locate_skills_dir("scitex-dev")
+    # Assert
+    assert result is None or bogus_skills not in result.parents
