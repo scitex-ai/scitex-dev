@@ -30,7 +30,7 @@ def own_scitex_package(filepath: str) -> str | None:
     directory, or otherwise the nearest ancestor directory that is itself
     a ``scitex`` / ``scitex_<word>`` package. Examples::
 
-        src/scitex_gen/_numeric/_norm.py   -> "scitex_gen"
+        src/scitex_io/_save_modules/_csv.py -> "scitex_io"
         scitex_io/io/_save.py              -> "scitex_io"
         tests/test_foo.py                  -> None
     """
@@ -160,7 +160,7 @@ class ImportChecksMixin:
             self._add(rules.NM001, node.lineno, node.col_offset, line)
 
         # I008 — cross-package private-submodule import (e.g.
-        # `import scitex_gen._numeric._norm`)
+        # `import scitex_io._save`)
         if cross_pkg_private_import(module_name, self._own_package):
             self._add(_lk("STX-I008"), node.lineno, node.col_offset, line)
 
@@ -207,14 +207,14 @@ class ImportChecksMixin:
                 break
 
         # I008 — cross-package private-submodule import. Two shapes:
-        #   from scitex_gen._numeric._norm import to_even   (module is private)
-        #   from scitex_gen import _numeric                 (importing a private name)
+        #   from scitex_io._save import save     (module is private)
+        #   from scitex_io import _save           (importing a private name)
         if cross_pkg_private_import(module, self._own_package):
             self._add(_lk("STX-I008"), node.lineno, node.col_offset, line)
         else:
             m = _SCITEX_PKG_RE.match(module or "")
             if m and m.group(1) == module and module != self._own_package:
-                # `from scitex_gen import _private_name`
+                # `from scitex_io import _private_name`
                 for alias in node.names:
                     if alias.name.startswith("_") and not alias.name.startswith("__"):
                         self._add(_lk("STX-I008"), node.lineno, node.col_offset, line)

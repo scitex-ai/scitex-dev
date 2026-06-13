@@ -1,10 +1,13 @@
 """Tests for STX-I008 — cross-package private-submodule imports.
 
 Importing a *peer* scitex package's underscore-prefixed submodule is
-fragile (it broke scitex-dsp / scitex-nn when scitex-gen reorganized
-`scitex_gen._norm` into `scitex_gen._numeric._norm`). The rule must fire
-for cross-package private imports but stay silent for public imports and
-same-package private imports.
+fragile. (Historical case: scitex-gen reorganized ``scitex_gen._norm``
+into ``scitex_gen._numeric._norm`` and silently broke scitex-dsp /
+scitex-nn, which had imported the private path directly.) The rule must
+fire for cross-package private imports but stay silent for public
+imports and same-package private imports. Fixtures below use
+``scitex_io._save`` as a present-tense stand-in for "a peer's private
+submodule".
 """
 
 from scitex_dev.linter._checks._imports import (
@@ -27,11 +30,11 @@ def _i008_ids(src, filepath):
 
 def test_own_package_resolved_from_src_layout():
     # Arrange
-    path = "/repo/src/scitex_gen/_numeric/_norm.py"
+    path = "/repo/src/scitex_io/_save_modules/_csv.py"
     # Act
     pkg = own_scitex_package(path)
     # Assert
-    assert pkg == "scitex_gen"
+    assert pkg == "scitex_io"
 
 
 def test_own_package_none_for_non_scitex_path():
@@ -48,25 +51,25 @@ def test_own_package_none_for_non_scitex_path():
 
 def test_predicate_flags_cross_package_private_module():
     # Arrange
-    module = "scitex_gen._numeric._norm"
+    module = "scitex_io._save"
     # Act
     peer = cross_pkg_private_import(module, own_package="scitex_dsp")
     # Assert
-    assert peer == "scitex_gen"
+    assert peer == "scitex_io"
 
 
 def test_predicate_allows_same_package_private_module():
     # Arrange
-    module = "scitex_gen._numeric._norm"
+    module = "scitex_io._save"
     # Act
-    peer = cross_pkg_private_import(module, own_package="scitex_gen")
+    peer = cross_pkg_private_import(module, own_package="scitex_io")
     # Assert
     assert peer is None
 
 
 def test_predicate_allows_public_peer_module():
     # Arrange
-    module = "scitex_gen"
+    module = "scitex_io"
     # Act
     peer = cross_pkg_private_import(module, own_package="scitex_dsp")
     # Assert
@@ -78,7 +81,7 @@ def test_predicate_allows_public_peer_module():
 
 def test_cross_package_private_from_import_is_flagged():
     # Arrange
-    src = "from scitex_gen._numeric._norm import to_z\n"
+    src = "from scitex_io._save import save\n"
     # Act
     ids = _i008_ids(src, "src/scitex_dsp/_filt.py")
     # Assert
@@ -87,7 +90,7 @@ def test_cross_package_private_from_import_is_flagged():
 
 def test_cross_package_private_bare_import_is_flagged():
     # Arrange
-    src = "import scitex_gen._numeric._norm\n"
+    src = "import scitex_io._save\n"
     # Act
     ids = _i008_ids(src, "src/scitex_dsp/_filt.py")
     # Assert
@@ -96,7 +99,7 @@ def test_cross_package_private_bare_import_is_flagged():
 
 def test_cross_package_importing_private_name_is_flagged():
     # Arrange
-    src = "from scitex_gen import _numeric\n"
+    src = "from scitex_io import _save\n"
     # Act
     ids = _i008_ids(src, "src/scitex_dsp/_filt.py")
     # Assert
@@ -105,7 +108,7 @@ def test_cross_package_importing_private_name_is_flagged():
 
 def test_public_peer_import_is_not_flagged():
     # Arrange
-    src = "from scitex_gen import to_z\n"
+    src = "from scitex_io import save\n"
     # Act
     ids = _i008_ids(src, "src/scitex_dsp/_filt.py")
     # Assert
@@ -114,9 +117,9 @@ def test_public_peer_import_is_not_flagged():
 
 def test_same_package_private_import_is_not_flagged():
     # Arrange
-    src = "from scitex_gen._numeric._norm import to_z\n"
+    src = "from scitex_io._save import save\n"
     # Act
-    ids = _i008_ids(src, "src/scitex_gen/_top.py")
+    ids = _i008_ids(src, "src/scitex_io/_top.py")
     # Assert
     assert ids == []
 
