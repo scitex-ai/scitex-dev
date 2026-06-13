@@ -55,13 +55,18 @@ def runner():
 
 
 class TestHooksPath:
-    """``hooks path <name>`` returns the absolute bundled-script path."""
+    """``hooks print-path <name>`` returns the absolute bundled-script path.
+
+    Verb is ``print-path`` (compound-leaf form) NOT ``path`` per
+    audit-cli §1 — a bare noun-typed leaf at the verb position is
+    rejected as a §1 violation.
+    """
 
     def test_prints_absolute_path_for_run_lint(self, cli, runner):
         # Arrange
         # (no fixtures needed; the cli fixture provides the wired runner.)
         # Act
-        result = runner.invoke(cli, ["hooks", "path", "run_lint"])
+        result = runner.invoke(cli, ["hooks", "print-path", "run_lint"])
         # Assert — single combined check: exit 0 AND output is the absolute
         # filesystem path of the bundled script (resolved + non-empty +
         # ends in run_lint.sh + matches the KNOWN_HOOKS source).

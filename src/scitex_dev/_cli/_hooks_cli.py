@@ -175,7 +175,26 @@ def register_hooks_commands(main) -> None:
             "edit is never silently clobbered."
         ),
     )
-    def hooks_install(target, names, force):
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help=(
+            "Print what would change without touching the filesystem. "
+            "audit-cli §2 — every mutating verb must expose --dry-run."
+        ),
+    )
+    @click.option(
+        "--yes",
+        "-y",
+        is_flag=True,
+        help=(
+            "Accept all confirmation prompts (no-op today; symlink installs "
+            "are non-interactive). Required by audit-cli §2 for mutating "
+            "verbs so callers can scriptedly bypass any future confirm "
+            "logic."
+        ),
+    )
+    def hooks_install(target, names, force, dry_run, yes):
         """Install bundled hooks as symlinks into the target project.
 
         \b
@@ -183,12 +202,19 @@ def register_hooks_commands(main) -> None:
             $ scitex-dev hooks install --target ~/proj/my-research
             installed  run_lint  →  ~/proj/my-research/docs/to_claude/hooks/post-tool-use/run_lint.sh
         """
+        del yes  # --yes is reserved for audit-cli §2 conformance; no
+                 # confirmation prompts are issued today.
         project = Path(target)
-        project.mkdir(parents=True, exist_ok=True)
+        if not dry_run:
+            project.mkdir(parents=True, exist_ok=True)
         chosen = list(names) if names else sorted(KNOWN_HOOKS)
         had_refusal = False
         for name in chosen:
             source, deploy_rel = KNOWN_HOOKS[name]
+            if dry_run:
+                target_path = project / deploy_rel
+                click.echo(f"would install  {name}  →  {target_path}")
+                continue
             status = _install_one(name, source, deploy_rel, project, force)
             symbol = {
                 "installed": click.style("installed ", fg="green"),
@@ -227,7 +253,24 @@ def register_hooks_commands(main) -> None:
         type=click.Choice(sorted(KNOWN_HOOKS), case_sensitive=False),
         help="Limit update to specific hook names. Defaults to all.",
     )
-    def hooks_update(target, names):
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help=(
+            "Print what would change without touching the filesystem. "
+            "audit-cli §2 — every mutating verb must expose --dry-run."
+        ),
+    )
+    @click.option(
+        "--yes",
+        "-y",
+        is_flag=True,
+        help=(
+            "Accept all confirmation prompts (no-op today; no interactive "
+            "confirm logic). Required by audit-cli §2 for mutating verbs."
+        ),
+    )
+    def hooks_update(target, names, dry_run, yes):
         """Equivalent to ``install --force`` for a project that already
         has the directory tree. Replaces non-symlink files too — call
         only when you mean to discard local edits.
@@ -236,10 +279,14 @@ def register_hooks_commands(main) -> None:
         Example:
             $ scitex-dev hooks update --target ~/proj/my-research
         """
+        del yes
         project = Path(target)
         chosen = list(names) if names else sorted(KNOWN_HOOKS)
         for name in chosen:
             source, deploy_rel = KNOWN_HOOKS[name]
+            if dry_run:
+                click.echo(f"would update  {name}  →  {project / deploy_rel}")
+                continue
             status = _install_one(name, source, deploy_rel, project, force=True)
             symbol = {
                 "installed": click.style("installed ", fg="green"),
@@ -257,7 +304,16 @@ def register_hooks_commands(main) -> None:
         type=click.Path(file_okay=False, dir_okay=True, exists=True, resolve_path=True),
         help="Project root to inspect.",
     )
-    def hooks_list(target):
+    @click.option(
+        "--json",
+        "as_json",
+        is_flag=True,
+        help=(
+            "Emit machine-readable JSON instead of the coloured table. "
+            "audit-cli §2 — every read verb must expose --json."
+        ),
+    )
+    def hooks_list(target, as_json):
         """Report which hooks are installed and whether they point at
         the canonical source.
 
@@ -267,28 +323,68 @@ def register_hooks_commands(main) -> None:
             ok       run_lint  → bundled canonical
             missing  …
         """
+        import json as _json
+
         project = Path(target)
+        rows = []
         for name in sorted(KNOWN_HOOKS):
             source, deploy_rel = KNOWN_HOOKS[name]
             status = _list_one(name, source, deploy_rel, project)
+            rows.append((name, status, source, str(project / deploy_rel)))
+        if as_json:
+            click.echo(
+                _json.dumps(
+                    [
+                        {
+                            "name": n,
+                            "status": s,
+                            "source": src,
+                            "target": tgt,
+                        }
+                        for n, s, src, tgt in rows
+                    ],
+                    indent=2,
+                )
+            )
+            return
+        for name, status, _source, target_path in rows:
             symbol = {
                 "ok": click.style("ok      ", fg="green"),
                 "drift": click.style("drift   ", fg="yellow"),
                 "stale": click.style("stale   ", fg="red"),
                 "missing": click.style("missing ", fg="white"),
             }[status]
-            target_path = project / deploy_rel
             click.echo(f"{symbol}  {name}  →  {target_path}")
 
-    @hooks_group.command("path", short_help="Print the absolute path of a bundled hook script.")
+    # Renamed `path` → `print-path` per audit-cli §1: a bare noun-typed
+    # leaf at the verb position is forbidden (the auditor reads `path`
+    # as a noun, not an action). `print-path` is the compound-leaf form
+    # the catalog recommends for a one-off read action.
+    @hooks_group.command(
+        "print-path",
+        short_help="Print the absolute path of a bundled hook script.",
+        epilog=(
+            "Example:\n"
+            "  $ scitex-dev hooks print-path run_lint\n"
+            "  /uvwork/venv-agent/lib/python3.12/site-packages/scitex_dev/_hooks/run_lint.sh\n"
+            "\n"
+            "  $ ln -s \"$(scitex-dev hooks print-path run_lint)\" \\\n"
+            "      docs/to_claude/hooks/post-tool-use/run_lint.sh"
+        ),
+    )
     @click.argument("name", type=click.Choice(sorted(KNOWN_HOOKS), case_sensitive=False))
-    def hooks_path(name):
+    def hooks_print_path(name):
         """Print the bundled hook script's absolute filesystem path.
+
+        \b
+        Example:
+            $ scitex-dev hooks print-path run_lint
+            /uvwork/venv-agent/lib/python3.12/site-packages/scitex_dev/_hooks/run_lint.sh
 
         Useful in shell scripts:
 
         \b
-            ln -s "$(scitex-dev hooks path run_lint)" \\
+            ln -s "$(scitex-dev hooks print-path run_lint)" \\
                 docs/to_claude/hooks/post-tool-use/run_lint.sh
         """
         source, _ = KNOWN_HOOKS[name]
