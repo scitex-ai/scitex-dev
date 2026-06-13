@@ -100,9 +100,7 @@ def test_compute_net_new_returns_only_the_new_finding():
     from scitex_dev._cli.audit._diff import compute_net_new
 
     # Act
-    net = compute_net_new(
-        _HEAD_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo"
-    )
+    net = compute_net_new(_HEAD_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo")
     # Assert
     assert len(net) == 1
 
@@ -113,9 +111,7 @@ def test_compute_net_new_identifies_the_correct_rule():
     from scitex_dev._cli.audit._diff import compute_net_new
 
     # Act
-    net = compute_net_new(
-        _HEAD_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo"
-    )
+    net = compute_net_new(_HEAD_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo")
     only = next(iter(net))
     # Assert
     assert "TQ002" in only.message_excerpt
@@ -127,9 +123,7 @@ def test_compute_net_new_returns_empty_when_head_equals_base():
     from scitex_dev._cli.audit._diff import compute_net_new
 
     # Act
-    net = compute_net_new(
-        _BASE_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo"
-    )
+    net = compute_net_new(_BASE_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo")
     # Assert
     assert net == set()
 
@@ -140,9 +134,7 @@ def test_compute_net_new_returns_empty_when_head_subset_of_base():
     from scitex_dev._cli.audit._diff import compute_net_new
 
     # Act
-    net = compute_net_new(
-        _BASE_SAMPLE, _HEAD_SAMPLE, distribution="scitex-todo"
-    )
+    net = compute_net_new(_BASE_SAMPLE, _HEAD_SAMPLE, distribution="scitex-todo")
     # Assert
     assert net == set()
 
@@ -157,13 +149,9 @@ def test_filter_to_net_new_lines_keeps_banner():
     # Arrange
     from scitex_dev._cli.audit._diff import compute_net_new, filter_to_net_new_lines
 
-    net = compute_net_new(
-        _HEAD_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo"
-    )
+    net = compute_net_new(_HEAD_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo")
     # Act
-    filtered = filter_to_net_new_lines(
-        _HEAD_SAMPLE, net, distribution="scitex-todo"
-    )
+    filtered = filter_to_net_new_lines(_HEAD_SAMPLE, net, distribution="scitex-todo")
     # Assert
     assert "=== audit-cli ===" in filtered
 
@@ -173,13 +161,9 @@ def test_filter_to_net_new_lines_drops_inherited_finding():
     # Arrange
     from scitex_dev._cli.audit._diff import compute_net_new, filter_to_net_new_lines
 
-    net = compute_net_new(
-        _HEAD_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo"
-    )
+    net = compute_net_new(_HEAD_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo")
     # Act
-    filtered = filter_to_net_new_lines(
-        _HEAD_SAMPLE, net, distribution="scitex-todo"
-    )
+    filtered = filter_to_net_new_lines(_HEAD_SAMPLE, net, distribution="scitex-todo")
     # Assert
     assert "monkeypatch" not in filtered
 
@@ -189,13 +173,9 @@ def test_filter_to_net_new_lines_keeps_the_net_new_finding():
     # Arrange
     from scitex_dev._cli.audit._diff import compute_net_new, filter_to_net_new_lines
 
-    net = compute_net_new(
-        _HEAD_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo"
-    )
+    net = compute_net_new(_HEAD_SAMPLE, _BASE_SAMPLE, distribution="scitex-todo")
     # Act
-    filtered = filter_to_net_new_lines(
-        _HEAD_SAMPLE, net, distribution="scitex-todo"
-    )
+    filtered = filter_to_net_new_lines(_HEAD_SAMPLE, net, distribution="scitex-todo")
     # Assert
     assert "TQ002" in filtered
 
@@ -214,17 +194,11 @@ def _seed_repo(path):
         ["git", "-C", str(path), "config", "user.email", "test@example.com"],
         check=True,
     )
-    subprocess.run(
-        ["git", "-C", str(path), "config", "user.name", "test"], check=True
-    )
+    subprocess.run(["git", "-C", str(path), "config", "user.name", "test"], check=True)
     (path / "README.md").write_text("seed\n")
     subprocess.run(["git", "-C", str(path), "add", "."], check=True)
-    subprocess.run(
-        ["git", "-C", str(path), "commit", "-q", "-m", "seed"], check=True
-    )
-    subprocess.run(
-        ["git", "-C", str(path), "branch", "-M", "develop"], check=True
-    )
+    subprocess.run(["git", "-C", str(path), "commit", "-q", "-m", "seed"], check=True)
+    subprocess.run(["git", "-C", str(path), "branch", "-M", "develop"], check=True)
 
 
 def test_worktree_at_yields_a_real_checkout(tmp_path):
@@ -283,3 +257,113 @@ def test_worktree_at_raises_when_path_is_not_git(tmp_path):
     with pytest.raises(DiffAwareSetupError):
         with worktree_at(bare, "develop"):
             pass
+
+
+# ---------------------------------------------------------------------------
+# Line-stable identity (2026-06-13 lead-directed refinement). The ratchet's
+# whole job is "fail only on NEW debt"; if a one-line docstring tweak above
+# a flagged construct re-keys every finding in that file as "new", the
+# ratchet churns and every unrelated PR gets a false-positive CI failure.
+# These sentinels pin the line-stable identity so that regression never
+# slips back in.
+# ---------------------------------------------------------------------------
+
+
+# Same content as the BASE/HEAD samples above but with EVERY line number
+# bumped (e.g. ``test_reopen.py:43`` → ``test_reopen.py:87``). Models
+# the "an unrelated edit above a flagged construct shifts every lineno
+# downward" scenario. The line-stable identity MUST treat these as
+# IDENTICAL to the base sample (no net-new).
+_BASE_SAMPLE_LINENOS_SHIFTED = """
+=== audit-cli ===
+ERRO: scitex-todo: 2 error(s)
+ERRO:   [PA-306 §3 no-mocks] scitex-todo: tests/scitex_todo/test_reopen.py:87: monkeypatch
+ERRO:   [PA-307 §3 test-quality] scitex-todo: tests/scitex_todo/test__model.py:204: TQ007 multi-assert
+"""
+
+
+def test_extract_keys_stable_under_lineno_shift_collisions():
+    # Arrange — same logical violations, different line numbers.
+    from scitex_dev._cli.audit._diff import extract_violation_keys
+
+    base_keys = extract_violation_keys(_BASE_SAMPLE, distribution_filter="scitex-todo")
+    shifted_keys = extract_violation_keys(
+        _BASE_SAMPLE_LINENOS_SHIFTED, distribution_filter="scitex-todo"
+    )
+    # Act
+    # Assert — the two key sets are EQUAL, not just same-cardinality.
+    assert base_keys == shifted_keys
+
+
+def test_compute_net_new_empty_when_only_linenos_shifted():
+    # Arrange — the ratchet's primary failure mode: an unrelated edit
+    # bumps every lineno; without line-stable identity, compute_net_new
+    # would return the entire base-sample finding set as "new".
+    from scitex_dev._cli.audit._diff import compute_net_new
+
+    # Act
+    net = compute_net_new(
+        _BASE_SAMPLE_LINENOS_SHIFTED,
+        _BASE_SAMPLE,
+        distribution="scitex-todo",
+    )
+    # Assert
+    assert net == set()
+
+
+def test_violation_key_file_component_drops_trailing_lineno():
+    # Arrange — direct unit on the key shape so a regression points
+    # straight at the file component.
+    from scitex_dev._cli.audit._diff import extract_violation_keys
+
+    keys = extract_violation_keys(_BASE_SAMPLE, distribution_filter="scitex-todo")
+    # Act
+    file_components = {k.file_line for k in keys}
+    # Assert — every component is a bare path (no ``:NN`` suffix).
+    assert all(":" not in fc.rsplit("/", 1)[-1] for fc in file_components)
+
+
+def test_violation_key_message_excerpt_drops_embedded_lineno():
+    # Arrange — sentinel for the rule-class where the auditor's
+    # ``msg`` field itself embeds a line ref (some rules append
+    # ``... at line 88`` or a redundant ``:NN:``). Normalization must
+    # scrub those too so the message excerpt is line-stable.
+    from scitex_dev._cli.audit._diff import extract_violation_keys
+
+    sample = (
+        "ERRO:   [PA-307 §3 test-quality] scitex-todo: tests/scitex_todo/x.py: "
+        "TQ007 at line 88 — multi-assert\n"
+    )
+    sample2 = (
+        "ERRO:   [PA-307 §3 test-quality] scitex-todo: tests/scitex_todo/x.py: "
+        "TQ007 at line 204 — multi-assert\n"
+    )
+    # Act
+    keys1 = extract_violation_keys(sample, distribution_filter="scitex-todo")
+    keys2 = extract_violation_keys(sample2, distribution_filter="scitex-todo")
+    # Assert — same logical finding, two different line refs in the
+    # message; identity must collapse them.
+    assert keys1 == keys2
+
+
+def test_filter_to_net_new_lines_drops_inherited_under_lineno_shift():
+    # Arrange — ratchet end-to-end sentinel: even if HEAD's linenos
+    # have shifted from BASE's, the inherited findings stay filtered
+    # out (not re-introduced as false positives).
+    from scitex_dev._cli.audit._diff import (
+        compute_net_new,
+        filter_to_net_new_lines,
+    )
+
+    # HEAD = BASE-shape but with shifted linenos (no actual new violations).
+    net = compute_net_new(
+        _BASE_SAMPLE_LINENOS_SHIFTED,
+        _BASE_SAMPLE,
+        distribution="scitex-todo",
+    )
+    # Act
+    filtered = filter_to_net_new_lines(
+        _BASE_SAMPLE_LINENOS_SHIFTED, net, distribution="scitex-todo"
+    )
+    # Assert — none of the inherited finding lines survive.
+    assert "monkeypatch" not in filtered

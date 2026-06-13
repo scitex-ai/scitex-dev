@@ -23,15 +23,30 @@ Design:
 2. Run ``scitex-dev ecosystem audit-all`` twice (HEAD path, base path)
    via the existing ``--path PATH`` plumbing landed in PR #137.
 3. Parse each auditor's output into a stable **violation key** —
-   ``(rule_code, file:line, message_excerpt[:60])`` — that survives
-   trivial reformatting but distinguishes genuinely-different findings.
+   ``(rule_code, file, normalized_message[:60])`` — that survives
+   trivial reformatting AND unrelated line shifts but distinguishes
+   genuinely-different findings.
 4. Net-new = HEAD-keys − BASE-keys. Re-emit only the matching lines.
 
-The first-cut violation identity intentionally trades precision for
-simplicity: a refactor that shifts every line in a file will flag all
-findings on that file as "new". That's accurate-ish in spirit (the
-agent IS responsible for the change) and a refinement (line-anchor
-fuzzy match) can land in a follow-up if it bites in practice.
+Line-stable identity (2026-06-13, lead-directed refinement)
+------------------------------------------------------------
+
+The identity intentionally drops line numbers from both the file
+component (no ``file:line``, just ``file``) and the normalized message
+(any ``test.py:NN`` / ``line NN`` / ``:NN:`` substrings are scrubbed).
+Reason: line numbers shift on every unrelated edit — a one-line
+docstring tweak above a flagged construct would re-key every finding
+in that file as "new", churning the ratchet and creating false
+"regression" CI failures on patches that introduced zero violations.
+
+The trade-off is that a file with N findings of the same rule is
+keyed as ONE entry, so adding a new finding of that rule in the SAME
+file with the SAME message stays invisible to the ratchet. We accept
+that — it's the same trade lead documented in the spec ("a baseline
+can only ever SHRINK; adding a new finding of an existing key class
+in the same file is debt that the strict full audit still catches").
+"Moved to evade" — moving a flagged construct to a different file —
+still flips the file component and is correctly detected as new.
 """
 
 from __future__ import annotations
@@ -42,7 +57,7 @@ import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Iterator
+from typing import Iterator
 
 
 # Matches a single auditor finding line emitted by ``audit-cli`` /
@@ -62,19 +77,75 @@ _FINDING_RE = re.compile(
     r"(?P<msg>.+?)\s*$"
 )
 
+# Strips trailing ``:NN`` line-number suffix from a file-path token.
+# Anchored at end-of-string so a colon inside the path (Windows drives,
+# URL-shaped paths) cannot mis-fire.
+_TRAILING_LINENO_RE = re.compile(r":\d+$")
+
+# Strips line-number-shaped substrings from the message excerpt so a
+# rule whose detail embeds ``... at line NN ...`` or ``tests/foo.py:NN:``
+# keys identically across unrelated line shifts. We deliberately match
+# only digit runs that look like line refs — bare numbers in prose
+# (``2 mocks found``) are preserved so two genuinely-distinct findings
+# don't collide.
+_MSG_LINENO_PATTERNS = (
+    re.compile(r":\d+(?=:|$|\s)"),  # ``...py:43`` or ``foo:88 ``
+    re.compile(r"\bline\s+\d+\b", re.I),  # ``at line 88``
+)
+
+
+def _strip_trailing_lineno(file_token: str) -> str:
+    """Drop the trailing ``:NN`` from a file-path token, if present.
+
+    Used to derive the line-stable file component of the identity.
+    A bare ``foo/bar.py`` round-trips unchanged; ``foo/bar.py:43`` →
+    ``foo/bar.py``; ``some:thing:42`` → ``some:thing`` (only the
+    trailing decimal suffix is stripped).
+    """
+    return _TRAILING_LINENO_RE.sub("", file_token)
+
+
+def _normalize_message(msg: str) -> str:
+    """Strip line-number substrings from a finding's message.
+
+    Ratchet stability depends on the identity not embedding line
+    references that shift on unrelated edits. The message excerpt is
+    the loosest component (any rule can put arbitrary text there), so
+    we additionally scrub two common shapes: trailing ``:NN``-style
+    file/line refs and ``at line NN`` prose.
+
+    Leaves all other content intact — a rule whose detail mentions
+    ``2 mocks found in tests/conftest.py`` keeps the file mention,
+    because that's part of WHAT changed, not a line-shift artefact.
+    """
+    out = msg
+    for pat in _MSG_LINENO_PATTERNS:
+        out = pat.sub("", out)
+    # Collapse the whitespace gaps the substitutions can leave behind
+    # so ``foo  bar`` doesn't collide-or-not-collide with ``foo bar``.
+    return " ".join(out.split())
+
 
 @dataclass(frozen=True)
 class ViolationKey:
-    """Identity that stays stable under whitespace + ANSI re-coloring.
+    """Identity that stays stable under whitespace, ANSI re-coloring,
+    AND unrelated line shifts.
 
     Two findings collide iff they come from the same auditor rule on
-    the same file (and line, if line-locatable) with the same message
-    prefix. We intentionally truncate the message at 60 chars so a
-    cosmetic word change in a hint doesn't make a finding "new".
+    the same file with the same normalized message prefix. Line numbers
+    are deliberately NOT part of the identity — see the module
+    docstring's "line-stable identity" section for the rationale and
+    the trade-off (debt of the same rule code in the same file with
+    the same message keys as one entry; "moved to evade" — moving the
+    flagged construct to a different file — still flips the identity).
+
+    Field name carries forward ``file_line`` for ON-WIRE compatibility
+    with any pickled / cached ViolationKey sets; the VALUE no longer
+    contains the line number.
     """
 
     rule: str
-    file_line: str  # "" if the finding is repo-wide
+    file_line: str  # file path with NO trailing ``:NN`` — name kept for compat
     message_excerpt: str
 
 
@@ -97,11 +168,13 @@ def extract_violation_keys(
         if distribution_filter and m.group("dist") != distribution_filter:
             continue
         rule = m.group("rule")
+        file_token = _strip_trailing_lineno(m.group("file_line") or "")
+        msg_norm = _normalize_message(m.group("msg") or "")
         keys.add(
             ViolationKey(
                 rule=rule,
-                file_line=m.group("file_line") or "",
-                message_excerpt=(m.group("msg") or "")[:60],
+                file_line=file_token,
+                message_excerpt=msg_norm[:60],
             )
         )
     return keys
@@ -147,10 +220,12 @@ def filter_to_net_new_lines(
             kept.append(line)
             continue
         rule = m.group("rule")
+        # Key reconstruction MUST mirror `extract_violation_keys`'s
+        # line-stripping or this filter would re-add inherited debt.
         key = ViolationKey(
             rule=rule,
-            file_line=m.group("file_line") or "",
-            message_excerpt=(m.group("msg") or "")[:60],
+            file_line=_strip_trailing_lineno(m.group("file_line") or ""),
+            message_excerpt=_normalize_message(m.group("msg") or "")[:60],
         )
         if key in net_new:
             kept.append(line)
