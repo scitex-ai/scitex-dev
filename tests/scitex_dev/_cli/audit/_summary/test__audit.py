@@ -1443,9 +1443,12 @@ def test_interactive_ok_above_with_blank_lines_still_exempts(tmp_path):
     assert out == []
 
 
-def test_interactive_ok_does_not_propagate_past_other_code(tmp_path):
-    # Arrange — TIGHT scope sentinel: a marker that documents the FIRST
-    # call must NOT silently exempt a SECOND, unmarked call below it.
+def _tight_scope_fixture_violations(tmp_path):
+    """Build the tight-scope fixture and return the §2 violations.
+
+    Shared between the two tight-scope sentinel tests so each test asserts
+    exactly one fact (TQ007 — single-assert discipline).
+    """
     dist = "scitex-inttight"
     local_root = _make_local_pkg_with_cli_call(
         tmp_path,
@@ -1456,11 +1459,30 @@ def test_interactive_ok_does_not_propagate_past_other_code(tmp_path):
         "click.confirm('really?')\n",
     )
     out: list[_SummaryViolation] = []
-    # Act
     with _registry_override(dist, local_root):
         _check_no_interactive_prompts(dist, out)
+    return out
+
+
+def test_interactive_ok_does_not_propagate_past_other_code_unmarked_call_flags(
+    tmp_path,
+):
+    # Arrange — TIGHT scope sentinel: a marker that documents the FIRST
+    # call must NOT silently exempt a SECOND, unmarked call below it.
+    # Act
+    out = _tight_scope_fixture_violations(tmp_path)
     # Assert
     assert any("click.confirm()" in v.message for v in out)
+
+
+def test_interactive_ok_does_not_propagate_past_other_code_marked_call_exempt(
+    tmp_path,
+):
+    # Arrange — paired sentinel: the FIRST (marked) call must still be
+    # exempted; only the unmarked SECOND call should fire.
+    # Act
+    out = _tight_scope_fixture_violations(tmp_path)
+    # Assert
     assert not any("click.prompt()" in v.message for v in out)
 
 
