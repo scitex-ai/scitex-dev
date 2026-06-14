@@ -51,8 +51,28 @@ def load_plugins():
         try:
             get_plugin = ep.load()
             plugin = get_plugin()
-        except Exception:
-            _logger.debug("Failed to load linter plugin %s", ep.name, exc_info=True)
+        except Exception as exc:
+            # Pillar 0: fail-loud on plugin-load failure. Previously
+            # this was a ``logger.debug`` (suppressed by default) which
+            # hid figrecipe's circular-import-induced load failures
+            # from operators for months — figure-style checkers were
+            # silently dropped, lint passed false-green. Per neurovista
+            # elevation 2026-06-14: surface load failures the same way
+            # the visit-time fail-loud in ``checker.lint_source`` does.
+            _logger.warning(
+                "linter: failed to load plugin %s: %s: %s",
+                ep.name,
+                type(exc).__name__,
+                exc,
+            )
+            import os as _os
+            import sys as _sys
+
+            if not _os.environ.get("SCITEX_DEV_LINTER_QUIET"):
+                _sys.stderr.write(
+                    f"[scitex-dev linter] WARNING: failed to load "
+                    f"plugin {ep.name!r}: {type(exc).__name__}: {exc}\n"
+                )
             continue
 
         plugin_payloads.append(plugin)

@@ -127,7 +127,6 @@ class SciTeXChecker(
         }
         self._plugin_checkers = _plugins["checkers"]
 
-
     # -- Assignment visitors --
 
     def visit_Assign(self, node: ast.Assign) -> None:
@@ -181,13 +180,11 @@ class SciTeXChecker(
         self._add(rules.NL001, node.lineno, node.col_offset, line)
         self.generic_visit(node)
 
-
     # -- Function/decorator visitors --
 
     @property
     def _REQUIRED_INJECTED(self):
         return set(self.config.required_injected)
-
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         # NM002 — `mocker` / `monkeypatch` fixture parameters (no exceptions).
@@ -424,9 +421,7 @@ class SciTeXChecker(
             # research project-type flips io/path from warning→error).
             # Per-rule override (above) still wins; category map is the
             # floor not the ceiling. See LinterConfig.
-            cat_override = getattr(
-                self.config, "category_severity_override", {}
-            ) or {}
+            cat_override = getattr(self.config, "category_severity_override", {}) or {}
             sev = cat_override.get(rule.category)
         if sev:
             rule = replace(rule, severity=sev)
@@ -470,8 +465,36 @@ def lint_source(source: str, filepath: str = "<stdin>", config=None) -> list:
             extra = checker_cls(lines, config)
             extra.visit(tree)
             checker.issues.extend(extra.issues)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Pillar 0: NEVER swallow. Surface to stderr so a dropped
+            # plugin checker is visible in CI logs + interactive sessions.
+            # Per neurovista elevation 2026-06-14: a silent except-pass
+            # here hid figrecipe's figure-style checkers (FM P006..P011)
+            # being dropped at load-time for months because of a
+            # circular-import in figrecipe's plugin module. Operator
+            # policy: fail-loud / no-silent-fallback.
+            _name = getattr(checker_cls, "__name__", repr(checker_cls))
+            import logging as _logging
+
+            _logging.getLogger(__name__).warning(
+                "linter: plugin checker %s raised on visit: %s",
+                _name,
+                exc,
+            )
+            # ALSO emit to stderr unconditionally (not gated by log
+            # level) so the agent feedback surface — `run_lint.sh`
+            # hook + interactive use — sees the drop. The escape is
+            # the same env flag already used by the IO/PA absence
+            # notice, so operators get one consistent off-switch.
+            import os as _os
+            import sys as _sys
+
+            if not _os.environ.get("SCITEX_DEV_LINTER_QUIET"):
+                _sys.stderr.write(
+                    f"[scitex-dev linter] WARNING: plugin checker "
+                    f"{_name} raised on visit of {filepath}: "
+                    f"{type(exc).__name__}: {exc}\n"
+                )
 
     return checker.get_issues()
 
