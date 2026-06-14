@@ -12,7 +12,12 @@ Implementation was split across sibling modules (issue #103) — pure
 refactor, zero behaviour change. Imports below preserve the original
 public surface so consumers reading via
 ``from scitex_dev._cli.audit._project._audit import X`` keep working.
+
+Ruff F401 on every re-export here is intentional (this is a public
+surface facade) — silenced file-wide rather than per-line so the
+import block stays readable.
 """
+# ruff: noqa: F401
 
 from __future__ import annotations
 
