@@ -11,21 +11,42 @@ don't reach for ``--no-verify`` out of frustration.
 Red-Green Doctrine
 ------------------
 
-The gate runs the SAME two checks that gate ``Test`` in CI, but
-restricted to the FAST subset:
+The gate runs the LIGHTWEIGHT subset of CI's checks, diff-scoped
+wherever possible:
 
 1. ``scitex-dev ecosystem audit-all <pkg> --path <repo> --severity error``
    — the same audit gate
    ``tests/develop/test_audit.py`` runs (installed by
    ``scitex-dev ecosystem install-audit-gate``), so local + CI agree
-   byte-for-byte.
-2. ``pytest --testmon -m "not slow and not integration"`` — only tests
-   whose imported sources changed since the last green run, with
-   heavy markers excluded.
+   byte-for-byte. Whole-repo today; per-package scoping is tracked
+   as follow-up.
+2. ``ruff check --select F401,F811`` on the CHANGED ``.py`` files
+   only — F401 (unused import) and F811 (redefined-while-unused)
+   are the two ruff rules that bite local→CI churn most often.
+   ``--extend-per-file-ignores '**/__init__.py:F401'`` keeps
+   re-export ``__init__.py`` files quiet.
+3. ``import-smoke`` — import every CHANGED module under ``src/``
+   via ``importlib.import_module`` to catch the "wheel installs
+   but runtime ImportError" class. Diff-scoped.
+4. ``pytest --testmon -m "not slow and not integration"`` — only
+   tests whose imported sources changed since the last green run,
+   with heavy markers excluded.
 
-Heavy tests (``slow``, ``integration``, network-bound) stay in CI.
-The local gate is the FAST check that catches the obvious red, not
-a CI replacement.
+**Diff scoping** is the gate's key design principle. The gate
+computes the changed-file list once at startup via
+``git diff --name-only --diff-filter=AM @{upstream}..HEAD -- '*.py'``
+(falling back to ``origin/HEAD..HEAD`` when no upstream is set).
+Steps 2 and 3 read from that list; testmon (step 4) is already
+diff-aware via its own state. README-only pushes skip steps 2 + 3
+entirely (no false greens, no false reds).
+
+Heavy CI items (``pytest-matrix`` across Python 3.11/3.12/3.13,
+``rtd-sphinx-build`` full docs build, Codecov upload, whole-repo
+ecosystem audit-all) stay CI-only by design. The gate is the FAST
+local check; CI is the thorough matrix. The auditor rule
+``PS-185`` (slug ``gate-covers-ci-lightweight``) catches drift:
+when CI grows a new lightweight job, PS-185 flags the gate as
+missing the matching step.
 
 Installation
 ------------

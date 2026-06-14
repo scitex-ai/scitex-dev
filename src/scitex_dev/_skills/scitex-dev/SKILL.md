@@ -55,6 +55,7 @@ interfaces:
 
 ### Distribution (40–49)
 - [40_distribution.md](40_distribution.md) — Skill cache update mechanics + drift detection
+- [41_pre-push-gate.md](41_pre-push-gate.md) — Pre-push gate coverage principle (lightweight CI mirror on changed diff; heavy items stay CI-only)
 
 ## Quick Reference
 
