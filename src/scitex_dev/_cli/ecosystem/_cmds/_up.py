@@ -2,140 +2,70 @@
 # -*- coding: utf-8 -*-
 """``scitex-dev ecosystem up`` — one-shot ecosystem reconciler.
 
-The headline UX the operator commissioned (a2a lead `c2908456`,
-2026-06-11): ONE command brings up every discovered ``JobSpec`` — cron
-lines, systemd timers, long-running services — in a single idempotent
-reconcile. ONE master ``scitex-dev-ecosystem-reconcile.service``
-``--user`` unit runs the same command on boot so the whole ecosystem
-comes alive without per-package manual systemctl ceremony.
+PR-1 redesign (2026-06-14, operator policy via lead msg 0502252a): the
+SciTeX fleet runs ~70 packages. Per-leaf ``--user`` units are
+unmanageable, so ``scitex-dev`` is the SOLE management surface.
+``systemctl --user list-units`` shows EXACTLY ONE entry —
+``scitex-dev-ecosystem.service`` — and that unit's ``ExecStart`` is the
+collective supervisor :func:`scitex_dev._supervisor.run_supervisor`,
+which spawns every ``kind="service"`` JobSpec as a child process under
+itself.
 
-What it does
-------------
-Per cron tick / invocation:
+What this command does
+----------------------
+Per invocation:
 
-  1. Discover every ``JobSpec`` via ``scitex_dev.jobs.discover_jobs()``
-     — built-in cron jobs + every entry-point provider.
-  2. ``ecosystem cron install --yes`` — materialise / refresh the
-     managed crontab block for ``kind="cron"`` jobs (idempotent;
-     re-running never duplicates lines).
-  3. ``ecosystem systemd install --yes`` — write
-     ``~/.config/systemd/user/<name>.{service,timer}`` for every
-     ``kind="service"`` / ``kind="timer"`` job.
-  4. ``systemctl --user daemon-reload`` once.
-  5. ``systemctl --user enable --now <unit>`` for each new/changed
-     unit. Per-unit failure is isolated and logged; one broken leaf
-     does NOT abort the reconcile.
+  1. Discover every ``JobSpec`` via :func:`scitex_dev.jobs.discover_jobs`.
+  2. Materialise / refresh the managed crontab block. The block carries
+     BOTH ``kind="cron"`` jobs (verbatim 5-field expressions) AND
+     ``kind="timer"`` jobs (translated to a 5-field cron expression in
+     :mod:`._up_timer_lowering`).
+  3. Write the supervisor unit (:data:`SUPERVISOR_UNIT_NAME`) to
+     ``~/.config/systemd/user/``. Idempotent.
+  4. With ``--yes``: ``systemctl --user daemon-reload`` +
+     ``enable --now scitex-dev-ecosystem.service``. The supervisor
+     process spawns the ~70 children itself — this command does NOT.
 
-Plus an opt-in flag:
+Dropped from the previous design (per PR-1 scope)
+-------------------------------------------------
 
-  ``--install-master-unit`` writes
-  ``~/.config/systemd/user/scitex-dev-ecosystem-reconcile.service``
-  which runs ``scitex-dev ecosystem up --yes`` on boot
-  (``OnBootSec=30s`` via an ``ExecStartPre=/bin/sleep`` delay so
-  network-online.target has time to settle). Idempotent; safe to call
-  on every ``up``. Once installed + enabled, the host reconciles
-  itself on every reboot — operator no longer manages 60 leaves.
+* No per-leaf ``.service`` / ``.timer`` writes.
+* No ``scitex-dev-ecosystem-reconcile.service`` master oneshot — the
+  supervisor IS the runtime. JobSpec changes propagate via
+  ``systemctl --user reload scitex-dev-ecosystem.service`` →
+  ``ExecReload=/bin/kill -HUP $MAINPID`` → supervisor SIGHUP handler.
+* No ``--install-master-unit`` flag.
 
-Robustness
-----------
-``ecosystem up`` is a CONVERGENCE LOOP. It must NEVER refuse to make
-forward progress because of one bad leaf:
+What this command does NOT do (intentionally)
+----------------------------------------------
 
-* Provider raises during discovery → logged + skipped (same fail-open
-  contract as ``discover_jobs``).
-* Per-unit ``systemctl enable`` fails → logged + counted; the loop
-  keeps reconciling the rest of the units.
-* ``systemctl`` itself missing (e.g. running in a container) → the
-  CLI exits 0 after writing unit files + crontab, with a clear
-  diagnostic that the operator's host has no systemd. The next run on
-  a real host completes the reconcile.
+* It does NOT purge legacy per-leaf units left over from the prior
+  design. That helper ships in PR-2 (``ecosystem systemd purge --yes``),
+  is opt-in, invoked by the operator only after host-verifying the
+  supervisor's children serve the board (8051) + the wake POSTs.
+  Sequencing avoids a board-down window during the migration.
 
-Exit code is non-zero ONLY when the discovery / install steps
-themselves blew up (the catastrophic case the operator wants paged
-on), never on a per-unit hiccup the next reconcile will sort out.
+Robustness — see the legacy ``_up`` docstring in git history; the
+fail-open contract is unchanged.
 """
 
 from __future__ import annotations
 
 import shutil
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 import click
 
-from ....jobs import JobSpec, jobs_of_kind
-from ....jobs import _systemd as sd
-
-
-# ---------------------------------------------------------------------------
-# Master reconcile unit — the one declarative artefact that makes the
-# whole "register systemd once, ecosystem stays reconciled" goal real.
-# ---------------------------------------------------------------------------
-
-MASTER_UNIT_NAME = "scitex-dev-ecosystem-reconcile.service"
-
-
-def build_master_unit_text() -> str:
-    """Return the master reconcile unit text.
-
-    Built dynamically (not a module-level constant) so the
-    ``ExecStart=`` line carries the absolute path to ``scitex-dev`` as
-    resolved from the operator's ambient PATH — same fix as
-    :func:`scitex_dev.jobs._systemd.resolve_execstart`. systemd
-    ``--user`` runs under a deliberately minimal PATH that excludes
-    most Python venvs; emitting a bare ``scitex-dev`` would 127 on
-    every boot.
-
-    ``RemainAfterExit=yes`` so ``systemctl --user enable --now
-    scitex-dev-ecosystem-reconcile.service`` returns immediately
-    once ExecStart exits cleanly. Without it, oneshot units flip
-    back to inactive the moment ExecStart returns and the operator's
-    ``enable --now`` would hang or report failure on a successful run.
-    """
-    from ....jobs._systemd import resolve_execstart
-
-    execstart = resolve_execstart("scitex-dev ecosystem up --yes")
-    return (
-        "[Unit]\n"
-        "Description=SciTeX ecosystem reconciler — runs "
-        "`scitex-dev ecosystem up --yes` to bring up every JobSpec\n"
-        "Documentation=https://github.com/ywatanabe1989/scitex-dev\n"
-        "After=network-online.target\n"
-        "Wants=network-online.target\n"
-        "\n"
-        "[Service]\n"
-        "Type=oneshot\n"
-        "# Wait 30 s after boot so DNS / network are settled before the\n"
-        "# reconcile starts shelling out to systemctl / crontab / gh.\n"
-        "ExecStartPre=/bin/sleep 30\n"
-        f"ExecStart={execstart}\n"
-        "StandardOutput=journal\n"
-        "StandardError=journal\n"
-        # Stay active after ExecStart exits so `enable --now` returns
-        # immediately on a clean reconcile rather than reporting the
-        # oneshot as inactive-then-failed.
-        "RemainAfterExit=yes\n"
-        "TimeoutStartSec=300s\n"
-        "\n"
-        "[Install]\n"
-        "WantedBy=default.target\n"
-    )
-
-
-# Back-compat shim — the previous module exposed ``MASTER_UNIT_TEXT``
-# as a constant. We keep the name resolvable so existing tests / docs
-# don't break, but the value is computed lazily via ``__getattr__`` so
-# the absolute-path resolution honours the LIVE PATH at call time
-# (rather than baking in scitex-dev's path at module-import time, which
-# is fragile during editable installs or first-time setup).
-
-
-def __getattr__(name):
-    if name == "MASTER_UNIT_TEXT":
-        return build_master_unit_text()
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+from ....jobs import JobSpec, discover_jobs
+from ._up_supervisor_unit import (
+    SUPERVISOR_UNIT_NAME,
+    build_supervisor_unit_text,
+    write_supervisor_unit,
+)
+from ._up_timer_lowering import collect_cron_jobs
 
 
 def _unit_dir() -> Path:
@@ -152,20 +82,15 @@ def _unit_dir() -> Path:
 class UpResult:
     """Aggregate outcome of one ``ecosystem up`` invocation.
 
-    ``error`` is set for catastrophic discovery / install failures
-    only. Per-unit outcomes (enable / start) are captured in
-    ``per_unit`` and aggregated into ``services_enabled`` /
-    ``timers_enabled`` / ``unit_failures`` so the dispatcher exit
-    code reflects systemic vs transient failure.
+    ``error`` is set for catastrophic discovery / write failures only.
+    Per-unit outcomes (enable / start) are captured in fields so the
+    dispatcher exit code reflects systemic vs transient failure.
     """
 
     cron_jobs_installed: int = 0
-    service_units_written: int = 0
-    timer_units_written: int = 0
-    master_unit_written: bool = False
-    services_enabled: int = 0
-    timers_enabled: int = 0
-    unit_failures: tuple[str, ...] = field(default_factory=tuple)
+    timer_jobs_lowered_to_cron: int = 0
+    supervisor_unit_written: bool = False
+    supervisor_unit_enabled: bool = False
     systemctl_missing: bool = False
     error: str | None = None
 
@@ -193,38 +118,27 @@ def _default_systemctl_runner(
 # ---------------------------------------------------------------------------
 
 
-def _write_master_unit(unit_dir: Path) -> Path:
-    """Write the master reconcile service unit. Idempotent.
-
-    Returns the path written so the CLI can echo a useful line. Always
-    writes the canonical text — if the operator hand-edited the file,
-    a fresh ``ecosystem up --install-master-unit`` resets it. That's
-    the correct behaviour for a managed unit; hand edits belong in the
-    JobSpec the leaf declares, not in scitex-dev's reconcile target.
-    """
-    unit_dir.mkdir(parents=True, exist_ok=True)
-    path = unit_dir / MASTER_UNIT_NAME
-    # Call the builder live so the absolute-path resolution honours the
-    # PATH of the process running `ecosystem up --install-master-unit`
-    # (which IS the operator's interactive shell with scitex-dev on it).
-    path.write_text(build_master_unit_text(), encoding="utf-8")
-    return path
-
-
-def _install_cron(
-    *, jobs: list[JobSpec], yes: bool, echo: Callable[[str], None]
+def _install_cron_block(
+    *,
+    cron_jobs: list[JobSpec],
+    yes: bool,
+    echo: Callable[[str], None],
 ) -> int:
-    """Materialise the managed crontab block. Returns count installed.
+    """Materialise the managed crontab block. Returns total entries installed.
 
-    Delegates to the existing helpers so there's one cron-write code
-    path (the ``ecosystem cron install`` command and ``ecosystem up``
-    can't drift).
+    Accepts the *merged* cron-native + timer-lowered list. Delegates
+    to the existing ``_cron_block.upsert_block`` so there's one cron-
+    write code path across ``ecosystem cron install`` and ``ecosystem
+    up``.
     """
     from ....jobs import _cron_block as cb
     from ...cron import _crontab
 
-    if not jobs:
-        echo("cron: no cron-kind jobs discovered; managed block left untouched")
+    if not cron_jobs:
+        echo(
+            "cron: no cron-kind / timer-kind jobs discovered; managed block "
+            "left untouched"
+        )
         return 0
 
     if not yes:
@@ -233,40 +147,13 @@ def _install_cron(
 
     try:
         current = _crontab.read_crontab()
-        new = cb.upsert_block(current, jobs)
+        new = cb.upsert_block(current, cron_jobs)
         _crontab.write_crontab(new)
     except RuntimeError as exc:
         echo(f"cron: ERROR writing crontab: {exc}")
         return 0
-    echo(f"cron: installed {len(jobs)} job(s) into managed block")
-    return len(jobs)
-
-
-def _install_systemd_units(
-    *,
-    jobs: list[JobSpec],
-    unit_dir: Path,
-    echo: Callable[[str], None],
-) -> tuple[int, int]:
-    """Write .service (+ .timer for kind='timer') unit files.
-
-    Returns ``(service_count, timer_count)``.
-    """
-    unit_dir.mkdir(parents=True, exist_ok=True)
-    services = 0
-    timers = 0
-    for j in jobs:
-        try:
-            service_text = sd.build_service_unit(j)
-            (unit_dir / f"{j.name}.service").write_text(service_text, encoding="utf-8")
-            services += 1
-            if j.kind == "timer":
-                timer_text = sd.build_timer_unit(j)
-                (unit_dir / f"{j.name}.timer").write_text(timer_text, encoding="utf-8")
-                timers += 1
-        except Exception as exc:  # noqa: BLE001 — fail-open per leaf
-            echo(f"systemd: ERROR writing units for {j.name!r}: {exc}")
-    return services, timers
+    echo(f"cron: installed {len(cron_jobs)} entry(ies) into managed block")
+    return len(cron_jobs)
 
 
 def _systemctl(
@@ -291,170 +178,155 @@ def _systemctl(
     return True
 
 
-def _reconcile_units(
-    *,
-    jobs: list[JobSpec],
-    systemctl_runner: Callable[..., subprocess.CompletedProcess],
-    echo: Callable[[str], None],
-) -> tuple[int, int, tuple[str, ...]]:
-    """``daemon-reload`` once, then ``enable --now`` each unit.
-
-    Returns ``(services_enabled, timers_enabled, failed_unit_names)``.
-    """
-    if shutil.which("systemctl") is None:
-        echo("systemctl not on PATH; unit files written but not enabled")
-        return 0, 0, ()
-
-    _systemctl(["daemon-reload"], runner=systemctl_runner, echo=echo)
-
-    services_enabled = 0
-    timers_enabled = 0
-    failures: list[str] = []
-    for j in jobs:
-        unit = sd.systemd_unit_name(j)
-        ok = _systemctl(
-            ["enable", "--now", unit], runner=systemctl_runner, echo=echo
-        )
-        if ok:
-            if j.kind == "timer":
-                timers_enabled += 1
-            else:
-                services_enabled += 1
-        else:
-            failures.append(unit)
-    return services_enabled, timers_enabled, tuple(failures)
-
-
-def _enable_master_unit(
+def _enable_supervisor_unit(
     *,
     systemctl_runner: Callable[..., subprocess.CompletedProcess],
     echo: Callable[[str], None],
 ) -> bool:
-    """Daemon-reload + enable --now the master reconcile unit. Best-effort."""
+    """Daemon-reload + enable --now the supervisor unit. Best-effort."""
     if shutil.which("systemctl") is None:
-        echo("systemctl not on PATH; master unit written but not enabled")
+        echo("systemctl not on PATH; supervisor unit written but not enabled")
         return False
     _systemctl(["daemon-reload"], runner=systemctl_runner, echo=echo)
     return _systemctl(
-        ["enable", "--now", MASTER_UNIT_NAME],
+        ["enable", "--now", SUPERVISOR_UNIT_NAME],
         runner=systemctl_runner,
         echo=echo,
     )
 
 
+def _supports_extra_providers(discover_callable) -> bool:
+    """Detect whether the discover callable accepts ``extra_providers=``.
+
+    Production ``discover_jobs`` does; a simple test fake of the form
+    ``def fake() -> list[JobSpec]`` does not. Reflecting once keeps
+    the seam ergonomic — tests don't have to mimic the real signature.
+    """
+    import inspect
+
+    try:
+        sig = inspect.signature(discover_callable)
+    except (TypeError, ValueError):
+        return False
+    return "extra_providers" in sig.parameters
+
+
 # ---------------------------------------------------------------------------
-# Top-level ``up`` body — test-friendly: every external touch goes
-# through a kwarg seam.
+# Top-level ``up`` body — every external touch goes through a kwarg seam.
 # ---------------------------------------------------------------------------
 
 
 def run_up(
     *,
     yes: bool = False,
-    install_master_unit: bool = False,
     systemctl_runner: Callable[..., subprocess.CompletedProcess] | None = None,
     unit_dir: Path | None = None,
     echo: Callable[[str], None] | None = None,
+    discover: Callable[..., list[JobSpec]] = discover_jobs,
 ) -> UpResult:
     """Execute one full reconcile pass. Returns aggregate outcome."""
     runner = systemctl_runner or _default_systemctl_runner
     udir = unit_dir or _unit_dir()
     log = echo or (lambda s: click.echo(s))
 
-    cron_jobs = jobs_of_kind("cron")
-    systemd_jobs = jobs_of_kind("timer") + jobs_of_kind("service")
-
-    cron_installed = _install_cron(jobs=cron_jobs, yes=yes, echo=log)
-    services_written, timers_written = _install_systemd_units(
-        jobs=systemd_jobs, unit_dir=udir, echo=log
+    # Discover the JobSpec set across all providers. Service-kind jobs
+    # are NOT installed here — they become children of the supervisor
+    # when `systemctl --user start scitex-dev-ecosystem.service` brings
+    # the supervisor up.
+    jobs = (
+        discover(extra_providers=None)
+        if _supports_extra_providers(discover)
+        else discover()
     )
+    cron_merged, _cron_native_n, timer_lowered_n = collect_cron_jobs(jobs)
+
+    cron_installed = _install_cron_block(cron_jobs=cron_merged, yes=yes, echo=log)
+
+    supervisor_path = write_supervisor_unit(udir)
+    log(f"supervisor: wrote {supervisor_path}")
 
     systemctl_missing = shutil.which("systemctl") is None
-
-    services_enabled = timers_enabled = 0
-    unit_failures: tuple[str, ...] = ()
-    if systemd_jobs and yes:
-        services_enabled, timers_enabled, unit_failures = _reconcile_units(
-            jobs=systemd_jobs, systemctl_runner=runner, echo=log
-        )
-
-    master_written = False
-    if install_master_unit:
-        master_path = _write_master_unit(udir)
-        master_written = True
-        log(f"master: wrote {master_path}")
-        if yes:
-            _enable_master_unit(systemctl_runner=runner, echo=log)
+    supervisor_enabled = False
+    if yes:
+        supervisor_enabled = _enable_supervisor_unit(systemctl_runner=runner, echo=log)
 
     return UpResult(
         cron_jobs_installed=cron_installed,
-        service_units_written=services_written,
-        timer_units_written=timers_written,
-        master_unit_written=master_written,
-        services_enabled=services_enabled,
-        timers_enabled=timers_enabled,
-        unit_failures=unit_failures,
+        timer_jobs_lowered_to_cron=timer_lowered_n,
+        supervisor_unit_written=True,
+        supervisor_unit_enabled=supervisor_enabled,
         systemctl_missing=systemctl_missing,
     )
 
 
-def register(ecosystem) -> None:
-    @ecosystem.command("up")
+# ---------------------------------------------------------------------------
+# Click registration
+# ---------------------------------------------------------------------------
+
+
+def register(ecosystem):
+    @ecosystem.command(
+        "up",
+        epilog=(
+            "Examples:\n"
+            "  $ scitex-dev ecosystem up\n"
+            "      (Dry surface — writes the supervisor unit + reports\n"
+            "       what would land in the crontab block. No systemctl\n"
+            "       enable; no crontab write.)\n"
+            "\n"
+            "  $ scitex-dev ecosystem up --yes\n"
+            "      (Write the supervisor unit, install the crontab block,\n"
+            "       enable + start scitex-dev-ecosystem.service. The unit\n"
+            "       runs `scitex-dev ecosystem run` — the collective\n"
+            "       supervisor that spawns every kind=service JobSpec as\n"
+            "       a child process. The ONLY systemd unit registered.)\n"
+            "\n"
+            "Per operator policy 2026-06-14: systemd shows EXACTLY one\n"
+            "entry — scitex-dev-ecosystem.service — for the SciTeX fleet.\n"
+            "Per-leaf .service / .timer writes are gone; service-kind\n"
+            "JobSpecs lower to supervisor children, timer-kind lowers to\n"
+            "cron lines in the managed crontab block.\n"
+        ),
+    )
     @click.option(
         "-y",
         "--yes",
         is_flag=True,
         default=False,
-        help="Required to write the crontab + run `systemctl --user enable --now`.",
-    )
-    @click.option(
-        "--install-master-unit",
-        is_flag=True,
-        default=False,
         help=(
-            "Also write + enable "
-            "`~/.config/systemd/user/scitex-dev-ecosystem-reconcile.service` "
-            "so the host reconciles on every boot."
+            "Actually write the crontab block + run "
+            "`systemctl --user enable --now scitex-dev-ecosystem.service`. "
+            "Without --yes the command writes the unit file (idempotent) "
+            "but does NOT touch the crontab or ask systemctl to do anything."
         ),
     )
-    def up(yes: bool, install_master_unit: bool) -> None:
-        """Reconcile every discovered JobSpec onto the host in one shot.
-
-        \b
-        Cron-kind jobs → managed crontab block.
-        Timer-kind jobs → ~/.config/systemd/user/<name>.timer + .service.
-        Service-kind jobs → ~/.config/systemd/user/<name>.service.
-
-        \b
-        With --yes:
-          systemctl --user daemon-reload, enable --now each unit.
-
-        \b
-        Optional --install-master-unit registers the
-        scitex-dev-ecosystem-reconcile.service so the whole ecosystem
-        comes up on every boot.
-
-        \b
-        Examples:
-          $ scitex-dev ecosystem up                              # dry surface
-          $ scitex-dev ecosystem up --yes
-          $ scitex-dev ecosystem up --yes --install-master-unit  # boot-time auto
-        """
-        result = run_up(yes=yes, install_master_unit=install_master_unit)
-        # Concise summary the operator can grep in the journal.
+    def ecosystem_up_cmd(yes: bool) -> None:
+        """Reconcile the SciTeX ecosystem: install the supervisor unit + cron."""
+        result = run_up(yes=yes)
         click.echo("")
         click.echo("=== ecosystem up summary ===")
-        click.echo(f"  cron jobs installed:    {result.cron_jobs_installed}")
-        click.echo(f"  .service units written: {result.service_units_written}")
-        click.echo(f"  .timer units written:   {result.timer_units_written}")
-        click.echo(f"  master unit written:    {result.master_unit_written}")
-        click.echo(f"  services enabled:       {result.services_enabled}")
-        click.echo(f"  timers enabled:         {result.timers_enabled}")
-        click.echo(f"  per-unit failures:      {len(result.unit_failures)}")
+        click.echo(f"  cron entries installed:       {result.cron_jobs_installed}")
+        click.echo(
+            f"  (of which timer-lowered):     {result.timer_jobs_lowered_to_cron}"
+        )
+        click.echo(f"  supervisor unit written:      {result.supervisor_unit_written}")
+        click.echo(f"  supervisor unit enabled+now:  {result.supervisor_unit_enabled}")
         if result.systemctl_missing:
-            click.echo("  (systemctl missing — unit files written, not enabled)")
+            click.echo(
+                "  (systemctl missing — unit file written, not enabled; "
+                "rerun on a real host)"
+            )
         if result.error is not None:
             raise click.ClickException(result.error)
+
+
+__all__ = [
+    "SUPERVISOR_UNIT_NAME",
+    "UpResult",
+    "build_supervisor_unit_text",
+    "register",
+    "run_up",
+]
 
 
 # EOF

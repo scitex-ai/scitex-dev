@@ -64,6 +64,12 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
             "cron",
             "systemd",
             "daemon",
+            # `up` provisions the supervisor unit + crontab block;
+            # `run` is the supervisor itself (systemd ExecStart);
+            # `status` reads the supervisor's state snapshot.
+            "up",
+            "run",
+            "status",
         ],
     ),
     (
