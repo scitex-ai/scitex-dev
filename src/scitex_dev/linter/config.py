@@ -141,6 +141,16 @@ def load_config(start_path: str | None = None) -> LinterConfig:
         merged = {"io": "error", "path": "error", **existing}
         config_dict["category_severity_override"] = merged
 
+        # FM category auto-enable for research projects (neurovista
+        # elevation 2026-06-14): figure provenance / clew chaining
+        # matters for research outputs, so figrecipe's figure-style
+        # rules (STX-FM0xx, STX-P00x) become opt-OUT, not opt-IN.
+        # Operator can still disable per-category via pyproject's
+        # ``disable`` list — this only sets the floor.
+        _existing_enable = config_dict.get("enable", []) or []
+        if "FM" not in _existing_enable:
+            config_dict["enable"] = [*_existing_enable, "FM"]
+
     # Build LinterConfig with merged values
     return LinterConfig(**config_dict)
 
