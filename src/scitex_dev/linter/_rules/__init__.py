@@ -39,6 +39,10 @@ from ._session_structure import (
     S006,
     S007,
     S008,
+    S009,
+    S010,
+    S011,
+    S012,
 )
 from ._test_quality import TQ001, TQ002, TQ003, TQ004, TQ005, TQ006, TQ007
 
@@ -65,6 +69,10 @@ ALL_RULES = {
     S006.id: S006,
     S007.id: S007,
     S008.id: S008,
+    S009.id: S009,
+    S010.id: S010,
+    S011.id: S011,
+    S012.id: S012,
     TQ001.id: TQ001,
     TQ002.id: TQ002,
     TQ003.id: TQ003,
@@ -104,6 +112,10 @@ __all__ = [
     "S006",
     "S007",
     "S008",
+    "S009",
+    "S010",
+    "S011",
+    "S012",
     "TQ001",
     "TQ002",
     "TQ003",
