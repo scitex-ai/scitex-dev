@@ -1,0 +1,130 @@
+# ---------------------------------------------------------------------------
+# release-ci.yml - portable post-merge gate template
+#
+# DIAGNOSIS (PR-CI-001, 2026-06-14): same root cause as pr-ci.yml.template.
+# scitex-todo's `release-ci.yml` shares the silent startup_failure mode
+# with `pr-ci.yml` (runs at 27497640246, 27497644913, ...): 0 steps,
+# runner_name="", 4-13s elapsed, 0 billable_ms, BlobNotFound on logs.
+# Workflow YAML unchanged since 2026-06-12; break boundary 2026-06-13T~13Z.
+# See `src/scitex_dev/ci/runner/templates/pr-ci.yml.template` header for
+# the full evidence chain.
+#
+# This template applies the same fix:
+#   - runs-on selected via `vars.CI_RUNS_ON` (self-hosted-flip-by-Variable)
+#   - `ubuntu-latest` default for fresh repos
+#   - $$PKG$$ / $$PKG_DASH$$ placeholders for portability
+# ---------------------------------------------------------------------------
+
+name: release-ci
+
+# Post-merge validation gate. Runs on push to protected branches
+# (main, develop) and as the canonical scheduled run. Always uses the
+# FULL pytest matrix - no conditional skipping - so the protected-branch
+# history is exercised on every supported Python.
+#
+# L1 concurrency - coalesce overlapping pushes on the same branch.
+# L5a uv-managed Python (`uv python install` + `uv venv --python`) so each
+#     matrix leg pins its interpreter independently of the runner.
+# L5b .venv/bin on PATH so console scripts resolve without `uv run`.
+
+on:
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: "0 7 * * *"  # nightly 07:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
+    # PR-CI-001 fix: runs-on via vars.CI_RUNS_ON so a hosted-runner
+    # billing-throttle is recovered by flipping one Actions Variable
+    # rather than re-rolling every leaf-repo workflow.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["ubuntu-latest"]') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python ${{ matrix.python-version }} (uv-managed)
+        run: uv python install ${{ matrix.python-version }}
+      - name: Create uv venv on this matrix Python
+        run: uv venv --python ${{ matrix.python-version }} .venv
+      - name: Install dependencies
+        run: |
+          uv pip install --python .venv/bin/python -e ".[all,dev]" \
+            || uv pip install --python .venv/bin/python -e ".[dev]" \
+            || uv pip install --python .venv/bin/python -e .
+      - name: Run tests
+        run: |
+          export PATH="$PWD/.venv/bin:$PATH"
+          .venv/bin/pytest tests/ --cov=src/$$PKG$$ --cov-report=xml --cov-report=term
+      - name: Upload coverage to Codecov
+        if: always() && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  import-smoke:
+    name: import-smoke-on-ubuntu-py3-12
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python 3.12 (uv-managed)
+        run: uv python install 3.12
+      - name: Install (no extras) in uv venv
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e .
+      - name: Import smoke
+        run: .venv/bin/python -c "import $$PKG$$; print(getattr($$PKG$$, '__version__', 'unversioned'))"
+
+  audit:
+    name: audit
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["ubuntu-latest"]') }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python 3.12 (uv-managed)
+        run: uv python install 3.12
+      - name: Install package + audit tooling
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e ".[dev]"
+          uv pip install --python .venv/bin/python "scitex-dev[cli-audit]"
+      - name: Run scitex-dev audits (scope-down, drift backlogged)
+        # PR #110 fix-forward (lead a2a `fb413fb038da49d1b18262b237385c33`,
+        # 2026-06-12). audit-skills returns rc=1 even when every finding
+        # is WARN (scitex-dev/_cli/audit/_skills/_audit.py:558,583). Echo
+        # the findings so they stay visible in the log, then continue.
+        # Restore canonical `audit-all` invocation once the three backlog
+        # PRs land (PA-307 sweep / SK-301/401 trim / MCP section-6 parity).
+        run: |
+          export PATH="$PWD/.venv/bin:$PATH"
+          set -e
+          scitex-dev ecosystem audit-cli       $$PKG_DASH$$
+          scitex-dev ecosystem audit-mcp-tools $$PKG_DASH$$
+          scitex-dev ecosystem audit-skills    $$PKG_DASH$$ || true
+          scitex-dev ecosystem audit-project   $$PKG_DASH$$

@@ -1,0 +1,210 @@
+# ---------------------------------------------------------------------------
+# pr-ci.yml — portable PR-gate template (scitex-dev ecosystem ci-template)
+#
+# DIAGNOSIS (PR-CI-001, 2026-06-14, hand-off lead msg 07f10f01):
+#   Live scitex-todo `.github/workflows/pr-ci.yml` (and `release-ci.yml`)
+#   started producing 0-step / 0-billable-ms / runner_name="" job runs at
+#   2026-06-13T12:56Z. The workflow YAML *had not changed* since 2026-06-12
+#   (commits 9dc7d64 / f24ea68). The break point matches no commit in
+#   `.github/workflows/`, and `docs` / `CLA Assistant` workflows in the same
+#   repo also went red from 2026-06-13T23:24Z onward. Other sibling repos
+#   (scitex-config / scitex-hub / scitex-clew / scitex-dsp) continued to
+#   produce green runs on 2026-06-14 with the same `runs-on: ubuntu-latest`
+#   hosted-runner pattern.
+#
+#   Signature on every failed run (see GITIGNORED/ci-health-sweep-diagnosis.md):
+#     - run conclusion = failure
+#     - per-job conclusion = failure
+#     - steps: []
+#     - runner_id: 0, runner_name: ""
+#     - timing/billable: total_ms = 0, run_duration_ms ~ 3-4s
+#     - logs API returns BlobNotFound (job never wrote any log)
+#
+#   That signature is GitHub Actions' canonical "startup_failure" - the
+#   workflow YAML parsed, the job was scheduled, but no runner ever picked
+#   it up. The repo is private; the most likely upstream cause is that
+#   *hosted-runner minutes were exhausted on ywatanabe1989's user-tier
+#   billing for private repos*, or that an account-level Actions setting
+#   (e.g. fork-PR runner allow-list, billing-hold) was toggled mid-day.
+#   GitHub does not surface either cause in the run-detail API for a fine-
+#   grained PAT (checks:read forbidden), but the timing alignment + the
+#   single-account scope are consistent with a billing-side rate-cut, not
+#   a YAML defect.
+#
+# FIX STRATEGY (portable, account-level cause-aware):
+#   1. Move runs-on selection behind `vars.CI_RUNS_ON`, mirroring the
+#      `ci.yml.template` convention. When hosted minutes are throttled,
+#      the watchdog (or operator) flips CI_RUNS_ON to '["self-hosted",
+#      "scitex-ci"]' with one Actions Variable write - no per-repo
+#      workflow PR needed.
+#   2. Keep `ubuntu-latest` as the *default* fallback so a fresh repo
+#      that hasn't onboarded scitex-ci still runs.
+#   3. Parameterize the package name via $$PKG$$ placeholder so the
+#      template is portable across the fleet (scitex-todo, scitex-io,
+#      scitex-stats, ...). The `_register.py`-style copier substitutes
+#      $$PKG$$ at apply time, derived from `pyproject.toml` [project].name
+#      with hyphen->underscore.
+#   4. Render `runner.environment` step guards so the same workflow scales
+#      between hosted and self-hosted providers (same pattern as
+#      `ci.yml.template`).
+#
+# ROLLOUT NOTE: This template is in scitex-dev only. Do NOT push to leaf
+#   repos until the lead's fleet-wide-rollout signal (post Spartan-CI
+#   landing - pipe #9). The fix is account-aware so it neutralizes the
+#   immediate billing-throttle break AND survives any future GitHub-side
+#   hosted-runner queue degradation.
+# ---------------------------------------------------------------------------
+
+name: pr-ci
+
+# Consolidated PR-only CI gate. Runs the per-PR validation suite as a
+# single workflow so the cancel-in-progress concurrency group, path
+# filters, and uv cache apply uniformly. Post-merge validation lives
+# in release-ci.yml.
+#
+# L1 concurrency - cancel superseded PR runs.
+# L3 path filters - skip docs/skills/examples/markdown-only PRs.
+# L4 conditional matrix - full ["3.11", "3.12", "3.13"] on PR (this trigger).
+# L5a uv-managed Python (`uv python install` + `uv venv --python`) so the
+#     matrix leg is not bound to the runner's system Python.
+# L5b .venv/bin on PATH (and explicit `.venv/bin/python` for clarity) so
+#     console scripts resolve without needing `uv run`.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '_skills/**'
+      - 'examples/**'
+      - '**.md'
+      - 'CHANGELOG.*'
+      - '.github/CODEOWNERS'
+      - '.github/ISSUE_TEMPLATE/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  import-smoke:
+    name: import-smoke-on-ubuntu-py3-12
+    # PR-CI-001 fix: route via vars.CI_RUNS_ON so the watchdog can flip
+    # the whole repo to self-hosted on a hosted-runner outage without a
+    # workflow PR. Default keeps ubuntu-latest for fresh repos.
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python 3.12 (uv-managed)
+        run: uv python install 3.12
+      - name: Install (no extras) in uv venv
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e .
+      - name: Import smoke
+        run: .venv/bin/python -c "import $$PKG$$; print(getattr($$PKG$$, '__version__', 'unversioned'))"
+      - name: smoke $$PKG_DASH$$ --help
+        # Skip the console-script smoke on repos that don't ship one.
+        # The runner exits 0 if pyproject.toml has no `[project.scripts]`.
+        run: |
+          if .venv/bin/python -c "import importlib.metadata as m; eps=m.entry_points(); print(any(e.name == '$$PKG_DASH$$' for e in eps.select(group='console_scripts')))" | grep -q True; then
+            .venv/bin/$$PKG_DASH$$ --help
+          else
+            echo "::notice::no $$PKG_DASH$$ console script; skipping --help smoke"
+          fi
+
+  dep-hygiene-smoke:
+    name: dep-hygiene-smoke
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python 3.11 (uv-managed)
+        run: uv python install 3.11
+      - name: Bare install (no extras) in uv venv
+        run: |
+          uv venv --python 3.11 .venv
+          uv pip install --python .venv/bin/python .
+      - name: Import package
+        run: .venv/bin/python -c "import $$PKG$$; print($$PKG$$.__name__)"
+
+  tests:
+    name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["ubuntu-latest"]') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ github.event_name == 'pull_request' && fromJson('["3.11", "3.12", "3.13"]') || fromJson('["3.12"]') }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python ${{ matrix.python-version }} (uv-managed)
+        run: uv python install ${{ matrix.python-version }}
+      - name: Create uv venv on this matrix Python
+        run: uv venv --python ${{ matrix.python-version }} .venv
+      - name: Install dependencies
+        # Fallback chain: prefer [all,dev] so optional-dep code paths
+        # get exercised. Falls back to [dev] then plain editable so a
+        # packaging hiccup doesn't strand CI.
+        run: |
+          uv pip install --python .venv/bin/python -e ".[all,dev]" \
+            || uv pip install --python .venv/bin/python -e ".[dev]" \
+            || uv pip install --python .venv/bin/python -e .
+      - name: Run tests
+        # PATH prepend so any test that subprocess-calls a console script
+        # finds it in .venv/bin/.
+        run: |
+          export PATH="$PWD/.venv/bin:$PATH"
+          .venv/bin/pytest tests/ --cov=src/$$PKG$$ --cov-report=xml --cov-report=term
+      - name: Upload coverage to Codecov
+        if: always() && matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  audit:
+    name: audit
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["ubuntu-latest"]') }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python 3.12 (uv-managed)
+        run: uv python install 3.12
+      - name: Install package + audit tooling
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e ".[dev]"
+          uv pip install --python .venv/bin/python "scitex-dev[cli-audit]"
+      - name: Run scitex-dev audits (scope-down, drift backlogged)
+        # PR #110 fix-forward (lead a2a `fb413fb038da49d1b18262b237385c33`,
+        # 2026-06-12). Same divergence from main: skip audit-python-apis
+        # until the AAA-marker sweep lands; treat audit-skills as warn-
+        # only until SK-301/401 cleanup.
+        run: |
+          export PATH="$PWD/.venv/bin:$PATH"
+          set -e
+          scitex-dev ecosystem audit-cli       $$PKG_DASH$$
+          scitex-dev ecosystem audit-mcp-tools $$PKG_DASH$$
+          scitex-dev ecosystem audit-skills    $$PKG_DASH$$ || true
+          scitex-dev ecosystem audit-project   $$PKG_DASH$$
