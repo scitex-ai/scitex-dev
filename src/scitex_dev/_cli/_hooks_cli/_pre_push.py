@@ -78,9 +78,12 @@ def register(hooks_group) -> None:
         "--force",
         is_flag=True,
         help=(
-            "Overwrite an existing non-symlink `.githooks/pre-push` file. "
-            "By default we refuse so an operator-edited hook is never "
-            "silently clobbered."
+            "Overwrite (a) an existing non-symlink `.githooks/pre-push` "
+            "file OR (b) an operator-chosen `core.hooksPath` that points "
+            "anywhere other than `.githooks`. By default we refuse both "
+            "so an operator-edited hook / hooks dir is never silently "
+            "clobbered. The operator's prior values are printed to the "
+            "transcript when --force takes effect."
         ),
     )
     @click.option(
@@ -120,7 +123,45 @@ def register(hooks_group) -> None:
 
         if dry_run:
             click.echo(f"would install   pre_push  →  {project / deploy_rel}")
-            click.echo(f"would configure core.hooksPath = .githooks (in {project})")
+            # Probe current core.hooksPath so the dry-run reports what
+            # the live run would actually do (additive vs forced vs
+            # refused). Failing the probe (no git on PATH / not a repo)
+            # falls back to the generic "would configure" message.
+            try:
+                current = subprocess.run(
+                    [
+                        "git",
+                        "-C",
+                        str(project),
+                        "config",
+                        "--get",
+                        "core.hooksPath",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                ).stdout.strip()
+            except FileNotFoundError:
+                current = ""
+            if current == ".githooks":
+                click.echo(
+                    "would no-op     core.hooksPath = .githooks (already wired)"
+                )
+            elif not current:
+                click.echo(
+                    f"would configure core.hooksPath = .githooks "
+                    f"(currently unset; in {project})"
+                )
+            elif force:
+                click.echo(
+                    f"would force     core.hooksPath = .githooks "
+                    f"(was {current!r}; --force given)"
+                )
+            else:
+                click.echo(
+                    f"would refuse    core.hooksPath = {current!r} already set "
+                    f"(re-run with --force to overwrite)"
+                )
             return
 
         # Step 1: install the symlink. Reuse the same helper the
@@ -149,6 +190,18 @@ def register(hooks_group) -> None:
         # Step 2: wire core.hooksPath. We use `git -C <project>` so the
         # command works regardless of the CWD. If the project isn't a
         # git repo (or git is missing) we surface the failure clearly.
+        #
+        # Semantics — ADDITIVE-then-refuse (operator answer 2026-06-15 Q1):
+        #   * unset            → set to `.githooks` (additive — wires the
+        #                        bundled gate into the canonical dir).
+        #   * `.githooks`      → no-op (idempotent; the bundled hook
+        #                        co-exists with `run_lint` in the SAME
+        #                        dir — Pillar 0 anti-drift).
+        #   * else (operator    → REFUSE unless `--force`. We don't
+        #     points elsewhere)   silently clobber an operator's chosen
+        #                         hooksPath. `--force` overwrites and
+        #                         prints the previous value so the
+        #                         transcript records what changed.
         try:
             current = subprocess.run(
                 ["git", "-C", str(project), "config", "--get", "core.hooksPath"],
@@ -176,6 +229,35 @@ def register(hooks_group) -> None:
             )
             return
 
+        if current and current != ".githooks" and not force:
+            # Refuse — the operator already chose a hooks dir. We will
+            # not silently clobber it. Print the value they chose AND
+            # the exact remediation (re-run with --force, or unset
+            # first) so the fix is one read away.
+            click.echo(
+                click.style(
+                    f"refused    core.hooksPath already set to "
+                    f"{current!r}; refusing to overwrite without --force",
+                    fg="red",
+                ),
+                err=True,
+            )
+            click.echo(
+                click.style(
+                    "  Re-run with --force to overwrite, or unset first:",
+                    fg="red",
+                ),
+                err=True,
+            )
+            click.echo(
+                click.style(
+                    f"    git -C {project} config --unset core.hooksPath",
+                    fg="red",
+                ),
+                err=True,
+            )
+            raise SystemExit(1)
+
         rc = subprocess.run(
             ["git", "-C", str(project), "config", "core.hooksPath", ".githooks"],
             capture_output=True,
@@ -193,11 +275,14 @@ def register(hooks_group) -> None:
             )
             raise SystemExit(rc.returncode)
 
-        prev_note = f" (was: {current})" if current else " (was: unset — git default)"
-        click.echo(
-            f"{click.style('configured', fg='green')}  "
-            f"core.hooksPath = .githooks{prev_note}"
-        )
+        if current and current != ".githooks":
+            # --force path — log loud so the transcript shows it.
+            prev_note = f" (forced; was: {current!r})"
+            verb = click.style("forced    ", fg="yellow")
+        else:
+            prev_note = " (was: unset — git default)"
+            verb = click.style("configured", fg="green")
+        click.echo(f"{verb}  core.hooksPath = .githooks{prev_note}")
 
 
 __all__ = ["register"]

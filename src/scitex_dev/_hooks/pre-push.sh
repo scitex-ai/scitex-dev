@@ -151,20 +151,60 @@ DEADLINE_SECONDS="${SCITEX_DEV_PREPUSH_TIMEOUT:-60}"
 # ----------------------------------------------------------------- #
 # Step 1: audit-all --path <repo>                                   #
 # ----------------------------------------------------------------- #
+#
+# Three-tier fallback to locate the scitex-dev entry point. Without
+# this, a worktree whose editable-install `.pth` file points at a
+# deleted checkout fires `ModuleNotFoundError: scitex_dev` even though
+# `scitex-dev` is still on PATH — the operator gets a confusing
+# "command not found" / `ModuleNotFoundError` instead of the actionable
+# remediation. The probe order is:
+#   1. `scitex-dev` on PATH (the canonical case).
+#   2. `python3 -m scitex_dev` (system python sees the package).
+#   3. `$SCITEX_DEV_PYTHON -m scitex_dev` or the running interpreter
+#      (the operator's active venv).
+# If all three fail we abort the push with a literal `uv pip install
+# -e <checkout>` remediation so the fix is one read away. The hook is
+# shell-only, so we cannot probe `sys.executable` of an unrelated
+# python — we just try `python3` (path-resolved) and a `python` alias.
+SCITEX_DEV_CMD=""
+if command -v scitex-dev >/dev/null 2>&1 && \
+        scitex-dev --version >/dev/null 2>&1; then
+    SCITEX_DEV_CMD="scitex-dev"
+elif command -v python3 >/dev/null 2>&1 && \
+        python3 -m scitex_dev --version >/dev/null 2>&1; then
+    SCITEX_DEV_CMD="python3 -m scitex_dev"
+elif command -v python >/dev/null 2>&1 && \
+        python -m scitex_dev --version >/dev/null 2>&1; then
+    SCITEX_DEV_CMD="python -m scitex_dev"
+fi
 
 AUDIT_RC=0
-if command -v scitex-dev >/dev/null 2>&1; then
-    echo_info "[1/2] scitex-dev ecosystem audit-all $PKG_NAME --path $REPO_ROOT --severity error"
-    if ! timeout "$DEADLINE_SECONDS" scitex-dev ecosystem audit-all "$PKG_NAME" \
-            --path "$REPO_ROOT" --severity error --no-version-check >&2; then
-        AUDIT_RC=$?
+if [[ -n "$SCITEX_DEV_CMD" ]]; then
+    echo_info "[1/2] $SCITEX_DEV_CMD ecosystem audit-all $PKG_NAME --path $REPO_ROOT --severity error"
+    # NB: `if ! cmd; then $?` always reports 0 (the `!`-inverted
+    # truthy result); the original exit code is lost. Capture it
+    # directly so the message names the audit-all rc the operator
+    # needs to grep. Also: do NOT pipe stderr — `>&2` after the
+    # whole pipeline keeps git pre-push's expected stream order.
+    timeout "$DEADLINE_SECONDS" $SCITEX_DEV_CMD ecosystem audit-all "$PKG_NAME" \
+        --path "$REPO_ROOT" --severity error --no-version-check >&2
+    AUDIT_RC=$?
+    if [[ "$AUDIT_RC" -ne 0 ]]; then
         echo_error "audit-all failed (rc=$AUDIT_RC)"
     else
         echo_success "audit-all clean"
     fi
 else
-    echo_warning "[1/2] scitex-dev not on PATH — audit step SKIPPED"
-    echo_warning "      install: pip install scitex-dev[cli-audit]"
+    # Loud, actionable error — the operator must see the remediation
+    # in ONE read. This is the editable-install-drift class: the venv's
+    # `scitex_dev.pth` points at a checkout that was removed (e.g. a
+    # finished worktree), so `scitex-dev` on PATH but `import scitex_dev`
+    # raises ModuleNotFoundError. Block the push so CI doesn't redress
+    # the same import error.
+    echo_error "[1/2] scitex-dev not importable. Editable install may have drifted (worktree removed)."
+    echo_error "Fix: cd <repo> && uv pip install -e <scitex-dev-checkout>"
+    echo_error "     (probed: \`scitex-dev\`, \`python3 -m scitex_dev\`, \`python -m scitex_dev\` — all failed)"
+    AUDIT_RC=127
 fi
 
 # ----------------------------------------------------------------- #
@@ -190,11 +230,15 @@ if [[ -d "$REPO_ROOT/tests" ]]; then
         # needs to see what ran when something fails. stderr is the
         # right channel because git pre-push hooks emit hook output
         # interleaved with the push command's own stderr.
-        if ! ( cd "$REPO_ROOT" && timeout "$DEADLINE_SECONDS" $PYTEST_BIN \
+        # Same `if ! cmd` trap as the audit step — capture `$?`
+        # directly so the failure message names the real pytest rc,
+        # not the inverted truthy 0.
+        ( cd "$REPO_ROOT" && timeout "$DEADLINE_SECONDS" $PYTEST_BIN \
                 --testmon -x --tb=short \
                 -m "not slow and not integration" \
-                tests >&2 ); then
-            TEST_RC=$?
+                tests >&2 )
+        TEST_RC=$?
+        if [[ "$TEST_RC" -ne 0 ]]; then
             echo_error "scope tests failed (rc=$TEST_RC)"
         else
             echo_success "scope tests clean"

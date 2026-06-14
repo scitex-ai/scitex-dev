@@ -2,11 +2,43 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import click
 
 from ._registry import KNOWN_HOOKS, list_one
+
+
+def _hooks_path_status(project: Path) -> tuple[str, str]:
+    """Inspect ``core.hooksPath`` on ``project``. Returns (status, value).
+
+    Status words used by ``hooks list`` so the pre-push gate's
+    activation state surfaces alongside the symlink-presence rows:
+
+    ``wired``           — ``core.hooksPath = .githooks`` (the gate fires).
+    ``unset``           — git default; bundled symlinks in ``.githooks/``
+                          are NO-OPs until ``enable-pre-push`` wires it.
+    ``points-elsewhere`` — operator chose a non-`.githooks` dir; the
+                           bundled symlinks at ``.githooks/`` won't fire.
+    ``no-git``          — git binary not on PATH or ``project`` not a
+                           repo; can't determine status.
+    """
+    try:
+        rc = subprocess.run(
+            ["git", "-C", str(project), "config", "--get", "core.hooksPath"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return "no-git", ""
+    value = rc.stdout.strip()
+    if not value:
+        return "unset", ""
+    if value == ".githooks":
+        return "wired", value
+    return "points-elsewhere", value
 
 
 def register(hooks_group) -> None:
@@ -47,22 +79,42 @@ def register(hooks_group) -> None:
             source, deploy_rel = KNOWN_HOOKS[name]
             status = list_one(name, source, deploy_rel, project)
             rows.append((name, status, source, str(project / deploy_rel)))
+        # Probe `core.hooksPath` so the operator sees whether the bundled
+        # gate would actually fire (a symlink at .githooks/pre-push is a
+        # no-op unless core.hooksPath points at .githooks). Surfacing
+        # this in `hooks list` makes the "half-installed gate" state
+        # impossible to miss — the symbol changes from `ok` to `wired`
+        # only when both halves are in place.
+        hp_status, hp_value = _hooks_path_status(project)
         if as_json:
             click.echo(
                 _json.dumps(
-                    [
-                        {
-                            "name": n,
-                            "status": s,
-                            "source": src,
-                            "target": tgt,
-                        }
-                        for n, s, src, tgt in rows
-                    ],
+                    {
+                        "hooks_path": {"status": hp_status, "value": hp_value},
+                        "hooks": [
+                            {
+                                "name": n,
+                                "status": s,
+                                "source": src,
+                                "target": tgt,
+                            }
+                            for n, s, src, tgt in rows
+                        ],
+                    },
                     indent=2,
                 )
             )
             return
+        # Print the hooksPath status header first so the symlink rows
+        # below have context.
+        hp_symbol = {
+            "wired": click.style("wired           ", fg="green"),
+            "unset": click.style("unset           ", fg="white"),
+            "points-elsewhere": click.style("points-elsewhere", fg="yellow"),
+            "no-git": click.style("no-git          ", fg="red"),
+        }[hp_status]
+        hp_suffix = f" → {hp_value!r}" if hp_value else ""
+        click.echo(f"{hp_symbol}  core.hooksPath{hp_suffix}")
         for name, status, _source, target_path in rows:
             symbol = {
                 "ok": click.style("ok      ", fg="green"),
