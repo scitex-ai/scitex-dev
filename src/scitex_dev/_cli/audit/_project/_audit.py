@@ -274,6 +274,13 @@ def audit_project(
     from ._check_runtime_separation import check_runtime_separation
 
     check_runtime_separation(repo_root, Violation, violations)
+    # PS-185: gate-covers-CI drift — reads .github/workflows/*.yml AND
+    # the canonical pre-push gate script and flags lightweight CI jobs
+    # the gate does not mirror. Heavy items (pytest-matrix, sphinx,
+    # codecov) are exempt by design.
+    from ._check_gate_coverage import check_ps185_gate_coverage
+
+    check_ps185_gate_coverage(repo_root, Violation, violations)
     if not skip_mirror:
         from ._check_smoke_e2e_layers import (
             check_ps211_smoke_layer,

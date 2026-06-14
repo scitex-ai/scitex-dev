@@ -14,6 +14,7 @@ Today's contents:
 - PS-168 — workflow-secret-env-prefix-missing
 - PS-173 — adr-format (filename + lean-template sections, when docs/adr/ exists)
 - PS-180 — runtime-separation (src/<pkg>/runtime/ must be gitignored at the package level)
+- PS-185 — gate-covers-ci-lightweight (drift detector: CI lightweight jobs vs pre-push gate)
 - PS-PATH-001/002 — config/PATH.yaml shape (outer wrapper / bare-string leaf)
 - PS-CLEW-001 — clew.add_claim without self-verify in same module
 - PS-AGENT-001 — scripts/agent/*.py with add_claim but no claims.json terminus
@@ -185,6 +186,26 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "W",
         "ecosystem-runtime-separation",
+    ),
+    (
+        "PS-185",
+        "§1",
+        (
+            "gate-covers-CI drift: a `.github/workflows/*.yml` declares "
+            "a LIGHTWEIGHT check (ruff / import-smoke / quality audit) "
+            "that the canonical pre-push gate "
+            "`src/scitex_dev/_hooks/pre-push.sh` does NOT mirror. The "
+            "gate's purpose is to catch CI's diff-scopable, fast checks "
+            "locally so the operator stops the push → red → patch → push "
+            "loop; CI adding a new lightweight job without a matching "
+            "gate step silently bypasses local feedback. Heavy items "
+            "(pytest-matrix, sphinx-docs, codecov upload, ecosystem-"
+            "audit whole-repo) are EXEMPT by design. Opt out per-file "
+            "via a `# PS-185-exempt: <reason>` comment in the first 40 "
+            "lines of the workflow YAML."
+        ),
+        "W",
+        "gate-covers-ci-lightweight",
     ),
     (
         "PS-213",
