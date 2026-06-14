@@ -11,6 +11,7 @@ Shared developer utilities for the SciTeX ecosystem.
    api
    search
    cli
+   pre_push_gate
 
 Indices and tables
 ==================

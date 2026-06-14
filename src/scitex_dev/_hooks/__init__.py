@@ -36,4 +36,21 @@ def run_lint_sh_path() -> str:
     return str(pathlib.Path(HOOK_DIR) / "run_lint.sh")
 
 
-__all__ = ["HOOK_DIR", "run_lint_sh_path"]
+def pre_push_sh_path() -> str:
+    """Return the absolute filesystem path of the canonical ``pre-push.sh``.
+
+    The pre-push gate runs `scitex-dev ecosystem audit-all` + scope-bound
+    pytest (`--testmon -m "not slow and not integration"`) before
+    `git push` is allowed to proceed. Operator projects install it as
+    a SYMLINK into `.githooks/pre-push` and wire
+    `git config core.hooksPath .githooks`, so a `scitex-dev` upgrade
+    propagates the latest gate logic without per-project copies.
+
+    Use this resolver (rather than concatenating HOOK_DIR) so editor
+    integrations, tests, and the `scitex-dev hooks` CLI never assume
+    a fixed install layout.
+    """
+    return str(pathlib.Path(HOOK_DIR) / "pre-push.sh")
+
+
+__all__ = ["HOOK_DIR", "pre_push_sh_path", "run_lint_sh_path"]

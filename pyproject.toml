@@ -132,6 +132,7 @@ scitex_dev = [
     "_skills/**/*",
     "_branding/*.yaml",
     "_cli/audit/_summary/data/*",
+    "_hooks/*.sh",
     "_sphinx_html/**/*",
     "_sphinx_html/**/.[!.]*",
 ]
