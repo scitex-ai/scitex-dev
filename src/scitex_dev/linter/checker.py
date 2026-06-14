@@ -60,7 +60,33 @@ def is_script(filepath: str, config=None) -> bool:
     return True
 
 
-_STX_ALLOW_RE = re.compile(r"#\s*stx-allow\b(?::?\s*(.+))?")
+# STX-allow regex.
+#
+# Before 2026-06-14 this was ``r"#\s*stx-allow\b(?::?\s*(.+))?"`` — the
+# greedy ``.+`` captured EVERYTHING after the colon, including prose. So
+# ``# stx-allow: STX-P006  (prose explanation)`` parsed the ids string as
+# ``"STX-P006  (prose explanation)"``, the comma-split saw a single
+# element that didn't equal ``STX-P006``, and the suppression silently
+# failed. Operators kept hitting this when annotating with reasons inline
+# (neurovista elevation 2026-06-14, item 6).
+#
+# Tightened regex captures ONLY characters valid in a rule-id list:
+# uppercase letters, digits, dash, comma, whitespace. Stops at the first
+# non-matching character so inline prose after the ids is ignored.
+# Supported forms (now correct):
+#
+#   x  # stx-allow                         → bare; suppress ALL
+#   x  # stx-allow: STX-S003               → suppress STX-S003
+#   x  # stx-allow: STX-S003, STX-I001     → suppress both
+#   x  # stx-allow: STX-S003  (because foo) → suppress STX-S003; ignore prose
+#
+# The form ``# stx-allow:lower-case-id`` is still NOT supported — rule
+# ids are uppercase by convention; lower-case suggests a typo. The regex
+# stops at the lower-case letter and the id list is empty → bare-allow
+# fallback (suppress all on the line) does NOT fire because the colon
+# was consumed; it's a no-op suppression — visible as a non-matching
+# rule. That's the desired loud behaviour.
+_STX_ALLOW_RE = re.compile(r"#\s*stx-allow\b(?::\s*([A-Z0-9\-,\s]*))?")
 
 
 def _is_allowed_by_comment(source_line: str, rule_id: str) -> bool:
