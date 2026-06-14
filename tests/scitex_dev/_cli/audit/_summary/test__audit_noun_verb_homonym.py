@@ -23,6 +23,7 @@ No mocks — every test wires a real ``click.Group`` and walks it.
 from __future__ import annotations
 
 import click
+import pytest
 
 from scitex_dev._cli.audit._summary._audit import (
     SERVER_STARTUP_FLAGS,
@@ -158,24 +159,36 @@ class TestServerStartupFlagsConstant:
     """The constant itself is the contract — any change here is operator-
     visible (drives the §1e violation message)."""
 
-    def test_constant_includes_port(self):
-        # Arrange + Act + Assert
-        assert "--port" in SERVER_STARTUP_FLAGS
-
-    def test_constant_includes_host_bind_serve(self):
-        # Arrange + Act + Assert
-        for f in ("--host", "--bind", "--serve"):
-            assert f in SERVER_STARTUP_FLAGS
-
-    def test_constant_includes_daemon_workers_listen_addr_address(self):
-        # Arrange + Act + Assert
-        for f in ("--daemon", "--workers", "--listen", "--addr", "--address"):
-            assert f in SERVER_STARTUP_FLAGS
+    @pytest.mark.parametrize(
+        "flag",
+        [
+            "--port",
+            "--host",
+            "--bind",
+            "--serve",
+            "--daemon",
+            "--workers",
+            "--listen",
+            "--addr",
+            "--address",
+        ],
+    )
+    def test_constant_includes_expected_server_startup_flag(self, flag):
+        # Arrange
+        constant = SERVER_STARTUP_FLAGS
+        # Act
+        is_present = flag in constant
+        # Assert
+        assert is_present
 
     def test_constant_does_not_include_common_non_server_flag(self):
-        # Arrange + Act + Assert — `--json` is a §2 read-verb flag, not a
-        # server-startup signal. Adding it would create false positives.
-        assert "--json" not in SERVER_STARTUP_FLAGS
+        # Arrange — `--json` is a §2 read-verb flag, not a server-startup
+        # signal. Adding it would create false positives.
+        constant = SERVER_STARTUP_FLAGS
+        # Act
+        is_present = "--json" in constant
+        # Assert
+        assert not is_present
 
 
 class TestRule1eServerStartupFlagFires:
