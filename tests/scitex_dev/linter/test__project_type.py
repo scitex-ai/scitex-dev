@@ -170,9 +170,7 @@ class TestLoadConfigCategoryOverride:
     def test_pip_only_project_leaves_override_empty(self, tmp_path):
         # Arrange — pip-only project, no research flip expected.
         (tmp_path / ".scitex" / "dev").mkdir(parents=True)
-        (tmp_path / ".scitex" / "dev" / "config.yaml").write_text(
-            "project-type: pip\n"
-        )
+        (tmp_path / ".scitex" / "dev" / "config.yaml").write_text("project-type: pip\n")
         # Act
         cfg = load_config(start_path=str(tmp_path))
         # Assert
@@ -199,6 +197,46 @@ class TestLoadConfigCategoryOverride:
             "path": "error",
         }
 
+    # ------------------------------------------------------------------ #
+    # FM category auto-enable (neurovista elevation 2026-06-14)           #
+    # ------------------------------------------------------------------ #
+
+    def test_research_project_auto_enables_FM_category(self, tmp_path):
+        # Arrange — research project, no FM in baseline enable.
+        (tmp_path / ".scitex" / "dev").mkdir(parents=True)
+        (tmp_path / ".scitex" / "dev" / "config.yaml").write_text(
+            "project-type: research\n"
+        )
+        # Act
+        cfg = load_config(start_path=str(tmp_path))
+        # Assert — FM is now in enable so figrecipe figure-style
+        # rules (STX-FM010/FM011 etc.) fire by default for research.
+        assert "FM" in cfg.enable
+
+    def test_non_research_project_does_NOT_auto_enable_FM(self, tmp_path):
+        # Arrange — pip-only project; FM stays opt-in.
+        (tmp_path / ".scitex" / "dev").mkdir(parents=True)
+        (tmp_path / ".scitex" / "dev" / "config.yaml").write_text("project-type: pip\n")
+        # Act
+        cfg = load_config(start_path=str(tmp_path))
+        # Assert
+        assert "FM" not in cfg.enable
+
+    def test_research_with_FM_already_enabled_does_not_duplicate(self, tmp_path):
+        # Arrange — operator explicitly enabled FM via pyproject; the
+        # auto-enable must not add a duplicate entry.
+        (tmp_path / ".scitex" / "dev").mkdir(parents=True)
+        (tmp_path / ".scitex" / "dev" / "config.yaml").write_text(
+            "project-type: research\n"
+        )
+        (tmp_path / "pyproject.toml").write_text(
+            "[tool.scitex-dev.linter]\nenable = ['FM']\n"
+        )
+        # Act
+        cfg = load_config(start_path=str(tmp_path))
+        # Assert — FM appears exactly once.
+        assert cfg.enable.count("FM") == 1
+
 
 # ---------------------------------------------------------------------- #
 # Checker honours the override                                           #
@@ -217,8 +255,7 @@ class TestCheckerHonoursCategoryOverride:
         # Assert — single combined check pins both issue count and flipped severity.
         emitted = [(i.rule.id, i.rule.severity) for i in checker.issues]
         assert emitted == [(IO_RULE.id, "error")], (
-            f"research-mode override must flip io category warning→error; "
-            f"got {emitted}"
+            f"research-mode override must flip io category warning→error; got {emitted}"
         )
 
     def test_path_rule_severity_flipped_to_error_when_research_override_set(self):
@@ -236,9 +273,7 @@ class TestCheckerHonoursCategoryOverride:
 
     def test_structure_rule_unaffected_by_io_path_only_override(self):
         # Arrange — research mode flips io+path; structure stays as-emitted.
-        cfg = LinterConfig(
-            category_severity_override={"io": "error", "path": "error"}
-        )
+        cfg = LinterConfig(category_severity_override={"io": "error", "path": "error"})
         checker = _make_checker(cfg)
         # Act
         checker._add(STRUCTURE_RULE, line=1, col=0, source_line="def main():")
@@ -274,6 +309,5 @@ class TestCheckerHonoursCategoryOverride:
         # Assert
         emitted = [(i.rule.id, i.rule.severity) for i in checker.issues]
         assert emitted == [(IO_RULE.id, "warning")], (
-            f"per_rule_severity must win over category_severity_override; "
-            f"got {emitted}"
+            f"per_rule_severity must win over category_severity_override; got {emitted}"
         )
