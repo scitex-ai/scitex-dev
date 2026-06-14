@@ -9,13 +9,16 @@ mixin here; ``SciTeXChecker`` composes them. Shared helpers (``_add``,
 
 from ._calls import CallChecksMixin
 from ._eh import ErrorHandlingMixin
+from ._hardcode import HardcodeChecksMixin, mark_keyword_str_skips
 from ._imports import ImportChecksMixin, own_scitex_package
 from ._test_quality import TestQualityMixin
 
 __all__ = [
     "CallChecksMixin",
     "ErrorHandlingMixin",
+    "HardcodeChecksMixin",
     "ImportChecksMixin",
     "TestQualityMixin",
+    "mark_keyword_str_skips",
     "own_scitex_package",
 ]

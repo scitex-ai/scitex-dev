@@ -8,6 +8,49 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **HARDCODE-LINT extension: STX-S009 / S010 / S011 / S012
+  (operator directive 2026-06-15).** The linter's structure family now
+  catches hardcoded provenance values in research repos:
+  - `STX-S009` — string literal outside `config/`
+  - `STX-S010` — path-like string literal outside `config/`
+    (e.g. `"data/fig01_cohort"`, `"result.csv"`)
+  - `STX-S011` — `UPPER_CASE = <string-literal>` parameter assignment
+    in a script
+  - `STX-S012` — redundant `print(...)` / `logger.info(...)` /
+    `logger.debug(...)` IMMEDIATELY after a scitex `save(...)` call
+    (the save call auto-logs the artifact path + sha)
+
+  **Conditional severity by project-type.** The new rules read
+  `.scitex/dev/config.yaml` (walking up from the file under lint). If
+  `project-type:` lists `research`, the rules upgrade from `warning`
+  (default) to `error` (blocking via `scitex-linter --strict`). Other
+  project-types (`pip`, `special`, `django`, missing config) keep the
+  declared `warning` severity. The legacy `STX-S008` (magic number)
+  also participates in the conditional-severity table for symmetry.
+
+  **`config/` carve-out.** Anything inside a `config/` directory is
+  fully exempt — that tree is the canonical provenance source-of-truth
+  and is allowed to hold literal values. The hardcode rules fire
+  everywhere else.
+
+  Implementation:
+  - Rule definitions in `_rules/_session_structure.py` (S009-S012).
+  - Severity resolver `_resolve_hardcode_severity()` + YAML walker in
+    `_naming_checker.py`. Cached per checker so the filesystem walk is
+    one-shot per linted file.
+  - New `HardcodeChecksMixin` in `_checks/_hardcode.py` carries the
+    Module / If / With / For / While / Try / ClassDef / JoinedStr
+    visitors for STX-S012 + docstring skip-marking; `SciTeXChecker`
+    composes it alongside the existing mixins.
+  - Log-like calls (`print`, `logger.*`, `logging.*`, `warnings.warn`,
+    `sys.stderr.write`, …) have their positional string args marked as
+    `_stx_string_skip` so natural-language messages don't trigger
+    STX-S009.
+  - Tests: 23 new cases in
+    `tests/scitex_dev/linter/_rules/test__hardcode_lint.py`
+    covering clean / violation / config-exempt / severity-by-
+    project-type / `# stx-allow` suppression.
+
 - **`ci-watch` cron now files CI-fails into scitex-todo (Task B).**
   When a develop CI run goes red, the existing `ci-watch` 10-min poll
   fires a fix-forward turn to the owning sac agent (existing behaviour)

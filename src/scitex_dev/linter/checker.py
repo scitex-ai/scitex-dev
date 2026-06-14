@@ -11,8 +11,10 @@ from . import rules
 from ._checks import (
     CallChecksMixin,
     ErrorHandlingMixin,
+    HardcodeChecksMixin,
     ImportChecksMixin,
     TestQualityMixin,
+    mark_keyword_str_skips,
     own_scitex_package,
 )
 from ._rules import lookup as _lk
@@ -85,6 +87,7 @@ def _is_allowed_by_comment(source_line: str, rule_id: str) -> bool:
 
 
 class SciTeXChecker(
+    HardcodeChecksMixin,
     ImportChecksMixin,
     CallChecksMixin,
     ErrorHandlingMixin,
@@ -127,7 +130,6 @@ class SciTeXChecker(
         }
         self._plugin_checkers = _plugins["checkers"]
 
-
     # -- Assignment visitors --
 
     def visit_Assign(self, node: ast.Assign) -> None:
@@ -143,8 +145,11 @@ class SciTeXChecker(
         (STX-NL001 / PEP 515 — see
         `_skills/general/03_interface/01_python-api/14_numeric-literals.md`).
 
+        Also dispatches string literals to ``check_string_literal`` for
+        STX-S009 / S010 (HARDCODE-LINT, operator directive 2026-06-15).
+
         Carve-outs:
-        - bool / float / complex / str / bytes / None — skipped.
+        - bool / float / complex / str / bytes / None — skipped for NL001.
         - abs(value) < 1000 — under threshold.
         - source segment already contains `_` — already conformant.
         - source segment is non-decimal (`0x…`, `0o…`, `0b…`) — left
@@ -152,6 +157,13 @@ class SciTeXChecker(
         - `# noqa: STX-NL001` on the line — explicit suppression for
           identifiers that read as a whole (years, ports, codes).
         """
+        # STX-S009 / S010 — string-literal hardcode-lint dispatch.
+        # Only fires for scripts; check_string_literal guards on
+        # `_is_script` and `config/` exemption itself.
+        if isinstance(node.value, str) and not getattr(node, "_stx_string_skip", False):
+            from ._naming_checker import check_string_literal
+
+            check_string_literal(self, node)
         # Only int literals; explicitly reject bool (`True is 1`).
         if not isinstance(node.value, int) or isinstance(node.value, bool):
             self.generic_visit(node)
@@ -181,15 +193,18 @@ class SciTeXChecker(
         self._add(rules.NL001, node.lineno, node.col_offset, line)
         self.generic_visit(node)
 
-
     # -- Function/decorator visitors --
 
     @property
     def _REQUIRED_INJECTED(self):
         return set(self.config.required_injected)
 
-
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        # Mark docstring + scan for redundant save-log inside the body.
+        self._mark_function_docstring(node.body)
+        from ._naming_checker import check_redundant_save_log
+
+        check_redundant_save_log(self, node.body)
         # NM002 — `mocker` / `monkeypatch` fixture parameters (no exceptions).
         for arg in (
             list(node.args.args)
@@ -334,11 +349,15 @@ class SciTeXChecker(
             self._add(dynamic_rule, node.lineno, node.col_offset, line)
 
     # -- Module-level checks (run after visiting entire tree) --
+    # Note: visit_Module / If / With / For / While / Try / ClassDef /
+    # JoinedStr live on HardcodeChecksMixin so this class stays focused.
 
-    def visit_If(self, node: ast.If) -> None:
-        """Detect if __name__ == '__main__' guard."""
-        if self._is_main_guard(node):
-            self._has_main_guard = True
+    _mark_function_docstring = HardcodeChecksMixin._mark_docstring_skips
+
+    def visit_Call(self, node: ast.Call) -> None:  # type: ignore[override]
+        """Skip ``key="literal"`` kwargs for S009/S010, then run call rules."""
+        mark_keyword_str_skips(node)
+        self._check_call(node)
         self.generic_visit(node)
 
     def _is_main_guard(self, node: ast.If) -> bool:
