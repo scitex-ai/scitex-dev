@@ -29,6 +29,8 @@ from ._cmds import (
     _up,
     _prune_merged,
     _regen_umbrella,
+    _run,
+    _status,
     _sync_status,
     _test_remote,
     _versions,
@@ -103,9 +105,15 @@ def register_ecosystem_commands(main_group):
     _jobs_cron.register(ecosystem)
     _jobs_systemd.register(ecosystem)
 
-    # Headline ecosystem-up one-shot: discover_jobs() → install all
-    # kinds + (with --yes) systemctl enable+start each. Operator's
-    # "register systemd once and the ecosystem stays reconciled" UX.
+    # Headline ecosystem-up one-shot. Post-2026-06-14 redesign: writes
+    # the ONE collective `scitex-dev-ecosystem.service` (supervisor
+    # unit) + the merged crontab block (cron-native + timer-lowered).
+    # See `_up`'s docstring for the operator policy.
     _up.register(ecosystem)
+
+    # Collective supervisor — `ecosystem run` is the systemd ExecStart;
+    # `ecosystem status` reads the supervisor's state snapshot.
+    _run.register(ecosystem)
+    _status.register(ecosystem)
 
     return ecosystem

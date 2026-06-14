@@ -1,32 +1,39 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""CLI tests for ``scitex-dev ecosystem up``.
+"""CLI tests for ``scitex-dev ecosystem up`` (post-2026-06-14 redesign).
 
-Real fakes only (PA-306 / STX-NM). The ``run_up`` function exposes
-every external touch (systemctl runner, unit dir, echo) as a kwarg
-seam so tests substitute hand-rolled callables / ``tmp_path``
-without ``monkeypatch`` and without touching the real
-``~/.config/systemd/user``.
+The legacy per-leaf systemd-unit + master-reconcile shape is gone; this
+test file covers the new shape: ONE collective supervisor unit gets
+written, cron-native + lowered-timer entries go to the managed crontab
+block. Real fakes only (PA-306 / STX-NM); ``run_up`` exposes
+``discover``, ``systemctl_runner``, ``unit_dir`` + ``echo`` as kwarg
+seams so tests substitute hand-rolled callables.
 """
 
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 
-from scitex_dev.jobs import JobSpec
 from scitex_dev._cli.ecosystem._cmds import _up
+from scitex_dev._cli.ecosystem._cmds._up_supervisor_unit import (
+    SUPERVISOR_UNIT_NAME,
+)
+from scitex_dev.jobs import JobSpec
 
 
-def _completed(rc: int = 0, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess:
-    return subprocess.CompletedProcess(args=[], returncode=rc, stdout=stdout, stderr=stderr)
+def _completed(
+    rc: int = 0, stdout: str = "", stderr: str = ""
+) -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(
+        args=[], returncode=rc, stdout=stdout, stderr=stderr
+    )
 
 
 def _ok_systemctl(args, **_):
     return _completed(rc=0)
 
 
-def _provider_one_service():
+def _service_provider():
     return [
         JobSpec(
             name="mock.dashboard",
@@ -40,7 +47,7 @@ def _provider_one_service():
     ]
 
 
-def _provider_one_timer():
+def _timer_provider():
     return [
         JobSpec(
             name="mock.refresh",
@@ -53,170 +60,223 @@ def _provider_one_timer():
     ]
 
 
-# --------------------------------------------------------------------- #
-# Result type                                                           #
-# --------------------------------------------------------------------- #
+def _cron_provider():
+    return [
+        JobSpec(
+            name="mock.cron",
+            kind="cron",
+            schedule="0 * * * *",
+            command="mock-cron run",
+            description="mock cron",
+        )
+    ]
 
 
-def test_upresult_default_master_unit_written_is_false():
+# --------------------------------------------------------------------------- #
+# UpResult defaults                                                            #
+# --------------------------------------------------------------------------- #
+
+
+def test_upresult_default_supervisor_unit_written_is_false():
     # Arrange
     # Act
     result = _up.UpResult()
     # Assert
-    assert result.master_unit_written is False
+    assert result.supervisor_unit_written is False
 
 
-def test_upresult_default_cron_jobs_installed_is_zero():
+def test_upresult_default_supervisor_unit_enabled_is_false():
     # Arrange
     # Act
     result = _up.UpResult()
     # Assert
-    assert result.cron_jobs_installed == 0
+    assert result.supervisor_unit_enabled is False
 
 
-def test_upresult_default_unit_failures_is_empty():
+def test_upresult_default_timer_jobs_lowered_to_cron_is_zero():
     # Arrange
     # Act
     result = _up.UpResult()
     # Assert
-    assert result.unit_failures == ()
+    assert result.timer_jobs_lowered_to_cron == 0
 
 
-# --------------------------------------------------------------------- #
-# _write_master_unit — pure file write, idempotent                      #
-# --------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# run_up — supervisor unit always written                                      #
+# --------------------------------------------------------------------------- #
 
 
-def test_write_master_unit_creates_the_file(tmp_path):
+def test_run_up_writes_supervisor_unit_to_unit_dir(tmp_path):
     # Arrange
     # Act
-    path = _up._write_master_unit(tmp_path)
-    # Assert
-    assert path.exists()
-
-
-def test_write_master_unit_writes_canonical_unit_name(tmp_path):
-    # Arrange
-    # Act
-    path = _up._write_master_unit(tmp_path)
-    # Assert
-    assert path.name == "scitex-dev-ecosystem-reconcile.service"
-
-
-def test_write_master_unit_unit_text_contains_execstart_to_ecosystem_up(tmp_path):
-    # Arrange
-    # Act
-    path = _up._write_master_unit(tmp_path)
-    # Assert
-    assert "scitex-dev ecosystem up --yes" in path.read_text(encoding="utf-8")
-
-
-def test_write_master_unit_unit_keeps_oneshot_remainafter_yes(tmp_path):
-    # Arrange — bug fix from host bring-up (lead msg b7ef3777): the
-    # master reconcile MUST be Type=oneshot + RemainAfterExit=yes so
-    # `systemctl --user enable --now` returns immediately on a clean
-    # reconcile rather than reporting the oneshot as flipped-back-
-    # inactive (which surfaces as "failed" under the daemon).
-    # Act
-    path = _up._write_master_unit(tmp_path)
-    # Assert
-    assert "RemainAfterExit=yes" in path.read_text(encoding="utf-8")
-
-
-def test_write_master_unit_unit_is_oneshot(tmp_path):
-    # Arrange
-    # Act
-    path = _up._write_master_unit(tmp_path)
-    # Assert
-    assert "Type=oneshot" in path.read_text(encoding="utf-8")
-
-
-def test_write_master_unit_is_idempotent(tmp_path):
-    # Arrange
-    first = _up._write_master_unit(tmp_path).read_text(encoding="utf-8")
-    # Act
-    second = _up._write_master_unit(tmp_path).read_text(encoding="utf-8")
-    # Assert
-    assert first == second
-
-
-# --------------------------------------------------------------------- #
-# _install_systemd_units — writes the right files per kind              #
-# --------------------------------------------------------------------- #
-
-
-def test_install_systemd_units_writes_service_file_for_service_kind(tmp_path):
-    # Arrange
-    jobs = _provider_one_service()
-    # Act
-    _up._install_systemd_units(jobs=jobs, unit_dir=tmp_path, echo=lambda _: None)
-    # Assert
-    assert (tmp_path / "mock.dashboard.service").exists()
-
-
-def test_install_systemd_units_does_not_write_timer_for_service_kind(tmp_path):
-    # Arrange
-    jobs = _provider_one_service()
-    # Act
-    _up._install_systemd_units(jobs=jobs, unit_dir=tmp_path, echo=lambda _: None)
-    # Assert
-    assert not (tmp_path / "mock.dashboard.timer").exists()
-
-
-def test_install_systemd_units_writes_service_file_for_timer_kind(tmp_path):
-    # Arrange
-    jobs = _provider_one_timer()
-    # Act
-    _up._install_systemd_units(jobs=jobs, unit_dir=tmp_path, echo=lambda _: None)
-    # Assert
-    assert (tmp_path / "mock.refresh.service").exists()
-
-
-def test_install_systemd_units_writes_timer_file_for_timer_kind(tmp_path):
-    # Arrange
-    jobs = _provider_one_timer()
-    # Act
-    _up._install_systemd_units(jobs=jobs, unit_dir=tmp_path, echo=lambda _: None)
-    # Assert
-    assert (tmp_path / "mock.refresh.timer").exists()
-
-
-def test_install_systemd_units_returns_service_count_for_timer_kind(tmp_path):
-    # Arrange
-    jobs = _provider_one_timer()
-    # Act
-    services, _ = _up._install_systemd_units(
-        jobs=jobs, unit_dir=tmp_path, echo=lambda _: None
-    )
-    # Assert — a timer kind writes BOTH a .service (oneshot) AND a .timer.
-    assert services == 1
-
-
-def test_install_systemd_units_returns_timer_count_for_timer_kind(tmp_path):
-    # Arrange
-    jobs = _provider_one_timer()
-    # Act
-    _, timers = _up._install_systemd_units(
-        jobs=jobs, unit_dir=tmp_path, echo=lambda _: None
+    _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=lambda: [],
     )
     # Assert
-    assert timers == 1
+    assert (tmp_path / SUPERVISOR_UNIT_NAME).exists()
 
 
-def test_install_systemd_units_returns_zero_timers_for_service_kind(tmp_path):
+def test_run_up_supervisor_unit_written_flag_true_even_without_yes(tmp_path):
     # Arrange
-    jobs = _provider_one_service()
     # Act
-    _, timers = _up._install_systemd_units(
-        jobs=jobs, unit_dir=tmp_path, echo=lambda _: None
+    result = _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=lambda: [],
+    )
+    # Assert — writing the unit file has no side effects worth gating.
+    assert result.supervisor_unit_written is True
+
+
+def test_run_up_does_not_enable_without_yes(tmp_path):
+    # Arrange
+    calls: list[list[str]] = []
+
+    def runner(args, **_):
+        calls.append(list(args))
+        return _completed(rc=0)
+
+    # Act
+    _up.run_up(
+        yes=False,
+        systemctl_runner=runner,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=lambda: [],
     )
     # Assert
-    assert timers == 0
+    assert calls == []
 
 
-# --------------------------------------------------------------------- #
-# _systemctl — runner failure isolated                                  #
-# --------------------------------------------------------------------- #
+def test_run_up_yes_calls_enable_now_on_supervisor_unit(tmp_path):
+    # Arrange
+    calls: list[list[str]] = []
+
+    def runner(args, **_):
+        calls.append(list(args))
+        return _completed(rc=0)
+
+    # Act
+    _up.run_up(
+        yes=True,
+        systemctl_runner=runner,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=lambda: [],
+    )
+    # Assert
+    assert ["enable", "--now", SUPERVISOR_UNIT_NAME] in calls
+
+
+# --------------------------------------------------------------------------- #
+# run_up — timer-kind lowered to cron                                          #
+# --------------------------------------------------------------------------- #
+
+
+def test_run_up_reports_timer_lowered_count_for_timer_kind(tmp_path):
+    # Arrange
+    # Act
+    result = _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=_timer_provider,
+    )
+    # Assert
+    assert result.timer_jobs_lowered_to_cron == 1
+
+
+def test_run_up_reports_zero_lowered_for_pure_cron_kind(tmp_path):
+    # Arrange
+    # Act
+    result = _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=_cron_provider,
+    )
+    # Assert
+    assert result.timer_jobs_lowered_to_cron == 0
+
+
+# --------------------------------------------------------------------------- #
+# run_up — service-kind does NOT produce per-leaf files                       #
+# --------------------------------------------------------------------------- #
+
+
+def test_run_up_does_not_write_per_leaf_service_file_for_service_kind(tmp_path):
+    # Arrange
+    # Act
+    _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=_service_provider,
+    )
+    # Assert — the legacy `<name>.service` per-leaf write is gone.
+    assert not (tmp_path / "mock.dashboard.service").exists()
+
+
+def test_run_up_does_not_write_per_leaf_timer_file_for_timer_kind(tmp_path):
+    # Arrange
+    # Act
+    _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=_timer_provider,
+    )
+    # Assert — the legacy `<name>.timer` per-leaf write is gone.
+    assert not (tmp_path / "mock.refresh.timer").exists()
+
+
+def test_run_up_does_not_write_master_reconcile_unit(tmp_path):
+    # Arrange
+    # Act
+    _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=_service_provider,
+    )
+    # Assert — the master reconcile unit is gone in the new design.
+    assert not (tmp_path / "scitex-dev-ecosystem-reconcile.service").exists()
+
+
+# --------------------------------------------------------------------------- #
+# run_up — systemctl missing                                                   #
+# --------------------------------------------------------------------------- #
+
+
+def test_run_up_reports_systemctl_missing_when_no_binary(tmp_path, monkeypatch):
+    # Arrange — pretend `systemctl` isn't on PATH.
+    monkeypatch.setattr(_up.shutil, "which", lambda _name: None)
+    # Act
+    result = _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=lambda: [],
+    )
+    # Assert
+    assert result.systemctl_missing is True
+
+
+# --------------------------------------------------------------------------- #
+# _systemctl seam                                                              #
+# --------------------------------------------------------------------------- #
 
 
 def test_systemctl_returns_true_on_rc0():
@@ -238,7 +298,7 @@ def test_systemctl_returns_false_on_non_zero_rc():
     assert ok is False
 
 
-def test_systemctl_returns_false_when_systemctl_binary_missing():
+def test_systemctl_returns_false_when_binary_missing():
     # Arrange
     def runner(args, **_):
         raise FileNotFoundError("systemctl")
@@ -247,79 +307,6 @@ def test_systemctl_returns_false_when_systemctl_binary_missing():
     ok = _up._systemctl(["daemon-reload"], runner=runner, echo=lambda _: None)
     # Assert
     assert ok is False
-
-
-# --------------------------------------------------------------------- #
-# run_up — top-level                                                    #
-# --------------------------------------------------------------------- #
-
-
-def test_run_up_with_no_extra_providers_writes_no_systemd_units(tmp_path):
-    # Arrange
-    # Act — only built-in cron jobs exist by default; no systemd-kind built-ins.
-    result = _up.run_up(
-        yes=False,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-    )
-    # Assert
-    assert result.service_units_written == 0
-
-
-def test_run_up_without_yes_does_not_install_cron(tmp_path):
-    # Arrange
-    # Act
-    result = _up.run_up(
-        yes=False,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-    )
-    # Assert — without --yes we never touch the crontab.
-    assert result.cron_jobs_installed == 0
-
-
-def test_run_up_with_install_master_unit_writes_master(tmp_path):
-    # Arrange
-    # Act
-    result = _up.run_up(
-        yes=False,
-        install_master_unit=True,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-    )
-    # Assert
-    assert result.master_unit_written is True
-
-
-def test_run_up_master_unit_path_exists_after_install(tmp_path):
-    # Arrange
-    # Act
-    _up.run_up(
-        yes=False,
-        install_master_unit=True,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-    )
-    # Assert
-    assert (tmp_path / "scitex-dev-ecosystem-reconcile.service").exists()
-
-
-def test_run_up_without_install_master_unit_does_not_write_master(tmp_path):
-    # Arrange
-    # Act
-    result = _up.run_up(
-        yes=False,
-        install_master_unit=False,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-    )
-    # Assert
-    assert result.master_unit_written is False
 
 
 # EOF
