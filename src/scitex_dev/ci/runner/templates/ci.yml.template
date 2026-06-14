@@ -35,6 +35,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # LOUD fallback announcement — operator directive 2026-06-14: when CI
+      # lands on a GitHub-hosted runner it MUST be visible (operator's
+      # phrase: "fallback でGitHubでもよいがうるさくフォールバックする"). The
+      # ::warning:: emission surfaces in the PR Checks UI + run summary;
+      # the $GITHUB_STEP_SUMMARY line is visible above the logs and on the
+      # workflow's overview tab. Together they make a silent fallback
+      # impossible.
+      - if: runner.environment == 'github-hosted'
+        name: Announce GitHub-hosted fallback (LOUD)
+        run: |
+          REASON="vars.CI_RUNS_ON resolved to ubuntu-latest; Spartan self-hosted runner unavailable or watchdog-flipped."
+          echo "::warning title=Spartan UNAVAILABLE — CI fell back to GitHub-hosted::$REASON"
+          {
+            echo "## ⚠️  CI fell back to GitHub-hosted"
+            echo ""
+            echo "$REASON"
+            echo ""
+            echo "Resolution: \`scitex-dev ci runner status\` (check runner online), then"
+            echo "\`scitex-dev ci runner use self-hosted\` to flip back, or"
+            echo "\`scitex-dev ci runner up\` if no runner is registered."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # Hosted fallback path — only fires when watchdog has flipped to
       # ubuntu-latest, or on a fresh repo with vars.CI_RUNS_ON unset.
       - if: runner.environment == 'github-hosted'
