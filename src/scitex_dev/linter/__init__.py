@@ -6,10 +6,17 @@ try:
     from importlib.metadata import PackageNotFoundError
     from importlib.metadata import version as _v
 
+    # The standalone `scitex-linter` package was merged into scitex-dev
+    # in 2026-06; the merged distribution is now "scitex-dev". The legacy
+    # "scitex-linter" alias is still tried as a fallback for hosts that
+    # pinned the old PyPI name during the migration window.
     try:
-        __version__ = _v("scitex-linter")
+        __version__ = _v("scitex-dev")
     except PackageNotFoundError:
-        __version__ = "0.0.0+local"
+        try:
+            __version__ = _v("scitex-linter")
+        except PackageNotFoundError:
+            __version__ = "0.0.0+local"
     del _v, PackageNotFoundError
 except ImportError:  # pragma: no cover — only on ancient Pythons
     __version__ = "0.0.0+local"

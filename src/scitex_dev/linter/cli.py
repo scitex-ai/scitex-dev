@@ -1,20 +1,20 @@
-"""CLI entry point for scitex-linter (Click-based, audit-compliant).
+"""CLI entry point for `scitex-dev linter` (Click-based, audit-compliant).
 
 Canonical subcommands:
-    scitex-linter check-files <PATH> [--json] [--severity] [--category] [--no-color]
-    scitex-linter format-files <PATH> [--check] [--diff] [--dry-run] [--yes]
-    scitex-linter run-python <SCRIPT> [--strict] [-- script_args...]
-    scitex-linter list-rules [--json] [--category] [--severity]      (built-in)
-    scitex-linter list-rules-all [--json] [--category] [--severity]  (built-in + plugin)
-    scitex-linter list-python-apis [-v|-vv|-vvv] [--json]
-    scitex-linter mcp start [--dry-run] [--yes]
-    scitex-linter mcp list-tools [-v|-vv|-vvv] [--json]
-    scitex-linter mcp doctor
-    scitex-linter mcp show-installation
-    scitex-linter completion install [--shell bash|zsh] [--dry-run] [--yes]
-    scitex-linter show-completion-status [--json]
-    scitex-linter show-completion-bash
-    scitex-linter show-completion-zsh
+    scitex-dev linter check-files <PATH> [--json] [--severity] [--category] [--no-color]
+    scitex-dev linter format-files <PATH> [--check] [--diff] [--dry-run] [--yes]
+    scitex-dev linter run-python <SCRIPT> [--strict] [-- script_args...]
+    scitex-dev linter list-rules [--json] [--category] [--severity]      (built-in)
+    scitex-dev linter list-rules-all [--json] [--category] [--severity]  (built-in + plugin)
+    scitex-dev linter list-python-apis [-v|-vv|-vvv] [--json]
+    scitex-dev linter mcp start [--dry-run] [--yes]
+    scitex-dev linter mcp list-tools [-v|-vv|-vvv] [--json]
+    scitex-dev linter mcp doctor
+    scitex-dev linter mcp show-installation
+    scitex-dev linter completion install [--shell bash|zsh] [--dry-run] [--yes]
+    scitex-dev linter show-completion-status [--json]
+    scitex-dev linter show-completion-bash
+    scitex-dev linter show-completion-zsh
 
 Deprecated aliases (still work, redirect to new names):
     check         -> check-files
@@ -73,7 +73,7 @@ def _print_help_recursive(ctx: click.Context, _param, value):
             click.echo(sub.get_help(sub_ctx))
             walk(sub, ancestry + [name])
 
-    walk(cmd, ["scitex-linter"])
+    walk(cmd, ["scitex-dev", "linter"])
     ctx.exit(0)
 
 
@@ -86,7 +86,7 @@ def _print_help_recursive(ctx: click.Context, _param, value):
     invoke_without_command=True,
     context_settings={"help_option_names": ["-h", "--help"]},
 )
-@click.version_option(__version__, "-V", "--version", prog_name="scitex-linter")
+@click.version_option(__version__, "-V", "--version", prog_name="scitex-dev linter")
 @click.option(
     "--help-recursive",
     is_flag=True,
@@ -109,17 +109,17 @@ def main_group(ctx, as_json):
     \b
     Configuration precedence (highest -> lowest):
       1. Explicit CLI flags
-      2. ./pyproject.toml [tool.scitex_linter]
+      2. ./pyproject.toml [tool.scitex_dev.linter]  (legacy [tool.scitex-linter] still read)
       3. ./config.yaml (project-local)
-      4. $SCITEX_LINTER_CONFIG (path to a YAML file)
-      5. ~/.scitex/linter/config.yaml (user-wide)
+      4. $SCITEX_DEV_LINTER_CONFIG (path to a YAML file)
+      5. ~/.scitex/dev/linter/config.yaml (user-wide)
       6. Built-in defaults
 
     \b
     Example:
-        $ scitex-linter check-files src/
-        $ scitex-linter list-rules --json
-        $ scitex-linter mcp list-tools
+        $ scitex-dev linter check-files src/
+        $ scitex-dev linter list-rules --json
+        $ scitex-dev linter mcp list-tools
     """
     ctx.ensure_object(dict)
     ctx.obj["as_json"] = as_json
@@ -208,9 +208,9 @@ def check_files(path, as_json, no_color, severity, category):
 
     \b
     Example:
-        $ scitex-linter check-files src/
-        $ scitex-linter check-files my_script.py --json
-        $ scitex-linter check-files src/ --severity error --no-color
+        $ scitex-dev linter check-files src/
+        $ scitex-dev linter check-files my_script.py --json
+        $ scitex-dev linter check-files src/ --severity error --no-color
     """
     sys.exit(_do_check(path, as_json, no_color, severity, category))
 
@@ -254,9 +254,9 @@ def format_files(path, check, diff, dry_run, yes, as_json):
 
     \b
     Example:
-        $ scitex-linter format-files src/
-        $ scitex-linter format-files my_script.py --diff
-        $ scitex-linter format-files src/ --check
+        $ scitex-dev linter format-files src/
+        $ scitex-dev linter format-files my_script.py --diff
+        $ scitex-dev linter format-files src/ --check
     """
     sys.exit(_do_format(path, check, diff, dry_run, as_json))
 
@@ -278,9 +278,9 @@ def run_python(script, strict, as_json, script_args):
 
     \b
     Example:
-        $ scitex-linter run-python my_script.py
-        $ scitex-linter run-python my_script.py --strict
-        $ scitex-linter run-python my_script.py -- --arg1 value
+        $ scitex-dev linter run-python my_script.py
+        $ scitex-dev linter run-python my_script.py --strict
+        $ scitex-dev linter run-python my_script.py -- --arg1 value
     """
     from .runner import run_script
 
@@ -336,9 +336,9 @@ def list_rules_cmd(as_json, category, severity):
 
     \b
     Example:
-        $ scitex-linter list-rules
-        $ scitex-linter list-rules --json
-        $ scitex-linter list-rules --category structure --severity error
+        $ scitex-dev linter list-rules
+        $ scitex-dev linter list-rules --json
+        $ scitex-dev linter list-rules --category structure --severity error
     """
     categories = set(category.split(",")) if category else None
     rules_list = list(ALL_RULES.values())
@@ -365,8 +365,8 @@ def list_rules_all(as_json, category, severity):
 
     \b
     Example:
-        $ scitex-linter list-rules-all
-        $ scitex-linter list-rules-all --category io
+        $ scitex-dev linter list-rules-all
+        $ scitex-dev linter list-rules-all --category io
     """
     from . import list_rules as _lr
 
@@ -395,9 +395,9 @@ def list_python_apis(as_json, verbose):
 
     \b
     Example:
-        $ scitex-linter list-python-apis
-        $ scitex-linter list-python-apis -vv
-        $ scitex-linter list-python-apis --json
+        $ scitex-dev linter list-python-apis
+        $ scitex-dev linter list-python-apis -vv
+        $ scitex-dev linter list-python-apis --json
     """
     from ._cmd_api import _PUBLIC_API
 
@@ -447,9 +447,9 @@ def mcp_group(ctx):
 
     \b
     Example:
-        $ scitex-linter mcp start
-        $ scitex-linter mcp list-tools
-        $ scitex-linter mcp doctor
+        $ scitex-dev linter mcp start
+        $ scitex-dev linter mcp list-tools
+        $ scitex-dev linter mcp doctor
     """
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
@@ -481,9 +481,9 @@ def mcp_start(transport, dry_run, yes, as_json):
 
     \b
     Example:
-        $ scitex-linter mcp start
-        $ scitex-linter mcp start --transport sse
-        $ scitex-linter mcp start --dry-run
+        $ scitex-dev linter mcp start
+        $ scitex-dev linter mcp start --transport sse
+        $ scitex-dev linter mcp start --dry-run
     """
     if dry_run:
         click.echo(f"Would start MCP server (transport={transport}).")
@@ -495,7 +495,7 @@ def mcp_start(transport, dry_run, yes, as_json):
     except ImportError:
         click.echo(
             "fastmcp is required for MCP server. "
-            "Install with: pip install scitex-linter[mcp]",
+            "Install with: pip install 'scitex-dev[mcp]'",
             err=True,
         )
         sys.exit(1)
@@ -511,13 +511,13 @@ def mcp_start(transport, dry_run, yes, as_json):
 )
 @click.option("--json", "as_json", is_flag=True, default=False, help="Output as JSON.")
 def mcp_list_tools(verbose, as_json):
-    """List available MCP tools exposed by scitex-linter.
+    """List available MCP tools exposed by `scitex-dev linter`.
 
     \b
     Example:
-        $ scitex-linter mcp list-tools
-        $ scitex-linter mcp list-tools -vv
-        $ scitex-linter mcp list-tools --json
+        $ scitex-dev linter mcp list-tools
+        $ scitex-dev linter mcp list-tools -vv
+        $ scitex-dev linter mcp list-tools --json
     """
     _KNOWN_TOOLS = ["linter_check", "linter_check_source", "linter_list_rules"]
     tools = []
@@ -587,11 +587,11 @@ def mcp_doctor(as_json):
 
     \b
     Example:
-        $ scitex-linter mcp doctor
+        $ scitex-dev linter mcp doctor
     """
     import shutil
 
-    click.echo(f"scitex-linter {__version__}\n")
+    click.echo(f"scitex-dev linter {__version__}\n")
     click.echo("Health Check")
     click.echo("=" * 40)
 
@@ -608,7 +608,7 @@ def mcp_doctor(as_json):
         checks.append(("MCP tools", True, "3 tools"))
     except Exception as e:
         checks.append(("MCP tools", False, str(e)))
-    cli_path = shutil.which("scitex-linter")
+    cli_path = shutil.which("scitex-dev")
     checks.append(("CLI", bool(cli_path), cli_path if cli_path else "not in PATH"))
     checks.append(("Rules", True, f"{len(ALL_RULES)} rules"))
 
@@ -622,7 +622,7 @@ def mcp_doctor(as_json):
     if all_ok:
         click.echo("All checks passed!")
     else:
-        click.echo("Some checks failed. Run 'pip install scitex-linter[mcp]' to fix.")
+        click.echo("Some checks failed. Run 'pip install scitex-dev[mcp]' to fix.")
     sys.exit(0 if all_ok else 1)
 
 
@@ -635,9 +635,9 @@ def mcp_doctor(as_json):
 def mcp_show_installation_deprecated(ctx):
     """(deprecated) Renamed to `install`."""
     click.echo(
-        "error: `scitex-linter mcp show-installation` was renamed to "
-        "`scitex-linter mcp install`.\n"
-        "Re-run with: scitex-linter mcp install",
+        "error: `scitex-dev linter mcp show-installation` was renamed to "
+        "`scitex-dev linter mcp install`.\n"
+        "Re-run with: scitex-dev linter mcp install",
         err=True,
     )
     ctx.exit(2)
@@ -661,26 +661,26 @@ def mcp_install(as_json, dry_run, yes):
 
     \b
     Example:
-        $ scitex-linter mcp install
+        $ scitex-dev linter mcp install
     """
     del dry_run, yes  # audit §2 — no-op flags
     import shutil
 
-    click.echo(f"scitex-linter {__version__}\n")
+    click.echo(f"scitex-dev linter {__version__}\n")
     click.echo("Add this to your Claude Desktop config file:\n")
     click.echo(
         "  macOS: ~/Library/Application Support/Claude/claude_desktop_config.json"
     )
     click.echo("  Linux: ~/.config/Claude/claude_desktop_config.json\n")
-    cli_path = shutil.which("scitex-linter")
+    cli_path = shutil.which("scitex-dev")
     if cli_path:
         click.echo(f"Your installation path: {cli_path}\n")
     config = (
         "{\n"
         '  "mcpServers": {\n'
-        '    "scitex-linter": {\n'
-        f'      "command": "{cli_path or "scitex-linter"}",\n'
-        '      "args": ["mcp", "start"]\n'
+        '    "scitex-dev-linter": {\n'
+        f'      "command": "{cli_path or "scitex-dev"}",\n'
+        '      "args": ["linter", "mcp", "start"]\n'
         "    }\n"
         "  }\n"
         "}"
@@ -699,8 +699,8 @@ def completion_group():
 
     \b
     Example:
-        $ scitex-linter completion install --shell bash
-        $ scitex-linter show-completion-status
+        $ scitex-dev linter completion install --shell bash
+        $ scitex-dev linter show-completion-status
     """
 
 
@@ -736,9 +736,9 @@ def completion_install(shell, dry_run, yes, as_json):
 
     \b
     Example:
-        $ scitex-linter completion install
-        $ scitex-linter completion install --shell zsh
-        $ scitex-linter completion install --dry-run
+        $ scitex-dev linter completion install
+        $ scitex-dev linter completion install --shell zsh
+        $ scitex-dev linter completion install --dry-run
     """
     import os
 
@@ -755,7 +755,7 @@ def completion_install(shell, dry_run, yes, as_json):
 
     if os.path.exists(rc_file):
         with open(rc_file) as f:
-            if "scitex-linter tab completion" in f.read():
+            if "scitex-dev linter tab completion" in f.read():
                 click.echo(f"Completion already installed in {rc_file}")
                 return
 
@@ -783,8 +783,8 @@ def show_completion_status(as_json):
 
     \b
     Example:
-        $ scitex-linter show-completion-status
-        $ scitex-linter show-completion-status --json
+        $ scitex-dev linter show-completion-status
+        $ scitex-dev linter show-completion-status --json
     """
     import os
 
@@ -794,7 +794,7 @@ def show_completion_status(as_json):
     installed = False
     if os.path.exists(rc_file):
         with open(rc_file) as f:
-            if "scitex-linter tab completion" in f.read():
+            if "scitex-dev linter tab completion" in f.read():
                 installed = True
 
     if as_json:
@@ -810,7 +810,7 @@ def show_completion_status(as_json):
     click.echo(f"RC:     {rc_file}")
     click.echo(f"Status: {'installed' if installed else 'not installed'}")
     if not installed:
-        click.echo("\nInstall with: scitex-linter completion install")
+        click.echo("\nInstall with: scitex-dev linter completion install")
 
 
 @main_group.command("show-completion-bash")
@@ -820,7 +820,7 @@ def show_completion_bash(as_json):
 
     \b
     Example:
-        $ scitex-linter show-completion-bash > /etc/bash_completion.d/scitex-linter
+        $ scitex-dev linter show-completion-bash > /etc/bash_completion.d/scitex-dev-linter
     """
     script = _completion_script("bash")
     if as_json:
@@ -836,7 +836,7 @@ def show_completion_zsh(as_json):
 
     \b
     Example:
-        $ scitex-linter show-completion-zsh > ~/.zsh/completions/_scitex-linter
+        $ scitex-dev linter show-completion-zsh > ~/.zsh/completions/_scitex-dev-linter
     """
     script = _completion_script("zsh")
     if as_json:
@@ -853,7 +853,7 @@ def show_completion_zsh(as_json):
 try:
     from scitex_dev._cli._completion import attach_shell_completion
 
-    attach_shell_completion(main_group, prog_name="scitex-linter")
+    attach_shell_completion(main_group, prog_name="scitex-dev linter")
 except ImportError:
     pass
 
@@ -924,7 +924,7 @@ def main(argv: list = None) -> int:
     raw = _rewrite_argv(raw)
 
     try:
-        main_group.main(args=raw, prog_name="scitex-linter", standalone_mode=False)
+        main_group.main(args=raw, prog_name="scitex-dev linter", standalone_mode=False)
         return 0
     except SystemExit as e:
         code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
