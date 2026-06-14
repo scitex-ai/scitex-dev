@@ -1,7 +1,7 @@
-"""Flake8 plugin for SciTeX linter.
+"""Flake8 plugin for the SciTeX linter (now part of scitex-dev).
 
 Usage:
-    pip install scitex-linter
+    pip install scitex-dev          # legacy 'scitex-linter' alias also works
     flake8 --select STX script.py
 """
 
@@ -13,6 +13,10 @@ from .checker import SciTeXChecker
 class SciTeXFlake8Checker:
     """Flake8 checker wrapping the SciTeX AST visitor."""
 
+    # ``name`` is the flake8 plugin name; flake8 prefixes plugin
+    # diagnostics with it. Keeping the historical ``scitex-linter``
+    # value preserves user-side rule filters that match on the legacy
+    # name (``flake8 --select scitex-linter ...``).
     name = "scitex-linter"
     version = "0.1.0"
 

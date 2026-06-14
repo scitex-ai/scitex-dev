@@ -1,6 +1,6 @@
 """Run a Python script after linting it.
 
-Core function used by the `scitex-linter python` subcommand.
+Core function used by the `scitex-dev linter run-python` subcommand.
 """
 
 import os

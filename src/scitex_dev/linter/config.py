@@ -1,4 +1,12 @@
-"""Configuration system for scitex-linter."""
+"""Configuration system for `scitex-dev linter`.
+
+The standalone "scitex-linter" package was merged into scitex-dev in
+2026-06; the linter is now invoked as `scitex-dev linter`. The legacy
+`[tool.scitex-linter]` pyproject key and `SCITEX_LINTER_*` env-var
+prefix are still read for back-compat (a `DeprecationWarning` is
+emitted), and the canonical names are `[tool.scitex_dev.linter]` +
+`SCITEX_DEV_LINTER_*`.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +29,7 @@ else:
 
 @dataclass
 class LinterConfig:
-    """Configuration for scitex-linter behavior."""
+    """Configuration for `scitex-dev linter` behaviour."""
 
     severity: str = "info"
     exclude_dirs: list[str] = field(
@@ -72,8 +80,10 @@ class LinterConfig:
     clew/io provenance silently. See Pillar 3 (#TBD).
 
     Per-rule overrides in ``per_rule_severity`` still win — set a specific
-    rule's severity in pyproject.toml ``[tool.scitex-linter.per-rule-
-    severity]`` to opt out of the category-wide flip for that one rule.
+    rule's severity in pyproject.toml ``[tool.scitex-dev.linter.per-rule-
+    severity]`` (canonical key; legacy ``[tool.scitex-linter.per-rule-
+    severity]`` is also read with a ``DeprecationWarning``) to opt out
+    of the category-wide flip for that one rule.
     """
     required_injected: list[str] = field(
         default_factory=lambda: ["CONFIG", "plt", "COLORS", "rngg", "logger"]
@@ -137,13 +147,18 @@ def load_config(start_path: str | None = None) -> LinterConfig:
 
 def _load_pyproject(start_dir: Path) -> dict:
     """
-    Walk up directories to find pyproject.toml with [tool.scitex-linter].
+    Walk up directories to find pyproject.toml with the linter config.
+
+    Canonical key: ``[tool.scitex-dev.linter]`` (post-2026-06 merge).
+    Legacy key: ``[tool.scitex-linter]`` is still read for back-compat
+    when the canonical key is absent — a ``DeprecationWarning`` is
+    emitted so the operator knows to migrate.
 
     Args:
         start_dir: Starting directory for search
 
     Returns:
-        Configuration dict from [tool.scitex-linter], or empty dict if not found
+        Configuration dict from the linter table, or empty dict if not found
     """
     if tomllib is None:
         return {}
@@ -155,7 +170,24 @@ def _load_pyproject(start_dir: Path) -> dict:
             try:
                 with open(pyproject_path, "rb") as f:
                     data = tomllib.load(f)
-                    tool_config = data.get("tool", {}).get("scitex-linter", {})
+                    tool_root = data.get("tool", {})
+                    # Canonical key first; legacy as fallback.
+                    tool_config = tool_root.get("scitex-dev", {}).get("linter", {})
+                    if not tool_config:
+                        legacy = tool_root.get("scitex-linter", {})
+                        if legacy:
+                            import warnings as _w
+
+                            _w.warn(
+                                f"{pyproject_path}: [tool.scitex-linter] is "
+                                "the legacy key; the canonical key is "
+                                "[tool.scitex-dev.linter]. Both are read "
+                                "for back-compat (canonical wins on "
+                                "conflict).",
+                                DeprecationWarning,
+                                stacklevel=2,
+                            )
+                            tool_config = legacy
                     if tool_config:
                         # Flatten nested sections
                         config = {}
@@ -163,7 +195,9 @@ def _load_pyproject(start_dir: Path) -> dict:
                             if key == "per-rule-severity":
                                 config["per_rule_severity"] = value
                             elif key == "session":
-                                # Handle [tool.scitex-linter.session]
+                                # Handle [tool.scitex-dev.linter.session]
+                                # (or its legacy [tool.scitex-linter.session]
+                                # alias — same loader handles both).
                                 if "required_injected" in value:
                                     config["required_injected"] = value[
                                         "required_injected"
