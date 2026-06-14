@@ -260,85 +260,116 @@ def test_app_metadata_returns_empty_when_no_config_app_metadata_dict(tmp_path):
     assert cfg.app_metadata == {}
 
 
-def test_app_metadata_returns_empty_when_metadata_lacks_app_key(tmp_path):
+def test_app_metadata_returns_empty_when_metadata_lacks_app_key_app_metadata_is_dict(
+    tmp_path,
+):
     # Arrange — metadata: present (cohorts), but no `app:` sub-block.
     _write_config_with_metadata(tmp_path, "  cohorts: 3\n")
-
     # Act
     cfg = load_config(tmp_path)
-
     # Assert
-    assert cfg.metadata.get("cohorts") == 3
     assert cfg.app_metadata == {}
 
 
-def test_app_metadata_round_trips_full_schema(tmp_path):
-    # Arrange — declare the full operator-approved metadata.app schema.
-    _write_config_with_metadata(
-        tmp_path,
+def test_app_metadata_returns_empty_when_metadata_lacks_app_key_cohorts_preserved(
+    tmp_path,
+):
+    # Arrange — sibling sub-block (cohorts) must still round-trip; this
+    # guards against the accessor inadvertently wiping unrelated keys.
+    _write_config_with_metadata(tmp_path, "  cohorts: 3\n")
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.metadata.get("cohorts") == 3
+
+
+def _full_schema_app_block() -> str:
+    return (
         "  app:\n"
         "    category: writer\n"
         '    official: "true"\n'
         '    pre_installed: "true"\n'
         '    is_hub_app: "true"\n'
-        '    author: "Yusuke Watanabe"\n',
+        '    author: "Yusuke Watanabe"\n'
     )
 
+
+def test_app_metadata_round_trips_category(tmp_path):
+    # Arrange
+    _write_config_with_metadata(tmp_path, _full_schema_app_block())
     # Act
     cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.app_metadata["category"] == "writer"
 
-    # Assert — the canonical accessor returns the same dict the loader stored.
-    app = cfg.app_metadata
-    assert app["category"] == "writer"
-    assert app["author"] == "Yusuke Watanabe"
-    # `official` / `pre_installed` / `is_hub_app` arrive as the loader's parsed
-    # form (PyYAML returns bool; minimal-YAML returns str). Both shapes are
-    # acceptable here — consumers normalise; this test only asserts that the
-    # key reached the accessor at all.
-    assert "official" in app
-    assert "pre_installed" in app
-    assert "is_hub_app" in app
+
+def test_app_metadata_round_trips_author(tmp_path):
+    # Arrange
+    _write_config_with_metadata(tmp_path, _full_schema_app_block())
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.app_metadata["author"] == "Yusuke Watanabe"
+
+
+@pytest.mark.parametrize("key", ["official", "pre_installed", "is_hub_app"])
+def test_app_metadata_round_trips_bool_keys_present_in_accessor(tmp_path, key):
+    # Arrange — bool values arrive as PyYAML bool (True) OR minimal-YAML
+    # str ("true") depending on which parser is active in CI. Both shapes
+    # are acceptable; the test only asserts the KEY reached the accessor.
+    _write_config_with_metadata(tmp_path, _full_schema_app_block())
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert key in cfg.app_metadata
 
 
 def test_app_metadata_returns_empty_when_app_key_is_not_a_dict(tmp_path):
     # Arrange — defensive case: `app:` typed as a scalar instead of mapping.
     _write_config_with_metadata(tmp_path, "  app: not-a-dict\n")
-
     # Act
     cfg = load_config(tmp_path)
-
-    # Assert — accessor must NOT propagate a non-dict (would break consumers
-    # that call `.get(...)` on the return value).
+    # Assert
     assert cfg.app_metadata == {}
 
 
-def test_app_metadata_preserves_unknown_keys(tmp_path):
+def test_app_metadata_preserves_unknown_key_icon(tmp_path):
     # Arrange — operator may experiment with extra keys before the schema
     # docs catch up; the accessor must not filter them out.
     _write_config_with_metadata(
         tmp_path,
-        "  app:\n"
-        "    category: writer\n"
-        "    icon: writer.svg\n"
-        "    route: /apps/writer/\n",
+        "  app:\n    category: writer\n    icon: writer.svg\n    route: /apps/writer/\n",
     )
-
     # Act
     cfg = load_config(tmp_path)
-
     # Assert
-    app = cfg.app_metadata
-    assert app["icon"] == "writer.svg"
-    assert app["route"] == "/apps/writer/"
+    assert cfg.app_metadata["icon"] == "writer.svg"
 
 
-def test_app_metadata_works_under_override_source_app_metadata_dict(tmp_path):
-    # Arrange — `override_types` short-circuits the YAML read entirely.
-    # The accessor must still return {} (not raise) for the override path.
+def test_app_metadata_preserves_unknown_key_route(tmp_path):
+    # Arrange
+    _write_config_with_metadata(
+        tmp_path,
+        "  app:\n    category: writer\n    icon: writer.svg\n    route: /apps/writer/\n",
+    )
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.app_metadata["route"] == "/apps/writer/"
 
+
+def test_app_metadata_under_override_source_returns_empty(tmp_path):
+    # Arrange — `override_types` short-circuits the YAML read entirely;
+    # the accessor must still return {} (not raise) for the override path.
     # Act
     cfg = load_config(tmp_path, override_types=["pip"])
+    # Assert
+    assert cfg.app_metadata == {}
 
+
+def test_app_metadata_under_override_source_marks_source_override(tmp_path):
+    # Arrange — sister test guarding the override marker stays correct.
+    # Act
+    cfg = load_config(tmp_path, override_types=["pip"])
     # Assert
     assert cfg.source == "override"
-    assert cfg.app_metadata == {}
