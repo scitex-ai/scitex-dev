@@ -73,7 +73,9 @@ def test_load_falls_through_to_heuristic_when_no_config_cfg_source_heuristic(tmp
     assert cfg.source == "heuristic"
 
 
-def test_load_falls_through_to_heuristic_when_no_config_cfg_project_types_frozenset_pip(tmp_path):
+def test_load_falls_through_to_heuristic_when_no_config_cfg_project_types_frozenset_pip(
+    tmp_path,
+):
     # Arrange
     # Act
     # Assert
@@ -233,3 +235,110 @@ def test_skip_list_round_trips(tmp_path):
     )
     cfg = load_config(tmp_path)
     assert cfg.skip == frozenset({"PS-108", "PS-127"})
+
+
+# metadata.app accessor (operator directive 2026-06-14) ----------------------
+
+
+def _write_config_with_metadata(repo: Path, metadata_block: str) -> None:
+    """Write a `.scitex/dev/config.yaml` with project-type + the given
+    metadata: block. Caller supplies the block body indented to match
+    the YAML schema."""
+    cfg_path = repo / ".scitex/dev/config.yaml"
+    cfg_path.parent.mkdir(parents=True)
+    cfg_path.write_text("project-type:\n  - pip\nmetadata:\n" + metadata_block)
+
+
+def test_app_metadata_returns_empty_when_no_config_app_metadata_dict(tmp_path):
+    # Arrange — no config file at all.
+    _seed_pip(tmp_path)
+
+    # Act
+    cfg = load_config(tmp_path)
+
+    # Assert — heuristic path, no metadata.app block, accessor returns {}.
+    assert cfg.app_metadata == {}
+
+
+def test_app_metadata_returns_empty_when_metadata_lacks_app_key(tmp_path):
+    # Arrange — metadata: present (cohorts), but no `app:` sub-block.
+    _write_config_with_metadata(tmp_path, "  cohorts: 3\n")
+
+    # Act
+    cfg = load_config(tmp_path)
+
+    # Assert
+    assert cfg.metadata.get("cohorts") == 3
+    assert cfg.app_metadata == {}
+
+
+def test_app_metadata_round_trips_full_schema(tmp_path):
+    # Arrange — declare the full operator-approved metadata.app schema.
+    _write_config_with_metadata(
+        tmp_path,
+        "  app:\n"
+        "    category: writer\n"
+        '    official: "true"\n'
+        '    pre_installed: "true"\n'
+        '    is_hub_app: "true"\n'
+        '    author: "Yusuke Watanabe"\n',
+    )
+
+    # Act
+    cfg = load_config(tmp_path)
+
+    # Assert — the canonical accessor returns the same dict the loader stored.
+    app = cfg.app_metadata
+    assert app["category"] == "writer"
+    assert app["author"] == "Yusuke Watanabe"
+    # `official` / `pre_installed` / `is_hub_app` arrive as the loader's parsed
+    # form (PyYAML returns bool; minimal-YAML returns str). Both shapes are
+    # acceptable here — consumers normalise; this test only asserts that the
+    # key reached the accessor at all.
+    assert "official" in app
+    assert "pre_installed" in app
+    assert "is_hub_app" in app
+
+
+def test_app_metadata_returns_empty_when_app_key_is_not_a_dict(tmp_path):
+    # Arrange — defensive case: `app:` typed as a scalar instead of mapping.
+    _write_config_with_metadata(tmp_path, "  app: not-a-dict\n")
+
+    # Act
+    cfg = load_config(tmp_path)
+
+    # Assert — accessor must NOT propagate a non-dict (would break consumers
+    # that call `.get(...)` on the return value).
+    assert cfg.app_metadata == {}
+
+
+def test_app_metadata_preserves_unknown_keys(tmp_path):
+    # Arrange — operator may experiment with extra keys before the schema
+    # docs catch up; the accessor must not filter them out.
+    _write_config_with_metadata(
+        tmp_path,
+        "  app:\n"
+        "    category: writer\n"
+        "    icon: writer.svg\n"
+        "    route: /apps/writer/\n",
+    )
+
+    # Act
+    cfg = load_config(tmp_path)
+
+    # Assert
+    app = cfg.app_metadata
+    assert app["icon"] == "writer.svg"
+    assert app["route"] == "/apps/writer/"
+
+
+def test_app_metadata_works_under_override_source_app_metadata_dict(tmp_path):
+    # Arrange — `override_types` short-circuits the YAML read entirely.
+    # The accessor must still return {} (not raise) for the override path.
+
+    # Act
+    cfg = load_config(tmp_path, override_types=["pip"])
+
+    # Assert
+    assert cfg.source == "override"
+    assert cfg.app_metadata == {}
