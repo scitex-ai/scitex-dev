@@ -60,7 +60,33 @@ def is_script(filepath: str, config=None) -> bool:
     return True
 
 
-_STX_ALLOW_RE = re.compile(r"#\s*stx-allow\b(?::?\s*(.+))?")
+# STX-allow regex.
+#
+# Before 2026-06-14 this was ``r"#\s*stx-allow\b(?::?\s*(.+))?"`` — the
+# greedy ``.+`` captured EVERYTHING after the colon, including prose. So
+# ``# stx-allow: STX-P006  (prose explanation)`` parsed the ids string as
+# ``"STX-P006  (prose explanation)"``, the comma-split saw a single
+# element that didn't equal ``STX-P006``, and the suppression silently
+# failed. Operators kept hitting this when annotating with reasons inline
+# (neurovista elevation 2026-06-14, item 6).
+#
+# Tightened regex captures ONLY characters valid in a rule-id list:
+# uppercase letters, digits, dash, comma, whitespace. Stops at the first
+# non-matching character so inline prose after the ids is ignored.
+# Supported forms (now correct):
+#
+#   x  # stx-allow                         → bare; suppress ALL
+#   x  # stx-allow: STX-S003               → suppress STX-S003
+#   x  # stx-allow: STX-S003, STX-I001     → suppress both
+#   x  # stx-allow: STX-S003  (because foo) → suppress STX-S003; ignore prose
+#
+# The form ``# stx-allow:lower-case-id`` is still NOT supported — rule
+# ids are uppercase by convention; lower-case suggests a typo. The regex
+# stops at the lower-case letter and the id list is empty → bare-allow
+# fallback (suppress all on the line) does NOT fire because the colon
+# was consumed; it's a no-op suppression — visible as a non-matching
+# rule. That's the desired loud behaviour.
+_STX_ALLOW_RE = re.compile(r"#\s*stx-allow\b(?::\s*([A-Z0-9\-,\s]*))?")
 
 
 def _is_allowed_by_comment(source_line: str, rule_id: str) -> bool:
@@ -127,7 +153,6 @@ class SciTeXChecker(
         }
         self._plugin_checkers = _plugins["checkers"]
 
-
     # -- Assignment visitors --
 
     def visit_Assign(self, node: ast.Assign) -> None:
@@ -181,13 +206,11 @@ class SciTeXChecker(
         self._add(rules.NL001, node.lineno, node.col_offset, line)
         self.generic_visit(node)
 
-
     # -- Function/decorator visitors --
 
     @property
     def _REQUIRED_INJECTED(self):
         return set(self.config.required_injected)
-
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         # NM002 — `mocker` / `monkeypatch` fixture parameters (no exceptions).
@@ -424,9 +447,7 @@ class SciTeXChecker(
             # research project-type flips io/path from warning→error).
             # Per-rule override (above) still wins; category map is the
             # floor not the ceiling. See LinterConfig.
-            cat_override = getattr(
-                self.config, "category_severity_override", {}
-            ) or {}
+            cat_override = getattr(self.config, "category_severity_override", {}) or {}
             sev = cat_override.get(rule.category)
         if sev:
             rule = replace(rule, severity=sev)

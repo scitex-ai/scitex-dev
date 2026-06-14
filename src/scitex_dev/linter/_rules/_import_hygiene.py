@@ -75,3 +75,25 @@ I007 = Rule(
     suggestion="Remove `import logging` and use `logger` from @stx.session injection.",
     requires="scitex",
 )
+
+# STX-I009 — prohibit `import seaborn` (and `import seaborn as sns`).
+# Per neurovista elevation 2026-06-14: seaborn imports in research code
+# bypass the figrecipe figure-style controls (FM rules) and the headless
+# save wrapper exposed via @stx.session-injected `plt`. The recommended
+# workflow is to use `stx.plt` (figrecipe wrapper) for plotting; seaborn-
+# style aesthetics live in figrecipe directly. We don't ban seaborn the
+# library — only the direct top-level import; users who need it can
+# `# stx-allow: STX-I009` per-line.
+I009 = Rule(
+    id="STX-I009",
+    severity="warning",
+    category="import",
+    message="Avoid `import seaborn` — use `stx.plt` (figrecipe wrapper) instead",
+    suggestion=(
+        "Replace seaborn usage with `stx.plt` / figrecipe equivalents "
+        "(get_styled_axes, set_xyt, hide_spines, etc.). If you genuinely "
+        "need seaborn — e.g. interop with a legacy notebook — add "
+        "`# stx-allow: STX-I009` on the import line."
+    ),
+    requires="scitex",
+)

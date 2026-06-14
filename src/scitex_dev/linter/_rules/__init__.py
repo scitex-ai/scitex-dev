@@ -25,7 +25,7 @@ defaults if needed.
 from ._base import Rule
 from ._cross_pkg_imports import I008
 from ._error_handling import EH001
-from ._import_hygiene import I001, I002, I003, I004, I005, I006, I007
+from ._import_hygiene import I001, I002, I003, I004, I005, I006, I007, I009
 from ._lookup import lookup
 from ._lookup import reset as reset_lookup_cache  # noqa: F401
 from ._no_mocks import NM001, NM002, NM003
@@ -52,6 +52,7 @@ ALL_RULES = {
     I006.id: I006,
     I007.id: I007,
     I008.id: I008,
+    I009.id: I009,
     NL001.id: NL001,
     NM001.id: NM001,
     NM002.id: NM002,
@@ -90,6 +91,7 @@ __all__ = [
     "I006",
     "I007",
     "I008",
+    "I009",
     "NL001",
     "NM001",
     "NM002",

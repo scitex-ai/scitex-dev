@@ -155,6 +155,14 @@ class ImportChecksMixin:
         if module_name == "logging":
             self._add(_lk("STX-I007"), node.lineno, node.col_offset, line)
 
+        # STX-I009 — prohibit direct seaborn import (use stx.plt /
+        # figrecipe wrappers instead). Per neurovista elevation 2026-06-14.
+        # Matches both `import seaborn` and `import seaborn as sns`. The
+        # bare module-name compare is enough — Python's import machinery
+        # collapses dotted-vs-dotless for the top-level name.
+        if module_name == "seaborn":
+            self._add(_lk("STX-I009"), node.lineno, node.col_offset, line)
+
         # NM001 — no-mock imports (no exceptions)
         if module_name in self._MOCK_MODULES:
             self._add(rules.NM001, node.lineno, node.col_offset, line)
