@@ -631,13 +631,14 @@ def _walk(
             # passed multi-class noun-verb homonyms such as `board`
             # (Moby classifies as both noun and verb-t/verb-i), letting
             # `scitex-todo board --port 8051` slip through (operator
-            # directive 13316). At TOP LEVEL (depth=1) the rule is
-            # tightened: a leaf carrying `noun` in its labels is flagged
-            # regardless of also-verb labels, because the operator's
-            # CLI grammar requires top-level leaves to be unambiguously
-            # verbs. Nested leaves (depth≥2) keep the existing permissive
-            # behaviour — they're verb-by-context (the parent group is
-            # the noun).
+            # directive 13316). At TOP LEVEL (depth=1) AND for BARE
+            # (non-compound) leaves the rule is tightened: a leaf
+            # carrying `noun` in its labels is flagged regardless of
+            # also-verb labels, because the operator's CLI grammar
+            # requires top-level bare leaves to be unambiguously verbs.
+            # Compound leaves like `print-shell-completion` are
+            # explicitly excluded from PART A — the compound IS the
+            # `<verb>-<object>` grammar the rule is asking for.
             top_level_leaf = len(path) == 1
             multi_class_homonym = (
                 bool({"verb-t", "verb-i", "verb"} & labels) and "noun" in labels
@@ -645,8 +646,7 @@ def _walk(
             if (
                 "noun" in labels
                 and (
-                    top_level_leaf
-                    and multi_class_homonym
+                    (top_level_leaf and multi_class_homonym and not is_compound)
                     or not ({"verb-t", "verb-i", "verb", "flat-keeper"} & labels)
                 )
                 and name not in FLAT_KEEPERS

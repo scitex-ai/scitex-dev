@@ -62,7 +62,9 @@ class TestNounVerbHomonymAtTopLevelIsFlagged:
 
     def test_violation_message_mentions_dict_escape_hatch(self):
         # Arrange — operator wants the actionable hint inline in the
-        # violation, not buried in docs.
+        # violation, not buried in docs. `any(...)` keeps the assertion
+        # single while still asserting the substring presence across
+        # whatever §1 violations the walker emits for `board`.
         @click.group()
         def root():
             pass
@@ -75,10 +77,15 @@ class TestNounVerbHomonymAtTopLevelIsFlagged:
         # Act
         _walk(root, [], out, root_display="demo")
         # Assert
-        msgs = [v.message for v in out if v.rule == "§1" and "board" in v.message]
-        assert msgs, "expected at least one §1 violation for `board`"
-        combined = " ".join(msgs).lower()
-        assert "intransitive_verbs" in combined or "cli-audit-dict.yaml" in combined
+        assert any(
+            v.rule == "§1"
+            and "board" in v.message
+            and (
+                "intransitive_verbs" in v.message.lower()
+                or "cli-audit-dict.yaml" in v.message.lower()
+            )
+            for v in out
+        )
 
     def test_panel_top_level_leaf_flagged(self):
         # Arrange — `panel` is another noun-verb homonym (Moby labels:
@@ -150,6 +157,33 @@ class TestNounOnlyLeavesStillFlaggedAtAllDepths:
         assert any(v.rule == "§1" and v.command.endswith("cache") for v in out)
 
 
+class TestCompoundLeafIsNotFlaggedByPartA:
+    """Compounds like `print-shell-completion` (verb-noun) are the FIX
+    shape the §1 violation message points to — they must NOT themselves
+    trip PART A, even though their head token (`print`) is a Moby
+    noun-verb homonym. Guards against the regression we caught on
+    scitex-dev's own CLI surface during the first CI roll.
+    """
+
+    def test_print_shell_completion_top_level_compound_not_flagged(self):
+        # Arrange — `print-shell-completion` is correct grammar.
+        @click.group()
+        def root():
+            pass
+
+        @root.command("print-shell-completion")
+        def print_completion_cmd():
+            pass
+
+        out: list[Violation] = []
+        # Act
+        _walk(root, [], out, root_display="demo")
+        # Assert
+        assert all(
+            not (v.rule == "§1" and "print-shell-completion" in v.command) for v in out
+        )
+
+
 # --------------------------------------------------------------------------- #
 # PART B — §1e server-startup-flag heuristic                                 #
 # --------------------------------------------------------------------------- #
@@ -212,8 +246,8 @@ class TestRule1eServerStartupFlagFires:
         assert any(v.rule == "§1e" and v.command.endswith("board") for v in out)
 
     def test_cache_with_port_flag_flagged_by_1e(self):
-        # Arrange — `cache` is noun-only; the §1 rule already fires, but
-        # §1e fires ON TOP because the server-flag pattern is present.
+        # Arrange — `cache` is noun-only; the §1 rule already fires
+        # independently. This test guards §1e, the new rule.
         @click.group()
         def root():
             pass
@@ -226,11 +260,29 @@ class TestRule1eServerStartupFlagFires:
         out: list[Violation] = []
         # Act
         _walk(root, [], out, root_display="demo")
-        # Assert — both §1 and §1e fire (different rule ids — they're
-        # complementary signals to the user).
+        # Assert
+        rules = {(v.rule, v.command) for v in out}
+        assert ("§1e", "demo cache") in rules
+
+    def test_cache_with_port_flag_still_flagged_by_section_1(self):
+        # Arrange — sister test guarding that §1 also still fires on
+        # the same fixture (§1 and §1e are complementary signals to
+        # the user; both ids must surface, with different texts).
+        @click.group()
+        def root():
+            pass
+
+        @root.command("cache")
+        @click.option("--port", type=int, default=6379)
+        def cache_cmd(port):
+            pass
+
+        out: list[Violation] = []
+        # Act
+        _walk(root, [], out, root_display="demo")
+        # Assert
         rules = {(v.rule, v.command) for v in out}
         assert ("§1", "demo cache") in rules
-        assert ("§1e", "demo cache") in rules
 
     def test_dashboard_with_bind_flag_flagged_by_1e(self):
         # Arrange — `--bind` is the gunicorn / uvicorn signal.
