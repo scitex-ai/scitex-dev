@@ -288,11 +288,31 @@ def write_config(
     return target
 
 
+def load_app_metadata(repo: Path) -> dict:
+    """Convenience helper — single read path for `metadata.app` across
+    scaffolders + hub registry's dev-install loader.
+
+    Equivalent to ``load_config(repo).app_metadata`` and returns ``{}``
+    when no `.scitex/dev/config.yaml` exists or when `metadata.app` is
+    absent / not-a-dict. The same defensive posture as the accessor:
+    consumers can call ``.get(...)`` on the return value without
+    branching for `None`.
+
+    Spec'd by the hub+dev joint disposition (lead a2a `efa78ecd...`,
+    operator directive 2026-06-14): governance fields (category,
+    official, pre_installed, is_hub_app, author) authored ONLY in
+    `.scitex/dev/config.yaml metadata.app`; runtime artifacts
+    (entry-point ModuleConfig, manifest.json) bake from this helper.
+    """
+    return load_config(repo).app_metadata
+
+
 __all__ = [
     "PROJECT_TYPES",
     "CONFIG_REL_PATH",
     "ProjectConfig",
     "detect_project_types",
     "load_config",
+    "load_app_metadata",
     "write_config",
 ]
