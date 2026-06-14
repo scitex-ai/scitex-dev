@@ -11,9 +11,25 @@
 #   1. `scitex-dev ecosystem audit-all <pkg> --path <repo> --severity error`
 #      — the same audit gate `tests/develop/test_audit.py` runs (the
 #      one installed by `scitex-dev ecosystem install-audit-gate`).
-#   2. Scope tests: `pytest --testmon -m "not slow and not integration"`
+#   2. `ruff check --select F401,F811` on CHANGED .py files only.
+#      F401 = unused import, F811 = redefined-while-unused. Cheap,
+#      diff-scoped, catches the lint regressions that bite CI most often.
+#   3. `import-smoke`: import every CHANGED module under `src/` to catch
+#      the "wheel installs but runtime ImportError" class. Diff-scoped.
+#   4. Scope tests: `pytest --testmon -m "not slow and not integration"`
 #      time-bound by `timeout 60` — narrow, fast, and aborts if any
 #      collected test fails.
+#
+# DIFF SCOPING (key design principle):
+# All steps that CAN be scoped to `git diff` ARE scoped. Steps 2 + 3 work
+# on the changed-file list (`git diff --name-only --diff-filter=AM
+# @{upstream}..HEAD -- '*.py'` with a fallback to ORIGIN/HEAD when no
+# upstream is set). Step 4 (testmon) is already diff-aware. Step 1
+# (audit-all) is whole-repo today — scoping is tracked separately.
+#
+# Heavy CI items remain CI-only by design: pytest-matrix (3.11/3.12/3.13),
+# sphinx-docs, codecov upload, ecosystem-audit whole-repo. The gate is the
+# fast subset; CI is the thorough subset.
 #
 # On either failure the push is blocked with a clear stderr message
 # naming WHAT failed and HOW to bypass.
@@ -149,6 +165,52 @@ echo_info "repo: $REPO_ROOT"
 DEADLINE_SECONDS="${SCITEX_DEV_PREPUSH_TIMEOUT:-60}"
 
 # ----------------------------------------------------------------- #
+# Diff scope: list .py files changed since the upstream tracking    #
+# branch (or origin/HEAD as a fallback). Used by the ruff + import-  #
+# smoke steps so they are O(diff), not O(repo).                     #
+# ----------------------------------------------------------------- #
+#
+# We probe the diff range in this order:
+#   1. `@{upstream}..HEAD` — the canonical "what am I about to push"
+#      when the local branch tracks a remote.
+#   2. `origin/HEAD..HEAD` — fallback when no upstream is set yet
+#      (e.g. brand-new feature branch never pushed).
+#   3. Empty list — degrades gracefully: ruff + import-smoke become
+#      no-ops with an INFO message. Better than failing loud on a
+#      fresh checkout.
+#
+# Filters:
+#   --diff-filter=AM — Added or Modified (skip Deleted / Renamed-only)
+#   -- '*.py'        — Python sources only
+#
+# The list is exported as $CHANGED_PY (newline-separated, may be empty).
+CHANGED_PY=""
+DIFF_RANGE=""
+if git -C "$REPO_ROOT" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' \
+        >/dev/null 2>&1; then
+    DIFF_RANGE='@{upstream}..HEAD'
+elif git -C "$REPO_ROOT" rev-parse --verify origin/HEAD >/dev/null 2>&1; then
+    DIFF_RANGE='origin/HEAD..HEAD'
+fi
+if [[ -n "$DIFF_RANGE" ]]; then
+    # `git diff --name-only` with a range is silent on errors; capture
+    # and filter to existing files (a rename leftover could otherwise
+    # name a path that no longer exists on disk and confuse ruff).
+    CHANGED_PY="$(
+        git -C "$REPO_ROOT" diff --name-only --diff-filter=AM \
+            $DIFF_RANGE -- '*.py' 2>/dev/null \
+            | while IFS= read -r f; do
+                [[ -f "$REPO_ROOT/$f" ]] && echo "$f"
+            done
+    )"
+fi
+CHANGED_PY_COUNT=0
+if [[ -n "$CHANGED_PY" ]]; then
+    CHANGED_PY_COUNT="$(echo "$CHANGED_PY" | wc -l | tr -d ' ')"
+fi
+echo_info "diff scope: $CHANGED_PY_COUNT changed .py file(s) (range=${DIFF_RANGE:-<none>})"
+
+# ----------------------------------------------------------------- #
 # Step 1: audit-all --path <repo>                                   #
 # ----------------------------------------------------------------- #
 #
@@ -180,7 +242,7 @@ fi
 
 AUDIT_RC=0
 if [[ -n "$SCITEX_DEV_CMD" ]]; then
-    echo_info "[1/2] $SCITEX_DEV_CMD ecosystem audit-all $PKG_NAME --path $REPO_ROOT --severity error"
+    echo_info "[1/4] $SCITEX_DEV_CMD ecosystem audit-all $PKG_NAME --path $REPO_ROOT --severity error"
     # NB: `if ! cmd; then $?` always reports 0 (the `!`-inverted
     # truthy result); the original exit code is lost. Capture it
     # directly so the message names the audit-all rc the operator
@@ -201,14 +263,129 @@ else
     # finished worktree), so `scitex-dev` on PATH but `import scitex_dev`
     # raises ModuleNotFoundError. Block the push so CI doesn't redress
     # the same import error.
-    echo_error "[1/2] scitex-dev not importable. Editable install may have drifted (worktree removed)."
+    echo_error "[1/4] scitex-dev not importable. Editable install may have drifted (worktree removed)."
     echo_error "Fix: cd <repo> && uv pip install -e <scitex-dev-checkout>"
     echo_error "     (probed: \`scitex-dev\`, \`python3 -m scitex_dev\`, \`python -m scitex_dev\` — all failed)"
     AUDIT_RC=127
 fi
 
 # ----------------------------------------------------------------- #
-# Step 2: pytest --testmon -m "not slow and not integration"        #
+# Step 2: ruff check --select F401,F811 on CHANGED .py files        #
+# ----------------------------------------------------------------- #
+#
+# F401 (unused import) + F811 (redefined-while-unused) are the two ruff
+# rules that bite local→CI churn most often. Both are line-stable and
+# fast (microseconds per file). Diff-scoped to keep the gate sub-second
+# even on large repos.
+#
+# --extend-per-file-ignores: package `__init__.py` files canonically
+# re-export symbols and would otherwise drown the gate in F401 noise.
+#
+# Why ONLY F401+F811 (not full ruff): broader linting (E/W/B/UP) is the
+# operator's prerogative on their schedule, not the gate's. Picking just
+# the two highest-bang-for-buck rules keeps the gate non-controversial:
+# you cannot argue with "you imported something and never used it".
+RUFF_RC=0
+if [[ "$CHANGED_PY_COUNT" -eq 0 ]]; then
+    echo_info "[2/4] ruff F401,F811 — no changed .py files, SKIPPED"
+elif command -v ruff >/dev/null 2>&1; then
+    echo_info "[2/4] ruff check --select F401,F811 ($CHANGED_PY_COUNT file(s))"
+    # Feed the file list via xargs so the command line stays bounded;
+    # ruff handles large fileset just fine but argv has a hard limit.
+    # `--no-cache` keeps the gate stateless — caching would invalidate
+    # on every $RUFF_CACHE_DIR-mtime change, which is hostile in CI.
+    # We DO want a cache locally, but the small fileset means the
+    # cache rarely helps; explicit > implicit.
+    echo "$CHANGED_PY" | (
+        cd "$REPO_ROOT" && timeout "$DEADLINE_SECONDS" \
+            xargs ruff check --select F401,F811 \
+                --extend-per-file-ignores '**/__init__.py:F401' >&2
+    )
+    RUFF_RC=$?
+    if [[ "$RUFF_RC" -ne 0 ]]; then
+        echo_error "ruff F401/F811 failed (rc=$RUFF_RC)"
+    else
+        echo_success "ruff F401/F811 clean"
+    fi
+else
+    echo_warning "[2/4] ruff not on PATH — step SKIPPED"
+    echo_warning "      install: pip install ruff"
+fi
+
+# ----------------------------------------------------------------- #
+# Step 3: import-smoke on CHANGED src/ modules                      #
+# ----------------------------------------------------------------- #
+#
+# Catches the "wheel installs but `import scitex_<pkg>.<mod>` raises at
+# runtime" class — a syntax error, a top-level NameError, an unguarded
+# optional dep, etc. Diff-scoped to the CHANGED src/ files only so the
+# gate stays sub-second.
+#
+# We compute the import dotted-name from the file path by:
+#   src/<pkg>/foo/bar.py        → <pkg>.foo.bar
+#   src/<pkg>/foo/__init__.py   → <pkg>.foo
+# Tests / examples / scripts are intentionally excluded — they are not
+# part of the package's public import surface.
+IMPORT_SMOKE_RC=0
+if [[ "$CHANGED_PY_COUNT" -eq 0 ]]; then
+    echo_info "[3/4] import-smoke — no changed .py files, SKIPPED"
+else
+    # Collect the dotted module names. Empty if no src/ files changed.
+    IMPORT_TARGETS="$(
+        echo "$CHANGED_PY" | python3 -c "
+import sys
+for line in sys.stdin.read().splitlines():
+    line = line.strip()
+    if not line or not line.startswith('src/'):
+        continue
+    parts = line[len('src/'):].split('/')
+    if not parts:
+        continue
+    # drop trailing .py / __init__.py
+    if parts[-1] == '__init__.py':
+        parts = parts[:-1]
+    elif parts[-1].endswith('.py'):
+        parts[-1] = parts[-1][:-3]
+    else:
+        continue
+    if not parts:
+        continue
+    print('.'.join(parts))
+" 2>/dev/null)"
+    if [[ -z "$IMPORT_TARGETS" ]]; then
+        echo_info "[3/4] import-smoke — no src/ modules in diff, SKIPPED"
+    else
+        N_TARGETS=$(echo "$IMPORT_TARGETS" | wc -l | tr -d ' ')
+        echo_info "[3/4] import-smoke ($N_TARGETS module(s))"
+        # We import via the active python (same interpreter used to
+        # resolve scitex-dev). The `python3` probe is cheap; failure here
+        # means the package can't be imported at all, which is a real
+        # bug — block the push.
+        ( cd "$REPO_ROOT" && timeout "$DEADLINE_SECONDS" python3 -c "
+import importlib, sys
+modules = [m for m in '''$IMPORT_TARGETS'''.strip().splitlines() if m]
+failed = []
+for m in modules:
+    try:
+        importlib.import_module(m)
+    except Exception as e:
+        failed.append((m, type(e).__name__, str(e)))
+if failed:
+    for m, etype, msg in failed:
+        print(f'IMPORT FAIL: {m}: {etype}: {msg}', file=sys.stderr)
+    sys.exit(1)
+" >&2 )
+        IMPORT_SMOKE_RC=$?
+        if [[ "$IMPORT_SMOKE_RC" -ne 0 ]]; then
+            echo_error "import-smoke failed (rc=$IMPORT_SMOKE_RC)"
+        else
+            echo_success "import-smoke clean"
+        fi
+    fi
+fi
+
+# ----------------------------------------------------------------- #
+# Step 4: pytest --testmon -m "not slow and not integration"        #
 # ----------------------------------------------------------------- #
 #
 # --testmon picks only the tests whose imported sources have changed
@@ -225,7 +402,7 @@ if [[ -d "$REPO_ROOT/tests" ]]; then
         PYTEST_BIN="python3 -m pytest"
     fi
     if [[ -n "$PYTEST_BIN" ]]; then
-        echo_info "[2/2] $PYTEST_BIN --testmon -x -m 'not slow and not integration'"
+        echo_info "[4/4] $PYTEST_BIN --testmon -x -m 'not slow and not integration'"
         # We deliberately do NOT pass --no-header / -q: the operator
         # needs to see what ran when something fails. stderr is the
         # right channel because git pre-push hooks emit hook output
@@ -244,21 +421,23 @@ if [[ -d "$REPO_ROOT/tests" ]]; then
             echo_success "scope tests clean"
         fi
     else
-        echo_warning "[2/2] pytest not available — scope test step SKIPPED"
+        echo_warning "[4/4] pytest not available — scope test step SKIPPED"
         echo_warning "      install: pip install pytest pytest-testmon"
     fi
 else
-    echo_warning "[2/2] no tests/ directory — scope test step SKIPPED"
+    echo_warning "[4/4] no tests/ directory — scope test step SKIPPED"
 fi
 
 # ----------------------------------------------------------------- #
 # Verdict                                                           #
 # ----------------------------------------------------------------- #
 
-if [[ "$AUDIT_RC" -ne 0 || "$TEST_RC" -ne 0 ]]; then
+if [[ "$AUDIT_RC" -ne 0 || "$RUFF_RC" -ne 0 || "$IMPORT_SMOKE_RC" -ne 0 || "$TEST_RC" -ne 0 ]]; then
     echo_error "----------------------------------------------------------"
     echo_error "PUSH BLOCKED by scitex-dev pre-push gate"
     [[ "$AUDIT_RC" -ne 0 ]] && echo_error "  - audit-all returned $AUDIT_RC"
+    [[ "$RUFF_RC"  -ne 0 ]] && echo_error "  - ruff F401/F811 returned $RUFF_RC"
+    [[ "$IMPORT_SMOKE_RC" -ne 0 ]] && echo_error "  - import-smoke returned $IMPORT_SMOKE_RC"
     [[ "$TEST_RC"  -ne 0 ]] && echo_error "  - scope tests returned $TEST_RC"
     echo_error ""
     echo_error "Fix the failures above, then re-run \`git push\`."
