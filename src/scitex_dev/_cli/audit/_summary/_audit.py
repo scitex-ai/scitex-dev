@@ -29,6 +29,26 @@ from . import CATALOG, FLAT_KEEPERS
 BANNED_LEAVES = {"version", "completion"}
 
 
+# §1e — flags that strongly imply "start a long-running service / server / UI"
+# on the leaf they appear under. When ANY of these is present on a leaf that
+# ALSO classifies as a noun, the §1e rule fires regardless of whether Moby
+# also classifies the same name as a verb (operator directive 13316: catch
+# `scitex-todo board --port 8051` pattern ecosystem-wide).
+SERVER_STARTUP_FLAGS = frozenset(
+    {
+        "--port",
+        "--host",
+        "--bind",
+        "--serve",
+        "--daemon",
+        "--workers",
+        "--listen",
+        "--addr",
+        "--address",
+    }
+)
+
+
 # ----------------------------------------------------------------------- #
 # Registry loader (per §6b config-precedence cascade for `scitex-dev`)    #
 # ----------------------------------------------------------------------- #
@@ -606,19 +626,73 @@ def _walk(
             )
 
         if is_leaf:
+            # §1 — leaf-noun check. Historically the exemption
+            # (`{verb-t, verb-i, verb, flat-keeper} & labels`) silently
+            # passed multi-class noun-verb homonyms such as `board`
+            # (Moby classifies as both noun and verb-t/verb-i), letting
+            # `scitex-todo board --port 8051` slip through (operator
+            # directive 13316). At TOP LEVEL (depth=1) AND for BARE
+            # (non-compound) leaves the rule is tightened: a leaf
+            # carrying `noun` in its labels is flagged regardless of
+            # also-verb labels, because the operator's CLI grammar
+            # requires top-level bare leaves to be unambiguously verbs.
+            # Compound leaves like `print-shell-completion` are
+            # explicitly excluded from PART A — the compound IS the
+            # `<verb>-<object>` grammar the rule is asking for.
+            top_level_leaf = len(path) == 1
+            multi_class_homonym = (
+                bool({"verb-t", "verb-i", "verb"} & labels) and "noun" in labels
+            )
             if (
                 "noun" in labels
-                and not ({"verb-t", "verb-i", "verb", "flat-keeper"} & labels)
+                and (
+                    (top_level_leaf and multi_class_homonym and not is_compound)
+                    or not ({"verb-t", "verb-i", "verb", "flat-keeper"} & labels)
+                )
                 and name not in FLAT_KEEPERS
+                and "flat-keeper" not in labels
             ):
+                suffix = (
+                    " — Moby classifies this as both noun AND verb; if the "
+                    "verb meaning is intended in this CLI context, add to "
+                    "`.scitex/dev/cli-audit-dict.yaml` under `intransitive_verbs:` "
+                    "(same escape hatch `next` uses)."
+                    if multi_class_homonym
+                    else ""
+                )
                 out.append(
                     Violation(
                         full,
                         "§1",
                         f"leaf token looks like a noun — transitive action implied; "
-                        f"use '<verb>-{name}' (e.g. start-{name}) or add a sibling verb",
+                        f"use '<verb>-{name}' (e.g. start-{name}) or add a sibling verb"
+                        + suffix,
                     )
                 )
+
+            # §1e — server-startup-flag heuristic. High-signal catch:
+            # a noun-classified leaf at top level that accepts any of
+            # `--port / --host / --bind / --serve / --daemon / --workers /
+            # --listen / --addr / --address` is unambiguously starting a
+            # service; the grammar should be `<noun> start` (group) or
+            # `start-<noun>` (compound). Fires even when the §1 check
+            # would have exempted the leaf via a Moby verb label —
+            # operator directive 13316's exact pattern.
+            if "noun" in labels and top_level_leaf:
+                if SERVER_STARTUP_FLAGS & _flag_names(cmd):
+                    out.append(
+                        Violation(
+                            full,
+                            "§1e",
+                            f"top-level noun leaf '{name}' accepts a server-"
+                            f"startup flag (one of --port/--host/--bind/"
+                            f"--serve/--daemon/--workers/--listen/--addr/"
+                            f"--address) — that's a service-start verb in "
+                            f"disguise; rename to 'start-{name}' or nest "
+                            f"under a '{name}' group with a 'start' "
+                            f"subcommand (e.g. '{name} start --port …').",
+                        )
+                    )
             if (
                 ("verb-t" in labels or "verb" in labels)
                 and not is_compound
