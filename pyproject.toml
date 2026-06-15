@@ -45,6 +45,7 @@ skills = ["newb>=0.3.0"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "pytest-timeout>=2.0.0",
     "fastmcp>=2.0.0",
     "textual>=0.50.0",
     # newb belongs to [skills] now. Re-listed here so the dev venv resolves
@@ -141,6 +142,9 @@ scitex_dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Default 5-minute per-test timeout to prevent runner hangs from
+# stalling CI (lead-approved Phase 3 robustness, 2026-06-15).
+timeout = 300
 markers = [
     "skill_quality: structural checklist tests (§1–§4)",
     "skill_trigger: trigger-rate tests (live claude -p, slow, non-deterministic)",
