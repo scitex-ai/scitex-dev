@@ -24,12 +24,32 @@ def register(group: click.Group) -> None:
         default=False,
         help="Replace any existing runner with the same name.",
     )
-    def up_cmd(launcher: str | None, replace_runner: bool) -> None:
+    @click.option(
+        "--name",
+        "name_override",
+        default=None,
+        help="Override runner.name from config — provision a SECOND/THIRD "
+        "executor (e.g. spartan-cpu-runner-02) for a parallel matrix. "
+        "Pair with --home so each runner has its own work/install dir.",
+    )
+    @click.option(
+        "--home",
+        "home_override",
+        default=None,
+        help="Override runner.home — REQUIRED to differ per runner when "
+        "running multiple executors (each needs its own _work/install dir).",
+    )
+    def up_cmd(
+        launcher: str | None,
+        replace_runner: bool,
+        name_override: str | None,
+        home_override: str | None,
+    ) -> None:
         """Start the persistent GitHub Actions runner on the HPC compute node.
 
         \b
         How it works:
-          1. Copies launcher.sh to the HPC host.
+          1. Copies launcher.sh to the HPC host (shared FS staging).
           2. SSHs to the HPC host and runs:
              srun --overlap --jobid=<CI_LEASE_JOBID> --export=ALL \\
                bash launcher.sh
@@ -37,21 +57,23 @@ def register(group: click.Group) -> None:
              registers the runner, and runs a persistent run.sh loop.
 
         \b
-        The GH_TOKEN is passed via ssh stdin (never in argv) to avoid
-        leaking it into process listings.
+        The GH_TOKEN is passed via env (never in argv) to avoid leaking it.
 
         \b
-        Example:
+        Examples:
           $ scitex-dev ci runner up
           $ scitex-dev ci runner up --replace-runner
+          # add a second executor (home-clean parallel matrix):
+          $ scitex-dev ci runner up --name spartan-cpu-runner-02 \\
+              --home /data/.../punim0264/.../ci/actions-runner-02
         """
         cfg = config.load_runner_config()
         target = config._ssh_target(cfg)
         gh_token = config.get_gh_token(cfg)
         jobname = cfg["ci_lease"]["jobname"]
-        runner_home = cfg["runner"]["home"]
+        runner_home = home_override or cfg["runner"]["home"]
         wrap_log = cfg["runner"]["wrap_log"]
-        runner_name = cfg["runner"]["name"]
+        runner_name = name_override or cfg["runner"]["name"]
         runner_labels = ",".join(cfg["runner"]["labels"])
         apptainer = cfg["hpc"]["apptainer"]
         sif = cfg["hpc"]["sif"]
