@@ -34,11 +34,19 @@ From: ubuntu:24.04
     # source-built wheel; libglib2.0-0 is REQUIRED by scitex.io (without
     # it import silently falls back to "minimal mode" — exactly the kind
     # of silent degradation we forbid). fd for the audit-conformance test.
+    #
+    # cron + systemd are TEST-ENVIRONMENT tools, not runtime services here:
+    # scitex-dev MANAGES crontab + a systemd user unit (`ecosystem cron`,
+    # `ecosystem up`), and its tests shell out to `crontab -l` / gate on
+    # `shutil.which("systemctl")`. A bare container has neither, so those
+    # tests fail with "'crontab' not found" / silently skip the supervisor
+    # enable path. Installing the BINARIES (systemd is never PID1 here) makes
+    # the CI container match a real SciTeX host — honest, not a mock.
     apt-get update
     apt-get install -y --no-install-recommends \
         ca-certificates curl git locales \
         build-essential pkg-config libffi-dev libssl-dev libglib2.0-0 \
-        fd-find ripgrep
+        fd-find ripgrep cron systemd
     locale-gen en_US.UTF-8
     # Debian ships fd as fdfind; the audit helper + muscle memory want `fd`.
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
@@ -68,6 +76,12 @@ From: ubuntu:24.04
         # EOVERFLOW (os error 75) on gpfs. Deps-only venv → runtime install
         # only WRITES (no overlay remove).
         uv pip install --python "/opt/venv-$V/bin/python" "scitex-dev[all,dev]"
+        # pytest-timeout is in develop's [dev] but may lag in PyPI's
+        # published [dev] extra (the SIF bakes deps from PyPI). Install it
+        # explicitly so the pyproject `timeout=300` per-test cap is honoured
+        # — else a hung test wedges the job to timeout-minutes instead of
+        # failing loud + naming itself at 300 s.
+        uv pip install --python "/opt/venv-$V/bin/python" pytest-timeout
         uv pip uninstall --python "/opt/venv-$V/bin/python" scitex-dev
     done
 

@@ -54,21 +54,17 @@ jobs:
           # apptainer scratch on punim0264 — HOME stays clean.
           export APPTAINER_TMPDIR=/data/gpfs/projects/punim0264/ywatanabe/ci/apptainer-tmp
           mkdir -p "$APPTAINER_TMPDIR"
-          # Read-only SIF, NO install: the SIF venv carries the deps; the
-          # checkout's scitex_dev is added via PYTHONPATH=$PWD/src. pytest
-          # writes coverage/.pytest_cache to the bound workspace (under $HOME,
-          # apptainer auto-binds it), never the SIF — so no --writable-tmpfs, no
-          # squashfs/overlay writes, no root-owned-venv perms issue.
-          # (__version__ falls back to "0.0.0+local" — harmless for tests.)
-          # $V expands in the runner shell; \$PWD expands inside the container.
+          # Read-only SIF, NO install (no --writable-tmpfs): the in-container
+          # setup — PYTHONPATH=src, the `scitex-dev` console-script shim, and
+          # the baked venv bin (python3/pytest) on PATH — lives in
+          # .github/ci/run-in-sif.sh. Keeping it in a version-controlled script
+          # (vs. an inline bash -c) means nothing is written into the SIF and
+          # the quoting stays readable.
           # --bind punim0264: $HOME/.scitex is a symlink into punim0264; bind it
           # so the symlink resolves inside the container (else scitex_logging's
           # on-import log-dir mkdir under ~/.scitex fails on a dangling link).
-          apptainer exec --pwd "$PWD" --bind /data/gpfs/projects/punim0264 "$IMG" bash -c "
-            set -euo pipefail
-            export LC_ALL=C.UTF-8 LANG=C.UTF-8
-            PYTHONPATH=\"\$PWD/src\" /opt/venv-$V/bin/pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
-          "
+          apptainer exec --pwd "$PWD" --bind /data/gpfs/projects/punim0264 \
+            "$IMG" bash .github/ci/run-in-sif.sh "$V"
 
       - name: Upload coverage to Codecov
         if: always() && matrix.python-version == '3.12'
