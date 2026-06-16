@@ -48,9 +48,13 @@ def register(group: click.Group) -> None:
             "--jq",
             f'[.[] | select(.name == "{rname}") | {{"id": .id}}]',
         ]
-        find_result = subprocess.run(find_cmd, capture_output=True, text=True, timeout=30)
+        find_result = subprocess.run(
+            find_cmd, capture_output=True, text=True, timeout=30
+        )
         if find_result.returncode != 0:
-            raise click.ClickException(f"Failed to find runner: {find_result.stderr.strip()}")
+            raise click.ClickException(
+                f"Failed to find runner: {find_result.stderr.strip()}"
+            )
 
         import json
 
@@ -68,7 +72,7 @@ def register(group: click.Group) -> None:
             "-X",
             "POST",
             "--jq",
-            '.token',
+            ".token",
         ]
         remove_result = subprocess.run(
             remove_token_cmd, capture_output=True, text=True, timeout=30
@@ -84,16 +88,19 @@ def register(group: click.Group) -> None:
 
         # Step 3: Run config.sh remove --token on HPC
         ssh_remove = (
-            f"ssh -o ControlPath=none -o ControlMaster=no "
-            f'{target} '
-            f"\"cd {cfg['runner']['home']} && ./config.sh remove --token {remove_token}\""
+            f"ssh {config.SSH_MUX_OPTS_STR} "
+            f"{target} "
+            f'"cd {cfg["runner"]["home"]} && ./config.sh remove --token {remove_token}"'
         )
         rm_result = subprocess.run(
             ssh_remove, capture_output=True, text=True, timeout=30, shell=True
         )
         if rm_result.returncode != 0:
             # Non-fatal — the runner might already be deregistered
-            click.echo(f"  (runner remove returned {rm_result.returncode}, continuing)", fg="yellow")
+            click.echo(
+                f"  (runner remove returned {rm_result.returncode}, continuing)",
+                fg="yellow",
+            )
 
         # Step 4: Delete the runner from GitHub
         delete_cmd = [
@@ -103,7 +110,9 @@ def register(group: click.Group) -> None:
             "-X",
             "DELETE",
         ]
-        delete_result = subprocess.run(delete_cmd, capture_output=True, text=True, timeout=30)
+        delete_result = subprocess.run(
+            delete_cmd, capture_output=True, text=True, timeout=30
+        )
         if delete_result.returncode != 0:
             raise click.ClickException(
                 f"Failed to delete runner: {delete_result.stderr.strip()}"
@@ -111,8 +120,8 @@ def register(group: click.Group) -> None:
 
         # Step 5: Kill the wrapper process on HPC
         kill_cmd = (
-            f"ssh -o ControlPath=none -o ControlMaster=no "
-            f'{target} '
+            f"ssh {config.SSH_MUX_OPTS_STR} "
+            f"{target} "
             f'"pkill -f scitex_ci_launcher || true"'
         )
         subprocess.run(kill_cmd, capture_output=True, text=True, timeout=15, shell=True)
