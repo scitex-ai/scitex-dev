@@ -42,7 +42,16 @@ jobs:
                 | (.conclusion // .state // "")
                 | select(. != "SUCCESS" and . != "NEUTRAL" and . != "SKIPPED" and . != "") ] | length' 2>/dev/null || echo 1)
             if [ "$pending" = "0" ]; then
-              gh pr merge "$pr" --repo "$REPO" --merge --admin --delete-branch && echo "MERGED #$pr -> develop" || echo "blocked #$pr"
+              # --squash, NOT --merge: this repo forbids merge commits (linear
+              # history — only squash/rebase allowed). With --merge, every green
+              # develop PR silently "blocked" and never auto-merged, defeating
+              # the green->self-merge ring (feedback.pdf §3). Fail LOUD on a real
+              # merge failure so it never silently stalls again.
+              if gh pr merge "$pr" --repo "$REPO" --squash --admin --delete-branch; then
+                echo "MERGED #$pr -> develop (squash)"
+              else
+                echo "::warning::auto-merge of #$pr FAILED (green but not merged) — needs a human look"
+              fi
             else
               echo "PR #$pr not green ($pending) — skip"
             fi
