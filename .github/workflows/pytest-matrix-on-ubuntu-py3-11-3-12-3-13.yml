@@ -60,7 +60,10 @@ jobs:
           # is the container CWD so `pip install -e .` + pytest see the checkout.
           apptainer exec --writable-tmpfs --pwd "$PWD" "$IMG" bash -c "
             set -euo pipefail
-            /opt/venv-$V/bin/python -m pip install -e . --no-deps -q
+            export LC_ALL=C.UTF-8 LANG=C.UTF-8
+            # uv venvs are pip-less by design — install the editable checkout
+            # with uv (baked in the SIF), --no-deps (deps already in the venv).
+            uv pip install --python /opt/venv-$V/bin/python -e . --no-deps -q
             /opt/venv-$V/bin/pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
           "
 
