@@ -57,9 +57,7 @@ def register(group: click.Group) -> None:
         sif = cfg["hpc"]["sif"]
 
         # Determine launcher path — shipped copy in the package
-        pkg_launcher = os.path.join(
-            os.path.dirname(__file__), "launcher.sh"
-        )
+        pkg_launcher = os.path.join(os.path.dirname(__file__), "launcher.sh")
         if launcher:
             launcher_path = launcher
         elif os.path.exists(pkg_launcher):
@@ -113,27 +111,41 @@ def register(group: click.Group) -> None:
                 f"See squeue output for available jobs."
             )
 
-        # Now set up the runner on the HPC host:
-        # 1. Copy launcher.sh to /tmp on HPC
-        # 2. Run via srun --overlap
+        # Now set up the runner on the HPC host.
+        #
+        # Staging MUST be on a SHARED filesystem, never /tmp. Spartan has
+        # multiple round-robin login nodes (login1/login2/…) and each `ssh`
+        # WITHOUT connection-sharing can land on a DIFFERENT node, whose /tmp
+        # is node-local — so a wrapper scp'd in one connection is missing in
+        # the next (observed: "/tmp/scitex_ci_wrapper.sh: No such file"). The
+        # launcher is worse: the wrapper runs on a login node but `srun`
+        # executes the launcher on the COMPUTE node, which shares HOME/project
+        # FS but not /tmp. Stage both under the runner_home's parent (a project
+        # dir on punim0264, mounted on every node). $stage_dir is created with
+        # `mkdir -p` over ssh BEFORE the scp (scp can't create dirs).
+        stage_dir = os.path.join(os.path.dirname(runner_home), "run")
+        wrapper_remote = os.path.join(stage_dir, "scitex_ci_wrapper.sh")
+        launcher_remote = os.path.join(stage_dir, "scitex_ci_launcher.sh")
 
-        # We need to pass the token and env through heredoc to ssh
-        # Use a temp file approach: write a wrapper script locally, then scp+ssh
+        # We need to pass the token and env through to the srun --overlap
+        # context. Write a wrapper script locally, then scp+ssh it.
         with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp:
             # The launcher already handles GH_TOKEN from env; we just need
-            # to pass env vars into the srun --overlap context
-            tmp.write(f'''#!/bin/bash
+            # to pass env vars into the srun --overlap context.
+            tmp.write(f"""#!/bin/bash
 set -euo pipefail
 
-# Write launcher to HPC /tmp
-cat > /tmp/scitex_ci_launcher.sh << 'LAUNCHER_EOF'
+# Write launcher to the SHARED staging dir (visible to the compute node srun
+# runs on — /tmp would not be).
+mkdir -p '{stage_dir}'
+cat > '{launcher_remote}' << 'LAUNCHER_EOF'
 {launcher_content}
 LAUNCHER_EOF
-chmod +x /tmp/scitex_ci_launcher.sh
+chmod +x '{launcher_remote}'
 
 # Set environment for the srun --overlap call
 export GH_TOKEN='{gh_token}'
-export GH_REPO='{cfg['github']['default_repo']}'
+export GH_REPO='{cfg["github"]["default_repo"]}'
 export RUNNER_NAME='{runner_name}'
 export RUNNER_LABELS='{runner_labels}'
 export RUNNER_HOME='{runner_home}'
@@ -144,39 +156,43 @@ export RUNNER_VERSION='2.328.0'
 # Start the runner via srun --overlap on the existing lease job
 setsid nohup srun \\
   --overlap --jobid={jobid} --export=ALL \\
-  bash /tmp/scitex_ci_launcher.sh </dev/null >'{wrap_log}' 2>&1 &
+  bash '{launcher_remote}' </dev/null >'{wrap_log}' 2>&1 &
 disown
 echo "RUNNER_STARTED:$!"
-''')
+""")
             tmp_path = tmp.name
 
-        # SCP the wrapper to HPC and run it
-        scp_cmd = [
-            "scp",
-            "-o",
-            "ControlPath=none",
-            "-o",
-            "ControlMaster=no",
-            tmp_path,
-            f"{target}:/tmp/scitex_ci_wrapper.sh",
-        ]
+        ssh_opts = ["-o", "ControlPath=none", "-o", "ControlMaster=no"]
+
+        # Ensure the shared staging dir exists (on the shared FS, so any login
+        # node the next connection lands on sees it).
+        mkdir_result = subprocess.run(
+            ["ssh", *ssh_opts, target, f"mkdir -p '{stage_dir}'"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if mkdir_result.returncode != 0:
+            os.unlink(tmp_path)
+            raise click.ClickException(
+                f"Failed to create staging dir {stage_dir}: {mkdir_result.stderr.strip()}"
+            )
+
+        # SCP the wrapper to the shared staging dir.
+        scp_cmd = ["scp", *ssh_opts, tmp_path, f"{target}:{wrapper_remote}"]
         scp_result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
         if scp_result.returncode != 0:
             os.unlink(tmp_path)
             raise click.ClickException(f"SCP failed: {scp_result.stderr.strip()}")
         os.unlink(tmp_path)
 
-        # Run the wrapper on HPC
-        run_cmd = [
-            "ssh",
-            "-o",
-            "ControlPath=none",
-            "-o",
-            "ControlMaster=no",
-            target,
-            "bash /tmp/scitex_ci_wrapper.sh",
-        ]
-        run_result = subprocess.run(run_cmd, capture_output=True, text=True, timeout=30)
+        # Run the wrapper on HPC (shared path → any login node sees it).
+        run_result = subprocess.run(
+            ["ssh", *ssh_opts, target, f"bash '{wrapper_remote}'"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
 
         if run_result.returncode != 0:
             raise click.ClickException(
