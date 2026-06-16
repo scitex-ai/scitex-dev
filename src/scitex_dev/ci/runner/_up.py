@@ -10,6 +10,84 @@ import click
 
 from . import config
 
+# Absolute SLURM paths: the `up` wrapper runs in a NON-interactive login shell
+# where SLURM is not on PATH (so bare `srun`/`squeue` fail). Match these.
+_SRUN = "/apps/slurm/latest/bin/srun"
+_SQUEUE = "/apps/slurm/latest/bin/squeue"
+
+
+def _staging_paths(runner_home: str) -> tuple[str, str, str]:
+    """Return (stage_dir, wrapper_remote, launcher_remote) on the SHARED FS.
+
+    Staging MUST be on a shared filesystem, never /tmp: Spartan has multiple
+    round-robin login nodes and each ssh WITHOUT connection-sharing can land
+    on a different node, whose /tmp is node-local; worse, the wrapper runs on
+    a login node but `srun` executes the launcher on the COMPUTE node, which
+    shares the project FS but not /tmp. runner_home is a punim0264 project dir
+    (mounted on every node), so stage under its parent.
+    """
+    stage_dir = os.path.join(os.path.dirname(runner_home), "run")
+    return (
+        stage_dir,
+        os.path.join(stage_dir, "scitex_ci_wrapper.sh"),
+        os.path.join(stage_dir, "scitex_ci_launcher.sh"),
+    )
+
+
+def _build_wrapper_script(
+    *,
+    runner_home: str,
+    launcher_content: str,
+    gh_token: str,
+    gh_repo: str,
+    runner_name: str,
+    runner_labels: str,
+    apptainer: str,
+    sif: str,
+    wrap_log: str,
+    jobid: str,
+) -> str:
+    """Build the login-node wrapper script (pure — no I/O).
+
+    Writes the launcher to the SHARED staging dir and starts it via the
+    ABSOLUTE srun path under srun --overlap on the existing lease. Both
+    invariants are regression-guarded by tests (the two bugs this fixed:
+    /tmp staging on multi-login-node Spartan, and bare `srun` not on the
+    non-interactive PATH).
+    """
+    stage_dir, _wrapper_remote, launcher_remote = _staging_paths(runner_home)
+    return f"""#!/bin/bash
+set -euo pipefail
+
+# Write launcher to the SHARED staging dir (visible to the compute node srun
+# runs on — /tmp would not be).
+mkdir -p '{stage_dir}'
+cat > '{launcher_remote}' << 'LAUNCHER_EOF'
+{launcher_content}
+LAUNCHER_EOF
+chmod +x '{launcher_remote}'
+
+# Set environment for the srun --overlap call
+export GH_TOKEN='{gh_token}'
+export GH_REPO='{gh_repo}'
+export RUNNER_NAME='{runner_name}'
+export RUNNER_LABELS='{runner_labels}'
+export RUNNER_HOME='{runner_home}'
+export APPTAINER='{apptainer}'
+export SIF='{sif}'
+export RUNNER_VERSION='2.328.0'
+
+# Start the runner via srun --overlap on the existing lease job.
+# Absolute srun path: the wrapper runs in a NON-interactive login shell where
+# SLURM is not on PATH (matches the absolute squeue path the lease check uses)
+# — bare `srun` fails with "No such file or directory".
+setsid nohup {_SRUN} \\
+  --overlap --jobid={jobid} --export=ALL \\
+  bash '{launcher_remote}' </dev/null >'{wrap_log}' 2>&1 &
+disown
+echo "RUNNER_STARTED:$!"
+"""
+
 
 def register(group: click.Group) -> None:
     @group.command()
@@ -106,7 +184,7 @@ def register(group: click.Group) -> None:
                 "-o",
                 "ControlMaster=no",
                 target,
-                f"/apps/slurm/latest/bin/squeue -u {cfg['hpc']['user']} --name={jobname} --noheader -o '%i %T'",
+                f"{_SQUEUE} -u {cfg['hpc']['user']} --name={jobname} --noheader -o '%i %T'",
             ],
             capture_output=True,
             text=True,
@@ -133,58 +211,23 @@ def register(group: click.Group) -> None:
                 f"See squeue output for available jobs."
             )
 
-        # Now set up the runner on the HPC host.
-        #
-        # Staging MUST be on a SHARED filesystem, never /tmp. Spartan has
-        # multiple round-robin login nodes (login1/login2/…) and each `ssh`
-        # WITHOUT connection-sharing can land on a DIFFERENT node, whose /tmp
-        # is node-local — so a wrapper scp'd in one connection is missing in
-        # the next (observed: "/tmp/scitex_ci_wrapper.sh: No such file"). The
-        # launcher is worse: the wrapper runs on a login node but `srun`
-        # executes the launcher on the COMPUTE node, which shares HOME/project
-        # FS but not /tmp. Stage both under the runner_home's parent (a project
-        # dir on punim0264, mounted on every node). $stage_dir is created with
-        # `mkdir -p` over ssh BEFORE the scp (scp can't create dirs).
-        stage_dir = os.path.join(os.path.dirname(runner_home), "run")
-        wrapper_remote = os.path.join(stage_dir, "scitex_ci_wrapper.sh")
-        launcher_remote = os.path.join(stage_dir, "scitex_ci_launcher.sh")
-
-        # We need to pass the token and env through to the srun --overlap
-        # context. Write a wrapper script locally, then scp+ssh it.
+        # Build the login-node wrapper (pure; staging on the SHARED FS, absolute
+        # srun — see _build_wrapper_script). Write it locally, then scp+ssh it.
+        stage_dir, wrapper_remote, _launcher_remote = _staging_paths(runner_home)
+        wrapper_script = _build_wrapper_script(
+            runner_home=runner_home,
+            launcher_content=launcher_content,
+            gh_token=gh_token,
+            gh_repo=cfg["github"]["default_repo"],
+            runner_name=runner_name,
+            runner_labels=runner_labels,
+            apptainer=apptainer,
+            sif=sif,
+            wrap_log=wrap_log,
+            jobid=jobid,
+        )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp:
-            # The launcher already handles GH_TOKEN from env; we just need
-            # to pass env vars into the srun --overlap context.
-            tmp.write(f"""#!/bin/bash
-set -euo pipefail
-
-# Write launcher to the SHARED staging dir (visible to the compute node srun
-# runs on — /tmp would not be).
-mkdir -p '{stage_dir}'
-cat > '{launcher_remote}' << 'LAUNCHER_EOF'
-{launcher_content}
-LAUNCHER_EOF
-chmod +x '{launcher_remote}'
-
-# Set environment for the srun --overlap call
-export GH_TOKEN='{gh_token}'
-export GH_REPO='{cfg["github"]["default_repo"]}'
-export RUNNER_NAME='{runner_name}'
-export RUNNER_LABELS='{runner_labels}'
-export RUNNER_HOME='{runner_home}'
-export APPTAINER='{apptainer}'
-export SIF='{sif}'
-export RUNNER_VERSION='2.328.0'
-
-# Start the runner via srun --overlap on the existing lease job.
-# Absolute srun path: the wrapper runs in a NON-interactive login shell where
-# SLURM is not on PATH (matches the absolute /apps/slurm/latest/bin/squeue the
-# lease check already uses) — bare `srun` fails with "No such file or directory".
-setsid nohup /apps/slurm/latest/bin/srun \\
-  --overlap --jobid={jobid} --export=ALL \\
-  bash '{launcher_remote}' </dev/null >'{wrap_log}' 2>&1 &
-disown
-echo "RUNNER_STARTED:$!"
-""")
+            tmp.write(wrapper_script)
             tmp_path = tmp.name
 
         ssh_opts = ["-o", "ControlPath=none", "-o", "ControlMaster=no"]
