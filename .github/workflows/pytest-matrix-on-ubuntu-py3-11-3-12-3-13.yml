@@ -14,11 +14,15 @@ on:
 # only Spartan-side names like the SLURM lease drop the redundant "spartan").
 # The runner srun --overlaps an ALREADY-RUNNING lease — never sbatch-and-wait
 # (no allocation guarantee). Pending leases are never used.
-# Design (operator directives 2026-06-16): fail-fast / fail-loud / NO silent
-# fallbacks. The runner pre-stages the toolchain (python3.11/3.12/3.13, fd,
-# uv) under $HOME; this workflow uses them directly — NO actions/setup-python
-# download (it floods the HOME quota) and NO `sudo apt` (no sudo on Spartan).
-# All heavy I/O (venv, caches, tmp) lives on punim0264 so HOME stays clean.
+#
+# CI runs INSIDE a reused, pre-built SIF (~/.scitex/dev/containers/ci-cpu.sif,
+# on punim0264) — the SIF bakes python3.11/3.12/3.13 + scitex-dev[all,dev]
+# DEPS, so each run only overlays the editable checkout (--no-deps) and runs
+# pytest. The SIF IS the cache: no per-run dependency install. Rebuild it with
+# `scitex-container apptainer build ci-cpu` when the dependency set changes.
+#
+# fail-fast / fail-loud / NO silent fallbacks (operator directives 2026-06-16):
+# a missing SIF or a missing dep is a hard error, never a reinstall fallback.
 jobs:
   test:
     # Job name kept verbatim — these are the required status checks on develop.
@@ -29,41 +33,30 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-    env:
-      PUNIM: /data/gpfs/projects/punim0264/ywatanabe/ci
     steps:
       - uses: actions/checkout@v4
 
-      - name: Resolve pre-staged toolchain (fail-loud; no setup-python, no sudo)
+      - name: Run tests in the reused CI SIF (apptainer exec — no per-run install)
         run: |
           set -euo pipefail
-          # Pre-staged tools live under $HOME (shared FS, visible on the compute node).
-          export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.env-3.11/bin:$PATH"
-          PY="python${{ matrix.python-version }}"
-          command -v "$PY" >/dev/null || { echo "FATAL: $PY is not on the runner — prestage missing"; exit 1; }
-          command -v fd    >/dev/null || { echo "FATAL: fd is not on the runner — prestage missing"; exit 1; }
-          command -v uv    >/dev/null || { echo "FATAL: uv is not on the runner — prestage missing"; exit 1; }
-          echo "$($PY --version) | $(fd --version) | uv $(uv --version)"
-          # Heavy I/O off HOME -> punim0264 (operator: home must stay clean).
-          BASE="$PUNIM/run-${{ github.run_id }}-${{ matrix.python-version }}"
-          mkdir -p "$BASE/tmp" "$BASE/uvcache"
-          {
-            echo "PATH=$PATH"
-            echo "TMPDIR=$BASE/tmp"
-            echo "UV_CACHE_DIR=$BASE/uvcache"
-            echo "CI_BASE=$BASE"
-          } >> "$GITHUB_ENV"
-
-      - name: Install .[all,dev] (single step, fail-loud — no `|| fallback` chain)
-        run: |
-          set -euo pipefail
-          uv venv --python "python${{ matrix.python-version }}" "$CI_BASE/venv"
-          uv pip install --python "$CI_BASE/venv/bin/python" -e ".[all,dev]"
-
-      - name: Run tests
-        run: |
-          set -euo pipefail
-          "$CI_BASE/venv/bin/pytest" tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
+          IMG="$HOME/.scitex/dev/containers/ci-cpu.sif"
+          if [ ! -f "$IMG" ]; then
+            echo "::error::CI SIF missing at $IMG — rebuild it: scitex-container apptainer build ci-cpu"
+            exit 1
+          fi
+          V="${{ matrix.python-version }}"
+          # apptainer scratch on punim0264 — HOME stays clean.
+          export APPTAINER_TMPDIR=/data/gpfs/projects/punim0264/ywatanabe/ci/apptainer-tmp
+          mkdir -p "$APPTAINER_TMPDIR"
+          # --writable-tmpfs: the editable --no-deps overlay writes a .pth into
+          # the SIF venv (read-only squashfs) via an ephemeral tmpfs layer.
+          # --pwd "$PWD": the workspace (under $HOME, apptainer auto-binds it)
+          # is the container CWD so `pip install -e .` + pytest see the checkout.
+          apptainer exec --writable-tmpfs --pwd "$PWD" "$IMG" bash -c "
+            set -euo pipefail
+            /opt/venv-$V/bin/python -m pip install -e . --no-deps -q
+            /opt/venv-$V/bin/pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
+          "
 
       - name: Upload coverage to Codecov
         if: always() && matrix.python-version == '3.12'
@@ -72,7 +65,3 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml
           fail_ci_if_error: false
-
-      - name: Clean punim0264 scratch (keep disk tidy)
-        if: always()
-        run: rm -rf "${CI_BASE:-/nonexistent}" || true
