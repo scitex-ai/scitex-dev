@@ -1,0 +1,114 @@
+# scitex-dev CI runner container (CPU) — Apptainer recipe (public SSoT).
+#
+# Purpose: a REUSED, cached image the self-hosted Spartan CPU runner
+# apptainer-exec's for every CI run, so no per-run dependency install.
+# The SIF IS the cache (operator directive 2026-06-16: "container already
+# there, reused with caching"). Built once via scitex-container; rebuilt
+# (new version) only when the dependency set changes.
+#
+# Build (canonical — versioned via scitex-container, on a RUNNING compute
+# node; never the login node, never sbatch-and-wait):
+#   scitex-container apptainer build ci-cpu -o ~/.scitex/dev/containers
+# Raw fallback (same effect):
+#   apptainer build ci-cpu.sif ci-cpu.def
+#
+# Run contract (the workflow): each matrix job execs (read-only SIF, no install)
+#   apptainer exec --bind <punim> <sif> bash .github/ci/run-in-sif.sh <pyver>
+# The baked venvs carry scitex-dev[all,dev] FULLY installed; CI prepends the
+# checkout via PYTHONPATH=<co>/src so imports + coverage use the PR code while
+# the baked console-script / entry-point / metadata stay available. A dep
+# missing from the SIF fails LOUD (rebuild the SIF) — never a silent reinstall.
+#
+# Design notes (vs the heavier agent base.def): no node/rust/claude-sdk —
+# CI inside the SIF runs pytest only (checkout/codecov run on the host
+# runner). Three Python versions for the required pytest matrix.
+
+Bootstrap: docker
+From: ubuntu:24.04
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+
+    # System libs: build-essential/pkg-config/libffi/libssl for any
+    # source-built wheel; libglib2.0-0 is REQUIRED by scitex.io (without
+    # it import silently falls back to "minimal mode" — exactly the kind
+    # of silent degradation we forbid). fd for the audit-conformance test.
+    #
+    # cron + systemd are TEST-ENVIRONMENT tools, not runtime services here:
+    # scitex-dev MANAGES crontab + a systemd user unit (`ecosystem cron`,
+    # `ecosystem up`), and its tests shell out to `crontab -l` / gate on
+    # `shutil.which("systemctl")`. A bare container has neither, so those
+    # tests fail with "'crontab' not found" / silently skip the supervisor
+    # enable path. Installing the BINARIES (systemd is never PID1 here) makes
+    # the CI container match a real SciTeX host — honest, not a mock.
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl git locales \
+        build-essential pkg-config libffi-dev libssl-dev libglib2.0-0 \
+        fd-find ripgrep cron systemd
+    locale-gen en_US.UTF-8
+    # Debian ships fd as fdfind; the audit helper + muscle memory want `fd`.
+    ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+    rm -rf /var/lib/apt/lists/*
+
+    # uv (Astral): manages the Python toolchain + fast installs.
+    # The installer lands uv in /root/.local/bin (root-only, 0700) — a SYMLINK
+    # there is unreadable by the non-root runtime user, so COPY the real
+    # binaries to /usr/local/bin (world-exec) for both %post and runtime.
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    cp -f /root/.local/bin/uv /usr/local/bin/uv
+    cp -f /root/.local/bin/uvx /usr/local/bin/uvx
+    chmod 0755 /usr/local/bin/uv /usr/local/bin/uvx
+    export PATH=/usr/local/bin:$PATH
+    export UV_PYTHON_INSTALL_DIR=/opt/uv-python
+
+    # Pre-stage the three matrix Python versions + a per-version venv with
+    # scitex-dev[all,dev] FULLY installed (from PyPI) — scitex-dev itself is
+    # KEPT installed, not just its deps.
+    #
+    # Why keep scitex-dev baked (vs. installing the checkout at runtime):
+    #   * The baked venv is root-owned; a runtime `uv pip install -e .` into it
+    #     hits `Permission denied (os error 13)` even with --writable-tmpfs (the
+    #     overlay can't copy-up root-owned site-packages for the non-root runner
+    #     user). An editable *replace* of a baked copy also hit EOVERFLOW on
+    #     gpfs. So NO runtime install — the SIF stays read-only.
+    #   * CI runs the CHECKOUT's code by prepending it via PYTHONPATH=<co>/src
+    #     (see .github/ci/run-in-sif.sh): PYTHONPATH shadows the baked package
+    #     for imports + coverage, while the baked install still provides the
+    #     things importlib.metadata-based tooling needs — the `scitex-dev`
+    #     console script on PATH (13 skills subprocess tests), the
+    #     `console_scripts` ENTRY POINT (audit-cli resolves the CLI via
+    #     im.entry_points — a shim with no metadata can't satisfy it), and a
+    #     real __version__. ep.load() then imports scitex_dev._cli from the
+    #     checkout (PYTHONPATH wins), so audit-cli audits the PR code.
+    for V in 3.11 3.12 3.13; do
+        uv python install "$V"
+        uv venv --python "$V" "/opt/venv-$V"
+        uv pip install --python "/opt/venv-$V/bin/python" "scitex-dev[all,dev]"
+        # pytest-timeout is in develop's [dev] but may lag in PyPI's
+        # published [dev] extra (the SIF bakes deps from PyPI). Install it
+        # explicitly so the pyproject `timeout=300` per-test cap is honoured
+        # — else a hung test wedges the job to timeout-minutes instead of
+        # failing loud + naming itself at 300 s.
+        uv pip install --python "/opt/venv-$V/bin/python" pytest-timeout
+    done
+
+%environment
+    export LANG=en_US.UTF-8
+    export LC_ALL=en_US.UTF-8
+    export UV_PYTHON_INSTALL_DIR=/opt/uv-python
+    export PATH=/usr/local/bin:$PATH
+
+%labels
+    org.scitex.layer ci-cpu
+    org.scitex.runtime apptainer
+    org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep cron systemd + scitex-dev[all,dev]"
+
+%help
+    scitex-dev CI runner image (CPU). Reused by the self-hosted Spartan
+    runner: apptainer exec --bind <punim> <sif> bash
+    .github/ci/run-in-sif.sh <ver> — read-only, no install; the checkout
+    is prepended via PYTHONPATH while the baked scitex-dev supplies the
+    console script / entry point / metadata. Rebuild via scitex-container
+    when the dependency set changes.

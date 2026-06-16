@@ -1,4 +1,12 @@
-"""Load and validate ~/.scitex/dev/ci-runner.yaml."""
+"""Load and validate the CI runner config (~/.scitex/dev/config/ci-runner.yaml).
+
+Organized layout (operator directive 2026-06-16, "utilize a directory … organize
+various configs"): the CI runner config lives under the ``config/`` subdir, and
+it does NOT duplicate the HPC host coordinates — ``hpc.user`` / ``hpc.ssh_host``
+are resolved from the sibling ``config.yaml``'s ``hosts:`` entry named by
+``hpc.host_ref`` (default ``spartan``). A ci-runner.yaml may still set
+``hpc.user`` / ``hpc.ssh_host`` explicitly to override the shared file.
+"""
 
 from __future__ import annotations
 
@@ -7,14 +15,23 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-_DEFAULT_CONFIG_PATH = Path.home() / ".scitex" / "dev" / "ci-runner.yaml"
+_DEV_DIR = Path.home() / ".scitex" / "dev"
+# Preferred (organized) location first, then the legacy flat path (back-compat).
+_CONFIG_CANDIDATES = (
+    _DEV_DIR / "config" / "ci-runner.yaml",
+    _DEV_DIR / "ci-runner.yaml",
+)
+_SHARED_CONFIG_YAML = _DEV_DIR / "config.yaml"
 
 
 def _resolve_config_path() -> Path:
     """Return the config path following the precedence contract.
 
     Precedence:
-      $SCITEX_DEV_CONFIG → $XDG_CONFIG_HOME/scitex/dev/ci-runner.yaml → ~/.scitex/dev/ci-runner.yaml
+      $SCITEX_DEV_CONFIG
+      → $XDG_CONFIG_HOME/scitex/dev/config/ci-runner.yaml
+      → ~/.scitex/dev/config/ci-runner.yaml   (organized — preferred)
+      → ~/.scitex/dev/ci-runner.yaml          (legacy flat — back-compat)
     """
     env = os.environ.get("SCITEX_DEV_CONFIG")
     if env:
@@ -22,34 +39,91 @@ def _resolve_config_path() -> Path:
 
     xdg = os.environ.get("XDG_CONFIG_HOME")
     if xdg:
-        candidate = Path(xdg) / "scitex" / "dev" / "ci-runner.yaml"
+        candidate = Path(xdg) / "scitex" / "dev" / "config" / "ci-runner.yaml"
         if candidate.exists():
             return candidate
 
-    return _DEFAULT_CONFIG_PATH
+    for candidate in _CONFIG_CANDIDATES:
+        if candidate.exists():
+            return candidate
+    # None exist — return the preferred path so the missing-config error names it.
+    return _CONFIG_CANDIDATES[0]
 
 
-def load_runner_config() -> dict[str, Any]:
+def _resolve_hpc_from_shared(
+    host_ref: str, *, shared_path: Path | None = None
+) -> dict[str, str]:
+    """Resolve ``{user, ssh_host}`` for ``host_ref`` from the shared config.yaml.
+
+    Reuses the single source of truth for host coordinates (operator: "reuse
+    config.yaml hosts.spartan + hpc") so ci-runner.yaml never duplicates them.
+    Returns {} (silently) when config.yaml is absent or has no matching host —
+    the caller's required-key validation then reports precisely what's missing.
+
+    ``shared_path`` is the file-path seam (defaults to ~/.scitex/dev/config.yaml);
+    tests pass a real tmp file rather than patching the module constant.
+    """
+    path = shared_path or _SHARED_CONFIG_YAML
+    if not path.exists():
+        return {}
+    # Best-effort: any failure here (yaml missing/misconfigured, unreadable
+    # file, malformed YAML) returns {} so the caller's required-key validation
+    # reports the missing hpc.user/ssh_host loudly with the precise path.
+    try:
+        import yaml
+
+        shared = yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        return {}
+    for host in shared.get("hosts", []) or []:
+        if isinstance(host, dict) and host.get("name") == host_ref:
+            out: dict[str, str] = {}
+            if host.get("user"):
+                out["user"] = str(host["user"])
+            if host.get("hostname"):
+                out["ssh_host"] = str(host["hostname"])
+            return out
+    return {}
+
+
+def load_runner_config(
+    *, config_path: Path | None = None, shared_path: Path | None = None
+) -> dict[str, Any]:
     """Load + validate the ci-runner config.
 
     Each required key MUST be present — no defaults.
     Raises SystemExit if required keys are missing.
+
+    ``config_path`` / ``shared_path`` are file-path seams (default to the
+    resolved ci-runner.yaml and ~/.scitex/dev/config.yaml); tests pass real
+    tmp files rather than patching module state.
     """
-    cfg_path = _resolve_config_path()
+    cfg_path = config_path or _resolve_config_path()
     if not cfg_path.exists():
         raise SystemExit(
             f"missing private config at {cfg_path}; "
             f"run: scitex-dev ci runner onboard … to get started, or create "
-            f"~/.scitex/dev/ci-runner.yaml with your bindings"
+            f"~/.scitex/dev/config/ci-runner.yaml with your bindings"
         )
 
     try:
         import yaml
-    except ImportError:
+    except Exception:
         raise SystemExit("PyYAML is required. Install with: pip install pyyaml")
 
     with cfg_path.open() as fh:
         cfg = yaml.safe_load(fh) or {}
+
+    # Reuse the shared config.yaml for HPC host coordinates (operator: "reuse
+    # config.yaml hosts.spartan + hpc"). ci-runner.yaml names the host via
+    # hpc.host_ref (default "spartan"); user/ssh_host are filled in from the
+    # shared file UNLESS ci-runner.yaml set them explicitly (explicit wins).
+    hpc = cfg.get("hpc")
+    if isinstance(hpc, dict):
+        host_ref = hpc.get("host_ref", "spartan")
+        shared_hpc = _resolve_hpc_from_shared(host_ref, shared_path=shared_path)
+        for key, value in shared_hpc.items():
+            hpc.setdefault(key, value)
 
     required = [
         ("hpc", "user"),
@@ -74,9 +148,7 @@ def load_runner_config() -> dict[str, Any]:
         node = cfg
         for k in path:
             if not isinstance(node, dict) or k not in node:
-                raise SystemExit(
-                    f"missing config key: {'.'.join(path)} in {cfg_path}"
-                )
+                raise SystemExit(f"missing config key: {'.'.join(path)} in {cfg_path}")
             node = node[k]
 
     return cfg
@@ -100,7 +172,9 @@ def get_gh_token(cfg: dict[str, Any]) -> str:
     return token
 
 
-def _gh_api(cfg: dict[str, Any], method: str, path: str, data: dict | None = None) -> dict:
+def _gh_api(
+    cfg: dict[str, Any], method: str, path: str, data: dict | None = None
+) -> dict:
     """Call GitHub REST API via gh CLI. Returns parsed JSON."""
     token = get_gh_token(cfg)
     repo = cfg["github"]["default_repo"]
@@ -124,7 +198,9 @@ def _gh_api(cfg: dict[str, Any], method: str, path: str, data: dict | None = Non
         raise SystemExit(f"gh api returned non-JSON: {result.stdout!r}")
 
 
-def ssh_run(cfg: dict[str, Any], cmd: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
+def ssh_run(
+    cfg: dict[str, Any], cmd: str, timeout: int = 60
+) -> subprocess.CompletedProcess[str]:
     """Run a command via ssh on the HPC host."""
     target = _ssh_target(cfg)
     result = subprocess.run(
