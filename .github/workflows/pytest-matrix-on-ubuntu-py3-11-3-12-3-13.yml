@@ -9,8 +9,11 @@ on:
     - cron: "0 7 * * *"  # nightly 07:00 UTC
   workflow_dispatch:
 
-# Runs on the self-hosted Spartan CPU runner (label: cpu — every self-hosted
-# runner here IS on Spartan, so "spartan" in the label is redundant).
+# Runs on the self-hosted Spartan CPU runner. GitHub label: spartan-cpu
+# ("spartan" is meaningful here — it selects this runner over github-hosted;
+# only Spartan-side names like the SLURM lease drop the redundant "spartan").
+# The runner srun --overlaps an ALREADY-RUNNING lease — never sbatch-and-wait
+# (no allocation guarantee). Pending leases are never used.
 # Design (operator directives 2026-06-16): fail-fast / fail-loud / NO silent
 # fallbacks. The runner pre-stages the toolchain (python3.11/3.12/3.13, fd,
 # uv) under $HOME; this workflow uses them directly — NO actions/setup-python
@@ -20,7 +23,7 @@ jobs:
   test:
     # Job name kept verbatim — these are the required status checks on develop.
     name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
-    runs-on: [self-hosted, Linux, X64, cpu]
+    runs-on: [self-hosted, Linux, X64, spartan-cpu]
     timeout-minutes: 30
     strategy:
       fail-fast: false
