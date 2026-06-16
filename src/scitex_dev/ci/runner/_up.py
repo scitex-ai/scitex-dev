@@ -153,8 +153,11 @@ export APPTAINER='{apptainer}'
 export SIF='{sif}'
 export RUNNER_VERSION='2.328.0'
 
-# Start the runner via srun --overlap on the existing lease job
-setsid nohup srun \\
+# Start the runner via srun --overlap on the existing lease job.
+# Absolute srun path: the wrapper runs in a NON-interactive login shell where
+# SLURM is not on PATH (matches the absolute /apps/slurm/latest/bin/squeue the
+# lease check already uses) — bare `srun` fails with "No such file or directory".
+setsid nohup /apps/slurm/latest/bin/srun \\
   --overlap --jobid={jobid} --export=ALL \\
   bash '{launcher_remote}' </dev/null >'{wrap_log}' 2>&1 &
 disown
