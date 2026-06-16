@@ -117,11 +117,31 @@ def register(group: click.Group) -> None:
         help="Override runner.home — REQUIRED to differ per runner when "
         "running multiple executors (each needs its own _work/install dir).",
     )
+    @click.option(
+        "--repo",
+        "repo_override",
+        default=None,
+        help="Override github.default_repo — provision a runner for ANOTHER "
+        "ecosystem repo (e.g. ywatanabe1989/scitex-todo) on the SAME shared "
+        "Spartan lease. This is the ecosystem-rollout path: ywatanabe1989 is a "
+        "User (no org runner pool), so each repo needs its own registration, "
+        "but they all overlap one lease/node. Pair with --name + --home.",
+    )
+    @click.option(
+        "--labels",
+        "labels_override",
+        default=None,
+        help="Override runner.labels (comma list) for this runner, e.g. "
+        "'self-hosted,spartan-cpu,scitex-ci' to also match a repo whose "
+        "workflow still targets the legacy label. Default: runner.labels from config.",
+    )
     def up_cmd(
         launcher: str | None,
         replace_runner: bool,
         name_override: str | None,
         home_override: str | None,
+        repo_override: str | None,
+        labels_override: str | None,
     ) -> None:
         """Start the persistent GitHub Actions runner on the HPC compute node.
 
@@ -144,6 +164,11 @@ def register(group: click.Group) -> None:
           # add a second executor (home-clean parallel matrix):
           $ scitex-dev ci runner up --name spartan-cpu-runner-02 \\
               --home /data/.../punim0264/.../ci/actions-runner-02
+          # ecosystem rollout: a runner for ANOTHER repo on the SAME lease
+          $ scitex-dev ci runner up --repo ywatanabe1989/scitex-todo \\
+              --name spartan-cpu-todo-01 \\
+              --home /data/.../punim0264/.../ci/actions-runner-todo \\
+              --labels self-hosted,spartan-cpu,scitex-ci
         """
         cfg = config.load_runner_config()
         target = config._ssh_target(cfg)
@@ -152,7 +177,8 @@ def register(group: click.Group) -> None:
         runner_home = home_override or cfg["runner"]["home"]
         wrap_log = cfg["runner"]["wrap_log"]
         runner_name = name_override or cfg["runner"]["name"]
-        runner_labels = ",".join(cfg["runner"]["labels"])
+        runner_labels = labels_override or ",".join(cfg["runner"]["labels"])
+        gh_repo = repo_override or cfg["github"]["default_repo"]
         apptainer = cfg["hpc"]["apptainer"]
         sif = cfg["hpc"]["sif"]
 
@@ -218,7 +244,7 @@ def register(group: click.Group) -> None:
             runner_home=runner_home,
             launcher_content=launcher_content,
             gh_token=gh_token,
-            gh_repo=cfg["github"]["default_repo"],
+            gh_repo=gh_repo,
             runner_name=runner_name,
             runner_labels=runner_labels,
             apptainer=apptainer,
