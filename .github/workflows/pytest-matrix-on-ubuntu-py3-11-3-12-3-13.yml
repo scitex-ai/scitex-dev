@@ -39,6 +39,12 @@ jobs:
       - name: Run tests in the reused CI SIF (apptainer exec — no per-run install)
         run: |
           set -euo pipefail
+          # The runner's job shell is --noprofile --norc (no Lmod), so put the
+          # self-contained apptainer shim on PATH (it execs the real
+          # Apptainer/1.3.3 binary directly — no `module`, no login shell,
+          # avoiding the bashrc cd/PATH-wipe).
+          export PATH="$HOME/.env-3.11/bin:$PATH"
+          command -v apptainer >/dev/null || { echo "::error::apptainer shim not on PATH (~/.env-3.11/bin)"; exit 1; }
           IMG="$HOME/.scitex/dev/containers/ci-cpu.sif"
           if [ ! -f "$IMG" ]; then
             echo "::error::CI SIF missing at $IMG — rebuild it: scitex-container apptainer build ci-cpu"
