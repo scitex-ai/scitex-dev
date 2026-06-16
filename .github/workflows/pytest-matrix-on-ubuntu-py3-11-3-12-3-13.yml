@@ -9,7 +9,8 @@ on:
     - cron: "0 7 * * *"  # nightly 07:00 UTC
   workflow_dispatch:
 
-# Runs on the self-hosted Spartan CPU runner (label: spartan-cpu).
+# Runs on the self-hosted Spartan CPU runner (label: cpu — every self-hosted
+# runner here IS on Spartan, so "spartan" in the label is redundant).
 # Design (operator directives 2026-06-16): fail-fast / fail-loud / NO silent
 # fallbacks. The runner pre-stages the toolchain (python3.11/3.12/3.13, fd,
 # uv) under $HOME; this workflow uses them directly — NO actions/setup-python
@@ -19,7 +20,7 @@ jobs:
   test:
     # Job name kept verbatim — these are the required status checks on develop.
     name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
-    runs-on: [self-hosted, Linux, X64, spartan-cpu]
+    runs-on: [self-hosted, Linux, X64, cpu]
     timeout-minutes: 30
     strategy:
       fail-fast: false
