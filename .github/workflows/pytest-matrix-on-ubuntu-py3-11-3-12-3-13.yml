@@ -13,6 +13,10 @@ jobs:
   test:
     name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    # Hard belt against a hung test wedging the job until GitHub's 6h ceiling
+    # (a supervisor terminate() busy-loop did exactly that). The suite runs in
+    # ~2 min; pytest-timeout (suspenders) names the offender, this caps the job.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

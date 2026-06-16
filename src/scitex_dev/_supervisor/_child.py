@@ -158,6 +158,11 @@ class ChildProcess:
     * ``clock`` — a ``Callable[[], float]`` that defaults to
       :func:`time.time`. Tests freeze the clock to drive the breaker
       deterministically.
+    * ``sleep`` — a ``Callable[[float], None]`` that defaults to
+      :func:`time.sleep`. Used only by ``terminate()``'s grace wait;
+      tests inject a no-op so the SIGTERM→SIGKILL escalation runs
+      instantly (mirrors the ``Supervisor`` sleep seam — no real sleep
+      in tests).
     """
 
     def __init__(
@@ -167,6 +172,7 @@ class ChildProcess:
         log_dir: Path,
         popen_factory: Callable[..., subprocess.Popen] = subprocess.Popen,
         clock: Callable[[], float] = _now,
+        sleep: Callable[[float], None] = time.sleep,
         circuit_failure_limit: int = DEFAULT_CIRCUIT_FAILURE_LIMIT,
         circuit_window_sec: float = DEFAULT_CIRCUIT_WINDOW_SEC,
     ) -> None:
@@ -179,6 +185,7 @@ class ChildProcess:
         self.log_dir = log_dir
         self._popen_factory = popen_factory
         self._clock = clock
+        self._sleep = sleep
         self._ledger = _RestartLedger(
             failure_limit=circuit_failure_limit,
             window_sec=circuit_window_sec,
@@ -394,11 +401,17 @@ class ChildProcess:
             # Already gone, or we don't own it (test-fake doesn't open
             # a real PGID). Fall through to the wait + KILL path.
             pass
-        deadline = self._clock() + grace_sec
-        while self._clock() < deadline:
+        # Iteration-bounded grace wait. Bounding by a fixed step count
+        # (not ``while self._clock() < deadline``) makes this immune to a
+        # frozen / non-advancing injected clock — a deterministic test
+        # clock that returns a constant would otherwise spin here forever.
+        # ``self._sleep`` is the injectable seam (no real sleep in tests).
+        poll_interval = 0.1
+        steps = max(1, int(grace_sec / poll_interval))
+        for _ in range(steps):
             if self._proc.poll() is not None:
                 break
-            time.sleep(0.1)
+            self._sleep(poll_interval)
         if self._proc.poll() is None:
             # Still alive — escalate.
             try:

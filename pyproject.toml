@@ -45,6 +45,10 @@ skills = ["newb>=0.3.0"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    # pytest-timeout: per-test wall-clock cap (see [tool.pytest.ini_options]
+    # `timeout`). A single hung test fails loud + names itself in ~5 min
+    # instead of wedging the whole job until GitHub's 6h ceiling.
+    "pytest-timeout>=2.1.0",
     "fastmcp>=2.0.0",
     "textual>=0.50.0",
     # newb belongs to [skills] now. Re-listed here so the dev venv resolves
@@ -141,6 +145,13 @@ scitex_dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Per-test wall-clock cap (pytest-timeout, in [dev]). The whole suite runs in
+# ~2 min, so any single test exceeding 300 s is wedged: fail it loud + name it
+# rather than spinning to GitHub's 6 h job ceiling. The default "signal" method
+# interrupts a stuck Python loop and lets the rest of the suite still run. If
+# pytest-timeout is absent (plain `pip install -e .` fallback), pytest just
+# warns "Unknown config option: timeout" — no error.
+timeout = 300
 markers = [
     "skill_quality: structural checklist tests (§1–§4)",
     "skill_trigger: trigger-rate tests (live claude -p, slow, non-deterministic)",
