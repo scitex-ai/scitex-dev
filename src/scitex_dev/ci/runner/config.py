@@ -23,6 +23,27 @@ _CONFIG_CANDIDATES = (
 )
 _SHARED_CONFIG_YAML = _DEV_DIR / "config.yaml"
 
+# SSH connection MULTIPLEXING for every runner-CLI ssh/scp call.
+#
+# Spartan's HPC admin flagged excessive login-node connections (2026-06-17:
+# 440+ from home). The runner CLI used to force ControlMaster=no (a FRESH
+# connection per call) to dodge a multi-login-node /tmp staging race — but that
+# race was fixed by moving staging onto the shared FS (PR #208), so the override
+# is now pure churn. Multiplex instead: one shared master per host, reused by
+# every call, auto-closed 30s after the last use. Caps the runner at ~1
+# login-node connection (admin asked for <~20). The dedicated ControlPath keeps
+# this socket separate from the operator's interactive ssh sockets.
+SSH_MUX_OPTS = [
+    "-o",
+    "ControlMaster=auto",
+    "-o",
+    "ControlPersist=30",
+    "-o",
+    "ControlPath=~/.ssh/.cm-scitex-ci-%C",
+]
+# Same opts as a single string, for the few shell=True ssh call sites.
+SSH_MUX_OPTS_STR = " ".join(SSH_MUX_OPTS)
+
 
 def _resolve_config_path() -> Path:
     """Return the config path following the precedence contract.
@@ -204,15 +225,7 @@ def ssh_run(
     """Run a command via ssh on the HPC host."""
     target = _ssh_target(cfg)
     result = subprocess.run(
-        [
-            "ssh",
-            "-o",
-            "ControlPath=none",
-            "-o",
-            "ControlMaster=no",
-            target,
-            cmd,
-        ],
+        ["ssh", *SSH_MUX_OPTS, target, cmd],
         capture_output=True,
         text=True,
         timeout=timeout,

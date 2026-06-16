@@ -75,7 +75,7 @@ def _lease_status(cfg: dict) -> dict:
     jobname = cfg["ci_lease"]["jobname"]
     target = config._ssh_target(cfg)
     cmd = (
-        f"ssh -o ControlPath=none -o ControlMaster=no "
+        f"ssh {config.SSH_MUX_OPTS_STR} "
         f"{target} "
         f"'/apps/slurm/latest/bin/squeue -u {user} --name={jobname} "
         f'--noheader -o "%i %T %M %L"\''

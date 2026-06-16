@@ -41,12 +41,14 @@ def register(group: click.Group) -> None:
 
         # Query squeue
         squeue_cmd = (
-            f"ssh -o ControlPath=none -o ControlMaster=no "
-            f'{target} '
+            f"ssh {config.SSH_MUX_OPTS_STR} "
+            f"{target} "
             f"/apps/slurm/latest/bin/squeue -u {user} "
             f"--name={jobname} --noheader -o '%i %T %M'"
         )
-        sq_result = subprocess.run(squeue_cmd, capture_output=True, text=True, timeout=30)
+        sq_result = subprocess.run(
+            squeue_cmd, capture_output=True, text=True, timeout=30
+        )
         if sq_result.returncode != 0:
             raise click.ClickException(f"squeue failed: {sq_result.stderr.strip()}")
 
@@ -55,7 +57,9 @@ def register(group: click.Group) -> None:
             parts = line.split()
             if len(parts) < 3:
                 continue
-            running.append({"jobid": parts[0], "state": parts[1], "time_used": parts[2]})
+            running.append(
+                {"jobid": parts[0], "state": parts[1], "time_used": parts[2]}
+            )
 
         running_jobs = [r for r in running if r["state"] == "RUNNING"]
         pending_jobs = [r for r in running if r["state"] == "PENDING"]
@@ -78,12 +82,14 @@ def register(group: click.Group) -> None:
         # Check if we need to resubmit based on time_left
         # squeue %M gives time_used; we need %T for time_left
         squeue_tl = (
-            f"ssh -o ControlPath=none -o ControlMaster=no "
-            f'{target} '
+            f"ssh {config.SSH_MUX_OPTS_STR} "
+            f"{target} "
             f"/apps/slurm/latest/bin/squeue -u {user} "
             f"--name={jobname} --noheader -o '%i %T %M %T'"
         )
-        tl_result = subprocess.run(squeue_tl, capture_output=True, text=True, timeout=30)
+        tl_result = subprocess.run(
+            squeue_tl, capture_output=True, text=True, timeout=30
+        )
         if tl_result.returncode == 0:
             for line in tl_result.stdout.strip().splitlines():
                 parts = line.split()
@@ -136,8 +142,8 @@ def _submit_lease(cfg: dict, target: str) -> str:
     """Submit a new CI lease job. Returns the new jobid."""
     sbatch_script = cfg["ci_lease"]["sbatch_script"]
     cmd = (
-        f"ssh -o ControlPath=none -o ControlMaster=no "
-        f'{target} '
+        f"ssh {config.SSH_MUX_OPTS_STR} "
+        f"{target} "
         f"cd ~ && /apps/slurm/latest/bin/sbatch "
         f"--output=./slurm_logs/%j.out --error=./slurm_logs/%j.err "
         f"{sbatch_script}"

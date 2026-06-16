@@ -205,10 +205,7 @@ def register(group: click.Group) -> None:
         lease_info = subprocess.run(
             [
                 "ssh",
-                "-o",
-                "ControlPath=none",
-                "-o",
-                "ControlMaster=no",
+                *config.SSH_MUX_OPTS,
                 target,
                 f"{_SQUEUE} -u {cfg['hpc']['user']} --name={jobname} --noheader -o '%i %T'",
             ],
@@ -256,7 +253,7 @@ def register(group: click.Group) -> None:
             tmp.write(wrapper_script)
             tmp_path = tmp.name
 
-        ssh_opts = ["-o", "ControlPath=none", "-o", "ControlMaster=no"]
+        ssh_opts = config.SSH_MUX_OPTS
 
         # Ensure the shared staging dir exists (on the shared FS, so any login
         # node the next connection lands on sees it).
