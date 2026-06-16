@@ -54,18 +54,17 @@ jobs:
           # apptainer scratch on punim0264 — HOME stays clean.
           export APPTAINER_TMPDIR=/data/gpfs/projects/punim0264/ywatanabe/ci/apptainer-tmp
           mkdir -p "$APPTAINER_TMPDIR"
-          # --writable-tmpfs: the editable --no-deps overlay writes a .pth into
-          # the SIF venv (read-only squashfs) via an ephemeral tmpfs layer.
-          # --pwd "$PWD": the workspace (under $HOME, apptainer auto-binds it)
-          # is the container CWD so `pip install -e .` + pytest see the checkout.
-          apptainer exec --writable-tmpfs --pwd "$PWD" "$IMG" bash -c "
+          # Read-only SIF, NO install: the SIF venv carries the deps; the
+          # checkout's scitex_dev is added via PYTHONPATH=$PWD/src. pytest
+          # writes coverage/.pytest_cache to the bound workspace (under $HOME,
+          # apptainer auto-binds it), never the SIF — so no --writable-tmpfs, no
+          # squashfs/overlay writes, no root-owned-venv perms issue.
+          # (__version__ falls back to "0.0.0+local" — harmless for tests.)
+          # $V expands in the runner shell; \$PWD expands inside the container.
+          apptainer exec --pwd "$PWD" "$IMG" bash -c "
             set -euo pipefail
             export LC_ALL=C.UTF-8 LANG=C.UTF-8
-            export UV_CACHE_DIR=/tmp/uvcache   # writable (tmpfs); SIF is read-only
-            # uv venvs are pip-less by design — install the editable checkout
-            # with uv (baked in the SIF), --no-deps (deps already in the venv).
-            uv pip install --python /opt/venv-$V/bin/python -e . --no-deps -q
-            /opt/venv-$V/bin/pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
+            PYTHONPATH=\"\$PWD/src\" /opt/venv-$V/bin/pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
           "
 
       - name: Upload coverage to Codecov
