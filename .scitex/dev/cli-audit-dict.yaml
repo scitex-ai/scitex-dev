@@ -29,4 +29,9 @@ transitive_verbs:
   # `scitex-dev ci runner use <target>` — flip CI_RUNS_ON for the
   # current repo's GitHub Actions workflow.
   - use
-intransitive_verbs: []
+intransitive_verbs:
+  # `scitex-dev ecosystem run` — run the collective ecosystem supervisor in
+  # the foreground (the systemd ExecStart). "run" is an intransitive verb in
+  # CLI convention (cf. `docker run`, `cargo run`, `make run`), but the
+  # bundled Moby POS list classifies it noun-only, tripping §1. Declare it.
+  - run

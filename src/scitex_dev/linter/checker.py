@@ -3,9 +3,7 @@
 __all__ = ["Issue", "is_script", "lint_file", "lint_source"]
 
 import ast
-import re
 from dataclasses import dataclass, replace
-from pathlib import Path
 
 from . import rules
 from ._checks import (
@@ -16,6 +14,7 @@ from ._checks import (
     own_scitex_package,
 )
 from ._rules import lookup as _lk
+from ._source_helpers import _is_allowed_by_comment, is_script
 from .rules import Rule
 
 
@@ -25,89 +24,6 @@ class Issue:
     line: int
     col: int
     source_line: str = ""
-
-
-def is_script(filepath: str, config=None) -> bool:
-    """Check if file is a script (not a library module).
-
-    Uses config.library_patterns and config.library_dirs to determine
-    which files are library modules (exempt from script-only rules).
-    """
-    from .config import load_config, matches_library_pattern
-
-    if config is None:
-        config = load_config(start_path=filepath)
-
-    path = Path(filepath)
-    name = path.name
-
-    # Check filename against library patterns (e.g., __*__.py, test_*.py)
-    if matches_library_pattern(name, config):
-        return False
-
-    # Check if file is inside a library directory (e.g., src/)
-    parts = path.parts
-    for lib_dir in config.library_dirs:
-        if lib_dir in parts:
-            return False
-
-    # Check if file is inside a script directory (e.g., scripts/)
-    # These are utility scripts called by shell, not SciTeX session scripts
-    for script_dir in config.script_dirs:
-        if script_dir in parts:
-            return False
-
-    return True
-
-
-# STX-allow regex.
-#
-# Before 2026-06-14 this was ``r"#\s*stx-allow\b(?::?\s*(.+))?"`` — the
-# greedy ``.+`` captured EVERYTHING after the colon, including prose. So
-# ``# stx-allow: STX-P006  (prose explanation)`` parsed the ids string as
-# ``"STX-P006  (prose explanation)"``, the comma-split saw a single
-# element that didn't equal ``STX-P006``, and the suppression silently
-# failed. Operators kept hitting this when annotating with reasons inline
-# (neurovista elevation 2026-06-14, item 6).
-#
-# Tightened regex captures ONLY characters valid in a rule-id list:
-# uppercase letters, digits, dash, comma, whitespace. Stops at the first
-# non-matching character so inline prose after the ids is ignored.
-# Supported forms (now correct):
-#
-#   x  # stx-allow                         → bare; suppress ALL
-#   x  # stx-allow: STX-S003               → suppress STX-S003
-#   x  # stx-allow: STX-S003, STX-I001     → suppress both
-#   x  # stx-allow: STX-S003  (because foo) → suppress STX-S003; ignore prose
-#
-# The form ``# stx-allow:lower-case-id`` is still NOT supported — rule
-# ids are uppercase by convention; lower-case suggests a typo. The regex
-# stops at the lower-case letter and the id list is empty → bare-allow
-# fallback (suppress all on the line) does NOT fire because the colon
-# was consumed; it's a no-op suppression — visible as a non-matching
-# rule. That's the desired loud behaviour.
-_STX_ALLOW_RE = re.compile(r"#\s*stx-allow\b(?::\s*([A-Z0-9\-,\s]*))?")
-
-
-def _is_allowed_by_comment(source_line: str, rule_id: str) -> bool:
-    """Check if a source line has a ``# stx-allow`` comment suppressing *rule_id*.
-
-    Supported forms::
-
-        x = 1  # stx-allow                     → suppresses ALL rules on this line
-        x = 1  # stx-allow: STX-S003           → suppresses STX-S003
-        x = 1  # stx-allow: STX-S003, STX-I001 → suppresses both
-    """
-    if not source_line:
-        return False
-    m = _STX_ALLOW_RE.search(source_line)
-    if m is None:
-        return False
-    ids_str = m.group(1)
-    if not ids_str:
-        return True  # bare ``# stx-allow`` suppresses everything
-    allowed = {s.strip() for s in ids_str.split(",")}
-    return rule_id in allowed
 
 
 class SciTeXChecker(
@@ -461,8 +377,15 @@ class SciTeXChecker(
         return ""
 
 
-def lint_source(source: str, filepath: str = "<stdin>", config=None) -> list:
-    """Lint Python source code and return list of Issues."""
+def lint_source(
+    source: str, filepath: str = "<stdin>", config=None, plugins=None
+) -> list:
+    """Lint Python source code and return list of Issues.
+
+    ``plugins`` is the plugin-payload seam (defaults to ``load_plugins()``);
+    tests pass a hand-rolled payload to drive the fail-loud path without
+    patching the loader (PA-306: real fakes, no monkeypatch).
+    """
     try:
         tree = ast.parse(source, filename=filepath)
     except SyntaxError:
@@ -481,8 +404,9 @@ def lint_source(source: str, filepath: str = "<stdin>", config=None) -> list:
     # Plugin-contributed checkers (respect opt-in gating)
     from ._plugin_loader import load_plugins
 
+    payload = plugins if plugins is not None else load_plugins()
     _enabled = set(config.enable) if config else set()
-    for checker_cls in load_plugins()["checkers"]:
+    for checker_cls in payload["checkers"]:
         # Gate FM-category checkers behind config.enable=["FM"]
         cat = getattr(checker_cls, "category", None)
         if cat == "figure" and "FM" not in _enabled:
@@ -501,21 +425,22 @@ def lint_source(source: str, filepath: str = "<stdin>", config=None) -> list:
             # policy: fail-loud / no-silent-fallback.
             _name = getattr(checker_cls, "__name__", repr(checker_cls))
             import logging as _logging
-
-            _logging.getLogger(__name__).warning(
-                "linter: plugin checker %s raised on visit: %s",
-                _name,
-                exc,
-            )
-            # ALSO emit to stderr unconditionally (not gated by log
-            # level) so the agent feedback surface — `run_lint.sh`
-            # hook + interactive use — sees the drop. The escape is
-            # the same env flag already used by the IO/PA absence
-            # notice, so operators get one consistent off-switch.
             import os as _os
             import sys as _sys
 
+            # Operator opt-out: SCITEX_DEV_LINTER_QUIET silences the WHOLE
+            # fail-loud surface. Both paths can reach stderr — the logger
+            # falls back to stderr (logging.lastResort / scitex-dev's own
+            # "WARN:" handler) when emitting, and the explicit write feeds
+            # the agent feedback hook (run_lint.sh) + interactive use.
+            # Gating only the explicit write left the logger leaking the
+            # message past QUIET; gate both so the off-switch is honest.
             if not _os.environ.get("SCITEX_DEV_LINTER_QUIET"):
+                _logging.getLogger(__name__).warning(
+                    "linter: plugin checker %s raised on visit: %s",
+                    _name,
+                    exc,
+                )
                 _sys.stderr.write(
                     f"[scitex-dev linter] WARNING: plugin checker "
                     f"{_name} raised on visit of {filepath}: "

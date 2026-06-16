@@ -44,50 +44,64 @@ def _cron(name="c", *, schedule="0 * * * *"):
 def test_derive_cron_expr_preserves_explicit_5_field_schedule():
     # Arrange
     job = _timer(schedule="*/3 * * * *")
-    # Act + Assert
-    assert derive_cron_expr(job) == "*/3 * * * *"
+    # Act
+    result = derive_cron_expr(job)
+    # Assert
+    assert result == "*/3 * * * *"
 
 
 def test_derive_cron_expr_minutes_cadence():
     # Arrange
     job = _timer(on_unit_active_sec="15min")
-    # Act + Assert
-    assert derive_cron_expr(job) == "*/15 * * * *"
+    # Act
+    result = derive_cron_expr(job)
+    # Assert
+    assert result == "*/15 * * * *"
 
 
 def test_derive_cron_expr_hours_cadence():
     # Arrange
     job = _timer(on_unit_active_sec="4h")
-    # Act + Assert
-    assert derive_cron_expr(job) == "0 */4 * * *"
+    # Act
+    result = derive_cron_expr(job)
+    # Assert
+    assert result == "0 */4 * * *"
 
 
 def test_derive_cron_expr_days_cadence():
     # Arrange
     job = _timer(on_unit_active_sec="2d")
-    # Act + Assert
-    assert derive_cron_expr(job) == "0 0 */2 * *"
+    # Act
+    result = derive_cron_expr(job)
+    # Assert
+    assert result == "0 0 */2 * *"
 
 
 def test_derive_cron_expr_falls_back_to_hourly_on_unknown():
     # Arrange
     job = _timer(on_unit_active_sec="weeks-pretty-please")
-    # Act + Assert
-    assert derive_cron_expr(job) == "0 * * * *"
+    # Act
+    result = derive_cron_expr(job)
+    # Assert
+    assert result == "0 * * * *"
 
 
 def test_derive_cron_expr_rejects_out_of_range_minutes():
     # Arrange — 60min would be ``*/60 * * * *`` which is invalid cron.
     job = _timer(on_unit_active_sec="60min")
-    # Act + Assert — fallback to hourly.
-    assert derive_cron_expr(job) == "0 * * * *"
+    # Act
+    result = derive_cron_expr(job)
+    # Assert — fallback to hourly.
+    assert result == "0 * * * *"
 
 
 def test_derive_cron_expr_rejects_out_of_range_hours():
     # Arrange — 24h overflows the hour field; fall back.
     job = _timer(on_unit_active_sec="24h")
-    # Act + Assert
-    assert derive_cron_expr(job) == "0 * * * *"
+    # Act
+    result = derive_cron_expr(job)
+    # Assert
+    assert result == "0 * * * *"
 
 
 # --------------------------------------------------------------------------- #

@@ -89,7 +89,8 @@ def test_child_rejects_non_service_kind(tmp_path):
         description="timer",
         on_unit_active_sec="1h",
     )
-    # Act + Assert
+    # Act
+    # Assert
     with pytest.raises(ValueError):
         ChildProcess(timer, log_dir=tmp_path)
 
@@ -221,8 +222,10 @@ def test_should_restart_false_for_clean_exit_under_on_failure(tmp_path):
     c.start()
     c._proc.set_exit(0)  # type: ignore[union-attr]
     c.poll()
-    # Act + Assert
-    assert c.should_restart() is False
+    # Act
+    restart = c.should_restart()
+    # Assert
+    assert restart is False
 
 
 def test_should_restart_true_under_always_even_on_clean_exit(tmp_path):
@@ -231,8 +234,10 @@ def test_should_restart_true_under_always_even_on_clean_exit(tmp_path):
     c.start()
     c._proc.set_exit(0)  # type: ignore[union-attr]
     c.poll()
-    # Act + Assert
-    assert c.should_restart() is True
+    # Act
+    restart = c.should_restart()
+    # Assert
+    assert restart is True
 
 
 def test_should_restart_false_under_no_policy(tmp_path):
@@ -241,15 +246,19 @@ def test_should_restart_false_under_no_policy(tmp_path):
     c.start()
     c._proc.set_exit(0)  # type: ignore[union-attr]
     c.poll()
-    # Act + Assert
-    assert c.should_restart() is False
+    # Act
+    restart = c.should_restart()
+    # Assert
+    assert restart is False
 
 
 def test_should_restart_initial_first_start_for_on_failure(tmp_path):
     # Arrange — never started; restart_policy says yes to first bring-up.
     c = _make_child(log_dir=tmp_path, job=_service_job(restart_policy="on-failure"))
-    # Act + Assert
-    assert c.should_restart() is True
+    # Act
+    restart = c.should_restart()
+    # Assert
+    assert restart is True
 
 
 # --------------------------------------------------------------------------- #
@@ -264,8 +273,10 @@ def test_breaker_trips_after_failure_limit(tmp_path):
         c.start()
         c._proc.set_exit(1)  # type: ignore[union-attr]
         c.poll()
-    # Act + Assert
-    assert c.circuit_open is True
+    # Act
+    tripped = c.circuit_open
+    # Assert
+    assert tripped is True
 
 
 def test_breaker_blocks_start_when_open(tmp_path):
@@ -281,12 +292,13 @@ def test_breaker_blocks_start_when_open(tmp_path):
 
 
 def test_breaker_reset_re_arms(tmp_path):
-    # Arrange
+    # Arrange — open the breaker first (limit=1 → one failure trips it;
+    # the breaker-opens behaviour itself is covered by
+    # test_breaker_trips_after_failure_limit).
     c = _make_child(log_dir=tmp_path, circuit_failure_limit=1)
     c.start()
     c._proc.set_exit(1)  # type: ignore[union-attr]
     c.poll()
-    assert c.circuit_open
     # Act
     c.reset_breaker()
     # Assert
@@ -299,8 +311,10 @@ def test_ledger_window_drops_old_failures():
     led.record_failure(now=0.0)
     led.record_failure(now=1.0)
     led.record_failure(now=100.0)  # ← old entries fall out of window first
-    # Act + Assert — only one entry remains in the window → breaker closed.
-    assert led.circuit_open is False
+    # Act
+    still_open = led.circuit_open
+    # Assert — only one entry remains in the window → breaker closed.
+    assert still_open is False
 
 
 # --------------------------------------------------------------------------- #
