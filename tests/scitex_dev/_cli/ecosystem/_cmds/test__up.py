@@ -259,9 +259,9 @@ def test_run_up_does_not_write_master_reconcile_unit(tmp_path):
 # --------------------------------------------------------------------------- #
 
 
-def test_run_up_reports_systemctl_missing_when_no_binary(tmp_path, monkeypatch):
-    # Arrange — pretend `systemctl` isn't on PATH.
-    monkeypatch.setattr(_up.shutil, "which", lambda _name: None)
+def test_run_up_reports_systemctl_missing_when_no_binary(tmp_path):
+    # Arrange — real fake for the executable-lookup seam: `systemctl` absent.
+    absent_which = lambda _name: None
     # Act
     result = _up.run_up(
         yes=False,
@@ -269,6 +269,7 @@ def test_run_up_reports_systemctl_missing_when_no_binary(tmp_path, monkeypatch):
         unit_dir=tmp_path,
         echo=lambda _: None,
         discover=lambda: [],
+        which=absent_which,
     )
     # Assert
     assert result.systemctl_missing is True

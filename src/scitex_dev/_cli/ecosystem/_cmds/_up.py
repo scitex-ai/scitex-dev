@@ -223,11 +223,18 @@ def run_up(
     unit_dir: Path | None = None,
     echo: Callable[[str], None] | None = None,
     discover: Callable[..., list[JobSpec]] = discover_jobs,
+    which: Callable[[str], str | None] | None = None,
 ) -> UpResult:
-    """Execute one full reconcile pass. Returns aggregate outcome."""
+    """Execute one full reconcile pass. Returns aggregate outcome.
+
+    ``which`` is the executable-lookup seam (defaults to ``shutil.which``);
+    tests pass a hand-rolled fake to exercise the systemctl-absent path
+    without patching production internals.
+    """
     runner = systemctl_runner or _default_systemctl_runner
     udir = unit_dir or _unit_dir()
     log = echo or (lambda s: click.echo(s))
+    which_fn = which or shutil.which
 
     # Discover the JobSpec set across all providers. Service-kind jobs
     # are NOT installed here — they become children of the supervisor
@@ -245,7 +252,7 @@ def run_up(
     supervisor_path = write_supervisor_unit(udir)
     log(f"supervisor: wrote {supervisor_path}")
 
-    systemctl_missing = shutil.which("systemctl") is None
+    systemctl_missing = which_fn("systemctl") is None
     supervisor_enabled = False
     if yes:
         supervisor_enabled = _enable_supervisor_unit(systemctl_runner=runner, echo=log)

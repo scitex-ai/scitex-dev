@@ -25,14 +25,26 @@ from scitex_dev.jobs import JobSpec
 
 
 class FakePopen:
-    """Minimal Popen stand-in — never exits unless caller sets returncode."""
+    """Minimal Popen stand-in — never exits unless caller sets returncode.
+
+    ``pid`` is an out-of-range sentinel so ``terminate()``'s ``os.killpg``
+    can never signal a real process group on the test host: the syscall
+    raises ``ProcessLookupError`` (no such group), which ``terminate``
+    swallows. ``wait`` is present so the SIGKILL escalation path can reap.
+    """
+
+    # Above any plausible kernel pid_max → os.killpg always ESRCHs.
+    _SENTINEL_PID = 2**31 - 1
 
     def __init__(self, args, **_):
         self.args = args
         self._rc = None
-        self.pid = 12345
+        self.pid = self._SENTINEL_PID
 
     def poll(self):
+        return self._rc
+
+    def wait(self, timeout=None):
         return self._rc
 
 
@@ -68,6 +80,7 @@ def _make_sup(tmp_path, *, discover, popen_factory=None):
             log_dir=log_dir,
             popen_factory=popen_factory or FakePopen,
             clock=lambda: 100.0,
+            sleep=lambda _s: None,  # terminate()'s grace wait never really sleeps
         )
 
     return Supervisor(
@@ -195,8 +208,7 @@ def test_tick_restarts_a_failed_on_failure_child(tmp_path):
         discover=lambda: [_service_job(name="alpha", restart_policy="on-failure")],
     )
     sup.start_all()
-    sup.children["alpha"]._proc.set_exit  # type: ignore[union-attr]
-    # Drive the exit through the proc handle.
+    # Drive the exit through the proc handle (non-zero → on-failure restart).
     sup.children["alpha"]._proc._rc = 1  # type: ignore[union-attr]
     # Act
     sup.tick()

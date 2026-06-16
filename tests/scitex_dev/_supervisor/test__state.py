@@ -10,6 +10,9 @@ seam.
 from __future__ import annotations
 
 import json
+import os
+
+import pytest
 
 from scitex_dev._supervisor._state import (
     SupervisorState,
@@ -20,33 +23,52 @@ from scitex_dev._supervisor._state import (
 )
 
 
+@pytest.fixture
+def restore_environ():
+    """Snapshot + restore ``os.environ`` around a test.
+
+    Real env manipulation (no mocks) — replaces ``monkeypatch.setenv`` /
+    ``delenv`` per PA-306. Tests mutate the yielded mapping directly; it is
+    restored verbatim afterwards so XDG_STATE_HOME / HOME don't leak into
+    sibling tests.
+    """
+    saved = dict(os.environ)
+    try:
+        yield os.environ
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
+
+
 # --------------------------------------------------------------------------- #
 # default_state_dir / default_state_path                                      #
 # --------------------------------------------------------------------------- #
 
 
-def test_default_state_dir_honours_xdg_state_home(monkeypatch, tmp_path):
+def test_default_state_dir_honours_xdg_state_home(restore_environ, tmp_path):
     # Arrange
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    restore_environ["XDG_STATE_HOME"] = str(tmp_path)
     # Act
     got = default_state_dir()
     # Assert
     assert got == tmp_path / "scitex-ecosystem"
 
 
-def test_default_state_dir_falls_back_to_local_state_when_no_xdg(monkeypatch, tmp_path):
+def test_default_state_dir_falls_back_to_local_state_when_no_xdg(
+    restore_environ, tmp_path
+):
     # Arrange
-    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path))
+    restore_environ.pop("XDG_STATE_HOME", None)
+    restore_environ["HOME"] = str(tmp_path)
     # Act
     got = default_state_dir()
     # Assert
     assert got == tmp_path / ".local" / "state" / "scitex-ecosystem"
 
 
-def test_default_state_path_filename_is_state_json(monkeypatch, tmp_path):
+def test_default_state_path_filename_is_state_json(restore_environ, tmp_path):
     # Arrange
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    restore_environ["XDG_STATE_HOME"] = str(tmp_path)
     # Act
     got = default_state_path()
     # Assert
