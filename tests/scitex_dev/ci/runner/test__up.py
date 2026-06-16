@@ -84,3 +84,19 @@ def test_wrapper_overlaps_the_given_lease_jobid() -> None:
     script = _wrapper(jobid="99999")
     # Assert
     assert "--overlap --jobid=99999" in script
+
+
+def test_wrapper_embeds_overridden_repo() -> None:
+    # Arrange — ecosystem rollout: a runner for another repo on the shared lease.
+    # Act
+    script = _wrapper(gh_repo="ywatanabe1989/scitex-todo")
+    # Assert
+    assert "export GH_REPO='ywatanabe1989/scitex-todo'" in script
+
+
+def test_wrapper_embeds_overridden_labels() -> None:
+    # Arrange — extra label so a repo's legacy-labelled workflow still matches.
+    # Act
+    script = _wrapper(runner_labels="self-hosted,spartan-cpu,scitex-ci")
+    # Assert
+    assert "export RUNNER_LABELS='self-hosted,spartan-cpu,scitex-ci'" in script
