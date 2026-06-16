@@ -1,0 +1,74 @@
+# scitex-dev CI runner container (CPU) — Apptainer recipe (public SSoT).
+#
+# Purpose: a REUSED, cached image the self-hosted Spartan CPU runner
+# apptainer-exec's for every CI run, so no per-run dependency install.
+# The SIF IS the cache (operator directive 2026-06-16: "container already
+# there, reused with caching"). Built once via scitex-container; rebuilt
+# (new version) only when the dependency set changes.
+#
+# Build (canonical — versioned via scitex-container, on a RUNNING compute
+# node; never the login node, never sbatch-and-wait):
+#   scitex-container apptainer build ci-cpu -o ~/.scitex/dev/containers
+# Raw fallback (same effect):
+#   apptainer build ci-cpu.sif ci-cpu.def
+#
+# Run contract (the workflow): each matrix job execs
+#   apptainer exec --writable-tmpfs <sif> \
+#       /opt/venv-<pyver>/bin/python -m ... (install -e . --no-deps; pytest)
+# The baked venvs carry scitex-dev[all,dev] DEPS; CI overlays only the
+# editable checkout (--no-deps) → fast. A dep missing from the SIF fails
+# LOUD (signal: rebuild the SIF) — never a silent reinstall fallback.
+#
+# Design notes (vs the heavier agent base.def): no node/rust/claude-sdk —
+# CI inside the SIF runs pytest only (checkout/codecov run on the host
+# runner). Three Python versions for the required pytest matrix.
+
+Bootstrap: docker
+From: ubuntu:24.04
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+
+    # System libs: build-essential/pkg-config/libffi/libssl for any
+    # source-built wheel; libglib2.0-0 is REQUIRED by scitex.io (without
+    # it import silently falls back to "minimal mode" — exactly the kind
+    # of silent degradation we forbid). fd for the audit-conformance test.
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        ca-certificates curl git \
+        build-essential pkg-config libffi-dev libssl-dev libglib2.0-0 \
+        fd-find ripgrep
+    # Debian ships fd as fdfind; the audit helper + muscle memory want `fd`.
+    ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+    rm -rf /var/lib/apt/lists/*
+
+    # uv (Astral): manages the Python toolchain + fast installs.
+    UV_INSTALL_DIR=/usr/local/bin curl -LsSf https://astral.sh/uv/install.sh | sh
+    export UV_PYTHON_INSTALL_DIR=/opt/uv-python
+
+    # Pre-stage the three matrix Python versions + a per-version venv with
+    # scitex-dev[all,dev] DEPENDENCIES baked in (from PyPI). The editable
+    # package itself is NOT baked — CI installs the checkout with --no-deps.
+    for V in 3.11 3.12 3.13; do
+        uv python install "$V"
+        uv venv --python "$V" "/opt/venv-$V"
+        uv pip install --python "/opt/venv-$V/bin/python" "scitex-dev[all,dev]"
+    done
+
+%environment
+    export LANG=en_US.UTF-8
+    export LC_ALL=en_US.UTF-8
+    export UV_PYTHON_INSTALL_DIR=/opt/uv-python
+    export PATH=/usr/local/bin:$PATH
+
+%labels
+    org.scitex.layer ci-cpu
+    org.scitex.runtime apptainer
+    org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep + scitex-dev[all,dev] deps"
+
+%help
+    scitex-dev CI runner image (CPU). Reused by the self-hosted Spartan
+    runner: apptainer exec --writable-tmpfs <sif> /opt/venv-<ver>/bin/...
+    (install -e . --no-deps; pytest). Rebuild via scitex-container when
+    the dependency set changes.
