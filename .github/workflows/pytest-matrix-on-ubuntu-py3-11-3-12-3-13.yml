@@ -61,6 +61,7 @@ jobs:
           apptainer exec --writable-tmpfs --pwd "$PWD" "$IMG" bash -c "
             set -euo pipefail
             export LC_ALL=C.UTF-8 LANG=C.UTF-8
+            export UV_CACHE_DIR=/tmp/uvcache   # writable (tmpfs); SIF is read-only
             # uv venvs are pip-less by design — install the editable checkout
             # with uv (baked in the SIF), --no-deps (deps already in the venv).
             uv pip install --python /opt/venv-$V/bin/python -e . --no-deps -q
