@@ -4,8 +4,12 @@
 #
 # Design:
 #  * runs-on driven by repo Actions Variable CI_RUNS_ON. Default
-#    '["self-hosted","scitex-ci"]'. Watchdog auto-flips to '"ubuntu-latest"'
-#    on runner-offline (manual override via `scitex-dev ci runner use ...`).
+#    '["self-hosted","scitex-ci"]'. NO silent fallback: the watchdog
+#    (`scitex-dev ci runner watchdog`, run operator-side) only ALERTS when
+#    the runner is down — it never auto-switches to hosted, because a silent
+#    switch would hide the outage. Falling back to hosted is a deliberate,
+#    announced `scitex-dev ci runner use github`; when that happens the
+#    hosted path below emits a LOUD ::warning:: so it is never silent.
 #  * Inside-SIF execution: NO per-job setup-python extraction on self-hosted.
 #    The SIF carries the common scitex base + apt deps.
 #  * Per-project deps installed at job start via `uv pip install` against
@@ -35,8 +39,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Hosted fallback path — only fires when watchdog has flipped to
-      # ubuntu-latest, or on a fresh repo with vars.CI_RUNS_ON unset.
+      # Hosted path — fires ONLY on an explicit `ci runner use github`
+      # override or a fresh repo with vars.CI_RUNS_ON unset. Never reached by
+      # an automatic fallback. Announce it LOUDLY so a hosted run is never
+      # mistaken for a healthy self-hosted run (fail-loud, no silent switch).
+      - if: runner.environment == 'github-hosted'
+        run: |
+          echo "::warning title=scitex-ci::Running on GitHub-hosted, NOT the self-hosted scitex-ci runner. This is an explicit override or cold-start, not an automatic fallback — verify the self-hosted runner is healthy (scitex-dev ci runner watchdog)."
       - if: runner.environment == 'github-hosted'
         uses: actions/setup-python@v5
         with:

@@ -22,6 +22,7 @@ def register(ci_group: click.Group) -> click.Group:
           renew             — renew the SLURM CI lease job
           register <repo>   — copy the ci.yml template into a repo
           preflight         — fail-loud CI-readiness gate (for pre-push)
+          watchdog          — observe-and-alert; FAIL LOUD, no silent fallback
 
         \b
         Example:
@@ -33,6 +34,7 @@ def register(ci_group: click.Group) -> click.Group:
           $ scitex-dev ci runner renew
           $ scitex-dev ci runner register ../figrecipe
           $ scitex-dev ci runner preflight
+          $ scitex-dev ci runner watchdog   # operator-side schedule, not HPC cron
         """
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
@@ -44,6 +46,7 @@ def register(ci_group: click.Group) -> click.Group:
     from ._renew import register as register_renew
     from ._register import register as register_register
     from ._preflight import register as register_preflight
+    from ._watchdog import register as register_watchdog
 
     register_status(runner)
     register_use(runner)
@@ -52,6 +55,7 @@ def register(ci_group: click.Group) -> click.Group:
     register_renew(runner)
     register_register(runner)
     register_preflight(runner)
+    register_watchdog(runner)
 
     return runner
 
