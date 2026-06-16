@@ -10,6 +10,84 @@ import click
 
 from . import config
 
+# Absolute SLURM paths: the `up` wrapper runs in a NON-interactive login shell
+# where SLURM is not on PATH (so bare `srun`/`squeue` fail). Match these.
+_SRUN = "/apps/slurm/latest/bin/srun"
+_SQUEUE = "/apps/slurm/latest/bin/squeue"
+
+
+def _staging_paths(runner_home: str) -> tuple[str, str, str]:
+    """Return (stage_dir, wrapper_remote, launcher_remote) on the SHARED FS.
+
+    Staging MUST be on a shared filesystem, never /tmp: Spartan has multiple
+    round-robin login nodes and each ssh WITHOUT connection-sharing can land
+    on a different node, whose /tmp is node-local; worse, the wrapper runs on
+    a login node but `srun` executes the launcher on the COMPUTE node, which
+    shares the project FS but not /tmp. runner_home is a punim0264 project dir
+    (mounted on every node), so stage under its parent.
+    """
+    stage_dir = os.path.join(os.path.dirname(runner_home), "run")
+    return (
+        stage_dir,
+        os.path.join(stage_dir, "scitex_ci_wrapper.sh"),
+        os.path.join(stage_dir, "scitex_ci_launcher.sh"),
+    )
+
+
+def _build_wrapper_script(
+    *,
+    runner_home: str,
+    launcher_content: str,
+    gh_token: str,
+    gh_repo: str,
+    runner_name: str,
+    runner_labels: str,
+    apptainer: str,
+    sif: str,
+    wrap_log: str,
+    jobid: str,
+) -> str:
+    """Build the login-node wrapper script (pure — no I/O).
+
+    Writes the launcher to the SHARED staging dir and starts it via the
+    ABSOLUTE srun path under srun --overlap on the existing lease. Both
+    invariants are regression-guarded by tests (the two bugs this fixed:
+    /tmp staging on multi-login-node Spartan, and bare `srun` not on the
+    non-interactive PATH).
+    """
+    stage_dir, _wrapper_remote, launcher_remote = _staging_paths(runner_home)
+    return f"""#!/bin/bash
+set -euo pipefail
+
+# Write launcher to the SHARED staging dir (visible to the compute node srun
+# runs on — /tmp would not be).
+mkdir -p '{stage_dir}'
+cat > '{launcher_remote}' << 'LAUNCHER_EOF'
+{launcher_content}
+LAUNCHER_EOF
+chmod +x '{launcher_remote}'
+
+# Set environment for the srun --overlap call
+export GH_TOKEN='{gh_token}'
+export GH_REPO='{gh_repo}'
+export RUNNER_NAME='{runner_name}'
+export RUNNER_LABELS='{runner_labels}'
+export RUNNER_HOME='{runner_home}'
+export APPTAINER='{apptainer}'
+export SIF='{sif}'
+export RUNNER_VERSION='2.328.0'
+
+# Start the runner via srun --overlap on the existing lease job.
+# Absolute srun path: the wrapper runs in a NON-interactive login shell where
+# SLURM is not on PATH (matches the absolute squeue path the lease check uses)
+# — bare `srun` fails with "No such file or directory".
+setsid nohup {_SRUN} \\
+  --overlap --jobid={jobid} --export=ALL \\
+  bash '{launcher_remote}' </dev/null >'{wrap_log}' 2>&1 &
+disown
+echo "RUNNER_STARTED:$!"
+"""
+
 
 def register(group: click.Group) -> None:
     @group.command()
@@ -24,12 +102,32 @@ def register(group: click.Group) -> None:
         default=False,
         help="Replace any existing runner with the same name.",
     )
-    def up_cmd(launcher: str | None, replace_runner: bool) -> None:
+    @click.option(
+        "--name",
+        "name_override",
+        default=None,
+        help="Override runner.name from config — provision a SECOND/THIRD "
+        "executor (e.g. spartan-cpu-runner-02) for a parallel matrix. "
+        "Pair with --home so each runner has its own work/install dir.",
+    )
+    @click.option(
+        "--home",
+        "home_override",
+        default=None,
+        help="Override runner.home — REQUIRED to differ per runner when "
+        "running multiple executors (each needs its own _work/install dir).",
+    )
+    def up_cmd(
+        launcher: str | None,
+        replace_runner: bool,
+        name_override: str | None,
+        home_override: str | None,
+    ) -> None:
         """Start the persistent GitHub Actions runner on the HPC compute node.
 
         \b
         How it works:
-          1. Copies launcher.sh to the HPC host.
+          1. Copies launcher.sh to the HPC host (shared FS staging).
           2. SSHs to the HPC host and runs:
              srun --overlap --jobid=<CI_LEASE_JOBID> --export=ALL \\
                bash launcher.sh
@@ -37,29 +135,29 @@ def register(group: click.Group) -> None:
              registers the runner, and runs a persistent run.sh loop.
 
         \b
-        The GH_TOKEN is passed via ssh stdin (never in argv) to avoid
-        leaking it into process listings.
+        The GH_TOKEN is passed via env (never in argv) to avoid leaking it.
 
         \b
-        Example:
+        Examples:
           $ scitex-dev ci runner up
           $ scitex-dev ci runner up --replace-runner
+          # add a second executor (home-clean parallel matrix):
+          $ scitex-dev ci runner up --name spartan-cpu-runner-02 \\
+              --home /data/.../punim0264/.../ci/actions-runner-02
         """
         cfg = config.load_runner_config()
         target = config._ssh_target(cfg)
         gh_token = config.get_gh_token(cfg)
         jobname = cfg["ci_lease"]["jobname"]
-        runner_home = cfg["runner"]["home"]
+        runner_home = home_override or cfg["runner"]["home"]
         wrap_log = cfg["runner"]["wrap_log"]
-        runner_name = cfg["runner"]["name"]
+        runner_name = name_override or cfg["runner"]["name"]
         runner_labels = ",".join(cfg["runner"]["labels"])
         apptainer = cfg["hpc"]["apptainer"]
         sif = cfg["hpc"]["sif"]
 
         # Determine launcher path — shipped copy in the package
-        pkg_launcher = os.path.join(
-            os.path.dirname(__file__), "launcher.sh"
-        )
+        pkg_launcher = os.path.join(os.path.dirname(__file__), "launcher.sh")
         if launcher:
             launcher_path = launcher
         elif os.path.exists(pkg_launcher):
@@ -86,7 +184,7 @@ def register(group: click.Group) -> None:
                 "-o",
                 "ControlMaster=no",
                 target,
-                f"/apps/slurm/latest/bin/squeue -u {cfg['hpc']['user']} --name={jobname} --noheader -o '%i %T'",
+                f"{_SQUEUE} -u {cfg['hpc']['user']} --name={jobname} --noheader -o '%i %T'",
             ],
             capture_output=True,
             text=True,
@@ -113,70 +211,56 @@ def register(group: click.Group) -> None:
                 f"See squeue output for available jobs."
             )
 
-        # Now set up the runner on the HPC host:
-        # 1. Copy launcher.sh to /tmp on HPC
-        # 2. Run via srun --overlap
-
-        # We need to pass the token and env through heredoc to ssh
-        # Use a temp file approach: write a wrapper script locally, then scp+ssh
+        # Build the login-node wrapper (pure; staging on the SHARED FS, absolute
+        # srun — see _build_wrapper_script). Write it locally, then scp+ssh it.
+        stage_dir, wrapper_remote, _launcher_remote = _staging_paths(runner_home)
+        wrapper_script = _build_wrapper_script(
+            runner_home=runner_home,
+            launcher_content=launcher_content,
+            gh_token=gh_token,
+            gh_repo=cfg["github"]["default_repo"],
+            runner_name=runner_name,
+            runner_labels=runner_labels,
+            apptainer=apptainer,
+            sif=sif,
+            wrap_log=wrap_log,
+            jobid=jobid,
+        )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp:
-            # The launcher already handles GH_TOKEN from env; we just need
-            # to pass env vars into the srun --overlap context
-            tmp.write(f'''#!/bin/bash
-set -euo pipefail
-
-# Write launcher to HPC /tmp
-cat > /tmp/scitex_ci_launcher.sh << 'LAUNCHER_EOF'
-{launcher_content}
-LAUNCHER_EOF
-chmod +x /tmp/scitex_ci_launcher.sh
-
-# Set environment for the srun --overlap call
-export GH_TOKEN='{gh_token}'
-export GH_REPO='{cfg['github']['default_repo']}'
-export RUNNER_NAME='{runner_name}'
-export RUNNER_LABELS='{runner_labels}'
-export RUNNER_HOME='{runner_home}'
-export APPTAINER='{apptainer}'
-export SIF='{sif}'
-export RUNNER_VERSION='2.328.0'
-
-# Start the runner via srun --overlap on the existing lease job
-setsid nohup srun \\
-  --overlap --jobid={jobid} --export=ALL \\
-  bash /tmp/scitex_ci_launcher.sh </dev/null >'{wrap_log}' 2>&1 &
-disown
-echo "RUNNER_STARTED:$!"
-''')
+            tmp.write(wrapper_script)
             tmp_path = tmp.name
 
-        # SCP the wrapper to HPC and run it
-        scp_cmd = [
-            "scp",
-            "-o",
-            "ControlPath=none",
-            "-o",
-            "ControlMaster=no",
-            tmp_path,
-            f"{target}:/tmp/scitex_ci_wrapper.sh",
-        ]
+        ssh_opts = ["-o", "ControlPath=none", "-o", "ControlMaster=no"]
+
+        # Ensure the shared staging dir exists (on the shared FS, so any login
+        # node the next connection lands on sees it).
+        mkdir_result = subprocess.run(
+            ["ssh", *ssh_opts, target, f"mkdir -p '{stage_dir}'"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if mkdir_result.returncode != 0:
+            os.unlink(tmp_path)
+            raise click.ClickException(
+                f"Failed to create staging dir {stage_dir}: {mkdir_result.stderr.strip()}"
+            )
+
+        # SCP the wrapper to the shared staging dir.
+        scp_cmd = ["scp", *ssh_opts, tmp_path, f"{target}:{wrapper_remote}"]
         scp_result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
         if scp_result.returncode != 0:
             os.unlink(tmp_path)
             raise click.ClickException(f"SCP failed: {scp_result.stderr.strip()}")
         os.unlink(tmp_path)
 
-        # Run the wrapper on HPC
-        run_cmd = [
-            "ssh",
-            "-o",
-            "ControlPath=none",
-            "-o",
-            "ControlMaster=no",
-            target,
-            "bash /tmp/scitex_ci_wrapper.sh",
-        ]
-        run_result = subprocess.run(run_cmd, capture_output=True, text=True, timeout=30)
+        # Run the wrapper on HPC (shared path → any login node sees it).
+        run_result = subprocess.run(
+            ["ssh", *ssh_opts, target, f"bash '{wrapper_remote}'"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
 
         if run_result.returncode != 0:
             raise click.ClickException(
