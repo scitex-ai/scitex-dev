@@ -36,15 +36,23 @@ From: ubuntu:24.04
     # of silent degradation we forbid). fd for the audit-conformance test.
     apt-get update
     apt-get install -y --no-install-recommends \
-        ca-certificates curl git \
+        ca-certificates curl git locales \
         build-essential pkg-config libffi-dev libssl-dev libglib2.0-0 \
         fd-find ripgrep
+    locale-gen en_US.UTF-8
     # Debian ships fd as fdfind; the audit helper + muscle memory want `fd`.
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
     rm -rf /var/lib/apt/lists/*
 
     # uv (Astral): manages the Python toolchain + fast installs.
-    UV_INSTALL_DIR=/usr/local/bin curl -LsSf https://astral.sh/uv/install.sh | sh
+    # The installer lands uv in /root/.local/bin (root-only, 0700) — a SYMLINK
+    # there is unreadable by the non-root runtime user, so COPY the real
+    # binaries to /usr/local/bin (world-exec) for both %post and runtime.
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    cp -f /root/.local/bin/uv /usr/local/bin/uv
+    cp -f /root/.local/bin/uvx /usr/local/bin/uvx
+    chmod 0755 /usr/local/bin/uv /usr/local/bin/uvx
+    export PATH=/usr/local/bin:$PATH
     export UV_PYTHON_INSTALL_DIR=/opt/uv-python
 
     # Pre-stage the three matrix Python versions + a per-version venv with
@@ -53,7 +61,14 @@ From: ubuntu:24.04
     for V in 3.11 3.12 3.13; do
         uv python install "$V"
         uv venv --python "$V" "/opt/venv-$V"
+        # Bake the DEPS, then REMOVE scitex-dev itself (build-time, real FS).
+        # CI installs the editable checkout at runtime; if scitex-dev were
+        # baked, the runtime editable replace would try to DELETE the baked
+        # copy from the read-only squashfs via the tmpfs overlay, which hits
+        # EOVERFLOW (os error 75) on gpfs. Deps-only venv → runtime install
+        # only WRITES (no overlay remove).
         uv pip install --python "/opt/venv-$V/bin/python" "scitex-dev[all,dev]"
+        uv pip uninstall --python "/opt/venv-$V/bin/python" scitex-dev
     done
 
 %environment
