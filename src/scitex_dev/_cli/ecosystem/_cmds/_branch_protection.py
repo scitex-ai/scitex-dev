@@ -185,6 +185,28 @@ def _all_distributions() -> List[str]:
     return list(ECOSYSTEM.keys())
 
 
+def _is_deletion_protected(owner_repo: str, branch: str) -> bool:
+    """True if ``branch`` already has protection with deletions disabled.
+
+    Used so the fleet-wide deletion-only baseline is IDEMPOTENT and
+    NON-DOWNGRADING: a branch that already carries protection where
+    ``allow_deletions`` is off already meets the baseline goal (un-deletable),
+    so the rollout skips it rather than overwriting a possibly-stronger policy
+    (e.g. a repo with required_status_checks) with the minimal one. A 404 (no
+    protection) or deletions-enabled returns False → the baseline is applied.
+    """
+    rc, out = _gh_api("GET", f"repos/{owner_repo}/branches/{branch}/protection")
+    if rc != 0:
+        return False
+    try:
+        data = json.loads(out)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    allow_del = data.get("allow_deletions", {})
+    # GitHub returns {"enabled": bool}; treat a missing/odd shape as not-safe.
+    return allow_del.get("enabled") is False if isinstance(allow_del, dict) else False
+
+
 def _resolve_owner_repo(distribution: str) -> Optional[str]:
     """Map a distribution name to the ``<owner>/<repo>`` ``gh api`` slug.
 
@@ -243,6 +265,24 @@ def _apply_one(
                     f"skip  {distribution}: branch '{tgt}' does not exist on origin",
                     err=True,
                 )
+            continue
+
+        # Idempotent / non-downgrading baseline: if the branch is already
+        # un-deletable, leave its (possibly stronger) policy untouched.
+        if deletion_only and _is_deletion_protected(owner_repo, tgt):
+            if json_out:
+                click.echo(
+                    json.dumps(
+                        {
+                            "distribution": distribution,
+                            "branch": tgt,
+                            "action": "skip",
+                            "reason": "already-protected",
+                        }
+                    )
+                )
+            else:
+                click.echo(f"skip  {distribution}@{tgt}: already deletion-protected")
             continue
 
         if deletion_only:

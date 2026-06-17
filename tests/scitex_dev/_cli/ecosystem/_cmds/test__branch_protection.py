@@ -417,3 +417,48 @@ def test_all_distributions_returns_nonempty_list():
     dists = _branch_protection._all_distributions()
     # Assert
     assert len(dists) > 0
+
+
+# ---------------------------------------------------------------------------
+# Idempotent / non-downgrading baseline (skip already-protected branches)
+# ---------------------------------------------------------------------------
+
+_PROTECTED_UNDELETABLE_JSON = '{"allow_deletions": {"enabled": false}}'
+_PROTECTED_DELETABLE_JSON = '{"allow_deletions": {"enabled": true}}'
+
+
+def test_deletion_only_skips_already_undeletable_branch(gh_seam):
+    # Arrange — develop exists, GET protection shows deletions already off.
+    gh_seam.canned = [
+        (0, '{"name": "develop"}'),
+        (0, _PROTECTED_UNDELETABLE_JSON),
+    ]
+    runner = CliRunner()
+    # Act
+    runner.invoke(
+        _make_group(),
+        ["set-branch-protection", "scitex-dev", "--branch", "develop",
+         "--deletion-only", "--execute"],
+    )
+    # Assert — no PUT issued (the existing policy is left intact).
+    puts = [c for c in gh_seam.calls if c[0] == "PUT"]
+    assert len(puts) == 0
+
+
+def test_deletion_only_applies_when_branch_deletable(gh_seam):
+    # Arrange — develop exists, GET shows deletions currently ALLOWED.
+    gh_seam.canned = [
+        (0, '{"name": "develop"}'),
+        (0, _PROTECTED_DELETABLE_JSON),
+        (0, "{}"),
+    ]
+    runner = CliRunner()
+    # Act
+    runner.invoke(
+        _make_group(),
+        ["set-branch-protection", "scitex-dev", "--branch", "develop",
+         "--deletion-only", "--execute"],
+    )
+    # Assert — baseline IS applied (one PUT).
+    puts = [c for c in gh_seam.calls if c[0] == "PUT"]
+    assert len(puts) == 1
