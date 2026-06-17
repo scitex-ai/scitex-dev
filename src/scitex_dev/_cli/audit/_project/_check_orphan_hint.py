@@ -103,7 +103,15 @@ def _expected_src_basename(test_filename: str) -> str | None:
 
 
 def _index_src_basenames(src_pkg: Path, *, require_fd: bool) -> dict[str, list[Path]]:
-    """{basename: [absolute paths]} for every .py under src_pkg (excl. __init__)."""
+    """{basename: [absolute paths]} for every .py under src_pkg (excl. __init__).
+
+    `src_pkg` is resolved to an absolute path up front so the index keys
+    anchor to the same root as the discovered files — `fd_find_files`
+    always yields absolute paths, so a *relative* `src_pkg` would make
+    downstream ``Path.relative_to(src_pkg)`` mix relative-vs-absolute
+    bases and raise ``ValueError``.
+    """
+    src_pkg = src_pkg.resolve()
     index: dict[str, list[Path]] = defaultdict(list)
     for p in fd_find_files(src_pkg, glob="*.py", require_fd=require_fd):
         if p.name == "__init__.py":
@@ -119,7 +127,19 @@ def build_orphan_hinter(src_pkg: Path, repo: Path):
     File discovery is `fd`-preferred; absence warns + falls back to the
     stdlib walk unless this `repo` opts into strict-fd (`audit.require-fd`),
     in which case fd-absence raises `FdNotFoundError`.
+
+    `src_pkg` and `repo` are normalized to absolute paths up front so every
+    ``Path.relative_to(...)`` below operates on consistently-absolute bases.
+    `fd_find_files` (and its stdlib fallback) always yields absolute paths,
+    so when the caller passed a *relative* ``--path`` the indexed src files
+    would be absolute while ``src_pkg``/``repo`` stayed relative — and
+    ``relative_to`` then raises ``ValueError`` (one path relative, the other
+    absolute). The emitted hint strings keep the nice relative
+    ``src/<pkg>/...`` form: they are derived from the resolved-*relative*
+    results (``pkg_rel`` / ``new_src_rel``), never the absolute paths.
     """
+    repo = repo.resolve()
+    src_pkg = src_pkg.resolve()
     index = _index_src_basenames(src_pkg, require_fd=is_require_fd(repo))
     pkg_rel = src_pkg.relative_to(repo)
 

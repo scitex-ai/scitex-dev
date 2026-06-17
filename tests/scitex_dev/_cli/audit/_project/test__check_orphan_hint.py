@@ -10,12 +10,31 @@ knob raises `FdNotFoundError` instead of falling back.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import warnings
 from pathlib import Path
 
 import pytest
+
+
+@contextlib.contextmanager
+def _chdir(target: Path):
+    """Enter `target` as cwd for the block; restore the real cwd on exit.
+
+    No-mock cwd switch (the ecosystem forbids the `monkeypatch` fixture):
+    a relative `--path` is resolved against the process cwd, so reproducing
+    the bug requires really standing inside the repo. try/finally guarantees
+    the original cwd is restored even when an assertion fails.
+    """
+    saved = os.getcwd()
+    os.chdir(target)
+    try:
+        yield
+    finally:
+        os.chdir(saved)
+
 
 from scitex_dev._cli.audit._fd import FdNotFoundError
 from scitex_dev._cli.audit._project._check_orphan_hint import (
@@ -169,3 +188,60 @@ def test_is_require_fd_false_without_opt_in(tmp_path):
     enabled = is_require_fd(repo)
     # Assert
     assert enabled is False
+
+
+# --------------------------------------------------------------------------- #
+# Regression: relative `--path` must not crash the hinter (ValueError).        #
+#                                                                              #
+# fd-backed discovery always yields ABSOLUTE paths, so a *relative* `src_pkg`/ #
+# `repo` (e.g. `audit-project <pkg> --path .` from a worktree) used to make    #
+# `Path.relative_to(...)` mix relative-vs-absolute bases and raise            #
+# `ValueError: ... OR one path is relative and the other is absolute`.        #
+# build_orphan_hinter now resolves its bases up front.                         #
+# --------------------------------------------------------------------------- #
+
+
+def test_orphan_hinter_handles_relative_paths(tmp_path):
+    """A relative src_pkg/repo (cwd-relative `--path`) returns a hint, not ValueError."""
+    # Arrange
+    repo, _abs_src_pkg = _make_project(tmp_path)
+    rel_src_pkg = Path("src") / "mypkg"  # relative to cwd (== repo)
+    rel_repo = Path(".")
+    # Act
+    with _chdir(repo), warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        detail = build_orphan_hinter(rel_src_pkg, rel_repo)(Path("test_audit.py"))
+    # Assert
+    assert "src/mypkg/_cli/audit.py" in detail
+
+
+def test_audit_project_relative_path_does_not_crash(tmp_path):
+    """audit-project with a relative `--path` runs to completion (no ValueError)."""
+    # Arrange — a package with a moved src file AND an orphaned mirror test,
+    # which is exactly the tree that forces the PS-204 hinter to run.
+    from scitex_dev._cli.audit._project import audit_project
+
+    repo = tmp_path / "pkgrepo"
+    import_name = "pkgrepo"
+    src_pkg = repo / "src" / import_name
+    (src_pkg / "_cli").mkdir(parents=True)
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "pkgrepo"\nversion = "0.1.0"\n'
+    )
+    (src_pkg / "__init__.py").write_text("\n")
+    (src_pkg / "_cli" / "__init__.py").write_text("\n")
+    (src_pkg / "_cli" / "audit.py").write_text("def audit():\n    return 0\n")
+    tests_pkg = repo / "tests" / import_name
+    tests_pkg.mkdir(parents=True)
+    # Mirrors the OLD flat layout → orphaned now that src moved under _cli/.
+    (tests_pkg / "test_audit.py").write_text("def test_audit():\n    assert True\n")
+    raised = None
+    # Act
+    with _chdir(repo), warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        try:
+            audit_project("pkgrepo", repo=Path("."), json_out=True, severity="warning")
+        except ValueError as exc:  # pragma: no cover - regression guard
+            raised = exc
+    # Assert
+    assert raised is None
