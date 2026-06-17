@@ -21,6 +21,7 @@ from . import (
     _ci_watch,
     _cred_distribute,
     _quota_keepalive,
+    _spartan_conn_monitor,
     _task_harvest,
     _worktree_gc,
 )
@@ -127,6 +128,17 @@ def register(group: click.Group) -> None:
             if result.error is not None:
                 raise SystemExit(1)
             if result.all_attempted_failed:
+                raise SystemExit(1)
+            return
+
+        if name == "spartan-conn-monitor":
+            # Poll the Spartan login nodes for the ywatanabe user's footprint;
+            # the body logs a TSV row per node and phones the operator on a
+            # threshold breach. An unreachable node or notification hiccup is
+            # swallowed (cron-safe); we exit non-zero ONLY when a threshold was
+            # actually crossed, so the cron log + mail flag a real regression.
+            mon = _spartan_conn_monitor.run_once()
+            if mon.alerts:
                 raise SystemExit(1)
             return
 

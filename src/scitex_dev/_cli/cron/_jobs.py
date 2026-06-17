@@ -81,9 +81,7 @@ def _worktree_gc_command() -> str:
     bounded without spending CI on a constant background walk.
     """
     log = "$HOME/.scitex/dev/logs/cron-worktree-gc.log"
-    return (
-        f"mkdir -p $(dirname {log}); scitex-dev cron exec worktree-gc >> {log} 2>&1"
-    )
+    return f"mkdir -p $(dirname {log}); scitex-dev cron exec worktree-gc >> {log} 2>&1"
 
 
 def _quota_keepalive_command() -> str:
@@ -153,8 +151,24 @@ def _task_harvest_command() -> str:
     (the skill the operator commissioned, scitex-todo PR #72).
     """
     log = "$HOME/.scitex/dev/logs/cron-task-harvest.log"
+    return f"mkdir -p $(dirname {log}); scitex-dev cron exec task-harvest >> {log} 2>&1"
+
+
+def _spartan_conn_monitor_command() -> str:
+    """The shell line installed for the ``spartan-conn-monitor`` cron job.
+
+    Same shape as the other jobs: invoke the console script so the line stays
+    stable across virtual-env shuffles, ``mkdir -p`` the log dir, append to a
+    per-job log. Schedule ``*/30 * * * *`` (every 30 min) — light (one
+    multiplexed ssh + pgrep/ps/who per login node), enough to catch a
+    connection/agent regression long before the HPC admin would. Body in
+    ``_spartan_conn_monitor.run_once``; metrics history is the TSV at
+    ``~/.scitex/dev/runtime/spartan-conn-monitor.tsv``.
+    """
+    log = "$HOME/.scitex/dev/logs/cron-spartan-conn-monitor.log"
     return (
-        f"mkdir -p $(dirname {log}); scitex-dev cron exec task-harvest >> {log} 2>&1"
+        f"mkdir -p $(dirname {log}); "
+        f"scitex-dev cron exec spartan-conn-monitor >> {log} 2>&1"
     )
 
 
@@ -236,6 +250,24 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "proj-scitex-agent-container is still landing the "
             "`sac accounts distribute` capability. See "
             "_cred_distribute.run_once."
+        ),
+    ),
+    "spartan-conn-monitor": JobSpec(
+        name="spartan-conn-monitor",
+        # Every 30 min. Light: one multiplexed ssh + pgrep/ps/who per login
+        # node. Watches the ywatanabe user's ssh-agent / connection / proc
+        # footprint on the Spartan login nodes (2026-06-17 admin incident) and
+        # phones the operator if a threshold is crossed. Replaces the
+        # session-bound monitor loop, which died on context compaction.
+        schedule="*/30 * * * *",
+        command=_spartan_conn_monitor_command(),
+        description=(
+            "Poll the 3 Spartan login nodes for the ywatanabe user's "
+            "ssh-agents / login sessions / total procs / srun; append a TSV "
+            "row per node to ~/.scitex/dev/runtime/spartan-conn-monitor.tsv; "
+            "audio-notify + PHONE-CALL the operator if ssh-agents>15 or "
+            "procs>250 (early warning before the HPC admin notices). See "
+            "_spartan_conn_monitor.run_once."
         ),
     ),
     # Future entries land here. Suggested naming pattern: short
