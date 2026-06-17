@@ -17,12 +17,19 @@ def _import_name(distribution: str) -> str:
 def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
     """Return the repo root Path or None if it can't be located.
 
-    If `repo` is given, it's used directly. Otherwise we resolve the
-    package via `importlib.util.find_spec` and walk up to the repo root
-    (assumed to contain `pyproject.toml`). Falls back to None.
+    If `repo` is given, it's used directly (resolved to an absolute path).
+    Otherwise we resolve the package via `importlib.util.find_spec` and walk
+    up to the repo root (assumed to contain `pyproject.toml`). Falls back to
+    None.
+
+    The explicit `repo` is ``.resolve()``d so the whole audit run operates on
+    an absolute root. A *relative* ``--path`` (e.g. ``--path .`` from a
+    worktree) would otherwise mix with the absolute paths produced by
+    ``fd``-backed file discovery and crash ``Path.relative_to(...)`` in the
+    PS-204 orphan-test hinter (see ``_check_orphan_hint.build_orphan_hinter``).
     """
     if repo is not None:
-        return repo
+        return repo.resolve()
     import importlib.util
 
     spec = importlib.util.find_spec(_import_name(distribution))
