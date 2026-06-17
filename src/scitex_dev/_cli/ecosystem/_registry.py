@@ -31,6 +31,7 @@ from ._cmds import (
     _regen_umbrella,
     _run,
     _status,
+    _sync,
     _sync_status,
     _test_remote,
     _versions,
@@ -93,6 +94,7 @@ def register_ecosystem_commands(main_group):
     _install_gate.register(ecosystem)
     _test_remote.register(ecosystem)
     _sync_status.register(ecosystem)
+    _sync.register(ecosystem)
     _prune_merged.register(ecosystem)
     _branch_protection.register(ecosystem)
     _regen_umbrella.register(ecosystem)
