@@ -256,3 +256,37 @@ def test_list_jobs_includes_cred_distribute():
 
 
 # EOF
+
+
+# -- spartan-conn-monitor ---------------------------------------------------
+
+
+def test_registry_has_spartan_conn_monitor_entry():
+    # Arrange
+    # Act
+    # Assert
+    assert "spartan-conn-monitor" in _jobs.JOB_REGISTRY
+
+
+def test_spartan_conn_monitor_schedule_is_every_thirty_minutes():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert
+    assert spec.schedule == "*/30 * * * *"
+
+
+def test_spartan_conn_monitor_command_invokes_scitex_dev_cron_exec():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert
+    assert "scitex-dev cron exec spartan-conn-monitor" in spec.command
+
+
+def test_spartan_conn_monitor_command_writes_to_log_under_scitex_dev():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert
+    assert "/.scitex/dev/logs/cron-spartan-conn-monitor.log" in spec.command
