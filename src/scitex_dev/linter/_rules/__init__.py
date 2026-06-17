@@ -25,6 +25,7 @@ defaults if needed.
 from ._base import Rule
 from ._cross_pkg_imports import I008
 from ._error_handling import EH001
+from ._hpc_ssh import HPC001
 from ._import_hygiene import I001, I002, I003, I004, I005, I006, I007, I009
 from ._lookup import lookup
 from ._lookup import reset as reset_lookup_cache  # noqa: F401
@@ -44,6 +45,7 @@ from ._test_quality import TQ001, TQ002, TQ003, TQ004, TQ005, TQ006, TQ007
 
 ALL_RULES = {
     EH001.id: EH001,
+    HPC001.id: HPC001,
     I001.id: I001,
     I002.id: I002,
     I003.id: I003,
@@ -83,6 +85,7 @@ __all__ = [
     "lookup",
     "reset_lookup_cache",
     "EH001",
+    "HPC001",
     "I001",
     "I002",
     "I003",

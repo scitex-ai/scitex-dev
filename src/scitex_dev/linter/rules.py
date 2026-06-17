@@ -22,6 +22,7 @@ __all__ = ["ALL_RULES", "Rule", "SEVERITY_ORDER"]
 from ._rules import (  # noqa: F401
     ALL_RULES,
     EH001,
+    HPC001,
     I001,
     I002,
     I003,
