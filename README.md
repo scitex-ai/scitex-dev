@@ -150,35 +150,37 @@ aggregation).
 <details>
 <summary><strong>Python API ⭐⭐</strong></summary>
 
+All public names are re-exported flat from the top-level package — import
+them directly from `scitex_dev` (internals live under `_release`, `_docs`,
+`_core`; don't import those paths).
+
 ```python
 # Version management
-from scitex_dev.fix import detect_mismatches, fix_local, fix_remote, verify_versions
+from scitex_dev import detect_mismatches, fix_local, fix_remote, verify_versions
 mismatches = detect_mismatches()
 fix_local(packages=["scitex-stats"], confirm=True)
 verify_versions()
 
 # CI/CD
-from scitex_dev.ci import check_ci, get_failing_packages, check_pypi_publish
+from scitex_dev import check_ci, get_failing_packages, check_pypi_publish
 status = check_ci()
 failing = get_failing_packages()
 
-# Skills
-from scitex_dev.skills import list_skills, get_skill, export_skills
-skills = list_skills()
-page = get_skill(package="scitex-stats")
-export_skills()
+# Docs & search
+from scitex_dev import get_docs, build_docs, search
+get_docs(package="scitex-writer")
+search("save figure")
 
 # Deployment
-from scitex_dev.deploy import deploy_scitex_cloud, verify_production
-deploy_scitex_cloud(host="nas", confirm=True)
-
-# Commit tracking
-from scitex_dev.versions import get_commits_since_tag
-commits = get_commits_since_tag("scitex-stats")
+from scitex_dev import deploy_scitex_hub, verify_production
+deploy_scitex_hub(confirm=True)
 
 # LLM-friendly types
-from scitex_dev import Result, supports_return_as
+from scitex_dev import Result, ErrorCode, supports_return_as
 ```
+
+> Skills are managed through the CLI (`scitex-dev skills list/get/export`),
+> not a Python module.
 
 </details>
 

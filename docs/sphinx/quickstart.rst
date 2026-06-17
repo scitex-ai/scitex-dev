@@ -13,7 +13,7 @@ Docs Aggregation
 
 .. code-block:: python
 
-   from scitex_dev.docs import get_docs, build_docs
+   from scitex_dev import get_docs, build_docs
 
    # All installed packages
    get_docs()
@@ -29,7 +29,7 @@ Unified Search
 
 .. code-block:: python
 
-   from scitex_dev.search import search
+   from scitex_dev import search
 
    search("save figure")                      # search everything
    search("ttest", scope="api")               # Python API only
