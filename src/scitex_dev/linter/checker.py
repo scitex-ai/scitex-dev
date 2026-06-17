@@ -93,6 +93,21 @@ class SciTeXChecker(
         - `# noqa: STX-NL001` on the line — explicit suppression for
           identifiers that read as a whole (years, ports, codes).
         """
+        # STX-HPC001 — SSH multiplexing disabled on the HPC path: a string
+        # literal that turns off the ssh control-master / control-path opens a
+        # fresh login-node connection per call (Spartan admin incident
+        # 2026-06-17: 440+ connections). The match tokens are split (`"=" + "no"`)
+        # so this detector's OWN source does not trip the rule.
+        _hpc_nomux = ("ControlMaster=" + "no", "ControlPath=" + "none")
+        if isinstance(node.value, str) and any(t in node.value for t in _hpc_nomux):
+            hpc_line = (
+                self.source_lines[node.lineno - 1]
+                if node.lineno - 1 < len(self.source_lines)
+                else ""
+            )
+            if not _is_allowed_by_comment(hpc_line, "STX-HPC001"):
+                self._add(rules.HPC001, node.lineno, node.col_offset, hpc_line)
+
         # Only int literals; explicitly reject bool (`True is 1`).
         if not isinstance(node.value, int) or isinstance(node.value, bool):
             self.generic_visit(node)
