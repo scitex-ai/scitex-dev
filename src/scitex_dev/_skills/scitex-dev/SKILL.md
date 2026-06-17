@@ -47,6 +47,7 @@ interfaces:
 ### Meta (20–29)
 - [20_env-vars.md](20_env-vars.md) — `SCITEX_DEV_*` env vars
 - [21_dynamic-audit.md](21_dynamic-audit.md) — Dynamic-audit design skeleton for release-gate
+- [22_figure-prep-pointer.md](22_figure-prep-pointer.md) — Pointer: figure-prep playbook lives in figrecipe; ecosystem no-synthetic-data policy lives in scientific umbrella
 
 ### Architecture (30–39)
 - [30_agentic-test-overview.md](30_agentic-test-overview.md) — Four-layer testing model + shared newbie-docker substrate
