@@ -127,13 +127,14 @@ def register(ecosystem):
         "sync",
         epilog=(
             "Examples:\n"
-            "  $ scitex-dev ecosystem sync                 # ff-pull develop everywhere\n"
-            "  $ scitex-dev ecosystem sync --dry-run       # preview, no merge\n"
-            "  $ scitex-dev ecosystem sync -p scitex-io    # one package\n"
+            "  $ scitex-dev ecosystem sync                 # preview (dry-run)\n"
+            "  $ scitex-dev ecosystem sync --yes           # ff-pull develop everywhere\n"
+            "  $ scitex-dev ecosystem sync -p scitex-io -y # one package, execute\n"
             "  $ scitex-dev ecosystem sync --json | jq\n"
             "\n"
-            "Safe by construction: develop-only, ff-only, skips dirty checkouts —\n"
-            "your un-pushed work is never touched. Use `check-sync` for a read-only\n"
+            "Default is a read-only preview; pass --yes/-y to actually merge. Safe by\n"
+            "construction even then: develop-only, ff-only, skips dirty checkouts —\n"
+            "your un-pushed work is never touched. See `check-sync` for the\n"
             "cross-host view."
         ),
     )
@@ -145,21 +146,33 @@ def register(ecosystem):
         "'all' = every package).",
     )
     @click.option(
+        "--execute",
+        "-y",
+        "--yes",
+        "execute",
+        is_flag=True,
+        help="Actually fast-forward (mutating). Without this, previews only: "
+        "still fetches to count, but merges nothing.",
+    )
+    @click.option(
         "--dry-run",
         is_flag=True,
-        help="Preview what would be pulled (still fetches to count) without "
-        "merging anything.",
+        help="Force preview even with --yes (no merge). Preview is also the "
+        "default when --yes is omitted.",
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON rows.")
-    def ecosystem_sync(package, dry_run, as_json):
+    def ecosystem_sync(package, execute, dry_run, as_json):
         """Fast-forward every local checkout's `develop` to origin (self-pull).
 
         For each ecosystem clone on `develop` with a clean tree, fetch and
         `merge --ff-only origin/develop`. Off-develop, dirty, or diverged
-        checkouts are reported and skipped — never clobbered.
+        checkouts are reported and skipped — never clobbered. Read-only preview
+        by default; pass --yes/-y to perform the merges.
         """
         import json as _json
 
+        # Preview unless explicitly executing; an explicit --dry-run always wins.
+        dry_run = dry_run or not execute
         pkg_filter = parse_package_filter(package)
         items = selected_packages(pkg_filter)
         rows = [_sync_one(pkg, info, dry_run=dry_run) for pkg, info in items]
