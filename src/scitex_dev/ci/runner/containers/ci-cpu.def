@@ -14,10 +14,25 @@
 #
 # Run contract (the workflow): each matrix job execs (read-only SIF, no install)
 #   apptainer exec --bind <punim> <sif> bash .github/ci/run-in-sif.sh <pyver>
-# The baked venvs carry scitex-dev[all,dev] FULLY installed; CI prepends the
-# checkout via PYTHONPATH=<co>/src so imports + coverage use the PR code while
-# the baked console-script / entry-point / metadata stay available. A dep
-# missing from the SIF fails LOUD (rebuild the SIF) — never a silent reinstall.
+# The baked venvs carry the ecosystem dependency stack INSTALLED — the
+# scientific core (numpy/scipy/pandas/matplotlib/xarray/statsmodels/pingouin/
+# scikit-learn/torch[cpu]/seaborn/figrecipe), the CLI/MCP stack (click/mcp/
+# fastmcp), the notebook-exec tools (nbconvert/ipykernel), the scitex basics
+# the per-package suites import (scitex-io/logging/config/dict/decorators/gen/
+# nn/stats/str/dsp), scitex-dev[all,dev] (its own console script / entry point
+# / metadata), and the pytest toolchain — so per-package `pytest tests/`
+# (str/stats/dsp/…) runs with NO per-run install. CI prepends the checkout via
+# PYTHONPATH=<co>/src so imports + coverage use the PR code while the baked
+# console-script / entry-point / metadata stay available. A dep missing from
+# the SIF fails LOUD (rebuild the SIF) — never a silent reinstall.
+#
+# Why the EXPLICIT UNION (not `scitex[all]`): the umbrella's [all] extra is a
+# kitchen sink — it resolves cleanly but drags in tensorflow + jax + opencv +
+# playwright + the entire 49-package ecosystem (~494 pkgs, multi-GB SIF) that
+# str/stats/dsp never import. The curated union below is ~205 pkgs, no GPU
+# torch, no TF/JAX bloat — a lean CPU CI image that still covers every dep the
+# matrix suites need. Add a name here when a newly-onboarded package's tests
+# need it; rebuild the SIF.
 #
 # Design notes (vs the heavier agent base.def): no node/rust/claude-sdk —
 # CI inside the SIF runs pytest only (checkout/codecov run on the host
@@ -64,8 +79,9 @@ From: ubuntu:24.04
     export UV_PYTHON_INSTALL_DIR=/opt/uv-python
 
     # Pre-stage the three matrix Python versions + a per-version venv with
-    # scitex-dev[all,dev] FULLY installed (from PyPI) — scitex-dev itself is
-    # KEPT installed, not just its deps.
+    # the FULL ecosystem dependency stack FULLY installed (from PyPI) — the
+    # scitex umbrella + the deps it misses + scitex-dev[all,dev] are all KEPT
+    # installed, not just whatever a single package needs.
     #
     # Why keep scitex-dev baked (vs. installing the checkout at runtime):
     #   * The baked venv is root-owned; a runtime `uv pip install -e .` into it
@@ -82,16 +98,49 @@ From: ubuntu:24.04
     #     im.entry_points — a shim with no metadata can't satisfy it), and a
     #     real __version__. ep.load() then imports scitex_dev._cli from the
     #     checkout (PYTHONPATH wins), so audit-cli audits the PR code.
+    # ONE resolve per venv bakes everything together (consistent solve, no
+    # multi-invocation re-resolution churn). The curated union, by group:
+    #   * scientific core — numpy/scipy/pandas/matplotlib/xarray/statsmodels/
+    #     pingouin/scikit-learn/torch/seaborn. str imports numpy (+[all]:
+    #     matplotlib/pandas/xarray); stats imports numpy/scipy/pandas/
+    #     statsmodels/matplotlib/pingouin; dsp imports numpy/scipy/pandas/
+    #     matplotlib/torch/xarray.
+    #   * CLI / MCP — click, mcp, fastmcp (stats bundles an MCP server; click
+    #     drives the `scitex-* <cmd>` CLIs).
+    #   * notebook exec — nbconvert + ipykernel (stats [dev] runs example
+    #     .ipynb in tests).
+    #   * scitex basics — the standalone scitex-* deps the suites import:
+    #     io/logging/config/dict (str/stats), decorators/gen/nn (dsp). Listing
+    #     scitex-dsp/stats/str bakes their PyPI build (metadata + entry points);
+    #     the CHECKOUT shadows the code via PYTHONPATH at run time.
+    #   * scitex-dev[all,dev] — the dev's own [all]+[dev] extras, so the
+    #     `scitex-dev` console script + console_scripts ENTRY POINT +
+    #     __version__ stay available for metadata-based tooling (skills
+    #     subprocess tests, audit-cli).
+    #   * figrecipe — stats[all]/dsp plotting integration tests.
+    #   * pytest toolchain — pytest, pytest-cov, pytest-xdist, pytest-timeout
+    #     (timeout lags in some PyPI [dev] extras; pin it so the pyproject
+    #     `timeout=300` per-test cap is honoured — a hung test fails loud at
+    #     300 s instead of wedging the job to timeout-minutes).
+    #
+    # torch: CPU-ONLY build via uv's --torch-backend=cpu. This is the CPU CI
+    # image — the default PyPI `torch` on Linux drags in ~7 nvidia-cu13 wheels
+    # (~4 GB). --torch-backend=cpu routes every torch-ecosystem package
+    # (torch/torchaudio/…) to the download.pytorch.org/whl/cpu index, keeping
+    # the SIF lean. Applied to the whole resolve so transitive torch deps (via
+    # scitex-nn/dsp) also stay CPU.
     for V in 3.11 3.12 3.13; do
         uv python install "$V"
         uv venv --python "$V" "/opt/venv-$V"
-        uv pip install --python "/opt/venv-$V/bin/python" "scitex-dev[all,dev]"
-        # pytest-timeout is in develop's [dev] but may lag in PyPI's
-        # published [dev] extra (the SIF bakes deps from PyPI). Install it
-        # explicitly so the pyproject `timeout=300` per-test cap is honoured
-        # — else a hung test wedges the job to timeout-minutes instead of
-        # failing loud + naming itself at 300 s.
-        uv pip install --python "/opt/venv-$V/bin/python" pytest-timeout
+        uv pip install --python "/opt/venv-$V/bin/python" --torch-backend=cpu \
+            numpy scipy pandas matplotlib xarray statsmodels pingouin \
+            scikit-learn torch seaborn \
+            click mcp fastmcp nbconvert ipykernel \
+            scitex-io scitex-logging scitex-config scitex-dict \
+            scitex-decorators scitex-gen scitex-nn \
+            scitex-stats scitex-str scitex-dsp figrecipe \
+            "scitex-dev[all,dev]" \
+            pytest pytest-cov pytest-xdist pytest-timeout
     done
 
 %environment
@@ -103,12 +152,15 @@ From: ubuntu:24.04
 %labels
     org.scitex.layer ci-cpu
     org.scitex.runtime apptainer
-    org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep cron systemd + scitex-dev[all,dev]"
+    org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep cron systemd + numpy scipy pandas matplotlib xarray statsmodels pingouin scikit-learn torch[cpu] seaborn click mcp fastmcp nbconvert ipykernel figrecipe + scitex basics (io logging config dict decorators gen nn stats str dsp) + scitex-dev[all,dev] + pytest{,-cov,-xdist,-timeout}"
 
 %help
     scitex-dev CI runner image (CPU). Reused by the self-hosted Spartan
     runner: apptainer exec --bind <punim> <sif> bash
     .github/ci/run-in-sif.sh <ver> — read-only, no install; the checkout
     is prepended via PYTHONPATH while the baked scitex-dev supplies the
-    console script / entry point / metadata. Rebuild via scitex-container
-    when the dependency set changes.
+    console script / entry point / metadata. Bakes a curated ecosystem dep
+    union (scientific core + CLI/MCP + notebook-exec + scitex basics +
+    scitex-dev[all,dev] + pytest), with torch as the CPU-only build, so
+    str/stats/dsp/… `pytest tests/` runs without a per-run install. Rebuild via
+    scitex-container when the dep set changes.
