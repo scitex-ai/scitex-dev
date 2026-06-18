@@ -49,6 +49,12 @@ dev = [
     # `timeout`). A single hung test fails loud + names itself in ~5 min
     # instead of wedging the whole job until GitHub's 6h ceiling.
     "pytest-timeout>=2.1.0",
+    # pytest-xdist: parallelise the suite across ALL cores of the self-hosted
+    # Spartan CPU lease (.github/ci/run-in-sif.sh runs `pytest -n "$(nproc)"
+    # --dist loadscope`). Already baked into the reused ci-cpu SIF; pinned here
+    # so a plain `pip install -e .[dev]` resolves the same parallel test path
+    # (PS-210 dev-extras-completeness).
+    "pytest-xdist>=3.0.0",
     "fastmcp>=2.0.0",
     "textual>=0.50.0",
     # newb belongs to [skills] now. Re-listed here so the dev venv resolves
