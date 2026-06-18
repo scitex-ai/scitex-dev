@@ -15,14 +15,24 @@ process, gate cleanly on `SCITEX_DEV_LINTER_QUIET=1`, and that
 
 Test isolation note: each test runs in its own subprocess so the
 module-global emit-once flags (``_emitted_l1`` / ``_emitted_l2``) are
-fresh. The first line of every script that probes a NEW emission sets
-``SCITEX_DEV_LINTER_QUIET=1`` so the import-time pass through
-``_register_sweep_cli`` → ``load_plugins`` → ``record_plugin_load([])``
-chain (which would naturally fire L1 in this sparse venv) stays
-silent — then the env var is dropped, ``_health.reset()`` clears the
-state, and the explicit test call exercises the predicate the test
-cares about. Without this, every test would see one import-time L1
-emission inherited from a context the test isn't testing.
+fresh. Every script first installs a real ``MetaPathFinder`` that makes
+``scitex_io`` un-importable (see ``_HIDE_SCITEX_IO_BOILERPLATE``) so the
+L1 zero-IO-plugin predicate triggers deterministically REGARDLESS of
+whether scitex-io is installed in the env. This matters because the CI
+SIF now bakes scitex-io into its curated dep union: without the finder,
+``_health._scitex_io_installed()`` would return True and the L1 notice
+would never fire, so these tests must FORCE the absent condition rather
+than assume scitex-io is uninstalled. The finder is a genuine import
+block (no mock) — it reproduces exactly the "scitex-io not in this
+venv" state the L1 notice exists to surface. It is then followed by an
+import of ``scitex_dev`` under ``SCITEX_DEV_LINTER_QUIET=1`` so the
+import-time pass through ``_register_sweep_cli`` → ``load_plugins`` →
+``record_plugin_load([])`` chain (which now DOES fire L1, since
+scitex-io is hidden) stays silent — then the env var is dropped,
+``_health.reset()`` clears the state, and the explicit test call
+exercises the predicate the test cares about. Without the QUIET wrap,
+every test would see one import-time L1 emission inherited from a
+context the test isn't testing.
 """
 
 from __future__ import annotations
@@ -43,11 +53,40 @@ import pytest
 # ---------------------------------------------------------------------- #
 
 
+# Boilerplate prepended FIRST (before any scitex import): install a real
+# MetaPathFinder that makes ``scitex_io`` un-importable for the lifetime
+# of the subprocess. This forces ``_health._scitex_io_installed()`` to
+# return False deterministically, so the L1 zero-IO-plugin predicate
+# fires whether or not scitex-io is installed in the env (the CI SIF now
+# bakes scitex-io in). This is NOT a mock: the finder genuinely removes
+# scitex_io from the import system, reproducing the exact "scitex-io not
+# in this venv" state that the L1 notice exists to surface. It must run
+# before the import below so the import-time load_plugins pass also sees
+# scitex-io as absent (consistent with the QUIET wrap rationale).
+_HIDE_SCITEX_IO_BOILERPLATE = """
+    import sys as _sys
+    import importlib.abc as _importlib_abc
+
+    class _BlockScitexIO(_importlib_abc.MetaPathFinder):
+        '''Real import finder that hides scitex_io (no mock).'''
+
+        def find_spec(self, name, path, target=None):
+            if name == 'scitex_io' or name.startswith('scitex_io.'):
+                raise ImportError(
+                    'scitex_io hidden by test to force the zero-IO-plugin '
+                    'condition (test__health L1)'
+                )
+            return None
+
+    _sys.meta_path.insert(0, _BlockScitexIO())
+"""
+
+
 # Boilerplate prepended to every test script: import scitex_dev with the
-# QUIET env set so the import-time L1 emission (which always fires in
-# this sparse agent venv) does not leak into the stderr the test asserts
-# against. Then env-drop + reset so the explicit call below runs against
-# fresh module state.
+# QUIET env set so the import-time L1 emission (which always fires once
+# scitex-io is hidden, see above) does not leak into the stderr the test
+# asserts against. Then env-drop + reset so the explicit call below runs
+# against fresh module state.
 _QUIET_IMPORT_BOILERPLATE = """
     import os
     os.environ['SCITEX_DEV_LINTER_QUIET'] = '1'
@@ -58,20 +97,27 @@ _QUIET_IMPORT_BOILERPLATE = """
 """
 
 
-def _run(script: str, env_extra: dict | None = None, prepend_boilerplate: bool = True) -> subprocess.CompletedProcess:
+def _run(
+    script: str, env_extra: dict | None = None, prepend_boilerplate: bool = True
+) -> subprocess.CompletedProcess:
     """Run a Python one-liner with the current interpreter; return result.
 
-    When ``prepend_boilerplate`` is True (default), the QUIET-import +
-    reset prelude runs first so the test's assertion sees only the
-    emissions the test triggers — never the import-time L1 inherited
-    from the sparse venv.
+    When ``prepend_boilerplate`` is True (default), two preludes run
+    first: the scitex_io-hiding finder (so the L1 zero-IO-plugin
+    predicate is deterministic regardless of the env's dep set) followed
+    by the QUIET-import + reset prelude (so the test's assertion sees
+    only the emissions the test triggers — never the import-time L1).
     """
     env = dict(os.environ)
     if env_extra:
         env.update(env_extra)
     body = textwrap.dedent(script)
     if prepend_boilerplate:
-        body = textwrap.dedent(_QUIET_IMPORT_BOILERPLATE) + body
+        body = (
+            textwrap.dedent(_HIDE_SCITEX_IO_BOILERPLATE)
+            + textwrap.dedent(_QUIET_IMPORT_BOILERPLATE)
+            + body
+        )
     return subprocess.run(
         [sys.executable, "-c", body],
         capture_output=True,
@@ -216,6 +262,7 @@ class TestL2RequiresGateFailLoud:
         """
         # Act
         import json
+
         result = _run(script)
         skip_counts = json.loads(result.stdout.strip().splitlines()[-1])
         # Assert
@@ -245,6 +292,7 @@ def test_health_snapshot_reports_recorded_state():
     """
     # Act
     import json
+
     result = _run(script)
     snap = json.loads(result.stdout.strip().splitlines()[-1])
     # Assert
