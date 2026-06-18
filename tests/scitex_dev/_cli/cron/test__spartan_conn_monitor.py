@@ -105,22 +105,30 @@ def test_thresholds_ignore_unreachable_node():
 
 @pytest.fixture
 def healthy_run(tmp_path):
-    """All nodes clean → no alert; TSV written; no call placed.
+    """All nodes clean → no alert; TSV written; no call/email placed.
 
     srun=4 is healthy under the new SRUN_MAX (the SSH-vector launch fix keeps
     per-node srun near zero); agents=0, procs=90 are both well within bounds.
     """
     calls = []
     notes = []
+    emails = []
     res = mon.run_once(
         ssh_runner=lambda node: (0, "0 1 90 4\n"),
         notifier=lambda m: notes.append(m),
         caller=lambda m: calls.append(m),
+        emailer=lambda m: emails.append(m),
         now=lambda: "2026-06-17T16:00:00",
         path=tmp_path / "m.tsv",
         out=io.StringIO(),
     )
-    return {"res": res, "calls": calls, "notes": notes, "tsv": tmp_path / "m.tsv"}
+    return {
+        "res": res,
+        "calls": calls,
+        "notes": notes,
+        "emails": emails,
+        "tsv": tmp_path / "m.tsv",
+    }
 
 
 def test_healthy_run_raises_no_alert(healthy_run):
@@ -140,6 +148,14 @@ def test_healthy_run_places_no_phone_call(healthy_run):
     assert calls == []
 
 
+def test_healthy_run_sends_no_email(healthy_run):
+    # Arrange
+    # Act — a clean cycle must NOT email (no inbox spam on healthy ticks).
+    emails = healthy_run["emails"]
+    # Assert
+    assert emails == []
+
+
 def test_healthy_run_writes_a_row_per_node(healthy_run):
     # Arrange
     text = healthy_run["tsv"].read_text(encoding="utf-8")
@@ -153,17 +169,19 @@ def test_healthy_run_writes_a_row_per_node(healthy_run):
 
 @pytest.fixture
 def breach_run(tmp_path):
-    """ssh-agents over threshold on every node → alert + phone call."""
+    """ssh-agents over threshold on every node → alert + phone call + email."""
     calls = []
+    emails = []
     res = mon.run_once(
         ssh_runner=lambda node: (0, "40 0 100 50\n"),
         notifier=lambda m: None,
         caller=lambda m: calls.append(m),
+        emailer=lambda m: emails.append(m),
         now=lambda: "2026-06-17T16:00:00",
         path=tmp_path / "m.tsv",
         out=io.StringIO(),
     )
-    return {"res": res, "calls": calls}
+    return {"res": res, "calls": calls, "emails": emails}
 
 
 def test_breach_run_raises_alerts(breach_run):
@@ -180,6 +198,22 @@ def test_breach_run_places_a_phone_call(breach_run):
     calls = breach_run["calls"]
     # Assert
     assert len(calls) == 1
+
+
+def test_breach_run_sends_one_email(breach_run):
+    # Arrange
+    # Act — exactly one combined email on a breach, not one per node.
+    emails = breach_run["emails"]
+    # Assert
+    assert len(emails) == 1
+
+
+def test_breach_run_email_carries_the_alert_message(breach_run):
+    # Arrange
+    # Act — the emailed body is the same combined alert text the caller gets.
+    emails = breach_run["emails"]
+    # Assert
+    assert "threshold crossed" in emails[0]
 
 
 @pytest.fixture

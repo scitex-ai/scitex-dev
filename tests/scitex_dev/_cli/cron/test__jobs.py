@@ -290,3 +290,108 @@ def test_spartan_conn_monitor_command_writes_to_log_under_scitex_dev():
     spec = _jobs.get_job("spartan-conn-monitor")
     # Assert
     assert "/.scitex/dev/logs/cron-spartan-conn-monitor.log" in spec.command
+
+
+# -- spartan-conn-monitor: EMAIL channel (config-layer prefix mapping) -------
+# The monitor SOURCE must never read a foreign prefix; the cross-package value
+# reuse that wires the proven SCITEX_UI_EMAIL_* creds onto the email backend's
+# SCITEX_NOTIFICATION_EMAIL_* API lives HERE, in the materialised crontab line.
+# These tests pin that mapping so a typo can't silently break the email alert.
+
+
+def test_spartan_conn_monitor_command_sources_the_ui_secrets_file():
+    # Arrange
+    # Act — the line must pull in the file where SCITEX_UI_EMAIL_* live.
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert — POSIX `.` source of the 01_ui.src secrets file.
+    assert ". " in spec.command and "01_ui.src" in spec.command
+
+
+def test_spartan_conn_monitor_command_guards_the_source_with_file_test():
+    # Arrange
+    # Act — a missing secrets file must not break the cron tick.
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert — the source is guarded by a `[ -f ... ]` existence test.
+    assert "[ -f " in spec.command
+
+
+def test_spartan_conn_monitor_command_maps_email_from():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert — backend FROM <= UI agent address.
+    assert "SCITEX_NOTIFICATION_EMAIL_FROM=$SCITEX_UI_EMAIL_AGENT" in spec.command
+
+
+def test_spartan_conn_monitor_command_maps_email_password():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert — backend PASSWORD <= UI agent password (with base-password fallback).
+    assert (
+        "SCITEX_NOTIFICATION_EMAIL_PASSWORD="
+        "${SCITEX_UI_EMAIL_AGENT_PASSWORD:-$SCITEX_UI_EMAIL_PASSWORD}"
+    ) in spec.command
+
+
+def test_spartan_conn_monitor_command_maps_smtp_host():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert — backend SMTP host <= UI SMTP server.
+    assert (
+        "SCITEX_NOTIFICATION_EMAIL_SMTP_HOST=$SCITEX_UI_EMAIL_SMTP_SERVER"
+        in spec.command
+    )
+
+
+def test_spartan_conn_monitor_command_maps_smtp_port():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert — backend SMTP port <= UI SMTP port.
+    assert (
+        "SCITEX_NOTIFICATION_EMAIL_SMTP_PORT=$SCITEX_UI_EMAIL_SMTP_PORT" in spec.command
+    )
+
+
+def test_spartan_conn_monitor_command_recipient_uses_dev_prefixed_knob():
+    # Arrange
+    # Act — per the prefix rule, the recipient is THIS package's own knob.
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert
+    assert "${SCITEX_DEV_SPARTAN_MONITOR_EMAIL_TO:-" in spec.command
+
+
+def test_spartan_conn_monitor_command_recipient_defaults_to_operator():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Assert — operator's unimelb address is the default recipient.
+    assert "Yusuke.Watanabe@unimelb.edu.au" in spec.command
+
+
+def test_spartan_conn_monitor_command_exports_before_exec():
+    # Arrange
+    spec = _jobs.get_job("spartan-conn-monitor")
+    # Act — the env mapping must be set BEFORE the monitor runs.
+    export_at = spec.command.index("SCITEX_NOTIFICATION_EMAIL_FROM")
+    exec_at = spec.command.index("scitex-dev cron exec spartan-conn-monitor")
+    # Assert
+    assert export_at < exec_at
+
+
+def test_spartan_conn_monitor_command_has_no_foreign_notification_prefix_leak():
+    # Arrange — sanity: the SOURCE module never references a foreign prefix; this
+    # pins that the mapping lives ONLY in the config line (this command string).
+    import inspect
+
+    from scitex_dev._cli.cron import _spartan_conn_monitor as srcmod
+
+    source = inspect.getsource(srcmod)
+    # Act
+    leaks = [
+        tok for tok in ("SCITEX_UI_EMAIL", "SCITEX_NOTIFICATION_EMAIL") if tok in source
+    ]
+    # Assert — zero foreign-prefix tokens in the monitor source.
+    assert leaks == []

@@ -9,8 +9,9 @@ Per cycle it ssh's (light, multiplexed) to each Spartan login node and records,
 for the ``ywatanabe`` user: ssh-agents, ``who`` login sessions, total procs,
 ``srun`` clients. It appends a timestamped TSV row per node to
 ``~/.scitex/dev/runtime/spartan-conn-monitor.tsv`` and, if any node crosses a
-threshold, fires a LOUD notification AND a phone call (operator directive: "call
-me when threshold reached").
+threshold, fires a LOUD notification, a phone call (operator directive: "call me
+when threshold reached") AND an email (durable inbox record for when nobody is
+at the terminal).
 
 Why these metrics (countable as a non-root user)
 ------------------------------------------------
@@ -30,9 +31,9 @@ the per-node loop always completes first.
 
 Seams (per PA-306 / STX-NM*)
 ----------------------------
-``ssh_runner`` (node → ``(rc, stdout)``), ``notifier`` / ``caller`` (message →
-None), ``now`` (→ ISO timestamp str) and ``tsv_path`` are injectable so tests
-pass real fakes — no monkeypatching of ``subprocess``.
+``ssh_runner`` (node → ``(rc, stdout)``), ``notifier`` / ``caller`` / ``emailer``
+(message → None), ``now`` (→ ISO timestamp str) and ``tsv_path`` are injectable
+so tests pass real fakes — no monkeypatching of ``subprocess``.
 """
 
 from __future__ import annotations
@@ -173,6 +174,47 @@ def _default_caller(message: str) -> None:
         pass
 
 
+# Email subject for the breach alert — one place, terse but self-explanatory in
+# an inbox list. SSH-hygiene framing matches the audio/phone copy.
+_EMAIL_TITLE = "Spartan login-node threshold crossed (SSH hygiene)"
+
+
+def _default_emailer(message: str) -> None:
+    """Email notification (error level). Best-effort; never raises.
+
+    Shells the standalone ``scitex-notification`` console script with an
+    explicit ``--backend email --no-fallback`` so a breach reaches the
+    operator's inbox even when nobody is at the terminal to hear the audio
+    alert. SMTP credentials / sender / recipient are supplied ENTIRELY by the
+    environment, mapped at the cron CONFIGURATION layer (the crontab line) onto
+    the email backend's own env API. This SOURCE references NO foreign env
+    prefix of any kind — it just asks for ``--backend email`` and lets the env
+    decide; cross-package value reuse belongs in the cron line, never here
+    (the operator's prefix rule).
+    """
+    notif = os.path.join(os.path.expanduser("~"), ".venv", "bin", "scitex-notification")
+    try:
+        subprocess.run(
+            [
+                notif,
+                "send-notification",
+                "--backend",
+                "email",
+                "--no-fallback",
+                "--level",
+                "error",
+                "--title",
+                _EMAIL_TITLE,
+                "-y",
+                message,
+            ],
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 def _parse(stdout: str) -> tuple[int, int, int, int] | None:
     """Parse the remote ``echo "a w p s"`` into 4 ints, or None if malformed."""
     parts = stdout.split()
@@ -225,6 +267,7 @@ def run_once(
     ssh_runner: Callable[[str], tuple[int, str]] | None = None,
     notifier: Callable[[str], None] | None = None,
     caller: Callable[[str], None] | None = None,
+    emailer: Callable[[str], None] | None = None,
     now: Callable[[], str] | None = None,
     path: Path | None = None,
     out=None,
@@ -232,14 +275,16 @@ def run_once(
     """Run one monitor cycle: poll each login node, log, alert on threshold.
 
     Returns a :class:`MonitorResult`. On any threshold breach, fires the
-    notifier + caller once with a combined message. Never raises (cron-safe);
-    the ``exec`` dispatcher decides the exit code from ``result.alerts``.
+    notifier + caller + emailer once with a combined message. Never raises
+    (cron-safe); the ``exec`` dispatcher decides the exit code from
+    ``result.alerts``.
     """
     if out is None:
         out = sys.stdout
     runner = ssh_runner or _default_ssh_runner
     notify = notifier or _default_notifier
     call = caller or _default_caller
+    email = emailer or _default_emailer
     clock = now or (lambda: _dt.datetime.now().isoformat(timespec="seconds"))
     log_path = path if path is not None else tsv_path()
 
@@ -275,6 +320,7 @@ def run_once(
         )
         notify(msg)
         call(msg)
+        email(msg)
         print(f"spartan-conn-monitor: ALERT {' '.join(result.alerts)}", file=out)
 
     return result

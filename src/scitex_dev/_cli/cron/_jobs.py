@@ -164,12 +164,73 @@ def _spartan_conn_monitor_command() -> str:
     connection/agent regression long before the HPC admin would. Body in
     ``_spartan_conn_monitor.run_once``; metrics history is the TSV at
     ``~/.scitex/dev/runtime/spartan-conn-monitor.tsv``.
+
+    EMAIL channel (the CONFIGURATION-layer half of the operator's prefix rule)
+    ------------------------------------------------------------------------
+    A threshold breach pages the operator three ways — audio, phone, AND email
+    (so a breach still lands in the inbox when nobody is at the terminal). The
+    email backend (``scitex-notification --backend email``) reads its OWN
+    ``SCITEX_NOTIFICATION_EMAIL_*`` env API; the monitor SOURCE deliberately
+    never touches any foreign prefix. Cross-package value reuse happens HERE, in
+    the crontab line, not in source:
+
+      1. Source the secrets file where the proven ``SCITEX_UI_EMAIL_*`` creds
+         live (``agent@scitex.ai`` via ``mail1030.onamae.ne.jp:587``). Guarded
+         with ``[ -f ... ]`` so a missing file never breaks the cron tick — the
+         monitor still runs and audio/phone still fire; only email goes quiet
+         (``--no-fallback`` makes that a silent no-op, by design).
+      2. Map ``SCITEX_UI_EMAIL_*`` → the backend's ``SCITEX_NOTIFICATION_EMAIL_*``
+         API. The recipient is the ONE knob owned by this package, so it reads
+         ``SCITEX_DEV_SPARTAN_MONITOR_EMAIL_TO`` (default: the operator's unimelb
+         address) — per the rule, the recipient knob is ``SCITEX_DEV_*``; the
+         rest is the backend's own API set at the config layer.
+
+    Operator-tunable WITHOUT touching source (all ``SCITEX_DEV_*``, the package's
+    own prefix): ``SCITEX_DEV_SPARTAN_MONITOR_SECRETS_SRC`` (where the creds are
+    sourced from) and ``SCITEX_DEV_SPARTAN_MONITOR_EMAIL_TO`` (the recipient).
+
+    Why ``bash -c`` (not the bare ``;``-joined body the other jobs use)
+    ------------------------------------------------------------------
+    cron's default shell is ``/bin/sh`` (dash on this host). The secrets file
+    declares a bash ARRAY (``SCITEX_EMAILS=( ... )``) which dash cannot parse
+    ("Syntax error: ( unexpected") — sourcing it under dash would leave every
+    ``SCITEX_UI_EMAIL_*`` empty and the email channel would silently no-op
+    (exactly the kind of subtle breakage behind the earlier revert). So the
+    whole body runs under ``bash -c`` so the bash-array secrets file parses. The
+    inner body uses NO single quotes, so single-quoting the ``bash -c`` argument
+    is unambiguous.
+
+    NOTE: this monitor will later migrate to scitex-hpc, where the recipient knob
+    becomes ``SCITEX_HPC_*``; scitex-dev is the interim live home.
     """
     log = "$HOME/.scitex/dev/logs/cron-spartan-conn-monitor.log"
-    return (
+    # Secrets file that owns SCITEX_UI_EMAIL_* (bash, with an array literal). The
+    # path itself is an operator override under THIS package's own prefix.
+    secrets = (
+        "${SCITEX_DEV_SPARTAN_MONITOR_SECRETS_SRC:-"
+        "$HOME/.bash.d/secrets/010_scitex/01_ui.src}"
+    )
+    # The body that must run under bash (so the bash-array secrets file parses).
+    # NB: keep this body free of single quotes — it is wrapped in bash -c '...'.
+    body = (
+        # 1. Pull in the working SCITEX_UI_EMAIL_* creds (guarded: never break
+        #    the tick if the file is absent on this host).
+        f'[ -f "{secrets}" ] && . "{secrets}"; '
+        # 2. Map the foreign creds onto the email backend's OWN env API. The
+        #    sender/password/host/port are the backend's API (config-layer
+        #    reuse); the recipient is this package's SCITEX_DEV_* knob.
+        "export SCITEX_NOTIFICATION_EMAIL_FROM=$SCITEX_UI_EMAIL_AGENT "
+        "SCITEX_NOTIFICATION_EMAIL_PASSWORD="
+        "${SCITEX_UI_EMAIL_AGENT_PASSWORD:-$SCITEX_UI_EMAIL_PASSWORD} "
+        "SCITEX_NOTIFICATION_EMAIL_SMTP_HOST=$SCITEX_UI_EMAIL_SMTP_SERVER "
+        "SCITEX_NOTIFICATION_EMAIL_SMTP_PORT=$SCITEX_UI_EMAIL_SMTP_PORT "
+        'SCITEX_NOTIFICATION_EMAIL_TO="${SCITEX_DEV_SPARTAN_MONITOR_EMAIL_TO:-'
+        'Yusuke.Watanabe@unimelb.edu.au}"; '
+        # 3. Run the monitor (unchanged shape).
         f"mkdir -p $(dirname {log}); "
         f"scitex-dev cron exec spartan-conn-monitor >> {log} 2>&1"
     )
+    return f"bash -c '{body}'"
 
 
 JOB_REGISTRY: Mapping[str, JobSpec] = {
