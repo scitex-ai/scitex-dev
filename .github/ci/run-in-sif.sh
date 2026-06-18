@@ -43,4 +43,11 @@ export PATH="$VENV/bin:$PATH"
 export PYTHONPATH="$PWD/src"
 
 echo "py=$("$VENV"/bin/python -V) scitex-dev=$(command -v scitex-dev) ver=$(scitex-dev --version 2>&1 | head -1)"
-exec pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
+# Parallelise across ALL cores of the Spartan CPU lease (64-core node). The
+# baked SIF supplies pytest-xdist; -n "$(nproc)" uses every allocated core and
+# --dist loadscope groups tests by module/class onto one worker so module-scoped
+# fixtures + setup_module run once per worker (not per test) — the figrecipe gold
+# pattern. coverage already runs parallel=true (see [tool.coverage.run]) so the
+# per-worker .coverage.* shards merge cleanly.
+echo "xdist workers (nproc): $(nproc)"
+exec pytest tests/ -n "$(nproc)" --dist loadscope --cov=src/scitex_dev --cov-report=xml --cov-report=term
