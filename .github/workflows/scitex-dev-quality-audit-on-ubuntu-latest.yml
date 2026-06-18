@@ -38,9 +38,15 @@ jobs:
         run: pip install -e "scitex-dev[dev]"
 
       - name: Clone every ecosystem package
+        env:
+          GH_TOKEN_CLONE: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
           mkdir -p proj
+          # Authenticate clones with the built-in token: lifts the 60/hr
+          # anonymous rate-limit (which aborted this step → exit 128 → the
+          # whole audit since 2026-06-09) to 1000+/hr. The one private repo
+          # (scitex-todo) will 403 and is skipped by the non-fatal clone below.
+          git config --global url."https://x-access-token:${GH_TOKEN_CLONE}@github.com/".insteadOf "https://github.com/"
           # Use the dedicated ecosystem_list.py helper (added in #144)
           # which imports `_registry.py` directly — no brittle text-scrape.
           # This supersedes the inline regex-based clone block.
@@ -49,7 +55,7 @@ jobs:
             repo=$(echo "$line" | python3 -c "import json,sys; print(json.load(sys.stdin)['github_repo'])")
             dest="proj/$name"
             [ -d "$dest" ] && continue
-            git clone --depth 1 --no-tags "https://github.com/$repo.git" "$dest"
+            git clone --depth 1 --no-tags "https://github.com/$repo.git" "$dest" || echo "::warning::skip clone $repo (private or unavailable)"
           done
 
       - name: Run ecosystem audit
@@ -87,6 +93,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
+          [ -f audit.json ] || { echo "no audit.json (audit step produced none) — skipping issue"; exit 0; }
           counts=$(python3 -c "import json; d=json.load(open('audit.json')); s=d['summary']['by_severity']; print(s.get('CRITICAL',0), s.get('HIGH',0))")
           read crit high <<< "$counts"
           if [[ "$crit" -eq 0 && "$high" -eq 0 ]]; then
