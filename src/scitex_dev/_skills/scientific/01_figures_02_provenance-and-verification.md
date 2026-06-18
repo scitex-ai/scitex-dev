@@ -54,6 +54,25 @@ match). This is what lets a reviewer trace a plotted value back to source data
 and confirm nothing changed underneath it. See
 [04_clew_01_dag-as-map-and-evidence.md](04_clew_01_dag-as-map-and-evidence.md).
 
+## Reproduction must be COMPLETE and never GAMED
+
+Re-derivation (above) must capture *everything that affected the pixels* — the
+loaded style/rcParams, every parameter (including style-inherited ones), and the
+data — and re-render identically from the recipe alone. Reject two failure modes
+explicitly:
+
+- **Silent degradation.** A replay that cannot match must **FAIL LOUD with the
+  specific divergence** (style? ticks? size?) — never silently resize + restyle
+  and report success. A size mismatch must be reported as a SIZE mismatch. (The
+  figure-replay instance of fail-fast / fail-loud / no-silent-fallback.)
+- **Gaming the check.** Never mutate the *figure* to dodge a replay gap — forcing
+  explicit ticks, hard-coding fontsizes, or pinning a figsize purely to make the
+  validator pass. That hides a real recorder gap and corrupts the figure to
+  satisfy a test. If a required element (colorbar, log axis, style-driven font)
+  does not yet reproduce, **keep the correct figure and fix the recorder** —
+  reproduction is a property the tooling must earn, not one the figure is
+  mutilated to fake.
+
 ## The verification boundary (expensive upstream steps)
 
 Not every step can be re-run under Clew. A heavy, one-off computation (a
@@ -111,3 +130,8 @@ the verification boundary, unverified≠wrong) apply verbatim to tables.
   reproducibility silently.
 - Treating an unverifiable upstream step as a *correctness* defect, or
   silently dropping it — instead, draw the boundary and disclose it.
+- A replay that silently resizes/restyles to "match" and reports success —
+  it must fail loud with the specific divergence (style? ticks? size?).
+- Mutating a figure (forcing ticks, hard-coding fontsize, pinning figsize)
+  just to make a replay/validator pass — hides a recorder gap; fix the
+  recorder instead.

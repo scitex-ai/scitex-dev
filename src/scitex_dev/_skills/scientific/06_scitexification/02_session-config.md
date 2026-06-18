@@ -70,6 +70,20 @@ CONFIG.THRESHOLD                 # 0.5
 stx.io.load(eval(CONFIG.PATH.RAW_CSV))   # PATH values are f-strings → eval
 ```
 
+### CONFIG access conventions
+
+`CONFIG` is a constant — treat it like one:
+
+- **Full path from the root, inline at every use site**
+  (`CONFIG.PAPER_FIGURES.FIG02.PANEL_D.AXES_WIDTH_MM`). Never split it into an
+  intermediate variable — neither a section handle
+  (`fig2 = CONFIG.PAPER_FIGURES.FIG02`) nor a scalar alias. Inline access keeps
+  every read greppable and traceable to one source.
+- **UPPERCASE keys**, and functions that receive config take an uppercase
+  `CONFIG` parameter.
+- **Move module-scope domain literals into config** — event orders, key maps,
+  layout toggles belong in `config/*.yaml`, not as top-of-file constants.
+
 ### Pre-flight rules (config corner cases that crash silently)
 
 ```
@@ -83,6 +97,11 @@ stx.io.load(eval(CONFIG.PATH.RAW_CSV))   # PATH values are f-strings → eval
   resolve when make runs from elsewhere.
 □ Declare all five INJECTED params explicitly; a missing one breaks the
   DI assumptions downstream stx modules make.
+□ @stx.session CONFIG (`_DotDict`) access is CASE-SENSITIVE: unlike
+  `load_configs`, the session path does NOT auto-uppercase, so a YAML key
+  must be written in the SAME case it is accessed. Convention: UPPERCASE
+  both. (A panel reading `CONFIG.PAPER_FIGURES.REP_SUBJECT_ID` fails against
+  a lowercase `rep_subject_id` YAML key.)
 ```
 
 ## Migrating an existing config layer
