@@ -121,10 +121,11 @@ From: ubuntu:24.04
     #     __version__ stay available for metadata-based tooling (skills
     #     subprocess tests, audit-cli).
     #   * figrecipe — stats[all]/dsp plotting integration tests.
-    #   * dsp signal-processing test deps — mne (the _demo_sig / wavelet path +
-    #     the 11_modulation_index example notebook hard-import MNE) and
-    #     ripple_detection (test__detect_ripples preprocessing). Both are in
-    #     scitex-dsp's [dev] extra; without them dsp pytest is 803-pass / 6-fail.
+    #   * dsp signal-processing test deps — mne (wavelet path), ripple_detection
+    #     (test__detect_ripples preprocessing), and tensorpac (the PAC path +
+    #     the 11_modulation_index example notebook, which nbconvert-executes and
+    #     hard-imports tensorpac). All three are in scitex-dsp's [dev]/[pac]
+    #     extras; without them dsp pytest is 803-pass / 6-fail.
     #   * pytest toolchain — pytest, pytest-cov, pytest-xdist, pytest-timeout
     #     (timeout lags in some PyPI [dev] extras; pin it so the pyproject
     #     `timeout=300` per-test cap is honoured — a hung test fails loud at
@@ -146,7 +147,7 @@ From: ubuntu:24.04
             scitex-io scitex-logging scitex-config scitex-dict \
             scitex-decorators scitex-gen scitex-nn \
             scitex-stats scitex-str scitex-dsp figrecipe \
-            mne ripple_detection \
+            mne ripple_detection tensorpac \
             "scitex-dev[all,dev]" \
             pytest pytest-cov pytest-xdist pytest-timeout
     done
@@ -160,7 +161,7 @@ From: ubuntu:24.04
 %labels
     org.scitex.layer ci-cpu
     org.scitex.runtime apptainer
-    org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep cron systemd + numpy scipy pandas matplotlib xarray statsmodels pingouin scikit-learn torch[cpu] seaborn click mcp fastmcp nbconvert ipykernel openpyxl figrecipe mne ripple_detection + scitex basics (io logging config dict decorators gen nn stats str dsp) + scitex-dev[all,dev] + pytest{,-cov,-xdist,-timeout}"
+    org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep cron systemd + numpy scipy pandas matplotlib xarray statsmodels pingouin scikit-learn torch[cpu] seaborn click mcp fastmcp nbconvert ipykernel openpyxl figrecipe mne ripple_detection tensorpac + scitex basics (io logging config dict decorators gen nn stats str dsp) + scitex-dev[all,dev] + pytest{,-cov,-xdist,-timeout}"
 
 %help
     scitex-dev CI runner image (CPU). Reused by the self-hosted Spartan
