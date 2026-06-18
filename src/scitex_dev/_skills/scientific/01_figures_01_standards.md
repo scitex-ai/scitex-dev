@@ -45,6 +45,18 @@ photogenic case:
   ([01_figures_03](01_figures_03_no-synthetic-data-policy.md)): the data is
   real, but a cherry-picked real example is its own integrity failure.
 
+## State What Each Panel Shows
+
+The reader must never have to guess what the data is:
+
+- **Population / unit** — is it pooled across the cohort, or a single subject /
+  channel / trial / window? State it.
+- **Sample size** — annotate `n` (e.g. `n = 12 seizures`). A panel with no `n`
+  is incomplete.
+
+Put it in the title, a corner annotation, or the caption — consistently across
+panels.
+
 ## Multi-Panel Layout for Per-Subject Reports
 
 - One subject (patient/participant/sample) per page, with all conditions for
@@ -59,6 +71,14 @@ Stack a heatmap above its averaged profile (or any two plots that share time):
 - Allocate vertical space proportionally (e.g., heatmap : line ≈ 3 : 1).
 - Hide x tick labels on the upper panel; show only on the bottom panel.
 
+## Binned / Windowed Axes
+
+- **Consistent, explicit half-open interval notation** for bins/windows:
+  `[-32, -16)`, `[-16, -1)`, `[0, 2)`, `[2, 10)` — the `[a, b)` form makes the
+  bounds and which end is inclusive unambiguous.
+- **Show the complete series of windows** — don't drop intermediate bins; a gap
+  in the sequence misleads the reader.
+
 ## Color Maps
 
 - **Diverging data** (positive/negative around 0): `RdBu_r` or `coolwarm`.
@@ -71,6 +91,12 @@ Stack a heatmap above its averaged profile (or any two plots that share time):
 ## Axis Labels & Typography
 
 - **Capital first letter + clear words**: "Phase Frequency (Hz)", not "phase freq".
+  This applies to **all** text — legends, categorical tick labels, annotations,
+  and panel titles — not only axis labels ("Density", "Preictal", not "density").
+- **Italicize mathematical & statistical symbols** — variables, *R²*, *p*, *n*,
+  *β* are math, not prose; set them in italic.
+- **Titles: the minimal sufficient identifier**, short and clear (e.g. "Patient
+  #10", not a sentence). An overlong title that is hard to parse is a defect.
 - **Abbreviate consistently or not at all.** If space forces abbreviation,
   abbreviate *both* paired axes the same way — "Amp. Freq. (Hz)" must pair with
   "Phase Freq. (Hz)"; never abbreviate one axis and spell out the other.
@@ -78,6 +104,29 @@ Stack a heatmap above its averaged profile (or any two plots that share time):
   "10–20 Hz", not "10--20 Hz".
 - A per-tile / per-window **title shows the actual range it covers**, not just a
   single offset.
+
+## Regression & Scatter Plots
+
+- **Fit line in a neutral colour (black)** so it stands out from the (often
+  coloured) data points.
+- **Show the fitted equation** — e.g. `y = ax + b` with the actual coefficients.
+- **Put the fit statistics (*R²*, *p*, *n*) next to the regression line**, not
+  floating in a corner, with the symbols *italicized*.
+
+## Encoded Channels Need a Legend
+
+Any visual channel that carries a quantity must be decodable:
+
+- **Colour → colorbar** (with units; see Color Maps above).
+- **Marker size → a size legend.** If bubble size/area encodes a value, show a
+  size legend and say in the caption what size means. A bubble chart whose size
+  is unexplained is unreadable.
+
+## Reduce Chartjunk
+
+- **Hide spines / ticks that don't aid reading.** On a heatmap / image /
+  comodulogram panel the box spines and redundant ticks add nothing — hide them
+  and let the colorbar + axis labels carry the information.
 
 ## PDF Report Layout
 
@@ -101,3 +150,10 @@ When generating multi-figure scientific reports as a PDF:
   asymmetry where there isn't any.
 - One figure per PDF page for a 50-figure report — unreadable, unprintable.
 - Using `jet` "because it's colorful".
+- A regression panel with the fit line in a data colour, no equation, and the
+  stats floating in a corner instead of beside the line.
+- A bubble chart with no size legend — the reader can't decode what size means.
+- A panel that doesn't say whether it's pooled or a single subject, or omits `n`.
+- Lowercase axis / legend / category labels ("density", "preictal") — capitalize
+  the first letter.
+- Box spines + redundant ticks left on a heatmap, adding visual noise.
