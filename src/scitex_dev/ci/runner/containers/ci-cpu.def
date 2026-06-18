@@ -1,10 +1,19 @@
 # scitex-dev CI runner container (CPU) — Apptainer recipe (public SSoT).
 #
-# Purpose: a REUSED, cached image the self-hosted Spartan CPU runner
-# apptainer-exec's for every CI run, so no per-run dependency install.
-# The SIF IS the cache (operator directive 2026-06-16: "container already
-# there, reused with caching"). Built once via scitex-container; rebuilt
-# (new version) only when the dependency set changes.
+# Purpose: the LEAN, read-only BASE IMAGE the self-hosted Spartan CPU runner
+# apptainer-exec's — exactly like GitHub's hosted-runner image. It carries the
+# common toolchain (Python 3.11/3.12/3.13 + uv + system libs + scitex-dev for
+# audit tooling) and NOTHING package-specific. Per-package dependencies are
+# NOT baked here; they live in a per-workflow, cached, WRITABLE overlay keyed
+# on (python-version, sha256(pyproject.toml)) — see run-in-sif.sh. Steady
+# state: this base is reused unchanged; only a workflow's overlay rebuilds
+# when that package's deps change. Rebuild this base only when the TOOLCHAIN
+# (pythons / uv / system libs / scitex-dev) changes.
+#
+# Two-layer model (GitHub-runner-faithful):
+#   LAYER 1 (here)   read-only base SIF      == github's runner image
+#   LAYER 2 (overlay) per-workflow deps      == per-job disk + actions/cache
+#   LAYER 0 (uv-cache) shared GPFS wheel cache == github's pip/uv cache
 #
 # Build (canonical — versioned via scitex-container, on a RUNNING compute
 # node; never the login node, never sbatch-and-wait):
@@ -12,12 +21,11 @@
 # Raw fallback (same effect):
 #   apptainer build ci-cpu.sif ci-cpu.def
 #
-# Run contract (the workflow): each matrix job execs (read-only SIF, no install)
-#   apptainer exec --bind <punim> <sif> bash .github/ci/run-in-sif.sh <pyver>
-# The baked venvs carry scitex-dev[all,dev] FULLY installed; CI prepends the
-# checkout via PYTHONPATH=<co>/src so imports + coverage use the PR code while
-# the baked console-script / entry-point / metadata stay available. A dep
-# missing from the SIF fails LOUD (rebuild the SIF) — never a silent reinstall.
+# Run contract (the workflow): each matrix job execs the read-only base WITH
+# its keyed overlay; deps come from a FRESH venv inside that overlay (created
+# as the runner user — never the root-owned /opt), installed on cache-MISS and
+# reused on cache-HIT:
+#   apptainer exec --overlay <keyed-overlay> <sif> ...   (see run-in-sif.sh)
 #
 # Design notes (vs the heavier agent base.def): no node/rust/claude-sdk —
 # CI inside the SIF runs pytest only (checkout/codecov run on the host
@@ -63,34 +71,35 @@ From: ubuntu:24.04
     export PATH=/usr/local/bin:$PATH
     export UV_PYTHON_INSTALL_DIR=/opt/uv-python
 
-    # Pre-stage the three matrix Python versions + a per-version venv with
-    # scitex-dev[all,dev] FULLY installed (from PyPI) — scitex-dev itself is
-    # KEPT installed, not just its deps.
+    # Pre-stage the three matrix Python versions. These baked interpreters
+    # under /opt/uv-python are what `uv venv --python <V>` discovers at runtime
+    # when run-in-sif.sh builds each workflow's FRESH overlay venv — so the
+    # cache-MISS path needs no network interpreter download.
     #
-    # Why keep scitex-dev baked (vs. installing the checkout at runtime):
-    #   * The baked venv is root-owned; a runtime `uv pip install -e .` into it
-    #     hits `Permission denied (os error 13)` even with --writable-tmpfs (the
-    #     overlay can't copy-up root-owned site-packages for the non-root runner
-    #     user). An editable *replace* of a baked copy also hit EOVERFLOW on
-    #     gpfs. So NO runtime install — the SIF stays read-only.
-    #   * CI runs the CHECKOUT's code by prepending it via PYTHONPATH=<co>/src
-    #     (see .github/ci/run-in-sif.sh): PYTHONPATH shadows the baked package
-    #     for imports + coverage, while the baked install still provides the
-    #     things importlib.metadata-based tooling needs — the `scitex-dev`
-    #     console script on PATH (13 skills subprocess tests), the
-    #     `console_scripts` ENTRY POINT (audit-cli resolves the CLI via
-    #     im.entry_points — a shim with no metadata can't satisfy it), and a
-    #     real __version__. ep.load() then imports scitex_dev._cli from the
-    #     checkout (PYTHONPATH wins), so audit-cli audits the PR code.
+    # scitex-dev[all,dev] is baked into a per-version /opt/venv-<V> as the only
+    # package in the base (operator: "+ scitex-dev for audit tooling"). It is
+    # NOT used to run the package-under-test (that runs from the overlay's fresh
+    # editable install) — it is here so the brand-wide audit tooling, the
+    # `scitex-dev` console script, and the linter/auditor entry points are
+    # available without a per-job install. NO other package deps are baked:
+    # zarr / pyarrow / pypdf / gitpython / torch / … come from the per-workflow
+    # overlay (run-in-sif.sh), exactly like a hosted runner installing them per
+    # job. This keeps the base LEAN and lets each repo's deps version
+    # independently of the image.
+    #
+    # The permission lesson that drove the overlay model: /opt below is
+    # root-owned, so a runtime `uv pip install -e .` INTO /opt/venv-<V> hits
+    # `Permission denied` for the non-root runner (a dir overlay can't copy-up
+    # root-owned site-packages; an ext3 overlay needs fakeroot we don't have).
+    # run-in-sif.sh therefore never writes /opt — it creates a NEW venv at an
+    # overlay-owned path (/ci/venv) instead.
     for V in 3.11 3.12 3.13; do
         uv python install "$V"
         uv venv --python "$V" "/opt/venv-$V"
         uv pip install --python "/opt/venv-$V/bin/python" "scitex-dev[all,dev]"
         # pytest-timeout is in develop's [dev] but may lag in PyPI's
-        # published [dev] extra (the SIF bakes deps from PyPI). Install it
-        # explicitly so the pyproject `timeout=300` per-test cap is honoured
-        # — else a hung test wedges the job to timeout-minutes instead of
-        # failing loud + naming itself at 300 s.
+        # published [dev] extra. Bake it so the audit venv has the full
+        # toolchain; the overlay venv installs its own copy too.
         uv pip install --python "/opt/venv-$V/bin/python" pytest-timeout
     done
 
@@ -106,9 +115,13 @@ From: ubuntu:24.04
     org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep cron systemd + scitex-dev[all,dev]"
 
 %help
-    scitex-dev CI runner image (CPU). Reused by the self-hosted Spartan
-    runner: apptainer exec --bind <punim> <sif> bash
-    .github/ci/run-in-sif.sh <ver> — read-only, no install; the checkout
-    is prepended via PYTHONPATH while the baked scitex-dev supplies the
-    console script / entry point / metadata. Rebuild via scitex-container
-    when the dependency set changes.
+    scitex-dev CI runner image (CPU) — the LEAN, read-only BASE (== github's
+    hosted-runner image). Reused by the self-hosted Spartan runner:
+        apptainer exec --overlay <keyed-overlay> <sif> ...
+    via .github/ci/run-in-sif.sh <ver>. Per-package deps are NOT baked here;
+    they live in a per-workflow cached overlay keyed on (py-version,
+    sha256(pyproject.toml)), installed into a FRESH overlay-owned venv
+    (/ci/venv) on cache-MISS and reused on cache-HIT. The baked
+    scitex-dev[all,dev] is the audit-tooling base only. Rebuild this image
+    only when the toolchain (pythons / uv / system libs / scitex-dev)
+    changes — NOT when a package's deps change (that re-keys its overlay).
