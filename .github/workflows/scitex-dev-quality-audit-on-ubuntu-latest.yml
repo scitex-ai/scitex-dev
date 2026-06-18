@@ -120,7 +120,11 @@ jobs:
                   out.append(f"- **{p['package']}** §{f['section']} ({f['lens']}) — {f['message']}")
                   if f.get("detail"):
                       out.append(f"    - {f['detail']}")
-          open("issue_body.md", "w").write("\n".join(out))
+          body = "\n".join(out)
+          LIMIT = 60000  # GitHub issue body hard cap is 65536 chars; leave margin
+          if len(body) > LIMIT:
+              body = body[:LIMIT] + "\n\n… (truncated — full findings in the `ecosystem-audit` artifact)"
+          open("issue_body.md", "w").write(body)
           PY
           # Reuse a single rolling issue per day.
           title="quality-audit: $(date -u +%Y-%m-%d) — CRITICAL=$crit HIGH=$high"
