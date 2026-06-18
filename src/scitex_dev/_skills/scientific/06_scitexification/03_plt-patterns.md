@@ -42,6 +42,24 @@ stx.io.save(fig, "ripple.png", symlink_to=eval(CONFIG.PATH.FIG_RIPPLE))
 **verifiable artefact** — a reviewer (or a clew claim) can trace the
 rendered pixels back to the numbers, and `make repro` can re-derive both.
 
+## Session figures: use the injected `plt`, not top-level `figrecipe`
+
+Inside an `@stx.session` script the figure API must be the **session-injected
+`plt`** (`plt.subplots`, Stage 2) — NOT top-level `import figrecipe as fr` /
+`fr.subplots`. The injected `plt` loads `SCITEX_STYLE`; raw `fr` does not, so the
+two render **differently**, and that difference silently breaks reproduction and
+cross-figure consistency.
+
+- **No per-call `fontsize=` / `lw=`.** Font sizes and line widths come from the
+  loaded style; setting them per-call overrides the style and un-reproducibly
+  pins sizes. Document any genuine exception (e.g. tiny multi-tile grids).
+- **No manual margins.** Let `plt.subplots` crop; hand-tuned margins are the
+  usual cause of a figure that "doesn't crop" and whose reproduction depends on
+  hard-coded sizes.
+
+(A linter rule steering `fr` → injected `plt` inside `@stx.session` modules is
+requested — pairs with this convention.)
+
 ## Translation inventory
 
 | Original | SciTeX |
@@ -88,6 +106,15 @@ plt.title("Trace")                    stx.io.save(fig, "trace.png",
 plt.savefig("trace.png")                  symlink_to=eval(CONFIG.PATH.FIG_TRACE))
 #   → trace.png only                  #   → trace.png + trace.csv (DAG-bound)
 ```
+
+## Per-figure entry points
+
+Each composed figure gets a uniform, reproducible pair:
+
+- `plot_figNN_composed.py` — config-driven "smart compose" over the panel recipes.
+- `plot_figNN.sh` — the runner.
+
+so every figure builds the same way and re-runs identically.
 
 ## Follow-up
 

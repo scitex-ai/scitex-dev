@@ -30,6 +30,21 @@ interictal, etc.):
 5. **One shared colorbar** for the comparison group (not one per panel) so
    the color↔value mapping is unambiguous.
 
+## Representative Examples Must Be Genuinely Typical
+
+A panel labelled "representative" (subject / channel / trial / window) must be
+typical of the population it stands for — **not** the strongest or most
+photogenic case:
+
+- **Pick by a stated, reproducible criterion** (median effect, nearest-to-mean),
+  never by eye, and state that criterion in the caption.
+- **Cross-check against the population.** A representative *control* must NOT
+  exhibit the *effect* you attribute to the experimental condition; if it does,
+  it is not a valid control — re-select it.
+- This is the presentation counterpart to the no-synthetic-data policy
+  ([01_figures_03](01_figures_03_no-synthetic-data-policy.md)): the data is
+  real, but a cherry-picked real example is its own integrity failure.
+
 ## Multi-Panel Layout for Per-Subject Reports
 
 - One subject (patient/participant/sample) per page, with all conditions for
@@ -49,7 +64,20 @@ Stack a heatmap above its averaged profile (or any two plots that share time):
 - **Diverging data** (positive/negative around 0): `RdBu_r` or `coolwarm`.
 - **Sequential data** (0 → max): `viridis` or `plasma`.
 - **Never use `jet`** — perceptually non-uniform; misrepresents data.
-- **Always include a colorbar** with units in the label.
+- **A colorbar is MANDATORY whenever colour encodes a numerical quantity**
+  (z-score, rate, effect size), with **units in the label**. A numeric colour
+  axis with no colorbar is a defect, not a stylistic choice.
+
+## Axis Labels & Typography
+
+- **Capital first letter + clear words**: "Phase Frequency (Hz)", not "phase freq".
+- **Abbreviate consistently or not at all.** If space forces abbreviation,
+  abbreviate *both* paired axes the same way — "Amp. Freq. (Hz)" must pair with
+  "Phase Freq. (Hz)"; never abbreviate one axis and spell out the other.
+- **Use an en-dash (–) for numeric ranges**, not a hyphen or double-hyphen:
+  "10–20 Hz", not "10--20 Hz".
+- A per-tile / per-window **title shows the actual range it covers**, not just a
+  single offset.
 
 ## PDF Report Layout
 
