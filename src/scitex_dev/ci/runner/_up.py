@@ -1,4 +1,14 @@
-"""``scitex-dev ci runner up`` — start the persistent runner on HPC."""
+"""``scitex-dev ci runner up`` — start the persistent runner on HPC.
+
+SSH-vector fix (2026-06-17 admin incident, ~20 srun/login-node ceiling): the
+runner is launched by ssh'ing STRAIGHT to the lease's compute node (ProxyJump
+through a login node) and detaching there with ``setsid nohup``. The ssh exits
+immediately, so provisioning a runner leaves NO persistent login-node ``srun``
+client (the old path ran ``setsid nohup srun --overlap`` on a login node, whose
+``srun`` CLIENT lingered for the runner's whole life as a stdio tether — one per
+runner, ~76 across the fleet). The runner's run.sh / Runner.Listener run on the
+compute node either way; only the tether is removed.
+"""
 
 from __future__ import annotations
 
@@ -10,9 +20,8 @@ import click
 
 from . import config
 
-# Absolute SLURM paths: the `up` wrapper runs in a NON-interactive login shell
-# where SLURM is not on PATH (so bare `srun`/`squeue` fail). Match these.
-_SRUN = "/apps/slurm/latest/bin/srun"
+# Absolute SLURM paths: the lease query runs in a NON-interactive login shell
+# where SLURM is not on PATH (so a bare `squeue` fails). Match this.
 _SQUEUE = "/apps/slurm/latest/bin/squeue"
 
 
@@ -21,10 +30,10 @@ def _staging_paths(runner_home: str) -> tuple[str, str, str]:
 
     Staging MUST be on a shared filesystem, never /tmp: Spartan has multiple
     round-robin login nodes and each ssh WITHOUT connection-sharing can land
-    on a different node, whose /tmp is node-local; worse, the wrapper runs on
-    a login node but `srun` executes the launcher on the COMPUTE node, which
-    shares the project FS but not /tmp. runner_home is a punim0264 project dir
-    (mounted on every node), so stage under its parent.
+    on a different node, whose /tmp is node-local; and the launcher is staged on
+    a login node but EXECUTED on the compute node, which shares the project FS
+    but not /tmp. runner_home is a punim0264 project dir (mounted on every
+    node), so stage under its parent.
     """
     stage_dir = os.path.join(os.path.dirname(runner_home), "run")
     return (
@@ -34,10 +43,40 @@ def _staging_paths(runner_home: str) -> tuple[str, str, str]:
     )
 
 
-def _build_wrapper_script(
+def _build_launcher_stage_script(
     *,
     runner_home: str,
     launcher_content: str,
+) -> str:
+    """Build the LOGIN-NODE staging script (pure — no I/O).
+
+    Runs on a login node via the multiplexed ssh and does ONLY cheap shared-FS
+    file work — write the launcher to the shared staging dir, chmod it. It starts
+    NO long-lived process, so this ssh leaves nothing behind on the login node
+    (no ``srun`` client, no lingering shell). The launch itself happens in a
+    SEPARATE ssh straight to the compute node (see ``_build_compute_run_script``)
+    — that is what eliminates the per-runner persistent login-node ``srun``.
+
+    /tmp would be node-local on multi-login-node Spartan and invisible to the
+    compute node; the shared project FS (``runner_home``'s parent) is mounted on
+    every node, so the launcher staged here is the same file the compute node
+    runs.
+    """
+    stage_dir, _wrapper_remote, launcher_remote = _staging_paths(runner_home)
+    return f"""#!/bin/bash
+set -euo pipefail
+mkdir -p '{stage_dir}'
+cat > '{launcher_remote}' << 'LAUNCHER_EOF'
+{launcher_content}
+LAUNCHER_EOF
+chmod +x '{launcher_remote}'
+echo "LAUNCHER_STAGED:{launcher_remote}"
+"""
+
+
+def _build_compute_run_script(
+    *,
+    runner_home: str,
     gh_token: str,
     gh_repo: str,
     runner_name: str,
@@ -45,29 +84,24 @@ def _build_wrapper_script(
     apptainer: str,
     sif: str,
     wrap_log: str,
-    jobid: str,
 ) -> str:
-    """Build the login-node wrapper script (pure — no I/O).
+    """Build the COMPUTE-NODE run script (pure — no I/O).
 
-    Writes the launcher to the SHARED staging dir and starts it via the
-    ABSOLUTE srun path under srun --overlap on the existing lease. Both
-    invariants are regression-guarded by tests (the two bugs this fixed:
-    /tmp staging on multi-login-node Spartan, and bare `srun` not on the
-    non-interactive PATH).
+    This is the body run via ``ssh -J <login> <compute-node>``. It exports the
+    runner env and starts the staged launcher with ``setsid nohup … &`` so the
+    runner (run.sh → Runner.Listener) is fully detached ON the compute node and
+    the ssh connection returns IMMEDIATELY. No ``srun`` is involved: we are
+    already on the lease's node (reached via ProxyJump), so there is no
+    login-node ``srun`` client tethering the runner — the whole point of the
+    SSH-vector fix.
+
+    The launcher itself no longer wraps ``run.sh`` in ``srun --overlap`` — it
+    runs run.sh directly, because this script already placed it on the node.
     """
-    stage_dir, _wrapper_remote, launcher_remote = _staging_paths(runner_home)
+    _stage_dir, _wrapper_remote, launcher_remote = _staging_paths(runner_home)
     return f"""#!/bin/bash
 set -euo pipefail
 
-# Write launcher to the SHARED staging dir (visible to the compute node srun
-# runs on — /tmp would not be).
-mkdir -p '{stage_dir}'
-cat > '{launcher_remote}' << 'LAUNCHER_EOF'
-{launcher_content}
-LAUNCHER_EOF
-chmod +x '{launcher_remote}'
-
-# Set environment for the srun --overlap call
 export GH_TOKEN='{gh_token}'
 export GH_REPO='{gh_repo}'
 export RUNNER_NAME='{runner_name}'
@@ -77,16 +111,46 @@ export APPTAINER='{apptainer}'
 export SIF='{sif}'
 export RUNNER_VERSION='2.328.0'
 
-# Start the runner via srun --overlap on the existing lease job.
-# Absolute srun path: the wrapper runs in a NON-interactive login shell where
-# SLURM is not on PATH (matches the absolute squeue path the lease check uses)
-# — bare `srun` fails with "No such file or directory".
-setsid nohup {_SRUN} \\
-  --overlap --jobid={jobid} --export=ALL \\
-  bash '{launcher_remote}' </dev/null >'{wrap_log}' 2>&1 &
+# Detach the runner on THIS (compute) node. setsid+nohup orphan it to init so it
+# survives this ssh closing; the ssh exits the instant this returns, leaving NO
+# persistent login-node srun/ssh client behind.
+setsid nohup bash '{launcher_remote}' </dev/null >'{wrap_log}' 2>&1 &
 disown
 echo "RUNNER_STARTED:$!"
 """
+
+
+def _resolve_lease(target: str, user: str, jobname: str) -> tuple[str, str]:
+    """Return ``(jobid, node)`` of the RUNNING lease, or raise ClickException.
+
+    Queries the login node (via the multiplexed ssh) for the lease job's id AND
+    its allocated node (``%N``) — we need the node to ssh straight to it. A
+    PENDING lease has no node and never allocates, so only RUNNING rows count.
+    """
+    lease_info = subprocess.run(
+        [
+            "ssh",
+            *config.SSH_MUX_OPTS,
+            target,
+            f"{_SQUEUE} -u {user} --name={jobname} --noheader -o '%i %T %N'",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if lease_info.returncode != 0 or not lease_info.stdout.strip():
+        raise click.ClickException(
+            f"No RUNNING CI lease job found for name={jobname}. "
+            f"Run 'scitex-dev ci runner renew' first to submit a lease job."
+        )
+    for line in lease_info.stdout.strip().splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[1] == "RUNNING" and parts[2]:
+            return parts[0], parts[2]
+    raise click.ClickException(
+        f"No RUNNING CI lease job with an allocated node for name={jobname}. "
+        f"squeue output: {lease_info.stdout.strip()!r}"
+    )
 
 
 def register(group: click.Group) -> None:
@@ -146,13 +210,16 @@ def register(group: click.Group) -> None:
         """Start the persistent GitHub Actions runner on the HPC compute node.
 
         \b
-        How it works:
-          1. Copies launcher.sh to the HPC host (shared FS staging).
-          2. SSHs to the HPC host and runs:
-             srun --overlap --jobid=<CI_LEASE_JOBID> --export=ALL \\
-               bash launcher.sh
-          3. The launcher downloads + caches the GitHub runner tarball,
-             registers the runner, and runs a persistent run.sh loop.
+        How it works (SSH-vector-safe — no per-runner login-node srun client):
+          1. Resolve the RUNNING CI lease's jobid AND allocated compute node.
+          2. Stage launcher.sh on the shared FS via a login-node ssh that does
+             ONLY file I/O (no long-lived process — leaves nothing behind).
+          3. SSH STRAIGHT to the compute node (ProxyJump through a login node)
+             and `setsid nohup bash launcher.sh &` — the ssh returns at once,
+             so the runner runs ON the lease's node with ZERO persistent
+             login-node srun/ssh client.
+          4. The launcher downloads + caches the GitHub runner tarball,
+             registers the runner, and runs a persistent run.sh loop on the node.
 
         \b
         The GH_TOKEN is passed via env (never in argv) to avoid leaking it.
@@ -190,73 +257,31 @@ def register(group: click.Group) -> None:
             launcher_path = pkg_launcher
         else:
             raise click.ClickException(
-                f"launcher.sh not found. "
-                f"Check the scitex-dev package or pass --launcher PATH."
+                "launcher.sh not found. "
+                "Check the scitex-dev package or pass --launcher PATH."
             )
 
-        # Copy launcher to a temp file on the HPC and run it via heredoc
-        # Pass env vars through the launcher via environment injection.
-
-        # Read launcher.sh content
+        # Read launcher.sh content (staged onto the shared FS below).
         with open(launcher_path, "r") as f:
             launcher_content = f.read()
 
-        # First, get the current lease jobid to check it exists
-        lease_info = subprocess.run(
-            [
-                "ssh",
-                *config.SSH_MUX_OPTS,
-                target,
-                f"{_SQUEUE} -u {cfg['hpc']['user']} --name={jobname} --noheader -o '%i %T'",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        # Resolve the RUNNING lease's jobid + allocated compute node — we ssh
+        # straight to that node so the runner runs there with no login srun.
+        jobid, node = _resolve_lease(target, cfg["hpc"]["user"], jobname)
 
-        if lease_info.returncode != 0 or not lease_info.stdout.strip():
-            raise click.ClickException(
-                f"No RUNNING CI lease job found for name={jobname}. "
-                f"Run 'scitex-dev ci runner renew' first to submit a lease job."
-            )
-
-        # Extract jobid from squeue output
-        jobid = None
-        for line in lease_info.stdout.strip().splitlines():
-            parts = line.split()
-            if len(parts) >= 2 and parts[1] == "RUNNING":
-                jobid = parts[0]
-                break
-
-        if not jobid:
-            raise click.ClickException(
-                f"No RUNNING CI lease job found for name={jobname}. "
-                f"See squeue output for available jobs."
-            )
-
-        # Build the login-node wrapper (pure; staging on the SHARED FS, absolute
-        # srun — see _build_wrapper_script). Write it locally, then scp+ssh it.
+        # --- step 1: stage the launcher on the shared FS (login-node ssh; only
+        #     cheap file I/O, no lingering process) ----------------------------
         stage_dir, wrapper_remote, _launcher_remote = _staging_paths(runner_home)
-        wrapper_script = _build_wrapper_script(
+        stage_script = _build_launcher_stage_script(
             runner_home=runner_home,
             launcher_content=launcher_content,
-            gh_token=gh_token,
-            gh_repo=gh_repo,
-            runner_name=runner_name,
-            runner_labels=runner_labels,
-            apptainer=apptainer,
-            sif=sif,
-            wrap_log=wrap_log,
-            jobid=jobid,
         )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".sh", delete=False) as tmp:
-            tmp.write(wrapper_script)
+            tmp.write(stage_script)
             tmp_path = tmp.name
 
         ssh_opts = config.SSH_MUX_OPTS
 
-        # Ensure the shared staging dir exists (on the shared FS, so any login
-        # node the next connection lands on sees it).
         mkdir_result = subprocess.run(
             ["ssh", *ssh_opts, target, f"mkdir -p '{stage_dir}'"],
             capture_output=True,
@@ -269,7 +294,6 @@ def register(group: click.Group) -> None:
                 f"Failed to create staging dir {stage_dir}: {mkdir_result.stderr.strip()}"
             )
 
-        # SCP the wrapper to the shared staging dir.
         scp_cmd = ["scp", *ssh_opts, tmp_path, f"{target}:{wrapper_remote}"]
         scp_result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=30)
         if scp_result.returncode != 0:
@@ -277,21 +301,48 @@ def register(group: click.Group) -> None:
             raise click.ClickException(f"SCP failed: {scp_result.stderr.strip()}")
         os.unlink(tmp_path)
 
-        # Run the wrapper on HPC (shared path → any login node sees it).
-        run_result = subprocess.run(
+        stage_result = subprocess.run(
             ["ssh", *ssh_opts, target, f"bash '{wrapper_remote}'"],
             capture_output=True,
             text=True,
             timeout=30,
         )
+        if stage_result.returncode != 0:
+            raise click.ClickException(
+                f"Failed to stage launcher: {stage_result.stderr.strip()}"
+            )
 
+        # --- step 2: launch ON the compute node via ProxyJump; the ssh exits
+        #     immediately, leaving NO persistent login-node srun/ssh client ----
+        run_script = _build_compute_run_script(
+            runner_home=runner_home,
+            gh_token=gh_token,
+            gh_repo=gh_repo,
+            runner_name=runner_name,
+            runner_labels=runner_labels,
+            apptainer=apptainer,
+            sif=sif,
+            wrap_log=wrap_log,
+        )
+        compute_cmd = config.compute_ssh_cmd(target, node)
+        run_result = subprocess.run(
+            [*compute_cmd, "bash -s"],
+            input=run_script,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
         if run_result.returncode != 0:
             raise click.ClickException(
-                f"Failed to start runner: {run_result.stderr.strip()}"
+                f"Failed to start runner on compute node {node}: "
+                f"{run_result.stderr.strip()}"
             )
 
         click.echo(run_result.stdout.strip())
-        click.echo(f"Runner {runner_name} started on HPC job {jobid}")
+        click.echo(
+            f"Runner {runner_name} started on compute node {node} "
+            f"(lease job {jobid}); no login-node srun client created."
+        )
 
 
 # EOF

@@ -265,8 +265,8 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "Poll the 3 Spartan login nodes for the ywatanabe user's "
             "ssh-agents / login sessions / total procs / srun; append a TSV "
             "row per node to ~/.scitex/dev/runtime/spartan-conn-monitor.tsv; "
-            "audio-notify + PHONE-CALL the operator if ssh-agents>15 or "
-            "procs>250 (early warning before the HPC admin notices). See "
+            "audio-notify + PHONE-CALL the operator if ssh-agents>15, srun>50, "
+            "or procs>250 (early warning before the HPC admin notices). See "
             "_spartan_conn_monitor.run_once."
         ),
     ),

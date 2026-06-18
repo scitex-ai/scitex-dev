@@ -44,6 +44,55 @@ SSH_MUX_OPTS = [
 # Same opts as a single string, for the few shell=True ssh call sites.
 SSH_MUX_OPTS_STR = " ".join(SSH_MUX_OPTS)
 
+# SSH options for reaching the LEASE COMPUTE NODE directly (ProxyJump through a
+# login node). The runner launch (``ci runner up``) uses this so the runner's
+# run.sh / Runner.Listener live on the compute node while the ssh client EXITS
+# immediately — leaving ZERO persistent login-node ``srun`` client per runner.
+#
+# Why this is the SSH-vector fix (2026-06-17 admin incident, ~20 srun/login-node
+# ceiling): the old ``up`` ran ``setsid nohup srun --overlap`` ON a login node,
+# and that ``srun`` CLIENT stayed alive for the runner's whole lifetime as a
+# stdio tether — one persistent login-node srun per runner (~76 across the
+# fleet). The runner's real work already executes on the compute node either
+# way; only the tether differs. Launching via ``ssh -J <login> <compute-node>``
+# puts run.sh on the node and lets the ssh exit at once → no tether, no srun.
+#
+# StrictHostKeyChecking=accept-new: compute nodes are ephemeral lease holders
+# absent from known_hosts; accept-new trusts on first contact (recording the
+# key) without the interactive prompt that BatchMode would otherwise turn into a
+# hard failure. It does NOT silently accept a CHANGED key (that still fails
+# loudly), so it is the safe non-interactive policy for first-contact nodes. A
+# dedicated ControlPath keeps the inner-hop master apart from the login sockets.
+SSH_COMPUTE_OPTS = [
+    "-o",
+    "ControlMaster=auto",
+    "-o",
+    "ControlPersist=30",
+    "-o",
+    "ControlPath=~/.ssh/.cm-scitex-ci-node-%C",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "StrictHostKeyChecking=accept-new",
+]
+
+
+def compute_ssh_cmd(login_target: str, compute_node: str) -> list[str]:
+    """ssh argv to reach ``compute_node`` via ProxyJump through ``login_target``.
+
+    ``login_target`` is ``user@login-host`` (the lease's submitting host); the
+    inner hop reuses that user as ``user@<compute_node>``. The caller appends the
+    remote command. Pure (no I/O) so the launch wrapper is unit-testable.
+    """
+    user = login_target.split("@", 1)[0]
+    return [
+        "ssh",
+        *SSH_COMPUTE_OPTS,
+        "-J",
+        login_target,
+        f"{user}@{compute_node}",
+    ]
+
 
 def _resolve_config_path() -> Path:
     """Return the config path following the precedence contract.

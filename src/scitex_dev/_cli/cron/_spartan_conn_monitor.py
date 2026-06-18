@@ -55,6 +55,15 @@ LOGIN_NODES = (
 # ceiling is deliberately high so legitimate other-agent srun load never pages.
 AGENT_MAX = 15
 PROC_MAX = 250
+# Per-login-node ``srun`` client ceiling. The HPC admin's guidance is ~20
+# connections per login node; each persistent CI runner used to leave one
+# ``srun`` CLIENT there (the SSH-vector that prompted the 'ci runner up' rewrite
+# to launch on the compute node instead). Page at 50 — comfortably above normal
+# transient other-agent srun research load, yet well BELOW a breach so we act
+# before the admin notices. The launch fix should keep this near 0 going forward;
+# a climb back toward 50 means a regression (a runner launched the old way, or
+# orphaned srun clients piling up).
+SRUN_MAX = 50
 
 # SSH connection MULTIPLEXING — one reused master per host, 30s persist, a
 # dedicated control path (kept apart from interactive sockets). Mirrors
@@ -178,10 +187,13 @@ def _parse(stdout: str) -> tuple[int, int, int, int] | None:
 def _check_thresholds(r: NodeReading) -> list[str]:
     """Alerts raised by one reading (empty if within bounds / unreachable)."""
     out: list[str] = []
+    short = r.node.split(".")[0]
     if r.ssh_agents is not None and r.ssh_agents > AGENT_MAX:
-        out.append(f"{r.node.split('.')[0]}:ssh-agents={r.ssh_agents}(>{AGENT_MAX})")
+        out.append(f"{short}:ssh-agents={r.ssh_agents}(>{AGENT_MAX})")
+    if r.srun is not None and r.srun > SRUN_MAX:
+        out.append(f"{short}:srun={r.srun}(>{SRUN_MAX})")
     if r.total_procs is not None and r.total_procs > PROC_MAX:
-        out.append(f"{r.node.split('.')[0]}:procs={r.total_procs}(>{PROC_MAX})")
+        out.append(f"{short}:procs={r.total_procs}(>{PROC_MAX})")
     return out
 
 
