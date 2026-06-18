@@ -48,6 +48,18 @@ class CallChecksMixin:
             # Resolve alias: if user did `import numpy as np`, resolve np -> numpy
             resolved = self._imports.get(mod_name, mod_name)
 
+            # STX-P010 — record any top-level figrecipe call inside a module.
+            # `fr.subplots(...)` (alias) and chained `fr.fig.savefig(...)`
+            # both resolve to root "figrecipe"; a bare `figrecipe.subplots()`
+            # matches directly. Recorded here — BEFORE the FM-category
+            # exemption below early-returns on fr/figrecipe — so the
+            # get_issues() session-gated emit sees it. Whether it flags
+            # depends on the module being @stx.session; that decision is
+            # deferred to get_issues().
+            if self._figrecipe_call_root(func) == "figrecipe":
+                line = self._get_source(node.lineno)
+                self._figrecipe_usages.append((node.lineno, node.col_offset, line))
+
             # Check (module, func) against rule table
             rule = _CALL_RULES.get((mod_name, func_name))
             if rule is None and resolved != mod_name:
@@ -138,6 +150,24 @@ class CallChecksMixin:
         if isinstance(func, ast.Attribute) and func.attr in self._MOCK_SYMBOLS:
             line = self._get_source(node.lineno)
             self._add(rules.NM003, node.lineno, node.col_offset, line)
+
+    def _figrecipe_call_root(self, func: ast.expr) -> str | None:
+        """Resolve the root module name of an attribute-call to its import.
+
+        For ``fr.subplots()`` the root ``Name`` is ``fr``; for the chained
+        ``fr.fig.savefig()`` it is still ``fr``. We walk down ``.value``
+        until the base ``Name``, then resolve any alias through
+        ``self._imports`` (``import figrecipe as fr`` → ``figrecipe``).
+        Returns the resolved top-level name, or None when the base is not a
+        plain ``Name`` (e.g. ``get_fr().subplots()``).
+        """
+        cur = func
+        # `func` is the Attribute being called (e.g. Attribute(attr=subplots)).
+        while isinstance(cur, ast.Attribute):
+            cur = cur.value
+        if not isinstance(cur, ast.Name):
+            return None
+        return self._imports.get(cur.id, cur.id)
 
     def _check_stx_io_path(self, node: ast.Call) -> None:
         from .._path_checker import check_stx_io_path

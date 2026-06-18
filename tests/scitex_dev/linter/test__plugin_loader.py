@@ -192,3 +192,205 @@ def test_lint_source_silenced_by_env_flag(capsys, restore_environ):
     captured = capsys.readouterr()
     # Assert — no stderr WARNING surfaces (operator opt-out respected).
     assert "synthetic-failure-for-pillar0-test" not in captured.err
+
+
+# --------------------------------------------------------------------------- #
+# LOAD-time fail-loud — entry_points_iter seam (real fake entry points)        #
+#                                                                              #
+# Ask 2 (neurovista 2026-06-14): a plugin advertised via the                   #
+# `scitex_dev.linter.plugins` entry-point group but unimportable must FAIL     #
+# LOUD + ACTIONABLE — not a swallowed/duplicated noisy line. The              #
+# `scitex` symptom is a STALE wheel whose entry point points at a dropped      #
+# `scitex._linter_plugin` module. We drive that branch with a real fake        #
+# entry point (a real class whose `.load()` raises), through the               #
+# `entry_points_iter` seam — no monkeypatch of importlib.metadata.             #
+# --------------------------------------------------------------------------- #
+
+
+class _StaleScitexEP:
+    """Real fake of the dangling `scitex` entry point neurovista hit.
+
+    Its ``.load()`` raises the exact ``ModuleNotFoundError`` an OLD scitex
+    wheel produces — the entry point outlived the module it points at.
+    """
+
+    name = "scitex"
+
+    def load(self):
+        raise ModuleNotFoundError(
+            "No module named 'scitex._linter_plugin'",
+            name="scitex._linter_plugin",
+        )
+
+
+class _CircularImportEP:
+    """Real fake of a plugin module that raises a circular ImportError."""
+
+    name = "figrecipe"
+
+    def load(self):
+        raise ImportError("cannot import name 'X' (most likely a circular import)")
+
+
+def _one_stale_ep():
+    return [_StaleScitexEP()]
+
+
+def _no_eps():
+    return []
+
+
+@pytest.fixture
+def stale_plugin_stderr(capsys, restore_environ):
+    """Load plugins with one stale entry point + opt-out unset; return stderr."""
+    restore_environ.pop("SCITEX_DEV_LINTER_QUIET", None)
+    restore_environ.pop("SCITEX_DEV_NO_AUDIT_DISCLAIMER", None)
+    _plugin_loader.load_plugins(entry_points_iter=_one_stale_ep)
+    return capsys.readouterr().err
+
+
+def test_load_failure_warning_names_the_plugin(stale_plugin_stderr):
+    # Arrange
+    err = stale_plugin_stderr
+    # Act
+    # Assert
+    assert "'scitex'" in err
+
+
+def test_load_failure_warning_names_the_missing_module(stale_plugin_stderr):
+    # Arrange
+    err = stale_plugin_stderr
+    # Act
+    # Assert — the actual dangling module is named so the operator can act.
+    assert "scitex._linter_plugin" in err
+
+
+def test_load_failure_warning_is_actionable_with_reinstall_hint(stale_plugin_stderr):
+    # Arrange
+    err = stale_plugin_stderr
+    # Act
+    # Assert — a concrete next step, not just the bare exception.
+    assert "pip install" in err
+
+
+def test_load_failure_warning_diagnoses_stale_entry_point(stale_plugin_stderr):
+    # Arrange
+    err = stale_plugin_stderr
+    # Act
+    # Assert — distinguishes "stale wheel" from "broken module".
+    assert "STALE" in err
+
+
+def test_load_failure_warning_mentions_quiet_escape(stale_plugin_stderr):
+    # Arrange
+    err = stale_plugin_stderr
+    # Act
+    # Assert
+    assert "SCITEX_DEV_LINTER_QUIET" in err
+
+
+def test_load_failure_does_not_duplicate_the_bare_exception_line(stale_plugin_stderr):
+    # Arrange — the old code emitted the same `failed to load plugin` text
+    # TWICE (logger.warning + stderr.write). Exactly one copy must reach
+    # stderr now; the logger breadcrumb is debug-level (not captured here).
+    err = stale_plugin_stderr
+    # Act
+    occurrences = err.count("failed to load plugin")
+    # Assert
+    assert occurrences == 1
+
+
+def test_load_failure_payload_is_still_well_formed():
+    # Arrange — a failed plugin must not corrupt the merged payload shape.
+    payload = _plugin_loader.load_plugins(entry_points_iter=_one_stale_ep)
+    # Act
+    # Assert
+    assert {"rules", "call_rules", "axes_hints", "checkers"}.issubset(payload)
+
+
+def test_load_failure_drops_only_the_broken_plugins_rules():
+    # Arrange
+    payload = _plugin_loader.load_plugins(entry_points_iter=_one_stale_ep)
+    # Act
+    # Assert — the broken plugin contributed nothing (no partial registration).
+    assert payload["rules"] == {}
+
+
+def test_no_declared_plugins_is_silent(capsys, restore_environ):
+    # Arrange — an empty entry-point group is FINE (engine-only venv) and
+    # must NOT emit the load-failure warning. This is the "no plugins
+    # declared" case that must stay distinct from "declared-but-broken".
+    restore_environ.pop("SCITEX_DEV_LINTER_QUIET", None)
+    restore_environ.pop("SCITEX_DEV_NO_AUDIT_DISCLAIMER", None)
+    # Act
+    _plugin_loader.load_plugins(entry_points_iter=_no_eps)
+    err = capsys.readouterr().err
+    # Assert
+    assert "failed to load plugin" not in err
+
+
+def test_load_failure_silenced_by_quiet_env(capsys, restore_environ):
+    # Arrange — opt-out env set; same stale entry point.
+    restore_environ["SCITEX_DEV_LINTER_QUIET"] = "1"
+    # Act
+    _plugin_loader.load_plugins(entry_points_iter=_one_stale_ep)
+    err = capsys.readouterr().err
+    # Assert — operator opt-out silences the load-failure notice too.
+    assert "failed to load plugin" not in err
+
+
+def test_injected_entry_points_do_not_pollute_the_process_cache():
+    # Arrange — the seam exists for tests; it must never write the
+    # process-lifetime cache (production load stays authoritative).
+    _plugin_loader.reset()
+    # Act
+    _plugin_loader.load_plugins(entry_points_iter=_one_stale_ep)
+    # Assert
+    assert _plugin_loader._cache is None
+
+
+# --------------------------------------------------------------------------- #
+# _remediation_hint — pure function, both failure shapes                       #
+# --------------------------------------------------------------------------- #
+
+
+def test_remediation_hint_for_missing_linter_plugin_module_says_stale():
+    # Arrange
+    exc = ModuleNotFoundError(
+        "No module named 'scitex._linter_plugin'", name="scitex._linter_plugin"
+    )
+    # Act
+    hint = _plugin_loader._remediation_hint("scitex", exc)
+    # Assert
+    assert "STALE" in hint
+
+
+def test_remediation_hint_for_missing_module_names_the_distribution():
+    # Arrange
+    exc = ModuleNotFoundError(
+        "No module named 'scitex._linter_plugin'", name="scitex._linter_plugin"
+    )
+    # Act
+    hint = _plugin_loader._remediation_hint("scitex", exc)
+    # Assert — the reinstall target is the distribution, not the submodule.
+    assert "scitex" in hint
+
+
+def test_remediation_hint_for_circular_import_names_circular():
+    # Arrange
+    exc = ImportError("cannot import name 'X' (most likely a circular import)")
+    # Act
+    hint = _plugin_loader._remediation_hint("figrecipe", exc)
+    # Assert — the broken-module branch points at the circular import.
+    assert "circular import" in hint
+
+
+def test_circular_import_plugin_failure_is_actionable(capsys, restore_environ):
+    # Arrange — a plugin whose module exists but raises on import.
+    restore_environ.pop("SCITEX_DEV_LINTER_QUIET", None)
+    restore_environ.pop("SCITEX_DEV_NO_AUDIT_DISCLAIMER", None)
+    # Act
+    _plugin_loader.load_plugins(entry_points_iter=lambda: [_CircularImportEP()])
+    err = capsys.readouterr().err
+    # Assert
+    assert "circular import" in err

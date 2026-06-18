@@ -163,6 +163,16 @@ class ImportChecksMixin:
         if module_name == "seaborn":
             self._add(_lk("STX-I009"), node.lineno, node.col_offset, line)
 
+        # STX-P010 — record a top-level figrecipe import (`import figrecipe`
+        # / `import figrecipe as fr` / `import figrecipe.sub`). Whether it
+        # actually flags is decided in get_issues() once we know the module
+        # is @stx.session-decorated — at this point the session `def main`
+        # further down may not be visited yet. We match the top-level name
+        # (incl. dotted submodule imports) so e.g. `import figrecipe.style`
+        # is also recorded.
+        if module_name == "figrecipe" or module_name.startswith("figrecipe."):
+            self._figrecipe_usages.append((node.lineno, node.col_offset, line))
+
         # NM001 — no-mock imports (no exceptions)
         if module_name in self._MOCK_MODULES:
             self._add(rules.NM001, node.lineno, node.col_offset, line)
@@ -198,6 +208,13 @@ class ImportChecksMixin:
         # from argparse import *
         if module == "argparse" and self._is_script:
             self._add(_lk("STX-S003"), node.lineno, node.col_offset, line)
+
+        # STX-P010 — `from figrecipe import subplots` (and friends). Recorded
+        # for the get_issues() session-gated emit, same as the bare-import
+        # case in _check_import. Covers `figrecipe` and any submodule
+        # (`from figrecipe.style import ...`).
+        if module == "figrecipe" or (module or "").startswith("figrecipe."):
+            self._figrecipe_usages.append((node.lineno, node.col_offset, line))
 
         # NM001 — no-mock imports (no exceptions)
         if module in self._MOCK_MODULES:
