@@ -56,6 +56,13 @@ class SciTeXChecker(
         self._own_package = own_scitex_package(filepath)  # for STX-I008
         self._is_script = is_script(filepath, self.config)
         self._func_depth = 0  # >0 means inside a function body
+        # STX-P010 — top-level figrecipe usage inside an @stx.session
+        # module. Recorded during the visit (import + call sites) and
+        # emitted in get_issues() ONCE the whole module is seen, because
+        # the `import figrecipe as fr` line is visited BEFORE the
+        # `@stx.session def main` further down — we can't know the module
+        # is session-decorated at import-visit time. (line, col, src) tuples.
+        self._figrecipe_usages: list = []
         from ._plugin_loader import load_plugins
 
         _plugins = load_plugins()
@@ -345,6 +352,15 @@ class SciTeXChecker(
 
         if self._has_main_guard and not self._has_stx_import:
             self._add(_lk("STX-S005"), 1, 0, "")
+
+        # STX-P010 — top-level figrecipe used inside an @stx.session module.
+        # Only emit when the module actually declares a session-decorated
+        # main; otherwise top-level figrecipe is the *correct* API (e.g. a
+        # plain plotting script or library helper) and must NOT be flagged.
+        if self._has_session_decorator and self._figrecipe_usages:
+            p010 = _lk("STX-P010")
+            for line, col, src in self._figrecipe_usages:
+                self._add(p010, line, col, src)
 
         # Sort: errors first, then by line
         from .rules import SEVERITY_ORDER
