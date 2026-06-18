@@ -109,6 +109,9 @@ From: ubuntu:24.04
     #     drives the `scitex-* <cmd>` CLIs).
     #   * notebook exec — nbconvert + ipykernel (stats [dev] runs example
     #     .ipynb in tests).
+    #   * openpyxl — stats [dev]: pandas .to_excel in the _demo_*.py modules +
+    #     test_export_results_xlsx (the test_module_demo_runs subprocess demos
+    #     and the xlsx export test fail without it).
     #   * scitex basics — the standalone scitex-* deps the suites import:
     #     io/logging/config/dict (str/stats), decorators/gen/nn (dsp). Listing
     #     scitex-dsp/stats/str bakes their PyPI build (metadata + entry points);
@@ -118,6 +121,10 @@ From: ubuntu:24.04
     #     __version__ stay available for metadata-based tooling (skills
     #     subprocess tests, audit-cli).
     #   * figrecipe — stats[all]/dsp plotting integration tests.
+    #   * dsp signal-processing test deps — mne (the _demo_sig / wavelet path +
+    #     the 11_modulation_index example notebook hard-import MNE) and
+    #     ripple_detection (test__detect_ripples preprocessing). Both are in
+    #     scitex-dsp's [dev] extra; without them dsp pytest is 803-pass / 6-fail.
     #   * pytest toolchain — pytest, pytest-cov, pytest-xdist, pytest-timeout
     #     (timeout lags in some PyPI [dev] extras; pin it so the pyproject
     #     `timeout=300` per-test cap is honoured — a hung test fails loud at
@@ -135,10 +142,11 @@ From: ubuntu:24.04
         uv pip install --python "/opt/venv-$V/bin/python" --torch-backend=cpu \
             numpy scipy pandas matplotlib xarray statsmodels pingouin \
             scikit-learn torch seaborn \
-            click mcp fastmcp nbconvert ipykernel \
+            click mcp fastmcp nbconvert ipykernel openpyxl \
             scitex-io scitex-logging scitex-config scitex-dict \
             scitex-decorators scitex-gen scitex-nn \
             scitex-stats scitex-str scitex-dsp figrecipe \
+            mne ripple_detection \
             "scitex-dev[all,dev]" \
             pytest pytest-cov pytest-xdist pytest-timeout
     done
@@ -152,7 +160,7 @@ From: ubuntu:24.04
 %labels
     org.scitex.layer ci-cpu
     org.scitex.runtime apptainer
-    org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep cron systemd + numpy scipy pandas matplotlib xarray statsmodels pingouin scikit-learn torch[cpu] seaborn click mcp fastmcp nbconvert ipykernel figrecipe + scitex basics (io logging config dict decorators gen nn stats str dsp) + scitex-dev[all,dev] + pytest{,-cov,-xdist,-timeout}"
+    org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep cron systemd + numpy scipy pandas matplotlib xarray statsmodels pingouin scikit-learn torch[cpu] seaborn click mcp fastmcp nbconvert ipykernel openpyxl figrecipe mne ripple_detection + scitex basics (io logging config dict decorators gen nn stats str dsp) + scitex-dev[all,dev] + pytest{,-cov,-xdist,-timeout}"
 
 %help
     scitex-dev CI runner image (CPU). Reused by the self-hosted Spartan
