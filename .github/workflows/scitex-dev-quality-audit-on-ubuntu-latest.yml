@@ -100,8 +100,10 @@ jobs:
             echo "No CRITICAL/HIGH; skipping issue."
             exit 0
           fi
-          # Build a markdown body listing offenders.
-          body=$(python3 - <<'PY'
+          # Build a markdown body listing offenders. Write to a FILE (not a
+          # shell var): the body can exceed ARG_MAX, and `--body "$body"` then
+          # dies "Argument list too long" (exit 126). Use --body-file below.
+          python3 - <<'PY'
           import json
           d = json.load(open("audit.json"))
           out = ["# Ecosystem Quality Audit findings", ""]
@@ -118,17 +120,16 @@ jobs:
                   out.append(f"- **{p['package']}** §{f['section']} ({f['lens']}) — {f['message']}")
                   if f.get("detail"):
                       out.append(f"    - {f['detail']}")
-          print("\n".join(out))
+          open("issue_body.md", "w").write("\n".join(out))
           PY
-          )
           # Reuse a single rolling issue per day.
           title="quality-audit: $(date -u +%Y-%m-%d) — CRITICAL=$crit HIGH=$high"
           existing=$(gh issue list -R "$GITHUB_REPOSITORY" --label quality-audit --state open --json number,title \
               | python3 -c "import sys,json; d=json.load(sys.stdin); print(next((x['number'] for x in d if x['title'].startswith('quality-audit:')), ''))")
           if [[ -n "$existing" ]]; then
-            gh issue comment "$existing" -R "$GITHUB_REPOSITORY" --body "$body"
+            gh issue comment "$existing" -R "$GITHUB_REPOSITORY" --body-file issue_body.md
             gh issue edit "$existing" -R "$GITHUB_REPOSITORY" --title "$title"
           else
-            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body "$body" \
+            gh issue create -R "$GITHUB_REPOSITORY" --title "$title" --body-file issue_body.md \
               --label quality-audit
           fi
