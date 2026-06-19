@@ -46,6 +46,8 @@ jobs:
           uv pip install --python .venv/bin/python -e ".[all,dev]" \
             || uv pip install --python .venv/bin/python -e ".[dev]" \
             || uv pip install --python .venv/bin/python -e .
+          # kaleido/plotly image export needs Chrome; install best-effort (no-op for non-plotly repos)
+          yes | .venv/bin/plotly_get_chrome >/dev/null 2>&1 || true
           PKG=$(basename "$(find src -maxdepth 1 -mindepth 1 -type d ! -name '*.egg-info' | sort | head -1)")
           .venv/bin/python -m pytest tests/ --cov="src/$PKG" --cov-report=xml --cov-report=term
       - name: Upload coverage to Codecov
@@ -90,9 +92,11 @@ jobs:
             || uv pip install --python .venv/bin/python -e ".[dev]" \
             || uv pip install --python .venv/bin/python -e .
           uv pip install --python .venv/bin/python scitex-dev
-          DIST=$(.venv/bin/python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['name'])")
+          # .venv/bin on PATH so audit-all's spawned `scitex-dev` subcommands resolve.
+          export PATH="$PWD/.venv/bin:$PATH"
+          DIST=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['name'])")
           # --path . audits the CHECKOUT (PR code), not the runner's shared state.
-          .venv/bin/scitex-dev ecosystem audit-all "$DIST" --path "$PWD"
+          scitex-dev ecosystem audit-all "$DIST" --path "$PWD"
 
   docs-sphinx:
     name: docs-sphinx
@@ -106,9 +110,17 @@ jobs:
       - name: Build sphinx HTML (satisfies PS-122; RTD bundle stays fresh)
         run: |
           set -euo pipefail
-          if [ ! -d docs ]; then echo "no docs/ — skipping"; exit 0; fi
+          CONF=""
+          for c in docs/conf.py docs/source/conf.py docs/src/conf.py; do
+            [ -f "$c" ] && CONF="$c" && break
+          done
+          if [ -z "$CONF" ]; then
+            echo "no sphinx conf.py (checked docs[/source|/src]) — skipping; PS-122 satisfied by workflow content"
+            exit 0
+          fi
           uv venv --python 3.12 .venv
           uv pip install --python .venv/bin/python -e ".[docs]" \
             || uv pip install --python .venv/bin/python -e ".[all,dev]" \
             || { uv pip install --python .venv/bin/python -e .; uv pip install --python .venv/bin/python sphinx; }
-          .venv/bin/python -m sphinx -b html docs docs/_build/html
+          CONFDIR=$(dirname "$CONF")
+          .venv/bin/python -m sphinx -b html "$CONFDIR" "$CONFDIR/_build/html"
