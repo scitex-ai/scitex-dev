@@ -19,7 +19,9 @@ interictal, etc.):
 1. **Same color scale.** Both panels MUST share identical `vmin`/`vmax` so
    intensities are directly comparable. Compute the global min/max across all
    compared conditions BEFORE drawing. For diverging data, use a symmetric
-   range (`vabs = max(|vmin|, |vmax|)`, then `vmin=-vabs, vmax=vabs`).
+   range (`vabs = max(|vmin|, |vmax|)`, then `vmin=-vabs, vmax=vabs`). If the
+   data is heavy-tailed, share a **percentile** range across conditions instead
+   of raw min/max — see Robust Limits for Long-Tailed Data.
 2. **Aligned axes.** Use shared x and y across the panels. Remove redundant
    tick labels on inner axes — only label the outer edges.
 3. **Side-by-side layout.** Place conditions horizontally (or in a small grid)
@@ -84,9 +86,28 @@ Stack a heatmap above its averaged profile (or any two plots that share time):
 - **Diverging data** (positive/negative around 0): `RdBu_r` or `coolwarm`.
 - **Sequential data** (0 → max): `viridis` or `plasma`.
 - **Never use `jet`** — perceptually non-uniform; misrepresents data.
-- **A colorbar is MANDATORY whenever colour encodes a numerical quantity**
-  (z-score, rate, effect size), with **units in the label**. A numeric colour
-  axis with no colorbar is a defect, not a stylistic choice.
+- **A colorbar (a.k.a. scalebar) is MANDATORY for EVERY colormap, on EVERY
+  panel** that encodes a numerical quantity in colour (z-score, rate, effect
+  size), with **units in the label**. No exceptions — a numeric colour axis with
+  no colorbar is a defect, not a stylistic choice. A shared comparison group
+  still shows one colorbar; no panel may rely on colour with no scale visible.
+
+## Robust Limits for Long-Tailed Data
+
+A few extreme values must not dictate the axis / colour range. A long tail
+stretches the scale until the bulk of the data is squashed into a sliver and the
+real differences — the point of the figure — become invisible.
+
+- **Set limits by percentiles, not raw min/max**, when the data is heavy-tailed:
+  e.g. `vmin, vmax = np.percentile(data, [1, 99])`. The informative mass of the
+  distribution then fills the range and differences become legible.
+- **Disclose the clipping.** Clipping the tail *for visibility* is legitimate;
+  hiding that you did it is not. Saturate out-of-range values to a distinct
+  colour (`cmap.set_over` / `set_under`) and/or state the window in the caption
+  ("colour clipped at 1st–99th pct").
+- **Keep limits shared for comparisons.** Compute the percentile limits ONCE
+  across ALL compared conditions (not per panel) so the panels stay directly
+  comparable (see Comparison Figures).
 
 ## Axis Labels & Typography
 
@@ -121,6 +142,21 @@ Any visual channel that carries a quantity must be decodable:
 - **Marker size → a size legend.** If bubble size/area encodes a value, show a
   size legend and say in the caption what size means. A bubble chart whose size
   is unexplained is unreadable.
+
+## Effect Sizes Need Implication Thresholds
+
+A magnitude only means something against a reference. Whenever a figure shows an
+effect size, a delta, or a difference, draw the threshold(s) that make it
+interpretable:
+
+- **Significance / clinical cutoff** — a horizontal line or shaded band at the
+  decision boundary, so the reader sees which points cross it.
+- **Effect-size reference lines** — small / medium / large markers where
+  applicable (e.g. Cohen's *d* = 0.2 / 0.5 / 0.8).
+- **A "meaningful difference" line on delta plots** — a Δ is only actionable
+  beside the Δ that matters.
+
+A bare effect-size or delta with no threshold leaves the "so what" unstated.
 
 ## Reduce Chartjunk
 
@@ -157,3 +193,10 @@ When generating multi-figure scientific reports as a PDF:
 - Lowercase axis / legend / category labels ("density", "preictal") — capitalize
   the first letter.
 - Box spines + redundant ticks left on a heatmap, adding visual noise.
+- A long-tailed heatmap / histogram scaled to raw min–max so the bulk is
+  squashed into a sliver — use percentile (1st–99th) limits and mark the
+  clipped tail.
+- An effect-size / Δ panel with no implication threshold — the reader can't
+  tell which values are meaningful.
+- A colormap panel with no colorbar / scalebar — colour with no visible scale
+  is undecodable.
