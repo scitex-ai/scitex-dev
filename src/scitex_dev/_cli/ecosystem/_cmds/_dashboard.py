@@ -174,6 +174,11 @@ def register(ecosystem):
         all surfaces (`gather_ecosystem_state`).
         """
 
+    # Open-PR CI backlog view (per-PR; complements the per-repo develop view).
+    from ._pr_backlog import register_prs
+
+    register_prs(dashboard)
+
     @dashboard.command(
         "list",
         epilog=(
@@ -640,8 +645,7 @@ def register(ecosystem):
         if dry_run:
             click.echo(
                 f"would emit: format={fmt} rows={len(states)} "
-                f"verbosity={verbosity}"
-                + (f" output={output}" if output else "")
+                f"verbosity={verbosity}" + (f" output={output}" if output else "")
             )
             return
         del yes
@@ -658,8 +662,7 @@ def register(ecosystem):
 
                 output = str(
                     Path(
-                        f"scitex-ecosystem-"
-                        f"{_dt.now().strftime('%Y%m%d-%H%M%S')}.pdf"
+                        f"scitex-ecosystem-{_dt.now().strftime('%Y%m%d-%H%M%S')}.pdf"
                     ).resolve()
                 )
             result = exp.to_pdf(states, output)
