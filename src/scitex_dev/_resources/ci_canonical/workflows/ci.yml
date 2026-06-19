@@ -3,14 +3,12 @@ name: ci
 # ============================================================================
 # CANONICAL CI — IDENTICAL across every scitex ecosystem repo.
 # Synced by `scitex-dev ecosystem sync-workflows`; do not edit per-repo (drift
-# is caught + reverted). Package-agnostic: all logic lives in the version-
-# controlled .github/ci/{exec,run}-in-sif.sh, which derive the package from the
-# checkout — there is nothing to substitute here.
+# is reverted). Package-agnostic — the package name is derived from the
+# checkout, so there is nothing to substitute here.
 #
-# Runner: the self-hosted Spartan CPU runner (label spartan-cpu), inside the
-# reused pre-built SIF (~/.scitex/dev/containers/ci-cpu.sif). The SIF bakes
-# python 3.11/3.12/3.13 + the ecosystem deps; each run only overlays the
-# checkout (PYTHONPATH=src). No per-run install — the SIF IS the cache.
+# Runner: the self-hosted Spartan CPU runner (label spartan-cpu).
+# Deps: installed per run with `uv` (cached) — `.[all,dev]` so every repo's
+# optional deps are present; no baked-SIF completeness to maintain.
 # ============================================================================
 
 on:
@@ -28,7 +26,7 @@ concurrency:
 
 jobs:
   pytest-matrix:
-    # Job name is a REQUIRED status check — keep it verbatim fleet-wide.
+    # Job name is a REQUIRED status check — keep verbatim fleet-wide.
     name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
     runs-on: [self-hosted, Linux, X64, spartan-cpu]
     timeout-minutes: 30
@@ -38,8 +36,18 @@ jobs:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - name: pytest (reused CI SIF)
-        run: bash .github/ci/exec-in-sif.sh pytest "${{ matrix.python-version }}"
+      - uses: astral-sh/setup-uv@v3
+        with:
+          cache-dependency-glob: pyproject.toml
+      - name: Install (.[all,dev]) + pytest
+        run: |
+          set -euo pipefail
+          uv venv --python ${{ matrix.python-version }} .venv
+          uv pip install --python .venv/bin/python -e ".[all,dev]" \
+            || uv pip install --python .venv/bin/python -e ".[dev]" \
+            || uv pip install --python .venv/bin/python -e .
+          PKG=$(basename "$(find src -maxdepth 1 -mindepth 1 -type d ! -name '*.egg-info' | sort | head -1)")
+          .venv/bin/python -m pytest tests/ --cov="src/$PKG" --cov-report=xml --cov-report=term
       - name: Upload coverage to Codecov
         if: always() && matrix.python-version == '3.12'
         uses: codecov/codecov-action@v5
@@ -54,8 +62,16 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: import smoke (reused CI SIF)
-        run: bash .github/ci/exec-in-sif.sh import-smoke
+      - uses: astral-sh/setup-uv@v3
+        with:
+          cache-dependency-glob: pyproject.toml
+      - name: Install (no extras) + import
+        run: |
+          set -euo pipefail
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e .
+          PKG=$(basename "$(find src -maxdepth 1 -mindepth 1 -type d ! -name '*.egg-info' | sort | head -1)")
+          .venv/bin/python -c "import importlib; importlib.import_module('$PKG'); print('import OK:', '$PKG')"
 
   audit:
     name: audit
@@ -63,5 +79,36 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: audit the workspace (reused CI SIF)
-        run: bash .github/ci/exec-in-sif.sh audit
+      - uses: astral-sh/setup-uv@v3
+        with:
+          cache-dependency-glob: pyproject.toml
+      - name: Install + audit the workspace
+        run: |
+          set -euo pipefail
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e ".[all,dev]" \
+            || uv pip install --python .venv/bin/python -e ".[dev]" \
+            || uv pip install --python .venv/bin/python -e .
+          uv pip install --python .venv/bin/python scitex-dev
+          DIST=$(.venv/bin/python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['name'])")
+          # --path . audits the CHECKOUT (PR code), not the runner's shared state.
+          .venv/bin/scitex-dev ecosystem audit-all "$DIST" --path "$PWD"
+
+  docs-sphinx:
+    name: docs-sphinx
+    runs-on: [self-hosted, Linux, X64, spartan-cpu]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          cache-dependency-glob: pyproject.toml
+      - name: Build sphinx HTML (satisfies PS-122; RTD bundle stays fresh)
+        run: |
+          set -euo pipefail
+          if [ ! -d docs ]; then echo "no docs/ — skipping"; exit 0; fi
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e ".[docs]" \
+            || uv pip install --python .venv/bin/python -e ".[all,dev]" \
+            || { uv pip install --python .venv/bin/python -e .; uv pip install --python .venv/bin/python sphinx; }
+          .venv/bin/python -m sphinx -b html docs docs/_build/html
