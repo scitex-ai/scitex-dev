@@ -2025,17 +2025,31 @@ def _check_startup_speed(
     package: str,
     out: list[Violation],
     threshold_ms: int = 500,
+    runs: int = 3,
 ) -> None:
-    """§9 — `import <module>` cold-start must be < threshold_ms.
+    """§10 — the MARGINAL cost of `import <module>` (above bare-interpreter
+    startup) must be < threshold_ms.
 
     Click bash-completion calls the program once per Tab press to resolve
     dynamic completions, so a slow import = unusable tab-completion. The
     fix is PEP 562 lazy `__getattr__` in the top-level `__init__.py`
     (see `_skills/general/03_interface/01_python-api/
     04_lazy-imports-and-optional-deps.md`).
+
+    Measurement (2026-06-19): the metric is ``T - B`` — ``T`` is the wall-clock
+    of ``python -c "import <module>"`` and ``B`` is the wall-clock of a bare
+    ``python -c "pass"`` reference, each taken as the *best of N* runs.
+    Subtracting ``B`` cancels the interpreter + site + coverage startup baseline
+    (and the machine-speed factor inside it), so the check reflects the
+    PACKAGE's own import cost — not the runner's filesystem or CPU load.
+    best-of-N (min) warms the file cache and drops transient load spikes: the
+    earlier absolute-time check false-failed on the shared/NFS Spartan CI node,
+    where a cold first import over the network FS measured 937ms while the
+    package's real marginal cost is a few ms.
     """
     import subprocess as _sp
     import sys as _sys
+    import time as _time
 
     ep_value = _ep_value_for(package)
     if ep_value is None:
@@ -2045,31 +2059,43 @@ def _check_startup_speed(
     if not module_name:
         return
 
-    code = (
-        "import time;t=time.perf_counter();"
-        f"import {module_name};"
-        "print(int((time.perf_counter()-t)*1000))"
-    )
-    try:
-        r = _sp.run(
-            [_sys.executable, "-c", code],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        if r.returncode != 0:
-            return  # import failure — covered elsewhere
-        ms = int(r.stdout.strip())
-    except Exception:
-        return
+    def _best_ms(code: str) -> float | None:
+        """Best-of-`runs` wall-clock (ms) of ``python -c <code>``; None on failure."""
+        best: float | None = None
+        for _ in range(max(1, runs)):
+            t0 = _time.perf_counter()
+            try:
+                r = _sp.run(
+                    [_sys.executable, "-c", code],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+            except Exception:
+                return None
+            if r.returncode != 0:
+                return None  # import failure — covered elsewhere
+            dt = (_time.perf_counter() - t0) * 1000.0
+            best = dt if best is None else min(best, dt)
+        return best
 
-    if ms > threshold_ms:
+    # Bare interpreter reference, then the package import — same env, so site +
+    # coverage + machine-speed cancel in the difference.
+    baseline = _best_ms("pass")
+    full = _best_ms(f"import {module_name}")
+    if baseline is None or full is None:
+        return  # import failure — covered elsewhere
+    marginal = full - baseline
+
+    if marginal > threshold_ms:
         out.append(
             Violation(
                 package,
                 "§10",
-                f"`import {module_name}` cold-start is {ms}ms (>{threshold_ms}ms threshold). "
-                "Slow tab-completion: Click runs the program once per Tab press. Convert "
+                f"`import {module_name}` adds {marginal:.0f}ms over bare-interpreter "
+                f"startup (>{threshold_ms}ms threshold; import={full:.0f}ms, "
+                f"baseline={baseline:.0f}ms, best-of-{runs}). Slow tab-completion: Click "
+                "runs the program once per Tab press. Convert "
                 f"{module_name}/__init__.py to PEP 562 lazy `__getattr__` (see python-api "
                 "skill 04_lazy-imports-and-optional-deps.md, 'PEP 562 module __getattr__' section).",
             )
