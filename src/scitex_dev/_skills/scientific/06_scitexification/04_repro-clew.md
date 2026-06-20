@@ -25,6 +25,44 @@ DAG made visible in Stages 1–3 is what each claim walks back along; Stage
 > not a hand-typed JSON).
 > **What stays the same**: what you are claiming; your numbers.
 
+## Stage 4.0 — reproduce the environment first (you can't ground what you didn't run)
+
+A claim is only verifiable if a **real** output file backs it. When the
+source ships a **pinned environment** that does not run in your default
+interpreter — a `Dockerfile`, a saved model needing an old TensorFlow/CUDA,
+a conda lock — the honest move is to **reproduce that environment and run
+the real code**. Do **not** "estimate from the paper" or hand-code numbers:
+that is the fabrication failure mode, and the validity gate /
+`clew verify --strict` will reject it (no real `@stx.session` lineage).
+
+If you run inside the SciTeX agent container with `nested_build` enabled
+(quick check: `apptainer --version` works), reproduce the env *from your
+workdir*:
+
+```bash
+export APPTAINER_TMPDIR=/tmp APPTAINER_CACHEDIR=/tmp/.apptainer-cache
+# (a) PULL a pre-built published image — preferred when the source provides one
+#     (e.g. CodeOcean capsules name one in REPRODUCING.md, anonymously pullable):
+apptainer build env.sif docker://<registry>/<published-image>:<tag>
+# (b) OR BUILD the source's Dockerfile — convert it to a def (`Bootstrap: docker`
+#     + a `%post` carrying the RUN/apt/conda/pip lines); %post runs as root:
+apptainer build env.sif env.def
+# then run the REAL code and read REAL outputs:
+apptainer exec --bind data:/data --bind code:/code --bind "$PWD/results":/results \
+  env.sif bash -lc 'cd /code && bash run'
+```
+
+What you **cannot** do: run **Docker**. There is no Docker daemon inside the
+unprivileged container (and none is grantable). Use the apptainer path above
+— `apptainer build docker://…` pulls the same OCI layers with no daemon, and
+a Dockerfile-derived def builds under apptainer's rootless fakeroot.
+
+If after honest effort you **cannot** reproduce it, **abstain** (the honest
+null below) — a calibrated "I could not run this" is correct science, scored
+as such, never as a wrong answer. Never substitute an estimate. Full
+mechanism + limits: the `scitex-agent-container` skill (nested-apptainer
+builds).
+
 ## Register, don't hand-write
 
 The anti-pattern Stage 4 exists to kill: hand-writing
