@@ -282,8 +282,10 @@ def test_own_import_name_falls_back_to_dir_when_no_pyproject(tmp_path):
     # Arrange -- no pyproject; dir name is the only signal.
     repo = tmp_path / "scitex-foo"
     repo.mkdir()
-    # Act / Assert
-    assert _own_import_name(repo) == "scitex_foo"
+    # Act
+    own = _own_import_name(repo)
+    # Assert
+    assert own == "scitex_foo"
 
 
 # --- PS-140 gate: own modules must not be flagged from a suffixed worktree --
@@ -345,7 +347,8 @@ def test_ps140_still_flags_genuinely_missing_peer_from_suffixed_worktree(tmp_pat
     # Act
     check_ps140_integration_gate(repo, "scitex-bar", _StubViolation, out)
     # Assert -- the missing peer (not the own module) is reported.
-    assert "PS-140" in _codes(out)
-    assert any("scitex_logging" in v.detail for v in out)
+    assert "PS-140" in _codes(out) and any(
+        "scitex_logging" in v.detail for v in out
+    )
 
 # EOF
