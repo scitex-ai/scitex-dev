@@ -328,6 +328,115 @@ def register_skills_commands(main_group):
 
         _print_export_result(exported, target, as_json)
 
+    # ----- Canonical: `skills sync` — idempotent refresh + change report -----
+    @skills.command("sync")
+    @click.option(
+        "--dest",
+        type=click.Path(),
+        default=None,
+        help=(
+            "Target directory. Default: ~/.scitex/dev/skills/ — the same "
+            "canonical store `skills install` writes to. Re-running is safe."
+        ),
+    )
+    @click.option("--package", default=None, help="Sync only this package.")
+    @click.option(
+        "--source",
+        type=click.Choice(["installed", "pypi"]),
+        default="installed",
+        help="installed or pypi.",
+    )
+    @click.option(
+        "--clean",
+        is_flag=True,
+        help="Delete package subdirs before re-installing (removed leaves "
+        "then show up in the change report).",
+    )
+    @click.option(
+        "--link",
+        is_flag=True,
+        help="Symlink skill files to editable source (source=installed only).",
+    )
+    @click.option(
+        "--claude-symlink",
+        is_flag=True,
+        help="After sync, ensure ~/.claude/skills/scitex → DEST (idempotent).",
+    )
+    @click.option("--dry-run", is_flag=True, help="Preview without copying.")
+    @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def skills_sync(
+        dest, package, source, clean, link, claude_symlink, dry_run, as_json, yes
+    ):
+        """Idempotently re-install skills for already-installed packages and report changes.
+
+        Same install path as `skills install`, but safe to re-run: it
+        snapshots DEST before and after and tells you which skill files were
+        added, updated, or left unchanged. Use it to refresh the store after
+        upgrading packages.
+
+        \b
+        Examples:
+          scitex-dev skills sync                          # refresh ~/.scitex/dev/skills/
+          scitex-dev skills sync --package scitex-io      # one package
+          scitex-dev skills sync --claude-symlink         # also expose under ~/.claude/
+          scitex-dev skills sync --dry-run --json         # preview
+        """
+        del yes  # accepted for §2 compliance; sync honours --dry-run for preview
+        import json as json_mod
+        import os as _os
+        from pathlib import Path
+
+        from ..._ecosystem._skills.skills import list_skills, sync_skills
+
+        # Same default destination as `skills install`.
+        target = Path(dest) if dest else Path.home() / ".scitex" / "dev" / "skills"
+
+        if dry_run:
+            result = {
+                k: [e["name"] + ".md" for e in v]
+                for k, v in list_skills(package=package).items()
+            }
+            if as_json:
+                click.echo(
+                    json_mod.dumps(
+                        {"dest": str(target), "source": source, "packages": result},
+                        indent=2,
+                    )
+                )
+            else:
+                total = sum(len(v) for v in result.values())
+                click.echo(f"Would sync {total} files into {target}/ (source={source})")
+                for k, v in sorted(result.items()):
+                    click.echo(f"  {k}/: {len(v)} files")
+                if claude_symlink:
+                    claude_link = Path.home() / ".claude" / "skills" / "scitex"
+                    click.echo(f"Would symlink {claude_link} → {target}")
+            return
+
+        target.mkdir(parents=True, exist_ok=True)
+        report = sync_skills(
+            target, package=package, clean=clean, source=source, link=link
+        )
+
+        if claude_symlink:
+            claude_link = Path.home() / ".claude" / "skills" / "scitex"
+            claude_link.parent.mkdir(parents=True, exist_ok=True)
+            # Idempotent: replace stale link, leave non-link contents alone.
+            if claude_link.is_symlink() or not claude_link.exists():
+                if claude_link.is_symlink():
+                    claude_link.unlink()
+                _os.symlink(target.resolve(), claude_link)
+                click.echo(f"linked: {claude_link} → {target}")
+            else:
+                click.echo(
+                    f"warning: {claude_link} exists and is not a symlink — "
+                    "skipping --claude-symlink (move it aside manually if needed).",
+                    err=True,
+                )
+
+        _print_sync_result(report, target, as_json)
+
     # ----- Deprecated `export` — same behaviour, default destination differs -----
     @skills.command("export", hidden=True)
     @click.option(
@@ -599,3 +708,47 @@ def _print_export_result(exported, dest_path, as_json=False):
         )
         for k, v in sorted(exported.items()):
             click.echo(f"  {k}: {len(v)} files")
+
+
+def _print_sync_result(report, dest_path, as_json=False):
+    """Print the idempotent-sync change report from ``sync_skills``."""
+    import json as json_mod
+
+    added = report["added"]
+    updated = report["updated"]
+    unchanged = report["unchanged"]
+    removed = report["removed"]
+
+    if as_json:
+        payload = {
+            "dest": str(dest_path),
+            "changed": report["changed"],
+            "added": added,
+            "updated": updated,
+            "unchanged": unchanged,
+            "removed": removed,
+        }
+        click.echo(json_mod.dumps(payload, indent=2))
+        return
+
+    if not report["exported"]:
+        click.echo("No skills found to sync.")
+        return
+
+    if not report["changed"]:
+        click.echo(
+            f"Already up to date: {len(unchanged)} files unchanged in {dest_path}"
+        )
+        return
+
+    click.echo(
+        f"Synced {dest_path}: "
+        f"{len(added)} added, {len(updated)} updated, "
+        f"{len(unchanged)} unchanged, {len(removed)} removed"
+    )
+    for rel in added:
+        click.echo(f"  + {rel}")
+    for rel in updated:
+        click.echo(f"  ~ {rel}")
+    for rel in removed:
+        click.echo(f"  - {rel}")

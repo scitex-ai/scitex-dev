@@ -467,4 +467,5 @@ def _generate_root_skill_md(dest: Path, exported: dict[str, list[Path]]) -> None
 
 # Re-export from refactored modules for backward compatibility
 from .skills_drift import cached_skill_version, drift_warning, installed_version  # noqa: F401
+from .skills_sync import sync_skills  # noqa: F401
 from .skills_verify import verify_docs_and_skills  # noqa: F401
