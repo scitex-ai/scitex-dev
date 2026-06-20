@@ -1,0 +1,54 @@
+name: quality
+
+# Single-package quality gate -- runs `scitex-dev ecosystem audit-all`
+# against THIS package (audit-cli / audit-mcp-tools / audit-skills /
+# audit-python-apis / audit-project). Mirrors the canonical audit that
+# `tests/develop/test_audit.py` runs inside the test suite, but as a
+# standalone gate so an audit regression is visible even when the matrix
+# is skipped.
+#
+# scitex-dev IS the audit tool: it audits ITSELF using its OWN editable
+# checkout, NOT a separately-pinned published scitex-dev. That way the
+# gate exercises the auditor code on this very PR/commit -- a fix to the
+# auditor is validated against itself before it ever ships.
+
+on:
+  schedule:
+    - cron: "0 18 * * *"  # 18:00 UTC (~03:00 JST), after Test
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "pyproject.toml"
+      - ".github/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install fd (Rust file finder; audit file discovery requires it)
+        run: sudo apt-get update && sudo apt-get install -y fd-find && sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+
+      - name: Fetch base refs for --new-only baseline (default --since develop)
+        run: git fetch origin develop:develop
+
+      - name: Install package + audit tooling (own editable checkout)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run scitex-dev ecosystem audit-all (self-audit, own code)
+        run: scitex-dev ecosystem audit-all scitex-dev --new-only --no-version-check

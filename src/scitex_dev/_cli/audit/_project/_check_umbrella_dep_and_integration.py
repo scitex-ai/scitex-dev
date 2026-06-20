@@ -31,7 +31,20 @@ _UMBRELLA_DEP_RE = re.compile(r"^\s*scitex(\[[^\]]*\])?\s*([<>=!~,].*)?$")
 
 
 def _own_import_name(repo: Path) -> str:
-    """`scitex-foo` → `scitex_foo`."""
+    """Canonical import name for the package at repo (scitex-foo -> scitex_foo).
+
+    Prefer the distribution name declared in [project].name over the
+    checkout directory name. Agents and the operator routinely audit from
+    git-worktree checkouts whose dir is <pkg>-<suffix> (e.g.
+    scitex-dev-rel); deriving the own-name from the dir there yields
+    scitex_dev_rel, so the package own scitex_dev.* imports stop
+    matching the own-name filter in _collect_cross_package_imports and
+    fire as bogus PS-140 missing-from-gate cross-package violations.
+    [project].name is worktree-path-independent and fixes this.
+    """
+    dist = _pyproject_distribution_name(repo)
+    if dist:
+        return dist.replace("-", "_")
     return repo.name.replace("-", "_")
 
 
