@@ -12,26 +12,55 @@ requires-python = ">=3.9"
 authors = [{name = "Yusuke Watanabe", email = "ywatanabe@scitex.ai"}]
 keywords = ["scitex", "developer-tools", "documentation", "llm-friendly", "mcp"]
 
-# Runtime deps: scitex-config (layered priority + local_state) and tomli on
-# 3.10 (tomllib is stdlib only from 3.11+; the pyproject linter needs it).
+# Runtime deps. The console-script `scitex-dev` (see [project.scripts]) is a
+# `click` group, so click is a HARD core dep, not an extra — bare
+# `pip install scitex-dev` MUST give a working `scitex-dev --help`. (PS-213
+# console-script-deps-must-be-core enforces this rule on every package with
+# a [project.scripts] entry.)
+#
+# `newb` is NOT core: it is consumed only by the optional `scitex-dev skills
+# self-explain` subcommand, which is lazy-imported inside that command (see
+# src/scitex_dev/_cli/skills/_self_explain.py). Lifting newb out of core
+# avoids dragging `claude-agent-sdk` (newb's heavy transitive) into every
+# scitex-* leaf that pins scitex-dev. Install via `pip install
+# scitex-dev[skills]` when you need self-explain.
 dependencies = [
     "scitex-config>=0.3.0",
     "scitex-logging>=0.1.0",
-    "newb>=0.3.0",
+    "click>=8.0.0",
     "pyyaml>=6.0",
     'tomli>=2.0; python_version < "3.11"',
 ]
 
 [project.optional-dependencies]
-cli = ["click>=8.0.0"]
+# `cli` retained as a no-op alias for backward compat with users who wrote
+# `pip install scitex-dev[cli]` before the click→core move (2026-06-10).
+# Click now lives in `[project.dependencies]`; this extra adds nothing.
+cli = []
 mcp = ["fastmcp>=2.0.0"]
+# `skills` powers `scitex-dev skills self-explain` (and `render_markdown`).
+# Lazy-imported inside _cli/skills/_self_explain.py with an install hint
+# referencing this extra name (PS-213 LAZY-EXTRA-PATTERN-OK).
+skills = ["newb>=0.3.0"]
 dev = [
-    "click>=8.0.0",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    # pytest-timeout: per-test wall-clock cap (see [tool.pytest.ini_options]
+    # `timeout`). A single hung test fails loud + names itself in ~5 min
+    # instead of wedging the whole job until GitHub's 6h ceiling.
+    "pytest-timeout>=2.1.0",
+    # pytest-xdist: parallelise the suite across ALL cores of the self-hosted
+    # Spartan CPU lease (.github/ci/run-in-sif.sh runs `pytest -n "$(nproc)"
+    # --dist loadscope`). Already baked into the reused ci-cpu SIF; pinned here
+    # so a plain `pip install -e .[dev]` resolves the same parallel test path
+    # (PS-210 dev-extras-completeness).
+    "pytest-xdist>=3.0.0",
     "fastmcp>=2.0.0",
-    "pyyaml>=6.0",
     "textual>=0.50.0",
+    # newb belongs to [skills] now. Re-listed here so the dev venv resolves
+    # the lazy-import test path (PS-210 dev-extras-completeness: every
+    # per-feature extra dep must also resolve in [dev]).
+    "newb>=0.3.0",
     # tomlkit is consumed by `audit-umbrella --write` (umbrella-regen extra).
     # PS-210 §2 requires dev-extras-completeness: any dep behind a per-feature
     # extra must also be in `[dev]` so the full test suite resolves cleanly.
@@ -44,11 +73,13 @@ dev = [
     # works. If the meta-audit test must hard-fail (not skip) when the CLI
     # is absent, gate it explicitly rather than via this circular pin.
 ]
-cli-audit = ["click>=8.0.0", "pyyaml>=6.0"]
+# `cli-audit` was originally (click, pyyaml) — both are core now. Kept as
+# an empty no-op alias for backward compat.
+cli-audit = []
 # Optional extra for `scitex-dev ecosystem audit-umbrella --write` —
 # tomlkit preserves comments + whitespace when regenerating the
 # scitex-python umbrella's pyproject.toml [all] aggregator.
-umbrella-regen = ["click>=8.0.0", "tomlkit>=0.12.0"]
+umbrella-regen = ["tomlkit>=0.12.0"]
 tui = ["textual>=0.50.0"]
 docs = [
     "sphinx>=7.0",
@@ -58,11 +89,10 @@ docs = [
     "sphinx-autodoc-typehints>=1.25",
 ]
 all = [
-    "scitex-dev[cli]",
     "scitex-dev[mcp]",
+    "scitex-dev[skills]",
     "scitex-dev[dev]",
     "scitex-dev[docs]",
-    "scitex-dev[cli-audit]",
     "scitex-dev[umbrella-regen]",
     "scitex-dev[tui]",
 ]
@@ -83,6 +113,13 @@ scitex-dev = "scitex_dev"
 # double-counted; this group is therefore reserved for *downstream*
 # packages.
 [project.entry-points."scitex_dev.jobs"]
+# scitex-dev applies the dual-mode principle to itself: its own
+# package-internal crons (ci-watch / quota-keepalive / worktree-gc /
+# task-harvest / cred-distribute) live under the standalone
+# `scitex-dev cron` CLI as JOB_REGISTRY entries; its ECOSYSTEM-LEVEL
+# control-plane jobs (cross-package work) flow through the federation
+# via the entry-point below, alongside every other leaf's provider.
+scitex-dev-ecosystem = "scitex_dev._ecosystem_jobs._provider:provide_jobs"
 # (downstream packages register here, e.g.)
 # scitex-agent-container = "scitex_agent_container._jobs_plugin:provide_jobs"
 
@@ -115,6 +152,13 @@ scitex_dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Per-test wall-clock cap (pytest-timeout, in [dev]). The whole suite runs in
+# ~2 min, so any single test exceeding 300 s is wedged: fail it loud + name it
+# rather than spinning to GitHub's 6 h job ceiling. The default "signal" method
+# interrupts a stuck Python loop and lets the rest of the suite still run. If
+# pytest-timeout is absent (plain `pip install -e .` fallback), pytest just
+# warns "Unknown config option: timeout" — no error.
+timeout = 300
 markers = [
     "skill_quality: structural checklist tests (§1–§4)",
     "skill_trigger: trigger-rate tests (live claude -p, slow, non-deterministic)",

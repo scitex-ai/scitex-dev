@@ -1,4 +1,12 @@
-"""Configuration system for scitex-linter."""
+"""Configuration system for `scitex-dev linter`.
+
+The standalone "scitex-linter" package was merged into scitex-dev in
+2026-06; the linter is now invoked as `scitex-dev linter`. The legacy
+`[tool.scitex-linter]` pyproject key and `SCITEX_LINTER_*` env-var
+prefix are still read for back-compat (a `DeprecationWarning` is
+emitted), and the canonical names are `[tool.scitex_dev.linter]` +
+`SCITEX_DEV_LINTER_*`.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +29,7 @@ else:
 
 @dataclass
 class LinterConfig:
-    """Configuration for scitex-linter behavior."""
+    """Configuration for `scitex-dev linter` behaviour."""
 
     severity: str = "info"
     exclude_dirs: list[str] = field(
@@ -60,6 +68,23 @@ class LinterConfig:
     disable: list[str] = field(default_factory=list)
     enable: list[str] = field(default_factory=list)
     per_rule_severity: dict[str, str] = field(default_factory=dict)
+    category_severity_override: dict[str, str] = field(default_factory=dict)
+    """Category → severity override map, applied after ``per_rule_severity``.
+
+    Populated by :func:`load_config` from the project's
+    ``.scitex/dev/config.yaml`` ``project-type`` declaration — research-
+    typed projects flip the ``io`` and ``path`` categories from
+    ``warning`` to ``error`` so a raw ``pd.read_parquet`` / bare
+    ``open()`` blocks rather than just warns. Per the 2026-06-12
+    operator directive 12826: research-category scripts must not bypass
+    clew/io provenance silently. See Pillar 3 (#TBD).
+
+    Per-rule overrides in ``per_rule_severity`` still win — set a specific
+    rule's severity in pyproject.toml ``[tool.scitex-dev.linter.per-rule-
+    severity]`` (canonical key; legacy ``[tool.scitex-linter.per-rule-
+    severity]`` is also read with a ``DeprecationWarning``) to opt out
+    of the category-wide flip for that one rule.
+    """
     required_injected: list[str] = field(
         default_factory=lambda: ["CONFIG", "plt", "COLORS", "rngg", "logger"]
     )
@@ -101,19 +126,49 @@ def load_config(start_path: str | None = None) -> LinterConfig:
     env_config = _load_env()
     config_dict.update(env_config)
 
+    # Pillar 3 (#TBD, 2026-06-12 operator directive 12826): when the
+    # project is research-typed (declared in .scitex/dev/config.yaml as
+    # `project-type: research`), flip the io / path category severities
+    # from "warning" to "error" so a raw `pd.read_parquet` / bare
+    # `open()` BLOCKS the script-edit hook rather than just warning the
+    # agent. Per-rule overrides in `per_rule_severity` still win — the
+    # category map is the floor, not the ceiling. Walk-up + YAML parse
+    # lives in `_project_type.py` (src↔tests 1:1 mirror invariant).
+    from ._project_type import detect_scitex_dev_project_types
+
+    if "research" in detect_scitex_dev_project_types(start_dir):
+        existing = config_dict.get("category_severity_override", {}) or {}
+        merged = {"io": "error", "path": "error", **existing}
+        config_dict["category_severity_override"] = merged
+
+        # FM category auto-enable for research projects (neurovista
+        # elevation 2026-06-14): figure provenance / clew chaining
+        # matters for research outputs, so figrecipe's figure-style
+        # rules (STX-FM0xx, STX-P00x) become opt-OUT, not opt-IN.
+        # Operator can still disable per-category via pyproject's
+        # ``disable`` list — this only sets the floor.
+        _existing_enable = config_dict.get("enable", []) or []
+        if "FM" not in _existing_enable:
+            config_dict["enable"] = [*_existing_enable, "FM"]
+
     # Build LinterConfig with merged values
     return LinterConfig(**config_dict)
 
 
 def _load_pyproject(start_dir: Path) -> dict:
     """
-    Walk up directories to find pyproject.toml with [tool.scitex-linter].
+    Walk up directories to find pyproject.toml with the linter config.
+
+    Canonical key: ``[tool.scitex-dev.linter]`` (post-2026-06 merge).
+    Legacy key: ``[tool.scitex-linter]`` is still read for back-compat
+    when the canonical key is absent — a ``DeprecationWarning`` is
+    emitted so the operator knows to migrate.
 
     Args:
         start_dir: Starting directory for search
 
     Returns:
-        Configuration dict from [tool.scitex-linter], or empty dict if not found
+        Configuration dict from the linter table, or empty dict if not found
     """
     if tomllib is None:
         return {}
@@ -125,7 +180,24 @@ def _load_pyproject(start_dir: Path) -> dict:
             try:
                 with open(pyproject_path, "rb") as f:
                     data = tomllib.load(f)
-                    tool_config = data.get("tool", {}).get("scitex-linter", {})
+                    tool_root = data.get("tool", {})
+                    # Canonical key first; legacy as fallback.
+                    tool_config = tool_root.get("scitex-dev", {}).get("linter", {})
+                    if not tool_config:
+                        legacy = tool_root.get("scitex-linter", {})
+                        if legacy:
+                            import warnings as _w
+
+                            _w.warn(
+                                f"{pyproject_path}: [tool.scitex-linter] is "
+                                "the legacy key; the canonical key is "
+                                "[tool.scitex-dev.linter]. Both are read "
+                                "for back-compat (canonical wins on "
+                                "conflict).",
+                                DeprecationWarning,
+                                stacklevel=2,
+                            )
+                            tool_config = legacy
                     if tool_config:
                         # Flatten nested sections
                         config = {}
@@ -133,7 +205,9 @@ def _load_pyproject(start_dir: Path) -> dict:
                             if key == "per-rule-severity":
                                 config["per_rule_severity"] = value
                             elif key == "session":
-                                # Handle [tool.scitex-linter.session]
+                                # Handle [tool.scitex-dev.linter.session]
+                                # (or its legacy [tool.scitex-linter.session]
+                                # alias — same loader handles both).
                                 if "required_injected" in value:
                                     config["required_injected"] = value[
                                         "required_injected"

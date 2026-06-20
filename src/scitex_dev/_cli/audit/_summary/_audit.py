@@ -29,6 +29,26 @@ from . import CATALOG, FLAT_KEEPERS
 BANNED_LEAVES = {"version", "completion"}
 
 
+# §1e — flags that strongly imply "start a long-running service / server / UI"
+# on the leaf they appear under. When ANY of these is present on a leaf that
+# ALSO classifies as a noun, the §1e rule fires regardless of whether Moby
+# also classifies the same name as a verb (operator directive 13316: catch
+# `scitex-todo board --port 8051` pattern ecosystem-wide).
+SERVER_STARTUP_FLAGS = frozenset(
+    {
+        "--port",
+        "--host",
+        "--bind",
+        "--serve",
+        "--daemon",
+        "--workers",
+        "--listen",
+        "--addr",
+        "--address",
+    }
+)
+
+
 # ----------------------------------------------------------------------- #
 # Registry loader (per §6b config-precedence cascade for `scitex-dev`)    #
 # ----------------------------------------------------------------------- #
@@ -606,19 +626,73 @@ def _walk(
             )
 
         if is_leaf:
+            # §1 — leaf-noun check. Historically the exemption
+            # (`{verb-t, verb-i, verb, flat-keeper} & labels`) silently
+            # passed multi-class noun-verb homonyms such as `board`
+            # (Moby classifies as both noun and verb-t/verb-i), letting
+            # `scitex-todo board --port 8051` slip through (operator
+            # directive 13316). At TOP LEVEL (depth=1) AND for BARE
+            # (non-compound) leaves the rule is tightened: a leaf
+            # carrying `noun` in its labels is flagged regardless of
+            # also-verb labels, because the operator's CLI grammar
+            # requires top-level bare leaves to be unambiguously verbs.
+            # Compound leaves like `print-shell-completion` are
+            # explicitly excluded from PART A — the compound IS the
+            # `<verb>-<object>` grammar the rule is asking for.
+            top_level_leaf = len(path) == 1
+            multi_class_homonym = (
+                bool({"verb-t", "verb-i", "verb"} & labels) and "noun" in labels
+            )
             if (
                 "noun" in labels
-                and not ({"verb-t", "verb-i", "verb", "flat-keeper"} & labels)
+                and (
+                    (top_level_leaf and multi_class_homonym and not is_compound)
+                    or not ({"verb-t", "verb-i", "verb", "flat-keeper"} & labels)
+                )
                 and name not in FLAT_KEEPERS
+                and "flat-keeper" not in labels
             ):
+                suffix = (
+                    " — Moby classifies this as both noun AND verb; if the "
+                    "verb meaning is intended in this CLI context, add to "
+                    "`.scitex/dev/cli-audit-dict.yaml` under `intransitive_verbs:` "
+                    "(same escape hatch `next` uses)."
+                    if multi_class_homonym
+                    else ""
+                )
                 out.append(
                     Violation(
                         full,
                         "§1",
                         f"leaf token looks like a noun — transitive action implied; "
-                        f"use '<verb>-{name}' (e.g. start-{name}) or add a sibling verb",
+                        f"use '<verb>-{name}' (e.g. start-{name}) or add a sibling verb"
+                        + suffix,
                     )
                 )
+
+            # §1e — server-startup-flag heuristic. High-signal catch:
+            # a noun-classified leaf at top level that accepts any of
+            # `--port / --host / --bind / --serve / --daemon / --workers /
+            # --listen / --addr / --address` is unambiguously starting a
+            # service; the grammar should be `<noun> start` (group) or
+            # `start-<noun>` (compound). Fires even when the §1 check
+            # would have exempted the leaf via a Moby verb label —
+            # operator directive 13316's exact pattern.
+            if "noun" in labels and top_level_leaf:
+                if SERVER_STARTUP_FLAGS & _flag_names(cmd):
+                    out.append(
+                        Violation(
+                            full,
+                            "§1e",
+                            f"top-level noun leaf '{name}' accepts a server-"
+                            f"startup flag (one of --port/--host/--bind/"
+                            f"--serve/--daemon/--workers/--listen/--addr/"
+                            f"--address) — that's a service-start verb in "
+                            f"disguise; rename to 'start-{name}' or nest "
+                            f"under a '{name}' group with a 'start' "
+                            f"subcommand (e.g. '{name} start --port …').",
+                        )
+                    )
             if (
                 ("verb-t" in labels or "verb" in labels)
                 and not is_compound
@@ -986,20 +1060,116 @@ def _check_introspection(
                     )
 
 
-def _package_ships_skills(package: str) -> bool:
-    """True if `<pkg>/src/<import_name>/_skills/<package>/` exists."""
+# ----------------------------------------------------------------------- #
+# Package-locator helpers (registry source-tree fallback)                  #
+#                                                                         #
+# Mirrors the fix landed in PRs #177 (audit-skills) and #178 (audit-      #
+# python-apis). Several §-checks in this file resolve a package via       #
+# `importlib.util.find_spec(...)` and silently skip the check when the    #
+# package is not pip-installed in the auditor's venv. Result: §11 CLI-    #
+# framework / §2 no-interactive-prompts / §1a skills-subcommand audits   #
+# went uncalled for every locally-cloned peer, hiding real violations.   #
+#                                                                         #
+# These helpers keep `find_spec` as the primary path and fall back to the #
+# ecosystem registry's `local_path` so the audit runs against the on-disk #
+# source tree. A truly-missing package (neither installed nor registered  #
+# nor on-disk) still returns None so the legacy skip is preserved for     #
+# genuinely-unauditable inputs.                                           #
+# ----------------------------------------------------------------------- #
+
+
+def _registry_local_src(distribution: str) -> Path | None:
+    """Source-tree fallback: ``<local_path>/src/<import_name>/`` from registry.
+
+    Returns None if the registry entry is missing, has no ``local_path``,
+    or the path doesn't exist on disk. Defensive — a stale / partial
+    registry import returns None silently so the per-package audit keeps
+    working.
+    """
+    try:
+        from ...._ecosystem._registry import ECOSYSTEM
+    except Exception:  # pragma: no cover — defensive
+        return None
+    info = ECOSYSTEM.get(distribution) or {}
+    local_path = info.get("local_path")
+    if not local_path:
+        return None
+    try:
+        root = Path(local_path).expanduser()
+    except (RuntimeError, OSError):  # pragma: no cover — defensive
+        return None
+    candidate = root / "src" / distribution.replace("-", "_")
+    return candidate if candidate.is_dir() else None
+
+
+def _resolve_pkg_root(distribution: str) -> Path | None:
+    """Return ``<pkg>/`` — installed search location or registry-fallback src tree.
+
+    Used by checks that walk the package tree (e.g. ``rglob("*.py")``).
+    The returned path is the directory containing ``__init__.py`` plus the
+    rest of the package source.
+    """
     import importlib.util
 
-    import_name = package.replace("-", "_")
+    import_name = distribution.replace("-", "_")
     spec = importlib.util.find_spec(import_name)
-    if spec is None or not spec.submodule_search_locations:
-        return False
-    from pathlib import Path as _Path
+    if spec is not None and spec.submodule_search_locations:
+        return Path(next(iter(spec.submodule_search_locations)))
+    return _registry_local_src(distribution)
 
-    for loc in spec.submodule_search_locations:
-        if (_Path(loc) / "_skills" / package).is_dir():
-            return True
-    return False
+
+def _resolve_dotted_module_file(distribution: str, dotted: str) -> Path | None:
+    """Resolve ``pkg.sub.mod`` to its concrete ``.py`` file.
+
+    Tries ``importlib.util.find_spec`` first; on miss, walks the dotted
+    path under the registry-fallback source tree. Picks the package's
+    ``__init__.py`` when the final segment is a directory, otherwise the
+    ``.py`` file. Returns None if neither resolution succeeds — caller
+    should treat that as "module not present, skip".
+    """
+    import importlib.util
+
+    # ``find_spec`` raises ``ModuleNotFoundError`` when the dotted path
+    # has an unimportable parent (the common case in CI where the package
+    # is on disk but not pip-installed). Treat the raise the same as a
+    # None return — fall through to the registry source-tree walk.
+    try:
+        spec = importlib.util.find_spec(dotted)
+    except (ImportError, ValueError):
+        spec = None
+    if spec is not None and spec.origin is not None:
+        return Path(spec.origin)
+    pkg_root = _resolve_pkg_root(distribution)
+    if pkg_root is None:
+        return None
+    parts = dotted.split(".")
+    rest = parts[1:]  # parts[0] is import_name (already pkg_root)
+    if not rest:
+        init = pkg_root / "__init__.py"
+        return init if init.is_file() else None
+    sub = pkg_root
+    for p in rest[:-1]:
+        sub = sub / p
+    last = rest[-1]
+    candidate_pkg = sub / last / "__init__.py"
+    if candidate_pkg.is_file():
+        return candidate_pkg
+    candidate_mod = sub / f"{last}.py"
+    return candidate_mod if candidate_mod.is_file() else None
+
+
+def _package_ships_skills(package: str) -> bool:
+    """True if ``<pkg>/_skills/<package>/`` exists.
+
+    Uses ``_resolve_pkg_root`` so non-installed but on-disk-valid peers
+    are detected via the registry fallback (was previously returning False
+    for every such peer — a phantom that hid §1a `skills` subcommand
+    omission audits across the ecosystem).
+    """
+    pkg_root = _resolve_pkg_root(package)
+    if pkg_root is None:
+        return False
+    return (pkg_root / "_skills" / package).is_dir()
 
 
 def _expected_env_prefix(package: str) -> str | None:
@@ -1551,23 +1721,16 @@ def _check_cli_framework(package: str, out: list[Violation]) -> None:
     its directory for `import argparse` / `from argparse`. Flag any
     occurrence in a CLI module.
     """
-    import importlib.util as _ilu
-
     ep_value = _ep_value_for(package)
     if ep_value is None:
         return
     # entry-point format: "module.path:object" — locate the module file.
+    # Uses the registry-aware resolver so non-installed peers (CI / fresh
+    # checkout) still get §11 audited against their on-disk source tree.
     mod_name = ep_value.split(":", 1)[0]
-    try:
-        spec = _ilu.find_spec(mod_name)
-    except Exception:
+    ep_file = _resolve_dotted_module_file(package, mod_name)
+    if ep_file is None:
         return
-    if spec is None or spec.origin is None:
-        return
-
-    from pathlib import Path as _P
-
-    ep_file = _P(spec.origin)
     # Walk only files that are actually part of the CLI tree:
     #   * the entry-point file itself
     #   * every .py under a `_cli/` subdir of the entry-point's parent
@@ -1624,15 +1787,126 @@ def _check_cli_framework(package: str, out: list[Violation]) -> None:
 
 
 def _ep_value_for(package: str) -> str | None:
-    """First console-script `module:obj` value registered under `package`."""
+    """First console-script ``module:obj`` value registered under ``package``.
+
+    Resolution order (each step proceeds to the next on miss, so a package
+    that is neither installed nor on-disk-registered still returns None):
+
+    1. **Installed metadata.** ``importlib.metadata.entry_points()`` —
+       picks up console-scripts from any peer that's been
+       ``pip install``-ed in the auditor's venv.
+    2. **On-disk pyproject (registry fallback).** When the peer is NOT
+       installed but IS in the ecosystem registry, read
+       ``<local_path>/pyproject.toml``'s ``[project.scripts]`` table and
+       return ``scripts.get(package)``. This is the upstream piece of the
+       same fail-silent class PRs #177 / #178 / #179 closed — without it
+       audit-summary's §10 / §11 / §1a checks couldn't even ask "what is
+       this package's CLI entry?" for a freshly-cloned peer, so the
+       downstream resolvers (`_resolve_dotted_module_file` etc.) never
+       ran on non-installed peers.
+
+    A truly-missing console-script (not in metadata, not in registry, or
+    registry path / pyproject missing) still returns None so callers
+    keep their "no console script — skipped" behaviour for genuinely-
+    scriptless packages.
+    """
+    # 1. Installed metadata.
     try:
         eps = im.entry_points(group="console_scripts")
-    except TypeError:
+    except TypeError:  # pragma: no cover — pre-3.10 API path
         eps = im.entry_points().get("console_scripts", [])
     for ep in eps:
         if ep.name == package:
             return ep.value
-    return None
+
+    # 2. On-disk pyproject via registry. Defensive — every parse failure
+    # falls through to None so a single malformed pyproject never breaks
+    # the per-package audit.
+    try:
+        from ...._ecosystem._registry import ECOSYSTEM
+    except Exception:  # pragma: no cover — defensive
+        return None
+    info = ECOSYSTEM.get(package) or {}
+    local_path = info.get("local_path")
+    if not local_path:
+        return None
+    try:
+        root = Path(local_path).expanduser()
+    except (RuntimeError, OSError):  # pragma: no cover — defensive
+        return None
+    pyproject = root / "pyproject.toml"
+    if not pyproject.is_file():
+        return None
+    try:
+        import tomllib
+    except ImportError:  # pragma: no cover — 3.10 path
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return None
+    try:
+        with open(pyproject, "rb") as fh:
+            meta = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    scripts = (meta.get("project") or {}).get("scripts") or {}
+    value = scripts.get(package)
+    return value if isinstance(value, str) else None
+
+
+_INTERACTIVE_OK_LINE_MARKER = "# audit-cli: interactive-ok"
+_INTERACTIVE_OK_FILE_MARKER = "# audit-cli: file-interactive-ok"
+
+
+def _has_file_interactive_ok_marker(text: str) -> bool:
+    """True if the file opts out of §2 wholesale via a top-of-file marker.
+
+    Looked-for marker (case-sensitive, must appear in the first 30 lines —
+    well within any docstring + import block):
+
+        ``# audit-cli: file-interactive-ok``
+
+    Use this on files whose entire purpose is interactive (e.g.
+    ``_login.py``, an ``auth_setup`` Click command). Per-call markers
+    are preferred when only one or two calls need exempting; this
+    file-level switch is for "the whole module is intentional".
+    """
+    for line in text.split("\n", 30)[:30]:
+        if _INTERACTIVE_OK_FILE_MARKER in line:
+            return True
+    return False
+
+
+def _line_or_above_has_interactive_ok(lines: list[str], lineno: int) -> bool:
+    """True if the call at ``lineno`` (1-indexed) is exempted by a marker.
+
+    Accepted shapes (case-sensitive substring match — the message tail is
+    free-form so authors can document the why):
+
+        click.prompt(...)  # audit-cli: interactive-ok — login flow
+        # audit-cli: interactive-ok — login flow
+        click.prompt(...)
+
+    The immediately-preceding form must be on the line directly above the
+    call (skipping blank lines and other comment lines does NOT walk past
+    a non-comment, non-blank line). This keeps the exemption tight to the
+    one call it documents — a marker far above does not silently exempt
+    every call below it.
+    """
+    if lineno <= 0 or lineno > len(lines):
+        return False
+    # Same-line trailing comment.
+    if _INTERACTIVE_OK_LINE_MARKER in lines[lineno - 1]:
+        return True
+    # Immediately-preceding non-blank line (typical "comment above call"
+    # idiom). Allow intermediate blank lines, but not a non-comment line.
+    i = lineno - 2
+    while i >= 0 and not lines[i].strip():
+        i -= 1
+    if i < 0:
+        return False
+    stripped = lines[i].lstrip()
+    return stripped.startswith("#") and _INTERACTIVE_OK_LINE_MARKER in stripped
 
 
 def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
@@ -1647,17 +1921,35 @@ def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
 
     Static AST scan over `src/<pkg>/**/*.py`. Skips obvious non-CLI
     directories (`tests/`, `examples/`, `docs/`).
+
+    Exemptions (precision refinement — some CLI commands are LEGITIMATELY
+    interactive, e.g. an OAuth flow that prompts for a secret, or a
+    destructive command that requires a typed-out confirmation token):
+
+    * **Per-call marker** — ``# audit-cli: interactive-ok`` on the SAME
+      line as the call OR on the line immediately above (with optional
+      blank lines but no intervening non-comment line). The author is
+      asserting "this prompt is the intended UX, not a CI-reliability
+      bomb." Keep the exemption tight to ONE call: a comment far above
+      the call does NOT silently exempt every call below it.
+
+    * **Per-file marker** — ``# audit-cli: file-interactive-ok`` anywhere
+      in the first 30 lines. Exempts every prompt in the file. Use this
+      for whole modules that exist to be interactive (e.g. ``_login.py``,
+      an ``auth_setup`` Click command file).
+
+    Markers are case-sensitive substring matches; any tail after the
+    sentinel is treated as free-form documentation, so authors can write
+    why the exemption is justified (``# audit-cli: interactive-ok —
+    login flow needs the user's TOTP``) without confusing the parser.
     """
     import ast
-    import importlib.util
-    from pathlib import Path
 
-    import_name = package.replace("-", "_")
-    spec = importlib.util.find_spec(import_name)
-    if spec is None or spec.origin is None:
-        return
-    pkg_root = Path(spec.origin).parent
-    if not pkg_root.exists():
+    # Use the registry-aware resolver so non-installed peers (CI / fresh
+    # ecosystem checkout) still get §2 audited against their on-disk
+    # source tree instead of silently passing.
+    pkg_root = _resolve_pkg_root(package)
+    if pkg_root is None or not pkg_root.exists():
         return
 
     forbidden = {
@@ -1681,9 +1973,17 @@ def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
         if any(s in py.parts for s in ("__pycache__", "tests", "examples", "docs")):
             continue
         try:
-            tree = ast.parse(py.read_text(encoding="utf-8"), filename=str(py))
-        except (OSError, SyntaxError):
+            text = py.read_text(encoding="utf-8")
+        except OSError:
             continue
+        try:
+            tree = ast.parse(text, filename=str(py))
+        except SyntaxError:
+            continue
+        # File-level opt-out (e.g. `_login.py`) — skip the whole file.
+        if _has_file_interactive_ok_marker(text):
+            continue
+        lines = text.split("\n")
         rel = py.relative_to(pkg_root.parent)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
@@ -1697,6 +1997,8 @@ def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
                     continue
                 if msg is None:
                     continue  # exempt entry
+                if _line_or_above_has_interactive_ok(lines, node.lineno):
+                    continue  # per-call opt-out
                 out.append(
                     Violation(
                         package,
@@ -1706,6 +2008,8 @@ def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
                 )
             # bare input(...) — exempt if it's `input.button-primary` etc.
             elif isinstance(f, ast.Name) and f.id in forbidden_bare:
+                if _line_or_above_has_interactive_ok(lines, node.lineno):
+                    continue  # per-call opt-out
                 out.append(
                     Violation(
                         package,
@@ -1721,17 +2025,31 @@ def _check_startup_speed(
     package: str,
     out: list[Violation],
     threshold_ms: int = 500,
+    runs: int = 3,
 ) -> None:
-    """§9 — `import <module>` cold-start must be < threshold_ms.
+    """§10 — the MARGINAL cost of `import <module>` (above bare-interpreter
+    startup) must be < threshold_ms.
 
     Click bash-completion calls the program once per Tab press to resolve
     dynamic completions, so a slow import = unusable tab-completion. The
     fix is PEP 562 lazy `__getattr__` in the top-level `__init__.py`
     (see `_skills/general/03_interface/01_python-api/
     04_lazy-imports-and-optional-deps.md`).
+
+    Measurement (2026-06-19): the metric is ``T - B`` — ``T`` is the wall-clock
+    of ``python -c "import <module>"`` and ``B`` is the wall-clock of a bare
+    ``python -c "pass"`` reference, each taken as the *best of N* runs.
+    Subtracting ``B`` cancels the interpreter + site + coverage startup baseline
+    (and the machine-speed factor inside it), so the check reflects the
+    PACKAGE's own import cost — not the runner's filesystem or CPU load.
+    best-of-N (min) warms the file cache and drops transient load spikes: the
+    earlier absolute-time check false-failed on the shared/NFS Spartan CI node,
+    where a cold first import over the network FS measured 937ms while the
+    package's real marginal cost is a few ms.
     """
     import subprocess as _sp
     import sys as _sys
+    import time as _time
 
     ep_value = _ep_value_for(package)
     if ep_value is None:
@@ -1741,31 +2059,43 @@ def _check_startup_speed(
     if not module_name:
         return
 
-    code = (
-        "import time;t=time.perf_counter();"
-        f"import {module_name};"
-        "print(int((time.perf_counter()-t)*1000))"
-    )
-    try:
-        r = _sp.run(
-            [_sys.executable, "-c", code],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        if r.returncode != 0:
-            return  # import failure — covered elsewhere
-        ms = int(r.stdout.strip())
-    except Exception:
-        return
+    def _best_ms(code: str) -> float | None:
+        """Best-of-`runs` wall-clock (ms) of ``python -c <code>``; None on failure."""
+        best: float | None = None
+        for _ in range(max(1, runs)):
+            t0 = _time.perf_counter()
+            try:
+                r = _sp.run(
+                    [_sys.executable, "-c", code],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+            except Exception:
+                return None
+            if r.returncode != 0:
+                return None  # import failure — covered elsewhere
+            dt = (_time.perf_counter() - t0) * 1000.0
+            best = dt if best is None else min(best, dt)
+        return best
 
-    if ms > threshold_ms:
+    # Bare interpreter reference, then the package import — same env, so site +
+    # coverage + machine-speed cancel in the difference.
+    baseline = _best_ms("pass")
+    full = _best_ms(f"import {module_name}")
+    if baseline is None or full is None:
+        return  # import failure — covered elsewhere
+    marginal = full - baseline
+
+    if marginal > threshold_ms:
         out.append(
             Violation(
                 package,
                 "§10",
-                f"`import {module_name}` cold-start is {ms}ms (>{threshold_ms}ms threshold). "
-                "Slow tab-completion: Click runs the program once per Tab press. Convert "
+                f"`import {module_name}` adds {marginal:.0f}ms over bare-interpreter "
+                f"startup (>{threshold_ms}ms threshold; import={full:.0f}ms, "
+                f"baseline={baseline:.0f}ms, best-of-{runs}). Slow tab-completion: Click "
+                "runs the program once per Tab press. Convert "
                 f"{module_name}/__init__.py to PEP 562 lazy `__getattr__` (see python-api "
                 "skill 04_lazy-imports-and-optional-deps.md, 'PEP 562 module __getattr__' section).",
             )

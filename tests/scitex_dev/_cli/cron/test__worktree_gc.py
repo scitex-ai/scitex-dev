@@ -271,8 +271,7 @@ def test_gc_one_worktree_stale_invokes_git_worktree_remove(tmp_path):
     # Act
     _, runner = _gc_call_stale(tmp_path)
     saw_remove = any(
-        argv[-2:] == ["worktree", "remove"]
-        or argv[-3:-1] == ["worktree", "remove"]
+        argv[-2:] == ["worktree", "remove"] or argv[-3:-1] == ["worktree", "remove"]
         for argv in runner.calls
     )
     # Assert
@@ -391,13 +390,7 @@ def _run_once_managed_and_protected(tmp_path):
     os.utime(managed, (old, old))
     os.utime(protected, (old, old))
 
-    porcelain = (
-        f"worktree {repo}\n"
-        "\n"
-        f"worktree {managed}\n"
-        "\n"
-        f"worktree {protected}\n"
-    )
+    porcelain = f"worktree {repo}\n\nworktree {managed}\n\nworktree {protected}\n"
     runner = (
         _ScriptedGitRunner()
         .when(
@@ -428,8 +421,7 @@ def test_run_once_protected_never_in_remove_calls(tmp_path):
     # Act
     _, runner, _, protected = _run_once_managed_and_protected(tmp_path)
     remove_calls = [
-        argv for argv in runner.calls
-        if "remove" in argv and "worktree" in argv
+        argv for argv in runner.calls if "remove" in argv and "worktree" in argv
     ]
     protected_seen = any(str(protected) in argv for argv in remove_calls)
     # Assert — this is the single highest-stakes invariant of this PR.
@@ -457,8 +449,7 @@ def test_run_once_remove_call_targets_the_managed_path(tmp_path):
     # Act
     _, runner, managed, _ = _run_once_managed_and_protected(tmp_path)
     remove_calls = [
-        argv for argv in runner.calls
-        if "remove" in argv and "worktree" in argv
+        argv for argv in runner.calls if "remove" in argv and "worktree" in argv
     ]
     # Assert
     assert any(str(managed) in argv for argv in remove_calls)
@@ -546,6 +537,187 @@ def test_run_once_env_threshold_30d_skipped_fresh_recorded(tmp_path):
     result = _run_once_env_threshold_keeps_5day_fresh(tmp_path)
     # Assert
     assert result.skipped_fresh == 1
+
+
+# ---------------------------------------------------------------------------
+# Container-worktree protection (lead-learnings/19, 2026-06-13)
+#
+# A bare ``git worktree prune`` from the host CHECKOUT destroys live
+# container worktrees because their recorded gitdir (``/work/<...>/.git``)
+# is unresolvable from outside the container — git treats "directory
+# missing" as "dangling" and prunes. ``_safe_prune`` walks the repo's
+# ``.git/worktrees/*/gitdir`` registry and, if ANY entry points at
+# ``/work/`` (the agent-container bind-mount root), skips the prune
+# wholesale rather than risk wiping out integration-test work.
+# ---------------------------------------------------------------------------
+
+
+def _make_main_repo_with_worktree_registry(tmp_path, gitdir_targets):
+    """Build a fake main-repo layout with one .git/worktrees/<n>/gitdir
+    per entry in ``gitdir_targets`` (each entry is the recorded path).
+
+    Returns the main-repo dir. No real ``git init`` needed — the prune
+    helper only reads the registry's ``gitdir`` files; the rest of git's
+    machinery never sees these paths.
+    """
+    repo = tmp_path / "main-repo"
+    (repo / ".git" / "worktrees").mkdir(parents=True)
+    for i, target in enumerate(gitdir_targets):
+        entry = repo / ".git" / "worktrees" / f"wt{i}"
+        entry.mkdir()
+        (entry / "gitdir").write_text(target + "\n")
+    return repo
+
+
+def test_gitdir_targets_container_recognises_work_prefix(tmp_path):
+    # Arrange
+    gitdir_file = tmp_path / "gitdir"
+    gitdir_file.write_text("/work/.worktrees/foo/.git\n")
+    # Act
+    result = _worktree_gc._gitdir_targets_container(gitdir_file)
+    # Assert
+    assert result is True
+
+
+def test_gitdir_targets_container_rejects_host_path(tmp_path):
+    # Arrange — a normal host worktree's gitdir lives under the user home.
+    gitdir_file = tmp_path / "gitdir"
+    gitdir_file.write_text("/home/u/proj/myrepo/.claude/worktrees/agent-1/.git\n")
+    # Act
+    result = _worktree_gc._gitdir_targets_container(gitdir_file)
+    # Assert
+    assert result is False
+
+
+def test_gitdir_targets_container_handles_missing_file(tmp_path):
+    # Arrange — registry entry whose ``gitdir`` file has been removed
+    # (race window between mkdir and write). Must NOT crash.
+    missing = tmp_path / "nonexistent-gitdir"
+    # Act
+    result = _worktree_gc._gitdir_targets_container(missing)
+    # Assert
+    assert result is False
+
+
+def test_has_container_worktree_true_when_work_entry_present(tmp_path):
+    # Arrange
+    repo = _make_main_repo_with_worktree_registry(
+        tmp_path,
+        ["/work/.worktrees/m4-integration/.git"],
+    )
+    # Act
+    result = _worktree_gc._has_container_worktree(str(repo))
+    # Assert
+    assert result is True
+
+
+def test_has_container_worktree_false_when_only_host_entries(tmp_path):
+    # Arrange
+    repo = _make_main_repo_with_worktree_registry(
+        tmp_path,
+        [
+            "/home/u/proj/myrepo/.claude/worktrees/agent-1/.git",
+            "/home/u/proj/myrepo/.claude/worktrees/agent-2/.git",
+        ],
+    )
+    # Act
+    result = _worktree_gc._has_container_worktree(str(repo))
+    # Assert
+    assert result is False
+
+
+def test_has_container_worktree_false_when_registry_absent(tmp_path):
+    # Arrange — repo with no `.git/worktrees/` at all.
+    repo = tmp_path / "main-repo"
+    (repo / ".git").mkdir(parents=True)
+    # Act
+    result = _worktree_gc._has_container_worktree(str(repo))
+    # Assert
+    assert result is False
+
+
+def test_safe_prune_skips_when_container_worktree_present_returns_false(tmp_path):
+    # Arrange — registry contains a live container worktree.
+    repo = _make_main_repo_with_worktree_registry(
+        tmp_path,
+        ["/work/.worktrees/m4-integration/.git"],
+    )
+    runner = _ScriptedGitRunner().when(
+        lambda argv: argv[-1] == "prune",
+        _FakeCompleted(returncode=0),
+    )
+    # Act
+    invoked = _worktree_gc._safe_prune(str(repo), runner, out=io.StringIO())
+    # Assert
+    assert invoked is False
+
+
+def test_safe_prune_skips_when_container_worktree_present_runner_not_called(tmp_path):
+    # Arrange — regression sentinel: even ONE container worktree in the
+    # registry must keep the runner away from ``worktree prune``.
+    repo = _make_main_repo_with_worktree_registry(
+        tmp_path,
+        [
+            "/home/u/proj/myrepo/.claude/worktrees/agent-1/.git",
+            "/work/.worktrees/m4-integration/.git",
+        ],
+    )
+    runner = _ScriptedGitRunner().when(
+        lambda argv: argv[-1] == "prune",
+        _FakeCompleted(returncode=0),
+    )
+    # Act
+    _worktree_gc._safe_prune(str(repo), runner, out=io.StringIO())
+    # Assert
+    assert all("prune" not in argv for argv in runner.calls)
+
+
+def test_safe_prune_invokes_prune_when_no_container_worktree_returns_true(tmp_path):
+    # Arrange — host-only registry; prune is safe.
+    repo = _make_main_repo_with_worktree_registry(
+        tmp_path,
+        ["/home/u/proj/myrepo/.claude/worktrees/agent-1/.git"],
+    )
+    runner = _ScriptedGitRunner().when(
+        lambda argv: argv[-1] == "prune",
+        _FakeCompleted(returncode=0),
+    )
+    # Act
+    invoked = _worktree_gc._safe_prune(str(repo), runner, out=io.StringIO())
+    # Assert
+    assert invoked is True
+
+
+def test_safe_prune_invokes_prune_when_no_container_worktree_runner_called(tmp_path):
+    # Arrange — paired sentinel: confirm the runner was actually called
+    # with ``worktree prune`` (not just that the helper returned True).
+    repo = _make_main_repo_with_worktree_registry(
+        tmp_path,
+        ["/home/u/proj/myrepo/.claude/worktrees/agent-1/.git"],
+    )
+    runner = _ScriptedGitRunner().when(
+        lambda argv: argv[-1] == "prune",
+        _FakeCompleted(returncode=0),
+    )
+    # Act
+    _worktree_gc._safe_prune(str(repo), runner, out=io.StringIO())
+    # Assert
+    assert any("prune" in argv for argv in runner.calls)
+
+
+def test_safe_prune_skip_log_mentions_lead_learnings(tmp_path):
+    # Arrange — the skip log must point a reader at the documented
+    # incident so they understand WHY this prune was suppressed.
+    repo = _make_main_repo_with_worktree_registry(
+        tmp_path,
+        ["/work/.worktrees/m4-integration/.git"],
+    )
+    runner = _ScriptedGitRunner()
+    out_buf = io.StringIO()
+    # Act
+    _worktree_gc._safe_prune(str(repo), runner, out=out_buf)
+    # Assert
+    assert "lead-learnings/19" in out_buf.getvalue()
 
 
 # EOF

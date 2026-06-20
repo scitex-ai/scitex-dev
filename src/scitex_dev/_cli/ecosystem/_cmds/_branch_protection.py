@@ -156,6 +156,57 @@ def _policy_body(
     }
 
 
+def _deletion_only_body() -> dict:
+    """Minimal protection: make the branch un-deletable, nothing else.
+
+    The baseline every `develop` should carry (clew incident 2026-06-17: an
+    unprotected, freshly-recreated develop was auto-deleted when the
+    develop→main release PR merged on a `deleteBranchOnMerge:true` repo,
+    breaking the publish `sync-main` job). Deliberately sets NO
+    `required_status_checks` and `enforce_admins:false` so CI's own direct
+    push to develop (docs-HTML commit-back, version bumps) is NOT blocked —
+    that is the tension the full policy creates. Required fields are sent as
+    null per the GitHub protection schema.
+    """
+    return {
+        "required_status_checks": None,
+        "enforce_admins": False,
+        "required_pull_request_reviews": None,
+        "restrictions": None,
+        "allow_force_pushes": False,
+        "allow_deletions": False,
+    }
+
+
+def _all_distributions() -> List[str]:
+    """Every ECOSYSTEM distribution name (for fleet-wide rollout)."""
+    from scitex_dev._ecosystem._core import ECOSYSTEM
+
+    return list(ECOSYSTEM.keys())
+
+
+def _is_deletion_protected(owner_repo: str, branch: str) -> bool:
+    """True if ``branch`` already has protection with deletions disabled.
+
+    Used so the fleet-wide deletion-only baseline is IDEMPOTENT and
+    NON-DOWNGRADING: a branch that already carries protection where
+    ``allow_deletions`` is off already meets the baseline goal (un-deletable),
+    so the rollout skips it rather than overwriting a possibly-stronger policy
+    (e.g. a repo with required_status_checks) with the minimal one. A 404 (no
+    protection) or deletions-enabled returns False → the baseline is applied.
+    """
+    rc, out = _gh_api("GET", f"repos/{owner_repo}/branches/{branch}/protection")
+    if rc != 0:
+        return False
+    try:
+        data = json.loads(out)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    allow_del = data.get("allow_deletions", {})
+    # GitHub returns {"enabled": bool}; treat a missing/odd shape as not-safe.
+    return allow_del.get("enabled") is False if isinstance(allow_del, dict) else False
+
+
 def _resolve_owner_repo(distribution: str) -> Optional[str]:
     """Map a distribution name to the ``<owner>/<repo>`` ``gh api`` slug.
 
@@ -168,6 +219,132 @@ def _resolve_owner_repo(distribution: str) -> Optional[str]:
     if not info:
         return None
     return info.get("github_repo")
+
+
+def _apply_one(
+    distribution: str,
+    targets: List[str],
+    *,
+    deletion_only: bool,
+    execute: bool,
+    json_out: bool,
+) -> int:
+    """Apply protection to one distribution's target branches.
+
+    Returns an exit code (0 ok, 1 a PUT failed, 2 unknown distribution).
+    ``deletion_only`` uses the minimal un-deletable baseline (no required
+    checks / enforce_admins) so CI pushes are not blocked; otherwise the full
+    brand-wide policy, with required contexts computed live from the repo.
+    """
+    owner_repo = _resolve_owner_repo(distribution)
+    if owner_repo is None:
+        click.echo(f"error: '{distribution}' not in ECOSYSTEM", err=True)
+        return 2
+
+    contexts: List[str] = []
+    if not deletion_only:
+        published = _list_published_check_names(owner_repo, ref="develop")
+        contexts = _intersect_required(published, _DEFAULT_REQUIRED_CONTEXTS)
+
+    exit_code = 0
+    for tgt in targets:
+        if not _branch_exists(owner_repo, tgt):
+            if json_out:
+                click.echo(
+                    json.dumps(
+                        {
+                            "distribution": distribution,
+                            "branch": tgt,
+                            "action": "skip",
+                            "reason": "no-branch",
+                        }
+                    )
+                )
+            else:
+                click.echo(
+                    f"skip  {distribution}: branch '{tgt}' does not exist on origin",
+                    err=True,
+                )
+            continue
+
+        # Idempotent / non-downgrading baseline: if the branch is already
+        # un-deletable, leave its (possibly stronger) policy untouched.
+        if deletion_only and _is_deletion_protected(owner_repo, tgt):
+            if json_out:
+                click.echo(
+                    json.dumps(
+                        {
+                            "distribution": distribution,
+                            "branch": tgt,
+                            "action": "skip",
+                            "reason": "already-protected",
+                        }
+                    )
+                )
+            else:
+                click.echo(f"skip  {distribution}@{tgt}: already deletion-protected")
+            continue
+
+        if deletion_only:
+            body = _deletion_only_body()
+        else:
+            body = _policy_body(contexts, enforce_admins=(tgt == "develop"))
+
+        if not execute:
+            if json_out:
+                click.echo(
+                    json.dumps(
+                        {
+                            "distribution": distribution,
+                            "branch": tgt,
+                            "action": "dry-run",
+                            "body": body,
+                        }
+                    )
+                )
+            else:
+                click.echo(
+                    f"DRY-RUN {distribution}@{tgt}: "
+                    f"PUT repos/{owner_repo}/branches/{tgt}/protection"
+                    + (" (deletion-only)" if deletion_only else "")
+                )
+            continue
+
+        rc, out = _gh_api("PUT", f"repos/{owner_repo}/branches/{tgt}/protection", body)
+        if rc != 0:
+            if json_out:
+                click.echo(
+                    json.dumps(
+                        {
+                            "distribution": distribution,
+                            "branch": tgt,
+                            "action": "error",
+                            "rc": rc,
+                            "stderr": out,
+                        }
+                    )
+                )
+            else:
+                click.echo(
+                    f"error  {distribution}@{tgt}: PUT failed (rc={rc}): {out}",
+                    err=True,
+                )
+            exit_code = 1
+            continue
+        if json_out:
+            click.echo(
+                json.dumps(
+                    {
+                        "distribution": distribution,
+                        "branch": tgt,
+                        "action": "set",
+                        "ok": True,
+                    }
+                )
+            )
+        else:
+            click.echo(f"ok    {distribution}@{tgt}: protection set")
+    return exit_code
 
 
 def register(ecosystem):
@@ -194,6 +371,13 @@ def register(ecosystem):
         help="Which branch to protect. Default: both.",
     )
     @click.option(
+        "--deletion-only",
+        is_flag=True,
+        help="Apply only the minimal un-deletable baseline (no required checks / "
+        "enforce-admins) so CI's own pushes to develop are not blocked. This is "
+        "the fleet-wide standard; omit for the full brand-wide policy.",
+    )
+    @click.option(
         "--execute",
         "-y",
         "--yes",
@@ -208,69 +392,28 @@ def register(ecosystem):
         is_flag=True,
         help="Emit one JSON object per branch instead of human-readable text.",
     )
-    def ecosystem_set_branch_protection(distribution, branch, execute, json_out):
-        """Apply brand-wide branch protection to DISTRIBUTION."""
-        owner_repo = _resolve_owner_repo(distribution)
-        if owner_repo is None:
-            click.echo(f"error: '{distribution}' not in ECOSYSTEM", err=True)
-            raise SystemExit(2)
+    def ecosystem_set_branch_protection(
+        distribution, branch, deletion_only, execute, json_out
+    ):
+        """Apply branch protection to DISTRIBUTION (or 'all' for the fleet).
 
-        targets = (
-            ["develop", "main"] if branch == "both" else [branch]
-        )
-
-        published = _list_published_check_names(owner_repo, ref="develop")
-        contexts = _intersect_required(published, _DEFAULT_REQUIRED_CONTEXTS)
+        Pass `all` as DISTRIBUTION to roll out across every ECOSYSTEM repo.
+        With --deletion-only this is the standard baseline that keeps every
+        `develop` un-deletable without blocking CI's commit-back push.
+        """
+        targets = ["develop", "main"] if branch == "both" else [branch]
+        dists = _all_distributions() if distribution == "all" else [distribution]
 
         exit_code = 0
-        for tgt in targets:
-            if not _branch_exists(owner_repo, tgt):
-                msg = f"skip  {distribution}: branch '{tgt}' does not exist on origin"
-                if json_out:
-                    click.echo(json.dumps({"branch": tgt, "action": "skip", "reason": "no-branch"}))
-                else:
-                    click.echo(msg, err=True)
-                continue
-
-            enforce_admins = (tgt == "develop")
-            body = _policy_body(contexts, enforce_admins)
-
-            if not execute:
-                if json_out:
-                    click.echo(json.dumps({
-                        "branch": tgt,
-                        "action": "dry-run",
-                        "body": body,
-                    }))
-                else:
-                    click.echo(
-                        f"DRY-RUN {distribution}@{tgt}: "
-                        f"PUT repos/{owner_repo}/branches/{tgt}/protection"
-                    )
-                    click.echo(json.dumps(body, indent=2))
-                continue
-
-            rc, out = _gh_api(
-                "PUT",
-                f"repos/{owner_repo}/branches/{tgt}/protection",
-                body,
+        for dist in dists:
+            rc = _apply_one(
+                dist,
+                targets,
+                deletion_only=deletion_only,
+                execute=execute,
+                json_out=json_out,
             )
-            if rc != 0:
-                if json_out:
-                    click.echo(json.dumps({
-                        "branch": tgt, "action": "error", "rc": rc, "stderr": out,
-                    }))
-                else:
-                    click.echo(
-                        f"error  {distribution}@{tgt}: PUT failed (rc={rc}): {out}",
-                        err=True,
-                    )
-                exit_code = 1
-                continue
-            if json_out:
-                click.echo(json.dumps({"branch": tgt, "action": "set", "ok": True}))
-            else:
-                click.echo(f"ok    {distribution}@{tgt}: protection set")
+            exit_code = max(exit_code, rc)
         raise SystemExit(exit_code)
 
     @ecosystem.command(
@@ -308,14 +451,16 @@ def register(ecosystem):
             click.echo(f"error: '{distribution}' not in ECOSYSTEM", err=True)
             raise SystemExit(2)
 
-        targets = (
-            ["develop", "main"] if branch == "both" else [branch]
-        )
+        targets = ["develop", "main"] if branch == "both" else [branch]
         exit_code = 0
         for tgt in targets:
             if not _branch_exists(owner_repo, tgt):
                 if json_out:
-                    click.echo(json.dumps({"branch": tgt, "action": "skip", "reason": "no-branch"}))
+                    click.echo(
+                        json.dumps(
+                            {"branch": tgt, "action": "skip", "reason": "no-branch"}
+                        )
+                    )
                 else:
                     click.echo(
                         f"skip  {distribution}: branch '{tgt}' does not exist on origin",
@@ -331,14 +476,19 @@ def register(ecosystem):
                         f"DELETE repos/{owner_repo}/branches/{tgt}/protection"
                     )
                 continue
-            rc, out = _gh_api(
-                "DELETE", f"repos/{owner_repo}/branches/{tgt}/protection"
-            )
+            rc, out = _gh_api("DELETE", f"repos/{owner_repo}/branches/{tgt}/protection")
             if rc != 0:
                 if json_out:
-                    click.echo(json.dumps({
-                        "branch": tgt, "action": "error", "rc": rc, "stderr": out,
-                    }))
+                    click.echo(
+                        json.dumps(
+                            {
+                                "branch": tgt,
+                                "action": "error",
+                                "rc": rc,
+                                "stderr": out,
+                            }
+                        )
+                    )
                 else:
                     click.echo(
                         f"error  {distribution}@{tgt}: DELETE failed (rc={rc}): {out}",

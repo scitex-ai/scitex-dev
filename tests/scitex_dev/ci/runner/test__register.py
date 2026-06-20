@@ -14,7 +14,15 @@ from click.testing import CliRunner
 
 from scitex_dev.ci.runner import register_ci_runner_commands
 
-RUNNER_SUBCOMMANDS = ["status", "use", "up", "down", "renew", "register"]
+RUNNER_SUBCOMMANDS = [
+    "status",
+    "use",
+    "up",
+    "down",
+    "renew",
+    "register",
+    "preflight",
+]
 
 
 def _build_root_group() -> click.Group:
@@ -52,3 +60,25 @@ def test_ci_runner_register_help_lists_yes_flag() -> None:
     result = CliRunner().invoke(root, ["ci", "runner", "register", "--help"])
     # Assert
     assert "--yes" in result.output
+
+
+def test_preflight_required_label_picks_non_builtin() -> None:
+    # Arrange
+    from scitex_dev.ci.runner._preflight import _required_label
+
+    cfg = {"runner": {"labels": ["self-hosted", "Linux", "X64", "spartan-cpu"]}}
+    # Act
+    label = _required_label(cfg)
+    # Assert — the descriptive label, not GitHub's built-in runner labels.
+    assert label == "spartan-cpu"
+
+
+def test_preflight_required_label_falls_back_to_head_when_all_builtin() -> None:
+    # Arrange
+    from scitex_dev.ci.runner._preflight import _required_label
+
+    cfg = {"runner": {"labels": ["self-hosted", "Linux"]}}
+    # Act
+    label = _required_label(cfg)
+    # Assert — degenerate config (only builtins) returns the list head.
+    assert label == "self-hosted"

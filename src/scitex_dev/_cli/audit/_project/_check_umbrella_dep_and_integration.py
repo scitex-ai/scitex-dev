@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ast
 import re
+import subprocess
 from pathlib import Path
 
 try:
@@ -30,18 +31,72 @@ _UMBRELLA_DEP_RE = re.compile(r"^\s*scitex(\[[^\]]*\])?\s*([<>=!~,].*)?$")
 
 
 def _own_import_name(repo: Path) -> str:
-    """`scitex-foo` → `scitex_foo`."""
+    """Canonical import name for the package at repo (scitex-foo -> scitex_foo).
+
+    Prefer the distribution name declared in [project].name over the
+    checkout directory name. Agents and the operator routinely audit from
+    git-worktree checkouts whose dir is <pkg>-<suffix> (e.g.
+    scitex-dev-rel); deriving the own-name from the dir there yields
+    scitex_dev_rel, so the package own scitex_dev.* imports stop
+    matching the own-name filter in _collect_cross_package_imports and
+    fire as bogus PS-140 missing-from-gate cross-package violations.
+    [project].name is worktree-path-independent and fixes this.
+    """
+    dist = _pyproject_distribution_name(repo)
+    if dist:
+        return dist.replace("-", "_")
     return repo.name.replace("-", "_")
 
 
-def _is_umbrella(repo: Path) -> bool:
-    """True if `repo` is the SciTeX umbrella package (distribution `scitex`).
+def _main_worktree_root(repo: Path) -> Path | None:
+    """Return the *main* working-tree root if `repo` is a git worktree.
 
-    Cannot rely on the directory basename alone — the umbrella's local
-    clone is `~/proj/scitex-python/`, so `repo.name` is `scitex-python`
-    not `scitex`. Resolve the canonical distribution name from the
-    ECOSYSTEM registry by matching `local_path` resolved.
+    The umbrella's canonical clone is `~/proj/scitex-python`; agents and
+    the operator routinely audit from sibling `git worktree add` checkouts
+    living at `<repo>/.worktrees/<name>` (or `<repo>/.claude/worktrees/...`).
+    Those carry a different `repo.resolve()` path, so an exact-path match
+    against the ECOSYSTEM `local_path` misses — the umbrella exemption then
+    silently breaks and PS-139/PS-140 fire ~77 false positives on the
+    umbrella's recursive `scitex[<extra>]` self-references.
+
+    `git worktree list --porcelain` reports the main working tree first;
+    its path is the registry-canonical one. Returns `None` when `repo` is
+    not inside a git checkout (callers fall back to the plain path).
     """
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo), "worktree", "list", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    for line in proc.stdout.splitlines():
+        # The first "worktree <path>" line is always the main working tree.
+        if line.startswith("worktree "):
+            return Path(line[len("worktree ") :].strip())
+    return None
+
+
+def _pyproject_distribution_name(repo: Path) -> str | None:
+    """Return `[project].name` from `repo/pyproject.toml`, or `None`."""
+    pyproject = repo / "pyproject.toml"
+    if not pyproject.exists():
+        return None
+    try:
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    name = data.get("project", {}).get("name")
+    return name if isinstance(name, str) else None
+
+
+def _matches_umbrella_registry(repo: Path) -> bool:
+    """True iff `repo`'s resolved path equals the umbrella's `local_path`."""
     try:
         from scitex_dev._ecosystem._core import ECOSYSTEM
     except ImportError:
@@ -53,6 +108,36 @@ def _is_umbrella(repo: Path) -> bool:
             continue
         if Path(local).expanduser().resolve() == repo_resolved:
             return info.get("category") == "umbrella" or dist == "scitex"
+    return False
+
+
+def _is_umbrella(repo: Path) -> bool:
+    """True if `repo` is the SciTeX umbrella package (distribution `scitex`).
+
+    Cannot rely on the directory basename alone — the umbrella's local
+    clone is `~/proj/scitex-python/`, so `repo.name` is `scitex-python`
+    not `scitex`. Resolve the canonical distribution name from the
+    ECOSYSTEM registry by matching `local_path` resolved.
+
+    Three signals, any of which identifies the umbrella:
+
+      1. `repo` itself matches the registry `local_path` (canonical clone).
+      2. `repo` is a *git worktree* whose **main** working tree matches the
+         registry (`.worktrees/<name>` and `.claude/worktrees/...` checkouts
+         resolve to a different path than the registered clone — without
+         this the exemption breaks for every worktree-based audit).
+      3. The repo's own `pyproject.toml` declares `[project].name == "scitex"`
+         — a path-independent backstop so the exemption survives clones at
+         non-registered locations (CI checkouts, fresh `gh repo clone`, …).
+    """
+    if _matches_umbrella_registry(repo):
+        return True
+    main_wt = _main_worktree_root(repo)
+    if main_wt is not None and main_wt.resolve() != repo.resolve():
+        if _matches_umbrella_registry(main_wt):
+            return True
+    if _pyproject_distribution_name(repo) == "scitex":
+        return True
     # Fallback: import name `scitex` (rare — would mean repo basename
     # matches the umbrella distribution name).
     return repo.name == "scitex"

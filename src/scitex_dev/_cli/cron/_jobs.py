@@ -81,9 +81,7 @@ def _worktree_gc_command() -> str:
     bounded without spending CI on a constant background walk.
     """
     log = "$HOME/.scitex/dev/logs/cron-worktree-gc.log"
-    return (
-        f"mkdir -p $(dirname {log}); scitex-dev cron exec worktree-gc >> {log} 2>&1"
-    )
+    return f"mkdir -p $(dirname {log}); scitex-dev cron exec worktree-gc >> {log} 2>&1"
 
 
 def _quota_keepalive_command() -> str:
@@ -101,6 +99,34 @@ def _quota_keepalive_command() -> str:
     log = "$HOME/.scitex/dev/logs/cron-quota-keepalive.log"
     return (
         f"mkdir -p $(dirname {log}); scitex-dev cron exec quota-keepalive >> {log} 2>&1"
+    )
+
+
+def _cred_distribute_command() -> str:
+    """The shell line installed for the ``cred-distribute`` cron job.
+
+    Same shape as ``ci-watch`` / ``worktree-gc`` / ``task-harvest``:
+    invoke the console script so the line stays stable across
+    virtual-env shuffles, ``mkdir -p`` the log dir first, append output
+    to a per-job log.
+
+    Schedule rationale: every 2 hours (``0 */2 * * *``) — matches the
+    operator's pre-existing ad-hoc ``spartan-cred-push`` cadence (the
+    stop-gap this job subsumes) and is conservative for credentials
+    that turn over on a multi-hour window. Operator-tunable: change
+    the schedule HERE (one diff + one test) and re-install.
+
+    Body lives in ``_cred_distribute.run_once``; the per-host list and
+    credential selector are read from
+    ``~/.scitex/dev/cred-distribute.yaml`` so switching behaviour does
+    not require any code change. Coordinates with
+    proj-scitex-agent-container which is concurrently building the
+    ``sac accounts distribute`` capability — the body is fail-open
+    until that capability lands.
+    """
+    log = "$HOME/.scitex/dev/logs/cron-cred-distribute.log"
+    return (
+        f"mkdir -p $(dirname {log}); scitex-dev cron exec cred-distribute >> {log} 2>&1"
     )
 
 
@@ -125,8 +151,24 @@ def _task_harvest_command() -> str:
     (the skill the operator commissioned, scitex-todo PR #72).
     """
     log = "$HOME/.scitex/dev/logs/cron-task-harvest.log"
+    return f"mkdir -p $(dirname {log}); scitex-dev cron exec task-harvest >> {log} 2>&1"
+
+
+def _spartan_conn_monitor_command() -> str:
+    """The shell line installed for the ``spartan-conn-monitor`` cron job.
+
+    Same shape as the other jobs: invoke the console script so the line stays
+    stable across virtual-env shuffles, ``mkdir -p`` the log dir, append to a
+    per-job log. Schedule ``*/30 * * * *`` (every 30 min) — light (one
+    multiplexed ssh + pgrep/ps/who per login node), enough to catch a
+    connection/agent regression long before the HPC admin would. Body in
+    ``_spartan_conn_monitor.run_once``; metrics history is the TSV at
+    ``~/.scitex/dev/runtime/spartan-conn-monitor.tsv``.
+    """
+    log = "$HOME/.scitex/dev/logs/cron-spartan-conn-monitor.log"
     return (
-        f"mkdir -p $(dirname {log}); scitex-dev cron exec task-harvest >> {log} 2>&1"
+        f"mkdir -p $(dirname {log}); "
+        f"scitex-dev cron exec spartan-conn-monitor >> {log} 2>&1"
     )
 
 
@@ -183,6 +225,49 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "follow-up PRs extend with Phase-1 walk + Phase-2 a2a "
             "dispatch. Protocol: skill 40_task-harvest. See "
             "_task_harvest.run_once."
+        ),
+    ),
+    "cred-distribute": JobSpec(
+        name="cred-distribute",
+        # Every 2 hours on the hour. Matches the operator's pre-
+        # existing ad-hoc spartan-cred-push cadence (the host crontab
+        # marker this job subsumes per directive 2026-06-11) and is
+        # conservative for credentials that turn over on a multi-hour
+        # window. The per-host target list lives in
+        # ~/.scitex/dev/cred-distribute.yaml — switching behaviour
+        # (add/remove host, change account selector) is a YAML edit
+        # alone, no code change required.
+        schedule="0 */2 * * *",
+        command=_cred_distribute_command(),
+        description=(
+            "Push the freshest Claude credentials to peer hosts via "
+            "`sac accounts distribute --to-host <h> --account <a>`. "
+            "Host list + credential selector live in "
+            "~/.scitex/dev/cred-distribute.yaml so behaviour is "
+            "switched by config alone. Subsumes the host-side ad-hoc "
+            "push-freshest-cred-to-spartan.sh (crontab marker "
+            "# spartan-cred-push). Fail-open while "
+            "proj-scitex-agent-container is still landing the "
+            "`sac accounts distribute` capability. See "
+            "_cred_distribute.run_once."
+        ),
+    ),
+    "spartan-conn-monitor": JobSpec(
+        name="spartan-conn-monitor",
+        # Every 30 min. Light: one multiplexed ssh + pgrep/ps/who per login
+        # node. Watches the ywatanabe user's ssh-agent / connection / proc
+        # footprint on the Spartan login nodes (2026-06-17 admin incident) and
+        # phones the operator if a threshold is crossed. Replaces the
+        # session-bound monitor loop, which died on context compaction.
+        schedule="*/30 * * * *",
+        command=_spartan_conn_monitor_command(),
+        description=(
+            "Poll the 3 Spartan login nodes for the ywatanabe user's "
+            "ssh-agents / login sessions / total procs / srun; append a TSV "
+            "row per node to ~/.scitex/dev/runtime/spartan-conn-monitor.tsv; "
+            "audio-notify + PHONE-CALL the operator if ssh-agents>15, srun>50, "
+            "or procs>250 (early warning before the HPC admin notices). See "
+            "_spartan_conn_monitor.run_once."
         ),
     ),
     # Future entries land here. Suggested naming pattern: short

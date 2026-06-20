@@ -81,3 +81,141 @@ def test_s001_is_error_severity():
     # Act
     # Assert
     assert ALL_RULES["STX-S001"].severity == "error"
+
+
+# ---------------------------------------------------------------------- #
+# STX-S006 behavioural — #60 regression + kwonly/posonly detection.       #
+# ---------------------------------------------------------------------- #
+# The legacy scitex._linter_plugin S006 dereferenced .id on the default-
+# value / annotation AST of each injected param, which NPE'd on any
+# real-world @stx.session script that used annotated args or stx.session.
+# INJECTED defaults (the canonical pattern). umbrella-thinning Phase A
+# (commit 4beb9f4) rewrote S006 to compare arg.arg name strings only —
+# never the value/annotation node — eliminating the .id-on-None path.
+# These tests pin that behaviour: lint_source MUST NOT raise on the
+# neurovista repro, AND S006 MUST detect INJECTED params declared as
+# keyword-only (behind `*`) or positional-only (after `/`).
+
+
+def _lint(source: str) -> list:
+    """Lint a snippet with the default config; return Issues."""
+    from scitex_dev.linter.checker import lint_source
+    from scitex_dev.linter.config import LinterConfig
+
+    return lint_source(source, filepath="<test>", config=LinterConfig())
+
+
+def _s006_issues(issues) -> list:
+    return [i for i in issues if i.rule.id == "STX-S006"]
+
+
+def test_s006_neurovista_pattern_does_not_raise_npe():
+    """#60 — annotated args + INJECTED defaults must not NPE on .id."""
+    # Arrange
+    source = (
+        "import scitex as stx\n"
+        "\n"
+        "@stx.session\n"
+        "def main(\n"
+        "    data_path: str,\n"
+        "    threshold: float = 0.5,\n"
+        "    CONFIG=stx.session.INJECTED,\n"
+        "    plt=stx.session.INJECTED,\n"
+        "    COLORS=stx.session.INJECTED,\n"
+        "    rngg=stx.session.INJECTED,\n"
+        "    logger=stx.session.INJECTED,\n"
+        "):\n"
+        "    return 0\n"
+    )
+    # Act
+    issues = _lint(source)
+    # Assert
+    assert _s006_issues(issues) == [], "all 5 INJECTED declared — S006 must not fire"
+
+
+def test_s006_detects_keyword_only_injected_params():
+    """S006 must see INJECTED params declared behind a `*` separator."""
+    # Arrange
+    source = (
+        "import scitex as stx\n"
+        "\n"
+        "@stx.session\n"
+        "def main(\n"
+        "    *,\n"
+        "    CONFIG=stx.session.INJECTED,\n"
+        "    plt=stx.session.INJECTED,\n"
+        "    COLORS=stx.session.INJECTED,\n"
+        "    rngg=stx.session.INJECTED,\n"
+        "    logger=stx.session.INJECTED,\n"
+        "):\n"
+        "    return 0\n"
+    )
+    # Act
+    issues = _s006_issues(_lint(source))
+    # Assert
+    assert issues == [], "kwonly INJECTED params must count toward declared set"
+
+
+def test_s006_detects_positional_only_injected_params():
+    """S006 must see INJECTED params declared before a `/` separator."""
+    # Arrange
+    source = (
+        "import scitex as stx\n"
+        "\n"
+        "@stx.session\n"
+        "def main(\n"
+        "    CONFIG=stx.session.INJECTED,\n"
+        "    plt=stx.session.INJECTED,\n"
+        "    /,\n"
+        "    COLORS=stx.session.INJECTED,\n"
+        "    rngg=stx.session.INJECTED,\n"
+        "    logger=stx.session.INJECTED,\n"
+        "):\n"
+        "    return 0\n"
+    )
+    # Act
+    issues = _s006_issues(_lint(source))
+    # Assert
+    assert issues == [], "posonly INJECTED params must count toward declared set"
+
+
+def test_s006_still_fires_on_actually_missing_injected_params():
+    """Sanity guard — the fix must not silence S006 when params ARE missing."""
+    # Arrange
+    source = (
+        "import scitex as stx\n"
+        "\n"
+        "@stx.session\n"
+        "def main(CONFIG=stx.session.INJECTED, plt=stx.session.INJECTED):\n"
+        "    return 0\n"
+    )
+    expected_missing = ("COLORS", "rngg", "logger")
+    # Act
+    issues = _s006_issues(_lint(source))
+    msg = issues[0].rule.message if issues else ""
+    # Assert
+    assert len(issues) == 1 and all(p in msg for p in expected_missing), (
+        f"expected exactly 1 S006 listing {expected_missing} as missing; "
+        f"got {len(issues)} issue(s), message={msg!r}"
+    )
+
+
+def test_s006_handles_bare_function_without_any_args():
+    """`def main():` with @stx.session — no NPE, S006 lists all 5 missing."""
+    # Arrange
+    source = (
+        "import scitex as stx\n"
+        "\n"
+        "@stx.session\n"
+        "def main():\n"
+        "    return 0\n"
+    )
+    expected_missing = ("CONFIG", "plt", "COLORS", "rngg", "logger")
+    # Act
+    issues = _s006_issues(_lint(source))
+    msg = issues[0].rule.message if issues else ""
+    # Assert
+    assert len(issues) == 1 and all(p in msg for p in expected_missing), (
+        f"expected exactly 1 S006 listing all 5 INJECTED params as missing; "
+        f"got {len(issues)} issue(s), message={msg!r}"
+    )

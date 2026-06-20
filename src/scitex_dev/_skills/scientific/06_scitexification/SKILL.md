@@ -25,11 +25,12 @@ interfaces:
 ---
 
 <!--
-SSoT status (2026-06-04 draft):
+SSoT status (2026-06-13):
   - This SKILL.md is the overview / index for the 6-file scitexification series.
-  - The 01-05 chapter files are NOT YET written; this overview ships first
-    for sign-off from operator + proj-paper-scitex-clew before chapter drafting
-    proceeds. See "Status" section at the end of this file.
+  - The 01-05 chapter files are WRITTEN (substantive content: translation
+    inventories, the symlink_to= idiom, worked before/after examples, and
+    corner cases per stage), delegating full per-package API surface to the
+    companion pkg SKILLs. (They superseded the 2026-06-12 #167 link-stubs.)
   - Discovery (capsule-side `spec.claude.skills: [scitexification]` declarative
     interface) is gated on a separate scitex-dev / SAC contract decision; see
     A2A thread `48d2324b` (proj-paper-scitex-clew ↔ proj-scitex-dev) and
@@ -188,11 +189,14 @@ exists to keep you out of:
    See `../02_research-project_06_project-structure-tests.md`; the
    mirroring is what lets `audit-project` catch drift.
 
-## Status (2026-06-04 draft)
+## Status (2026-06-13)
 
 - ✅ This overview SKILL.md drafted.
-- ⏳ Chapters `01–05` queued for drafting, **pending sign-off** from
-  operator + proj-paper-scitex-clew on this overview.
+- ✅ Chapters `01–05` **written** (substantive: per-stage translation
+  inventories, the `symlink_to=` DAG idiom, worked before/after examples,
+  corner cases; full per-pkg API delegated to the companion SKILLs).
+  Dogfooded during the paper-scitex-clew cohort prompt retirement (the
+  cohort solver auto-loads this skill instead of a bespoke prompt).
 - ⏳ Parent + sub-tag discovery syntax (`scitexification` vs
   `scitexification.io`) requires a small extension in
   `scitex-dev/_cli/skills/_tags.py` — separate issue to be filed.

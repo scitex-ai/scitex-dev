@@ -13,10 +13,22 @@ audit:
   whitelist: .audit-whitelist.yaml
 metadata:
   cohorts: 3
+  app:                              # OPTIONAL — app/hub-registry surface.
+    category: writer                # free string, e.g. "writer" | "todo" | "figrecipe"
+    official: true                  # first-party flag
+    pre_installed: true             # ships in hub by default
+    is_hub_app: true                # mounts in hub's app shell
+    author: "Yusuke Watanabe <ywatanabe@scitex.ai>"
 ```
 
 Both `project-type` keys can be present at once for hybrid repos
 (a tool package whose `examples/` IS the research project).
+
+The `metadata.app` block (operator directive 2026-06-14, lead a2a
+`1f135ad4...`) is the SINGLE source-of-truth for app/project metadata
+across the ecosystem — hub's app registry, scitex-dev audit, and any
+other consumer all read it via :func:`load_config` → :attr:`ProjectConfig.app_metadata`.
+No new manifest.json surface; no `[tool.scitex_dev]` duplication.
 """
 
 from __future__ import annotations
@@ -43,6 +55,32 @@ class ProjectConfig:
     whitelist_path: Path | None = None
     metadata: dict = field(default_factory=dict)
     source: str = "config"  # "config" | "heuristic" | "override"
+
+    @property
+    def app_metadata(self) -> dict:
+        """Return the `metadata.app` block (or `{}` when absent).
+
+        This is the canonical accessor for app/project metadata across
+        the ecosystem — hub's app registry, audit, and any other
+        consumer should read app metadata via this property rather than
+        re-parsing `.scitex/dev/config.yaml` themselves. Operator
+        directive 2026-06-14: no parallel manifest, no
+        `[tool.scitex_dev]` duplication.
+
+        Recognised keys (all OPTIONAL):
+
+        * ``category`` (str)       — e.g. ``"writer"``, ``"todo"``.
+        * ``official`` (bool)      — first-party flag.
+        * ``pre_installed`` (bool) — ships in hub by default.
+        * ``is_hub_app`` (bool)    — mounts in hub's app shell.
+        * ``author`` (str)         — override of ``project.authors``.
+
+        Unknown keys are returned verbatim so consumers can experiment
+        without a loader change (the loader stays minimal; the schema
+        evolves at the consumer/doc layer).
+        """
+        app = self.metadata.get("app")
+        return app if isinstance(app, dict) else {}
 
     def applies(self, code: str) -> bool:
         """True iff a rule code's family is active for this project.

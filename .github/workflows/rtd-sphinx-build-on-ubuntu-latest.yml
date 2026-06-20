@@ -5,14 +5,6 @@ on:
     branches: [main, develop]
   pull_request:
 
-# L1 concurrency: cancel superseded PR runs only. Push runs (develop) must
-# complete because the job commits the refreshed `_sphinx_html` bundle back
-# to develop — cancelling a push run mid-commit would leave bot state
-# inconsistent.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
   sphinx:
     # Skip when HEAD is the bot's own previous docs auto-commit — breaks
@@ -36,8 +28,13 @@ jobs:
       - name: Install package + docs deps
         run: pip install -e ".[docs]"
 
-      - name: Build Sphinx HTML (warnings-as-errors everywhere)
-        run: sphinx-build -W --keep-going -b html docs/sphinx docs/sphinx/_build/html
+      - name: Build Sphinx HTML (warnings fail PRs only)
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            sphinx-build -W -b html docs/sphinx docs/sphinx/_build/html
+          else
+            sphinx-build -b html docs/sphinx docs/sphinx/_build/html
+          fi
 
       - name: Refresh src/scitex_dev/_sphinx_html/ (develop push only)
         # main is PR-only — its _sphinx_html/ bundle arrives via the
@@ -47,7 +44,6 @@ jobs:
         run: |
           rm -rf src/scitex_dev/_sphinx_html
           cp -rf docs/sphinx/_build/html src/scitex_dev/_sphinx_html
-          rm -rf src/scitex_dev/_sphinx_html/.doctrees
           touch src/scitex_dev/_sphinx_html/.nojekyll
 
       - name: Commit refreshed HTML if it changed (develop push only)

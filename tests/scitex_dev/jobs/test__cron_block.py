@@ -11,10 +11,18 @@ from scitex_dev.jobs import _cron_block as cb
 def _jobs():
     return [
         JobSpec(
-            name="a.one", schedule="*/5 * * * *", command="run one", description="d1"
+            name="a.one",
+            kind="cron",
+            schedule="*/5 * * * *",
+            command="run one",
+            description="d1",
         ),
         JobSpec(
-            name="b.two", schedule="0 * * * *", command="run two", description="d2"
+            name="b.two",
+            kind="cron",
+            schedule="0 * * * *",
+            command="run two",
+            description="d2",
         ),
     ]
 
@@ -117,7 +125,15 @@ def test_remove_last_line_collapses_block():
     # Arrange
     single = cb.upsert_block(
         "",
-        [JobSpec(name="x.solo", schedule="* * * * *", command="c", description="d")],
+        [
+            JobSpec(
+                name="x.solo",
+                kind="cron",
+                schedule="* * * * *",
+                command="c",
+                description="d",
+            )
+        ],
     )
     # Act
     new, _ = cb.remove_line(single, "x.solo")

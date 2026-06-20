@@ -17,7 +17,14 @@ from __future__ import annotations
 
 import click
 
-from . import _ci_watch, _quota_keepalive, _task_harvest, _worktree_gc
+from . import (
+    _ci_watch,
+    _cred_distribute,
+    _quota_keepalive,
+    _spartan_conn_monitor,
+    _task_harvest,
+    _worktree_gc,
+)
 from ._jobs import JOB_REGISTRY
 
 
@@ -99,6 +106,39 @@ def register(group: click.Group) -> None:
             # follow-up PRs without changing the dispatcher contract.
             result = _task_harvest.run_once()
             if result.error is not None:
+                raise SystemExit(1)
+            return
+
+        if name == "cred-distribute":
+            # Per-host credential push via `sac accounts distribute`.
+            # Exit code policy:
+            #   - config malformed / bootstrap failed → exit 1 so the
+            #     operator's audit log records the breakage AND the
+            #     cron mail (if configured) pages them.
+            #   - every attempted host failed → exit 1 (systemic
+            #     outage signal). One host failing while another
+            #     succeeded is a transient hiccup, not a page.
+            #   - sac binary / subcommand missing → exit 0 (graceful
+            #     rollout-window state; the body marks those hosts
+            #     skipped, the cron stays green).
+            #   - all-skipped (no hosts configured OR `sac` not yet
+            #     installed) → exit 0; the audit line records the
+            #     no-op so the operator can confirm the loop is alive.
+            result = _cred_distribute.run_once()
+            if result.error is not None:
+                raise SystemExit(1)
+            if result.all_attempted_failed:
+                raise SystemExit(1)
+            return
+
+        if name == "spartan-conn-monitor":
+            # Poll the Spartan login nodes for the ywatanabe user's footprint;
+            # the body logs a TSV row per node and phones the operator on a
+            # threshold breach. An unreachable node or notification hiccup is
+            # swallowed (cron-safe); we exit non-zero ONLY when a threshold was
+            # actually crossed, so the cron log + mail flag a real regression.
+            mon = _spartan_conn_monitor.run_once()
+            if mon.alerts:
                 raise SystemExit(1)
             return
 

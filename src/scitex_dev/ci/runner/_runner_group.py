@@ -21,6 +21,7 @@ def register(ci_group: click.Group) -> click.Group:
           down              — deregister the runner + stop it
           renew             — renew the SLURM CI lease job
           register <repo>   — copy the ci.yml template into a repo
+          preflight         — fail-loud CI-readiness gate (for pre-push)
 
         \b
         Example:
@@ -31,6 +32,7 @@ def register(ci_group: click.Group) -> click.Group:
           $ scitex-dev ci runner down
           $ scitex-dev ci runner renew
           $ scitex-dev ci runner register ../figrecipe
+          $ scitex-dev ci runner preflight
         """
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
@@ -41,6 +43,7 @@ def register(ci_group: click.Group) -> click.Group:
     from ._down import register as register_down
     from ._renew import register as register_renew
     from ._register import register as register_register
+    from ._preflight import register as register_preflight
 
     register_status(runner)
     register_use(runner)
@@ -48,6 +51,7 @@ def register(ci_group: click.Group) -> click.Group:
     register_down(runner)
     register_renew(runner)
     register_register(runner)
+    register_preflight(runner)
 
     return runner
 

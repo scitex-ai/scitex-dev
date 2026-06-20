@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from scitex_dev._cli.audit._api._audit import RULES, _audit_init
+from scitex_dev._cli.audit._api._audit import RULES, _audit_init, _locate_init
 
 
 def _write_init(tmp_path: Path, body: str) -> Path:
@@ -402,3 +402,126 @@ def test_PA305_flags_module_level_import_even_with_type_checking_block(tmp_path)
     codes = _codes(_audit_playwright_capture(init, "fakepkg", "fakepkg"))
     # Assert
     assert "PA-305" in codes
+
+
+# ---------------------------------------------------------------------------
+# _locate_init — registry source-tree fallback (phantom-skip fix)
+#
+# Before this fallback, `_locate_init` returned None whenever find_spec
+# couldn't import the package, so audit-python-apis silently SKIPPED the
+# entire audit (`return 0`, "package not importable" info) for any peer
+# the developer had cloned locally but not pip-installed. The same fail-
+# silent class the SK-101 fix (PR #177) eliminated for the skills auditor;
+# this PR closes it for audit-python-apis. The fallback walks the package's
+# source tree via ECOSYSTEM.local_path.
+#
+# No-mocks discipline: we mutate the real ECOSYSTEM dict in-place via a
+# try/finally contextmanager (NOT `monkeypatch`, NOT `unittest.mock`) so
+# PA-306 stays clean.
+# ---------------------------------------------------------------------------
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def _registry_override(distribution: str, local_path: Path):
+    """Temporarily add (or replace) an ECOSYSTEM entry; restore on exit.
+
+    No-mocks-compliant: pure dict mutation + try/finally restore. The
+    sentinel `_MISSING` distinguishes "key didn't exist" from "key existed
+    with None value" so restoration is exact.
+    """
+    from scitex_dev._ecosystem._registry import ECOSYSTEM
+
+    _MISSING = object()
+    before = ECOSYSTEM.get(distribution, _MISSING)
+    ECOSYSTEM[distribution] = {
+        "local_path": str(local_path),
+        "pypi_name": distribution,
+        "github_repo": f"ywatanabe1989/{distribution}",
+        "import_name": distribution.replace("-", "_"),
+        "category": "library",
+    }
+    try:
+        yield
+    finally:
+        if before is _MISSING:
+            ECOSYSTEM.pop(distribution, None)
+        else:
+            ECOSYSTEM[distribution] = before
+
+
+def test_locate_init_falls_back_to_registry_source_tree(tmp_path):
+    # Arrange — non-installed package with a valid on-disk __init__.py.
+    # find_spec("phantomapi") returns None, so the source-tree fallback
+    # is the only path that can return a non-None Path. Without it,
+    # audit-python-apis would silently skip the whole audit.
+    dist = "scitex-phantomapi"
+    import_name = "scitex_phantomapi"
+    local_root = tmp_path / "scitex-phantomapi"
+    init = local_root / "src" / import_name / "__init__.py"
+    init.parent.mkdir(parents=True)
+    init.write_text("__all__ = []\n__version__ = '0.0.0'\n")
+    # Act
+    with _registry_override(dist, local_root):
+        result = _locate_init(dist, import_name)
+    # Assert
+    assert result == init
+
+
+def test_locate_init_returns_none_when_registry_path_missing_on_disk(tmp_path):
+    # Arrange — registry has `local_path` but the directory doesn't
+    # exist on this host (clean checkout, CI runner, etc.). The fallback
+    # must NOT crash and must return None so the caller skips cleanly
+    # rather than auditing a non-existent file.
+    dist = "scitex-ghostapi"
+    nonexistent = tmp_path / "does-not-exist"
+    # Act
+    with _registry_override(dist, nonexistent):
+        result = _locate_init(dist, "scitex_ghostapi")
+    # Assert
+    assert result is None
+
+
+def test_locate_init_returns_none_when_registry_path_lacks_init_file(tmp_path):
+    # Arrange — registry path exists but no `src/<pkg>/__init__.py`.
+    # Real edge case for a freshly-`git init`ed repo. Fallback must
+    # decline cleanly so the caller's "package not importable" skip
+    # remains correct.
+    dist = "scitex-emptypkg"
+    import_name = "scitex_emptypkg"
+    local_root = tmp_path / "scitex-emptypkg"
+    local_root.mkdir()
+    # Act
+    with _registry_override(dist, local_root):
+        result = _locate_init(dist, import_name)
+    # Assert
+    assert result is None
+
+
+def test_locate_init_returns_none_when_neither_installed_nor_registered():
+    # Arrange — distribution is not pip-installed AND not in ECOSYSTEM.
+    # The fallback must NOT invent a path; caller's audit skip is the
+    # correct behaviour for a truly-missing package.
+    # Act
+    result = _locate_init("scitex-doesnotexistanywhere", "scitex_doesnotexistanywhere")
+    # Assert
+    assert result is None
+
+
+def test_locate_init_prefers_installed_when_both_present(tmp_path):
+    # Arrange — installed package is the canonical source-of-truth (it's
+    # what users actually import); the registry fallback is only consulted
+    # when find_spec fails. scitex_dev is installed in the test venv, so a
+    # bogus registry path for "scitex-dev" must NOT override the install
+    # location.
+    bogus_root = tmp_path / "bogus-scitex-dev"
+    bogus_init = bogus_root / "src" / "scitex_dev" / "__init__.py"
+    bogus_init.parent.mkdir(parents=True)
+    bogus_init.write_text("__all__ = []\n")
+    # Act
+    with _registry_override("scitex-dev", bogus_root):
+        result = _locate_init("scitex-dev", "scitex_dev")
+    # Assert — install path wins, never under bogus_root
+    assert result is None or bogus_root not in result.parents

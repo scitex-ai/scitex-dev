@@ -39,6 +39,38 @@ The umbrella NEVER implements logic. If the extra isn't installed, the bridge
 raises `ImportError` with a pointer to `pip install scitex[<name>]`. This is
 the hard rule; see `01_ecosystem/03_modules-and-standalone-packages.md` §8.
 
+## Umbrella = coordinator + namespace ONLY (hard rule)
+
+"No logic" generalizes: the umbrella also holds **no linter rules, no skills,
+no per-tool MCP bridges, and no redundant top-level alias** when a natural
+`scitex.<owner>.<x>` path already exists. Every in-tree dir holding real
+implementation is factored to its owning standalone, leaving only a thin alias.
+
+- Logic dir → owner + thin alias (owner absorbs logic+skills and RELEASES first,
+  then umbrella aliases + bumps pin). e.g. media→scitex_etc.media,
+  cloud/module/project→scitex_hub.
+- Linter rules live in scitex-dev (`scitex_dev.linter._rules`, gated
+  `requires="scitex"`), surfaced via `scitex.dev.linter` — NOT a
+  `_linter_plugin.py` entry-point in the umbrella.
+- No redundant top-level alias (dropped `scitex.linter`; channel is
+  `scitex.dev.linter`).
+- MCP = ONE registry-mounting entrypoint (`src/scitex/_mcp/`) that mounts every
+  peer FastMCP with brand-prefix + tool renames, skipping optional peers
+  gracefully. NO per-package `register_<pkg>_tools` bridge files.
+
+### Optional peers stay OUT of `[all]`/`[dev]`
+
+For heavy/unreleased owners (e.g. scitex-hub), pin only in the targeted extra
+(`[cloud]`/`[hub]`/…), never `[all]`/`[dev]`: base `import scitex` works
+without it, the bridge raises the install-hint stub on access, and the
+cross-package import test skips it (peer absent in CI → matrix green without
+releasing the heavy owner). **Corollary**: do NOT release the umbrella while
+a targeted extra pins an unreleased owner version — hold the umbrella release
+until the owner ships.
+
+Source: 2026-05-31 umbrella-thinning campaign (scitex-python #308 + #309,
+scitex-dev 0.16.0, scitex-etc 0.2.0).
+
 ## When NOT to re-export
 
 - Underscore-prefixed helpers (`_internal_foo`) — private to the standalone.

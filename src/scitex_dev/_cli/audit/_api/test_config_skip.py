@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import importlib
 import itertools
+import json
 import sys
 from pathlib import Path
 
@@ -186,3 +187,107 @@ def test_django_project_type_downgrades_pa306_below_error(tmp_path: Path) -> Non
     code = _audit_api_end_to_end(repo, dist)
     # Assert
     assert code != 2
+
+
+# --------------------------------------------------------------------------
+# RC2 regression: deferral config must load when repo_root is None but an
+# editable checkout IS present (the CI-runner case — the ecosystem registry's
+# dev-box `local_path` is absent there, so the per-target wrappers pass
+# repo_root=None). audit_api derives repo_root from the resolved init_path
+# (whose `src/<pkg>/__init__.py` layout has a pyproject.toml two levels up), so
+# the package's `.scitex/dev/config.yaml` audit.skip applies on CI exactly as
+# on a dev box. Before the fix, repo_root=None skipped the deferral block
+# entirely and the deferred rule (PA-306) re-fired as a false positive.
+# --------------------------------------------------------------------------
+
+
+def _build_ci_pkg(tmp_path: Path, config_yaml: str) -> tuple[Path, str]:
+    """Build a real editable checkout (src-layout + pyproject.toml + config).
+
+    Simulates a CI runner: the package source is on disk and importable, but
+    no caller supplies repo_root. The pyproject.toml at the repo root is what
+    audit_api keys off to derive repo_root from the resolved init_path.
+    """
+    dist = f"scitex_pa_ci_demo_{next(_PKG_COUNTER)}"
+    repo = tmp_path / "ci_repo"
+    pkg = repo / "src" / dist
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text(
+        '__all__ = ["thing"]\n__version__ = "0.0.0+local"\nfrom ._core import thing\n',
+        encoding="utf-8",
+    )
+    (pkg / "_core.py").write_text(_TRIGGER_SRC, encoding="utf-8")
+    # The repo-root marker the fix requires to derive repo_root from init_path.
+    (repo / "pyproject.toml").write_text(
+        f'[project]\nname = "{dist}"\nversion = "0.0.0+local"\n',
+        encoding="utf-8",
+    )
+    cfg_dir = repo / ".scitex" / "dev"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.yaml").write_text(config_yaml, encoding="utf-8")
+    return repo, dist
+
+
+def _audit_api_repo_root_none(repo: Path, dist: str, *, json_out: bool = False) -> int:
+    """Run audit_api with repo_root=None while the checkout is importable.
+
+    Mirrors the CI wrappers: the package is on sys.path (editable checkout)
+    but repo_root is NOT supplied. The fix must still load the deferral config
+    by deriving repo_root from the authoritatively-resolved init_path.
+    """
+    src = str(repo / "src")
+    sys.path.insert(0, src)
+    importlib.invalidate_caches()
+    try:
+        return audit_api(dist, repo_root=None, json_out=json_out)
+    finally:
+        sys.path.remove(src)
+        sys.modules.pop(dist, None)
+        sys.modules.pop(f"{dist}._core", None)
+        importlib.invalidate_caches()
+
+
+def test_deferral_loads_with_repo_root_none_on_editable_checkout(
+    tmp_path: Path,
+) -> None:
+    # Arrange — PA-306 deferred in config; caller passes repo_root=None (CI).
+    repo, dist = _build_ci_pkg(
+        tmp_path,
+        config_yaml="project-type:\n  - pip\naudit:\n  skip:\n    - PA-306\n",
+    )
+    # Act — exit code must drop below the error code (2) because the deferred
+    # PA-306 (the only error) is loaded and dropped despite repo_root=None.
+    code = _audit_api_repo_root_none(repo, dist)
+    # Assert
+    assert code != 2
+
+
+def test_skipped_rule_absent_from_violations_with_repo_root_none(
+    tmp_path: Path, capsys
+) -> None:
+    # Arrange — PA-306 deferred; JSON mode surfaces the kept violation set.
+    repo, dist = _build_ci_pkg(
+        tmp_path,
+        config_yaml="project-type:\n  - pip\naudit:\n  skip:\n    - PA-306\n",
+    )
+    _audit_api_repo_root_none(repo, dist, json_out=True)
+    payload = json.loads(capsys.readouterr().out)
+    # Act
+    fired = {v["rule"] for v in payload["violations"]}
+    # Assert — the deferred rule does NOT fire even though repo_root was None.
+    assert "PA-306" not in fired
+
+
+def test_repo_root_none_still_fires_pa306_when_not_deferred(
+    tmp_path: Path,
+) -> None:
+    # Arrange — config skips an unrelated rule; PA-306 stays active. This pins
+    # that the derive-repo_root fix does not silently swallow real violations.
+    repo, dist = _build_ci_pkg(
+        tmp_path,
+        config_yaml="project-type:\n  - pip\naudit:\n  skip:\n    - PA-301\n",
+    )
+    # Act
+    code = _audit_api_repo_root_none(repo, dist)
+    # Assert
+    assert code == 2

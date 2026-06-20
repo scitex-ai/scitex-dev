@@ -25,9 +25,12 @@ These complement (never duplicate) the engineering rules in [../general/SKILL.md
 
 ### 0. Planning
 - [00_planning_01_hypotheses-agreement.md](00_planning_01_hypotheses-agreement.md) — Numbered, falsifiable hypotheses (H1/H2/...) with metric + prediction + baseline + falsification. Required **before** writing any experiment script. Research-project counterpart of the architecture agreement for pip packages.
+- [00_planning_02_paper-structure.md](00_planning_02_paper-structure.md) — How to design and compact a manuscript: one-claim-one-figure-one-Result spine, lead with dataset+experimental-design Result, explicit float manifest over implicit glob, write Introduction & Discussion last, simplify redundant designs, flag provisional storyless results, panel-level figure sketches bound to build scripts.
 
 ### 1. Figures
 - [01_figures_01_standards.md](01_figures_01_standards.md) — Universal scientific-figure standards: comparison rules (shared color scale, aligned axes), multi-panel layout, color maps, PDF report layout. Pairs with `figrecipe/21_scientific-figure-patterns.md` for matplotlib code.
+- [01_figures_02_provenance-and-verification.md](01_figures_02_provenance-and-verification.md) — A figure is a generative, verifiable artefact: figrecipe (recipe YAML + DATA + media, WHAT vs HOW), paper consumes media via symlink, every figure a Clew claim with a hash-verified Source->Figure DAG; the verification-boundary concept (expensive upstream steps as hashed Source leaves) and the rule that Clew-unverified means *unmachine-checkable, not wrong*.
+- [01_figures_03_no-synthetic-data-policy.md](01_figures_03_no-synthetic-data-policy.md) — Ecosystem policy: publication / paper / representative figures must use real data; fail loud when absent. Canonical home (figrecipe `23_*` cross-links).
 
 ### 2. Research project — how a research project *consumes* SciTeX
 Project structure split into one leaf per top-level directory:

@@ -7,6 +7,7 @@ import subprocess
 import click
 
 from . import config
+from ._up import _resolve_lease
 
 
 def register(group: click.Group) -> None:
@@ -36,21 +37,32 @@ def register(group: click.Group) -> None:
         """
         cfg = config.load_runner_config()
         target = config._ssh_target(cfg)
-        gh_token = config.get_gh_token(cfg)
+        # Fail loud early if the PAT env var is unset (the gh CLI calls below
+        # rely on it being present); the value itself is unused here.
+        config.get_gh_token(cfg)
         repo = cfg["github"]["default_repo"]
         rname = runner_name or cfg["runner"]["name"]
+        runner_home = cfg["runner"]["home"]
 
-        # Step 1: Find the runner and get remove-token
+        # Step 1: Find the runner and get remove-token. The list-runners
+        # endpoint returns an OBJECT {total_count, runners: [...]}, so iterate
+        # `.runners[]` — a bare `.[]` walks the object's VALUES (the count int +
+        # the array) and select() then errors ("expected an object but got:
+        # array"), which is exactly the failure _status.py already guards against.
         find_cmd = [
             "gh",
             "api",
             f"repos/{repo}/actions/runners",
             "--jq",
-            f'[.[] | select(.name == "{rname}") | {{"id": .id}}]',
+            f'[.runners[] | select(.name == "{rname}") | {{"id": .id}}]',
         ]
-        find_result = subprocess.run(find_cmd, capture_output=True, text=True, timeout=30)
+        find_result = subprocess.run(
+            find_cmd, capture_output=True, text=True, timeout=30
+        )
         if find_result.returncode != 0:
-            raise click.ClickException(f"Failed to find runner: {find_result.stderr.strip()}")
+            raise click.ClickException(
+                f"Failed to find runner: {find_result.stderr.strip()}"
+            )
 
         import json
 
@@ -68,7 +80,7 @@ def register(group: click.Group) -> None:
             "-X",
             "POST",
             "--jq",
-            '.token',
+            ".token",
         ]
         remove_result = subprocess.run(
             remove_token_cmd, capture_output=True, text=True, timeout=30
@@ -84,16 +96,19 @@ def register(group: click.Group) -> None:
 
         # Step 3: Run config.sh remove --token on HPC
         ssh_remove = (
-            f"ssh -o ControlPath=none -o ControlMaster=no "
-            f'{target} '
-            f"\"cd {cfg['runner']['home']} && ./config.sh remove --token {remove_token}\""
+            f"ssh {config.SSH_MUX_OPTS_STR} "
+            f"{target} "
+            f'"cd {cfg["runner"]["home"]} && ./config.sh remove --token {remove_token}"'
         )
         rm_result = subprocess.run(
             ssh_remove, capture_output=True, text=True, timeout=30, shell=True
         )
         if rm_result.returncode != 0:
             # Non-fatal — the runner might already be deregistered
-            click.echo(f"  (runner remove returned {rm_result.returncode}, continuing)", fg="yellow")
+            click.echo(
+                f"  (runner remove returned {rm_result.returncode}, continuing)",
+                fg="yellow",
+            )
 
         # Step 4: Delete the runner from GitHub
         delete_cmd = [
@@ -103,19 +118,51 @@ def register(group: click.Group) -> None:
             "-X",
             "DELETE",
         ]
-        delete_result = subprocess.run(delete_cmd, capture_output=True, text=True, timeout=30)
+        delete_result = subprocess.run(
+            delete_cmd, capture_output=True, text=True, timeout=30
+        )
         if delete_result.returncode != 0:
             raise click.ClickException(
                 f"Failed to delete runner: {delete_result.stderr.strip()}"
             )
 
-        # Step 5: Kill the wrapper process on HPC
-        kill_cmd = (
-            f"ssh -o ControlPath=none -o ControlMaster=no "
-            f'{target} '
-            f'"pkill -f scitex_ci_launcher || true"'
-        )
-        subprocess.run(kill_cmd, capture_output=True, text=True, timeout=15, shell=True)
+        # Step 5: Kill the runner process ON THE COMPUTE NODE (the SSH-vector
+        # fix moved run.sh/launcher off the login node, so a login-node pkill
+        # would no longer find it). Resolve the lease node, ssh straight to it,
+        # and pkill ONLY this runner's launcher — matched by its unique
+        # RUNNER_HOME path, NOT the generic "scitex_ci_launcher" name, so peer
+        # runners sharing the node are never disturbed.
+        try:
+            _jobid, node = _resolve_lease(
+                target, cfg["hpc"]["user"], cfg["ci_lease"]["jobname"]
+            )
+        except click.ClickException:
+            node = None
+        if node:
+            compute_cmd = config.compute_ssh_cmd(target, node)
+            # pgrep -f matches the full command line; RUNNER_HOME appears in the
+            # launcher's argv (bash '<stage>/scitex_ci_launcher.sh') only via the
+            # exported env, so match on run.sh's cwd + the home in the wrap-log
+            # path instead: pkill the launcher whose RUNNER_HOME env equals ours.
+            kill_remote = (
+                f"for pid in $(pgrep -u {cfg['hpc']['user']} -f scitex_ci_launcher); do "
+                f"  if tr '\\0' ' ' < /proc/$pid/environ 2>/dev/null "
+                f"     | grep -q 'RUNNER_HOME={runner_home} '; then "
+                f"    pkill -TERM -P $pid 2>/dev/null; kill -TERM $pid 2>/dev/null; "
+                f"  fi; "
+                f"done; true"
+            )
+            subprocess.run(
+                [*compute_cmd, kill_remote],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        else:
+            click.echo(
+                "  (no RUNNING lease node resolved — skipped compute-node kill; "
+                "runner deregistered on GitHub)",
+            )
 
         click.echo(f"Runner {rname} (id={runner_id}) deregistered and stopped.")
 

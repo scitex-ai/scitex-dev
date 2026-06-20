@@ -174,6 +174,87 @@ def register(ecosystem) -> None:
             raise click.ClickException(str(exc)) from exc
 
 
+    @cron.command("exec")
+    @click.argument("name")
+    @click.option(
+        "--apply",
+        is_flag=True,
+        default=False,
+        help=(
+            "(deploy-freshness) Repair drift instead of dry-run: "
+            "run `pip install -U <pkg>` + `systemctl --user restart <unit>` "
+            "for every leaf whose installed version trails latest PyPI."
+        ),
+    )
+    def cron_exec(name: str, apply: bool) -> None:
+        """Execute the body of the federated cron job NAME.
+
+        \b
+        Discovers the JobSpec via the `scitex_dev.jobs` entry-point
+        federation (the SAME aggregator that `ecosystem cron install`
+        uses), then dispatches to the owning module's run_once. This is
+        the verb the materialised crontab line invokes; operators can
+        also run it interactively to test a job without waiting for
+        the next cron tick.
+
+        \b
+        Example:
+          $ scitex-dev ecosystem cron exec deploy-freshness
+          $ scitex-dev ecosystem cron exec deploy-freshness --apply
+        """
+        from ....jobs import jobs_of_kind
+
+        # Verify the named job is actually in the federation.
+        all_cron_jobs = jobs_of_kind("cron")
+        names = {j.name for j in all_cron_jobs}
+        if name not in names:
+            known = ", ".join(sorted(names)) or "(none)"
+            raise click.ClickException(
+                f"unknown federated cron job: {name!r}. "
+                f"Discovered: {known}"
+            )
+
+        if name == "deploy-freshness":
+            from ...._ecosystem_jobs import _deploy_freshness
+
+            result = _deploy_freshness.run_once(apply=apply)
+            if result.error is not None:
+                raise click.ClickException(result.error)
+            return
+
+        # Defensive — a JobSpec is discovered but no dispatch branch
+        # exists. Means a leaf registered a federated cron job that
+        # scitex-dev's ecosystem cron exec doesn't know how to run.
+        # That's OK for the OTHER cron-kind jobs leaves declare —
+        # they shell out to the leaf's OWN CLI via JobSpec.command,
+        # and we never reach this dispatch (the crontab line invokes
+        # the leaf's CLI directly, not `ecosystem cron exec`).
+        # But if someone DID call `ecosystem cron exec <leaf-job>`,
+        # the right thing is to shell out to the JobSpec.command
+        # itself rather than crash.
+        import shlex
+        import subprocess
+
+        spec = next(j for j in all_cron_jobs if j.name == name)
+        # Strip the wrapper `mkdir ...; <cmd> >> log 2>&1` if present
+        # — the operator's interactive `cron exec` shouldn't double-write.
+        # Best-effort: take the last `;`-delimited segment.
+        cmd_str = spec.command.split(";")[-1].strip()
+        # Drop any trailing `>> log 2>&1` redirect.
+        for redir in (" >> ", " > ", " 2>>", " 2>"):
+            idx = cmd_str.find(redir)
+            if idx > 0:
+                cmd_str = cmd_str[:idx].strip()
+        argv = shlex.split(cmd_str)
+        if not argv:
+            raise click.ClickException(
+                f"cron job {name!r}: empty command after wrapper strip"
+            )
+        r = subprocess.run(argv, check=False)
+        if r.returncode != 0:
+            raise SystemExit(r.returncode)
+
+
 def _source_of(name: str) -> str:
     """Best-effort source label: package prefix before the first dot."""
     if "." in name:

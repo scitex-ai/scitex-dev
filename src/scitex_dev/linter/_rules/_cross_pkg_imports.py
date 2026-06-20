@@ -1,14 +1,15 @@
 """Category I: cross-package private-submodule import rule (I008).
 
 Flags importing a *peer* scitex package's underscore-prefixed (private)
-submodule, e.g. ``from scitex_gen._numeric._norm import to_z``. Reaching
-into a peer's private internals is fragile: when scitex-gen reorganized
-``scitex_gen._norm`` into ``scitex_gen._numeric._norm`` it silently broke
-scitex-dsp and scitex-nn, which had imported the private path directly.
+submodule, e.g. ``from scitex_io._save import save``. Reaching into a peer's
+private internals is fragile: a historical case was the scitex-gen
+``_norm`` -> ``_numeric._norm`` reorg, which silently broke scitex-dsp and
+scitex-nn (both had imported the private path directly). The same risk
+applies to every peer: scitex_io._save, scitex_str._color_text, etc.
 
 Packages must depend only on a peer's *public* API
-(``from scitex_gen import to_z``). Same-package private imports — a module
-inside ``scitex_gen`` importing ``scitex_gen._numeric`` — are allowed; only
+(``from scitex_io import save``). Same-package private imports — a module
+inside ``scitex_io`` importing ``scitex_io._save`` — are allowed; only
 *cross*-package private imports are flagged.
 """
 
@@ -24,10 +25,9 @@ I008 = Rule(
     ),
     suggestion=(
         "Reaching into another scitex package's underscore-prefixed module "
-        "(e.g. `from scitex_gen._numeric._norm import to_z`) is fragile: "
-        "the peer can rename or move that private path without notice. "
-        "Import the public symbol instead (e.g. `from scitex_gen import "
-        "to_z`). If the symbol is not yet public, ask the owning package "
-        "to export it."
+        "(e.g. `from scitex_io._save import save`) is fragile: the peer "
+        "can rename or move that private path without notice. Import the "
+        "public symbol instead (e.g. `from scitex_io import save`). If "
+        "the symbol is not yet public, ask the owning package to export it."
     ),
 )

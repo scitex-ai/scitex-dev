@@ -48,10 +48,10 @@ tags: [scitex-dev-linter-cli-reference]
 
 ```
 1. Explicit CLI flags
-2. ./pyproject.toml [tool.scitex_dev.linter]
+2. ./pyproject.toml [tool.scitex-dev.linter]  (legacy [tool.scitex-linter] still read with a DeprecationWarning)
 3. ./config.yaml (project-local)
-4. $SCITEX_LINTER_CONFIG (path to a YAML file)
-5. ~/.scitex/linter/config.yaml (user-wide)
+4. $SCITEX_DEV_LINTER_CONFIG (path to a YAML file; legacy $SCITEX_LINTER_CONFIG still read)
+5. ~/.scitex/dev/linter/config.yaml (user-wide)
 6. Built-in defaults
 ```
 

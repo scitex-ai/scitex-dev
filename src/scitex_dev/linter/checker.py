@@ -3,9 +3,7 @@
 __all__ = ["Issue", "is_script", "lint_file", "lint_source"]
 
 import ast
-import re
 from dataclasses import dataclass, replace
-from pathlib import Path
 
 from . import rules
 from ._checks import (
@@ -16,6 +14,7 @@ from ._checks import (
     own_scitex_package,
 )
 from ._rules import lookup as _lk
+from ._source_helpers import _is_allowed_by_comment, is_script
 from .rules import Rule
 
 
@@ -25,63 +24,6 @@ class Issue:
     line: int
     col: int
     source_line: str = ""
-
-
-def is_script(filepath: str, config=None) -> bool:
-    """Check if file is a script (not a library module).
-
-    Uses config.library_patterns and config.library_dirs to determine
-    which files are library modules (exempt from script-only rules).
-    """
-    from .config import load_config, matches_library_pattern
-
-    if config is None:
-        config = load_config(start_path=filepath)
-
-    path = Path(filepath)
-    name = path.name
-
-    # Check filename against library patterns (e.g., __*__.py, test_*.py)
-    if matches_library_pattern(name, config):
-        return False
-
-    # Check if file is inside a library directory (e.g., src/)
-    parts = path.parts
-    for lib_dir in config.library_dirs:
-        if lib_dir in parts:
-            return False
-
-    # Check if file is inside a script directory (e.g., scripts/)
-    # These are utility scripts called by shell, not SciTeX session scripts
-    for script_dir in config.script_dirs:
-        if script_dir in parts:
-            return False
-
-    return True
-
-
-_STX_ALLOW_RE = re.compile(r"#\s*stx-allow\b(?::?\s*(.+))?")
-
-
-def _is_allowed_by_comment(source_line: str, rule_id: str) -> bool:
-    """Check if a source line has a ``# stx-allow`` comment suppressing *rule_id*.
-
-    Supported forms::
-
-        x = 1  # stx-allow                     → suppresses ALL rules on this line
-        x = 1  # stx-allow: STX-S003           → suppresses STX-S003
-        x = 1  # stx-allow: STX-S003, STX-I001 → suppresses both
-    """
-    if not source_line:
-        return False
-    m = _STX_ALLOW_RE.search(source_line)
-    if m is None:
-        return False
-    ids_str = m.group(1)
-    if not ids_str:
-        return True  # bare ``# stx-allow`` suppresses everything
-    allowed = {s.strip() for s in ids_str.split(",")}
-    return rule_id in allowed
 
 
 class SciTeXChecker(
@@ -114,6 +56,13 @@ class SciTeXChecker(
         self._own_package = own_scitex_package(filepath)  # for STX-I008
         self._is_script = is_script(filepath, self.config)
         self._func_depth = 0  # >0 means inside a function body
+        # STX-P010 — top-level figrecipe usage inside an @stx.session
+        # module. Recorded during the visit (import + call sites) and
+        # emitted in get_issues() ONCE the whole module is seen, because
+        # the `import figrecipe as fr` line is visited BEFORE the
+        # `@stx.session def main` further down — we can't know the module
+        # is session-decorated at import-visit time. (line, col, src) tuples.
+        self._figrecipe_usages: list = []
         from ._plugin_loader import load_plugins
 
         _plugins = load_plugins()
@@ -126,7 +75,6 @@ class SciTeXChecker(
             if r.category not in _CAT_ENABLE or _CAT_ENABLE[r.category] in _enabled
         }
         self._plugin_checkers = _plugins["checkers"]
-
 
     # -- Assignment visitors --
 
@@ -152,6 +100,21 @@ class SciTeXChecker(
         - `# noqa: STX-NL001` on the line — explicit suppression for
           identifiers that read as a whole (years, ports, codes).
         """
+        # STX-HPC001 — SSH multiplexing disabled on the HPC path: a string
+        # literal that turns off the ssh control-master / control-path opens a
+        # fresh login-node connection per call (Spartan admin incident
+        # 2026-06-17: 440+ connections). The match tokens are split (`"=" + "no"`)
+        # so this detector's OWN source does not trip the rule.
+        _hpc_nomux = ("ControlMaster=" + "no", "ControlPath=" + "none")
+        if isinstance(node.value, str) and any(t in node.value for t in _hpc_nomux):
+            hpc_line = (
+                self.source_lines[node.lineno - 1]
+                if node.lineno - 1 < len(self.source_lines)
+                else ""
+            )
+            if not _is_allowed_by_comment(hpc_line, "STX-HPC001"):
+                self._add(rules.HPC001, node.lineno, node.col_offset, hpc_line)
+
         # Only int literals; explicitly reject bool (`True is 1`).
         if not isinstance(node.value, int) or isinstance(node.value, bool):
             self.generic_visit(node)
@@ -181,13 +144,11 @@ class SciTeXChecker(
         self._add(rules.NL001, node.lineno, node.col_offset, line)
         self.generic_visit(node)
 
-
     # -- Function/decorator visitors --
 
     @property
     def _REQUIRED_INJECTED(self):
         return set(self.config.required_injected)
-
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         # NM002 — `mocker` / `monkeypatch` fixture parameters (no exceptions).
@@ -313,8 +274,28 @@ class SciTeXChecker(
         self._add(_lk("STX-S004"), node.lineno, node.col_offset, line)
 
     def _check_injected_params(self, node: ast.FunctionDef) -> None:
-        """Check that @stx.session function declares all INJECTED parameters."""
-        declared = {arg.arg for arg in node.args.args}
+        """Check that @stx.session function declares all INJECTED parameters.
+
+        Considers positional, positional-only, AND keyword-only args — the
+        injected pattern can legitimately live behind a ``*`` separator
+        (e.g. ``def main(data: str, *, CONFIG=stx.session.INJECTED, ...)``).
+        The previous ``args.args``-only scan missed kwonly INJECTED decls
+        and produced false-positive S006s on neurovista-style scripts.
+
+        Argument *values/annotations* are never dereferenced here — only
+        the bare ``arg.arg`` name string is read. This avoids the
+        ``AttributeError: 'NoneType' object has no attribute 'id'`` NPE
+        the legacy ``scitex._linter_plugin`` S006 raised on annotated
+        injected params (#60).
+        """
+        declared = {
+            arg.arg
+            for arg in (
+                list(node.args.args)
+                + list(node.args.kwonlyargs)
+                + list(getattr(node.args, "posonlyargs", []))
+            )
+        }
         missing = sorted(self._REQUIRED_INJECTED - declared)
         if missing:
             line = self._get_source(node.lineno)
@@ -372,6 +353,15 @@ class SciTeXChecker(
         if self._has_main_guard and not self._has_stx_import:
             self._add(_lk("STX-S005"), 1, 0, "")
 
+        # STX-P010 — top-level figrecipe used inside an @stx.session module.
+        # Only emit when the module actually declares a session-decorated
+        # main; otherwise top-level figrecipe is the *correct* API (e.g. a
+        # plain plotting script or library helper) and must NOT be flagged.
+        if self._has_session_decorator and self._figrecipe_usages:
+            p010 = _lk("STX-P010")
+            for line, col, src in self._figrecipe_usages:
+                self._add(p010, line, col, src)
+
         # Sort: errors first, then by line
         from .rules import SEVERITY_ORDER
 
@@ -382,12 +372,30 @@ class SciTeXChecker(
         if rule is None:
             return
         if rule.requires and rule.requires not in self._available:
+            # Pillar-0 fail-loud (#TBD): tally the silent-skip so the
+            # health module can emit an L2 stderr summary the first
+            # time the count goes non-zero. Without this the
+            # `requires=` gate evaporates IO0xx coverage with zero
+            # indication — exactly the 2026-06-12 ripple-wm class.
+            try:
+                from ._health import record_rule_skip
+
+                record_rule_skip(rule.requires)
+            except Exception:  # pragma: no cover
+                pass
             return
         if rule.id in self.config.disable:
             return
         if _is_allowed_by_comment(source_line, rule.id):
             return
         sev = self.config.per_rule_severity.get(rule.id)
+        if not sev:
+            # Pillar 3 (#TBD) — category-wide severity override (e.g.
+            # research project-type flips io/path from warning→error).
+            # Per-rule override (above) still wins; category map is the
+            # floor not the ceiling. See LinterConfig.
+            cat_override = getattr(self.config, "category_severity_override", {}) or {}
+            sev = cat_override.get(rule.category)
         if sev:
             rule = replace(rule, severity=sev)
         self.issues.append(
@@ -400,8 +408,15 @@ class SciTeXChecker(
         return ""
 
 
-def lint_source(source: str, filepath: str = "<stdin>", config=None) -> list:
-    """Lint Python source code and return list of Issues."""
+def lint_source(
+    source: str, filepath: str = "<stdin>", config=None, plugins=None
+) -> list:
+    """Lint Python source code and return list of Issues.
+
+    ``plugins`` is the plugin-payload seam (defaults to ``load_plugins()``);
+    tests pass a hand-rolled payload to drive the fail-loud path without
+    patching the loader (PA-306: real fakes, no monkeypatch).
+    """
     try:
         tree = ast.parse(source, filename=filepath)
     except SyntaxError:
@@ -420,8 +435,9 @@ def lint_source(source: str, filepath: str = "<stdin>", config=None) -> list:
     # Plugin-contributed checkers (respect opt-in gating)
     from ._plugin_loader import load_plugins
 
+    payload = plugins if plugins is not None else load_plugins()
     _enabled = set(config.enable) if config else set()
-    for checker_cls in load_plugins()["checkers"]:
+    for checker_cls in payload["checkers"]:
         # Gate FM-category checkers behind config.enable=["FM"]
         cat = getattr(checker_cls, "category", None)
         if cat == "figure" and "FM" not in _enabled:
@@ -430,8 +446,37 @@ def lint_source(source: str, filepath: str = "<stdin>", config=None) -> list:
             extra = checker_cls(lines, config)
             extra.visit(tree)
             checker.issues.extend(extra.issues)
-        except Exception:
-            pass
+        except Exception as exc:
+            # Pillar 0: NEVER swallow. Surface to stderr so a dropped
+            # plugin checker is visible in CI logs + interactive sessions.
+            # Per neurovista elevation 2026-06-14: a silent except-pass
+            # here hid figrecipe's figure-style checkers (FM P006..P011)
+            # being dropped at load-time for months because of a
+            # circular-import in figrecipe's plugin module. Operator
+            # policy: fail-loud / no-silent-fallback.
+            _name = getattr(checker_cls, "__name__", repr(checker_cls))
+            import logging as _logging
+            import os as _os
+            import sys as _sys
+
+            # Operator opt-out: SCITEX_DEV_LINTER_QUIET silences the WHOLE
+            # fail-loud surface. Both paths can reach stderr — the logger
+            # falls back to stderr (logging.lastResort / scitex-dev's own
+            # "WARN:" handler) when emitting, and the explicit write feeds
+            # the agent feedback hook (run_lint.sh) + interactive use.
+            # Gating only the explicit write left the logger leaking the
+            # message past QUIET; gate both so the off-switch is honest.
+            if not _os.environ.get("SCITEX_DEV_LINTER_QUIET"):
+                _logging.getLogger(__name__).warning(
+                    "linter: plugin checker %s raised on visit: %s",
+                    _name,
+                    exc,
+                )
+                _sys.stderr.write(
+                    f"[scitex-dev linter] WARNING: plugin checker "
+                    f"{_name} raised on visit of {filepath}: "
+                    f"{type(exc).__name__}: {exc}\n"
+                )
 
     return checker.get_issues()
 

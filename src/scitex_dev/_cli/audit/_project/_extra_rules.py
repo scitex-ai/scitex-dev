@@ -13,6 +13,7 @@ Today's contents:
 - PS-167 — readme-badge-layout
 - PS-168 — workflow-secret-env-prefix-missing
 - PS-173 — adr-format (filename + lean-template sections, when docs/adr/ exists)
+- PS-180 — runtime-separation (src/<pkg>/runtime/ must be gitignored at the package level)
 - PS-PATH-001/002 — config/PATH.yaml shape (outer wrapper / bare-string leaf)
 - PS-CLEW-001 — clew.add_claim without self-verify in same module
 - PS-AGENT-001 — scripts/agent/*.py with add_claim but no claims.json terminus
@@ -164,6 +165,67 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "W",
         "adr-format",
     ),
+    (
+        "PS-180",
+        "§1",
+        (
+            "ecosystem runtime/ separation discipline: a package's "
+            "`src/<pkg>/runtime/` directory exists on disk but no "
+            "`.gitignore` entry covers it. Runtime artefacts (logs, "
+            "caches, shell-completion outputs, generated state) are "
+            "user-state, not source code — they MUST NOT be tracked "
+            "by git. Add `runtime/` to `src/<pkg>/.gitignore` "
+            "(package-local, preferred), or `src/<pkg>/runtime/` to "
+            "the repo-root `.gitignore`, or `**/runtime/` (catch-all). "
+            "Per the 2026-05-17 directive: default-track everything "
+            "EXCEPT `<pkg>/runtime/`; exceptions belong in the "
+            "package's own `.gitignore`, not a global rule. See "
+            "`docs/needs-check-scitex-pkg-runtime-separation.md` and "
+            "`_skills/general/02_package/02_project-structure-src.md`."
+        ),
+        "W",
+        "ecosystem-runtime-separation",
+    ),
+    (
+        "PS-213",
+        "§3",
+        (
+            "console-script-deps-must-be-core: a dep imported at "
+            "module-load on the reachability chain of any "
+            "`[project.scripts]` entry-point MUST appear in "
+            "`[project.dependencies]`. Currently the dep is satisfied "
+            "only via `[project.optional-dependencies]`, so bare "
+            "`pip install <peer>` followed by `<cli> --help` fails. "
+            "Move the dep to `[project.dependencies]` (and drop any "
+            "`try/except ImportError` graceful fallback — failing the "
+            "import is the correct CI signal, not a runtime hint). "
+            "Companion rule: PS-213i (info) emits LAZY-EXTRA-PATTERN-OK "
+            "for the permitted opposite case (function-scope import + "
+            "install hint referencing a real extra). See "
+            "_skills/general/01_ecosystem/"
+            "02_dependency-and-version-pinning.md "
+            "§console-script-deps-must-be-core."
+        ),
+        "E",
+        "core-cli-dep-missing",
+    ),
+    (
+        "PS-213i",
+        "§3",
+        (
+            "LAZY-EXTRA-PATTERN-OK: a dep declared only in "
+            "`[project.optional-dependencies].<extra>` is "
+            "lazy-imported inside a function body whose body also "
+            "raises with a `pip install <pkg>[<extra>]` install hint. "
+            "This is the canonical permitted pattern for "
+            "optional-subcommand deps; PS-213i reports it as an "
+            "info-severity signal so the operator can audit coverage "
+            "of every optional subcommand without grepping by hand. "
+            "Not a violation — info-only."
+        ),
+        "I",
+        "lazy-extra-pattern-ok",
+    ),
     # ── RP-2xx: research-project mirror (scripts ↔ tests/scripts) ──
     # Research projects (project-type: research) have no src/<pkg>/ — their
     # primary code lives in ./scripts/, mirrored by tests/scripts/. These
@@ -228,10 +290,10 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         (
             "config/PATH.yaml has at least one leaf scalar value that "
             "is not an f-string literal. Scripts always do "
-            "`eval(CONFIG.PATH.<KEY>)`; a bare `\"./data/foo\"` is "
+            '`eval(CONFIG.PATH.<KEY>)`; a bare `"./data/foo"` is '
             "parsed as the Python expression `./data/foo` and "
             "SyntaxErrors. Prefix every value with `f`, e.g. "
-            "`KEY: f\"./your/path\"`, even for static paths. See "
+            '`KEY: f"./your/path"`, even for static paths. See '
             "_skills/scientific/"
             "02_research-project_03_project-structure-config-and-data.md "
             "§`PATH.yaml`."

@@ -56,6 +56,17 @@ Append-only log of mistakes that cost real time, and the rules that fix them. Re
 | Edited a CSV in `src/capsules_extracted/` to "fix" a typo | Hash drift; provenance broken; original lost | Treat extractions as ephemeral; fix in code, never on disk |
 | Stored only the extracted dirs, deleted compressed originals to save disk | Can't replicate; can't compute upstream-bytes hash for provenance | Compressed `.tar.gz`/`.zip` is canonical; extractions are derived/regenerable ([`./09_id-readability`](02_research-project_09_id-readability-and-data-immutability.md) Part 2) |
 | Mass-renamed files via `git mv` while `core.fileMode=false` was set | New scripts committed as 100644 (non-executable) → broken pipeline on next pull | Use `git update-index --chmod=+x`; install pre-commit hook to auto-mark `.sh`/`.src` as +x |
+| Tried to "fix" the storage layer's `-32768` sentinel by rewriting the DB | Other consumers (integer-typed binary protocols, downstream DB schemas) break; sentinel was intentional | Convert sentinel → `np.nan` at the figure layer on read; treat the storage-layer sentinel as a contract, not a bug ([`figrecipe/22_nan-sentinel-on-read`](https://github.com/ywatanabe1989/figrecipe/blob/develop/src/figrecipe/_skills/figrecipe/22_nan-sentinel-on-read.md)) |
+
+## Figures (publication-bound)
+
+| Mistake | Symptom | Fix → leaf |
+|---|---|---|
+| Used `np.random.randn` to populate a "representative" figure in a paper draft | Synthetic figure traveled into slides / Slack / the PDF; reviewer caught the placeholder one revision before submission | Real-data-only policy for publication figures; fail loud (raise / non-zero exit) when real data missing; synthetic OK only in `synthetic_*` fixtures ([`./01_figures_03_no-synthetic-data-policy`](01_figures_03_no-synthetic-data-policy.md)) |
+| `make_example_figure()` helper swallowed `FileNotFoundError` and rendered a stub | A "polite" placeholder figure shipped in an internal report; co-author thought it was the real result | Helper must propagate the error; refuse to write the file; never silently substitute synthetic data ([`./01_figures_03_no-synthetic-data-policy`](01_figures_03_no-synthetic-data-policy.md)) |
+| Heatmap comparison with per-panel `vmin`/`vmax` "for clarity" | Visual comparison meaningless; reviewer requested redraw | Shared `vmin`/`vmax`, shared colorbar across compared panels ([`./01_figures_01_standards`](01_figures_01_standards.md), figrecipe `21_figure-prep-playbook`) |
+| Hard-coded `SUBJECT_ID = 7` for the "representative example" because subject 7 looked good | Cherry-pick encoded in the pipeline; cohort change does not propagate; reviewer challenges criterion | Representative-example criterion in `CONFIG.REPRESENTATIVE.*` (median / nearest-mean / first-passing-quality), re-derived on every render; show cohort distribution alongside (figrecipe `21_figure-prep-playbook` rule 4) |
+| Raw `-32768` (int16 min) values reached `vmin=data.min()` and crushed the colormap | Heatmap rendered as a single dark pixel surrounded by uniform background; "the figure is broken" — actually the sentinel leaked | Convert sentinel → `np.nan` immediately after load; use `np.nanmin`/`np.nanmax`; `cmap.set_bad("white")` for heatmaps (figrecipe `22_nan-sentinel-on-read`) |
 
 ## Tooling / dotfiles / fleet
 

@@ -25,7 +25,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Tag to publish (e.g. v0.10.19) — must already exist on the repo'
+        description: 'Tag to publish (e.g. v0.18.1) — must already exist on the repo'
         required: true
         type: string
 
@@ -53,16 +53,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install fd (Rust file finder; preferred fast path for audit discovery)
-        run: |
-          # The audit-all conformance test exercises fd-backed file
-          # discovery. fd is the preferred accelerator: when absent the
-          # helper warns loudly and falls back to a stdlib walk (never a
-          # silent fallback, never a hard crash). We install it here so CI
-          # always runs the fast path. Debian/Ubuntu ships the binary as
-          # `fdfind`, which the discovery helper accepts.
-          sudo apt-get update && sudo apt-get install -y fd-find
-          fdfind --version
       - name: Install (best-effort fallback chain)
         run: |
           python -m pip install --upgrade pip
@@ -135,37 +125,17 @@ jobs:
           name: dist
           path: dist
       - name: Extract release notes from CHANGELOG.md
-        # 2026-05-27: explicitly NEVER fail this step. The downstream
-        # `gh release create` consumes `release-notes.md`; under
-        # `bash -eo pipefail` (GHA default) any of these conditions
-        # used to cascade into a failed `release` job even though PyPI
-        # had already published successfully:
-        #   - CHANGELOG.md missing entirely
-        #   - awk syntax error / non-zero exit
-        #   - `## [X.Y.Z]` section absent (extractor writes empty file,
-        #     and downstream `gh release create --notes-file` rejects
-        #     an empty file when the upstream step also errored)
-        # The hardened script disables -e, guards every path, and
-        # guarantees a non-empty release-notes.md before exiting 0.
-        # See GH-Release wave 2026-05-27 (crossref-local 0.7.4 +
-        # openalex-local 0.7.6 PyPI-OK / GH-Release missing).
-        shell: bash
         run: |
-          set +e
           VERSION="${{ needs.build.outputs.version }}"
           VERSION="${VERSION#v}"
-          : > release-notes.md
-          if [ -f CHANGELOG.md ]; then
-            awk -v v="$VERSION" '
-              $0 ~ "^## \\[" v "\\]" {p=1; next}
-              p && /^## \[/ {exit}
-              p
-            ' CHANGELOG.md > release-notes.md 2>/dev/null
-          fi
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" {p=1; next}
+            p && /^## \[/ {exit}
+            p
+          ' CHANGELOG.md > release-notes.md || true
           if [ ! -s release-notes.md ]; then
             echo "Release v${VERSION}. See CHANGELOG.md for details." > release-notes.md
           fi
-          exit 0
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -176,79 +146,39 @@ jobs:
             dist/*
 
   sync-main:
-    # After a release tag is pushed (which lives on develop), advance
-    # `main` to the tagged commit so `main` reliably tracks "last
-    # released SHA". The operator's actual release flow is:
-    #
-    #     git tag vX.Y.Z develop && git push origin vX.Y.Z
-    #
-    # i.e. the tag lives on develop's tip and develop is ahead of main
-    # by every commit since the previous release. The PRIOR sync-main
-    # logic tried to fast-forward develop TO main's SHA, which is
-    # backwards for this flow: develop has commits main doesn't, so
-    # `PATCH refs/heads/develop -f sha=MAIN_SHA -F force=false` failed
-    # with "Update is not a fast forward" (HTTP 422) on every release
-    # (v0.16.1 / v0.17.0 / v0.17.1 / v0.17.2 / v0.17.3). That failure
-    # was benign — publish + GitHub Release jobs already succeeded —
-    # but surfaced as a red workflow on every release and confused
-    # every reader of the CI dashboard.
-    #
-    # New logic (closes #105):
-    #   * tag_sha == main → no-op (already in sync, re-run of dispatch).
-    #   * tag_sha is a descendant of main (typical case) → ff main → tag.
-    #   * tag_sha is NOT a descendant of main → surface and exit non-zero
-    #     (rare; means main has commits the tag doesn't, e.g. a hotfix
-    #     landed on main without going through develop). Human handles.
+    # Open develop→main PR so main always equals the latest released
+    # commit. Branch-protected mains require PR review; this job tries
+    # admin-merge but leaves the PR open if that isn't allowed.
     needs: publish
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
-      - name: Resolve tag SHA (checkout-free)
-        id: ver
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: develop
+      - name: Open develop→main PR if diverged
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
         run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "push" ]; then
-            tag="${GITHUB_REF#refs/tags/}"
-          else
-            tag="${{ inputs.version }}"
-          fi
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          ref_sha=$(gh api "repos/${REPO}/git/refs/tags/${tag}" --jq '.object.sha')
-          # Annotated tags resolve to a tag object; peel to the commit.
-          obj_type=$(gh api "repos/${REPO}/git/refs/tags/${tag}" --jq '.object.type')
-          if [ "${obj_type}" = "tag" ]; then
-            tag_sha=$(gh api "repos/${REPO}/git/tags/${ref_sha}" --jq '.object.sha')
-          else
-            tag_sha="${ref_sha}"
-          fi
-          echo "tag_sha=${tag_sha}" >> "$GITHUB_OUTPUT"
-      - name: Advance main to the tagged commit (or no-op)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          TAG: ${{ steps.ver.outputs.tag }}
-          TAG_SHA: ${{ steps.ver.outputs.tag_sha }}
-        run: |
-          set -euo pipefail
-          main_sha=$(gh api "repos/${REPO}/branches/main" --jq '.commit.sha')
-          echo "tag ${TAG} = ${TAG_SHA}"
-          echo "main      = ${main_sha}"
-          if [ "${TAG_SHA}" = "${main_sha}" ]; then
-            echo "main already at ${TAG}; nothing to do."
+          set -e
+          git fetch origin main
+          AHEAD=$(git rev-list --count origin/main..origin/develop)
+          if [ "$AHEAD" -eq 0 ]; then
+            echo "main already up-to-date with develop."
             exit 0
           fi
-          # Strict fast-forward (force=false). If main has commits the
-          # tag doesn't, this fails with HTTP 422 — the human-handled
-          # path (rare; hotfix landed on main outside the develop flow).
-          if gh api -X PATCH "repos/${REPO}/git/refs/heads/main" \
-              -f sha="${TAG_SHA}" -F force=false; then
-            echo "main fast-forwarded to ${TAG}."
+          EXISTING=$(gh pr list --base main --head develop --state open --json number --jq '.[0].number // empty')
+          if [ -z "$EXISTING" ]; then
+            PR_URL=$(gh pr create --base main --head develop \
+              --title "release: sync main with develop" \
+              --body "Auto-opened by the release pipeline so main equals the latest released commit.")
+            EXISTING=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+            echo "Created PR #${EXISTING}"
           else
-            echo "::error::main is not a descendant of ${TAG}; manual reconcile required." >&2
-            echo "::error::Likely a hotfix landed on main outside the develop flow." >&2
-            exit 1
+            echo "Reusing existing PR #${EXISTING}"
           fi
+          gh pr merge "$EXISTING" --merge --admin \
+            || echo "Admin merge unavailable; PR left open for manual merge."

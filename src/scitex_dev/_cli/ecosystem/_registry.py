@@ -25,11 +25,14 @@ from ._cmds import (
     _git,
     _install_gate,
     _jobs_cron,
-    _jobs_daemon,
     _jobs_systemd,
     _list,
+    _up,
     _prune_merged,
     _regen_umbrella,
+    _run,
+    _status,
+    _sync,
     _sync_status,
     _test_remote,
     _versions,
@@ -92,14 +95,29 @@ def register_ecosystem_commands(main_group):
     _install_gate.register(ecosystem)
     _test_remote.register(ecosystem)
     _sync_status.register(ecosystem)
+    _sync.register(ecosystem)
     _prune_merged.register(ecosystem)
     _branch_protection.register(ecosystem)
     _ci_template.register(ecosystem)
     _regen_umbrella.register(ecosystem)
 
     # Federated scheduled-job aggregation (scitex_dev.jobs entry-points).
+    # `ecosystem systemd` handles BOTH long-running services
+    # (kind="service") and periodic timers (kind="timer") since the
+    # service|timer|cron taxonomy refactor; the prior `ecosystem
+    # daemon` subcommand was removed as a duplicate surface.
     _jobs_cron.register(ecosystem)
     _jobs_systemd.register(ecosystem)
-    _jobs_daemon.register(ecosystem)
+
+    # Headline ecosystem-up one-shot. Post-2026-06-14 redesign: writes
+    # the ONE collective `scitex-dev-ecosystem.service` (supervisor
+    # unit) + the merged crontab block (cron-native + timer-lowered).
+    # See `_up`'s docstring for the operator policy.
+    _up.register(ecosystem)
+
+    # Collective supervisor — `ecosystem run` is the systemd ExecStart;
+    # `ecosystem status` reads the supervisor's state snapshot.
+    _run.register(ecosystem)
+    _status.register(ecosystem)
 
     return ecosystem

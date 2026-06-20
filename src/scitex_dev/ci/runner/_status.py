@@ -30,12 +30,17 @@ class XdistConstants:
 def _runner_status(cfg: dict) -> dict:
     """Query GitHub API for the runner's online status."""
     repo = cfg["github"]["default_repo"]
+    # The list-runners endpoint returns an OBJECT {total_count, runners: [...]},
+    # so iterate `.runners[]` — a bare `.[]` walks the object's values (the
+    # count int + the array) and the per-item object constructor then errors
+    # ("expected an object but got: array"), which would make the preflight
+    # gate falsely report the runner unreachable.
     gh_cmd = [
         "gh",
         "api",
         f"repos/{repo}/actions/runners",
         "--jq",
-        '[.[] | {name, status, labels: [.labels[]?.name]}]',
+        "[.runners[] | {name, status, busy, labels: [.labels[]?.name]}]",
     ]
     result = subprocess.run(gh_cmd, capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
@@ -56,7 +61,7 @@ def _ci_runs_on(cfg: dict) -> str:
         "api",
         f"repos/{repo}/actions/variables/{var_name}",
         "--jq",
-        '.value',
+        ".value",
     ]
     result = subprocess.run(gh_cmd, capture_output=True, text=True, timeout=30)
     if result.returncode != 0:
@@ -70,10 +75,10 @@ def _lease_status(cfg: dict) -> dict:
     jobname = cfg["ci_lease"]["jobname"]
     target = config._ssh_target(cfg)
     cmd = (
-        f"ssh -o ControlPath=none -o ControlMaster=no "
-        f'{target} '
+        f"ssh {config.SSH_MUX_OPTS_STR} "
+        f"{target} "
         f"'/apps/slurm/latest/bin/squeue -u {user} --name={jobname} "
-        f"--noheader -o \"%i %T %M %L\"'"
+        f'--noheader -o "%i %T %M %L"\''
     )
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30, shell=True)
     if result.returncode != 0:
@@ -84,12 +89,14 @@ def _lease_status(cfg: dict) -> dict:
         parts = line.split()
         if len(parts) < 4:
             continue
-        rows.append({
-            "jobid": parts[0],
-            "state": parts[1],
-            "time_used": parts[2],
-            "time_left": parts[3],
-        })
+        rows.append(
+            {
+                "jobid": parts[0],
+                "state": parts[1],
+                "time_used": parts[2],
+                "time_left": parts[3],
+            }
+        )
     return {"jobs": rows}
 
 
@@ -111,9 +118,12 @@ def _compute_xdist_n(n_tests: int, nproc: int | None = None) -> int:
 
 def _nproc() -> int:
     try:
-        return max(1, len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else 4)
+        return max(
+            1, len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else 4
+        )
     except Exception:
         import os  # type: ignore[no-redef]
+
         return os.cpu_count() or 4
 
 
@@ -123,17 +133,21 @@ def _xdist_tuning_table() -> list[dict]:
     phys_cap = max(1, nproc // 2)
     rows: list[dict] = []
     for limit, n in XdistConstants.BINS:
-        rows.append({
-            "test_range": f"≤{limit}",
-            "xdist_n": min(n, phys_cap),
+        rows.append(
+            {
+                "test_range": f"≤{limit}",
+                "xdist_n": min(n, phys_cap),
+                "cap": phys_cap,
+            }
+        )
+    rows.append(
+        {
+            "test_range": f">{XdistConstants.BINS[-1][0]}",
+            "xdist_n": phys_cap,
             "cap": phys_cap,
-        })
-    rows.append({
-        "test_range": f">{XdistConstants.BINS[-1][0]}",
-        "xdist_n": phys_cap,
-        "cap": phys_cap,
-        "note": f"nproc={nproc} // 2 = {phys_cap}",
-    })
+            "note": f"nproc={nproc} // 2 = {phys_cap}",
+        }
+    )
     return rows
 
 
@@ -197,7 +211,10 @@ def register(group: click.Group) -> None:
             return
 
         # Human-readable
-        click.secho(f"runner: {cfg['runner']['name']} ({', '.join(str(l) for l in cfg['runner']['labels'])})", bold=True)
+        click.secho(
+            f"runner: {cfg['runner']['name']} ({', '.join(str(l) for l in cfg['runner']['labels'])})",
+            bold=True,
+        )
 
         runners_info = output["runner"].get("runners", [])
         online = [r for r in runners_info if r.get("status") == "online"]
@@ -216,7 +233,9 @@ def register(group: click.Group) -> None:
 
         click.echo()
         click.echo("  xdist tuning:")
-        click.secho(f"    {'test_range':12s} {'xdist_n':8s} {'cap':6s} {'note'}", fg="cyan")
+        click.secho(
+            f"    {'test_range':12s} {'xdist_n':8s} {'cap':6s} {'note'}", fg="cyan"
+        )
         for row in output["xdist_tuning"]:
             note = row.get("note", "")
             click.echo(

@@ -30,7 +30,7 @@ def own_scitex_package(filepath: str) -> str | None:
     directory, or otherwise the nearest ancestor directory that is itself
     a ``scitex`` / ``scitex_<word>`` package. Examples::
 
-        src/scitex_gen/_numeric/_norm.py   -> "scitex_gen"
+        src/scitex_io/_save_modules/_csv.py -> "scitex_io"
         scitex_io/io/_save.py              -> "scitex_io"
         tests/test_foo.py                  -> None
     """
@@ -155,12 +155,30 @@ class ImportChecksMixin:
         if module_name == "logging":
             self._add(_lk("STX-I007"), node.lineno, node.col_offset, line)
 
+        # STX-I009 — prohibit direct seaborn import (use stx.plt /
+        # figrecipe wrappers instead). Per neurovista elevation 2026-06-14.
+        # Matches both `import seaborn` and `import seaborn as sns`. The
+        # bare module-name compare is enough — Python's import machinery
+        # collapses dotted-vs-dotless for the top-level name.
+        if module_name == "seaborn":
+            self._add(_lk("STX-I009"), node.lineno, node.col_offset, line)
+
+        # STX-P010 — record a top-level figrecipe import (`import figrecipe`
+        # / `import figrecipe as fr` / `import figrecipe.sub`). Whether it
+        # actually flags is decided in get_issues() once we know the module
+        # is @stx.session-decorated — at this point the session `def main`
+        # further down may not be visited yet. We match the top-level name
+        # (incl. dotted submodule imports) so e.g. `import figrecipe.style`
+        # is also recorded.
+        if module_name == "figrecipe" or module_name.startswith("figrecipe."):
+            self._figrecipe_usages.append((node.lineno, node.col_offset, line))
+
         # NM001 — no-mock imports (no exceptions)
         if module_name in self._MOCK_MODULES:
             self._add(rules.NM001, node.lineno, node.col_offset, line)
 
         # I008 — cross-package private-submodule import (e.g.
-        # `import scitex_gen._numeric._norm`)
+        # `import scitex_io._save`)
         if cross_pkg_private_import(module_name, self._own_package):
             self._add(_lk("STX-I008"), node.lineno, node.col_offset, line)
 
@@ -191,6 +209,13 @@ class ImportChecksMixin:
         if module == "argparse" and self._is_script:
             self._add(_lk("STX-S003"), node.lineno, node.col_offset, line)
 
+        # STX-P010 — `from figrecipe import subplots` (and friends). Recorded
+        # for the get_issues() session-gated emit, same as the bare-import
+        # case in _check_import. Covers `figrecipe` and any submodule
+        # (`from figrecipe.style import ...`).
+        if module == "figrecipe" or (module or "").startswith("figrecipe."):
+            self._figrecipe_usages.append((node.lineno, node.col_offset, line))
+
         # NM001 — no-mock imports (no exceptions)
         if module in self._MOCK_MODULES:
             self._add(rules.NM001, node.lineno, node.col_offset, line)
@@ -207,14 +232,14 @@ class ImportChecksMixin:
                 break
 
         # I008 — cross-package private-submodule import. Two shapes:
-        #   from scitex_gen._numeric._norm import to_even   (module is private)
-        #   from scitex_gen import _numeric                 (importing a private name)
+        #   from scitex_io._save import save     (module is private)
+        #   from scitex_io import _save           (importing a private name)
         if cross_pkg_private_import(module, self._own_package):
             self._add(_lk("STX-I008"), node.lineno, node.col_offset, line)
         else:
             m = _SCITEX_PKG_RE.match(module or "")
             if m and m.group(1) == module and module != self._own_package:
-                # `from scitex_gen import _private_name`
+                # `from scitex_io import _private_name`
                 for alias in node.names:
                     if alias.name.startswith("_") and not alias.name.startswith("__"):
                         self._add(_lk("STX-I008"), node.lineno, node.col_offset, line)

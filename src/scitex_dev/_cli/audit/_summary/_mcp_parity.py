@@ -401,6 +401,31 @@ def _allowlist_violations(
     return out
 
 
+def _tool_matches_api(tool: str, api: str) -> bool:
+    """Return True if `tool` covers `api` for §6 parity.
+
+    A bare-name match (``tool == api``) always counts. We ALSO accept any
+    ``<verb>_<api>`` form — i.e. the tool ends with ``_<api>`` — so an
+    MCP tool named ``submit_sbatch`` satisfies §6 for the Python API
+    ``sbatch``. This resolves the §2 / §6 conflict surfaced by #82:
+    single-token Python APIs (the SLURM verb family ``sbatch`` /
+    ``srun`` / ``squeue`` / ``sacct`` / ``scancel`` / ``salloc``, plus
+    ``sync``, ``rsync``, etc.) previously could not satisfy both rules
+    at once — §2 forbids single-token tool names, §6 demanded an
+    exactly-matching MCP tool. Letting §6 accept the verb-prefixed form
+    lets the package keep §2-compliant tool names while still passing
+    §6.
+
+    The match is intentionally one-way (the API name must appear as the
+    tool's suffix after an underscore) so this does NOT silence the
+    legitimate case where a totally-unrelated tool happens to share a
+    short suffix with an API — the FULL api string must be present.
+    """
+    if tool == api:
+        return True
+    return tool.endswith(f"_{api}")
+
+
 def _parity_violations(
     package: str, py_apis: set[str], mcp_normalized: set[str]
 ) -> list[Violation]:
@@ -409,10 +434,20 @@ def _parity_violations(
 
     Split out from `_check_api_parity` so the comparison logic is testable
     with real sets — no module-import or registry I/O required.
+
+    Matching uses :func:`_tool_matches_api`, which accepts both the bare
+    ``tool == api`` form AND the ``<verb>_<api>`` form so single-token
+    Python APIs can satisfy both §2 (verb_noun naming) and §6
+    (Python-API coverage) at the same time. See :func:`_tool_matches_api`
+    docstring and #82 for the motivating conflict.
     """
     out: list[Violation] = []
 
-    missing_in_mcp = py_apis - mcp_normalized
+    missing_in_mcp = {
+        api
+        for api in py_apis
+        if not any(_tool_matches_api(t, api) for t in mcp_normalized)
+    }
     if missing_in_mcp and len(missing_in_mcp) > len(py_apis) * 0.5:
         out.append(
             Violation(
@@ -424,16 +459,23 @@ def _parity_violations(
         )
 
     # Orphan check (warn-tier; small set is normal for envelope tools).
-    orphans = mcp_normalized - py_apis
+    # A tool that covers any Python API via the verb_<api> form is not
+    # an orphan — same matching rule as the missing-in-MCP direction so
+    # the two halves stay symmetric.
     skill_tools = {"skills_list", "skills_get"}
-    interesting_orphans = orphans - skill_tools
-    if interesting_orphans and len(interesting_orphans) > 3:
+    orphans = {
+        t
+        for t in mcp_normalized
+        if t not in skill_tools
+        and not any(_tool_matches_api(t, api) for api in py_apis)
+    }
+    if orphans and len(orphans) > 3:
         out.append(
             Violation(
                 package,
                 "§6",
-                f"{len(interesting_orphans)} MCP tools have no matching Python API "
-                f"(sample: {sorted(interesting_orphans)[:3]})",
+                f"{len(orphans)} MCP tools have no matching Python API "
+                f"(sample: {sorted(orphans)[:3]})",
             )
         )
     return out
@@ -446,4 +488,5 @@ __all__ = [
     "_allowlist_violations",
     "_python_api_names",
     "_check_api_parity",
+    "_tool_matches_api",
 ]
