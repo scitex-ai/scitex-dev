@@ -25,8 +25,10 @@ from pathlib import Path
 from scitex_dev._cli.audit._project._check_umbrella_dep_and_integration import (
     _is_umbrella,
     _main_worktree_root,
+    _own_import_name,
     _pyproject_distribution_name,
     check_ps139_umbrella_dep,
+    check_ps140_integration_gate,
 )
 
 
@@ -260,5 +262,93 @@ def test_ps139_silent_when_no_umbrella_dep(tmp_path):
     # Assert
     assert out == []
 
+
+
+# --- _own_import_name: canonical name, worktree-dir-name independent --------
+
+
+def test_own_import_name_prefers_pyproject_distribution_name(tmp_path):
+    # Arrange -- checkout dir name differs from the declared distribution name,
+    # exactly as in a `<repo>/.worktrees/<pkg>-<suffix>` release worktree.
+    repo = tmp_path / "scitex-dev-rel"
+    _write(repo / "pyproject.toml", '[project]\nname = "scitex-dev"\n')
+    # Act
+    own = _own_import_name(repo)
+    # Assert -- canonical import name, NOT the dir-derived "scitex_dev_rel".
+    assert own == "scitex_dev"
+
+
+def test_own_import_name_falls_back_to_dir_when_no_pyproject(tmp_path):
+    # Arrange -- no pyproject; dir name is the only signal.
+    repo = tmp_path / "scitex-foo"
+    repo.mkdir()
+    # Act
+    own = _own_import_name(repo)
+    # Assert
+    assert own == "scitex_foo"
+
+
+# --- PS-140 gate: own modules must not be flagged from a suffixed worktree --
+
+
+def test_ps140_does_not_flag_own_modules_from_suffixed_worktree(tmp_path):
+    # Arrange -- a leaf whose source imports BOTH a real peer (scitex_config)
+    # and its OWN sub-packages, audited from a worktree whose directory name
+    # ("scitex-foo-rel") does not match the distribution name ("scitex-foo").
+    # Regression: deriving the own-name from the dir gave "scitex_foo_rel", so
+    # the package's own `scitex_foo.*` imports leaked into the cross-package set
+    # and fired bogus PS-140 "missing from gate" errors.
+    repo = tmp_path / "scitex-foo-rel"
+    src = repo / "src" / "scitex_foo"
+    src.mkdir(parents=True)
+    _write(repo / "pyproject.toml", '[project]\nname = "scitex-foo"\n')
+    _write(src / "__init__.py", "")
+    _write(
+        src / "_core.py",
+        "from scitex_foo import _helper\n"
+        "from scitex_config import load\n",
+    )
+    _write(src / "_helper.py", "VALUE = 1\n")
+    # The gate lists ONLY the true cross-package import (the peer).
+    gate = repo / "tests" / "integration" / "test_cross_package_imports.py"
+    _write(
+        gate,
+        "CROSS_PACKAGE_IMPORTS = [\n    \"scitex_config\",\n]\n",
+    )
+    out: list = []
+    # Act
+    check_ps140_integration_gate(repo, "scitex-foo", _StubViolation, out)
+    # Assert -- own modules excluded -> the gate already matches -> no violation.
+    assert out == []
+
+
+def test_ps140_still_flags_genuinely_missing_peer_from_suffixed_worktree(tmp_path):
+    # Arrange -- same suffixed-worktree shape, but the gate is missing a REAL
+    # cross-package peer. The fix must not silence genuine PS-140 violations.
+    repo = tmp_path / "scitex-bar-wt"
+    src = repo / "src" / "scitex_bar"
+    src.mkdir(parents=True)
+    _write(repo / "pyproject.toml", '[project]\nname = "scitex-bar"\n')
+    _write(src / "__init__.py", "")
+    _write(
+        src / "_core.py",
+        "from scitex_bar import _x\n"
+        "from scitex_config import load\n"
+        "from scitex_logging import getLogger\n",
+    )
+    _write(src / "_x.py", "Y = 2\n")
+    # Gate omits scitex_logging -> genuinely missing.
+    gate = repo / "tests" / "integration" / "test_cross_package_imports.py"
+    _write(
+        gate,
+        "CROSS_PACKAGE_IMPORTS = [\n    \"scitex_config\",\n]\n",
+    )
+    out: list = []
+    # Act
+    check_ps140_integration_gate(repo, "scitex-bar", _StubViolation, out)
+    # Assert -- the missing peer (not the own module) is reported.
+    assert "PS-140" in _codes(out) and any(
+        "scitex_logging" in v.detail for v in out
+    )
 
 # EOF

@@ -56,6 +56,7 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
             "clone",
             "check-sync",
             "prune-merged",
+            "ci-template",
         ],
     ),
     (
