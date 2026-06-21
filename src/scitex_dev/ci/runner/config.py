@@ -204,9 +204,6 @@ def load_runner_config(
         ("runner", "labels"),
         ("runner", "home"),
         ("runner", "wrap_log"),
-        ("ci_lease", "jobname"),
-        ("ci_lease", "sbatch_script"),
-        ("ci_lease", "renew_threshold_min"),
         ("github", "pat_env"),
         ("github", "default_repo"),
         ("github", "variable_name"),
@@ -214,6 +211,24 @@ def load_runner_config(
         ("watchdog", "offline_grace_min"),
         ("watchdog", "alert_via"),
     ]
+
+    # Lease backend (operator: "regarding lease, use scitex-hpc"):
+    #   * If a `reservation` block is present, the lease IS a scitex-hpc
+    #     persistent reservation (book/refresh owns the 7-day-walltime
+    #     auto-resubmit). Only `reservation.name` is mandatory; the booking
+    #     params (partition/cpus/mem/time/account/qos) are optional pass-through
+    #     to `scitex-hpc reservations book`, which has its own config fallback.
+    #   * Otherwise the legacy ad-hoc `ci_lease` hold-job applies and its keys
+    #     stay required, so pre-migration operator setups keep working.
+    if isinstance(cfg.get("reservation"), dict):
+        required.append(("reservation", "name"))
+    else:
+        required += [
+            ("ci_lease", "jobname"),
+            ("ci_lease", "sbatch_script"),
+            ("ci_lease", "renew_threshold_min"),
+        ]
+
     for path in required:
         node = cfg
         for k in path:

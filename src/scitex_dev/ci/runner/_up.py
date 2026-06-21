@@ -120,6 +120,38 @@ echo "RUNNER_STARTED:$!"
 """
 
 
+def _resolve_lease_node(cfg: dict, target: str) -> tuple[str, str]:
+    """Resolve the lease's ``(jobid, node)`` for ``up``/``down``.
+
+    Unified lease management (operator: "regarding lease, use scitex-hpc"):
+    when the config names a scitex-hpc reservation (``reservation.name``), the
+    lease IS that persistent reservation — ``ensure_lease`` books/refreshes it
+    through scitex-hpc, which owns the 7-day-walltime auto-resubmit. This
+    replaces the standalone ``ci_lease`` hold-job so renewal lives in one place.
+
+    Back-compat: a config WITHOUT a ``reservation`` block falls back to the
+    legacy name-filtered squeue query (``_resolve_lease``) so existing operator
+    setups keep working until they migrate.
+
+    Returns ``(jobid, node)``; ``jobid`` may be empty under the reservation path
+    (scitex-hpc tracks it internally and we only need the node to ssh to).
+    """
+    res_name = (cfg.get("reservation") or {}).get("name")
+    if res_name:
+        # Local import to avoid a module import cycle (_ensure imports _up).
+        from . import _ensure
+
+        _action, node = _ensure.ensure_lease(cfg)
+        if not node:
+            raise click.ClickException(
+                f"scitex-hpc reservation {res_name!r} has no allocated node yet "
+                "(freshly booked / still PENDING). Re-run once SLURM schedules "
+                "it (or check `scitex-hpc reservations get/refresh`)."
+            )
+        return "", node
+    return _resolve_lease(target, cfg["hpc"]["user"], cfg["ci_lease"]["jobname"])
+
+
 def _resolve_lease(target: str, user: str, jobname: str) -> tuple[str, str]:
     """Return ``(jobid, node)`` of the RUNNING lease, or raise ClickException.
 
@@ -240,7 +272,6 @@ def register(group: click.Group) -> None:
         cfg = config.load_runner_config()
         target = config._ssh_target(cfg)
         gh_token = config.get_gh_token(cfg)
-        jobname = cfg["ci_lease"]["jobname"]
         runner_home = home_override or cfg["runner"]["home"]
         wrap_log = cfg["runner"]["wrap_log"]
         runner_name = name_override or cfg["runner"]["name"]
@@ -267,7 +298,10 @@ def register(group: click.Group) -> None:
 
         # Resolve the RUNNING lease's jobid + allocated compute node — we ssh
         # straight to that node so the runner runs there with no login srun.
-        jobid, node = _resolve_lease(target, cfg["hpc"]["user"], jobname)
+        # Prefers the scitex-hpc persistent reservation when configured
+        # (unified lease mgmt — scitex-hpc owns the 7-day-walltime renewal);
+        # falls back to the legacy name-filtered squeue query otherwise.
+        jobid, node = _resolve_lease_node(cfg, target)
 
         # --- step 1: stage the launcher on the shared FS (login-node ssh; only
         #     cheap file I/O, no lingering process) ----------------------------

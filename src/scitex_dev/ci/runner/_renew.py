@@ -31,12 +31,31 @@ def register(group: click.Group) -> None:
         \b
         Example:
           $ scitex-dev ci runner renew
+
+        \b
+        NOTE: when the config names a scitex-hpc `reservation`, lease renewal
+        is owned by scitex-hpc (the persistent reservation's SIGUSR1
+        auto-resubmit + `reservations refresh`). `renew` then delegates to the
+        same book/refresh path as `ensure` — prefer `scitex-dev ci runner
+        ensure` (it also restarts offline runners).
         """
         cfg = config.load_runner_config()
+
+        # Unified lease backend: delegate to scitex-hpc when configured.
+        if (cfg.get("reservation") or {}).get("name"):
+            from ._ensure import ensure_lease
+
+            action, node = ensure_lease(cfg)
+            click.echo(
+                f"[renew] scitex-hpc reservation lease: {action} "
+                f"(node={node or '-'}). Tip: `ci runner ensure` also restarts "
+                "offline runners."
+            )
+            return
+
         target = config._ssh_target(cfg)
         user = cfg["hpc"]["user"]
         jobname = cfg["ci_lease"]["jobname"]
-        sbatch_script = cfg["ci_lease"]["sbatch_script"]
         threshold_min = cfg["ci_lease"]["renew_threshold_min"]
 
         # Query squeue

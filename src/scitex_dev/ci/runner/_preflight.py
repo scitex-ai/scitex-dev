@@ -23,7 +23,7 @@ import json
 import click
 
 from . import config
-from ._status import _lease_status, _runner_status
+from ._status import _lease_label, _lease_status, _runner_status
 
 
 def _required_label(cfg: dict) -> str:
@@ -88,9 +88,7 @@ def register(group: click.Group) -> None:
                     if pending
                     else ""
                 )
-                problems.append(
-                    f"no RUNNING CI lease for name={cfg['ci_lease']['jobname']}{hint}"
-                )
+                problems.append(f"no RUNNING CI lease for {_lease_label(cfg)}{hint}")
 
         # --- check 2: an online runner with the required label -------------
         rstat = _runner_status(cfg)
@@ -131,8 +129,8 @@ def register(group: click.Group) -> None:
                 click.echo(
                     "\nThe self-hosted Spartan CI is not ready; the run would queue\n"
                     "indefinitely. Bring it up:\n"
-                    "  scitex-dev ci runner renew   # if no RUNNING lease\n"
-                    "  scitex-dev ci runner up      # (re)start the runner\n"
+                    "  scitex-dev ci runner ensure  # book/refresh lease + restart runners\n"
+                    "  scitex-dev ci runner up      # (re)start a single runner\n"
                     "  scitex-dev ci runner status  # inspect\n"
                     "Or push with --no-verify to bypass (the run will not execute)."
                 )

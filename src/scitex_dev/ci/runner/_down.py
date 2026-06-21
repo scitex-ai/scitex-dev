@@ -132,11 +132,28 @@ def register(group: click.Group) -> None:
         # and pkill ONLY this runner's launcher — matched by its unique
         # RUNNER_HOME path, NOT the generic "scitex_ci_launcher" name, so peer
         # runners sharing the node are never disturbed.
+        # Prefer the scitex-hpc reservation's node when configured (unified
+        # lease mgmt). `down` must NEVER book/cancel — it only needs the live
+        # node to kill the runner — so we use scitex-hpc's read-only `refresh`
+        # (re-discovers job_id/node via squeue), not `ensure_lease`. Legacy
+        # configs fall back to the name-filtered squeue query.
+        res_name = (cfg.get("reservation") or {}).get("name")
         try:
-            _jobid, node = _resolve_lease(
-                target, cfg["hpc"]["user"], cfg["ci_lease"]["jobname"]
-            )
-        except click.ClickException:
+            if res_name:
+                from . import _reservation
+
+                res_cfg = cfg.get("reservation") or {}
+                state = _reservation.refresh_state(
+                    res_name,
+                    host=res_cfg.get("host") or cfg["hpc"].get("ssh_host"),
+                    cli=res_cfg.get("cli", "scitex-hpc"),
+                )
+                node = state.node or None
+            else:
+                _jobid, node = _resolve_lease(
+                    target, cfg["hpc"]["user"], cfg["ci_lease"]["jobname"]
+                )
+        except (click.ClickException, RuntimeError):
             node = None
         if node:
             compute_cmd = config.compute_ssh_cmd(target, node)
