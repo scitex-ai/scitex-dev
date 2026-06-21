@@ -2085,21 +2085,66 @@ def _check_startup_speed(
     full = _best_ms(f"import {module_name}")
     if baseline is None or full is None:
         return  # import failure — covered elsewhere
-    marginal = full - baseline
 
-    if marginal > threshold_ms:
-        out.append(
-            Violation(
-                package,
-                "§10",
-                f"`import {module_name}` adds {marginal:.0f}ms over bare-interpreter "
-                f"startup (>{threshold_ms}ms threshold; import={full:.0f}ms, "
-                f"baseline={baseline:.0f}ms, best-of-{runs}). Slow tab-completion: Click "
-                "runs the program once per Tab press. Convert "
-                f"{module_name}/__init__.py to PEP 562 lazy `__getattr__` (see python-api "
-                "skill 04_lazy-imports-and-optional-deps.md, 'PEP 562 module __getattr__' section).",
-            )
+    v = _startup_speed_violation(
+        package, module_name, baseline, full, threshold_ms, runs
+    )
+    if v is not None:
+        out.append(v)
+
+
+def _startup_speed_violation(
+    package: str,
+    module_name: str,
+    baseline: float,
+    full: float,
+    threshold_ms: int,
+    runs: int,
+) -> "Violation | None":
+    """Decide the §10 finding from already-measured timings (pure, testable).
+
+    Returns a §10 ERROR Violation when the package's marginal import cost
+    exceeds ``threshold_ms`` on a *trustworthy* measurement, a §10w WARN
+    Violation when the runner is too slow/noisy to measure reliably, or
+    ``None`` when the import is comfortably under budget.
+
+    Baseline-sanity guard
+    ---------------------
+    The metric is ``marginal = full - baseline`` (see ``_check_startup_speed``).
+    Subtracting the bare-interpreter ``baseline`` is only meaningful when
+    ``baseline`` is small relative to the budget. On a loaded / NFS CI runner
+    the *bare* interpreter alone has measured 1072–1476ms (normal ≈ 20ms);
+    once ``baseline`` exceeds the entire ``threshold_ms`` budget, the residual
+    ``marginal`` is dominated by scheduling/FS noise and flips sign run-to-run,
+    false-flaking the SAME package. In that regime we DO NOT emit the §10
+    ERROR — we emit a §10w WARNING (warn-tier severity, so ``audit-all`` exit
+    stays 0) and skip the budget assertion. On normal runners
+    (``baseline`` ≪ ``threshold_ms``) the check stays fully STRICT: the
+    marginal is measured and enforced exactly as before.
+    """
+    if baseline > threshold_ms:
+        return Violation(
+            package,
+            "§10w",
+            f"§10 import-budget SKIPPED: runner baseline {baseline:.0f}ms exceeds "
+            f"the {threshold_ms}ms budget itself — environment too slow/noisy "
+            "(likely NFS or loaded CI) to measure import time reliably; re-run on "
+            "a normal runner to enforce.",
         )
+
+    marginal = full - baseline
+    if marginal > threshold_ms:
+        return Violation(
+            package,
+            "§10",
+            f"`import {module_name}` adds {marginal:.0f}ms over bare-interpreter "
+            f"startup (>{threshold_ms}ms threshold; import={full:.0f}ms, "
+            f"baseline={baseline:.0f}ms, best-of-{runs}). Slow tab-completion: Click "
+            "runs the program once per Tab press. Convert "
+            f"{module_name}/__init__.py to PEP 562 lazy `__getattr__` (see python-api "
+            "skill 04_lazy-imports-and-optional-deps.md, 'PEP 562 module __getattr__' section).",
+        )
+    return None
 
 
 # --------------------------------------------------------------------- #
@@ -2136,6 +2181,11 @@ RULE_SEVERITY: dict[str, str] = {
     "§7": "error",
     "§8": "error",
     "§10": "error",
+    # §10w — warn-tier sibling of §10. Emitted only when the runner's
+    # bare-interpreter baseline already exceeds the import budget, so the
+    # marginal import cost cannot be measured reliably (loaded/NFS CI). WARN,
+    # not error, so `audit-all` exit stays 0 instead of false-flaking the fleet.
+    "§10w": "warn",
     "§11": "error",
     # PA-304: umbrella imports (scitex.X / import scitex) inside standalone
     # source. Drags umbrella __init__ + lazy re-export setup into every call

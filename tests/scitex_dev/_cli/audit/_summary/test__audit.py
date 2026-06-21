@@ -72,6 +72,7 @@ click = pytest.importorskip("click")
 
 from scitex_dev._cli.audit._summary import FLAT_KEEPERS
 from scitex_dev._cli.audit._summary._audit import (
+    RULE_SEVERITY,
     Violation,
     _PackageTimeout,
     _audit_one,
@@ -87,6 +88,8 @@ from scitex_dev._cli.audit._summary._audit import (
     _is_pass_through,
     _isolated_streams,
     _load_registry,
+    _max_severity,
+    _startup_speed_violation,
     _verb_token,
     _walk,
     _watchdog,
@@ -473,6 +476,130 @@ class TestFilterViolations:
         # §1c (info) does not.
         rules = {v.rule for v in out}
         assert "§1c" not in rules
+
+
+# --------------------------------------------------------------------- #
+# §10 import-budget — baseline-sanity guard (noisy/slow runner tolerance)#
+# --------------------------------------------------------------------- #
+
+
+class TestStartupSpeedBaselineGuard:
+    """`_startup_speed_violation` decides §10 from real measured timings.
+
+    No mocks: the helper is pure (module_name, baseline, full, threshold,
+    runs) -> Violation | None. We pass real numbers that stand in for what
+    the subprocess measurement produced — a high baseline (NFS/loaded CI)
+    vs. a normal baseline with a genuinely-slow import — and assert the
+    severity classification, which is what drives `audit-all`'s exit code.
+    """
+
+    THRESHOLD = 500
+
+    def _call(self, baseline, full):
+        return _startup_speed_violation(
+            "scitex-demo", "scitex_demo", baseline, full, self.THRESHOLD, runs=3
+        )
+
+    # -- §10w warn-path: runner baseline itself exceeds the budget -------- #
+
+    def test_high_baseline_emits_a_finding(self):
+        # Arrange — bare interpreter already costs > threshold (NFS Spartan).
+        baseline, full = 1072.0, 1180.0
+        # Act
+        v = self._call(baseline=baseline, full=full)
+        # Assert
+        assert v is not None
+
+    def test_high_baseline_uses_warn_tier_rule(self):
+        # Arrange
+        baseline, full = 1072.0, 1180.0
+        # Act
+        v = self._call(baseline=baseline, full=full)
+        # Assert
+        assert v.rule == "§10w"
+
+    def test_warn_rule_registered_as_warn_severity(self):
+        # Arrange
+        rule = "§10w"
+        # Act
+        severity = RULE_SEVERITY[rule]
+        # Assert
+        assert severity == "warn"
+
+    def test_high_baseline_keeps_exit_zero(self):
+        # Arrange — audit-all exits 1 only when _max_severity == "error".
+        baseline, full = 1476.0, 1500.0
+        # Act
+        sev = _max_severity([self._call(baseline=baseline, full=full)])
+        # Assert
+        assert sev != "error"
+
+    def test_high_baseline_fires_even_when_marginal_negative(self):
+        # Arrange — on a noisy runner the marginal can flip negative.
+        baseline, full = 1100.0, 812.0
+        # Act
+        v = self._call(baseline=baseline, full=full)
+        # Assert
+        assert v.rule == "§10w"
+
+    def test_high_baseline_message_says_skipped(self):
+        # Arrange
+        baseline, full = 1072.0, 1200.0
+        # Act
+        v = self._call(baseline=baseline, full=full)
+        # Assert
+        assert "SKIPPED" in v.message
+
+    def test_high_baseline_message_names_baseline(self):
+        # Arrange
+        baseline, full = 1072.0, 1200.0
+        # Act
+        v = self._call(baseline=baseline, full=full)
+        # Assert
+        assert "1072ms" in v.message
+
+    # -- §10 strict-path: normal baseline, genuinely-slow import --------- #
+
+    def test_normal_baseline_slow_import_emits_a_finding(self):
+        # Arrange — baseline under budget, marginal (900 - 20 = 880ms) over it.
+        baseline, full = 20.0, 900.0
+        # Act
+        v = self._call(baseline=baseline, full=full)
+        # Assert
+        assert v is not None
+
+    def test_normal_baseline_slow_import_uses_error_tier_rule(self):
+        # Arrange
+        baseline, full = 20.0, 900.0
+        # Act
+        v = self._call(baseline=baseline, full=full)
+        # Assert
+        assert v.rule == "§10"
+
+    def test_normal_baseline_slow_import_is_error_severity(self):
+        # Arrange — §10 stays error so audit-all exits 1 on a real regression.
+        baseline, full = 20.0, 900.0
+        # Act
+        sev = _max_severity([self._call(baseline=baseline, full=full)])
+        # Assert
+        assert sev == "error"
+
+    def test_normal_baseline_fast_import_no_violation(self):
+        # Arrange — comfortably under budget.
+        baseline, full = 20.0, 45.0
+        # Act
+        v = self._call(baseline=baseline, full=full)
+        # Assert
+        assert v is None
+
+    def test_guard_boundary_baseline_equals_threshold_stays_strict(self):
+        # Arrange — baseline == threshold is NOT "over budget"; strict path,
+        # and marginal (threshold - threshold = 0) is under budget -> None.
+        baseline = full = float(self.THRESHOLD)
+        # Act
+        v = self._call(baseline=baseline, full=full)
+        # Assert
+        assert v is None
 
 
 # --------------------------------------------------------------------- #
