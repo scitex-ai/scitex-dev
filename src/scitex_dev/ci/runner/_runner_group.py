@@ -17,6 +17,7 @@ def register(ci_group: click.Group) -> click.Group:
         Verbs:
           status            — runner state + CI_RUNS_ON + xdist tuning
           use <target>      — flip CI_RUNS_ON (target: github|self-hosted)
+          ensure            — SOLVER: keep lease + N runners alive (cron-safe)
           up                — start the persistent runner
           down              — deregister the runner + stop it
           renew             — renew the SLURM CI lease job
@@ -28,6 +29,7 @@ def register(ci_group: click.Group) -> click.Group:
           $ scitex-dev ci runner status
           $ scitex-dev ci runner status --explain
           $ scitex-dev ci runner use self-hosted
+          $ scitex-dev ci runner ensure          # idempotent; run from cron
           $ scitex-dev ci runner up
           $ scitex-dev ci runner down
           $ scitex-dev ci runner renew
@@ -39,6 +41,7 @@ def register(ci_group: click.Group) -> click.Group:
 
     from ._status import register as register_status
     from ._use import register as register_use
+    from ._ensure import register as register_ensure
     from ._up import register as register_up
     from ._down import register as register_down
     from ._renew import register as register_renew
@@ -47,6 +50,7 @@ def register(ci_group: click.Group) -> click.Group:
 
     register_status(runner)
     register_use(runner)
+    register_ensure(runner)
     register_up(runner)
     register_down(runner)
     register_renew(runner)

@@ -23,6 +23,47 @@ runner:
   home:       </absolute/path/on/persistent/project-storage/github_runner>
   wrap_log:   </absolute/path/on/persistent/project-storage/github_runner/wrap.log>
 
+# --- Lease backend: PREFER `reservation` (scitex-hpc) over `ci_lease` ---------
+#
+# `reservation` rides on scitex-hpc's PERSISTENT reservations, which own the
+# 7-day-SLURM-walltime auto-resubmit (SIGUSR1 → `sbatch "$0"`) + `refresh`
+# job_id re-discovery. This is what `scitex-dev ci runner ensure` (the SOLVER)
+# and `up` use for the lease — scitex-dev no longer re-implements lease renewal.
+#
+# When `reservation` is present, the legacy `ci_lease` block below is OPTIONAL
+# (and ignored). Only `reservation.name` is required; the rest are pass-through
+# to `scitex-hpc reservations book` (which has its own config fallback).
+reservation:
+  # Friendly NAME of the scitex-hpc reservation that backs CI. Use the
+  # scitex-hpc naming convention so the shape is self-describing, e.g.
+  # spartan-cpu-64-cores-256-ram.
+  name:        spartan-cpu-64-cores-256-ram
+  # Path to the `scitex-hpc` binary. Default `scitex-hpc` assumes it's on
+  # PATH; set an absolute path when running from cron / a non-interactive
+  # shell where PATH is minimal (e.g. /home/<user>/.venv/bin/scitex-hpc).
+  cli:         scitex-hpc
+  # SSH host scitex-hpc submits from (passed as `--host`). Defaults to
+  # hpc.ssh_host above when omitted.
+  host:        <YOUR_HPC_SSH_ALIAS>
+  # Booking params — pass-through to `scitex-hpc reservations book`. Omit any
+  # you want scitex-hpc to resolve from ITS own config.
+  partition:   cascade
+  cpus:        64
+  mem:         256G
+  time:        7-0
+  account:     <YOUR_SLURM_ACCOUNT>
+  qos:         publiccpu
+  # Optional explicit pool for PARALLELISM. Omit → a single executor from the
+  # top-level `runner.*`. Each entry overrides name/home/repo/labels (anything
+  # omitted falls back to the `runner.*` / github.default_repo defaults); every
+  # extra executor needs its OWN `home` (separate _work/install dir).
+  # runners:
+  #   - name: spartan-cpu-runner-01
+  #     home: </persistent/.../github_runner-01>
+  #   - name: spartan-cpu-runner-02
+  #     home: </persistent/.../github_runner-02>
+
+# --- Legacy lease (only used when `reservation` is ABSENT) --------------------
 ci_lease:
   # The SLURM job NAME (NOT jobid — jobids cycle). The cron filters
   # squeue by this name; this is the scope guarantee that keeps the cron

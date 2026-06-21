@@ -5,6 +5,8 @@ Verbs:
   * ``status …``   — alias: ``scitex-dev ci runner status``
   * ``use github``       — flip CI_RUNS_ON to hosted ubuntu-latest
   * ``use self-hosted``  — flip CI_RUNS_ON back to self-hosted
+  * ``ensure``           — SOLVER: keep the scitex-hpc reservation + N runners
+                           alive across the 7-day SLURM walltime (cron-safe)
   * ``up``               — start the persistent runner on the HPC node
   * ``down``             — deregister the runner + stop it
   * ``renew``            — renew the SLURM CI lease job

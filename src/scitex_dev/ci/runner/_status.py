@@ -69,8 +69,34 @@ def _ci_runs_on(cfg: dict) -> str:
     return result.stdout.strip().strip('"')
 
 
+def _lease_label(cfg: dict) -> str:
+    """Human label for the lease backend (reservation name OR ci_lease jobname).
+
+    Used in status/preflight messages so they read correctly regardless of
+    which lease backend the config selected.
+    """
+    res_name = (cfg.get("reservation") or {}).get("name")
+    if res_name:
+        return f"reservation {res_name}"
+    return f"name={cfg['ci_lease']['jobname']}"
+
+
 def _lease_status(cfg: dict) -> dict:
-    """Query SLURM for the CI lease job status."""
+    """Return the CI lease status as ``{"jobs": [...]}`` (or ``{"error": ...}``).
+
+    Two backends, transparently (operator: "regarding lease, use scitex-hpc"):
+      * ``reservation.name`` set → ask scitex-hpc (``reservations refresh``),
+        which re-discovers the live job after a 7-day-walltime re-key. A live
+        reservation maps to one RUNNING ``jobs`` row so downstream consumers
+        (status display, preflight check 1) work unchanged; a dead/PENDING
+        reservation maps to zero rows (no RUNNING lease).
+      * otherwise → the legacy name-filtered squeue query on the ad-hoc
+        ``ci_lease`` hold-job.
+    """
+    res_cfg = cfg.get("reservation") or {}
+    if res_cfg.get("name"):
+        return _reservation_lease_status(cfg, res_cfg)
+
     user = cfg["hpc"]["user"]
     jobname = cfg["ci_lease"]["jobname"]
     target = config._ssh_target(cfg)
@@ -98,6 +124,38 @@ def _lease_status(cfg: dict) -> dict:
             }
         )
     return {"jobs": rows}
+
+
+def _reservation_lease_status(cfg: dict, res_cfg: dict, *, hpc_runner=None) -> dict:
+    """Map a scitex-hpc reservation to the ``{"jobs": [...]}`` lease shape.
+
+    ``hpc_runner`` is the test seam (a real fake ``scitex-hpc`` CLI runner);
+    production leaves it ``None`` so :func:`_reservation.refresh_state` shells
+    out to the real binary.
+    """
+    from . import _reservation
+
+    host = res_cfg.get("host") or cfg["hpc"].get("ssh_host")
+    cli = res_cfg.get("cli", "scitex-hpc")
+    try:
+        state = _reservation.refresh_state(
+            res_cfg["name"], host=host, cli=cli, hpc_runner=hpc_runner
+        )
+    except RuntimeError as exc:
+        return {"error": str(exc)[:200]}
+    if not state.live:
+        # No live allocation backing the reservation right now.
+        return {"jobs": []}
+    return {
+        "jobs": [
+            {
+                "jobid": state.job_id,
+                "state": "RUNNING",
+                "time_used": "-",
+                "time_left": "-",
+            }
+        ]
+    }
 
 
 def _compute_xdist_n(n_tests: int, nproc: int | None = None) -> int:
