@@ -164,6 +164,21 @@ def test_load_config_has_no_capabilities_when_absent(tmp_path):
     assert cfg.capabilities == frozenset()
 
 
+def test_load_config_honours_audit_block_without_project_type(tmp_path):
+    # Arrange — a config that declares ONLY an audit block (no project-type),
+    # like an alias package's capability knob. The audit block must still
+    # apply (types fall back to heuristic detection).
+    cfg_dir = tmp_path / ".scitex" / "dev"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.yaml").write_text(
+        "audit:\n  capabilities:\n    - no-mcp\n", encoding="utf-8"
+    )
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.has_capability("no-mcp") is True
+
+
 # ---------------------------------------------------------------------------
 # no-umbrella -> PS-501 / PS-503
 # ---------------------------------------------------------------------------

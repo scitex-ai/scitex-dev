@@ -289,28 +289,37 @@ def load_config(
 
     cfg_path = repo / CONFIG_REL_PATH
     raw = _read_yaml(cfg_path)
-    if raw and "project-type" in raw:
+    if raw:
+        # `project-type` is OPTIONAL. When absent (or empty/invalid) we still
+        # honour the file's `audit` block — `audit.capabilities` / `audit.skip`
+        # / `audit.whitelist` apply regardless of whether the project type is
+        # spelled out — and fall back to heuristic detection for the types. A
+        # config that only declares `audit:` (e.g. an alias package's
+        # capability knob or root-whitelist) was previously ignored wholesale.
         types_raw = raw.get("project-type") or []
         if isinstance(types_raw, str):
             types_raw = [types_raw]
         types = frozenset(t for t in types_raw if t in PROJECT_TYPES)
-        if types:
-            audit = raw.get("audit") or {}
-            skip = audit.get("skip") or []
-            if isinstance(skip, str):
-                skip = [skip]
-            caps = audit.get("capabilities") or []
-            if isinstance(caps, str):
-                caps = [caps]
-            wl = audit.get("whitelist")
-            return ProjectConfig(
-                project_types=types,
-                skip=frozenset(skip),
-                capabilities=frozenset(c for c in caps if c in KNOWN_CAPABILITIES),
-                whitelist_path=Path(wl) if wl else None,
-                metadata=raw.get("metadata") or {},
-                source="config",
-            )
+        source = "config"
+        if not types:
+            types = detect_project_types(repo)
+            source = "heuristic"
+        audit = raw.get("audit") or {}
+        skip = audit.get("skip") or []
+        if isinstance(skip, str):
+            skip = [skip]
+        caps = audit.get("capabilities") or []
+        if isinstance(caps, str):
+            caps = [caps]
+        wl = audit.get("whitelist")
+        return ProjectConfig(
+            project_types=types,
+            skip=frozenset(skip),
+            capabilities=frozenset(c for c in caps if c in KNOWN_CAPABILITIES),
+            whitelist_path=Path(wl) if wl else None,
+            metadata=raw.get("metadata") or {},
+            source=source,
+        )
 
     return ProjectConfig(
         project_types=detect_project_types(repo),
