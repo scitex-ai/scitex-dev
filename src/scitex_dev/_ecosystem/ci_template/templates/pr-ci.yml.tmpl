@@ -102,7 +102,15 @@ jobs:
           export PATH="$PWD/.venv/bin:$PATH"
           .venv/bin/pytest tests/ --cov=src/<PKG_MODULE> --cov-report=xml --cov-report=term
       - name: Upload coverage to Codecov
+        # continue-on-error so a tokenless runner (e.g. self-hosted
+        # spartan-cpu, where CODECOV_TOKEN is unset) does NOT fail the
+        # job. codecov-action@v5 exits 255 on a pre-flight token check
+        # that `fail_ci_if_error: false` does not catch — that exit must
+        # not red the leg. Where the token IS provisioned (a repo
+        # *secret*, never a *variable*, so it can't be gated in `if:`),
+        # the upload still happens.
         if: always() && matrix.python-version == '3.12'
+        continue-on-error: true
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
