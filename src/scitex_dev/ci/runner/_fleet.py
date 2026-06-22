@@ -13,7 +13,7 @@ the other ~60 runners die unnoticed.
 
 What the fleet pass does (idempotent, cron-safe)
 ------------------------------------------------
-In **ONE** ``scitex-hpc reservations exec`` to the lease's compute node (login-
+In **ONE** ``ssh -J`` to the lease's compute node (login-
 node hygiene is critical — the 2026-06-17 admin incident capped login-node ssh
 connections, so we MUST NOT ssh per-repo from the dev host), the pass:
 
@@ -34,7 +34,7 @@ connections, so we MUST NOT ssh per-repo from the dev host), the pass:
    launcher's env contract (and its TERM/INT deregister trap) stays satisfied.
 
 Reports ``alive=N restarted=M`` (``--dry-run`` reports ``would_restart`` and
-touches nothing). Fail-loud: a non-zero ``reservations exec`` raises.
+touches nothing). Fail-loud: a non-zero ``ssh`` to the node raises.
 
 Why this is ONE ssh, not 60 (and why NOT ``reservations exec``)
 --------------------------------------------------------------
@@ -157,7 +157,7 @@ def build_fleet_script(
     wrap_log_dir: str,
     dry_run: bool,
 ) -> str:
-    """Build the ONE bash script run on the node via ``reservations exec``. Pure.
+    """Build the ONE bash script run on the node via ``ssh -J``. Pure.
 
     The script is self-contained: it re-stages the launcher onto the shared FS
     (idempotent — covers a fresh node after a re-book where the staged copy may
