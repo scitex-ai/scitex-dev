@@ -2388,3 +2388,116 @@ def test_ps163_silent_when_badges_block_missing(tmp_path):
     (repo / "README.md").write_text(body)
     rules = _violations_for(repo, "demo")
     assert "PS-163" not in rules
+
+
+# ---------------------------------------------------------------------------
+# CAPABILITY knob -> no-umbrella gates PS-501 / PS-503.
+# (Split out of the former _project/test__capability_knob.py orphan; these
+# exercise audit_project's capability-filtering path, whose mirror src is
+# this module's _project/_audit.py.) Operator directive 2026-06-22.
+# ---------------------------------------------------------------------------
+
+
+def _write_caps_config(repo: Path, capabilities: list[str] | None) -> None:
+    """Write a `.scitex/dev/config.yaml` for `repo`, optionally with caps."""
+    cfg_dir = repo / ".scitex" / "dev"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    body = "project-type:\n  - pip\n"
+    if capabilities is not None:
+        body += "audit:\n  capabilities:\n"
+        for cap in capabilities:
+            body += f"    - {cap}\n"
+    (cfg_dir / "config.yaml").write_text(body, encoding="utf-8")
+
+
+def _make_ps501_repo(tmp_path: Path, capabilities: list[str] | None) -> Path:
+    """A package whose examples/01_*.py has main() but no @stx.session (PS-501)."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "demo-pkg"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
+    examples = tmp_path / "examples"
+    examples.mkdir()
+    (examples / "01_demo.py").write_text(
+        'def main():\n    print("hi")\n\n\nif __name__ == "__main__":\n    main()\n',
+        encoding="utf-8",
+    )
+    _write_caps_config(tmp_path, capabilities)
+    return tmp_path
+
+
+def _capknob_audit_json(repo: Path, rules: set[str]) -> dict:
+    import contextlib as _contextlib
+    import io as _io
+    import json as _json2
+
+    buf = _io.StringIO()
+    with _contextlib.redirect_stdout(buf):
+        audit_project(
+            "demo-pkg", repo=repo, json_out=True, rules=rules, severity="info"
+        )
+    return _json2.loads(buf.getvalue())
+
+
+def test_ps501_fires_without_capability(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=None)
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert {v["rule"] for v in payload["violations"]} == {"PS-501"}
+
+
+def test_ps501_not_skipped_without_capability(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=None)
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert payload["capability_skips"] == []
+
+
+def test_ps501_dropped_with_no_umbrella(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=["no-umbrella"])
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert payload["violations"] == []
+
+
+def test_ps501_skip_is_clean_exit_with_no_umbrella(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=["no-umbrella"])
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert payload["exit_code"] == 0
+
+
+def test_ps501_skip_is_recorded_visibly_in_json(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=["no-umbrella"])
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert {"rule": "PS-501", "capability": "no-umbrella"} in payload[
+        "capability_skips"
+    ]
+
+
+def test_ps501_skip_emits_human_notice(tmp_path, capsys):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=["no-umbrella"])
+    # Act
+    audit_project("demo-pkg", repo=repo, rules={"PS-501"}, severity="info")
+    # Assert
+    assert "skipped (declared capability: no-umbrella)" in capsys.readouterr().err
+
+
+def test_no_mcp_does_not_skip_ps501(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=["no-mcp"])
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert {v["rule"] for v in payload["violations"]} == {"PS-501"}
