@@ -302,6 +302,32 @@ def audit_project(
         if "deferred" in cfg.project_types
         else []
     )
+
+    # Leaf-side package-type CAPABILITY knob (operator directive 2026-06-22):
+    # a declared `audit.capabilities` entry (e.g. `no-umbrella`) skips the
+    # rules that do not fit the package TYPE — with a VISIBLE
+    # "skipped (declared capability: X)" notice, NOT a silent pass and NOT a
+    # blanket `audit.skip`. Each capability gates a FIXED rule set
+    # (CAPABILITY_RULES), so this can never silence an unrelated rule. We
+    # compute the skip BEFORE the project-type/skip filter so the notice
+    # reflects exactly what the capability dropped.
+    from .._config import capability_for_rule
+
+    capability_skipped: list[tuple[str, str]] = []  # (rule, capability)
+    if cfg.capabilities:
+        kept: list[Violation] = []
+        seen: set[tuple[str, str]] = set()
+        for v in violations:
+            cap = capability_for_rule(v.rule)
+            if cap is not None and cfg.has_capability(cap):
+                key = (v.rule, cap)
+                if key not in seen:
+                    seen.add(key)
+                    capability_skipped.append(key)
+                continue
+            kept.append(v)
+        violations = kept
+
     violations = [
         v for v in violations if cfg.applies(v.rule) and v.rule not in cfg.skip
     ]
@@ -329,6 +355,10 @@ def audit_project(
                             "severity": v.severity,
                         }
                         for v in visible
+                    ],
+                    "capability_skips": [
+                        {"rule": rule, "capability": cap}
+                        for rule, cap in capability_skipped
                     ],
                     "exit_code": exit_code,
                     "errors": n_errors,
@@ -362,9 +392,23 @@ def audit_project(
 
     from .._emit import emit as _emit
 
+    def _emit_capability_skips() -> None:
+        # Route via click.echo(err=True) — NOT _emit("info", ...) — so the
+        # notice is ALWAYS visible: the audit logger's default level is
+        # WARNING, which would swallow an info/skip headline. The operator
+        # requires this skip to be visible, not silent. Mirrors the
+        # always-printed `_emit_deferred_reminder` precedent.
+        for rule, cap in capability_skipped:
+            click.echo(
+                f"  [capability] {distribution}: {rule} skipped "
+                f"(declared capability: {cap})",
+                err=True,
+            )
+
     if not visible:
         # No findings at the requested severity floor.
         _emit("success", f"{distribution}: no project-structure violations")
+        _emit_capability_skips()
         _emit_deferred_reminder()
         emit_disclaimer()
         return exit_code
@@ -385,6 +429,7 @@ def audit_project(
             else ("warning" if getattr(v, "severity", "W") == "W" else "info")
         )
         _emit(sev, v.format())
+    _emit_capability_skips()
     _emit_deferred_reminder()
     emit_disclaimer()
     emit_skill_hints()

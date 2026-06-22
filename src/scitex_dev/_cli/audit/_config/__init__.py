@@ -13,16 +13,22 @@ ssh); PA-307 (test-quality) still applies at full severity.
 """
 
 from ._loader import (
+    CAPABILITY_RULES,
+    KNOWN_CAPABILITIES,
     PROJECT_TYPES,
     ProjectConfig,
+    capability_for_rule,
     detect_project_types,
     load_config,
     write_config,
 )
 
 __all__ = [
+    "CAPABILITY_RULES",
+    "KNOWN_CAPABILITIES",
     "PROJECT_TYPES",
     "ProjectConfig",
+    "capability_for_rule",
     "detect_project_types",
     "load_config",
     "write_config",
