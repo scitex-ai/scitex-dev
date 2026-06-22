@@ -27,15 +27,20 @@ class _FakeCompletedProcess:
         self.stderr = stderr
 
 
-class _FakeHpc:
-    """``scitex-hpc`` CLI fake — records calls; returns one canned response."""
+class _FakeComputeExec:
+    """Compute-node exec fake — records the on-node script; returns one response.
+
+    Mirrors production's seam: ``(script) -> CompletedProcess``. Recording the
+    script lets tests assert what the node would run (glob, liveness predicate,
+    DRY gate) without any ssh.
+    """
 
     def __init__(self, response: _FakeCompletedProcess):
         self._response = response
-        self.calls: list[list[str]] = []
+        self.scripts: list[str] = []
 
-    def __call__(self, args: list[str]) -> _FakeCompletedProcess:
-        self.calls.append(args)
+    def __call__(self, script: str) -> _FakeCompletedProcess:
+        self.scripts.append(script)
         return self._response
 
 
@@ -256,28 +261,18 @@ def test_parse_ignores_summary_and_blanks():
 # ---------------------------------------------------------------------------
 
 
-def test_run_fleet_uses_reservations_exec(monkeypatch):
-    # Arrange — token present; fake returns one alive runner.
+def test_run_fleet_runs_the_onnode_script(monkeypatch):
+    # Arrange — token present; fake returns one alive runner. The pass must hand
+    # the discover+restart script to the compute-node exec (one ssh to the node).
     monkeypatch.setenv("FLEET_TEST_PAT", "tkn")
-    hpc = _FakeHpc(
+    ex = _FakeComputeExec(
         _FakeCompletedProcess(stdout="FLEET_ALIVE\t/data/ci/actions-runner-tex\n")
     )
     cfg = _cfg()
     # Act
-    _fleet.run_fleet_ensure(cfg, hpc_runner=hpc)
-    # Assert — the single CLI call is `reservations exec` (one ssh to the node).
-    assert hpc.calls[0][:2] == ["reservations", "exec"]
-
-
-def test_run_fleet_targets_reservation_name(monkeypatch):
-    # Arrange
-    monkeypatch.setenv("FLEET_TEST_PAT", "tkn")
-    hpc = _FakeHpc(_FakeCompletedProcess(stdout="FLEET_SUMMARY\talive=0\n"))
-    cfg = _cfg()
-    # Act
-    _fleet.run_fleet_ensure(cfg, hpc_runner=hpc)
-    # Assert — the reservation name is passed to exec.
-    assert "ci-res" in hpc.calls[0]
+    _fleet.run_fleet_ensure(cfg, node="spartan-bm7", compute_exec=ex)
+    # Assert — the on-node script globs the per-repo runner homes.
+    assert "/data/ci/actions-runner-*" in ex.scripts[0]
 
 
 def test_run_fleet_parses_alive_and_restarted(monkeypatch):
@@ -288,44 +283,43 @@ def test_run_fleet_parses_alive_and_restarted(monkeypatch):
         "FLEET_RESTARTED\t/data/ci/actions-runner-io\n"
         "FLEET_SUMMARY\talive=1\trestarted=1\n"
     )
-    hpc = _FakeHpc(_FakeCompletedProcess(stdout=out))
+    ex = _FakeComputeExec(_FakeCompletedProcess(stdout=out))
     cfg = _cfg()
     # Act
-    res = _fleet.run_fleet_ensure(cfg, hpc_runner=hpc)
+    res = _fleet.run_fleet_ensure(cfg, node="spartan-bm7", compute_exec=ex)
     # Assert
     assert (len(res.alive), len(res.restarted)) == (1, 1)
 
 
 def test_run_fleet_dry_run_passes_dry_to_script(monkeypatch):
-    # Arrange — dry pass must hand a DRY=1 script to exec.
+    # Arrange — dry pass must hand a DRY=1 script to the node exec.
     monkeypatch.setenv("FLEET_TEST_PAT", "tkn")
-    hpc = _FakeHpc(_FakeCompletedProcess(stdout="FLEET_SUMMARY\talive=0\n"))
+    ex = _FakeComputeExec(_FakeCompletedProcess(stdout="FLEET_SUMMARY\talive=0\n"))
     cfg = _cfg()
     # Act
-    _fleet.run_fleet_ensure(cfg, dry_run=True, hpc_runner=hpc)
-    # Assert — the script (last exec arg) is the dry variant.
-    assert "DRY=1" in hpc.calls[0][-1]
+    _fleet.run_fleet_ensure(cfg, node="spartan-bm7", dry_run=True, compute_exec=ex)
+    # Assert — the script is the dry variant.
+    assert "DRY=1" in ex.scripts[0]
 
 
 def test_run_fleet_raises_on_exec_failure(monkeypatch):
-    # Arrange — a non-zero exec is a real error (fail-loud), not a no-op.
+    # Arrange — a non-zero on-node exec is a real error (fail-loud), not a no-op.
     monkeypatch.setenv("FLEET_TEST_PAT", "tkn")
-    hpc = _FakeHpc(_FakeCompletedProcess(returncode=1, stderr="srun: node down"))
+    ex = _FakeComputeExec(_FakeCompletedProcess(returncode=255, stderr="ssh: timeout"))
     cfg = _cfg()
     # Act / Assert
     with pytest.raises(Exception, match="fleet pass"):
-        _fleet.run_fleet_ensure(cfg, hpc_runner=hpc)
+        _fleet.run_fleet_ensure(cfg, node="spartan-bm7", compute_exec=ex)
 
 
-def test_run_fleet_requires_reservation_name(monkeypatch):
-    # Arrange — fleet execs INSIDE the reservation, so a name is mandatory.
+def test_run_fleet_requires_a_node(monkeypatch):
+    # Arrange — no allocated node (freshly booked / PENDING) → cannot ssh.
     monkeypatch.setenv("FLEET_TEST_PAT", "tkn")
     cfg = _cfg()
-    cfg["reservation"].pop("name")
-    hpc = _FakeHpc(_FakeCompletedProcess())
+    ex = _FakeComputeExec(_FakeCompletedProcess())
     # Act / Assert
-    with pytest.raises(Exception, match="reservation.name"):
-        _fleet.run_fleet_ensure(cfg, hpc_runner=hpc)
+    with pytest.raises(Exception, match="compute node"):
+        _fleet.run_fleet_ensure(cfg, node="", compute_exec=ex)
 
 
 # EOF

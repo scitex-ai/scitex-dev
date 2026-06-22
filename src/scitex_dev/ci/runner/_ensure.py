@@ -461,9 +461,21 @@ def register(group: click.Group) -> None:
         # true), so the existing */30 cron picks it up once the knob is set.
         fleet_result = None
         if fleet or _fleet.fleet_enabled(cfg):
-            fleet_result = _fleet.run_fleet_ensure(
-                cfg, dry_run=dry_run, launcher_path=launcher
-            )
+            if result.lease_node:
+                fleet_result = _fleet.run_fleet_ensure(
+                    cfg,
+                    node=result.lease_node,
+                    dry_run=dry_run,
+                    launcher_path=launcher,
+                )
+            else:
+                # No allocated node yet (freshly booked / PENDING); the
+                # fleet sweep needs a node to ssh to. Defer to the next tick.
+                click.echo(
+                    "fleet: lease has no allocated node yet; deferring fleet "
+                    "sweep to the next pass.",
+                    err=True,
+                )
 
         if as_json:
             payload = {

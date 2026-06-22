@@ -36,12 +36,23 @@ connections, so we MUST NOT ssh per-repo from the dev host), the pass:
 Reports ``alive=N restarted=M`` (``--dry-run`` reports ``would_restart`` and
 touches nothing). Fail-loud: a non-zero ``reservations exec`` raises.
 
-Why this is ONE ssh, not 60
----------------------------
-``reservations exec NAME 'CMD'`` runs ``CMD`` inside the allocation over a
-single ssh (``srun --jobid --overlap`` on the node). We hand it ONE bash script
-that does the whole discover+restart loop on the node. The dev host never ssh's
-to the node per-repo — the entire fleet sweep costs one login-node connection.
+Why this is ONE ssh, not 60 (and why NOT ``reservations exec``)
+--------------------------------------------------------------
+The whole discover+restart loop runs on the node in ONE bash script delivered
+over a SINGLE ``ssh -J <login> <compute-node>`` (``config.compute_ssh_cmd`` —
+the EXACT vector ``ci runner up`` / the single-repo restart already use). The
+dev host never ssh's to the node per-repo; the entire fleet sweep is one
+compute-node ssh (transiting one login node), so login-node hygiene holds.
+
+We deliberately do NOT launch through ``scitex-hpc reservations exec``: that
+runs the command as an ``srun --jobid --overlap`` job STEP, and SLURM reaps the
+step's whole process group when the step exits — killing even ``setsid nohup``
+children (verified live on Spartan: runners launched via ``reservations exec``
+died the instant the step returned). ``ssh -J`` to the node is a plain sshd
+session, so ``setsid nohup`` truly orphans the runner to init and it survives —
+the same reason ``up`` reaches the node by ssh, not srun. The lease NODE NAME
+comes from the scitex-hpc reservation state (``ensure_lease``); scitex-hpc still
+owns the lease, we just attach to its node the durable way.
 """
 
 from __future__ import annotations
@@ -50,12 +61,16 @@ import os
 import shlex
 import subprocess
 from dataclasses import dataclass, field
+from typing import Callable
 
 import click
 
-from . import _reservation, config
+from . import config
 
-HpcRunner = _reservation.HpcRunner
+# An injectable seam for the compute-node exec: (script) -> CompletedProcess.
+# Tests pass a real fake that records the script + returns canned output; prod
+# uses :func:`_default_compute_exec` (ssh -J to the lease node).
+ComputeExec = Callable[[str], "subprocess.CompletedProcess[str]"]
 
 # Machine-parseable line tags emitted by the on-node script (tab-separated so a
 # dir path with spaces — there are none on the lease, but be safe — never
@@ -269,16 +284,25 @@ def parse_fleet_output(stdout: str) -> FleetResult:
     return result
 
 
-def _default_hpc_runner_factory(cli: str) -> HpcRunner:
-    """Shell out to the configured ``scitex-hpc`` binary (tests pass a fake)."""
+def _default_compute_exec(target: str, node: str) -> ComputeExec:
+    """Return an exec that ssh -J's the script to the lease's compute node.
 
-    def _run(args: list[str]) -> "subprocess.CompletedProcess[str]":
+    Uses :func:`config.compute_ssh_cmd` (``ssh -J <login> <node>``) + ``bash
+    -s`` over stdin — the identical SSH-vector-safe path ``ci runner up`` and
+    the single-repo restart use, so a relaunched runner's ``setsid nohup``
+    orphans to init and survives (unlike an ``srun`` job step, which SLURM
+    reaps). One ssh per fleet pass; the on-node script touches ~70 dirs.
+    """
+
+    def _run(script: str) -> "subprocess.CompletedProcess[str]":
+        cmd = config.compute_ssh_cmd(target, node)
         return subprocess.run(
-            [cli, *args],
+            [*cmd, "bash -s"],
+            input=script,
             capture_output=True,
             text=True,
             check=False,
-            timeout=600,  # the on-node loop touches ~70 dirs; generous ceiling.
+            timeout=600,
         )
 
     return _run
@@ -287,26 +311,28 @@ def _default_hpc_runner_factory(cli: str) -> HpcRunner:
 def run_fleet_ensure(
     cfg: dict,
     *,
+    node: str,
     dry_run: bool = False,
     launcher_path: str | None = None,
-    hpc_runner: HpcRunner | None = None,
+    compute_exec: ComputeExec | None = None,
 ) -> FleetResult:
-    """Execute one fleet pass via a SINGLE ``reservations exec``. IO entry point.
+    """Execute one fleet pass via a SINGLE compute-node ssh. IO entry point.
 
-    The ``hpc_runner`` seam lets tests drive the whole pass with a real fake
-    (canned ``reservations exec`` output) — no mocks of our own code, mirroring
-    the ``_ensure`` / ``_reservation`` test strategy. Production leaves it
-    ``None`` and shells out to the configured ``scitex-hpc`` binary.
+    ``node`` is the lease's live compute node (resolved by ``ensure_lease``);
+    the whole discover+restart loop runs there over one ``ssh -J`` session so a
+    relaunched runner survives (see the module docstring on why NOT srun).
+
+    The ``compute_exec`` seam lets tests drive the whole pass with a real fake
+    (records the script + returns canned on-node output) — no mocks of our own
+    code, mirroring the ``_ensure`` / ``_reservation`` test strategy. Production
+    leaves it ``None`` and ssh's to ``node`` via :func:`_default_compute_exec`.
     """
-    res_cfg = cfg.get("reservation") or {}
-    name = res_cfg.get("name")
-    if not name:
+    if not node:
         raise click.ClickException(
-            "reservation.name is required for `ci runner ensure --fleet` — the "
-            "fleet pass execs inside the scitex-hpc reservation that backs CI."
+            "fleet pass needs the lease's compute node, but none is allocated "
+            "yet (freshly booked / PENDING). The next cron tick runs the fleet "
+            "sweep once SLURM schedules the lease."
         )
-    cli = res_cfg.get("cli", "scitex-hpc")
-    host = res_cfg.get("host") or cfg["hpc"].get("ssh_host")
 
     ci_root = fleet_ci_root(cfg)
     gh_token = config.get_gh_token(cfg)
@@ -328,15 +354,12 @@ def run_fleet_ensure(
         dry_run=dry_run,
     )
 
-    run = hpc_runner or _default_hpc_runner_factory(cli)
-    args = ["reservations", "exec", "-y", name]
-    if host:
-        args += ["--host", host]
-    args.append(script)
-    r = run(args)
+    target = config._ssh_target(cfg)
+    run = compute_exec or _default_compute_exec(target, node)
+    r = run(script)
     if r.returncode != 0:
         raise click.ClickException(
-            f"`scitex-hpc reservations exec {name}` (fleet pass) failed "
+            f"fleet pass (ssh to lease node {node}) failed "
             f"(rc={r.returncode}): {(r.stderr or r.stdout).strip()}"
         )
     return parse_fleet_output(r.stdout or "")
