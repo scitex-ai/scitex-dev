@@ -349,13 +349,17 @@ def _check_api_parity(
     # ``.scitex/dev/config.yaml``. §6 does not apply to them; skip it with a
     # VISIBLE "declared capability" notice (operator directive 2026-06-22).
     if declares_no_mcp(package, repo=repo):
-        from .._emit import emit as _emit
+        import click
 
-        _emit(
-            "info",
-            f"{package}: §6 MCP-parity skipped (declared capability: no-mcp) "
-            "— alias/no first-party MCP surface; parity does not apply to this "
-            "package type",
+        # Use click.echo(err=True) — NOT _emit("info", ...) — so the notice is
+        # ALWAYS visible: the audit logger's default level is WARNING and would
+        # swallow an info headline. The operator requires this skip to be
+        # visible, not silent (directive 2026-06-22).
+        click.echo(
+            f"  [capability] {package}: §6 skipped (declared capability: no-mcp)"
+            " — alias/no first-party MCP surface; parity does not apply to this"
+            " package type",
+            err=True,
         )
         return
 

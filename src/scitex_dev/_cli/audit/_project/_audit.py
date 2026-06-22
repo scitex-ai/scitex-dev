@@ -393,10 +393,16 @@ def audit_project(
     from .._emit import emit as _emit
 
     def _emit_capability_skips() -> None:
+        # Route via click.echo(err=True) — NOT _emit("info", ...) — so the
+        # notice is ALWAYS visible: the audit logger's default level is
+        # WARNING, which would swallow an info/skip headline. The operator
+        # requires this skip to be visible, not silent. Mirrors the
+        # always-printed `_emit_deferred_reminder` precedent.
         for rule, cap in capability_skipped:
-            _emit(
-                "info",
-                f"{distribution}: {rule} skipped (declared capability: {cap})",
+            click.echo(
+                f"  [capability] {distribution}: {rule} skipped "
+                f"(declared capability: {cap})",
+                err=True,
             )
 
     if not visible:
