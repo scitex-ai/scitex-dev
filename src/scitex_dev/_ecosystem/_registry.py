@@ -418,18 +418,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_nn",
         "category": "library",
     },
-    "scitex-linter": {
-        # GH-archived 2026 — AST-linter rules now live in scitex-dev
-        # (>=0.16.0, ``scitex_dev.linter._rules``); the standalone repo
-        # was archived. Kept here with archived=True so historical refs
-        # and plugin entry-points still resolve.
-        "local_path": "~/proj/scitex-linter",
-        "pypi_name": "scitex-linter",
-        "github_repo": "ywatanabe1989/scitex-linter",
-        "import_name": "scitex_linter",
-        "category": "library",
-        "archived": True,
-    },
     "scitex-math": {
         # Mathematical utilities (parity helpers, etc.). Added
         # 2026-06-07 alongside scitex-audit / scitex-core (#132 batch) —
