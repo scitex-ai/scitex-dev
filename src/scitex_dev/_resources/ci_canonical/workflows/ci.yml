@@ -24,6 +24,15 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Shared uv cache on punim0264 — the SAME filesystem as the self-hosted runners'
+  # _work — so uv HARDLINKS packages into each .venv instead of copying. Without
+  # this, uv's cache defaults to ~/.cache/uv (home FS ≠ _work FS) and uv falls back
+  # to COPY, so every repo's `.[all,dev]` venv duplicates ~50k files. With 68 per-repo
+  # runners that drove punim0264 to 95% inodes (2026-06-20). Hardlinks make all 68
+  # venvs share one cache's inodes (~60x fewer). Harmless off-Spartan (uv just copies).
+  UV_CACHE_DIR: /data/gpfs/projects/punim0264/ywatanabe/ci/uv-cache
+
 jobs:
   pytest-matrix:
     # Job name is a REQUIRED status check — keep verbatim fleet-wide.
@@ -49,6 +58,9 @@ jobs:
           # kaleido/plotly image export needs Chrome; install best-effort (no-op for non-plotly repos)
           yes | .venv/bin/plotly_get_chrome >/dev/null 2>&1 || true
           PKG=$(basename "$(find src -maxdepth 1 -mindepth 1 -type d ! -name '*.egg-info' | sort | head -1)")
+          # .venv/bin on PATH so tests that spawn the package's console script via
+          # subprocess (bare name, e.g. `scitex-dev …`) resolve it — else FileNotFoundError.
+          export PATH="$PWD/.venv/bin:$PATH"
           .venv/bin/python -m pytest tests/ --cov="src/$PKG" --cov-report=xml --cov-report=term
       - name: Upload coverage to Codecov
         if: always() && matrix.python-version == '3.12'
