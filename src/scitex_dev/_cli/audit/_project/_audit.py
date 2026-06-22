@@ -302,6 +302,32 @@ def audit_project(
         if "deferred" in cfg.project_types
         else []
     )
+
+    # Leaf-side package-type CAPABILITY knob (operator directive 2026-06-22):
+    # a declared `audit.capabilities` entry (e.g. `no-umbrella`) skips the
+    # rules that do not fit the package TYPE — with a VISIBLE
+    # "skipped (declared capability: X)" notice, NOT a silent pass and NOT a
+    # blanket `audit.skip`. Each capability gates a FIXED rule set
+    # (CAPABILITY_RULES), so this can never silence an unrelated rule. We
+    # compute the skip BEFORE the project-type/skip filter so the notice
+    # reflects exactly what the capability dropped.
+    from .._config import capability_for_rule
+
+    capability_skipped: list[tuple[str, str]] = []  # (rule, capability)
+    if cfg.capabilities:
+        kept: list[Violation] = []
+        seen: set[tuple[str, str]] = set()
+        for v in violations:
+            cap = capability_for_rule(v.rule)
+            if cap is not None and cfg.has_capability(cap):
+                key = (v.rule, cap)
+                if key not in seen:
+                    seen.add(key)
+                    capability_skipped.append(key)
+                continue
+            kept.append(v)
+        violations = kept
+
     violations = [
         v for v in violations if cfg.applies(v.rule) and v.rule not in cfg.skip
     ]
@@ -329,6 +355,10 @@ def audit_project(
                             "severity": v.severity,
                         }
                         for v in visible
+                    ],
+                    "capability_skips": [
+                        {"rule": rule, "capability": cap}
+                        for rule, cap in capability_skipped
                     ],
                     "exit_code": exit_code,
                     "errors": n_errors,
@@ -362,9 +392,17 @@ def audit_project(
 
     from .._emit import emit as _emit
 
+    def _emit_capability_skips() -> None:
+        for rule, cap in capability_skipped:
+            _emit(
+                "info",
+                f"{distribution}: {rule} skipped (declared capability: {cap})",
+            )
+
     if not visible:
         # No findings at the requested severity floor.
         _emit("success", f"{distribution}: no project-structure violations")
+        _emit_capability_skips()
         _emit_deferred_reminder()
         emit_disclaimer()
         return exit_code
@@ -385,6 +423,7 @@ def audit_project(
             else ("warning" if getattr(v, "severity", "W") == "W" else "info")
         )
         _emit(sev, v.format())
+    _emit_capability_skips()
     _emit_deferred_reminder()
     emit_disclaimer()
     emit_skill_hints()
