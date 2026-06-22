@@ -145,7 +145,7 @@ From: ubuntu:24.04
             scikit-learn torch seaborn \
             click mcp fastmcp nbconvert ipykernel openpyxl \
             scitex-io scitex-logging scitex-config scitex-dict \
-            scitex-decorators scitex-gen scitex-nn \
+            scitex-decorators scitex-nn \
             scitex-stats scitex-str scitex-dsp figrecipe \
             mne ripple_detection tensorpac \
             "scitex-dev[all,dev]" \
