@@ -2,18 +2,22 @@
 
 Covers:
   * config opt-in (``fleet_enabled``) + ci-root resolution,
-  * the on-node bash script the pass hands to ``reservations exec`` (it must
-    discover ``actions-runner-*``, decide liveness by the runner's own argv,
-    and relaunch dead-but-registered runners via the shipped launcher),
+  * the on-node bash script the pass runs over one compute-node ssh (it must
+    discover ``actions-runner-*``, decide liveness by the runner's own argv, and
+    relaunch dead-but-registered runners via the shipped launcher),
   * output parsing into ``FleetResult``,
-  * one full pass driven by a real ``scitex-hpc`` CLI fake (no mocks of our own
-    code — PA-306 / STX-NM*; the ``hpc_runner`` seam returns canned
-    ``reservations exec`` output).
+  * one full pass driven by a real compute-exec fake (no mocks of our own code —
+    PA-306 / STX-NM*; the ``compute_exec`` seam records the on-node script and
+    returns canned output).
 
-One assertion per test (STX-TQ007); AAA markers per STX-TQ002.
+No mocks (PA-306): the GH-token env var is set/restored by a real ``os.environ``
+fixture, not ``monkeypatch``. One assertion per test (STX-TQ007); AAA markers
+per STX-TQ002.
 """
 
 from __future__ import annotations
+
+import os
 
 import pytest
 
@@ -42,6 +46,26 @@ class _FakeComputeExec:
     def __call__(self, script: str) -> _FakeCompletedProcess:
         self.scripts.append(script)
         return self._response
+
+
+@pytest.fixture
+def pat_env():
+    """Set the GH-token env var for the pass, then restore — no mocks.
+
+    ``config.get_gh_token`` reads the var named by ``github.pat_env``; the test
+    config points it at ``FLEET_TEST_PAT``. Real ``os.environ`` save/restore
+    keeps PA-306 (no ``monkeypatch``) satisfied.
+    """
+    key = "FLEET_TEST_PAT"
+    prior = os.environ.get(key)
+    os.environ[key] = "tkn"
+    try:
+        yield
+    finally:
+        if prior is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = prior
 
 
 def _cfg(**reservation_overrides) -> dict:
@@ -75,24 +99,30 @@ def _cfg(**reservation_overrides) -> dict:
 
 
 def test_fleet_disabled_by_default():
-    # Arrange — bare reservation, no fleet knob.
+    # Arrange
     cfg = _cfg()
-    # Act / Assert
-    assert _fleet.fleet_enabled(cfg) is False
+    # Act
+    enabled = _fleet.fleet_enabled(cfg)
+    # Assert
+    assert enabled is False
 
 
 def test_fleet_enabled_when_flag_true():
-    # Arrange — operator flips reservation.fleet: true.
+    # Arrange
     cfg = _cfg(fleet=True)
-    # Act / Assert
-    assert _fleet.fleet_enabled(cfg) is True
+    # Act
+    enabled = _fleet.fleet_enabled(cfg)
+    # Assert
+    assert enabled is True
 
 
 def test_fleet_enabled_when_repos_listed():
-    # Arrange — an explicit allow-list also opts in (forward-compat knob).
+    # Arrange
     cfg = _cfg(repos=["owner/a", "owner/b"])
-    # Act / Assert
-    assert _fleet.fleet_enabled(cfg) is True
+    # Act
+    enabled = _fleet.fleet_enabled(cfg)
+    # Assert
+    assert enabled is True
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +131,7 @@ def test_fleet_enabled_when_repos_listed():
 
 
 def test_ci_root_is_parent_of_runner_home():
-    # Arrange — per-repo homes are siblings of the config-managed home.
+    # Arrange
     cfg = _cfg()
     # Act
     root = _fleet.fleet_ci_root(cfg)
@@ -110,7 +140,7 @@ def test_ci_root_is_parent_of_runner_home():
 
 
 def test_ci_root_explicit_override_wins():
-    # Arrange — explicit fleet_root supersedes the derived parent.
+    # Arrange
     cfg = _cfg(fleet_root="/other/ci")
     # Act
     root = _fleet.fleet_ci_root(cfg)
@@ -136,60 +166,75 @@ def _script(dry_run: bool = False) -> str:
 
 
 def test_script_globs_actions_runner_dirs():
-    # Arrange / Act
+    # Arrange
+    expected = "/data/ci/actions-runner-*"
+    # Act
     script = _script()
-    # Assert — discovery globs the per-repo homes (the -* suffix excludes the
-    # no-suffix config-managed home).
-    assert "/data/ci/actions-runner-*" in script
+    # Assert
+    assert expected in script
 
 
 def test_script_checks_liveness_by_listener_argv():
-    # Arrange / Act
+    # Arrange
+    predicate = '"$d/bin/Runner.Listener"'
+    # Act
     script = _script()
-    # Assert — liveness uses the runner's OWN argv path, not a generic name.
-    assert '"$d/bin/Runner.Listener"' in script
+    # Assert
+    assert predicate in script
 
 
 def test_script_embeds_launcher_content():
-    # Arrange / Act
+    # Arrange
+    marker = "echo launcher"
+    # Act
     script = _script()
-    # Assert — the shipped launcher is re-staged inside the same exec.
-    assert "echo launcher" in script
+    # Assert
+    assert marker in script
 
 
 def test_script_restages_launcher_on_shared_fs():
-    # Arrange / Act
+    # Arrange
+    staged = "/data/ci/run/scitex_ci_launcher.sh"
+    # Act
     script = _script()
-    # Assert — staged under the ci-root's run/ dir (shared FS, not /tmp).
-    assert "/data/ci/run/scitex_ci_launcher.sh" in script
+    # Assert
+    assert staged in script
 
 
 def test_script_detaches_with_setsid_nohup():
-    # Arrange / Act
+    # Arrange
+    detach = "setsid nohup bash"
+    # Act
     script = _script()
-    # Assert — same detach mechanism as the single-repo path.
-    assert "setsid nohup bash" in script
+    # Assert
+    assert detach in script
 
 
 def test_script_passes_token_via_env_not_argv():
-    # Arrange / Act
+    # Arrange
+    env_ref = 'GH_TOKEN="$FLEET_GH_TOKEN"'
+    # Act
     script = _script()
-    # Assert — the token is referenced via env, never spliced into a runner argv.
-    assert 'GH_TOKEN="$FLEET_GH_TOKEN"' in script
+    # Assert
+    assert env_ref in script
 
 
-def test_script_dry_run_does_not_launch():
-    # Arrange / Act — dry mode.
+def test_script_dry_run_sets_dry_gate():
+    # Arrange
+    gate = "DRY=1"
+    # Act
     script = _script(dry_run=True)
-    # Assert — DRY gate set; the would-restart branch is taken instead of launch.
-    assert "DRY=1" in script
+    # Assert
+    assert gate in script
 
 
-def test_script_real_run_launches():
-    # Arrange / Act — real mode.
+def test_script_real_run_clears_dry_gate():
+    # Arrange
+    gate = "DRY=0"
+    # Act
     script = _script(dry_run=False)
     # Assert
-    assert "DRY=0" in script
+    assert gate in script
 
 
 # ---------------------------------------------------------------------------
@@ -257,14 +302,12 @@ def test_parse_ignores_summary_and_blanks():
 
 
 # ---------------------------------------------------------------------------
-# run_fleet_ensure — full pass with a real scitex-hpc fake (no mocks)
+# run_fleet_ensure — full pass with a real compute-exec fake (no mocks)
 # ---------------------------------------------------------------------------
 
 
-def test_run_fleet_runs_the_onnode_script(monkeypatch):
-    # Arrange — token present; fake returns one alive runner. The pass must hand
-    # the discover+restart script to the compute-node exec (one ssh to the node).
-    monkeypatch.setenv("FLEET_TEST_PAT", "tkn")
+def test_run_fleet_runs_the_onnode_script(pat_env):
+    # Arrange
     ex = _FakeComputeExec(
         _FakeCompletedProcess(stdout="FLEET_ALIVE\t/data/ci/actions-runner-tex\n")
     )
@@ -275,9 +318,8 @@ def test_run_fleet_runs_the_onnode_script(monkeypatch):
     assert "/data/ci/actions-runner-*" in ex.scripts[0]
 
 
-def test_run_fleet_parses_alive_and_restarted(monkeypatch):
-    # Arrange — one alive, one restarted.
-    monkeypatch.setenv("FLEET_TEST_PAT", "tkn")
+def test_run_fleet_parses_alive_and_restarted(pat_env):
+    # Arrange
     out = (
         "FLEET_ALIVE\t/data/ci/actions-runner-tex\n"
         "FLEET_RESTARTED\t/data/ci/actions-runner-io\n"
@@ -291,33 +333,32 @@ def test_run_fleet_parses_alive_and_restarted(monkeypatch):
     assert (len(res.alive), len(res.restarted)) == (1, 1)
 
 
-def test_run_fleet_dry_run_passes_dry_to_script(monkeypatch):
-    # Arrange — dry pass must hand a DRY=1 script to the node exec.
-    monkeypatch.setenv("FLEET_TEST_PAT", "tkn")
+def test_run_fleet_dry_run_passes_dry_to_script(pat_env):
+    # Arrange
     ex = _FakeComputeExec(_FakeCompletedProcess(stdout="FLEET_SUMMARY\talive=0\n"))
     cfg = _cfg()
     # Act
     _fleet.run_fleet_ensure(cfg, node="spartan-bm7", dry_run=True, compute_exec=ex)
-    # Assert — the script is the dry variant.
+    # Assert
     assert "DRY=1" in ex.scripts[0]
 
 
-def test_run_fleet_raises_on_exec_failure(monkeypatch):
+def test_run_fleet_raises_on_exec_failure(pat_env):
     # Arrange — a non-zero on-node exec is a real error (fail-loud), not a no-op.
-    monkeypatch.setenv("FLEET_TEST_PAT", "tkn")
     ex = _FakeComputeExec(_FakeCompletedProcess(returncode=255, stderr="ssh: timeout"))
     cfg = _cfg()
-    # Act / Assert
+    # Act
+    # Assert
     with pytest.raises(Exception, match="fleet pass"):
         _fleet.run_fleet_ensure(cfg, node="spartan-bm7", compute_exec=ex)
 
 
-def test_run_fleet_requires_a_node(monkeypatch):
+def test_run_fleet_requires_a_node(pat_env):
     # Arrange — no allocated node (freshly booked / PENDING) → cannot ssh.
-    monkeypatch.setenv("FLEET_TEST_PAT", "tkn")
-    cfg = _cfg()
     ex = _FakeComputeExec(_FakeCompletedProcess())
-    # Act / Assert
+    cfg = _cfg()
+    # Act
+    # Assert
     with pytest.raises(Exception, match="compute node"):
         _fleet.run_fleet_ensure(cfg, node="", compute_exec=ex)
 
