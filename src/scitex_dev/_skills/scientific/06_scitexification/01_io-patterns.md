@@ -100,11 +100,11 @@ lands you may pass a literal `"./data/metrics.csv"`.
 - **`dtype=object` pickles / custom classes** — round-trip via the `.pkl`
   saver works, but the class must be importable at load time; prefer a
   plain dict/array payload where you can.
-- **Non-descriptive source names** (a capsule's literal `output`,
+- **Non-descriptive source names** (a project's literal `output`,
   `stdout`) — **copy** (don't symlink) into a descriptive `data/<name>`
   before Stage 1. `stx.io`/clew resolve a symlink to its *target*
-  basename, so `eval_output.txt → output` would show up as `output` in
-  the DAG; a real copy shows `eval_output.txt`.
+  basename, so `result_output.txt → output` would show up as `output` in
+  the DAG; a real copy shows `result_output.txt`.
 
 ## Two I/O modes (environment caveat)
 
