@@ -40,6 +40,47 @@ PROJECT_TYPES = frozenset({"pip", "research", "special", "django", "deferred"})
 
 CONFIG_REL_PATH = Path(".scitex/dev/config.yaml")
 
+# Leaf-side package-type CAPABILITY knob (operator directive 2026-06-22).
+#
+# A leaf declares what it structurally LACKS so the auditor skips the rules
+# that do not fit that package TYPE — with a VISIBLE "skipped (declared
+# capability: X)" notice rather than a silent pass or a blanket
+# ``audit.skip`` entry. This keeps the skip self-documenting and scoped to a
+# real package property (like a plugin/capability flag), not per-rule debt
+# suppression. Schema in ``.scitex/dev/config.yaml``::
+#
+#     audit:
+#       capabilities: [no-mcp, no-umbrella]
+#
+#   no-mcp       — package is an ALIAS / has no first-party MCP surface
+#                  (e.g. scitex-plt aliases figrecipe). Skips the §6
+#                  MCP ↔ Python-API parity check.
+#   no-umbrella  — package is umbrella-free (e.g. scitex-seizure-metrics,
+#                  scitex-stats); its examples legitimately do not use
+#                  ``@stx.session``. Skips PS-501 / PS-503.
+#
+# Each capability gates a FIXED, hard-coded set of rule codes (see
+# ``CAPABILITY_RULES``) so a declared capability can never silence an
+# unrelated rule.
+CAPABILITY_RULES: dict[str, frozenset[str]] = {
+    "no-mcp": frozenset({"§6"}),
+    "no-umbrella": frozenset({"PS-501", "PS-503"}),
+}
+
+KNOWN_CAPABILITIES = frozenset(CAPABILITY_RULES)
+
+
+def capability_for_rule(rule: str) -> str | None:
+    """Return the capability whose declaration skips ``rule`` (or None).
+
+    Inverse of :data:`CAPABILITY_RULES`. Used by the auditor to emit the
+    ``skipped (declared capability: X)`` notice when a finding is dropped.
+    """
+    for cap, rules in CAPABILITY_RULES.items():
+        if rule in rules:
+            return cap
+    return None
+
 
 @dataclass(frozen=True)
 class ProjectConfig:
@@ -52,9 +93,23 @@ class ProjectConfig:
 
     project_types: frozenset[str]
     skip: frozenset[str] = frozenset()
+    capabilities: frozenset[str] = frozenset()
     whitelist_path: Path | None = None
     metadata: dict = field(default_factory=dict)
     source: str = "config"  # "config" | "heuristic" | "override"
+
+    def has_capability(self, name: str) -> bool:
+        """True iff the project declared the ``name`` capability.
+
+        Capabilities are declared in ``.scitex/dev/config.yaml`` under
+        ``audit.capabilities`` (e.g. ``no-mcp``, ``no-umbrella``) and gate a
+        FIXED set of rule codes (:data:`CAPABILITY_RULES`). Unlike
+        ``audit.skip`` (which silences an arbitrary rule, debt-style), a
+        capability is a declared package PROPERTY — the auditor emits a
+        visible "skipped (declared capability: X)" notice when it drops a
+        finding for it.
+        """
+        return name in self.capabilities
 
     @property
     def app_metadata(self) -> dict:
@@ -244,10 +299,14 @@ def load_config(
             skip = audit.get("skip") or []
             if isinstance(skip, str):
                 skip = [skip]
+            caps = audit.get("capabilities") or []
+            if isinstance(caps, str):
+                caps = [caps]
             wl = audit.get("whitelist")
             return ProjectConfig(
                 project_types=types,
                 skip=frozenset(skip),
+                capabilities=frozenset(c for c in caps if c in KNOWN_CAPABILITIES),
                 whitelist_path=Path(wl) if wl else None,
                 metadata=raw.get("metadata") or {},
                 source="config",
@@ -291,6 +350,9 @@ def write_config(
 __all__ = [
     "PROJECT_TYPES",
     "CONFIG_REL_PATH",
+    "CAPABILITY_RULES",
+    "KNOWN_CAPABILITIES",
+    "capability_for_rule",
     "ProjectConfig",
     "detect_project_types",
     "load_config",
