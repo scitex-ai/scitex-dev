@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Universal scitexify playbook — the layer-agnostic translation act.
-  [DETAILS] Canonical playbook for **scitexification**: the act of taking ANY scientific problem (a script, a notebook, a small repo, a paper supplement, a published analysis) and translating it into a SciTeX project — canonical structure, `@stx.session` discipline, DAG/pipeline conventions, source-grounded outputs — then re-solving it within that structure. This leaf is the GENERAL layer: it COINS the vocabulary (`scitexify` verb / `scitexification` noun) and fixes the universal contract. Experiment-specific layers (clew/capsule/cohort/submission gates, oracle-blind scoring, etc.) live separately and compose ON TOP of this skill via `04_clew_*`. The core scientific-integrity principle — "honest source-grounding WITHOUT over-abstaining: attempt every claim, ground where possible, and when ungroundable include the claim explicitly with `null` + a reason — NEVER silently omit" — is framed here as a general scientific norm, not a submission rule. To actually translate-and-resolve, scitexification DEPENDS on four package-level companion skills that supply the API knowledge: scitex.session (the `@stx.session` framework), scitex.io (save/load I/O), scitex.plt + figrecipe (figures), and scitex.clew (provenance / source-grounding / validity chain). Load these alongside this playbook — see the "Required companion skills" section below for the canonical declaration and the SAC `spec.skills.required` snippet.
+  [DETAILS] Canonical playbook for **scitexification**: the act of taking ANY scientific problem (a script, a notebook, a small repo, a paper supplement, a published analysis) and translating it into a SciTeX project — canonical structure, `@stx.session` discipline, DAG/pipeline conventions, source-grounded outputs — then re-solving it within that structure. This leaf is the GENERAL layer: it COINS the vocabulary (`scitexify` verb / `scitexification` noun) and fixes the universal contract. Experiment-specific layers (experiment-specific evaluation/scoring/output gates, etc.) live separately and compose ON TOP of this skill via `04_clew_*`. The core scientific-integrity principle — "honest source-grounding WITHOUT over-abstaining: attempt every claim, ground where possible, and when ungroundable include the claim explicitly with `null` + a reason — NEVER silently omit" — is framed here as a general scientific norm, not an output-schema rule. To actually translate-and-resolve, scitexification DEPENDS on four package-level companion skills that supply the API knowledge: scitex.session (the `@stx.session` framework), scitex.io (save/load I/O), scitex.plt + figrecipe (figures), and scitex.clew (provenance / source-grounding / validity chain). Load these alongside this playbook — see the "Required companion skills" section below for the canonical declaration and the SAC `spec.skills.required` snippet.
 tags: [scitex-scientific-scitexification-playbook]
 requires:
   - scitex-session
@@ -14,8 +14,8 @@ requires:
 
 The single canonical playbook for **scitexification**, the act of converting
 arbitrary scientific code into a SciTeX project. Layer-agnostic by
-construction: nothing in this file mentions capsules, cohorts, oracles,
-submission schemas, or SHA-256 validity gates. Specializations layer on top
+construction: nothing here is tied to a specific experiment's harness
+(evaluation gates, scoring, output schemas). Specializations layer on top
 (see [Related](#related)).
 
 ## Vocabulary (canonical)
@@ -195,8 +195,8 @@ modes that no amount of careful translation will fix later.
 □ Files with non-descriptive source names (literal "output", "stdout"):
   COPY (not symlink) into a descriptive name in `data/` before stage 1.
   Clew/scitex-io resolve symlinks to target basename, so a symlink
-  `eval_output.txt` → `output` shows up as `output` in the DAG. A real
-  copy `eval_output.txt` shows clearly.
+  `result_output.txt` → `output` shows up as `output` in the DAG. A real
+  copy `result_output.txt` shows clearly.
 ```
 
 ## Phase dispatch
@@ -225,7 +225,7 @@ else:
 
 Note: `has_repro_doc` triggers on `REPRODUCING.md` specifically, not on
 the more common `README.md`. A `README.md` is too broad a signal —
-many notebook capsules carry a stub `README.md` that documents the
+many notebook bundles carry a stub `README.md` that documents the
 project at a glance rather than the *reproduction recipe*. Triggering
 `repro-doc` on it would misroute the agent into looking for run
 commands that aren't there. The narrower `REPRODUCING.md` convention
@@ -344,7 +344,7 @@ The agent's job is to emit a faithful record of *what it attempted and
 what it found*. The verifier's job is to decide *which entries count*.
 Mixing the two is the bug.
 
-### Why this is a general principle, not a submission rule
+### Why this is a general principle, not an output-schema rule
 
 This principle is older than scitex-clew and outlives any one evaluator.
 It is the standard scientific-record norm: report what you found,
@@ -376,8 +376,9 @@ issue) rather than presented as done.
 ## Forbidden (at the universal layer)
 
 These are forbidden regardless of which downstream evaluator the project
-feeds. Experiment-specific layers add more (e.g., clew forbids reading
-the oracle); this list is the universal floor.
+feeds. Experiment-specific layers add more (e.g., an evaluator-blind
+harness forbids reading the held-out answers); this list is the universal
+floor.
 
 - Silent omission of an ungroundable claim (see Honest Grounding).
 - Hand-writing the results / claims JSON instead of composing it from
@@ -418,11 +419,11 @@ Deliberately out of scope (each has its own dedicated home):
 - **Per-package API surface** (full `stx.io` type matrix, FigRecipe
   figure types, scitex-clew primitives) → the per-pkg SKILL.md in
   `~/.claude/skills/scitex/<pkg>/`.
-- **Clew-specific / capsule-specific specialisation** (oracle-blind
-  scoring, `$CAPSULE_ID` dispatch, DONE signalling, submission
+- **Clew-specific / experiment-specific specialisation** (evaluator-blind
+  scoring, run dispatch, completion signalling, output/results
   schemas) → [`../04_clew_*`](../). Read those AFTER this playbook
-  when working in a clew-tracked cohort.
-- **The discovery contract** (capsule-side
+  when working in a clew-tracked flow.
+- **The discovery contract** (consumer-side
   `spec.claude.skills: [scitexification]` auto-loading) — tracked
   separately in the SAC ↔ scitex-dev contract thread; not a
   scitexification concern.
@@ -435,7 +436,7 @@ Deliberately out of scope (each has its own dedicated home):
   when adopting clew.
 - [`../04_clew_02_translation-playbook.md`](../04_clew_02_translation-playbook.md)
   — clew-specific translation playbook. Specialisation of stages 1+2+4
-  for the clew-tracked cohort flow.
+  for the clew-tracked flow.
 - [`../04_clew_03_translation-template.md`](../04_clew_03_translation-template.md)
   — concrete project skeleton for clew-tracked translation.
 - [`../02_research-project_07_config-and-parameters.md`](../02_research-project_07_config-and-parameters.md)

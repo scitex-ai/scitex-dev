@@ -107,7 +107,6 @@ ECOSYSTEM_IMPORTS_TO_DIST: dict[str, str] = {
     "scitex_notification": "scitex-notification",
     "scitex_benchmark": "scitex-benchmark",
     "scitex_bridge": "scitex-bridge",
-    "scitex_linter": "scitex-linter",
     "figrecipe": "figrecipe",
     "socialia": "socialia",
 }

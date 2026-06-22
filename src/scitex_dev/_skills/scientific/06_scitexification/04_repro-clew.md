@@ -4,7 +4,7 @@ description: |
   [DETAILS] Stage 4 of the 5-stage scitexification arc: final-mile
   assertions (the numbers in the abstract / conclusions / a figure
   caption) become registered scitex-clew claims, each evidence-bound by
-  SHA-256 to the file that produced it; the results/submission JSON is
+  SHA-256 to the file that produced it; the results/output JSON is
   composed by iterating registered claims through `list_claims()` +
   `verify_claim()` and filtering on `source_verified`, never hand-written.
   A validity gate runs INSIDE the final stage so a broken evidence chain
@@ -42,7 +42,7 @@ workdir*:
 ```bash
 export APPTAINER_TMPDIR=/tmp APPTAINER_CACHEDIR=/tmp/.apptainer-cache
 # (a) PULL a pre-built published image — preferred when the source provides one
-#     (e.g. CodeOcean capsules name one in REPRODUCING.md, anonymously pullable):
+#     (e.g. a CodeOcean compute capsule names one in REPRODUCING.md, anonymously pullable):
 apptainer build env.sif docker://<registry>/<published-image>:<tag>
 # (b) OR BUILD the source's Dockerfile — convert it to a def (`Bootstrap: docker`
 #     + a `%post` carrying the RUN/apt/conda/pip lines); %post runs as root:
@@ -151,11 +151,11 @@ json.dump(results, open("out.json","w"))      claim_type="value", line_number=1,
 - Full scitex-clew primitive surface (`add_claim`, `list_claims`,
   `verify_claim`, `chain`, `render_dag`/`generate_mermaid_dag`, validity
   semantics) → **`scitex-clew`'s own SKILL.md**.
-- Clew-tracked / capsule-specific specialisations (oracle-blind scoring,
-  submission schemas, DONE signalling) →
+- Clew-tracked / experiment-specific specialisations (evaluator-blind
+  scoring, output/results schemas, completion signalling) →
   [`../04_clew_02_translation-playbook.md`](../04_clew_02_translation-playbook.md)
   and the `../04_clew_*` siblings. Read those after this chapter when
-  working in a clew cohort.
+  working in a clew-tracked flow.
 - Stages 1–3 are the precondition: the file nodes those stages created are
   the leaves each claim walks back to.
 
