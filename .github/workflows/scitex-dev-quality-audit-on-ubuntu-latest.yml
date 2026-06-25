@@ -28,7 +28,7 @@ on:
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
