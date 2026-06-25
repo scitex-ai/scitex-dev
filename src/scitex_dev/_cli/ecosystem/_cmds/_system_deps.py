@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import click
 
-from ....system_deps import discover_system_deps
-
 
 def _select(provider):
     """Discover + optionally filter to one provider."""
+    from ....system_deps import discover_system_deps
+
     deps = discover_system_deps()
     if provider:
         deps = [d for d in deps if d.provider == provider]
