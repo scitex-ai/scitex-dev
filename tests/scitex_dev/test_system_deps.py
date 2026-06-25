@@ -7,7 +7,9 @@ providers, mirroring how discover_jobs is tested.
 from __future__ import annotations
 
 import pytest
+from click.testing import CliRunner
 
+from scitex_dev._cli import main
 from scitex_dev.system_deps import SystemDepSpec, discover_system_deps
 
 
@@ -84,3 +86,30 @@ def test_spec_carries_optional_apt_repo():
     apt_repo = spec.apt_repo
     # Assert
     assert apt_repo == "ppa:apptainer/ppa"
+
+
+def test_cli_system_deps_list_exits_zero():
+    # Arrange
+    runner = CliRunner()
+    # Act
+    result = runner.invoke(main, ["ecosystem", "system-deps", "--list"])
+    # Assert
+    assert result.exit_code == 0
+
+
+def test_cli_system_deps_json_emits_an_array():
+    # Arrange
+    runner = CliRunner()
+    # Act
+    result = runner.invoke(main, ["ecosystem", "system-deps", "--json"])
+    # Assert
+    assert result.output.strip().startswith("[")
+
+
+def test_cli_system_deps_default_table_exits_zero():
+    # Arrange
+    runner = CliRunner()
+    # Act
+    result = runner.invoke(main, ["ecosystem", "system-deps"])
+    # Assert
+    assert result.exit_code == 0
