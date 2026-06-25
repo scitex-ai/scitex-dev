@@ -118,6 +118,12 @@ def discover_system_deps(
     provider wins (entry-point discovery order, then ``extra_providers``) and
     the duplicate is dropped with a logged warning -- matching ``discover_jobs``
     (provider-wins / first-wins). Returns specs sorted by package name.
+
+    DETERMINISM GUARANTEE (contract): the result is deduped-by-package and
+    sorted-by-package, so the set of apt names -- i.e. ``--list`` output -- is
+    STABLE regardless of entry-point iteration order. Only the *metadata*
+    (purpose / provider / apt_repo) of a duplicated package depends on discovery
+    order (first-wins). Leaves can therefore rely on a reproducible install set.
     """
     providers: list[Callable[[], list[SystemDepSpec]]] = []
     for ep in _iter_entry_points(ENTRY_POINT_GROUP):
