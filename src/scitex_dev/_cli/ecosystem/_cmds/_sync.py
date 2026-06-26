@@ -111,6 +111,41 @@ def _sync_one(pkg: str, info: dict, *, dry_run: bool) -> dict:
     return {"package": pkg, "action": "pulled", "behind": n_behind, "detail": ""}
 
 
+def _shell_emit(pkg: str) -> None:
+    """Emit a ``pulled`` card-event for ``pkg`` via the scitex-todo CLI.
+
+    Decoupled by SHELLING OUT (no import of scitex-todo) so a slow/absent
+    consumer can't hang or break the sweep. Best-effort: if scitex-todo isn't
+    on PATH or the emit fails, the sync is unaffected. ``pulled`` is default-
+    quiet (the dispatcher no-ops without a card_id), so this is a recorded,
+    non-notifying signal — exactly the auto-pull C8 contract.
+    """
+    import subprocess
+
+    try:
+        subprocess.run(
+            ["scitex-todo", "emit-event", "--type", "pulled",
+             "--repo", pkg, "--actor", "scitex-dev"],
+            check=False,
+            capture_output=True,
+        )
+    except OSError:
+        pass  # scitex-todo not installed / not on PATH — never fail the sync
+
+
+def _emit_pulled_events(rows, *, emit_fn=None) -> None:
+    """Fire a ``pulled`` event for each repo that ACTUALLY fast-forwarded.
+
+    Only ``action == "pulled"`` rows advance (a real ff-merge); ``synced`` /
+    ``would-pull`` / skipped rows emit nothing, so no-op pulls stay quiet.
+    ``emit_fn`` is the injection seam for tests (default = real shell-out).
+    """
+    emit = emit_fn or _shell_emit
+    for row in rows:
+        if row.get("action") == "pulled":
+            emit(row["package"])
+
+
 _ACTION_STYLE = {
     "pulled": ("green", "pulled"),
     "would-pull": ("cyan", "would-pull"),
@@ -176,6 +211,11 @@ def register(ecosystem):
         pkg_filter = parse_package_filter(package)
         items = selected_packages(pkg_filter)
         rows = [_sync_one(pkg, info, dry_run=dry_run) for pkg, info in items]
+
+        # C8: emit a card-event for each repo that actually fast-forwarded.
+        # Only on real execution (dry-run yields would-pull, never pulled).
+        if not dry_run:
+            _emit_pulled_events(rows)
 
         if as_json:
             click.echo(
