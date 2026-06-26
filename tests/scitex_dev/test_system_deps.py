@@ -6,11 +6,17 @@ providers, mirroring how discover_jobs is tested.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from click.testing import CliRunner
 
 from scitex_dev._cli import main
-from scitex_dev._cli.ecosystem._cmds._system_deps import _do_install
+from scitex_dev._cli.ecosystem._cmds._system_deps import (
+    _do_install,
+    _read_baseline,
+    _superset_delta,
+)
 from scitex_dev.system_deps import SystemDepSpec, discover_system_deps
 
 
@@ -132,3 +138,79 @@ def test_do_install_dry_run_previews_without_running():
     rc = _do_install(deps, dry_run=True)
     # Assert
     assert rc == 0
+
+
+def test_superset_delta_flags_a_missing_baseline_package():
+    # Arrange
+    aggregated = {"ffmpeg"}
+    baseline = {"ffmpeg", "biber"}
+    # Act
+    missing, _added = _superset_delta(aggregated, baseline)
+    # Assert
+    assert missing == ["biber"]
+
+
+def test_superset_delta_reports_packages_added_by_providers():
+    # Arrange
+    aggregated = {"ffmpeg", "biber"}
+    baseline = {"ffmpeg"}
+    # Act
+    _missing, added = _superset_delta(aggregated, baseline)
+    # Assert
+    assert added == ["biber"]
+
+
+def test_read_baseline_skips_comments_and_blank_lines(tmp_path):
+    # Arrange
+    baseline_file = tmp_path / "recipe-apt.txt"
+    baseline_file.write_text("ffmpeg\n\n# a comment\nbiber  # inline\n")
+    # Act
+    names = _read_baseline(str(baseline_file))
+    # Assert
+    assert names == {"ffmpeg", "biber"}
+
+
+def test_cli_check_superset_is_green_on_an_empty_baseline(tmp_path):
+    # Arrange
+    baseline_file = tmp_path / "empty.txt"
+    baseline_file.write_text("# nothing required\n")
+    # Act
+    result = CliRunner().invoke(
+        main,
+        ["ecosystem", "system-deps", "check-superset", "--baseline", str(baseline_file)],
+    )
+    # Assert
+    assert result.exit_code == 0
+
+
+def test_cli_check_superset_is_red_on_an_undeclared_package(tmp_path):
+    # Arrange
+    baseline_file = tmp_path / "recipe.txt"
+    baseline_file.write_text("zzz-not-a-declared-apt-pkg\n")
+    # Act
+    result = CliRunner().invoke(
+        main,
+        ["ecosystem", "system-deps", "check-superset", "--baseline", str(baseline_file)],
+    )
+    # Assert
+    assert result.exit_code == 1
+
+
+def test_cli_check_superset_json_reports_a_red_verdict(tmp_path):
+    # Arrange
+    baseline_file = tmp_path / "recipe.txt"
+    baseline_file.write_text("zzz-not-a-declared-apt-pkg\n")
+    # Act
+    result = CliRunner().invoke(
+        main,
+        [
+            "ecosystem",
+            "system-deps",
+            "check-superset",
+            "--baseline",
+            str(baseline_file),
+            "--json",
+        ],
+    )
+    # Assert
+    assert json.loads(result.output)["verdict"] == "red"

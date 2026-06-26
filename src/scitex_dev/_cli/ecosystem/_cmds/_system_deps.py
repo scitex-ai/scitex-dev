@@ -7,11 +7,15 @@ Each scitex leaf declares its SYSTEM (apt) packages via a
 (deduped by package) so container builds install ONE federated set instead of
 hardcoding/duplicating apt lists across container definitions.
 
-apt needs root, so ``--install`` is BUILD-TIME only (run in a container
-``%post`` / Dockerfile). ``--list`` emits apt names for piping, e.g.::
+apt needs root, so ``install`` is BUILD-TIME only (run in a container
+``%post`` / Dockerfile). ``list`` emits apt names for piping, e.g.::
 
     apt-get install -y --no-install-recommends \\
-        $(scitex-dev ecosystem system-deps --list)
+        $(scitex-dev ecosystem system-deps list)
+
+``check-superset`` gates a container cutover: it proves the federated set is a
+superset of a recipe's current hardcoded apt list, so nothing is silently
+dropped when those hardcoded blocks are deleted.
 """
 
 from __future__ import annotations
@@ -121,6 +125,29 @@ def _emit_json(deps) -> None:
     )
 
 
+def _read_baseline(path):
+    """Apt names from a baseline file (one per line; ``#`` comments + blanks skipped)."""
+    names = set()
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            name = line.split("#", 1)[0].strip()
+            if name:
+                names.add(name)
+    return names
+
+
+def _superset_delta(aggregated, baseline):
+    """Return ``(missing, added)`` sorted lists for a superset check.
+
+    ``missing`` = baseline packages no provider declares (a RED result: they
+    would be dropped at cutover). ``added`` = packages providers declare beyond
+    the baseline (the image gains them; informational).
+    """
+    missing = sorted(set(baseline) - set(aggregated))
+    added = sorted(set(aggregated) - set(baseline))
+    return missing, added
+
+
 def register(ecosystem):
     @ecosystem.group(
         "system-deps",
@@ -133,6 +160,7 @@ def register(ecosystem):
             "        $(scitex-dev ecosystem system-deps list)\n"
             "  $ scitex-dev ecosystem system-deps install       # BUILD-time, root\n"
             "  $ scitex-dev ecosystem system-deps list --provider scitex-writer\n"
+            "  $ scitex-dev ecosystem system-deps check-superset --baseline recipe-apt.txt\n"
             "\n"
             "Declarations live in each leaf (scitex_dev.system_deps entry point);\n"
             "this aggregates + dedups by apt package. INSTALL IS BUILD-TIME ONLY\n"
@@ -218,3 +246,77 @@ def register(ecosystem):
             $ scitex-dev ecosystem system-deps install --yes  # execute (root)
         """
         return _do_install(_select(provider), dry_run=dry_run or not yes)
+
+    @system_deps.command(
+        "check-superset",
+        epilog=(
+            "Example:\n"
+            "  $ scitex-dev ecosystem system-deps check-superset --baseline recipe-apt.txt\n"
+            "  $ scitex-dev ecosystem system-deps check-superset --baseline r.txt --json"
+        ),
+    )
+    @click.option(
+        "--baseline",
+        required=True,
+        type=click.Path(exists=True, dir_okay=False),
+        help="File of a recipe's current hardcoded apt names (one per line; "
+        "# comments ok).",
+    )
+    @click.option(
+        "--json", "as_json", is_flag=True, help="Emit the verdict + delta as JSON."
+    )
+    @click.pass_context
+    def system_deps_check_superset(ctx, baseline, as_json):
+        """Gate a container cutover: assert the federated set ⊇ a recipe baseline.
+
+        Run in the container BUILD env (where every leaf provider is installed)
+        BEFORE deleting a recipe's hardcoded apt blocks -- it proves nothing is
+        silently dropped. Exit 0 = GREEN (superset, safe to drop the blocks);
+        exit 1 = RED (a baseline package is declared by no provider). In a venv
+        without the providers the federated set is empty, so a real baseline
+        correctly reports RED.
+
+        \b
+        Example:
+            $ scitex-dev ecosystem system-deps check-superset --baseline recipe-apt.txt
+            $ scitex-dev ecosystem system-deps check-superset --baseline r.txt --json
+        """
+        import json as _json
+
+        aggregated = {dep.package for dep in _select(None)}
+        baseline_set = _read_baseline(baseline)
+        missing, added = _superset_delta(aggregated, baseline_set)
+
+        if as_json:
+            click.echo(
+                _json.dumps(
+                    {
+                        "verdict": "red" if missing else "green",
+                        "aggregated_count": len(aggregated),
+                        "baseline_count": len(baseline_set),
+                        "missing": missing,
+                        "added": added,
+                    },
+                    indent=2,
+                )
+            )
+            ctx.exit(1 if missing else 0)
+
+        click.echo(
+            f"aggregated (federated): {len(aggregated)}   "
+            f"baseline (recipe): {len(baseline_set)}"
+        )
+        for pkg in added:
+            click.echo(f"  + {pkg}  (added by providers, OK)")
+        for pkg in missing:
+            click.echo(f"  ! {pkg}  (in baseline, declared by NO provider)")
+        if missing:
+            click.echo(
+                "RED: federated set is NOT a superset — do NOT drop the hardcoded "
+                "blocks until every missing package is declared by a provider."
+            )
+            ctx.exit(1)
+        click.echo(
+            "GREEN: federated set ⊇ baseline — safe to drop the hardcoded blocks."
+        )
+        ctx.exit(0)
