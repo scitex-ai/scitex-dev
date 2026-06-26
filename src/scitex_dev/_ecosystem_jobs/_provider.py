@@ -41,6 +41,17 @@ def _deploy_freshness_command() -> str:
     )
 
 
+def _self_pull_command() -> str:
+    """Shell line installed for the ``ecosystem-self-pull`` timer.
+
+    Runs the existing, non-destructive ``ecosystem sync`` sweep: per managed
+    checkout it ff-merges ``origin/develop`` and skips anything dirty /
+    off-develop / diverged, so live or un-pushed work is never clobbered.
+    """
+    log = "$HOME/.scitex/dev/logs/timer-ecosystem-self-pull.log"
+    return f"mkdir -p $(dirname {log}); scitex-dev ecosystem sync --yes >> {log} 2>&1"
+
+
 def provide_jobs() -> list[JobSpec]:
     """Return scitex-dev's ecosystem-level JobSpecs for the federation.
 
@@ -66,6 +77,25 @@ def provide_jobs() -> list[JobSpec]:
                 "~/.scitex/dev/logs/cron-deploy-freshness.log. "
                 "See _ecosystem_jobs._deploy_freshness.run_once."
             ),
+        ),
+        JobSpec(
+            name="ecosystem-self-pull",
+            kind="timer",
+            schedule="",
+            command=_self_pull_command(),
+            description=(
+                "Keep every managed checkout's develop current "
+                "(self-pull). Runs `scitex-dev ecosystem sync --yes` on a "
+                "Persistent timer: OnBootSec catch-up after boot/reconcile + "
+                "every ~2min. ff-only / develop-only / skips dirty+diverged, "
+                "so un-pushed or live work is never clobbered. Closes the "
+                "self-pull leg of the feedback loop (editable checkouts serve "
+                "stale code until pulled). Log at "
+                "~/.scitex/dev/logs/timer-ecosystem-self-pull.log. "
+                "See _cli.ecosystem._cmds._sync."
+            ),
+            on_boot_sec="1min",
+            on_unit_active_sec="2min",
         ),
     ]
 
