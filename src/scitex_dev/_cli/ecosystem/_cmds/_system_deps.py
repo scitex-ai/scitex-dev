@@ -29,24 +29,39 @@ def _select(provider):
     return deps
 
 
-def _do_install(deps) -> int:
-    """apt-get install the aggregated set (BUILD-time; needs root)."""
+def _do_install(deps, *, dry_run: bool) -> int:
+    """apt-get install the aggregated set (BUILD-time; needs root).
+
+    ``dry_run`` previews the exact apt commands without running them; it is the
+    default when ``--yes`` is omitted (§2 mutating-verb convention).
+    """
     import os
     import subprocess
 
     if not deps:
         click.echo("No system deps declared by any provider; nothing to install.")
         return 0
+
+    repos = sorted({d.apt_repo for d in deps if d.apt_repo})
+    packages = [d.package for d in deps]
+
+    if dry_run:
+        for repo in repos:
+            click.echo(f"+ add-apt-repository -y {repo}")
+        click.echo("+ apt-get update")
+        click.echo(f"+ apt-get install -y --no-install-recommends {' '.join(packages)}")
+        click.echo("(dry-run — pass --yes to execute; BUILD-time / root only)")
+        return 0
+
     if hasattr(os, "geteuid") and os.geteuid() != 0:
         click.echo(
-            "ERROR: --install needs root and runs at IMAGE-BUILD time only "
+            "ERROR: install --yes needs root and runs at IMAGE-BUILD time only "
             "(agents are rootless --userns). Use it inside a container %post / "
-            "Dockerfile, or pipe `--list` into apt-get there.",
+            "Dockerfile, or pipe `system-deps list` into apt-get there.",
             err=True,
         )
         return 1
 
-    repos = sorted({d.apt_repo for d in deps if d.apt_repo})
     for repo in repos:
         click.echo(f"+ add-apt-repository -y {repo}")
         if subprocess.run(["add-apt-repository", "-y", repo]).returncode != 0:
@@ -55,8 +70,6 @@ def _do_install(deps) -> int:
     if subprocess.run(["apt-get", "update"]).returncode != 0:
         click.echo("ERROR: apt-get update failed", err=True)
         return 1
-
-    packages = [d.package for d in deps]
     click.echo(f"+ apt-get install -y --no-install-recommends {' '.join(packages)}")
     rc = subprocess.run(
         ["apt-get", "install", "-y", "--no-install-recommends", *packages]
@@ -137,7 +150,15 @@ def register(ecosystem):
         if ctx.invoked_subcommand is None:
             _render(_select(None))
 
-    @system_deps.command("list")
+    @system_deps.command(
+        "list",
+        epilog=(
+            "Example:\n"
+            "  $ scitex-dev ecosystem system-deps list\n"
+            "  $ apt-get install -y --no-install-recommends \\\n"
+            "        $(scitex-dev ecosystem system-deps list)"
+        ),
+    )
     @click.option(
         "--provider",
         default=None,
@@ -145,7 +166,13 @@ def register(ecosystem):
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON.")
     def system_deps_list(provider, as_json):
-        """Print the aggregated apt package names, one per line (pipe-friendly)."""
+        """Print the aggregated apt package names, one per line (pipe-friendly).
+
+        \b
+        Example:
+            $ scitex-dev ecosystem system-deps list
+            $ apt-get install -y $(scitex-dev ecosystem system-deps list)
+        """
         deps = _select(provider)
         if as_json:
             _emit_json(deps)
@@ -154,12 +181,40 @@ def register(ecosystem):
             click.echo(dep.package)
         return 0
 
-    @system_deps.command("install")
+    @system_deps.command(
+        "install",
+        epilog=(
+            "Example:\n"
+            "  $ scitex-dev ecosystem system-deps install        # preview\n"
+            "  $ scitex-dev ecosystem system-deps install --yes  # execute (root)"
+        ),
+    )
     @click.option(
         "--provider",
         default=None,
         help="Filter to one declaring package (e.g. scitex-writer).",
     )
-    def system_deps_install(provider):
-        """apt-get install the aggregated set (BUILD-time; needs root)."""
-        return _do_install(_select(provider))
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print the apt commands without running them (default when --yes "
+        "is omitted).",
+    )
+    @click.option(
+        "--yes",
+        "-y",
+        "yes",
+        is_flag=True,
+        help="Actually run apt-get (BUILD-time; needs root).",
+    )
+    def system_deps_install(provider, dry_run, yes):
+        """apt-get install the aggregated set (BUILD-time; needs root).
+
+        Mutating verb: previews (dry-run) unless --yes is given.
+
+        \b
+        Example:
+            $ scitex-dev ecosystem system-deps install        # preview
+            $ scitex-dev ecosystem system-deps install --yes  # execute (root)
+        """
+        return _do_install(_select(provider), dry_run=dry_run or not yes)

@@ -10,6 +10,7 @@ import pytest
 from click.testing import CliRunner
 
 from scitex_dev._cli import main
+from scitex_dev._cli.ecosystem._cmds._system_deps import _do_install
 from scitex_dev.system_deps import SystemDepSpec, discover_system_deps
 
 
@@ -113,3 +114,21 @@ def test_cli_system_deps_default_table_exits_zero():
     result = runner.invoke(main, ["ecosystem", "system-deps"])
     # Assert
     assert result.exit_code == 0
+
+
+def test_cli_system_deps_install_defaults_to_dry_run_exits_zero():
+    # Arrange
+    runner = CliRunner()
+    # Act
+    result = runner.invoke(main, ["ecosystem", "system-deps", "install"])
+    # Assert
+    assert result.exit_code == 0
+
+
+def test_do_install_dry_run_previews_without_running():
+    # Arrange
+    deps = [SystemDepSpec("ffmpeg", "decode", "scitex-audio", apt_repo="ppa:x/y")]
+    # Act
+    rc = _do_install(deps, dry_run=True)
+    # Assert
+    assert rc == 0
