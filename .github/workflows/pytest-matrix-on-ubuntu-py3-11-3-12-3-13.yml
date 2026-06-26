@@ -40,16 +40,33 @@ jobs:
           # (yaml, fastmcp, textual) get exercised. Falls back to [dev] then
           # plain editable so a packaging hiccup doesn't strand CI.
           pip install -e ".[all,dev]" || pip install -e ".[dev]" || pip install -e .
-      - name: Run tests
-        env:
-          # Isolated per-job HOME: the shared self-hosted runner's real
-          # $HOME carries a user-wide ~/.scitex/dev/config.yaml that leaks
-          # into config-discovery tests (e.g. project-type / FM auto-enable),
-          # which a clean hosted-runner HOME never sees. Matches the codecov
-          # step's isolation below.
-          HOME: ${{ runner.temp }}/test-home-${{ matrix.python-version }}
+      - name: DIAG config-discovery (temporary)
         run: |
-          mkdir -p "$HOME"
+          echo "TMPDIR=${TMPDIR:-<unset>} HOME=$HOME PWD=$PWD RUNNER_TEMP=$RUNNER_TEMP"
+          python - <<'PY'
+          import tempfile, sys
+          from pathlib import Path
+          from scitex_dev.linter.config import load_config
+          from scitex_dev.linter._project_type import detect_scitex_dev_project_types
+          d = Path(tempfile.mkdtemp())
+          (d / ".scitex" / "dev").mkdir(parents=True)
+          (d / ".scitex" / "dev" / "config.yaml").write_text("project-type: pip\n")
+          rs = Path(str(d)).resolve()
+          print("tmp_path =", d)
+          print("resolved =", rs)
+          print("detect   =", detect_scitex_dev_project_types(rs))
+          print("enable   =", load_config(start_path=str(d)).enable)
+          cur = rs
+          while True:
+              c = cur / ".scitex" / "dev" / "config.yaml"
+              if c.is_file():
+                  print("WALK-UP FOUND:", c, "->", repr(c.read_text()[:120])); break
+              if cur.parent == cur:
+                  print("WALK-UP: no config to root"); break
+              cur = cur.parent
+          PY
+      - name: Run tests
+        run: |
           pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
       - name: Upload coverage to Codecov
         if: always() && matrix.python-version == '3.12'
