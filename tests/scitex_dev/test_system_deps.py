@@ -92,16 +92,16 @@ def test_cli_system_deps_list_exits_zero():
     # Arrange
     runner = CliRunner()
     # Act
-    result = runner.invoke(main, ["ecosystem", "system-deps", "--list"])
+    result = runner.invoke(main, ["ecosystem", "system-deps", "list"])
     # Assert
     assert result.exit_code == 0
 
 
-def test_cli_system_deps_json_emits_an_array():
+def test_cli_system_deps_list_json_emits_an_array():
     # Arrange
     runner = CliRunner()
     # Act
-    result = runner.invoke(main, ["ecosystem", "system-deps", "--json"])
+    result = runner.invoke(main, ["ecosystem", "system-deps", "list", "--json"])
     # Assert
     assert result.output.strip().startswith("[")
 

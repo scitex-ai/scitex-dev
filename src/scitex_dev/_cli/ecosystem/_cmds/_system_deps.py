@@ -89,69 +89,77 @@ def _render(deps) -> None:
     )
 
 
+def _emit_json(deps) -> None:
+    import json as _json
+
+    click.echo(
+        _json.dumps(
+            [
+                {
+                    "package": d.package,
+                    "purpose": d.purpose,
+                    "provider": d.provider,
+                    "apt_repo": d.apt_repo,
+                }
+                for d in deps
+            ],
+            indent=2,
+        )
+    )
+
+
 def register(ecosystem):
-    @ecosystem.command(
+    @ecosystem.group(
         "system-deps",
+        invoke_without_command=True,
         epilog=(
             "Examples:\n"
-            "  $ scitex-dev ecosystem system-deps            # table\n"
-            "  $ scitex-dev ecosystem system-deps --list     # apt names, one/line\n"
+            "  $ scitex-dev ecosystem system-deps               # table\n"
+            "  $ scitex-dev ecosystem system-deps list          # apt names, one/line\n"
             "  $ apt-get install -y --no-install-recommends \\\n"
-            "        $(scitex-dev ecosystem system-deps --list)\n"
-            "  $ scitex-dev ecosystem system-deps --install  # BUILD-time, root\n"
-            "  $ scitex-dev ecosystem system-deps --provider scitex-writer --list\n"
+            "        $(scitex-dev ecosystem system-deps list)\n"
+            "  $ scitex-dev ecosystem system-deps install       # BUILD-time, root\n"
+            "  $ scitex-dev ecosystem system-deps list --provider scitex-writer\n"
             "\n"
             "Declarations live in each leaf (scitex_dev.system_deps entry point);\n"
             "this aggregates + dedups by apt package. INSTALL IS BUILD-TIME ONLY\n"
             "(apt needs root; agents run rootless --userns)."
         ),
     )
-    @click.option(
-        "--list", "do_list", is_flag=True, help="Print apt package names, one per line."
-    )
-    @click.option(
-        "--install",
-        "do_install",
-        is_flag=True,
-        help="apt-get install the aggregated set (BUILD-time; needs root).",
-    )
+    @click.pass_context
+    def system_deps(ctx):
+        """Aggregate the ecosystem's declared system (apt) dependencies.
+
+        Walks every ``scitex_dev.system_deps`` provider and dedups by apt
+        package name. With no subcommand, prints a human table; ``list`` is
+        pipe-friendly; ``install`` applies them at image-build time.
+        """
+        if ctx.invoked_subcommand is None:
+            _render(_select(None))
+
+    @system_deps.command("list")
     @click.option(
         "--provider",
         default=None,
         help="Filter to one declaring package (e.g. scitex-writer).",
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON.")
-    def ecosystem_system_deps(do_list, do_install, provider, as_json):
-        """Aggregate the ecosystem's declared system (apt) dependencies.
-
-        Walks every ``scitex_dev.system_deps`` provider and dedups by apt
-        package name. Default output is a table; ``--list`` is pipe-friendly.
-        """
-        import json as _json
-
+    def system_deps_list(provider, as_json):
+        """Print the aggregated apt package names, one per line (pipe-friendly)."""
         deps = _select(provider)
-
         if as_json:
-            click.echo(
-                _json.dumps(
-                    [
-                        {
-                            "package": d.package,
-                            "purpose": d.purpose,
-                            "provider": d.provider,
-                            "apt_repo": d.apt_repo,
-                        }
-                        for d in deps
-                    ],
-                    indent=2,
-                )
-            )
+            _emit_json(deps)
             return 0
-        if do_install:
-            return _do_install(deps)
-        if do_list:
-            for dep in deps:
-                click.echo(dep.package)
-            return 0
-        _render(deps)
+        for dep in deps:
+            click.echo(dep.package)
         return 0
+
+    @system_deps.command("install")
+    @click.option(
+        "--provider",
+        default=None,
+        help="Filter to one declaring package (e.g. scitex-writer).",
+    )
+    def system_deps_install(provider):
+        """apt-get install the aggregated set (BUILD-time; needs root)."""
+        return _do_install(_select(provider))
