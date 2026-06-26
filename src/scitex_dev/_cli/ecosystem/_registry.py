@@ -34,6 +34,7 @@ from ._cmds import (
     _status,
     _sync,
     _sync_status,
+    _system_deps,
     _test_remote,
     _versions,
 )
@@ -96,6 +97,7 @@ def register_ecosystem_commands(main_group):
     _test_remote.register(ecosystem)
     _sync_status.register(ecosystem)
     _sync.register(ecosystem)
+    _system_deps.register(ecosystem)
     _prune_merged.register(ecosystem)
     _branch_protection.register(ecosystem)
     _ci_template.register(ecosystem)

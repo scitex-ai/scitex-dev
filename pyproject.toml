@@ -123,6 +123,19 @@ scitex-dev-ecosystem = "scitex_dev._ecosystem_jobs._provider:provide_jobs"
 # (downstream packages register here, e.g.)
 # scitex-agent-container = "scitex_agent_container._jobs_plugin:provide_jobs"
 
+# Federated SYSTEM (apt) dependency providers live under the entry-point group
+# `scitex_dev.system_deps`. Each entry point loads to a callable returning
+# `list[scitex_dev.system_deps.SystemDepSpec]`;
+# `scitex_dev.system_deps.discover_system_deps()` aggregates them (deduped by
+# apt package). Replaces hardcoding apt lists in container defs. scitex-dev has
+# NO system deps of its own, so it declares no provider; this group is for
+# *downstream* leaves, which register like so (install is BUILD-time/root only,
+# via `scitex-dev ecosystem system-deps --install` in a container %post):
+#   [project.entry-points."scitex_dev.system_deps"]
+#   scitex-writer = "scitex_writer._system_deps:provide"
+#   scitex-audio  = "scitex_audio._system_deps:provide"
+#   scitex-cv     = "scitex_cv._system_deps:provide"
+
 [project.urls]
 Homepage = "https://github.com/ywatanabe1989/scitex-dev"
 Repository = "https://github.com/ywatanabe1989/scitex-dev"
