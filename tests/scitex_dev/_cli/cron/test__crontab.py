@@ -44,6 +44,17 @@ def test_build_line_contains_schedule_command_and_marker():
     )
 
 
+def test_read_crontab_returns_empty_when_binary_missing():
+    # Arrange
+    def missing_binary(*args, **kwargs):
+        raise FileNotFoundError("crontab")
+
+    # Act
+    out = _crontab.read_crontab(runner=missing_binary)
+    # Assert
+    assert out == ""
+
+
 def test_build_line_rejects_newline_in_command():
     # Arrange
     # Act
