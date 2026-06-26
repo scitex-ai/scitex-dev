@@ -173,7 +173,6 @@ def register(ecosystem) -> None:
         except RuntimeError as exc:
             raise click.ClickException(str(exc)) from exc
 
-
     @cron.command("exec")
     @click.argument("name")
     @click.option(
@@ -181,9 +180,11 @@ def register(ecosystem) -> None:
         is_flag=True,
         default=False,
         help=(
-            "(deploy-freshness) Repair drift instead of dry-run: "
-            "run `pip install -U <pkg>` + `systemctl --user restart <unit>` "
-            "for every leaf whose installed version trails latest PyPI."
+            "(deploy-freshness) Repair drift instead of dry-run. WHEEL "
+            "leaf (installed version trails latest PyPI): run `pip install "
+            "-U <pkg>` + `systemctl --user restart <unit>`. EDITABLE leaf "
+            "(PEP 660 install whose git source is newer than the unit's "
+            "last start): `systemctl --user restart <unit>` only (no pip)."
         ),
     )
     def cron_exec(name: str, apply: bool) -> None:
@@ -210,8 +211,7 @@ def register(ecosystem) -> None:
         if name not in names:
             known = ", ".join(sorted(names)) or "(none)"
             raise click.ClickException(
-                f"unknown federated cron job: {name!r}. "
-                f"Discovered: {known}"
+                f"unknown federated cron job: {name!r}. Discovered: {known}"
             )
 
         if name == "deploy-freshness":
