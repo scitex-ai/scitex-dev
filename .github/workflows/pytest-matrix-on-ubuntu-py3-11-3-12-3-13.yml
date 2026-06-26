@@ -41,7 +41,15 @@ jobs:
           # plain editable so a packaging hiccup doesn't strand CI.
           pip install -e ".[all,dev]" || pip install -e ".[dev]" || pip install -e .
       - name: Run tests
+        env:
+          # Isolated per-job HOME: the shared self-hosted runner's real
+          # $HOME carries a user-wide ~/.scitex/dev/config.yaml that leaks
+          # into config-discovery tests (e.g. project-type / FM auto-enable),
+          # which a clean hosted-runner HOME never sees. Matches the codecov
+          # step's isolation below.
+          HOME: ${{ runner.temp }}/test-home-${{ matrix.python-version }}
         run: |
+          mkdir -p "$HOME"
           pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
       - name: Upload coverage to Codecov
         if: always() && matrix.python-version == '3.12'
