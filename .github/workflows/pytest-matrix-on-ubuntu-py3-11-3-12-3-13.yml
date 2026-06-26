@@ -40,31 +40,6 @@ jobs:
           # (yaml, fastmcp, textual) get exercised. Falls back to [dev] then
           # plain editable so a packaging hiccup doesn't strand CI.
           pip install -e ".[all,dev]" || pip install -e ".[dev]" || pip install -e .
-      - name: DIAG config-discovery (temporary)
-        run: |
-          echo "TMPDIR=${TMPDIR:-<unset>} HOME=$HOME PWD=$PWD RUNNER_TEMP=$RUNNER_TEMP"
-          python - <<'PY'
-          import tempfile, sys
-          from pathlib import Path
-          from scitex_dev.linter.config import load_config
-          from scitex_dev.linter._project_type import detect_scitex_dev_project_types
-          d = Path(tempfile.mkdtemp())
-          (d / ".scitex" / "dev").mkdir(parents=True)
-          (d / ".scitex" / "dev" / "config.yaml").write_text("project-type: pip\n")
-          rs = Path(str(d)).resolve()
-          print("tmp_path =", d)
-          print("resolved =", rs)
-          print("detect   =", detect_scitex_dev_project_types(rs))
-          print("enable   =", load_config(start_path=str(d)).enable)
-          cur = rs
-          while True:
-              c = cur / ".scitex" / "dev" / "config.yaml"
-              if c.is_file():
-                  print("WALK-UP FOUND:", c, "->", repr(c.read_text()[:120])); break
-              if cur.parent == cur:
-                  print("WALK-UP: no config to root"); break
-              cur = cur.parent
-          PY
       - name: Run tests
         run: |
           pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
