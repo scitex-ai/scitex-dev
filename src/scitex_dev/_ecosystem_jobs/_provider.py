@@ -18,9 +18,12 @@ every other leaf's contributions.
 Today's roster
 --------------
 - ``deploy-freshness`` — detects (and with ``--apply`` repairs) drift
-  between the installed and latest released version of every
-  kind=service / kind=timer JobSpec discovered through the
-  federation. See ``_deploy_freshness.run_once``.
+  in every kind=service / kind=timer JobSpec discovered through the
+  federation, on two axes: WHEEL drift (installed version trails the
+  latest PyPI release → ``pip install -U`` + restart) and EDITABLE
+  drift (a PEP 660 editable install whose git source is newer than the
+  unit's last start → restart only, no pip). See
+  ``_deploy_freshness.run_once``.
 """
 
 from __future__ import annotations
@@ -63,12 +66,15 @@ def provide_jobs() -> list[JobSpec]:
             schedule="*/30 * * * *",
             command=_deploy_freshness_command(),
             description=(
-                "Detect & repair drift between installed and latest "
-                "released versions of every managed service/timer "
-                "JobSpec. Compares importlib.metadata version against "
-                "PyPI; with --apply runs `pip install -U <pkg>` + "
-                "`systemctl --user restart <unit>` per drifted leaf. "
-                "Audit log at ~/.scitex/dev/logs/cron-deploy-freshness.log. "
+                "Detect & repair drift in every managed service/timer "
+                "JobSpec, two axes. WHEEL: importlib.metadata version vs "
+                "latest PyPI; with --apply runs `pip install -U <pkg>` + "
+                "`systemctl --user restart <unit>`. EDITABLE (PEP 660): "
+                "git source-commit time vs the unit's ActiveEnterTimestamp; "
+                "with --apply runs `systemctl --user restart <unit>` only "
+                "(no pip — source already in place; the pull stays the "
+                "operator's deliberate act). Audit log at "
+                "~/.scitex/dev/logs/cron-deploy-freshness.log. "
                 "See _ecosystem_jobs._deploy_freshness.run_once."
             ),
         ),
