@@ -76,6 +76,24 @@ class TestHooksPath:
             f"hooks path must echo the bundled-script path; got {emitted}"
         )
 
+    def test_prints_absolute_path_for_run_testmon(self, cli, runner):
+        # Arrange — run_testmon is the testmon warm-cache wrapper; repos
+        # reference it via `entry: bash $(scitex-dev hooks print-path
+        # run_testmon)` in .pre-commit-config.yaml, so print-path is the seam.
+        # Act
+        result = runner.invoke(cli, ["hooks", "print-path", "run_testmon"])
+        # Assert — exit 0 AND output is the bundled run_testmon.sh path.
+        source = KNOWN_HOOKS["run_testmon"][0]
+        emitted = (
+            result.exit_code,
+            result.output.strip(),
+            result.output.strip().endswith("run_testmon.sh"),
+        )
+        assert emitted == (0, source, True), (
+            f"hooks print-path must echo the bundled run_testmon.sh path; "
+            f"got {emitted}"
+        )
+
 
 # ---------------------------------------------------------------------- #
 # `hooks install` — fresh install                                        #

@@ -39,6 +39,10 @@ Hooks the CLI knows about
     The PostToolUse SciTeX-pattern-check hook from Pillar 0. Future
     canonical hooks register themselves by adding an entry to
     :data:`KNOWN_HOOKS`.
+``run_testmon`` → bundled at ``scitex_dev._hooks.run_testmon_sh_path()``.
+    The pre-commit pytest-testmon warm-cache wrapper that seed-copies a
+    persistent per-(repo, pyXY) ``.testmondata`` in/out of each fresh
+    worktree so testmon runs only impacted tests instead of the full suite.
 """
 
 from __future__ import annotations
@@ -58,6 +62,10 @@ KNOWN_HOOKS: dict[str, tuple[str, str]] = {
     "run_lint": (
         _hooks.run_lint_sh_path(),
         "docs/to_claude/hooks/post-tool-use/run_lint.sh",
+    ),
+    "run_testmon": (
+        _hooks.run_testmon_sh_path(),
+        "docs/to_claude/hooks/pre-commit/run_testmon.sh",
     ),
 }
 
