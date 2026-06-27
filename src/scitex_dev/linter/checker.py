@@ -443,7 +443,10 @@ def lint_source(
         if cat == "figure" and "FM" not in _enabled:
             continue
         try:
-            extra = checker_cls(lines, config)
+            # Pass the RESOLVED config (never None): SciTeXChecker defaults a
+            # None config via load_config(), but plugin checkers deref
+            # self.config.disable directly — a raw None here crashes them.
+            extra = checker_cls(lines, checker.config)
             extra.visit(tree)
             checker.issues.extend(extra.issues)
         except Exception as exc:

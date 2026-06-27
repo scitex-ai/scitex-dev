@@ -85,6 +85,29 @@ class _BoomChecker:
         raise RuntimeError("synthetic-failure-for-pillar0-test")
 
 
+class _ConfigReadingChecker:
+    """Plugin-checker fake mirroring figrecipe's StyleKwarg checker: it
+    dereferences ``self.config.disable`` on visit.
+
+    The scitex-io self-hosted-runner crash (routed via scitex-hpc): on the
+    ``lint_source(config=None)`` path the plugin loop handed the raw ``None``
+    to this constructor, so ``self.config.disable`` raised AttributeError and
+    the checker was silently dropped. ``lint_source`` must pass the RESOLVED
+    config (never None), exactly as the core SciTeXChecker receives.
+    """
+
+    category = "stx-test"
+
+    def __init__(self, lines, config):
+        self.config = config
+        self.issues = []
+
+    def visit(self, _tree):
+        # The exact deref that crashed on a None config.
+        if "STX-NEVER-DISABLED" in self.config.disable:  # pragma: no cover
+            self.issues.append("unreachable")
+
+
 def _payload_with(checker_cls):
     """A minimal ``load_plugins()``-shaped payload carrying one checker."""
     return {
@@ -192,6 +215,24 @@ def test_lint_source_silenced_by_env_flag(capsys, restore_environ):
     captured = capsys.readouterr()
     # Assert — no stderr WARNING surfaces (operator opt-out respected).
     assert "synthetic-failure-for-pillar0-test" not in captured.err
+
+
+def test_plugin_checker_receives_resolved_config_when_none(capsys, restore_environ):
+    # Arrange — lint_source's documented config=None path. A plugin checker
+    # that reads self.config.disable must get the RESOLVED config (loaded via
+    # load_config), not a raw None — else it AttributeErrors and is dropped
+    # (the scitex-io StyleKwarg crash on test__pdf*.py).
+    restore_environ.pop("SCITEX_DEV_LINTER_QUIET", None)
+    # Act
+    lint_source(
+        "x = 1\n",
+        filepath="<test>",
+        config=None,
+        plugins=_payload_with(_ConfigReadingChecker),
+    )
+    err = capsys.readouterr().err
+    # Assert — not dropped: no fail-loud WARNING names the config-reading checker.
+    assert "_ConfigReadingChecker" not in err
 
 
 # --------------------------------------------------------------------------- #
