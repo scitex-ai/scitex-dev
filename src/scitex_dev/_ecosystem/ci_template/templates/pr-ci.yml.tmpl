@@ -123,6 +123,21 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so --new-only can compute the merge-base diff against
+          # the PR's base branch; a shallow depth-1 checkout leaves no common
+          # ancestor and audit-all silently falls back to a STRICT full audit.
+          fetch-depth: 0
+      - name: Fetch PR base into a remote-tracking ref for --new-only baseline
+        # audit-all --new-only stages the base ref via `git worktree add
+        # --detach`, so the base ref must exist locally. Fetch the PR's ACTUAL
+        # base (GITHUB_BASE_REF: develop for ->develop, main for ->main) into
+        # refs/remotes/origin/<base>. A remote-tracking ref is always writable,
+        # unlike `git fetch origin <base>:<base>` which dies when HEAD already
+        # IS that branch. `--since origin/<base>` then resolves it, so the
+        # FETCHED ref and the DIFF ref are always the same (the PR15 mismatch
+        # was: fetch main, but --new-only defaulted --since to develop).
+        run: git fetch origin "${GITHUB_BASE_REF:-develop}"
       - name: Install uv
         uses: astral-sh/setup-uv@v3
         with:
@@ -135,7 +150,12 @@ jobs:
           uv venv --python 3.12 .venv
           uv pip install --python .venv/bin/python -e ".[dev]"
           uv pip install --python .venv/bin/python "scitex-dev[cli-audit]"
-      - name: Run scitex-dev ecosystem audit-all
+      - name: Run scitex-dev ecosystem audit-all (PR gate — net-new only)
+        # PR gate is INCREMENTAL: report only violations THIS PR introduces vs
+        # its base ref, so inherited debt the PR didn't create never blocks it.
+        # The strict full-tree audit stays the protected-branch gate in
+        # release-ci.yml.
         run: |
           export PATH="$PWD/.venv/bin:$PATH"
-          scitex-dev ecosystem audit-all <PKG_NAME> --no-version-check
+          scitex-dev ecosystem audit-all <PKG_NAME> --no-version-check \
+            --new-only --since "origin/${GITHUB_BASE_REF:-develop}"

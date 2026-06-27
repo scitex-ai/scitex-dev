@@ -253,6 +253,32 @@ def test_rendered_pr_template_carries_dep_hygiene_smoke_name():
     assert expected in body
 
 
+def test_rendered_pr_audit_is_incremental_new_only_gate():
+    # The PR audit gate must be INCREMENTAL (--new-only vs the PR base), not a
+    # strict full-tree audit — else a PR is failed on inherited debt it did not
+    # introduce. The --since ref MUST track GITHUB_BASE_REF so the fetched ref
+    # and the diff ref always match (the scitex-genai PR15 regression was a
+    # fetch-main / diff-develop mismatch).
+    # Arrange
+    needles = ("--new-only", '--since "origin/${GITHUB_BASE_REF:-develop}"')
+    # Act
+    body = _render_pr()
+    # Assert
+    assert all(n in body for n in needles)
+
+
+def test_rendered_pr_audit_checkout_fetches_full_history():
+    # --new-only stages a worktree at the base ref + needs the merge-base; a
+    # shallow depth-1 checkout has no common ancestor and silently degrades to
+    # a strict full audit. fetch-depth: 0 is the guard.
+    # Arrange
+    expected = "fetch-depth: 0"
+    # Act
+    body = _render_pr()
+    # Assert
+    assert expected in body
+
+
 def test_rendered_release_template_carries_matrix_name_placeholder():
     # Arrange
     expected = "pytest-matrix-on-ubuntu-py${{ matrix.python-version }}"
