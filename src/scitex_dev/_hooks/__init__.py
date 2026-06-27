@@ -36,4 +36,18 @@ def run_lint_sh_path() -> str:
     return str(pathlib.Path(HOOK_DIR) / "run_lint.sh")
 
 
-__all__ = ["HOOK_DIR", "run_lint_sh_path"]
+def run_testmon_sh_path() -> str:
+    """Return the absolute filesystem path of the canonical ``run_testmon.sh``.
+
+    The testmon warm-cache wrapper makes pytest-testmon worktree-
+    resilient: every release runs in a FRESH worktree with a COLD
+    ``.testmondata``, so testmon re-runs the full suite instead of only
+    impacted tests. This wrapper seed-copies a persistent per-(repo,
+    pyXY) cache in/out of the worktree. Resolved the same way as
+    :func:`run_lint_sh_path` so operator-project bootstrap and the
+    ``scitex-dev hooks`` CLI never string-concatenate ``HOOK_DIR``.
+    """
+    return str(pathlib.Path(HOOK_DIR) / "run_testmon.sh")
+
+
+__all__ = ["HOOK_DIR", "run_lint_sh_path", "run_testmon_sh_path"]

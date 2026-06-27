@@ -99,6 +99,7 @@ all = [
 
 [project.scripts]
 scitex-dev = "scitex_dev._cli:main"
+scitex-dev-testmon = "scitex_dev._hooks.run_testmon_cli:main"
 
 [project.entry-points."scitex_dev.docs"]
 scitex-dev = "scitex_dev"
