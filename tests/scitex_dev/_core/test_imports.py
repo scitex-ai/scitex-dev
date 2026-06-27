@@ -2,11 +2,33 @@
 
 from __future__ import annotations
 
+import sys
+
+import pytest
+
 from scitex_dev import (
     InstallHint,
     last_install_hint,
     try_import_optional,
 )
+
+
+@pytest.fixture
+def import_sandbox(tmp_path):
+    """Yield a tmp dir on sys.path; restore sys.path + sys.modules after.
+
+    Lets a test drop a REAL fake module that raises on import (no mocks) and
+    leaves the interpreter's import state untouched afterward.
+    """
+    saved_path = list(sys.path)
+    saved_mods = set(sys.modules)
+    sys.path.insert(0, str(tmp_path))
+    try:
+        yield tmp_path
+    finally:
+        sys.path[:] = saved_path
+        for name in set(sys.modules) - saved_mods:
+            sys.modules.pop(name, None)
 
 
 def test_success_returns_module_mod_is_not_none():
@@ -167,3 +189,66 @@ def test_install_hint_message_variants_p_x_in_installhint_module_m_extra_x_pkg()
     # Act
     # Assert
     assert "p[x]" in InstallHint(module="m", extra="x", pkg="p").message()
+
+
+# ---------------------------------------------------------------------- #
+# Present-but-broken optional dep (neurovista torch<->numpy ABI report)  #
+# ---------------------------------------------------------------------- #
+
+
+def test_broken_module_raising_runtimeerror_degrades_to_none(import_sandbox):
+    # Arrange — a module that is PRESENT but raises RuntimeError on import.
+    name = "abi_broken_mod_rt"
+    (import_sandbox / f"{name}.py").write_text(
+        "raise RuntimeError('boom at import')\n", encoding="utf-8"
+    )
+    # Act
+    obj = try_import_optional(name)
+    # Assert
+    assert obj is None
+
+
+def test_broken_module_records_real_cause_in_hint(import_sandbox):
+    # Arrange
+    name = "abi_broken_mod_cause"
+    (import_sandbox / f"{name}.py").write_text(
+        "raise RuntimeError('boom at import')\n", encoding="utf-8"
+    )
+    # Act
+    try_import_optional(name)
+    hint = last_install_hint(name)
+    # Assert
+    assert "RuntimeError: boom at import" in (hint.cause or "")
+
+
+def test_numpy_abi_signature_yields_actionable_cause(import_sandbox):
+    # Arrange — mimic the torch<->numpy ABI RuntimeError text.
+    name = "abi_numpy_sig_mod"
+    (import_sandbox / f"{name}.py").write_text(
+        "raise RuntimeError('Failed to initialize NumPy: _ARRAY_API not found')\n",
+        encoding="utf-8",
+    )
+    # Act
+    try_import_optional(name)
+    hint = last_install_hint(name)
+    # Assert
+    assert "numpy ABI mismatch" in (hint.cause or "")
+
+
+def test_hint_message_includes_cause_when_present():
+    # Arrange
+    hint = InstallHint(module="m", extra=None, pkg=None, cause="RuntimeError: x")
+    # Act
+    msg = hint.message()
+    # Assert
+    assert "RuntimeError: x" in msg
+
+
+def test_plain_missing_module_records_no_cause():
+    # Arrange
+    name = "definitely_absent_mod_no_cause_zzz"
+    # Act
+    try_import_optional(name, extra="x", pkg="p")
+    hint = last_install_hint(name)
+    # Assert
+    assert hint.cause is None
