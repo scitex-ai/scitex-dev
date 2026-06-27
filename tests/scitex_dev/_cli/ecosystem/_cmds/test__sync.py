@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from scitex_dev._cli.ecosystem._cmds._sync import _sync_one
+from scitex_dev._cli.ecosystem._cmds._sync import _emit_pulled_events, _sync_one
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -256,3 +256,28 @@ def test_missing_checkout_is_reported(tmp_path):
     row = _sync_one("pkg", {"local_path": str(missing)}, dry_run=False)
     # Assert
     assert row["action"] == "missing"
+
+
+def test_emit_pulled_events_fires_only_for_actually_pulled_repos():
+    # Arrange
+    rows = [
+        {"package": "scitex-io", "action": "pulled"},
+        {"package": "scitex-cv", "action": "synced"},
+        {"package": "scitex-db", "action": "would-pull"},
+        {"package": "scitex-gists", "action": "diverged"},
+    ]
+    fired: list[str] = []
+    # Act
+    _emit_pulled_events(rows, emit_fn=fired.append)
+    # Assert
+    assert fired == ["scitex-io"]
+
+
+def test_emit_pulled_events_is_silent_when_nothing_advanced():
+    # Arrange
+    rows = [{"package": "scitex-io", "action": "synced"}]
+    fired: list[str] = []
+    # Act
+    _emit_pulled_events(rows, emit_fn=fired.append)
+    # Assert
+    assert fired == []
