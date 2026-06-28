@@ -138,7 +138,7 @@ def load_config(start_path: str | None = None) -> LinterConfig:
 
     if "research" in detect_scitex_dev_project_types(start_dir):
         existing = config_dict.get("category_severity_override", {}) or {}
-        # Figure-family promotion v1 (#TBD, operator directive 2026-06-28):
+        # Figure-family promotion v1 (PR #264, operator directive 2026-06-28):
         # figrecipe owns the DETECTION of figure-bypass patterns; here we
         # promote the EXISTING figure-family rules to ERROR in research
         # projects so the post-edit hook (run_lint.sh, exit 2) deterministically
