@@ -138,7 +138,24 @@ def load_config(start_path: str | None = None) -> LinterConfig:
 
     if "research" in detect_scitex_dev_project_types(start_dir):
         existing = config_dict.get("category_severity_override", {}) or {}
-        merged = {"io": "error", "path": "error", **existing}
+        # Figure-family promotion v1 (PR #264, operator directive 2026-06-28):
+        # figrecipe owns the DETECTION of figure-bypass patterns; here we
+        # promote the EXISTING figure-family rules to ERROR in research
+        # projects so the post-edit hook (run_lint.sh, exit 2) deterministically
+        # BLOCKS figure-bypass code. The v1 set spans TWO categories:
+        #   - "figure": FM001-FM011 + FIG001
+        #   - "plot":   P001-P009
+        # (verified against figrecipe's _linter_plugin.py rule objects).
+        # As always, per-rule `per_rule_severity` overrides WIN — the category
+        # map is the floor, not the ceiling. `# stx-allow: STX-<ID>` per-line
+        # comments remain the opt-out (handled in each checker's _add/_emit).
+        merged = {
+            "io": "error",
+            "path": "error",
+            "figure": "error",
+            "plot": "error",
+            **existing,
+        }
         config_dict["category_severity_override"] = merged
 
         # FM category auto-enable for research projects (neurovista

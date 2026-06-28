@@ -362,6 +362,14 @@ class SciTeXChecker(
             for line, col, src in self._figrecipe_usages:
                 self._add(p010, line, col, src)
 
+        # Central category-severity-override floor (figure-family v1). Plugin
+        # checkers shipped by figrecipe honour only per_rule_severity and
+        # ignore category_severity_override; apply it here over the combined
+        # issue list (per-rule pins still WIN). See _severity_promotion.py.
+        from ._severity_promotion import promote_category_severity
+
+        self.issues = promote_category_severity(self.issues, self.config)
+
         # Sort: errors first, then by line
         from .rules import SEVERITY_ORDER
 
