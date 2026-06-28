@@ -180,6 +180,25 @@ class TestFM001PromotionEndToEnd:
         # Assert
         assert _sev_of(issues, "STX-FM001") == "warning"
 
+    def test_bare_stx_allow_fully_suppresses_fm001_in_research(self):
+        # Arrange — research config; the violating line carries the bare
+        # ``# stx-allow`` opt-out. Regression (figrecipe v1 ask): suppression
+        # must emit NOTHING even under research mode — the promotion floor only
+        # flips the severity of an ALREADY-emitted finding, it must never
+        # resurrect a line the author explicitly suppressed.
+        cfg = _research_config()
+        src = (
+            "import matplotlib.pyplot as plt\n"
+            "fig, ax = plt.subplots(figsize=(4, 3))  # stx-allow: STX-FM001\n"
+        )
+        # Act
+        issues = lint_source(src, "fig.py", cfg)
+        # Assert
+        assert _sev_of(issues, "STX-FM001") is None, (
+            f"bare # stx-allow must fully suppress FM001 even in research; "
+            f"got {[(i.rule.id, i.rule.severity) for i in issues]}"
+        )
+
 
 @requires_figrecipe
 class TestPluginPathPromotionEndToEnd:
