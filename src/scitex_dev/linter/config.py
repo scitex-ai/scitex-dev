@@ -158,6 +158,36 @@ def load_config(start_path: str | None = None) -> LinterConfig:
         }
         config_dict["category_severity_override"] = merged
 
+        # Raw-external-library IMPORT promotion v1 (operator directive
+        # 2026-06-30, mirroring PR #264's figure/plot promotion): research
+        # projects must use the stx umbrella (`stx.plt` / `stx.stats` /
+        # `stx.io`) instead of importing the raw third-party library
+        # directly. The relevant import rules — STX-I001 (matplotlib.pyplot),
+        # STX-I002 (scipy.stats), STX-I009 (seaborn) — already FIRE in
+        # research mode but only as WARNINGS, so e.g. `import matplotlib`
+        # warns-without-blocking the post-edit hook. We promote them to
+        # ERROR so the hook (run_lint.sh, exit 2) deterministically BLOCKS.
+        #
+        # MECHANISM — per_rule_severity, NOT a category override: all of
+        # STX-I001..I009 share the SINGLE category "import", which also
+        # carries rules that must STAY warn-only — STX-I003 (pickle),
+        # STX-I006/I007 (`random`/`logging` injection hygiene), and
+        # STX-I008 (cross-package private-submodule import, a DIFFERENT
+        # concern). Promoting the whole "import" category would over-promote
+        # those. So we target the exact raw-extlib import IDs by rule.
+        # per_rule_severity WINS over the category floor (see checker._add
+        # and _severity_promotion.py), so an operator pin in pyproject for
+        # any of these still takes precedence. The `# stx-allow: STX-<ID>`
+        # per-line opt-out is unaffected (handled in checker._add before
+        # severity is assigned — a suppressed line never reaches here).
+        _existing_per_rule = config_dict.get("per_rule_severity", {}) or {}
+        config_dict["per_rule_severity"] = {
+            "STX-I001": "error",
+            "STX-I002": "error",
+            "STX-I009": "error",
+            **_existing_per_rule,
+        }
+
         # FM category auto-enable for research projects (neurovista
         # elevation 2026-06-14): figure provenance / clew chaining
         # matters for research outputs, so figrecipe's figure-style
