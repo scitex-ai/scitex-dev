@@ -42,6 +42,32 @@ requires_figrecipe = pytest.mark.skipif(
 )
 
 
+def _rule_registered(rule_id: str) -> bool:
+    """Return True iff *rule_id* is in the loaded linter rule set.
+
+    figrecipe-IMPORTABLE is not the same as figrecipe-PROVIDES-this-rule: a
+    baked CI/SIF image can carry an OLDER figrecipe whose plugin predates a
+    given rule (e.g. STX-FM010 / STX-P006). figrecipe then imports fine — so
+    ``@requires_figrecipe`` passes — yet the rule never registers and the
+    promotion never fires, turning a version-skew into a hard test FAILURE.
+    The plugin loader merges every plugin's rules into a dict keyed by rule
+    id, so membership there is the precise "is this rule available?" check.
+    """
+    from scitex_dev.linter._plugin_loader import load_plugins
+
+    return rule_id in load_plugins().get("rules", {})
+
+
+def requires_rule(rule_id: str):
+    """skipif guard for a plugin-PROVIDED rule that may be absent on old figrecipe."""
+    return pytest.mark.skipif(
+        not _rule_registered(rule_id),
+        reason=(
+            f"{rule_id} not registered — installed figrecipe predates this rule"
+        ),
+    )
+
+
 def _research_config(**extra):
     """A synthetic research-mode config (FM enabled + full v1 category floor)."""
     return LinterConfig(
@@ -204,6 +230,7 @@ class TestFM001PromotionEndToEnd:
 class TestPluginPathPromotionEndToEnd:
     """Plugin-path rules (P006-P009 / FM010/FM011) also promote."""
 
+    @requires_rule("STX-P006")
     def test_p006_style_kwarg_promoted_to_error(self):
         # Arrange — P006 fires from figrecipe's StyleKwargChecker (plugin path).
         cfg = _research_config()
@@ -216,6 +243,7 @@ class TestPluginPathPromotionEndToEnd:
             f"got {[(i.rule.id, i.rule.severity) for i in issues]}"
         )
 
+    @requires_rule("STX-FM010")
     def test_fm010_figure_method_promoted_to_error(self):
         # Arrange — FM010 fires from figrecipe's FigureMethodChecker (plugin).
         cfg = _research_config()
