@@ -7,6 +7,40 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-06-30
+
+### Added
+- **Figure-lint v1 — figrecipe figure-bypass rules → research-mode ERROR (#264).**
+  In `project-type: research` repos the figrecipe FM/FIG/P family (raw
+  matplotlib, `tight_layout`/`constrained_layout`, `plt.subplots` bypass, …)
+  is promoted from warning to error via `category_severity_override`, so the
+  post-edit hook deterministically blocks figure-bypass code.
+- **Raw-external-library IMPORT rules → research-mode ERROR (#265).** `STX-I001`
+  (`import matplotlib.pyplot`), `STX-I002` (`import scipy.stats`), `STX-I009`
+  (`import seaborn`) promote to error in research via `per_rule_severity`
+  (precise per-rule, not a category bump — sibling import rules like
+  `STX-I008` private-import stay warn). `# stx-allow: STX-<ID>` escape hatch
+  preserved.
+- **`--new-only` baseline gate for `check-files` (#266).** With
+  `--new-only --baseline <ref>` (wired into `run_lint.sh` as `--baseline HEAD`)
+  the edit hook blocks only NEWLY-introduced violations; pre-existing (baseline)
+  findings are capped to warning so a large legacy backlog never wedges edits.
+  Content-based (rule + normalized line) matching survives line shifts. This is
+  the safety pair for the research-mode promotions above.
+- **Worktree-resilient testmon warm-cache wrapper (`run_testmon`) (#260).**
+- **`pulled` card-events emitted from `ecosystem sync` (auto-pull C8) (#257).**
+
+### Changed
+- **STX-S001/S002 messages explain WHY, not just WHAT (#263)** — the
+  `@stx.session` rules now state the clew-lineage rationale.
+- **PR audit gate is incremental (`--new-only`), not strict (#261)** —
+  `ecosystem audit-all` in CI flags only newly-introduced violations.
+
+### Fixed
+- **Degrade present-but-broken optional deps instead of crashing (#262)** —
+  `try_import_optional` broadened + numpy/torch ABI hint.
+- **Pass resolved config to plugin checkers — None-config crash (#259).**
+
 ## [0.17.11] - 2026-06-11
 
 ### Added
