@@ -163,6 +163,21 @@ def load_plugins(*, entry_points_iter=None):
                 exc,
                 exc_info=True,
             )
+            # Record the DECLARED-but-broken plugin so that, in
+            # ``project-type: research``, the CLI (``_do_check``) can turn
+            # this into a HARD ERROR finding (exit 2) instead of letting the
+            # plugin's compliance rules silently not-fire — the NeuroVista
+            # 2026-06-30 false-green. Recorded on BOTH the injected (test)
+            # and real paths: the seam exists precisely to drive THIS branch
+            # without mocks. ``research_blocking_conditions`` is itself gated
+            # on research-mode + ``_quiet``, so recording here is harmless in
+            # non-research / quiet runs (it just isn't promoted to an error).
+            try:
+                from . import _health as _h
+
+                _h.record_plugin_load_failure(ep.name, exc, hint)
+            except Exception:  # pragma: no cover - health must NEVER break loading
+                _logger.debug("plugin-load-failure record failed", exc_info=True)
             if not _quiet():
                 sys.stderr.write(
                     f"\033[33m[scitex-dev linter] WARNING: failed to load "

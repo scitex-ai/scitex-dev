@@ -22,10 +22,10 @@ from pathlib import Path
 
 import click
 
-from .checker import lint_file
+from .checker import Issue, lint_file
 from .config import load_config
 from .formatter import format_issue, format_summary, to_json
-from .rules import SEVERITY_ORDER
+from .rules import Rule, SEVERITY_ORDER
 
 
 def _collect_files(path: Path, recursive: bool = True, config=None) -> list:
@@ -51,6 +51,60 @@ def _baseline_issues_for(filepath, baseline, config):
     from .checker import lint_source
 
     return lint_source(src, filepath=str(filepath), config=config)
+
+
+# Synthetic file key under which the research-mode missing-plugin HARD
+# ERROR findings are surfaced. Not a real file — the linter's silent-skip
+# guard is a project-level condition, not a per-file violation — but routing
+# it through the same ``all_results`` map means it flows through the EXACT
+# existing exit-code path (text + JSON ⇒ exit 2 ⇒ run_lint.sh blocks) instead
+# of a parallel mechanism. The ``<plugin-health>`` sentinel makes it obvious
+# in output that this is not a source location.
+_PLUGIN_HEALTH_KEY = "<plugin-health>"
+
+
+def _is_research(path) -> bool:
+    """Return True when ``path`` resolves under a ``project-type: research`` repo.
+
+    Mirrors ``config.load_config``'s research detection (same walk-up +
+    ``detect_scitex_dev_project_types``) so the hard-fail gate keys off the
+    SAME project-type signal that already drives the io/path severity flip.
+    """
+    from pathlib import Path
+
+    from ._project_type import detect_scitex_dev_project_types
+
+    start = Path(path).resolve()
+    if start.is_file():
+        start = start.parent
+    return "research" in detect_scitex_dev_project_types(start)
+
+
+def _plugin_health_issues(path) -> list:
+    """Build synthetic ERROR ``Issue``s for research-mode missing-plugin conditions.
+
+    Returns ``[]`` outside research mode, under ``SCITEX_DEV_LINTER_QUIET``,
+    or when every declared plugin loaded and IO/PA rules are present — the
+    decision lives in ``_health.research_blocking_conditions`` (a pure
+    function over the load-time health tally). Must be called AFTER files are
+    linted (so ``load_plugins`` has populated the health state) and AFTER any
+    ``--new-only`` capping (these are not file-content findings and have no
+    baseline, so they must never be capped to warning).
+    """
+    from . import _health as _h
+
+    conditions = _h.research_blocking_conditions(_is_research(path))
+    issues = []
+    for cond in conditions:
+        rule = Rule(
+            id=cond["id"],
+            severity="error",
+            category="plugin",
+            message=cond["message"],
+            suggestion="",
+        )
+        issues.append(Issue(rule=rule, line=0, col=0, source_line=""))
+    return issues
 
 
 def _do_check(
@@ -91,6 +145,19 @@ def _do_check(
         ]
         if issues:
             all_results[str(f)] = issues
+
+    # Research-mode HARD ERROR on a DECLARED-but-missing leaf plugin (kill the
+    # silent-skip false-green). Injected AFTER the file loop / --new-only cap:
+    # these are project-level conditions, not file-content findings, so they
+    # have no baseline and must always block in research mode. The severity
+    # gate still applies (error >= min_sev for the hook's `--severity error`
+    # pass); `--category` does NOT filter them out unless explicitly requested
+    # since they carry the dedicated "plugin" category.
+    plugin_issues = [
+        i for i in _plugin_health_issues(path) if SEVERITY_ORDER[i.rule.severity] >= min_sev
+    ]
+    if plugin_issues:
+        all_results[_PLUGIN_HEALTH_KEY] = plugin_issues
 
     if as_json:
         combined = {fp: to_json(issues, fp) for fp, issues in all_results.items()}

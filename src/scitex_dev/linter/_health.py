@@ -54,6 +54,16 @@ _st_rule_count = 0
 _skip_counts: dict[str, int] = {}
 _emitted_l1 = False
 _emitted_l2 = False
+# Declared-but-unloadable plugins. An entry point in the
+# ``scitex_dev.linter.plugins`` group that raised on import. Each item is
+# ``{"name": <ep_name>, "exc_type": <type-name>, "exc": <str>, "hint": <str>}``.
+# In ``project-type: research`` this is a HARD ERROR (see
+# :func:`research_blocking_conditions`): a DECLARED rule provider that fails
+# to load means its compliance rules SILENTLY don't fire — the exact
+# false-green NeuroVista hit on 2026-06-30 (scitex-io plugin uninstalled →
+# all IO/PA rules absent, lint passed clean). In non-research dev venvs a
+# missing leaf plugin is legitimate, so this stays a warning there.
+_load_failures: list[dict] = []
 
 
 def _quiet() -> bool:
@@ -104,6 +114,88 @@ def record_plugin_load(plugin_results: list[dict]) -> None:
                 elif cat == "structure":
                     _st_rule_count += 1
         _maybe_emit_l1()
+
+
+def record_plugin_load_failure(ep_name: str, exc: Exception, hint: str = "") -> None:
+    """Record a DECLARED plugin entry point that raised on import.
+
+    Called from ``_plugin_loader.load_plugins`` in the load-failure branch
+    (right where it emits the L1 WARNING). We keep the failure so that, in
+    ``project-type: research``, ``_do_check`` can turn it into a HARD ERROR
+    finding instead of letting the rules silently not-fire. The ``hint`` is
+    the actionable remediation string the loader already computed via
+    ``_remediation_hint`` — we reuse it verbatim in the error message.
+    """
+    with _lock:
+        _load_failures.append(
+            {
+                "name": ep_name,
+                "exc_type": type(exc).__name__,
+                "exc": str(exc),
+                "hint": hint,
+            }
+        )
+
+
+def research_blocking_conditions(research: bool) -> list[dict]:
+    """Return the missing-plugin conditions that HARD-FAIL in research mode.
+
+    Each item is ``{"id": <synthetic-rule-id>, "message": <str>}`` describing
+    a condition that must block the post-edit hook (exit 2) when the linted
+    project is ``project-type: research``. Two conditions are covered, both
+    of which would otherwise be a SILENT false-green:
+
+    * **Declared-but-unloadable plugin** — an entry point present in the
+      installed metadata whose import raised (stale wheel / broken module).
+      Its compliance rules never register. One condition per failed plugin.
+    * **scitex-io missing → IO/PA rules silently skipped** — the canonical
+      false-green :func:`_maybe_emit_l1` already detects (no IO/PA category
+      rules registered AND ``scitex_io`` not importable).
+
+    Returns an EMPTY list when:
+
+    * ``research`` is False — non-research dev venvs legitimately lack leaf
+      plugins, so these stay warn-only (the L1/load-failure WARNINGs above).
+    * :func:`_quiet` is True — the documented ``SCITEX_DEV_LINTER_QUIET`` /
+      ``SCITEX_DEV_NO_AUDIT_DISCLAIMER`` escape hatch suppresses the hard
+      fail exactly as it suppresses the warnings (an escape hatch, not a
+      half-measure).
+
+    This is a pure function over module state — no I/O, no emit — so the
+    decision is unit-testable in isolation (no mocks; drive ``_load_failures``
+    via :func:`record_plugin_load_failure`).
+    """
+    if not research or _quiet():
+        return []
+    conditions: list[dict] = []
+    with _lock:
+        for failure in _load_failures:
+            msg = (
+                f"declared linter plugin {failure['name']!r} FAILED to load "
+                f"({failure['exc_type']}: {failure['exc']}) — its compliance "
+                f"rules are NOT active, so they SILENTLY do not fire. In a "
+                f"research project this is a hard error (false-green guard)."
+            )
+            if failure["hint"]:
+                msg += f" FIX: {failure['hint']}"
+            conditions.append({"id": "STX-PLUGIN-LOAD", "message": msg})
+        io_pa = _io_rule_count + _pa_rule_count
+        io_missing = _loaded and io_pa == 0 and not _scitex_io_installed()
+    if io_missing:
+        conditions.append(
+            {
+                "id": "STX-PLUGIN-IO-MISSING",
+                "message": (
+                    "no IO/PA category rules registered — the scitex-io plugin "
+                    "is NOT installed in this venv, so all `pd.read_*` / "
+                    "`np.load/save` / `pickle` / `df.to_*` / `open()` checks "
+                    "(STX-IO001-014, STX-PA001-005) are SILENTLY skipped. In a "
+                    "research project this is a hard error (the NeuroVista "
+                    "2026-06-30 false-green). FIX: `pip install scitex-io`."
+                ),
+            }
+        )
+    return conditions
 
 
 def record_rule_skip(rule_requires: str) -> None:
@@ -184,13 +276,14 @@ def health_snapshot() -> dict:
             "scitex_io_installed": _scitex_io_installed(),
             "emitted_l1": _emitted_l1,
             "emitted_l2": _emitted_l2,
+            "load_failures": list(_load_failures),
         }
 
 
 def reset() -> None:
     """Reset all module state. For tests only — production never calls this."""
     global _loaded, _io_rule_count, _pa_rule_count, _st_rule_count
-    global _skip_counts, _emitted_l1, _emitted_l2
+    global _skip_counts, _emitted_l1, _emitted_l2, _load_failures
     with _lock:
         _loaded = False
         _io_rule_count = 0
@@ -199,3 +292,4 @@ def reset() -> None:
         _skip_counts = {}
         _emitted_l1 = False
         _emitted_l2 = False
+        _load_failures = []
