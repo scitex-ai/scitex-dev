@@ -290,3 +290,210 @@ def test_spartan_conn_monitor_command_writes_to_log_under_scitex_dev():
     spec = _jobs.get_job("spartan-conn-monitor")
     # Assert
     assert "/.scitex/dev/logs/cron-spartan-conn-monitor.log" in spec.command
+
+
+# ---------------------------------------------------------------------------
+# creds-rotate-all — federates the operator's ad-hoc
+# `# scitex-dev creds-rotate (managed)` crontab line (the default
+# `scitex-dev creds rotate-all --yes` install at "0 * * * *", see
+# _creds._cron) into the managed block. Pins the registry shape per the
+# §3 "Adding a new job" checklist so a typo in schedule / command / log
+# path can't ship silently.
+# ---------------------------------------------------------------------------
+
+
+def test_registry_has_creds_rotate_all_entry():
+    # Arrange
+    # Act
+    # Assert
+    assert "creds-rotate-all" in _jobs.JOB_REGISTRY
+
+
+def test_creds_rotate_all_name_matches_registry_key():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("creds-rotate-all")
+    # Assert
+    assert spec.name == "creds-rotate-all"
+
+
+def test_creds_rotate_all_schedule_is_top_of_every_hour():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("creds-rotate-all")
+    # Assert — matches _creds._cron._interval_to_schedule(60).
+    assert spec.schedule == "0 * * * *"
+
+
+def test_creds_rotate_all_command_invokes_creds_rotate_all_yes():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("creds-rotate-all")
+    # Assert
+    assert "scitex-dev creds rotate-all --yes" in spec.command
+
+
+def test_creds_rotate_all_command_writes_to_creds_rotate_log():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("creds-rotate-all")
+    # Assert — the ad-hoc line this entry retires writes to exactly this
+    # path (NO `cron-` prefix); dashboards tailing it must keep working.
+    assert "/.scitex/dev/logs/creds-rotate.log" in spec.command
+
+
+def test_creds_rotate_all_command_keeps_one_mib_rotation_threshold():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("creds-rotate-all")
+    # Assert — the 1-MiB rotate-to-.1 threshold from the ad-hoc installer
+    # (_creds._cron.build_cron_line) is preserved in the managed line.
+    assert "1048576" in spec.command
+
+
+def test_creds_rotate_all_command_keeps_stat_size_check():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("creds-rotate-all")
+    # Assert — the `stat -c%s` size probe of the rotation guard survives.
+    assert "stat -c%s" in spec.command
+
+
+def test_creds_rotate_all_description_mentions_rotate_all_verb():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("creds-rotate-all")
+    # Assert
+    assert "rotate-all" in spec.description
+
+
+def test_list_jobs_includes_creds_rotate_all():
+    # Arrange
+    # Act
+    names = [s.name for s in _jobs.list_jobs()]
+    # Assert
+    assert "creds-rotate-all" in names
+
+
+# ---------------------------------------------------------------------------
+# ci-runner-ensure — federates the operator's ad-hoc ci-runner-ensure
+# crontab line (every 30 min, body = ~/.scitex/dev/ci-runner-ensure-cron.sh)
+# into the managed block. Pins schedule / command / log path.
+# ---------------------------------------------------------------------------
+
+
+def test_registry_has_ci_runner_ensure_entry():
+    # Arrange
+    # Act
+    # Assert
+    assert "ci-runner-ensure" in _jobs.JOB_REGISTRY
+
+
+def test_ci_runner_ensure_name_matches_registry_key():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ci-runner-ensure")
+    # Assert
+    assert spec.name == "ci-runner-ensure"
+
+
+def test_ci_runner_ensure_schedule_is_every_thirty_minutes():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ci-runner-ensure")
+    # Assert
+    assert spec.schedule == "*/30 * * * *"
+
+
+def test_ci_runner_ensure_command_runs_the_host_script():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ci-runner-ensure")
+    # Assert
+    assert "$HOME/.scitex/dev/ci-runner-ensure-cron.sh" in spec.command
+
+
+def test_ci_runner_ensure_command_writes_to_named_log_file():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ci-runner-ensure")
+    # Assert
+    assert "/.scitex/dev/logs/ci-runner-ensure.log" in spec.command
+
+
+def test_ci_runner_ensure_description_non_empty():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ci-runner-ensure")
+    # Assert
+    assert spec.description.strip() != ""
+
+
+def test_list_jobs_includes_ci_runner_ensure():
+    # Arrange
+    # Act
+    names = [s.name for s in _jobs.list_jobs()]
+    # Assert
+    assert "ci-runner-ensure" in names
+
+
+# ---------------------------------------------------------------------------
+# ci-runner-workgc — federates the operator's ad-hoc ci-runner-workgc
+# crontab line (every 6 h, body = ~/.scitex/dev/ci-runner-workgc-cron.sh)
+# into the managed block. Pins schedule / command / log path.
+# ---------------------------------------------------------------------------
+
+
+def test_registry_has_ci_runner_workgc_entry():
+    # Arrange
+    # Act
+    # Assert
+    assert "ci-runner-workgc" in _jobs.JOB_REGISTRY
+
+
+def test_ci_runner_workgc_name_matches_registry_key():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ci-runner-workgc")
+    # Assert
+    assert spec.name == "ci-runner-workgc"
+
+
+def test_ci_runner_workgc_schedule_is_every_six_hours():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ci-runner-workgc")
+    # Assert
+    assert spec.schedule == "0 */6 * * *"
+
+
+def test_ci_runner_workgc_command_runs_the_host_script():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ci-runner-workgc")
+    # Assert
+    assert "$HOME/.scitex/dev/ci-runner-workgc-cron.sh" in spec.command
+
+
+def test_ci_runner_workgc_command_writes_to_named_log_file():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ci-runner-workgc")
+    # Assert
+    assert "/.scitex/dev/logs/ci-runner-workgc.log" in spec.command
+
+
+def test_ci_runner_workgc_description_non_empty():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ci-runner-workgc")
+    # Assert
+    assert spec.description.strip() != ""
+
+
+def test_list_jobs_includes_ci_runner_workgc():
+    # Arrange
+    # Act
+    names = [s.name for s in _jobs.list_jobs()]
+    # Assert
+    assert "ci-runner-workgc" in names
