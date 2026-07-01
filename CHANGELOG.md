@@ -7,6 +7,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-07-01
+
+### Added
+- **`scitex-dev service ensure <name>` — supervised long-running services (#273).**
+  Resolves a `kind="service"` JobSpec from the `scitex_dev.jobs` entry-point
+  federation and guarantees it is installed AND running, picking the backend at
+  runtime: systemd `--user` (writes the `.service` unit, `daemon-reload`,
+  `enable --now`) where a user manager exists, otherwise a respawn keep-alive
+  loop (alive-flag + pidfile, capped exponential backoff, logs under
+  `~/.scitex/<pkg>/runtime/logs/`). `--respawn` forces the fallback; `--json`
+  emits a structured result. The durable auto-relaunch a daemon-owning leaf
+  (e.g. the sac listen server) declares once and consumes — closing the
+  "no supervisor" outage class.
+- **Opt-in systemd watchdog for `kind="service"` JobSpecs.** A new
+  `JobSpec.watchdog_sec` field emits `Type=notify` + `WatchdogSec=<N>s` ONLY
+  when a leaf sets it (i.e. the daemon sends `sd_notify(WATCHDOG=1)`). Unset ⇒
+  the unit stays `Type=simple` and relies on `Restart=` alone — avoiding the
+  restart-storm/activation-hang footguns of emitting a watchdog for a daemon
+  that never pings.
+
 ## [0.22.0] - 2026-07-01
 
 ### Added
