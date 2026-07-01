@@ -17,7 +17,10 @@ COMMAND_CATEGORIES = [
     ("CI", ["ci"]),
     ("Development", ["show-config", "rename-symbols"]),
     ("Documentation", ["docs", "search-docs", "skills"]),
-    ("Ecosystem", ["audit-umbrella-pins", "cron", "doctor", "ecosystem", "creds"]),
+    (
+        "Ecosystem",
+        ["audit-umbrella-pins", "cron", "doctor", "ecosystem", "creds", "service"],
+    ),
     ("Interface", ["mcp", "list-python-apis"]),
     ("Shell", ["install-tab-completion"]),
 ]
@@ -439,15 +442,9 @@ def search_docs_deprecated(query, scope, max_results, as_json):
 # Integration commands
 # -------------------------------------------------------------------
 
-from ._mcp_cmds import register_mcp_commands
-from .creds import register_creds_commands
-from .cron import register_cron_commands
-from ._hooks_cli import register_hooks_commands
+from ._integrations import register_integration_commands
 
-register_mcp_commands(main)
-register_creds_commands(main)
-register_cron_commands(main)
-register_hooks_commands(main)
+register_integration_commands(main)
 
 # -------------------------------------------------------------------
 # ci runner — self-hosted GitHub Actions runner lifecycle
@@ -479,47 +476,6 @@ except Exception:
 # list-python-apis
 # -------------------------------------------------------------------
 
-@main.command("list-python-apis")
-@click.option(
-    "-v", "--verbose", count=True, help="Verbosity: -v sig+doc1, -vv full doc."
-)
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
-def list_python_apis(verbose, as_json):
-    """List Python APIs (scitex-dev public API tree).
+from ._list_apis import register_list_python_apis_command
 
-    \b
-    Example:
-        $ scitex-dev list-python-apis
-        $ scitex-dev list-python-apis -v --json
-    """
-    import inspect
-
-    import scitex_dev
-
-    items = []
-    for name in sorted(scitex_dev.__all__):
-        obj = getattr(scitex_dev, name, None)
-        if obj is None:
-            continue
-        if inspect.isclass(obj):
-            kind = "C"
-        elif callable(obj):
-            kind = "F"
-        else:
-            kind = "V"
-        doc = inspect.getdoc(obj) or ""
-        items.append({"name": name, "type": kind, "doc": doc})
-
-    if as_json:
-        click.echo(json.dumps(items, indent=2))
-        return
-
-    click.secho(
-        f"scitex-dev public API ({len(items)} items):", fg="cyan", bold=True
-    )
-    for item in items:
-        t = item["type"]
-        click.echo(f"  [{t}] {item['name']}")
-        if verbose >= 1 and item["doc"]:
-            desc = item["doc"].split("\n")[0][:70]
-            click.echo(f"      {desc}")
+register_list_python_apis_command(main)

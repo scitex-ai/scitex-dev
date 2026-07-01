@@ -456,4 +456,90 @@ def test_jobs_of_kind_cron_includes_builtin_ci_watch():
     assert "ci-watch" in names
 
 
+# ---------------------------------------------------------------------------
+# watchdog_sec opt-in field validation
+# ---------------------------------------------------------------------------
+
+
+def test_service_accepts_positive_watchdog_sec():
+    # Arrange
+    kwargs = dict(
+        name="sac.listen",
+        kind="service",
+        schedule="",
+        command="sac listen",
+        description="d",
+        restart_policy="always",
+        watchdog_sec=30,
+    )
+    # Act
+    job = JobSpec(**kwargs)
+    # Assert
+    assert job.watchdog_sec == 30
+
+
+def test_service_defaults_watchdog_sec_to_none():
+    # Arrange
+    kwargs = dict(
+        name="sac.listen",
+        kind="service",
+        schedule="",
+        command="sac listen",
+        description="d",
+    )
+    # Act
+    job = JobSpec(**kwargs)
+    # Assert — opt-in: absent unless declared.
+    assert job.watchdog_sec is None
+
+
+def test_service_rejects_nonpositive_watchdog_sec():
+    # Arrange
+    kwargs = dict(
+        name="sac.listen",
+        kind="service",
+        schedule="",
+        command="sac listen",
+        description="d",
+        watchdog_sec=0,
+    )
+    # Act
+    # Assert
+    with pytest.raises(ValueError):
+        JobSpec(**kwargs)
+
+
+def test_timer_rejects_watchdog_sec():
+    # Arrange — WatchdogSec is a service-only knob.
+    kwargs = dict(
+        name="mockpkg.refresh",
+        kind="timer",
+        schedule="*/5 * * * *",
+        command="mock refresh",
+        description="d",
+        on_unit_active_sec="5min",
+        watchdog_sec=30,
+    )
+    # Act
+    # Assert
+    with pytest.raises(ValueError):
+        JobSpec(**kwargs)
+
+
+def test_cron_rejects_watchdog_sec():
+    # Arrange
+    kwargs = dict(
+        name="ci-watch",
+        kind="cron",
+        schedule="*/5 * * * *",
+        command="scitex-dev cron exec ci-watch",
+        description="d",
+        watchdog_sec=30,
+    )
+    # Act
+    # Assert
+    with pytest.raises(ValueError):
+        JobSpec(**kwargs)
+
+
 # EOF
