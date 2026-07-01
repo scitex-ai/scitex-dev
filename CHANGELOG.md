@@ -7,6 +7,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-07-01
+
+### Added
+- **`STX-NET001` — outbound network calls must pass an explicit `timeout` (#271).**
+  Flags `urllib`/`requests`/`httpx`/`socket` calls on non-test code that omit a
+  `timeout` (positional or keyword). Deterministic never-repeat for the
+  2026-07-01 sac-listen `:7878` dead-daemon incident, where unbounded clients
+  degraded to ~30s connect-hangs ("everything is slow" fleet-wide). Severity is
+  `warning` under the `--new-only` gate (promotable to error after a clean
+  ecosystem sweep); `# stx-allow: STX-NET001` escape hatch. Shared rule the
+  leaf packages consume.
+- **`ecosystem-sync` managed cron job — scheduled self-pull (#270).** Hourly
+  `scitex-dev ecosystem sync --yes` (ff-only, develop-only, skips
+  dirty/off-develop/diverged) fast-forwards every editable checkout so no
+  install silently serves stale code. Closes the drift loop that left the
+  workstation's own checkout 18 commits behind a tag. Install with
+  `scitex-dev cron install ecosystem-sync`.
+- **Federated cron jobs: `creds-rotate-all`, `ci-runner-ensure`,
+  `ci-runner-workgc` (#269).** The operator's ad-hoc host crontab lines are
+  absorbed into the managed `JOB_REGISTRY` block.
+
 ## [0.21.0] - 2026-06-30
 
 ### Added
