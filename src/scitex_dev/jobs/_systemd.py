@@ -245,7 +245,23 @@ def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
     ``on_boot_sec`` (systemd Services don't natively expose
     ``OnBootSec`` — that's a Timer-only knob — so we materialise the
     delay as a pre-exec sleep).
+
+    Watchdog (opt-in). ``Restart=`` handles a *crash* (the process
+    exits) but is blind to a *hang* (the process is alive but wedged).
+    ``WatchdogSec`` closes that gap — BUT it does nothing unless the
+    daemon calls ``sd_notify(WATCHDOG=1)`` on a cadence faster than the
+    interval, under ``Type=notify``. If we emitted ``WatchdogSec`` for a
+    plain ``Type=simple`` daemon that never pings, systemd would decide
+    the daemon "timed out" every interval and kill+restart it forever —
+    a restart-storm footgun strictly worse than no watchdog at all.
+
+    Therefore the watchdog is emitted ONLY when the JobSpec explicitly
+    sets ``watchdog_sec`` (the leaf is declaring "I send WATCHDOG=1
+    pings"). In that case we switch the unit to ``Type=notify`` and add
+    ``WatchdogSec=<N>s``. Otherwise the unit stays ``Type=simple`` and
+    relies on ``Restart=`` alone.
     """
+    use_watchdog = job.watchdog_sec is not None
     lines = [
         "[Unit]",
         f"Description={job.description or job.name}",
@@ -254,7 +270,11 @@ def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
         "Wants=network-online.target",
         "",
         "[Service]",
-        "Type=simple",
+        # Type=notify ONLY when a watchdog is requested — a Type=notify
+        # unit whose ExecStart never calls sd_notify(READY=1) would sit
+        # in "activating" until TimeoutStartSec and fail, so we must NOT
+        # flip to notify for daemons that don't opt in.
+        "Type=notify" if use_watchdog else "Type=simple",
     ]
     if job.on_boot_sec:
         seconds = _on_boot_sec_to_seconds(job.on_boot_sec)
@@ -268,6 +288,11 @@ def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
             f"Restart={job.restart_policy}",
         ]
     )
+    if use_watchdog:
+        # Guards hangs. The leaf MUST ping sd_notify(WATCHDOG=1) faster
+        # than this or systemd will treat the daemon as hung and restart
+        # it — see the opt-in caveat in the docstring above.
+        lines.append(f"WatchdogSec={job.watchdog_sec}s")
     if job.restart_policy != "no":
         # Sensible default the operator can override at the systemctl
         # level. Keeps a runaway restart loop from melting CPU on a

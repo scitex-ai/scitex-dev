@@ -219,6 +219,88 @@ def test_derive_on_unit_active_sec_fallback_for_unknown():
 
 
 # ---------------------------------------------------------------------------
+# kind="service" long-running unit + WatchdogSec opt-in
+# ---------------------------------------------------------------------------
+
+
+def _service_job(**overrides):
+    base = dict(
+        name="sac.listen",
+        kind="service",
+        schedule="",
+        command="sac listen --port 7878",
+        description="sac long-poll listen daemon",
+        restart_policy="always",
+    )
+    base.update(overrides)
+    return JobSpec(**base)
+
+
+def test_service_unit_kind_service_is_type_simple_by_default():
+    # Arrange
+    job = _service_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert — no watchdog opt-in ⇒ plain Type=simple.
+    assert "Type=simple" in text
+
+
+def test_service_unit_kind_service_has_restart_policy():
+    # Arrange
+    job = _service_job(restart_policy="always")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "Restart=always" in text
+
+
+def test_service_unit_omits_watchdog_when_not_opted_in():
+    # Arrange — WatchdogSec absent for a plain Type=simple daemon avoids
+    # the "kill+restart every interval" footgun.
+    job = _service_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "WatchdogSec" not in text
+
+
+def test_service_unit_not_type_notify_when_not_opted_in():
+    # Arrange
+    job = _service_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert — Type=notify only when a watchdog is requested.
+    assert "Type=notify" not in text
+
+
+def test_service_unit_emits_watchdog_when_opted_in():
+    # Arrange
+    job = _service_job(watchdog_sec=30)
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "WatchdogSec=30s" in text
+
+
+def test_service_unit_switches_to_type_notify_when_watchdog_opted_in():
+    # Arrange — WatchdogSec requires Type=notify + sd_notify pings.
+    job = _service_job(watchdog_sec=30)
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "Type=notify" in text
+
+
+def test_service_unit_watchdog_opted_in_is_not_type_simple():
+    # Arrange
+    job = _service_job(watchdog_sec=30)
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "Type=simple" not in text
+
+
+# ---------------------------------------------------------------------------
 # resolve_execstart — absolute-path fix (BUG A on the host bring-up)
 # ---------------------------------------------------------------------------
 
