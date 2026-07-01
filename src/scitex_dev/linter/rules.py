@@ -30,6 +30,7 @@ from ._rules import (  # noqa: F401
     I005,
     I006,
     I007,
+    NET001,
     NL001,
     NM001,
     NM002,
