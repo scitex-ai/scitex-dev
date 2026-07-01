@@ -245,6 +245,36 @@ def _ci_runner_workgc_command() -> str:
     return f"mkdir -p $(dirname {log}); {script} >> {log} 2>&1"
 
 
+def _ecosystem_sync_command() -> str:
+    """The shell line installed for the ``ecosystem-sync`` cron job.
+
+    Runs the WRITE self-pull ``scitex-dev ecosystem sync --yes`` (see
+    ``_cmds/_sync.py``), which fast-forwards every editable checkout's
+    ``develop`` to ``origin/develop``. Safe by construction: develop-only,
+    ``git merge --ff-only``, and dirty / off-develop / diverged checkouts
+    are reported and SKIPPED — never clobbered, so the operator's
+    un-pushed work is never touched.
+
+    Why this is a MANAGED job and not merely an available command: the
+    ecosystem runs on editable installs that import their own working
+    tree, but ``origin/develop`` advances on its own (CI commits docs-HTML
+    and version bumps back). Without a periodic self-pull a checkout
+    silently serves stale code — the workstation's own ``scitex-dev``
+    checkout was found 18 commits behind tag v0.21.0 (2026-07-01) and the
+    Spartan runner 145 behind. Scheduling the sweep closes that self-pull
+    leg of the loop so no editable install drifts unnoticed again.
+
+    ``mkdir -p`` the log dir, run the 1-MiB log-rotation guard (a sweep
+    over ~60 repos writes a table each run), then append output to
+    ``~/.scitex/dev/logs/cron-ecosystem-sync.log``.
+    """
+    log = "$HOME/.scitex/dev/logs/cron-ecosystem-sync.log"
+    return (
+        f"mkdir -p $(dirname {log}); {_log_rotate_guard(log)}"
+        f"scitex-dev ecosystem sync --yes >> {log} 2>&1"
+    )
+
+
 JOB_REGISTRY: Mapping[str, JobSpec] = {
     "ci-watch": JobSpec(
         name="ci-watch",
@@ -390,6 +420,25 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "trees by running ~/.scitex/dev/ci-runner-workgc-cron.sh. "
             "Federates the ad-hoc host crontab line into the managed "
             "block. Log at ~/.scitex/dev/logs/ci-runner-workgc.log."
+        ),
+    ),
+    "ecosystem-sync": JobSpec(
+        name="ecosystem-sync",
+        # Top of every hour. A git fetch of an already-current checkout is
+        # a couple KB and the ff-merge only runs when actually behind, so
+        # hourly is cheap even across ~60 repos while bounding drift to
+        # <=1h. Tunable: change THIS schedule (one diff + one test) and
+        # re-install. See _ecosystem_sync_command for why it exists.
+        schedule="0 * * * *",
+        command=_ecosystem_sync_command(),
+        description=(
+            "Fast-forward every editable ecosystem checkout's develop to "
+            "origin (self-pull) via `scitex-dev ecosystem sync --yes`. "
+            "ff-only, develop-only, skips dirty/off-develop/diverged so "
+            "un-pushed work is never clobbered. Closes the drift loop that "
+            "let checkouts silently serve stale code (the workstation's own "
+            "scitex-dev was 18 commits behind v0.21.0; the Spartan runner "
+            "145 behind). Log at ~/.scitex/dev/logs/cron-ecosystem-sync.log."
         ),
     ),
     # Future entries land here. Suggested naming pattern: short
