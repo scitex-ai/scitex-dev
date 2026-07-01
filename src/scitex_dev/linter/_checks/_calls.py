@@ -3,12 +3,31 @@
 from __future__ import annotations
 
 import ast
+from pathlib import Path
 
 from .. import rules
 from .._rule_tables import AXES_HINTS as _AXES_HINTS
 from .._rule_tables import AXES_SKIP as _AXES_SKIP
 from .._rule_tables import CALL_RULES as _CALL_RULES
 from .._rule_tables import PRINT_RULE as _PRINT_RULE
+
+# STX-NET001 — outbound network HTTP-ish verb methods. `session.get(...)` /
+# `httpx_client.request(...)` etc. all take `timeout=` as a keyword; the value
+# maps method-name -> None because those APIs have NO positional timeout slot
+# we can rely on (timeout is keyword-only in practice). `urlopen` and
+# `create_connection` are handled separately since they take timeout
+# positionally.
+_NET_HTTP_METHODS = frozenset(
+    {"get", "post", "put", "delete", "patch", "head", "options", "request"}
+)
+# Module names whose HTTP verbs we attribute confidently (requests.get,
+# httpx.post, ...). Names outside this set are only matched when the receiver
+# variable looks like an http client/session (see `_net_looks_like_client`).
+_NET_HTTP_MODULES = frozenset({"requests", "httpx"})
+# Receiver-variable name hints for `<var>.get(...)` — only these variable
+# names are treated as HTTP clients, so arbitrary `d.get(key)` (dict.get) is
+# never flagged.
+_NET_CLIENT_HINTS = ("session", "client", "http", "requests", "httpx", "sess")
 
 
 class CallChecksMixin:
@@ -18,7 +37,97 @@ class CallChecksMixin:
 
     def visit_Call(self, node: ast.Call) -> None:
         self._check_call(node)
+        self._check_network_timeout(node)
         self.generic_visit(node)
+
+    # -- STX-NET001 — outbound network call without an explicit timeout --
+
+    def _net_is_test_file(self) -> bool:
+        """True iff the current file is test code (calls there may be unbounded).
+
+        Mirrors ``_tq001_is_test_file`` intentionally rather than importing it:
+        NET001 must skip ``tests/`` dirs and ``test_*.py`` / ``*_test.py``
+        regardless of mixin ordering.
+        """
+        p = Path(self.filepath)
+        name = p.name
+        return (
+            name.startswith("test_")
+            or name.endswith("_test.py")
+            or any(seg in {"tests", "test"} for seg in p.parts)
+        )
+
+    def _net_has_kw(self, node: ast.Call, name: str = "timeout") -> bool:
+        return any(kw.arg == name for kw in node.keywords)
+
+    @staticmethod
+    def _net_looks_like_client(recv: str | None) -> bool:
+        if not recv:
+            return False
+        low = recv.lower()
+        return any(h in low for h in _NET_CLIENT_HINTS)
+
+    def _net_flag(self, node: ast.Call) -> None:
+        line = self._get_source(node.lineno)
+        self._add(rules.NET001, node.lineno, node.col_offset, line)
+
+    def _check_network_timeout(self, node: ast.Call) -> None:
+        """Flag outbound network calls that omit an explicit ``timeout``.
+
+        Only calls confidently attributable to a network API are flagged —
+        attribute/name match against urllib/requests/httpx/socket. When the
+        attribution is uncertain (arbitrary ``.get(``), the call is left alone
+        to keep false positives near zero.
+        """
+        if self._net_is_test_file():
+            return
+        func = node.func
+
+        # bare name: urlopen(url)  ->  timeout is the 3rd POSITIONAL or kw.
+        if isinstance(func, ast.Name):
+            if func.id == "urlopen":
+                # urlopen(url, data=None, timeout=...)
+                if len(node.args) >= 3 or self._net_has_kw(node):
+                    return
+                self._net_flag(node)
+            return
+
+        if not isinstance(func, ast.Attribute):
+            return
+
+        attr = func.attr
+        recv = func.value.id if isinstance(func.value, ast.Name) else None
+        # Resolve alias (import urllib.request as R -> R.urlopen).
+        resolved = self._imports.get(recv, recv) if recv else None
+
+        # urllib.request.urlopen(...) / <alias>.urlopen(...)
+        if attr == "urlopen":
+            if len(node.args) >= 3 or self._net_has_kw(node):
+                return
+            self._net_flag(node)
+            return
+
+        # socket.create_connection(address, timeout, source_address)
+        #   -> timeout is 2nd POSITIONAL or kw.
+        if attr == "create_connection":
+            base = recv or ""
+            base_resolved = resolved or ""
+            if "socket" in base.lower() or "socket" in base_resolved.lower():
+                if len(node.args) >= 2 or self._net_has_kw(node):
+                    return
+                self._net_flag(node)
+            return
+
+        # requests / httpx verb methods -> timeout is keyword-only in practice.
+        if attr in _NET_HTTP_METHODS:
+            mod = (resolved or recv or "").split(".")[0].lower()
+            confident = mod in _NET_HTTP_MODULES or self._net_looks_like_client(recv)
+            if not confident:
+                return
+            if self._net_has_kw(node):
+                return
+            self._net_flag(node)
+            return
 
     def _check_call(self, node: ast.Call) -> None:
         """Check function calls against Phase 2 rules."""
