@@ -497,3 +497,78 @@ def test_list_jobs_includes_ci_runner_workgc():
     names = [s.name for s in _jobs.list_jobs()]
     # Assert
     assert "ci-runner-workgc" in names
+
+
+# ---------------------------------------------------------------------------
+# ecosystem-sync — schedules the WRITE self-pull (`scitex-dev ecosystem sync
+# --yes`) so no editable checkout silently serves stale code. Motivated by the
+# 2026-07-01 incidence where the workstation's own scitex-dev checkout was
+# found 18 commits behind tag v0.21.0. Pins schedule / command / log path /
+# rotation guard per the §3 "Adding a new job" checklist.
+# ---------------------------------------------------------------------------
+
+
+def test_registry_has_ecosystem_sync_entry():
+    # Arrange
+    # Act
+    # Assert
+    assert "ecosystem-sync" in _jobs.JOB_REGISTRY
+
+
+def test_ecosystem_sync_name_matches_registry_key():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ecosystem-sync")
+    # Assert
+    assert spec.name == "ecosystem-sync"
+
+
+def test_ecosystem_sync_schedule_is_top_of_every_hour():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ecosystem-sync")
+    # Assert — hourly bounds drift to <=1h; cheap since ff-merge only runs
+    # when a checkout is actually behind.
+    assert spec.schedule == "0 * * * *"
+
+
+def test_ecosystem_sync_command_invokes_ecosystem_sync_yes():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ecosystem-sync")
+    # Assert — must call the mutating self-pull, not the read-only preview.
+    assert "scitex-dev ecosystem sync --yes" in spec.command
+
+
+def test_ecosystem_sync_command_writes_to_named_log_file():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ecosystem-sync")
+    # Assert
+    assert "/.scitex/dev/logs/cron-ecosystem-sync.log" in spec.command
+
+
+def test_ecosystem_sync_command_keeps_one_mib_rotation_threshold():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ecosystem-sync")
+    # Assert — a sweep over ~60 repos writes a table each run, so the
+    # 1-MiB rotate-to-.1 guard must be present.
+    assert "1048576" in spec.command
+
+
+def test_ecosystem_sync_description_mentions_ff_only_safety():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("ecosystem-sync")
+    # Assert — `scitex-dev cron list` must make the never-clobber contract
+    # obvious to operators without reading source.
+    assert "ff-only" in spec.description
+
+
+def test_list_jobs_includes_ecosystem_sync():
+    # Arrange
+    # Act
+    names = [s.name for s in _jobs.list_jobs()]
+    # Assert
+    assert "ecosystem-sync" in names
