@@ -7,6 +7,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-07-02
+
+### Changed
+- **STX-S010 judges verbs by a bundled lexicon, not a whitelist (#280).**
+  Operator directive (via neurovista): the v0.24.0 curated verb whitelist was
+  CLI-command-oriented and produced 22 false positives on real research
+  scripts (`analyse`, `compose`, `register`, `translate`, …). The primary
+  judge is now `_rules/_verb_lexicon.txt` — 8431 single-token English verb
+  lemmas derived from WordNet 3.1 `index.verb` (shipped as package data, no
+  runtime NLP dependency; includes British spellings) — plus `re`-prefixed
+  derivations (`recompute`/`rerender` → `compute`/`render`) and a small
+  built-in tech-verb supplement (`symlink`, `calc`, `gen`, …). The whitelist
+  is demoted to the `script_verb_prefixes` extension; config semantics are
+  unchanged. Missing data file degrades to defaults-only (no crash, no
+  mass-flagging). Regression fixture: the 17 wrongly-flagged first-tokens,
+  verified end-to-end.
+
 ## [0.24.0] - 2026-07-02
 
 ### Added
