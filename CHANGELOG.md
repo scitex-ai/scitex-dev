@@ -7,6 +7,42 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-07-03
+
+### Added
+- **`scholar-library-sync` managed cron job (#282).** Durable cross-machine
+  sync for `~/.scitex/scholar/library` (card
+  scholar-library-cross-machine-sync-20260701): every 6 hours,
+  `scitex-scholar library dedupe --apply` (quarantine-based, fail-loud) →
+  one-way `scitex-ssh sync` push host-WSL (authority) → Spartan (never
+  `--delete`; `index.db` + journal/WAL/SHM excluded as derived state) →
+  remote `scitex-scholar library db build`, each stage `&&`-gated so a
+  partial tree is never synced or indexed. Log under the scholar leaf's
+  runtime dir. Activation (host): `pip install 'scitex-dev[sync]'` +
+  `scitex-dev cron install scholar-library-sync`.
+- **New `[sync]` extra**: `scitex-ssh>=1.1.0` (the `sync` CLI / `sync_dir`
+  primitive) + `scitex-scholar>=1.4.3` (the `library dedupe` CLI).
+- **scitex-dev's first own SystemDepSpec provider** (`_system_deps.py`):
+  declares `rsync` through the same `scitex_dev.system_deps` entry-point
+  federation downstream leaves use. `discover_system_deps` gains an
+  `include_entry_points=False` isolation seam so unit tests stay exact
+  regardless of installed providers.
+
+### Fixed
+- **Release audits no longer wedge on gitignored runner debris (#283).**
+  `audit-project`'s PS-PATH-001/002 walker scanned every `config/PATH.yaml`
+  on disk including GITIGNORED trees — a dotfiles-synced
+  `docs/to_claude/examples` copy in a persistent self-hosted runner
+  checkout failed scitex-scholar's v1.4.3 PyPI publish despite 385 green
+  tests. The walker now batch-filters via `git check-ignore --stdin -z`,
+  fail-open outside git (real violations are never silently skipped).
+  Same runner-state-leak class as the SIF host-env item.
+
+### Changed
+- `_cli/cron/_jobs.py` hit the 512-line cap: per-job shell-line builders
+  extracted verbatim to `_job_commands.py`; `_jobs` re-imports them under
+  their original names (callers and tests unchanged).
+
 ## [0.24.1] - 2026-07-02
 
 ### Changed
