@@ -339,7 +339,23 @@ class SciTeXChecker(
 
     def get_issues(self) -> list:
         """Return all issues, including post-visit structural checks."""
+        # STX-S009 / STX-S010 — research script-organization (path/filename
+        # rules). They target files UNDER a configured script dir, which
+        # is_script() deliberately excludes, so they run BEFORE the is_script
+        # early-return and are gated on the research project-type instead.
+        org_emitted = False
+        if "research" in (getattr(self.config, "project_types", None) or ()):
+            from ._rules._script_organization import check_script_organization
+
+            org_emitted = check_script_organization(self)
+
         if not self._is_script:
+            if org_emitted:
+                from .rules import SEVERITY_ORDER
+
+                self.issues.sort(
+                    key=lambda i: (-SEVERITY_ORDER[i.rule.severity], i.line)
+                )
             return self.issues
 
         if not self._has_main_guard:
