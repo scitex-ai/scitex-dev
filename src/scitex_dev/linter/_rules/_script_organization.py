@@ -23,6 +23,8 @@ early-return (see ``checker.get_issues``).
 from __future__ import annotations
 
 import re
+from functools import lru_cache
+from importlib import resources
 from pathlib import Path
 
 from ._base import Rule
@@ -73,30 +75,64 @@ S010 = Rule(
 )
 
 
-# Curated default verb prefixes accepted as a research-script filename start.
-# Deliberately generous — the rule defaults to WARNING and a project extends
-# this list via ``script_verb_prefixes``; the goal is to catch NOUN-named
-# scripts (``analysis.py``, ``dataset.py``), not to police vocabulary.
+# Built-in tech/CLI verbs that a general English lexicon does not carry —
+# coined-but-real imperatives (``symlink``) plus abbreviated forms
+# (``calc``/``gen``/``eval``/``preprocess``). The PRIMARY judge of "is this a
+# verb" is the bundled WordNet-derived lexicon (see ``_load_verb_lexicon``,
+# operator directive 2026-07-02: a real verb lexicon, not a curated CLI
+# whitelist — the v1 whitelist produced 22 false positives on neurovista);
+# this set only supplements it, and ``script_verb_prefixes`` extends both.
 DEFAULT_SCRIPT_VERBS: frozenset[str] = frozenset(
     {
-        "add", "aggregate", "align", "analyze", "annotate", "apply",
-        "audit", "augment", "benchmark", "build", "calc", "calculate",
-        "check", "clean", "classify", "cluster", "collect", "compare",
-        "compile", "compute", "concat", "convert", "count", "create",
-        "decode", "detect", "download", "draw", "dump", "encode",
-        "estimate", "evaluate", "eval", "explore", "export", "extract",
-        "fetch", "filter", "find", "fit", "format", "gather", "gen",
-        "generate", "get", "group", "import", "index", "inspect",
-        "join", "list", "load", "make", "map", "measure", "merge",
-        "normalize", "optimize", "parse", "partition", "plot", "predict",
-        "prepare", "preprocess", "process", "profile", "pull", "push",
-        "query", "rank", "read", "reduce", "render", "report", "resample",
-        "run", "sample", "save", "scan", "score", "select", "setup",
-        "simulate", "smooth", "sort", "split", "standardize", "summarize",
-        "sync", "tabulate", "test", "train", "transform", "update",
-        "upload", "validate", "verify", "visualize", "write",
+        "calc", "concat", "eval", "gen", "preprocess", "resample",
+        "setup", "symlink", "sync",
     }
 )
+
+
+@lru_cache(maxsize=1)
+def _load_verb_lexicon() -> frozenset[str]:
+    """English verb lemmas bundled as package data (``_verb_lexicon.txt``).
+
+    Derived from WordNet 3.1 ``index.verb`` (single-token lowercase lemmas,
+    ~8.4k entries, incl. British spellings like ``analyse``). Loaded once per
+    process. Returns an empty set when the data file is missing (e.g. a
+    stripped install) — the check then degrades to the built-in defaults +
+    config extension rather than crashing or mass-flagging.
+    """
+    try:
+        text = (
+            resources.files("scitex_dev.linter._rules")
+            .joinpath("_verb_lexicon.txt")
+            .read_text(encoding="utf-8")
+        )
+    except Exception:
+        return frozenset()
+    return frozenset(
+        line
+        for line in (raw.strip() for raw in text.splitlines())
+        if line and not line.startswith("#")
+    )
+
+
+def _is_verb_token(token: str, extra_verbs: set) -> bool:
+    """True iff *token* reads as an imperative verb.
+
+    Accepts: lexicon membership, the built-in tech-verb defaults, the
+    project's ``script_verb_prefixes``, and ``re``-prefixed re-derivations
+    (``recompute``/``rerender`` → ``compute``/``render``) which WordNet does
+    not enumerate.
+    """
+    if token in extra_verbs:
+        return True
+    lexicon = _load_verb_lexicon()
+    if token in lexicon:
+        return True
+    if token.startswith("re") and len(token) > 4:
+        base = token[2:]
+        if base in lexicon or base in extra_verbs:
+            return True
+    return False
 
 DEFAULT_SCRIPT_ORG_EXEMPT: tuple[str, ...] = (
     "__init__.py",
@@ -159,12 +195,14 @@ def check_script_organization(checker) -> bool:
         checker._add(_lk("STX-S009"), 1, 0, "")
         added = True
 
-    # STX-S010 — verb-first filename. Configured verbs EXTEND the defaults.
-    verbs = set(DEFAULT_SCRIPT_VERBS) | set(
+    # STX-S010 — verb-first filename, judged by the bundled verb LEXICON
+    # (WordNet-derived) first; the built-in tech-verb defaults and the
+    # project's ``script_verb_prefixes`` EXTEND it (see ``_is_verb_token``).
+    extra_verbs = set(DEFAULT_SCRIPT_VERBS) | set(
         getattr(cfg, "script_verb_prefixes", None) or ()
     )
     token = _first_token(path.stem)
-    if token and token not in verbs:
+    if token and not _is_verb_token(token, extra_verbs):
         checker._add(_lk("STX-S010"), 1, 0, "")
         added = True
 
