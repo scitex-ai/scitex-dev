@@ -88,6 +88,27 @@ class LinterConfig:
     required_injected: list[str] = field(
         default_factory=lambda: ["CONFIG", "plt", "COLORS", "rngg", "logger"]
     )
+    project_types: list[str] = field(default_factory=list)
+    """Project types detected from ``.scitex/dev/config.yaml`` ``project-type``.
+
+    Populated once by :func:`load_config` (via
+    ``_project_type.detect_scitex_dev_project_types``) so rule code can gate
+    on ``"research" in config.project_types`` without re-walking the tree.
+    The category/per-rule promotion below reuses the same detection.
+    """
+    # STX-S009 / STX-S010 — research script-organization knobs (see
+    # ``_rules/_script_organization.py``). Research-gated, default WARNING.
+    script_domain_min_depth: int = 1
+    """Required domain-subdir depth under a ``script_dir`` before STX-S009
+    stops firing. 1 (default) means ``scripts/<domain>/foo.py`` passes and a
+    flat ``scripts/foo.py`` warns."""
+    script_org_exempt: list[str] = field(
+        default_factory=lambda: ["__init__.py", "__main__.py", "conftest.py"]
+    )
+    """Filenames exempt from STX-S009 / STX-S010."""
+    script_verb_prefixes: list[str] = field(default_factory=list)
+    """Extra verb prefixes accepted as a verb-first script name (STX-S010).
+    Empty means use the curated default set in ``_script_organization``."""
 
 
 # =============================================================================
@@ -136,7 +157,12 @@ def load_config(start_path: str | None = None) -> LinterConfig:
     # lives in `_project_type.py` (src↔tests 1:1 mirror invariant).
     from ._project_type import detect_scitex_dev_project_types
 
-    if "research" in detect_scitex_dev_project_types(start_dir):
+    _project_types = detect_scitex_dev_project_types(start_dir)
+    # Surface the detected types so rule code (e.g. STX-S009/S010) can gate on
+    # `"research" in config.project_types` without re-walking the tree.
+    config_dict["project_types"] = list(_project_types)
+
+    if "research" in _project_types:
         existing = config_dict.get("category_severity_override", {}) or {}
         # Figure-family promotion v1 (PR #264, operator directive 2026-06-28):
         # figrecipe owns the DETECTION of figure-bypass patterns; here we
