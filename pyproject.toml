@@ -156,6 +156,7 @@ scitex_dev = [
     "_skills/**/*",
     "_branding/*.yaml",
     "_cli/audit/_summary/data/*",
+    "linter/_rules/_verb_lexicon.txt",
     "_sphinx_html/**/*",
     "_sphinx_html/**/.[!.]*",
     "_ecosystem/ci_template/templates/*.tmpl",

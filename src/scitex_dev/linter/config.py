@@ -108,7 +108,9 @@ class LinterConfig:
     """Filenames exempt from STX-S009 / STX-S010."""
     script_verb_prefixes: list[str] = field(default_factory=list)
     """Extra verb prefixes accepted as a verb-first script name (STX-S010).
-    Empty means use the curated default set in ``_script_organization``."""
+    These EXTEND the primary judge — the bundled WordNet-derived verb lexicon
+    in ``_script_organization`` (plus its small built-in tech-verb set) — for
+    project-specific coinages the lexicon can't know."""
 
 
 # =============================================================================

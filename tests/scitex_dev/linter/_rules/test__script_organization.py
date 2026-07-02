@@ -14,6 +14,8 @@ from scitex_dev.linter.config import LinterConfig
 from scitex_dev.linter._rules._script_organization import (
     DEFAULT_SCRIPT_VERBS,
     _first_token,
+    _is_verb_token,
+    _load_verb_lexicon,
 )
 
 # Minimal, always-parseable script body — S009/S010 are path/name based, so
@@ -325,3 +327,117 @@ def test_default_verbs_are_all_lowercase():
     all_lower = all(v == v.lower() for v in verbs)
     # Assert
     assert all_lower is True
+
+
+# --------------------------------------------------------------------------
+# Verb lexicon (S010 v2 — operator directive 2026-07-02: a real verb lexicon,
+# not a curated whitelist). Regression fixture = the first-tokens the v1
+# whitelist wrongly flagged on neurovista.
+# --------------------------------------------------------------------------
+
+# The 17 legitimate imperative first-tokens neurovista's scripts/ used that
+# the v1 whitelist flagged as non-verbs (incl. the British-spelling
+# ``analyse``, the re-derived ``recompute``/``rerender``, and the coined
+# tech verb ``symlink``).
+NEUROVISTA_FALSE_POSITIVE_LEMMAS = (
+    "analyse", "compact", "compose", "compress", "define", "extract",
+    "migrate", "monitor", "populate", "recompute", "register", "rerender",
+    "resolve", "resume", "select", "symlink", "translate",
+)
+
+
+def test_lexicon_loads_thousands_of_lemmas():
+    # Arrange
+    lexicon = _load_verb_lexicon()
+    # Act
+    count = len(lexicon)
+    # Assert
+    assert count > 5000
+
+
+def test_lexicon_contains_no_comment_lines():
+    # Arrange
+    lexicon = _load_verb_lexicon()
+    # Act
+    commentish = [w for w in lexicon if w.startswith("#") or " " in w]
+    # Assert
+    assert commentish == []
+
+
+def test_neurovista_false_positive_lemmas_all_read_as_verbs():
+    # Arrange
+    extra = set(DEFAULT_SCRIPT_VERBS)
+    # Act
+    rejected = [
+        t for t in NEUROVISTA_FALSE_POSITIVE_LEMMAS
+        if not _is_verb_token(t, extra)
+    ]
+    # Assert
+    assert rejected == [], f"still flagged as non-verbs: {rejected}"
+
+
+def test_neurovista_false_positive_filenames_pass_s010_end_to_end():
+    # Arrange
+    cfg = _research_cfg()
+    # Act
+    flagged = [
+        t for t in NEUROVISTA_FALSE_POSITIVE_LEMMAS
+        if "STX-S010" in _ids(lint_source(_SRC, f"scripts/pac/{t}_thing.py", cfg))
+    ]
+    # Assert
+    assert flagged == [], f"S010 still fires end-to-end for: {flagged}"
+
+
+def test_british_spelling_analyse_is_a_verb():
+    # Arrange
+    token = "analyse"
+    # Act
+    ok = _is_verb_token(token, set())
+    # Assert
+    assert ok is True
+
+
+def test_re_prefixed_derivation_recompute_is_a_verb():
+    # Arrange — "recompute" is not a WordNet lemma; "compute" is.
+    token = "recompute"
+    # Act
+    ok = _is_verb_token(token, set())
+    # Assert
+    assert ok is True
+
+
+def test_short_re_word_is_not_stripped_to_a_verb():
+    # Arrange — "redo" IS a lexicon verb itself, but a junk token like "rex"
+    # must not pass via the re- stripping path (len guard).
+    token = "rex"
+    # Act
+    ok = _is_verb_token(token, set())
+    # Assert
+    assert ok is False
+
+
+def test_noun_token_analysis_is_still_not_a_verb():
+    # Arrange — the rule must still catch noun-named scripts.
+    token = "analysis"
+    # Act
+    ok = _is_verb_token(token, set())
+    # Assert
+    assert ok is False
+
+
+def test_noun_filename_still_flags_s010_with_lexicon():
+    # Arrange
+    cfg = _research_cfg()
+    # Act
+    issues = lint_source(_SRC, "scripts/pac/dataset_thing.py", cfg)
+    # Assert
+    assert "STX-S010" in _ids(issues)
+
+
+def test_config_extension_still_wins_over_lexicon_absence():
+    # Arrange — a project coinage neither WordNet nor the defaults know.
+    cfg = _research_cfg(script_verb_prefixes=["fooify"])
+    # Act
+    issues = lint_source(_SRC, "scripts/pac/fooify_thing.py", cfg)
+    # Assert
+    assert "STX-S010" not in _ids(issues)
