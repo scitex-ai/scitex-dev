@@ -29,8 +29,46 @@ when the file is there).
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Iterable
+
+
+def _git_ignored_subset(repo: Path, candidates: list[Path]) -> set[Path]:
+    """Return the subset of ``candidates`` that git says are IGNORED.
+
+    A gitignored file is by definition not part of the project being
+    audited — but persistent CI checkouts (self-hosted runners) accrue
+    synced/scaffolded debris that IS on disk yet ignored, e.g. the
+    dotfiles-synced ``docs/to_claude/examples/.../config/PATH.yaml`` that
+    failed scitex-scholar's v1.4.3 PyPI publish on PS-PATH-001
+    (2026-07-03). Filtering by ``git check-ignore`` scopes the audit to
+    what the repo actually ships, the same class of runner-state-leak fix
+    as the SIF ``--cleanenv`` item.
+
+    One batched ``git check-ignore --stdin -z`` call (NUL-safe both
+    directions). Fail-open BY DESIGN: outside a git repo, or when git is
+    missing/errors, returns the empty set so every candidate is still
+    audited — degrading to the pre-fix behaviour rather than silently
+    skipping real violations.
+    """
+    if not candidates:
+        return set()
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo), "check-ignore", "--stdin", "-z"],
+            input="\0".join(str(p) for p in candidates) + "\0",
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    # Exit 0 = at least one ignored; 1 = none ignored; anything else
+    # (128 = not a git repo, ...) means "don't know" -> fail-open.
+    if proc.returncode not in (0, 1):
+        return set()
+    return {Path(chunk) for chunk in proc.stdout.split("\0") if chunk}
 
 
 def _is_in_worktree_checkout(parts: tuple[str, ...]) -> bool:
@@ -72,6 +110,7 @@ def _path_yaml_files(repo: Path) -> Iterable[Path]:
     additional copies under ``scripts/cohorts/.../<capsule>/config/PATH.yaml``.
     The shape rules apply uniformly — every file must be valid on its own.
     """
+    candidates: list[Path] = []
     seen: set[Path] = set()
     for pattern in ("config/PATH.yaml", "configs/PATH.yaml"):
         for p in repo.rglob(pattern):
@@ -96,6 +135,14 @@ def _path_yaml_files(repo: Path) -> Iterable[Path]:
             if p in seen:
                 continue
             seen.add(p)
+            candidates.append(p)
+    # Finally, drop anything git itself IGNORES — persistent-runner
+    # debris (synced docs/to_claude examples etc.) is on disk but not
+    # part of the project; auditing it wedges releases. Fail-open
+    # outside git. See _git_ignored_subset.
+    ignored = _git_ignored_subset(repo, candidates)
+    for p in candidates:
+        if p not in ignored:
             yield p
 
 
