@@ -255,16 +255,21 @@ def _scholar_library_sync_command() -> str:
     - Post-sync, the DERIVED index is rebuilt on Spartan
       (``scitex-scholar library db build``); a failed rsync short-circuits
       the rebuild (``&&``) so a partial tree is never indexed.
-    - Library DEDUPE is deliberately NOT run here: scholar's dedupe lives
-      in a private module (``storage._library_dedupe``) and shelling into
-      another package's private API from cron is the exact cross-package
-      coupling the linter exists to prevent. It becomes a pre-sync step
-      once scholar ships a public ``library dedupe`` CLI.
+    - PRE-SYNC DEDUPE on the WSL (authority) side:
+      ``scitex-scholar library dedupe --apply`` (public CLI, scholar
+      PR #62, ships in scitex-scholar>=1.4.3) quarantines duplicate-DOI
+      losers to ``MASTER_quarantine/`` (reversible, never hard-deletes).
+      Exit-code contract pinned with scholar: ``--apply`` exits 0 once
+      clean (or none existed) so the one-run pipeline proceeds; non-zero
+      ONLY on unresolved-after-apply or apply/IO error — so a new
+      duplicate never wedges the sync, but a genuinely stuck conflict
+      blocks the push (and the remote rebuild) fail-loud.
 
-    Requires ``scitex-ssh`` (>=1.1.0, the ``[sync]`` extra) and ``rsync``
-    on the host — rsync is declared via scitex-dev's SystemDepSpec
-    provider (``scitex_dev._system_deps``). A missing binary fails loudly
-    in the log ("command not found") rather than half-syncing.
+    Requires ``scitex-ssh`` (>=1.1.0) + ``scitex-scholar`` (>=1.4.3) —
+    both in the ``[sync]`` extra — and ``rsync`` on the host, declared
+    via scitex-dev's SystemDepSpec provider (``scitex_dev._system_deps``).
+    A missing binary fails loudly in the log ("command not found") rather
+    than half-syncing.
 
     ``mkdir -p`` the log dir first; the log lives under the SCHOLAR leaf's
     user-level runtime dir per the 2026-07-01 operator directive ("logs
@@ -279,7 +284,8 @@ def _scholar_library_sync_command() -> str:
     )
     return (
         f"mkdir -p $(dirname {log}); {_log_rotate_guard(log)}"
-        "{ ssh spartan 'mkdir -p ~/.scitex/scholar/library' && "
+        f"{{ scitex-scholar library dedupe --apply --library-root {lib} && "
+        "ssh spartan 'mkdir -p ~/.scitex/scholar/library' && "
         f"scitex-ssh sync {lib}/ spartan:.scitex/scholar/library/ "
         f"{excludes} --yes && "
         "ssh spartan 'bash -lc \"scitex-scholar library db build "

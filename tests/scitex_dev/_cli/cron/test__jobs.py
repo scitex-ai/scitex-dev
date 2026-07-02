@@ -698,3 +698,39 @@ def test_scholar_library_sync_command_keeps_one_mib_rotation_threshold():
     spec = _jobs.get_job("scholar-library-sync")
     # Assert
     assert "1048576" in spec.command
+
+
+def test_scholar_library_sync_command_runs_dedupe_apply_before_sync():
+    # Arrange
+    spec = _jobs.get_job("scholar-library-sync")
+    # Act — dedupe resolves duplicate-DOI dirs BEFORE they can sync to
+    # Spartan or fail the remote build (scholar's sequencing requirement).
+    dedupe_pos = spec.command.index(
+        "scitex-scholar library dedupe --apply "
+        "--library-root $HOME/.scitex/scholar/library"
+    )
+    sync_pos = spec.command.index("scitex-ssh sync")
+    # Assert
+    assert dedupe_pos < sync_pos
+
+
+def test_scholar_library_sync_command_gates_sync_on_dedupe_success():
+    # Arrange
+    spec = _jobs.get_job("scholar-library-sync")
+    # Act — && between dedupe and the rest: --apply exits non-zero ONLY on
+    # unresolved conflicts or apply/IO error (contract pinned with
+    # scholar), and that must block the push fail-loud.
+    dedupe_pos = spec.command.index("library dedupe --apply")
+    sync_pos = spec.command.index("scitex-ssh sync")
+    joiner = spec.command[dedupe_pos:sync_pos]
+    # Assert
+    assert "&&" in joiner
+
+
+def test_scholar_library_sync_command_never_hard_deletes():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert — dedupe must stay quarantine-based (reversible); the
+    # irreversible flag is forbidden in the unattended cron line.
+    assert "--hard-delete" not in spec.command

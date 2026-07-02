@@ -44,9 +44,11 @@ mcp = ["fastmcp>=2.0.0"]
 skills = ["newb>=0.3.0"]
 # `sync` powers the scholar-library-sync managed cron job, whose shell line
 # calls the `scitex-ssh sync` console script (sync_dir primitive, first
-# shipped in scitex-ssh 1.1.0). CLI-invoked at cron runtime, not imported —
-# a missing script fails loudly in the job log with this extra as the hint.
-sync = ["scitex-ssh>=1.1.0"]
+# shipped in scitex-ssh 1.1.0) and `scitex-scholar library dedupe` /
+# `library db build` (dedupe first shipped in scitex-scholar 1.4.3).
+# CLI-invoked at cron runtime, not imported — a missing script fails
+# loudly in the job log with this extra as the hint.
+sync = ["scitex-ssh>=1.1.0", "scitex-scholar>=1.4.3"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
