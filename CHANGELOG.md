@@ -7,6 +7,42 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-07-02
+
+### Added
+- **Supervised periodic asyncio task primitive (#275).** `runtime.PeriodicTask`
+  + `PeriodicTaskGroup` run a coroutine (or, off-loop via `asyncio.to_thread`, a
+  sync callable) on a fixed interval with fail-loud semantics: `CancelledError`
+  is re-raised for clean shutdown (caught BEFORE the broad `except`), any other
+  tick error is `logger.exception`-logged and then either continued or re-raised
+  per policy — no silent stall. Supports `initial_delay` (wait before first
+  tick) and an env-gate that skips ticks when the flag is unset/`0/false/no/off`.
+  The shared primitive sac's six ad-hoc `while True: await asyncio.sleep()`
+  loops consume, replacing per-loop error handling that silently swallowed
+  exceptions.
+- **STX-S009 / STX-S010 — research script-organization linter rules (#278).**
+  Two research-gated (`project-type: research`), default-WARNING path/filename
+  rules for a research project's `scripts/` tree. **STX-S009** flags a script
+  that sits FLAT under `scripts/` (no domain subdirectory); **STX-S010** flags a
+  script FILENAME that does not begin with a verb. clew hashes a script by its
+  PATH, so a flat, noun-named `scripts/` churns those paths on every reorg
+  (moved file → broken provenance chain); domain grouping + verb-first names
+  keep the producing-session edge stable and the tree scannable. Both escalate
+  to ERROR via `per_rule_severity` (existing mechanism, no new wiring); knobs:
+  `script_domain_min_depth`, `script_org_exempt`, `script_verb_prefixes`.
+  `load_config` now surfaces detected project types on `config.project_types`.
+
+### Fixed
+- **Figure-promotion e2e tests no longer hard-fail on figrecipe detection-skew
+  (#277).** The reused Spartan CI SIF can layer a figrecipe whose checker maps a
+  fixture to a different rule id than a sibling matrix leg (e.g. `STX-P002` for
+  the P006 scatter pattern), so `@requires_rule` passes yet the rule never fires
+  — a version-skew that hard-failed `test_p006_style_kwarg_promoted_to_error`
+  and blocked the v0.23.0 release. A new `_skip_if_not_emitted` guard
+  `pytest.skip`s when the rule did not emit on the fixture (reporting the ids it
+  DID emit); a genuine promotion regression — rule fires but stays `warning` —
+  still fails the assert.
+
 ## [0.23.0] - 2026-07-01
 
 ### Added
