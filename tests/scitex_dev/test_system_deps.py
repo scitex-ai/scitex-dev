@@ -26,7 +26,7 @@ def test_discover_returns_specs_from_an_injected_provider():
         return [SystemDepSpec("ffmpeg", "audio decode", "scitex-audio")]
 
     # Act
-    packages = [d.package for d in discover_system_deps(extra_providers=[provide])]
+    packages = [d.package for d in discover_system_deps(include_entry_points=False, extra_providers=[provide])]
     # Assert
     assert packages == ["ffmpeg"]
 
@@ -40,7 +40,7 @@ def test_discover_dedups_by_package_first_provider_wins():
         return [SystemDepSpec("ffmpeg", "from-second", "scitex-cv")]
 
     # Act
-    deps = discover_system_deps(extra_providers=[first, second])
+    deps = discover_system_deps(include_entry_points=False, extra_providers=[first, second])
     # Assert
     assert [(d.package, d.provider) for d in deps] == [("ffmpeg", "scitex-audio")]
 
@@ -54,7 +54,7 @@ def test_discover_sorts_by_package_name():
         ]
 
     # Act
-    packages = [d.package for d in discover_system_deps(extra_providers=[provide])]
+    packages = [d.package for d in discover_system_deps(include_entry_points=False, extra_providers=[provide])]
     # Assert
     assert packages == ["ffmpeg", "portaudio19-dev"]
 
@@ -68,7 +68,7 @@ def test_discover_skips_a_provider_that_raises():
         return [SystemDepSpec("biber", "bibliography", "scitex-writer")]
 
     # Act
-    packages = [d.package for d in discover_system_deps(extra_providers=[boom, ok])]
+    packages = [d.package for d in discover_system_deps(include_entry_points=False, extra_providers=[boom, ok])]
     # Assert
     assert packages == ["biber"]
 
