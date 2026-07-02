@@ -104,6 +104,7 @@ def _make_ep_provider(ep) -> Callable[[], list[SystemDepSpec]]:
 def discover_system_deps(
     *,
     extra_providers: list[Callable[[], list[SystemDepSpec]]] | None = None,
+    include_entry_points: bool = True,
 ) -> list[SystemDepSpec]:
     """Aggregate every ``SystemDepSpec`` declared across the ecosystem.
 
@@ -126,8 +127,13 @@ def discover_system_deps(
     order (first-wins). Leaves can therefore rely on a reproducible install set.
     """
     providers: list[Callable[[], list[SystemDepSpec]]] = []
-    for ep in _iter_entry_points(ENTRY_POINT_GROUP):
-        providers.append(_make_ep_provider(ep))
+    if include_entry_points:
+        # include_entry_points=False is the unit-test isolation seam: it
+        # aggregates ONLY extra_providers, so exact-list assertions stay
+        # valid regardless of which real providers are installed in the
+        # running env (scitex-dev itself now registers one: rsync).
+        for ep in _iter_entry_points(ENTRY_POINT_GROUP):
+            providers.append(_make_ep_provider(ep))
     if extra_providers:
         providers.extend(extra_providers)
 

@@ -572,3 +572,165 @@ def test_list_jobs_includes_ecosystem_sync():
     names = [s.name for s in _jobs.list_jobs()]
     # Assert
     assert "ecosystem-sync" in names
+
+
+# ---------------------------------------------------------------------------
+# scholar-library-sync — one-way rsync of ~/.scitex/scholar/library from the
+# host WSL (authority) to Spartan via `scitex-ssh sync` (sync_dir primitive,
+# scitex-ssh>=1.1.0), then a remote derived-index rebuild. Design locked with
+# scitex-scholar + scitex-ssh (card scholar-library-cross-machine-sync-
+# 20260701). Pins schedule / command shape / safety invariants (no --delete,
+# index.db* excluded, && short-circuit) per the §3 checklist.
+# ---------------------------------------------------------------------------
+
+
+def test_registry_has_scholar_library_sync_entry():
+    # Arrange
+    # Act
+    # Assert
+    assert "scholar-library-sync" in _jobs.JOB_REGISTRY
+
+
+def test_scholar_library_sync_name_matches_registry_key():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert
+    assert spec.name == "scholar-library-sync"
+
+
+def test_scholar_library_sync_schedule_is_every_six_hours_offset():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert — :30 offset keeps it off the crowded 0-minute tick.
+    assert spec.schedule == "30 */6 * * *"
+
+
+def test_scholar_library_sync_command_pushes_library_to_spartan():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert — one-way push: local library/ source, spartan: destination.
+    assert (
+        "scitex-ssh sync $HOME/.scitex/scholar/library/ "
+        "spartan:.scitex/scholar/library/" in spec.command
+    )
+
+
+def test_scholar_library_sync_command_never_passes_delete():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert — WSL is authority but a WSL-side pruning must never reap
+    # Spartan copies; --delete is forbidden by design.
+    assert "--delete" not in spec.command
+
+
+def test_scholar_library_sync_command_excludes_all_index_db_siblings():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert — the index is DERIVED state; shipping a live SQLite file
+    # mid-write corrupts it. All four siblings must be excluded.
+    missing = [
+        name
+        for name in (
+            "index.db",
+            "index.db-journal",
+            "index.db-wal",
+            "index.db-shm",
+        )
+        if f"--exclude {name}" not in spec.command
+    ]
+    assert missing == []
+
+
+def test_scholar_library_sync_command_rebuilds_remote_index_after_push():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert
+    assert "scitex-scholar library db build" in spec.command
+
+
+def test_scholar_library_sync_command_short_circuits_rebuild_on_rsync_failure():
+    # Arrange
+    spec = _jobs.get_job("scholar-library-sync")
+    # Act — the rebuild must come after the sync joined by && so a partial
+    # tree is never indexed.
+    sync_pos = spec.command.index("scitex-ssh sync")
+    rebuild_pos = spec.command.index("scitex-scholar library db build")
+    joiner = spec.command[sync_pos:rebuild_pos]
+    # Assert
+    assert "&&" in joiner
+
+
+def test_scholar_library_sync_command_precreates_remote_dir():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert — mkdir -p over ssh instead of rsync --mkpath (Spartan's rsync
+    # predates 3.2.3).
+    assert "ssh spartan 'mkdir -p ~/.scitex/scholar/library'" in spec.command
+
+
+def test_scholar_library_sync_command_runs_noninteractive():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert — cron has no TTY; the CLI confirmation must be suppressed.
+    assert "--yes" in spec.command
+
+
+def test_scholar_library_sync_logs_under_scholar_runtime_dir():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert — per the 2026-07-01 operator directive, the log lives under
+    # the SCHOLAR leaf's user-level runtime dir, not ~/.scitex/dev/.
+    assert "/.scitex/scholar/runtime/logs/cron-library-sync.log" in spec.command
+
+
+def test_scholar_library_sync_command_keeps_one_mib_rotation_threshold():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert
+    assert "1048576" in spec.command
+
+
+def test_scholar_library_sync_command_runs_dedupe_apply_before_sync():
+    # Arrange
+    spec = _jobs.get_job("scholar-library-sync")
+    # Act — dedupe resolves duplicate-DOI dirs BEFORE they can sync to
+    # Spartan or fail the remote build (scholar's sequencing requirement).
+    dedupe_pos = spec.command.index(
+        "scitex-scholar library dedupe --apply "
+        "--library-root $HOME/.scitex/scholar/library"
+    )
+    sync_pos = spec.command.index("scitex-ssh sync")
+    # Assert
+    assert dedupe_pos < sync_pos
+
+
+def test_scholar_library_sync_command_gates_sync_on_dedupe_success():
+    # Arrange
+    spec = _jobs.get_job("scholar-library-sync")
+    # Act — && between dedupe and the rest: --apply exits non-zero ONLY on
+    # unresolved conflicts or apply/IO error (contract pinned with
+    # scholar), and that must block the push fail-loud.
+    dedupe_pos = spec.command.index("library dedupe --apply")
+    sync_pos = spec.command.index("scitex-ssh sync")
+    joiner = spec.command[dedupe_pos:sync_pos]
+    # Assert
+    assert "&&" in joiner
+
+
+def test_scholar_library_sync_command_never_hard_deletes():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("scholar-library-sync")
+    # Assert — dedupe must stay quarantine-based (reversible); the
+    # irreversible flag is forbidden in the unattended cron line.
+    assert "--hard-delete" not in spec.command

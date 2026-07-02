@@ -42,6 +42,13 @@ mcp = ["fastmcp>=2.0.0"]
 # Lazy-imported inside _cli/skills/_self_explain.py with an install hint
 # referencing this extra name (PS-213 LAZY-EXTRA-PATTERN-OK).
 skills = ["newb>=0.3.0"]
+# `sync` powers the scholar-library-sync managed cron job, whose shell line
+# calls the `scitex-ssh sync` console script (sync_dir primitive, first
+# shipped in scitex-ssh 1.1.0) and `scitex-scholar library dedupe` /
+# `library db build` (dedupe first shipped in scitex-scholar 1.4.3).
+# CLI-invoked at cron runtime, not imported — a missing script fails
+# loudly in the job log with this extra as the hint.
+sync = ["scitex-ssh>=1.1.0", "scitex-scholar>=1.4.3"]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -128,14 +135,15 @@ scitex-dev-ecosystem = "scitex_dev._ecosystem_jobs._provider:provide_jobs"
 # `scitex_dev.system_deps`. Each entry point loads to a callable returning
 # `list[scitex_dev.system_deps.SystemDepSpec]`;
 # `scitex_dev.system_deps.discover_system_deps()` aggregates them (deduped by
-# apt package). Replaces hardcoding apt lists in container defs. scitex-dev has
-# NO system deps of its own, so it declares no provider; this group is for
-# *downstream* leaves, which register like so (install is BUILD-time/root only,
-# via `scitex-dev ecosystem system-deps --install` in a container %post):
-#   [project.entry-points."scitex_dev.system_deps"]
+# apt package). Replaces hardcoding apt lists in container defs. Install is
+# BUILD-time/root only, via `scitex-dev ecosystem system-deps --install` in a
+# container %post. Downstream leaves register like so:
 #   scitex-writer = "scitex_writer._system_deps:provide"
 #   scitex-audio  = "scitex_audio._system_deps:provide"
-#   scitex-cv     = "scitex_cv._system_deps:provide"
+[project.entry-points."scitex_dev.system_deps"]
+# scitex-dev's own (first) declaration: rsync, required by the
+# scholar-library-sync managed cron job (scitex-ssh sync wraps rsync).
+scitex-dev = "scitex_dev._system_deps:provide"
 
 [project.urls]
 Homepage = "https://github.com/ywatanabe1989/scitex-dev"
