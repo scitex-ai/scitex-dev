@@ -40,3 +40,10 @@ intransitive_verbs:
   # ("preflight the deploy", cf. `terraform plan`); Moby classifies it
   # noun-only, tripping §1. It takes no object — it checks lease+runner state.
   - preflight
+  # `scitex-dev gate <workdir>` — GATE a submission at a stage (run the
+  # aggregated pre/post-submission checks, block on an enforced failure).
+  # "gate" is a transitive verb here ("gate the submission"); Moby
+  # classifies it both noun AND verb so §1 flags the noun reading. The verb
+  # meaning is intended — the whole point is to GATE. Same escape hatch as
+  # `run` / `preflight`.
+  - gate
