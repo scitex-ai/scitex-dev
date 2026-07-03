@@ -7,6 +7,28 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-07-03
+
+### Added
+- **Submission-gate plugin federation + `scitex-dev gate` CLI (#285).**
+  Operator-directed (cohort-A eval): a pre-submission GATE so a solver can't
+  "submit" without real provenance. `scitex_dev.gate` is a new federation
+  (mirroring `jobs` / `system_deps` / `linter.plugins`): packages register
+  per-stage checks under the `scitex_dev.gate.checks` entry-point group; the
+  `scitex-dev gate --stage=pre-submission <workdir> [--json]` CLI aggregates
+  them so a hook depends ONLY on scitex-dev (SOC — each check reads its own
+  state from the capsule workdir; scitex-dev stays package-agnostic).
+  Contract: `GateCheck(id, stage, run, requires, description)`,
+  `GateResult(passed, findings)`, `Finding(check_id, kind, message, severity,
+  fix_hint)`. Severity is config-driven: a failed check is ADVISORY by default
+  (warn, exit 0) and only BLOCKS (exit 2) when its id is under `gate.enforce`
+  in `<root>/.scitex/dev/config.yaml` (mirrors `project-type: research`
+  escalation); `gate.disable` skips a check; a crashing check fails CLOSED.
+  Ships a built-in `gate-workdir-present` check so a hook can be wired and
+  tested before package checks (scitex-clew `clew-source-reachability`,
+  scitex-dataset `dataset-submission-format`) register. Design doc:
+  `docs/submission-gate.md`.
+
 ## [0.25.0] - 2026-07-03
 
 ### Added
