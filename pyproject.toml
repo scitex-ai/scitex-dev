@@ -145,6 +145,16 @@ scitex-dev-ecosystem = "scitex_dev._ecosystem_jobs._provider:provide_jobs"
 # scholar-library-sync managed cron job (scitex-ssh sync wraps rsync).
 scitex-dev = "scitex_dev._system_deps:provide"
 
+# Federated SUBMISSION-GATE check providers live under the entry-point group
+# `scitex_dev.gate.checks`. Each entry point loads to a callable returning
+# `list[scitex_dev.gate.GateCheck]`; `scitex_dev.gate.discover_gate_checks()`
+# aggregates them (deduped by check id). The `scitex-dev gate` CLI runs them
+# so a hook depends ONLY on scitex-dev. scitex-dev ships its own built-in
+# check via an INTERNAL provider (always merged, not an entry point), so it
+# declares no provider here; this group is for downstream leaves, e.g.:
+#   scitex-clew    = "scitex_clew._gate_plugin:provide"
+#   scitex-dataset = "scitex_dataset._gate_plugin:provide"
+
 [project.urls]
 Homepage = "https://github.com/ywatanabe1989/scitex-dev"
 Repository = "https://github.com/ywatanabe1989/scitex-dev"

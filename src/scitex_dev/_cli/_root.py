@@ -479,3 +479,13 @@ except Exception:
 from ._list_apis import register_list_python_apis_command
 
 register_list_python_apis_command(main)
+
+# -------------------------------------------------------------------
+# gate — submission-gate plugin federation (scitex_dev.gate.checks).
+# Leaves register per-package pre/post-submission checks; the hook calls
+# ONLY `scitex-dev gate`, staying package-agnostic (SOC).
+# -------------------------------------------------------------------
+
+from .gate import register_gate_command
+
+register_gate_command(main)
