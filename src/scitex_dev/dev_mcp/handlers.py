@@ -200,12 +200,15 @@ async def sync_local_handler(
     packages: list[str] | None = None,
     confirm: bool = False,
 ) -> str:
-    """`pip install -e .` every SciTeX package in the local ecosystem — ensures imports resolve to the working-tree version, not the last PyPI release. Use whenever the user asks to "install all scitex packages in editable mode", "make pip see my local changes", "sync local editable installs", "reinstall after cloning fresh", or is fixing a version mismatch introduced by `pip install scitex`."""
+    """Editable-install every SciTeX package in the local ecosystem (uv-first, `python -m pip` fallback; brings uv+pip to latest first) — ensures imports resolve to the working-tree version, not the last PyPI release. Use whenever the user asks to "install all scitex packages in editable mode", "make pip see my local changes", "sync local editable installs", "reinstall after cloning fresh", or is fixing a version mismatch introduced by `pip install scitex`."""
     from .._sync import sync_local
 
     return wrap_as_mcp(
         sync_local,
-        side_effects=["pip_install: installs packages in editable mode"],
+        side_effects=[
+            "installer_upgrade: upgrades uv + pip to latest",
+            "editable_install: installs packages in editable mode (uv/pip)",
+        ],
         packages=packages,
         confirm=confirm,
     )
