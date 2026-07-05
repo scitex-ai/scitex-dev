@@ -42,7 +42,19 @@ _SECRET_RE = re.compile(
 
 
 def is_secret_shaped(name: str) -> bool:
-    """True if ``name`` looks secret-shaped (``*_KEY``/``*_TOKEN``/...)."""
+    """True if ``name`` looks secret-shaped (``*_KEY``/``*_TOKEN``/...).
+
+    KNOWN LIMITATION — this is a deliberately conservative, name-based
+    heuristic: it matches only when one of a fixed 9-keyword set (``KEY``,
+    ``TOKEN``, ``SECRET``, ``PASSWORD``, ``PASS``, ``CREDENTIAL``,
+    ``AUTH``, ``COOKIE``, ``SESSION``) is the LAST ``_``-delimited
+    component of the name. So it catches ``AWS_SECRET_ACCESS_KEY`` and
+    ``GH_TOKEN``, but MISSES names that carry a secret without one of
+    those trailing keywords — e.g. ``GITHUB_PAT``, ``JSESSIONID``, or a
+    ``DATABASE_URL`` with embedded credentials. Treat a non-redacted
+    value as "not recognized as secret-shaped", NOT as "confirmed safe":
+    do not over-trust this when pasting output into a shared channel.
+    """
     return bool(_SECRET_RE.search(name))
 
 

@@ -60,6 +60,19 @@ scitex-dev trace-env-vars SCITEX_TODO_AGENT --trace -- \
     sac agents start scitex-todo --yes
 ```
 
+Two caveats to internalize:
+
+- **Redaction is a conservative name heuristic, not a guarantee.**
+  Values are redacted only when the variable name ends in one of
+  `KEY`/`TOKEN`/`SECRET`/`PASSWORD`/`PASS`/`CREDENTIAL`/`AUTH`/`COOKIE`/`SESSION`.
+  It catches `AWS_SECRET_ACCESS_KEY` and `GH_TOKEN` but MISSES
+  `GITHUB_PAT`, `JSESSIONID`, `DATABASE_URL`-with-embedded-creds, etc.
+  A non-redacted value means "not recognized as secret-shaped", not
+  "confirmed safe" — don't over-trust it when sharing output.
+- **`--trace` needs ptrace.** Inside a container without
+  `CAP_SYS_PTRACE`, strace produces no data; the tool reports this
+  DISTINCTLY as *trace inconclusive* (not a false "var never injected").
+
 ## Documentation
 
 | Command | Description | Deep dive |

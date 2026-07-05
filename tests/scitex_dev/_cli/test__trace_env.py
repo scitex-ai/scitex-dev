@@ -37,6 +37,7 @@ from scitex_dev.trace_env import (
     scan_env_vars,
     trace_env_vars,
 )
+from scitex_dev.trace_env.trace import _result_from_trace
 
 
 # --------------------------------------------------------------------
@@ -456,6 +457,74 @@ def test_trace_mode_is_trace_when_strace_missing(empty_path):
     result = trace_env_vars(["FOO"], command=["echo", "hi"])
     # Assert
     assert result.mode == "trace"
+
+
+def test_trace_empty_output_is_inconclusive_not_var_absent():
+    # Arrange: strace produced ZERO execve records (ptrace denied).
+    # Act
+    result = _result_from_trace(["FOO"], raw="", stderr_text="")
+    # Assert
+    assert "inconclusive" in (result.error or "")
+
+
+def test_trace_empty_output_disclaims_var_not_found():
+    # Arrange
+    # Act
+    result = _result_from_trace(["FOO"], raw="", stderr_text="")
+    # Assert
+    assert "not found" in (result.error or "")
+
+
+def test_trace_empty_output_reports_zero_stages():
+    # Arrange
+    # Act
+    result = _result_from_trace(["FOO"], raw="", stderr_text="")
+    # Assert
+    assert result.exec_stages == 0
+
+
+def test_trace_empty_output_has_no_hits():
+    # Arrange
+    # Act
+    result = _result_from_trace(["FOO"], raw="", stderr_text="")
+    # Assert
+    assert result.trace_hits == []
+
+
+def test_trace_empty_output_surfaces_ptrace_hint():
+    # Arrange
+    stderr = "strace: ptrace(PTRACE_TRACEME, ...): Operation not permitted\n"
+    # Act
+    result = _result_from_trace(["FOO"], raw="", stderr_text=stderr)
+    # Assert
+    assert "strace said:" in (result.error or "")
+
+
+def test_trace_nonempty_output_locates_var():
+    # Arrange: a synthetic execve record carrying FOO.
+    raw = 'execve("/bin/x", ["x"], ["PATH=/bin", "FOO=bar"]) = 0\n'
+    # Act
+    result = _result_from_trace(["FOO"], raw=raw, stderr_text="")
+    # Assert
+    assert result.trace_hits[0].var == "FOO"
+
+
+def test_trace_nonempty_output_has_no_error():
+    # Arrange
+    raw = 'execve("/bin/x", ["x"], ["FOO=bar"]) = 0\n'
+    # Act
+    result = _result_from_trace(["FOO"], raw=raw, stderr_text="")
+    # Assert
+    assert result.error is None
+
+
+def test_trace_nonempty_but_var_absent_is_not_inconclusive():
+    # Arrange: strace worked (a stage parsed) but FOO is not in it.
+    raw = 'execve("/bin/x", ["x"], ["PATH=/bin"]) = 0\n'
+    # Act
+    result = _result_from_trace(["FOO"], raw=raw, stderr_text="")
+    # Assert
+    assert result.error is None
 
 
 # --------------------------------------------------------------------

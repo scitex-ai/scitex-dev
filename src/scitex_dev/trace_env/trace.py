@@ -128,68 +128,50 @@ def _first_hit(
     return None
 
 
-def trace_env_vars(
-    names: list[str],
-    command: list[str],
-    strace_string_size: int = 65_536,
-    timeout: float | None = 300.0,
+def _unset_report(names: list[str]) -> list[VarReport]:
+    """A ``VarReport`` list with every var marked unset (error paths)."""
+    return [VarReport(n, False, None, is_secret_shaped(n)) for n in names]
+
+
+def _permission_hint(stderr_text: str) -> str:
+    """Surface strace's own diagnostic line for a no-data trace, if any."""
+    low = stderr_text.lower()
+    if any(k in low for k in ("ptrace", "not permitted", "seccomp", "operation not")):
+        last = stderr_text.strip().splitlines()[-1] if stderr_text.strip() else ""
+        return f" strace said: {last}" if last else ""
+    return ""
+
+
+def _result_from_trace(
+    names: list[str], raw: str, stderr_text: str = ""
 ) -> TraceEnvResult:
-    """Run ``command`` under strace; report first exec stage per var.
+    """Classify parsed strace output into a :class:`TraceEnvResult`.
 
-    Returns a :class:`TraceEnvResult` in ``mode="trace"``. When strace
-    is missing, ``error`` carries an actionable message and no command
-    is run.
+    Pure (no subprocess) so the empty/failed-strace path is unit-testable.
+    A trace that yields ZERO execve records is reported DISTINCTLY as
+    *inconclusive* — a normal trace always records at least the initial
+    execve of the command itself, so zero records means strace could not
+    trace at all (typically missing ``CAP_SYS_PTRACE`` / ptrace denied in
+    a container). That is NOT the same as "the var never appeared".
     """
-    if not shutil.which("strace"):
-        return TraceEnvResult(
-            variables=[
-                VarReport(n, False, None, is_secret_shaped(n)) for n in names
-            ],
-            mode="trace",
-            error=_STRACE_MISSING,
-        )
-    if not command:
-        return TraceEnvResult(
-            variables=[
-                VarReport(n, False, None, is_secret_shaped(n)) for n in names
-            ],
-            mode="trace",
-            error="no command given to --trace (expected: ... --trace -- CMD ARGS)",
-        )
-
-    with tempfile.NamedTemporaryFile(
-        "r", suffix=".strace", delete=False
-    ) as tf:
-        out_path = Path(tf.name)
-    try:
-        argv = [
-            "strace",
-            "-f",
-            "-e",
-            "trace=execve",
-            "-s",
-            str(strace_string_size),
-            "-v",
-            "-o",
-            str(out_path),
-            *command,
-        ]
-        try:
-            subprocess.run(argv, timeout=timeout, check=False)
-        except subprocess.TimeoutExpired:
-            pass  # partial trace is still useful
-        raw = out_path.read_text(encoding="utf-8", errors="replace")
-    finally:
-        try:
-            out_path.unlink()
-        except OSError:
-            pass
-
     stages: list[tuple[str, list[str], list[str]]] = []
     for line in raw.splitlines():
         parsed = _parse_execve(line)
         if parsed is not None:
             stages.append(parsed)
+
+    if not stages:
+        return TraceEnvResult(
+            variables=_unset_report(names),
+            mode="trace",
+            exec_stages=0,
+            error=(
+                "strace produced no execve data — trace inconclusive "
+                "(missing CAP_SYS_PTRACE? ptrace not permitted in this "
+                "container/sandbox?). This is NOT a 'var not found' result."
+                + _permission_hint(stderr_text)
+            ),
+        )
 
     hits: list[ExecStageHit] = []
     variables: list[VarReport] = []
@@ -212,6 +194,76 @@ def trace_env_vars(
         exec_stages=len(stages),
         trace_hits=hits,
     )
+
+
+def trace_env_vars(
+    names: list[str],
+    command: list[str],
+    strace_string_size: int = 65_536,
+    timeout: float | None = 300.0,
+) -> TraceEnvResult:
+    """Run ``command`` under strace; report first exec stage per var.
+
+    Returns a :class:`TraceEnvResult` in ``mode="trace"``. When strace is
+    missing, ``error`` carries an actionable message and no command is
+    run. When strace runs but produces no execve data (e.g. ptrace is
+    denied in the container — the primary in-container use case this tool
+    is for), the result is reported as *inconclusive* rather than as a
+    false "var never injected".
+    """
+    if not shutil.which("strace"):
+        return TraceEnvResult(
+            variables=_unset_report(names),
+            mode="trace",
+            error=_STRACE_MISSING,
+        )
+    if not command:
+        return TraceEnvResult(
+            variables=_unset_report(names),
+            mode="trace",
+            error="no command given to --trace (expected: ... --trace -- CMD ARGS)",
+        )
+
+    with tempfile.NamedTemporaryFile(
+        "r", suffix=".strace", delete=False
+    ) as tf:
+        out_path = Path(tf.name)
+    stderr_text = ""
+    try:
+        argv = [
+            "strace",
+            "-f",
+            "-e",
+            "trace=execve",
+            "-s",
+            str(strace_string_size),
+            "-v",
+            "-o",
+            str(out_path),
+            *command,
+        ]
+        # Capture strace's own stderr (ptrace-denied diagnostics land
+        # here) while letting the traced command's stdout pass through.
+        try:
+            proc = subprocess.run(
+                argv,
+                timeout=timeout,
+                check=False,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            stderr_text = proc.stderr or ""
+        except subprocess.TimeoutExpired as exc:
+            err = exc.stderr
+            stderr_text = err if isinstance(err, str) else ""
+        raw = out_path.read_text(encoding="utf-8", errors="replace")
+    finally:
+        try:
+            out_path.unlink()
+        except OSError:
+            pass
+
+    return _result_from_trace(names, raw, stderr_text)
 
 
 # EOF
