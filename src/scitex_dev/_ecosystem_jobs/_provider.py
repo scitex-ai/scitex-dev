@@ -52,6 +52,24 @@ def _self_pull_command() -> str:
     return f"mkdir -p $(dirname {log}); scitex-dev ecosystem sync --yes >> {log} 2>&1"
 
 
+def _drift_report_command() -> str:
+    """Shell line installed for the ``drift-report`` timer.
+
+    Runs the read-only ``ecosystem drift-report`` observe pass and appends
+    the full package × layer matrix to a log. ``|| true`` keeps the
+    OBSERVATION unit successful even when it FINDS drift: drift is data
+    recorded in the report, not a unit failure — so a chronically-drifting
+    fleet never trains the operator to ignore a permanently-failed timer
+    (skill §4). The signal lives in the log; tail it to see what moved.
+    """
+    log = "$HOME/.scitex/dev/logs/timer-drift-report.log"
+    return (
+        f"mkdir -p $(dirname {log}); "
+        f"date -u +'== drift-report %Y-%m-%dT%H:%MZ ==' >> {log}; "
+        f"scitex-dev ecosystem drift-report >> {log} 2>&1 || true"
+    )
+
+
 def provide_jobs() -> list[JobSpec]:
     """Return scitex-dev's ecosystem-level JobSpecs for the federation.
 
@@ -96,6 +114,27 @@ def provide_jobs() -> list[JobSpec]:
             ),
             on_boot_sec="1min",
             on_unit_active_sec="2min",
+        ),
+        JobSpec(
+            name="drift-report",
+            kind="timer",
+            schedule="",
+            command=_drift_report_command(),
+            description=(
+                "Unified version-drift observer. Runs `scitex-dev ecosystem "
+                "drift-report` on a Persistent timer (OnBootSec catch-up + "
+                "every 6h) and appends the package × layer matrix (PyPI / "
+                "GitHub / per-host develop sha / container base-image + agent "
+                "overlay via `sac versions --json` / editable-installed) to "
+                "~/.scitex/dev/logs/timer-drift-report.log, so drift across "
+                "hosts/containers/agents is caught in minutes, not discovered "
+                "when something breaks (skill §5 north-star report). Read-only "
+                "observe pass; the SSoT is pyproject@develop. Layers 5/6 "
+                "degrade gracefully when sac is absent. See "
+                "_ecosystem._drift_report."
+            ),
+            on_boot_sec="5min",
+            on_unit_active_sec="6h",
         ),
     ]
 
