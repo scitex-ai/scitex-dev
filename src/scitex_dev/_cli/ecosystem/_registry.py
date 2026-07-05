@@ -23,6 +23,7 @@ from ._cmds import (
     _ci_template,
     _clean,
     _dashboard,
+    _drift_report,
     _git,
     _install_gate,
     _jobs_cron,
@@ -88,6 +89,7 @@ def register_ecosystem_commands(main_group):
     # internal ordering.
     _list.register(ecosystem)
     _versions.register(ecosystem)
+    _drift_report.register(ecosystem)
     _git.register(ecosystem)
     _audit_per_target.register(ecosystem)
     _audit_registry_layout.register(ecosystem)
