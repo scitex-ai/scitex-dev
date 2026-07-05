@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -534,14 +535,24 @@ def test_trace_nonempty_but_var_absent_is_not_inconclusive():
 # --------------------------------------------------------------------
 
 
-def test_sanitize_command_joins_and_strips_unsafe_chars():
+def test_sanitize_command_joins_with_single_delimiter():
     # Arrange
     from scitex_dev.trace_env.trace import _sanitize_command
 
     # Act
     result = _sanitize_command(["sac", "agents", "start", "scitex-todo", "--yes"])
     # Assert
-    assert result == "sac_agents_start_scitex-todo_--yes"
+    assert result == "sac-agents-start-scitex-todo-yes"
+
+
+def test_sanitize_command_drops_bare_dashdash():
+    # Arrange
+    from scitex_dev.trace_env.trace import _sanitize_command
+
+    # Act
+    result = _sanitize_command(["echo", "--", "hi"])
+    # Assert
+    assert result == "echo-hi"
 
 
 def test_sanitize_command_never_empty():
@@ -584,6 +595,35 @@ def test_new_log_path_is_under_runtime_dir():
     assert log_path.parent.parent.name == "runtime"
 
 
+def test_new_log_path_ignores_project_scope_git_repo(tmp_path):
+    # Arrange: fake a project-scope `.scitex/dev/` inside a git repo, and
+    # point $SCITEX_DIR at a separate fixed location. The log must land
+    # under $SCITEX_DIR regardless of the project-scope dir's presence —
+    # this diagnostic tool must never scatter logs into whichever repo
+    # the operator happens to be standing in.
+    from scitex_dev.trace_env.trace import _new_log_path
+
+    project = tmp_path / "some-repo"
+    (project / ".git").mkdir(parents=True)
+    (project / ".scitex" / "dev").mkdir(parents=True)
+    fixed_home = tmp_path / "fixed-scitex-home"
+    prior_cwd = Path.cwd()
+    prior_scitex_dir = os.environ.get("SCITEX_DIR")
+    os.chdir(project)
+    os.environ["SCITEX_DIR"] = str(fixed_home)
+    # Act
+    try:
+        log_path = _new_log_path(["echo", "hi"])
+    finally:
+        os.chdir(prior_cwd)
+        if prior_scitex_dir is None:
+            os.environ.pop("SCITEX_DIR", None)
+        else:
+            os.environ["SCITEX_DIR"] = prior_scitex_dir
+    # Assert
+    assert str(log_path).startswith(str(fixed_home))
+
+
 def test_new_log_path_filename_carries_sanitized_command():
     # Arrange
     from scitex_dev.trace_env.trace import _new_log_path
@@ -591,7 +631,7 @@ def test_new_log_path_filename_carries_sanitized_command():
     # Act
     log_path = _new_log_path(["echo", "hi"])
     # Assert
-    assert "echo_hi" in log_path.name
+    assert "echo-hi" in log_path.name
 
 
 # --------------------------------------------------------------------

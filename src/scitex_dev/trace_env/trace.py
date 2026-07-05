@@ -199,22 +199,34 @@ def _result_from_trace(
 
 
 def _sanitize_command(command: list[str]) -> str:
-    """Turn a command argv into a filesystem-safe log-filename fragment."""
-    joined = re.sub(r"[^A-Za-z0-9_.-]+", "-", "_".join(command))
+    """Turn a command argv into a single hyphen-separated log-filename slug.
+
+    A single delimiter (``-``) keeps the name scannable by eye and
+    globbable by tooling — no mix of ``_`` (arg join) and ``-``
+    (char substitution) that made earlier names read as a word-mash.
+    Bare ``--`` flags are dropped as noise; everything else is kept.
+    """
+    words = [w for w in command if w not in ("--",)]
+    joined = re.sub(r"[^A-Za-z0-9.]+", "-", "-".join(words))
     return joined.strip("-")[:80] or "cmd"
 
 
 def _new_log_path(command: list[str]) -> Path:
-    """Allocate a discoverable, timestamped strace log under runtime/.
+    """Allocate a discoverable, timestamped strace log at a FIXED location.
 
-    Per ``01_arch_06_local-state-directories.md`` §1: logs go under
-    ``~/.scitex/dev/runtime/``, never a bare ``/tmp`` tempfile — so a
-    long-running ``--trace`` invocation can be watched live with
-    ``tail -f`` and inspected afterwards instead of vanishing on exit.
+    Always ``~/.scitex/dev/runtime/trace-env-vars/`` (user scope, never
+    project scope) — this is a cross-repo diagnostic tool invoked from
+    wherever the operator happens to be standing, so a per-cwd project
+    dir would scatter logs unpredictably instead of one place a human
+    (or a script) can always find. Per
+    ``01_arch_06_local-state-directories.md`` §1: logs go under
+    ``runtime/``, never a bare ``/tmp`` tempfile — so a long-running
+    ``--trace`` invocation can be watched live with ``tail -f`` and
+    inspected afterwards instead of vanishing on exit.
     """
     from scitex_config._ecosystem import local_state
 
-    log_dir = local_state.runtime_path("dev") / "trace-env-vars"
+    log_dir = local_state.user_path("dev") / "runtime" / "trace-env-vars"
     log_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return log_dir / f"{ts}-{_sanitize_command(command)}.log"
