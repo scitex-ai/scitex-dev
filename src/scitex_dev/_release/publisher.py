@@ -22,6 +22,16 @@ Public API
   — detects the trigger, pushes the tag if needed, creates the GH
   release if needed. Returns a structured ``PublishResult`` with the
   steps it ran.
+
+C7 (card-event producer)
+-------------------------
+
+When ``publish_release`` actually tags/publishes (not a dry-run, not an
+idempotent no-op rerun), it shells out to ``scitex-todo emit-event
+--type released`` so a `released` card-event lands on scitex-todo's
+event bus (sibling of the C8 ``pulled`` producer in
+``_cli/ecosystem/_cmds/_sync.py``). Best-effort: a missing/failing
+scitex-todo CLI never fails the release.
 """
 
 from __future__ import annotations
@@ -96,8 +106,72 @@ def _gh_repo_slug(repo: Path) -> str | None:
     return m.group(1) if m else None
 
 
+def _shell_emit(repo_slug: str, version: str, *, card_id: str | None, actor: str) -> None:
+    """Emit a ``released`` card-event for ``repo_slug`` via the scitex-todo CLI.
+
+    Decoupled by SHELLING OUT (no import of scitex-todo) so a slow/absent
+    consumer can't hang or break the release flow. Best-effort: if
+    scitex-todo isn't on PATH or the emit fails, ``publish_release`` is
+    unaffected. Unlike ``pulled`` (C8, default-quiet without a card_id),
+    ``released`` is NOT default-quiet — the dispatcher's default rule is
+    released->subscribers, so this is a real, notifying signal (C7
+    contract): ``{type: "released", card_id, repo, version, actor, ts}``
+    (``ts`` is stamped by the emitter, not the producer).
+    """
+    import subprocess
+
+    args = [
+        "scitex-todo",
+        "emit-event",
+        "--type",
+        "released",
+        "--repo",
+        repo_slug,
+        "--version",
+        version,
+        "--actor",
+        actor,
+    ]
+    if card_id:
+        args += ["--card-id", card_id]
+
+    try:
+        subprocess.run(args, check=False, capture_output=True)
+    except OSError:
+        pass  # scitex-todo not installed / not on PATH — never fail the release
+
+
+def _emit_released_event(
+    rep: PublishResult,
+    *,
+    actor: str = "scitex-dev",
+    card_id: str | None = None,
+    emit_fn=None,
+) -> None:
+    """Fire a ``released`` event for a release that ACTUALLY did something.
+
+    Only fires when THIS call newly created the tag or newly created the
+    GH release (the two "real work happened" signals in ``rep.steps_run``)
+    — an idempotent rerun against an already-tagged/-released version
+    (see ``rep.skipped``) emits nothing, so no-op reruns stay quiet.
+    ``emit_fn`` is the injection seam for tests (default = real shell-out).
+    """
+    slug = _gh_repo_slug(rep.repo)
+    if not slug:
+        return
+    emit = emit_fn or _shell_emit
+    emit(slug, rep.version, card_id=card_id, actor=actor)
+
+
 def publish_release(
-    repo: Path, version: str, notes: str | None = None, dry_run: bool = False
+    repo: Path,
+    version: str,
+    notes: str | None = None,
+    dry_run: bool = False,
+    *,
+    actor: str = "scitex-dev",
+    card_id: str | None = None,
+    emit_fn=None,
 ) -> PublishResult:
     """Tag (if missing), push, and create GH release (if needed)."""
     trigger = _detect_trigger(repo)
@@ -167,6 +241,14 @@ def publish_release(
         rep.skipped.append(
             f"trigger={trigger}; tag-push alone fires the publish workflow"
         )
+
+    # C7: emit a `released` card-event, but only when a real release
+    # action happened (a fresh tag or a fresh GH release) — never on
+    # dry-run, and never on an idempotent rerun that only hit `skipped`.
+    if not dry_run and not rep.failed:
+        real_signals = {f"git tag v{version}", f"gh release create v{version}"}
+        if real_signals & set(rep.steps_run):
+            _emit_released_event(rep, actor=actor, card_id=card_id, emit_fn=emit_fn)
 
     return rep
 
