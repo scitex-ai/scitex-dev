@@ -24,3 +24,5 @@ ecosystem maintainers. Sits atop the docs tier
 9. [09_ecosystem-tq-migration.md](09_ecosystem-tq-migration.md) — Per-peer migration playbook for the no-mocks + test-quality rules; four-pass sequence, dispatch template, rollback contract
 10. [10_package-maintenance-prompt.md](10_package-maintenance-prompt.md) — Reusable package-maintenance prompt
 11. [11_dependency-tiers.md](11_dependency-tiers.md) — Dependency tier model
+12. [12_ci-feedback-decoupled-pollers.md](12_ci-feedback-decoupled-pollers.md) — CI-feedback decoupled-pollers convention (the owning agent hears its PR's CI result)
+13. [13_version-drift-management.md](13_version-drift-management.md) — Version-drift across the distributed fleet: the 8-layer drift matrix, the observe→reconcile loop (`ecosystem check-versions`), the release→propagate→rebuild→restart lifecycle, and the agent rebuild/restart protocol
