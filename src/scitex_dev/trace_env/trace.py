@@ -91,6 +91,47 @@ def _read_array(s: str, i: int) -> tuple[list[str] | None, int]:
     return items, i
 
 
+def _redact_raw_log(raw: str) -> str:
+    """Redact secret-shaped ``NAME=VALUE`` strings before a raw strace log
+    is left on disk at a persistent, discoverable path.
+
+    ``--trace`` logs the FULL environment (and argv) of every exec stage,
+    not just the one traced variable — the structured report already
+    redacts that single variable's reported value, but the raw file
+    behind it previously kept every other var in plaintext. Now that the
+    log survives the run at a well-known path instead of vanishing with
+    the old tempfile, that plaintext is a real exposure. Walks every
+    double-quoted string token in the raw text (this is how strace
+    renders both argv and envp entries) and redacts the value half
+    whenever the name half is secret-shaped, reusing the exact heuristic
+    already applied to the traced variable's own reported value — this
+    also catches an inline ``NAME=VALUE`` assignment token in argv (e.g.
+    ``env API_TOKEN=x cmd``), though NOT a hyphenated CLI flag like
+    ``--api-token=x`` (the shared ``is_secret_shaped`` heuristic matches
+    ``_``-delimited name components, not ``-``-delimited ones).
+    """
+    out: list[str] = []
+    i, n = 0, len(raw)
+    while i < n:
+        if raw[i] != '"':
+            out.append(raw[i])
+            i += 1
+            continue
+        start = i
+        token, j = _read_string(raw, i)
+        if token is None:
+            out.append(raw[i])
+            i += 1
+            continue
+        name, sep, value = token.partition("=")
+        if sep and is_secret_shaped(name):
+            out.append(f'"{name}={redact(name, value)}"')
+        else:
+            out.append(raw[start:j])
+        i = j
+    return "".join(out)
+
+
 def _parse_execve(line: str) -> tuple[str, list[str], list[str]] | None:
     """Extract ``(binary, argv, envp)`` from one strace execve line.
 
@@ -301,6 +342,10 @@ def trace_env_vars(
         err = exc.stderr
         stderr_text = err if isinstance(err, str) else ""
     raw = out_path.read_text(encoding="utf-8", errors="replace")
+    try:
+        out_path.write_text(_redact_raw_log(raw), encoding="utf-8")
+    except OSError:
+        pass
 
     return _result_from_trace(names, raw, stderr_text)
 
