@@ -14,6 +14,7 @@ Today's contents:
 - PS-168 — workflow-secret-env-prefix-missing
 - PS-173 — adr-format (filename + lean-template sections, when docs/adr/ exists)
 - PS-180 — runtime-separation (src/<pkg>/runtime/ must be gitignored at the package level)
+- PS-181 — registry-layout (~/.scitex/<pkg>/ state dir must match the canonical shape; global-scoped, not repo-scoped)
 - PS-PATH-001/002 — config/PATH.yaml shape (outer wrapper / bare-string leaf)
 - PS-CLEW-001 — clew.add_claim without self-verify in same module
 - PS-AGENT-001 — scripts/agent/*.py with add_claim but no claims.json terminus
@@ -185,6 +186,31 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "W",
         "ecosystem-runtime-separation",
+    ),
+    (
+        "PS-181",
+        "§1",
+        (
+            "registry-layout drift: a `~/.scitex/<pkg>/` local-state "
+            "directory does not match the canonical shape — "
+            "`config.yaml` XOR `config/` (never both, never a "
+            "differently-named config file); loose "
+            "`*.pid`/`*.sock`/`*.state`/`*_latest.json`/`ci-state.json` "
+            "belong under `runtime/`; loose `*.log` belongs under "
+            "`logs/`; `_archive-<date>/` and `*.bak-<date>` belong "
+            "under `archive/<date>/`; loose `*.py`/`*.sh` belong under "
+            "`bin/` or `scripts/`; no `__pycache__/` at top level; a "
+            "venv dir (has `pyvenv.cfg`) must be named `venvs/`. "
+            "UNLIKE every other PS-1xx rule, this one is scoped to the "
+            "user's entire `$SCITEX_DIR` tree across every installed "
+            "package, not a single repo — see "
+            "`scitex-dev ecosystem audit-registry-layout` (the rule's "
+            "actual entry point) and `scitex-dev registry-normalize "
+            "<pkg>` (mechanical fix, dry-run by default). Severity W "
+            "during ecosystem adoption."
+        ),
+        "W",
+        "registry-layout-drift",
     ),
     (
         "PS-213",

@@ -19,6 +19,7 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
             "audit-django",
             "audit-mcp-tools",
             "audit-project",
+            "audit-registry-layout",
             "audit-python-apis",
             "audit-skills",
             "audit-summary",

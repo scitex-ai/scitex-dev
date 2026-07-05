@@ -358,6 +358,15 @@ from ._trace_env import register as _register_trace_env
 
 _register_trace_env(main)
 
+# registry-normalize — mechanical fix for PS-181 (~/.scitex/<pkg>/
+# registry-layout drift). Thin CLI in _cli/_registry_normalize.py;
+# engine in scitex_dev/registry_normalize/ (mirrors the rename-symbols /
+# trace-env-vars CLI/engine split; shares detection logic with the
+# PS-181 audit rule via registry_normalize/scan.py).
+from ._registry_normalize import register as _register_registry_normalize
+
+_register_registry_normalize(main)
+
 # -------------------------------------------------------------------
 # Documentation commands
 # -------------------------------------------------------------------

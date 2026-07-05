@@ -33,6 +33,7 @@ Config path resolution:
 | `ecosystem fix-mismatches` | Repair version drift | [13_versions.md](13_versions.md) |
 | `ecosystem sync-local` / `sync-host` | Editable / SSH sync | [14_ecosystem.md](14_ecosystem.md) |
 | `ecosystem audit-*` | Skills / project / docs audits | [21_dynamic-audit.md](21_dynamic-audit.md) |
+| `ecosystem audit-registry-layout` | PS-181 — `~/.scitex/<pkg>/` registry-layout conformance, scoped to the WHOLE `$SCITEX_DIR` tree (not a single repo) | — |
 
 ## Development
 
@@ -41,6 +42,7 @@ Config path resolution:
 | `show-config` | Print the resolved `DevConfig` | [12_config.md](12_config.md) |
 | `rename-symbols` | Bulk rename with cross-reference updates | [15_rename.md](15_rename.md) |
 | `trace-env-vars` | Trace where env var(s) are defined/injected (static scan + strace) | — |
+| `registry-normalize` | Fix PS-181 `~/.scitex/<pkg>/` registry-layout drift for ONE package (dry-run by default) | — |
 
 `trace-env-vars` is a diagnostic "silver bullet" for _where does this
 env var come from?_ Two modes, both with word-boundary matching (`FOO`
@@ -87,6 +89,65 @@ Two caveats to internalize:
   above applies. The BRIEF live-tail window while the trace is still
   running shows the unredacted feed straight from strace, since
   redaction only rewrites the file after the command exits.
+
+### `registry-normalize` — fix PS-181 registry-layout drift
+
+Mechanically fixes drift in a SINGLE `~/.scitex/<pkg>/` state directory
+against the canonical shape (`config.yaml` XOR `config/`; `runtime/`;
+`logs/`; `archive/<UTC>/`; `bin/`/`scripts/`; a `<domain>/` dir per
+authored content). Shares its detection logic with the PS-181 audit
+rule (`scitex-dev ecosystem audit-registry-layout`) via
+`scitex_dev.registry_normalize.scan` — one source of truth, so the two
+surfaces can never disagree about what counts as drift.
+
+```bash
+scitex-dev registry-normalize scitex-todo             # dry-run (default)
+scitex-dev registry-normalize scitex-todo --json       # structured plan
+scitex-dev registry-normalize scitex-todo --yes        # actually move files
+```
+
+Hard safety rules (non-negotiable):
+
+- **Dry-run by default.** Nothing is moved on disk unless you pass
+  `--yes`/`-y`. Dry-run prints every planned move as `<from> -> <to>`.
+- **Archive, never delete.** Every move has a destination; nothing is
+  silently discarded. Loose `*.log` → `logs/`; loose
+  `*.pid`/`*.sock`/`*.state`/`*_latest.json`/`ci-state.json` →
+  `runtime/`; `_archive-<date>/` and `*.bak-<date>` → `archive/<date>/`;
+  loose `*.py`/`*.sh` → `scripts/`.
+- **Service-safe `*.pid` handling.** Before moving a `*.pid` file, the
+  PID inside is checked for liveness (`os.kill(pid, 0)`). A live PID is
+  SKIPPED (reported as `SKIPPED (live pid N)`), never moved out from
+  under a running service.
+- **`*.sock` files are ALWAYS skipped.** Liveness of a Unix socket is
+  not cheaply determinable from the filesystem side, so every `*.sock`
+  is reported as `SKIPPED (socket, assumed live — remove manually if
+  stale)` regardless of `--yes`. Remove it by hand once you've
+  confirmed the owning process is gone.
+- **Exactly one `<pkg>` positional argument.** There is no "normalize
+  everything" bulk mode — this tool acts on one package's state dir per
+  invocation, on purpose.
+- **Config-naming drift, stray `__pycache__/`, and venv-naming drift
+  are reported by `audit-registry-layout` but NOT auto-moved here** —
+  renaming a config file or a venv directory isn't a safe mechanical
+  move (unlike relocating a log/pid/archive file to its canonical
+  subdirectory), so those findings require manual attention.
+
+### `ecosystem audit-registry-layout` — PS-181, whole-`$SCITEX_DIR` scope
+
+Unlike every other `PS-1xx` rule (which audits a single repo checkout),
+PS-181 inspects the user's ENTIRE `$SCITEX_DIR` tree (default
+`~/.scitex`) — every installed package's local-state directory at once.
+It is therefore wired as its own sibling command rather than folded
+into `audit-project`/`audit-all` (which are inherently
+per-distribution); see the docstring in
+`_cli/audit/_project/_check_registry_layout.py` for the full rationale.
+
+```bash
+scitex-dev ecosystem audit-registry-layout                 # human output
+scitex-dev ecosystem audit-registry-layout --json
+scitex-dev ecosystem audit-registry-layout --severity info
+```
 
 ## Documentation
 
