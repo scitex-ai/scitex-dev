@@ -114,7 +114,9 @@ def register(main: click.Group) -> None:
         var_names, command = _split_names_command(names, raw_args)
 
         if trace_cmd:
-            result = trace_env_vars(var_names, command=command)
+            result = trace_env_vars(
+                var_names, command=command, announce=not as_json
+            )
         else:
             result = scan_env_vars(
                 var_names,

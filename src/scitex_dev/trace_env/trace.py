@@ -17,9 +17,11 @@ If ``strace`` is unavailable the engine returns a clear, actionable
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
-import tempfile
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .config import (
@@ -196,11 +198,34 @@ def _result_from_trace(
     )
 
 
+def _sanitize_command(command: list[str]) -> str:
+    """Turn a command argv into a filesystem-safe log-filename fragment."""
+    joined = re.sub(r"[^A-Za-z0-9_.-]+", "-", "_".join(command))
+    return joined.strip("-")[:80] or "cmd"
+
+
+def _new_log_path(command: list[str]) -> Path:
+    """Allocate a discoverable, timestamped strace log under runtime/.
+
+    Per ``01_arch_06_local-state-directories.md`` §1: logs go under
+    ``~/.scitex/dev/runtime/``, never a bare ``/tmp`` tempfile — so a
+    long-running ``--trace`` invocation can be watched live with
+    ``tail -f`` and inspected afterwards instead of vanishing on exit.
+    """
+    from scitex_config._ecosystem import local_state
+
+    log_dir = local_state.runtime_path("dev") / "trace-env-vars"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return log_dir / f"{ts}-{_sanitize_command(command)}.log"
+
+
 def trace_env_vars(
     names: list[str],
     command: list[str],
     strace_string_size: int = 65_536,
     timeout: float | None = 300.0,
+    announce: bool = True,
 ) -> TraceEnvResult:
     """Run ``command`` under strace; report first exec stage per var.
 
@@ -210,6 +235,11 @@ def trace_env_vars(
     denied in the container — the primary in-container use case this tool
     is for), the result is reported as *inconclusive* rather than as a
     false "var never injected".
+
+    ``announce=False`` suppresses the "watch live" stderr hint — set by
+    callers emitting machine-readable output (e.g. ``--json``), since
+    some runners (Click's ``CliRunner``) merge stderr into the captured
+    stdout and would otherwise corrupt the parseable payload.
     """
     if not shutil.which("strace"):
         return TraceEnvResult(
@@ -224,44 +254,41 @@ def trace_env_vars(
             error="no command given to --trace (expected: ... --trace -- CMD ARGS)",
         )
 
-    with tempfile.NamedTemporaryFile(
-        "r", suffix=".strace", delete=False
-    ) as tf:
-        out_path = Path(tf.name)
+    out_path = _new_log_path(command)
+    if announce:
+        print(
+            f"[trace-env-vars] tracing under strace (multi-stage launches "
+            f"can take a while) — watch live: tail -f {out_path}",
+            file=sys.stderr,
+        )
     stderr_text = ""
+    argv = [
+        "strace",
+        "-f",
+        "-e",
+        "trace=execve",
+        "-s",
+        str(strace_string_size),
+        "-v",
+        "-o",
+        str(out_path),
+        *command,
+    ]
+    # Capture strace's own stderr (ptrace-denied diagnostics land
+    # here) while letting the traced command's stdout pass through.
     try:
-        argv = [
-            "strace",
-            "-f",
-            "-e",
-            "trace=execve",
-            "-s",
-            str(strace_string_size),
-            "-v",
-            "-o",
-            str(out_path),
-            *command,
-        ]
-        # Capture strace's own stderr (ptrace-denied diagnostics land
-        # here) while letting the traced command's stdout pass through.
-        try:
-            proc = subprocess.run(
-                argv,
-                timeout=timeout,
-                check=False,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-            stderr_text = proc.stderr or ""
-        except subprocess.TimeoutExpired as exc:
-            err = exc.stderr
-            stderr_text = err if isinstance(err, str) else ""
-        raw = out_path.read_text(encoding="utf-8", errors="replace")
-    finally:
-        try:
-            out_path.unlink()
-        except OSError:
-            pass
+        proc = subprocess.run(
+            argv,
+            timeout=timeout,
+            check=False,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stderr_text = proc.stderr or ""
+    except subprocess.TimeoutExpired as exc:
+        err = exc.stderr
+        stderr_text = err if isinstance(err, str) else ""
+    raw = out_path.read_text(encoding="utf-8", errors="replace")
 
     return _result_from_trace(names, raw, stderr_text)
 

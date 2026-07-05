@@ -72,6 +72,14 @@ Two caveats to internalize:
 - **`--trace` needs ptrace.** Inside a container without
   `CAP_SYS_PTRACE`, strace produces no data; the tool reports this
   DISTINCTLY as *trace inconclusive* (not a false "var never injected").
+- **`--trace` can take a while for multi-stage launches** (container
+  boot, venv activation, etc.). On start it prints the live strace log
+  path under `<runtime>/dev/runtime/trace-env-vars/` (project-scope
+  `.scitex/dev/runtime/` if run inside a git repo with that dir, else
+  `$SCITEX_DIR/dev/runtime/`, default `~/.scitex/dev/runtime/`) — run
+  `tail -f <path>` in another shell to watch execve stages arrive live.
+  The log is kept after the run for later inspection; these accumulate
+  over time and can be cleared manually.
 
 ## Documentation
 
