@@ -48,6 +48,7 @@ interfaces:
 - [20_env-vars.md](20_env-vars.md) — `SCITEX_DEV_*` env vars
 - [21_dynamic-audit.md](21_dynamic-audit.md) — Dynamic-audit design skeleton for release-gate
 - [22_figure-prep-pointer.md](22_figure-prep-pointer.md) — Pointer: figure-prep playbook lives in figrecipe; ecosystem no-synthetic-data policy lives in scientific umbrella
+- [23_drift-report.md](23_drift-report.md) — `ecosystem drift-report`: the unified per-package × per-layer version-drift matrix (all 8 layers), exit 1 on drift, federated 6h timer
 
 ### Architecture (30–39)
 - [30_agentic-test-overview.md](30_agentic-test-overview.md) — Four-layer testing model + shared newbie-docker substrate
