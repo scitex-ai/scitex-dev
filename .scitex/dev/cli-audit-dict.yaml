@@ -29,6 +29,17 @@ transitive_verbs:
   # `scitex-dev ci runner use <target>` — flip CI_RUNS_ON for the
   # current repo's GitHub Actions workflow.
   - use
+  # `scitex-dev registry-normalize <pkg>` — the operator-and-sac-agreed
+  # public command name for the PS-181 registry-layout drift fixer (chosen to
+  # sit next to `trace-env-vars`). The compound leaf reads `<noun>-<verb>`
+  # (registry / normalize), so §1's leaf-head heuristic classifies the head
+  # "registry" as a noun and flags it — but the command IS a transitive
+  # action: it normalizes the registry for its required `<pkg>` object.
+  # Declare the whole leaf a transitive verb so §1 doesn't misfire, exactly
+  # like the `gate` / `unset` / `use` escape hatches above. Renaming a
+  # shipped public command to satisfy the heuristic would be worse than this
+  # one-line declaration.
+  - registry-normalize
 intransitive_verbs:
   # `scitex-dev ecosystem run` — run the collective ecosystem supervisor in
   # the foreground (the systemd ExecStart). "run" is an intransitive verb in
