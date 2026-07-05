@@ -116,6 +116,16 @@ def execute_plan(plan: list[MoveResult]) -> list[MoveResult]:
 
     Entries already ``skipped`` pass through unchanged. Returns a new
     list with executed entries marked ``status="moved"``.
+
+    ``shutil.move`` silently OVERWRITES an existing destination — on a
+    repeated run against a package that keeps regenerating the same
+    loose file (the realistic recurring-drift case this tool exists
+    for), that would clobber the previously-archived/relocated file
+    with no copy and no warning: a de facto delete despite the
+    archive-not-delete invariant. Check for a destination collision
+    immediately before each move and skip it instead, since deciding
+    HOW to disambiguate (overwrite vs. rename vs. merge) is a judgment
+    call the operator should make, not something to guess silently.
     """
     executed: list[MoveResult] = []
     for entry in plan:
@@ -124,6 +134,17 @@ def execute_plan(plan: list[MoveResult]) -> list[MoveResult]:
             continue
         src = Path(entry.src)
         dest = Path(entry.dest)  # type: ignore[arg-type]
+        if dest.exists():
+            executed.append(
+                MoveResult(
+                    entry.src,
+                    entry.dest,
+                    STATUS_SKIPPED,
+                    f"SKIPPED (destination already exists: {dest} — "
+                    f"resolve manually to avoid overwriting it)",
+                )
+            )
+            continue
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.move(str(src), str(dest))
         executed.append(MoveResult(entry.src, entry.dest, STATUS_MOVED, entry.detail))

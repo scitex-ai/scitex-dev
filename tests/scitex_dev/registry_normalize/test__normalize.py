@@ -80,6 +80,56 @@ class TestExecutePlanMoves:
         assert all(m.status == STATUS_MOVED for m in executed)
 
 
+class TestExecutePlanDestinationCollision:
+    """A pre-existing destination must never be silently overwritten —
+    that would be a de facto delete despite the archive-not-delete
+    invariant (e.g. a second run against a package that keeps
+    regenerating the same loose file)."""
+
+    def test_preexisting_destination_is_not_overwritten(self, tmp_path: Path) -> None:
+        # Arrange
+        pkg_dir = tmp_path / "pkg8"
+        pkg_dir.mkdir()
+        (pkg_dir / "logs").mkdir()
+        (pkg_dir / "logs" / "app.log").write_text("original\n")
+        (pkg_dir / "app.log").write_text("new\n")
+        plan = build_plan(pkg_dir)
+        # Act
+        execute_plan(plan)
+        # Assert
+        assert (pkg_dir / "logs" / "app.log").read_text() == "original\n"
+
+    def test_preexisting_destination_leaves_source_in_place(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange
+        pkg_dir = tmp_path / "pkg9"
+        pkg_dir.mkdir()
+        (pkg_dir / "logs").mkdir()
+        (pkg_dir / "logs" / "app.log").write_text("original\n")
+        (pkg_dir / "app.log").write_text("new\n")
+        plan = build_plan(pkg_dir)
+        # Act
+        execute_plan(plan)
+        # Assert — nothing deleted; the new file is still where it was.
+        assert (pkg_dir / "app.log").read_text() == "new\n"
+
+    def test_preexisting_destination_is_reported_skipped(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange
+        pkg_dir = tmp_path / "pkg10"
+        pkg_dir.mkdir()
+        (pkg_dir / "logs").mkdir()
+        (pkg_dir / "logs" / "app.log").write_text("original\n")
+        (pkg_dir / "app.log").write_text("new\n")
+        plan = build_plan(pkg_dir)
+        # Act
+        executed = execute_plan(plan)
+        # Assert
+        assert all(m.status == STATUS_SKIPPED for m in executed)
+
+
 class TestLivePidSkip:
     def test_pid_file_naming_live_process_is_skipped(self, tmp_path: Path) -> None:
         # Arrange — os.getpid() is guaranteed alive for the duration of the test.
