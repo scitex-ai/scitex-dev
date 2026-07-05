@@ -528,6 +528,73 @@ def test_trace_nonempty_but_var_absent_is_not_inconclusive():
 
 
 # --------------------------------------------------------------------
+# Live-log path — discoverable ``tail -f``-able runtime log, not an
+# anonymous /tmp tempfile (operator ask: surface a live-progress hint
+# for long-running multi-stage --trace launches).
+# --------------------------------------------------------------------
+
+
+def test_sanitize_command_joins_and_strips_unsafe_chars():
+    # Arrange
+    from scitex_dev.trace_env.trace import _sanitize_command
+
+    # Act
+    result = _sanitize_command(["sac", "agents", "start", "scitex-todo", "--yes"])
+    # Assert
+    assert result == "sac_agents_start_scitex-todo_--yes"
+
+
+def test_sanitize_command_never_empty():
+    # Arrange
+    from scitex_dev.trace_env.trace import _sanitize_command
+
+    # Act
+    result = _sanitize_command([])
+    # Assert
+    assert result == "cmd"
+
+
+def test_sanitize_command_is_length_capped():
+    # Arrange
+    from scitex_dev.trace_env.trace import _sanitize_command
+
+    # Act
+    result = _sanitize_command(["x" * 500])
+    # Assert
+    assert len(result) <= 80
+
+
+def test_new_log_path_is_under_trace_env_vars_dir():
+    # Arrange
+    from scitex_dev.trace_env.trace import _new_log_path
+
+    # Act
+    log_path = _new_log_path(["echo", "hi"])
+    # Assert
+    assert log_path.parent.name == "trace-env-vars"
+
+
+def test_new_log_path_is_under_runtime_dir():
+    # Arrange
+    from scitex_dev.trace_env.trace import _new_log_path
+
+    # Act
+    log_path = _new_log_path(["echo", "hi"])
+    # Assert
+    assert log_path.parent.parent.name == "runtime"
+
+
+def test_new_log_path_filename_carries_sanitized_command():
+    # Arrange
+    from scitex_dev.trace_env.trace import _new_log_path
+
+    # Act
+    log_path = _new_log_path(["echo", "hi"])
+    # Assert
+    assert "echo_hi" in log_path.name
+
+
+# --------------------------------------------------------------------
 # CLI wiring + --json output shape.
 # --------------------------------------------------------------------
 
