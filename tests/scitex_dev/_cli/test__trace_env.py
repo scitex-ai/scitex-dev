@@ -529,6 +529,70 @@ def test_trace_nonempty_but_var_absent_is_not_inconclusive():
 
 
 # --------------------------------------------------------------------
+# Raw-log redaction — the persisted strace log carries the FULL env of
+# every exec stage, not just the traced var; secret-shaped names must
+# be redacted before that log is left on disk at a discoverable path.
+# --------------------------------------------------------------------
+
+
+def test_redact_raw_log_redacts_secret_shaped_envp_value():
+    # Arrange
+    from scitex_dev.trace_env.trace import _redact_raw_log
+
+    raw = 'execve("/bin/x", ["x"], ["AWS_SECRET_ACCESS_KEY=abcdef1234"]) = 0\n'
+    # Act
+    redacted = _redact_raw_log(raw)
+    # Assert
+    assert "abcdef1234" not in redacted
+
+
+def test_redact_raw_log_keeps_secret_var_name_visible():
+    # Arrange
+    from scitex_dev.trace_env.trace import _redact_raw_log
+
+    raw = 'execve("/bin/x", ["x"], ["AWS_SECRET_ACCESS_KEY=abcdef1234"]) = 0\n'
+    # Act
+    redacted = _redact_raw_log(raw)
+    # Assert
+    assert "AWS_SECRET_ACCESS_KEY=<redacted: 10 chars>" in redacted
+
+
+def test_redact_raw_log_leaves_non_secret_value_untouched():
+    # Arrange
+    from scitex_dev.trace_env.trace import _redact_raw_log
+
+    raw = 'execve("/bin/x", ["x"], ["PATH=/usr/bin"]) = 0\n'
+    # Act
+    redacted = _redact_raw_log(raw)
+    # Assert
+    assert "PATH=/usr/bin" in redacted
+
+
+def test_redact_raw_log_redacts_secret_shaped_argv_token():
+    # Arrange: `env API_TOKEN=x cmd`-style inline assignment in argv,
+    # not just envp — the redaction walks every quoted string in the
+    # line, so this NAME=VALUE token gets caught the same way.
+    from scitex_dev.trace_env.trace import _redact_raw_log
+
+    raw = 'execve("/bin/x", ["x", "API_TOKEN=supersecret"], ["PATH=/bin"]) = 0\n'
+    # Act
+    redacted = _redact_raw_log(raw)
+    # Assert
+    assert "supersecret" not in redacted
+
+
+def test_redact_raw_log_does_not_crash_on_malformed_quotes():
+    # Arrange: an unterminated quote (truncated strace line).
+    from scitex_dev.trace_env.trace import _redact_raw_log
+
+    raw = 'execve("/bin/x", ["x"], ["FOO=bar\n'
+    # Act
+    redacted = _redact_raw_log(raw)
+    # Assert
+    assert isinstance(redacted, str)
+
+
+# --------------------------------------------------------------------
 # Live-log path — discoverable ``tail -f``-able runtime log, not an
 # anonymous /tmp tempfile (operator ask: surface a live-progress hint
 # for long-running multi-stage --trace launches).

@@ -81,7 +81,12 @@ Two caveats to internalize:
   `.scitex/dev/` happens to be nearby. Run `tail -f <path>` in another
   shell to watch execve stages arrive live. The log is kept after the
   run for later inspection; these accumulate over time and can be
-  cleared manually.
+  cleared manually. Once the trace finishes, every secret-shaped
+  `NAME=VALUE` token in the SAVED file (envp and argv both) is redacted
+  the same way as the structured report — same name-heuristic caveat
+  above applies. The BRIEF live-tail window while the trace is still
+  running shows the unredacted feed straight from strace, since
+  redaction only rewrites the file after the command exits.
 
 ## Documentation
 
