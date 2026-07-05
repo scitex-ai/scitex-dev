@@ -47,6 +47,7 @@ Project structure split into one leaf per top-level directory:
 
 ### 3. Reporting
 - [03_reporting_01_pdf-reports.md](03_reporting_01_pdf-reports.md) — Recurring scientific PDF analysis reports — timestamped filenames, mandatory section structure, navigable bookmarks (`fpdf2` / `pikepdf`), aspect-preserving figure embedding, size management for email (<10 MB, DPI/ghostscript/split), and delivery tracking via email + issue-tracker comment.
+- [03_reporting_02_statistics-completeness.md](03_reporting_02_statistics-completeness.md) — The six required elements of any reported statistic (n, 95% CI, method name, p-value, effect size, test statistic); where to place them when the main text is crowded (captions / stats table / footnotes); worked good-vs-bad example. Operator-issued hard doctrine (2026-07-05).
 
 ### 4. Clew adoption — translating any project into a Clew-verifiable form
 - [04_clew_01_dag-as-map-and-evidence.md](04_clew_01_dag-as-map-and-evidence.md) — Conceptual: same SHA-256 DAG in two modes — *map* (live, read-write, used during build/exploration by agents and authors) and *evidence* (post-hoc, read-only, used by reviewers). Read first when adopting Clew on any project.
