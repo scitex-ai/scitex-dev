@@ -15,6 +15,9 @@ Behaviour pinned here:
   WRITES the updated DB back to the cache after — verified end-to-end
   with a REAL shell stub standing in for python3/pytest (NO mocks,
   per PA-306).
+
+The console-script shim (``run_testmon_cli``) has its own mirror suite in
+``test_run_testmon_cli.py`` alongside its ``run_testmon_cli.py`` src module.
 """
 
 from __future__ import annotations
@@ -166,44 +169,4 @@ class TestRunTestmonCacheRoundTrip:
         assert emitted == (0, True), (
             f"wrapper must seed the worktree DB from the warm cache; got "
             f"{emitted}; stderr={proc.stderr!r}"
-        )
-
-
-# ---------------------------------------------------------------------- #
-# Console-script shim — `scitex-dev-testmon` / `-m run_testmon_cli`       #
-# ---------------------------------------------------------------------- #
-
-
-class TestRunTestmonConsoleShim:
-    """The shim execs the wrapper so pre-commit can use a bare entry.
-
-    pre-commit does NOT shell-expand ``entry:``, so ``bash $(scitex-dev
-    hooks print-path run_testmon)`` cannot work there. Repos instead use the
-    console script ``scitex-dev-testmon`` (or ``python -m
-    scitex_dev._hooks.run_testmon_cli``), which execs the bundled wrapper
-    with all args forwarded.
-    """
-
-    def test_main_is_importable_and_callable(self):
-        # Arrange
-        from scitex_dev._hooks import run_testmon_cli
-        # Act
-        main = run_testmon_cli.main
-        # Assert
-        assert callable(main)
-
-    def test_module_run_execs_wrapper_self_test(self):
-        # Arrange — `python -m ...` must exec the wrapper, which self-tests.
-        # Act
-        proc = subprocess.run(
-            [sys.executable, "-m", "scitex_dev._hooks.run_testmon_cli", "--self-test"],
-            capture_output=True,
-            text=True,
-        )
-        # Assert — exit 0 AND the wrapper's cache-keying line appears, proving
-        # the shim reached run_testmon.sh and forwarded the `--self-test` arg.
-        emitted = (proc.returncode, "cache dir keyed by (repo, pyXY)" in proc.stdout)
-        assert emitted == (0, True), (
-            f"`-m run_testmon_cli --self-test` must exec the wrapper and exit "
-            f"0; got {emitted}; stdout={proc.stdout!r} stderr={proc.stderr!r}"
         )
