@@ -136,6 +136,12 @@ _LAZY_ATTRS: dict[str, str] = {
     "bulk_rename": "rename",
     "execute_rename": "rename",
     "preview_rename": "rename",
+    # trace_env
+    "TraceEnvResult": "trace_env",
+    "format_quiet": "trace_env",
+    "format_report": "trace_env",
+    "scan_env_vars": "trace_env",
+    "trace_env_vars": "trace_env",
     # ssh
     "check_all_hosts": "ssh",
     "get_remote_version": "ssh",

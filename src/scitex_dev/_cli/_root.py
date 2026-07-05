@@ -15,7 +15,7 @@ CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 # not listed here falls through to the "Other" section in --help.
 COMMAND_CATEGORIES = [
     ("CI", ["ci"]),
-    ("Development", ["show-config", "rename-symbols"]),
+    ("Development", ["show-config", "rename-symbols", "trace-env-vars"]),
     ("Documentation", ["docs", "search-docs", "skills"]),
     (
         "Ecosystem",
@@ -350,6 +350,13 @@ def config_cmd(as_json):
 from ._rename import register as _register_rename
 
 _register_rename(main)
+
+# trace-env-vars — env-var provenance diagnostic. Thin CLI in
+# _cli/_trace_env.py; engine in scitex_dev/trace_env/ (mirrors the
+# rename-symbols CLI/engine split).
+from ._trace_env import register as _register_trace_env
+
+_register_trace_env(main)
 
 # -------------------------------------------------------------------
 # Documentation commands

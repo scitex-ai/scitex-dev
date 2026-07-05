@@ -40,6 +40,38 @@ Config path resolution:
 |---|---|---|
 | `show-config` | Print the resolved `DevConfig` | [12_config.md](12_config.md) |
 | `rename-symbols` | Bulk rename with cross-reference updates | [15_rename.md](15_rename.md) |
+| `trace-env-vars` | Trace where env var(s) are defined/injected (static scan + strace) | — |
+
+`trace-env-vars` is a diagnostic "silver bullet" for _where does this
+env var come from?_ Two modes, both with word-boundary matching (`FOO`
+never matches `FOO_BAR`) and secret-value redaction:
+
+```bash
+# Static scan (default): every assignment site across shell init
+# files, direnv (.envrc walk-up), tmux global env, and current process.
+scitex-dev trace-env-vars SCITEX_TODO_AGENT SCITEX_TODO_TASKS
+scitex-dev trace-env-vars FOO --json      # structured envelope
+scitex-dev trace-env-vars FOO -q          # one-line summary
+
+# Dynamic trace: run a command under strace and report the FIRST exec
+# stage whose child env carries the var (pinpoints multi-stage launches
+# like shell -> tmux -> apptainer -> claude). Requires strace.
+scitex-dev trace-env-vars SCITEX_TODO_AGENT --trace -- \
+    sac agents start scitex-todo --yes
+```
+
+Two caveats to internalize:
+
+- **Redaction is a conservative name heuristic, not a guarantee.**
+  Values are redacted only when the variable name ends in one of
+  `KEY`/`TOKEN`/`SECRET`/`PASSWORD`/`PASS`/`CREDENTIAL`/`AUTH`/`COOKIE`/`SESSION`.
+  It catches `AWS_SECRET_ACCESS_KEY` and `GH_TOKEN` but MISSES
+  `GITHUB_PAT`, `JSESSIONID`, `DATABASE_URL`-with-embedded-creds, etc.
+  A non-redacted value means "not recognized as secret-shaped", not
+  "confirmed safe" — don't over-trust it when sharing output.
+- **`--trace` needs ptrace.** Inside a container without
+  `CAP_SYS_PTRACE`, strace produces no data; the tool reports this
+  DISTINCTLY as *trace inconclusive* (not a false "var never injected").
 
 ## Documentation
 
