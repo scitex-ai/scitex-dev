@@ -70,6 +70,26 @@ def _drift_report_command() -> str:
     )
 
 
+def _local_state_audit_command() -> str:
+    """Shell line installed for the ``local-state-audit`` timer.
+
+    Runs the read-only ``ecosystem audit-local-state`` observe pass across
+    every registered package and appends the findings + a greppable
+    ``LOCAL-STATE-DRIFT: <N> ...`` summary to a log. ``|| true`` keeps the
+    OBSERVATION unit successful even when it FINDS drift (mirrors
+    ``drift-report`` — drift is data recorded in the log, not a unit
+    failure, so a chronically-drifting fleet never trains the operator to
+    ignore a permanently-failed timer). The ``check_state_drift.sh``
+    PostToolUse hook reads this log's last summary line.
+    """
+    log = "$HOME/.scitex/dev/logs/timer-local-state-audit.log"
+    return (
+        f"mkdir -p $(dirname {log}); "
+        f"date -u +'== local-state-audit %Y-%m-%dT%H:%MZ ==' >> {log}; "
+        f"scitex-dev ecosystem audit-local-state >> {log} 2>&1 || true"
+    )
+
+
 def provide_jobs() -> list[JobSpec]:
     """Return scitex-dev's ecosystem-level JobSpecs for the federation.
 
@@ -132,6 +152,29 @@ def provide_jobs() -> list[JobSpec]:
                 "observe pass; the SSoT is pyproject@develop. Layers 5/6 "
                 "degrade gracefully when sac is absent. See "
                 "_ecosystem._drift_report."
+            ),
+            on_boot_sec="5min",
+            on_unit_active_sec="6h",
+        ),
+        JobSpec(
+            name="local-state-audit",
+            kind="timer",
+            schedule="",
+            command=_local_state_audit_command(),
+            description=(
+                "Local-state convention drift observer. Runs `scitex-dev "
+                "ecosystem audit-local-state` on a Persistent timer "
+                "(OnBootSec catch-up + every 6h) and appends per-package "
+                "findings + a `LOCAL-STATE-DRIFT: <N> ...` summary to "
+                "~/.scitex/dev/logs/timer-local-state-audit.log. Flags "
+                "rolled-own path resolvers (PS-182) and cross-package "
+                "state reads (PS-145) — the config-vs-data footgun that "
+                "silently shadowed the canonical ~/.scitex/todo task store "
+                "(2026-07). Read-only observe pass; `|| true` so finding "
+                "drift is data, not a unit failure. The check_state_drift.sh "
+                "PostToolUse hook reads this log. See "
+                "_ecosystem_jobs._provider._local_state_audit_command and "
+                "_skills/general/01_ecosystem/12_local-state-resolution.md."
             ),
             on_boot_sec="5min",
             on_unit_active_sec="6h",

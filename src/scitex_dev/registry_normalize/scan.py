@@ -4,7 +4,7 @@
 
 Single source of truth for "what counts as drift" from the canonical
 per-package local-state shape (see
-``_skills/general/01_ecosystem/06_local-state-directories.md``)::
+``_skills/general/01_ecosystem/06_dot_scitex_directory.md``)::
 
     ~/.scitex/<pkg>/
     ├── config.yaml          # ONE config name (or config/ for multi-file)

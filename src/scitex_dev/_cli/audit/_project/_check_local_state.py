@@ -1,7 +1,7 @@
 """PS-145 / PS-146 / PS-147 — local-state convention checks.
 
 Implements the rules from
-`_skills/general/01_ecosystem/06_local-state-directories.md`:
+`_skills/general/01_ecosystem/06_dot_scitex_directory.md`:
 
   PS-145 — cross-package state read (§9.5 plugin-port pattern).
            Source must not contain `~/.scitex/<other-pkg>/` literals
@@ -34,7 +34,7 @@ except ImportError:  # pragma: no cover
 
 # Known short-names for every scitex-* package and external partner.
 # Mirrors the §2 prefix-stripping rule in
-# 01_ecosystem/06_local-state-directories.md. Kept in sync manually with
+# 01_ecosystem/06_dot_scitex_directory.md. Kept in sync manually with
 # `_ecosystem._core.ECOSYSTEM`. Adding a new package here is a one-liner.
 _KNOWN_SHORTS = frozenset(
     {
@@ -252,7 +252,7 @@ def check_ps145_cross_package_read(
                     f"var: {sample}{more}. Use the plugin-port pattern: "
                     f"expose `SCITEX_<THIS>_*_DIRS` and let the consumer "
                     f"populate it from their own startup. See "
-                    f"_skills/general/01_ecosystem/06_local-state-directories.md "
+                    f"_skills/general/01_ecosystem/06_dot_scitex_directory.md "
                     f"§9.5."
                 ),
             )
@@ -338,7 +338,7 @@ def check_ps146_pip_install_side_effect(
         ". `pip install <pkg>` must not create `~/.scitex/<pkg-short>/` — "
         "use lazy `mkdir(parents=True, exist_ok=True)` from PathManager on "
         "first write. See _skills/general/"
-        "01_ecosystem/06_local-state-directories.md §3.5."
+        "01_ecosystem/06_dot_scitex_directory.md §3.5."
     )
     out.append(violation_cls("PS-146", str(pp), detail))
 
@@ -395,7 +395,7 @@ def check_ps147_eval_form_completion(
                     f"create an XDG symlink, and write a `[ -f cache ] && "
                     f"source cache` line into rc. See _skills/general/"
                     f"03_interface/02_cli/03_required-introspection-commands.md "
-                    f"and 01_ecosystem/06_local-state-directories.md §11."
+                    f"and 01_ecosystem/06_dot_scitex_directory.md §11."
                 ),
             )
         )
