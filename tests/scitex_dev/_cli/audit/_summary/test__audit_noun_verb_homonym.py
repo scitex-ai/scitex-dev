@@ -28,6 +28,7 @@ import pytest
 from scitex_dev._cli.audit._summary._audit import (
     SERVER_STARTUP_FLAGS,
     Violation,
+    _group_head_labels,
     _walk,
 )
 
@@ -372,3 +373,131 @@ class TestRule1eCompoundLeafIsCorrectGrammar:
         _walk(root, [], out, root_display="demo")
         # Assert
         assert all(not (v.rule == "§1e" and "start-board" in v.command) for v in out)
+
+
+# --------------------------------------------------------------------------- #
+# §1 — group token must be a NOUN, judged by the token's semantic HEAD.        #
+#                                                                             #
+# Regression: `_classify` classifies a hyphenated token by its FIRST part     #
+# (its compound fallback). For a GROUP that wrongly inherited verb-ness from   #
+# the leading MODIFIER, so a legit compound-noun group whose head is a noun    #
+# (`login-guardrail` = a *guardrail*) was flagged "group token looks like a    #
+# verb — non-leaf subcommands must be nouns". This over-flag broke consumer    #
+# CI (e.g. an ecosystem package exposing a `login-guardrail` group). The fix   #
+# classifies the HEAD (right-headed English noun compound) so compound nouns   #
+# pass while genuinely verb-named single-token groups (`run`, `build`) still   #
+# flag. No mocks — real `click.Group` trees walked end to end.                 #
+# --------------------------------------------------------------------------- #
+
+
+class TestGroupHeadLabelsHelper:
+    """`_group_head_labels` classifies by the HEAD (last hyphen part)."""
+
+    def test_single_token_verb_group_is_verb(self):
+        # Arrange
+        token = "login"
+        # Act
+        labels = _group_head_labels(token)
+        # Assert — a bare verb group keeps its verb label (no noun).
+        assert ({"verb-t", "verb-i", "verb"} & labels) and "noun" not in labels
+
+    def test_compound_noun_group_head_is_noun(self):
+        # Arrange — head `guardrail` is a plain noun.
+        token = "login-guardrail"
+        # Act
+        labels = _group_head_labels(token)
+        # Assert — the leading `login` verb no longer leaks in.
+        assert "noun" in labels and not ({"verb-t", "verb-i", "verb"} & labels)
+
+    def test_single_noun_group_is_noun(self):
+        # Arrange
+        token = "guardrail"
+        # Act
+        labels = _group_head_labels(token)
+        # Assert
+        assert "noun" in labels
+
+
+class TestCompoundNounGroupNotFlaggedByRule1:
+    """The confirmed over-flag regression: a compound-noun group whose
+    leading modifier is a verb stem must NOT trip §1."""
+
+    def test_login_guardrail_group_not_flagged(self):
+        # Arrange — `login-guardrail` is a noun (a guardrail for login).
+        @click.group()
+        def root():
+            pass
+
+        @root.group("login-guardrail")
+        def login_guardrail_group():
+            pass
+
+        @login_guardrail_group.command("list")
+        @click.option("--json", "as_json", is_flag=True)
+        def list_cmd(as_json):
+            pass
+
+        out: list[Violation] = []
+        # Act
+        _walk(root, [], out, root_display="demo")
+        # Assert — no §1 "looks like a verb" flag on the compound-noun group.
+        assert all(
+            not (v.rule == "§1" and v.command.endswith("login-guardrail"))
+            for v in out
+        )
+
+    def test_build_cache_group_not_flagged(self):
+        # Arrange — `build-cache` is a noun (a cache of builds); head `cache`
+        # is a noun. The leading `build` verb must not leak in.
+        @click.group()
+        def root():
+            pass
+
+        @root.group("build-cache")
+        def build_cache_group():
+            pass
+
+        @build_cache_group.command("list")
+        @click.option("--json", "as_json", is_flag=True)
+        def list_cmd(as_json):
+            pass
+
+        out: list[Violation] = []
+        # Act
+        _walk(root, [], out, root_display="demo")
+        # Assert
+        assert all(
+            not (v.rule == "§1" and v.command.endswith("build-cache")) for v in out
+        )
+
+
+class TestVerbNamedGroupStillFlaggedByRule1:
+    """True positive preserved: a genuinely verb-named single-token group
+    (the head IS the verb) must still trip §1."""
+
+    def test_run_group_flagged(self):
+        # Arrange — `run` classifies as a verb; a verb-named group is wrong
+        # grammar (groups are nouns).
+        @click.group()
+        def root():
+            pass
+
+        @root.group("build")
+        def build_group():
+            pass
+
+        @build_group.command("list")
+        @click.option("--json", "as_json", is_flag=True)
+        def list_cmd(as_json):
+            pass
+
+        out: list[Violation] = []
+        # Act
+        _walk(root, [], out, root_display="demo")
+        # Assert — `build` is a transitive verb; a verb-named group trips §1.
+        assert any(
+            v.rule == "§1"
+            and v.command.endswith("build")
+            and "looks like a verb" in v.message
+            for v in out
+        )

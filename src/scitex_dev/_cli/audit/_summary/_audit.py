@@ -329,6 +329,33 @@ def _verb_token(name: str) -> str:
     return name.lower().split("-")[0]
 
 
+def _group_head_labels(name: str) -> set[str]:
+    """Classify a GROUP token by its semantic HEAD (right-headed compound).
+
+    English noun compounds are *right-headed*: the LAST hyphen-delimited part
+    is the head noun and the leading parts are modifiers. `login-guardrail`
+    is a *guardrail* (a noun); the leading `login` is a modifier, not a verb
+    naming the group.
+
+    ``_classify`` classifies a hyphenated token by its FIRST part when the
+    whole token isn't in a dictionary (its compound fallback). For a leaf that
+    is correct — CLI leaves are verb-first `<verb>-<object>` (`start-dashboard`
+    -> `start`). But for a GROUP the §1 rule asks "is this a NOUN?", and the
+    first-part fallback wrongly inherits verb-ness from the modifier, so a
+    legit compound-noun group (`login-guardrail`, `build-cache`) was flagged
+    as "group token looks like a verb". This helper classifies the HEAD only:
+
+    * single token       -> classify the token itself (unchanged behaviour)
+    * compound (`a-b-c`) -> classify the last part (`c`), the semantic head
+
+    A single-token verb group (`run`, `build`, `login`) still yields a verb
+    label with no noun and keeps flagging; a compound whose head is a noun
+    (`guardrail`, `gatekeeper`) yields a noun label and passes.
+    """
+    head = name.rsplit("-", 1)[-1] if "-" in name else name
+    return _classify(head)
+
+
 def _flag_names(cmd: click.BaseCommand) -> set[str]:
     """All flag spellings declared on a command (`--foo`, `-f`)."""
     out: set[str] = set()
@@ -711,7 +738,21 @@ def _walk(
                     )
                 )
         else:
-            if ({"verb-t", "verb-i", "verb"} & labels) and "noun" not in labels:
+            # §1 — a group (non-leaf) token must read as a NOUN. Classify by
+            # the token's SEMANTIC HEAD, not by its hyphen-FIRST part: English
+            # noun compounds are right-headed, so `login-guardrail` is a
+            # *guardrail* (noun) whose leading `login` is a modifier — NOT a
+            # verb-named group. `_classify` inherits verb-ness from the
+            # hyphen-first fallback, which over-flagged such compound nouns
+            # (confirmed regression on `login-guardrail`, breaking consumer
+            # CI). Flag only when the HEAD itself is a whole-token verb and
+            # not also a noun — so genuinely verb-named groups (`run`,
+            # `build`, `login`) still fire, while compound nouns
+            # (`login-guardrail`, `guardrail`, `gatekeeper`) pass.
+            head_labels = _group_head_labels(name)
+            if ({"verb-t", "verb-i", "verb"} & head_labels) and (
+                "noun" not in head_labels
+            ):
                 out.append(
                     Violation(
                         full,
