@@ -15,6 +15,7 @@ Today's contents:
 - PS-173 — adr-format (filename + lean-template sections, when docs/adr/ exists)
 - PS-180 — runtime-separation (src/<pkg>/runtime/ must be gitignored at the package level)
 - PS-181 — registry-layout (~/.scitex/<pkg>/ state dir must match the canonical shape; global-scoped, not repo-scoped)
+- PS-182 — rolled-own local-state path resolver (a src/<pkg>/**/_paths.py that re-implements git-root/project-scope precedence instead of using scitex_config._ecosystem.local_state)
 - PS-PATH-001/002 — config/PATH.yaml shape (outer wrapper / bare-string leaf)
 - PS-CLEW-001 — clew.add_claim without self-verify in same module
 - PS-AGENT-001 — scripts/agent/*.py with add_claim but no claims.json terminus
@@ -211,6 +212,31 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "W",
         "registry-layout-drift",
+    ),
+    (
+        "PS-182",
+        "§1",
+        (
+            "rolled-own local-state path resolver: a `src/<pkg>/**/_paths.py` "
+            "(or `paths.py`) re-implements the project-scope / git-root "
+            "precedence walk (a `.git` sentinel walk + a `.scitex/<pkg>` "
+            "project-scope literal) WITHOUT importing the canonical "
+            "`scitex_config._ecosystem.local_state` helper. Rolling your own "
+            "precedence is the CONFIG-vs-DATA footgun: `local_state.path()` "
+            "legitimately lets a project scope shadow the user scope for "
+            "CONFIG, but a hand-rolled resolver applies the same 'project "
+            "wins' rule to DATA/STATE stores too — exactly how a week-stale "
+            "`<repo>/.scitex/todo/tasks.yaml` silently shadowed the canonical "
+            "`~/.scitex/todo/tasks.yaml` task store (2026-07 incident). Adopt "
+            "`local_state` and pick the resolver by DATA NATURE: `path()` for "
+            "config, `user_path()` for DATA/STATE stores (user-canonical, "
+            "NEVER project-shadowed), `runtime_path()` for ephemera. "
+            "Deterministic b1 check; the store-nature/chain-order b2 refinement "
+            "is deferred. Severity W during ecosystem adoption — see "
+            "_skills/general/01_ecosystem/12_local-state-resolution.md."
+        ),
+        "W",
+        "local-state-rolled-own-resolver",
     ),
     (
         "PS-213",

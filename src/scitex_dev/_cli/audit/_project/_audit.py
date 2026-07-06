@@ -245,6 +245,11 @@ def audit_project(
     check_ps145_cross_package_read(repo_root, distribution, Violation, violations)
     check_ps146_pip_install_side_effect(repo_root, Violation, violations)
     check_ps147_eval_form_completion(repo_root, Violation, violations)
+    # PS-182: rolled-own local-state path resolver (git-root/project-scope
+    # precedence re-implemented instead of using scitex_config...local_state).
+    from ._check_path_resolver import check_ps182_rolled_own_path_resolver
+
+    check_ps182_rolled_own_path_resolver(repo_root, Violation, violations)
     # PS-PATH / PS-CLEW / PS-AGENT — paper-scitex-clew MVP lint set.
     # Artifact-gated (only fire when PATH.yaml / clew.add_claim /
     # scripts/agent/ are present); safe to run on every project type.

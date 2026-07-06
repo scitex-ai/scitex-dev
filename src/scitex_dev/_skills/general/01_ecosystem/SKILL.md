@@ -24,3 +24,4 @@ touching any `scitex-*` package. Read before the per-package tiers
 9. [09_package-categories.md](09_package-categories.md) — Package category taxonomy
 10. [10_research-project-type.md](10_research-project-type.md) — `project-type: research` — research repos are NOT pip packages; auditor SKIPS publish rules and KEEPS the universal ones
 11. [11_model-serving-vs-consumption.md](11_model-serving-vs-consumption.md) — Model-serving (scitex-genai) vs model-consumption (sac via `ProviderSpec` `base_url`); contract is an HTTP endpoint, never a Python import — neither package imports the other
+12. [12_local-state-resolution.md](12_local-state-resolution.md) — Resolve on-disk state via `scitex_config._ecosystem.local_state` by DATA NATURE: `path()` for config, `user_path()` for DATA/STATE stores (user-canonical, never project-shadowed — the anti-footgun rule), `runtime_path()` for ephemera; `$SCITEX_DIR` relocator; no-rolled-own-resolver mandate (PS-182)
