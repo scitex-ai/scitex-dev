@@ -29,14 +29,14 @@ python -c "from importlib.metadata import entry_points as ep; print([e.name for 
 
 Do NOT add `[tool.hatch.build.targets.wheel.force-include]` for `_skills/` — hatch already includes files under `src/<pkg>/` in the wheel. Adding `force-include` causes duplicate-file errors on build.
 
-For setuptools-based packages (e.g., `scitex-cloud`), `_skills/` ships only when declared as package data:
+For setuptools-based packages (e.g., `scitex-hub`), `_skills/` ships only when declared as package data:
 
 ```toml
 [tool.setuptools.package-data]
 <pkg_name> = ["_skills/**/*.md"]
 ```
 
-`scitex-cloud/pyproject.toml` is the reference setuptools example — it declares both `_skills/**/*.md` and the legacy `skills/*.md` paths.
+`scitex-hub/pyproject.toml` is the reference setuptools example — it declares both `_skills/**/*.md` and the legacy `skills/*.md` paths.
 
 After every wheel-publish, verify a fresh `pip install scitex-<pkg>` into a clean venv still sees the skills:
 

@@ -22,11 +22,15 @@ Strike through (`~~item~~`) when done.
 - [ ] Revise `scitex-plt` / `figrecipe` so its actual CLI matches the reference example
       in [16_example.md](16_example.md).
 
-- [ ] Triage the 1067 warnings in [DRIFT_REPORT.md](DRIFT_REPORT.md).
-      Highest-leverage sweeps:
-      - §4 (486 hits) — add `Example:` epilogs.
-      - §2 (368 hits) — add `--json` / `--dry-run` / `--yes` decorators.
-      - §6b (24 hits) — config-path docs in root `--help`.
+- [ ] Triage the ecosystem-wide CLI drift warnings.
+      Regenerate a fresh point-in-time report with
+      `scitex-dev ecosystem audit-cli --all` (JSON via `--json`); the old
+      committed `DRIFT_REPORT.md` snapshot was retired as a stale build
+      artifact (it listed since-archived packages).
+      Historically highest-leverage sweeps:
+      - §4 — add `Example:` epilogs.
+      - §2 — add `--json` / `--dry-run` / `--yes` decorators.
+      - §6b — config-path docs in root `--help`.
 
 
 ### Open: tool UX & ergonomics
