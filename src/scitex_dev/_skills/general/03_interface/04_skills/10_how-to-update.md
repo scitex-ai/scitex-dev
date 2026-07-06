@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Skills How To Update
-  [DETAILS] Update workflow for SciTeX skill content — the source-of-truth locations (`src/<pkg>/_skills/<pip-name>/` always; never the exported copies in `~/.dotfiles/.../skills/scitex/` or `~/.claude/skills/scitex/`), the pre-tool-use hook that blocks direct edits to export copies, editable-install vs wheel-install resolution, the `scitex-dev skills export --package <pkg>` export command, the `scitex-dev skills list` / `--dry-run` verification commands, and how to create a GitHub issue when the package is not installed in editable mode. Use whenever you want to change existing skill text.
+  [DETAILS] Update workflow for SciTeX skill content — the source-of-truth locations (`src/<pkg>/_skills/<pip-name>/` always; never the exported copies in `~/.dotfiles/.../skills/scitex/` or `~/.claude/skills/scitex/`), the pre-tool-use hook that blocks direct edits to export copies, editable-install vs wheel-install resolution, the `scitex-dev skills install --package <pkg>` export command (`export` is a deprecated hidden alias), the `scitex-dev skills list` / `--dry-run` verification commands, and how to create a GitHub issue when the package is not installed in editable mode. Use whenever you want to change existing skill text.
 tags: [scitex-general-interface-skills-how-to-update]
 ---
 
@@ -20,17 +20,21 @@ If the package is installed in editable mode, edit the source directly:
 | Modules (within scitex-python) | `~/proj/scitex-python/src/scitex/<module>/_skills/` |
 | Standalone packages | `~/proj/<pkg>/src/<pkg_name>/_skills/<pip-name>/` |
 
-After editing, export to dotfiles:
+After editing, install the exported copies into the skills store:
 
 ```bash
-scitex-dev skills export --package <pkg>
+scitex-dev skills install --package <pkg>
 ```
+
+> `install` is the public export verb (default dest `~/.scitex/dev/skills/`).
+> The older `scitex-dev skills export` is a deprecated, hidden alias — same
+> behaviour, different default destination. Prefer `install`.
 
 Verify:
 
 ```bash
 scitex-dev skills list --package <pkg>
-scitex-dev skills export --package <pkg> --dry-run
+scitex-dev skills install --package <pkg> --dry-run
 python -m pytest tests/test_skills.py -v
 ```
 
@@ -39,15 +43,15 @@ python -m pytest tests/test_skills.py -v
 ```bash
 # scitex-notification (standalone)
 vi ~/proj/scitex-notification/src/scitex_notification/_skills/scitex-notification/configuration.md
-scitex-dev skills export --package scitex-notification
+scitex-dev skills install --package scitex-notification
 
 # notification module (within scitex-python)
 vi ~/proj/scitex-python/src/scitex/notification/_skills/voice-sms.md
-scitex-dev skills export --package scitex
+scitex-dev skills install --package scitex
 
 # general standards (within scitex-python)
 vi ~/proj/scitex-python/src/scitex/_skills/general/01_ecosystem/04_environment-variables.md
-scitex-dev skills export --package scitex
+scitex-dev skills install --package scitex
 ```
 
 ## Non-Editable Install
