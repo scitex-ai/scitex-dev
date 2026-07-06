@@ -23,6 +23,8 @@ __all__ = [
     "get_all_packages",
     "get_local_path",
     "should_skip_audit",
+    "is_mcp_mountable",
+    "mountable_peers",
 ]
 
 
@@ -52,6 +54,67 @@ _CATEGORY_SKIP: dict[str, frozenset[str]] = {
     "audit-python-apis": frozenset({"template"}),
     "audit-project": frozenset(),
 }
+
+
+# --------------------------------------------------------------------- #
+# MCP aggregator mount policy                                           #
+# --------------------------------------------------------------------- #
+
+# Packages that ship a ``_mcp_server`` FastMCP instance but must NOT be
+# auto-mounted onto the umbrella MCP aggregator (``scitex serve`` /
+# ``scitex-mcp-server``; see ``scitex._mcp.register_all_tools`` ->
+# ``_iter_registry``). This is the single source of truth the aggregator
+# consults via :func:`is_mcp_mountable` / :func:`mountable_peers`.
+#
+# - ``scitex-orochi`` is the single-instance agent-communication
+#   ORCHESTRATOR. Its ``mcp_server`` module is guarded to ``sys.exit`` /
+#   refuse when a Telegram bot token or telegram agent-role is present,
+#   and it is NOT a per-agent tool provider. Mounting it is both
+#   semantically wrong AND a cold-start hazard (its import blocks the
+#   aggregator's serial peer-resolution loop), so it is skipped
+#   unconditionally.
+#
+# Distinct from ``umbrella_skip`` (a per-entry registry field that only
+# gates the Python-API SSoT / ``[all]`` extras generator, NOT the MCP
+# mount) and from ``archived`` / ``_SKIP_CATEGORIES`` (already honoured
+# aggregator-side). A package may ALSO opt out per-entry by setting
+# ``"mcp_mountable": False`` in its ``ECOSYSTEM`` record; both signals
+# are honoured.
+_MCP_UNMOUNTABLE: frozenset = frozenset({"scitex-orochi"})
+
+
+def is_mcp_mountable(package: str) -> bool:
+    """Return ``True`` iff ``package`` may be auto-mounted onto the umbrella MCP.
+
+    A package is NOT mountable when any of the following hold:
+
+    - it is unknown to the registry (fail closed — nothing to mount),
+    - its ``ECOSYSTEM`` record is ``archived``,
+    - its ``category`` is one the aggregator never mounts
+      (``umbrella`` / ``template``),
+    - its record sets ``"mcp_mountable": False``,
+    - it is listed in :data:`_MCP_UNMOUNTABLE`.
+
+    This is the SSoT the umbrella aggregator consults so the skip policy
+    lives in one place (scitex-dev), not duplicated in scitex-python.
+    """
+    info = ECOSYSTEM.get(package)
+    if info is None:
+        return False
+    if info.get("archived"):
+        return False
+    if info.get("category") in {"umbrella", "template"}:
+        return False
+    if info.get("mcp_mountable") is False:
+        return False
+    if package in _MCP_UNMOUNTABLE:
+        return False
+    return True
+
+
+def mountable_peers() -> List[str]:
+    """Return the ordered list of packages the umbrella MCP should mount."""
+    return [pkg for pkg in ECOSYSTEM if is_mcp_mountable(pkg)]
 
 
 def should_skip_audit(package: str, auditor: str) -> tuple[bool, str]:
