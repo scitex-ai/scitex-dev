@@ -45,6 +45,24 @@ def test_types_zero_tool_peer_is_not_mcp_mountable():
     assert mountable is False
 
 
+def test_str_zero_tool_peer_is_not_mcp_mountable():
+    # Arrange
+    package = "scitex-str"  # ships no _mcp server; pulls pandas/numpy, zero tools
+    # Act
+    mountable = is_mcp_mountable(package)
+    # Assert
+    assert mountable is False
+
+
+def test_str_absent_from_mountable_peers_list():
+    # Arrange
+    package = "scitex-str"
+    # Act
+    peers = mountable_peers()
+    # Assert
+    assert package not in peers
+
+
 def test_resource_tool_peer_stays_mcp_mountable():
     # Arrange
     package = "scitex-resource"  # ships real tools; font-cache fixed at source

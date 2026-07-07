@@ -79,6 +79,14 @@ _CATEGORY_SKIP: dict[str, frozenset[str]] = {
 #   aggregator's peer-resolution imports the package while probing for a
 #   FastMCP instance that does not exist — pure cold-start waste with no
 #   tool payoff — so it is skipped.
+# - ``scitex-str`` likewise ships NO ``_mcp_server`` / ``mcp_server`` /
+#   ``_mcp`` (ZERO MCP tools — it is a pure text-utility library). Probing
+#   it still imports ``scitex_str``, which eagerly pulls pandas + numpy via
+#   its ``_search`` / ``_plot`` submodules (~1.4 s cold, inflating toward
+#   the per-peer timeout in a fresh SIF). No FastMCP instance exists to
+#   mount, so — exactly like ``scitex-types`` — it is pure cold-start waste
+#   and is skipped. (Diagnosed in sac's real-SIF re-verify of umbrella
+#   2.30.8.)
 #
 # Distinct from ``umbrella_skip`` (a per-entry registry field that only
 # gates the Python-API SSoT / ``[all]`` extras generator, NOT the MCP
@@ -92,7 +100,9 @@ _CATEGORY_SKIP: dict[str, frozenset[str]] = {
 # (a demo-only top-level ``import matplotlib.pyplot`` that triggered the
 # font-cache build) is fixed at the source in scitex-resource by deferring
 # that import into the ``__main__`` block, so it stays mounted and cheap.
-_MCP_UNMOUNTABLE: frozenset = frozenset({"scitex-orochi", "scitex-types"})
+_MCP_UNMOUNTABLE: frozenset = frozenset(
+    {"scitex-orochi", "scitex-types", "scitex-str"}
+)
 
 
 def is_mcp_mountable(package: str) -> bool:
