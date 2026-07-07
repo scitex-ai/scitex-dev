@@ -26,11 +26,13 @@ from ._ecosystem._skills.skills import (
     get_skill,
     list_skills,
 )
+from ._ecosystem.click_compat import deprecated_alias
 from ._ecosystem.click_helpers import CategorizedGroup, make_categorized_group
 
 __all__ = [
     "CategorizedGroup",
     "async_wrap_as_mcp",
+    "deprecated_alias",
     "docs_build",
     "docs_get",
     "docs_list",
