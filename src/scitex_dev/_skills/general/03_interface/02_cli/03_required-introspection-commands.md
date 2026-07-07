@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Interface Cli Required Introspection
-  [DETAILS] SciTeX CLI required introspection commands — `list-python-apis` and `mcp list-tools` with `-v|-vv|-vvv` verbosity levels. Mandatory on every package CLI for parity with sibling packages.
+  [DETAILS] SciTeX CLI required introspection commands — `dev list-python-apis` and `mcp list-tools` with `-v|-vv|-vvv` verbosity levels, `completion install/status`. Mandatory on every package CLI for parity with sibling packages.
 tags: [scitex-general-interface-cli-required-introspection-commands]
 ---
 
@@ -13,15 +13,16 @@ Every `scitex-*` package CLI **must** expose two introspection commands so that 
 
 | Command              | Lists                                       | Section anchor                                                         |
 |----------------------|---------------------------------------------|------------------------------------------------------------------------|
-| `list-python-apis`   | Public Python API (`__all__`)               | this file + [03_interface/01_python-api/SKILL.md](SKILL.md) |
+| `dev list-python-apis` | Public Python API (`__all__`)             | this file + [03_interface/01_python-api/SKILL.md](SKILL.md) |
 | `mcp list-tools`     | MCP tools registered by the package         | this file + [03_interface/03_mcp/SKILL.md](SKILL.md)        |
 | `skills {list, get, install}` | Bundled agent-facing skills (markdown leaves under `_skills/<pkg>/`) | this file + [03_interface/04_skills/SKILL.md](SKILL.md) |
-| `install-shell-completion` / `print-shell-completion` | Wires up bash/zsh/fish tab-completion. **Required** — without it, every scitex-* CLI ships without working `<TAB>` completion (the 2026-05-06 scitex-hpc symptom). `install-shell-completion --shell bash` must source the click-generated completion into the user's shell rc; `print-shell-completion --shell bash` prints it for piping. | §1b [04_exceptions.md](04_exceptions.md) |
+| `completion install` / `completion status` | Wires up / reports bash/zsh/fish tab-completion. **Required** — without it, every scitex-* CLI ships without working `<TAB>` completion (the 2026-05-06 scitex-hpc symptom). `completion install --shell bash` must source the cached completion script into the user's shell rc; `completion install --dry-run` prints the target rc file + script without writing (retires the old `print-shell-completion`). | §1b [04_exceptions.md](04_exceptions.md) |
 
-Both follow the §1 noun-verb grammar:
+All follow the §1 noun-verb grammar:
 
-- `list-python-apis` — verb-noun compound leaf at top level (object: `python-apis`).
+- `dev list-python-apis` — `dev` noun group (§11 [18_dev-subgroup-and-ecosystem-placement.md](18_dev-subgroup-and-ecosystem-placement.md)), `list-python-apis` compound-leaf verb. The legacy top-level `list-python-apis` mount stays as a Phase W warn-forward alias (§5 [11_deprecation.md](11_deprecation.md)) during migration.
 - `mcp list-tools` — `mcp` noun group, `list-tools` compound-leaf verb. (`tool` is a noun in the §1d catalog; `list-tools` bakes in the object.)
+- `completion install` — `completion` noun group + `install` verb (§1b [04_exceptions.md](04_exceptions.md)).
 
 ## Verbosity convention — `-v` / `-vv` / `-vvv`
 
@@ -37,19 +38,19 @@ Both commands accept the same `-v` ladder. Each level **adds** information; it d
 ### Examples
 
 ```bash
-$ scitex-io list-python-apis
+$ scitex-io dev list-python-apis
 save
 load
 load_configs
 register_saver
 …
 
-$ scitex-io list-python-apis -v
+$ scitex-io dev list-python-apis -v
 save(obj, path: str | Path, **kwargs) -> Path
 load(path: str | Path, **kwargs) -> Any
 …
 
-$ scitex-io list-python-apis -vv
+$ scitex-io dev list-python-apis -vv
 save(obj, path: str | Path, **kwargs) -> Path
     Save any object to disk; format inferred from extension.
 …
@@ -89,8 +90,8 @@ In addition to the verbosity ladder, both must accept (per §2 [08_universal-fla
 
 The §1e auditor should verify:
 
-- [ ] `<cli> list-python-apis` exists and exits 0.
-- [ ] `<cli> list-python-apis -v|-vv|-vvv` produce monotonically more output (each level ⊇ previous).
+- [ ] `<cli> dev list-python-apis` exists and exits 0 (legacy top-level `list-python-apis` allowed only as a Phase W alias).
+- [ ] `<cli> dev list-python-apis -v|-vv|-vvv` produce monotonically more output (each level ⊇ previous).
 - [ ] `<cli> mcp list-tools` exists and exits 0.
 - [ ] `<cli> mcp list-tools -v|-vv|-vvv` follow the same monotonic ladder.
 - [ ] Both commands honor `--json`.
@@ -101,9 +102,9 @@ The §1e auditor should verify:
       `get` accept `--json`; `install` defaults to symlinking
       `_skills/<pkg>/` → `~/.scitex/dev/skills/<pkg>/` and accepts
       `--claude-symlink` to also expose at `~/.claude/skills/scitex/`.
-- [ ] `<cli> install-shell-completion` and `<cli> print-shell-completion` exist; both accept `--shell {bash,zsh,fish}`. `install-shell-completion` writes the click-generated completion to the appropriate shell rc (or `~/.config/<shell>/completions/<cli>`) and prints a one-line "open a new shell" message. `print-shell-completion` prints the snippet without modifying the filesystem (useful for `eval "$(<cli> print-shell-completion --shell bash)"`).
+- [ ] `<cli> completion install` and `<cli> completion status` exist; `completion install` accepts `--shell {bash,zsh,fish}` and `--dry-run`. `completion install` writes the cached completion script + rc `source` line (pattern below) and prints a one-line "open a new shell" message; `completion install --dry-run` prints the target rc file and the script without modifying the filesystem. `completion status` reports whether completion is wired. Legacy `install-shell-completion` / `print-shell-completion` exist only as Phase W aliases (§5 [11_deprecation.md](11_deprecation.md)).
 
-## How `install-shell-completion` writes the rc line
+## How `completion install` writes the rc line
 
 **Required pattern: cache file + `source` line (NOT eval-the-binary).**
 
@@ -131,7 +132,7 @@ source it from the canonical user-state location:
 
 Sourcing a 30-line static script is microseconds. Per-binary marker
 (`# <pkg>-completion: <binary>`) makes the line idempotent — a second
-`install-shell-completion` invocation is a no-op.
+`completion install` invocation is a no-op.
 
 ### Why backgrounding the eval doesn't help
 
@@ -150,12 +151,12 @@ the user's interactive session.
 Click keys the completion environment variable on `argv[0]`, so a
 package shipping both `<long-name>` and `<short-alias>` (e.g.,
 `scitex-agent-container` + `sac`) needs **two** cache files and two
-source lines — one per binary name. A single `install-shell-completion`
+source lines — one per binary name. A single `completion install`
 invocation should write all of them.
 
 ### Audit — `PS-147 local-state-eval-completion`
 
-- [ ] `<pkg>` source must not contain `eval "$(_<PKG>_COMPLETE=bash_source ...)"` lines that get appended to rc files via `install-shell-completion`. Use the cache pattern above.
+- [ ] `<pkg>` source must not contain `eval "$(_<PKG>_COMPLETE=bash_source ...)"` lines that get appended to rc files via `completion install` (or its legacy `install-shell-completion` alias). Use the cache pattern above.
 
 The auditor lives at
 `scitex_dev._cli.audit._project._check_local_state.check_ps147_eval_form_completion`.
@@ -168,7 +169,7 @@ The upstream helper `scitex_dev._cli._completion.attach_shell_completion`
 already implements the cache pattern — every CLI that uses
 `attach_shell_completion(group, prog_name=...)` inherits it for free.
 Packages still tripping `PS-147` are the ones that ship their own
-`install-shell-completion` body; the fix is to delete the local
+completion-install body; the fix is to delete the local
 implementation and call `attach_shell_completion` instead.
 
 `scitex-dev ecosystem install --with-completions` (default on) wires

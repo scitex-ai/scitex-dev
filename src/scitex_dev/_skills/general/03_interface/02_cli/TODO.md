@@ -13,8 +13,10 @@ Strike through (`~~item~~`) when done.
 
 ## Package sweeps
 
-- [ ] Replace bare `completion` subcommand with `install-shell-completion` / `print-shell-completion`
-      across all `scitex-*` packages.
+- [ ] Replace bare `completion` subcommand (and legacy `install-shell-completion` /
+      `print-shell-completion` compounds) with the canonical `completion` noun group
+      (`completion install [--dry-run]`, `completion status` — §1b [04_exceptions.md](04_exceptions.md))
+      across all `scitex-*` packages, via Phase W warn-forward aliases.
 
 - [ ] Replace bare `version` subcommand with `--version` / `-V` flag
       across all `scitex-*` packages.
@@ -96,8 +98,9 @@ Strike through (`~~item~~`) when done.
 
 ## Design questions
 
-- [ ] Should `sync` ever stand alone, or always require an object (`sync-ecosystem`)?
-      Currently §1d says always require — confirm with real-world usage.
+- [x] ~~Should `sync` ever stand alone, or always require an object (`sync-ecosystem`)?~~
+      Resolved (operator-confirmed 2026-07-07): always object-suffixed; directional
+      transfer is `push` / `pull` — see the §1d canonical verb table.
 
 - [ ] `tag` is currently verb-only.
       Confirm no package needs `tag` as a noun (e.g. `tag list`).
