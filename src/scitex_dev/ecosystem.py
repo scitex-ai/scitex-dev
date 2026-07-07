@@ -28,9 +28,21 @@ from ._ecosystem._skills.skills import (
 )
 from ._ecosystem.click_compat import deprecated_alias
 from ._ecosystem.click_helpers import CategorizedGroup, make_categorized_group
+from ._ecosystem.help_spec import (
+    CliHelp,
+    Example,
+    SpecCommand,
+    SpecGroup,
+    render_epilog,
+    render_help,
+)
 
 __all__ = [
     "CategorizedGroup",
+    "CliHelp",
+    "Example",
+    "SpecCommand",
+    "SpecGroup",
     "async_wrap_as_mcp",
     "deprecated_alias",
     "docs_build",
@@ -43,6 +55,8 @@ __all__ = [
     "list_skills",
     "make_categorized_group",
     "register_docs_tools",
+    "render_epilog",
+    "render_help",
     "result_to_mcp",
     "run_as_mcp",
     "wrap_as_mcp",
