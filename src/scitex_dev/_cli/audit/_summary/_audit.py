@@ -4,10 +4,25 @@ Rules audited (warn-only):
 - §1   noun-verb structure        (subcommand grammar)
 - §1b  banned bare leaves         (`version`, `completion`)
 - §1d  vocabulary in catalog/dict
+- §1f  non-canonical verb synonym (doctrine 06 synonym tables — see
+                                   `_std_rules.VERB_SYNONYMS`; WARN-only)
 - §2   universal flag presence    (--version/-V, --help-recursive at top;
                                    --json on read verbs; --dry-run, --yes
                                    on mutating verbs)
 - §4   help format                (Usage line + at least one example)
+- §4b  spec-built help            (constructed via CliHelp —
+                                   `scitex_dev.ecosystem.help_spec`; WARN-only)
+- §5   deprecation ladder         (static `_deprecated_alias` metadata in
+                                   `_std_rules`; phase-aware behavioral
+                                   checks in `_behavioral`)
+
+Module layout (staged split of this legacy-oversized engine):
+- `_behavioral.py` — subprocess-based behavioral checks
+- `_run.py`        — severity registry, filtering, orchestration,
+                     `run_audit` / `run_audit_all` (+ baseline ratchet)
+- `_std_rules.py`  — §1f / §4b / §5-static rules (slice 4)
+- `_baseline.py`   — `--baseline` fingerprint ratchet store (slice 4)
+Moved names remain importable from this module via PEP 562 __getattr__.
 """
 
 from __future__ import annotations
@@ -413,9 +428,14 @@ def _check_help_format(cmd: click.BaseCommand, full: str, out: list[Violation]) 
     """§4 — help must include Usage synopsis (Click adds automatically) + an example.
 
     Click guarantees the Usage line, so we only check for an example marker.
+    Spec-built commands (`_help_spec` set by SpecCommand / SpecGroup) skip
+    the example sniff — `CliHelp` validation already guarantees leaves
+    declare >=1 example, so rule §4b subsumes this heuristic for them.
     """
     if isinstance(cmd, click.Group):
         # Groups list subcommands; examples live on leaves.
+        return
+    if getattr(cmd, "_help_spec", None) is not None:
         return
     if not _has_example(cmd):
         out.append(
@@ -632,6 +652,10 @@ def _walk(
     # the upstream tool.
     if is_root and not _is_pass_through(cmd):
         _check_root_help_has_version(cmd, full, out)
+        # §4b — the root, too, should build help from a CliHelp spec.
+        from ._std_rules import check_spec_built_help
+
+        check_spec_built_help(cmd, full, out)
 
     if not is_root:
         # §1c — pass-through entry points are exempt from §1 / §1d / §4.
@@ -653,6 +677,13 @@ def _walk(
             )
 
         if is_leaf:
+            # §1f — non-canonical verb synonym (WARN-only, data-driven
+            # map seeded from the doctrine 06 synonym tables; respects
+            # `verb_exceptions:` in .scitex/dev/cli-audit-dict.yaml).
+            from ._std_rules import check_verb_synonym
+
+            check_verb_synonym(name, full, out)
+
             # §1 — leaf-noun check. Historically the exemption
             # (`{verb-t, verb-i, verb, flat-keeper} & labels`) silently
             # passed multi-class noun-verb homonyms such as `board`
@@ -773,6 +804,12 @@ def _walk(
 
         # §4 help format on leaves.
         _check_help_format(cmd, full, out)
+
+        # §4b — spec-built help (leaves AND nested groups; the root is
+        # covered above). WARN-only.
+        from ._std_rules import check_spec_built_help
+
+        check_spec_built_help(cmd, full, out)
 
     if is_group:
         next_path = [name] if is_root else path + [name]
@@ -1481,215 +1518,6 @@ def _check_config_help(
         )
 
 
-def _run_subprocess(args: list[str], timeout: float = 10.0) -> tuple[int, str, str]:
-    """Run a CLI command; return (exit_code, stdout, stderr). -1 on timeout/error."""
-    import subprocess
-
-    try:
-        proc = subprocess.run(
-            args,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-        return proc.returncode, proc.stdout, proc.stderr
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return -1, "", ""
-
-
-def _collect_json_leaves(cmd: click.BaseCommand, path: list[str]) -> list[list[str]]:
-    """Return paths (e.g. ['mcp', 'list-tools']) of every leaf that has --json."""
-    out: list[list[str]] = []
-    if getattr(cmd, "hidden", False):
-        return out
-    if isinstance(cmd, click.Group):
-        for name, sub in cmd.commands.items():
-            out.extend(_collect_json_leaves(sub, path + [name]))
-        return out
-    if "--json" in _flag_names(cmd):
-        out.append(path)
-    return out
-
-
-def _collect_hidden_leaves(cmd: click.BaseCommand, path: list[str]) -> list[list[str]]:
-    """Return paths of every hidden leaf (deprecation-redirect candidates)."""
-    out: list[list[str]] = []
-    if isinstance(cmd, click.Group):
-        for name, sub in cmd.commands.items():
-            child_path = path + [name]
-            if getattr(sub, "hidden", False) and not isinstance(sub, click.Group):
-                out.append(child_path)
-            else:
-                out.extend(_collect_hidden_leaves(sub, child_path))
-    return out
-
-
-def _check_behavioral(
-    package: str,
-    out: list[Violation],
-    cmd: click.BaseCommand | None = None,
-    timeout: float = 10.0,
-) -> None:
-    """Behavioral checks (§1a ladder, §3 exit codes, §5 redirects, §7 parity, §8 JSON)."""
-    import json as _json
-
-    sub_to = max(1.0, min(timeout, 30.0))
-
-    # §3 — bogus flag at top level should exit 2 (Click default).
-    rc, _so, _se = _run_subprocess(
-        [package, "--definitely-not-a-flag-xyz"], timeout=sub_to
-    )
-    if rc != 2 and rc != -1:
-        out.append(
-            Violation(
-                package,
-                "§3",
-                f"unknown flag at top-level exited {rc}, expected 2 (usage error)",
-            )
-        )
-
-    # §3 — bogus subcommand should exit 2.
-    rc, _so, _se = _run_subprocess(
-        [package, "definitely-not-a-subcommand-xyz"], timeout=sub_to
-    )
-    if rc not in (
-        2,
-        -1,
-        0,
-    ):  # 0 means CLI accepted gibberish — also a bug, but separate signal
-        if rc != 2:
-            out.append(
-                Violation(
-                    package,
-                    "§3",
-                    f"unknown subcommand exited {rc}, expected 2 (usage error)",
-                )
-            )
-
-    # §1a behavioral — list-python-apis verbosity ladder.
-    levels = [[], ["-v"], ["-vv"], ["-vvv"]]
-    counts: list[int] = []
-    for extra in levels:
-        rc, so, _se = _run_subprocess(
-            [package, "list-python-apis", *extra], timeout=sub_to
-        )
-        if rc != 0:
-            counts.append(-1)
-            continue
-        counts.append(len([ln for ln in so.splitlines() if ln.strip()]))
-    if all(c >= 0 for c in counts):
-        for i in range(1, len(counts)):
-            if counts[i] < counts[i - 1]:
-                out.append(
-                    Violation(
-                        f"{package} list-python-apis",
-                        "§1a",
-                        f"verbosity ladder not monotonic: -{'v' * i} produced fewer "
-                        f"non-empty lines ({counts[i]}) than -{'v' * (i - 1)} ({counts[i - 1]})",
-                    )
-                )
-                break
-
-    # §8 — every leaf with --json must produce parseable JSON on stdout.
-    if cmd is not None:
-        for leaf_path in _collect_json_leaves(cmd, []):
-            rc, so, _se = _run_subprocess(
-                [package, *leaf_path, "--json"], timeout=sub_to
-            )
-            if rc == 0 and so.strip():
-                try:
-                    _json.loads(so)
-                except _json.JSONDecodeError:
-                    out.append(
-                        Violation(
-                            f"{package} {' '.join(leaf_path)}",
-                            "§8",
-                            "--json stdout is not parseable JSON (log contamination?)",
-                        )
-                    )
-
-    # §5 — hidden leaves should be deprecation redirects: exit non-zero with
-    # a "renamed" / "moved" message on stderr.
-    if cmd is not None:
-        for leaf_path in _collect_hidden_leaves(cmd, []):
-            rc, _so, se = _run_subprocess([package, *leaf_path], timeout=sub_to)
-            if rc == 0:
-                out.append(
-                    Violation(
-                        f"{package} {' '.join(leaf_path)}",
-                        "§5",
-                        "hidden leaf exited 0 — expected non-zero deprecation redirect",
-                    )
-                )
-                continue
-            blob = se.lower()
-            if not any(
-                tok in blob for tok in ("renamed", "moved", "deprecated", "use ")
-            ):
-                out.append(
-                    Violation(
-                        f"{package} {' '.join(leaf_path)}",
-                        "§5",
-                        "hidden leaf exited non-zero but stderr lacks redirect hint "
-                        "(expected 'renamed', 'moved', 'deprecated', or 'use ...')",
-                    )
-                )
-
-    # §7 — CLI ↔ MCP parity. When both `list-python-apis --json` and
-    # `mcp list-tools --json` are present, every Python API should map to
-    # an MCP tool (loosely: the MCP set should cover a substantial fraction
-    # of the Python API set).
-    py_rc, py_so, _ = _run_subprocess(
-        [package, "list-python-apis", "--json"], timeout=sub_to
-    )
-    mcp_rc, mcp_so, _ = _run_subprocess(
-        [package, "mcp", "list-tools", "--json"], timeout=sub_to
-    )
-    if py_rc == 0 and mcp_rc == 0 and py_so.strip() and mcp_so.strip():
-        try:
-            py_set = _extract_names(_json.loads(py_so))
-            mcp_set = _extract_names(_json.loads(mcp_so))
-        except (_json.JSONDecodeError, AttributeError, TypeError):
-            py_set, mcp_set = set(), set()
-        if py_set and mcp_set:
-            # MCP names typically prefix the package short name; strip it for comparison.
-            short = package.replace("scitex-", "").replace("-", "_")
-            mcp_normalized = {n.removeprefix(f"{short}_") for n in mcp_set}
-            missing = py_set - mcp_normalized
-            if missing and len(missing) > len(py_set) * 0.5:
-                out.append(
-                    Violation(
-                        package,
-                        "§7",
-                        f"{len(missing)}/{len(py_set)} Python APIs have no matching MCP tool "
-                        f"(sample: {sorted(missing)[:3]})",
-                    )
-                )
-
-
-def _extract_names(payload) -> set[str]:
-    """Pull a flat name set out of a JSON listing (handles list[str] | list[dict] | dict)."""
-    if isinstance(payload, list):
-        out: set[str] = set()
-        for item in payload:
-            if isinstance(item, str):
-                out.add(item)
-            elif isinstance(item, dict):
-                for k in ("name", "tool", "api", "id"):
-                    v = item.get(k)
-                    if isinstance(v, str):
-                        out.add(v)
-                        break
-        return out
-    if isinstance(payload, dict):
-        for k in ("apis", "tools", "items", "data", "results"):
-            if k in payload:
-                return _extract_names(payload[k])
-        return set(k for k in payload.keys() if isinstance(k, str))
-    return set()
-
-
 def _check_option_positional_ordering(
     package: str, root: click.BaseCommand, out: list[Violation]
 ) -> None:
@@ -2189,328 +2017,51 @@ def _startup_speed_violation(
 
 
 # --------------------------------------------------------------------- #
-# Rule severity & filtering                                              #
+# Moved sections (staged split — see module docstring)                    #
+#                                                                        #
+# Severity registry / filtering / orchestration / run entry points live  #
+# in `_run.py`; subprocess-based behavioral checks live in               #
+# `_behavioral.py`. The PEP 562 __getattr__ at the bottom of this file   #
+# keeps every historical `from ._audit import X` working.                #
 # --------------------------------------------------------------------- #
 
-# Severity tiers — used by --severity to gate which findings are reported.
-#
-# Per 2026-05-06 directive: any rule that has been live long enough to ship a
-# documented spec is `error` (CI must fail). Demote a rule back to `warn` only
-# after a concrete false-positive lands on develop. `info` is reserved for
-# purely advisory categorizations (pass-through entry-points) that cannot
-# describe a violation.
-RULE_SEVERITY: dict[str, str] = {
-    "§1": "error",
-    "§1a": "error",
-    "§1b": "error",
-    "§1c": "info",
-    "§1d": "error",
-    "§1e": "info",
-    "§2": "error",
-    "§3": "error",
-    "§4": "error",
-    "§5": "error",
-    # §6 (Python API ↔ MCP tool parity). Promoted back to error 2026-05-08
-    # at user direction: severity must match the rule corpus's intent —
-    # if it's a real violation, label it as one. False-positives on
-    # utility-heavy packages should be addressed via per-package
-    # allowlists (skip_rules in test_audit.py) or a tightened threshold,
-    # not by globally demoting the rule to warn.
-    "§6": "error",
-    "§6a": "error",
-    "§6b": "error",
-    "§7": "error",
-    "§8": "error",
-    "§10": "error",
-    # §10w — warn-tier sibling of §10. Emitted only when the runner's
-    # bare-interpreter baseline already exceeds the import budget, so the
-    # marginal import cost cannot be measured reliably (loaded/NFS CI). WARN,
-    # not error, so `audit-all` exit stays 0 instead of false-flaking the fleet.
-    "§10w": "warn",
-    "§11": "error",
-    # PA-304: umbrella imports (scitex.X / import scitex) inside standalone
-    # source. Drags umbrella __init__ + lazy re-export setup into every call
-    # — measurable on NFS-mounted homes (HPC). Codified 2026-05-06 after the
-    # scitex-scholar 2.7s cold-import surfaced on Spartan.
-    "PA-304": "error",
-    # PA-305: playwright.async_api imported without capture_debug_artifacts_async
-    # call. Codified 2026-05-06 — every browser-automation decision point must
-    # capture screenshot+HTML so selector regressions are diagnosable
-    # post-mortem. See _skills/general/02_package/09_browser-automation-debugging.md.
-    "PA-305": "error",
-}
-SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}
 
-
-def _max_severity(violations: list[Violation]) -> str:
-    """Highest severity present among violations; 'info' if list is empty."""
-    best = "info"
-    for v in violations:
-        sev = RULE_SEVERITY.get(v.rule, "warn")
-        if SEVERITY_ORDER[sev] > SEVERITY_ORDER[best]:
-            best = sev
-    return best
-
-
-def _filter_violations(
-    violations: list[Violation],
-    rules: tuple[str, ...] = (),
-    exclude: tuple[str, ...] = (),
-    min_severity: str | None = None,
-) -> list[Violation]:
-    """Apply --rule / --exclude / --severity gating to a violation list."""
-    out: list[Violation] = []
-    threshold = SEVERITY_ORDER.get(min_severity or "info", 0)
-    rules_set = {r.lstrip("§") for r in rules}
-    excl_set = {r.lstrip("§") for r in exclude}
-    for v in violations:
-        rule_key = v.rule.lstrip("§")
-        if rules_set and rule_key not in rules_set:
-            continue
-        if rule_key in excl_set:
-            continue
-        sev = RULE_SEVERITY.get(v.rule, "warn")
-        if SEVERITY_ORDER[sev] < threshold:
-            continue
-        out.append(v)
-    return out
-
-
-def _audit_one(
-    package: str,
-    behavioral: bool = False,
-    timeout: float = 30.0,
-    ep_value_for=None,
-) -> tuple[str, list[Violation]]:
-    """Audit a single package; return (status, violations).
-
-    Status is one of: "ok", "warn", "skip-mcp", "not-found", "not-auditable".
-    """
-    if ep_value_for is None:
-        ep_value_for = _ep_value_for
-    ep_value = ep_value_for(package)
-    if ep_value is None:
-        return "not-found", []
-    if _is_mcp_server_entry(ep_value):
-        return "skip-mcp", []
-
-    # MCP / argparse entry points may close stdio on import or write protocol
-    # frames to stdout — `_isolated_streams` redirects the three standard
-    # streams to /dev/null and restores them on exit.
-    with _isolated_streams():
-        cmd = _resolve_entry_point(package)
-
-    if cmd is None:
-        last_err = getattr(_resolve_entry_point, "_last_err", None)
-        if hasattr(_resolve_entry_point, "_last_err"):
-            delattr(_resolve_entry_point, "_last_err")
-        return f"not-auditable: {last_err or 'unknown'}", []
-
-    out: list[Violation] = []
-    _walk(cmd, [], out, root_display=package)
-    _check_introspection(cmd, package, out)
-    _check_config_help(cmd, package, out)
-    _scan_env_vars(package, out)
-    _check_startup_speed(package, out)
-    _check_no_interactive_prompts(package, out)
-    _check_cli_framework(package, out)
-    _check_option_positional_ordering(package, cmd, out)
-    if behavioral:
-        _check_behavioral(package, out, cmd, timeout=timeout)
-    return ("ok" if not out else "warn"), out
-
-
-def _violation_to_dict(v: Violation) -> dict:
-    return {"command": v.command, "rule": v.rule, "message": v.message}
-
-
-def _emit_human(package: str, status: str, violations: list[Violation]) -> None:
-    if status == "skip-mcp":
-        click.echo(
-            f"info  {package}: MCP / protocol server — skipped (use audit-mcp-tools when available)"
-        )
-        return
-    from .._emit import emit as _emit
-
-    if status == "not-found":
-        # No console script is a legitimate state for utility packages
-        # (types, base/core libraries, etc.) — audit-cli can't enforce
-        # a CLI convention on a package that has no CLI. Surface as info.
-        _emit("info", f"{package}: no console script — skipped")
-        return
-    if status.startswith("not-auditable"):
-        _emit("error", f"{package}: {status}", err=True)
-        return
-    from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
-
-    if status == "ok":
-        _emit("success", f"{package}: no CLI convention violations")
-        emit_disclaimer()
-        return
-    sev = _max_severity(violations)
-    level = "error" if sev == "error" else "warning"
-    noun = "error(s)" if sev == "error" else "warning(s)"
-    _emit(level, f"{package}: {len(violations)} {noun}")
-    for v in violations:
-        _emit(level, f"  [{v.rule}] {v.command}: {v.message}")
-    emit_disclaimer()
-    emit_skill_hints()
-
-
-def _emit_json(records: list[dict], registry_provenance: str) -> None:
-    import json as _json
-
-    payload = {
-        "registry_source": registry_provenance,
-        "results": records,
+# Names moved to `_run.py` (orchestration + baseline ratchet) and
+# `_behavioral.py` (subprocess-based checks). Forwarded lazily so both
+# import directions stay cycle-free and historical imports keep working.
+_MOVED_TO_RUN = frozenset(
+    {
+        "RULE_SEVERITY",
+        "SEVERITY_ORDER",
+        "_audit_one",
+        "_emit_human",
+        "_emit_json",
+        "_filter_violations",
+        "_max_severity",
+        "_violation_to_dict",
+        "run_audit",
+        "run_audit_all",
     }
-    click.echo(_json.dumps(payload, indent=2))
+)
+_MOVED_TO_BEHAVIORAL = frozenset(
+    {
+        "_check_behavioral",
+        "_collect_hidden_leaves",
+        "_collect_json_leaves",
+        "_extract_names",
+        "_run_subprocess",
+    }
+)
 
 
-def run_audit(
-    package: str,
-    behavioral: bool = False,
-    output_json: bool = False,
-    registry_provenance: str = "",
-    rules: tuple[str, ...] = (),
-    exclude: tuple[str, ...] = (),
-    min_severity: str | None = None,
-    timeout: float = 30.0,
-) -> int:
-    """Audit a single package (single-target mode)."""
-    # Category-aware skip: archived packages, templates, etc. — see
-    # `scitex_dev._ecosystem._core.should_skip_audit` for the per-auditor
-    # category map.
-    try:
-        from ...._ecosystem import should_skip_audit
-    except ImportError:
-        should_skip_audit = lambda *_a, **_k: (False, "")  # noqa: E731
-    skip, reason = should_skip_audit(package, "audit-cli")
-    if skip:
-        if output_json:
-            rec = {"package": package, "status": f"skip-{reason}", "violations": []}
-            _emit_json([rec], registry_provenance or "single-package mode")
-        else:
-            from .._emit import emit as _emit_skip
+def __getattr__(name: str):
+    """PEP 562 forwarder for names extracted in the staged split."""
+    if name in _MOVED_TO_RUN:
+        from . import _run
 
-            _emit_skip("skip", f"{package}: {reason}")
-        return 0
+        return getattr(_run, name)
+    if name in _MOVED_TO_BEHAVIORAL:
+        from . import _behavioral
 
-    status, violations = _audit_one(package, behavioral=behavioral, timeout=timeout)
-    violations = _filter_violations(violations, rules, exclude, min_severity)
-    if not violations and status == "warn":
-        status = "ok"
-    if output_json:
-        rec = {
-            "package": package,
-            "status": status,
-            "violations": [_violation_to_dict(v) for v in violations],
-        }
-        _emit_json([rec], registry_provenance or "single-package mode")
-    else:
-        _emit_human(package, status, violations)
-    if status.startswith("not-auditable"):
-        return 2
-    if status == "not-found":
-        # Legitimate "no CLI" — exit 0, audit-cli has nothing to enforce.
-        return 0
-    # Exit 1 if any violation reaches `error` severity. Warnings alone exit 0.
-    return 1 if _max_severity(violations) == "error" else 0
-
-
-def run_audit_all(
-    behavioral: bool = False,
-    output_json: bool = False,
-    dry_run: bool = False,
-    registry_path: str | Path | None = None,
-    rules: tuple[str, ...] = (),
-    exclude: tuple[str, ...] = (),
-    min_severity: str | None = None,
-    timeout: float = 30.0,
-) -> int:
-    """Audit every package in the registry (ecosystem-wide mode).
-
-    With dry_run=True, lists the targets without auditing.
-    """
-    registry, provenance = _load_registry(registry_path)
-    targets: list[tuple[str, str, str]] = []  # (name, ep_value, status_hint)
-    for name, _info in registry.items():
-        ep_value = _ep_value_for(name)
-        if ep_value is None:
-            targets.append((name, "", "not-found"))
-            continue
-        if _is_mcp_server_entry(ep_value):
-            targets.append((name, ep_value, "skip-mcp"))
-            continue
-        targets.append((name, ep_value, "audit"))
-
-    if dry_run:
-        if output_json:
-            payload = {
-                "registry_source": provenance,
-                "dry_run": True,
-                "targets": [
-                    {"package": n, "entry_point": ep, "action": s}
-                    for n, ep, s in targets
-                ],
-            }
-            import json as _json
-
-            click.echo(_json.dumps(payload, indent=2))
-        else:
-            click.echo(f"# registry: {provenance}")
-            click.echo(f"# {len(targets)} package(s) — dry-run, no audit performed")
-            for name, ep, status in targets:
-                click.echo(f"  {status:<12} {name:<28} {ep}")
-        return 0
-
-    records: list[dict] = []
-    counts = {"ok": 0, "warn": 0, "skip-mcp": 0, "not-found": 0, "not-auditable": 0}
-    any_error = False
-    for name, ep, hint in targets:
-        if hint == "not-found":
-            status, violations = "not-found", []
-        elif hint == "skip-mcp":
-            status, violations = "skip-mcp", []
-        else:
-            # Wall-clock watchdog so a single hanging package can't wedge --all.
-            # Budget = behavioral subprocess cap + 5s slack for static checks.
-            wall_budget = max(timeout + 5.0, 10.0)
-            try:
-                with _watchdog(wall_budget):
-                    status, violations = _audit_one(
-                        name, behavioral=behavioral, timeout=timeout
-                    )
-            except _PackageTimeout:
-                status, violations = (
-                    f"not-auditable: timed out after {wall_budget:.0f}s",
-                    [],
-                )
-        violations = _filter_violations(violations, rules, exclude, min_severity)
-        if not violations and status == "warn":
-            status = "ok"
-        if not output_json:
-            _emit_human(name, status, violations)
-        if _max_severity(violations) == "error" or status.startswith("not-auditable"):
-            any_error = True
-        records.append(
-            {
-                "package": name,
-                "status": status,
-                "violations": [_violation_to_dict(v) for v in violations],
-            }
-        )
-        bucket = "not-auditable" if status.startswith("not-auditable") else status
-        counts[bucket] = counts.get(bucket, 0) + 1
-
-    if output_json:
-        _emit_json(records, provenance)
-    else:
-        click.echo("")
-        click.echo(f"# registry: {provenance}")
-        click.echo(
-            f"# summary: {counts['ok']} ok, {counts['warn']} warn, "
-            f"{counts['skip-mcp']} skipped (MCP), "
-            f"{counts['not-found']} not-found, {counts['not-auditable']} not-auditable"
-        )
-    return 1 if any_error else 0
+        return getattr(_behavioral, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

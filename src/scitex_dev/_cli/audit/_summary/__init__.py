@@ -296,6 +296,7 @@ def audit_cli(
     exclude: tuple[str, ...] = (),
     min_severity: str | None = None,
     timeout: float = 30.0,
+    baseline_path: str | None = None,
 ) -> int:
     """Audit a package's installed CLI; return exit code (always 0 — warn-only).
 
@@ -304,6 +305,11 @@ def audit_cli(
       (resolved via the §6b cascade: --registry > $SCITEX_DEV_REGISTRY >
       project YAML > user YAML > bundled dict).
     - `dry_run=True` (with `audit_all=True`) lists targets without auditing.
+    - `baseline_path` enables the ratchet: a missing file is written with
+      the current violation fingerprints (exit 0 — ratchet init); an
+      existing file suppresses recorded violations so only NEW ones
+      fail/warn. The default `.scitex/dev/cli-audit-baseline.yaml` (cwd)
+      is honored automatically whenever it exists.
     """
     if not AVAILABLE:
         import click
@@ -315,7 +321,7 @@ def audit_cli(
         )
         return 2
 
-    from ._audit import run_audit, run_audit_all
+    from ._run import run_audit, run_audit_all
 
     if audit_all:
         return run_audit_all(
@@ -327,6 +333,7 @@ def audit_cli(
             exclude=exclude,
             min_severity=min_severity,
             timeout=timeout,
+            baseline_path=baseline_path,
         )
     if package is None:
         import click
@@ -341,4 +348,5 @@ def audit_cli(
         exclude=exclude,
         min_severity=min_severity,
         timeout=timeout,
+        baseline_path=baseline_path,
     )
