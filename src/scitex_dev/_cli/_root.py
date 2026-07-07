@@ -251,54 +251,48 @@ from .audit._umbrella_pins import cli as _umbrella_pins_cli
 ecosystem_group.add_command(_umbrella_pins_cli, name="audit-umbrella-pins")
 
 # ----- Deprecation shim: `scitex-dev quality <cmd>` → ecosystem -----
+# Shared 3-phase-ladder helper (02_cli/11_deprecation.md, slice 2 of the
+# CLI-standardization plan). Warn phase forwards; error phase exits 2.
+from .._ecosystem.click_compat import deprecated_alias
+
 @main.group("quality", hidden=True)
 def _quality_deprecated():
     """(deprecated) Use `scitex-dev ecosystem audit-*` instead."""
 
-def _make_quality_redirect(cmd_name: str):
-    @_quality_deprecated.command(
-        cmd_name,
-        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
-    )
-    @click.pass_context
-    def _redirect(ctx):
-        f"""(deprecated) See `scitex-dev ecosystem {cmd_name}`."""
-        click.echo(
-            f"warning: `scitex-dev quality {cmd_name}` was moved to "
-            f"`scitex-dev ecosystem {cmd_name}`. Will be removed in 0.11.0.",
-            err=True,
-        )
-        target = ecosystem_group.get_command(ctx, cmd_name)
-        if target is None:
-            ctx.exit(2)
-        ctx.invoke(target, *ctx.args)
-
-    return _redirect
-
-for _quality_cmd in (
-    "audit-docs",
-    "audit-scope",
-    "audit-lines",
-    "audit-frontmatter",
+for _quality_cmd, _quality_target in (
+    ("audit-docs", _ecosystem_audit_docs),
+    ("audit-scope", _ecosystem_audit_scope),
+    ("audit-lines", _ecosystem_audit_lines),
 ):
-    _make_quality_redirect(_quality_cmd)
+    deprecated_alias(
+        _quality_deprecated,
+        _quality_cmd,
+        target=_quality_target,
+        target_name=f"ecosystem {_quality_cmd}",
+        remove_in="0.11",
+        phase="warn",
+    )
+
+# `quality audit-frontmatter` has no forwarding target (the rule was
+# DROPPED — frontmatter shape lives in audit-skills), so it sits on the
+# error rung pointing at the canonical owner. Exit code 2, as before.
+deprecated_alias(
+    _quality_deprecated,
+    "audit-frontmatter",
+    target="audit-skills",
+    target_name="ecosystem audit-skills",
+    remove_in="0.11",
+    phase="error",
+)
 
 # -------------------------------------------------------------------
 # Development commands
 # -------------------------------------------------------------------
 
-@main.command(
-    "config", hidden=True, context_settings={"ignore_unknown_options": True}
+# `config` → `show-config` rename, error rung of the deprecation ladder.
+deprecated_alias(
+    main, "config", target="show-config", remove_in="0.11", phase="error"
 )
-@click.pass_context
-def config_deprecated(ctx):
-    """(deprecated) Renamed to `show-config`."""
-    click.echo(
-        "error: `scitex-dev config` was renamed to `scitex-dev show-config`.\n"
-        "Re-run with: scitex-dev show-config",
-        err=True,
-    )
-    ctx.exit(2)
 
 @main.command("show-config")
 @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
@@ -414,45 +408,25 @@ from ._completion import register_completion_command
 
 register_completion_command(main)
 
-@main.command(
+# `search` → `docs search` walked the ladder in two renames: the direct
+# alias is already on the error rung; `search-docs` still forwards
+# (warn rung) so existing callers keep working until v0.11.
+deprecated_alias(
+    main,
     "search",
-    hidden=True,
-    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    target="search-docs",
+    remove_in="0.11",
+    phase="error",
 )
-@click.pass_context
-def search_deprecated(ctx):
-    """(deprecated) Renamed to `search-docs`."""
-    click.echo(
-        "error: `scitex-dev search` was renamed to `scitex-dev search-docs`.\n"
-        "Re-run with: scitex-dev search-docs <query> [...]",
-        err=True,
-    )
-    ctx.exit(2)
 
-@main.command("search-docs", hidden=True)
-@click.argument("query")
-@click.option(
-    "--scope", default="all", help="Search scope: all, api, cli, mcp, docs."
+deprecated_alias(
+    main,
+    "search-docs",
+    target=_docs_search,
+    target_name="docs search",
+    remove_in="0.11",
+    phase="warn",
 )
-@click.option("--max-results", default=10, help="Maximum results.")
-@click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-def search_docs_deprecated(query, scope, max_results, as_json):
-    """(deprecated) Use `scitex-dev docs search`. Removed in 0.11.0."""
-    click.echo(
-        "warning: `scitex-dev search-docs` was moved to "
-        "`scitex-dev docs search`. Will be removed in 0.11.0.",
-        err=True,
-    )
-    from .. import search as do_search
-    from ._utils import wrap_as_cli
-
-    wrap_as_cli(
-        do_search,
-        as_json=as_json,
-        query=query,
-        scope=scope,
-        max_results=max_results,
-    )
 
 # -------------------------------------------------------------------
 # Integration commands
