@@ -73,6 +73,12 @@ _CATEGORY_SKIP: dict[str, frozenset[str]] = {
 #   semantically wrong AND a cold-start hazard (its import blocks the
 #   aggregator's serial peer-resolution loop), so it is skipped
 #   unconditionally.
+# - ``scitex-types`` ships NO ``_mcp_server`` (it exposes ZERO MCP tools)
+#   yet importing the package pulls the heavy scientific stack
+#   (numpy / optionally torch / xarray / pandas via ``_ArrayLike``). The
+#   aggregator's peer-resolution imports the package while probing for a
+#   FastMCP instance that does not exist — pure cold-start waste with no
+#   tool payoff — so it is skipped.
 #
 # Distinct from ``umbrella_skip`` (a per-entry registry field that only
 # gates the Python-API SSoT / ``[all]`` extras generator, NOT the MCP
@@ -80,7 +86,13 @@ _CATEGORY_SKIP: dict[str, frozenset[str]] = {
 # aggregator-side). A package may ALSO opt out per-entry by setting
 # ``"mcp_mountable": False`` in its ``ECOSYSTEM`` record; both signals
 # are honoured.
-_MCP_UNMOUNTABLE: frozenset = frozenset({"scitex-orochi"})
+#
+# NOTE: ``scitex-resource`` is deliberately NOT skipped here — it ships
+# real tools (``get_specs`` / ``get_metrics`` / …). Its cold-start hazard
+# (a demo-only top-level ``import matplotlib.pyplot`` that triggered the
+# font-cache build) is fixed at the source in scitex-resource by deferring
+# that import into the ``__main__`` block, so it stays mounted and cheap.
+_MCP_UNMOUNTABLE: frozenset = frozenset({"scitex-orochi", "scitex-types"})
 
 
 def is_mcp_mountable(package: str) -> bool:

@@ -36,6 +36,24 @@ def test_orochi_absent_from_mountable_peers_list():
     assert package not in peers
 
 
+def test_types_zero_tool_peer_is_not_mcp_mountable():
+    # Arrange
+    package = "scitex-types"  # ships no _mcp_server; heavy import, zero tools
+    # Act
+    mountable = is_mcp_mountable(package)
+    # Assert
+    assert mountable is False
+
+
+def test_resource_tool_peer_stays_mcp_mountable():
+    # Arrange
+    package = "scitex-resource"  # ships real tools; font-cache fixed at source
+    # Act
+    mountable = is_mcp_mountable(package)
+    # Assert
+    assert mountable is True
+
+
 def test_ordinary_library_peer_is_mcp_mountable():
     # Arrange
     package = "scitex-io"
