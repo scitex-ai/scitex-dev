@@ -23,6 +23,8 @@ __all__ = [
     "get_all_packages",
     "get_local_path",
     "should_skip_audit",
+    "is_mcp_mountable",
+    "mountable_peers",
 ]
 
 
@@ -52,6 +54,79 @@ _CATEGORY_SKIP: dict[str, frozenset[str]] = {
     "audit-python-apis": frozenset({"template"}),
     "audit-project": frozenset(),
 }
+
+
+# --------------------------------------------------------------------- #
+# MCP aggregator mount policy                                           #
+# --------------------------------------------------------------------- #
+
+# Packages that ship a ``_mcp_server`` FastMCP instance but must NOT be
+# auto-mounted onto the umbrella MCP aggregator (``scitex serve`` /
+# ``scitex-mcp-server``; see ``scitex._mcp.register_all_tools`` ->
+# ``_iter_registry``). This is the single source of truth the aggregator
+# consults via :func:`is_mcp_mountable` / :func:`mountable_peers`.
+#
+# - ``scitex-orochi`` is the single-instance agent-communication
+#   ORCHESTRATOR. Its ``mcp_server`` module is guarded to ``sys.exit`` /
+#   refuse when a Telegram bot token or telegram agent-role is present,
+#   and it is NOT a per-agent tool provider. Mounting it is both
+#   semantically wrong AND a cold-start hazard (its import blocks the
+#   aggregator's serial peer-resolution loop), so it is skipped
+#   unconditionally.
+# - ``scitex-types`` ships NO ``_mcp_server`` (it exposes ZERO MCP tools)
+#   yet importing the package pulls the heavy scientific stack
+#   (numpy / optionally torch / xarray / pandas via ``_ArrayLike``). The
+#   aggregator's peer-resolution imports the package while probing for a
+#   FastMCP instance that does not exist — pure cold-start waste with no
+#   tool payoff — so it is skipped.
+#
+# Distinct from ``umbrella_skip`` (a per-entry registry field that only
+# gates the Python-API SSoT / ``[all]`` extras generator, NOT the MCP
+# mount) and from ``archived`` / ``_SKIP_CATEGORIES`` (already honoured
+# aggregator-side). A package may ALSO opt out per-entry by setting
+# ``"mcp_mountable": False`` in its ``ECOSYSTEM`` record; both signals
+# are honoured.
+#
+# NOTE: ``scitex-resource`` is deliberately NOT skipped here — it ships
+# real tools (``get_specs`` / ``get_metrics`` / …). Its cold-start hazard
+# (a demo-only top-level ``import matplotlib.pyplot`` that triggered the
+# font-cache build) is fixed at the source in scitex-resource by deferring
+# that import into the ``__main__`` block, so it stays mounted and cheap.
+_MCP_UNMOUNTABLE: frozenset = frozenset({"scitex-orochi", "scitex-types"})
+
+
+def is_mcp_mountable(package: str) -> bool:
+    """Return ``True`` iff ``package`` may be auto-mounted onto the umbrella MCP.
+
+    A package is NOT mountable when any of the following hold:
+
+    - it is unknown to the registry (fail closed — nothing to mount),
+    - its ``ECOSYSTEM`` record is ``archived``,
+    - its ``category`` is one the aggregator never mounts
+      (``umbrella`` / ``template``),
+    - its record sets ``"mcp_mountable": False``,
+    - it is listed in :data:`_MCP_UNMOUNTABLE`.
+
+    This is the SSoT the umbrella aggregator consults so the skip policy
+    lives in one place (scitex-dev), not duplicated in scitex-python.
+    """
+    info = ECOSYSTEM.get(package)
+    if info is None:
+        return False
+    if info.get("archived"):
+        return False
+    if info.get("category") in {"umbrella", "template"}:
+        return False
+    if info.get("mcp_mountable") is False:
+        return False
+    if package in _MCP_UNMOUNTABLE:
+        return False
+    return True
+
+
+def mountable_peers() -> List[str]:
+    """Return the ordered list of packages the umbrella MCP should mount."""
+    return [pkg for pkg in ECOSYSTEM if is_mcp_mountable(pkg)]
 
 
 def should_skip_audit(package: str, auditor: str) -> tuple[bool, str]:
