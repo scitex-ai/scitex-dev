@@ -35,8 +35,9 @@ Chain shape:
 
 ### Intransitive (complete without an object)
 
-- Examples: `doctor`, `sync`, `repl`, `shell`.
+- Examples: `doctor`, `repl`, `shell`.
 - May stand alone as **exceptions** — see [04_exceptions.md](04_exceptions.md).
+- `sync` is NOT one of them — it is always object-suffixed (`sync-skills`), per the §1d canonical verb table ([06_noun-verb-catalog.md](06_noun-verb-catalog.md)).
 
 ## Tree vs compound leaf (transitive only)
 
