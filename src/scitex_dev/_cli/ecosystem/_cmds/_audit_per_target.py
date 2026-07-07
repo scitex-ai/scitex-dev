@@ -115,6 +115,24 @@ def register(ecosystem):
         default=30.0,
         help="Per-package subprocess timeout (seconds) for behavioral checks.",
     )
+    @click.option(
+        "--baseline",
+        "baseline_path",
+        is_flag=False,
+        flag_value=".scitex/dev/cli-audit-baseline.yaml",
+        default=None,
+        type=click.Path(dir_okay=False),
+        help=(
+            "Ratchet mode. Bare `--baseline` uses "
+            ".scitex/dev/cli-audit-baseline.yaml (cwd); pass a PATH to "
+            "override. Missing file: current violation fingerprints are "
+            "recorded and the run exits 0. Existing file: recorded "
+            "violations are suppressed (count shown); only NEW ones "
+            "fail/warn. To re-record, delete the file and re-run. The "
+            "default file is honored automatically when it exists, even "
+            "without this flag."
+        ),
+    )
     def ecosystem_audit_cli(
         package,
         audit_all,
@@ -126,6 +144,7 @@ def register(ecosystem):
         exclude_rules,
         min_severity,
         timeout,
+        baseline_path,
     ):
         """Check a package's CLI against the noun-verb convention (warn-only).
 
@@ -148,6 +167,7 @@ def register(ecosystem):
                 exclude=tuple(exclude_rules),
                 min_severity=min_severity,
                 timeout=timeout,
+                baseline_path=baseline_path,
             )
         )
 
