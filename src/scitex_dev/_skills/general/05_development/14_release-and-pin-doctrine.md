@@ -38,6 +38,23 @@ container, and agent waiting on the change.
   release *immediately* (patch bump, same flow) rather than yanking,
   reverting, or pausing the cadence. A regression is one more release
   away from fixed — never a reason to stop shipping.
+- **The autonomy is GATED, not unconditional.** "No approval gate"
+  means no *operator* gate — it does NOT mean no gate. CI must be
+  **green**, and the repo's release ritual must pass: a CHANGELOG
+  entry, the version bump, and the packaging / import gates. Those
+  honest, deterministic gates — not a human ask — are what make a bad
+  publish a cheap yank instead of a silent breakage; that reversibility
+  is precisely what licenses publishing without asking. Keep the
+  import/packaging gates honest and they carry the safety the operator
+  gate used to.
+
+**Re-ratified 2026-07-08 as a UNIVERSAL fleet rule** — the operator
+directed it be shared with every agent as a普遍ルール ("リリースは私の
+確認不要、むしろ聞かないでくださいレベルで、どんどんリリースして…これを
+普遍的なルールとしてみんなで共有してください"). It applies to every
+agent and every scitex repo, and is mirrored in the constitution's
+delivery section so it loads for all agents, not just those who read
+this skill.
 
 **Rationale (operator).** scitex packages are *actively developed*;
 the goal is velocity across hosts and agents. A hesitation gate
