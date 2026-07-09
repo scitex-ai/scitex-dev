@@ -446,18 +446,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_benchmark",
         "category": "library",
     },
-    "scitex-bridge": {
-        # GH-archived 2026 — cross-module adapter shim superseded by
-        # inline integration in scitex-stats / scitex-plt. Kept in the
-        # registry so historical refs resolve; auditors short-circuit
-        # on archived=True.
-        "local_path": "~/proj/scitex-bridge",
-        "pypi_name": "scitex-bridge",
-        "github_repo": "ywatanabe1989/scitex-bridge",
-        "import_name": "scitex_bridge",
-        "category": "library",
-        "archived": True,
-    },
     "scitex-capture": {
         "local_path": "~/proj/scitex-capture",
         "pypi_name": "scitex-capture",
@@ -544,21 +532,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/scitex-resource",
         "import_name": "scitex_resource",
         "category": "library",
-    },
-    "scitex-security": {
-        # Absorbed into scitex-audit 2026-06-07 per ADR-0001 (#139).
-        # scitex-security 0.2.0 is a deprecated re-export shim of
-        # ``scitex_audit.github``; the standalone repo will be yanked from
-        # PyPI at W3 once reconcile-versions confirms zero downstream
-        # pins. Kept here with archived=True so historical refs +
-        # umbrella-extras reconciliation know not to expect an active
-        # standalone going forward (mirrors the scitex-linter precedent).
-        "local_path": "~/proj/scitex-security",
-        "pypi_name": "scitex-security",
-        "github_repo": "ywatanabe1989/scitex-security",
-        "import_name": "scitex_security",
-        "category": "library",
-        "archived": True,
     },
     "scitex-session": {
         "local_path": "~/proj/scitex-session",

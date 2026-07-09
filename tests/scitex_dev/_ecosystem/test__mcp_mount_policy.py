@@ -109,10 +109,18 @@ def test_template_category_is_not_mcp_mountable():
 
 
 def test_archived_peer_is_not_mcp_mountable():
-    # Arrange
-    package = "scitex-bridge"  # archived=True in the registry
+    # Arrange — scitex-bridge/scitex-security (the prior archived=True
+    # fixtures) were dropped from ECOSYSTEM entirely (dead packages
+    # should not appear in ecosystem-wide tooling at all), so exercise
+    # the archived-skip branch via a temporary override instead.
+    package = "scitex-io"
+    original = ECOSYSTEM[package]
+    ECOSYSTEM[package] = {**original, "archived": True}
     # Act
-    mountable = is_mcp_mountable(package)
+    try:
+        mountable = is_mcp_mountable(package)
+    finally:
+        ECOSYSTEM[package] = original
     # Assert
     assert mountable is False
 
