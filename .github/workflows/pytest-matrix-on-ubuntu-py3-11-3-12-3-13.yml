@@ -10,50 +10,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    # Job name is a REQUIRED status check (branch protection):
-    # pytest-matrix-on-ubuntu-py3.11 / 3.12 / 3.13 — keep verbatim.
-    name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Create per-job venv (self-hosted shared-cache isolation)
-        # Self-hosted runners share one read-only tool-cache + home, so
-        # pip-installing into the base interpreter is blocked (PEP 668) and
-        # would race across repos. A per-job venv on the runner's local
-        # $RUNNER_TEMP isolates deps; GITHUB_PATH makes later steps use it.
-        run: |
-          python -m venv "$RUNNER_TEMP/venv"
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          # Fallback chain: prefer [all,dev] so optional-dep code paths
-          # (yaml, fastmcp, textual) get exercised. Falls back to [dev] then
-          # plain editable so a packaging hiccup doesn't strand CI.
-          pip install -e ".[all,dev]" || pip install -e ".[dev]" || pip install -e .
-      - name: Run tests
-        run: |
-          pytest tests/ --cov=src/scitex_dev --cov-report=xml --cov-report=term
-      - name: Upload coverage to Codecov
-        if: always() && matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v5
-        env:
-          # Per-job isolated HOME so parallel matrix jobs don't race on the
-          # codecov uploader's state under $HOME, and so the uploader's
-          # internal `git` calls don't trip "dubious ownership" on the
-          # shared checkout. Paired with disable_safe_directory below.
-          HOME: ${{ runner.temp }}/codecov-home-${{ matrix.python-version }}
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
-          fail_ci_if_error: false
-          disable_safe_directory: true
+  # 2026-07-10 incident remediation: centralized as an org-level reusable
+  # workflow at scitex-ai/.github (pilot: PR #69 on scitex-ai/scitex-stats).
+  # Only this job body changes — on:/concurrency:/permissions: above stay
+  # byte-identical to the pre-migration file.
+  pytest-matrix:
+    # New required-status-check contexts: "pytest-matrix / pytest-matrix-on-ubuntu-py3.11" / "...py3.12" / "...py3.13"
+    uses: scitex-ai/.github/.github/workflows/pytest-matrix.yml@main
+    secrets: inherit

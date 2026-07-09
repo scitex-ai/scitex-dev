@@ -29,43 +29,16 @@ permissions:
   statuses: write
 
 jobs:
-  owner-bypass:
-    # Fires only for direct pushes by the repo owner. PR events keep
-    # going through the full CLAssistant action below.
-    if: github.event_name == 'push' && github.actor == 'ywatanabe1989'
-    runs-on: ubuntu-latest
-    permissions:
-      statuses: write
-    steps:
-      - name: Mark CLAssistant=success on this SHA (owner-allowlisted direct push)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          gh api "repos/${REPO}/statuses/${SHA}" \
-            -f state=success \
-            -f context=CLAssistant \
-            -f description="Owner-triggered direct push (CLA bypass per repo allowlist)"
-
-  CLAssistant:
-    # PR / comment path — unchanged from the pre-2026-06-04 workflow.
-    if: github.event_name != 'push'
-    runs-on: ubuntu-latest
-    steps:
-      - name: CLA Assistant
-        uses: contributor-assistant/github-action@v2.6.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-        with:
-          path-to-signatures: "signatures/cla.json"
-          path-to-document: "https://github.com/ywatanabe1989/scitex-dev/blob/main/CLA.md"
-          branch: "cla-signatures"
-          allowlist: bot*,ywatanabe1989,LLEmacs
-          custom-allsigned-prcomment: |
-            Thank you for signing the SciTeX CLA. Your contribution can now be reviewed.
-          custom-notsigned-prcomment: |
-            Please sign the [SciTeX CLA](https://github.com/ywatanabe1989/scitex-dev/blob/main/CLA.md) before your contribution can be merged.
-            Comment `I have read and agree to the SciTeX CLA.` to sign.
+  # 2026-07-10 incident remediation: centralized as an org-level reusable
+  # workflow at scitex-ai/.github (pilot: PR #69 on scitex-ai/scitex-stats).
+  # The reusable already contains both the owner-bypass job (direct-push CLA
+  # status synth, operator-direct 2026-06-04) and the CLAssistant job, so the
+  # whole jobs: block collapses to one caller. owner_allowlist is overridden
+  # because this repo's allowlist ("bot*,ywatanabe1989,LLEmacs") differs from
+  # the reusable's default ("bot*,ywatanabe1989"); default_branch (main) and
+  # owner_login (ywatanabe1989) already match the reusable's defaults.
+  call:
+    uses: scitex-ai/.github/.github/workflows/cla.yml@main
+    with:
+      owner_allowlist: "bot*,ywatanabe1989,LLEmacs"
+    secrets: inherit
