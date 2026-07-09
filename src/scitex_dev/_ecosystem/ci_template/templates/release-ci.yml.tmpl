@@ -21,6 +21,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+# ISOLATION (not serialization): concurrent jobs on the self-hosted runner
+# share $HOME. actions/checkout runs `git config --global --add safe.directory`,
+# which locks ~/.gitconfig; two concurrent jobs collide (exit 255), and a job
+# killed mid-checkout can strand ~/.gitconfig.lock. Point every --global git
+# write at a per-job temp file so jobs stay FULLY PARALLEL and never touch the
+# shared ~/.gitconfig. runner.temp is unique per runner instance (git >= 2.32).
+env:
+  GIT_CONFIG_GLOBAL: ${{ runner.temp }}/gitconfig
+
 jobs:
   tests:
     name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
