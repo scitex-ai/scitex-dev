@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ._sync_helpers import git, parse_package_filter, resolve_repo, selected_packages
 
 
@@ -160,17 +161,29 @@ _ACTION_STYLE = {
 def register(ecosystem):
     @ecosystem.command(
         "sync",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem sync                 # preview (dry-run)\n"
-            "  $ scitex-dev ecosystem sync --yes           # ff-pull develop everywhere\n"
-            "  $ scitex-dev ecosystem sync -p scitex-io -y # one package, execute\n"
-            "  $ scitex-dev ecosystem sync --json | jq\n"
-            "\n"
-            "Default is a read-only preview; pass --yes/-y to actually merge. Safe by\n"
-            "construction even then: develop-only, ff-only, skips dirty checkouts —\n"
-            "your un-pushed work is never touched. See `check-sync` for the\n"
-            "cross-host view."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Fast-forward every local checkout's develop to origin (self-pull).",
+            description=(
+                "For each ecosystem clone on `develop` with a clean "
+                "tree, fetch and `merge --ff-only origin/develop`. "
+                "Off-develop, dirty, or diverged checkouts are reported "
+                "and skipped — never clobbered. Read-only preview by "
+                "default; pass --yes/-y to perform the merges. Default "
+                "is a read-only preview; safe by construction even when "
+                "applying: develop-only, ff-only, skips dirty checkouts "
+                "— your un-pushed work is never touched. See "
+                "`check-sync` for the cross-host view.",
+            ),
+            examples=(
+                Example("{prog} ecosystem sync", "Preview (dry-run)."),
+                Example("{prog} ecosystem sync --yes", "ff-pull develop everywhere."),
+                Example(
+                    "{prog} ecosystem sync -p scitex-io -y",
+                    "One package, execute.",
+                ),
+                Example("{prog} ecosystem sync --json | jq", "Structured JSON output."),
+            ),
         ),
     )
     @click.option(
@@ -197,13 +210,6 @@ def register(ecosystem):
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON rows.")
     def ecosystem_sync(package, execute, dry_run, as_json):
-        """Fast-forward every local checkout's `develop` to origin (self-pull).
-
-        For each ecosystem clone on `develop` with a clean tree, fetch and
-        `merge --ff-only origin/develop`. Off-develop, dirty, or diverged
-        checkouts are reported and skipped — never clobbered. Read-only preview
-        by default; pass --yes/-y to perform the merges.
-        """
         import json as _json
 
         # Preview unless explicitly executing; an explicit --dry-run always wins.

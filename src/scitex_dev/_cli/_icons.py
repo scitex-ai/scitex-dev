@@ -11,15 +11,46 @@ from __future__ import annotations
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
+
 
 def register_icons_command(main_group):
     """Register the `icons` command group on the main CLI group."""
 
-    @main_group.group("icons")
+    @main_group.group(
+        "icons",
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="Deterministic name -> icon/avatar generator (SVG + PNG).",
+        ),
+    )
     def icons_group() -> None:
-        """Deterministic name -> icon/avatar generator (SVG + PNG)."""
+        pass
 
-    @icons_group.command("generate")
+    @icons_group.command(
+        "generate",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Generate a deterministic icon for NAME (SVG + PNG by default).",
+            description=(
+                "The name is hashed to derive a stable brand color and a "
+                "short label caption; --color/--label override the "
+                "derived values. See `scitex_dev._icons` for the "
+                "underlying Python API (generate_svg / generate_png / "
+                "save_icon / resolve_color / derive_label).",
+            ),
+            examples=(
+                Example(
+                    "{prog} icons generate scitex-todo --out ./icons",
+                    "Write both formats to ./icons.",
+                ),
+                Example(
+                    "{prog} icons generate my-agent --format svg --no-wordmark",
+                    "SVG only, no wordmark caption.",
+                ),
+            ),
+        ),
+    )
     @click.argument("name")
     @click.option(
         "--out",
@@ -59,13 +90,6 @@ def register_icons_command(main_group):
         no_wordmark: bool,
         formats: tuple[str, ...],
     ) -> None:
-        """Generate a deterministic icon for NAME (SVG + PNG by default).
-
-        \b
-        Example:
-            $ scitex-dev icons generate scitex-todo --out ./icons
-            $ scitex-dev icons generate my-agent --format svg --no-wordmark
-        """
         from .._icons import save_icon
 
         wordmark = None if no_wordmark else "SciTeX"

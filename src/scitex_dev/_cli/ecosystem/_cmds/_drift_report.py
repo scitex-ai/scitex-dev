@@ -13,9 +13,37 @@ import json
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem):
-    @ecosystem.command("drift-report")
+    @ecosystem.command(
+        "drift-report",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Report version drift across all 8 layers, package x layer.",
+            description=(
+                "Layers: PyPI, GitHub (release tag), each host's develop "
+                "checkout, container base image + agent overlay (via "
+                "`sac versions --json`), CI (not-collected in v1), and "
+                "the editable/installed version. The SSoT is "
+                "`pyproject.toml` on the local develop checkout; any "
+                "cell that disagrees is flagged with `*`. Exit 1 iff "
+                "drift is detected.",
+            ),
+            examples=(
+                Example("{prog} ecosystem drift-report", "Full matrix report."),
+                Example(
+                    "{prog} ecosystem drift-report -p scitex-io --json",
+                    "One package, as JSON.",
+                ),
+                Example(
+                    "{prog} ecosystem drift-report -h spartan -q",
+                    "One host, one-line summary.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--host",
         "-h",
@@ -39,21 +67,6 @@ def register(ecosystem):
     )
     @click.pass_context
     def ecosystem_drift_report(ctx, hosts, packages, as_json, quiet):
-        """Report version drift across all 8 layers, package × layer.
-
-        \b
-        Layers: PyPI, GitHub (release tag), each host's develop checkout,
-        container base image + agent overlay (via `sac versions --json`),
-        CI (not-collected in v1), and the editable/installed version. The
-        SSoT is `pyproject.toml` on the local develop checkout; any cell
-        that disagrees is flagged with `*`. Exit 1 iff drift is detected.
-
-        \b
-        Example:
-            $ scitex-dev ecosystem drift-report
-            $ scitex-dev ecosystem drift-report -p scitex-io --json
-            $ scitex-dev ecosystem drift-report -h spartan -q
-        """
         from ...._ecosystem._drift_report import (
             collect_drift_matrix,
             render_quiet,

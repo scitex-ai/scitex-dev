@@ -16,11 +16,38 @@ from __future__ import annotations
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register_gate_command(main_group: click.Group) -> None:
     """Register ``scitex-dev gate`` on the given main group."""
 
-    @main_group.command("gate")
+    @main_group.command(
+        "gate",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Aggregate per-package submission checks for WORKDIR at STAGE.",
+            description=(
+                "Checks are contributed by packages via the "
+                "`scitex_dev.gate.checks` entry-point group; a failed "
+                "check BLOCKS (exit 2) only when its id is under "
+                "`gate.enforce` in `.scitex/dev/config.yaml` "
+                "(warn-default). The cohort pre-submission hook calls "
+                "`{prog} gate --stage=pre-submission <capsule-workdir> "
+                "--json` and blocks the submit on exit code 2, "
+                "rendering each finding's fix_hint to the solver. Exit "
+                "0 = pass or advisory-only failures; exit 1 = usage "
+                "error.",
+            ),
+            examples=(
+                Example(
+                    "{prog} gate --stage=pre-submission ./capsule-007 --json",
+                    "Run pre-submission checks as JSON.",
+                ),
+                Example("{prog} gate --list", "List registered checks."),
+            ),
+        ),
+    )
     @click.argument("workdir", type=click.Path(), required=False)
     @click.option(
         "--stage",
@@ -44,17 +71,6 @@ def register_gate_command(main_group: click.Group) -> None:
         help="List the registered checks for the stage and exit 0 (no run).",
     )
     def gate(workdir: str, stage: str, as_json: bool, list_only: bool) -> None:
-        """Aggregate per-package submission checks for WORKDIR at STAGE.
-
-        \b
-        Checks are contributed by packages via the `scitex_dev.gate.checks`
-        entry-point group; a failed check BLOCKS (exit 2) only when its id
-        is under `gate.enforce` in `.scitex/dev/config.yaml` (warn-default).
-
-        \b
-        Example:
-          $ scitex-dev gate --stage=pre-submission ./capsule-007 --json
-        """
         import json as _json
 
         from ...gate import discover_gate_checks, report_to_dict, run_gate

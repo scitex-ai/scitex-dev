@@ -27,35 +27,42 @@ import sys
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(main: click.Group) -> None:
     """Attach the ``registry-normalize`` command to the top-level click group."""
 
     @main.command(
         "registry-normalize",
-        epilog=(
-            "Fixes PS-181 registry-layout drift for a SINGLE "
-            "~/.scitex/<pkg>/ state directory.\n"
-            "\n"
-            "CAVEATS:\n"
-            "  * dry-run by default — nothing is moved without --yes/-y.\n"
-            "  * archive, never delete — every move has a destination.\n"
-            "  * a *.pid file naming a LIVE process is skipped, not moved.\n"
-            "  * *.sock files are ALWAYS skipped (liveness of a socket is "
-            "not cheaply\n"
-            "    determinable) — remove manually once you've confirmed "
-            "it's stale.\n"
-            "  * config-naming drift, __pycache__/, and venv-naming "
-            "drift are reported\n"
-            "    by `scitex-dev ecosystem audit-registry-layout` but NOT "
-            "auto-moved here\n"
-            "    (renaming a config file or a venv is not a safe "
-            "mechanical move).\n"
-            "\n"
-            "Examples:\n"
-            "  $ scitex-dev registry-normalize scitex-todo\n"
-            "  $ scitex-dev registry-normalize scitex-todo --json\n"
-            "  $ scitex-dev registry-normalize scitex-todo --yes"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Fix ~/.scitex/<pkg>/ registry-layout drift (dry-run by default).",
+            description=(
+                "Fixes PS-181 registry-layout drift for a SINGLE "
+                "~/.scitex/<pkg>/ state directory. Caveats: dry-run by "
+                "default — nothing is moved without --yes/-y; archive, "
+                "never delete (every move has a destination); a *.pid "
+                "file naming a LIVE process is skipped, not moved; "
+                "*.sock files are ALWAYS skipped (liveness of a socket "
+                "is not cheaply determinable) — remove manually once "
+                "you've confirmed it's stale; config-naming drift, "
+                "__pycache__/, and venv-naming drift are reported by "
+                "`ecosystem audit-registry-layout` but NOT auto-moved "
+                "here (renaming a config file or a venv is not a safe "
+                "mechanical move).",
+            ),
+            examples=(
+                Example("{prog} registry-normalize scitex-todo", "Dry-run report."),
+                Example(
+                    "{prog} registry-normalize scitex-todo --json",
+                    "Dry-run report as JSON.",
+                ),
+                Example(
+                    "{prog} registry-normalize scitex-todo --yes",
+                    "Apply the moves.",
+                ),
+            ),
         ),
     )
     @click.argument("pkg")
@@ -75,14 +82,6 @@ def register(main: click.Group) -> None:
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit JSON output.")
     def _registry_normalize(pkg, confirm, scitex_dir_opt, as_json):
-        """Fix ~/.scitex/<pkg>/ registry-layout drift (dry-run by default).
-
-        \b
-        Example:
-            $ scitex-dev registry-normalize scitex-todo
-            $ scitex-dev registry-normalize scitex-todo --yes
-            $ scitex-dev registry-normalize scitex-todo --json
-        """
         from pathlib import Path
 
         from ..registry_normalize import run_registry_normalize

@@ -33,25 +33,37 @@ from __future__ import annotations
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem) -> None:
     @ecosystem.command(
         "audit-local-state",
-        epilog=(
-            "PS-182 (+ PS-145) — local-state convention drift across the "
-            "ecosystem.\n"
-            "\n"
-            "Scans every registered package's local checkout for a "
-            "rolled-own path resolver (PS-182). Observe-mode exit: "
-            "0 = clean, 1 = drift. Add --include-cross-package to also "
-            "run PS-145 (cross-package state reads). See "
-            "_skills/general/01_ecosystem/12_local-state-resolution.md.\n"
-            "\n"
-            "Examples:\n"
-            "  $ scitex-dev ecosystem audit-local-state\n"
-            "  $ scitex-dev ecosystem audit-local-state --quiet\n"
-            "  $ scitex-dev ecosystem audit-local-state --include-cross-package\n"
-            "  $ scitex-dev ecosystem audit-local-state --json"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Report local-state resolver drift (PS-182; opt-in PS-145) ecosystem-wide.",
+            description=(
+                "Scans every registered package's local checkout for a "
+                "rolled-own path resolver (PS-182). Observe-mode exit: "
+                "0 = clean, 1 = drift. Add --include-cross-package to "
+                "also run PS-145 (cross-package state reads). See "
+                "_skills/general/01_ecosystem/12_local-state-resolution.md.",
+            ),
+            examples=(
+                Example("{prog} ecosystem audit-local-state", "Full report."),
+                Example(
+                    "{prog} ecosystem audit-local-state --quiet",
+                    "One-line summary only.",
+                ),
+                Example(
+                    "{prog} ecosystem audit-local-state --include-cross-package",
+                    "Also run PS-145.",
+                ),
+                Example(
+                    "{prog} ecosystem audit-local-state --json",
+                    "Structured JSON output.",
+                ),
+            ),
         ),
     )
     @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
@@ -81,7 +93,6 @@ def register(ecosystem) -> None:
         ),
     )
     def audit_local_state(json_out, quiet, severity, include_cross_package):
-        """Report local-state resolver drift (PS-182; opt-in PS-145) ecosystem-wide."""
         from ...._ecosystem._core import ECOSYSTEM, get_local_path
         from ...audit._project._check_path_resolver import (
             check_ps182_rolled_own_path_resolver,

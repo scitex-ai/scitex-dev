@@ -26,10 +26,30 @@ from . import (
     _worktree_gc,
 )
 from ._jobs import JOB_REGISTRY
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 
 
 def register(group: click.Group) -> None:
-    @group.command("exec")
+    @group.command(
+        "exec",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Execute the body of the managed job NAME.",
+            description=(
+                "This is the verb the materialised crontab line invokes "
+                "— operators can also run it interactively to test a "
+                "job without waiting for the next cron tick.",
+            ),
+            examples=(
+                Example("{prog} cron exec ci-watch", "Run the ci-watch job body."),
+                Example("{prog} cron exec ci-watch --dry-run", "Preview without dispatching."),
+                Example(
+                    "{prog} cron exec ci-watch --only proj-scitex-stats --dry-run",
+                    "Preview for one agent.",
+                ),
+            ),
+        ),
+    )
     @click.argument("name")
     @click.option(
         "--only",
@@ -45,19 +65,6 @@ def register(group: click.Group) -> None:
         "calling `sac agents send`.",
     )
     def exec_cmd(name: str, only: str | None, dry_run: bool) -> None:
-        """Execute the body of the managed job NAME.
-
-        \b
-        This is the verb the materialised crontab line invokes — operators
-        can also run it interactively to test a job without waiting for
-        the next cron tick.
-
-        \b
-        Example:
-          $ scitex-dev cron exec ci-watch
-          $ scitex-dev cron exec ci-watch --dry-run
-          $ scitex-dev cron exec ci-watch --only proj-scitex-stats --dry-run
-        """
         if name not in JOB_REGISTRY:
             known = ", ".join(sorted(JOB_REGISTRY)) or "(none)"
             raise click.ClickException(

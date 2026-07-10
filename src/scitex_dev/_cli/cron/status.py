@@ -12,6 +12,7 @@ import click
 
 from . import _crontab
 from ._jobs import JOB_REGISTRY
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 
 
 def _last_run_from_log(name: str) -> str:
@@ -30,7 +31,24 @@ def _last_run_from_log(name: str) -> str:
 
 
 def register(group: click.Group) -> None:
-    @group.command("status")
+    @group.command(
+        "status",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Show last-run / next-run hints for every managed cron job.",
+            description=(
+                "Reports per-job: installed? (line is present in "
+                "`crontab -l`), schedule (declared vs. installed, "
+                "flagged if they drift), last-run (mtime of "
+                "`~/.scitex/dev/logs/cron-<name>.log`), next-run (raw "
+                "schedule, operator interprets).",
+            ),
+            examples=(
+                Example("{prog} cron status", "Human-readable status table."),
+                Example("{prog} cron status --json", "Structured JSON output."),
+            ),
+        ),
+    )
     @click.option(
         "--json",
         "as_json",
@@ -39,21 +57,6 @@ def register(group: click.Group) -> None:
         help="Output as structured JSON.",
     )
     def status_cmd(as_json: bool) -> None:
-        """Show last-run / next-run hints for every managed cron job.
-
-        \b
-        Reports per-job:
-          - installed?   — line is present in `crontab -l`
-          - schedule     — declared schedule (registry) and installed
-                           schedule (crontab); flagged if they drift
-          - last-run     — mtime of `~/.scitex/dev/logs/cron-<name>.log`
-          - next-run     — raw schedule (operator interprets)
-
-        \b
-        Example:
-          $ scitex-dev cron status
-          $ scitex-dev cron status --json
-        """
         try:
             current = _crontab.read_crontab()
         except RuntimeError as exc:

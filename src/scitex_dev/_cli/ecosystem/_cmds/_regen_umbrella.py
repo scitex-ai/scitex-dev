@@ -25,6 +25,7 @@ from pathlib import Path
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ...._ecosystem._registry import ECOSYSTEM
 from ...._ecosystem._umbrella import (
     HAND_CURATED_EXTRAS,
@@ -190,20 +191,30 @@ def register(ecosystem):
         # ``regen-umbrella`` action (verb form unambiguous when paired
         # with the audit-only command above).
         "audit-umbrella",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem audit-umbrella --check\n"
-            "  $ scitex-dev ecosystem audit-umbrella --check --json\n"
-            "  $ scitex-dev ecosystem audit-umbrella --write\n"
-            "\n"
-            "Drift detector between ECOSYSTEM (the registry) and the local\n"
-            "scitex-python checkout (umbrella pyproject + __init__).\n"
-            "\n"
-            "Exits 0 on no-drift, 1 on drift (--check), or 0 on successful\n"
-            "regen (--write). --write only regenerates the [all] aggregator\n"
-            "block; lazy_attrs and EXTERNAL_REEXPORTS edits are still\n"
-            "surfaced via --check (apply by hand until the marker-based\n"
-            "Python-source regen lands)."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Audit umbrella surfaces against the ECOSYSTEM registry SSoT.",
+            description=(
+                "Drift detector between ECOSYSTEM (the registry) and the "
+                "local scitex-python checkout (umbrella pyproject + "
+                "__init__). Exits 0 on no-drift, 1 on drift (--check), "
+                "or 0 on successful regen (--write). --write only "
+                "regenerates the [all] aggregator block; lazy_attrs and "
+                "EXTERNAL_REEXPORTS edits are still surfaced via "
+                "--check (apply by hand until the marker-based "
+                "Python-source regen lands).",
+            ),
+            examples=(
+                Example("{prog} ecosystem audit-umbrella --check", "Read-only drift check."),
+                Example(
+                    "{prog} ecosystem audit-umbrella --check --json",
+                    "Structured JSON output.",
+                ),
+                Example(
+                    "{prog} ecosystem audit-umbrella --write",
+                    "Regenerate the [all] aggregator.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -225,7 +236,6 @@ def register(ecosystem):
     )
     @click.option("--json", "json_out", is_flag=True, help="Machine-readable JSON.")
     def audit_umbrella(mode, json_out):
-        """Audit umbrella surfaces against the ECOSYSTEM registry SSoT."""
         root = _umbrella_root()
         if not root.is_dir():
             raise click.ClickException(

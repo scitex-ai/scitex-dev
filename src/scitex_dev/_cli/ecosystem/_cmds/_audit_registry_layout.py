@@ -16,23 +16,33 @@ from __future__ import annotations
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem) -> None:
     @ecosystem.command(
         "audit-registry-layout",
-        epilog=(
-            "PS-181 — ~/.scitex/<pkg>/ registry-layout conformance.\n"
-            "\n"
-            "Scoped to the user's entire $SCITEX_DIR tree (every "
-            "installed package's local-state dir), NOT a single repo — "
-            "unlike every other PS-1xx rule. See "
-            "`scitex-dev registry-normalize <pkg>` to fix mechanically "
-            "(dry-run by default).\n"
-            "\n"
-            "Examples:\n"
-            "  $ scitex-dev ecosystem audit-registry-layout\n"
-            "  $ scitex-dev ecosystem audit-registry-layout --json\n"
-            "  $ scitex-dev ecosystem audit-registry-layout --scitex-dir /tmp/fake-home/.scitex"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Check every ~/.scitex/<pkg>/ state dir against the canonical layout.",
+            description=(
+                "PS-181 — scoped to the user's entire $SCITEX_DIR tree "
+                "(every installed package's local-state dir), NOT a "
+                "single repo — unlike every other PS-1xx rule. See "
+                "`registry-normalize <pkg>` to fix mechanically "
+                "(dry-run by default).",
+            ),
+            examples=(
+                Example("{prog} ecosystem audit-registry-layout", "Scan the default $SCITEX_DIR."),
+                Example(
+                    "{prog} ecosystem audit-registry-layout --json",
+                    "Structured JSON output.",
+                ),
+                Example(
+                    "{prog} ecosystem audit-registry-layout --scitex-dir /tmp/fake-home/.scitex",
+                    "Scan an alternate root.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -55,7 +65,6 @@ def register(ecosystem) -> None:
         ),
     )
     def audit_registry_layout(scitex_dir_opt, json_out, severity):
-        """Check every `~/.scitex/<pkg>/` state dir against the canonical layout."""
         from pathlib import Path
 
         from ...audit._project._check_registry_layout import check_registry_layout

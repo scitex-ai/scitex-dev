@@ -28,26 +28,34 @@ from ..._creds import (
     validate_source,
 )
 from ..._creds import _cron as cron_mod
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
 
 
 def register_creds_commands(main_group) -> click.Group:
     """Register ``scitex-dev creds`` on the given Click main group."""
 
-    @main_group.group("creds", invoke_without_command=True)
+    @main_group.group(
+        "creds",
+        invoke_without_command=True,
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="Ecosystem-wide Claude Code credential rotation.",
+            description=(
+                "Uploads ~/.claude/.credentials.json as the GitHub Actions "
+                "secret CLAUDE_CODE_CREDENTIALS_JSON (with sha256 sidecar "
+                "variable CLAUDE_CODE_CREDENTIALS_JSON_SHA256) across "
+                "every scitex package. This is the un-prefixed "
+                "multiplexer — the package-prefixed sac single-repo "
+                "command (`sac dev upload-credentials-to-github`, slot "
+                "`SAC_CLAUDE_CODE_CREDENTIALS_JSON`) is unaffected.",
+            ),
+            examples=(
+                Example("{prog} creds rotate-all --dry-run", "Preview the rotation."),
+            ),
+        ),
+    )
     @click.pass_context
     def creds(ctx: click.Context) -> None:
-        """Ecosystem-wide Claude Code credential rotation.
-
-        \b
-        Uploads ~/.claude/.credentials.json as the GitHub Actions secret
-        CLAUDE_CODE_CREDENTIALS_JSON (with sha256 sidecar variable
-        CLAUDE_CODE_CREDENTIALS_JSON_SHA256) across every scitex package.
-
-        \b
-        This is the un-prefixed multiplexer. The package-prefixed sac
-        single-repo command (`sac dev upload-credentials-to-github`,
-        slot `SAC_CLAUDE_CODE_CREDENTIALS_JSON`) is unaffected.
-        """
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
 
@@ -58,7 +66,29 @@ def register_creds_commands(main_group) -> click.Group:
 
 
 def _register_rotate_all(creds: click.Group) -> None:
-    @creds.command("rotate-all")
+    @creds.command(
+        "rotate-all",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Rotate CLAUDE_CODE_CREDENTIALS_JSON across the ecosystem.",
+            description=(
+                "Per-package status: unchanged | rotated | skipped (no "
+                "remote) | error: <msg>. Exits 0 if every reachable repo "
+                "is unchanged-or-rotated; non-zero if any repo reports "
+                "`error`. Exits 0 silently if the local credentials file "
+                "is missing or its OAuth token has expired (operator "
+                "must `claude /login` first; don't push a stale token).",
+            ),
+            examples=(
+                Example("{prog} creds rotate-all --dry-run", "Preview the rotation."),
+                Example("{prog} creds rotate-all --yes", "Rotate everywhere."),
+                Example(
+                    "{prog} creds rotate-all --only scitex-io --only scitex-stats --yes",
+                    "Rotate a subset.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--dry-run",
         is_flag=True,
@@ -108,24 +138,6 @@ def _register_rotate_all(creds: click.Group) -> None:
         exclude: tuple[str, ...],
         source: Path | None,
     ) -> None:
-        """Rotate CLAUDE_CODE_CREDENTIALS_JSON across the ecosystem.
-
-        \b
-        Per-package status:
-          unchanged | rotated | skipped (no remote) | error: <msg>
-
-        \b
-        Exits 0 if every reachable repo is unchanged-or-rotated. Exits
-        non-zero if any repo reports `error`. Exits 0 silently if the
-        local credentials file is missing or its OAuth token has expired
-        (operator must `claude /login` first; don't push a stale token).
-
-        \b
-        Example:
-          $ scitex-dev creds rotate-all --dry-run
-          $ scitex-dev creds rotate-all --yes
-          $ scitex-dev creds rotate-all --only scitex-io --only scitex-stats --yes
-        """
         source_path = source or CREDENTIALS_PATH
 
         # Source validation runs once up-front so we can give a single
@@ -209,7 +221,28 @@ def _register_rotate_all(creds: click.Group) -> None:
 
 
 def _register_install_cron(creds: click.Group) -> None:
-    @creds.command("install-cron")
+    @creds.command(
+        "install-cron",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Install a crontab line that runs `creds rotate-all` periodically.",
+            description=(
+                "Idempotent: a single line tagged `# scitex-dev "
+                "creds-rotate (managed)` is managed in place — "
+                "reinstall replaces it. Logs to "
+                "~/.scitex/dev/logs/creds-rotate.log (size-rotated at 1 "
+                "MiB).",
+            ),
+            examples=(
+                Example("{prog} creds install-cron --dry-run", "Preview the cron line."),
+                Example("{prog} creds install-cron --yes", "Install at the default interval."),
+                Example(
+                    "{prog} creds install-cron --interval-minutes 30 --yes",
+                    "Install at a custom interval.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--interval-minutes",
         type=int,
@@ -230,22 +263,6 @@ def _register_install_cron(creds: click.Group) -> None:
         help="Confirm the install. Required when not --dry-run.",
     )
     def install_cron_cmd(interval_minutes: int, dry_run: bool, yes: bool) -> None:
-        """Install a crontab line that runs `creds rotate-all` periodically.
-
-        \b
-        Idempotent: a single line tagged
-            # scitex-dev creds-rotate (managed)
-        is managed in place — reinstall replaces it.
-
-        \b
-        Logs to ~/.scitex/dev/logs/creds-rotate.log (size-rotated at 1 MiB).
-
-        \b
-        Example:
-          $ scitex-dev creds install-cron --dry-run
-          $ scitex-dev creds install-cron --yes
-          $ scitex-dev creds install-cron --interval-minutes 30 --yes
-        """
         if dry_run:
             line = cron_mod.install(interval_minutes, dry_run=True)
             click.echo(line)
@@ -265,7 +282,17 @@ def _register_install_cron(creds: click.Group) -> None:
 
 
 def _register_uninstall_cron(creds: click.Group) -> None:
-    @creds.command("uninstall-cron")
+    @creds.command(
+        "uninstall-cron",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Remove the managed crontab line.",
+            examples=(
+                Example("{prog} creds uninstall-cron --dry-run", "Preview the removal."),
+                Example("{prog} creds uninstall-cron --yes", "Remove the managed line."),
+            ),
+        ),
+    )
     @click.option(
         "--dry-run",
         is_flag=True,
@@ -276,13 +303,6 @@ def _register_uninstall_cron(creds: click.Group) -> None:
         "-y", "--yes", is_flag=True, default=False, help="Confirm the uninstall."
     )
     def uninstall_cron_cmd(dry_run: bool, yes: bool) -> None:
-        """Remove the managed crontab line.
-
-        \b
-        Example:
-          $ scitex-dev creds uninstall-cron --dry-run
-          $ scitex-dev creds uninstall-cron --yes
-        """
         if dry_run:
             preview = cron_mod.uninstall(dry_run=True)
             click.echo(f"would remove {preview} managed line(s).")

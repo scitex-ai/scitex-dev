@@ -6,9 +6,26 @@ import json
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem):
-    @ecosystem.command("check-versions")
+    @ecosystem.command(
+        "check-versions",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Audit ecosystem package versions across hosts (3 modes + gate).",
+            examples=(
+                Example("{prog} ecosystem check-versions", "Observe (report only)."),
+                Example("{prog} ecosystem check-versions --dry-run", "Preview the sync."),
+                Example("{prog} ecosystem check-versions --apply", "Execute the sync."),
+                Example(
+                    "{prog} ecosystem check-versions --gate scitex-todo==0.7.51 --require-full-coverage",
+                    "Release-gate mode.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--host",
         "-h",
@@ -72,16 +89,6 @@ def register(ecosystem):
         gate_spec,
         require_full_coverage,
     ):
-        """Audit ecosystem package versions across hosts (3 modes + gate).
-
-        \b
-        Example:
-            $ scitex-dev ecosystem check-versions                  # observe
-            $ scitex-dev ecosystem check-versions --dry-run        # preview sync
-            $ scitex-dev ecosystem check-versions --apply          # execute sync
-            $ scitex-dev ecosystem check-versions \\
-                --gate scitex-todo==0.7.51 --require-full-coverage # release gate
-        """
         if gate_spec is not None:
             if dry_run or do_apply:
                 click.echo(

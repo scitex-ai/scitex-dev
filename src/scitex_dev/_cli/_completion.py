@@ -32,6 +32,8 @@ from pathlib import Path
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 _SOURCE_MAP = {"bash": "bash_source", "zsh": "zsh_source", "fish": "fish_source"}
 
 
@@ -109,7 +111,27 @@ def _generate_script(shell: str, prog_name: str) -> str:
 def attach_shell_completion(main_group, *, prog_name: str) -> None:
     """Register the 4 shell-completion leaves on `main_group`."""
 
-    @main_group.command("print-shell-completion")
+    @main_group.command(
+        "print-shell-completion",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Print the click-generated completion script to stdout.",
+            examples=(
+                Example(
+                    "{prog} print-shell-completion --shell bash",
+                    "Print the bash script.",
+                ),
+                Example(
+                    "{prog} print-shell-completion --shell zsh",
+                    "Print the zsh script.",
+                ),
+                Example(
+                    'eval "$({prog} print-shell-completion --shell bash)"',
+                    "Activate it in the current shell.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--shell",
         type=click.Choice(["bash", "zsh", "fish"]),
@@ -117,33 +139,33 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
         help="Target shell. Default: bash.",
     )
     def print_shell_completion(shell):
-        """Print the click-generated completion script to stdout.
-
-        \b
-        Example:
-          $ <cli> print-shell-completion --shell bash
-          $ <cli> print-shell-completion --shell zsh
-          $ eval "$(<cli> print-shell-completion --shell bash)"
-        """
         click.echo(_generate_script(shell, prog_name))
 
-    # Click caches `help` from the docstring at decoration time, so
-    # mutating __doc__ post-hoc is too late — also overwrite the
-    # registered Command's `help` attribute so `<cli>` is rendered as
-    # the actual prog name in `--help` output (audit-cli §4 expects a
-    # concrete example, not a placeholder).
-    _psc_cmd = main_group.commands["print-shell-completion"]
-    _psc_cmd.help = (_psc_cmd.help or "").replace("<cli>", prog_name)
-    print_shell_completion.__doc__ = (print_shell_completion.__doc__ or "").replace(
-        "<cli>", prog_name
+    @main_group.command(
+        "install-shell-completion",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Wire up TAB completion in the user's shell rc.",
+            description=(
+                "Activate in the current shell after install: `source "
+                "~/.bashrc`.",
+            ),
+            examples=(
+                Example(
+                    "{prog} install-shell-completion",
+                    "Install into ~/.bashrc.",
+                ),
+                Example(
+                    "{prog} install-shell-completion --shell zsh",
+                    "Install into ~/.zshrc.",
+                ),
+                Example(
+                    "{prog} install-shell-completion --dry-run",
+                    "Preview only.",
+                ),
+            ),
+        ),
     )
-
-    def _swap_cli_placeholder_post(name: str, fn) -> None:
-        cmd = main_group.commands[name]
-        cmd.help = (cmd.help or "").replace("<cli>", prog_name)
-        fn.__doc__ = (fn.__doc__ or "").replace("<cli>", prog_name)
-
-    @main_group.command("install-shell-completion")
     @click.option(
         "--shell",
         type=click.Choice(["bash", "zsh", "fish"]),
@@ -157,18 +179,6 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
     )
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
     def install_shell_completion(shell, dry_run, yes):
-        """Wire up `<TAB>` completion in the user's shell rc.
-
-        \b
-        Example:
-          $ <cli> install-shell-completion              # → ~/.bashrc
-          $ <cli> install-shell-completion --shell zsh  # → ~/.zshrc
-          $ <cli> install-shell-completion --dry-run    # preview only
-
-        \b
-        Activate in the current shell after install:
-          source ~/.bashrc
-        """
         del yes  # accepted for §2 compliance; use --dry-run for preview
         rc_path = _rc_path(shell, prog_name)
 
@@ -239,8 +249,6 @@ def attach_shell_completion(main_group, *, prog_name: str) -> None:
         click.echo(f"  cache:  {cache}")
         click.echo(f"  rc:     {rc_path}  (source line appended)")
         click.echo(f"Run: source {rc_path}")
-
-    _swap_cli_placeholder_post("install-shell-completion", install_shell_completion)
 
     @main_group.command(
         "install-tab-completion",

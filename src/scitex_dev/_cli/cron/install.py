@@ -8,10 +8,26 @@ import click
 
 from . import _crontab
 from ._jobs import get_job
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 
 
 def register(group: click.Group) -> None:
-    @group.command("install")
+    @group.command(
+        "install",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Install (or replace) the managed cron line for NAME.",
+            description=(
+                "Idempotent: a single line tagged `# scitex-dev cron: "
+                "<name>` is managed in place — reinstall replaces it. "
+                "Unrelated crontab lines are preserved verbatim.",
+            ),
+            examples=(
+                Example("{prog} cron install ci-watch --dry-run", "Preview the line."),
+                Example("{prog} cron install ci-watch --yes", "Install it."),
+            ),
+        ),
+    )
     @click.argument("name")
     @click.option(
         "--dry-run",
@@ -27,19 +43,6 @@ def register(group: click.Group) -> None:
         help="Confirm. Required when not --dry-run.",
     )
     def install_cmd(name: str, dry_run: bool, yes: bool) -> None:
-        """Install (or replace) the managed cron line for NAME.
-
-        \b
-        Idempotent: a single line tagged
-            # scitex-dev cron: <name>
-        is managed in place — reinstall replaces it. Unrelated crontab
-        lines are preserved verbatim.
-
-        \b
-        Example:
-          $ scitex-dev cron install ci-watch --dry-run
-          $ scitex-dev cron install ci-watch --yes
-        """
         try:
             spec = get_job(name)
         except KeyError as exc:
