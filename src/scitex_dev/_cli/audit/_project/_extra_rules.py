@@ -16,6 +16,7 @@ Today's contents:
 - PS-180 — runtime-separation (src/<pkg>/runtime/ must be gitignored at the package level)
 - PS-181 — registry-layout (~/.scitex/<pkg>/ state dir must match the canonical shape; global-scoped, not repo-scoped)
 - PS-182 — rolled-own local-state path resolver (a src/<pkg>/**/_paths.py that re-implements git-root/project-scope precedence instead of using scitex_config._ecosystem.local_state)
+- PS-183 — ecosystem-boundary a2 smell: unguarded top-level import reaching a peer leaf package's private internals (ADR-0003 / skill 01_ecosystem/16)
 - PS-PATH-001/002 — config/PATH.yaml shape (outer wrapper / bare-string leaf)
 - PS-CLEW-001 — clew.add_claim without self-verify in same module
 - PS-AGENT-001 — scripts/agent/*.py with add_claim but no claims.json terminus
@@ -237,6 +238,27 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "W",
         "local-state-rolled-own-resolver",
+    ),
+    (
+        "PS-183",
+        "§1",
+        (
+            "ecosystem-boundary a2 smell: an UNGUARDED, TOP-LEVEL import "
+            "reaches a DIFFERENT scitex leaf package's private internals "
+            "(a `_private`-prefixed submodule/attribute), and the peer is "
+            "NOT a foundational-tier package (io/config/logging/str/dict/"
+            "context/path/types). Per ADR-0003, either import the peer's "
+            "public surface instead, or introduce a `_ports`/`_providers` "
+            "module holding a guarded (`try/except ImportError`) or lazy "
+            "(function-body) import — the ports pattern. Guarded, lazy, "
+            "and `TYPE_CHECKING`-only imports are NEVER flagged (a static "
+            "scan can't tell those from a hard dependency — see the "
+            "methodology caveat in the ADR). See "
+            "_skills/general/01_ecosystem/16_boundary-ports-and-producers.md "
+            "and docs/adr/0003-ecosystem-boundary-ports-and-producers.md."
+        ),
+        "W",
+        "ecosystem-boundary-private-cross-import",
     ),
     (
         "PS-213",

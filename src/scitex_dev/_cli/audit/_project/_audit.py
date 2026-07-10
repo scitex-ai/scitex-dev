@@ -215,6 +215,9 @@ def audit_project(
 
     check_ps139_umbrella_dep(repo_root, Violation, violations)
     check_ps140_integration_gate(repo_root, distribution, Violation, violations)
+    from ._check_ecosystem_boundary import check_ps183_ecosystem_boundary
+
+    check_ps183_ecosystem_boundary(repo_root, distribution, Violation, violations)
     from ._check_audit_pin import check_audit_pin
 
     check_audit_pin(repo_root, Violation, violations)
