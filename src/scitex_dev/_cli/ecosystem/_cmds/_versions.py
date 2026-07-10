@@ -40,16 +40,97 @@ def register(ecosystem):
         help="Skip ahead-check; allow clobbering remote unpushed commits.",
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
+    @click.option(
+        "--gate",
+        "gate_spec",
+        default=None,
+        metavar="PACKAGE==VERSION",
+        help=(
+            "Release-gate mode (mutually exclusive with --dry-run/--apply): "
+            "report whether PACKAGE is installed at >= VERSION on every "
+            "in-scope fleet host. Pair with --require-full-coverage to "
+            "hard-fail CI / a pre-tag hook when coverage isn't 100%. See "
+            "scitex_dev._ecosystem._release_gate for the protocol-milestone "
+            "convention this backs."
+        ),
+    )
+    @click.option(
+        "--require-full-coverage",
+        "require_full_coverage",
+        is_flag=True,
+        help="With --gate: exit non-zero unless every in-scope host meets VERSION.",
+    )
     @click.pass_context
-    def ecosystem_packages(ctx, hosts, packages, dry_run, do_apply, unsafe, as_json):
-        """Audit ecosystem package versions across hosts (3 modes).
+    def ecosystem_packages(
+        ctx,
+        hosts,
+        packages,
+        dry_run,
+        do_apply,
+        unsafe,
+        as_json,
+        gate_spec,
+        require_full_coverage,
+    ):
+        """Audit ecosystem package versions across hosts (3 modes + gate).
 
         \b
         Example:
             $ scitex-dev ecosystem check-versions                  # observe
             $ scitex-dev ecosystem check-versions --dry-run        # preview sync
             $ scitex-dev ecosystem check-versions --apply          # execute sync
+            $ scitex-dev ecosystem check-versions \\
+                --gate scitex-todo==0.7.51 --require-full-coverage # release gate
         """
+        if gate_spec is not None:
+            if dry_run or do_apply:
+                click.echo(
+                    "error: --gate is mutually exclusive with --dry-run/--apply",
+                    err=True,
+                )
+                ctx.exit(2)
+            pkg_name, sep, min_version = gate_spec.partition("==")
+            pkg_name = pkg_name.strip()
+            min_version = min_version.strip()
+            if not sep or not pkg_name or not min_version:
+                click.echo("error: --gate expects PACKAGE==VERSION", err=True)
+                ctx.exit(2)
+
+            from ...._ecosystem._release_gate import check_release_gate
+
+            host_list = list(hosts) if hosts else None
+            if host_list == ["all"]:
+                host_list = None
+
+            result = check_release_gate(pkg_name, min_version, hosts=host_list)
+
+            if as_json:
+                click.echo(json.dumps(result, indent=2, default=str))
+            else:
+                summ = result["summary"]
+                click.echo(f"gate: {pkg_name} >= {min_version}")
+                for row in result["rows"]:
+                    mark = "OK  " if row["meets"] else "FAIL"
+                    click.echo(f"  [{mark}] {row['host']}: installed={row['installed']}")
+                click.echo(
+                    f"{summ['covered']}/{summ['total_hosts']} hosts covered "
+                    f"({summ['coverage_pct']:.0f}%)"
+                )
+                if summ["not_covered"]:
+                    click.echo("not covered: " + ", ".join(summ["not_covered"]))
+                if summ["total_hosts"] == 0:
+                    click.echo(
+                        "warning: no in-scope hosts for "
+                        f"{pkg_name!r} — is it in any host's synced-package "
+                        "set (host.packages / host.exclude in "
+                        "~/.scitex/dev/config.yaml)?",
+                        err=True,
+                    )
+
+            if require_full_coverage:
+                ctx.exit(0 if result["passed"] else 1)
+            ctx.exit(0)
+
         if dry_run and do_apply:
             click.echo("error: --dry-run and --apply are mutually exclusive", err=True)
             ctx.exit(2)
