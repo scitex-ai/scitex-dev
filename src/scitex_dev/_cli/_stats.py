@@ -219,7 +219,7 @@ def register_stats_command(
         "show-stats",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Show SciTeX ecosystem statistics (package counts, CLI commands, MCP tools, ...).",
+            summary="Show SciTeX ecosystem statistics (package/CLI/MCP-tool counts).",
             examples=(
                 Example("{prog} ecosystem show-stats", "Human-readable summary."),
                 Example("{prog} ecosystem show-stats --json", "Structured JSON output."),
