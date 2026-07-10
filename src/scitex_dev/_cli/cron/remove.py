@@ -7,10 +7,26 @@ from __future__ import annotations
 import click
 
 from . import _crontab
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 
 
 def register(group: click.Group) -> None:
-    @group.command("remove")
+    @group.command(
+        "remove",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Remove the managed cron line for NAME.",
+            description=(
+                "Operates only on lines tagged with the marker `# "
+                "scitex-dev cron: <name>`. Every other line in the "
+                "crontab is preserved verbatim.",
+            ),
+            examples=(
+                Example("{prog} cron remove ci-watch --dry-run", "Preview the removal."),
+                Example("{prog} cron remove ci-watch --yes", "Remove the line."),
+            ),
+        ),
+    )
     @click.argument("name")
     @click.option(
         "--dry-run",
@@ -26,18 +42,6 @@ def register(group: click.Group) -> None:
         help="Confirm. Required when not --dry-run.",
     )
     def remove_cmd(name: str, dry_run: bool, yes: bool) -> None:
-        """Remove the managed cron line for NAME.
-
-        \b
-        Operates only on lines tagged with the marker
-            # scitex-dev cron: <name>
-        Every other line in the crontab is preserved verbatim.
-
-        \b
-        Example:
-          $ scitex-dev cron remove ci-watch --dry-run
-          $ scitex-dev cron remove ci-watch --yes
-        """
         try:
             current = _crontab.read_crontab()
         except RuntimeError as exc:

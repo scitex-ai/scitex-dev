@@ -24,6 +24,8 @@ import sys
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(main: click.Group) -> None:
     """Attach rename commands to the top-level click group."""
@@ -46,7 +48,41 @@ def register(main: click.Group) -> None:
         )
         ctx.exit(2)
 
-    @main.command("rename-symbols")
+    @main.command(
+        "rename-symbols",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Bulk rename with cross-reference updates. Supports --regex.",
+            description=(
+                "--allow-dirty skips the uncommitted-changes guard, "
+                "letting you chain multiple regex passes within one "
+                "logical rename without committing between each pass — "
+                "the reverse-rename safety contract still holds (every "
+                "rename is invertible by re-running with old/new "
+                "swapped). --quiet/-q emits a one-line 'N files / M "
+                "matches / K collisions' summary instead of the full "
+                "RenameResult repr.",
+            ),
+            examples=(
+                Example(
+                    "{prog} rename-symbols old_func new_func --dry-run",
+                    "Preview a literal rename.",
+                ),
+                Example(
+                    "{prog} rename-symbols old_func new_func --yes",
+                    "Apply a literal rename.",
+                ),
+                Example(
+                    r"{prog} rename-symbols 'old_(\w+)' 'new_\1' --regex --dry-run",
+                    "Preview a regex rename.",
+                ),
+                Example(
+                    "{prog} rename-symbols old new --regex --allow-dirty -q",
+                    "Chain a regex pass without committing first.",
+                ),
+            ),
+        ),
+    )
     @click.argument("old_name")
     @click.argument("new_name")
     @click.option("--root", default=".", help="Root directory for rename.")
@@ -92,15 +128,6 @@ def register(main: click.Group) -> None:
         allow_dirty,
         quiet,
     ):
-        """Bulk rename with cross-reference updates. Supports --regex.
-
-        \b
-        Example:
-            $ scitex-dev rename-symbols old_func new_func --dry-run
-            $ scitex-dev rename-symbols old_func new_func --yes
-            $ scitex-dev rename-symbols 'old_(\\w+)' 'new_\\1' --regex --dry-run
-            $ scitex-dev rename-symbols old new --regex --allow-dirty -q
-        """
         del yes  # accepted for §2; use --dry-run for preview
         extra_excludes = list(exclude) if exclude else []
 

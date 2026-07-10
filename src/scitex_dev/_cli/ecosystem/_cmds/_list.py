@@ -6,9 +6,27 @@ import json
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem):
-    @ecosystem.command("list")
+    @ecosystem.command(
+        "list",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="List packages in the SciTeX ecosystem.",
+            examples=(
+                Example("{prog} ecosystem list", "Table of name + repo."),
+                Example("{prog} ecosystem list --json", "Structured JSON output."),
+                Example("{prog} ecosystem list -q", "Names only, pipe-friendly."),
+                Example(
+                    "{prog} ecosystem list -p scitex-io --versions",
+                    "One package with version details.",
+                ),
+                Example("{prog} ecosystem list -c library", "Filter by category."),
+            ),
+        ),
+    )
     @click.option("--package", "-p", multiple=True, help="Specific packages to check.")
     @click.option(
         "--category",
@@ -31,16 +49,6 @@ def register(ecosystem):
         ),
     )
     def ecosystem_list(package, category, versions, as_json, names_only):
-        """List packages in the SciTeX ecosystem.
-
-        \b
-        Example:
-            $ scitex-dev ecosystem list
-            $ scitex-dev ecosystem list --json
-            $ scitex-dev ecosystem list -q                # names only
-            $ scitex-dev ecosystem list -p scitex-io --versions
-            $ scitex-dev ecosystem list -c library        # by category
-        """
         from ...._ecosystem import ECOSYSTEM, get_all_packages
 
         pkgs = list(package) if package else get_all_packages()
@@ -73,7 +81,22 @@ def register(ecosystem):
                 repo = info.get("github_repo", "")
                 click.echo(f"  {pkg:25s} {repo}")
 
-    @ecosystem.command("show-graph")
+    @ecosystem.command(
+        "show-graph",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Emit a current-state ecosystem dependency graph (mermaid/DOT).",
+            examples=(
+                Example("{prog} ecosystem show-graph", "Mermaid graph to stdout."),
+                Example(
+                    "{prog} ecosystem show-graph --format dot -o /tmp/eco.dot",
+                    "DOT graph to a file.",
+                ),
+                Example("{prog} ecosystem show-graph --cycles", "Detect dependency cycles."),
+                Example("{prog} ecosystem show-graph --json", "Nodes/edges as JSON."),
+            ),
+        ),
+    )
     @click.option(
         "--format",
         "fmt",
@@ -110,15 +133,6 @@ def register(ecosystem):
     def ecosystem_graph(
         ctx, fmt, output, cycles, include_extras, group_by_tier, as_json
     ):
-        """Emit a current-state ecosystem dependency graph (mermaid/DOT).
-
-        \b
-        Example:
-            $ scitex-dev ecosystem show-graph
-            $ scitex-dev ecosystem show-graph --format dot -o /tmp/eco.dot
-            $ scitex-dev ecosystem show-graph --cycles
-            $ scitex-dev ecosystem show-graph --json
-        """
         from ...._ecosystem import _graph as _eg
 
         pkgs = _eg.discover_packages()

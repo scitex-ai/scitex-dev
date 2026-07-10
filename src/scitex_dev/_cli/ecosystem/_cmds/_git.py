@@ -1,105 +1,52 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ecosystem git-flavoured commands: `sync`, `clone`, `checkout`, `pull`,
-`install`, `sync-remote`."""
+"""ecosystem git-flavoured commands: `clone`, `checkout`, `pull`,
+`install`, `sync-remote`.
+
+Note: this module previously ALSO defined an `ecosystem sync` command,
+but `_cmds/_sync.py` registers a command of the same name and is wired
+AFTER this module in `_registry.py::register_ecosystem_commands` — so
+`_sync.py`'s version always won (Click's `Group.add_command` is a
+plain dict assignment; later registration wins) and the one here was
+unreachable dead code. Removed during the 2026-07-10 CLI-standardization
+audit pass rather than left to bit-rot.
+"""
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem):
-    @ecosystem.command(
-        "sync",
-        epilog=(
-            "Equivalent to `bulk -- pip install -e ~/proj/{}` — "
-            "see `ecosystem bulk --help`."
-        ),
-    )
-    @click.option("--package", "-p", multiple=True, help="Specific packages.")
-    @click.option("--dry-run", is_flag=True, help="Preview without syncing.")
-    @click.option(
-        "--jobs",
-        "-j",
-        "jobs",
-        default="1",
-        show_default=True,
-        help="Parallel installs. 1=serial, N=N workers, 0 or 'auto'=all CPUs.",
-    )
-    @click.option(
-        "--quiet",
-        "-q",
-        is_flag=True,
-        help="Suppress per-package progress lines (errors still on stderr).",
-    )
-    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-    def ecosystem_sync(package, dry_run, jobs, quiet, as_json, yes):
-        """Install ecosystem packages from local clones in editable mode (pip install -e).
-
-        Walks every configured package, runs `pip install -e <local_path>` for
-        each. Use `-j N` to install in parallel; progress is streamed to stderr
-        unless --json or --quiet is set.
-
-        \b
-        Example:
-            $ scitex-dev ecosystem sync --dry-run
-            $ scitex-dev ecosystem sync -y -j 4
-            $ scitex-dev ecosystem sync -p scitex-io --yes
-        """
-        del yes  # accepted for §2 compliance; sync is non-interactive already
-        import sys
-
-        from ..._utils import wrap_as_cli
-        from ...._sync import sync_local
-
-        pkgs = list(package) if package else None
-
-        # Resolve --jobs ('auto' or '0' → all CPUs)
-        if str(jobs).lower() in ("auto", "0"):
-            jobs_n = 0
-        else:
-            try:
-                jobs_n = int(jobs)
-            except ValueError:
-                click.echo(
-                    f"error: --jobs must be int, 'auto', or '0' (got {jobs!r})",
-                    err=True,
-                )
-                sys.exit(2)
-
-        # Per-package progress callback (stderr; off in --json or --quiet mode)
-        def _progress(idx, total, name, status, elapsed):
-            mark = {"ok": "✓", "error": "✗", "skipped": "·", "dry_run": "·"}.get(
-                status, "?"
-            )
-            click.echo(
-                f"[{idx}/{total}] {mark} {name} ({status}, {elapsed:.1f}s)", err=True
-            )
-
-        on_progress = None if (as_json or quiet) else _progress
-
-        wrap_as_cli(
-            sync_local,
-            as_json=as_json,
-            packages=pkgs,
-            confirm=not dry_run,
-            jobs=jobs_n,
-            on_progress=on_progress,
-        )
-
-    # ---------------------------------------------------------------
-    # Bootstrap / cross-machine ops: clone | checkout | pull | install
-    # ---------------------------------------------------------------
-
     def _git_progress(idx, total, name, status, msg):
         mark = {"ok": "✓", "err": "✗", "skip": "·", "dry": "·"}.get(status, "?")
         click.echo(f"[{idx}/{total}] {mark} {name}: {msg}", err=True)
 
     @ecosystem.command(
         "clone",
-        epilog=(
-            "Note: `clone` is intentionally separate from `bulk` — it creates "
-            "package dirs that don't exist yet, while `bulk` can only iterate "
-            "already-registered local packages."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Clone every ecosystem repo into DEST (default ~/proj/).",
+            description=(
+                "Default is dry-run — pass --yes to actually clone. Note: "
+                "`clone` is intentionally separate from `bulk` — it "
+                "creates package dirs that don't exist yet, while "
+                "`bulk` can only iterate already-registered local "
+                "packages.",
+            ),
+            examples=(
+                Example("{prog} ecosystem clone", "Preview (dry-run)."),
+                Example("{prog} ecosystem clone --yes", "Apply."),
+                Example(
+                    "{prog} ecosystem clone --dest /scratch/proj --yes",
+                    "Clone into a custom directory.",
+                ),
+                Example(
+                    "{prog} ecosystem clone --https --branch main --yes",
+                    "HTTPS remotes, main branch.",
+                ),
+                Example("{prog} ecosystem clone -p scitex-io --yes", "One package."),
+            ),
         ),
     )
     @click.option("--dest", default="~/proj", show_default=True, help="Parent dir.")
@@ -118,19 +65,6 @@ def register(ecosystem):
         "--yes", "-y", is_flag=True, help="Apply for real (overrides default dry-run)."
     )
     def ecosystem_clone(dest, branch, https, package, jobs, dry_run, as_json, yes):
-        """Clone every ecosystem repo into DEST (default ~/proj/).
-
-        \b
-        Default is dry-run — pass --yes to actually clone.
-
-        \b
-        Example:
-          $ scitex-dev ecosystem clone                # preview (dry-run)
-          $ scitex-dev ecosystem clone --yes          # apply
-          $ scitex-dev ecosystem clone --dest /scratch/proj --yes
-          $ scitex-dev ecosystem clone --https --branch main --yes
-          $ scitex-dev ecosystem clone -p scitex-io --yes
-        """
         from pathlib import Path as _Path
 
         from ...._ecosystem._git_ops import clone_all
@@ -160,9 +94,22 @@ def register(ecosystem):
 
     @ecosystem.command(
         "checkout",
-        epilog=(
-            "Equivalent to `bulk -- git -C ~/proj/{} checkout BRANCH` — "
-            "see `ecosystem bulk --help`."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="git checkout <branch> in every ecosystem clone.",
+            description=(
+                "Default is dry-run — pass --yes to actually checkout. "
+                "Equivalent to `bulk -- git -C ~/proj/{} checkout "
+                "BRANCH` — see `ecosystem bulk --help`.",
+            ),
+            examples=(
+                Example("{prog} ecosystem checkout develop", "Preview."),
+                Example("{prog} ecosystem checkout develop --yes", "Apply."),
+                Example(
+                    "{prog} ecosystem checkout main -p scitex-io --yes",
+                    "One package.",
+                ),
+            ),
         ),
     )
     @click.argument("branch")
@@ -178,17 +125,6 @@ def register(ecosystem):
     )
     @click.option("--json", "as_json", is_flag=True)
     def ecosystem_checkout(branch, package, dry_run, yes, as_json):
-        """`git checkout <branch>` in every ecosystem clone.
-
-        \b
-        Default is dry-run — pass --yes to actually checkout.
-
-        \b
-        Example:
-          $ scitex-dev ecosystem checkout develop          # preview
-          $ scitex-dev ecosystem checkout develop --yes    # apply
-          $ scitex-dev ecosystem checkout main -p scitex-io --yes
-        """
         from ...._ecosystem._core import ECOSYSTEM as _ECO
         from ...._ecosystem._git_ops import checkout_all
 
@@ -217,9 +153,20 @@ def register(ecosystem):
 
     @ecosystem.command(
         "pull",
-        epilog=(
-            "Equivalent to `bulk -- git -C ~/proj/{} pull --rebase` — "
-            "see `ecosystem bulk --help`."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="git pull --rebase in every ecosystem clone (parallel).",
+            description=(
+                "Default is dry-run — pass --yes to actually pull. "
+                "Equivalent to `bulk -- git -C ~/proj/{} pull --rebase` "
+                "— see `ecosystem bulk --help`.",
+            ),
+            examples=(
+                Example("{prog} ecosystem pull", "Preview."),
+                Example("{prog} ecosystem pull --yes", "Apply."),
+                Example("{prog} ecosystem pull --yes -j 8", "Apply, 8 parallel workers."),
+                Example("{prog} ecosystem pull -p scitex-io --yes", "One package."),
+            ),
         ),
     )
     @click.option(
@@ -238,18 +185,6 @@ def register(ecosystem):
     )
     @click.option("--json", "as_json", is_flag=True)
     def ecosystem_pull(no_rebase, package, jobs, dry_run, yes, as_json):
-        """`git pull --rebase` in every ecosystem clone (parallel).
-
-        \b
-        Default is dry-run — pass --yes to actually pull.
-
-        \b
-        Example:
-          $ scitex-dev ecosystem pull              # preview
-          $ scitex-dev ecosystem pull --yes        # apply
-          $ scitex-dev ecosystem pull --yes -j 8
-          $ scitex-dev ecosystem pull -p scitex-io --yes
-        """
         from ...._ecosystem._git_ops import pull_all
 
         if dry_run and not yes:
@@ -281,11 +216,32 @@ def register(ecosystem):
 
     @ecosystem.command(
         "install",
-        epilog=(
-            "Equivalent to `bulk -- pip install -e ~/proj/{}` — "
-            "see `ecosystem bulk --help`. The dedicated `install` command is "
-            "kept for the per-package venv plumbing and shell-completion wiring "
-            "that `bulk` does not perform."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="pip install every ecosystem package.",
+            description=(
+                "Default is dry-run — pass --yes to actually install. "
+                "Equivalent to `bulk -- pip install -e ~/proj/{}` — see "
+                "`ecosystem bulk --help`. The dedicated `install` "
+                "command is kept for the per-package venv plumbing and "
+                "shell-completion wiring that `bulk` does not perform.",
+            ),
+            examples=(
+                Example("{prog} ecosystem install", "Preview (dry-run, per-package)."),
+                Example(
+                    "{prog} ecosystem install --extras all,dev --yes -j 4",
+                    "CI-parity install: per-pkg .venv each.",
+                ),
+                Example(
+                    "{prog} ecosystem install --venv current --yes",
+                    "Legacy: install everything into the running venv.",
+                ),
+                Example("{prog} ecosystem install --source pypi --yes", "Install from PyPI."),
+                Example(
+                    "{prog} ecosystem install -p scitex-io --extras dev --yes",
+                    "One package.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -355,19 +311,6 @@ def register(ecosystem):
         with_completions,
         completion_shell,
     ):
-        """`pip install` every ecosystem package.
-
-        \b
-        Default is dry-run — pass --yes to actually install.
-
-        \b
-        Example:
-          $ scitex-dev ecosystem install                              # preview (dry-run, per-package — DEFAULT)
-          $ scitex-dev ecosystem install --extras all,dev --yes -j 4  # CI-parity install: per-pkg .venv each
-          $ scitex-dev ecosystem install --venv current --yes         # legacy: install everything into running venv
-          $ scitex-dev ecosystem install --source pypi --yes
-          $ scitex-dev ecosystem install -p scitex-io --extras dev --yes
-        """
         from ...._ecosystem._git_ops import install_all, install_completions_all
 
         # Dry-run is default; --yes overrides to apply for real.

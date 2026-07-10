@@ -53,6 +53,7 @@ from pathlib import Path
 import click
 
 from .. import _hooks
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
 
 
 # Map: canonical name → (source path, deploy-relative path).
@@ -146,17 +147,42 @@ def register_hooks_commands(main) -> None:
     ``register_*_commands(main)`` registrations.
     """
 
-    @main.group("hooks", short_help="Manage agent-feedback hook scripts.")
+    @main.group(
+        "hooks",
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="Manage scitex-dev's bundled PostToolUse agent-feedback hooks.",
+            description=(
+                "Pillar 0 follow-up (#169) — replaces the per-project "
+                "fanned-out run_lint.sh copies with a symlink to the "
+                "canonical version shipped inside the pip-installed "
+                "scitex-dev package. Future scitex-dev releases "
+                "auto-propagate without operator action.",
+            ),
+            examples=(
+                Example(
+                    "{prog} hooks install --target ~/proj/my-research",
+                    "Install the canonical hooks.",
+                ),
+            ),
+        ),
+    )
     def hooks_group():  # pragma: no cover - click group body is empty by design
-        """Manage scitex-dev's bundled PostToolUse agent-feedback hooks.
+        pass
 
-        Pillar 0 follow-up (#169) — replaces the per-project fanned-out
-        run_lint.sh copies with a symlink to the canonical version
-        shipped inside the pip-installed scitex-dev package. Future
-        scitex-dev releases auto-propagate without operator action.
-        """
-
-    @hooks_group.command("install", short_help="Install canonical hooks into a project.")
+    @hooks_group.command(
+        "install",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Install bundled hooks as symlinks into the target project.",
+            examples=(
+                Example(
+                    "{prog} hooks install --target ~/proj/my-research",
+                    "installed run_lint -> .../docs/to_claude/hooks/post-tool-use/run_lint.sh",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--target",
         "target",
@@ -203,13 +229,6 @@ def register_hooks_commands(main) -> None:
         ),
     )
     def hooks_install(target, names, force, dry_run, yes):
-        """Install bundled hooks as symlinks into the target project.
-
-        \b
-        Example:
-            $ scitex-dev hooks install --target ~/proj/my-research
-            installed  run_lint  →  ~/proj/my-research/docs/to_claude/hooks/post-tool-use/run_lint.sh
-        """
         del yes  # --yes is reserved for audit-cli §2 conformance; no
                  # confirmation prompts are issued today.
         project = Path(target)
@@ -246,7 +265,25 @@ def register_hooks_commands(main) -> None:
         if had_refusal:
             raise SystemExit(1)
 
-    @hooks_group.command("update", short_help="Re-link installed hooks to the current canonical.")
+    @hooks_group.command(
+        "update",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Re-link installed hooks to the current canonical.",
+            description=(
+                "Equivalent to `install --force` for a project that "
+                "already has the directory tree. Replaces non-symlink "
+                "files too — call only when you mean to discard local "
+                "edits.",
+            ),
+            examples=(
+                Example(
+                    "{prog} hooks update --target ~/proj/my-research",
+                    "Re-link to the current canonical hooks.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--target",
         "target",
@@ -279,14 +316,6 @@ def register_hooks_commands(main) -> None:
         ),
     )
     def hooks_update(target, names, dry_run, yes):
-        """Equivalent to ``install --force`` for a project that already
-        has the directory tree. Replaces non-symlink files too — call
-        only when you mean to discard local edits.
-
-        \b
-        Example:
-            $ scitex-dev hooks update --target ~/proj/my-research
-        """
         del yes
         project = Path(target)
         chosen = list(names) if names else sorted(KNOWN_HOOKS)
@@ -304,7 +333,24 @@ def register_hooks_commands(main) -> None:
             }.get(status, status)
             click.echo(f"{symbol}  {name}  →  {project / deploy_rel}")
 
-    @hooks_group.command("list", short_help="Show the install status of each hook.")
+    @hooks_group.command(
+        "list",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Show the install status of each hook.",
+            description=(
+                "Reports which hooks are installed and whether they "
+                "point at the canonical source: ok, drift, stale, or "
+                "missing.",
+            ),
+            examples=(
+                Example(
+                    "{prog} hooks list --target ~/proj/my-research",
+                    "ok run_lint -> bundled canonical.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--target",
         "target",
@@ -322,15 +368,6 @@ def register_hooks_commands(main) -> None:
         ),
     )
     def hooks_list(target, as_json):
-        """Report which hooks are installed and whether they point at
-        the canonical source.
-
-        \b
-        Example:
-            $ scitex-dev hooks list --target ~/proj/my-research
-            ok       run_lint  → bundled canonical
-            missing  …
-        """
         import json as _json
 
         project = Path(target)
@@ -370,31 +407,27 @@ def register_hooks_commands(main) -> None:
     # the catalog recommends for a one-off read action.
     @hooks_group.command(
         "print-path",
-        short_help="Print the absolute path of a bundled hook script.",
-        epilog=(
-            "Example:\n"
-            "  $ scitex-dev hooks print-path run_lint\n"
-            "  /uvwork/venv-agent/lib/python3.12/site-packages/scitex_dev/_hooks/run_lint.sh\n"
-            "\n"
-            "  $ ln -s \"$(scitex-dev hooks print-path run_lint)\" \\\n"
-            "      docs/to_claude/hooks/post-tool-use/run_lint.sh"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Print the bundled hook script's absolute filesystem path.",
+            description=(
+                "Useful in shell scripts, e.g. to symlink the canonical "
+                "hook manually instead of via `hooks install`.",
+            ),
+            examples=(
+                Example(
+                    "{prog} hooks print-path run_lint",
+                    "/.../site-packages/scitex_dev/_hooks/run_lint.sh",
+                ),
+                Example(
+                    '''ln -s "$({prog} hooks print-path run_lint)" docs/to_claude/hooks/post-tool-use/run_lint.sh''',
+                    "Symlink it by hand.",
+                ),
+            ),
         ),
     )
     @click.argument("name", type=click.Choice(sorted(KNOWN_HOOKS), case_sensitive=False))
     def hooks_print_path(name):
-        """Print the bundled hook script's absolute filesystem path.
-
-        \b
-        Example:
-            $ scitex-dev hooks print-path run_lint
-            /uvwork/venv-agent/lib/python3.12/site-packages/scitex_dev/_hooks/run_lint.sh
-
-        Useful in shell scripts:
-
-        \b
-            ln -s "$(scitex-dev hooks print-path run_lint)" \\
-                docs/to_claude/hooks/post-tool-use/run_lint.sh
-        """
         source, _ = KNOWN_HOOKS[name]
         click.echo(source)
 

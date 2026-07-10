@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
+
 
 def _select(provider):
     """Discover + optionally filter to one provider."""
@@ -152,39 +154,41 @@ def register(ecosystem):
     @ecosystem.group(
         "system-deps",
         invoke_without_command=True,
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem system-deps               # table\n"
-            "  $ scitex-dev ecosystem system-deps list          # apt names, one/line\n"
-            "  $ apt-get install -y --no-install-recommends \\\n"
-            "        $(scitex-dev ecosystem system-deps list)\n"
-            "  $ scitex-dev ecosystem system-deps install       # BUILD-time, root\n"
-            "  $ scitex-dev ecosystem system-deps list --provider scitex-writer\n"
-            "  $ scitex-dev ecosystem system-deps check-superset --baseline recipe-apt.txt\n"
-            "\n"
-            "Declarations live in each leaf (scitex_dev.system_deps entry point);\n"
-            "this aggregates + dedups by apt package. INSTALL IS BUILD-TIME ONLY\n"
-            "(apt needs root; agents run rootless --userns)."
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="Aggregate the ecosystem's declared system (apt) dependencies.",
+            description=(
+                "Walks every `scitex_dev.system_deps` provider and "
+                "dedups by apt package name. With no subcommand, "
+                "prints a human table; `list` is pipe-friendly; "
+                "`install` applies them at image-build time. "
+                "Declarations live in each leaf (scitex_dev.system_deps "
+                "entry point). INSTALL IS BUILD-TIME ONLY (apt needs "
+                "root; agents run rootless --userns).",
+            ),
+            examples=(
+                Example("{prog} ecosystem system-deps", "Human table."),
+                Example("{prog} ecosystem system-deps list", "apt names, one per line."),
+            ),
         ),
     )
     @click.pass_context
     def system_deps(ctx):
-        """Aggregate the ecosystem's declared system (apt) dependencies.
-
-        Walks every ``scitex_dev.system_deps`` provider and dedups by apt
-        package name. With no subcommand, prints a human table; ``list`` is
-        pipe-friendly; ``install`` applies them at image-build time.
-        """
         if ctx.invoked_subcommand is None:
             _render(_select(None))
 
     @system_deps.command(
         "list",
-        epilog=(
-            "Example:\n"
-            "  $ scitex-dev ecosystem system-deps list\n"
-            "  $ apt-get install -y --no-install-recommends \\\n"
-            "        $(scitex-dev ecosystem system-deps list)"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Print the aggregated apt package names, one per line (pipe-friendly).",
+            examples=(
+                Example("{prog} ecosystem system-deps list", "Names, one per line."),
+                Example(
+                    "apt-get install -y $({prog} ecosystem system-deps list)",
+                    "Pipe into apt-get.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -194,13 +198,6 @@ def register(ecosystem):
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON.")
     def system_deps_list(provider, as_json):
-        """Print the aggregated apt package names, one per line (pipe-friendly).
-
-        \b
-        Example:
-            $ scitex-dev ecosystem system-deps list
-            $ apt-get install -y $(scitex-dev ecosystem system-deps list)
-        """
         deps = _select(provider)
         if as_json:
             _emit_json(deps)
@@ -211,10 +208,14 @@ def register(ecosystem):
 
     @system_deps.command(
         "install",
-        epilog=(
-            "Example:\n"
-            "  $ scitex-dev ecosystem system-deps install        # preview\n"
-            "  $ scitex-dev ecosystem system-deps install --yes  # execute (root)"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="apt-get install the aggregated set (BUILD-time; needs root).",
+            description=("Mutating verb: previews (dry-run) unless --yes is given.",),
+            examples=(
+                Example("{prog} ecosystem system-deps install", "Preview."),
+                Example("{prog} ecosystem system-deps install --yes", "Execute (root)."),
+            ),
         ),
     )
     @click.option(
@@ -236,23 +237,33 @@ def register(ecosystem):
         help="Actually run apt-get (BUILD-time; needs root).",
     )
     def system_deps_install(provider, dry_run, yes):
-        """apt-get install the aggregated set (BUILD-time; needs root).
-
-        Mutating verb: previews (dry-run) unless --yes is given.
-
-        \b
-        Example:
-            $ scitex-dev ecosystem system-deps install        # preview
-            $ scitex-dev ecosystem system-deps install --yes  # execute (root)
-        """
         return _do_install(_select(provider), dry_run=dry_run or not yes)
 
     @system_deps.command(
         "check-superset",
-        epilog=(
-            "Example:\n"
-            "  $ scitex-dev ecosystem system-deps check-superset --baseline recipe-apt.txt\n"
-            "  $ scitex-dev ecosystem system-deps check-superset --baseline r.txt --json"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Gate a container cutover against a recipe baseline superset.",
+            description=(
+                "Run in the container BUILD env (where every leaf "
+                "provider is installed) BEFORE deleting a recipe's "
+                "hardcoded apt blocks — it proves nothing is silently "
+                "dropped. Exit 0 = GREEN (superset, safe to drop the "
+                "blocks); exit 1 = RED (a baseline package is declared "
+                "by no provider). In a venv without the providers the "
+                "federated set is empty, so a real baseline correctly "
+                "reports RED.",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem system-deps check-superset --baseline recipe-apt.txt",
+                    "Check against a baseline file.",
+                ),
+                Example(
+                    "{prog} ecosystem system-deps check-superset --baseline r.txt --json",
+                    "Structured JSON verdict.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -267,20 +278,6 @@ def register(ecosystem):
     )
     @click.pass_context
     def system_deps_check_superset(ctx, baseline, as_json):
-        """Gate a container cutover: assert the federated set ⊇ a recipe baseline.
-
-        Run in the container BUILD env (where every leaf provider is installed)
-        BEFORE deleting a recipe's hardcoded apt blocks -- it proves nothing is
-        silently dropped. Exit 0 = GREEN (superset, safe to drop the blocks);
-        exit 1 = RED (a baseline package is declared by no provider). In a venv
-        without the providers the federated set is empty, so a real baseline
-        correctly reports RED.
-
-        \b
-        Example:
-            $ scitex-dev ecosystem system-deps check-superset --baseline recipe-apt.txt
-            $ scitex-dev ecosystem system-deps check-superset --baseline r.txt --json
-        """
         import json as _json
 
         aggregated = {dep.package for dep in _select(None)}

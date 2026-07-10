@@ -11,36 +11,55 @@ import json
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
+
 
 def register_mcp_commands(main: click.Group) -> click.Group:
     """Attach the `mcp` group + its subcommands to *main*."""
 
-    @main.group(invoke_without_command=True)
+    @main.group(
+        invoke_without_command=True,
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="MCP (Model Context Protocol) server commands.",
+            examples=(
+                Example("{prog} mcp start", "Start the MCP server."),
+                Example("{prog} mcp doctor", "Check MCP dependencies."),
+                Example("{prog} mcp list-tools", "List available MCP tools."),
+            ),
+        ),
+    )
     @click.option(
         "--help-recursive", is_flag=True, help="Show help for all subcommands."
     )
     @click.pass_context
     def mcp(ctx, help_recursive):
-        """MCP (Model Context Protocol) server commands."""
         if help_recursive:
             _print_mcp_help_recursive(ctx, mcp)
             ctx.exit(0)
         elif ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
 
-    @mcp.command("start")
+    @mcp.command(
+        "start",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Start the scitex-dev MCP server.",
+            description=(
+                "Runs the fastmcp server on stdio, blocking until killed. "
+                "Requires the `mcp` extra (fastmcp).",
+            ),
+            examples=(
+                Example("{prog} mcp start", "Start the server on stdio."),
+                Example("{prog} mcp start --dry-run", "Preview without starting."),
+            ),
+        ),
+    )
     @click.option(
         "--dry-run", is_flag=True, help="Print what would be done; do not start."
     )
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
     def mcp_start(dry_run, yes):
-        """Start the scitex-dev MCP server.
-
-        \b
-        Example:
-            $ scitex-dev mcp start
-            $ scitex-dev mcp start --dry-run
-        """
         del yes  # accepted for §2; mcp start is non-interactive
         if dry_run:
             click.echo("would start scitex-dev MCP server (fastmcp on stdio)")
@@ -56,14 +75,15 @@ def register_mcp_commands(main: click.Group) -> click.Group:
         click.echo("Starting scitex-dev MCP server...")
         mcp_server.run()
 
-    @mcp.command("doctor")
+    @mcp.command(
+        "doctor",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Check MCP server dependencies and configuration.",
+            examples=(Example("{prog} mcp doctor", "Verify fastmcp + tool loading."),),
+        ),
+    )
     def mcp_doctor():
-        """Check MCP server dependencies and configuration.
-
-        \b
-        Example:
-            $ scitex-dev mcp doctor
-        """
         click.echo("Checking MCP dependencies...")
 
         try:
@@ -121,7 +141,21 @@ def register_mcp_commands(main: click.Group) -> click.Group:
         )
         ctx.exit(2)
 
-    @mcp.command("install")
+    @mcp.command(
+        "install",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Show installation instructions for MCP server integration.",
+            description=(
+                "Read-only: prints the pip install line and the MCP client "
+                "JSON snippet (or emits it as --json).",
+            ),
+            examples=(
+                Example("{prog} mcp install", "Human-readable instructions."),
+                Example("{prog} mcp install --json", "Machine-readable manifest."),
+            ),
+        ),
+    )
     @click.option(
         "--json",
         "as_json",
@@ -140,13 +174,6 @@ def register_mcp_commands(main: click.Group) -> click.Group:
         help="Accepted for §2 compliance; this command is informational and never mutates state.",
     )
     def mcp_install(as_json, dry_run, yes):
-        """Show installation instructions for MCP server integration.
-
-        \b
-        Example:
-            $ scitex-dev mcp install
-            $ scitex-dev mcp install --json
-        """
         del dry_run, yes  # accepted for §2 mutation flags; this verb is read-only
         if as_json:
             click.echo(
@@ -187,20 +214,23 @@ def register_mcp_commands(main: click.Group) -> click.Group:
         click.echo("  scitex-dev mcp doctor")
         click.echo("  scitex-dev mcp list-tools")
 
-    @mcp.command("list-tools")
+    @mcp.command(
+        "list-tools",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="List available MCP tools.",
+            examples=(
+                Example("{prog} mcp list-tools", "Tool names only."),
+                Example("{prog} mcp list-tools -vv", "Names + descriptions."),
+                Example("{prog} mcp list-tools --json", "Structured JSON output."),
+            ),
+        ),
+    )
     @click.option(
         "-v", "--verbose", count=True, help="Verbosity: -v sig, -vv +desc, -vvv full."
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def mcp_list_tools(verbose, as_json):
-        """List available MCP tools.
-
-        \b
-        Example:
-            $ scitex-dev mcp list-tools
-            $ scitex-dev mcp list-tools -vv
-            $ scitex-dev mcp list-tools --json
-        """
         try:
             from .._mcp._server import mcp as mcp_server
         except ImportError as e:

@@ -13,11 +13,26 @@ import json
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register_list_python_apis_command(main: click.Group) -> None:
     """Register ``scitex-dev list-python-apis`` on ``main``."""
 
-    @main.command("list-python-apis")
+    @main.command(
+        "list-python-apis",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="List Python APIs (scitex-dev public API tree).",
+            examples=(
+                Example("{prog} list-python-apis", "Names only."),
+                Example(
+                    "{prog} list-python-apis -v --json",
+                    "Names + first doc line, as JSON.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "-v",
         "--verbose",
@@ -26,13 +41,6 @@ def register_list_python_apis_command(main: click.Group) -> None:
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def list_python_apis(verbose, as_json):
-        """List Python APIs (scitex-dev public API tree).
-
-        \b
-        Example:
-            $ scitex-dev list-python-apis
-            $ scitex-dev list-python-apis -v --json
-        """
         import inspect
 
         import scitex_dev

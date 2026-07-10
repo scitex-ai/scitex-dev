@@ -12,7 +12,7 @@ so external callers keep working.
 
 import click
 
-from ..._ecosystem.click_helpers import make_categorized_group
+from ..._ecosystem.help_spec import CliHelp, Example, SpecGroup
 from ._categories import ECOSYSTEM_COMMAND_CATEGORIES
 from ._cmds import (
     _audit_all,
@@ -53,14 +53,22 @@ def register_ecosystem_commands(main_group):
 
     @main_group.group(
         invoke_without_command=True,
-        cls=make_categorized_group(ECOSYSTEM_COMMAND_CATEGORIES),
+        cls=SpecGroup,
+        command_categories=ECOSYSTEM_COMMAND_CATEGORIES,
+        help_spec=CliHelp(
+            summary="Manage the SciTeX ecosystem (versions, sync, audits, stats).",
+            examples=(
+                Example("{prog} ecosystem list --json", "List ecosystem packages."),
+                Example("{prog} ecosystem audit-all scitex-io", "Run every audit-*."),
+                Example("{prog} ecosystem sync", "Sync all packages across hosts."),
+            ),
+        ),
     )
     @click.option(
         "--help-recursive", is_flag=True, help="Show help for all subcommands."
     )
     @click.pass_context
     def ecosystem(ctx, help_recursive):
-        """Manage the SciTeX ecosystem (versions, sync, audits, stats)."""
         if help_recursive:
             _print_ecosystem_help_recursive(ctx)
             ctx.exit(0)

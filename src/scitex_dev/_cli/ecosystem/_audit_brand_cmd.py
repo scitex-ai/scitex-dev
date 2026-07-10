@@ -13,11 +13,27 @@ from pathlib import Path
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register_audit_brand_command(ecosystem_group):
     """Attach `audit-brand` to the given Click ecosystem group."""
 
-    @ecosystem_group.command("audit-brand")
+    @ecosystem_group.command(
+        "audit-brand",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Audit a branded package against PS-2xx rules.",
+            description=(
+                "Rules: PS-201 no-local-brand-glue, PS-202 "
+                "umbrella-brand-symmetry, PS-203 method-prefix-pair.",
+            ),
+            examples=(
+                Example("{prog} ecosystem audit-brand figrecipe", "One brand."),
+                Example("{prog} ecosystem audit-brand socialia", "Another brand."),
+            ),
+        ),
+    )
     @click.argument("brand_key")
     @click.option(
         "--path",
@@ -32,19 +48,6 @@ def register_audit_brand_command(ecosystem_group):
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     @click.pass_context
     def ecosystem_audit_brand(ctx, brand_key, pkg_path, as_json):
-        """Audit a branded package against PS-2xx rules.
-
-        \b
-        Rules:
-          PS-201 no-local-brand-glue
-          PS-202 umbrella-brand-symmetry
-          PS-203 method-prefix-pair
-
-        \b
-        Example:
-            $ scitex-dev ecosystem audit-brand figrecipe
-            $ scitex-dev ecosystem audit-brand socialia
-        """
         from ..._branding._audit import (
             audit_brand_package,
             find_package_root,

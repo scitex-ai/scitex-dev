@@ -4,27 +4,45 @@
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem):
     @ecosystem.command(
         "test-remote",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem test-remote --host bm198 scitex-io\n"
-            "  $ scitex-dev ecosystem test-remote --host bm198 --all --audit-only\n"
-            "  $ scitex-dev ecosystem test-remote --host bm198 --dry-run scitex-stats\n"
-            "\n"
-            "rsync local checkouts to HOST, SSH in, install (`pip install -e .[dev]`),\n"
-            "run pytest with `-n auto` (xdist when available), stream output, and\n"
-            "propagate the exit code. Excludes `.git/`, `__pycache__/`, `*.egg-info/`,\n"
-            "`_sphinx_html/`, `GITIGNORED/`, `.scitex/`. With `--all`, fans out across\n"
-            "every non-archived ECOSYSTEM package in parallel; failed packages are\n"
-            "summarised at the end. Use this to offload heavy parallel runs to a host\n"
-            "with spare cores when the local box is loaded.\n"
-            "\n"
-            "Legacy: simple SSH-based fan-out can also be expressed via "
-            "`ecosystem bulk -- ssh HOST ...` — see `ecosystem bulk --help`. "
-            "This command is kept for its rsync + venv-bootstrap + xdist-pytest plumbing."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Run pytest on HOST against rsynced local checkouts.",
+            description=(
+                "rsync local checkouts to HOST, SSH in, install (`pip "
+                "install -e .[dev]`), run pytest with `-n auto` (xdist "
+                "when available), stream output, and propagate the "
+                "exit code. Excludes `.git/`, `__pycache__/`, "
+                "`*.egg-info/`, `_sphinx_html/`, `GITIGNORED/`, "
+                "`.scitex/`. With `--all`, fans out across every "
+                "non-archived ECOSYSTEM package in parallel; failed "
+                "packages are summarised at the end. Use this to "
+                "offload heavy parallel runs to a host with spare "
+                "cores when the local box is loaded. Legacy: simple "
+                "SSH-based fan-out can also be expressed via `bulk -- "
+                "ssh HOST ...` (see `ecosystem bulk --help`); this "
+                "command is kept for its rsync + venv-bootstrap + "
+                "xdist-pytest plumbing.",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem test-remote --host bm198 scitex-io",
+                    "One package.",
+                ),
+                Example(
+                    "{prog} ecosystem test-remote --host bm198 --all --audit-only",
+                    "Every package, audit test only.",
+                ),
+                Example(
+                    "{prog} ecosystem test-remote --host bm198 --dry-run scitex-stats",
+                    "Preview the commands.",
+                ),
+            ),
         ),
     )
     @click.argument("packages", nargs=-1)
@@ -97,7 +115,6 @@ def register(ecosystem):
         dry_run,
         yes,
     ):
-        """Run pytest on HOST against rsynced local checkouts."""
         del yes  # non-destructive on local; remote installs are idempotent
         import shlex
         import subprocess as _sp

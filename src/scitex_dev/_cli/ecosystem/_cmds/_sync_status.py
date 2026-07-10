@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ._sync_helpers import (
     git,
     parse_package_filter,
@@ -94,16 +95,33 @@ _STATUS_STYLE = {
 def register(ecosystem):
     @ecosystem.command(
         "check-sync",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem check-sync                       # local only\n"
-            "  $ scitex-dev ecosystem check-sync -h spartan            # diff vs spartan\n"
-            "  $ scitex-dev ecosystem check-sync -h spartan --json | jq\n"
-            "  $ scitex-dev ecosystem check-sync -p scitex-io -h spartan\n"
-            "  $ scitex-dev ecosystem check-sync -h spartan --fetch    # refresh origin first\n"
-            "\n"
-            "Read-only: never fetches/pulls/mutates unless --fetch is\n"
-            "passed (which only runs `git fetch origin develop` per repo)."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Per-package develop-sha sync between local and remote host(s).",
+            description=(
+                "Captures each ecosystem clone's branch + local/origin "
+                "develop sha; with --host also gathers the same over "
+                "ssh and classifies the drift (synced / behind / ahead "
+                "/ diverged). Read-only: never fetches/pulls/mutates "
+                "unless --fetch is passed (which only runs `git fetch "
+                "origin develop` per repo).",
+            ),
+            examples=(
+                Example("{prog} ecosystem check-sync", "Local only."),
+                Example("{prog} ecosystem check-sync -h spartan", "Diff vs a host."),
+                Example(
+                    "{prog} ecosystem check-sync -h spartan --json | jq",
+                    "Structured JSON output.",
+                ),
+                Example(
+                    "{prog} ecosystem check-sync -p scitex-io -h spartan",
+                    "One package vs a host.",
+                ),
+                Example(
+                    "{prog} ecosystem check-sync -h spartan --fetch",
+                    "Refresh origin first.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -129,12 +147,6 @@ def register(ecosystem):
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON rows.")
     def ecosystem_sync_status(hosts, package, fetch, as_json):
-        """Per-package develop-sha sync between local and remote host(s).
-
-        Captures each ecosystem clone's branch + local/origin develop
-        sha; with --host also gathers the same over ssh and classifies
-        the drift (synced / behind / ahead / diverged).
-        """
         import json as _json
 
         pkg_filter = parse_package_filter(package)
