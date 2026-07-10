@@ -243,7 +243,7 @@ def register(ecosystem):
         "check-superset",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Gate a container cutover: assert the federated set is a superset of a recipe baseline.",
+            summary="Gate a container cutover against a recipe baseline superset.",
             description=(
                 "Run in the container BUILD env (where every leaf "
                 "provider is installed) BEFORE deleting a recipe's "
