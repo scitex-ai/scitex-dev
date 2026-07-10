@@ -28,6 +28,7 @@ COMMAND_CATEGORIES = [
             "rename-symbols",
             "trace-env-vars",
             "registry-normalize",
+            "icons",
         ],
     ),
     ("Service", ["mcp", "service", "cron"]),
@@ -205,6 +206,10 @@ def main(
 from ._doctor import register_doctor_command
 
 register_doctor_command(main)
+
+from ._icons import register_icons_command
+
+register_icons_command(main)
 
 from .ecosystem._registry import register_ecosystem_commands
 
