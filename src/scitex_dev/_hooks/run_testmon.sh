@@ -47,7 +47,15 @@ if [[ "${1:-}" == "--self-test" ]]; then
     fail=0
 
     GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-    REPO="$(basename "$GIT_ROOT")"
+    # Use --git-common-dir (not --show-toplevel) to derive REPO: inside a
+    # worktree, --show-toplevel returns the WORKTREE's own directory (e.g.
+    # figrecipe/.worktrees/fix-coverage-pth), so basename yields the
+    # worktree's name, not the repo's -- keying the persistent cache by a
+    # different value per worktree and defeating the whole point of sharing
+    # it. --git-common-dir always resolves to the shared .git dir regardless
+    # of which worktree invoked this script.
+    GIT_COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "$GIT_ROOT/.git")"
+    REPO="$(basename "$(dirname "$GIT_COMMON_DIR")")"
     PYXY="$(python3 -c 'import sys;print(f"py{sys.version_info.major}{sys.version_info.minor}")')"
     CACHE_ROOT="${SCITEX_TESTMON_CACHE_ROOT:-$HOME/.cache/scitex-testmon}"
     CACHE_DIR="$CACHE_ROOT/$REPO/$PYXY"
@@ -80,7 +88,10 @@ fi
 
 # Resolve the worktree root, repo name, and interpreter key.
 GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-REPO="$(basename "$GIT_ROOT")"
+# See the matching --self-test block above for why REPO is derived from
+# --git-common-dir rather than GIT_ROOT/--show-toplevel.
+GIT_COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "$GIT_ROOT/.git")"
+REPO="$(basename "$(dirname "$GIT_COMMON_DIR")")"
 PYXY="$(python3 -c 'import sys;print(f"py{sys.version_info.major}{sys.version_info.minor}")')"
 
 CACHE_ROOT="${SCITEX_TESTMON_CACHE_ROOT:-$HOME/.cache/scitex-testmon}"
