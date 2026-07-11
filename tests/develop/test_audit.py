@@ -16,6 +16,14 @@ import shutil
 import pytest
 
 
+# audit-all fans out to 6 sub-auditor subprocesses (audit-cli,
+# audit-mcp-tools, audit-skills, audit-python-apis, audit-project,
+# audit-django), each re-importing the package fresh; on a loaded or
+# NFS-backed host this legitimately runs well past this repo's global
+# [tool.pytest.ini_options] `timeout` default even when the audit itself
+# is completely clean. Override per-test rather than raise the global
+# cap for every other (fast) test.
+@pytest.mark.timeout(600)
 def test_audit_all_clean():
     # Arrange
     # Act

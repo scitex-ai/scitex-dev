@@ -14,7 +14,7 @@
 # accumulated drift, and the in-tree calls to `scitex-linter` (archived)
 # and `scitex linter` (dropped #95 umbrella-thinning) silently no-op'd
 # the SciTeX pattern check on every research script edit. THIS file
-# uses the LIVE command `scitex-dev linter check-files` so the agent
+# uses the LIVE command `scitex-dev linter validate-files` so the agent
 # feedback surface actually receives the IO0xx / PA0xx / structural
 # warnings.
 #
@@ -110,11 +110,11 @@ lint_python() {
         # capped to warning by --new-only, so they stay visible in the
         # warning pass below but do NOT block. This is the SAFETY PAIR for
         # the promotion: the two must ship together.
-        scitex-dev linter check-files "$file" --severity error --no-color \
+        scitex-dev linter validate-files "$file" --severity error --no-color \
             --new-only --baseline HEAD >&2 || exit 2
         # Non-blocking pass: show ALL findings at warning+ (no --new-only) so
         # the agent still sees the full legacy backlog as feedback.
-        scitex-dev linter check-files "$file" --severity warning --no-color >&2 || true
+        scitex-dev linter validate-files "$file" --severity warning --no-color >&2 || true
     elif command -v scitex-linter &>/dev/null; then
         # Defensive fallback for 2026-pre-Q2 deployments. The standalone
         # `scitex-linter` is archived but may still be on PATH on some

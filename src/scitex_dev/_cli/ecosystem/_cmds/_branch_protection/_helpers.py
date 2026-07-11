@@ -1,52 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ecosystem `set-branch-protection` / `unset-branch-protection`.
+"""Non-CLI internals for `ecosystem update-branch-protection` / `unset-branch-protection`.
 
-Brand-wide GitHub branch-protection management. PR #117 raced past CI by
-auto-merging before required checks completed; an ecosystem survey then
-showed 8 of 10 sampled repos have NO required_status_checks on `develop`.
-This module makes "CI-green is the only gate" actually enforced by
-configuring branch protection consistently across the fleet.
+Split out of the former flat `_branch_protection.py` module (2026-07-11,
+CLI-standardization audit pass §4b/§1f) so both command files can stay
+comfortably under the repo's 512-line file cap after their CliHelp
+conversion. This file intentionally groups EVERY function the two
+commands call through a plain module-global name (``_gh_api``,
+``_resolve_owner_repo``, ``_apply_one``, ...) in ONE module — the
+behavioural test suite
+(``tests/scitex_dev/_cli/ecosystem/_cmds/test__branch_protection.py``)
+replaces ``_gh_api`` / ``_resolve_owner_repo`` with a real injection
+seam via direct attribute assignment (PA-306 forbids mock-shaped
+tests), which only works because every caller in this module resolves
+those names from THIS module's globals at call time. Moving a helper
+to a different module without keeping all its callers here would
+silently break the seam (the patched attribute and the name the
+caller actually reads would diverge).
 
-Policy (from lead msg a3c59d1a):
-
-  required_status_checks       = 6 CI contexts, intersected with what the
-                                  repo's workflows actually publish:
-                                    pytest-matrix-on-ubuntu-py3.11
-                                    pytest-matrix-on-ubuntu-py3.12
-                                    pytest-matrix-on-ubuntu-py3.13
-                                    sphinx
-                                    import-smoke-on-ubuntu-py3-12
-                                    audit
-  strict                       = False  (don't serialise the parallel fleet
-                                          on rebase-before-merge churn)
-  enforce_admins (develop)     = True   (the #117 race fix; nobody bypasses
-                                          CI on the integration branch)
-  enforce_admins (main)        = False  (release flow needs the admin merge
-                                          + tag-push to fire PyPI; locking
-                                          admin out would wedge releases)
-  required_pull_request_reviews = OMIT  (CI-green is the only gate)
-  required_linear_history      = True   (matches the squash-merge convention)
-  allow_force_pushes           = False
-  allow_deletions              = False
-
-CLAssistant is deliberately HELD OUT of the required set today — the bot
-has a documented transient timing failure mode; making it blocking would
-let a bot hiccup wedge the fleet's auto-merge. Keep it as a non-blocking
-check; revisit when stable.
-
-Operations
-----------
-Both commands default to --dry-run. Pass --execute (or -y / --yes) to
-actually PUT or DELETE. The PUT body is computed live from the repo's
-current workflows so additions land automatically; the required-set
-contexts that the repo doesn't publish are silently dropped (e.g.
-scitex-orochi has no develop branch — main-only operation), preventing
-"required check that never runs" deadlocks.
-
-The first execution lands on scitex-dev ITSELF; fleet-wide rollout waits
-on operator confirm via lead. Sibling `unset-branch-protection` is the
-rollback path.
+Brand-wide GitHub branch-protection policy background: see the
+`_update_cmd.py` module docstring for the full incident history (PR
+#117 CI race) and policy table (lead msg a3c59d1a).
 """
 
 from __future__ import annotations
@@ -61,7 +35,7 @@ import click
 # The full required-set ceiling. The actual required set per repo is the
 # intersection of this ceiling with the repo's published workflow check
 # names — repos that don't run, say, sphinx, don't get sphinx required.
-_DEFAULT_REQUIRED_CONTEXTS: List[str] = [
+DEFAULT_REQUIRED_CONTEXTS: List[str] = [
     "pytest-matrix-on-ubuntu-py3.11",
     "pytest-matrix-on-ubuntu-py3.12",
     "pytest-matrix-on-ubuntu-py3.13",
@@ -244,7 +218,7 @@ def _apply_one(
     contexts: List[str] = []
     if not deletion_only:
         published = _list_published_check_names(owner_repo, ref="develop")
-        contexts = _intersect_required(published, _DEFAULT_REQUIRED_CONTEXTS)
+        contexts = _intersect_required(published, DEFAULT_REQUIRED_CONTEXTS)
 
     exit_code = 0
     for tgt in targets:
@@ -345,159 +319,3 @@ def _apply_one(
         else:
             click.echo(f"ok    {distribution}@{tgt}: protection set")
     return exit_code
-
-
-def register(ecosystem):
-    @ecosystem.command(
-        "set-branch-protection",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem set-branch-protection scitex-dev\n"
-            "  $ scitex-dev ecosystem set-branch-protection scitex-dev --branch develop --execute\n"
-            "  $ scitex-dev ecosystem set-branch-protection scitex-io --dry-run\n"
-            "\n"
-            "Applies the brand-wide branch-protection policy (lead msg\n"
-            "a3c59d1a) to DISTRIBUTION's `develop` and/or `main` branch.\n"
-            "Required contexts are computed live from the repo's published\n"
-            "workflows so we never demand a check the repo cannot publish.\n"
-            "--dry-run is the default; pass --execute to actually PUT.\n"
-        ),
-    )
-    @click.argument("distribution")
-    @click.option(
-        "--branch",
-        type=click.Choice(["develop", "main", "both"]),
-        default="both",
-        help="Which branch to protect. Default: both.",
-    )
-    @click.option(
-        "--deletion-only",
-        is_flag=True,
-        help="Apply only the minimal un-deletable baseline (no required checks / "
-        "enforce-admins) so CI's own pushes to develop are not blocked. This is "
-        "the fleet-wide standard; omit for the full brand-wide policy.",
-    )
-    @click.option(
-        "--execute",
-        "-y",
-        "--yes",
-        "execute",
-        is_flag=True,
-        help="Actually PUT the protection rule. Without this, prints the "
-        "planned PUT body and exits.",
-    )
-    @click.option(
-        "--json",
-        "json_out",
-        is_flag=True,
-        help="Emit one JSON object per branch instead of human-readable text.",
-    )
-    def ecosystem_set_branch_protection(
-        distribution, branch, deletion_only, execute, json_out
-    ):
-        """Apply branch protection to DISTRIBUTION (or 'all' for the fleet).
-
-        Pass `all` as DISTRIBUTION to roll out across every ECOSYSTEM repo.
-        With --deletion-only this is the standard baseline that keeps every
-        `develop` un-deletable without blocking CI's commit-back push.
-        """
-        targets = ["develop", "main"] if branch == "both" else [branch]
-        dists = _all_distributions() if distribution == "all" else [distribution]
-
-        exit_code = 0
-        for dist in dists:
-            rc = _apply_one(
-                dist,
-                targets,
-                deletion_only=deletion_only,
-                execute=execute,
-                json_out=json_out,
-            )
-            exit_code = max(exit_code, rc)
-        raise SystemExit(exit_code)
-
-    @ecosystem.command(
-        "unset-branch-protection",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem unset-branch-protection scitex-dev\n"
-            "  $ scitex-dev ecosystem unset-branch-protection scitex-dev --execute\n"
-            "\n"
-            "Rollback for `set-branch-protection`. Deletes the protection\n"
-            "rule on DISTRIBUTION's `develop` and/or `main` branch. --dry-run\n"
-            "is the default; pass --execute to actually DELETE.\n"
-        ),
-    )
-    @click.argument("distribution")
-    @click.option(
-        "--branch",
-        type=click.Choice(["develop", "main", "both"]),
-        default="both",
-        help="Which branch to unprotect. Default: both.",
-    )
-    @click.option(
-        "--execute",
-        "-y",
-        "--yes",
-        "execute",
-        is_flag=True,
-        help="Actually DELETE the protection rule.",
-    )
-    @click.option("--json", "json_out", is_flag=True)
-    def ecosystem_unset_branch_protection(distribution, branch, execute, json_out):
-        """Remove branch protection on DISTRIBUTION (rollback for set-)."""
-        owner_repo = _resolve_owner_repo(distribution)
-        if owner_repo is None:
-            click.echo(f"error: '{distribution}' not in ECOSYSTEM", err=True)
-            raise SystemExit(2)
-
-        targets = ["develop", "main"] if branch == "both" else [branch]
-        exit_code = 0
-        for tgt in targets:
-            if not _branch_exists(owner_repo, tgt):
-                if json_out:
-                    click.echo(
-                        json.dumps(
-                            {"branch": tgt, "action": "skip", "reason": "no-branch"}
-                        )
-                    )
-                else:
-                    click.echo(
-                        f"skip  {distribution}: branch '{tgt}' does not exist on origin",
-                        err=True,
-                    )
-                continue
-            if not execute:
-                if json_out:
-                    click.echo(json.dumps({"branch": tgt, "action": "dry-run"}))
-                else:
-                    click.echo(
-                        f"DRY-RUN {distribution}@{tgt}: "
-                        f"DELETE repos/{owner_repo}/branches/{tgt}/protection"
-                    )
-                continue
-            rc, out = _gh_api("DELETE", f"repos/{owner_repo}/branches/{tgt}/protection")
-            if rc != 0:
-                if json_out:
-                    click.echo(
-                        json.dumps(
-                            {
-                                "branch": tgt,
-                                "action": "error",
-                                "rc": rc,
-                                "stderr": out,
-                            }
-                        )
-                    )
-                else:
-                    click.echo(
-                        f"error  {distribution}@{tgt}: DELETE failed (rc={rc}): {out}",
-                        err=True,
-                    )
-                exit_code = 1
-                continue
-            if json_out:
-                click.echo(json.dumps({"branch": tgt, "action": "unset", "ok": True}))
-            else:
-                click.echo(f"ok    {distribution}@{tgt}: protection removed")
-        raise SystemExit(exit_code)

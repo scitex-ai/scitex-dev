@@ -60,6 +60,7 @@ from typing import Callable
 import click
 
 from ....jobs import JobSpec, discover_jobs
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ._up_supervisor_unit import (
     SUPERVISOR_UNIT_NAME,
     build_supervisor_unit_text,
@@ -274,25 +275,36 @@ def run_up(
 def register(ecosystem):
     @ecosystem.command(
         "up",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem up\n"
-            "      (Dry surface — writes the supervisor unit + reports\n"
-            "       what would land in the crontab block. No systemctl\n"
-            "       enable; no crontab write.)\n"
-            "\n"
-            "  $ scitex-dev ecosystem up --yes\n"
-            "      (Write the supervisor unit, install the crontab block,\n"
-            "       enable + start scitex-dev-ecosystem.service. The unit\n"
-            "       runs `scitex-dev ecosystem run` — the collective\n"
-            "       supervisor that spawns every kind=service JobSpec as\n"
-            "       a child process. The ONLY systemd unit registered.)\n"
-            "\n"
-            "Per operator policy 2026-06-14: systemd shows EXACTLY one\n"
-            "entry — scitex-dev-ecosystem.service — for the SciTeX fleet.\n"
-            "Per-leaf .service / .timer writes are gone; service-kind\n"
-            "JobSpecs lower to supervisor children, timer-kind lowers to\n"
-            "cron lines in the managed crontab block.\n"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Reconcile the SciTeX ecosystem: supervisor unit + cron block.",
+            description=(
+                "Per operator policy 2026-06-14: systemd shows EXACTLY "
+                "one entry — scitex-dev-ecosystem.service — for the "
+                "SciTeX fleet. Per-leaf .service / .timer writes are "
+                "gone; service-kind JobSpecs lower to supervisor "
+                "children, timer-kind lowers to cron lines in the "
+                "managed crontab block. Without --yes: writes the "
+                "supervisor unit (idempotent) and reports what would "
+                "land in the crontab block, but does NOT touch the "
+                "crontab or ask systemctl to do anything. With --yes: "
+                "writes the supervisor unit, installs the crontab "
+                "block, and runs `systemctl --user enable --now "
+                "scitex-dev-ecosystem.service` — whose ExecStart is "
+                "`scitex-dev ecosystem run`, the collective supervisor "
+                "that spawns every kind=service JobSpec as a child "
+                "process.",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem up",
+                    "Preview: write the unit, report the cron plan.",
+                ),
+                Example(
+                    "{prog} ecosystem up --yes",
+                    "Write + install cron + enable/start the supervisor.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -308,7 +320,6 @@ def register(ecosystem):
         ),
     )
     def ecosystem_up_cmd(yes: bool) -> None:
-        """Reconcile the SciTeX ecosystem: install the supervisor unit + cron."""
         result = run_up(yes=yes)
         click.echo("")
         click.echo("=== ecosystem up summary ===")

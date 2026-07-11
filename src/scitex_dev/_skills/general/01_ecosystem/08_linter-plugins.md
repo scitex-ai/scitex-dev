@@ -88,7 +88,7 @@ This is the structural argument for the per-package layout: rule + API + test al
 
 ## Doc-block linting (`.md`, `.rst`)
 
-`scitex-dev linter check-files <file>` works on more than `.py`:
+`scitex-dev linter validate-files <file>` works on more than `.py`:
 
 | Extension | Handler | Source-of-truth file |
 |---|---|---|

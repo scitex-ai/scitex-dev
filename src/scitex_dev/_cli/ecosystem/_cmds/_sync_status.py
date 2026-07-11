@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ecosystem `check-sync` — per-package develop-sha sync across hosts.
+"""ecosystem `validate-sync` (+ deprecated `check-sync` alias) — per-package develop-sha sync across hosts.
 
 Read-only by default. For each ecosystem clone it reports the current
 branch, the local `develop` sha, the `origin/develop` sha, and (with
@@ -8,14 +8,15 @@ branch, the local `develop` sha, the `origin/develop` sha, and (with
 then diffs local-vs-remote `develop` and classifies the drift.
 
 The user develops on Spartan now, so the local clones routinely drift
-behind. `check-sync -h spartan` shows, at a glance, which packages are
-behind / ahead / diverged without fetching or mutating anything.
+behind. `validate-sync -h spartan` shows, at a glance, which packages
+are behind / ahead / diverged without fetching or mutating anything.
 """
 
 from __future__ import annotations
 
 import click
 
+from ...._ecosystem.click_compat import deprecated_alias
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ._sync_helpers import (
     git,
@@ -94,7 +95,7 @@ _STATUS_STYLE = {
 
 def register(ecosystem):
     @ecosystem.command(
-        "check-sync",
+        "validate-sync",
         cls=SpecCommand,
         help_spec=CliHelp(
             summary="Per-package develop-sha sync between local and remote host(s).",
@@ -107,18 +108,18 @@ def register(ecosystem):
                 "origin develop` per repo).",
             ),
             examples=(
-                Example("{prog} ecosystem check-sync", "Local only."),
-                Example("{prog} ecosystem check-sync -h spartan", "Diff vs a host."),
+                Example("{prog} ecosystem validate-sync", "Local only."),
+                Example("{prog} ecosystem validate-sync -h spartan", "Diff vs a host."),
                 Example(
-                    "{prog} ecosystem check-sync -h spartan --json | jq",
+                    "{prog} ecosystem validate-sync -h spartan --json | jq",
                     "Structured JSON output.",
                 ),
                 Example(
-                    "{prog} ecosystem check-sync -p scitex-io -h spartan",
+                    "{prog} ecosystem validate-sync -p scitex-io -h spartan",
                     "One package vs a host.",
                 ),
                 Example(
-                    "{prog} ecosystem check-sync -h spartan --fetch",
+                    "{prog} ecosystem validate-sync -h spartan --fetch",
                     "Refresh origin first.",
                 ),
             ),
@@ -161,6 +162,11 @@ def register(ecosystem):
         # identical per-package shape, then deserialise rows[].
         remote_by_host: dict[str, dict[str, dict]] = {}
         for host in host_list:
+            # Deliberately invoke the OLD name here, not "validate-sync":
+            # the remote host may still be running a pre-rename scitex-dev
+            # during a rolling upgrade. "check-sync" is guaranteed to work
+            # on both old (primary command) and new (warn-phase alias)
+            # installs; "validate-sync" would 404 against an old install.
             remote_argv = ["ecosystem", "check-sync", "--json"]
             if fetch:
                 remote_argv.append("--fetch")
@@ -265,3 +271,16 @@ def register(ecosystem):
             if s in host_statuses:
                 return s
         return "synced"
+
+    # `check-sync` → `validate-sync` rename (§1f: `check` is a
+    # non-canonical synonym for the ecosystem-wide `validate` verb).
+    # This command's own remote-forwarding logic above deliberately keeps
+    # calling the OLD name over ssh during the rolling-upgrade window;
+    # this alias is what makes that safe.
+    deprecated_alias(
+        ecosystem,
+        "check-sync",
+        target="validate-sync",
+        remove_in="0.32",
+        phase="warn",
+    )

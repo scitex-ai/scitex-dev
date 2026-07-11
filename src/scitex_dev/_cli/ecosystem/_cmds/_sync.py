@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """ecosystem `sync` — bring every local checkout's `develop` current (ff-only).
 
-The WRITE companion to the read-only `check-sync`. The ecosystem runs on
+The WRITE companion to the read-only `validate-sync`. The ecosystem runs on
 editable installs that import the working tree, but `origin/develop` advances on
 its own (CI commits docs-HTML / version bumps back), so a checkout silently
 serves stale code until someone pulls (the Spartan runner was found 145 commits
@@ -173,7 +173,7 @@ def register(ecosystem):
                 "is a read-only preview; safe by construction even when "
                 "applying: develop-only, ff-only, skips dirty checkouts "
                 "— your un-pushed work is never touched. See "
-                "`check-sync` for the cross-host view.",
+                "`validate-sync` for the cross-host view.",
             ),
             examples=(
                 Example("{prog} ecosystem sync", "Preview (dry-run)."),

@@ -1,4 +1,4 @@
-"""NEW-ONLY baseline gate for ``check-files`` (safety pair for #265).
+"""NEW-ONLY baseline gate for ``validate-files`` (safety pair for #265).
 
 Research-mode severity promotion (PR #264 / #265) flips figure / io /
 import-family rules to ``error`` so the post-edit hook (``run_lint.sh``,
@@ -23,7 +23,7 @@ in-process ``Issue`` objects of ONE file and pulls the baseline via
 is the same one #261 documents: drop line numbers, key on rule + content.
 
 Identity here is ``(rule_id, normalized source-line text)`` — the task
-contract for check-files. Matching on the source-line CONTENT (not the
+contract for validate-files. Matching on the source-line CONTENT (not the
 line number) is what makes the gate survive a docstring tweak above a
 flagged construct: the construct moves down a few lines but keys the
 same, so it stays classified as pre-existing.

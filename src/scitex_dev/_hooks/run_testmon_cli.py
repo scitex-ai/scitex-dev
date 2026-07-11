@@ -1,7 +1,7 @@
 """Console-script shim that execs the bundled ``run_testmon.sh`` wrapper.
 
 pre-commit's ``entry:`` is whitespace-split and NOT run through a shell, so
-``entry: bash $(scitex-dev hooks print-path run_testmon)`` cannot expand the
+``entry: bash $(scitex-dev hooks show-path run_testmon)`` cannot expand the
 command substitution. This shim gives repos a host-agnostic entry point that
 needs no shell expansion and no hand-resolved absolute path:
 
