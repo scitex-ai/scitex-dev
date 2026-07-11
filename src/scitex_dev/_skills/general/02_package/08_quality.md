@@ -135,7 +135,7 @@ inside the **code** (e.g. `np.save` instead of `stx.io.save`,
 INJECTED params), use `scitex-dev linter`:
 
 ```bash
-scitex-dev linter check-files src/<pkg>                  # files in this package
+scitex-dev linter validate-files src/<pkg>               # files in this package
 scitex-dev linter sweep --package <pkg> --strict         # README + docs sweep, CI gate
 ```
 

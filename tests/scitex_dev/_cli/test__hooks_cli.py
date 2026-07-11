@@ -50,38 +50,41 @@ def runner():
 
 
 # ---------------------------------------------------------------------- #
-# `hooks path` — bundled-path lookup                                     #
+# `hooks show-path` — bundled-path lookup                                #
 # ---------------------------------------------------------------------- #
 
 
 class TestHooksPath:
-    """``hooks print-path <name>`` returns the absolute bundled-script path.
+    """``hooks show-path <name>`` returns the absolute bundled-script path.
 
-    Verb is ``print-path`` (compound-leaf form) NOT ``path`` per
-    audit-cli §1 — a bare noun-typed leaf at the verb position is
-    rejected as a §1 violation.
+    Verb is ``show-path`` (compound-leaf form) NOT ``path`` per audit-cli
+    §1 — a bare noun-typed leaf at the verb position is rejected as a §1
+    violation. Was briefly ``print-path``; renamed again for §1f (`print`
+    is a non-canonical synonym for the doctrine's `show` verb). The old
+    name is exercised in ``test_print_path_alias_still_forwards`` below
+    since it's still a working (deprecated) alias.
     """
 
     def test_prints_absolute_path_for_run_lint(self, cli, runner):
         # Arrange
         # (no fixtures needed; the cli fixture provides the wired runner.)
         # Act
-        result = runner.invoke(cli, ["hooks", "print-path", "run_lint"])
+        result = runner.invoke(cli, ["hooks", "show-path", "run_lint"])
         # Assert — single combined check: exit 0 AND output is the absolute
         # filesystem path of the bundled script (resolved + non-empty +
         # ends in run_lint.sh + matches the KNOWN_HOOKS source).
         source = KNOWN_HOOKS["run_lint"][0]
         emitted = (result.exit_code, result.output.strip())
         assert emitted == (0, source), (
-            f"hooks path must echo the bundled-script path; got {emitted}"
+            f"hooks show-path must echo the bundled-script path; got {emitted}"
         )
 
     def test_prints_absolute_path_for_run_testmon(self, cli, runner):
         # Arrange — run_testmon is the testmon warm-cache wrapper; repos
-        # reference it via `entry: bash $(scitex-dev hooks print-path
-        # run_testmon)` in .pre-commit-config.yaml, so print-path is the seam.
+        # reference it via `entry: bash $(scitex-dev hooks show-path
+        # run_testmon)` in .pre-commit-config.yaml, so show-path is the seam.
         # Act
-        result = runner.invoke(cli, ["hooks", "print-path", "run_testmon"])
+        result = runner.invoke(cli, ["hooks", "show-path", "run_testmon"])
         # Assert — exit 0 AND output is the bundled run_testmon.sh path.
         source = KNOWN_HOOKS["run_testmon"][0]
         emitted = (
@@ -90,9 +93,42 @@ class TestHooksPath:
             result.output.strip().endswith("run_testmon.sh"),
         )
         assert emitted == (0, source, True), (
-            f"hooks print-path must echo the bundled run_testmon.sh path; "
+            f"hooks show-path must echo the bundled run_testmon.sh path; "
             f"got {emitted}"
         )
+
+    def test_print_path_alias_still_forwards(self, cli, runner):
+        # Arrange — the OLD (deprecated) verb must still resolve the path
+        # (existing `entry: bash $(scitex-dev hooks print-path ...)` lines
+        # in downstream .pre-commit-config.yaml files must keep working).
+        # Act
+        result = runner.invoke(cli, ["hooks", "print-path", "run_lint"])
+        # Assert — exit 0 and the bundled path is on stdout somewhere (the
+        # once-per-shell deprecation warning goes to stderr, which
+        # CliRunner may fold into .output, so check `in` not `==`).
+        source = KNOWN_HOOKS["run_lint"][0]
+        assert result.exit_code == 0 and source in result.output
+
+    def test_show_path_json_emits_structured_object(self, cli, runner):
+        # Arrange — --json (audit-cli §2 read-verb requirement) must emit
+        # REAL structure, not just wrap the same string.
+        import json
+
+        # Act
+        result = runner.invoke(cli, ["hooks", "show-path", "run_lint", "--json"])
+        # Assert
+        source = KNOWN_HOOKS["run_lint"][0]
+        payload = json.loads(result.output)
+        assert payload == {"name": "run_lint", "path": source}
+
+    def test_show_path_default_output_stays_bare_path(self, cli, runner):
+        # Arrange — command-substitution callers (`$(... show-path X)`)
+        # must keep getting a bare path when --json is NOT passed.
+        # Act
+        result = runner.invoke(cli, ["hooks", "show-path", "run_lint"])
+        # Assert
+        source = KNOWN_HOOKS["run_lint"][0]
+        assert result.output.strip() == source
 
 
 # ---------------------------------------------------------------------- #

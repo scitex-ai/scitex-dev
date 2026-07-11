@@ -27,7 +27,7 @@ from __future__ import annotations
 import io
 
 from ._colors import resolve_color
-from ._label import derive_label
+from ._label import derive_label, label_font_size
 
 DEFAULT_SIZE = 512
 WORDMARK = "SciTeX"
@@ -104,7 +104,7 @@ def generate_png(
     img = Image.new("RGB", (size, size), fill)
     draw = ImageDraw.Draw(img)
 
-    label_px = int(size * (0.42 if len(resolved_label) <= 3 else 0.30))
+    label_px = max(int(label_font_size(resolved_label, size)), 1)
     label_font = _load_font(ImageFont, font_path, label_px)
     bbox = draw.textbbox((0, 0), resolved_label, font=label_font)
     w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]

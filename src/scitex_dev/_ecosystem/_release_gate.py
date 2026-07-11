@@ -36,7 +36,7 @@ Marking release N as a milestone needs no separate registry entry —
 the convention IS the CLI invocation. A repo's release workflow (CI
 job, pre-tag hook, or a human/agent cutting the tag) runs::
 
-    scitex-dev ecosystem check-versions \\
+    scitex-dev ecosystem validate-versions \\
         --gate scitex-todo==0.7.51 --require-full-coverage
 
 referencing release N's version directly. The command hard-blocks
@@ -46,7 +46,7 @@ referencing release N's version directly. The command hard-blocks
 Scope note — what "fleet coverage" means here
 -----------------------------------------------
 This reuses the SAME host-probing infrastructure ``ecosystem
-check-versions`` already uses for git-SHA sync auditing
+validate-versions`` already uses for git-SHA sync auditing
 (``scitex_dev._core.config`` hosts + SSH,
 ``scitex_dev._ecosystem._packages``). "Coverage" is measured per
 CONFIGURED HOST (``~/.scitex/dev/config.yaml`` hosts: nas, spartan,
@@ -61,7 +61,7 @@ currently-achievable proxy for fleet coverage.
 
 A host is IN SCOPE for the gate iff the package is in that host's
 synced-package set (the same allow-list / ``exclude:`` semantics
-``ecosystem check-versions`` already uses via
+``ecosystem validate-versions`` already uses via
 ``scitex_dev._sync._get_host_packages``) — hosts that don't track the
 package at all are simply absent from the result, not counted as
 failing. An EMPTY in-scope set means the gate inspected nothing and is

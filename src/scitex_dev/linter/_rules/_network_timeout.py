@@ -10,7 +10,7 @@ explicit ``timeout`` (positional OR keyword). The bounded shape that PASSES is
 scitex-todo's fixed wake POST — a call with ``timeout=`` set (and fail-soft).
 
 Severity is WARNING by design, and the rule participates in the linter's
-NEW-ONLY gate (``check-files --new-only``): it fires on newly-changed code but
+NEW-ONLY gate (``validate-files --new-only``): it fires on newly-changed code but
 legacy unbounded calls stay visible-yet-non-blocking. A CI-failing (ERROR) rule
 that over-triggers would wedge every fleet repo. PROMOTABLE to ERROR after a
 clean ecosystem sweep confirms no legitimate unbounded-call backlog remains.

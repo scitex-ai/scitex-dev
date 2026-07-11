@@ -27,27 +27,37 @@ import sys
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ...._supervisor import run_supervisor
 
 
 def register(ecosystem):
     @ecosystem.command(
         "run",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem run\n"
-            "      (Run forever — long-running foreground process; this is\n"
-            "       what systemd invokes via scitex-dev-ecosystem.service.)\n"
-            "\n"
-            "  $ scitex-dev ecosystem run --max-ticks 3\n"
-            "      (Run 3 tick cycles then exit; smoke-test path. The state\n"
-            "       file is written between ticks so a follow-up\n"
-            "       `scitex-dev ecosystem status` can verify the supervisor\n"
-            "       wrote a snapshot without sitting through the long-poll.)\n"
-            "\n"
-            "Backed by scitex_dev._supervisor.run_supervisor; that module's\n"
-            "docstring documents the tick budget, signal-handling, hot-\n"
-            "reload (SIGHUP), and the state-file path.\n"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Run the SciTeX ecosystem supervisor (Type=simple, foreground).",
+            description=(
+                "Backed by scitex_dev._supervisor.run_supervisor; that "
+                "module's docstring documents the tick budget, signal-"
+                "handling, hot-reload (SIGHUP), and the state-file "
+                "path. This is what systemd invokes via "
+                "scitex-dev-ecosystem.service's ExecStart — foreground, "
+                "because Type=simple expects ExecStart to not "
+                "double-fork, and because journalctl --user -u "
+                "scitex-dev-ecosystem then picks up stdout/stderr "
+                "without extra wiring.",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem run",
+                    "Run forever (what systemd invokes).",
+                ),
+                Example(
+                    "{prog} ecosystem run --max-ticks 3",
+                    "Smoke-test path: 3 ticks then exit.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -70,7 +80,6 @@ def register(ecosystem):
         ),
     )
     def ecosystem_run(max_ticks, verbose):
-        """Run the SciTeX ecosystem supervisor (Type=simple, foreground)."""
         # Configure logging on the way in. systemd Type=simple captures
         # stdout + stderr into the journal, so logging.basicConfig with
         # the default stderr handler is correct here — no journal-specific

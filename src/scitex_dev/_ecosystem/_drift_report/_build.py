@@ -269,7 +269,7 @@ def _layer_header(layer: str) -> str:
 
 
 def render_matrix(matrix: DriftMatrix) -> str:
-    """Render the full package × layer grid (mirrors check-versions)."""
+    """Render the full package × layer grid (mirrors validate-versions)."""
     headers = ["pkg", "SSoT"] + [_layer_header(la) for la in matrix.layers]
     body: list[list[str]] = []
     for p in matrix.packages:

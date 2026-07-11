@@ -205,7 +205,7 @@ a unit test.
 
 ## Enforcement
 
-- **Linter** (`scitex-dev lint check-files`) — fires on every save
+- **Linter** (`scitex-dev linter validate-files`) — fires on every save
   via the PostToolUse hook. Error-severity rules block the save;
   warning-severity rules surface for review.
 - **Audit** (`scitex-dev ecosystem audit-python-apis`) — currently

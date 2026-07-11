@@ -30,7 +30,7 @@ Config path resolution:
 |---|---|---|
 | `doctor` | Diagnose the health of the full SciTeX ecosystem | [02_quick-start.md](02_quick-start.md) |
 | `ecosystem list` | Registry + installed/PyPI versions | [14_ecosystem.md](14_ecosystem.md) |
-| `ecosystem check-versions` | Per-(host, package) develop-sha audit + sync (observe / dry-run / apply) | [13_versions.md](13_versions.md) |
+| `ecosystem validate-versions` | Per-(host, package) develop-sha audit + sync (observe / dry-run / apply) | [13_versions.md](13_versions.md) |
 | `ecosystem drift-report` | Unified per-package × per-layer VERSION matrix across all 8 drift layers; exit 1 on drift | [23_drift-report.md](23_drift-report.md) |
 | `ecosystem fix-mismatches` | Repair version drift | [13_versions.md](13_versions.md) |
 | `ecosystem sync-local` / `sync-host` | Editable / SSH sync | [14_ecosystem.md](14_ecosystem.md) |

@@ -8,7 +8,7 @@ with raw `pd.read_parquet` / `np.load` calls lint clean:
   plugins, the package that provides those rules (typically
   ``scitex-io``) is not installed in the lint env. Emits a one-shot
   stderr warning at load time so the agent feedback surface (and a
-  human running ``scitex-dev linter check-files`` directly) SEES it.
+  human running ``scitex-dev linter validate-files`` directly) SEES it.
 
 * **L2 — ``requires`` gate skipped**. Every IO/PA/ST rule has
   ``requires="scitex"``; when the umbrella isn't import-detectable the

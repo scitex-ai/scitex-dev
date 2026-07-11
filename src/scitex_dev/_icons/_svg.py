@@ -12,7 +12,7 @@ from __future__ import annotations
 from xml.sax.saxutils import escape
 
 from ._colors import resolve_color
-from ._label import derive_label
+from ._label import derive_label, label_font_size
 
 DEFAULT_SIZE = 512
 WORDMARK = "SciTeX"
@@ -55,7 +55,7 @@ def generate_svg(
     """
     resolved_label = (label if label is not None else derive_label(name)).upper()
     fill = color or resolve_color(name)
-    label_font_size = size * (0.42 if len(resolved_label) <= 3 else 0.30)
+    label_size = label_font_size(resolved_label, size)
     label_y = size * 0.46
     wordmark_font_size = size * 0.11
     wordmark_y = size * 0.72
@@ -65,7 +65,7 @@ def generate_svg(
         f'viewBox="0 0 {size} {size}">',
         f'<rect width="{size}" height="{size}" fill="{fill}"/>',
         f'<text x="{size / 2:.1f}" y="{label_y:.1f}" font-family="sans-serif" '
-        f'font-size="{label_font_size:.1f}" font-weight="700" fill="#ffffff" '
+        f'font-size="{label_size:.1f}" font-weight="700" fill="#ffffff" '
         f'text-anchor="middle" dominant-baseline="middle">'
         f"{escape(resolved_label)}</text>",
     ]

@@ -13,7 +13,7 @@ apt needs root, so ``install`` is BUILD-TIME only (run in a container
     apt-get install -y --no-install-recommends \\
         $(scitex-dev ecosystem system-deps list)
 
-``check-superset`` gates a container cutover: it proves the federated set is a
+``validate-superset`` gates a container cutover: it proves the federated set is a
 superset of a recipe's current hardcoded apt list, so nothing is silently
 dropped when those hardcoded blocks are deleted.
 """
@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import click
 
+from ...._ecosystem.click_compat import deprecated_alias
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
 
 
@@ -240,7 +241,7 @@ def register(ecosystem):
         return _do_install(_select(provider), dry_run=dry_run or not yes)
 
     @system_deps.command(
-        "check-superset",
+        "validate-superset",
         cls=SpecCommand,
         help_spec=CliHelp(
             summary="Gate a container cutover against a recipe baseline superset.",
@@ -256,11 +257,11 @@ def register(ecosystem):
             ),
             examples=(
                 Example(
-                    "{prog} ecosystem system-deps check-superset --baseline recipe-apt.txt",
+                    "{prog} ecosystem system-deps validate-superset --baseline recipe-apt.txt",
                     "Check against a baseline file.",
                 ),
                 Example(
-                    "{prog} ecosystem system-deps check-superset --baseline r.txt --json",
+                    "{prog} ecosystem system-deps validate-superset --baseline r.txt --json",
                     "Structured JSON verdict.",
                 ),
             ),
@@ -277,7 +278,7 @@ def register(ecosystem):
         "--json", "as_json", is_flag=True, help="Emit the verdict + delta as JSON."
     )
     @click.pass_context
-    def system_deps_check_superset(ctx, baseline, as_json):
+    def system_deps_validate_superset(ctx, baseline, as_json):
         import json as _json
 
         aggregated = {dep.package for dep in _select(None)}
@@ -317,3 +318,13 @@ def register(ecosystem):
             "GREEN: federated set ⊇ baseline — safe to drop the hardcoded blocks."
         )
         ctx.exit(0)
+
+    # `check-superset` → `validate-superset` rename (§1f: `check` is a
+    # non-canonical synonym for the ecosystem-wide `validate` verb).
+    deprecated_alias(
+        system_deps,
+        "check-superset",
+        target="validate-superset",
+        remove_in="0.32",
+        phase="warn",
+    )

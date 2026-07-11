@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Version-Drift Management across the distributed SciTeX fleet
-  [DETAILS] The single hardest thing about developing the SciTeX ecosystem fast is keeping ONE package's version consistent across every layer it lives in: PyPI, GitHub (develop/main/tags), each host's per-project `.venv`, the agent container base image, each agent's overlay venv, CI, and every editable (`-e`) install. Drift in any layer silently ships stale or broken code and — worse — hides bugs (a broken CI feedback loop lets audit/test violations accumulate invisibly). This skill defines the drift matrix (what version lives where), the reconcile loop (`scitex-dev ecosystem check-versions` and friends), the full release→propagate→rebuild→restart lifecycle, and the agent rebuild/restart protocol. Read this before any multi-package release wave, before asking "why is my change not live yet?", or when reconciling versions across hosts/containers/agents. Companion to 01_version-control.md (manual git flow) and 03_release-automation.md (release commands).
+  [DETAILS] The single hardest thing about developing the SciTeX ecosystem fast is keeping ONE package's version consistent across every layer it lives in: PyPI, GitHub (develop/main/tags), each host's per-project `.venv`, the agent container base image, each agent's overlay venv, CI, and every editable (`-e`) install. Drift in any layer silently ships stale or broken code and — worse — hides bugs (a broken CI feedback loop lets audit/test violations accumulate invisibly). This skill defines the drift matrix (what version lives where), the reconcile loop (`scitex-dev ecosystem validate-versions` and friends), the full release→propagate→rebuild→restart lifecycle, and the agent rebuild/restart protocol. Read this before any multi-package release wave, before asking "why is my change not live yet?", or when reconciling versions across hosts/containers/agents. Companion to 01_version-control.md (manual git flow) and 03_release-automation.md (release commands).
 tags: [scitex-general-development-version-drift]
 ---
 
@@ -28,8 +28,8 @@ For any package `scitex-x`, its version is materialized independently in
 |---|-------|-------|----------------|----------------|
 | 1 | **PyPI** | published release (external SSoT) | `pip index versions scitex-x` / `check_releases.py` | cut a release (§3) |
 | 2 | **GitHub** | `develop` HEAD, `main` HEAD, tags | `git ls-remote --tags`, `gh run list` | promote develop→main→tag |
-| 3 | **Host `ywata-note-win`** | per-project `.venv` editable installs | `ecosystem check-versions -h ywata-note-win` | `check-versions --apply` |
-| 4 | **Host `spartan`** | CI-runner + compute venvs | `ecosystem check-versions -h spartan` | `check-versions --apply -h spartan` |
+| 3 | **Host `ywata-note-win`** | per-project `.venv` editable installs | `ecosystem validate-versions -h ywata-note-win` | `validate-versions --apply` |
+| 4 | **Host `spartan`** | CI-runner + compute venvs | `ecosystem validate-versions -h spartan` | `validate-versions --apply -h spartan` |
 | 5 | **Container base image** | the apptainer image's baked venv | `sac`/image inspection (gap — see §5) | rebuild the image |
 | 6 | **Agent overlay** | each agent's dedicated overlay venv | per-agent venv inspection (gap — §5) | redeploy+restart the agent |
 | 7 | **CI** | what each workflow installs per run | the workflow yaml / run logs | pin/refresh in the workflow |
@@ -46,16 +46,16 @@ hand-set independently.
 Always **observe before you reconcile**. The backbone tool:
 
 ```bash
-scitex-dev ecosystem check-versions                 # Mode 1: observe (all hosts)
-scitex-dev ecosystem check-versions --json          # structured, for piping
-scitex-dev ecosystem check-versions -p scitex-io    # one package
-scitex-dev ecosystem check-versions -h spartan      # one host
+scitex-dev ecosystem validate-versions                 # Mode 1: observe (all hosts)
+scitex-dev ecosystem validate-versions --json          # structured, for piping
+scitex-dev ecosystem validate-versions -p scitex-io    # one package
+scitex-dev ecosystem validate-versions -h spartan      # one host
 ```
 
 Supporting probes:
 
 ```bash
-scitex-dev ecosystem check-sync                     # per-package develop-sha: local vs remote host(s)
+scitex-dev ecosystem validate-sync                  # per-package develop-sha: local vs remote host(s)
 ~/.scitex/todo/check_releases.py                    # per-package pyproject-vs-PyPI (RELEASED/STALE/BEHIND/UNPUBLISHED)
 scitex-dev ecosystem audit-umbrella-pins            # umbrella `==` pins vs PyPI latest
 ```
@@ -91,8 +91,8 @@ short of.
 4. **Propagate to hosts** (layers 3, 4, 8): once PyPI shows the new
    version, reconcile every host's installs:
    ```bash
-   scitex-dev ecosystem check-versions --dry-run       # preview the sync
-   scitex-dev ecosystem check-versions --apply         # execute (all hosts)
+   scitex-dev ecosystem validate-versions --dry-run       # preview the sync
+   scitex-dev ecosystem validate-versions --apply         # execute (all hosts)
    scitex-dev ecosystem fix-mismatches --confirm       # align installed/pyproject/tag
    ```
    For editable installs, a `git pull` in the checkout is enough — but
@@ -127,7 +127,7 @@ infra fast; never let green-CI go dark for days.
 
 ## 5. The baked-artifact gap and the never-again loop (the north star)
 
-`check-versions` covers layers 1–4, 7, 8 well. It does **not** yet see
+`validate-versions` covers layers 1–4, 7, 8 well. It does **not** yet see
 inside layer 5 (container base image) or layer 6 (agent overlays) — the
 two layers that need a rebuild/restart rather than a `pip install`.
 `deploy-freshness` (the auto-restart engine for host units) is **no help
@@ -153,7 +153,7 @@ scitex-dev owns *when + why to rebuild* (policy); `scitex-agent-container`
 owns *how* (`sac versions` reporter + `sac image build --remote`
 actuator); `scitex-hpc` owns the HPC build recipe.
 
-1. **Detect** — schedule the existing `check-versions`/drift-report as a
+1. **Detect** — schedule the existing `validate-versions`/drift-report as a
    `scitex_dev.jobs` cron so it runs every N minutes, not on demand.
    Side A = `sac versions --json` (the baked/installed truth; a *pure*
    state reporter — no PyPI/policy logic in it). Side B = PyPI-latest.

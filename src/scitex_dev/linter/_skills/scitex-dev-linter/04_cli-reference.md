@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] scitex-dev linter CLI Reference
-  [DETAILS] Top-level subcommands of `scitex-dev linter` — check-files, format-files, lint-and-run, list-rules, list-rules-all, mcp, completion helpers.
+  [DETAILS] Top-level subcommands of `scitex-dev linter` — validate-files, format-files, lint-and-run, list-rules, list-rules-all, mcp, completion helpers.
 tags: [scitex-dev-linter-cli-reference]
 ---
 
@@ -22,7 +22,7 @@ tags: [scitex-dev-linter-cli-reference]
 
 | Command         | Purpose                                                 |
 |-----------------|---------------------------------------------------------|
-| `check-files`   | Check Python files for SciTeX pattern compliance        |
+| `validate-files`   | Check Python files for SciTeX pattern compliance        |
 | `format-files`  | Auto-fix SciTeX pattern issues in Python files          |
 | `lint-and-run`  | Lint then execute a Python script                       |
 
@@ -58,7 +58,7 @@ tags: [scitex-dev-linter-cli-reference]
 ## Examples
 
 ```bash
-scitex-dev linter check-files src/
+scitex-dev linter validate-files src/
 scitex-dev linter list-rules --json
 scitex-dev linter format-files path/to/file.py
 scitex-dev linter mcp list-tools
