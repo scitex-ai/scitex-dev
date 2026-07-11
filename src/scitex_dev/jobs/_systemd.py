@@ -113,6 +113,7 @@ def _interpreter_bindir() -> Path:
 def resolve_execstart(
     command: str,
     *,
+    venv: str | None = None,
     which=shutil.which,
     interpreter_bindir=_interpreter_bindir,
 ) -> str:
@@ -127,6 +128,14 @@ def resolve_execstart(
 
     Resolution rules (tried in order — first match wins):
 
+    0. **Per-job venv pin** — ``Path(venv) / "bin" / head`` when
+       ``venv`` is given (typically ``JobSpec.venv``). "Leaf owns its
+       own venv": a cross-package supervised child should resolve
+       against ITS OWN venv, not the supervisor's. Takes priority over
+       every other rule below. Falls through to them if the pinned
+       venv doesn't actually contain the binary (e.g. a stale pin) so
+       a misconfigured pin degrades to the old behavior instead of a
+       hard failure.
     1. **Interpreter sibling-bin** — ``Path(sys.executable).parent / head``.
        The process that *writes* the unit is the same interpreter that
        installed the console scripts. Its sibling ``bin/`` therefore
@@ -166,6 +175,14 @@ def resolve_execstart(
     head, *tail = tokens
     if head.startswith("/"):
         return command
+
+    # 0. Per-job venv pin — highest priority. The leaf DECLARED which
+    #    venv owns this command; trust that over the supervisor's own
+    #    interpreter or ambient PATH.
+    if venv:
+        pinned = Path(venv) / "bin" / head
+        if pinned.is_file() and os.access(pinned, os.X_OK):
+            return shlex.join([str(pinned), *tail])
 
     # 1. Interpreter sibling-bin probe — most reliable for console
     #    scripts installed alongside the running interpreter.
@@ -226,11 +243,14 @@ def _build_oneshot_service_unit(job: _jobs.JobSpec) -> str:
         "",
         "[Service]",
         "Type=oneshot",
-        f"ExecStart={resolve_execstart(job.command)}",
+        f"ExecStart={resolve_execstart(job.command, venv=job.venv)}",
         "StandardOutput=journal",
         "StandardError=journal",
         "RemainAfterExit=no",
     ]
+    if job.venv:
+        lines.append(f"WorkingDirectory={Path(job.venv).parent}")
+        lines.append(f"Environment=VIRTUAL_ENV={job.venv}")
     if job.timeout_sec is not None:
         lines.append(f"TimeoutStartSec={job.timeout_sec}s")
     lines.append("")
@@ -280,9 +300,12 @@ def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
         seconds = _on_boot_sec_to_seconds(job.on_boot_sec)
         if seconds > 0:
             lines.append(f"ExecStartPre=/bin/sleep {seconds}")
+    if job.venv:
+        lines.append(f"WorkingDirectory={Path(job.venv).parent}")
+        lines.append(f"Environment=VIRTUAL_ENV={job.venv}")
     lines.extend(
         [
-            f"ExecStart={resolve_execstart(job.command)}",
+            f"ExecStart={resolve_execstart(job.command, venv=job.venv)}",
             "StandardOutput=journal",
             "StandardError=journal",
             f"Restart={job.restart_policy}",
