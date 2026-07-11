@@ -7,6 +7,65 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-07-11
+
+### Added
+- **Per-JobSpec venv pin (#324).** `JobSpec.venv: str | None` lets a leaf
+  package pin its own venv (e.g. `~/proj/scitex-todo/.venv`) for a
+  supervised service/timer, instead of the job silently resolving from
+  whichever venv the `scitex-dev` supervisor itself happens to run from.
+  Wired through all three execution paths: the systemd unit builder
+  (`WorkingDirectory=` + `Environment=VIRTUAL_ENV=`), the `ecosystem run`
+  supervisor's `subprocess.Popen` spawner (`cwd` + overlaid
+  `VIRTUAL_ENV`/`PATH`), and the non-systemd shell keep-alive fallback
+  (`_respawn.py`). Backward compatible — a JobSpec without `venv` set is
+  unaffected. Fixes the cross-package staleness class of bug where a
+  supervised service ran stale code because the supervisor's own venv
+  didn't have the owning package installed (or had an older version).
+- **Ecosystem boundary/ports-and-producers lint rule + ADR (#319).**
+  `docs/adr/0003-ecosystem-boundary-ports-and-producers.md` codifies when a
+  leaf-to-leaf import needs a port/producer indirection vs. a direct
+  import; new AST-context-aware audit rule (PS-183) flags unguarded
+  top-level lateral/upward leaf imports. Also promotes
+  `scitex_dev.linter.spi` and `scitex_dev.cli.attach_shell_completion` to
+  the public API.
+- **§4b CliHelp migration, first pass (#320, #322, #323).** Continues
+  converting scitex-dev's own CLI help text to the `CliHelp`/`SpecCommand`/
+  `SpecGroup` dataclass spec (dogfooding the same convention scitex-dev
+  enforces on other packages). `icons generate` gained a real `--dry-run`/
+  `--yes` (verified: no file/dir created under `--dry-run`); 6 verb
+  renames (`check-*` → `validate-*`, `set-branch-protection` →
+  `update-branch-protection`, `print-path` → `show-path`), each with a
+  working `deprecated_alias()` back-compat forward so existing scripts
+  keep working with a warning.
+
+### Fixed
+- **`scitex-dev ecosystem audit-all scitex-dev` no longer fails CI
+  (#323).** The 67 violations this surfaced were a mix of severities: 8
+  were genuine errors blocking the audit gate (the CliHelp/verb work
+  above); the other 59 were warn-only but printed with an `ERRO:` label
+  because the auditor labels a whole batch by its worst violation, not
+  per-line — those don't block CI and are tracked as documented
+  follow-up (33 remain, mirroring the same "avoid rushed conversion of
+  complex code" precedent already used elsewhere in this migration).
+- **Latent `NameError` in `skills get`** — used `drift_warning` without
+  importing it; regression test added (#323).
+- **Icon generator label sizing (#321).** Label font size jumped
+  discontinuously at a 3/4-character boundary (every label over 3 chars
+  rendered the same size regardless of actually being 4 or 6 characters
+  long) instead of scaling smoothly with label length — visible as
+  mismatched icon sizes across a set of fleet Telegram-bot avatars.
+  `label_font_size()` now targets a fixed on-canvas text width so size
+  shrinks continuously, capped so short labels never exceed the previous
+  best-case size.
+- **AGPL-3.0-only license clarity, ecosystem-wide.** The FSF-provided
+  "How to Apply These Terms" template text in every package's `LICENSE`
+  still offered "version 3, or (at your option) any later version",
+  contradicting every package's own `pyproject.toml`
+  (`license = "AGPL-3.0-only"`). Corrected to "version 3 of the License
+  only" across the org (only the non-operative template section touched
+  — the actual license terms, sections 0-17, are unchanged).
+
 ## [0.26.0] - 2026-07-03
 
 ### Added
