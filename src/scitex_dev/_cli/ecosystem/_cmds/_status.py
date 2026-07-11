@@ -26,6 +26,7 @@ import time
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ...._supervisor import default_state_path
 from ...._supervisor._state import read_state
 
@@ -97,17 +98,27 @@ def _render_human(state) -> str:
 def register(ecosystem):
     @ecosystem.command(
         "status",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem status\n"
-            "      (Human-readable table — one row per child service.)\n"
-            "\n"
-            "  $ scitex-dev ecosystem status --json\n"
-            "      (Raw state.json pass-through — for scripting.)\n"
-            "\n"
-            "Reads ~/.local/state/scitex-ecosystem/state.json — the snapshot\n"
-            "the supervisor writes every 5s. Never talks to the supervisor\n"
-            "process, so calling this is free.\n"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Show the SciTeX ecosystem supervisor's current state.",
+            description=(
+                "Reads ~/.local/state/scitex-ecosystem/state.json — the "
+                "snapshot the supervisor writes every 5s. Never talks "
+                "to the supervisor process (no IPC, no signal-ping), so "
+                "calling this is free and never perturbs a running "
+                "child. A missing / empty / corrupted snapshot reports "
+                "\"supervisor not running\" rather than raising.",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem status",
+                    "Human-readable table, one row per child.",
+                ),
+                Example(
+                    "{prog} ecosystem status --json",
+                    "Raw state.json pass-through, for scripting.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -126,7 +137,6 @@ def register(ecosystem):
         ),
     )
     def ecosystem_status(as_json, state_path):
-        """Show the SciTeX ecosystem supervisor's current state."""
         from pathlib import Path as _Path
 
         path = _Path(state_path) if state_path else default_state_path()

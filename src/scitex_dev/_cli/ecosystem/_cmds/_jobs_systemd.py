@@ -14,6 +14,8 @@ from pathlib import Path
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
+
 
 def _unit_dir() -> Path:
     """Resolve ``~/.config/systemd/user`` honouring ``$HOME`` (test seam)."""
@@ -21,35 +23,41 @@ def _unit_dir() -> Path:
 
 
 def register(ecosystem) -> None:
-    @ecosystem.group("systemd", invoke_without_command=True)
+    @ecosystem.group(
+        "systemd",
+        invoke_without_command=True,
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="Federated systemd user timers across the SciTeX ecosystem.",
+            description=(
+                "Generates `<name>.service` (Type=oneshot) and "
+                "`<name>.timer` (Persistent=true) unit files under "
+                "~/.config/systemd/user/ for every systemd-kind job. "
+                "Does NOT run systemctl — prints the enable hint "
+                "instead. Verbs: `list` shows all discovered systemd "
+                "jobs + source package; `install` writes unit files "
+                "(prints the `systemctl --user` hint); `uninstall` "
+                "removes the unit files.",
+            ),
+        ),
+    )
     @click.pass_context
     def systemd(ctx):
-        """Federated systemd user timers across the SciTeX ecosystem.
-
-        \b
-        Generates `<name>.service` (Type=oneshot) and `<name>.timer`
-        (Persistent=true) unit files under ~/.config/systemd/user/ for
-        every systemd-kind job. Does NOT run systemctl — prints the
-        enable hint instead.
-
-        \b
-        Verbs:
-          list       — show all discovered systemd jobs + source package
-          install    — write unit files (prints `systemctl --user` hint)
-          uninstall  — remove the unit files
-        """
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
 
-    @systemd.command("list")
+    @systemd.command(
+        "list",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="List all discovered systemd-kind jobs.",
+            examples=(
+                Example("{prog} ecosystem systemd list", "Human-readable list."),
+            ),
+        ),
+    )
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def systemd_list(as_json):
-        """List all discovered systemd-kind jobs.
-
-        \b
-        Example:
-          $ scitex-dev ecosystem systemd list
-        """
         from ....jobs import jobs_of_kind
 
         jobs = jobs_of_kind("timer") + jobs_of_kind("service")
@@ -79,7 +87,21 @@ def register(ecosystem) -> None:
             click.echo(f"  {j.name:30s} every {cadence}")
             click.echo(f"  {'':30s} {j.description}")
 
-    @systemd.command("install")
+    @systemd.command(
+        "install",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Write `<name>.service` + `<name>.timer` for systemd-kind jobs.",
+            examples=(
+                Example("{prog} ecosystem systemd install --dry-run", "Preview only."),
+                Example("{prog} ecosystem systemd install --yes", "Write unit files."),
+                Example(
+                    "{prog} ecosystem systemd install --name sac.accounts-refresh --yes",
+                    "Install just one job.",
+                ),
+            ),
+        ),
+    )
     @click.option("--name", default=None, help="Install only the named job.")
     @click.option(
         "--dry-run",
@@ -95,14 +117,6 @@ def register(ecosystem) -> None:
         help="Confirm. Required when not --dry-run.",
     )
     def systemd_install(name, dry_run, yes):
-        """Write `<name>.service` + `<name>.timer` for systemd-kind jobs.
-
-        \b
-        Example:
-          $ scitex-dev ecosystem systemd install --dry-run
-          $ scitex-dev ecosystem systemd install --yes
-          $ scitex-dev ecosystem systemd install --name sac.accounts-refresh --yes
-        """
         from ....jobs import jobs_of_kind
         from ....jobs import _systemd as sd
 
@@ -152,7 +166,25 @@ def register(ecosystem) -> None:
                     f"  systemctl --user enable --now {sd.systemd_unit_name(j)}"
                 )
 
-    @systemd.command("uninstall")
+    @systemd.command(
+        "uninstall",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Remove `<name>.service` + `<name>.timer` unit files.",
+            examples=(
+                Example(
+                    "{prog} ecosystem systemd uninstall --dry-run", "Preview only."
+                ),
+                Example(
+                    "{prog} ecosystem systemd uninstall --yes", "Remove unit files."
+                ),
+                Example(
+                    "{prog} ecosystem systemd uninstall --name sac.accounts-refresh --yes",
+                    "Remove just one job.",
+                ),
+            ),
+        ),
+    )
     @click.option("--name", default=None, help="Remove only the named job's units.")
     @click.option(
         "--dry-run",
@@ -168,14 +200,6 @@ def register(ecosystem) -> None:
         help="Confirm. Required when not --dry-run.",
     )
     def systemd_uninstall(name, dry_run, yes):
-        """Remove `<name>.service` + `<name>.timer` unit files.
-
-        \b
-        Example:
-          $ scitex-dev ecosystem systemd uninstall --dry-run
-          $ scitex-dev ecosystem systemd uninstall --yes
-          $ scitex-dev ecosystem systemd uninstall --name sac.accounts-refresh --yes
-        """
         from ....jobs import jobs_of_kind
 
         jobs = jobs_of_kind("timer") + jobs_of_kind("service")

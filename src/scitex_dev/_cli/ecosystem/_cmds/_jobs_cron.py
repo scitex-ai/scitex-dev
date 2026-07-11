@@ -12,37 +12,46 @@ from __future__ import annotations
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
+
 
 def register(ecosystem) -> None:
-    @ecosystem.group("cron", invoke_without_command=True)
+    @ecosystem.group(
+        "cron",
+        invoke_without_command=True,
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="Federated cron jobs across the SciTeX ecosystem.",
+            description=(
+                "Aggregates cron-kind jobs from every package registered "
+                "under the `scitex_dev.jobs` entry-point group (plus "
+                "scitex-dev's built-ins) and materialises them into a "
+                "single idempotent crontab block. Verbs: `list` shows "
+                "all discovered cron jobs + source package; `install` "
+                "writes the managed crontab block (idempotent); "
+                "`uninstall` removes the managed block (or one line); "
+                "`exec` runs one federated job's body directly.",
+            ),
+        ),
+    )
     @click.pass_context
     def cron(ctx):
-        """Federated cron jobs across the SciTeX ecosystem.
-
-        \b
-        Aggregates cron-kind jobs from every package registered under the
-        `scitex_dev.jobs` entry-point group (plus scitex-dev's built-ins)
-        and materialises them into a single idempotent crontab block.
-
-        \b
-        Verbs:
-          list       — show all discovered cron jobs + source package
-          install    — write the managed crontab block (idempotent)
-          uninstall  — remove the managed block (or one line)
-        """
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
 
-    @cron.command("list")
+    @cron.command(
+        "list",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="List all discovered cron-kind jobs.",
+            examples=(
+                Example("{prog} ecosystem cron list", "Human-readable list."),
+                Example("{prog} ecosystem cron list --json", "Structured JSON."),
+            ),
+        ),
+    )
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def cron_list(as_json):
-        """List all discovered cron-kind jobs.
-
-        \b
-        Example:
-          $ scitex-dev ecosystem cron list
-          $ scitex-dev ecosystem cron list --json
-        """
         from ....jobs import jobs_of_kind
 
         jobs = jobs_of_kind("cron")
@@ -70,7 +79,26 @@ def register(ecosystem) -> None:
             click.echo(f"  {j.name:30s} {j.schedule:16s} [{_source_of(j.name)}]")
             click.echo(f"  {'':30s} {j.description}")
 
-    @cron.command("install")
+    @cron.command(
+        "install",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Write the managed crontab block for cron-kind jobs.",
+            description=(
+                "Idempotent: the block delimited by `# >>> "
+                "scitex-dev-ecosystem ... >>>` / `# <<< ... <<<` is "
+                "replaced in place — re-running never duplicates lines.",
+            ),
+            examples=(
+                Example("{prog} ecosystem cron install --dry-run", "Preview only."),
+                Example("{prog} ecosystem cron install --yes", "Write the block."),
+                Example(
+                    "{prog} ecosystem cron install --name ci-watch --yes",
+                    "Install just one job.",
+                ),
+            ),
+        ),
+    )
     @click.option("--name", default=None, help="Install only the named job.")
     @click.option(
         "--dry-run",
@@ -82,19 +110,6 @@ def register(ecosystem) -> None:
         "-y", "--yes", is_flag=True, default=False, help="Confirm the crontab write."
     )
     def cron_install(name, dry_run, yes):
-        """Write the managed crontab block for cron-kind jobs.
-
-        \b
-        Idempotent: the block delimited by
-            # >>> scitex-dev-ecosystem ... >>>  /  # <<< ... <<<
-        is replaced in place — re-running never duplicates lines.
-
-        \b
-        Example:
-          $ scitex-dev ecosystem cron install --dry-run
-          $ scitex-dev ecosystem cron install --yes
-          $ scitex-dev ecosystem cron install --name ci-watch --yes
-        """
         from ....jobs import jobs_of_kind
         from ....jobs import _cron_block as cb
         from ...cron import _crontab
@@ -122,7 +137,21 @@ def register(ecosystem) -> None:
 
         click.echo(f"installed {len(jobs)} cron job(s) into managed block.")
 
-    @cron.command("uninstall")
+    @cron.command(
+        "uninstall",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Remove the managed crontab block (or one line).",
+            examples=(
+                Example("{prog} ecosystem cron uninstall --dry-run", "Preview only."),
+                Example("{prog} ecosystem cron uninstall --yes", "Remove the block."),
+                Example(
+                    "{prog} ecosystem cron uninstall --name ci-watch --yes",
+                    "Remove just one line.",
+                ),
+            ),
+        ),
+    )
     @click.option("--name", default=None, help="Remove only the named line.")
     @click.option(
         "--dry-run",
@@ -134,14 +163,6 @@ def register(ecosystem) -> None:
         "-y", "--yes", is_flag=True, default=False, help="Confirm the crontab write."
     )
     def cron_uninstall(name, dry_run, yes):
-        """Remove the managed crontab block (or one line).
-
-        \b
-        Example:
-          $ scitex-dev ecosystem cron uninstall --dry-run
-          $ scitex-dev ecosystem cron uninstall --yes
-          $ scitex-dev ecosystem cron uninstall --name ci-watch --yes
-        """
         from ....jobs import _cron_block as cb
         from ...cron import _crontab
 
@@ -173,7 +194,32 @@ def register(ecosystem) -> None:
         except RuntimeError as exc:
             raise click.ClickException(str(exc)) from exc
 
-    @cron.command("exec")
+    @cron.command(
+        "exec",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Execute the body of the federated cron job NAME.",
+            description=(
+                "Discovers the JobSpec via the `scitex_dev.jobs` "
+                "entry-point federation (the SAME aggregator that "
+                "`ecosystem cron install` uses), then dispatches to the "
+                "owning module's run_once. This is the verb the "
+                "materialised crontab line invokes; operators can also "
+                "run it interactively to test a job without waiting "
+                "for the next cron tick.",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem cron exec deploy-freshness",
+                    "Dry-run the job body.",
+                ),
+                Example(
+                    "{prog} ecosystem cron exec deploy-freshness --apply",
+                    "Actually repair drift.",
+                ),
+            ),
+        ),
+    )
     @click.argument("name")
     @click.option(
         "--apply",
@@ -188,21 +234,6 @@ def register(ecosystem) -> None:
         ),
     )
     def cron_exec(name: str, apply: bool) -> None:
-        """Execute the body of the federated cron job NAME.
-
-        \b
-        Discovers the JobSpec via the `scitex_dev.jobs` entry-point
-        federation (the SAME aggregator that `ecosystem cron install`
-        uses), then dispatches to the owning module's run_once. This is
-        the verb the materialised crontab line invokes; operators can
-        also run it interactively to test a job without waiting for
-        the next cron tick.
-
-        \b
-        Example:
-          $ scitex-dev ecosystem cron exec deploy-freshness
-          $ scitex-dev ecosystem cron exec deploy-freshness --apply
-        """
         from ....jobs import jobs_of_kind
 
         # Verify the named job is actually in the federation.
