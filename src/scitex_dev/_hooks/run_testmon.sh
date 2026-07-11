@@ -82,6 +82,21 @@ if [[ "${1:-}" == "--self-test" ]]; then
         echo "  FAIL: cache dir not keyed correctly ($CACHE_DIR)"
     fi
 
+    # Regression guard: if we're inside a linked worktree (path contains
+    # /.worktrees/<name>), REPO must NOT equal the worktree's own directory
+    # name -- that was exactly the bug this fix closes. Only meaningful when
+    # actually run from inside such a path, so this is a no-op elsewhere.
+    if [[ "$GIT_ROOT" == *"/.worktrees/"* ]]; then
+        worktree_name="$(basename "$GIT_ROOT")"
+        if [[ "$REPO" != "$worktree_name" ]]; then
+            pass=$((pass + 1))
+            echo "  PASS: worktree-invariant (REPO=$REPO != worktree dir=$worktree_name)"
+        else
+            fail=$((fail + 1))
+            echo "  FAIL: REPO leaked the worktree dir name ($REPO) -- cache no longer shared across worktrees"
+        fi
+    fi
+
     echo "Results: $pass passed, $fail failed"
     [[ $fail -eq 0 ]] && exit 0 || exit 1
 fi
