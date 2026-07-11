@@ -1,7 +1,7 @@
 """CLI entry point for `scitex-dev linter` (Click-based, audit-compliant).
 
 Canonical subcommands:
-    scitex-dev linter check-files <PATH> [--json] [--severity] [--category] [--no-color]
+    scitex-dev linter validate-files <PATH> [--json] [--severity] [--category] [--no-color]
     scitex-dev linter format-files <PATH> [--check] [--diff] [--dry-run] [--yes]
     scitex-dev linter run-python <SCRIPT> [--strict] [-- script_args...]
     scitex-dev linter list-rules [--json] [--category] [--severity]      (built-in)
@@ -17,7 +17,8 @@ Canonical subcommands:
     scitex-dev linter show-completion-zsh
 
 Deprecated aliases (still work, redirect to new names):
-    check         -> check-files
+    check         -> validate-files
+    check-files   -> validate-files
     format        -> format-files
     python        -> run-python
     rule          -> list-rules
@@ -106,7 +107,7 @@ def main_group(ctx, as_json):
 
     \b
     Example:
-        $ scitex-dev linter check-files src/
+        $ scitex-dev linter validate-files src/
         $ scitex-dev linter list-rules --json
         $ scitex-dev linter mcp list-tools
     """
@@ -117,14 +118,41 @@ def main_group(ctx, as_json):
 
 
 # =========================================================================
-# check-files (lives in ._cmd_check; registered here, re-exported for compat)
+# validate-files (lives in ._cmd_check; registered here, re-exported for
+# compat). Command renamed from `check-files` 2026-07-11 (§1f); the
+# module stays `_cmd_check.py` — pure internal filename, not user-facing.
 # =========================================================================
 
 from ._cmd_check import _do_check  # noqa: E402,F401  back-compat re-export
 from ._cmd_check import _collect_files  # noqa: E402,F401  back-compat re-export
-from ._cmd_check import register as _register_check_files  # noqa: E402
+from ._cmd_check import register as _register_validate_files  # noqa: E402
 
-check_files = _register_check_files(main_group)
+validate_files = _register_validate_files(main_group)
+
+# Real (Click-registered) deprecated aliases, NOT just the `_rewrite_argv`
+# shim below: `scitex-dev linter check-files ...` (the primary entry
+# point, wired via `_cli/_root.py` attaching THIS `main_group` object
+# directly) dispatches straight into Click's subcommand tree and never
+# goes through this module's own `main()` / `_rewrite_argv` — that shim
+# only fires for the secondary `python -m scitex_dev.linter` entry
+# point. Without a real registered alias, the primary entry point would
+# 404 on the old name the instant it stopped being canonical.
+from .._ecosystem.click_compat import deprecated_alias  # noqa: E402
+
+deprecated_alias(
+    main_group,
+    "check-files",
+    target="validate-files",
+    remove_in="0.32",
+    phase="warn",
+)
+deprecated_alias(
+    main_group,
+    "check",
+    target="validate-files",
+    remove_in="0.32",
+    phase="warn",
+)
 
 
 # =========================================================================
@@ -378,7 +406,13 @@ except ImportError:
 # =========================================================================
 
 _TOP_RENAMES = {
-    "check": "check-files",
+    # §1f (2026-07-11): `check` is a non-canonical synonym for the
+    # ecosystem-wide `validate` verb, so `check-files` was itself renamed
+    # to `validate-files`. Both older spellings still rewrite straight to
+    # the current canonical name (no double-hop through the retired
+    # `check-files` name).
+    "check": "validate-files",
+    "check-files": "validate-files",
     "format": "format-files",
     "python": "lint-and-run",
     "run-python": "lint-and-run",

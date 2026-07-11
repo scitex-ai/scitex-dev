@@ -10,7 +10,7 @@ tags: [scitex-dev-linter-quick-start]
 ## Check a file from the CLI
 
 ```bash
-scitex-dev linter check-files src/
+scitex-dev linter validate-files src/
 ```
 
 Each violation prints with rule code (`STX-IO001`, ...) and a
@@ -40,7 +40,7 @@ scitex-dev linter format-files src/
 
 ## Pre-commit integration
 
-Add a hook that calls `scitex-dev linter check-files`. See
+Add a hook that calls `scitex-dev linter validate-files`. See
 `07_rule-catalog.md` for which rules are advisory vs blocking.
 
 ## Next steps
