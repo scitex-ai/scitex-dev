@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Tests for the `ecosystem check-versions --gate` release-gate mechanism.
+"""Tests for the `ecosystem validate-versions --gate` release-gate mechanism.
 
 Synthetic fixtures: pip-version readers injected via the public
 ``remote_version_fn`` seam on ``check_release_gate`` / ``collect_gate_state``

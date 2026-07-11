@@ -55,7 +55,7 @@ rule and empirical verification table.
 
 ### Mandatory leaves
 - [01_installation.md](01_installation.md) — pip install + extras + smoke verify
-- [02_quick-start.md](02_quick-start.md) — minimal `check-files` example
+- [02_quick-start.md](02_quick-start.md) — minimal `validate-files` example
 - [03_python-api.md](03_python-api.md) — top-level Python surface
 - [04_cli-reference.md](04_cli-reference.md) — `scitex-dev linter` subcommand summary
 

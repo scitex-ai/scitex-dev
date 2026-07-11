@@ -94,6 +94,7 @@ def save_icon(
     wordmark: str | None = WORDMARK,
     formats: tuple[str, ...] = ("svg", "png"),
     stem: str | None = None,
+    dry_run: bool = False,
 ) -> dict[str, Path]:
     """Render ``name``'s icon and write it to ``out_dir`` in ``formats``.
 
@@ -106,31 +107,43 @@ def save_icon(
             ``("svg", "png")``.
         stem: output filename stem (without extension); defaults to a
             filesystem-safe slug derived from ``name``.
+        dry_run: when ``True``, compute the destination paths (same slug
+            logic used for a real run) but skip creating ``out_dir`` and
+            skip both the SVG/PNG rendering and the filesystem writes.
+            Lets a caller (the CLI's ``--dry-run``) preview exactly what
+            a real run would produce -- including which files would be
+            overwritten -- with zero side effects, and without requiring
+            Pillow just to preview a PNG path.
 
     Returns:
         A dict mapping each written format to its output ``Path``, e.g.
         ``{"svg": Path("out/my-agent.svg"), "png": Path("out/my-agent.png")}``.
+        When ``dry_run`` is set, the paths are the ones that *would* be
+        written -- nothing is created on disk.
     """
     out_dir = Path(out_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
     slug = stem or _slugify(name)
 
     written: dict[str, Path] = {}
     if "svg" in formats:
         svg_path = out_dir / f"{slug}.svg"
-        svg_path.write_text(
-            generate_svg(
-                name, size=size, label=label, color=color, wordmark=wordmark
+        if not dry_run:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            svg_path.write_text(
+                generate_svg(
+                    name, size=size, label=label, color=color, wordmark=wordmark
+                )
             )
-        )
         written["svg"] = svg_path
     if "png" in formats:
         png_path = out_dir / f"{slug}.png"
-        png_path.write_bytes(
-            generate_png(
-                name, size=size, label=label, color=color, wordmark=wordmark
+        if not dry_run:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            png_path.write_bytes(
+                generate_png(
+                    name, size=size, label=label, color=color, wordmark=wordmark
+                )
             )
-        )
         written["png"] = png_path
     return written
 

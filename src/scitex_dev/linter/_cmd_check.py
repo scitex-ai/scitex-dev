@@ -1,9 +1,16 @@
-"""``scitex-dev linter check-files`` command + its helpers.
+"""``scitex-dev linter validate-files`` (+ deprecated `check-files`/`check`
+aliases) command + its helpers.
 
 Extracted from ``cli.py`` (which crossed the 512-line budget when the
 ``--new-only`` baseline gate landed). The command is registered onto the
 root group via :func:`register`. ``_do_check`` is re-exported from
 ``cli`` for back-compat with callers/tests that import it from there.
+
+Renamed from ``check-files`` (2026-07-11, audit-cli §1f): ``check`` is a
+non-canonical synonym for the ecosystem-wide ``validate`` verb. Both
+``check-files`` and the older ``check`` alias stay registered as
+warn-phase deprecated aliases (see ``cli.py``) so existing pre-commit /
+CI invocations across the ecosystem keep working.
 
 The ``--new-only`` / ``--baseline`` flags are the SAFETY PAIR for the
 research-mode severity promotion (#264 / #265): under ``--new-only`` only
@@ -121,9 +128,9 @@ def _do_check(
 
 
 def register(main_group):
-    """Attach the ``check-files`` command to ``main_group``."""
+    """Attach the ``validate-files`` command to ``main_group``."""
 
-    @main_group.command("check-files")
+    @main_group.command("validate-files")
     @click.argument("path", type=click.Path())
     @click.option(
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
@@ -166,15 +173,15 @@ def register(main_group):
             "are new)."
         ),
     )
-    def check_files(path, as_json, no_color, severity, category, new_only, baseline):
+    def validate_files(path, as_json, no_color, severity, category, new_only, baseline):
         """Check Python files for SciTeX pattern compliance.
 
         \b
         Example:
-            $ scitex-dev linter check-files src/
-            $ scitex-dev linter check-files my_script.py --json
-            $ scitex-dev linter check-files src/ --severity error --no-color
-            $ scitex-dev linter check-files my_script.py --new-only --baseline HEAD
+            $ scitex-dev linter validate-files src/
+            $ scitex-dev linter validate-files my_script.py --json
+            $ scitex-dev linter validate-files src/ --severity error --no-color
+            $ scitex-dev linter validate-files my_script.py --new-only --baseline HEAD
         """
         sys.exit(
             _do_check(
@@ -188,7 +195,7 @@ def register(main_group):
             )
         )
 
-    return check_files
+    return validate_files
 
 
 # EOF

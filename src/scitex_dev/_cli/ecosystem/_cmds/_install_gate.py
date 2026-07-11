@@ -102,6 +102,14 @@ def register(ecosystem):
             '    reason="scitex-dev not installed — add `scitex-dev[cli-audit]` '
             'to [project.optional-dependencies.dev]",\n'
             ")\n"
+            "# audit-all fans out to 6 sub-auditor subprocesses (audit-cli,\n"
+            "# audit-mcp-tools, audit-skills, audit-python-apis, audit-project,\n"
+            "# audit-django), each re-importing the package fresh; on a loaded\n"
+            "# or NFS-backed host this legitimately runs well past this repo's\n"
+            "# global [tool.pytest.ini_options] `timeout` default even when the\n"
+            "# audit itself is completely clean. Override per-test rather than\n"
+            "# raise the global cap for every other (fast) test.\n"
+            "@pytest.mark.timeout(600)\n"
             "def test_audit_all_clean():\n"
             "    # Arrange\n"
             "    from scitex_dev.testing import audit_all_for_package\n"

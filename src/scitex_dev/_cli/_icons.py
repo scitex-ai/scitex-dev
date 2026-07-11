@@ -81,6 +81,26 @@ def register_icons_command(main_group):
         show_default=True,
         help="Output format(s); repeat to pick both.",
     )
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help=(
+            "Print the file(s) that would be written without rendering "
+            "or touching the filesystem. audit-cli §2 — every mutating "
+            "verb must expose --dry-run."
+        ),
+    )
+    @click.option(
+        "--yes",
+        "-y",
+        is_flag=True,
+        help=(
+            "Accept all confirmation prompts (no-op today; icon "
+            "generation never prompts). Required by audit-cli §2 for "
+            "mutating verbs so callers can scriptedly bypass any future "
+            "confirm logic."
+        ),
+    )
     def generate_cmd(
         name: str,
         out_dir: str,
@@ -89,7 +109,11 @@ def register_icons_command(main_group):
         color: str | None,
         no_wordmark: bool,
         formats: tuple[str, ...],
+        dry_run: bool,
+        yes: bool,
     ) -> None:
+        del yes  # --yes is reserved for audit-cli §2 conformance; no
+                 # confirmation prompts are issued today.
         from .._icons import save_icon
 
         wordmark = None if no_wordmark else "SciTeX"
@@ -101,6 +125,8 @@ def register_icons_command(main_group):
             color=color,
             wordmark=wordmark,
             formats=tuple(formats),
+            dry_run=dry_run,
         )
+        verb = "would write" if dry_run else "wrote"
         for _fmt, path in written.items():
-            click.echo(f"wrote {path}")
+            click.echo(f"{verb} {path}")

@@ -1,4 +1,4 @@
-"""Tests for the NEW-ONLY baseline gate (``check-files --new-only``).
+"""Tests for the NEW-ONLY baseline gate (``validate-files --new-only``).
 
 Safety pair for the research-mode severity promotion (#264 / #265): under
 ``--new-only`` only NEWLY-introduced findings keep their promoted ``error``
@@ -59,7 +59,7 @@ def git_repo(tmp_path):
 
 
 def _write_pyproject(repo):
-    """Promote NL001 to error in the repo so check-files emits it as error."""
+    """Promote NL001 to error in the repo so validate-files emits it as error."""
     (repo / "pyproject.toml").write_text(
         "[tool.scitex-dev.linter]\n"
         'per-rule-severity = { "STX-NL001" = "error" }\n'

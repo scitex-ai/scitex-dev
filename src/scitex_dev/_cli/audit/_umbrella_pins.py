@@ -55,6 +55,8 @@ from typing import Callable, Optional
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 UMBRELLA_NAME = "scitex"
 # Match any of: scitex-X, figrecipe, newb, socialia (the publishable
 # ecosystem leaves). Optional extras spec, then a PEP 508 operator and
@@ -167,11 +169,38 @@ def audit_umbrella_pins(
 
 @click.command(
     "audit-umbrella-pins",
-    epilog=(
-        "Example:\n"
-        "  $ scitex-dev ecosystem audit-umbrella-pins .\n"
-        "  $ scitex-dev ecosystem audit-umbrella-pins /home/me/proj/scitex-python --strict\n"
-        "  $ scitex-dev ecosystem audit-umbrella-pins . --strict --allow-network-error\n"
+    cls=SpecCommand,
+    help_spec=CliHelp(
+        summary="Audit umbrella `==` pin freshness vs PyPI latest.",
+        description=(
+            "Non-`==` declarations (`>=`, `~=`, no operator, etc.) are "
+            "accepted as PEP 508 minimum-compatible declarations and "
+            "are NOT flagged. Only explicit `==` pins are drift-checked "
+            "against PyPI. PS-170 drift is warn-only by default "
+            "(2026-06-09 — scitex-dev 0.17.8): the earlier error-by-"
+            "default behaviour cascaded into 12+ ecosystem CI failures "
+            "every time a single leaf released a new patch wheel ahead "
+            "of the umbrella pin bump. Drift is still surfaced "
+            "(stderr, WARN: prefix) but exit is 0 so consumer CI stays "
+            "green; pass --strict to restore the old fail-on-drift "
+            "behaviour for release-pipeline use. Only fires on the "
+            "umbrella package itself (pyproject.toml `name = "
+            '"scitex"`); on any other package it exits 0 silently.',
+        ),
+        examples=(
+            Example(
+                "{prog} ecosystem audit-umbrella-pins .",
+                "Warn-only check of the cwd umbrella.",
+            ),
+            Example(
+                "{prog} ecosystem audit-umbrella-pins /path/to/scitex-python --strict",
+                "Release-pipeline gate: fail on drift.",
+            ),
+            Example(
+                "{prog} ecosystem audit-umbrella-pins . --strict --allow-network-error",
+                "Strict, but tolerate a flaky PyPI query.",
+            ),
+        ),
     ),
 )
 @click.argument(
@@ -201,25 +230,6 @@ def audit_umbrella_pins(
     ),
 )
 def cli(path: Path, allow_network_error: bool, strict: bool) -> None:
-    """Audit umbrella ``==`` pin freshness vs PyPI latest.
-
-    Non-``==`` declarations (``>=``, ``~=``, no operator, etc.) are
-    accepted as PEP 508 minimum-compatible declarations and are NOT
-    flagged. Only explicit ``==`` pins are drift-checked against PyPI.
-
-    **Severity (2026-06-09 — scitex-dev 0.17.8):** PS-170 drift is
-    warn-only by default. The earlier error-by-default behaviour cascaded
-    into 12+ ecosystem CI failures every time a single leaf released a
-    new patch wheel ahead of the umbrella pin bump. The drift is still
-    surfaced (printed to stderr with a ``WARN:`` prefix), but exit is 0
-    so consumer CI stays green. Pass ``--strict`` to restore the old
-    fail-on-drift behaviour for release-pipeline use.
-
-    Example::
-
-        $ scitex-dev ecosystem audit-umbrella-pins .
-        $ scitex-dev ecosystem audit-umbrella-pins . --strict
-    """
     violations = audit_umbrella_pins(path)
     if not violations:
         click.echo(f"SUCC: {path}/pyproject.toml: all umbrella pins fresh")

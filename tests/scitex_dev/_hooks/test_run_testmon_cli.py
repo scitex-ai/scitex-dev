@@ -2,7 +2,7 @@
 
 The shim execs the bundled ``run_testmon.sh`` wrapper so pre-commit can use a
 bare entry point. pre-commit does NOT shell-expand ``entry:``, so ``bash
-$(scitex-dev hooks print-path run_testmon)`` cannot work there. Repos instead
+$(scitex-dev hooks show-path run_testmon)`` cannot work there. Repos instead
 use the console script ``scitex-dev-testmon`` (or ``python -m
 scitex_dev._hooks.run_testmon_cli``), which execs the bundled wrapper with all
 args forwarded.
@@ -22,7 +22,7 @@ class TestRunTestmonConsoleShim:
     """The shim execs the wrapper so pre-commit can use a bare entry.
 
     pre-commit does NOT shell-expand ``entry:``, so ``bash $(scitex-dev
-    hooks print-path run_testmon)`` cannot work there. Repos instead use the
+    hooks show-path run_testmon)`` cannot work there. Repos instead use the
     console script ``scitex-dev-testmon`` (or ``python -m
     scitex_dev._hooks.run_testmon_cli``), which execs the bundled wrapper
     with all args forwarded.

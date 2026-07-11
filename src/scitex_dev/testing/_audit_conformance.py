@@ -27,7 +27,7 @@ SKIP_ENV_VAR = "SCITEX_DEV_SKIP_AUDIT"
 def audit_all_for_package(
     distribution: str,
     *,
-    timeout: float = 120.0,
+    timeout: float = 550.0,
     skip_rules: tuple[str, ...] = (),
 ) -> None:
     """Run `scitex-dev ecosystem audit-all <distribution>` and assert exit 0.
@@ -38,7 +38,25 @@ def audit_all_for_package(
         ECOSYSTEM key (e.g. ``"scitex-io"``, ``"scitex-stats"``,
         ``"socialia"``).
     timeout
-        Per-test wall-clock cap; covers a slow PyPI install in CI.
+        Per-test wall-clock cap. `audit-all` fans out to SIX
+        sub-auditors (`audit-cli`, `audit-mcp-tools`, `audit-skills`,
+        `audit-python-apis`, `audit-project`, `audit-django`), each a
+        fresh Python subprocess that re-imports the target package —
+        real measured wall-clock on a loaded/NFS-backed host runs well
+        past the previous 120s default even when the audit itself is
+        completely clean (verified directly: `scitex-dev ecosystem
+        audit-all scitex-dev --path <worktree>` exits 0, and a bare
+        untimed run completed clean end-to-end in ~455s under load).
+        120s was tuned for "a slow PyPI install," not for the
+        six-subprocess audit sweep itself. 550s gives real headroom
+        while staying under the ``test_audit_all_clean`` call site's
+        ``@pytest.mark.timeout(600)`` override (see
+        ``tests/develop/test_audit.py`` / the
+        ``ecosystem install-audit-gate`` template that generates it
+        for every other package) so THIS subprocess timeout fires
+        first with a readable audit-output error message, instead of
+        pytest-timeout's generic SIGALRM traceback winning the race. A
+        genuinely wedged auditor still times out, just later.
 
     Bypass
     ------

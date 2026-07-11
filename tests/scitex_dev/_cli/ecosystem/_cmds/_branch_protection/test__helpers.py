@@ -1,4 +1,4 @@
-"""Behavioural tests for `scitex-dev ecosystem set-branch-protection` /
+"""Behavioural tests for `scitex-dev ecosystem update-branch-protection` /
 `unset-branch-protection`.
 
 No mocks. The gh-api + owner-repo boundary is replaced via direct
@@ -22,7 +22,8 @@ pytest.importorskip("click")
 import click
 from click.testing import CliRunner
 
-from scitex_dev._cli.ecosystem._cmds import _branch_protection
+from scitex_dev._cli.ecosystem._cmds._branch_protection import _helpers as _branch_protection
+from scitex_dev._cli.ecosystem._cmds._branch_protection import register as _register_branch_protection
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +80,7 @@ def _make_group():
     def root():
         pass
 
-    _branch_protection.register(root)
+    _register_branch_protection(root)
     return root
 
 
@@ -114,7 +115,22 @@ def test_dry_run_does_not_invoke_gh_api_put(gh_seam):
     _arrange_seam_with_both_branches(gh_seam)
     runner = CliRunner()
     # Act
-    runner.invoke(_make_group(), ["set-branch-protection", "scitex-dev"])
+    runner.invoke(_make_group(), ["update-branch-protection", "scitex-dev"])
+    # Assert
+    puts = [c for c in gh_seam.calls if c[0] == "PUT"]
+    assert len(puts) == 0
+
+
+def test_explicit_dry_run_flag_overrides_execute(gh_seam):
+    # Arrange — --dry-run passed ALONGSIDE --execute must still win (safety
+    # override), proving the flag is wired to real behavior, not a no-op.
+    _arrange_seam_with_both_branches(gh_seam)
+    runner = CliRunner()
+    # Act
+    runner.invoke(
+        _make_group(),
+        ["update-branch-protection", "scitex-dev", "--execute", "--dry-run"],
+    )
     # Assert
     puts = [c for c in gh_seam.calls if c[0] == "PUT"]
     assert len(puts) == 0
@@ -127,7 +143,7 @@ def test_execute_emits_put_per_existing_branch(gh_seam):
     # Act
     runner.invoke(
         _make_group(),
-        ["set-branch-protection", "scitex-dev", "--execute"],
+        ["update-branch-protection", "scitex-dev", "--execute"],
     )
     # Assert
     puts = [c for c in gh_seam.calls if c[0] == "PUT"]
@@ -141,7 +157,7 @@ def test_develop_put_uses_enforce_admins_true(gh_seam):
     # Act
     runner.invoke(
         _make_group(),
-        ["set-branch-protection", "scitex-dev", "--execute"],
+        ["update-branch-protection", "scitex-dev", "--execute"],
     )
     # Assert
     develop_put = next(
@@ -158,7 +174,7 @@ def test_main_put_uses_enforce_admins_false(gh_seam):
     # Act
     runner.invoke(
         _make_group(),
-        ["set-branch-protection", "scitex-dev", "--execute"],
+        ["update-branch-protection", "scitex-dev", "--execute"],
     )
     # Assert
     main_put = next(
@@ -180,7 +196,7 @@ def test_policy_uses_strict_false_per_lead_doctrine(gh_seam):
     runner.invoke(
         _make_group(),
         [
-            "set-branch-protection",
+            "update-branch-protection",
             "scitex-dev",
             "--branch",
             "develop",
@@ -204,7 +220,7 @@ def test_policy_required_linear_history_true(gh_seam):
     runner.invoke(
         _make_group(),
         [
-            "set-branch-protection",
+            "update-branch-protection",
             "scitex-dev",
             "--branch",
             "develop",
@@ -228,7 +244,7 @@ def test_policy_required_pull_request_reviews_omitted(gh_seam):
     runner.invoke(
         _make_group(),
         [
-            "set-branch-protection",
+            "update-branch-protection",
             "scitex-dev",
             "--branch",
             "develop",
@@ -252,7 +268,7 @@ def test_policy_allow_force_pushes_false(gh_seam):
     runner.invoke(
         _make_group(),
         [
-            "set-branch-protection",
+            "update-branch-protection",
             "scitex-dev",
             "--branch",
             "develop",
@@ -276,7 +292,7 @@ def test_required_contexts_intersected_with_published_checks(gh_seam):
     runner.invoke(
         _make_group(),
         [
-            "set-branch-protection",
+            "update-branch-protection",
             "scitex-dev",
             "--branch",
             "develop",
@@ -301,7 +317,7 @@ def test_missing_develop_branch_skips_develop(gh_seam):
     # Act
     runner.invoke(
         _make_group(),
-        ["set-branch-protection", "scitex-orochi", "--execute"],
+        ["update-branch-protection", "scitex-orochi", "--execute"],
     )
     # Assert
     develop_puts = [
@@ -320,7 +336,7 @@ def test_unknown_distribution_exits_with_error_code():
         # Act
         result = runner.invoke(
             _make_group(),
-            ["set-branch-protection", "nonexistent-distribution"],
+            ["update-branch-protection", "nonexistent-distribution"],
         )
     finally:
         _branch_protection._resolve_owner_repo = orig_resolve
@@ -400,7 +416,7 @@ def test_deletion_only_put_sends_minimal_body(gh_seam):
     # Act
     runner.invoke(
         _make_group(),
-        ["set-branch-protection", "scitex-dev", "--branch", "develop",
+        ["update-branch-protection", "scitex-dev", "--branch", "develop",
          "--deletion-only", "--execute"],
     )
     # Assert — the PUT body carries no required_status_checks.
@@ -437,7 +453,7 @@ def test_deletion_only_skips_already_undeletable_branch(gh_seam):
     # Act
     runner.invoke(
         _make_group(),
-        ["set-branch-protection", "scitex-dev", "--branch", "develop",
+        ["update-branch-protection", "scitex-dev", "--branch", "develop",
          "--deletion-only", "--execute"],
     )
     # Assert — no PUT issued (the existing policy is left intact).
@@ -456,9 +472,34 @@ def test_deletion_only_applies_when_branch_deletable(gh_seam):
     # Act
     runner.invoke(
         _make_group(),
-        ["set-branch-protection", "scitex-dev", "--branch", "develop",
+        ["update-branch-protection", "scitex-dev", "--branch", "develop",
          "--deletion-only", "--execute"],
     )
     # Assert — baseline IS applied (one PUT).
+    puts = [c for c in gh_seam.calls if c[0] == "PUT"]
+    assert len(puts) == 1
+
+
+# ---------------------------------------------------------------------------
+# `set-branch-protection` → `update-branch-protection` deprecated alias
+# ---------------------------------------------------------------------------
+
+
+def test_deprecated_set_branch_protection_alias_still_forwards(gh_seam):
+    # Arrange — the OLD command name must still dry-run correctly.
+    gh_seam.canned = [
+        (0, '{"name": "develop"}'),
+        (0, _PROTECTED_DELETABLE_JSON),
+        (0, "{}"),
+    ]
+    runner = CliRunner()
+    # Act
+    runner.invoke(
+        _make_group(),
+        ["set-branch-protection", "scitex-dev", "--branch", "develop",
+         "--deletion-only", "--execute"],
+    )
+    # Assert — the alias reached the real command (one PUT, same as calling
+    # `update-branch-protection` directly).
     puts = [c for c in gh_seam.calls if c[0] == "PUT"]
     assert len(puts) == 1

@@ -20,38 +20,54 @@ from ...._ecosystem.ci_template import (
     BranchProtectionGateError,
     apply as _apply,
 )
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
 
 
 def register(ecosystem) -> None:
     @ecosystem.group(
         "ci-template",
         invoke_without_command=True,
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="Roll canonical CI-speedup workflows to a scitex-* repo.",
+            description=(
+                "Verbs: `apply` writes pr-ci.yml + release-ci.yml, "
+                "deletes consolidated standalone workflows, and "
+                "enforces the branch-protection gate.",
+            ),
+        ),
     )
     @click.pass_context
     def ci_template(ctx):
-        """Roll canonical CI-speedup workflows to a scitex-* repo.
-
-        \b
-        Verbs:
-          apply  — write pr-ci.yml + release-ci.yml; delete consolidated
-                   standalone workflows; enforce branch-protection gate.
-        """
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
 
     @ci_template.command(
         "apply",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem ci-template apply ../scitex-io --dry-run\n"
-            "  $ scitex-dev ecosystem ci-template apply ../scitex-io --yes\n"
-            "  $ scitex-dev ecosystem ci-template apply ../scitex-io \\\n"
-            "        --python-versions '[\"3.12\",\"3.13\"]' --yes\n"
-            "\n"
-            "Mutating verb: pass --yes/-y to actually write. Without it the\n"
-            "command behaves like --dry-run (no FS mutation, prints intended\n"
-            "diff). §2 audit-cli requires explicit confirmation for mutating\n"
-            "ecosystem subcommands.\n"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Apply the CI templates to REPO_DIR.",
+            description=(
+                "Mutating verb: defaults to dry-run unless --yes is "
+                "passed. This keeps the §2 audit-cli convention that "
+                "every ecosystem mutator needs an explicit confirmation "
+                "flag.",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem ci-template apply ../scitex-io --dry-run",
+                    "Preview the diff.",
+                ),
+                Example(
+                    "{prog} ecosystem ci-template apply ../scitex-io --yes",
+                    "Actually write + delete.",
+                ),
+                Example(
+                    '{prog} ecosystem ci-template apply ../scitex-io '
+                    '--python-versions \'["3.12","3.13"]\' --yes',
+                    "Override the Python matrix.",
+                ),
+            ),
         ),
     )
     @click.argument(
@@ -99,12 +115,6 @@ def register(ecosystem) -> None:
         python_versions_json,
         skip_required_check_gate,
     ):
-        """Apply the CI templates to REPO_DIR.
-
-        Mutating verb: defaults to dry-run unless --yes is passed. This
-        keeps the §2 audit-cli convention that every ecosystem mutator
-        needs an explicit confirmation flag.
-        """
         if dry_run and yes:
             click.echo(
                 "error: --dry-run and --yes are mutually exclusive",
