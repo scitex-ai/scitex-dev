@@ -92,9 +92,44 @@ def _build_argv(job: JobSpec) -> list[str]:
     ``shlex`` for the ``subprocess.Popen`` list form. The split is safe
     because ``resolve_execstart`` itself round-trips through
     ``shlex.join`` so quoting is consistent.
+
+    ``job.venv``, when set, is threaded through so the child resolves
+    against its OWN venv ("leaf owns its own venv") instead of the
+    supervisor's — see ``JobSpec.venv`` and ``resolve_execstart``.
     """
-    resolved = resolve_execstart(job.command)
+    resolved = resolve_execstart(job.command, venv=job.venv)
     return shlex.split(resolved)
+
+
+def _build_child_env(job: JobSpec) -> dict[str, str]:
+    """Return the environment for ``job``'s child process.
+
+    Inherits the supervisor's own environment (unchanged default
+    behavior) and, when ``job.venv`` is set, overlays ``VIRTUAL_ENV``
+    and prepends ``<venv>/bin`` onto ``PATH`` — mirroring what
+    ``source <venv>/bin/activate`` does, so any tool the child shells
+    out to (``python``, ``pip``, sibling console scripts) also
+    resolves against the pinned venv rather than the supervisor's.
+    """
+    env = os.environ.copy()
+    if job.venv:
+        venv_bin = str(Path(job.venv) / "bin")
+        env["VIRTUAL_ENV"] = job.venv
+        env["PATH"] = os.pathsep.join([venv_bin, env.get("PATH", "")])
+    return env
+
+
+def _child_cwd(job: JobSpec) -> Optional[str]:
+    """Return the working directory for ``job``'s child process.
+
+    ``None`` (inherit the supervisor's cwd) unless ``job.venv`` is set,
+    in which case we use the venv's parent directory — the
+    conventional package root for a ``<pkg>/.venv`` layout (e.g.
+    ``~/proj/scitex-todo/.venv`` → cwd ``~/proj/scitex-todo``).
+    """
+    if not job.venv:
+        return None
+    return str(Path(job.venv).parent)
 
 
 # --------------------------------------------------------------------------- #
@@ -292,11 +327,14 @@ class ChildProcess:
                 stdout=self._log_fh,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.DEVNULL,
-                # The leaf inherits the supervisor's environment; per-leaf
-                # env extensions are NOT implemented in PR-1 (the JobSpec
-                # contract doesn't carry env today — that's a follow-up if
-                # any leaf needs it).
-                env=os.environ.copy(),
+                # The leaf inherits the supervisor's environment, plus a
+                # VIRTUAL_ENV / PATH overlay when ``job.venv`` pins a
+                # cross-package venv ("leaf owns its own venv" — see
+                # ``JobSpec.venv``).
+                env=_build_child_env(self.job),
+                # Run from the pinned venv's package root when set, else
+                # inherit the supervisor's cwd (unchanged default).
+                cwd=_child_cwd(self.job),
                 # New process group so a SIGTERM to the supervisor
                 # doesn't immediately also hit the children — the
                 # supervisor's own shutdown() walks the registry and
