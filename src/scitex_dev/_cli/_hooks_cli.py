@@ -53,6 +53,7 @@ from pathlib import Path
 import click
 
 from .. import _hooks
+from .._ecosystem.click_compat import deprecated_alias
 from .._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
 
 
@@ -405,8 +406,15 @@ def register_hooks_commands(main) -> None:
     # leaf at the verb position is forbidden (the auditor reads `path`
     # as a noun, not an action). `print-path` is the compound-leaf form
     # the catalog recommends for a one-off read action.
+    #
+    # Renamed AGAIN (2026-07-11, §1f): `print` is a non-canonical synonym
+    # for the doctrine's one show-verb, `show` (cf. `cat`/`display`/`view`
+    # → `show`). `print-path` stays registered as a warn-phase deprecated
+    # alias below so existing `entry: bash $(scitex-dev hooks print-path
+    # ...)` lines in pre-commit configs (this repo's own run_testmon /
+    # run_lint hooks, and potentially other scitex-* leaves) keep working.
     @hooks_group.command(
-        "print-path",
+        "show-path",
         cls=SpecCommand,
         help_spec=CliHelp(
             summary="Print the bundled hook script's absolute filesystem path.",
@@ -416,20 +424,45 @@ def register_hooks_commands(main) -> None:
             ),
             examples=(
                 Example(
-                    "{prog} hooks print-path run_lint",
+                    "{prog} hooks show-path run_lint",
                     "/.../site-packages/scitex_dev/_hooks/run_lint.sh",
                 ),
                 Example(
-                    '''ln -s "$({prog} hooks print-path run_lint)" docs/to_claude/hooks/post-tool-use/run_lint.sh''',
+                    '''ln -s "$({prog} hooks show-path run_lint)" docs/to_claude/hooks/post-tool-use/run_lint.sh''',
                     "Symlink it by hand.",
                 ),
             ),
         ),
     )
     @click.argument("name", type=click.Choice(sorted(KNOWN_HOOKS), case_sensitive=False))
-    def hooks_print_path(name):
+    @click.option(
+        "--json",
+        "as_json",
+        is_flag=True,
+        help=(
+            "Emit {\"name\": ..., \"path\": ...} instead of the bare path. "
+            "Default output stays a bare path on purpose — it's designed "
+            "for direct command substitution, e.g. `ln -s \"$(... hooks "
+            "show-path run_lint)\" ...`; --json is for scripted/programmatic "
+            "callers that want structure (audit-cli §2)."
+        ),
+    )
+    def hooks_show_path(name, as_json):
         source, _ = KNOWN_HOOKS[name]
+        if as_json:
+            import json as _json
+
+            click.echo(_json.dumps({"name": name, "path": source}))
+            return
         click.echo(source)
+
+    deprecated_alias(
+        hooks_group,
+        "print-path",
+        target="show-path",
+        remove_in="0.32",
+        phase="warn",
+    )
 
 
 __all__ = ["KNOWN_HOOKS", "register_hooks_commands"]

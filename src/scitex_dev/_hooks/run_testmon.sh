@@ -33,7 +33,7 @@
 # ------
 # Repos reference this script from ``.pre-commit-config.yaml`` via:
 #
-#     entry: bash $(scitex-dev hooks print-path run_testmon)
+#     entry: bash $(scitex-dev hooks show-path run_testmon)
 #
 # so future fixes land here and every project picks them up.
 
