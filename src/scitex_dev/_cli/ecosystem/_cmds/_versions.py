@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ecosystem `check-versions`, `fix-mismatches` (+ deprecated `packages` alias)."""
+"""ecosystem `validate-versions` (+ deprecated `check-versions`/`packages` aliases), `fix-mismatches`."""
 
 import json
 
 import click
 
+from ...._ecosystem.click_compat import deprecated_alias
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 
 
 def register(ecosystem):
     @ecosystem.command(
-        "check-versions",
+        "validate-versions",
         cls=SpecCommand,
         help_spec=CliHelp(
             summary="Audit ecosystem package versions across hosts (3 modes + gate).",
             examples=(
-                Example("{prog} ecosystem check-versions", "Observe (report only)."),
-                Example("{prog} ecosystem check-versions --dry-run", "Preview the sync."),
-                Example("{prog} ecosystem check-versions --apply", "Execute the sync."),
+                Example("{prog} ecosystem validate-versions", "Observe (report only)."),
+                Example("{prog} ecosystem validate-versions --dry-run", "Preview the sync."),
+                Example("{prog} ecosystem validate-versions --apply", "Execute the sync."),
                 Example(
-                    "{prog} ecosystem check-versions --gate scitex-todo==0.7.51 --require-full-coverage",
+                    "{prog} ecosystem validate-versions --gate scitex-todo==0.7.51 --require-full-coverage",
                     "Release-gate mode.",
                 ),
             ),
@@ -78,7 +79,7 @@ def register(ecosystem):
         help="With --gate: exit non-zero unless every in-scope host meets VERSION.",
     )
     @click.pass_context
-    def ecosystem_packages(
+    def ecosystem_validate_versions(
         ctx,
         hosts,
         packages,
@@ -194,7 +195,11 @@ def register(ecosystem):
             )
         ctx.exit(0)
 
-    # Deprecated alias for the §1 noun-verb fix (packages → check-versions).
+    # Deprecated alias for the original §1 noun-verb fix (packages →
+    # check-versions). check-versions was itself later renamed to
+    # validate-versions (§1f: `check` is a non-canonical synonym for the
+    # ecosystem-wide `validate` verb) — point straight at the current
+    # command rather than hopping through the check-versions alias.
     # Removed in 0.11.0.
     @ecosystem.command(
         "packages",
@@ -203,15 +208,31 @@ def register(ecosystem):
     )
     @click.pass_context
     def _ecosystem_packages_deprecated(ctx):
-        """(deprecated) Use `ecosystem check-versions`. Removed in 0.11.0."""
+        """(deprecated) Use `ecosystem validate-versions`. Removed in 0.11.0."""
         click.echo(
-            "warning: `ecosystem packages` was renamed to `ecosystem check-versions`.",
+            "warning: `ecosystem packages` was renamed to "
+            "`ecosystem validate-versions`.",
             err=True,
         )
-        target = ecosystem.get_command(ctx, "check-versions")
+        target = ecosystem.get_command(ctx, "validate-versions")
         if target is None:
             ctx.exit(2)
         ctx.invoke(target, *ctx.args)
+
+    # `check-versions` → `validate-versions` rename (§1f: `check` is a
+    # non-canonical synonym for the ecosystem-wide `validate` verb).
+    # Internal cross-host RPC calls (ecosystem check-sync's remote-check
+    # forwarding, any fleet cron job invoking this by name) keep using
+    # the OLD name deliberately during the rolling-upgrade window; the
+    # warn-phase alias is what makes that safe regardless of which side
+    # of the upgrade a given host is on.
+    deprecated_alias(
+        ecosystem,
+        "check-versions",
+        target="validate-versions",
+        remove_in="0.32",
+        phase="warn",
+    )
 
     @ecosystem.command("fix-mismatches", hidden=True)
     @click.option(

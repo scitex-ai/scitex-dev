@@ -45,7 +45,7 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
     (
         "Quality",
         [
-            "check-versions",
+            "validate-versions",
             "install-audit-gate",
         ],
     ),
@@ -55,7 +55,7 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
             "clean-root",
             "init-config",
             "clone",
-            "check-sync",
+            "validate-sync",
             "prune-merged",
             "ci-template",
         ],

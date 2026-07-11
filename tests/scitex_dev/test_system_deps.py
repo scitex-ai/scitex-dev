@@ -170,33 +170,33 @@ def test_read_baseline_skips_comments_and_blank_lines(tmp_path):
     assert names == {"ffmpeg", "biber"}
 
 
-def test_cli_check_superset_is_green_on_an_empty_baseline(tmp_path):
+def test_cli_validate_superset_is_green_on_an_empty_baseline(tmp_path):
     # Arrange
     baseline_file = tmp_path / "empty.txt"
     baseline_file.write_text("# nothing required\n")
     # Act
     result = CliRunner().invoke(
         main,
-        ["ecosystem", "system-deps", "check-superset", "--baseline", str(baseline_file)],
+        ["ecosystem", "system-deps", "validate-superset", "--baseline", str(baseline_file)],
     )
     # Assert
     assert result.exit_code == 0
 
 
-def test_cli_check_superset_is_red_on_an_undeclared_package(tmp_path):
+def test_cli_validate_superset_is_red_on_an_undeclared_package(tmp_path):
     # Arrange
     baseline_file = tmp_path / "recipe.txt"
     baseline_file.write_text("zzz-not-a-declared-apt-pkg\n")
     # Act
     result = CliRunner().invoke(
         main,
-        ["ecosystem", "system-deps", "check-superset", "--baseline", str(baseline_file)],
+        ["ecosystem", "system-deps", "validate-superset", "--baseline", str(baseline_file)],
     )
     # Assert
     assert result.exit_code == 1
 
 
-def test_cli_check_superset_json_reports_a_red_verdict(tmp_path):
+def test_cli_validate_superset_json_reports_a_red_verdict(tmp_path):
     # Arrange
     baseline_file = tmp_path / "recipe.txt"
     baseline_file.write_text("zzz-not-a-declared-apt-pkg\n")
@@ -206,7 +206,7 @@ def test_cli_check_superset_json_reports_a_red_verdict(tmp_path):
         [
             "ecosystem",
             "system-deps",
-            "check-superset",
+            "validate-superset",
             "--baseline",
             str(baseline_file),
             "--json",

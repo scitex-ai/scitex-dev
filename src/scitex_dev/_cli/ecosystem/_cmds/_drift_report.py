@@ -3,7 +3,7 @@
 """ecosystem `drift-report` — unified per-package × per-layer version matrix.
 
 Thin CLI surface (mirrors ``_versions.py``'s ``register(ecosystem)`` and
-``check-versions``' option conventions). All logic lives in the
+``validate-versions``' option conventions). All logic lives in the
 ``scitex_dev._ecosystem._drift_report`` engine package; this module only
 wires options, prints, and sets the observe-mode exit code (0 = no drift,
 1 = drift), so it is usable as a scheduled gate.
@@ -87,5 +87,5 @@ def register(ecosystem):
         else:
             click.echo(render_report(matrix))
 
-        # Observe-mode exit semantics (mirrors check-versions): drift → 1.
+        # Observe-mode exit semantics (mirrors validate-versions): drift → 1.
         ctx.exit(1 if matrix.has_drift else 0)
