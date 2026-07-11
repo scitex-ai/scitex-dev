@@ -57,11 +57,17 @@ From: ubuntu:24.04
     # tests fail with "'crontab' not found" / silently skip the supervisor
     # enable path. Installing the BINARIES (systemd is never PID1 here) makes
     # the CI container match a real SciTeX host — honest, not a mock.
+    #
+    # tmux + openssh-client belong to the same clause: sac's runner/probe
+    # tests shell out to `tmux` (pane probes, snapshot io) and `ssh`
+    # (registry sync fail-loud tests). Their absence failed the sac
+    # v0.21.13 release run (8 failed / 3 errors, all FileNotFoundError
+    # 'tmux'/'ssh') after the 2026-07-11 ci-cpu rebuild.
     apt-get update
     apt-get install -y --no-install-recommends \
         ca-certificates curl git locales \
         build-essential pkg-config libffi-dev libssl-dev libglib2.0-0 \
-        fd-find ripgrep cron systemd
+        fd-find ripgrep cron systemd tmux openssh-client
     locale-gen en_US.UTF-8
     # Debian ships fd as fdfind; the audit helper + muscle memory want `fd`.
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
@@ -157,6 +163,10 @@ From: ubuntu:24.04
     export LC_ALL=en_US.UTF-8
     export UV_PYTHON_INSTALL_DIR=/opt/uv-python
     export PATH=/usr/local/bin:$PATH
+    # Deterministic terminal width: click wraps --help text by COLUMNS;
+    # unset inside apptainer exec it falls back to a narrow default and
+    # help-string assertions fail on wrap position (sac v0.21.13 run).
+    export COLUMNS=120
 
 %labels
     org.scitex.layer ci-cpu
