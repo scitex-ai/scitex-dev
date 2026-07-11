@@ -164,6 +164,23 @@ class JobSpec:
         the pings. When unset, the unit stays ``Type=simple`` and
         relies on ``Restart=`` alone (crashes, not hangs). MUST be
         ``None`` for ``timer`` and ``cron`` kinds.
+    venv
+        Optional path to the venv directory that OWNS ``command``,
+        e.g. ``"/home/ywatanabe/proj/scitex-todo/.venv"``. "Leaf owns
+        its own venv": a supervised child is a DIFFERENT package from
+        scitex-dev (which runs the supervisor), so resolving the
+        child's executable via the supervisor's own
+        ``sys.executable`` (the historical default) can pick up a
+        missing, stale, or wrong-version binary. When set, both the
+        systemd unit builder (``ExecStart=``) and the ``ecosystem
+        run`` supervisor (``subprocess.Popen`` argv) resolve the
+        command as ``<venv>/bin/<head>`` instead, set ``cwd`` to the
+        venv's parent directory (the package root), and export
+        ``VIRTUAL_ENV=<venv>`` in the child's environment — mirroring
+        what a normal ``source <venv>/bin/activate`` would do.
+        Defaults to ``None``, which keeps the historical behavior
+        (resolve via the supervisor's own interpreter / PATH) for
+        every existing JobSpec — fully backward compatible.
     """
 
     name: str
@@ -176,6 +193,7 @@ class JobSpec:
     timeout_sec: int | None = None
     restart_policy: str = "no"
     watchdog_sec: int | None = None
+    venv: str | None = None
 
     def __post_init__(self) -> None:
         # Run the validator at construction time so a malformed leaf

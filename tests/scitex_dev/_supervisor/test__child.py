@@ -8,6 +8,7 @@ the state machine deterministically without spawning real processes.
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -28,8 +29,12 @@ from scitex_dev.jobs import JobSpec
 class FakePopen:
     """Stand-in for subprocess.Popen with a hand-driven exit code."""
 
-    def __init__(self, args, **_):
+    def __init__(self, args, **kwargs):
         self.args = args
+        # Keep every kwarg (env, cwd, stdout, ...) so tests can assert on
+        # what the spawner actually passed through, e.g. the venv-pin
+        # env/cwd overlay.
+        self.kwargs = kwargs
         self._rc: int | None = None  # None = still running
         # Realistic-ish PID so killpg paths see something.
         self.pid = 99999
@@ -143,6 +148,69 @@ def test_child_start_records_argv(tmp_path):
     c.start()
     # Assert — argv carries the resolved command (head absolutised).
     assert c.argv[0] == "/bin/true"
+
+
+def test_child_start_uses_pinned_venv_executable(tmp_path):
+    # Arrange — leaf declares its own venv; the binary lives at
+    # <venv>/bin/<head>. "Leaf owns its own venv" — the supervisor must
+    # resolve against THIS venv, not its own sys.executable.
+    venv_dir = tmp_path / "pkg" / ".venv"
+    venv_bin = venv_dir / "bin"
+    venv_bin.mkdir(parents=True)
+    binary = venv_bin / "scitex-todo"
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+    job = _service_job(command="scitex-todo serve --port 8051")
+    job = dataclasses.replace(job, venv=str(venv_dir))
+    c = _make_child(log_dir=tmp_path, job=job)
+    # Act
+    c.start()
+    # Assert — resolved argv[0] is the venv-pinned binary.
+    assert c.argv[0] == str(binary)
+
+
+def test_child_start_sets_virtual_env_in_child_env(tmp_path):
+    # Arrange
+    venv_dir = tmp_path / "pkg" / ".venv"
+    (venv_dir / "bin").mkdir(parents=True)
+    job = dataclasses.replace(_service_job(), venv=str(venv_dir))
+    c = _make_child(log_dir=tmp_path, job=job)
+    # Act
+    c.start()
+    # Assert — VIRTUAL_ENV mirrors what `source <venv>/bin/activate` sets.
+    assert c._proc.kwargs["env"]["VIRTUAL_ENV"] == str(venv_dir)  # type: ignore[union-attr]
+
+
+def test_child_start_sets_cwd_to_venv_parent(tmp_path):
+    # Arrange
+    venv_dir = tmp_path / "pkg" / ".venv"
+    (venv_dir / "bin").mkdir(parents=True)
+    job = dataclasses.replace(_service_job(), venv=str(venv_dir))
+    c = _make_child(log_dir=tmp_path, job=job)
+    # Act
+    c.start()
+    # Assert — cwd is the venv's parent (conventional package root).
+    assert c._proc.kwargs["cwd"] == str(venv_dir.parent)  # type: ignore[union-attr]
+
+
+def test_child_start_without_venv_keeps_cwd_none(tmp_path):
+    # Arrange — regression: a JobSpec with no venv keeps the historical
+    # behavior (inherit the supervisor's cwd — no venv-derived cwd).
+    c = _make_child(log_dir=tmp_path)
+    # Act
+    c.start()
+    # Assert
+    assert c._proc.kwargs["cwd"] is None  # type: ignore[union-attr]
+
+
+def test_child_start_without_venv_omits_virtual_env(tmp_path):
+    # Arrange — regression: a JobSpec with no venv gets no VIRTUAL_ENV
+    # overlay (historical behavior: plain os.environ.copy()).
+    c = _make_child(log_dir=tmp_path)
+    # Act
+    c.start()
+    # Assert
+    assert "VIRTUAL_ENV" not in c._proc.kwargs["env"]  # type: ignore[union-attr]
 
 
 def test_child_start_idempotent_while_running(tmp_path):

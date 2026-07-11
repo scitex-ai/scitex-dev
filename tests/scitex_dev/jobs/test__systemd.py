@@ -301,6 +301,119 @@ def test_service_unit_watchdog_opted_in_is_not_type_simple():
 
 
 # ---------------------------------------------------------------------------
+# kind="service" long-running unit — per-job venv pin
+#
+# "Leaf owns its own venv": scitex-todo's dashboard service must resolve
+# ExecStart against scitex-todo's OWN venv, not scitex-dev's (the
+# supervisor). See JobSpec.venv.
+# ---------------------------------------------------------------------------
+
+
+def test_service_unit_long_running_execstart_uses_venv_bin(tmp_path):
+    # Arrange
+    venv_dir = tmp_path / "scitex-todo" / ".venv"
+    binary = venv_dir / "bin" / "scitex-todo"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+    job = _service_job(command="scitex-todo serve --port 8051", venv=str(venv_dir))
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert f"ExecStart={binary} serve --port 8051" in text
+
+
+def test_service_unit_long_running_emits_working_directory_when_venv_set():
+    # Arrange
+    job = _service_job(venv="/home/ywatanabe/proj/scitex-todo/.venv")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert — cwd is the venv's parent, the package root.
+    assert "WorkingDirectory=/home/ywatanabe/proj/scitex-todo" in text
+
+
+def test_service_unit_long_running_emits_virtual_env_when_venv_set():
+    # Arrange
+    job = _service_job(venv="/home/ywatanabe/proj/scitex-todo/.venv")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "Environment=VIRTUAL_ENV=/home/ywatanabe/proj/scitex-todo/.venv" in text
+
+
+def test_service_unit_long_running_omits_working_directory_without_venv():
+    # Arrange — regression: a JobSpec with no venv keeps the historical
+    # unit shape (no WorkingDirectory= line at all).
+    job = _service_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "WorkingDirectory" not in text
+
+
+def test_service_unit_long_running_omits_virtual_env_without_venv():
+    # Arrange — regression companion to the WorkingDirectory check above.
+    job = _service_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "VIRTUAL_ENV" not in text
+
+
+# ---------------------------------------------------------------------------
+# kind="timer" oneshot unit — per-job venv pin (same rationale as above)
+# ---------------------------------------------------------------------------
+
+
+def test_oneshot_unit_execstart_uses_venv_bin(tmp_path):
+    # Arrange
+    venv_dir = tmp_path / "sac" / ".venv"
+    binary = venv_dir / "bin" / "sac"
+    binary.parent.mkdir(parents=True)
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+    job = JobSpec(
+        name="sac.accounts-refresh",
+        schedule="0 */4 * * *",
+        command="sac accounts refresh --all",
+        description="rotate tokens",
+        kind="timer",
+        on_unit_active_sec="4h",
+        venv=str(venv_dir),
+    )
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert f"ExecStart={binary} accounts refresh --all" in text
+
+
+def test_oneshot_unit_emits_working_directory_when_venv_set():
+    # Arrange
+    job = JobSpec(
+        name="sac.accounts-refresh",
+        schedule="0 */4 * * *",
+        command="sac accounts refresh --all",
+        description="rotate tokens",
+        kind="timer",
+        on_unit_active_sec="4h",
+        venv="/home/ywatanabe/proj/sac/.venv",
+    )
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "WorkingDirectory=/home/ywatanabe/proj/sac" in text
+
+
+def test_oneshot_unit_omits_working_directory_without_venv():
+    # Arrange — regression: unchanged shape for a JobSpec without venv.
+    job = _job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "WorkingDirectory" not in text
+
+
+# ---------------------------------------------------------------------------
 # resolve_execstart — absolute-path fix (BUG A on the host bring-up)
 # ---------------------------------------------------------------------------
 
@@ -451,6 +564,83 @@ def test_default_interpreter_bindir_is_sys_executable_parent():
     bindir = sd._interpreter_bindir()
     # Assert — the production default reads sys.executable's parent.
     assert bindir == expected
+
+
+# ---------------------------------------------------------------------------
+# resolve_execstart — per-job venv pin ("leaf owns its own venv")
+#
+# A supervised cross-package child (e.g. scitex-todo's dashboard) must NOT
+# resolve against the SUPERVISOR's own interpreter (scitex-dev's venv) —
+# that venv may lack the package entirely, or hold a stale version. When
+# JobSpec.venv is set, resolve_execstart must prefer <venv>/bin/<head>
+# over both the interpreter sibling-bin probe and the PATH lookup.
+# ---------------------------------------------------------------------------
+
+
+def _make_venv_bin(tmp_path: Path, name: str) -> Path:
+    venv_bin = tmp_path / "leaf-venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    binary = venv_bin / name
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+    return binary
+
+
+def test_resolve_execstart_venv_pin_used_when_binary_present(tmp_path):
+    # Arrange — the pinned venv has the binary; sibling-bin/PATH probes
+    # would resolve to something ELSE that must NOT be used.
+    binary = _make_venv_bin(tmp_path, "scitex-todo")
+    other_bin = tmp_path / "supervisor-bin"
+    other_bin.mkdir()
+
+    # Act
+    resolved = sd.resolve_execstart(
+        "scitex-todo board --port 8051",
+        venv=str(binary.parent.parent),
+        which=lambda _n: "/should/not/be/used/scitex-todo",
+        interpreter_bindir=lambda: other_bin,
+    )
+
+    # Assert — the venv-pinned binary wins.
+    assert resolved == f"{binary} board --port 8051"
+
+
+def test_resolve_execstart_venv_pin_falls_through_when_binary_missing(tmp_path):
+    # Arrange — venv is pinned but doesn't actually hold the binary (stale
+    # pin); must degrade to the normal resolution chain, not error out.
+    venv_dir = tmp_path / "leaf-venv"
+    (venv_dir / "bin").mkdir(parents=True)
+
+    # Act
+    resolved = sd.resolve_execstart(
+        "scitex-todo board",
+        venv=str(venv_dir),
+        which=lambda n: "/path/from/which/scitex-todo" if n == "scitex-todo" else None,
+        interpreter_bindir=lambda: tmp_path / "empty-supervisor-bin",
+    )
+
+    # Assert — fell through to which().
+    assert resolved == "/path/from/which/scitex-todo board"
+
+
+def test_resolve_execstart_without_venv_kwarg_is_unaffected(tmp_path):
+    # Arrange — regression: omitting ``venv`` entirely (every pre-existing
+    # call site) must behave exactly as before the venv-pin feature.
+    fake_bin = tmp_path / "fake-venv-bin"
+    fake_bin.mkdir()
+    binary = fake_bin / "scitex-todo"
+    binary.write_text("#!/bin/sh\nexit 0\n")
+    binary.chmod(0o755)
+
+    # Act
+    resolved = sd.resolve_execstart(
+        "scitex-todo board --port 8051",
+        which=lambda _n: "/should/not/be/used/scitex-todo",
+        interpreter_bindir=lambda: fake_bin,
+    )
+
+    # Assert — unchanged sibling-bin-probe behavior.
+    assert resolved == f"{binary} board --port 8051"
 
 
 # ---------------------------------------------------------------------------
