@@ -16,6 +16,7 @@ from scitex_dev._ecosystem._drift_report._model import (
     PackageDrift,
     SacFold,
 )
+from scitex_dev._ecosystem._drift_report._package_watch import PackageDriftWarning
 
 
 # ── LayerCell ────────────────────────────────────────────────────────────────
@@ -162,6 +163,31 @@ def test_drift_matrix_to_dict_carries_sac_availability():
     d = matrix.to_dict()
     # Assert
     assert d["sac_available"] is False and "sac not on PATH" in d["sac_note"]
+
+
+# ── DriftMatrix — package_drift_warnings (2026-07-12 incident) ───────────────
+
+
+def test_drift_matrix_has_drift_true_when_only_a_package_warning_is_present():
+    # Arrange — every per-layer package is consistent; only the critical-package
+    # check found something, so has_drift must still flip true (never silent).
+    ok = PackageDrift("a", "1.0.0", None, (LayerCell("pypi", "1.0.0", KIND_VERSION, False, ""),))
+    warning = PackageDriftWarning("scitex-todo", "0.7.28", "0.8.4", "pypi")
+    matrix = _matrix((ok,), package_drift_warnings=(warning,))
+    # Act
+    has_drift = matrix.has_drift
+    # Assert
+    assert has_drift is True
+
+
+def test_drift_matrix_to_dict_includes_package_drift_warnings():
+    # Arrange
+    warning = PackageDriftWarning("scitex-todo", "0.7.28", "0.8.4", "pypi")
+    matrix = _matrix((), package_drift_warnings=(warning,))
+    # Act
+    d = matrix.to_dict()
+    # Assert
+    assert d["package_drift_warnings"] == [warning.to_dict()]
 
 
 # ── SacFold — overlay-else-base effective resolution ─────────────────────────

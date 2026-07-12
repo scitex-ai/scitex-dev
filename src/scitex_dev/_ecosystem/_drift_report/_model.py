@@ -11,7 +11,10 @@ eight-layer model and the SSoT drift rule.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ._package_watch import PackageDriftWarning
 
 # --------------------------------------------------------------------- #
 # Layer identifiers (matrix columns)                                    #
@@ -106,6 +109,13 @@ class DriftMatrix:
     hosts: tuple[str, ...] = ()
     sac_available: bool = False
     sac_note: str = ""
+    #: Critical shared-infra packages (scitex-todo, scitex-agent-container,
+    #: scitex-dev, …) found behind fleet-current IN THIS INTERPRETER, per
+    #: ``_package_watch.check_critical_package_drift`` — added after the
+    #: 2026-07-12 incident where layer 8 ("editable") silently treated a
+    #: missing local-checkout reference as "no drift" for a container that
+    #: only pip-installs its deps. See ``_package_watch`` module docstring.
+    package_drift_warnings: tuple["PackageDriftWarning", ...] = ()
 
     @property
     def drifting(self) -> list[PackageDrift]:
@@ -117,7 +127,7 @@ class DriftMatrix:
 
     @property
     def has_drift(self) -> bool:
-        return bool(self.drifting)
+        return bool(self.drifting) or bool(self.package_drift_warnings)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -131,6 +141,7 @@ class DriftMatrix:
                 "drifting": len(self.drifting),
             },
             "packages": [p.to_dict() for p in self.packages],
+            "package_drift_warnings": [w.to_dict() for w in self.package_drift_warnings],
         }
 
 

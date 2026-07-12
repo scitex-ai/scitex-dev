@@ -25,6 +25,7 @@ from scitex_dev._ecosystem._drift_report._model import (
     LAYER_EDITABLE,
     LAYER_PYPI,
 )
+from scitex_dev._ecosystem._drift_report._package_watch import PackageDriftWarning
 
 SHA_OK = "a" * 40
 SHA_OTHER = "b" * 40
@@ -331,3 +332,35 @@ def test_render_quiet_summarizes_consistency_counts():
     line = render_quiet(matrix)
     # Assert
     assert "1 drifting" in line
+
+
+# ── package_drift_warnings passthrough (2026-07-12 incident) ────────────────
+
+
+def test_build_matrix_carries_package_drift_warnings_through():
+    # Arrange
+    warning = PackageDriftWarning("scitex-todo", "0.7.28", "0.8.4", "pypi")
+    inputs = _inputs(package_drift_warnings=(warning,))
+    # Act
+    matrix = build_drift_matrix(**inputs)
+    # Assert
+    assert matrix.package_drift_warnings == (warning,)
+
+
+def test_render_report_puts_package_drift_banner_before_the_matrix():
+    # Arrange
+    warning = PackageDriftWarning("scitex-todo", "0.7.28", "0.8.4", "pypi")
+    matrix = build_drift_matrix(**_inputs(package_drift_warnings=(warning,)))
+    # Act
+    text = render_report(matrix)
+    # Assert — the banner must appear before the matrix title, never buried after it
+    assert text.index("PACKAGE-DRIFT WARNING") < text.index("SciTeX ecosystem drift report")
+
+
+def test_render_report_omits_banner_when_no_package_drift_warnings():
+    # Arrange
+    matrix = build_drift_matrix(**_inputs())
+    # Act
+    text = render_report(matrix)
+    # Assert
+    assert "PACKAGE-DRIFT WARNING" not in text
