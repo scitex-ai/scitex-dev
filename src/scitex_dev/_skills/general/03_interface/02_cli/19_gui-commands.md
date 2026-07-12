@@ -16,6 +16,20 @@ launcher — mounts under **one group name: `gui`**.
   browser-automation domain), not `board` / `dashboard` / `web`
   (per-package drift).
 
+## Web framework — Django only
+
+Operator-confirmed 2026-07-12: every package GUI is built on **Django**,
+not Flask or another micro-framework. This is not a style preference —
+**scitex-hub mounts each tool's GUI as a plugin (a guarded `THIRD_PARTY_APPS`
+append + URL include into hub's own Django project, per scitex-storage's
+reference plugin, scitex-hub#359)**, and a Flask app structurally cannot be
+mounted that way. A tool whose GUI is Flask can serve standalone but can
+**never** become a scitex-hub plugin — that gap is the reason this rule
+exists, not a hypothetical. Any package still on Flask (or another
+non-Django stack) for its GUI needs to migrate before it can join the
+hub-plugin architecture (§ARCHITECTURE below in the coordination card;
+see `scitex-hub-gui-plugin-host-architecture-*` for the plugin-host side).
+
 ## Fixed verbs
 
 ```
