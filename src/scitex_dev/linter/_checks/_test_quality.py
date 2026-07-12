@@ -199,21 +199,33 @@ class TestQualityMixin:
 
     @classmethod
     def _tq007_count_assertions(cls, node) -> int:
-        """Count assertions in a function body."""
+        """Count assertions in a function body.
+
+        Walks ``node.body`` only, not the whole ``FunctionDef`` node —
+        ``ast.walk(node)`` would also descend into ``node.decorator_list``,
+        miscounting a marker like ``@pytest.mark.xfail(...)`` as an
+        assertion construct (it shares an attr name, "xfail", with
+        ``_TQ001_PYTEST_ASSERT_ATTRS``, but a decorator is metadata about
+        the test, not a runtime assertion).
+        """
         count = 0
-        for sub in ast.walk(node):
-            if isinstance(sub, ast.Assert):
-                count += 1
-                continue
-            if isinstance(sub, ast.Call):
-                f = sub.func
-                if (
-                    isinstance(f, ast.Attribute)
-                    and f.attr in cls._TQ001_PYTEST_ASSERT_ATTRS
-                ):
+        for stmt in node.body:
+            for sub in ast.walk(stmt):
+                if isinstance(sub, ast.Assert):
                     count += 1
-                elif isinstance(f, ast.Name) and f.id in cls._TQ001_PYTEST_ASSERT_ATTRS:
-                    count += 1
+                    continue
+                if isinstance(sub, ast.Call):
+                    f = sub.func
+                    if (
+                        isinstance(f, ast.Attribute)
+                        and f.attr in cls._TQ001_PYTEST_ASSERT_ATTRS
+                    ):
+                        count += 1
+                    elif (
+                        isinstance(f, ast.Name)
+                        and f.id in cls._TQ001_PYTEST_ASSERT_ATTRS
+                    ):
+                        count += 1
         return count
 
     @classmethod
