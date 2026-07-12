@@ -44,6 +44,49 @@ runs); one always fires (an alert on things nobody can act on); and this one —
 **fires confidently and is wrong**. The third is the worst, because you *act* on
 it.
 
+THE THIRD FAILURE MODE — DISK TRUTH IS NOT PROCESS TRUTH
+--------------------------------------------------------
+**This probe reports what is on DISK. A long-lived process may be running
+something else entirely, and no version number will ever tell you.**
+
+scitex-dev found this while auditing the incident above, and it is the sharper
+half of the lesson. Symptom: an ``update_task`` call failed for HOURS with an
+old-enum validator message. A mid-session ``pip install --upgrade`` changed the
+code on disk, and the failures **continued, byte-identical**. Only a full process
+restart cleared them.
+
+Neither pip nor the metadata was at fault. Python imports a module ONCE, into
+``sys.modules``; upgrading the files on disk does not touch the module objects a
+running process already holds. So a server can serve stale code from memory while
+its disk, its ``.dist-info``, and this probe ALL report a current install — and
+**not one of them is lying.** They are answering a different question than the one
+that was asked. That is nastier than the fossil, because every signal is
+individually true.
+
+No version number detects this: the metadata's and the source's both describe the
+DISK.
+
+**The only reliable detector is to probe the LOADED MODULE for a symbol** — which
+is what ``features`` does, because ``hasattr`` reads ``sys.modules`` and therefore
+interrogates the code the process is ACTUALLY RUNNING::
+
+    p = probe_install("scitex-todo", features={
+        "post_migration_enum": "scitex_todo._model:VALID_BLOCKERS",
+    })
+    if not p.features["post_migration_enum"]:
+        # THIS PROCESS runs pre-migration code, whatever the disk says.
+        # An upgrade will NOT fix it — only a RESTART will.
+
+The rule: **to know what a process is running, ask the process — not the package
+manager.** And when the answer is "stale", the remedy is a RESTART; an upgrade
+will not touch it. (That clause is the operationally useful half: scitex-dev DID
+upgrade, and it changed nothing.)
+
+An mtime-vs-process-start heuristic was tried and DELIBERATELY NOT SHIPPED: it
+depends on boot-time arithmetic and clock skew, and returned a wrong answer on the
+first live box it was pointed at. Shipping a flaky detector for a false-confidence
+bug would be self-parody. Symbol probing is exact.
+
 DESIGN
 ------
 Vendored deliberately, not imported from scitex-todo. scitex-dev owns the
