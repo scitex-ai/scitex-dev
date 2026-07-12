@@ -28,9 +28,15 @@ launcher — mounts under **one group name: `gui`**.
 | Verb     | Semantics                                                                                          |
 |----------|------------------------------------------------------------------------------------------------------|
 | `open`   | The user-facing entry point: opens the surface in the browser, **auto-serving first if needed**.    |
-| `serve`  | Foreground server (blocks; Ctrl-C to stop). `start`/`stop` stay reserved for **daemonized** lifecycle (§1d catalog) — `serve` is deliberately not `start`. |
+| `serve`  | Foreground server (blocks; Ctrl-C to stop). **Headless only** — never opens a browser, never takes a `--no-browser` flag (browser-launching is exclusively `open`'s job). `start`/`stop` stay reserved for **daemonized** lifecycle (§1d catalog) — `serve` is deliberately not `start`. Must expose a **browsable HTTP root**, not a WS-only endpoint — a GUI whose `serve` only speaks WebSocket is not browser-usable and fails this rule. |
 | `status` | Report running/not-running, port, pid, URL.                                                         |
 | `stop`   | Stop the instance `open` auto-served (or a daemonized one).                                         |
+
+`gui` itself is a **group only** — it never takes a positional argument
+directly (confirmed live 2026-07-12: a `gui [SOURCE]` leaf shape breaks
+`gui serve`, since "serve" gets parsed as the positional value instead
+of resolving to the `serve` subcommand). Any per-invocation argument
+(a source file, a project path, …) belongs on `open`, not on the group.
 
 ## Multiple surfaces → positional argument
 
@@ -41,6 +47,28 @@ argument, not as extra groups:
 <cli> gui open board
 <cli> gui open editor
 ```
+
+## Ports — the 3129X block
+
+Standalone GUI servers share one fixed, contiguous port block —
+**3129X**, continuing the existing SciTeX web-port scheme (crossref
+31291, openalex 31292, audio 31293, scitex-hub staging/dev
+31294/31295). Each tool gets **one fixed port**, no incrementing on
+repeated starts — `gui serve` binds the tool's fixed port; the runtime
+state file makes this idempotent, so a re-run reuses the running
+instance instead of stacking a second one on the next free port.
+
+| Tool             | Port  |
+|------------------|-------|
+| figrecipe        | 31296 |
+| scitex-scholar   | 31297 |
+| scitex-writer    | 31298 |
+| scitex-todo      | 31299 |
+| (future GUIs)    | 31290, next free |
+
+This block is orthogonal to the `3129X` reverse-tunnel ports used by
+scitex-hub for staging/dev — those stay as-is; this table is the
+**local standalone-GUI** block specifically.
 
 ## Migration
 
