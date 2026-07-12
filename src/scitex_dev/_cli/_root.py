@@ -29,6 +29,7 @@ COMMAND_CATEGORIES = [
             "trace-env-vars",
             "registry-normalize",
             "icons",
+            "host",
         ],
     ),
     ("Service", ["mcp", "service", "cron"]),

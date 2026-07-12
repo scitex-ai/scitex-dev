@@ -54,6 +54,19 @@ and optional `SideEffect` records. See [10_result-types.md](10_result-types.md).
 helpers — see [12_config.md](12_config.md). Environment overrides:
 [20_env-vars.md](20_env-vars.md).
 
+## Host registry
+
+```python
+from scitex_dev.hosts import resolve, list_hosts
+
+resolve("spartan").scitex_root   # "where is host X, and what's its ~/.scitex root?"
+list_hosts()                     # every registered host
+```
+
+The shared port other scitex-* packages (sac, scitex-hub,
+scitex-storage) should resolve host paths through instead of inventing
+their own host config. See [24_host-registry.md](24_host-registry.md).
+
 ## Discoverability
 
 ```bash
