@@ -18,7 +18,7 @@ code it describes**:
 Comparing against a fossil is wrong in BOTH directions, and this file pins both:
 
 * :func:`test_a_fossil_no_longer_produces_a_false_stale_alarm`
-* :func:`test_an_orphaned_install_is_surfaced_not_silently_blessed`
+* :func:`test_an_orphaned_install_kind_is_reported`
 
 A drift detector that reads a fossilised version is a drift detector turned off.
 """
@@ -57,13 +57,14 @@ def test_a_fossil_no_longer_produces_a_false_stale_alarm():
     container that was already current. Repeat that 12x a day and its reader
     learns to ignore the whole report.
     """
+    # Arrange
     fossil = _probe(
         kind=KIND_EDITABLE,
         metadata_version="0.7.26",  # the fossil
         code_version="0.8.7",  # what actually runs
         honest=False,
     )
-
+    # Act
     warnings = check_critical_package_drift(
         packages=("scitex-todo",),
         # the verified reader returns what is RUNNING, not what is claimed
@@ -72,13 +73,13 @@ def test_a_fossil_no_longer_produces_a_false_stale_alarm():
         local_path_fn=lambda pkg: None,
         toml_fn=lambda p: None,
     )
-
+    # Assert
     assert warnings == [], "a current install must not be reported as behind"
 
 
-def test_genuinely_behind_is_still_reported():
-    """The true signal must survive the fix — this is what the check is FOR."""
-    warnings = check_critical_package_drift(
+def _genuinely_behind_warnings():
+    """Shared setup for the split ``test_genuinely_behind_*`` tests below."""
+    return check_critical_package_drift(
         packages=("scitex-todo",),
         installed_fn=lambda pkg: "0.7.50",
         pypi_fn=lambda pkg: "0.8.8",
@@ -86,13 +87,40 @@ def test_genuinely_behind_is_still_reported():
         toml_fn=lambda p: None,
     )
 
+
+def test_genuinely_behind_is_still_reported():
+    """The true signal must survive the fix — this is what the check is FOR."""
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    warnings = _genuinely_behind_warnings()
+    # Assert
     assert [w.package for w in warnings] == ["scitex-todo"]
+
+
+def test_genuinely_behind_reports_the_installed_version():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    warnings = _genuinely_behind_warnings()
+    # Assert
     assert warnings[0].installed == "0.7.50"
+
+
+def test_genuinely_behind_reports_the_reference_version():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    warnings = _genuinely_behind_warnings()
+    # Assert
     assert warnings[0].reference == "0.8.8"
 
 
 def test_unknowable_running_version_is_never_reported_as_drift():
     """``None`` from the verified reader means UNKNOWN, never agreement."""
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
     warnings = check_critical_package_drift(
         packages=("scitex-todo",),
         installed_fn=lambda pkg: None,  # cannot establish what is running
@@ -100,7 +128,7 @@ def test_unknowable_running_version_is_never_reported_as_drift():
         local_path_fn=lambda pkg: None,
         toml_fn=lambda p: None,
     )
-
+    # Assert
     assert warnings == [], "unknown must be silent, never a confident drift claim"
 
 
@@ -109,8 +137,9 @@ def test_unknowable_running_version_is_never_reported_as_drift():
 # --------------------------------------------------------------------------
 
 
-def test_a_drifted_metadata_is_surfaced_as_untrustworthy():
-    fossil = _probe(
+def _drifted_metadata_probe() -> InstallProbe:
+    """Shared setup for the split ``test_a_drifted_metadata_*`` tests below."""
+    return _probe(
         kind=KIND_EDITABLE,
         metadata_version="0.7.26",
         code_version="0.8.7",
@@ -119,24 +148,67 @@ def test_a_drifted_metadata_is_surfaced_as_untrustworthy():
         hint="uv pip install -e <root> --no-deps",
     )
 
-    out = check_untrustworthy_installs(
+
+def _drifted_metadata_findings():
+    fossil = _drifted_metadata_probe()
+    return check_untrustworthy_installs(
         packages=("scitex-todo",), probe_fn=lambda pkg: fossil
     )
 
+
+def test_a_drifted_metadata_is_surfaced_exactly_once():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    out = _drifted_metadata_findings()
+    # Assert
     assert len(out) == 1
+
+
+def test_a_drifted_metadata_names_the_package():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    out = _drifted_metadata_findings()
+    # Assert
     assert out[0].package == "scitex-todo"
+
+
+def test_a_drifted_metadata_reports_the_claimed_version():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    out = _drifted_metadata_findings()
+    # Assert
     assert out[0].claimed == "0.7.26"
+
+
+def test_a_drifted_metadata_reports_the_actual_version():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    out = _drifted_metadata_findings()
+    # Assert
     assert out[0].actual == "0.8.7"
+
+
+def test_a_drifted_metadata_line_names_it_a_fossil():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    out = _drifted_metadata_findings()
+    # Assert
     assert "fossil" in out[0].line()
 
 
-def test_an_orphaned_install_is_surfaced_not_silently_blessed():
-    """Metadata present, NO code. The worst case, and the old check missed it.
+def _orphaned_install_probe() -> InstallProbe:
+    """Shared setup for the split ``test_an_orphaned_install_*`` tests below.
 
-    A container whose package was deleted but whose .dist-info survived would
+    Metadata present, NO code. The worst case, and the old check missed it: a
+    container whose package was deleted but whose .dist-info survived would
     compare "0.8.8 vs 0.8.8" and be pronounced healthy — while running nothing.
     """
-    orphan = _probe(
+    return _probe(
         kind=KIND_ORPHANED,
         metadata_version="0.8.8",
         code_version=None,
@@ -145,33 +217,61 @@ def test_an_orphaned_install_is_surfaced_not_silently_blessed():
         hint="pip install --force-reinstall --no-deps scitex-todo",
     )
 
-    out = check_untrustworthy_installs(
+
+def _orphaned_install_findings():
+    orphan = _orphaned_install_probe()
+    return check_untrustworthy_installs(
         packages=("scitex-todo",), probe_fn=lambda pkg: orphan
     )
 
+
+def test_an_orphaned_install_is_surfaced_exactly_once():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    out = _orphaned_install_findings()
+    # Assert
     assert len(out) == 1
+
+
+def test_an_orphaned_install_kind_is_reported():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    out = _orphaned_install_findings()
+    # Assert
     assert out[0].kind == KIND_ORPHANED
+
+
+def test_an_orphaned_install_line_says_no_code():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    out = _orphaned_install_findings()
+    # Assert
     assert "NO CODE" in out[0].line()
 
 
 def test_a_healthy_wheel_is_not_reported():
+    # Arrange
     healthy = _probe(kind=KIND_WHEEL, metadata_version="0.8.8", honest=True)
-
+    # Act
     out = check_untrustworthy_installs(
         packages=("scitex-todo",), probe_fn=lambda pkg: healthy
     )
-
+    # Assert
     assert out == []
 
 
 def test_an_absent_package_is_not_reported_as_a_liar():
     """Not installed is not a lie. Reporting it as one is a confidently wrong hint."""
+    # Arrange
     absent = _probe(kind=KIND_ABSENT, metadata_version=None, honest=False)
-
+    # Act
     out = check_untrustworthy_installs(
         packages=("scitex-todo",), probe_fn=lambda pkg: absent
     )
-
+    # Assert
     assert out == []
 
 
@@ -181,10 +281,16 @@ def test_an_absent_package_is_not_reported_as_a_liar():
 
 
 def test_banner_is_empty_when_there_is_nothing_to_say():
-    assert render_untrustworthy_install_banner([]) == ""
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    banner = render_untrustworthy_install_banner([])
+    # Assert
+    assert banner == ""
 
 
-def test_banner_names_the_problem_and_the_repair():
+def _repair_banner() -> str:
+    """Shared setup for the split ``test_banner_names_*`` tests below."""
     fossil = _probe(
         kind=KIND_EDITABLE,
         metadata_version="0.7.26",
@@ -196,12 +302,40 @@ def test_banner_names_the_problem_and_the_repair():
     out = check_untrustworthy_installs(
         packages=("scitex-todo",), probe_fn=lambda pkg: fossil
     )
+    return render_untrustworthy_install_banner(out)
 
-    banner = render_untrustworthy_install_banner(out)
 
+def test_banner_names_the_finding():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    banner = _repair_banner()
+    # Assert
     assert "UNTRUSTWORTHY INSTALL" in banner
+
+
+def test_banner_names_the_package():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    banner = _repair_banner()
+    # Assert
     assert "scitex-todo" in banner
-    # It must say WHY every other line is now suspect for this package.
+
+
+def test_banner_explains_why_other_lines_are_suspect():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    banner = _repair_banner()
+    # Assert
     assert "meaningless" in banner
-    # And it must carry the actual repair, not just a complaint.
+
+
+def test_banner_carries_the_actual_repair_command():
+    # Arrange
+    # (setup lives in the shared helper above)
+    # Act
+    banner = _repair_banner()
+    # Assert
     assert "--no-deps" in banner
