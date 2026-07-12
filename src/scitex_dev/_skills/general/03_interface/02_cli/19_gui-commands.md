@@ -78,11 +78,40 @@ instance instead of stacking a second one on the next free port.
 | scitex-scholar   | 31297 |
 | scitex-writer    | 31298 |
 | scitex-todo      | 31299 |
-| (future GUIs)    | 31290, next free |
+| scitex-storage   | 31290 |
+| (future GUIs)    | next free in 3129X |
 
 This block is orthogonal to the `3129X` reverse-tunnel ports used by
 scitex-hub for staging/dev — those stay as-is; this table is the
 **local standalone-GUI** block specifically.
+
+## Branding — one shared favicon + title convention
+
+Operator-confirmed 2026-07-12 (browser-tab screenshot): every package
+GUI carries the SAME brand, not a bespoke one. Two requirements:
+
+- **Favicon**: one shared SciTeX brand icon, not the browser's generic
+  globe default. `figrecipe` and `scitex-scholar` were the outliers
+  that surfaced this (no favicon at all); `scitex-writer` and
+  `scitex-todo` already had one.
+- **Title**: consistent `<title>SciTeX <Tool></title>` convention —
+  `SciTeX FigRecipe`, `SciTeX Scholar`, `SciTeX Writer`, `SciTeX Todo`,
+  `SciTeX Storage` — not per-package titles like "FigRecipe Editor" or
+  "default-project — SciTeX".
+
+**Ownership**: `scitex-ui` is the framework owner and provides the
+shared favicon asset + branding contract each GUI's frontend imports
+(mechanism — npm export, static asset path, template partial — is
+scitex-ui's call, not prescribed here). This is currently BLOCKED:
+scitex-ui had no live agent to pick this up as of 2026-07-12
+(confirmed via two separate a2a attempts, ~6h apart, both undelivered
+— `scitex-ui-gui-branding-favicon-title-20260712`), and scitex-ui
+0.6.3's `standalone_shell.html` was found (by scitex-storage, reading
+the installed source directly) to have **no favicon mechanism at
+all** — this is a real gap, not a documentation gap. Each tool's
+`gui serve` should adopt scitex-ui's favicon/title contract once it
+exists; do not hand-roll a per-package favicon in the meantime, to
+avoid a second migration later.
 
 ## Migration
 
