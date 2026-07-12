@@ -78,6 +78,11 @@ RULE_SEVERITY: dict[str, str] = {
     # not error, so `audit-all` exit stays 0 instead of false-flaking the fleet.
     "§10w": "warn",
     "§11": "error",
+    # §12 — canonical `gui {open,serve,status,stop}` command group.
+    # WARN during ecosystem migration (figrecipe/writer/scholar/todo are
+    # adopting incrementally as of 2026-07); promote once the fleet has
+    # converged, same bake-in pattern as §1f / §4b.
+    "§12": "warn",
     # PA-304: umbrella imports (scitex.X / import scitex) inside standalone
     # source. Drags umbrella __init__ + lazy re-export setup into every call
     # — measurable on NFS-mounted homes (HPC). Codified 2026-05-06 after the
@@ -150,6 +155,7 @@ def _audit_one(
         _scan_env_vars,
         _walk,
     )
+    from ._gui_group import check_gui_command_group
     from ._std_rules import (
         check_deprecated_alias_metadata,
         check_verb_exception_comments,
@@ -188,6 +194,8 @@ def _audit_one(
     check_verb_exception_comments(package, out)
     # §5 — static `_deprecated_alias` metadata verification.
     check_deprecated_alias_metadata(cmd, package, out)
+    # §12 — canonical `gui {open,serve,status,stop}` command group.
+    check_gui_command_group(cmd, package, out)
     if behavioral:
         _check_behavioral(package, out, cmd, timeout=timeout)
     return ("ok" if not out else "warn"), out

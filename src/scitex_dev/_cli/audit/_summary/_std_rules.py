@@ -22,6 +22,10 @@ module so the legacy-oversized engine does not grow further:
        phase="warn" aliases MUST exit 0 and print 'deprecated' on stderr;
        phase="error" MUST exit 2; missing metadata keeps the legacy
        expectation (non-zero + redirect hint on stderr).
+- §12  canonical `gui` command group — see the sibling module
+       `_gui_group.py` (kept separate to stay under the repo's own
+       512-line file limit). Doctrine:
+       ``_skills/general/03_interface/02_cli/19_gui-commands.md``.
 """
 
 from __future__ import annotations
