@@ -5,10 +5,10 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.30.0] - 2026-07-13
 
 ### Added
-- **Shared `gui` command-group lifecycle primitive + audit rule.**
+- **Shared `gui` command-group lifecycle primitive + audit rule (#332).**
   `scitex_dev.gui_runtime.GuiRuntime` generalizes the state-file/pid-
   liveness/idempotent-stop pattern behind `<pkg> gui {open,serve,status,
   stop}` (doctrine `19_gui-commands.md`) so consuming packages
@@ -19,6 +19,28 @@ versions follow [Semantic Versioning](https://semver.org/).
   (`start-gui`, `dashboard`, `board`, a bare non-group `gui`, ...) that
   aren't a properly-deprecated Phase W/E alias, and flags a `gui` group
   missing one of the four required verbs.
+- **`gui` CLI-commands doctrine: port scheme + shape refinements (#333).**
+  Fixed 3129X standalone-GUI port block (figrecipe 31296, scholar 31297,
+  writer 31298, todo 31299), `serve` is headless-only (no `--no-browser`,
+  must expose a browsable HTTP root), `gui` is a group-only namespace
+  (no positional SOURCE argument on the group itself).
+- **SciTeX-wide host registry (#331).** `scitex_dev.hosts` —
+  `HostRecord`/`resolve()`/`list_hosts()`, CLI `scitex-dev host
+  list/show/resolve`, seeded `~/.scitex/dev/hosts.yaml` with real
+  host identifiers (ywata-note-win, spartan, nas, nas1, nas2, mba)
+  instead of ad hoc/vague names like "localhost".
+- **Critical-package drift check in drift-report (#329).**
+  `check_critical_package_drift()` compares a verified-installed
+  version against PyPI-latest for a fixed critical-package list;
+  responds to the 2026-07-12 incident where scitex-dev's own container
+  ran stale for days with the drift timer silently not firing.
+
+### Fixed
+- **The drift detector was reading a version string that can lie (#330).**
+  `check_untrustworthy_installs()` / `render_untrustworthy_install_banner()`
+  surface installs where dist-info metadata and actual source disagree
+  (editable-install drift, orphaned metadata, stale already-imported
+  modules) — content-verified, not just version-string-trusted.
 
 ## [0.29.0] - 2026-07-11
 
