@@ -82,8 +82,11 @@ from ._model import (
 from ._package_watch import (
     CRITICAL_PACKAGES,
     PackageDriftWarning,
+    UntrustworthyInstallWarning,
     check_critical_package_drift,
+    check_untrustworthy_installs,
     render_package_drift_banner,
+    render_untrustworthy_install_banner,
 )
 from ._sac import collect_sac_rows, fold_sac_versions, parse_sac_output
 
@@ -94,14 +97,17 @@ __all__ = [
     "PackageDrift",
     "PackageDriftWarning",
     "SacFold",
+    "UntrustworthyInstallWarning",
     "build_drift_matrix",
     "check_critical_package_drift",
+    "check_untrustworthy_installs",
     "collect_drift_matrix",
     "collect_sac_rows",
     "fold_sac_versions",
     "parse_sac_output",
     "render_matrix",
     "render_package_drift_banner",
+    "render_untrustworthy_install_banner",
     "render_quiet",
     "render_report",
 ]

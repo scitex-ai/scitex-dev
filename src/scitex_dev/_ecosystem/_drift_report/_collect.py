@@ -16,7 +16,10 @@ from typing import Callable
 
 from ._build import build_drift_matrix
 from ._model import DriftMatrix
-from ._package_watch import check_critical_package_drift
+from ._package_watch import (
+    check_critical_package_drift,
+    check_untrustworthy_installs,
+)
 from ._sac import collect_sac_rows
 
 
@@ -94,6 +97,12 @@ def collect_drift_matrix(
     # Layers 5 / 6 — sac (fail-open).
     sac_rows, sac_note = collect_sac_rows(runner=sac_runner)
 
+    # Can we even BELIEVE the version strings for the critical packages? Runs
+    # BEFORE the drift comparison, because a comparison against a fossilised
+    # .dist-info is not a weak signal but a WRONG one — it cries "stale" at a
+    # current install and blesses a stale one (incident 2026-07-12).
+    untrustworthy_installs = check_untrustworthy_installs()
+
     # Critical-package check — always-on, independent of local checkouts.
     package_drift_warnings = check_critical_package_drift()
 
@@ -109,6 +118,7 @@ def collect_drift_matrix(
         sac_rows=sac_rows,
         sac_note=sac_note,
         package_drift_warnings=tuple(package_drift_warnings),
+        untrustworthy_installs=tuple(untrustworthy_installs),
     )
 
 
