@@ -12,6 +12,8 @@ click group:
 * ``hooks``   — git/agent hook management.
 * ``service`` — keep a declared ``kind='service'`` daemon alive
                 (systemd --user or respawn fallback).
+* ``host``    — the SciTeX-wide host registry (where is host X, and
+                what's its ~/.scitex root?).
 """
 
 from __future__ import annotations
@@ -26,12 +28,14 @@ def register_integration_commands(main: click.Group) -> None:
     from .cron import register_cron_commands
     from ._hooks_cli import register_hooks_commands
     from .service import register_service_commands
+    from ._hosts import register_host_commands
 
     register_mcp_commands(main)
     register_creds_commands(main)
     register_cron_commands(main)
     register_hooks_commands(main)
     register_service_commands(main)
+    register_host_commands(main)
 
 
 __all__ = ["register_integration_commands"]

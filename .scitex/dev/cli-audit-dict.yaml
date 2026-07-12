@@ -40,6 +40,17 @@ transitive_verbs:
   # shipped public command to satisfy the heuristic would be worse than this
   # one-line declaration.
   - registry-normalize
+verb_exceptions:
+  # `scitex-dev host resolve <name>` — DNS-style lookup ("resolve a
+  # name to its record"), the standard meaning of "resolve" in
+  # networking/registry contexts (cf. `dns resolve`, `pip resolve`).
+  # The doctrine's `resolve -> done` synonym mapping targets a
+  # DIFFERENT sense of the word: "resolve" as a terminal-state verb for
+  # closing out a work item (task/issue) — `host resolve` never marks
+  # anything done, it looks up a host record. Distinct meanings, same
+  # spelling; exempting rather than renaming the public, spec-agreed
+  # command.
+  - resolve  # why: lookup verb (DNS/registry sense), not the task terminal-state verb
 intransitive_verbs:
   # `scitex-dev ecosystem run` — run the collective ecosystem supervisor in
   # the foreground (the systemd ExecStart). "run" is an intransitive verb in

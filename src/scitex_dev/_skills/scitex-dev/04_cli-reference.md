@@ -45,6 +45,7 @@ Config path resolution:
 | `rename-symbols` | Bulk rename with cross-reference updates | [15_rename.md](15_rename.md) |
 | `trace-env-vars` | Trace where env var(s) are defined/injected (static scan + strace) | — |
 | `registry-normalize` | Fix PS-181 `~/.scitex/<pkg>/` registry-layout drift for ONE package (dry-run by default) | — |
+| `host list / show / resolve` | SciTeX-wide host registry — where is host X, and what's its `~/.scitex` root? | [24_host-registry.md](24_host-registry.md) |
 
 `trace-env-vars` is a diagnostic "silver bullet" for _where does this
 env var come from?_ Two modes, both with word-boundary matching (`FOO`
