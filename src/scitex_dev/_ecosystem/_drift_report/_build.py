@@ -30,11 +30,14 @@ from ._model import (
     PackageDrift,
     SacFold,
 )
-from ._package_watch import render_package_drift_banner
+from ._package_watch import (
+    render_package_drift_banner,
+    render_untrustworthy_install_banner,
+)
 from ._sac import fold_sac_versions
 
 if TYPE_CHECKING:
-    from ._package_watch import PackageDriftWarning
+    from ._package_watch import PackageDriftWarning, UntrustworthyInstallWarning
 
 
 # --------------------------------------------------------------------- #
@@ -158,6 +161,7 @@ def build_drift_matrix(
     sac_rows: list[dict] | None,
     sac_note: str = "",
     package_drift_warnings: "tuple[PackageDriftWarning, ...]" = (),
+    untrustworthy_installs: "tuple[UntrustworthyInstallWarning, ...]" = (),
 ) -> DriftMatrix:
     """Fold plain per-package inputs into a :class:`DriftMatrix`.
 
@@ -249,6 +253,7 @@ def build_drift_matrix(
         sac_available=sac_available,
         sac_note=sac_note,
         package_drift_warnings=tuple(package_drift_warnings),
+        untrustworthy_installs=tuple(untrustworthy_installs),
     )
 
 
