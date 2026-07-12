@@ -7,6 +7,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Shared `gui` command-group lifecycle primitive + audit rule.**
+  `scitex_dev.gui_runtime.GuiRuntime` generalizes the state-file/pid-
+  liveness/idempotent-stop pattern behind `<pkg> gui {open,serve,status,
+  stop}` (doctrine `19_gui-commands.md`) so consuming packages
+  (scitex-writer, figrecipe, scitex-scholar, scitex-todo) wire their own
+  server bootstrap without re-implementing the same ~140 lines each.
+  New audit-cli rule §12 (`_cli/audit/_summary/_gui_group.py`, WARN
+  during ecosystem migration) flags legacy/flat gui-adjacent commands
+  (`start-gui`, `dashboard`, `board`, a bare non-group `gui`, ...) that
+  aren't a properly-deprecated Phase W/E alias, and flags a `gui` group
+  missing one of the four required verbs.
+
 ## [0.29.0] - 2026-07-11
 
 ### Added
