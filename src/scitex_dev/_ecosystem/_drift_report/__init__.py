@@ -30,6 +30,21 @@ The eight layers (per package)
 8. **Editable / local checkout** — the current interpreter's installed
    version + the localhost develop sha.
 
+Critical-package check (independent of the 8 layers)
+------------------------------------------------------
+Layer 8 silently treats "no local git checkout of this package" as
+"unknown, not drift" — correct for the matrix's SSoT rule, but it means
+a lean container that only ``pip install``s its dependencies (never
+clones every sibling repo) gets NO warning when one of them goes stale.
+This bit a real agent 2026-07-12 (``scitex-todo`` pinned at 0.7.28 while
+the fleet moved to 0.7.50+). ``_package_watch.check_critical_package_drift``
+closes that gap for a short, hand-picked critical-package list
+(``scitex-todo``, ``scitex-agent-container``, ``scitex-dev`` — see
+``CRITICAL_PACKAGES``): it compares THIS interpreter's installed version
+against a fleet-current reference that falls back to PyPI latest when no
+local checkout exists, and renders a LOUD banner (never silent) ahead of
+the matrix in ``render_report`` whenever one is behind.
+
 Architecture — a pure core + a thin collector
 ----------------------------------------------
 Everything network-/subprocess-touching lives in ``_collect`` (and the
@@ -64,19 +79,29 @@ from ._model import (
     PackageDrift,
     SacFold,
 )
+from ._package_watch import (
+    CRITICAL_PACKAGES,
+    PackageDriftWarning,
+    check_critical_package_drift,
+    render_package_drift_banner,
+)
 from ._sac import collect_sac_rows, fold_sac_versions, parse_sac_output
 
 __all__ = [
+    "CRITICAL_PACKAGES",
     "DriftMatrix",
     "LayerCell",
     "PackageDrift",
+    "PackageDriftWarning",
     "SacFold",
     "build_drift_matrix",
+    "check_critical_package_drift",
     "collect_drift_matrix",
     "collect_sac_rows",
     "fold_sac_versions",
     "parse_sac_output",
     "render_matrix",
+    "render_package_drift_banner",
     "render_quiet",
     "render_report",
 ]

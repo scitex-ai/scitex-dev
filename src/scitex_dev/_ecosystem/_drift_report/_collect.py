@@ -16,6 +16,7 @@ from typing import Callable
 
 from ._build import build_drift_matrix
 from ._model import DriftMatrix
+from ._package_watch import check_critical_package_drift
 from ._sac import collect_sac_rows
 
 
@@ -38,6 +39,12 @@ def collect_drift_matrix(
       2-develop / 3 / 4 / 8-sha).
     * ``sac versions --json`` — layers 5/6, via :func:`collect_sac_rows`
       (fail-open).
+
+    Also runs :func:`_package_watch.check_critical_package_drift` — an
+    independent, always-on check of THIS interpreter's critical-package
+    installs (never silently skipped when a package's local git checkout
+    is absent, unlike layer 8; see that module's docstring for why it
+    exists alongside the 8-layer matrix).
     """
     from ..._core.config import load_config
     from ..._release.versions import _normalize_version, list_versions
@@ -87,6 +94,9 @@ def collect_drift_matrix(
     # Layers 5 / 6 — sac (fail-open).
     sac_rows, sac_note = collect_sac_rows(runner=sac_runner)
 
+    # Critical-package check — always-on, independent of local checkouts.
+    package_drift_warnings = check_critical_package_drift()
+
     return build_drift_matrix(
         packages=pkg_list,
         hosts=host_names,
@@ -98,6 +108,7 @@ def collect_drift_matrix(
         pypi_names=pypi_names,
         sac_rows=sac_rows,
         sac_note=sac_note,
+        package_drift_warnings=tuple(package_drift_warnings),
     )
 
 

@@ -28,8 +28,14 @@ def register(ecosystem):
                 "`sac versions --json`), CI (not-collected in v1), and "
                 "the editable/installed version. The SSoT is "
                 "`pyproject.toml` on the local develop checkout; any "
-                "cell that disagrees is flagged with `*`. Exit 1 iff "
-                "drift is detected.",
+                "cell that disagrees is flagged with `*`. Also runs an "
+                "independent critical-package check (scitex-todo, "
+                "scitex-agent-container, scitex-dev) against THIS "
+                "interpreter's installs, falling back to PyPI when no "
+                "local checkout exists, and prints a LOUD banner ahead "
+                "of the matrix when one is behind (closes the silent "
+                "gap that let a container run scitex-todo 0.7.28 "
+                "unnoticed, 2026-07-12). Exit 1 iff drift is detected.",
             ),
             examples=(
                 Example("{prog} ecosystem drift-report", "Full matrix report."),

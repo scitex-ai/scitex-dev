@@ -11,7 +11,7 @@ re-implementing PEP 440 logic.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from ..._release.versions import _compare_versions, _pep440_equal
 from ._model import (
@@ -30,7 +30,11 @@ from ._model import (
     PackageDrift,
     SacFold,
 )
+from ._package_watch import render_package_drift_banner
 from ._sac import fold_sac_versions
+
+if TYPE_CHECKING:
+    from ._package_watch import PackageDriftWarning
 
 
 # --------------------------------------------------------------------- #
@@ -153,6 +157,7 @@ def build_drift_matrix(
     pypi_names: dict[str, str],
     sac_rows: list[dict] | None,
     sac_note: str = "",
+    package_drift_warnings: "tuple[PackageDriftWarning, ...]" = (),
 ) -> DriftMatrix:
     """Fold plain per-package inputs into a :class:`DriftMatrix`.
 
@@ -164,6 +169,10 @@ def build_drift_matrix(
     each ecosystem key to its pip/PyPI name so ``sac`` rows (which key on
     the PyPI name) match the right package. ``sac_rows is None`` marks
     layers 5/6 unavailable (rendered ``-`` with ``sac_note``).
+    ``package_drift_warnings`` is the critical-package check's result
+    (already computed by the caller — see ``_package_watch``); it is
+    passed through verbatim, never recomputed here, so this function
+    stays pure.
     """
     sha_by_pkg = {r.get("pkg"): r for r in sha_rows}
     sac_fold = fold_sac_versions(sac_rows) if sac_rows is not None else None
@@ -239,6 +248,7 @@ def build_drift_matrix(
         hosts=tuple(hosts),
         sac_available=sac_available,
         sac_note=sac_note,
+        package_drift_warnings=tuple(package_drift_warnings),
     )
 
 
@@ -291,14 +301,27 @@ def render_matrix(matrix: DriftMatrix) -> str:
 
 
 def render_report(matrix: DriftMatrix) -> str:
-    """Full human report: title, grid, summary, per-drift detail."""
-    lines: list[str] = [
-        "SciTeX ecosystem drift report "
-        "(SSoT = pyproject.toml @ local develop; * = drift vs SSoT)",
-        "",
-        render_matrix(matrix),
-        "",
-    ]
+    """Full human report: title, grid, summary, per-drift detail.
+
+    The critical-package banner (if any) prints FIRST, ahead of the
+    matrix — it is the loudest signal in the report and must not depend
+    on a reader scanning the whole per-layer table to notice it (see
+    ``_package_watch`` module docstring, 2026-07-12 incident).
+    """
+    lines: list[str] = []
+    banner = render_package_drift_banner(list(matrix.package_drift_warnings))
+    if banner:
+        lines.append(banner)
+        lines.append("")
+    lines.extend(
+        [
+            "SciTeX ecosystem drift report "
+            "(SSoT = pyproject.toml @ local develop; * = drift vs SSoT)",
+            "",
+            render_matrix(matrix),
+            "",
+        ]
+    )
 
     total = len(matrix.packages)
     consistent = len(matrix.consistent_packages)
@@ -339,9 +362,11 @@ def render_quiet(matrix: DriftMatrix) -> str:
     """One-line summary."""
     total = len(matrix.packages)
     consistent = len(matrix.consistent_packages)
+    warnings = len(matrix.package_drift_warnings)
     return (
         f"drift: {consistent}/{total} packages consistent; "
         f"{len(matrix.drifting)} drifting"
+        + (f"; {warnings} critical package(s) behind fleet-current" if warnings else "")
         + ("" if matrix.sac_available else " (sac layers 5/6 unavailable)")
     )
 
