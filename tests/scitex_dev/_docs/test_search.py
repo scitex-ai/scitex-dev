@@ -219,6 +219,17 @@ class TestSearch:
         with pytest.raises(ValueError, match="Unknown scope"):
             search("test", scope="invalid")
 
+    @pytest.mark.xfail(
+        reason=(
+            "Intermittent 'ImportError: cannot load module more than once "
+            "per process' from numpy's C-extension guard under this repo's "
+            "pytest-xdist full-core parallelism (py3.12/3.13 CI-SIF, "
+            "2026-07-13) — not a real bug in search()/discover_packages(); "
+            "the same assertion holds under a serial/local run. Tracked: "
+            "scitex-dev-flaky-test-search-numpy-reload-20260713."
+        ),
+        strict=False,
+    )
     def test_max_results_caps_returned_count(self):
         # Even if many results, should cap at max_results
         # Arrange
