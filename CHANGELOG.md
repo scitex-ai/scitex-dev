@@ -17,6 +17,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   2nd instance of this exact pattern (prior: the 0.16.0 `audit-all`
   TypeError). TQ001 now exempts `@pytest.mark.skip` / `@pytest.mark.
   skipif(...)`-decorated tests entirely.
+- **`gate` printed a bare `"fail"` for an unenforced check under a PASS
+  banner + exit 0 (#340).** Reported by scitex-writer: `clew-source-
+  reachability` correctly evaluated as advisory (no `gate.enforce` in
+  the repo's `.scitex/dev/config.yaml`), but its rendered line still
+  read `fail`, contradicting the correct PASS/exit-0 result. An
+  unenforced check now renders `warning (non-blocking)`; `BLOCK` is
+  reserved for a check that is both failed and enforced — the only
+  case that should ever flip the banner/exit code.
 
 ## [0.30.0] - 2026-07-13
 
