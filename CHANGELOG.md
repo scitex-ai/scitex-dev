@@ -5,6 +5,19 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.30.1] - 2026-07-13
+
+### Fixed
+- **STX-TQ001 false-positived on `@pytest.mark.skip`/`skipif` tests (#338).**
+  A skip(if)-decorated test body never executes under pytest, so "no
+  assertion" was not a meaningful signal for it. Because consumers
+  install scitex-dev on an unpinned `>=` floor, the rule retroactively
+  reddened `test_audit_all_clean` on live PRs and `develop` for at
+  least one downstream consumer with zero code change on their side —
+  2nd instance of this exact pattern (prior: the 0.16.0 `audit-all`
+  TypeError). TQ001 now exempts `@pytest.mark.skip` / `@pytest.mark.
+  skipif(...)`-decorated tests entirely.
+
 ## [0.30.0] - 2026-07-13
 
 ### Added
