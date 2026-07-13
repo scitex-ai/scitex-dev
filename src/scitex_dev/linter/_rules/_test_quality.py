@@ -12,6 +12,9 @@ and pass only when production code works"):
 - **TQ001** — empty assertion (no `assert` and no `pytest.raises` /
   `pytest.warns` / `pytest.fail`). Catches `assert callable(fn)`
   placeholders and "I added a test for coverage" stubs.
+  `@pytest.mark.skip` / `@pytest.mark.skipif(...)`-decorated tests are
+  exempt: their body never runs under pytest, so "no assertion" isn't
+  a meaningful signal there.
 - **TQ002** — AAA-marker enforcement: every `test_*` function body
   must contain `# Arrange`, `# Act`, `# Assert` comments, in that
   order. Forces the author to think about — and the reviewer to see —

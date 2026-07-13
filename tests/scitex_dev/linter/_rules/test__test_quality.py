@@ -59,6 +59,51 @@ def test_tq001_silent_when_pytest_raises_used_as_assertion():
     assert "STX-TQ001" not in fired
 
 
+def test_tq001_silent_when_skip_decorated_stub_has_no_assertion():
+    # Arrange — a `@pytest.mark.skip(...)` body never runs under pytest,
+    # so "no assertion" is not a meaningful signal for it.
+    src = (
+        "import pytest\n"
+        "@pytest.mark.skip(reason='not implemented yet')\n"
+        "def test_computes_future_feature_correctly():\n"
+        "    pass\n"
+    )
+    # Act
+    fired = _ids(src)
+    # Assert
+    assert "STX-TQ001" not in fired
+
+
+def test_tq001_silent_when_bare_skip_decorated_stub_has_no_assertion():
+    # Arrange — bare `@pytest.mark.skip` (no call, no reason) form.
+    src = (
+        "import pytest\n"
+        "@pytest.mark.skip\n"
+        "def test_computes_future_feature_correctly():\n"
+        "    pass\n"
+    )
+    # Act
+    fired = _ids(src)
+    # Assert
+    assert "STX-TQ001" not in fired
+
+
+def test_tq001_silent_when_skipif_decorated_stub_has_no_assertion():
+    # Arrange — `@pytest.mark.skipif(...)` body never runs under pytest
+    # either, when the condition is true at collection time.
+    src = (
+        "import sys\n"
+        "import pytest\n"
+        "@pytest.mark.skipif(sys.platform == 'win32', reason='posix only')\n"
+        "def test_computes_posix_only_feature_correctly():\n"
+        "    pass\n"
+    )
+    # Act
+    fired = _ids(src)
+    # Assert
+    assert "STX-TQ001" not in fired
+
+
 # ── TQ002 — AAA marker enforcement ───────────────────────────────────────────
 
 
