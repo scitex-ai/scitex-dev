@@ -198,6 +198,16 @@ def audit_project(
     from ._check_optional_deps_guarded import check_ps148_optional_deps_guarded
 
     check_ps148_optional_deps_guarded(repo_root, distribution, Violation, violations)
+    # PS-214/215: all-or-nothing extras + dead install-remedy strings.
+    # See scitex-writer PR #322 (reference incident: editor = [] extra +
+    # "pip install scitex-writer[editor]" remedy that installs nothing).
+    from ._check_empty_extras import check_ps214_empty_extras
+
+    check_ps214_empty_extras(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    from ._check_install_remedy_strings import check_ps215_broken_install_remedy
+
+    check_ps215_broken_install_remedy(repo_root, distribution, Violation, violations)
     # hook-bypass: line-limit
     from ._check_console_script_core_deps import (
         check_ps213_console_script_core_deps,

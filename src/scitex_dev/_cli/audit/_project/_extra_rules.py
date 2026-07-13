@@ -20,6 +20,9 @@ Today's contents:
 - PS-PATH-001/002 — config/PATH.yaml shape (outer wrapper / bare-string leaf)
 - PS-CLEW-001 — clew.add_claim without self-verify in same module
 - PS-AGENT-001 — scripts/agent/*.py with add_claim but no claims.json terminus
+- PS-214 — empty-pyproject-extra (`extra = []` — the writer PR #322 incident)
+- PS-215 — broken-install-remedy-string (source-side mirror of PS-214: a
+  `pip install <pkg>[<extra>]` string naming a missing/empty extra)
 - RP-201/202/204/205 — research-project scripts ↔ tests/scripts mirror
 
 When `_audit.py` is split per-rule (see GITIGNORED/REFACTORING.md), this
@@ -299,6 +302,56 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "I",
         "lazy-extra-pattern-ok",
+    ),
+    # ── PS-214/215 — all-or-nothing extras + dead install remedies ──
+    # Reference incident: scitex-writer declared `editor = []` (a totally
+    # empty extra) while its own source told users "Install with: pip
+    # install scitex-writer[editor]" to get scitex-app — a remedy that
+    # installs literally nothing. See scitex-writer PR #322 (reference
+    # fix) and the operator's fleet-wide directive: package extras should
+    # be ALL-OR-NOTHING (one `[all]` extra, no fine-grained per-feature
+    # menu; `dev`/`docs` extras are exempt — those are for people building
+    # the package, not using it). Severity W during ecosystem adoption —
+    # per the operator's explicit instruction, this brand-new rule pair
+    # uses the warn-first rollout mechanism (same shape as PS-145/147/164)
+    # rather than shipping straight to E, since it will retroactively
+    # evaluate every consumer's already-published code on their next
+    # unpinned scitex-dev audit run.
+    (
+        "PS-214",
+        "§3",
+        (
+            "empty pyproject extra: `[project.optional-dependencies.<name>]` "
+            "is declared as an empty list (`<name> = []`). A `pip install "
+            "<pkg>[<name>]` remedy for it installs ZERO packages — the user "
+            "runs the suggested fix, pip exits 0, and nothing changes, so "
+            "they believe they already tried the cure. Either populate the "
+            "extra with its real dependency, or delete the extra (and any "
+            "source text recommending it). See scitex-writer PR #322 "
+            "(reference incident + fix). Severity W during ecosystem "
+            "adoption."
+        ),
+        "W",
+        "empty-pyproject-extra",
+    ),
+    (
+        "PS-215",
+        "§3",
+        (
+            "broken install-remedy string: source or docs contain a `pip "
+            "install <pkg>[<extra>]` (or `uv pip install ...`) string that "
+            "self-references THIS package, but `<extra>` either does not "
+            "exist in `[project.optional-dependencies]` or is declared "
+            "empty (see PS-214). A user who runs the exact suggested "
+            "command gets a resolver error or a silent no-op. Fix the "
+            "extra name, or populate the extra. Source-side companion of "
+            "PS-214 — composes with it: an extra flagged by PS-214 also "
+            "fires PS-215 on every remedy string that names it. See "
+            "scitex-writer PR #322 (reference incident + fix). Severity W "
+            "during ecosystem adoption."
+        ),
+        "W",
+        "broken-install-remedy-string",
     ),
     # ── RP-2xx: research-project mirror (scripts ↔ tests/scripts) ──
     # Research projects (project-type: research) have no src/<pkg>/ — their
