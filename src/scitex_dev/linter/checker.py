@@ -163,9 +163,9 @@ class SciTeXChecker(
         # TQ001 / TQ002 / TQ003 / TQ006 / TQ007 — test-function rules
         # (gated on test files).
         if node.name.startswith("test_") and self._tq001_is_test_file():
-            # TQ001 — no assertion → green-bar theater.
+            # TQ001 — no assertion (skip/skipif-decorated tests exempt).
             assertion_count = self._tq007_count_assertions(node)
-            if assertion_count == 0:
+            if assertion_count == 0 and not self._tq001_is_skip_decorated(node):
                 line = self._get_source(node.lineno)
                 self._add(rules.TQ001, node.lineno, node.col_offset, line)
             # TQ007 — more than one assertion in one test (when first

@@ -103,6 +103,28 @@ class TestQualityMixin:
                 return True
         return False
 
+    @staticmethod
+    def _tq001_is_skip_decorated(node) -> bool:
+        """True iff decorated with `@pytest.mark.skip` or `.skipif(...)`.
+
+        Mirrors ``_tq_has_parametrize``'s decorator-shape matching. Handles
+        both the bare-attribute form (``@pytest.mark.skip``, ``@mark.skip``)
+        and the call form (``@pytest.mark.skip(reason=...)``,
+        ``@pytest.mark.skipif(cond, reason=...)``). A skip(if)-marked test
+        body never executes under pytest, so "no assertion" is not a
+        meaningful signal for it — STX-TQ001 exempts it entirely.
+        """
+        for deco in node.decorator_list:
+            f = deco.func if isinstance(deco, ast.Call) else deco
+            if isinstance(f, ast.Attribute) and f.attr in ("skip", "skipif"):
+                # @pytest.mark.skip(if)  (Attribute on Attribute)
+                if isinstance(f.value, ast.Attribute) and f.value.attr == "mark":
+                    return True
+                # @mark.skip(if)  (Attribute on Name "mark")
+                if isinstance(f.value, ast.Name) and f.value.id == "mark":
+                    return True
+        return False
+
     @classmethod
     def _tq004_body_mutates_state(cls, node) -> bool:
         """True iff the function body contains a state-mutation call."""
