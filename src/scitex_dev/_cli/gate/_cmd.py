@@ -124,7 +124,20 @@ def _render_human(report) -> None:
         if not o.ran:
             click.echo(f"  - {o.id}: skipped ({o.skipped_reason})")
             continue
-        tag = "BLOCK" if o.blocked else ("fail" if o.passed is False else "ok")
+        # A check that ran and failed but is NOT enforced must never be
+        # tagged "fail" — that word reads as "this failed the gate", which
+        # contradicts a PASS banner + exit 0 (the exact self-contradictory
+        # output scitex-writer reported: `clew-source-reachability: fail`
+        # under a PASS banner). Only an ENFORCED failure blocks the gate
+        # (o.blocked, tagged BLOCK); an unenforced failure is advisory and
+        # is tagged "warning (non-blocking)" so a per-check line can never
+        # disagree with the banner/exit code.
+        if o.blocked:
+            tag = "BLOCK"
+        elif o.passed is False:
+            tag = "warning (non-blocking)"
+        else:
+            tag = "ok"
         enforce = " [enforced]" if o.enforced else ""
         click.echo(f"  - {o.id}: {tag}{enforce}")
         for f in o.findings:
