@@ -235,6 +235,10 @@ def audit_project(
 
     check_ps164_workflow_naming(repo_root, Violation, violations)
     # hook-bypass: line-limit
+    from ._check_hosted_runners import check_ps169_hosted_runners
+
+    check_ps169_hosted_runners(repo_root, Violation, violations)
+    # hook-bypass: line-limit
     from ._check_secret_env_prefix import check_ps168_secret_env_prefix
 
     check_ps168_secret_env_prefix(repo_root, distribution, Violation, violations)

@@ -106,6 +106,30 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "secret-env-prefix-missing",
     ),
     (
+        "PS-169",
+        "§1",
+        (
+            "GitHub-hosted runner in `.github/workflows/` — FORBIDDEN, no "
+            "exceptions (operator mandate 2026-07-14). Every SciTeX job runs "
+            "on the self-hosted Spartan pool: `runs-on: [self-hosted, Linux, "
+            "X64, spartan-cpu]`. If Spartan cannot run the job, fix Spartan "
+            "(scitex-hpc) — never fall back to a hosted runner. Resolves the "
+            "EFFECTIVE runner, so a hosted image reached via `runs-on: "
+            "${{ matrix.os }}` or a `workflow_call` input default is caught "
+            "too; an UNRESOLVABLE runner is also a violation (it cannot be "
+            "proven Spartan-only). Callers of reusable workflows from owners "
+            "outside `scitex-ai` are flagged — their runner cannot be "
+            "vouched for. Consuming the shared workflow is not by itself "
+            "compliance: the SSOT's own `runs-on` is audited by this rule in "
+            "`scitex-ai/.github`, so a dirty shared workflow fires at source. "
+            "Severity E — this is the ONLY enforcement that exists, since "
+            "blocking hosted runners at the org level requires GitHub "
+            "Enterprise and `scitex-ai` is on the Free plan."
+        ),
+        "E",
+        "hosted-runner-forbidden",
+    ),
+    (
         "PS-148",
         "§3",
         (
