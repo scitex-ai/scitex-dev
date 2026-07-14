@@ -191,6 +191,14 @@ def audit_project(
 
     check_readme_structure(repo_root, Violation, violations)
     check_codecov_target(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    # PS-HOOK-001: a `language: system` pre-commit hook invoking a Python tool
+    # is a $PATH lottery — it resolves to whichever venv is active at commit
+    # time. figrecipe's testmon hook ran ZERO tests fleet-wide while blocking
+    # every Python commit; davinci-resolve-mcp's took >14 min per commit.
+    from ._check_precommit_hooks import check_ps_hook_001_precommit_system_hooks
+
+    check_ps_hook_001_precommit_system_hooks(repo_root, Violation, violations)
     from ._check_dev_extras_complete import check_dev_extras_complete
 
     check_dev_extras_complete(repo_root, Violation, violations)

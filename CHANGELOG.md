@@ -5,6 +5,52 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.31.0] - 2026-07-14
+
+### Added
+- **PS-HOOK-001 — pre-commit `language: system` hooks may not invoke Python
+  tools.** A bare command name under `language: system` is a `$PATH` lookup, so
+  the hook runs against whichever virtualenv happens to be active at commit
+  time — a different interpreter, with a different package set, on every
+  machine. Measured on one repo, same config: `/home/…/.env-3.11/bin/pytest`
+  on the host vs `/opt/venv-sac/bin/pytest` in the container.
+
+  Reference incident: figrecipe's `entry: python -m pytest --testmon` +
+  `language: system` hook. `pytest-testmon` was never a declared dependency, so
+  the hook exited 4 (`unrecognized arguments: --testmon` / `ModuleNotFoundError:
+  matplotlib`) on every machine but one. **It never ran a single test — it only
+  blocked the commit**, and it had done so for weeks (zero `.testmondata` files
+  existed anywhere in the fleet). The same shape cost `davinci-resolve-mcp`
+  **>14 minutes on every commit**, and `pip-project-template`'s "quick smoke
+  test" hook inherits `--cov-fail-under=100` from `addopts` so a smoke subset
+  (~42 % coverage) can *never* pass — a permanently-red gate, replicated into
+  every repo seeded from the template.
+
+  Declaring the tool in `[project.optional-dependencies].dev` does **not** fix
+  this — pre-commit never activates your dev venv. Five of the six repos found
+  in the fleet sweep did declare `pytest>=8` in a dev extra; all five were still
+  nondeterministic. The fix is `language: python` +
+  `additional_dependencies: [...]`, which makes pre-commit build an isolated
+  venv with the dep declared explicitly.
+
+  Ships at severity **E**. The usual warn-first rollout guards against an `E`
+  rule retroactively reddening consumers' CI on an unpinned `>=` floor (see the
+  0.30.1 and 0.16.0 entries); that risk was *measured away* here rather than
+  assumed: the rule was run against all 16 `.pre-commit-config.yaml` files in
+  the fleet, where it flags exactly the 6 known-bad hooks, leaves all 9
+  legitimate `language: system` hooks alone (openclaw's
+  pnpm/oxlint/oxfmt/swiftlint/swiftformat + four `bash`+`grep` no-debug-code
+  hooks), and flags **zero scitex-\* packages** — so no consumer's CI changes
+  colour. Non-Python toolchains and explicit paths (`./scripts/tool.sh`) are
+  never flagged. Opt-out: `# PS-HOOK-001: allow`.
+
+- **Skill page `general/05_development/15_pre-commit-policy.md`** — the fleet
+  policy the rule enforces: pre-commit runs fast, bounded, deterministic checks
+  only (ruff, format, yaml, large-file, whitespace); the test suite belongs in
+  CI, which already runs it on three Python versions per push. A gate that is
+  nondeterministic across machines is worse than no gate — it blocks honest
+  commits while catching nothing.
+
 ## [0.30.1] - 2026-07-13
 
 ### Fixed
