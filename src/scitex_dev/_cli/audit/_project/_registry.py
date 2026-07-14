@@ -1179,3 +1179,12 @@ from ._extra_rules import EXTRA_RULES as _EXTRA_RULES  # noqa: E402
 for _c, _sec, _msg, _sev, _slug in _EXTRA_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
+# Co-located rule registration. `_extra_rules.py` exists because THIS file blew
+# the 512-line cap; it has now blown the cap itself. Rather than grow a third
+# generation of sidecar, new rules ship in the shape `_extra_rules.py`'s own
+# docstring names as the target architecture — "each rule co-located with its
+# check module" — and are merged here on the same terms.
+from ._check_precommit_hooks import HOOK_RULES as _HOOK_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in _HOOK_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
