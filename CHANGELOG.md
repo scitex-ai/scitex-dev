@@ -5,6 +5,46 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.31.1] - 2026-07-17
+
+### Fixed
+- **The audit gate graded the wrong tree (#347).** `audit_all_for_package`
+  shelled `ecosystem audit-all <distribution>` with no `--path`, so
+  `_resolve_repo_root` fell back to a `~/proj/<name>` guess and graded
+  whatever checkout sat on the runner's disk — not the commit under test.
+  Every ecosystem package's `tests/test_audit.py` calls this helper, so
+  every branch's CI, including release gates, was affected. Observed live:
+  on one commit the `audit` job passed (it reads the checkout) while
+  `pytest-matrix` failed (it read a stale tree on the self-hosted runner),
+  and three reruns of a byte-identical branch produced three different
+  verdicts. A gate that grades the wrong tree is worse than no gate — it
+  reports a confident verdict about source nobody asked about.
+  `audit_all_for_package` now accepts a keyword-only `path` and forwards
+  `--path` (`path=None` preserves prior behaviour); `_resolve_repo_root`
+  prefers the CWD's git-root over the `~/proj` guess; and the audit
+  surfaces which tree it resolved, so a wrong-tree run is self-evident
+  rather than silent. Reported by scitex-agent-container.
+- **`_package_watch` carried two concerns, leaving an orphan test that
+  silently reddened develop (#348).** `test__untrustworthy_installs.py`
+  had no matching source, so PS-204 failed `test_audit_all_clean` on
+  develop itself and every PR inherited it. PS-204 was correct: the two
+  test files already named two concerns and only the source hadn't caught
+  up. `_package_watch.py` splits into `_untrustworthy_installs.py`
+  (`UntrustworthyInstallWarning`, `check_untrustworthy_installs`,
+  `render_untrustworthy_install_banner`) and `_package_watch.py`
+  (`PackageDriftWarning`, `check_critical_package_drift`,
+  `render_package_drift_banner`). Public import surface unchanged.
+  Introduced by #330.
+- **PS-214/PS-215 warned forever with no escalation path (#346).** A
+  warning that never escalates is a finding printed under a green banner —
+  the exact defect both rules exist to catch; scitex-writer's own
+  `editor = []` survived repeated audit runs for precisely that reason.
+  Severity is now decided per violation: absent from the `develop`
+  baseline (newly introduced) → `E`, blocking; already present → stays
+  `W`, reported but non-blocking, so an already-red repo is unblocked
+  rather than having its backlog erased from view. Reuses the existing
+  `_diff.worktree_at` baseline primitive. Reported by scitex-writer.
+
 ## [0.31.0] - 2026-07-14
 
 ### Added
