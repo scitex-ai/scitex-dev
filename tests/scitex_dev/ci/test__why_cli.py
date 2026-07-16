@@ -1,10 +1,12 @@
-"""Tests for the ``scitex-dev ecosystem ci why`` CLI verb.
+"""Tests for the ``scitex-dev ci why`` CLI verb (``scitex_dev.ci._why_cli``).
 
-No mocks. The group/help wiring is probed with Click's ``CliRunner``.
-The end-to-end verb is driven against a REAL (fake) ``gh`` executable
-placed on ``PATH`` — a tiny script emitting canned ``gh run view`` JSON
-and ``--log-failed`` output — so the actual ``run_gh`` subprocess seam is
-exercised without a network. AAA, one logical assertion per test.
+No mocks. The verb is attached to the SAME top-level ``ci`` group that
+holds ``ci runner``; the tests build that group and confirm both verbs
+coexist. The end-to-end path is driven against a REAL (fake) ``gh``
+executable placed on ``PATH`` — a tiny script emitting canned ``gh run
+view`` JSON and ``--log-failed`` output — so the actual ``run_gh``
+subprocess seam is exercised without a network. AAA, one logical
+assertion per test.
 """
 
 from __future__ import annotations
@@ -19,7 +21,8 @@ pytest.importorskip("click")
 import click
 from click.testing import CliRunner
 
-from scitex_dev._cli.ecosystem import register_ecosystem_commands
+from scitex_dev.ci._why_cli import register_ci_why_command
+from scitex_dev.ci.runner import register_ci_runner_commands
 
 _JOB = "pytest-matrix-on-ubuntu-py3.11"
 
@@ -60,7 +63,8 @@ def _build_main():
     def main():
         pass
 
-    register_ecosystem_commands(main)
+    ci = register_ci_runner_commands(main)
+    register_ci_why_command(ci)
     return main
 
 
@@ -78,12 +82,20 @@ def _put_gh_on_path(tmp_path, script: str):
     return lambda: os.environ.__setitem__("PATH", saved)
 
 
-def test_ci_group_registered_under_ecosystem():
+def test_ci_why_registered_on_top_level_ci_group():
     # Arrange
     main = _build_main()
     # Act
-    runner = CliRunner()
-    result = runner.invoke(main, ["ecosystem", "ci", "--help"])
+    result = CliRunner().invoke(main, ["ci", "why", "--help"])
+    # Assert
+    assert result.exit_code == 0
+
+
+def test_ci_runner_still_resolves_alongside_why():
+    # Arrange — why must not clobber the sibling runner group.
+    main = _build_main()
+    # Act
+    result = CliRunner().invoke(main, ["ci", "runner", "--help"])
     # Assert
     assert result.exit_code == 0
 
@@ -92,8 +104,7 @@ def test_ci_why_help_documents_target():
     # Arrange
     main = _build_main()
     # Act
-    runner = CliRunner()
-    result = runner.invoke(main, ["ecosystem", "ci", "why", "--help"])
+    result = CliRunner().invoke(main, ["ci", "why", "--help"])
     # Assert
     assert "TARGET" in result.output
 
@@ -104,7 +115,7 @@ def test_ci_why_extracts_failing_test_from_fake_gh(tmp_path):
     main = _build_main()
     # Act
     try:
-        result = CliRunner().invoke(main, ["ecosystem", "ci", "why", "10000042"])
+        result = CliRunner().invoke(main, ["ci", "why", "10000042"])
     finally:
         restore()
     # Assert
@@ -117,7 +128,7 @@ def test_ci_why_exits_1_when_failures_found(tmp_path):
     main = _build_main()
     # Act
     try:
-        result = CliRunner().invoke(main, ["ecosystem", "ci", "why", "10000042"])
+        result = CliRunner().invoke(main, ["ci", "why", "10000042"])
     finally:
         restore()
     # Assert
@@ -130,9 +141,7 @@ def test_ci_why_json_emits_failed_tests(tmp_path):
     main = _build_main()
     # Act
     try:
-        result = CliRunner().invoke(
-            main, ["ecosystem", "ci", "why", "10000042", "--json"]
-        )
+        result = CliRunner().invoke(main, ["ci", "why", "10000042", "--json"])
     finally:
         restore()
     # Assert
@@ -145,7 +154,7 @@ def test_ci_why_exits_2_when_gh_cannot_read(tmp_path):
     main = _build_main()
     # Act
     try:
-        result = CliRunner().invoke(main, ["ecosystem", "ci", "why", "10000042"])
+        result = CliRunner().invoke(main, ["ci", "why", "10000042"])
     finally:
         restore()
     # Assert

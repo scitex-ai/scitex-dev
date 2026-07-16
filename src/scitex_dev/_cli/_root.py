@@ -58,6 +58,7 @@ ROOT_HELP_SPEC = CliHelp(
     see_also=("{prog} docs — browse doctrine and package documentation",),
 )
 
+
 def _command_to_dict(
     cmd: click.Command,
     parent_ctx: click.Context | None,
@@ -96,14 +97,13 @@ def _command_to_dict(
         out["commands"] = commands
     return out
 
+
 def _show_recursive_help(ctx: click.Context) -> None:
     """Recursively show help for all commands. Honours ctx.obj['json']."""
     if ctx.obj and ctx.obj.get("json"):
         import json as _json
 
-        tree = _command_to_dict(
-            ctx.command, ctx.parent, ctx.info_name or "scitex-dev"
-        )
+        tree = _command_to_dict(ctx.command, ctx.parent, ctx.info_name or "scitex-dev")
         click.echo(_json.dumps(tree, indent=2))
         return
 
@@ -131,6 +131,7 @@ def _show_recursive_help(ctx: click.Context) -> None:
                     click.echo(sub_sub_ctx.get_help())
                     click.echo()
 
+
 def _get_version() -> str:
     try:
         from importlib.metadata import version
@@ -138,6 +139,7 @@ def _get_version() -> str:
         return version("scitex-dev")
     except Exception:
         return "0.0.0-unknown"
+
 
 # Disable Click's auto --help on THIS group only (parameter, not
 # context — does not propagate to subcommands). Then re-add --help /
@@ -200,6 +202,7 @@ def main(
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
+
 # -------------------------------------------------------------------
 # Ecosystem commands
 # -------------------------------------------------------------------
@@ -229,6 +232,7 @@ register_stats_command(ecosystem_group, main_group=main)
 # individual `quality audit-*` callers must update.
 from .quality import _check as _cli_quality
 
+
 # These sub-rules belong inside their canonical owner per the
 # consolidation plan. Hidden until folded in (PR-by-PR) so the public
 # surface is just five audit-* commands. Removed in 0.11.0.
@@ -243,16 +247,19 @@ def _ecosystem_audit_docs(projects_root):
     """(deprecated) Splits into `audit-python-apis` (README API drift) and `audit-skills` (SKILL.md drift). Removed in 0.11.0."""
     raise SystemExit(_cli_quality.audit_docs(projects_root=projects_root))
 
+
 @ecosystem_group.command("audit-scope", hidden=True)
 @click.option("--projects-root", default=None)
 def _ecosystem_audit_scope(projects_root):
     """(deprecated) Folds into `audit-project`. Removed in 0.11.0."""
     raise SystemExit(_cli_quality.audit_scope(projects_root=projects_root))
 
+
 @ecosystem_group.command("audit-lines", hidden=True)
 def _ecosystem_audit_lines():
     """(deprecated) Folds into `audit-project` (LOC-limits). Removed in 0.11.0."""
     raise SystemExit(_cli_quality.audit_lines())
+
 
 # Umbrella-only pin freshness audit. Designed to fire from the
 # umbrella package's CI; on any other package it exits 0, so it's
@@ -266,9 +273,11 @@ ecosystem_group.add_command(_umbrella_pins_cli, name="audit-umbrella-pins")
 # CLI-standardization plan). Warn phase forwards; error phase exits 2.
 from .._ecosystem.click_compat import deprecated_alias
 
+
 @main.group("quality", hidden=True)
 def _quality_deprecated():
     """(deprecated) Use `scitex-dev ecosystem audit-*` instead."""
+
 
 for _quality_cmd, _quality_target in (
     ("audit-docs", _ecosystem_audit_docs),
@@ -301,9 +310,8 @@ deprecated_alias(
 # -------------------------------------------------------------------
 
 # `config` → `show-config` rename, error rung of the deprecation ladder.
-deprecated_alias(
-    main, "config", target="show-config", remove_in="0.11", phase="error"
-)
+deprecated_alias(main, "config", target="show-config", remove_in="0.11", phase="error")
+
 
 @main.command(
     "show-config",
@@ -357,6 +365,7 @@ def config_cmd(as_json):
             else:
                 click.echo(f"  {item}")
 
+
 # rename-symbols + the hidden `rename` deprecation alias live in
 # _cli/_rename.py. Extracted to keep _root.py under the line budget
 # and to give the bulk-rename surface a focused module to grow into.
@@ -389,6 +398,7 @@ from .._core.dispatch import docs_click_group
 docs_grp = docs_click_group(package="scitex-dev")
 main.add_command(docs_grp)
 
+
 # `docs search` — canonical home for ecosystem-wide search across APIs,
 # CLI, MCP tools, and documentation. The legacy top-level `search-docs`
 # is kept as a hidden deprecation alias (see below). Removed in 0.11.0.
@@ -399,15 +409,17 @@ main.add_command(docs_grp)
         summary="Search across APIs, CLI, MCP tools, and documentation.",
         examples=(
             Example('{prog} docs search "save figure"', "Full-text search everywhere."),
-            Example("{prog} docs search version --scope api", "Limit to the API scope."),
-            Example("{prog} docs search hpc --max-results 20 --json", "More hits, as JSON."),
+            Example(
+                "{prog} docs search version --scope api", "Limit to the API scope."
+            ),
+            Example(
+                "{prog} docs search hpc --max-results 20 --json", "More hits, as JSON."
+            ),
         ),
     ),
 )
 @click.argument("query")
-@click.option(
-    "--scope", default="all", help="Search scope: all, api, cli, mcp, docs."
-)
+@click.option("--scope", default="all", help="Search scope: all, api, cli, mcp, docs.")
 @click.option("--max-results", default=10, help="Maximum results.")
 @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
 def _docs_search(query, scope, max_results, as_json):
@@ -421,6 +433,7 @@ def _docs_search(query, scope, max_results, as_json):
         scope=scope,
         max_results=max_results,
     )
+
 
 from .skills._manage import register_skills_commands
 
@@ -459,12 +472,17 @@ from ._integrations import register_integration_commands
 register_integration_commands(main)
 
 # -------------------------------------------------------------------
-# ci runner — self-hosted GitHub Actions runner lifecycle
+# ci — self-hosted runner lifecycle (`ci runner`) + CI-failure reading
+# (`ci why`), both attached to the one top-level `ci` group.
 # -------------------------------------------------------------------
 
 from ..ci.runner import register_ci_runner_commands
 
-register_ci_runner_commands(main)
+ci_group = register_ci_runner_commands(main)
+
+from ..ci._why_cli import register_ci_why_command
+
+register_ci_why_command(ci_group)
 
 # -------------------------------------------------------------------
 # linter — engine moved here from scitex-linter (soft migration)

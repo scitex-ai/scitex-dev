@@ -21,7 +21,6 @@ from ._cmds import (
     _audit_registry_layout,
     _audit_summary,
     _branch_protection,
-    _ci,
     _ci_template,
     _clean,
     _dashboard,
@@ -115,7 +114,6 @@ def register_ecosystem_commands(main_group):
     _system_deps.register(ecosystem)
     _prune_merged.register(ecosystem)
     _branch_protection.register(ecosystem)
-    _ci.register(ecosystem)
     _ci_template.register(ecosystem)
     _regen_umbrella.register(ecosystem)
 

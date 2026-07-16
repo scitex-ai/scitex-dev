@@ -29,6 +29,7 @@ def register_ci_runner_commands(main_group: click.Group) -> click.Group:
         \b
         Verbs:
           runner   — self-hosted GitHub Actions runner lifecycle
+          why      — read WHY a CI run is red (distil the failure log)
         """
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""``scitex-dev ecosystem ci why`` — read WHY a CI run is red, cheaply.
+"""``scitex-dev ci why`` — read WHY a CI run is red, cheaply.
 
-The thin CLI verb over the ecosystem CI-failure-reading primitive
-(``scitex_dev.ci.why``). Reading CI *status* is one word (``failure``);
-this reads the *reason* for a fraction of the log by fetching a failing
-run's ``--log-failed`` ONCE and distilling it to failing test ids,
-assertion lines, or a setup ``##[error]``.
+The thin CLI verb over the CI-failure-reading primitive
+(``scitex_dev.ci.why``), attached to the top-level ``ci`` group alongside
+``ci runner``. Reading CI *status* is one word (``failure``); this reads
+the *reason* for a fraction of the log by fetching a failing run's
+``--log-failed`` ONCE and distilling it to failing test ids, assertion
+lines, or a setup ``##[error]``.
 
 ``why`` resolves a PR number / run id / branch / nothing (current branch)
 to the failing run(s) behind it. A target it cannot read raises loudly
@@ -21,15 +22,7 @@ import sys
 
 import click
 
-from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
-
-_CI_HELP = CliHelp(
-    summary="Read the ecosystem's CI — why a run is red, not just that.",
-    examples=(
-        Example("{prog} ecosystem ci why 712", "Distil PR 712's failing checks."),
-        Example("{prog} ecosystem ci why", "The current branch's latest run."),
-    ),
-)
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
 
 _WHY_HELP = CliHelp(
     summary="Extract the real reason a CI run is red — as cheaply as status.",
@@ -41,10 +34,10 @@ _WHY_HELP = CliHelp(
         "not the whole log.",
     ),
     examples=(
-        Example("{prog} ecosystem ci why 712", "Explain PR 712's failing checks."),
-        Example("{prog} ecosystem ci why 29446283736", "Explain one run id."),
-        Example("{prog} ecosystem ci why -R owner/repo main", "A branch of a repo."),
-        Example("{prog} ecosystem ci why 712 --json", "Structured output."),
+        Example("{prog} ci why 712", "Explain PR 712's failing checks."),
+        Example("{prog} ci why 29446283736", "Explain one run id."),
+        Example("{prog} ci why -R owner/repo main", "A branch of a repo."),
+        Example("{prog} ci why 712 --json", "Structured output."),
     ),
     exit_codes=(
         (0, "no failing jobs found (green)"),
@@ -59,7 +52,7 @@ def _emit_json(runs) -> None:
 
 
 def _emit_human(runs) -> None:
-    from ....ci.why import render_text
+    from .why import render_text
 
     blocks: list[str] = []
     for run in runs:
@@ -75,27 +68,15 @@ def _emit_human(runs) -> None:
     click.echo("\n\n".join(blocks))
 
 
-def register(ecosystem):
-    """Wire the ``ecosystem ci`` group (verb: ``why``) onto *ecosystem*."""
+def register_ci_why_command(ci_group):
+    """Attach the ``why`` verb to the top-level ``ci`` group (beside runner)."""
 
-    @ecosystem.group(
-        "ci",
-        cls=SpecGroup,
-        invoke_without_command=True,
-        command_categories=[("Read", ["why"])],
-        help_spec=_CI_HELP,
-    )
-    @click.pass_context
-    def ci(ctx):
-        if ctx.invoked_subcommand is None:
-            click.echo(ctx.get_help())
-
-    @ci.command("why", cls=SpecCommand, help_spec=_WHY_HELP)
+    @ci_group.command("why", cls=SpecCommand, help_spec=_WHY_HELP)
     @click.argument("target", required=False, default="")
     @click.option("-R", "--repo", default=None, help="Target OWNER/REPO (else CWD).")
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON.")
     def ci_why(target, repo, as_json):
-        from ....ci.why import CIWhyError, explain_ci_run
+        from .why import CIWhyError, explain_ci_run
 
         try:
             runs = explain_ci_run(target or None, repo=repo)
@@ -111,10 +92,10 @@ def register(ecosystem):
         any_failures = any(run.failures for run in runs)
         sys.exit(1 if any_failures else 0)
 
-    return ci
+    return ci_why
 
 
-__all__ = ["register"]
+__all__ = ["register_ci_why_command"]
 
 
 # EOF
