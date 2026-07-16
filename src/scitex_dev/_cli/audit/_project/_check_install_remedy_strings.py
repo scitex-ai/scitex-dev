@@ -57,6 +57,16 @@ Heuristic notes
   `.md` files at the repo root and under `docs/` — mirrors the existing
   README-scanning checks (e.g. `_check_readme_badges.py`), which already
   treat markdown as a text-scan surface, not just `.py` source.
+
+Severity: new vs. pre-existing
+-------------------------------
+
+Same rationale and mechanism as PS-214 (see that module's docstring): a
+flat `severity = "W"` made this rule invisible in practice. Every
+violation is re-classified against a git baseline (default `develop`,
+see `_new_vs_baseline.escalate_new_violations`) — genuinely NEW relative
+to baseline → "E" (blocking); already present at baseline → stays at the
+rule's registered default, "W" (warn, non-blocking).
 """
 
 from __future__ import annotations
@@ -68,6 +78,8 @@ try:
     import tomllib  # 3.11+
 except ImportError:  # pragma: no cover — 3.10 path
     import tomli as tomllib  # type: ignore[no-redef]
+
+from ._new_vs_baseline import DEFAULT_BASELINE_REF, escalate_new_violations
 
 
 _INSTALL_REMEDY_RE = re.compile(
@@ -122,28 +134,22 @@ def _scan_files(repo: Path) -> list[Path]:
     return files
 
 
-def check_ps215_broken_install_remedy(
+def _collect_ps215_violations(
     repo: Path,
     distribution: str,
     violation_cls: type,
-    out: list,
-) -> None:
-    """Append PS-215 violations for self-referential dead install remedies.
+) -> list:
+    """Pure collection pass — no severity escalation.
 
-    Parameters
-    ----------
-    repo : Path
-        Repository root (the dir containing `pyproject.toml`).
-    distribution : str
-        Distribution name, e.g. ``"scitex-writer"``.
-    violation_cls : type
-        The auditor's ``Violation`` dataclass ``(rule, where, detail)``.
-    out : list
-        Violations are appended in place (project-auditor convention).
+    Split out of `check_ps215_broken_install_remedy` so the escalation
+    helper can re-run the SAME detection logic against a
+    `worktree_at`-staged baseline checkout without recursing into
+    escalation itself.
     """
+    found: list = []
     meta = _parse_pyproject(repo)
     if meta is None:
-        return
+        return found
 
     project = meta.get("project", {}) or {}
     od = project.get("optional-dependencies", {}) or {}
@@ -175,7 +181,7 @@ def check_ps215_broken_install_remedy(
                     except ValueError:
                         rel = path
                     if extra_name not in od:
-                        out.append(
+                        found.append(
                             violation_cls(
                                 "PS-215",
                                 f"{rel}:{lineno}",
@@ -194,7 +200,7 @@ def check_ps215_broken_install_remedy(
                             )
                         )
                     elif isinstance(od[extra_name], list) and len(od[extra_name]) == 0:
-                        out.append(
+                        found.append(
                             violation_cls(
                                 "PS-215",
                                 f"{rel}:{lineno}",
@@ -214,6 +220,48 @@ def check_ps215_broken_install_remedy(
                                 ),
                             )
                         )
+    return found
+
+
+def check_ps215_broken_install_remedy(
+    repo: Path,
+    distribution: str,
+    violation_cls: type,
+    out: list,
+    *,
+    baseline_ref: str = DEFAULT_BASELINE_REF,
+) -> None:
+    """Append PS-215 violations for self-referential dead install remedies.
+
+    Parameters
+    ----------
+    repo : Path
+        Repository root (the dir containing `pyproject.toml`).
+    distribution : str
+        Distribution name, e.g. ``"scitex-writer"``.
+    violation_cls : type
+        The auditor's ``Violation`` dataclass ``(rule, where, detail)``.
+    out : list
+        Violations are appended in place (project-auditor convention).
+    baseline_ref : str
+        Git ref to diff against for new-vs-existing severity escalation
+        (default ``"develop"``; falls back to ``"origin/<baseline_ref>"``
+        — see `_new_vs_baseline.escalate_new_violations`).
+    """
+    found = _collect_ps215_violations(repo, distribution, violation_cls)
+    if not found:
+        return
+
+    escalate_new_violations(
+        repo,
+        found,
+        ("PS-215",),
+        lambda base_repo: _collect_ps215_violations(
+            base_repo, distribution, violation_cls
+        ),
+        baseline_ref=baseline_ref,
+    )
+    out.extend(found)
 
 
 # EOF

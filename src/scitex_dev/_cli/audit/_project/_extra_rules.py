@@ -311,12 +311,20 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
     # fix) and the operator's fleet-wide directive: package extras should
     # be ALL-OR-NOTHING (one `[all]` extra, no fine-grained per-feature
     # menu; `dev`/`docs` extras are exempt — those are for people building
-    # the package, not using it). Severity W during ecosystem adoption —
-    # per the operator's explicit instruction, this brand-new rule pair
-    # uses the warn-first rollout mechanism (same shape as PS-145/147/164)
-    # rather than shipping straight to E, since it will retroactively
-    # evaluate every consumer's already-published code on their next
-    # unpinned scitex-dev audit run.
+    # the package, not using it).
+    #
+    # Severity here is the REGISTRY DEFAULT ("W") only — it's the fallback
+    # a violation gets when it can't be classified as new-vs-existing (no
+    # git baseline available) or when it's confirmed pre-existing. Each
+    # check (`_check_empty_extras.py` / `_check_install_remedy_strings.py`)
+    # now escalates a violation to "E" (blocking) per-instance when it is
+    # genuinely NEW relative to a `develop` baseline — see
+    # `_new_vs_baseline.escalate_new_violations`. This landed after
+    # scitex-writer reported that flat W severity made the rule invisible
+    # in practice: their own `editor = []` sat undetected through repeated
+    # audit runs because nothing distinguished it from routine warning
+    # noise. A repo that was already red on these rules is NOT newly
+    # blocked; only genuinely new violations are.
     (
         "PS-214",
         "§3",
@@ -328,8 +336,9 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "they believe they already tried the cure. Either populate the "
             "extra with its real dependency, or delete the extra (and any "
             "source text recommending it). See scitex-writer PR #322 "
-            "(reference incident + fix). Severity W during ecosystem "
-            "adoption."
+            "(reference incident + fix). Severity is escalated to E when "
+            "the violation is NEW relative to the `develop` baseline; "
+            "pre-existing violations stay at the W default."
         ),
         "W",
         "empty-pyproject-extra",
@@ -347,8 +356,10 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
             "extra name, or populate the extra. Source-side companion of "
             "PS-214 — composes with it: an extra flagged by PS-214 also "
             "fires PS-215 on every remedy string that names it. See "
-            "scitex-writer PR #322 (reference incident + fix). Severity W "
-            "during ecosystem adoption."
+            "scitex-writer PR #322 (reference incident + fix). Severity is "
+            "escalated to E when the violation is NEW relative to the "
+            "`develop` baseline; pre-existing violations stay at the W "
+            "default."
         ),
         "W",
         "broken-install-remedy-string",
