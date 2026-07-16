@@ -45,27 +45,25 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
         if (candidate / "pyproject.toml").is_file():
             return candidate
 
-    # Fallback: module is in site-packages (non-editable PyPI install).
-    # Try common development checkout locations.
-    proj_roots: list[Path] = []
-    try:
-        home_proj = Path.home() / "proj"
-        if home_proj.is_dir():
-            proj_roots.append(home_proj)
-    except Exception:
-        pass
-    try:
-        for home_dir in Path("/home").iterdir():
-            p = home_dir / "proj"
-            if p.is_dir() and p not in proj_roots:
-                proj_roots.append(p)
-    except Exception:
-        pass
-    for root in proj_roots:
-        candidate = root / distribution
-        if (candidate / "pyproject.toml").is_file():
-            return candidate.resolve()
-
+    # The module is in site-packages and we cannot walk up to a repo root.
+    #
+    # We used to GUESS here: try ``~/proj/<distribution>``, then scan every
+    # directory under ``/home`` for ``<user>/proj/<distribution>``, and audit
+    # whichever matched first. That is a silent substitution of a DIFFERENT
+    # TREE for the one the caller asked about, and on 2026-07-14 it produced a
+    # CI verdict about the wrong code:
+    #
+    #   PR #691 (scitex-agent-container) changed exactly one thing — it renamed
+    #   a test file. Its CI reported a PS-204 violation AT THE OLD NAME, under
+    #   /data/gpfs/.../scitex-agent-container. A tree cannot hold the new name
+    #   and report the old one, so the auditor was never reading the PR: on the
+    #   runner, ~/proj/<name> is a symlink into the shared GPFS checkout. The
+    #   gate failed a clean PR, and would equally have passed a dirty one.
+    #
+    # A resolver that answers with the wrong tree is worse than one that
+    # answers "I don't know", because the caller cannot tell the difference.
+    # If we cannot locate the repo from the package itself, say so and let the
+    # caller fail loudly or pass ``--path`` explicitly.
     return None
 
 
