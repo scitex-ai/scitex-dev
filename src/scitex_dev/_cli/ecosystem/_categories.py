@@ -40,6 +40,7 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
             "show-stats",
             "dashboard",
             "start-dashboard",
+            "ci",
         ],
     ),
     (
