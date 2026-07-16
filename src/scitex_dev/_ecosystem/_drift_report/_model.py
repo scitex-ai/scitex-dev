@@ -2,10 +2,17 @@
 # Timestamp: 2026-07-06
 # File: scitex_dev/_ecosystem/_drift_report/_model.py
 
-"""Value objects + layer constants for the version-drift matrix.
+"""Value objects + constants for the version-drift matrix.
 
 Pure data — no I/O. See the package ``__init__`` docstring for the
 eight-layer model and the SSoT drift rule.
+
+Also the shared home for ``CRITICAL_PACKAGES``: the two critical-package
+checks that hang off the matrix — ``_package_watch`` (are you behind?)
+and ``_untrustworthy_installs`` (can your version string be believed?) —
+both scope themselves to that one list, and neither owns it. It lives
+here, beside the ``DriftMatrix`` fields that carry both checks' results,
+so neither check has to import the other.
 """
 
 from __future__ import annotations
@@ -15,6 +22,24 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from ._package_watch import PackageDriftWarning
+    from ._untrustworthy_installs import UntrustworthyInstallWarning
+
+# --------------------------------------------------------------------- #
+# Critical-package watch list (independent of the 8 layers)             #
+# --------------------------------------------------------------------- #
+
+#: Packages whose staleness in a single container has already caused
+#: real damage (scitex-todo, 2026-07-12) or backs fleet-wide control
+#: infrastructure (scitex-agent-container, scitex-dev itself). Extend
+#: this tuple as new shared-infra packages earn "every agent depends on
+#: this being current" status — it is intentionally a short, hand-picked
+#: list, not the full ~90-package ECOSYSTEM registry (that breadth is
+#: already the 8-layer matrix's job).
+CRITICAL_PACKAGES: tuple[str, ...] = (
+    "scitex-todo",
+    "scitex-agent-container",
+    "scitex-dev",
+)
 
 # --------------------------------------------------------------------- #
 # Layer identifiers (matrix columns)                                    #
@@ -124,7 +149,7 @@ class DriftMatrix:
     #: and "I cannot tell what you are running" are different findings with
     #: different fixes, and the second one INVALIDATES the first for that package
     #: — a version comparison against a fossil is wrong in both directions. See
-    #: ``_package_watch.check_untrustworthy_installs``.
+    #: ``_untrustworthy_installs.check_untrustworthy_installs``.
     untrustworthy_installs: tuple["UntrustworthyInstallWarning", ...] = ()
 
     @property

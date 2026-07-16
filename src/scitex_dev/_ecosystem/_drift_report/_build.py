@@ -30,14 +30,13 @@ from ._model import (
     PackageDrift,
     SacFold,
 )
-from ._package_watch import (
-    render_package_drift_banner,
-    render_untrustworthy_install_banner,
-)
+from ._package_watch import render_package_drift_banner
 from ._sac import fold_sac_versions
+from ._untrustworthy_installs import render_untrustworthy_install_banner
 
 if TYPE_CHECKING:
-    from ._package_watch import PackageDriftWarning, UntrustworthyInstallWarning
+    from ._package_watch import PackageDriftWarning
+    from ._untrustworthy_installs import UntrustworthyInstallWarning
 
 
 # --------------------------------------------------------------------- #

@@ -27,6 +27,8 @@ from __future__ import annotations
 
 from scitex_dev._ecosystem._drift_report._package_watch import (
     check_critical_package_drift,
+)
+from scitex_dev._ecosystem._drift_report._untrustworthy_installs import (
     check_untrustworthy_installs,
     render_untrustworthy_install_banner,
 )

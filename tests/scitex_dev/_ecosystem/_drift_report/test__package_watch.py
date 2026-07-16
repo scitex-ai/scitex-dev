@@ -19,8 +19,8 @@ to a local checkout explicitly.
 
 from __future__ import annotations
 
+from scitex_dev._ecosystem._drift_report._model import CRITICAL_PACKAGES
 from scitex_dev._ecosystem._drift_report._package_watch import (
-    CRITICAL_PACKAGES,
     PackageDriftWarning,
     check_critical_package_drift,
     render_package_drift_banner,

@@ -16,11 +16,9 @@ from typing import Callable
 
 from ._build import build_drift_matrix
 from ._model import DriftMatrix
-from ._package_watch import (
-    check_critical_package_drift,
-    check_untrustworthy_installs,
-)
+from ._package_watch import check_critical_package_drift
 from ._sac import collect_sac_rows
+from ._untrustworthy_installs import check_untrustworthy_installs
 
 
 def collect_drift_matrix(
