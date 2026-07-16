@@ -45,6 +45,14 @@ against a fleet-current reference that falls back to PyPI latest when no
 local checkout exists, and renders a LOUD banner (never silent) ahead of
 the matrix in ``render_report`` whenever one is behind.
 
+That comparison presumes the installed version string can be BELIEVED —
+a ``.dist-info`` can outlive the code it describes, and comparing against
+such a fossil is wrong in BOTH directions (false "stale", false "ok").
+``_untrustworthy_installs.check_untrustworthy_installs`` answers that
+prior question over the same ``CRITICAL_PACKAGES`` list and renders an
+even louder banner, because "I cannot tell what you are running"
+invalidates every version-based line of this report for that package.
+
 Architecture — a pure core + a thin collector
 ----------------------------------------------
 Everything network-/subprocess-touching lives in ``_collect`` (and the
@@ -74,21 +82,23 @@ from ._build import (
 )
 from ._collect import collect_drift_matrix
 from ._model import (
+    CRITICAL_PACKAGES,
     DriftMatrix,
     LayerCell,
     PackageDrift,
     SacFold,
 )
 from ._package_watch import (
-    CRITICAL_PACKAGES,
     PackageDriftWarning,
-    UntrustworthyInstallWarning,
     check_critical_package_drift,
-    check_untrustworthy_installs,
     render_package_drift_banner,
-    render_untrustworthy_install_banner,
 )
 from ._sac import collect_sac_rows, fold_sac_versions, parse_sac_output
+from ._untrustworthy_installs import (
+    UntrustworthyInstallWarning,
+    check_untrustworthy_installs,
+    render_untrustworthy_install_banner,
+)
 
 __all__ = [
     "CRITICAL_PACKAGES",
