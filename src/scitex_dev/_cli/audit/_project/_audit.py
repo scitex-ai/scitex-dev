@@ -432,8 +432,20 @@ def audit_project(
             )
 
     if not visible:
-        # No findings at the requested severity floor.
-        _emit("success", f"{distribution}: no project-structure violations")
+        # No findings at the requested severity floor. Name the tree we
+        # graded, exactly as the violation headline below does: a CLEAN
+        # result is precisely the one nobody double-checks, so it is the
+        # one that must say what it read. Resolution can land on a tree
+        # that isn't the commit under test (an editable install or the
+        # `~/proj/<name>` guess — see `_resolve_repo_root`), and a green
+        # "no violations" for the WRONG tree is a confident lie. Printing
+        # the root makes that self-evident instead of silent.
+        # `_emit("info", ...)` would NOT do: the audit logger's default
+        # level is WARNING and swallows info (see `_emit_capability_skips`).
+        _emit(
+            "success",
+            f"{distribution} ({repo_root}): no project-structure violations",
+        )
         _emit_capability_skips()
         _emit_deferred_reminder()
         emit_disclaimer()

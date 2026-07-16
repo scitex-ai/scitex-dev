@@ -17,8 +17,10 @@ Subprocess invocation, not in-process, because:
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
+from pathlib import Path
 
 
 SKIP_ENV_VAR = "SCITEX_DEV_SKIP_AUDIT"
@@ -27,6 +29,7 @@ SKIP_ENV_VAR = "SCITEX_DEV_SKIP_AUDIT"
 def audit_all_for_package(
     distribution: str,
     *,
+    path: str | Path | None = None,
     timeout: float = 550.0,
     skip_rules: tuple[str, ...] = (),
 ) -> None:
@@ -37,6 +40,36 @@ def audit_all_for_package(
     distribution
         ECOSYSTEM key (e.g. ``"scitex-io"``, ``"scitex-stats"``,
         ``"socialia"``).
+    path
+        The checkout to audit — pass it, and pass the tree the test
+        itself lives in. PASS THIS. Without it, `audit-all` has no
+        argument telling it WHICH tree you meant, so it falls back to
+        resolving the distribution by import location / a
+        ``~/proj/<name>`` development guess. On a CI runner that guess
+        is somebody else's tree — or the wrong commit of your own — and
+        the gate then grades source that is NOT the commit under test
+        while reporting a confident pass/fail. A gate that grades the
+        wrong tree is worse than no gate.
+
+        The idiomatic call from a package's ``tests/test_audit.py`` is
+        therefore to anchor on the test file itself, which is by
+        construction inside the checkout pytest is running against::
+
+            from pathlib import Path
+            audit_all_for_package(
+                "scitex-io", path=Path(__file__).resolve().parents[1]
+            )
+
+        Threaded through as ``--path <path>`` to the ``audit-all`` CLI,
+        which forwards it to every sub-auditor that accepts it
+        (`audit-project`, `audit-django`, `audit-python-apis` — the
+        source-tree-reading ones). The distribution NAME is still
+        required and is still used for skill/rule lookup; ``path`` only
+        decides which source gets read.
+
+        ``None`` (the default) preserves the historical
+        resolve-by-guess behaviour for callers that haven't migrated.
+        It is a compatibility shim, not a recommendation.
     timeout
         Per-test wall-clock cap. `audit-all` fans out to SIX
         sub-auditors (`audit-cli`, `audit-mcp-tools`, `audit-skills`,
@@ -81,8 +114,11 @@ def audit_all_for_package(
             f"audit-all skipped via {SKIP_ENV_VAR}=1 (unset to re-enable the gate)"
         )
     bin_path = shutil.which("scitex-dev") or "scitex-dev"
+    argv = [bin_path, "ecosystem", "audit-all", distribution]
+    if path is not None:
+        argv += ["--path", str(path)]
     proc = subprocess.run(
-        [bin_path, "ecosystem", "audit-all", distribution],
+        argv,
         capture_output=True,
         text=True,
         timeout=timeout,
@@ -136,7 +172,11 @@ def audit_all_for_package(
             )
             return
     if proc.returncode != 0:
-        cmd = f"{bin_path} ecosystem audit-all {distribution}"
+        # Reproduce the ACTUAL argv (including any --path) so the printed
+        # command re-runs the same audit against the same tree. A hand-
+        # written command string would silently drop --path and send the
+        # reader off to reproduce against a different checkout.
+        cmd = shlex.join(argv)
         msg = (
             f"audit-all reported violations for {distribution!r} "
             f"(exit={proc.returncode}).\n"
