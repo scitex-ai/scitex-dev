@@ -14,13 +14,108 @@ def _import_name(distribution: str) -> str:
     return distribution.replace("-", "_")
 
 
+def _pyproject_name(repo: Path) -> str | None:
+    """Return the ``[project] name`` declared in ``repo/pyproject.toml``.
+
+    Best-effort by design (mirrors the `tomllib` usage in
+    ``_summary/_mcp_parity.py``): returns None on a missing/unparseable
+    pyproject, on a `[project]` table with no `name`, and on Python <3.11
+    where `tomllib` doesn't exist. Every None sends the caller to the
+    layout-evidence fallback rather than to a wrong answer.
+    """
+    pyproject = repo / "pyproject.toml"
+    if not pyproject.is_file():
+        return None
+    try:
+        import tomllib
+
+        data = tomllib.loads(pyproject.read_text(errors="ignore"))
+        name = data.get("project", {}).get("name")
+        if isinstance(name, str) and name:
+            return name
+    except Exception:
+        pass
+    return None
+
+
+def _looks_like_checkout_of(repo: Path, distribution: str) -> bool:
+    """True iff `repo` is plausibly a checkout of `distribution`.
+
+    The guard on the CWD-git-root preference below. Without it, running
+    `audit-all scitex-io` from inside the scitex-dev checkout would grade
+    scitex-dev's tree and call it scitex-io — trading one wrong-tree bug
+    for a louder one.
+
+    Evidence, strongest first:
+
+      1. `pyproject.toml`'s declared `[project] name` — authoritative
+         when present. A declared name that DISAGREES is a hard no, not
+         a fall-through: a repo that says it is something else is not
+         this distribution's checkout, whatever its directory is called.
+      2. Layout — `src/<import_name>/` or a flat `<import_name>/__init__.py`.
+         This is what carries git WORKTREES, whose directory is named for
+         the branch (`.worktrees/feat-x`), not the distribution.
+      3. Directory name — last resort, for a checkout with neither a
+         parseable name nor a recognisable layout.
+    """
+    if not (repo / "pyproject.toml").is_file():
+        return False
+    declared = _pyproject_name(repo)
+    if declared is not None:
+        return declared == distribution
+    import_name = _import_name(distribution)
+    if (repo / "src" / import_name).is_dir():
+        return True
+    if (repo / import_name / "__init__.py").is_file():
+        return True
+    return repo.name == distribution
+
+
+def _cwd_git_root(distribution: str) -> Path | None:
+    """Return the CWD's git-root iff it's a checkout of `distribution`.
+
+    Reuses `linter._new_only.git_repo_root` (the codebase's existing
+    `git rev-parse --show-toplevel` wrapper) rather than adding a second
+    git-root resolver.
+    """
+    from ....linter._new_only import git_repo_root
+
+    try:
+        root = git_repo_root(Path.cwd())
+    except OSError:
+        # Path.cwd() raises when the CWD has been unlinked underneath us.
+        return None
+    if root is None:
+        return None
+    root = root.resolve()
+    return root if _looks_like_checkout_of(root, distribution) else None
+
+
 def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
     """Return the repo root Path or None if it can't be located.
 
-    If `repo` is given, it's used directly (resolved to an absolute path).
-    Otherwise we resolve the package via `importlib.util.find_spec` and walk
-    up to the repo root (assumed to contain `pyproject.toml`). Falls back to
-    None.
+    Resolution order, first hit wins:
+
+      1. An explicit `repo` (i.e. ``--path``) — always authoritative.
+      2. The CWD's git-root, when it looks like `distribution`'s checkout
+         (see `_looks_like_checkout_of`).
+      3. The installed package's location via `importlib.util.find_spec`,
+         walked up to the repo root (assumed to contain `pyproject.toml`).
+      4. A `~/proj/<distribution>` (and `/home/*/proj/<distribution>`)
+         development guess.
+      5. None.
+
+    Steps 3-4 answer "where is a checkout of this distribution on this
+    disk?", which is NOT the question a CI gate is asking — it wants "the
+    tree I am running against". The two silently diverge exactly where it
+    hurts most: on a runner, an editable install or the `~/proj` guess
+    resolves to whatever tree happens to be on disk, so the audit grades
+    the wrong source and reports a confident pass/fail about a commit it
+    never read. Preferring the CWD's git-root (step 2) closes that gap
+    for the common case, because a test run's CWD is inside the checkout
+    under test. It is a safety net, not a substitute for step 1: callers
+    that know their checkout should pass `--path` and not rely on
+    ambient CWD.
 
     The explicit `repo` is ``.resolve()``d so the whole audit run operates on
     an absolute root. A *relative* ``--path`` (e.g. ``--path .`` from a
@@ -30,6 +125,9 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
     """
     if repo is not None:
         return repo.resolve()
+    from_cwd = _cwd_git_root(distribution)
+    if from_cwd is not None:
+        return from_cwd
     import importlib.util
 
     spec = importlib.util.find_spec(_import_name(distribution))
