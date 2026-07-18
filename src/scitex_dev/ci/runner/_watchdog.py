@@ -1,4 +1,4 @@
-"""``scitex-dev ci runner watchdog`` — tri-state health signal (NO silent fallback).
+"""``scitex-dev ci runner validate-health`` — tri-state health signal (no fallback).
 
 Run this on a schedule on the OPERATOR side (a systemd-timer / cron / agent on
 your own host) — NOT as an HPC cron. Each tick observes, over the network,
@@ -39,6 +39,7 @@ from enum import Enum
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 from ._preflight import _required_label
 from ._status import _lease_status, _runner_status
@@ -227,7 +228,49 @@ def _probe_oldest_unprocessed_min(
 
 
 def register(group: click.Group) -> None:
-    @group.command()
+    @group.command(
+        "validate-health",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Validate self-hosted runner health as an honest tri-state.",
+            description=(
+                "Observes, over the network, whether the self-hosted runner is "
+                "actually PROCESSING jobs and reports 'up', 'wedged' or "
+                "'unknown'. 'unknown' means a probe FAILED — we say so loudly "
+                "and never collapse 'cannot tell' into 'up'.\n\n"
+                "FAIL LOUD, no silent fallback: on any non-'up' state a single "
+                "[ALERT] / [UNKNOWN] line goes to stderr and the exit code is "
+                "non-zero. This command NEVER flips CI to a hosted runner — "
+                "switching stays a manual, announced `ci runner use "
+                "github`.\n\n"
+                "Run it operator-side on a schedule (systemd-timer / cron / "
+                "agent on your own host) — NOT as an HPC cron."
+            ),
+            examples=(
+                Example(
+                    "{prog} ci runner validate-health",
+                    "One tick; exit 0 only when 'up'.",
+                ),
+                Example(
+                    "{prog} ci runner validate-health --json",
+                    "Machine-readable health report.",
+                ),
+                Example(
+                    "{prog} ci runner validate-health --grace-min 30",
+                    "Widen the stuck-run grace.",
+                ),
+            ),
+            exit_codes=(
+                (0, "up — online runner + running lease + queue draining"),
+                (1, "wedged or unknown — not processing, or a probe failed"),
+            ),
+            see_also=(
+                "{prog} ci runner status",
+                "{prog} ci runner ensure",
+                "{prog} ci runner use github",
+            ),
+        ),
+    )
     @click.option(
         "--json",
         "as_json",
@@ -253,25 +296,13 @@ def register(group: click.Group) -> None:
         default=None,
         help="The label CI targets (default: derived from runner.labels).",
     )
-    def watchdog(
+    def validate_health(
         as_json: bool,
         notify_cmd: str | None,
         grace_min: float | None,
         want_label: str | None,
     ) -> None:
-        """Report runner health as an honest tri-state; FAIL LOUD when not 'up'.
-
-        \b
-        States & exit codes:
-          up       (0)  matching online runner + running lease + queue draining
-          wedged   (1)  observed but not processing (offline / dead lease /
-                         run stuck at conclusion=None past the grace)
-          unknown  (1)  a probe failed — we CANNOT tell, so we never say 'up'
-
-        \b
-        Never flips CI to a hosted runner. Run it operator-side on a schedule
-        (systemd-timer / cron) — NOT as an HPC cron.
-        """
+        """Report runner health as an honest tri-state; FAIL LOUD when not 'up'."""
         cfg = config.load_runner_config()
         repo = cfg["github"]["default_repo"]
         wd = cfg.get("watchdog") or {}

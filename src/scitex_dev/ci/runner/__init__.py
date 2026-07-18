@@ -11,7 +11,7 @@ Verbs:
   * ``down``             — deregister the runner + stop it
   * ``renew``            — renew the SLURM CI lease job
   * ``onboard <repo>``   — copy the ci.yml template into a repo + set vars
-  * ``watchdog``         — tri-state health signal (up/wedged/unknown); FAIL
+  * ``validate-health``  — tri-state health signal (up/wedged/unknown); FAIL
                            LOUD, never silently falls back to a hosted runner
 """
 
