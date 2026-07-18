@@ -182,6 +182,7 @@ scitex_dev = [
     "skills/*.md",
     "skills/references/*.md",
     "_skills/**/*",
+    "_hooks/*.sh",
     "_branding/*.yaml",
     "_cli/audit/_summary/data/*",
     "linter/_rules/_verb_lexicon.txt",
