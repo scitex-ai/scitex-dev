@@ -1,148 +1,113 @@
-"""Auditor freshness check — warn if running scitex-dev < PyPI latest.
+"""Auditor freshness self-check — is the auditor I'm about to run current?
 
 Background — 2026-05: a user ran `scitex-dev ecosystem audit-all
 scitex-io` against scitex-io's modernised README and got six false-
 positive errors (PS-131, PS-141, PS-142, etc.). Cause: the installed
 auditor was 0.11.8 while PyPI was on 0.11.11 — three relaxations
-shipped in between (Quick-Start as Demo alias, visual-anywhere,
-collapse-all-interfaces). The rule corpus had moved; the local
-auditor hadn't.
+shipped in between. The rule corpus had moved; the local auditor
+hadn't. So the audit CLI runs this self-check first and warns (never
+blocks) if the running auditor is behind what shipped.
 
-This module adds a pre-audit self-check:
+THE FOSSIL BUG THIS MODULE USED TO HAVE
+---------------------------------------
+The original self-check read ``scitex_dev.__version__`` (via
+``importlib.metadata``) and string-compared it to PyPI's latest. That
+metadata is a FOSSIL for an *editable* checkout — it is frozen at
+``pip install -e`` and says nothing about the code actually loaded. On
+the operator's own box (scitex-dev is an editable checkout there), that
+comparison could FALSELY report "you are behind" and hand back a
+``pip install -U`` remedy — which would CLOBBER his editable checkout
+with a wheel. That is exactly the danger the version-currency primitive
+was built to prevent, so this self-check now DOGFOODS it.
 
-    - Fetch the latest scitex-dev version on PyPI (cheap; cached 6 h).
-    - Compare to the installed version.
-    - If installed < latest, emit a clear stderr warning telling the
-      user how to upgrade. Audit proceeds (warning, not hard fail) so
-      that air-gapped boxes still work.
+WHAT IT DOES NOW
+----------------
+:func:`warn_if_stale` delegates to
+:func:`scitex_dev.versioning.check_currency`, then maps the ONE finding
+that answers "is my running auditor behind?" — ``install-currency`` —
+onto the old warn/return contract:
+
+* FRESH   -> no warning, ``False``. (An editable checkout whose working
+  tree carries every released commit is FRESH BY CONTENT, so this is the
+  no-clobber case: it never fires and never suggests ``pip install -U``.)
+* STALE   -> the yellow WARN line, carrying the primitive's remedy
+  (``git pull`` for an editable checkout, ``pip install -U`` only for a
+  wheel) and the name-the-binary tag (origin + interpreter), then
+  ``True``.
+* UNKNOWN -> no warning, ``False``. Offline / can't-tell must NEVER be
+  dressed up as "you are behind" — that was the second half of the
+  fossil bug.
+
+Only the ``install-currency`` finding is consulted: the primitive's
+other checks (ghost-tag, release-run, running-vs-installed) are about
+the SHIPPING pipeline, not "is my running auditor stale", and an audit
+of some *other* package is the wrong place to raise them.
 
 Behaviour can be turned off explicitly with --no-version-check or by
-setting SCITEX_DEV_SKIP_VERSION_CHECK=1.
+setting SCITEX_DEV_SKIP_VERSION_CHECK=1. SCITEX_DEV_VERSION_CHECK_SILENT=1
+suppresses the print while still returning True so a caller can react.
 """
 
 from __future__ import annotations
 
-import json
 import os
 import sys
-import urllib.request
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
-_CACHE_TTL = timedelta(hours=6)
-_PYPI_URL = "https://pypi.org/pypi/scitex-dev/json"
+from ...versioning import Currency, VersioningConfig, check_currency
 
+__all__ = ["config", "warn_if_stale"]
 
-def _scitex_dir() -> Path:
-    return Path(os.environ.get("SCITEX_DIR", os.path.expanduser("~/.scitex")))
+_INSTALL_CURRENCY = "install-currency"
 
 
-def _cache_path() -> Path:
-    return _scitex_dir() / "dev" / "runtime" / "auditor-version-check.json"
+def config() -> VersioningConfig:
+    """The version-currency config for scitex-dev checking ITSELF.
 
-
-def _installed_version() -> str:
-    try:
-        from scitex_dev import __version__  # type: ignore[attr-defined]
-
-        return str(__version__)
-    except Exception:
-        return "0.0.0"
-
-
-def _normalize(v: str) -> tuple[int, ...]:
-    """Tuple-compare-friendly version parse — strips leading 'v' and any
-    PEP 440 suffix (`.dev`, `+local`, `a1`, etc.). Returns (0, 0, 0)
-    on parse failure so unknown locals never look 'newer'.
+    Only ``install-currency`` matters for the auditor-staleness question,
+    so the release-run and running-vs-installed checks are left disabled
+    (``release_workflow`` / ``systemd_unit`` unset) — that keeps the
+    self-check off ``gh`` / ``systemctl`` and honest about its scope.
     """
-    v = v.lstrip("vV").split("+", 1)[0]
-    head: list[int] = []
-    for part in v.split("."):
-        digits = ""
-        for ch in part:
-            if ch.isdigit():
-                digits += ch
-            else:
-                break
-        if not digits:
-            break
-        head.append(int(digits))
-    return tuple(head)
+    return VersioningConfig(dist="scitex-dev", module="scitex_dev")
 
 
-def _read_cache() -> tuple[str, datetime] | None:
-    p = _cache_path()
-    if not p.is_file():
-        return None
-    try:
-        blob = json.loads(p.read_text())
-        v = str(blob["latest"])
-        ts = datetime.fromisoformat(blob["fetched_at"])
-        return v, ts
-    except (OSError, json.JSONDecodeError, KeyError, ValueError):
-        return None
+def warn_if_stale(*, stream=sys.stderr, sources=None) -> bool:
+    """Warn (once, to stderr) if the running auditor is genuinely behind.
 
-
-def _write_cache(latest: str) -> None:
-    p = _cache_path()
-    p.parent.mkdir(parents=True, exist_ok=True)
-    blob = {
-        "latest": latest,
-        "fetched_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-    }
-    tmp = p.with_suffix(p.suffix + ".tmp")
-    tmp.write_text(json.dumps(blob, indent=2))
-    os.replace(tmp, p)
-
-
-def _fetch_latest_from_pypi(timeout: float = 3.0) -> str | None:
-    try:
-        with urllib.request.urlopen(_PYPI_URL, timeout=timeout) as resp:
-            data = json.load(resp)
-        return str(data["info"]["version"])
-    except Exception:
-        return None
-
-
-def latest_known() -> str | None:
-    """Return the latest scitex-dev version, cached for 6 h. Returns
-    None on network failure with no usable cache."""
-    cached = _read_cache()
-    if cached is not None:
-        v, fetched_at = cached
-        if datetime.now(timezone.utc) - fetched_at < _CACHE_TTL:
-            return v
-    latest = _fetch_latest_from_pypi()
-    if latest is not None:
-        _write_cache(latest)
-        return latest
-    return cached[0] if cached is not None else None
-
-
-def warn_if_stale(*, stream=sys.stderr) -> bool:
-    """Emit a one-line warning if installed < latest. Returns True if
-    a warning was emitted, False otherwise.
+    Returns True iff a stale warning was warranted (emitted, unless
+    silenced), False otherwise. Never raises: any failure in the currency
+    probe degrades to silence so the self-check can never break an audit.
 
     Honors:
       - SCITEX_DEV_SKIP_VERSION_CHECK=1 — skip the check entirely
       - SCITEX_DEV_VERSION_CHECK_SILENT=1 — suppress the print (still
         returns True so a caller can react)
+
+    ``sources`` defaults to live PyPI/git/install evidence; tests pass a
+    ``StaticSources`` to drive the tri-state from recorded facts.
     """
     if os.environ.get("SCITEX_DEV_SKIP_VERSION_CHECK"):
         return False
-    installed = _installed_version()
-    latest = latest_known()
-    if latest is None:
-        return False  # offline; can't compare — silent
-    if _normalize(installed) >= _normalize(latest):
-        return False  # up to date (or running a dev build ahead)
+
+    try:
+        report = check_currency(config(), sources=sources)
+    except Exception:
+        return False  # a self-check must never break the audit
+
+    finding = next(
+        (f for f in report.findings if f.check == _INSTALL_CURRENCY), None
+    )
+    if finding is None or finding.state is not Currency.STALE:
+        # FRESH (incl. editable-current: no clobber) and UNKNOWN
+        # (offline / can't-tell) are both silent — only positive evidence
+        # of staleness speaks.
+        return False
+
     if not os.environ.get("SCITEX_DEV_VERSION_CHECK_SILENT"):
-        msg = (
-            "\033[33m"
-            f"WARN  scitex-dev {installed} is older than the latest "
-            f"{latest} on PyPI. Rule corpus may have moved on — audit "
-            f"results below may be stale. Upgrade: pip install -U "
-            f"scitex-dev (or `--no-version-check` to silence).\033[0m"
-        )
+        lines = [f"WARN  scitex-dev auditor is stale: {finding.summary}"]
+        if finding.remedy:
+            lines.append(f"      fix: {finding.remedy}")
+        lines.append("      (silence: --no-version-check)")
+        msg = "\033[33m" + "\n".join(lines) + "\033[0m"
         print(msg, file=stream, flush=True)
     return True
