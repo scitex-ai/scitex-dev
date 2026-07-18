@@ -6,35 +6,43 @@ import subprocess
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 from ._up import _resolve_lease
 
 
 def register(group: click.Group) -> None:
-    @group.command()
+    @group.command(
+        "down",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Deregister the self-hosted runner and stop it.",
+            description=(
+                "\b\n"
+                "Steps:\n"
+                "  1. Get remove-token from GitHub API.\n"
+                "  2. Run config.sh remove --token on the runner.\n"
+                "  3. Delete the runner from GitHub.\n"
+                "  4. Kill the wrapper process on the HPC host.\n"
+                "\n"
+                "NOTE: This NEVER cancels the SLURM lease job — it only "
+                "removes the runner from GitHub and kills the runner process."
+            ),
+            examples=(
+                Example("{prog} ci runner down", "Remove the configured runner."),
+                Example(
+                    "{prog} ci runner down --runner-name scitex-ci-01",
+                    "Remove a specific runner.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--runner-name",
         default=None,
         help="Runner name to remove. Default: from config.",
     )
     def down_cmd(runner_name: str | None) -> None:
-        """Deregister the self-hosted runner and stop it.
-
-        \b
-        Steps:
-          1. Get remove-token from GitHub API.
-          2. Run config.sh remove --token on the runner.
-          3. Delete the runner from GitHub.
-          4. Kill the wrapper process on the HPC host.
-
-        \b
-        NOTE: This NEVER cancels the SLURM lease job — only removes the
-        runner from GitHub and kills the runner process.
-
-        \b
-        Example:
-          $ scitex-dev ci runner down
-        """
         cfg = config.load_runner_config()
         target = config._ssh_target(cfg)
         # Fail loud early if the PAT env var is unset (the gh CLI calls below
