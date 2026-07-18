@@ -7,38 +7,42 @@ import subprocess
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 
 
 def register(group: click.Group) -> None:
-    @group.command()
+    @group.command(
+        "renew",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Renew the SLURM CI lease job.",
+            description=(
+                "\b\n"
+                "Steps:\n"
+                "  1. Query squeue for the current CI lease job.\n"
+                "  2. If no RUNNING job exists, submit a new one.\n"
+                "  3. If a RUNNING job exists with time_left < threshold,\n"
+                "     submit a successor (brief overlap — the runner stays\n"
+                "     attached via srun --overlap).\n"
+                "\n"
+                "This command is the manual counterpart of the auto-renew "
+                "cron. The lease job name is hard-pinned in config; this "
+                "NEVER touches research lease jobs.\n"
+                "\n"
+                "NOTE: when the config names a scitex-hpc `reservation`, "
+                "lease renewal is owned by scitex-hpc (the persistent "
+                "reservation's SIGUSR1 auto-resubmit + `reservations "
+                "refresh`). `renew` then delegates to the same book/refresh "
+                "path as `ensure` — prefer `ci runner ensure` (it also "
+                "restarts offline runners)."
+            ),
+            examples=(
+                Example("{prog} ci runner renew", "Renew or submit the CI lease."),
+            ),
+        ),
+    )
     def renew_cmd() -> None:
-        """Renew the SLURM CI lease job.
-
-        \b
-        Steps:
-          1. Query squeue for the current CI lease job.
-          2. If no RUNNING job exists, submit a new one.
-          3. If a RUNNING job exists with time_left < threshold, submit a
-             successor (brief overlap — the runner stays attached via
-             srun --overlap).
-
-        \b
-        This command is the manual counterpart of the auto-renew cron.
-        The lease job name is hard-pinned in config; this NEVER touches
-        research lease jobs.
-
-        \b
-        Example:
-          $ scitex-dev ci runner renew
-
-        \b
-        NOTE: when the config names a scitex-hpc `reservation`, lease renewal
-        is owned by scitex-hpc (the persistent reservation's SIGUSR1
-        auto-resubmit + `reservations refresh`). `renew` then delegates to the
-        same book/refresh path as `ensure` — prefer `scitex-dev ci runner
-        ensure` (it also restarts offline runners).
-        """
         cfg = config.load_runner_config()
 
         # Unified lease backend: delegate to scitex-hpc when configured.
