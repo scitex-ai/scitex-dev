@@ -44,7 +44,9 @@ def free_port():
     """A port number nothing is listening on."""
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+        port = sock.getsockname()[1]
+    # Socket is closed by here, which is the point: the port is free.
+    yield port
 
 
 @pytest.fixture()
@@ -72,10 +74,12 @@ def loopback_probe_works():
     try:
         socket.create_connection(("127.0.0.1", closed_port), timeout=1).close()
     except ConnectionRefusedError:
-        return True
+        pass
     except OSError:
         pytest.skip("sandbox filters loopback connections; port probe is blind here")
-    pytest.skip("unexpected listener on a port we just closed")
+    else:
+        pytest.skip("unexpected listener on a port we just closed")
+    yield True
 
 
 @pytest.fixture()
