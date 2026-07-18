@@ -83,6 +83,13 @@ RULE_SEVERITY: dict[str, str] = {
     # adopting incrementally as of 2026-07); promote once the fleet has
     # converged, same bake-in pattern as §1f / §4b.
     "§12": "warn",
+    # §13 — self-maintenance commands must nest under a `dev` group.
+    # WARN during the fleet migration to `<pkg> dev {daemon,cron,systemd,
+    # hooks,skills,shell}`; promote to error once the fleet has converged,
+    # same bake-in pattern as §1f / §4b / §12. The baseline ratchet
+    # contains the existing drift so only NEW top-level self-maintenance
+    # commands break CI.
+    "§13": "warn",
     # PA-304: umbrella imports (scitex.X / import scitex) inside standalone
     # source. Drags umbrella __init__ + lazy re-export setup into every call
     # — measurable on NFS-mounted homes (HPC). Codified 2026-05-06 after the
@@ -155,6 +162,7 @@ def _audit_one(
         _scan_env_vars,
         _walk,
     )
+    from ._dev_group import check_dev_command_group
     from ._gui_group import check_gui_command_group
     from ._std_rules import (
         check_deprecated_alias_metadata,
@@ -196,6 +204,8 @@ def _audit_one(
     check_deprecated_alias_metadata(cmd, package, out)
     # §12 — canonical `gui {open,serve,status,stop}` command group.
     check_gui_command_group(cmd, package, out)
+    # §13 — self-maintenance commands must nest under a `dev` group.
+    check_dev_command_group(cmd, package, out)
     if behavioral:
         _check_behavioral(package, out, cmd, timeout=timeout)
     return ("ok" if not out else "warn"), out
