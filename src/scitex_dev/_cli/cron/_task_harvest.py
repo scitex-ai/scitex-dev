@@ -33,8 +33,9 @@ dispatch land in a follow-up — keeping this PR surgical per lead a2a
     ``worktree-gc`` so the operator can ``scitex-dev cron list`` and
     see the harvest is wired)
   * an audit line on every fire (``[task-harvest YYYY-MM-DD]
-    N=… blocked=… runnable=… …``) appended to
-    ``~/.scitex/dev/logs/cron-task-harvest.log``
+    N=… blocked=… runnable=… …``). The body just prints it; ``cron
+    exec`` owns the redirect that lands it in
+    ``$HOME/.scitex/dev/runtime/logs/cron-task-harvest.log``
   * a structured ``TaskHarvestResult`` (``scanned`` /
     ``blocked`` / ``runnable`` / ``done`` / ``error``) so the
     follow-up PRs add Phase-1 walk + Phase-2 dispatch without changing
@@ -225,7 +226,7 @@ def run_once(
 
     # Audit line — append-only, greppable by date prefix. Phase-1 walk
     # + Phase-2 dispatch fold into THIS log line so a single grep
-    # against `~/.scitex/dev/logs/cron-task-harvest.log` answers "how
+    # against `$HOME/.scitex/dev/runtime/logs/cron-task-harvest.log` answers "how
     # are we trending?" across the whole history of the board.
     print(
         f"[task-harvest {timestamp}] "

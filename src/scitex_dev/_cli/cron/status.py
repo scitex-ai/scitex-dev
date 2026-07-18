@@ -11,23 +11,36 @@ from pathlib import Path
 import click
 
 from . import _crontab
+from ._job_commands import log_path_for
 from ._jobs import JOB_REGISTRY
 from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
+
+def _legacy_log_path(name: str) -> Path:
+    """The pre-2026-07-19 log location: ``~/.scitex/dev/logs/cron-<name>.log``.
+
+    Kept ONLY as a read fallback. Existing logs are deliberately not
+    moved by the cleanup, so a job that has not ticked since the change
+    still reports a real last-run instead of "(no log yet)".
+    """
+    return Path.home() / ".scitex" / "dev" / "logs" / f"cron-{name}.log"
 
 
 def _last_run_from_log(name: str) -> str:
     """Best-effort last-run timestamp from the job's log file.
 
-    Convention: each job writes to ``~/.scitex/dev/logs/cron-<name>.log``
-    (the registry's command line does this via ``mkdir -p && >>``).
-    We report the file's mtime — exact enough for an operator to see
-    "the loop is alive" without parsing the log body.
+    Each job's log is owned by ``cron exec`` and lives under
+    ``$HOME/.scitex/<pkg>/runtime/logs/`` (see ``_job_commands`` /
+    ``jobs._logsink``). We report the file's mtime — exact enough for an
+    operator to see "the loop is alive" without parsing the log body,
+    and we take the NEWER of the new and legacy paths so the reading
+    stays honest across the transition.
     """
-    log = Path.home() / ".scitex" / "dev" / "logs" / f"cron-{name}.log"
-    if not log.exists():
+    candidates = [p for p in (log_path_for(name), _legacy_log_path(name)) if p.exists()]
+    if not candidates:
         return "(no log yet)"
-    mtime = _dt.datetime.fromtimestamp(log.stat().st_mtime)
-    return mtime.isoformat(timespec="seconds")
+    mtime = max(p.stat().st_mtime for p in candidates)
+    return _dt.datetime.fromtimestamp(mtime).isoformat(timespec="seconds")
 
 
 def register(group: click.Group) -> None:
@@ -40,8 +53,9 @@ def register(group: click.Group) -> None:
                 "Reports per-job: installed? (line is present in "
                 "`crontab -l`), schedule (declared vs. installed, "
                 "flagged if they drift), last-run (mtime of "
-                "`~/.scitex/dev/logs/cron-<name>.log`), next-run (raw "
-                "schedule, operator interprets).",
+                "`$HOME/.scitex/<pkg>/runtime/logs/<slug>.log`, falling "
+                "back to the pre-cleanup `~/.scitex/dev/logs/` path), "
+                "next-run (raw schedule, operator interprets).",
             ),
             examples=(
                 Example("{prog} cron status", "Human-readable status table."),
