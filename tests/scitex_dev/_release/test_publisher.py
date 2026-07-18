@@ -10,7 +10,11 @@ import subprocess
 from pathlib import Path
 
 
-from scitex_dev._release.publisher import _detect_trigger, publish_release
+from scitex_dev._release.publisher import (
+    _detect_trigger,
+    _emit_released_event,
+    publish_release,
+)
 
 
 def _mk_workflow(repo: Path, body: str) -> Path:
@@ -32,6 +36,13 @@ def _mk_git_repo(tmp_path: Path) -> Path:
         ["git", "-C", str(tmp_path), "commit", "-q", "-m", "init"], check=True
     )
     return tmp_path
+
+
+def _add_origin(repo: Path, slug: str = "ywatanabe1989/scitex-testrepo") -> None:
+    subprocess.run(
+        ["git", "-C", str(repo), "remote", "add", "origin", f"git@github.com:{slug}.git"],
+        check=True,
+    )
 
 
 def test_detect_trigger_release(tmp_path):
@@ -147,3 +158,134 @@ def test_publish_skips_existing_tag(tmp_path):
     subprocess.run(["git", "-C", str(tmp_path), "tag", "v1.2.3"], check=True)
     rep = publish_release(tmp_path, "1.2.3", dry_run=True)
     assert any("already exists" in s for s in rep.skipped)
+
+
+# --- C7: `released` card-event producer -------------------------------
+
+
+def test_emit_released_event_fires_with_recorded_envelope(tmp_path):
+    # Arrange
+    _mk_git_repo(tmp_path)
+    _add_origin(tmp_path)
+    from scitex_dev._release.publisher import PublishResult
+
+    rep = PublishResult(repo=tmp_path, version="1.2.3", trigger="tags")
+    rep.steps_run.append("git tag v1.2.3")
+    fired: list[dict] = []
+
+    def _fake_emit(repo_slug, version, *, card_id, actor):
+        fired.append({"repo": repo_slug, "version": version, "card_id": card_id, "actor": actor})
+
+    # Act
+    _emit_released_event(rep, actor="scitex-dev", card_id="my-card", emit_fn=_fake_emit)
+
+    # Assert
+    assert fired == [
+        {
+            "repo": "ywatanabe1989/scitex-testrepo",
+            "version": "1.2.3",
+            "card_id": "my-card",
+            "actor": "scitex-dev",
+        }
+    ]
+
+
+def test_emit_released_event_is_silent_without_origin_remote(tmp_path):
+    # Arrange — no `origin` remote configured, so no slug can be derived.
+    _mk_git_repo(tmp_path)
+    from scitex_dev._release.publisher import PublishResult
+
+    rep = PublishResult(repo=tmp_path, version="1.2.3", trigger="tags")
+    rep.steps_run.append("git tag v1.2.3")
+    fired: list[dict] = []
+
+    # Act
+    _emit_released_event(rep, emit_fn=lambda *a, **k: fired.append((a, k)))
+
+    # Assert
+    assert fired == []
+
+
+def _publish_real_tags_trigger(tmp_path, emit_fn):
+    _mk_git_repo(tmp_path)
+    _add_origin(tmp_path)
+    _mk_workflow(tmp_path, "name: Pub\non:\n  push:\n    tags:\n      - 'v*'\n")
+    # Real (non-dry-run) publish against a repo with no PyPI/gh side
+    # effects reachable in the test sandbox; `git push --tags` against
+    # the fake origin is recorded regardless of transport failure
+    # (existing publisher behavior), so the tag-creation signal still
+    # fires the emit.
+    return publish_release(tmp_path, "1.2.3", dry_run=False, emit_fn=emit_fn)
+
+
+def test_publish_release_creates_the_tag_for_real(tmp_path):
+    # Arrange
+    fired: list[dict] = []
+    # Act
+    rep = _publish_real_tags_trigger(tmp_path, lambda *a, **k: fired.append(1))
+    # Assert
+    assert "git tag v1.2.3" in rep.steps_run
+
+
+def test_publish_release_emits_on_real_tag_creation(tmp_path):
+    # Arrange
+    fired: list[dict] = []
+
+    def _fake_emit(repo_slug, version, *, card_id, actor):
+        fired.append({"repo": repo_slug, "version": version, "card_id": card_id, "actor": actor})
+
+    # Act
+    _publish_real_tags_trigger(tmp_path, _fake_emit)
+
+    # Assert
+    assert fired == [
+        {
+            "repo": "ywatanabe1989/scitex-testrepo",
+            "version": "1.2.3",
+            "card_id": None,
+            "actor": "scitex-dev",
+        }
+    ]
+
+
+def test_publish_release_does_not_emit_on_dry_run(tmp_path):
+    # Arrange
+    _mk_git_repo(tmp_path)
+    _add_origin(tmp_path)
+    _mk_workflow(tmp_path, "name: Pub\non:\n  push:\n    tags:\n      - 'v*'\n")
+    fired: list[dict] = []
+
+    # Act
+    publish_release(tmp_path, "1.2.3", dry_run=True, emit_fn=lambda *a, **k: fired.append(1))
+
+    # Assert
+    assert fired == []
+
+
+def _publish_real_with_preexisting_tag(tmp_path, emit_fn):
+    # Tag already exists before the call, so this run is a no-op.
+    _mk_git_repo(tmp_path)
+    _add_origin(tmp_path)
+    _mk_workflow(tmp_path, "name: Pub\non:\n  push:\n    tags:\n      - 'v*'\n")
+    subprocess.run(["git", "-C", str(tmp_path), "tag", "v1.2.3"], check=True)
+    return publish_release(tmp_path, "1.2.3", dry_run=False, emit_fn=emit_fn)
+
+
+def test_publish_release_skips_the_preexisting_tag_as_a_noop(tmp_path):
+    # Arrange
+    fired: list[dict] = []
+    # Act
+    rep = _publish_real_with_preexisting_tag(tmp_path, lambda *a, **k: fired.append(1))
+    # Assert
+    assert any("already exists" in s for s in rep.skipped)
+
+
+def test_publish_release_does_not_emit_on_idempotent_rerun(tmp_path):
+    # Arrange
+    fired: list[dict] = []
+
+    # Act
+    _publish_real_with_preexisting_tag(tmp_path, lambda *a, **k: fired.append(1))
+
+    # Assert
+    assert fired == []

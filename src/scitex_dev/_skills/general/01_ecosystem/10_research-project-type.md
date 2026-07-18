@@ -115,7 +115,7 @@ codecov. The expected workflow runs, on a **single** Python version:
 - name: Install
   run: uv pip install -e ".[dev]"   # or a requirements file
 - name: Lint
-  run: scitex-dev linter check-files scripts tests
+  run: scitex-dev linter validate-files scripts tests
 - name: Test
   run: pytest tests/ -q -m "not requires_data"
 ```

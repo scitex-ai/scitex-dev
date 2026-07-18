@@ -4,24 +4,40 @@
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem):
     @ecosystem.command(
         "audit-all",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem audit-all scitex-io\n"
-            "  $ scitex-dev ecosystem audit-all scitex-io scitex-stats\n"
-            "  $ scitex-dev ecosystem audit-all scitex-io,scitex-stats\n"
-            "  $ scitex-dev ecosystem audit-all all --severity error\n"
-            "  $ scitex-dev ecosystem audit-all scitex-io --json\n"
-            "\n"
-            "Runs every audit-* on each given distribution and\n"
-            "aggregates exit codes (overall exit=1 if any auditor on any\n"
-            "package reports violations). Pass `all` to run across every\n"
-            "registered ecosystem package. For cross-leaf rollups across\n"
-            "the whole ecosystem with cross-pkg dedup, use audit-summary\n"
-            "instead."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Run every audit-* on each DISTRIBUTION; aggregate exit codes.",
+            description=(
+                "DISTRIBUTIONS accepts: a single name, multiple names as "
+                "separate args, comma-separated names, or the literal "
+                "`all` to expand to every registered ecosystem package. "
+                "Overall exit=1 if any auditor on any package reports "
+                "violations. For cross-leaf rollups across the whole "
+                "ecosystem with cross-pkg dedup, use audit-summary "
+                "instead.",
+            ),
+            examples=(
+                Example("{prog} ecosystem audit-all scitex-io", "One package."),
+                Example(
+                    "{prog} ecosystem audit-all scitex-io scitex-stats",
+                    "Multiple packages.",
+                ),
+                Example(
+                    "{prog} ecosystem audit-all scitex-io,scitex-stats",
+                    "Comma-separated packages.",
+                ),
+                Example(
+                    "{prog} ecosystem audit-all all --severity error",
+                    "Every registered package.",
+                ),
+                Example("{prog} ecosystem audit-all scitex-io --json", "Structured JSON output."),
+            ),
         ),
     )
     @click.argument("distributions", nargs=-1, required=True)
@@ -111,12 +127,6 @@ def register(ecosystem):
         new_only,
         since_ref,
     ):
-        """Run every audit-* on each DISTRIBUTION; aggregate exit codes.
-
-        DISTRIBUTIONS accepts: a single name, multiple names as separate
-        args, comma-separated names, or the literal `all` to expand to
-        every registered ecosystem package.
-        """
         import json as _json
         import os as _os
         import shutil as _shutil

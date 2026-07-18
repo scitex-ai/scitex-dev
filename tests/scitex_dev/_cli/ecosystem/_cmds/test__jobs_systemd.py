@@ -65,12 +65,12 @@ def _write_units(job, unit_dir):
     return service, timer
 
 
-def test_systemd_list_with_only_builtins_reports_empty(runner):
+def test_systemd_list_includes_the_builtin_self_pull_timer(runner):
     # Arrange
     # Act
     result = runner.invoke(main, ["ecosystem", "systemd", "list"])
     # Assert
-    assert "No systemd-kind jobs discovered." in result.output
+    assert "ecosystem-self-pull" in result.output
 
 
 def test_systemd_write_creates_service_file(tmp_path):

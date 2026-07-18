@@ -8,11 +8,20 @@ Module map:
 
 from __future__ import annotations
 
-from ._core import ECOSYSTEM, get_all_packages, get_local_path, should_skip_audit
+from ._core import (
+    ECOSYSTEM,
+    get_all_packages,
+    get_local_path,
+    is_mcp_mountable,
+    mountable_peers,
+    should_skip_audit,
+)
 
 __all__ = [
     "ECOSYSTEM",
     "get_all_packages",
     "get_local_path",
+    "is_mcp_mountable",
+    "mountable_peers",
     "should_skip_audit",
 ]

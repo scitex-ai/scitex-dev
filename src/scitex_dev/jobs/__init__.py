@@ -147,6 +147,40 @@ class JobSpec:
         controls automatic restart on exit/failure. Defaults to
         ``"no"`` (no restart). MUST stay ``"no"`` for ``timer`` and
         ``cron`` kinds.
+    watchdog_sec
+        systemd ``WatchdogSec`` for ``kind="service"`` only — the
+        liveness-ping interval that guards against *hangs* (a crash is
+        already covered by ``Restart=``; a hang is not). Defaults to
+        ``None`` (no watchdog).
+
+        CRITICAL CAVEAT — opt-in on purpose. ``WatchdogSec`` does
+        NOTHING unless the daemon periodically calls
+        ``sd_notify(WATCHDOG=1)`` under ``Type=notify``. A plain
+        ``Type=simple`` daemon that never pings would be *killed and
+        restarted every ``WatchdogSec`` seconds* by systemd — a
+        footgun. So a JobSpec must EXPLICITLY set ``watchdog_sec`` to
+        request it; when set, the unit builder emits ``Type=notify`` +
+        ``WatchdogSec=<N>s`` and the LEAF is responsible for sending
+        the pings. When unset, the unit stays ``Type=simple`` and
+        relies on ``Restart=`` alone (crashes, not hangs). MUST be
+        ``None`` for ``timer`` and ``cron`` kinds.
+    venv
+        Optional path to the venv directory that OWNS ``command``,
+        e.g. ``"/home/ywatanabe/proj/scitex-todo/.venv"``. "Leaf owns
+        its own venv": a supervised child is a DIFFERENT package from
+        scitex-dev (which runs the supervisor), so resolving the
+        child's executable via the supervisor's own
+        ``sys.executable`` (the historical default) can pick up a
+        missing, stale, or wrong-version binary. When set, both the
+        systemd unit builder (``ExecStart=``) and the ``ecosystem
+        run`` supervisor (``subprocess.Popen`` argv) resolve the
+        command as ``<venv>/bin/<head>`` instead, set ``cwd`` to the
+        venv's parent directory (the package root), and export
+        ``VIRTUAL_ENV=<venv>`` in the child's environment — mirroring
+        what a normal ``source <venv>/bin/activate`` would do.
+        Defaults to ``None``, which keeps the historical behavior
+        (resolve via the supervisor's own interpreter / PATH) for
+        every existing JobSpec — fully backward compatible.
     """
 
     name: str
@@ -158,6 +192,8 @@ class JobSpec:
     on_unit_active_sec: str | None = None
     timeout_sec: int | None = None
     restart_policy: str = "no"
+    watchdog_sec: int | None = None
+    venv: str | None = None
 
     def __post_init__(self) -> None:
         # Run the validator at construction time so a malformed leaf
@@ -221,6 +257,15 @@ class JobSpec:
                 f"services use Restart= for keepalive, not a timer). "
                 f"Got: {self.on_unit_active_sec!r}"
             )
+        if self.watchdog_sec is not None and self.watchdog_sec <= 0:
+            # A non-positive interval is meaningless and, worse, would
+            # produce a WatchdogSec=0s that systemd treats as "disabled"
+            # while implying the leaf opted in — a confusing half-state.
+            raise ValueError(
+                f"JobSpec({self.name!r}, kind='service').watchdog_sec "
+                f"must be a positive number of seconds when set. "
+                f"Got: {self.watchdog_sec!r}"
+            )
 
     def _validate_timer(self) -> None:
         # A systemd Timer needs SOMETHING to tell it when to fire.
@@ -238,6 +283,12 @@ class JobSpec:
                 f"JobSpec({self.name!r}, kind='timer').restart_policy "
                 f"must be 'no' (timers fire oneshot services; Restart= "
                 f"doesn't apply). Got: {self.restart_policy!r}"
+            )
+        if self.watchdog_sec is not None:
+            raise ValueError(
+                f"JobSpec({self.name!r}, kind='timer').watchdog_sec "
+                f"must be None (WatchdogSec guards long-running services, "
+                f"not oneshot timer bodies). Got: {self.watchdog_sec!r}"
             )
 
     def _validate_cron(self) -> None:
@@ -274,6 +325,12 @@ class JobSpec:
                 f"JobSpec({self.name!r}, kind='cron').restart_policy "
                 f"must be 'no' (cron has no restart concept). Got: "
                 f"{self.restart_policy!r}"
+            )
+        if self.watchdog_sec is not None:
+            raise ValueError(
+                f"JobSpec({self.name!r}, kind='cron').watchdog_sec "
+                f"must be None (systemd-only field). Got: "
+                f"{self.watchdog_sec!r}"
             )
 
 

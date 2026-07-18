@@ -16,6 +16,7 @@ from scitex_dev._cli.audit._summary._mcp_parity import (
     _python_api_names,
     _repo_root_from_import,
     _tool_matches_api,
+    declares_no_mcp,
     is_mcp_parity_exempt,
     mcp_tools_allowlist,
 )
@@ -486,3 +487,69 @@ class TestAuditedRepoRoot:
             sys.modules.pop("scitex_parityexempt", None)
         # Assert
         assert exempt is True
+
+
+# ---------------------------------------------------------------------------
+# CAPABILITY knob -> no-mcp gates the §6 MCP <-> Python-API parity check.
+# (Split out of the former _project/test__capability_knob.py orphan; the
+# symbols under test live in this module's mirror src, _summary/_mcp_parity.py.)
+# Operator directive 2026-06-22.
+# ---------------------------------------------------------------------------
+
+
+def _write_caps_config(repo: Path, capabilities: list[str] | None) -> None:
+    """Write a `.scitex/dev/config.yaml` for `repo`, optionally with caps."""
+    cfg_dir = repo / ".scitex" / "dev"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    body = "project-type:\n  - pip\n"
+    if capabilities is not None:
+        body += "audit:\n  capabilities:\n"
+        for cap in capabilities:
+            body += f"    - {cap}\n"
+    (cfg_dir / "config.yaml").write_text(body, encoding="utf-8")
+
+
+def _make_alias_repo(tmp_path: Path, capabilities: list[str] | None) -> Path:
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-plt"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
+    _write_caps_config(tmp_path, capabilities)
+    return tmp_path
+
+
+def test_declares_no_mcp_true_with_capability(tmp_path):
+    # Arrange
+    repo = _make_alias_repo(tmp_path, capabilities=["no-mcp"])
+    # Act
+    result = declares_no_mcp("scitex-plt", repo=repo)
+    # Assert
+    assert result is True
+
+
+def test_declares_no_mcp_false_without_capability(tmp_path):
+    # Arrange
+    repo = _make_alias_repo(tmp_path, capabilities=None)
+    # Act
+    result = declares_no_mcp("scitex-plt", repo=repo)
+    # Assert
+    assert result is False
+
+
+def test_parity_check_emits_no_violations_with_no_mcp(tmp_path):
+    # Arrange
+    repo = _make_alias_repo(tmp_path, capabilities=["no-mcp"])
+    out: list = []
+    # Act
+    _check_api_parity("scitex-plt", {"plt_orphan_tool"}, out, repo=repo)
+    # Assert
+    assert out == []
+
+
+def test_parity_check_emits_capability_notice_with_no_mcp(tmp_path, capsys):
+    # Arrange
+    repo = _make_alias_repo(tmp_path, capabilities=["no-mcp"])
+    out: list = []
+    # Act
+    _check_api_parity("scitex-plt", {"plt_orphan_tool"}, out, repo=repo)
+    # Assert
+    assert "skipped (declared capability: no-mcp)" in capsys.readouterr().err

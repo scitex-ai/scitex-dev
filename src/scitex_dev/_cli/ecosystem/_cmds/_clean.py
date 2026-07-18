@@ -4,27 +4,36 @@
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem):
     @ecosystem.command(
         "clean-root",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem clean-root figrecipe                  # preview\n"
-            "  $ scitex-dev ecosystem clean-root figrecipe --yes            # move\n"
-            "  $ scitex-dev ecosystem clean-root all -j 8                   # preview all\n"
-            "  $ scitex-dev ecosystem clean-root scitex-io,figrecipe --yes  # bulk\n"
-            "\n"
-            "Moves every PS-103 root violation in DISTRIBUTIONS into\n"
-            "<repo>/.scitex/dev/runtime/root-violations/<YYYYmmdd-HHMMSS>/.\n"
-            "Non-destructive: nothing is deleted. The quarantine dir is\n"
-            "gitignored via the standard `.scitex/*/runtime/*` rule. To\n"
-            "permanently delete after review, `rm -rf` the timestamped\n"
-            "subdir. To restore, `mv` the entries back.\n"
-            "\n"
-            "Default is dry-run; pass --yes to apply. Use --keep-screenshots\n"
-            "etc. (or per-pkg `audit.root-whitelist` in .scitex/dev/config.yaml)\n"
-            "to whitelist legitimate roots before cleaning."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Move PS-103 root violations into a per-repo quarantine dir.",
+            description=(
+                "Moves every PS-103 root violation in DISTRIBUTIONS into "
+                "<repo>/.scitex/dev/runtime/root-violations/<YYYYmmdd-HHMMSS>/. "
+                "Non-destructive: nothing is deleted. The quarantine "
+                "dir is gitignored via the standard "
+                "`.scitex/*/runtime/*` rule. To permanently delete "
+                "after review, `rm -rf` the timestamped subdir; to "
+                "restore, `mv` the entries back. Default is dry-run; "
+                "pass --yes to apply. Whitelist legitimate roots first "
+                "via per-pkg `audit.root-whitelist` in "
+                ".scitex/dev/config.yaml.",
+            ),
+            examples=(
+                Example("{prog} ecosystem clean-root figrecipe", "Preview one package."),
+                Example("{prog} ecosystem clean-root figrecipe --yes", "Apply for one package."),
+                Example("{prog} ecosystem clean-root all -j 8", "Preview every package."),
+                Example(
+                    "{prog} ecosystem clean-root scitex-io,figrecipe --yes",
+                    "Bulk apply.",
+                ),
+            ),
         ),
     )
     @click.argument("distributions", nargs=-1, required=True)
@@ -47,7 +56,6 @@ def register(ecosystem):
         help="Run packages in parallel.",
     )
     def ecosystem_clean_root(distributions, dry_run, yes, as_json, jobs):
-        """Move PS-103 root violations into <repo>/.scitex/dev/runtime/root-violations/<ts>/."""
         import json as _json
         import sys as _sys
         from concurrent.futures import ThreadPoolExecutor, as_completed

@@ -243,7 +243,7 @@ job: it surfaced a design problem.
 
 | Surface | Code | Severity | What it scans |
 | :-- | :-- | :-- | :-- |
-| Linter (`scitex-dev lint check-files`) | `STX-NM001` | error | `import` / `from` of `unittest.mock`, `mock`, `pytest_mock` |
+| Linter (`scitex-dev linter validate-files`) | `STX-NM001` | error | `import` / `from` of `unittest.mock`, `mock`, `pytest_mock` |
 | Linter | `STX-NM002` | error | `mocker` / `monkeypatch` fixture parameters |
 | Linter | `STX-NM003` | error | Calls and decorators using `Mock`, `MagicMock`, `AsyncMock`, `patch`, `mock_open`, `PropertyMock`, `create_autospec`, `MockerFixture` (and imports of those names) |
 | `~/.claude/hooks/post-tool-use/run_lint.sh` | (same) | exit 2 | Every `Write`/`Edit` of a `*.py` — blocks Claude Code from writing mocks |

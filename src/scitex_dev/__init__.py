@@ -127,12 +127,21 @@ _LAZY_ATTRS: dict[str, str] = {
     "get_github_latest_tag": "_release.github",
     "get_github_release": "_release.github",
     "get_github_tags": "_release.github",
+    # runtime — supervised async periodic-task primitive
+    "PeriodicTask": "runtime",
+    "PeriodicTaskGroup": "runtime",
     # rename
     "RenameConfig": "rename",
     "RenameResult": "rename",
     "bulk_rename": "rename",
     "execute_rename": "rename",
     "preview_rename": "rename",
+    # trace_env
+    "TraceEnvResult": "trace_env",
+    "format_quiet": "trace_env",
+    "format_report": "trace_env",
+    "scan_env_vars": "trace_env",
+    "trace_env_vars": "trace_env",
     # ssh
     "check_all_hosts": "ssh",
     "get_remote_version": "ssh",
@@ -250,4 +259,7 @@ __all__ = [
     "remote_diff",
     "remote_commit",
     "pull_local",
+    # Async runtime primitives
+    "PeriodicTask",
+    "PeriodicTaskGroup",
 ]

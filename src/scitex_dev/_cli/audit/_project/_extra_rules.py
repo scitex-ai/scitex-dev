@@ -14,9 +14,15 @@ Today's contents:
 - PS-168 — workflow-secret-env-prefix-missing
 - PS-173 — adr-format (filename + lean-template sections, when docs/adr/ exists)
 - PS-180 — runtime-separation (src/<pkg>/runtime/ must be gitignored at the package level)
+- PS-181 — registry-layout (~/.scitex/<pkg>/ state dir must match the canonical shape; global-scoped, not repo-scoped)
+- PS-182 — rolled-own local-state path resolver (a src/<pkg>/**/_paths.py that re-implements git-root/project-scope precedence instead of using scitex_config._ecosystem.local_state)
+- PS-183 — ecosystem-boundary a2 smell: unguarded top-level import reaching a peer leaf package's private internals (ADR-0003 / skill 01_ecosystem/16)
 - PS-PATH-001/002 — config/PATH.yaml shape (outer wrapper / bare-string leaf)
 - PS-CLEW-001 — clew.add_claim without self-verify in same module
 - PS-AGENT-001 — scripts/agent/*.py with add_claim but no claims.json terminus
+- PS-214 — empty-pyproject-extra (`extra = []` — the writer PR #322 incident)
+- PS-215 — broken-install-remedy-string (source-side mirror of PS-214: a
+  `pip install <pkg>[<extra>]` string naming a missing/empty extra)
 - RP-201/202/204/205 — research-project scripts ↔ tests/scripts mirror
 
 When `_audit.py` is split per-rule (see GITIGNORED/REFACTORING.md), this
@@ -187,6 +193,77 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "ecosystem-runtime-separation",
     ),
     (
+        "PS-181",
+        "§1",
+        (
+            "registry-layout drift: a `~/.scitex/<pkg>/` local-state "
+            "directory does not match the canonical shape — "
+            "`config.yaml` XOR `config/` (never both, never a "
+            "differently-named config file); loose "
+            "`*.pid`/`*.sock`/`*.state`/`*_latest.json`/`ci-state.json` "
+            "belong under `runtime/`; loose `*.log` belongs under "
+            "`logs/`; `_archive-<date>/` and `*.bak-<date>` belong "
+            "under `archive/<date>/`; loose `*.py`/`*.sh` belong under "
+            "`bin/` or `scripts/`; no `__pycache__/` at top level; a "
+            "venv dir (has `pyvenv.cfg`) must be named `venvs/`. "
+            "UNLIKE every other PS-1xx rule, this one is scoped to the "
+            "user's entire `$SCITEX_DIR` tree across every installed "
+            "package, not a single repo — see "
+            "`scitex-dev ecosystem audit-registry-layout` (the rule's "
+            "actual entry point) and `scitex-dev registry-normalize "
+            "<pkg>` (mechanical fix, dry-run by default). Severity W "
+            "during ecosystem adoption."
+        ),
+        "W",
+        "registry-layout-drift",
+    ),
+    (
+        "PS-182",
+        "§1",
+        (
+            "rolled-own local-state path resolver: a `src/<pkg>/**/_paths.py` "
+            "(or `paths.py`) re-implements the project-scope / git-root "
+            "precedence walk (a `.git` sentinel walk + a `.scitex/<pkg>` "
+            "project-scope literal) WITHOUT importing the canonical "
+            "`scitex_config._ecosystem.local_state` helper. Rolling your own "
+            "precedence is the CONFIG-vs-DATA footgun: `local_state.path()` "
+            "legitimately lets a project scope shadow the user scope for "
+            "CONFIG, but a hand-rolled resolver applies the same 'project "
+            "wins' rule to DATA/STATE stores too — exactly how a week-stale "
+            "`<repo>/.scitex/todo/tasks.yaml` silently shadowed the canonical "
+            "`~/.scitex/todo/tasks.yaml` task store (2026-07 incident). Adopt "
+            "`local_state` and pick the resolver by DATA NATURE: `path()` for "
+            "config, `user_path()` for DATA/STATE stores (user-canonical, "
+            "NEVER project-shadowed), `runtime_path()` for ephemera. "
+            "Deterministic b1 check; the store-nature/chain-order b2 refinement "
+            "is deferred. Severity W during ecosystem adoption — see "
+            "_skills/general/01_ecosystem/12_local-state-resolution.md."
+        ),
+        "W",
+        "local-state-rolled-own-resolver",
+    ),
+    (
+        "PS-183",
+        "§1",
+        (
+            "ecosystem-boundary a2 smell: an UNGUARDED, TOP-LEVEL import "
+            "reaches a DIFFERENT scitex leaf package's private internals "
+            "(a `_private`-prefixed submodule/attribute), and the peer is "
+            "NOT a foundational-tier package (io/config/logging/str/dict/"
+            "context/path/types). Per ADR-0003, either import the peer's "
+            "public surface instead, or introduce a `_ports`/`_providers` "
+            "module holding a guarded (`try/except ImportError`) or lazy "
+            "(function-body) import — the ports pattern. Guarded, lazy, "
+            "and `TYPE_CHECKING`-only imports are NEVER flagged (a static "
+            "scan can't tell those from a hard dependency — see the "
+            "methodology caveat in the ADR). See "
+            "_skills/general/01_ecosystem/16_boundary-ports-and-producers.md "
+            "and docs/adr/0003-ecosystem-boundary-ports-and-producers.md."
+        ),
+        "W",
+        "ecosystem-boundary-private-cross-import",
+    ),
+    (
         "PS-213",
         "§3",
         (
@@ -225,6 +302,67 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "I",
         "lazy-extra-pattern-ok",
+    ),
+    # ── PS-214/215 — all-or-nothing extras + dead install remedies ──
+    # Reference incident: scitex-writer declared `editor = []` (a totally
+    # empty extra) while its own source told users "Install with: pip
+    # install scitex-writer[editor]" to get scitex-app — a remedy that
+    # installs literally nothing. See scitex-writer PR #322 (reference
+    # fix) and the operator's fleet-wide directive: package extras should
+    # be ALL-OR-NOTHING (one `[all]` extra, no fine-grained per-feature
+    # menu; `dev`/`docs` extras are exempt — those are for people building
+    # the package, not using it).
+    #
+    # Severity here is the REGISTRY DEFAULT ("W") only — it's the fallback
+    # a violation gets when it can't be classified as new-vs-existing (no
+    # git baseline available) or when it's confirmed pre-existing. Each
+    # check (`_check_empty_extras.py` / `_check_install_remedy_strings.py`)
+    # now escalates a violation to "E" (blocking) per-instance when it is
+    # genuinely NEW relative to a `develop` baseline — see
+    # `_new_vs_baseline.escalate_new_violations`. This landed after
+    # scitex-writer reported that flat W severity made the rule invisible
+    # in practice: their own `editor = []` sat undetected through repeated
+    # audit runs because nothing distinguished it from routine warning
+    # noise. A repo that was already red on these rules is NOT newly
+    # blocked; only genuinely new violations are.
+    (
+        "PS-214",
+        "§3",
+        (
+            "empty pyproject extra: `[project.optional-dependencies.<name>]` "
+            "is declared as an empty list (`<name> = []`). A `pip install "
+            "<pkg>[<name>]` remedy for it installs ZERO packages — the user "
+            "runs the suggested fix, pip exits 0, and nothing changes, so "
+            "they believe they already tried the cure. Either populate the "
+            "extra with its real dependency, or delete the extra (and any "
+            "source text recommending it). See scitex-writer PR #322 "
+            "(reference incident + fix). Severity is escalated to E when "
+            "the violation is NEW relative to the `develop` baseline; "
+            "pre-existing violations stay at the W default."
+        ),
+        "W",
+        "empty-pyproject-extra",
+    ),
+    (
+        "PS-215",
+        "§3",
+        (
+            "broken install-remedy string: source or docs contain a `pip "
+            "install <pkg>[<extra>]` (or `uv pip install ...`) string that "
+            "self-references THIS package, but `<extra>` either does not "
+            "exist in `[project.optional-dependencies]` or is declared "
+            "empty (see PS-214). A user who runs the exact suggested "
+            "command gets a resolver error or a silent no-op. Fix the "
+            "extra name, or populate the extra. Source-side companion of "
+            "PS-214 — composes with it: an extra flagged by PS-214 also "
+            "fires PS-215 on every remedy string that names it. See "
+            "scitex-writer PR #322 (reference incident + fix). Severity is "
+            "escalated to E when the violation is NEW relative to the "
+            "`develop` baseline; pre-existing violations stay at the W "
+            "default."
+        ),
+        "W",
+        "broken-install-remedy-string",
     ),
     # ── RP-2xx: research-project mirror (scripts ↔ tests/scripts) ──
     # Research projects (project-type: research) have no src/<pkg>/ — their
@@ -339,5 +477,29 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         ),
         "E",
         "agent-script-no-claims-json-terminus",
+    ),
+    # PS-169 — GitHub-hosted runners forbidden (operator mandate 2026-07-14;
+    # reland of closed PR #344). Check + resolution logic in
+    # `_check_hosted_runners.py`. Registered here (not co-located) because that
+    # module imports `_new_vs_baseline` and importing its rule tuple back into
+    # `_registry` would close a cycle — same reason PS-214/PS-215 live here.
+    # Ships at W (bake-in); NEW violations ratchet to E via the baseline check,
+    # and the whole rule promotes to E once the fleet is confirmed clean.
+    (
+        "PS-169",
+        "§1",
+        (
+            "GitHub Actions job runs on a GitHub-HOSTED runner "
+            "(`ubuntu-*` / `macos-*` / `windows-*`) — forbidden without "
+            "exception (operator mandate 2026-07-14). Every SciTeX job must "
+            "run on the self-hosted pool: `runs-on: [self-hosted, Linux, X64, "
+            "scitex-ci]` or the fleet idiom `runs-on: ${{ fromJSON(vars."
+            "CI_RUNS_ON || '[\"self-hosted\",\"Linux\",\"X64\",\"scitex-ci\"]"
+            "') }}`. If the pool cannot run the job, fix the pool — never fall "
+            "back to a hosted runner. WARN during bake-in; NEW violations "
+            "ratchet to ERROR."
+        ),
+        "W",
+        "hosted-runner-forbidden",
     ),
 ]

@@ -6,23 +6,35 @@ import json
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem):
     @ecosystem.command(
         "audit-summary",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem audit-summary\n"
-            "  $ scitex-dev ecosystem audit-summary --auditor python-apis\n"
-            "  $ scitex-dev ecosystem audit-summary --json\n"
-            "  $ scitex-dev ecosystem audit-summary --parallel 16\n"
-            "\n"
-            "Runs each scitex-dev auditor against every ecosystem leaf and\n"
-            "prints per-leaf violation counts. Each rule is deterministic, so\n"
-            "the same commit gives the same numbers across machines.\n"
-            "\n"
-            "Excluded by default: scitex (umbrella), scitex-orochi,\n"
-            "scitex-hub. Pass --include-meta to include them."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Cross-leaf, cross-auditor violation summary — one source of truth.",
+            description=(
+                "Runs each scitex-dev auditor against every ecosystem "
+                "leaf and prints per-leaf violation counts. Each rule "
+                "is deterministic, so the same commit gives the same "
+                "numbers across machines. Excluded by default: scitex "
+                "(umbrella), scitex-orochi, scitex-hub — pass "
+                "--include-meta to include them.",
+            ),
+            examples=(
+                Example("{prog} ecosystem audit-summary", "All auditors, all leaves."),
+                Example(
+                    "{prog} ecosystem audit-summary --auditor python-apis",
+                    "One auditor.",
+                ),
+                Example("{prog} ecosystem audit-summary --json", "Structured JSON output."),
+                Example(
+                    "{prog} ecosystem audit-summary --parallel 16",
+                    "More concurrent workers.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -61,7 +73,6 @@ def register(ecosystem):
         help="Emit structured JSON instead of a table.",
     )
     def ecosystem_audit_summary(auditors, parallel, include_meta, json_out):
-        """Cross-leaf, cross-auditor violation summary — one source of truth."""
         from concurrent.futures import ThreadPoolExecutor, as_completed
         import subprocess
         from ...._ecosystem import ECOSYSTEM
@@ -176,7 +187,35 @@ def register(ecosystem):
             fg="green",
         )
 
-    @ecosystem.command("list-audit-rules")
+    @ecosystem.command(
+        "list-audit-rules",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="List every registered audit rule (id, section, message).",
+            description=(
+                "Walks the four code-side rule registries: api (PA*, "
+                "audit-python-apis), project (PS*, audit-project), "
+                "skills (SK*, audit-skills), release (E5C*, "
+                "pyproject_lint, surfaces inside audit-project). Note: "
+                "audit-cli and audit-mcp-tools use §-numbered "
+                "violations defined inline (no central registry), so "
+                "they're not listed here — their conventions live in "
+                "`_skills/general/03_interface/02_cli/` and "
+                "`_skills/general/03_interface/03_mcp/`.",
+            ),
+            examples=(
+                Example("{prog} ecosystem list-audit-rules", "Every auditor's rules."),
+                Example(
+                    "{prog} ecosystem list-audit-rules --auditor project",
+                    "One auditor's rules.",
+                ),
+                Example(
+                    "{prog} ecosystem list-audit-rules --json | jq",
+                    "Structured JSON output.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--auditor",
         type=click.Choice(["api", "project", "skills", "release", "all"]),
@@ -187,28 +226,6 @@ def register(ecosystem):
         "--json", "as_json", is_flag=True, help="Emit JSON instead of a table."
     )
     def ecosystem_list_audit_rules(auditor, as_json):
-        """List every registered audit rule (id, section, message).
-
-        Walks the four code-side rule registries:
-
-        \b
-          api      — PA*  (audit-python-apis)
-          project  — PS*  (audit-project)
-          skills   — SK*  (audit-skills)
-          release  — E5C* (pyproject_lint, surfaces inside audit-project)
-
-        \b
-        Examples:
-          $ scitex-dev ecosystem list-audit-rules
-          $ scitex-dev ecosystem list-audit-rules --auditor project
-          $ scitex-dev ecosystem list-audit-rules --json | jq
-
-        Note: audit-cli and audit-mcp-tools use §-numbered violations
-        defined inline (no central registry), so they're not listed
-        here. Their conventions live in
-        `_skills/general/03_interface/02_cli/` and
-        `_skills/general/03_interface/03_mcp/`.
-        """
         import json as _json
 
         sources: dict[str, list[dict]] = {}

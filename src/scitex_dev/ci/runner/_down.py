@@ -6,35 +6,43 @@ import subprocess
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 from ._up import _resolve_lease
 
 
 def register(group: click.Group) -> None:
-    @group.command()
+    @group.command(
+        "down",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Deregister the self-hosted runner and stop it.",
+            description=(
+                "\b\n"
+                "Steps:\n"
+                "  1. Get remove-token from GitHub API.\n"
+                "  2. Run config.sh remove --token on the runner.\n"
+                "  3. Delete the runner from GitHub.\n"
+                "  4. Kill the wrapper process on the HPC host.\n"
+                "\n"
+                "NOTE: This NEVER cancels the SLURM lease job — it only "
+                "removes the runner from GitHub and kills the runner process."
+            ),
+            examples=(
+                Example("{prog} ci runner down", "Remove the configured runner."),
+                Example(
+                    "{prog} ci runner down --runner-name scitex-ci-01",
+                    "Remove a specific runner.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--runner-name",
         default=None,
         help="Runner name to remove. Default: from config.",
     )
     def down_cmd(runner_name: str | None) -> None:
-        """Deregister the self-hosted runner and stop it.
-
-        \b
-        Steps:
-          1. Get remove-token from GitHub API.
-          2. Run config.sh remove --token on the runner.
-          3. Delete the runner from GitHub.
-          4. Kill the wrapper process on the HPC host.
-
-        \b
-        NOTE: This NEVER cancels the SLURM lease job — only removes the
-        runner from GitHub and kills the runner process.
-
-        \b
-        Example:
-          $ scitex-dev ci runner down
-        """
         cfg = config.load_runner_config()
         target = config._ssh_target(cfg)
         # Fail loud early if the PAT env var is unset (the gh CLI calls below
@@ -132,11 +140,28 @@ def register(group: click.Group) -> None:
         # and pkill ONLY this runner's launcher — matched by its unique
         # RUNNER_HOME path, NOT the generic "scitex_ci_launcher" name, so peer
         # runners sharing the node are never disturbed.
+        # Prefer the scitex-hpc reservation's node when configured (unified
+        # lease mgmt). `down` must NEVER book/cancel — it only needs the live
+        # node to kill the runner — so we use scitex-hpc's read-only `refresh`
+        # (re-discovers job_id/node via squeue), not `ensure_lease`. Legacy
+        # configs fall back to the name-filtered squeue query.
+        res_name = (cfg.get("reservation") or {}).get("name")
         try:
-            _jobid, node = _resolve_lease(
-                target, cfg["hpc"]["user"], cfg["ci_lease"]["jobname"]
-            )
-        except click.ClickException:
+            if res_name:
+                from . import _reservation
+
+                res_cfg = cfg.get("reservation") or {}
+                state = _reservation.refresh_state(
+                    res_name,
+                    host=res_cfg.get("host") or cfg["hpc"].get("ssh_host"),
+                    cli=res_cfg.get("cli", "scitex-hpc"),
+                )
+                node = state.node or None
+            else:
+                _jobid, node = _resolve_lease(
+                    target, cfg["hpc"]["user"], cfg["ci_lease"]["jobname"]
+                )
+        except (click.ClickException, RuntimeError):
             node = None
         if node:
             compute_cmd = config.compute_ssh_cmd(target, node)

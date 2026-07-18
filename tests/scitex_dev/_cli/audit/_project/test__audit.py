@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 
 from scitex_dev._cli.audit._project import RULES, audit_project
 from scitex_dev._cli.audit._project._audit import (
@@ -1399,6 +1400,128 @@ def test_ps142_silent_with_filetree(tmp_path):
     assert "PS-142" not in rules
 
 
+# REGRESSION (PS-142 truncation): the checker used to read only the first
+# 16384 chars of a README, so a perfectly present `## Architecture` section
+# living past that offset was reported as "missing mandatory
+# `## Architecture`" — a false positive shipped to the whole fleet. A check
+# that cannot see the whole input must not report ABSENCE.
+_OLD_README_WINDOW = 16384
+
+
+def _readme_structure_details(repo: Path, rule: str) -> list[str]:
+    """Return the detail strings `check_readme_structure` emitted for `rule`."""
+    from scitex_dev._cli.audit._project._audit import Violation
+    from scitex_dev._cli.audit._project._check_readme_structure import (
+        check_readme_structure,
+    )
+
+    out: list = []
+    check_readme_structure(repo, Violation, out)
+    return [v.detail for v in out if v.rule == rule]
+
+
+def _readme_with_architecture_past_old_window() -> str:
+    """A compliant README padded so `## Architecture` lands past 16 KiB.
+
+    Canonical section order is preserved, so PS-143 must stay silent too.
+    """
+    body = _full_compliant_readme()
+    filler = "\nPadding line to push later sections past the old window.\n" * 400
+    return body.replace("## Architecture\n", filler + "\n## Architecture\n", 1)
+
+
+@pytest.fixture
+def repo_with_late_architecture(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_readme_with_architecture_past_old_window())
+    return repo
+
+
+def test_fixture_actually_places_architecture_past_the_old_window():
+    # Arrange: guards the regression fixture itself — if padding ever stops
+    # pushing Architecture past 16 KiB, the tests below pass vacuously.
+    # Act
+    body = _readme_with_architecture_past_old_window()
+    # Assert
+    assert body.index("## Architecture") > _OLD_README_WINDOW
+
+
+def test_ps142_silent_when_architecture_sits_past_the_old_16kib_window(
+    repo_with_late_architecture,
+):
+    # Arrange
+    repo = repo_with_late_architecture
+    # Act
+    rules = _violations_for(repo, "demo")
+    # Assert
+    assert "PS-142" not in rules
+
+
+def test_ps143_silent_when_sections_sit_past_the_old_16kib_window(
+    repo_with_late_architecture,
+):
+    # Arrange
+    repo = repo_with_late_architecture
+    # Act
+    rules = _violations_for(repo, "demo")
+    # Assert
+    assert "PS-143" not in rules
+
+
+def test_ps142_still_fires_when_architecture_genuinely_missing_in_long_readme(
+    tmp_path,
+):
+    # CONTROL for the truncation fix: proves the window was removed, not the
+    # rule weakened. A LONG README (past the old 16 KiB boundary) that really
+    # has no `## Architecture` must still be reported as missing.
+    # Arrange
+    repo = _make_repo(tmp_path, "demo")
+    body = _readme_with_architecture_past_old_window().replace(
+        "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```\n\n",
+        "",
+    )
+    (repo / "README.md").write_text(body)
+    # Act
+    rules = _violations_for(repo, "demo")
+    # Assert
+    assert "PS-142" in rules
+
+
+def test_ps142_fires_when_late_architecture_section_body_is_empty(tmp_path):
+    # Proves the late section is actually PARSED, not merely located: an
+    # `## Architecture` past the old window with no diagram in its body (and
+    # no Demo/Quick Start visual fallback) must report the body violation.
+    # Arrange
+    repo = _make_repo(tmp_path, "demo")
+    body = _readme_with_architecture_past_old_window()
+    body = body.replace(
+        "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```",
+        "## Architecture\n",
+    )
+    body = body.replace(
+        "## Demo\n\n![Hilbert](docs/hilbert.png)",
+        "## Demo\n\nLook at this cool thing.",
+    )
+    (repo / "README.md").write_text(body)
+    # Act
+    details = _readme_structure_details(repo, "PS-142")
+    # Assert
+    assert any("no diagram" in d for d in details), details
+
+
+def test_read_readme_returns_whole_file_not_a_head_slice(tmp_path):
+    # Arrange
+    from scitex_dev._cli.audit._project._readme_structure_shared import read_readme
+
+    readme = tmp_path / "README.md"
+    text = "# demo\n\n" + ("x" * 40000) + "\n\n## Architecture\n\n```mermaid\nA-->B\n```\n"
+    readme.write_text(text)
+    # Act
+    got = read_readme(readme)
+    # Assert
+    assert got == text
+
+
 def test_ps143_fires_when_architecture_appears_before_installation(tmp_path):
     # Updated 2026-05: Demo / Quick Start are now allowed BEFORE
     # Installation (Quick Start lives between Problem-and-Solution and
@@ -2388,3 +2511,116 @@ def test_ps163_silent_when_badges_block_missing(tmp_path):
     (repo / "README.md").write_text(body)
     rules = _violations_for(repo, "demo")
     assert "PS-163" not in rules
+
+
+# ---------------------------------------------------------------------------
+# CAPABILITY knob -> no-umbrella gates PS-501 / PS-503.
+# (Split out of the former _project/test__capability_knob.py orphan; these
+# exercise audit_project's capability-filtering path, whose mirror src is
+# this module's _project/_audit.py.) Operator directive 2026-06-22.
+# ---------------------------------------------------------------------------
+
+
+def _write_caps_config(repo: Path, capabilities: list[str] | None) -> None:
+    """Write a `.scitex/dev/config.yaml` for `repo`, optionally with caps."""
+    cfg_dir = repo / ".scitex" / "dev"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    body = "project-type:\n  - pip\n"
+    if capabilities is not None:
+        body += "audit:\n  capabilities:\n"
+        for cap in capabilities:
+            body += f"    - {cap}\n"
+    (cfg_dir / "config.yaml").write_text(body, encoding="utf-8")
+
+
+def _make_ps501_repo(tmp_path: Path, capabilities: list[str] | None) -> Path:
+    """A package whose examples/01_*.py has main() but no @stx.session (PS-501)."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "demo-pkg"\nversion = "0.1.0"\n', encoding="utf-8"
+    )
+    examples = tmp_path / "examples"
+    examples.mkdir()
+    (examples / "01_demo.py").write_text(
+        'def main():\n    print("hi")\n\n\nif __name__ == "__main__":\n    main()\n',
+        encoding="utf-8",
+    )
+    _write_caps_config(tmp_path, capabilities)
+    return tmp_path
+
+
+def _capknob_audit_json(repo: Path, rules: set[str]) -> dict:
+    import contextlib as _contextlib
+    import io as _io
+    import json as _json2
+
+    buf = _io.StringIO()
+    with _contextlib.redirect_stdout(buf):
+        audit_project(
+            "demo-pkg", repo=repo, json_out=True, rules=rules, severity="info"
+        )
+    return _json2.loads(buf.getvalue())
+
+
+def test_ps501_fires_without_capability(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=None)
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert {v["rule"] for v in payload["violations"]} == {"PS-501"}
+
+
+def test_ps501_not_skipped_without_capability(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=None)
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert payload["capability_skips"] == []
+
+
+def test_ps501_dropped_with_no_umbrella(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=["no-umbrella"])
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert payload["violations"] == []
+
+
+def test_ps501_skip_is_clean_exit_with_no_umbrella(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=["no-umbrella"])
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert payload["exit_code"] == 0
+
+
+def test_ps501_skip_is_recorded_visibly_in_json(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=["no-umbrella"])
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert {"rule": "PS-501", "capability": "no-umbrella"} in payload[
+        "capability_skips"
+    ]
+
+
+def test_ps501_skip_emits_human_notice(tmp_path, capsys):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=["no-umbrella"])
+    # Act
+    audit_project("demo-pkg", repo=repo, rules={"PS-501"}, severity="info")
+    # Assert
+    assert "skipped (declared capability: no-umbrella)" in capsys.readouterr().err
+
+
+def test_no_mcp_does_not_skip_ps501(tmp_path):
+    # Arrange
+    repo = _make_ps501_repo(tmp_path, capabilities=["no-mcp"])
+    # Act
+    payload = _capknob_audit_json(repo, rules={"PS-501", "PS-503"})
+    # Assert
+    assert {v["rule"] for v in payload["violations"]} == {"PS-501"}

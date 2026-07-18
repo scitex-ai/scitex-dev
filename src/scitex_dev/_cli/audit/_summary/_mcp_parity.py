@@ -182,6 +182,28 @@ def is_mcp_parity_exempt(package: str, repo: Path | None = None) -> bool:
     return False
 
 
+def declares_no_mcp(package: str, repo: Path | None = None) -> bool:
+    """Return True when `package` declares the ``no-mcp`` CAPABILITY.
+
+    Reads ``.scitex/dev/config.yaml`` ``audit.capabilities: [no-mcp]`` via the
+    shared :func:`load_config` loader (operator directive 2026-06-22). This is
+    the package-TYPE knob for ALIAS packages with no first-party MCP surface
+    (e.g. ``scitex-plt`` aliases ``figrecipe``): the §6 MCP↔Python-API parity
+    check does not apply, and the auditor skips it with a VISIBLE notice.
+
+    Distinct from :func:`is_mcp_parity_exempt` (the older ``mcp_parity_exempt``
+    flag for diagram-rich packages whose tools mirror external methods): both
+    skip §6, but the capability emits the canonical
+    ``skipped (declared capability: no-mcp)`` notice.
+    """
+    root = repo if repo is not None else _audited_repo_root(package)
+    if root is None:
+        return False
+    from .._config import load_config
+
+    return load_config(root).has_capability("no-mcp")
+
+
 def mcp_tools_allowlist(package: str, repo: Path | None = None) -> set[str] | None:
     """Return the package's declared MCP tool allowlist, or None if absent.
 
@@ -322,6 +344,25 @@ def _check_api_parity(
     `repo` overrides the registry path lookup for the exemption check —
     used by tests that operate on a synthetic package tree.
     """
+    # Leaf-side package-type capability knob: ALIAS packages with no
+    # first-party MCP surface declare ``audit.capabilities: [no-mcp]`` in
+    # ``.scitex/dev/config.yaml``. §6 does not apply to them; skip it with a
+    # VISIBLE "declared capability" notice (operator directive 2026-06-22).
+    if declares_no_mcp(package, repo=repo):
+        import click
+
+        # Use click.echo(err=True) — NOT _emit("info", ...) — so the notice is
+        # ALWAYS visible: the audit logger's default level is WARNING and would
+        # swallow an info headline. The operator requires this skip to be
+        # visible, not silent (directive 2026-06-22).
+        click.echo(
+            f"  [capability] {package}: §6 skipped (declared capability: no-mcp)"
+            " — alias/no first-party MCP surface; parity does not apply to this"
+            " package type",
+            err=True,
+        )
+        return
+
     if is_mcp_parity_exempt(package, repo=repo):
         from .._emit import emit as _emit
 

@@ -18,6 +18,7 @@ import tempfile
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 
 # Absolute SLURM paths: the lease query runs in a NON-interactive login shell
@@ -120,6 +121,38 @@ echo "RUNNER_STARTED:$!"
 """
 
 
+def _resolve_lease_node(cfg: dict, target: str) -> tuple[str, str]:
+    """Resolve the lease's ``(jobid, node)`` for ``up``/``down``.
+
+    Unified lease management (operator: "regarding lease, use scitex-hpc"):
+    when the config names a scitex-hpc reservation (``reservation.name``), the
+    lease IS that persistent reservation — ``ensure_lease`` books/refreshes it
+    through scitex-hpc, which owns the 7-day-walltime auto-resubmit. This
+    replaces the standalone ``ci_lease`` hold-job so renewal lives in one place.
+
+    Back-compat: a config WITHOUT a ``reservation`` block falls back to the
+    legacy name-filtered squeue query (``_resolve_lease``) so existing operator
+    setups keep working until they migrate.
+
+    Returns ``(jobid, node)``; ``jobid`` may be empty under the reservation path
+    (scitex-hpc tracks it internally and we only need the node to ssh to).
+    """
+    res_name = (cfg.get("reservation") or {}).get("name")
+    if res_name:
+        # Local import to avoid a module import cycle (_ensure imports _up).
+        from . import _ensure
+
+        _action, node = _ensure.ensure_lease(cfg)
+        if not node:
+            raise click.ClickException(
+                f"scitex-hpc reservation {res_name!r} has no allocated node yet "
+                "(freshly booked / still PENDING). Re-run once SLURM schedules "
+                "it (or check `scitex-hpc reservations get/refresh`)."
+            )
+        return "", node
+    return _resolve_lease(target, cfg["hpc"]["user"], cfg["ci_lease"]["jobname"])
+
+
 def _resolve_lease(target: str, user: str, jobname: str) -> tuple[str, str]:
     """Return ``(jobid, node)`` of the RUNNING lease, or raise ClickException.
 
@@ -154,7 +187,51 @@ def _resolve_lease(target: str, user: str, jobname: str) -> tuple[str, str]:
 
 
 def register(group: click.Group) -> None:
-    @group.command()
+    @group.command(
+        "up",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Start the persistent Actions runner on the HPC compute node.",
+            description=(
+                "How it works (SSH-vector-safe — no per-runner login-node "
+                "srun client):\n"
+                "  1. Resolve the RUNNING CI lease's jobid AND allocated "
+                "compute node.\n"
+                "  2. Stage launcher.sh on the shared FS via a login-node ssh "
+                "that does ONLY file I/O (no long-lived process — leaves "
+                "nothing behind).\n"
+                "  3. SSH STRAIGHT to the compute node (ProxyJump through a "
+                "login node) and `setsid nohup bash launcher.sh &` — the ssh "
+                "returns at once, so the runner runs ON the lease's node with "
+                "ZERO persistent login-node srun/ssh client.\n"
+                "  4. The launcher downloads + caches the GitHub runner "
+                "tarball, registers the runner, and runs a persistent run.sh "
+                "loop on the node.\n"
+                "\n"
+                "The GH_TOKEN is passed via env (never in argv) to avoid "
+                "leaking it."
+            ),
+            examples=(
+                Example("{prog} ci runner up", "Start the configured runner."),
+                Example(
+                    "{prog} ci runner up --replace-runner",
+                    "Replace an existing same-named runner.",
+                ),
+                Example(
+                    "{prog} ci runner up --name spartan-cpu-runner-02 "
+                    "--home /data/ci/actions-runner-02",
+                    "Add a second executor for a parallel matrix.",
+                ),
+                Example(
+                    "{prog} ci runner up --repo ywatanabe1989/scitex-todo "
+                    "--name spartan-cpu-todo-01 "
+                    "--home /data/ci/actions-runner-todo "
+                    "--labels self-hosted,spartan-cpu,scitex-ci",
+                    "Ecosystem rollout: another repo on the SAME lease.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--launcher",
         default=None,
@@ -207,40 +284,9 @@ def register(group: click.Group) -> None:
         repo_override: str | None,
         labels_override: str | None,
     ) -> None:
-        """Start the persistent GitHub Actions runner on the HPC compute node.
-
-        \b
-        How it works (SSH-vector-safe — no per-runner login-node srun client):
-          1. Resolve the RUNNING CI lease's jobid AND allocated compute node.
-          2. Stage launcher.sh on the shared FS via a login-node ssh that does
-             ONLY file I/O (no long-lived process — leaves nothing behind).
-          3. SSH STRAIGHT to the compute node (ProxyJump through a login node)
-             and `setsid nohup bash launcher.sh &` — the ssh returns at once,
-             so the runner runs ON the lease's node with ZERO persistent
-             login-node srun/ssh client.
-          4. The launcher downloads + caches the GitHub runner tarball,
-             registers the runner, and runs a persistent run.sh loop on the node.
-
-        \b
-        The GH_TOKEN is passed via env (never in argv) to avoid leaking it.
-
-        \b
-        Examples:
-          $ scitex-dev ci runner up
-          $ scitex-dev ci runner up --replace-runner
-          # add a second executor (home-clean parallel matrix):
-          $ scitex-dev ci runner up --name spartan-cpu-runner-02 \\
-              --home /data/.../punim0264/.../ci/actions-runner-02
-          # ecosystem rollout: a runner for ANOTHER repo on the SAME lease
-          $ scitex-dev ci runner up --repo ywatanabe1989/scitex-todo \\
-              --name spartan-cpu-todo-01 \\
-              --home /data/.../punim0264/.../ci/actions-runner-todo \\
-              --labels self-hosted,spartan-cpu,scitex-ci
-        """
         cfg = config.load_runner_config()
         target = config._ssh_target(cfg)
         gh_token = config.get_gh_token(cfg)
-        jobname = cfg["ci_lease"]["jobname"]
         runner_home = home_override or cfg["runner"]["home"]
         wrap_log = cfg["runner"]["wrap_log"]
         runner_name = name_override or cfg["runner"]["name"]
@@ -267,7 +313,10 @@ def register(group: click.Group) -> None:
 
         # Resolve the RUNNING lease's jobid + allocated compute node — we ssh
         # straight to that node so the runner runs there with no login srun.
-        jobid, node = _resolve_lease(target, cfg["hpc"]["user"], jobname)
+        # Prefers the scitex-hpc persistent reservation when configured
+        # (unified lease mgmt — scitex-hpc owns the 7-day-walltime renewal);
+        # falls back to the legacy name-filtered squeue query otherwise.
+        jobid, node = _resolve_lease_node(cfg, target)
 
         # --- step 1: stage the launcher on the shared FS (login-node ssh; only
         #     cheap file I/O, no lingering process) ----------------------------

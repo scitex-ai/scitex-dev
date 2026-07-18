@@ -191,6 +191,14 @@ def audit_project(
 
     check_readme_structure(repo_root, Violation, violations)
     check_codecov_target(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    # PS-HOOK-001: a `language: system` pre-commit hook invoking a Python tool
+    # is a $PATH lottery — it resolves to whichever venv is active at commit
+    # time. figrecipe's testmon hook ran ZERO tests fleet-wide while blocking
+    # every Python commit; davinci-resolve-mcp's took >14 min per commit.
+    from ._check_precommit_hooks import check_ps_hook_001_precommit_system_hooks
+
+    check_ps_hook_001_precommit_system_hooks(repo_root, Violation, violations)
     from ._check_dev_extras_complete import check_dev_extras_complete
 
     check_dev_extras_complete(repo_root, Violation, violations)
@@ -198,6 +206,16 @@ def audit_project(
     from ._check_optional_deps_guarded import check_ps148_optional_deps_guarded
 
     check_ps148_optional_deps_guarded(repo_root, distribution, Violation, violations)
+    # PS-214/215: all-or-nothing extras + dead install-remedy strings.
+    # See scitex-writer PR #322 (reference incident: editor = [] extra +
+    # "pip install scitex-writer[editor]" remedy that installs nothing).
+    from ._check_empty_extras import check_ps214_empty_extras
+
+    check_ps214_empty_extras(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    from ._check_install_remedy_strings import check_ps215_broken_install_remedy
+
+    check_ps215_broken_install_remedy(repo_root, distribution, Violation, violations)
     # hook-bypass: line-limit
     from ._check_console_script_core_deps import (
         check_ps213_console_script_core_deps,
@@ -215,12 +233,22 @@ def audit_project(
 
     check_ps139_umbrella_dep(repo_root, Violation, violations)
     check_ps140_integration_gate(repo_root, distribution, Violation, violations)
+    from ._check_ecosystem_boundary import check_ps183_ecosystem_boundary
+
+    check_ps183_ecosystem_boundary(repo_root, distribution, Violation, violations)
     from ._check_audit_pin import check_audit_pin
 
     check_audit_pin(repo_root, Violation, violations)
     from ._check_workflows_naming import check_ps164_workflow_naming
 
     check_ps164_workflow_naming(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    # PS-169: GitHub-hosted runners forbidden (operator mandate 2026-07-14;
+    # reland of closed PR #344). Only flags runners we can PROVE are hosted;
+    # the self-hosted `fromJSON(vars.CI_RUNS_ON || '[...]')` idiom is clean.
+    from ._check_hosted_runners import check_ps169_hosted_runners
+
+    check_ps169_hosted_runners(repo_root, Violation, violations)
     # hook-bypass: line-limit
     from ._check_secret_env_prefix import check_ps168_secret_env_prefix
 
@@ -245,6 +273,11 @@ def audit_project(
     check_ps145_cross_package_read(repo_root, distribution, Violation, violations)
     check_ps146_pip_install_side_effect(repo_root, Violation, violations)
     check_ps147_eval_form_completion(repo_root, Violation, violations)
+    # PS-182: rolled-own local-state path resolver (git-root/project-scope
+    # precedence re-implemented instead of using scitex_config...local_state).
+    from ._check_path_resolver import check_ps182_rolled_own_path_resolver
+
+    check_ps182_rolled_own_path_resolver(repo_root, Violation, violations)
     # PS-PATH / PS-CLEW / PS-AGENT — paper-scitex-clew MVP lint set.
     # Artifact-gated (only fire when PATH.yaml / clew.add_claim /
     # scripts/agent/ are present); safe to run on every project type.
@@ -302,6 +335,32 @@ def audit_project(
         if "deferred" in cfg.project_types
         else []
     )
+
+    # Leaf-side package-type CAPABILITY knob (operator directive 2026-06-22):
+    # a declared `audit.capabilities` entry (e.g. `no-umbrella`) skips the
+    # rules that do not fit the package TYPE — with a VISIBLE
+    # "skipped (declared capability: X)" notice, NOT a silent pass and NOT a
+    # blanket `audit.skip`. Each capability gates a FIXED rule set
+    # (CAPABILITY_RULES), so this can never silence an unrelated rule. We
+    # compute the skip BEFORE the project-type/skip filter so the notice
+    # reflects exactly what the capability dropped.
+    from .._config import capability_for_rule
+
+    capability_skipped: list[tuple[str, str]] = []  # (rule, capability)
+    if cfg.capabilities:
+        kept: list[Violation] = []
+        seen: set[tuple[str, str]] = set()
+        for v in violations:
+            cap = capability_for_rule(v.rule)
+            if cap is not None and cfg.has_capability(cap):
+                key = (v.rule, cap)
+                if key not in seen:
+                    seen.add(key)
+                    capability_skipped.append(key)
+                continue
+            kept.append(v)
+        violations = kept
+
     violations = [
         v for v in violations if cfg.applies(v.rule) and v.rule not in cfg.skip
     ]
@@ -329,6 +388,10 @@ def audit_project(
                             "severity": v.severity,
                         }
                         for v in visible
+                    ],
+                    "capability_skips": [
+                        {"rule": rule, "capability": cap}
+                        for rule, cap in capability_skipped
                     ],
                     "exit_code": exit_code,
                     "errors": n_errors,
@@ -362,9 +425,35 @@ def audit_project(
 
     from .._emit import emit as _emit
 
+    def _emit_capability_skips() -> None:
+        # Route via click.echo(err=True) — NOT _emit("info", ...) — so the
+        # notice is ALWAYS visible: the audit logger's default level is
+        # WARNING, which would swallow an info/skip headline. The operator
+        # requires this skip to be visible, not silent. Mirrors the
+        # always-printed `_emit_deferred_reminder` precedent.
+        for rule, cap in capability_skipped:
+            click.echo(
+                f"  [capability] {distribution}: {rule} skipped "
+                f"(declared capability: {cap})",
+                err=True,
+            )
+
     if not visible:
-        # No findings at the requested severity floor.
-        _emit("success", f"{distribution}: no project-structure violations")
+        # No findings at the requested severity floor. Name the tree we
+        # graded, exactly as the violation headline below does: a CLEAN
+        # result is precisely the one nobody double-checks, so it is the
+        # one that must say what it read. Resolution can land on a tree
+        # that isn't the commit under test (an editable install or the
+        # `~/proj/<name>` guess — see `_resolve_repo_root`), and a green
+        # "no violations" for the WRONG tree is a confident lie. Printing
+        # the root makes that self-evident instead of silent.
+        # `_emit("info", ...)` would NOT do: the audit logger's default
+        # level is WARNING and swallows info (see `_emit_capability_skips`).
+        _emit(
+            "success",
+            f"{distribution} ({repo_root}): no project-structure violations",
+        )
+        _emit_capability_skips()
         _emit_deferred_reminder()
         emit_disclaimer()
         return exit_code
@@ -385,6 +474,7 @@ def audit_project(
             else ("warning" if getattr(v, "severity", "W") == "W" else "info")
         )
         _emit(sev, v.format())
+    _emit_capability_skips()
     _emit_deferred_reminder()
     emit_disclaimer()
     emit_skill_hints()

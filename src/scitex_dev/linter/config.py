@@ -88,6 +88,29 @@ class LinterConfig:
     required_injected: list[str] = field(
         default_factory=lambda: ["CONFIG", "plt", "COLORS", "rngg", "logger"]
     )
+    project_types: list[str] = field(default_factory=list)
+    """Project types detected from ``.scitex/dev/config.yaml`` ``project-type``.
+
+    Populated once by :func:`load_config` (via
+    ``_project_type.detect_scitex_dev_project_types``) so rule code can gate
+    on ``"research" in config.project_types`` without re-walking the tree.
+    The category/per-rule promotion below reuses the same detection.
+    """
+    # STX-S009 / STX-S010 — research script-organization knobs (see
+    # ``_rules/_script_organization.py``). Research-gated, default WARNING.
+    script_domain_min_depth: int = 1
+    """Required domain-subdir depth under a ``script_dir`` before STX-S009
+    stops firing. 1 (default) means ``scripts/<domain>/foo.py`` passes and a
+    flat ``scripts/foo.py`` warns."""
+    script_org_exempt: list[str] = field(
+        default_factory=lambda: ["__init__.py", "__main__.py", "conftest.py"]
+    )
+    """Filenames exempt from STX-S009 / STX-S010."""
+    script_verb_prefixes: list[str] = field(default_factory=list)
+    """Extra verb prefixes accepted as a verb-first script name (STX-S010).
+    These EXTEND the primary judge — the bundled WordNet-derived verb lexicon
+    in ``_script_organization`` (plus its small built-in tech-verb set) — for
+    project-specific coinages the lexicon can't know."""
 
 
 # =============================================================================
@@ -136,10 +159,62 @@ def load_config(start_path: str | None = None) -> LinterConfig:
     # lives in `_project_type.py` (src↔tests 1:1 mirror invariant).
     from ._project_type import detect_scitex_dev_project_types
 
-    if "research" in detect_scitex_dev_project_types(start_dir):
+    _project_types = detect_scitex_dev_project_types(start_dir)
+    # Surface the detected types so rule code (e.g. STX-S009/S010) can gate on
+    # `"research" in config.project_types` without re-walking the tree.
+    config_dict["project_types"] = list(_project_types)
+
+    if "research" in _project_types:
         existing = config_dict.get("category_severity_override", {}) or {}
-        merged = {"io": "error", "path": "error", **existing}
+        # Figure-family promotion v1 (PR #264, operator directive 2026-06-28):
+        # figrecipe owns the DETECTION of figure-bypass patterns; here we
+        # promote the EXISTING figure-family rules to ERROR in research
+        # projects so the post-edit hook (run_lint.sh, exit 2) deterministically
+        # BLOCKS figure-bypass code. The v1 set spans TWO categories:
+        #   - "figure": FM001-FM011 + FIG001
+        #   - "plot":   P001-P009
+        # (verified against figrecipe's _linter_plugin.py rule objects).
+        # As always, per-rule `per_rule_severity` overrides WIN — the category
+        # map is the floor, not the ceiling. `# stx-allow: STX-<ID>` per-line
+        # comments remain the opt-out (handled in each checker's _add/_emit).
+        merged = {
+            "io": "error",
+            "path": "error",
+            "figure": "error",
+            "plot": "error",
+            **existing,
+        }
         config_dict["category_severity_override"] = merged
+
+        # Raw-external-library IMPORT promotion v1 (operator directive
+        # 2026-06-30, mirroring PR #264's figure/plot promotion): research
+        # projects must use the stx umbrella (`stx.plt` / `stx.stats` /
+        # `stx.io`) instead of importing the raw third-party library
+        # directly. The relevant import rules — STX-I001 (matplotlib.pyplot),
+        # STX-I002 (scipy.stats), STX-I009 (seaborn) — already FIRE in
+        # research mode but only as WARNINGS, so e.g. `import matplotlib`
+        # warns-without-blocking the post-edit hook. We promote them to
+        # ERROR so the hook (run_lint.sh, exit 2) deterministically BLOCKS.
+        #
+        # MECHANISM — per_rule_severity, NOT a category override: all of
+        # STX-I001..I009 share the SINGLE category "import", which also
+        # carries rules that must STAY warn-only — STX-I003 (pickle),
+        # STX-I006/I007 (`random`/`logging` injection hygiene), and
+        # STX-I008 (cross-package private-submodule import, a DIFFERENT
+        # concern). Promoting the whole "import" category would over-promote
+        # those. So we target the exact raw-extlib import IDs by rule.
+        # per_rule_severity WINS over the category floor (see checker._add
+        # and _severity_promotion.py), so an operator pin in pyproject for
+        # any of these still takes precedence. The `# stx-allow: STX-<ID>`
+        # per-line opt-out is unaffected (handled in checker._add before
+        # severity is assigned — a suppressed line never reaches here).
+        _existing_per_rule = config_dict.get("per_rule_severity", {}) or {}
+        config_dict["per_rule_severity"] = {
+            "STX-I001": "error",
+            "STX-I002": "error",
+            "STX-I009": "error",
+            **_existing_per_rule,
+        }
 
         # FM category auto-enable for research projects (neurovista
         # elevation 2026-06-14): figure provenance / clew chaining

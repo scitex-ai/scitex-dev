@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from .._ecosystem import ECOSYSTEM, get_all_packages, get_local_path
+from ._install_probe import probe_install
 
 
 def get_version_from_toml(path: Path) -> str | None:
@@ -44,7 +45,19 @@ def get_version_from_toml(path: Path) -> str | None:
 
 
 def get_version_installed(package: str) -> str | None:
-    """Get version from importlib.metadata."""
+    """The RAW ``importlib.metadata`` claim — WHICH CAN LIE. See ``_install_probe``.
+
+    A ``.dist-info`` can OUTLIVE the code it describes, and then this returns a
+    FOSSIL — confident, permanent, and wrong (2026-07-12: metadata said 0.7.26
+    while the code importing was 0.8.7). Comparing a fossil against a reference
+    is wrong in BOTH directions: it cries "stale!" at a current install, and
+    blesses a stale one whose metadata happens to look right.
+
+    Kept because a caller may legitimately want the raw claim — notably to
+    compare it AGAINST the code and detect exactly this drift. For "what is
+    actually running?", use
+    :func:`scitex_dev._release._install_probe.get_version_installed_verified`.
+    """
     try:
         from importlib.metadata import version
 
@@ -355,7 +368,21 @@ def list_versions(packages: list[str] | None = None) -> dict[str, Any]:
         # Local sources
         if local_path and local_path.exists():
             info["local"]["pyproject_toml"] = get_version_from_toml(local_path)
-        info["local"]["installed"] = get_version_installed(pypi_name)
+
+        # ``installed`` must be what is ACTUALLY RUNNING, not what a .dist-info
+        # CLAIMS — they differ whenever the metadata has outlived its code, and
+        # reporting the fossil poisons every downstream comparison in BOTH
+        # directions. The raw claim is kept alongside it (and flagged when it
+        # cannot be trusted): silently substituting a corrected value would be
+        # only half-honest, since that metadata will keep lying to every OTHER
+        # tool on the machine.
+        probe = probe_install(pypi_name)
+        info["local"]["installed"] = probe.effective_version
+        info["local"]["installed_metadata_claim"] = probe.metadata_version
+        info["local"]["install_kind"] = probe.kind
+        info["local"]["install_trustworthy"] = probe.trustworthy
+        if not probe.trustworthy and probe.metadata_version is not None:
+            info["local"]["install_warning"] = probe.detail
 
         # Git sources
         if local_path and local_path.exists():

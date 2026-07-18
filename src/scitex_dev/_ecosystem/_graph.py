@@ -58,7 +58,6 @@ TIER_MAP: Dict[str, str] = {
     "scitex-repro": "middle",
     "scitex-config": "middle",
     "scitex-session": "middle",
-    "scitex-gen": "middle",
     "scitex-db": "middle",
     "scitex-tex": "middle",
     "scitex-parallel": "middle",

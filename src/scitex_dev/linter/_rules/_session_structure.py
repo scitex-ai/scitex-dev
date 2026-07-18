@@ -20,12 +20,22 @@ S001 = Rule(
     id="STX-S001",
     severity="error",
     category="structure",
-    message="Missing @stx.session or @stx.module decorator on main function",
+    message=(
+        "Missing @stx.session/@stx.module on main() — its inputs/outputs are "
+        "then UNTRACKED, breaking data lineage (reproducibility / clew provenance)"
+    ),
     suggestion=(
-        "Add @stx.session (for scripts) or @stx.module (for cloud modules).\n"
+        "@stx.session RECORDS this script's inputs/outputs so its data lineage is\n"
+        "tracked. This is a hard reproducibility / clew-provenance requirement, NOT\n"
+        "a style nit: without it, `clew chain` on your outputs returns length 0 (no\n"
+        "producing-session edge links them to this script).\n"
         "  @stx.session\n"
         "  def main(...):\n"
         "      return 0\n"
+        "Use @stx.module for cloud modules.\n"
+        "What @stx.session wires up (see `help(scitex.session.start)` / the "
+        "scitex 'session' skill): provenance/clew lineage, run logging, CONFIG "
+        "load, reproducible RNG, figrecipe-styled plt + recorded saves.\n"
         "If this is library code (not a script), add its directory to library_dirs:\n"
         "  [tool.scitex-linter]\n"
         '  library_dirs = ["src", "tests", "apps", "config", "docs"]\n'
@@ -38,7 +48,10 @@ S002 = Rule(
     id="STX-S002",
     severity="error",
     category="structure",
-    message="Missing `if __name__ == '__main__'` guard",
+    message=(
+        "Missing `if __name__ == '__main__'` guard — main() then never runs "
+        "when the script is executed directly"
+    ),
     suggestion=(
         "Add `if __name__ == '__main__': main()` at the end of the script.\n"
         "If this is library code (not a script), add its directory to library_dirs:\n"

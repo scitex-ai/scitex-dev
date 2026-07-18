@@ -10,6 +10,7 @@ import click
 
 from . import _crontab
 from ._jobs import JOB_REGISTRY, list_jobs
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 
 
 def _classify(line, spec):
@@ -22,7 +23,26 @@ def _classify(line, spec):
 
 
 def register(group: click.Group) -> None:
-    @group.command("list")
+    @group.command(
+        "list",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="List managed cron jobs.",
+            description=(
+                "Shows two views: 'registry' — every job known to "
+                "scitex-dev (whether installed or not), with its "
+                "declared schedule + description; 'installed' — every "
+                "`# scitex-dev cron: <name>` line currently present in "
+                "the user's crontab, with status (matches registry, "
+                "drifted, or unknown).",
+            ),
+            examples=(
+                Example("{prog} cron list", "Registry + installed status."),
+                Example("{prog} cron list --registry-only", "Registry only."),
+                Example("{prog} cron list --json", "Structured JSON output."),
+            ),
+        ),
+    )
     @click.option(
         "--registry-only",
         is_flag=True,
@@ -37,22 +57,6 @@ def register(group: click.Group) -> None:
         help="Output as structured JSON.",
     )
     def list_cmd(registry_only: bool, as_json: bool) -> None:
-        """List managed cron jobs.
-
-        \b
-        Shows two views:
-          - "registry" — every job known to scitex-dev (whether installed
-            or not), with its declared schedule + description.
-          - "installed" — every `# scitex-dev cron: <name>` line currently
-            present in the user's crontab, with status (matches registry,
-            drifted, or unknown).
-
-        \b
-        Example:
-          $ scitex-dev cron list
-          $ scitex-dev cron list --registry-only
-          $ scitex-dev cron list --json
-        """
         registry = [
             {
                 "name": s.name,

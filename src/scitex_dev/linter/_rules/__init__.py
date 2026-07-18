@@ -34,8 +34,10 @@ from ._hpc_ssh import HPC001
 from ._import_hygiene import I001, I002, I003, I004, I005, I006, I007, I009
 from ._lookup import lookup
 from ._lookup import reset as reset_lookup_cache  # noqa: F401
+from ._network_timeout import NET001
 from ._no_mocks import NM001, NM002, NM003
 from ._numeric_literals import NL001
+from ._script_organization import S009, S010
 from ._session_figure import P010
 from ._session_structure import (
     S001,
@@ -61,6 +63,7 @@ ALL_RULES = {
     I007.id: I007,
     I008.id: I008,
     I009.id: I009,
+    NET001.id: NET001,
     NL001.id: NL001,
     NM001.id: NM001,
     NM002.id: NM002,
@@ -74,6 +77,8 @@ ALL_RULES = {
     S006.id: S006,
     S007.id: S007,
     S008.id: S008,
+    S009.id: S009,
+    S010.id: S010,
     TQ001.id: TQ001,
     TQ002.id: TQ002,
     TQ003.id: TQ003,
@@ -102,6 +107,7 @@ __all__ = [
     "I007",
     "I008",
     "I009",
+    "NET001",
     "NL001",
     "NM001",
     "NM002",
@@ -115,6 +121,8 @@ __all__ = [
     "S006",
     "S007",
     "S008",
+    "S009",
+    "S010",
     "TQ001",
     "TQ002",
     "TQ003",

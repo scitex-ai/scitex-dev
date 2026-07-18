@@ -98,18 +98,15 @@ ECOSYSTEM_IMPORTS_TO_DIST: dict[str, str] = {
     "scitex_agent_container": "scitex-agent-container",
     "scitex_template": "scitex-template",
     "scitex_audit": "scitex-audit",
-    "scitex_core": "scitex-core",
     "scitex_math": "scitex-math",
     "scitex_repl": "scitex-repl",
     "scitex_etc": "scitex-etc",
     "scitex_gists": "scitex-gists",
     "scitex_parallel": "scitex-parallel",
     "scitex_plt": "scitex-plt",
-    "scitex_gen": "scitex-gen",
     "scitex_notification": "scitex-notification",
     "scitex_benchmark": "scitex-benchmark",
     "scitex_bridge": "scitex-bridge",
-    "scitex_linter": "scitex-linter",
     "figrecipe": "figrecipe",
     "socialia": "socialia",
 }
@@ -940,7 +937,7 @@ def check_cla_workflow_exists(repo: Path) -> list[LintFinding]:
                     "see _skills/general/01_ecosystem/07_license-and-cla.md"
                 ),
                 fix_hint=(
-                    "copy the workflow template from a sibling repo (e.g. scitex-core) "
+                    "copy the workflow template from a sibling repo (e.g. scitex-io) "
                     "and ensure `allowlist: bot*,ywatanabe1989`"
                 ),
             )

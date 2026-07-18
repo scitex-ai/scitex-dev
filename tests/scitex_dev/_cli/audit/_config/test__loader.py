@@ -7,7 +7,10 @@ from pathlib import Path
 import pytest
 
 from scitex_dev._cli.audit._config import (
+    CAPABILITY_RULES,
+    KNOWN_CAPABILITIES,
     PROJECT_TYPES,
+    capability_for_rule,
     detect_project_types,
     load_config,
     write_config,
@@ -373,3 +376,118 @@ def test_app_metadata_under_override_source_marks_source_override(tmp_path):
     cfg = load_config(tmp_path, override_types=["pip"])
     # Assert
     assert cfg.source == "override"
+
+
+# ---------------------------------------------------------------------------
+# CAPABILITY knob — the leaf-side package-type knob's fixed contract.
+# (Split out of the former test__capability_knob.py orphan; the symbols under
+# test all live in this module's mirror src, _config/_loader.py.)
+#
+# A leaf declares ``audit.capabilities: [no-mcp, no-umbrella]`` in its
+# ``.scitex/dev/config.yaml``; the auditor reads it and SKIPS the matching rule
+# with a VISIBLE notice. Each capability gates a FIXED set of rule codes, so it
+# can never silence an unrelated rule. Operator directive 2026-06-22.
+# ---------------------------------------------------------------------------
+
+
+def _write_caps_config(repo: Path, capabilities: list[str] | None) -> None:
+    """Write a `.scitex/dev/config.yaml` for `repo`, optionally with caps."""
+    cfg_dir = repo / ".scitex" / "dev"
+    cfg_dir.mkdir(parents=True, exist_ok=True)
+    body = "project-type:\n  - pip\n"
+    if capabilities is not None:
+        body += "audit:\n  capabilities:\n"
+        for cap in capabilities:
+            body += f"    - {cap}\n"
+    (cfg_dir / "config.yaml").write_text(body, encoding="utf-8")
+
+
+def test_known_capabilities_are_no_mcp_and_no_umbrella():
+    # Arrange
+    expected = frozenset({"no-mcp", "no-umbrella"})
+    # Act
+    actual = KNOWN_CAPABILITIES
+    # Assert
+    assert actual == expected
+
+
+def test_no_mcp_gates_section6_rule():
+    # Arrange
+    # Act
+    gated = CAPABILITY_RULES["no-mcp"]
+    # Assert
+    assert gated == frozenset({"§6"})
+
+
+def test_no_umbrella_gates_ps501_and_ps503():
+    # Arrange
+    # Act
+    gated = CAPABILITY_RULES["no-umbrella"]
+    # Assert
+    assert gated == frozenset({"PS-501", "PS-503"})
+
+
+def test_capability_for_section6_is_no_mcp():
+    # Arrange
+    # Act
+    cap = capability_for_rule("§6")
+    # Assert
+    assert cap == "no-mcp"
+
+
+def test_capability_for_ps501_is_no_umbrella():
+    # Arrange
+    # Act
+    cap = capability_for_rule("PS-501")
+    # Assert
+    assert cap == "no-umbrella"
+
+
+def test_capability_for_ungated_rule_is_none():
+    # Arrange
+    # Act
+    cap = capability_for_rule("PS-101")
+    # Assert
+    assert cap is None
+
+
+def test_load_config_keeps_known_capabilities(tmp_path):
+    # Arrange
+    _write_caps_config(tmp_path, ["no-mcp", "no-umbrella", "totally-bogus"])
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.capabilities == frozenset({"no-mcp", "no-umbrella"})
+
+
+def test_load_config_drops_unknown_capability(tmp_path):
+    # Arrange
+    _write_caps_config(tmp_path, ["no-mcp", "totally-bogus"])
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.has_capability("totally-bogus") is False
+
+
+def test_load_config_has_no_capabilities_when_absent(tmp_path):
+    # Arrange
+    _write_caps_config(tmp_path, capabilities=None)
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.capabilities == frozenset()
+
+
+def test_load_config_honours_audit_block_without_project_type(tmp_path):
+    # Arrange - a config that declares ONLY an audit block (no project-type),
+    # like an alias package's capability knob. The audit block must still
+    # apply (types fall back to heuristic detection).
+    cfg_dir = tmp_path / ".scitex" / "dev"
+    cfg_dir.mkdir(parents=True)
+    (cfg_dir / "config.yaml").write_text(
+        "audit:\n  capabilities:\n    - no-mcp\n", encoding="utf-8"
+    )
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.has_capability("no-mcp") is True

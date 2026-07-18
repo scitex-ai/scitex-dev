@@ -51,8 +51,8 @@ symlink alias, so humans navigate by meaning and tooling keeps the
 stable id (per `../02_research-project_09`):
 
 ```
-runs/capsule-7038571/            ← canonical (stable, machine)
-runs/cohort-a_corebench-easy/    → capsule-7038571   (readable alias)
+runs/run-7038571/                ← canonical (stable, machine)
+runs/experiment-a_dataset-easy/  → run-7038571   (readable alias)
 ```
 
 Apply the same to figure/table ordinals (`Figure 1` ↔ the script that

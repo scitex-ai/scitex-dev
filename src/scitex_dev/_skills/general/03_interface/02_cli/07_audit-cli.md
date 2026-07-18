@@ -15,7 +15,18 @@ tags: [scitex-general-interface-cli-audit-cli]
 pip install 'scitex-dev[cli-audit]'
 scitex-dev ecosystem audit-cli <package-name>
 scitex-dev ecosystem audit-cli <package-name> --behavioral   # also run subprocess checks (slow)
+scitex-dev ecosystem audit-cli <package-name> --baseline     # ratchet: record once, fail only on NEW
 ```
+
+## Baseline ratchet (`--baseline`)
+
+Adopt the auditor incrementally: the first `--baseline` run records every
+current violation fingerprint (rule id + command path + message-invariant
+part, digits normalized) to `.scitex/dev/cli-audit-baseline.yaml` and
+exits 0. Later runs — with the flag OR whenever that file exists —
+suppress the recorded violations (a count is shown) and fail/warn only on
+NEW ones. To re-record, delete the file and re-run with `--baseline`.
+Pass `--baseline PATH` to use a non-default file.
 
 ## Token classification (first hit wins)
 
@@ -30,9 +41,12 @@ scitex-dev ecosystem audit-cli <package-name> --behavioral   # also run subproce
 - §1 leaf token is a noun without a verb (`<cli> dashboard` → suggests `start-dashboard`).
 - §1 bare transitive verb at top level (`<cli> list` → demands `list-<object>`). **Exception:** if the verb declares a required positional argument (`<cli> install <pkg>`), the object is right there; the warning is suppressed.
 - §1 group (non-leaf) token is a verb (groups must be nouns).
-- §1a missing introspection commands (`list-python-apis`, `mcp list-tools`, `install-shell-completion`, `print-shell-completion`) and their `--json` flag. Tab completion is a §1a baseline requirement — without `install-shell-completion`, users typing `<cli> <TAB>` get nothing (the 2026-05-06 scitex-hpc symptom).
+- §1a missing introspection commands (`list-python-apis`, `mcp list-tools`, `install-shell-completion`, `print-shell-completion`) and their `--json` flag. Tab completion is a §1a baseline requirement — without it, users typing `<cli> <TAB>` get nothing (the 2026-05-06 scitex-hpc symptom). *Note:* the doctrine canon has moved to `dev list-python-apis` (§11 [18_dev-subgroup-and-ecosystem-placement.md](18_dev-subgroup-and-ecosystem-placement.md)) and the `completion install`/`completion status` group (§1b [04_exceptions.md](04_exceptions.md)); the auditor still checks the legacy names until slice 4 of the CLI-standardization plan updates it.
 - §1b banned bare leaves (`version`, `completion`).
 - §1d tokens not in catalog/dict/Moby.
+- §1f non-canonical verb synonym (WARN) — data-driven map seeded from the [06_noun-verb-catalog.md](06_noun-verb-catalog.md) synonym tables (`ls`→`list`, `resolve`/`complete`→`done`, `setup`→`install|init`, `sync-to`/`sync-from`→`push-<object>`/`pull-<object>`, `show-status`→`status`, …). Matched against the full leaf name first, then the verb token. Escape hatch: a `verb_exceptions:` list in `.scitex/dev/cli-audit-dict.yaml`; every entry needs an inline `# why` comment (undocumented entries still exempt, but the missing comment is itself warned about).
+- §4b help not built from a `CliHelp` spec (WARN) — spec-built help ([10_help-format.md](10_help-format.md)) is the enforced construction method; commands lacking `_help_spec` (set by `SpecCommand`/`SpecGroup`) warn. Spec-built commands skip the §4 example sniff — `CliHelp` validation already guarantees leaves declare ≥1 example.
+- §5 deprecated-alias metadata — every `cmd._deprecated_alias` (set by `click_compat.deprecated_alias()`) is verified statically: `target` must resolve in the command tree and `remove_in` must be set. With `--behavioral`, hidden leaves are probed phase-aware: phase-W aliases must exit 0 AND print `deprecated` on stderr; phase-E must exit 2; metadata-less hidden leaves keep the legacy non-zero + redirect-hint expectation.
 - §2 missing universal flags at top: `--version`/`-V`, `--help-recursive`, **`--json`** (so `<cli> --json` parses without crashing); on read verbs: `--json`; on mutating verbs: `--dry-run` and `--yes`/`-y`.
 - §4 missing concrete example in command help/epilog (Click guarantees the Usage line).
 - §10 CLI startup speed — `import <top-level-module>` cold-start exceeds 500ms.
@@ -54,10 +68,12 @@ Auditor coverage of each rule (`yes` = enforced statically; `partial` = best-eff
 | §1c  | Pass-through entry points                    | no        | Auditor cannot statically detect verbatim-forward entries.           |
 | §1d  | Vocabulary in catalog/dict/Moby              | yes       | Layered lookup; warns on `unknown`.                                  |
 | §1e  | (this section — the auditor itself)          | n/a       |                                                                      |
+| §1f  | Non-canonical verb synonyms                  | yes (warn) | Doctrine-06 synonym map over leaf names / verb tokens; `verb_exceptions:` (with `# why`) exempts. |
 | §2   | Universal flag presence                      | yes       | Root: `--version`/`-V`, `--help-recursive`, `--json` (parseable). Leaves: `--json` on read verbs; `--dry-run` and `--yes`/`-y` on mutating verbs. |
 | §3   | Exit code conformance                        | partial   | Top-level bogus-flag returns 2 (behavioral; `--behavioral`).         |
-| §4   | Help format                                  | partial   | Heuristic: looks for "example", "$ ", or "e.g." in help/epilog.      |
-| §5   | Deprecation hard-error redirect              | no        | Renamed commands are typically `hidden=True`; auditor skips them.    |
+| §4   | Help format                                  | partial   | Heuristic: looks for "example", "$ ", or "e.g." in help/epilog. Skipped for spec-built commands (§4b subsumes). |
+| §4b  | Spec-built help (`CliHelp`)                  | yes (warn) | `_help_spec` presence on every non-hidden, non-pass-through command. |
+| §5   | Deprecation ladder (W → E → R)               | partial   | Static: `cmd._deprecated_alias` metadata (target resolves, `remove_in` set). Behavioral (`--behavioral`): phase-W exits 0 + prints `deprecated`; phase-E exits 2; metadata-less hidden leaves keep the legacy non-zero + redirect-hint contract. |
 | §5b  | Umbrella subcommand passthrough              | TODO      | Diff `scitex <short> --help` vs standalone `--help` (modulo prog-name); flag hand-typed wrappers + `subprocess.call(["scitex-<pkg>", ...])` shapes; flag hardcoded brand strings (`scitex-<pkg>`, `socialia`, …) in help bodies that will be rendered under the umbrella. See [05a_umbrella-passthrough.md](05a_umbrella-passthrough.md). |
 | §6a  | Env var prefix `SCITEX_<PKG>_*`              | partial   | Static source scan flags bare-pkg prefix; cross-pkg `SCITEX_*` allowed. |
 | §6b  | Config path fallback documented in `--help`  | yes       | Greps root help/epilog for `config.yaml`, `$SCITEX_<PKG>_CONFIG`, or `~/.scitex/`. |
@@ -84,6 +100,8 @@ transitive_verbs:
   - deduplicate
 intransitive_verbs:
   - vacuum
+verb_exceptions:               # §1f opt-outs — every entry needs a `# why`
+  - resolve  # why: matches upstream GitHub issue terminology
 ```
 
 ## Operational notes

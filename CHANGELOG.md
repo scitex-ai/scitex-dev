@@ -5,7 +5,394 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.31.1] - 2026-07-17
+
+### Fixed
+- **The audit gate graded the wrong tree (#347).** `audit_all_for_package`
+  shelled `ecosystem audit-all <distribution>` with no `--path`, so
+  `_resolve_repo_root` fell back to a `~/proj/<name>` guess and graded
+  whatever checkout sat on the runner's disk — not the commit under test.
+  Every ecosystem package's `tests/test_audit.py` calls this helper, so
+  every branch's CI, including release gates, was affected. Observed live:
+  on one commit the `audit` job passed (it reads the checkout) while
+  `pytest-matrix` failed (it read a stale tree on the self-hosted runner),
+  and three reruns of a byte-identical branch produced three different
+  verdicts. A gate that grades the wrong tree is worse than no gate — it
+  reports a confident verdict about source nobody asked about.
+  `audit_all_for_package` now accepts a keyword-only `path` and forwards
+  `--path` (`path=None` preserves prior behaviour); `_resolve_repo_root`
+  prefers the CWD's git-root over the `~/proj` guess; and the audit
+  surfaces which tree it resolved, so a wrong-tree run is self-evident
+  rather than silent. Reported by scitex-agent-container.
+- **`_package_watch` carried two concerns, leaving an orphan test that
+  silently reddened develop (#348).** `test__untrustworthy_installs.py`
+  had no matching source, so PS-204 failed `test_audit_all_clean` on
+  develop itself and every PR inherited it. PS-204 was correct: the two
+  test files already named two concerns and only the source hadn't caught
+  up. `_package_watch.py` splits into `_untrustworthy_installs.py`
+  (`UntrustworthyInstallWarning`, `check_untrustworthy_installs`,
+  `render_untrustworthy_install_banner`) and `_package_watch.py`
+  (`PackageDriftWarning`, `check_critical_package_drift`,
+  `render_package_drift_banner`). Public import surface unchanged.
+  Introduced by #330.
+- **PS-214/PS-215 warned forever with no escalation path (#346).** A
+  warning that never escalates is a finding printed under a green banner —
+  the exact defect both rules exist to catch; scitex-writer's own
+  `editor = []` survived repeated audit runs for precisely that reason.
+  Severity is now decided per violation: absent from the `develop`
+  baseline (newly introduced) → `E`, blocking; already present → stays
+  `W`, reported but non-blocking, so an already-red repo is unblocked
+  rather than having its backlog erased from view. Reuses the existing
+  `_diff.worktree_at` baseline primitive. Reported by scitex-writer.
+
+## [0.31.0] - 2026-07-14
+
+### Added
+- **PS-HOOK-001 — pre-commit `language: system` hooks may not invoke Python
+  tools.** A bare command name under `language: system` is a `$PATH` lookup, so
+  the hook runs against whichever virtualenv happens to be active at commit
+  time — a different interpreter, with a different package set, on every
+  machine. Measured on one repo, same config: `/home/…/.env-3.11/bin/pytest`
+  on the host vs `/opt/venv-sac/bin/pytest` in the container.
+
+  Reference incident: figrecipe's `entry: python -m pytest --testmon` +
+  `language: system` hook. `pytest-testmon` was never a declared dependency, so
+  the hook exited 4 (`unrecognized arguments: --testmon` / `ModuleNotFoundError:
+  matplotlib`) on every machine but one. **It never ran a single test — it only
+  blocked the commit**, and it had done so for weeks (zero `.testmondata` files
+  existed anywhere in the fleet). The same shape cost `davinci-resolve-mcp`
+  **>14 minutes on every commit**, and `pip-project-template`'s "quick smoke
+  test" hook inherits `--cov-fail-under=100` from `addopts` so a smoke subset
+  (~42 % coverage) can *never* pass — a permanently-red gate, replicated into
+  every repo seeded from the template.
+
+  Declaring the tool in `[project.optional-dependencies].dev` does **not** fix
+  this — pre-commit never activates your dev venv. Five of the six repos found
+  in the fleet sweep did declare `pytest>=8` in a dev extra; all five were still
+  nondeterministic. The fix is `language: python` +
+  `additional_dependencies: [...]`, which makes pre-commit build an isolated
+  venv with the dep declared explicitly.
+
+  Ships at severity **E**. The usual warn-first rollout guards against an `E`
+  rule retroactively reddening consumers' CI on an unpinned `>=` floor (see the
+  0.30.1 and 0.16.0 entries); that risk was *measured away* here rather than
+  assumed: the rule was run against all 16 `.pre-commit-config.yaml` files in
+  the fleet, where it flags exactly the 6 known-bad hooks, leaves all 9
+  legitimate `language: system` hooks alone (openclaw's
+  pnpm/oxlint/oxfmt/swiftlint/swiftformat + four `bash`+`grep` no-debug-code
+  hooks), and flags **zero scitex-\* packages** — so no consumer's CI changes
+  colour. Non-Python toolchains and explicit paths (`./scripts/tool.sh`) are
+  never flagged. Opt-out: `# PS-HOOK-001: allow`.
+
+- **Skill page `general/05_development/15_pre-commit-policy.md`** — the fleet
+  policy the rule enforces: pre-commit runs fast, bounded, deterministic checks
+  only (ruff, format, yaml, large-file, whitespace); the test suite belongs in
+  CI, which already runs it on three Python versions per push. A gate that is
+  nondeterministic across machines is worse than no gate — it blocks honest
+  commits while catching nothing.
+
+## [0.30.1] - 2026-07-13
+
+### Fixed
+- **STX-TQ001 false-positived on `@pytest.mark.skip`/`skipif` tests (#338).**
+  A skip(if)-decorated test body never executes under pytest, so "no
+  assertion" was not a meaningful signal for it. Because consumers
+  install scitex-dev on an unpinned `>=` floor, the rule retroactively
+  reddened `test_audit_all_clean` on live PRs and `develop` for at
+  least one downstream consumer with zero code change on their side —
+  2nd instance of this exact pattern (prior: the 0.16.0 `audit-all`
+  TypeError). TQ001 now exempts `@pytest.mark.skip` / `@pytest.mark.
+  skipif(...)`-decorated tests entirely.
+- **`gate` printed a bare `"fail"` for an unenforced check under a PASS
+  banner + exit 0 (#340).** Reported by scitex-writer: `clew-source-
+  reachability` correctly evaluated as advisory (no `gate.enforce` in
+  the repo's `.scitex/dev/config.yaml`), but its rendered line still
+  read `fail`, contradicting the correct PASS/exit-0 result. An
+  unenforced check now renders `warning (non-blocking)`; `BLOCK` is
+  reserved for a check that is both failed and enforced — the only
+  case that should ever flip the banner/exit code.
+
+## [0.30.0] - 2026-07-13
+
+### Added
+- **Shared `gui` command-group lifecycle primitive + audit rule (#332).**
+  `scitex_dev.gui_runtime.GuiRuntime` generalizes the state-file/pid-
+  liveness/idempotent-stop pattern behind `<pkg> gui {open,serve,status,
+  stop}` (doctrine `19_gui-commands.md`) so consuming packages
+  (scitex-writer, figrecipe, scitex-scholar, scitex-todo) wire their own
+  server bootstrap without re-implementing the same ~140 lines each.
+  New audit-cli rule §12 (`_cli/audit/_summary/_gui_group.py`, WARN
+  during ecosystem migration) flags legacy/flat gui-adjacent commands
+  (`start-gui`, `dashboard`, `board`, a bare non-group `gui`, ...) that
+  aren't a properly-deprecated Phase W/E alias, and flags a `gui` group
+  missing one of the four required verbs.
+- **`gui` CLI-commands doctrine: port scheme + shape refinements (#333).**
+  Fixed 3129X standalone-GUI port block (figrecipe 31296, scholar 31297,
+  writer 31298, todo 31299), `serve` is headless-only (no `--no-browser`,
+  must expose a browsable HTTP root), `gui` is a group-only namespace
+  (no positional SOURCE argument on the group itself).
+- **SciTeX-wide host registry (#331).** `scitex_dev.hosts` —
+  `HostRecord`/`resolve()`/`list_hosts()`, CLI `scitex-dev host
+  list/show/resolve`, seeded `~/.scitex/dev/hosts.yaml` with real
+  host identifiers (ywata-note-win, spartan, nas, nas1, nas2, mba)
+  instead of ad hoc/vague names like "localhost".
+- **Critical-package drift check in drift-report (#329).**
+  `check_critical_package_drift()` compares a verified-installed
+  version against PyPI-latest for a fixed critical-package list;
+  responds to the 2026-07-12 incident where scitex-dev's own container
+  ran stale for days with the drift timer silently not firing.
+
+### Fixed
+- **The drift detector was reading a version string that can lie (#330).**
+  `check_untrustworthy_installs()` / `render_untrustworthy_install_banner()`
+  surface installs where dist-info metadata and actual source disagree
+  (editable-install drift, orphaned metadata, stale already-imported
+  modules) — content-verified, not just version-string-trusted.
+
+## [0.29.0] - 2026-07-11
+
+### Added
+- **Per-JobSpec venv pin (#324).** `JobSpec.venv: str | None` lets a leaf
+  package pin its own venv (e.g. `~/proj/scitex-todo/.venv`) for a
+  supervised service/timer, instead of the job silently resolving from
+  whichever venv the `scitex-dev` supervisor itself happens to run from.
+  Wired through all three execution paths: the systemd unit builder
+  (`WorkingDirectory=` + `Environment=VIRTUAL_ENV=`), the `ecosystem run`
+  supervisor's `subprocess.Popen` spawner (`cwd` + overlaid
+  `VIRTUAL_ENV`/`PATH`), and the non-systemd shell keep-alive fallback
+  (`_respawn.py`). Backward compatible — a JobSpec without `venv` set is
+  unaffected. Fixes the cross-package staleness class of bug where a
+  supervised service ran stale code because the supervisor's own venv
+  didn't have the owning package installed (or had an older version).
+- **Ecosystem boundary/ports-and-producers lint rule + ADR (#319).**
+  `docs/adr/0003-ecosystem-boundary-ports-and-producers.md` codifies when a
+  leaf-to-leaf import needs a port/producer indirection vs. a direct
+  import; new AST-context-aware audit rule (PS-183) flags unguarded
+  top-level lateral/upward leaf imports. Also promotes
+  `scitex_dev.linter.spi` and `scitex_dev.cli.attach_shell_completion` to
+  the public API.
+- **§4b CliHelp migration, first pass (#320, #322, #323).** Continues
+  converting scitex-dev's own CLI help text to the `CliHelp`/`SpecCommand`/
+  `SpecGroup` dataclass spec (dogfooding the same convention scitex-dev
+  enforces on other packages). `icons generate` gained a real `--dry-run`/
+  `--yes` (verified: no file/dir created under `--dry-run`); 6 verb
+  renames (`check-*` → `validate-*`, `set-branch-protection` →
+  `update-branch-protection`, `print-path` → `show-path`), each with a
+  working `deprecated_alias()` back-compat forward so existing scripts
+  keep working with a warning.
+
+### Fixed
+- **`scitex-dev ecosystem audit-all scitex-dev` no longer fails CI
+  (#323).** The 67 violations this surfaced were a mix of severities: 8
+  were genuine errors blocking the audit gate (the CliHelp/verb work
+  above); the other 59 were warn-only but printed with an `ERRO:` label
+  because the auditor labels a whole batch by its worst violation, not
+  per-line — those don't block CI and are tracked as documented
+  follow-up (33 remain, mirroring the same "avoid rushed conversion of
+  complex code" precedent already used elsewhere in this migration).
+- **Latent `NameError` in `skills get`** — used `drift_warning` without
+  importing it; regression test added (#323).
+- **Icon generator label sizing (#321).** Label font size jumped
+  discontinuously at a 3/4-character boundary (every label over 3 chars
+  rendered the same size regardless of actually being 4 or 6 characters
+  long) instead of scaling smoothly with label length — visible as
+  mismatched icon sizes across a set of fleet Telegram-bot avatars.
+  `label_font_size()` now targets a fixed on-canvas text width so size
+  shrinks continuously, capped so short labels never exceed the previous
+  best-case size.
+- **AGPL-3.0-only license clarity, ecosystem-wide.** The FSF-provided
+  "How to Apply These Terms" template text in every package's `LICENSE`
+  still offered "version 3, or (at your option) any later version",
+  contradicting every package's own `pyproject.toml`
+  (`license = "AGPL-3.0-only"`). Corrected to "version 3 of the License
+  only" across the org (only the non-operative template section touched
+  — the actual license terms, sections 0-17, are unchanged).
+
+## [0.26.0] - 2026-07-03
+
+### Added
+- **Submission-gate plugin federation + `scitex-dev gate` CLI (#285).**
+  Operator-directed (cohort-A eval): a pre-submission GATE so a solver can't
+  "submit" without real provenance. `scitex_dev.gate` is a new federation
+  (mirroring `jobs` / `system_deps` / `linter.plugins`): packages register
+  per-stage checks under the `scitex_dev.gate.checks` entry-point group; the
+  `scitex-dev gate --stage=pre-submission <workdir> [--json]` CLI aggregates
+  them so a hook depends ONLY on scitex-dev (SOC — each check reads its own
+  state from the capsule workdir; scitex-dev stays package-agnostic).
+  Contract: `GateCheck(id, stage, run, requires, description)`,
+  `GateResult(passed, findings)`, `Finding(check_id, kind, message, severity,
+  fix_hint)`. Severity is config-driven: a failed check is ADVISORY by default
+  (warn, exit 0) and only BLOCKS (exit 2) when its id is under `gate.enforce`
+  in `<root>/.scitex/dev/config.yaml` (mirrors `project-type: research`
+  escalation); `gate.disable` skips a check; a crashing check fails CLOSED.
+  Ships a built-in `gate-workdir-present` check so a hook can be wired and
+  tested before package checks (scitex-clew `clew-source-reachability`,
+  scitex-dataset `dataset-submission-format`) register. Design doc:
+  `docs/submission-gate.md`.
+
+## [0.25.0] - 2026-07-03
+
+### Added
+- **`scholar-library-sync` managed cron job (#282).** Durable cross-machine
+  sync for `~/.scitex/scholar/library` (card
+  scholar-library-cross-machine-sync-20260701): every 6 hours,
+  `scitex-scholar library dedupe --apply` (quarantine-based, fail-loud) →
+  one-way `scitex-ssh sync` push host-WSL (authority) → Spartan (never
+  `--delete`; `index.db` + journal/WAL/SHM excluded as derived state) →
+  remote `scitex-scholar library db build`, each stage `&&`-gated so a
+  partial tree is never synced or indexed. Log under the scholar leaf's
+  runtime dir. Activation (host): `pip install 'scitex-dev[sync]'` +
+  `scitex-dev cron install scholar-library-sync`.
+- **New `[sync]` extra**: `scitex-ssh>=1.1.0` (the `sync` CLI / `sync_dir`
+  primitive) + `scitex-scholar>=1.4.3` (the `library dedupe` CLI).
+- **scitex-dev's first own SystemDepSpec provider** (`_system_deps.py`):
+  declares `rsync` through the same `scitex_dev.system_deps` entry-point
+  federation downstream leaves use. `discover_system_deps` gains an
+  `include_entry_points=False` isolation seam so unit tests stay exact
+  regardless of installed providers.
+
+### Fixed
+- **Release audits no longer wedge on gitignored runner debris (#283).**
+  `audit-project`'s PS-PATH-001/002 walker scanned every `config/PATH.yaml`
+  on disk including GITIGNORED trees — a dotfiles-synced
+  `docs/to_claude/examples` copy in a persistent self-hosted runner
+  checkout failed scitex-scholar's v1.4.3 PyPI publish despite 385 green
+  tests. The walker now batch-filters via `git check-ignore --stdin -z`,
+  fail-open outside git (real violations are never silently skipped).
+  Same runner-state-leak class as the SIF host-env item.
+
+### Changed
+- `_cli/cron/_jobs.py` hit the 512-line cap: per-job shell-line builders
+  extracted verbatim to `_job_commands.py`; `_jobs` re-imports them under
+  their original names (callers and tests unchanged).
+
+## [0.24.1] - 2026-07-02
+
+### Changed
+- **STX-S010 judges verbs by a bundled lexicon, not a whitelist (#280).**
+  Operator directive (via neurovista): the v0.24.0 curated verb whitelist was
+  CLI-command-oriented and produced 22 false positives on real research
+  scripts (`analyse`, `compose`, `register`, `translate`, …). The primary
+  judge is now `_rules/_verb_lexicon.txt` — 8431 single-token English verb
+  lemmas derived from WordNet 3.1 `index.verb` (shipped as package data, no
+  runtime NLP dependency; includes British spellings) — plus `re`-prefixed
+  derivations (`recompute`/`rerender` → `compute`/`render`) and a small
+  built-in tech-verb supplement (`symlink`, `calc`, `gen`, …). The whitelist
+  is demoted to the `script_verb_prefixes` extension; config semantics are
+  unchanged. Missing data file degrades to defaults-only (no crash, no
+  mass-flagging). Regression fixture: the 17 wrongly-flagged first-tokens,
+  verified end-to-end.
+
+## [0.24.0] - 2026-07-02
+
+### Added
+- **Supervised periodic asyncio task primitive (#275).** `runtime.PeriodicTask`
+  + `PeriodicTaskGroup` run a coroutine (or, off-loop via `asyncio.to_thread`, a
+  sync callable) on a fixed interval with fail-loud semantics: `CancelledError`
+  is re-raised for clean shutdown (caught BEFORE the broad `except`), any other
+  tick error is `logger.exception`-logged and then either continued or re-raised
+  per policy — no silent stall. Supports `initial_delay` (wait before first
+  tick) and an env-gate that skips ticks when the flag is unset/`0/false/no/off`.
+  The shared primitive sac's six ad-hoc `while True: await asyncio.sleep()`
+  loops consume, replacing per-loop error handling that silently swallowed
+  exceptions.
+- **STX-S009 / STX-S010 — research script-organization linter rules (#278).**
+  Two research-gated (`project-type: research`), default-WARNING path/filename
+  rules for a research project's `scripts/` tree. **STX-S009** flags a script
+  that sits FLAT under `scripts/` (no domain subdirectory); **STX-S010** flags a
+  script FILENAME that does not begin with a verb. clew hashes a script by its
+  PATH, so a flat, noun-named `scripts/` churns those paths on every reorg
+  (moved file → broken provenance chain); domain grouping + verb-first names
+  keep the producing-session edge stable and the tree scannable. Both escalate
+  to ERROR via `per_rule_severity` (existing mechanism, no new wiring); knobs:
+  `script_domain_min_depth`, `script_org_exempt`, `script_verb_prefixes`.
+  `load_config` now surfaces detected project types on `config.project_types`.
+
+### Fixed
+- **Figure-promotion e2e tests no longer hard-fail on figrecipe detection-skew
+  (#277).** The reused Spartan CI SIF can layer a figrecipe whose checker maps a
+  fixture to a different rule id than a sibling matrix leg (e.g. `STX-P002` for
+  the P006 scatter pattern), so `@requires_rule` passes yet the rule never fires
+  — a version-skew that hard-failed `test_p006_style_kwarg_promoted_to_error`
+  and blocked the v0.23.0 release. A new `_skip_if_not_emitted` guard
+  `pytest.skip`s when the rule did not emit on the fixture (reporting the ids it
+  DID emit); a genuine promotion regression — rule fires but stays `warning` —
+  still fails the assert.
+
+## [0.23.0] - 2026-07-01
+
+### Added
+- **`scitex-dev service ensure <name>` — supervised long-running services (#273).**
+  Resolves a `kind="service"` JobSpec from the `scitex_dev.jobs` entry-point
+  federation and guarantees it is installed AND running, picking the backend at
+  runtime: systemd `--user` (writes the `.service` unit, `daemon-reload`,
+  `enable --now`) where a user manager exists, otherwise a respawn keep-alive
+  loop (alive-flag + pidfile, capped exponential backoff, logs under
+  `~/.scitex/<pkg>/runtime/logs/`). `--respawn` forces the fallback; `--json`
+  emits a structured result. The durable auto-relaunch a daemon-owning leaf
+  (e.g. the sac listen server) declares once and consumes — closing the
+  "no supervisor" outage class.
+- **Opt-in systemd watchdog for `kind="service"` JobSpecs.** A new
+  `JobSpec.watchdog_sec` field emits `Type=notify` + `WatchdogSec=<N>s` ONLY
+  when a leaf sets it (i.e. the daemon sends `sd_notify(WATCHDOG=1)`). Unset ⇒
+  the unit stays `Type=simple` and relies on `Restart=` alone — avoiding the
+  restart-storm/activation-hang footguns of emitting a watchdog for a daemon
+  that never pings.
+
+## [0.22.0] - 2026-07-01
+
+### Added
+- **`STX-NET001` — outbound network calls must pass an explicit `timeout` (#271).**
+  Flags `urllib`/`requests`/`httpx`/`socket` calls on non-test code that omit a
+  `timeout` (positional or keyword). Deterministic never-repeat for the
+  2026-07-01 sac-listen `:7878` dead-daemon incident, where unbounded clients
+  degraded to ~30s connect-hangs ("everything is slow" fleet-wide). Severity is
+  `warning` under the `--new-only` gate (promotable to error after a clean
+  ecosystem sweep); `# stx-allow: STX-NET001` escape hatch. Shared rule the
+  leaf packages consume.
+- **`ecosystem-sync` managed cron job — scheduled self-pull (#270).** Hourly
+  `scitex-dev ecosystem sync --yes` (ff-only, develop-only, skips
+  dirty/off-develop/diverged) fast-forwards every editable checkout so no
+  install silently serves stale code. Closes the drift loop that left the
+  workstation's own checkout 18 commits behind a tag. Install with
+  `scitex-dev cron install ecosystem-sync`.
+- **Federated cron jobs: `creds-rotate-all`, `ci-runner-ensure`,
+  `ci-runner-workgc` (#269).** The operator's ad-hoc host crontab lines are
+  absorbed into the managed `JOB_REGISTRY` block.
+
+## [0.21.0] - 2026-06-30
+
+### Added
+- **Figure-lint v1 — figrecipe figure-bypass rules → research-mode ERROR (#264).**
+  In `project-type: research` repos the figrecipe FM/FIG/P family (raw
+  matplotlib, `tight_layout`/`constrained_layout`, `plt.subplots` bypass, …)
+  is promoted from warning to error via `category_severity_override`, so the
+  post-edit hook deterministically blocks figure-bypass code.
+- **Raw-external-library IMPORT rules → research-mode ERROR (#265).** `STX-I001`
+  (`import matplotlib.pyplot`), `STX-I002` (`import scipy.stats`), `STX-I009`
+  (`import seaborn`) promote to error in research via `per_rule_severity`
+  (precise per-rule, not a category bump — sibling import rules like
+  `STX-I008` private-import stay warn). `# stx-allow: STX-<ID>` escape hatch
+  preserved.
+- **`--new-only` baseline gate for `check-files` (#266).** With
+  `--new-only --baseline <ref>` (wired into `run_lint.sh` as `--baseline HEAD`)
+  the edit hook blocks only NEWLY-introduced violations; pre-existing (baseline)
+  findings are capped to warning so a large legacy backlog never wedges edits.
+  Content-based (rule + normalized line) matching survives line shifts. This is
+  the safety pair for the research-mode promotions above.
+- **Worktree-resilient testmon warm-cache wrapper (`run_testmon`) (#260).**
+- **`pulled` card-events emitted from `ecosystem sync` (auto-pull C8) (#257).**
+
+### Changed
+- **STX-S001/S002 messages explain WHY, not just WHAT (#263)** — the
+  `@stx.session` rules now state the clew-lineage rationale.
+- **PR audit gate is incremental (`--new-only`), not strict (#261)** —
+  `ecosystem audit-all` in CI flags only newly-introduced violations.
+
+### Fixed
+- **Degrade present-but-broken optional deps instead of crashing (#262)** —
+  `try_import_optional` broadened + numpy/torch ABI hint.
+- **Pass resolved config to plugin checkers — None-config crash (#259).**
 
 ## [0.17.11] - 2026-06-11
 

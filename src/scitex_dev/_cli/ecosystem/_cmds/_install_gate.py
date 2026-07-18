@@ -4,31 +4,44 @@
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem):
     @ecosystem.command(
         "install-audit-gate",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem install-audit-gate scitex-types\n"
-            "  $ scitex-dev ecosystem install-audit-gate scitex-io --force\n"
-            "  $ scitex-dev ecosystem install-audit-gate scitex-io --dry-run\n"
-            "\n"
-            "Wires the audit-conformance gate into the package's own\n"
-            "test suite by materialising `tests/develop/test_audit.py`.\n"
-            "The generated test calls\n"
-            "`scitex_dev.testing.audit_all_for_package(<pkg>)` and\n"
-            "fails when any error-severity violation is reported, so\n"
-            "the existing `Test` workflow surfaces audit drift — no\n"
-            "separate `.github/workflows/audit.yml` needed. Also\n"
-            "creates `tests/develop/__init__.py` and an empty\n"
-            "`tests/conftest.py` if either is missing.\n"
-            "\n"
-            "This does NOT generate stub tests for the package's source\n"
-            "modules — it ONLY installs the canonical audit gate.\n"
-            "Quality of source-coverage tests is the package author's\n"
-            "responsibility (see PS-206 / PS-206b for the rules that\n"
-            "enforce non-trivial test bodies).\n"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Install the audit-conformance gate test for DISTRIBUTION.",
+            description=(
+                "Wires `ecosystem audit-all <pkg>` into the package's "
+                "own test suite by materialising "
+                "`tests/develop/test_audit.py`, which calls "
+                "`scitex_dev.testing.audit_all_for_package(<pkg>)` and "
+                "fails when any error-severity violation is reported — "
+                "so the existing `Test` workflow surfaces audit drift, "
+                "no separate `.github/workflows/audit.yml` needed. Also "
+                "creates `tests/develop/__init__.py` and an empty "
+                "`tests/conftest.py` if either is missing. This does "
+                "NOT generate stub tests for the package's source "
+                "modules — it ONLY installs the canonical audit gate; "
+                "source-coverage test quality remains the package "
+                "author's responsibility (PS-206 / PS-206b).",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem install-audit-gate scitex-types",
+                    "Install the gate.",
+                ),
+                Example(
+                    "{prog} ecosystem install-audit-gate scitex-io --force",
+                    "Overwrite an existing gate.",
+                ),
+                Example(
+                    "{prog} ecosystem install-audit-gate scitex-io --dry-run",
+                    "Preview without writing.",
+                ),
+            ),
         ),
     )
     @click.argument("distribution")
@@ -40,12 +53,6 @@ def register(ecosystem):
     )
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
     def ecosystem_install_audit_gate(distribution, force, dry_run, yes):
-        """Install the audit-conformance gate test for DISTRIBUTION.
-
-        Wires `scitex-dev ecosystem audit-all <pkg>` into the package's
-        test suite as `tests/develop/test_audit.py`. Does NOT generate
-        stub tests for source modules.
-        """
         del yes  # generation is non-destructive when --force is absent
         from ...._ecosystem import ECOSYSTEM, get_local_path
 
@@ -95,6 +102,14 @@ def register(ecosystem):
             '    reason="scitex-dev not installed — add `scitex-dev[cli-audit]` '
             'to [project.optional-dependencies.dev]",\n'
             ")\n"
+            "# audit-all fans out to 6 sub-auditor subprocesses (audit-cli,\n"
+            "# audit-mcp-tools, audit-skills, audit-python-apis, audit-project,\n"
+            "# audit-django), each re-importing the package fresh; on a loaded\n"
+            "# or NFS-backed host this legitimately runs well past this repo's\n"
+            "# global [tool.pytest.ini_options] `timeout` default even when the\n"
+            "# audit itself is completely clean. Override per-test rather than\n"
+            "# raise the global cap for every other (fast) test.\n"
+            "@pytest.mark.timeout(600)\n"
             "def test_audit_all_clean():\n"
             "    # Arrange\n"
             "    from scitex_dev.testing import audit_all_for_package\n"

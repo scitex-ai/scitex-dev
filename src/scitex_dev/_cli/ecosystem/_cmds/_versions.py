@@ -1,14 +1,32 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ecosystem `check-versions`, `fix-mismatches` (+ deprecated `packages` alias)."""
+"""ecosystem `validate-versions` (+ deprecated `check-versions`/`packages` aliases), `fix-mismatches`."""
 
 import json
 
 import click
 
+from ...._ecosystem.click_compat import deprecated_alias
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def register(ecosystem):
-    @ecosystem.command("check-versions")
+    @ecosystem.command(
+        "validate-versions",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Audit ecosystem package versions across hosts (3 modes + gate).",
+            examples=(
+                Example("{prog} ecosystem validate-versions", "Observe (report only)."),
+                Example("{prog} ecosystem validate-versions --dry-run", "Preview the sync."),
+                Example("{prog} ecosystem validate-versions --apply", "Execute the sync."),
+                Example(
+                    "{prog} ecosystem validate-versions --gate scitex-todo==0.7.51 --require-full-coverage",
+                    "Release-gate mode.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--host",
         "-h",
@@ -40,16 +58,87 @@ def register(ecosystem):
         help="Skip ahead-check; allow clobbering remote unpushed commits.",
     )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
+    @click.option(
+        "--gate",
+        "gate_spec",
+        default=None,
+        metavar="PACKAGE==VERSION",
+        help=(
+            "Release-gate mode (mutually exclusive with --dry-run/--apply): "
+            "report whether PACKAGE is installed at >= VERSION on every "
+            "in-scope fleet host. Pair with --require-full-coverage to "
+            "hard-fail CI / a pre-tag hook when coverage isn't 100%. See "
+            "scitex_dev._ecosystem._release_gate for the protocol-milestone "
+            "convention this backs."
+        ),
+    )
+    @click.option(
+        "--require-full-coverage",
+        "require_full_coverage",
+        is_flag=True,
+        help="With --gate: exit non-zero unless every in-scope host meets VERSION.",
+    )
     @click.pass_context
-    def ecosystem_packages(ctx, hosts, packages, dry_run, do_apply, unsafe, as_json):
-        """Audit ecosystem package versions across hosts (3 modes).
+    def ecosystem_validate_versions(
+        ctx,
+        hosts,
+        packages,
+        dry_run,
+        do_apply,
+        unsafe,
+        as_json,
+        gate_spec,
+        require_full_coverage,
+    ):
+        if gate_spec is not None:
+            if dry_run or do_apply:
+                click.echo(
+                    "error: --gate is mutually exclusive with --dry-run/--apply",
+                    err=True,
+                )
+                ctx.exit(2)
+            pkg_name, sep, min_version = gate_spec.partition("==")
+            pkg_name = pkg_name.strip()
+            min_version = min_version.strip()
+            if not sep or not pkg_name or not min_version:
+                click.echo("error: --gate expects PACKAGE==VERSION", err=True)
+                ctx.exit(2)
 
-        \b
-        Example:
-            $ scitex-dev ecosystem check-versions                  # observe
-            $ scitex-dev ecosystem check-versions --dry-run        # preview sync
-            $ scitex-dev ecosystem check-versions --apply          # execute sync
-        """
+            from ...._ecosystem._release_gate import check_release_gate
+
+            host_list = list(hosts) if hosts else None
+            if host_list == ["all"]:
+                host_list = None
+
+            result = check_release_gate(pkg_name, min_version, hosts=host_list)
+
+            if as_json:
+                click.echo(json.dumps(result, indent=2, default=str))
+            else:
+                summ = result["summary"]
+                click.echo(f"gate: {pkg_name} >= {min_version}")
+                for row in result["rows"]:
+                    mark = "OK  " if row["meets"] else "FAIL"
+                    click.echo(f"  [{mark}] {row['host']}: installed={row['installed']}")
+                click.echo(
+                    f"{summ['covered']}/{summ['total_hosts']} hosts covered "
+                    f"({summ['coverage_pct']:.0f}%)"
+                )
+                if summ["not_covered"]:
+                    click.echo("not covered: " + ", ".join(summ["not_covered"]))
+                if summ["total_hosts"] == 0:
+                    click.echo(
+                        "warning: no in-scope hosts for "
+                        f"{pkg_name!r} — is it in any host's synced-package "
+                        "set (host.packages / host.exclude in "
+                        "~/.scitex/dev/config.yaml)?",
+                        err=True,
+                    )
+
+            if require_full_coverage:
+                ctx.exit(0 if result["passed"] else 1)
+            ctx.exit(0)
+
         if dry_run and do_apply:
             click.echo("error: --dry-run and --apply are mutually exclusive", err=True)
             ctx.exit(2)
@@ -106,7 +195,11 @@ def register(ecosystem):
             )
         ctx.exit(0)
 
-    # Deprecated alias for the §1 noun-verb fix (packages → check-versions).
+    # Deprecated alias for the original §1 noun-verb fix (packages →
+    # check-versions). check-versions was itself later renamed to
+    # validate-versions (§1f: `check` is a non-canonical synonym for the
+    # ecosystem-wide `validate` verb) — point straight at the current
+    # command rather than hopping through the check-versions alias.
     # Removed in 0.11.0.
     @ecosystem.command(
         "packages",
@@ -115,15 +208,31 @@ def register(ecosystem):
     )
     @click.pass_context
     def _ecosystem_packages_deprecated(ctx):
-        """(deprecated) Use `ecosystem check-versions`. Removed in 0.11.0."""
+        """(deprecated) Use `ecosystem validate-versions`. Removed in 0.11.0."""
         click.echo(
-            "warning: `ecosystem packages` was renamed to `ecosystem check-versions`.",
+            "warning: `ecosystem packages` was renamed to "
+            "`ecosystem validate-versions`.",
             err=True,
         )
-        target = ecosystem.get_command(ctx, "check-versions")
+        target = ecosystem.get_command(ctx, "validate-versions")
         if target is None:
             ctx.exit(2)
         ctx.invoke(target, *ctx.args)
+
+    # `check-versions` → `validate-versions` rename (§1f: `check` is a
+    # non-canonical synonym for the ecosystem-wide `validate` verb).
+    # Internal cross-host RPC calls (ecosystem check-sync's remote-check
+    # forwarding, any fleet cron job invoking this by name) keep using
+    # the OLD name deliberately during the rolling-upgrade window; the
+    # warn-phase alias is what makes that safe regardless of which side
+    # of the upgrade a given host is on.
+    deprecated_alias(
+        ecosystem,
+        "check-versions",
+        target="validate-versions",
+        remove_in="0.32",
+        phase="warn",
+    )
 
     @ecosystem.command("fix-mismatches", hidden=True)
     @click.option(

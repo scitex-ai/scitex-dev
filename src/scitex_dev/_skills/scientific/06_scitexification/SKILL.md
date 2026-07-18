@@ -2,7 +2,7 @@
 name: scitexification
 description: |
   [WHAT] Scitexification — the verb: translate existing code (a script, a notebook, a small repo, a published-paper supplement) into SciTeX form so it gains the ecosystem's session-managed I/O, scitex-clew evidence binding, publication-quality figures, and project structure. Single source of truth for the migration act itself, package-agnostic; per-package patterns delegate to the per-pkg SKILL.md, and Clew-specific specialization layers on top of this skill via `scientific/04_clew_*`.
-  [WHEN] You have existing code that works and want to bring it into the SciTeX ecosystem with minimal rewrite, OR an agent is asked to translate a research capsule, paper supplement, or one-off notebook into a SciTeX project. Load this skill BEFORE picking the per-chapter topic.
+  [WHEN] You have existing code that works and want to bring it into the SciTeX ecosystem with minimal rewrite, OR an agent is asked to translate a research bundle, paper supplement, or one-off notebook into a SciTeX project. Load this skill BEFORE picking the per-chapter topic.
   [HOW] Read this SKILL.md first to orient on the 5-stage translation arc; then drill into the topic chapter you need next (`01_io-patterns`, `02_session-config`, `03_plt-patterns`, `04_repro-clew`, `05_naming-and-numbering`). Per-package details (full stx.io API surface, figrecipe figure types, etc.) live in the corresponding per-pkg SKILL.md — this skill references them rather than restating.
 tags: [scitexification]
 requires:
@@ -31,7 +31,7 @@ SSoT status (2026-06-13):
     inventories, the symlink_to= idiom, worked before/after examples, and
     corner cases per stage), delegating full per-package API surface to the
     companion pkg SKILLs. (They superseded the 2026-06-12 #167 link-stubs.)
-  - Discovery (capsule-side `spec.claude.skills: [scitexification]` declarative
+  - Discovery (consumer-side `spec.claude.skills: [scitexification]` declarative
     interface) is gated on a separate scitex-dev / SAC contract decision; see
     A2A thread `48d2324b` (proj-paper-scitex-clew ↔ proj-scitex-dev) and
     the "Discovery" section below.
@@ -68,10 +68,10 @@ Load when **any** of the following is true:
 
 - You inherited working code (script, notebook, small repo) and want it
   inside the ecosystem with minimal rewrite.
-- An agent is asked to translate a research capsule, paper supplement,
+- An agent is asked to translate a research bundle, paper supplement,
   or one-off notebook into a SciTeX project.
-- You are about to hand-write `data/results/claims.json` (or
-  `submission.json`, etc.) — **stop**, read chapter `04_repro-clew`,
+- You are about to hand-write `data/results/claims.json` (or any
+  results/output JSON, etc.) — **stop**, read chapter `04_repro-clew`,
   use the API.
 - You are about to copy-paste a `matplotlib` figure call from a paper
   template — **stop**, read chapter `03_plt-patterns`, use the figrecipe
@@ -95,11 +95,11 @@ each of which holds independently:
 | 1 | [01_io-patterns](01_io-patterns.md) | Every `open()` / `np.load` / `pd.read_csv` / `pickle.load` becomes `stx.io.load(...)`; every `np.save` / `pickle.dump` / `df.to_csv` becomes `stx.io.save(..., symlink_to=...)`. DAG composition (output of step N is input of step N+1) becomes visible at the filesystem level. | Your algorithm. Your data shapes. Your business logic. |
 | 2 | [02_session-config](02_session-config.md) | The script entry-point becomes `@stx.session.start(...)`; magic numbers and paths become `CONFIG.<KEY>` lookups against `config/*.yaml`; logging becomes the session logger. | Function call structure. Module organization. Test cases. |
 | 3 | [03_plt-patterns](03_plt-patterns.md) | Every `plt.savefig(...)` becomes a `stx.io.save(fig, ...)` (so the figure is bound to a session output), and every visual style choice ladders up to figrecipe's publication-quality primitives. | Figure intent (what comparison, what axis labels). What information the figure carries. |
-| 4 | [04_repro-clew](04_repro-clew.md) | Final-mile assertions (`accuracy was X%`, `effect size was Y`) become registered Clew **claims**, each evidence-bound to the file that produced it; the submission JSON is composed by iterating registered claims through `scitex_clew.list_claims()` + `scitex_clew.verify_claim()` and filtering to `source_verified=True`, not hand-written. | What you are claiming. Your numbers. |
+| 4 | [04_repro-clew](04_repro-clew.md) | Final-mile assertions (`accuracy was X%`, `effect size was Y`) become registered Clew **claims**, each evidence-bound to the file that produced it; the results/output JSON is composed by iterating registered claims through `scitex_clew.list_claims()` + `scitex_clew.verify_claim()` and filtering to `source_verified=True`, not hand-written. | What you are claiming. Your numbers. |
 | 5 | [05_naming-and-numbering](05_naming-and-numbering.md) | `cnn_v3_final_FIXED2.py` becomes `scripts/03_cnn.py` (zero-filled, sortable, mirrored under `tests/`); IDs and ordinals become readable symlinks per `02_research-project_09`. | Your filenames as a *concept*. The numbers themselves (after zero-fill). |
 
 Doing stages 1+2 alone gets you a *runnable* SciTeX project — stage 3+ are
-strictly additive. If a capsule's deadline is tight, stages 1+2 are the
+strictly additive. If a project's deadline is tight, stages 1+2 are the
 minimum viable scitexification; stages 3, 4, 5 land in subsequent PRs.
 
 ## Relationship to other skills
@@ -116,10 +116,10 @@ This skill **does not duplicate** content elsewhere; it composes them.
   `.../figrecipe/`, `.../scitex-clew/`). This skill teaches *which*
   primitive to reach for during translation, not *what* the primitive
   does internally.
-- For **Clew-specific** translation (capsule-aware DAG, oracle-blind
-  scoring, DONE signalling): see `04_clew_*` skills. Those are
+- For **Clew-specific** translation (project-aware DAG, evidence-bound
+  claims, the validity chain): see `04_clew_*` skills. Those are
   specializations of scitexification stages 1+2+4 for the Clew-tracked
-  cohort flow. If you only need to scitexify and *don't* need Clew
+  flow. If you only need to scitexify and *don't* need Clew
   verifiability, ignore the `04_clew_*` skills.
 - For **PDF reporting** (recurring scientific PDF deliverables): see
   `03_reporting_*`. Reporting is a *downstream* concern; scitexify first,
@@ -138,7 +138,7 @@ tags: [scitexification, scitexification.clew]    # chapter 04 only
 tags: [scitexification, scitexification.naming]  # chapter 05 only
 ```
 
-Capsule-side declarative interface (target, gated on the scitex-dev /
+Consumer-side declarative interface (target, gated on the scitex-dev /
 SAC discovery contract — see A2A thread `48d2324b`):
 
 ```yaml
@@ -156,7 +156,7 @@ manually expand the tag:
 scitex-dev skills tags-expand scitexification
 ```
 
-and read the printed paths. The cohort-A reference consumer
+and read the printed paths. The reference consumer
 ([proj-paper-scitex-clew](https://github.com/...)) drives the
 prompt-side migration plan: their bespoke
 `PROMPT_SCITEX_TRANSLATION_FOR_CLEW.md` will be retired once this
@@ -167,7 +167,7 @@ skill ships and is wired through the discovery contract.
 Patterns that look "almost SciTeX" but aren't, and that this skill
 exists to keep you out of:
 
-1. **Hand-writing `claims.json` / `submission.json`** even though the
+1. **Hand-writing `claims.json` / any results/output JSON** even though the
    project has Clew registered. The hand-written JSON drifts from the
    evidence-binding the registered claims actually have. Always compose
    from `scitex_clew.list_claims()` + filter on
@@ -195,19 +195,19 @@ exists to keep you out of:
 - ✅ Chapters `01–05` **written** (substantive: per-stage translation
   inventories, the `symlink_to=` DAG idiom, worked before/after examples,
   corner cases; full per-pkg API delegated to the companion SKILLs).
-  Dogfooded during the paper-scitex-clew cohort prompt retirement (the
-  cohort solver auto-loads this skill instead of a bespoke prompt).
+  Dogfooded during the proj-paper-scitex-clew prompt retirement (the
+  solver auto-loads this skill instead of a bespoke prompt).
 - ⏳ Parent + sub-tag discovery syntax (`scitexification` vs
   `scitexification.io`) requires a small extension in
   `scitex-dev/_cli/skills/_tags.py` — separate issue to be filed.
 - ✅ Chapter 04 uses scitex-clew **primitives** (`list_claims`,
   `verify_claim`, `render_dag`) rather than proposing a new
-  `emit_submission` API. Rationale: scitex-clew stays general-purpose;
-  the submission shape (which keys, which schema) is cohort/paper-
-  specific concern, owned by the consumer (paper-scitex-clew,
+  `emit_results` API. Rationale: scitex-clew stays general-purpose;
+  the output/results shape (which keys, which schema) is an experiment-
+  specific concern, owned by the consumer (proj-paper-scitex-clew,
   MNIST template, etc.) as a 10-line iterate+filter+emit helper.
   Per operator decision (Telegram msg 125).
-- ⏳ Capsule-side discovery contract (`spec.claude.skills:
+- ⏳ Consumer-side discovery contract (`spec.claude.skills:
   [scitexification]` auto-loading) tracked in A2A thread `48d2324b`
   between proj-paper-scitex-clew ↔ proj-scitex-dev.
 

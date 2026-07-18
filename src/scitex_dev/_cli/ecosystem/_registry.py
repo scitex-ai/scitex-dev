@@ -12,21 +12,25 @@ so external callers keep working.
 
 import click
 
-from ..._ecosystem.click_helpers import make_categorized_group
+from ..._ecosystem.help_spec import CliHelp, Example, SpecGroup
 from ._categories import ECOSYSTEM_COMMAND_CATEGORIES
 from ._cmds import (
     _audit_all,
+    _audit_local_state,
     _audit_per_target,
+    _audit_registry_layout,
     _audit_summary,
     _branch_protection,
     _ci_template,
     _clean,
     _dashboard,
+    _drift_report,
     _git,
     _install_gate,
     _jobs_cron,
     _jobs_systemd,
     _list,
+    _pr,
     _up,
     _prune_merged,
     _regen_umbrella,
@@ -34,6 +38,7 @@ from ._cmds import (
     _status,
     _sync,
     _sync_status,
+    _system_deps,
     _test_remote,
     _versions,
 )
@@ -49,14 +54,22 @@ def register_ecosystem_commands(main_group):
 
     @main_group.group(
         invoke_without_command=True,
-        cls=make_categorized_group(ECOSYSTEM_COMMAND_CATEGORIES),
+        cls=SpecGroup,
+        command_categories=ECOSYSTEM_COMMAND_CATEGORIES,
+        help_spec=CliHelp(
+            summary="Manage the SciTeX ecosystem (versions, sync, audits, stats).",
+            examples=(
+                Example("{prog} ecosystem list --json", "List ecosystem packages."),
+                Example("{prog} ecosystem audit-all scitex-io", "Run every audit-*."),
+                Example("{prog} ecosystem sync", "Sync all packages across hosts."),
+            ),
+        ),
     )
     @click.option(
         "--help-recursive", is_flag=True, help="Show help for all subcommands."
     )
     @click.pass_context
     def ecosystem(ctx, help_recursive):
-        """Manage the SciTeX ecosystem (versions, sync, audits, stats)."""
         if help_recursive:
             _print_ecosystem_help_recursive(ctx)
             ctx.exit(0)
@@ -86,8 +99,11 @@ def register_ecosystem_commands(main_group):
     # internal ordering.
     _list.register(ecosystem)
     _versions.register(ecosystem)
+    _drift_report.register(ecosystem)
     _git.register(ecosystem)
     _audit_per_target.register(ecosystem)
+    _audit_registry_layout.register(ecosystem)
+    _audit_local_state.register(ecosystem)
     _audit_summary.register(ecosystem)
     _dashboard.register(ecosystem)
     _audit_all.register(ecosystem)
@@ -96,7 +112,9 @@ def register_ecosystem_commands(main_group):
     _test_remote.register(ecosystem)
     _sync_status.register(ecosystem)
     _sync.register(ecosystem)
+    _system_deps.register(ecosystem)
     _prune_merged.register(ecosystem)
+    _pr.register(ecosystem)
     _branch_protection.register(ecosystem)
     _ci_template.register(ecosystem)
     _regen_umbrella.register(ecosystem)

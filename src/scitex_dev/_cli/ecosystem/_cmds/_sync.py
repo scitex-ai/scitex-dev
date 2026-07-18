@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """ecosystem `sync` — bring every local checkout's `develop` current (ff-only).
 
-The WRITE companion to the read-only `check-sync`. The ecosystem runs on
+The WRITE companion to the read-only `validate-sync`. The ecosystem runs on
 editable installs that import the working tree, but `origin/develop` advances on
 its own (CI commits docs-HTML / version bumps back), so a checkout silently
 serves stale code until someone pulls (the Spartan runner was found 145 commits
@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ._sync_helpers import git, parse_package_filter, resolve_repo, selected_packages
 
 
@@ -111,6 +112,41 @@ def _sync_one(pkg: str, info: dict, *, dry_run: bool) -> dict:
     return {"package": pkg, "action": "pulled", "behind": n_behind, "detail": ""}
 
 
+def _shell_emit(pkg: str) -> None:
+    """Emit a ``pulled`` card-event for ``pkg`` via the scitex-todo CLI.
+
+    Decoupled by SHELLING OUT (no import of scitex-todo) so a slow/absent
+    consumer can't hang or break the sweep. Best-effort: if scitex-todo isn't
+    on PATH or the emit fails, the sync is unaffected. ``pulled`` is default-
+    quiet (the dispatcher no-ops without a card_id), so this is a recorded,
+    non-notifying signal — exactly the auto-pull C8 contract.
+    """
+    import subprocess
+
+    try:
+        subprocess.run(
+            ["scitex-todo", "emit-event", "--type", "pulled",
+             "--repo", pkg, "--actor", "scitex-dev"],
+            check=False,
+            capture_output=True,
+        )
+    except OSError:
+        pass  # scitex-todo not installed / not on PATH — never fail the sync
+
+
+def _emit_pulled_events(rows, *, emit_fn=None) -> None:
+    """Fire a ``pulled`` event for each repo that ACTUALLY fast-forwarded.
+
+    Only ``action == "pulled"`` rows advance (a real ff-merge); ``synced`` /
+    ``would-pull`` / skipped rows emit nothing, so no-op pulls stay quiet.
+    ``emit_fn`` is the injection seam for tests (default = real shell-out).
+    """
+    emit = emit_fn or _shell_emit
+    for row in rows:
+        if row.get("action") == "pulled":
+            emit(row["package"])
+
+
 _ACTION_STYLE = {
     "pulled": ("green", "pulled"),
     "would-pull": ("cyan", "would-pull"),
@@ -125,17 +161,29 @@ _ACTION_STYLE = {
 def register(ecosystem):
     @ecosystem.command(
         "sync",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem sync                 # preview (dry-run)\n"
-            "  $ scitex-dev ecosystem sync --yes           # ff-pull develop everywhere\n"
-            "  $ scitex-dev ecosystem sync -p scitex-io -y # one package, execute\n"
-            "  $ scitex-dev ecosystem sync --json | jq\n"
-            "\n"
-            "Default is a read-only preview; pass --yes/-y to actually merge. Safe by\n"
-            "construction even then: develop-only, ff-only, skips dirty checkouts —\n"
-            "your un-pushed work is never touched. See `check-sync` for the\n"
-            "cross-host view."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Fast-forward every local checkout's develop to origin (self-pull).",
+            description=(
+                "For each ecosystem clone on `develop` with a clean "
+                "tree, fetch and `merge --ff-only origin/develop`. "
+                "Off-develop, dirty, or diverged checkouts are reported "
+                "and skipped — never clobbered. Read-only preview by "
+                "default; pass --yes/-y to perform the merges. Default "
+                "is a read-only preview; safe by construction even when "
+                "applying: develop-only, ff-only, skips dirty checkouts "
+                "— your un-pushed work is never touched. See "
+                "`validate-sync` for the cross-host view.",
+            ),
+            examples=(
+                Example("{prog} ecosystem sync", "Preview (dry-run)."),
+                Example("{prog} ecosystem sync --yes", "ff-pull develop everywhere."),
+                Example(
+                    "{prog} ecosystem sync -p scitex-io -y",
+                    "One package, execute.",
+                ),
+                Example("{prog} ecosystem sync --json | jq", "Structured JSON output."),
+            ),
         ),
     )
     @click.option(
@@ -162,13 +210,6 @@ def register(ecosystem):
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON rows.")
     def ecosystem_sync(package, execute, dry_run, as_json):
-        """Fast-forward every local checkout's `develop` to origin (self-pull).
-
-        For each ecosystem clone on `develop` with a clean tree, fetch and
-        `merge --ff-only origin/develop`. Off-develop, dirty, or diverged
-        checkouts are reported and skipped — never clobbered. Read-only preview
-        by default; pass --yes/-y to perform the merges.
-        """
         import json as _json
 
         # Preview unless explicitly executing; an explicit --dry-run always wins.
@@ -176,6 +217,11 @@ def register(ecosystem):
         pkg_filter = parse_package_filter(package)
         items = selected_packages(pkg_filter)
         rows = [_sync_one(pkg, info, dry_run=dry_run) for pkg, info in items]
+
+        # C8: emit a card-event for each repo that actually fast-forwarded.
+        # Only on real execution (dry-run yields would-pull, never pulled).
+        if not dry_run:
+            _emit_pulled_events(rows)
 
         if as_json:
             click.echo(

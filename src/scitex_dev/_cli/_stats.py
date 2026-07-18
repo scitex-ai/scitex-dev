@@ -10,6 +10,8 @@ from typing import Any, Dict
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 
 def _run_cmd(cmd: list[str], timeout: int = 30) -> str:
     """Run a command and return stdout, or empty string on failure."""
@@ -213,16 +215,19 @@ def register_stats_command(
     deprecation alias for one cycle and removed in 0.11.0.
     """
 
-    @ecosystem_group.command("show-stats")
+    @ecosystem_group.command(
+        "show-stats",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Show SciTeX ecosystem statistics (package/CLI/MCP-tool counts).",
+            examples=(
+                Example("{prog} ecosystem show-stats", "Human-readable summary."),
+                Example("{prog} ecosystem show-stats --json", "Structured JSON output."),
+            ),
+        ),
+    )
     @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
     def show_stats(as_json: bool) -> None:
-        """Show SciTeX ecosystem statistics (package counts, CLI commands, MCP tools, …).
-
-        \b
-        Example:
-            $ scitex-dev ecosystem show-stats
-            $ scitex-dev ecosystem show-stats --json
-        """
         result = collect_stats()
         if as_json:
             click.echo(json.dumps(result, indent=2))

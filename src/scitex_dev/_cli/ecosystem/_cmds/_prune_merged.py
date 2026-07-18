@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import click
 
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ._sync_helpers import (
     PROTECTED_BRANCHES,
     git,
@@ -195,19 +196,33 @@ def _prune_one(pkg: str, info: dict, *, apply: bool, remote: bool) -> dict:
 def register(ecosystem):
     @ecosystem.command(
         "prune-merged",
-        epilog=(
-            "Examples:\n"
-            "  $ scitex-dev ecosystem prune-merged                     # dry-run, all pkgs\n"
-            "  $ scitex-dev ecosystem prune-merged -p scitex-dev       # dry-run, one pkg\n"
-            "  $ scitex-dev ecosystem prune-merged --apply             # delete local merged\n"
-            "  $ scitex-dev ecosystem prune-merged --remote            # also list remote\n"
-            "  $ scitex-dev ecosystem prune-merged --apply --remote    # delete both\n"
-            "  $ scitex-dev ecosystem prune-merged -h spartan --apply  # prune on spartan\n"
-            "\n"
-            "Safety: dry-run is the DEFAULT; --apply required to mutate.\n"
-            "develop/main/master + the checked-out branch are NEVER\n"
-            "touched; only `git branch -d` (merged-safe) is used; a\n"
-            "remote branch with an open PR is always skipped."
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="List (and with --apply delete) branches merged into develop.",
+            description=(
+                "Default = dry-run: prints what WOULD be deleted, "
+                "grouped by package, with a total. --apply safe-deletes "
+                "(never -D). --remote extends to origin-merged branches "
+                "(open-PR branches skipped). Safety: dry-run is the "
+                "DEFAULT; --apply required to mutate; develop/main/"
+                "master + the checked-out branch are NEVER touched; "
+                "only `git branch -d` (merged-safe) is used; a remote "
+                "branch with an open PR is always skipped.",
+            ),
+            examples=(
+                Example("{prog} ecosystem prune-merged", "Dry-run, all packages."),
+                Example("{prog} ecosystem prune-merged -p scitex-dev", "Dry-run, one package."),
+                Example("{prog} ecosystem prune-merged --apply", "Delete local merged branches."),
+                Example("{prog} ecosystem prune-merged --remote", "Also list remote."),
+                Example(
+                    "{prog} ecosystem prune-merged --apply --remote",
+                    "Delete local and remote.",
+                ),
+                Example(
+                    "{prog} ecosystem prune-merged -h spartan --apply",
+                    "Prune on a remote host.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -240,12 +255,6 @@ def register(ecosystem):
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON.")
     def ecosystem_prune_merged(package, do_apply, do_remote, host, as_json):
-        """List (and with --apply delete) branches merged into develop.
-
-        Default = dry-run: prints what WOULD be deleted, grouped by
-        package, with a total. --apply safe-deletes (never -D). --remote
-        extends to origin-merged branches (open-PR branches skipped).
-        """
         import json as _json
 
         # --host: delegate the whole prune to the remote scitex-dev and

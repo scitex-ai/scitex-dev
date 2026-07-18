@@ -12,6 +12,8 @@ from typing import Literal
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
 Status = Literal["ok", "fail", "skip"]
 
 OK_TAG = "[OK]"
@@ -305,15 +307,26 @@ def check_agent_container() -> list[dict]:
 def register_doctor_command(main_group):
     """Register the doctor command on the main CLI group."""
 
-    @main_group.command("doctor")
+    @main_group.command(
+        "doctor",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Diagnose the health of the full SciTeX ecosystem.",
+            description=(
+                "Checks Python version, active venv, installed scitex-* "
+                "package versions against PyPI, relevant environment "
+                "variables, the MCP server, Orochi connectivity, and "
+                "agent-container screen sessions. Exits 1 if any check "
+                "fails.",
+            ),
+            examples=(
+                Example("{prog} doctor", "Human-readable diagnostic report."),
+                Example("{prog} doctor --json", "Structured JSON output."),
+            ),
+        ),
+    )
     @click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
     def doctor_cmd(as_json: bool) -> None:
-        """Diagnose the health of the full SciTeX ecosystem.
-
-        \b
-        Example:
-            $ scitex-dev doctor --json
-        """
         from importlib.metadata import version as pkg_version
 
         try:

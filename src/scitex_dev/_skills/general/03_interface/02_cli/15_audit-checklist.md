@@ -15,18 +15,28 @@ Run through this list before shipping a CLI. Items marked **(A)** are covered by
 - [ ] **(A)** No bare transitive verbs at top level (`<cli> list` ✗ → `list-<noun>` ✓).
 - [ ] **(A)** No trailing nouns without a verb (`<cli> dashboard` ✗ → `start-dashboard` ✓).
 - [ ] **(A)** Group (non-leaf) tokens are nouns, never verbs.
-- [ ] No banned bare leaves: `version`, `completion` are forbidden (§1b).
-- [ ] Compound verbs are hyphenated, never split (`send-heartbeat` ✓, `send heartbeat` ✗).
-- [ ] Synonyms picked from the catalog "Prefer" column — no `ls`, `rm`, `display`, … (§1d [06_noun-verb-catalog.md](06_noun-verb-catalog.md)).
+- [ ] No banned bare leaves: `version` and a bare `completion` COMMAND are forbidden; the `completion` noun GROUP is the canon (§1b [04_exceptions.md](04_exceptions.md)).
+- [ ] Noun groups are **singular** (`task`, not `tasks`) (§1d).
+- [ ] Compound verbs are hyphenated, never split (`send-heartbeat` ✓, `send heartbeat` ✗); compounds are verb-first (`list-python-apis` ✓, `python-apis-list` ✗).
+- [ ] No short aliases (`ss` and friends are banned) (§1d).
+- [ ] Terminal-state verbs are exactly `done` (success) and `close --reason` — no `resolve` / `complete` / `finish` (§1d).
+- [ ] Synonyms picked from the catalog "Prefer" column — no `ls`, `rm`, `display`, `verify`/`check` (use `validate`), `sync-to`/`sync-from` (use `push`/`pull`), … (§1d [06_noun-verb-catalog.md](06_noun-verb-catalog.md)).
 - [ ] Pass-through entry points (§1c [05_pass-through.md](05_pass-through.md)) explicitly declared and noted in `--help`.
 
 ## Required commands
 
-- [ ] `list-python-apis` exists with `-v|-vv|-vvv` and `--json` (§1a [03_required-introspection-commands.md](03_required-introspection-commands.md)).
+- [ ] `dev list-python-apis` exists with `-v|-vv|-vvv` and `--json` (§1a [03_required-introspection-commands.md](03_required-introspection-commands.md)).
 - [ ] `mcp list-tools` exists with `-v|-vv|-vvv` and `--json`.
 - [ ] Verbosity ladder is **additive** — each level strictly extends the previous one.
 - [ ] `mcp` group includes `start`, `doctor`, `list-tools`, `show-installation`.
+- [ ] `completion install [--shell …] [--dry-run]` and `completion status` exist (§1b).
 - [ ] `doctor` (or equivalent) self-diagnoses install/environment.
+
+## Command placement (§11 [18_dev-subgroup-and-ecosystem-placement.md](18_dev-subgroup-and-ecosystem-placement.md), §12 [19_gui-commands.md](19_gui-commands.md))
+
+- [ ] Developer/maintainer commands (`list-python-apis`, `introspect`, app/pkg scaffolds, audit hooks, `docs-build`, skills export) live under the `dev` subgroup.
+- [ ] No ecosystem-wide command mounts on this package's CLI — those live only under `scitex dev ecosystem`.
+- [ ] Any browser surface uses the canonical `gui` group with exactly `open [SURFACE]` / `serve` / `status` / `stop`; no Django `manage.py` verbs mounted.
 
 ## Universal flags (§2 [08_universal-flags.md](08_universal-flags.md))
 
@@ -46,17 +56,20 @@ Run through this list before shipping a CLI. Items marked **(A)** are covered by
 - [ ] `2` on every usage error (bad flag, missing arg, precondition unmet, deprecated name).
 - [ ] Domain-specific codes (`3-9`) documented in `--help`.
 
-## Help format (§4 [10_help-format.md](10_help-format.md))
+## Help format (§4 [10_help-format.md](10_help-format.md), §4a [10a_command-categories.md](10a_command-categories.md))
 
 - [ ] One-line description present.
 - [ ] Usage synopsis matches `<cli> <noun> <verb> [OPTIONS] ARG`.
 - [ ] At least one concrete example.
 - [ ] Flag list with descriptions.
 - [ ] Exit-code summary if any code outside `0/1/2` is used.
+- [ ] Top-level command list uses the fixed §4a categories in order; `Other` is empty.
+- [ ] Help is spec-built from a `CliHelp` dataclass with `{prog}` placeholders (once `help_spec.py` ships — audit rule 4b).
 
 ## Deprecation (§5 [11_deprecation.md](11_deprecation.md))
 
-- [ ] Renamed commands hard-error (exit 2) with a `Re-run with: …` redirect.
+- [ ] Renamed commands follow the W → E → R ladder: Phase W hidden alias forwards via `ctx.invoke` + once-per-shell stderr warning naming the removal version; Phase E hard-errors (exit 2) with a `Re-run with: …` redirect; Phase R removes the alias.
+- [ ] Phase W warnings state the removal version (`… (removed in v0.20)`).
 - [ ] Parameter-level deprecation (`--foo` → `--bar`) warns once per shell session, not every call.
 
 ## Config + env (§6 [12_config-and-env.md](12_config-and-env.md))

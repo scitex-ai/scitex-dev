@@ -83,7 +83,14 @@ def read_crontab(
     *,
     runner: Callable[..., subprocess.CompletedProcess] | None = None,
 ) -> str:
-    """Return the current user's crontab text (``""`` if none)."""
+    """Return the current user's crontab text (``""`` if none).
+
+    No ``crontab`` binary on PATH is treated as "no crontab" (returns ``""``),
+    honouring the documented contract above: read-only paths (``cron list`` /
+    any ``*-dry-run``) must work in crontab-less environments (CI, containers).
+    Writes still fail loud -- ``write_crontab`` raises when the binary is
+    absent, since you cannot modify a crontab on a system that has none.
+    """
     run = runner or subprocess.run
     try:
         r = run(
@@ -93,8 +100,8 @@ def read_crontab(
             check=False,
             timeout=15,
         )
-    except FileNotFoundError as exc:
-        raise RuntimeError("'crontab' not found on PATH") from exc
+    except FileNotFoundError:
+        return ""
     if r.returncode != 0:
         # `crontab -l` returns 1 on "no crontab for $USER" — that's empty
         # for our purposes, not an error.

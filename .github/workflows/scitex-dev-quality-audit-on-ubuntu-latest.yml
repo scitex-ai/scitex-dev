@@ -28,7 +28,7 @@ on:
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -39,8 +39,26 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install fd (Rust file finder; audit file discovery requires it)
-        run: sudo apt-get update && sudo apt-get install -y fd-find && sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+      - name: Create per-job venv (self-hosted shared-cache isolation)
+        # Self-hosted runners share one read-only tool-cache + home, so
+        # pip-installing into the base interpreter is blocked (PEP 668) and
+        # would race across repos. A per-job venv on the runner's local
+        # $RUNNER_TEMP isolates deps; GITHUB_PATH makes later steps use it.
+        run: |
+          python -m venv "$RUNNER_TEMP/venv"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+
+      - name: Ensure fd (Rust file finder; audit file discovery requires it)
+        # OS-tolerant: use a preinstalled fd/fdfind if present (self-hosted
+        # RHEL runners have no apt-get); only fall back to apt on Debian.
+        run: |
+          if command -v fd >/dev/null; then
+            echo "fd present: $(command -v fd)"
+          elif command -v fdfind >/dev/null; then
+            sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+          else
+            sudo apt-get update && sudo apt-get install -y fd-find && sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+          fi
 
       - name: Fetch develop into a remote-tracking ref for --new-only baseline
         # Fetch into refs/remotes/origin/develop (NOT the local develop

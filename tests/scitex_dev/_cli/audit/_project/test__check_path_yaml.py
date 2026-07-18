@@ -454,3 +454,59 @@ def test_path_yaml_files_DOES_fire_for_violation_under_canonical_config(tmp_path
     check_ps_path_001_outer_wrapper(repo, Violation, out)
     # Assert
     assert any(v.rule == "PS-PATH-001" for v in out)
+
+
+# ── gitignored-path scoping (scholar v1.4.3 release blocker, 2026-07-03) ──
+
+
+def _repo_with_ignored_debris(tmp_path):
+    # Arrange helper — real git repo: clean tracked PATH.yaml + a
+    # violating copy under gitignored docs/to_claude (the synced-debris
+    # shape that failed scholar's v1.4.3 publish on a persistent runner).
+    import subprocess
+
+    repo = tmp_path / "repo"
+    (repo / "config").mkdir(parents=True)
+    (repo / "config" / "PATH.yaml").write_text(_AFTER_PATH_YAML)
+    debris = repo / "docs" / "to_claude" / "examples" / "x" / "config"
+    debris.mkdir(parents=True)
+    (debris / "PATH.yaml").write_text(_BEFORE_PATH_YAML)
+    (repo / ".gitignore").write_text("docs/to_claude\n")
+    subprocess.run(
+        ["git", "-C", str(repo), "init", "-q"], check=True, capture_output=True
+    )
+    return repo
+
+
+def test_ps_path_001_skips_gitignored_debris_in_git_repo(tmp_path):
+    # Arrange
+    repo = _repo_with_ignored_debris(tmp_path)
+    out: list = []
+    # Act
+    check_ps_path_001_outer_wrapper(repo, Violation, out)
+    # Assert — the gitignored BEFORE-state copy must not wedge the audit.
+    assert out == []
+
+
+def test_ps_path_001_still_fires_on_tracked_violation_in_git_repo(tmp_path):
+    # Arrange — same repo, but the TRACKED PATH.yaml carries the bug.
+    repo = _repo_with_ignored_debris(tmp_path)
+    (repo / "config" / "PATH.yaml").write_text(_BEFORE_PATH_YAML)
+    out: list = []
+    # Act
+    check_ps_path_001_outer_wrapper(repo, Violation, out)
+    # Assert — exactly the tracked copy, never the ignored one.
+    assert [v for v in out if "to_claude" in v.where] == [] and len(out) == 1
+
+
+def test_ps_path_001_fails_open_outside_git_repo(tmp_path):
+    # Arrange — NO git repo: the ignore filter must fail-open and keep
+    # auditing everything (pre-fix behaviour), not silently skip.
+    debris = tmp_path / "docs" / "to_claude" / "config"
+    debris.mkdir(parents=True)
+    (debris / "PATH.yaml").write_text(_BEFORE_PATH_YAML)
+    out: list = []
+    # Act
+    check_ps_path_001_outer_wrapper(tmp_path, Violation, out)
+    # Assert
+    assert any(v.rule == "PS-PATH-001" for v in out)

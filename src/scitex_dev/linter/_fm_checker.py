@@ -152,6 +152,15 @@ class FMChecker(ast.NodeVisitor):
             suggestion = variants.get(self._ctx, suggestion)
         rule = _replace(rule, suggestion=suggestion)
         sev = self.config.per_rule_severity.get(rule.id)
+        if not sev:
+            # Mirror checker.SciTeXChecker._add: category-wide severity
+            # override (e.g. research project-type flips figure/plot from
+            # warning→error). Per-rule override (above) still WINS; the
+            # category map is the floor, not the ceiling. See LinterConfig.
+            cat_override = (
+                getattr(self.config, "category_severity_override", {}) or {}
+            )
+            sev = cat_override.get(rule.category)
         if sev:
             rule = _replace(rule, severity=sev)
         self.issues.append(

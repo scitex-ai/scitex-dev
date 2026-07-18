@@ -14,7 +14,7 @@
 # accumulated drift, and the in-tree calls to `scitex-linter` (archived)
 # and `scitex linter` (dropped #95 umbrella-thinning) silently no-op'd
 # the SciTeX pattern check on every research script edit. THIS file
-# uses the LIVE command `scitex-dev linter check-files` so the agent
+# uses the LIVE command `scitex-dev linter validate-files` so the agent
 # feedback surface actually receives the IO0xx / PA0xx / structural
 # warnings.
 #
@@ -101,8 +101,20 @@ lint_python() {
     # itself emits when the IO plugin is missing — Pillar 0) so
     # the agent sees what's missing instead of a silent skip.
     if command -v scitex-dev &>/dev/null; then
-        scitex-dev linter check-files "$file" --severity error --no-color >&2 || exit 2
-        scitex-dev linter check-files "$file" --severity warning --no-color >&2 || true
+        # BLOCKING pass: --new-only so only NEWLY-introduced errors (vs the
+        # HEAD baseline) trip exit 2. Research-mode severity promotion (#264/
+        # #265) flips figure/io/import-family rules to ERROR; without this
+        # gate an agent editing a legacy file with a large PRE-EXISTING
+        # backlog (NeuroVista: ~1000 violations across 207 files) would be
+        # wedged on violations it never introduced. Pre-existing errors are
+        # capped to warning by --new-only, so they stay visible in the
+        # warning pass below but do NOT block. This is the SAFETY PAIR for
+        # the promotion: the two must ship together.
+        scitex-dev linter validate-files "$file" --severity error --no-color \
+            --new-only --baseline HEAD >&2 || exit 2
+        # Non-blocking pass: show ALL findings at warning+ (no --new-only) so
+        # the agent still sees the full legacy backlog as feedback.
+        scitex-dev linter validate-files "$file" --severity warning --no-color >&2 || true
     elif command -v scitex-linter &>/dev/null; then
         # Defensive fallback for 2026-pre-Q2 deployments. The standalone
         # `scitex-linter` is archived but may still be on PATH on some

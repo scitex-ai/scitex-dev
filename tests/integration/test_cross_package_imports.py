@@ -22,6 +22,7 @@ import pytest
 CROSS_PACKAGE_IMPORTS = [
     "scitex",
     "scitex._mcp_tools",
+    "scitex_cards",
     "scitex_config",
     "scitex_config._ecosystem",
     "scitex_events",

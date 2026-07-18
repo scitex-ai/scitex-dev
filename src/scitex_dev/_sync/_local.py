@@ -14,12 +14,16 @@ Safety model (like bulk_rename):
 from __future__ import annotations
 
 import subprocess
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
 from .._core.config import DevConfig, HostConfig, get_enabled_hosts, load_config
+
+# Local editable install lives in its own module (uv-first installer +
+# upgrade preflight); re-exported here so the historical
+# ``from ._local import sync_local`` import path keeps working.
+from ._editable import sync_local  # noqa: F401,E402
 
 # ---------------------------------------------------------------------------
 # SSH helpers
@@ -392,134 +396,6 @@ def sync_all(
                 results[host_name] = future.result()
             except Exception as e:
                 results[host_name] = {"error": str(e)}
-    return results
-
-
-def _install_one(pkg, path: Path) -> tuple[str, dict[str, Any]]:
-    """Run `pip install -e <path>` for one package; return (name, result)."""
-    try:
-        # sys.executable -m pip — bare `pip` finds the first one on PATH,
-        # which can be a system Python with stale metadata (spartan's
-        # /usr/bin/pip is Python 3.9 and fails on >=3.10 wheels).
-        result = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "-e", str(path), "-q"],
-            capture_output=True,
-            text=True,
-            timeout=300,
-        )
-        if result.returncode == 0:
-            return pkg.name, {"status": "ok", "output": result.stdout.strip()}
-        return pkg.name, {"status": "error", "error": result.stderr.strip()}
-    except Exception as e:
-        return pkg.name, {"status": "error", "error": str(e)}
-
-
-def sync_local(
-    packages: list[str] | None = None,
-    confirm: bool = False,
-    config: DevConfig | None = None,
-    jobs: int = 1,
-    on_progress=None,
-) -> dict[str, Any]:
-    """Install all local editable packages.
-
-    Safety: defaults to preview only. Pass confirm=True to execute.
-
-    Parameters
-    ----------
-    packages : list[str] | None
-        Package names. None = all configured packages.
-    confirm : bool
-        If False (default), preview only.
-        If True, execute pip install -e.
-    config : DevConfig | None
-        Configuration.
-    jobs : int
-        Parallel installs. 1 = serial (default). 0 or negative = all CPUs.
-    on_progress : callable | None
-        Optional callback ``f(idx, total, name, status, elapsed)`` invoked
-        as each package finishes.
-
-    Returns
-    -------
-    dict
-        {package: {status, output|commands}}.
-    """
-    import os
-    import time
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
-    if config is None:
-        config = load_config()
-
-    targets = config.packages
-    if packages:
-        targets = [p for p in targets if p.name in packages]
-
-    # Resolve installable targets (skip missing-path early)
-    work: list[tuple[Any, Path]] = []
-    results: dict[str, Any] = {}
-    for pkg in targets:
-        if not pkg.local_path:
-            continue
-        path = Path(pkg.local_path).expanduser()
-        if not path.exists():
-            results[pkg.name] = {"status": "skipped", "error": f"{path} not found"}
-            continue
-        if not confirm:
-            results[pkg.name] = {
-                "status": "dry_run",
-                "commands": [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "-e",
-                    str(path),
-                    "-q",
-                ],
-            }
-            continue
-        work.append((pkg, path))
-
-    if not work:
-        return results
-
-    # Resolve --jobs
-    if jobs <= 0:
-        jobs = os.cpu_count() or 1
-    jobs = max(1, min(jobs, len(work)))
-
-    total = len(work)
-    started = {pkg.name: time.monotonic() for pkg, _ in work}
-
-    if jobs == 1:
-        # Serial path — preserve deterministic ordering
-        for idx, (pkg, path) in enumerate(work, 1):
-            name, res = _install_one(pkg, path)
-            results[name] = res
-            if on_progress is not None:
-                on_progress(
-                    idx, total, name, res["status"], time.monotonic() - started[name]
-                )
-    else:
-        # Parallel path — pip install -e is mostly I/O (git, PyPI metadata)
-        with ThreadPoolExecutor(max_workers=jobs) as ex:
-            futures = {
-                ex.submit(_install_one, pkg, path): pkg.name for pkg, path in work
-            }
-            for idx, fut in enumerate(as_completed(futures), 1):
-                name, res = fut.result()
-                results[name] = res
-                if on_progress is not None:
-                    on_progress(
-                        idx,
-                        total,
-                        name,
-                        res["status"],
-                        time.monotonic() - started[name],
-                    )
-
     return results
 
 

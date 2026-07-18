@@ -161,10 +161,12 @@ class TestLoadConfigCategoryOverride:
         )
         # Act
         cfg = load_config(start_path=str(tmp_path))
-        # Assert
+        # Assert — io/path PLUS the figure-family v1 categories (figure, plot).
         assert cfg.category_severity_override == {
             "io": "error",
             "path": "error",
+            "figure": "error",
+            "plot": "error",
         }
 
     def test_pip_only_project_leaves_override_empty(self, tmp_path):
@@ -191,10 +193,12 @@ class TestLoadConfigCategoryOverride:
         )
         # Act
         cfg = load_config(start_path=str(tmp_path))
-        # Assert
+        # Assert — hybrid repo still gets the full research floor.
         assert cfg.category_severity_override == {
             "io": "error",
             "path": "error",
+            "figure": "error",
+            "plot": "error",
         }
 
     # ------------------------------------------------------------------ #

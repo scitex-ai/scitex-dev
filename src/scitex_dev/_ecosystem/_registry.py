@@ -225,6 +225,20 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "github_repo": "ywatanabe1989/scitex-audit",
         "import_name": "scitex_audit",
         "category": "library",
+        # ARCHIVED 2026-07-16 (operator ruling). Content is in
+        # scitex-security per ADR-0002, which reversed ADR-0001: security
+        # is canonical; "audit" was the narrower, more ambiguous name and
+        # collides with this package's own ``ecosystem audit-all`` verbs.
+        # Nothing was ported -- security already carried every symbol;
+        # audit's only unique ones were the ADR-0001-direction migration
+        # helpers, i.e. the superseded half.
+        #
+        # The row STAYS rather than being deleted: the repo still exists
+        # as a public GitHub archive and scitex-audit 0.2.0 is still
+        # installable (archiving is not yanking; yanking breaks installed
+        # callers per ADR-0002). Deleting it would blind ecosystem sweeps
+        # to a repo that is still out there.
+        "archived": True,
     },
     "scitex-parallel": {
         "local_path": "~/proj/scitex-parallel",
@@ -366,16 +380,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_context",
         "category": "library",
     },
-    "scitex-core": {
-        # Core infrastructure / fundamental utilities. Added 2026-06-07
-        # alongside scitex-audit (#132 batch) — on PyPI and GH but was
-        # absent from this registry.
-        "local_path": "~/proj/scitex-core",
-        "pypi_name": "scitex-core",
-        "github_repo": "ywatanabe1989/scitex-core",
-        "import_name": "scitex_core",
-        "category": "library",
-    },
     "scitex-events": {
         "local_path": "~/proj/scitex-events",
         "pypi_name": "scitex-events",
@@ -418,22 +422,10 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "import_name": "scitex_nn",
         "category": "library",
     },
-    "scitex-linter": {
-        # GH-archived 2026 — AST-linter rules now live in scitex-dev
-        # (>=0.16.0, ``scitex_dev.linter._rules``); the standalone repo
-        # was archived. Kept here with archived=True so historical refs
-        # and plugin entry-points still resolve.
-        "local_path": "~/proj/scitex-linter",
-        "pypi_name": "scitex-linter",
-        "github_repo": "ywatanabe1989/scitex-linter",
-        "import_name": "scitex_linter",
-        "category": "library",
-        "archived": True,
-    },
     "scitex-math": {
         # Mathematical utilities (parity helpers, etc.). Added
-        # 2026-06-07 alongside scitex-audit / scitex-core (#132 batch) —
-        # on PyPI and GH but was absent from this registry.
+        # 2026-06-07 alongside scitex-audit (#132 batch) — on PyPI and
+        # GH but was absent from this registry.
         "local_path": "~/proj/scitex-math",
         "pypi_name": "scitex-math",
         "github_repo": "ywatanabe1989/scitex-math",
@@ -452,13 +444,6 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "pypi_name": "scitex-genai",
         "github_repo": "ywatanabe1989/scitex-genai",
         "import_name": "scitex_genai",
-        "category": "library",
-    },
-    "scitex-gen": {
-        "local_path": "~/proj/scitex-gen",
-        "pypi_name": "scitex-gen",
-        "github_repo": "ywatanabe1989/scitex-gen",
-        "import_name": "scitex_gen",
         "category": "library",
     },
     "scitex-dsp": {
@@ -575,19 +560,24 @@ ECOSYSTEM: Dict[str, PackageInfo] = {
         "category": "library",
     },
     "scitex-security": {
-        # Absorbed into scitex-audit 2026-06-07 per ADR-0001 (#139).
-        # scitex-security 0.2.0 is a deprecated re-export shim of
-        # ``scitex_audit.github``; the standalone repo will be yanked from
-        # PyPI at W3 once reconcile-versions confirms zero downstream
-        # pins. Kept here with archived=True so historical refs +
-        # umbrella-extras reconciliation know not to expect an active
-        # standalone going forward (mirrors the scitex-linter precedent).
+        # CANONICAL. This entry previously described the ADR-0001 (#139)
+        # direction -- "absorbed into scitex-audit", "a deprecated
+        # re-export shim of scitex_audit.github", "will be yanked from
+        # PyPI at W3" -- and carried archived=True. ADR-0002 (#142,
+        # Accepted 2026-06-07 the same afternoon) REVERSED that: security
+        # is the unified home; "audit" was the broader codebase but the
+        # narrower, more ambiguous name. The reversal was never applied
+        # here, so the registry marked the SURVIVOR as archived and the
+        # ARCHIVED package as active -- exactly backwards.
+        #
+        # NOT archived, and NOT to be yanked: scitex-audit is the public
+        # archive (2026-07-16 operator ruling), and yanking anything
+        # breaks installed callers (ADR-0002).
         "local_path": "~/proj/scitex-security",
         "pypi_name": "scitex-security",
         "github_repo": "ywatanabe1989/scitex-security",
         "import_name": "scitex_security",
         "category": "library",
-        "archived": True,
     },
     "scitex-session": {
         "local_path": "~/proj/scitex-session",

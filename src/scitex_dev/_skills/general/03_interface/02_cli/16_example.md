@@ -20,43 +20,42 @@ Options:
   --help-recursive  Show help for all commands.
   -h, --help        Show this message and exit.
 
-Figure (noun group):
+Core:
   figure create        Create a figure from a declarative YAML/JSON spec.
   figure reproduce     Reproduce a figure from a YAML recipe.
   figure compose       Compose multiple figures into one.
   figure extract       Extract plotted data arrays from a recipe.
   figure validate      Validate that a recipe reproduces its original figure.
   figure show          Show information about a recipe.
-
-Image (noun group):
   image convert        Convert between figure formats.
   image crop           Crop an image to its content area.
   image diff           Compare two images and report pixel differences.
   image hitmap         Generate hitmap visualization from two images.
-
-Diagram (noun group):
   diagram create       Create a diagram from a spec (flowchart, pipeline, etc.).
   diagram render       Render a diagram to an image.
   diagram list         List available diagrams.
-
-Style & font (noun groups):
   style list           List available style presets.
   style show           Show a style preset.
   style apply          Apply a style preset to a figure.
   font list            List available fonts.
-  font check           Verify a font is installed and usable.
+  font validate        Validate a font is installed and usable.
 
-GUI (noun group, lifecycle):
-  gui start            Launch interactive GUI editor.
-  gui stop             Stop the running GUI editor.
-
-MCP (noun group):
+Service:
+  gui open [SURFACE]       Open the GUI editor in the browser (auto-serve).
+  gui serve                Run the GUI server in the foreground (--port, --host).
+  gui status               Report whether the GUI server is running.
+  gui stop                 Stop the running GUI server.
   mcp start                MCP (Model Context Protocol) server.
   mcp doctor               Self-diagnose the MCP install.
   mcp list-tools           Enumerate registered MCP tools (-v|-vv|-vvv, --json).
   mcp show-installation    Print snippet for Claude Code / MCP-host config.
 
-Reference (noun groups):
+Diagnostics:
+  doctor               Self-diagnose installation / environment.
+
+Introspection:
+  dev list-python-apis     List public Python APIs (-v|-vv|-vvv, --json).
+  dev docs-build           Build the package docs (developer-facing).
   docs list                List package documentation pages.
   docs show                Show a documentation page.
   docs search              Search documentation.
@@ -64,23 +63,22 @@ Reference (noun groups):
   skills show              Show a skill page.
   skills search            Search skills.
 
-Top-level compound leaves (verb-noun, no group):
-  list-python-apis            List public Python APIs (-v|-vv|-vvv, --json).
-  install-shell-completion    Install shell completion script (--shell bash).
-  print-shell-completion      Print shell completion script to stdout.
-
-Single-token exceptions (intransitive verbs):
-  doctor               Self-diagnose installation / environment.
+Shell:
+  completion install       Install shell completion (--shell bash, --dry-run).
+  completion status        Report whether completion is wired for this binary.
 ```
 
 ## Why this shape
 
 - **Every leaf is `<noun> <verb>` or `<verb>-<noun>` compound.** No bare transitive verbs at top level — see §1 [02_subcommand-structure-noun-verb.md](02_subcommand-structure-noun-verb.md).
-- **Noun groups (`figure`, `image`, `diagram`, …)** appear when a noun has 3+ sibling verbs. With 1–2 actions a compound leaf (`list-python-apis`) is preferred.
-- **No bare `completion` or `version` subcommands.** `--version` is a reserved flag (§1b [04_exceptions.md](04_exceptions.md)); shell-completion is a verb-noun compound (`install-shell-completion`, `print-shell-completion`).
+- **Help sections are the fixed §4a categories** (`Core` / `Data & Sync` / `Service` / `Diagnostics` / `Introspection` / `Shell` / `Other`) rendered by `CategorizedGroup` — see [10a_command-categories.md](10a_command-categories.md). Empty categories (here `Data & Sync`, `Other`) are omitted.
+- **Noun groups (`figure`, `image`, `diagram`, …)** appear when a noun has 3+ sibling verbs, and are **singular** (§1d). With 1–2 actions a compound leaf (`list-python-apis`) is preferred.
+- **No bare `completion` or `version` subcommands.** `--version` is a reserved flag (§1b [04_exceptions.md](04_exceptions.md)); shell completion is the `completion` noun group (`completion install [--dry-run]`, `completion status`).
+- **Developer commands live under `dev`** (§11 [18_dev-subgroup-and-ecosystem-placement.md](18_dev-subgroup-and-ecosystem-placement.md)) — `dev list-python-apis`, `dev docs-build`. User-facing commands never do.
+- **The browser surface is the canonical `gui` group** (§12 [19_gui-commands.md](19_gui-commands.md)): `open` / `serve` / `status` / `stop` — never `gui start` (reserved for daemonized lifecycle) or a bare `board` leaf.
 - **`doctor` is the only single-token leaf.** It's an intransitive exception (§1b). `repl` / `shell` are also allowed when the package ships an interactive session; this example doesn't.
-- **`mcp list-tools` follows the same `-v|-vv|-vvv` ladder** as `list-python-apis` — see [03_required-introspection-commands.md](03_required-introspection-commands.md).
-- **No `kill` / `display` / `rm` / `enumerate`** — synonyms picked from the canonical catalog ([06_noun-verb-catalog.md](06_noun-verb-catalog.md)).
+- **`mcp list-tools` follows the same `-v|-vv|-vvv` ladder** as `dev list-python-apis` — see [03_required-introspection-commands.md](03_required-introspection-commands.md).
+- **No `kill` / `display` / `rm` / `enumerate` / `check`** — synonyms picked from the canonical catalog ([06_noun-verb-catalog.md](06_noun-verb-catalog.md)); `validate` over `check` (`font validate`).
 
 ## Auto-generation note
 
