@@ -52,11 +52,27 @@ next.
 Imports are LAZY (PEP 562): ``_sources`` pulls in urllib/subprocess, and a
 leaf may import this package on its CLI hot path — an eager import would put
 that cost on every ``--help``.
+
+THE HOT PATH IS CHEAPER STILL: ``_fastpath``
+---------------------------------------------
+Lazy is not free. Importing this package at all costs ~200 ms, and almost
+none of that is this file — it is the PARENT ``scitex_dev`` package, which
+Python must import first. sac measured 201 ms against its own ~150 ms
+whole-CLI budget.
+
+So a consumer that wants to hook the currency check onto EVERY invocation
+pre-gates on the warm cache instead, via :mod:`._fastpath` — stdlib-only,
+no relative imports, ~0.02 ms when loaded standalone by file location::
+
+    if fastpath.cache_is_fresh(CACHE_PATH):
+        ...          # warm — skip the ~200 ms full check this invocation
+
+:func:`cache_is_fresh` is re-exported here (lazily) for callers already off
+the hot path. Read ``_fastpath``'s docstring before wiring it: the standalone
+load is the part that actually buys the speed.
 """
 
 from __future__ import annotations
-
-from ._model import Currency, Finding, Report
 
 __all__ = [
     "Currency",
@@ -67,7 +83,10 @@ __all__ = [
     "LiveSources",
     "StaticSources",
     "build_report",
+    "cache_is_fresh",
     "cache_path",
+    "cached_generated_at",
+    "cached_state",
     "check_currency",
     "check_ghost_tags",
     "check_install_currency",
@@ -100,7 +119,20 @@ def check_currency(config, sources=None, *, now=None) -> Report:
 
 # name -> submodule holding it. Resolved on first attribute access so a leaf
 # never pays for urllib/subprocess merely by importing the package.
+#
+# The model types are lazy too, not just the expensive ones. They are cheap
+# in themselves, but an eager `from ._model import ...` here would put
+# `_model` in `sys.modules` for anyone who touched this package at all — and
+# "is `_model` loaded?" is precisely the assertion that pins the fastpath's
+# cheapness (tests/scitex_dev/versioning/test__fastpath.py). A guarantee you
+# cannot assert on is not a guarantee.
 _LAZY = {
+    "Currency": "._model",
+    "Finding": "._model",
+    "Report": "._model",
+    "cache_is_fresh": "._fastpath",
+    "cached_generated_at": "._fastpath",
+    "cached_state": "._fastpath",
     "SymbolExpectation": "._symbols",
     "probe": "._symbols",
     "VersioningConfig": "._config",
