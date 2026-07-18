@@ -29,6 +29,7 @@ from pathlib import Path
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from .checker import lint_file
 from .config import load_config
 from .formatter import format_issue, format_summary, to_json
@@ -130,7 +131,28 @@ def _do_check(
 def register(main_group):
     """Attach the ``validate-files`` command to ``main_group``."""
 
-    @main_group.command("validate-files")
+    @main_group.command(
+        "validate-files",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Check Python files for SciTeX pattern compliance.",
+            examples=(
+                Example("{prog} linter validate-files src/", "Lint a source tree."),
+                Example(
+                    "{prog} linter validate-files my_script.py --json",
+                    "Machine-readable findings.",
+                ),
+                Example(
+                    "{prog} linter validate-files src/ --severity error --no-color",
+                    "Errors only, plain output.",
+                ),
+                Example(
+                    "{prog} linter validate-files my_script.py --new-only --baseline HEAD",
+                    "Block only on NEWLY-introduced findings.",
+                ),
+            ),
+        ),
+    )
     @click.argument("path", type=click.Path())
     @click.option(
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
@@ -174,15 +196,6 @@ def register(main_group):
         ),
     )
     def validate_files(path, as_json, no_color, severity, category, new_only, baseline):
-        """Check Python files for SciTeX pattern compliance.
-
-        \b
-        Example:
-            $ scitex-dev linter validate-files src/
-            $ scitex-dev linter validate-files my_script.py --json
-            $ scitex-dev linter validate-files src/ --severity error --no-color
-            $ scitex-dev linter validate-files my_script.py --new-only --baseline HEAD
-        """
         sys.exit(
             _do_check(
                 path,
