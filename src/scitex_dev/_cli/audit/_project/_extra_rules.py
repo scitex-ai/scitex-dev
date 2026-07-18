@@ -478,4 +478,28 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "E",
         "agent-script-no-claims-json-terminus",
     ),
+    # PS-169 — GitHub-hosted runners forbidden (operator mandate 2026-07-14;
+    # reland of closed PR #344). Check + resolution logic in
+    # `_check_hosted_runners.py`. Registered here (not co-located) because that
+    # module imports `_new_vs_baseline` and importing its rule tuple back into
+    # `_registry` would close a cycle — same reason PS-214/PS-215 live here.
+    # Ships at W (bake-in); NEW violations ratchet to E via the baseline check,
+    # and the whole rule promotes to E once the fleet is confirmed clean.
+    (
+        "PS-169",
+        "§1",
+        (
+            "GitHub Actions job runs on a GitHub-HOSTED runner "
+            "(`ubuntu-*` / `macos-*` / `windows-*`) — forbidden without "
+            "exception (operator mandate 2026-07-14). Every SciTeX job must "
+            "run on the self-hosted pool: `runs-on: [self-hosted, Linux, X64, "
+            "scitex-ci]` or the fleet idiom `runs-on: ${{ fromJSON(vars."
+            "CI_RUNS_ON || '[\"self-hosted\",\"Linux\",\"X64\",\"scitex-ci\"]"
+            "') }}`. If the pool cannot run the job, fix the pool — never fall "
+            "back to a hosted runner. WARN during bake-in; NEW violations "
+            "ratchet to ERROR."
+        ),
+        "W",
+        "hosted-runner-forbidden",
+    ),
 ]
