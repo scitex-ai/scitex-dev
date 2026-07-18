@@ -10,6 +10,7 @@ import subprocess
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 
 
@@ -210,7 +211,29 @@ def _xdist_tuning_table() -> list[dict]:
 
 
 def register(group: click.Group) -> None:
-    @group.command()
+    @group.command(
+        "status",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Show runner state, CI_RUNS_ON, lease status, xdist info.",
+            description=(
+                "\b\n"
+                "Reports per-topic:\n"
+                "  runner     — online/offline status from GitHub API\n"
+                "  ci_runs_on — the active CI_RUNS_ON variable value\n"
+                "  lease      — SLURM CI lease job status (jobid, state,\n"
+                "               time_left)\n"
+                "  xdist      — adaptive xdist worker table (with --explain)"
+            ),
+            examples=(
+                Example("{prog} ci runner status", "Human-readable status."),
+                Example(
+                    "{prog} ci runner status --explain --json",
+                    "Structured status with the xdist tuning table.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--json",
         "as_json",
@@ -225,20 +248,6 @@ def register(group: click.Group) -> None:
         help="Include the adaptive xdist tuning table.",
     )
     def status_cmd(as_json: bool, explain: bool) -> None:
-        """Show runner state, CI_RUNS_ON, lease status, xdist info.
-
-        \b
-        Reports per-topic:
-          runner     — online/offline status from GitHub API
-          ci_runs_on — the active CI_RUNS_ON variable value
-          lease      — SLURM CI lease job status (jobid, state, time_left)
-          xdist      — adaptive xdist worker table (with --explain)
-
-        \b
-        Example:
-          $ scitex-dev ci runner status
-          $ scitex-dev ci runner status --explain --json
-        """
         import os  # noqa: E402
 
         cfg = config.load_runner_config()

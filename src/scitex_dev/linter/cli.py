@@ -38,6 +38,7 @@ import sys
 import click
 
 from . import __version__
+from .._ecosystem.help_spec import CliHelp, Example, SpecGroup
 from .rules import ALL_RULES
 
 # =========================================================================
@@ -75,6 +76,40 @@ def _print_help_recursive(ctx: click.Context, _param, value):
 @click.group(
     invoke_without_command=True,
     context_settings={"help_option_names": ["-h", "--help"]},
+    cls=SpecGroup,
+    command_categories=[
+        ("Core", ["validate-files", "format-files", "lint-and-run", "sweep"]),
+        ("Service", ["mcp"]),
+        ("Introspection", ["list-rules", "list-rules-all", "list-python-apis"]),
+        (
+            "Shell",
+            [
+                "install-shell-completion",
+                "print-shell-completion",
+                "show-completion-status",
+                "show-completion-bash",
+                "show-completion-zsh",
+            ],
+        ),
+    ],
+    help_spec=CliHelp(
+        summary="SciTeX Linter — enforce reproducible research patterns.",
+        examples=(
+            Example("{prog} linter validate-files src/", "Lint a source tree."),
+            Example("{prog} linter list-rules --json", "Machine-readable rule list."),
+            Example("{prog} linter mcp list-tools", "Show the MCP tool surface."),
+        ),
+        config_resolution=(
+            "Highest -> lowest precedence:",
+            "1. Explicit CLI flags",
+            "2. ./pyproject.toml [tool.scitex_dev.linter] "
+            "(legacy [tool.scitex-linter] still read)",
+            "3. ./config.yaml (project-local)",
+            "4. $SCITEX_DEV_LINTER_CONFIG (path to a YAML file)",
+            "5. ~/.scitex/dev/linter/config.yaml (user-wide)",
+            "6. Built-in defaults",
+        ),
+    ),
 )
 @click.version_option(__version__, "-V", "--version", prog_name="scitex-dev linter")
 @click.option(
@@ -94,23 +129,6 @@ def _print_help_recursive(ctx: click.Context, _param, value):
 )
 @click.pass_context
 def main_group(ctx, as_json):
-    """SciTeX Linter — enforce reproducible research patterns.
-
-    \b
-    Configuration precedence (highest -> lowest):
-      1. Explicit CLI flags
-      2. ./pyproject.toml [tool.scitex_dev.linter]  (legacy [tool.scitex-linter] still read)
-      3. ./config.yaml (project-local)
-      4. $SCITEX_DEV_LINTER_CONFIG (path to a YAML file)
-      5. ~/.scitex/dev/linter/config.yaml (user-wide)
-      6. Built-in defaults
-
-    \b
-    Example:
-        $ scitex-dev linter validate-files src/
-        $ scitex-dev linter list-rules --json
-        $ scitex-dev linter mcp list-tools
-    """
     ctx.ensure_object(dict)
     ctx.obj["as_json"] = as_json
     if ctx.invoked_subcommand is None:
@@ -156,223 +174,22 @@ deprecated_alias(
 
 
 # =========================================================================
-# format-files
+# format-files / lint-and-run / list-rules(-all) / list-python-apis
+# (extracted to ._cmds; registered here, re-exported for compat)
 # =========================================================================
 
+from ._cmds._apis import register as _register_apis  # noqa: E402
+from ._cmds._format import _do_format  # noqa: E402,F401  back-compat re-export
+from ._cmds._format import register as _register_format  # noqa: E402
+from ._cmds._rules import _do_list_rules  # noqa: E402,F401  back-compat re-export
+from ._cmds._rules import register as _register_rules  # noqa: E402
+from ._cmds._run import register as _register_run  # noqa: E402
 
-def _do_format(path, check, diff, dry_run, as_json):
-    from ._format_runner import run as _format_run
+format_files = _register_format(main_group)
+run_python = _register_run(main_group)
+list_rules_cmd, list_rules_all = _register_rules(main_group)
+list_python_apis = _register_apis(main_group)
 
-    return _format_run(path, check=check, diff=diff, dry_run=dry_run, as_json=as_json)
-
-
-@main_group.command("format-files")
-@click.argument("path", type=click.Path())
-@click.option(
-    "--check",
-    is_flag=True,
-    default=False,
-    help="Check if changes needed without writing (exit 1 if changes needed).",
-)
-@click.option("--diff", is_flag=True, default=False, help="Show diff of changes.")
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    default=False,
-    help="Show what would be fixed without writing.",
-)
-@click.option(
-    "--yes",
-    "-y",
-    is_flag=True,
-    default=False,
-    help="Skip confirmation (no-op; format is non-destructive on --check/--dry-run).",
-)
-@click.option("--json", "as_json", is_flag=True, default=False, help="Output as JSON.")
-def format_files(path, check, diff, dry_run, yes, as_json):
-    """Auto-fix SciTeX pattern issues in Python files.
-
-    \b
-    Example:
-        $ scitex-dev linter format-files src/
-        $ scitex-dev linter format-files my_script.py --diff
-        $ scitex-dev linter format-files src/ --check
-    """
-    sys.exit(_do_format(path, check, diff, dry_run, as_json))
-
-
-# =========================================================================
-# run-python
-# =========================================================================
-
-
-@main_group.command("lint-and-run")
-@click.argument("script", type=click.Path())
-@click.option("--strict", is_flag=True, default=False, help="Abort on lint errors.")
-@click.option("--json", "as_json", is_flag=True, default=False, help="Output as JSON.")
-@click.argument("script_args", nargs=-1, type=click.UNPROCESSED)
-def run_python(script, strict, as_json, script_args):
-    """Lint then execute a Python script.
-
-    Use -- to separate script arguments from linter flags.
-
-    \b
-    Example:
-        $ scitex-dev linter run-python my_script.py
-        $ scitex-dev linter run-python my_script.py --strict
-        $ scitex-dev linter run-python my_script.py -- --arg1 value
-    """
-    from .runner import run_script
-
-    sys.exit(run_script(script, strict=strict, script_args=list(script_args)))
-
-
-# =========================================================================
-# list-rules / list-rules-all
-# =========================================================================
-
-
-def _do_list_rules(rules_list, as_json):
-    if as_json:
-        data = [
-            {
-                "id": r.id,
-                "severity": r.severity,
-                "category": r.category,
-                "message": r.message,
-                "suggestion": r.suggestion,
-            }
-            for r in rules_list
-        ]
-        click.echo(json.dumps(data, indent=2))
-        return
-    use_color = sys.stdout.isatty()
-    sev_color = {"error": "\033[91m", "warning": "\033[93m", "info": "\033[94m"}
-    reset = "\033[0m"
-    for r in rules_list:
-        if use_color:
-            c = sev_color.get(r.severity, "")
-            click.echo(f"  {c}{r.id}{reset}  [{r.severity}]  {r.message}")
-        else:
-            click.echo(f"  {r.id}  [{r.severity}]  {r.message}")
-    click.echo(f"\n  {len(rules_list)} rules")
-
-
-@main_group.command("list-rules")
-@click.option("--json", "as_json", is_flag=True, default=False, help="Output as JSON.")
-@click.option(
-    "--category",
-    default=None,
-    help="Filter by category (comma-separated: structure,import,io,plot,stats).",
-)
-@click.option(
-    "--severity",
-    type=click.Choice(["error", "warning", "info"]),
-    default=None,
-    help="Filter by severity.",
-)
-def list_rules_cmd(as_json, category, severity):
-    """List all built-in SciTeX lint rules.
-
-    \b
-    Example:
-        $ scitex-dev linter list-rules
-        $ scitex-dev linter list-rules --json
-        $ scitex-dev linter list-rules --category structure --severity error
-    """
-    categories = set(category.split(",")) if category else None
-    rules_list = list(ALL_RULES.values())
-    if categories:
-        rules_list = [r for r in rules_list if r.category in categories]
-    if severity:
-        rules_list = [r for r in rules_list if r.severity == severity]
-    _do_list_rules(rules_list, as_json)
-
-
-@main_group.command("list-rules-all")
-@click.option("--json", "as_json", is_flag=True, default=False, help="Output as JSON.")
-@click.option(
-    "--category", default=None, help="Filter by category (e.g. io, plot, structure)."
-)
-@click.option(
-    "--severity",
-    type=click.Choice(["error", "warning", "info"]),
-    default=None,
-    help="Filter by severity.",
-)
-def list_rules_all(as_json, category, severity):
-    """List all SciTeX lint rules, including plugin-contributed rules.
-
-    \b
-    Example:
-        $ scitex-dev linter list-rules-all
-        $ scitex-dev linter list-rules-all --category io
-    """
-    from . import list_rules as _lr
-
-    rules_list = _lr(category=category)
-    if severity:
-        rules_list = [r for r in rules_list if r.severity == severity]
-    _do_list_rules(rules_list, as_json)
-
-
-# =========================================================================
-# list-python-apis
-# =========================================================================
-
-
-@main_group.command("list-python-apis")
-@click.option("--json", "as_json", is_flag=True, default=False, help="Output as JSON.")
-@click.option(
-    "-v",
-    "--verbose",
-    count=True,
-    default=0,
-    help="Verbosity: -v signatures, -vv +docstrings, -vvv full.",
-)
-def list_python_apis(as_json, verbose):
-    """List the public Python API surface of scitex_linter.
-
-    \b
-    Example:
-        $ scitex-dev linter list-python-apis
-        $ scitex-dev linter list-python-apis -vv
-        $ scitex-dev linter list-python-apis --json
-    """
-    from ._cmd_api import _PUBLIC_API
-
-    if as_json:
-        data = [
-            {"module": m, "kind": k, "name": n, "signature": s, "doc": d}
-            for m, k, n, s, d in _PUBLIC_API
-        ]
-        click.echo(json.dumps(data, indent=2))
-        return
-
-    use_color = sys.stdout.isatty()
-    cyan = "\033[96m" if use_color else ""
-    green = "\033[92m" if use_color else ""
-    yellow = "\033[93m" if use_color else ""
-    blue = "\033[94m" if use_color else ""
-    dim = "\033[2m" if use_color else ""
-    reset = "\033[0m" if use_color else ""
-    kind_color = {"F": green, "C": yellow, "V": blue}
-
-    click.echo(f"API tree of scitex_linter ({len(_PUBLIC_API)} items):")
-    click.echo("Legend: [M]=Module [C]=Class [F]=Function [V]=Variable")
-    current_mod = None
-    for mod, kind, name, sig, doc in _PUBLIC_API:
-        if mod != current_mod:
-            click.echo(f"{cyan}[M] {mod}{reset}")
-            current_mod = mod
-        kc = kind_color.get(kind, "")
-        if verbose == 0:
-            click.echo(f"  {kc}[{kind}]{reset} {name}")
-        else:
-            sep = "" if sig.startswith("(") else " "
-            click.echo(f"  {kc}[{kind}]{reset} {name}{sep}{sig}")
-            if verbose >= 2 and doc:
-                click.echo(f"       {dim}{doc}{reset}")
 
 
 # =========================================================================

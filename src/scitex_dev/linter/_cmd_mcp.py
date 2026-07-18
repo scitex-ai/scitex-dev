@@ -12,27 +12,48 @@ import sys
 import click
 
 from . import __version__
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
 from .rules import ALL_RULES
 
 
 def register(main_group):
     """Attach the ``mcp`` command group to ``main_group``."""
 
-    @main_group.group("mcp", invoke_without_command=True)
+    @main_group.group(
+        "mcp",
+        invoke_without_command=True,
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="MCP (Model Context Protocol) server management.",
+            examples=(
+                Example("{prog} linter mcp start", "Run the MCP server."),
+                Example("{prog} linter mcp list-tools", "Show the exposed tools."),
+                Example("{prog} linter mcp doctor", "Check MCP server health."),
+            ),
+        ),
+    )
     @click.pass_context
     def mcp_group(ctx):
-        """MCP (Model Context Protocol) server management.
-
-        \b
-        Example:
-            $ scitex-dev linter mcp start
-            $ scitex-dev linter mcp list-tools
-            $ scitex-dev linter mcp doctor
-        """
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
 
-    @mcp_group.command("start")
+    @mcp_group.command(
+        "start",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Start the MCP server.",
+            examples=(
+                Example("{prog} linter mcp start", "Start on the default transport."),
+                Example(
+                    "{prog} linter mcp start --transport sse", "Start with SSE."
+                ),
+                Example(
+                    "{prog} linter mcp start --dry-run",
+                    "Show what would happen; start nothing.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--transport",
         type=click.Choice(["stdio", "sse"]),
@@ -56,14 +77,6 @@ def register(main_group):
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
     def mcp_start(transport, dry_run, yes, as_json):
-        """Start the MCP server.
-
-        \b
-        Example:
-            $ scitex-dev linter mcp start
-            $ scitex-dev linter mcp start --transport sse
-            $ scitex-dev linter mcp start --dry-run
-        """
         if dry_run:
             click.echo(f"Would start MCP server (transport={transport}).")
             return
@@ -79,7 +92,23 @@ def register(main_group):
             )
             sys.exit(1)
 
-    @mcp_group.command("list-tools")
+    @mcp_group.command(
+        "list-tools",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="List available MCP tools exposed by `scitex-dev linter`.",
+            examples=(
+                Example("{prog} linter mcp list-tools", "Tool names only."),
+                Example(
+                    "{prog} linter mcp list-tools -vv",
+                    "Signatures plus descriptions.",
+                ),
+                Example(
+                    "{prog} linter mcp list-tools --json", "Machine-readable output."
+                ),
+            ),
+        ),
+    )
     @click.option(
         "-v",
         "--verbose",
@@ -91,14 +120,6 @@ def register(main_group):
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
     def mcp_list_tools(verbose, as_json):
-        """List available MCP tools exposed by `scitex-dev linter`.
-
-        \b
-        Example:
-            $ scitex-dev linter mcp list-tools
-            $ scitex-dev linter mcp list-tools -vv
-            $ scitex-dev linter mcp list-tools --json
-        """
         _KNOWN_TOOLS = ["linter_check", "linter_check_source", "linter_list_rules"]
         tools = []
         try:
@@ -163,17 +184,20 @@ def register(main_group):
                             click.echo(f"       {dm}{line}{r}")
                     click.echo()
 
-    @mcp_group.command("doctor")
+    @mcp_group.command(
+        "doctor",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Check MCP server health.",
+            examples=(
+                Example("{prog} linter mcp doctor", "Run the health checks."),
+            ),
+        ),
+    )
     @click.option(
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
     def mcp_doctor(as_json):
-        """Check MCP server health.
-
-        \b
-        Example:
-            $ scitex-dev linter mcp doctor
-        """
         import shutil
 
         click.echo(f"scitex-dev linter {__version__}\n")
@@ -228,7 +252,18 @@ def register(main_group):
         )
         ctx.exit(2)
 
-    @mcp_group.command("install")
+    @mcp_group.command(
+        "install",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Show Claude Desktop MCP configuration snippet.",
+            examples=(
+                Example(
+                    "{prog} linter mcp install", "Print the config snippet to paste."
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
@@ -244,12 +279,6 @@ def register(main_group):
         help="Accepted for §2; this verb is informational, never mutates state.",
     )
     def mcp_install(as_json, dry_run, yes):
-        """Show Claude Desktop MCP configuration snippet.
-
-        \b
-        Example:
-            $ scitex-dev linter mcp install
-        """
         del dry_run, yes  # audit §2 — no-op flags
         import shutil
 

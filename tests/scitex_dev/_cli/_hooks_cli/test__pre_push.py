@@ -7,7 +7,8 @@ is distributable across the ecosystem via the same symlink mechanism as
 ``run_lint``.
 
 Behaviour pinned here (CLI half — see
-``tests/scitex_dev/_hooks/test_pre_push.py`` for the bundled-script half):
+``tests/scitex_dev/_hooks/test___init___pre_push.py`` for the
+bundled-script half):
 - ``pre_push`` is a KNOWN_HOOK deploying to ``.githooks/pre-push``.
 - ``enable-pre-push`` symlinks the bundled ``pre-push.sh`` into
   ``<target>/.githooks/pre-push`` (no ``.sh`` suffix — git's pre-push

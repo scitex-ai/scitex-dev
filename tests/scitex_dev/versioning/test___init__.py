@@ -13,6 +13,10 @@
 
 Driven through ``StaticSources`` — a real implementation of the ``Sources``
 protocol fed recorded evidence. No network, no mocks.
+
+Named ``test___init__.py`` rather than ``test_check_currency.py``: PS-204
+mirrors test files onto src MODULES, and ``check_currency`` is defined in
+``versioning/__init__.py`` — there is no ``check_currency.py`` to mirror.
 """
 
 from __future__ import annotations
