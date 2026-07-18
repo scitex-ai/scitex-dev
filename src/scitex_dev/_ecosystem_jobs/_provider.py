@@ -90,6 +90,27 @@ def _local_state_audit_command() -> str:
     )
 
 
+def _pr_expire_command() -> str:
+    """Shell line installed for the ``pr-expire`` daily cron job.
+
+    SAFETY — SHIPS IN --dry-run (REPORT) MODE, NOT --apply. The operator
+    wants eventual fleet-wide auto-close, but a scheduled job that mass-
+    closes 12 repos on its very first fire is exactly the kind of
+    irreversible blast the constitution (§2) forbids. Flip ``--dry-run``
+    to ``--apply`` ONLY after a fleet-wide dry-run has been validated by a
+    human; do NOT auto-mass-close the fleet on first fire.
+    """
+    log = "$HOME/.scitex/dev/logs/cron-pr-expire.log"
+    return (
+        f"mkdir -p $(dirname {log}); "
+        f"date -u +'== pr-expire %Y-%m-%dT%H:%MZ ==' >> {log}; "
+        # flip to --apply after fleet-wide dry-run validation — constitution
+        # §2, do not auto-mass-close 12 repos on first fire.
+        f"scitex-dev ecosystem pr expire --all --days 3 --dry-run "
+        f">> {log} 2>&1 || true"
+    )
+
+
 def provide_jobs() -> list[JobSpec]:
     """Return scitex-dev's ecosystem-level JobSpecs for the federation.
 
@@ -178,6 +199,24 @@ def provide_jobs() -> list[JobSpec]:
             ),
             on_boot_sec="5min",
             on_unit_active_sec="6h",
+        ),
+        JobSpec(
+            name="pr-expire",
+            kind="cron",
+            schedule="30 3 * * *",
+            command=_pr_expire_command(),
+            description=(
+                "Fleet 3-day PR-expiry primitive. Runs `scitex-dev "
+                "ecosystem pr expire --all --days 3` daily (03:30). "
+                "SHIPS IN --dry-run (REPORT) MODE: it lists expiring PRs "
+                "fleet-wide to ~/.scitex/dev/logs/cron-pr-expire.log and "
+                "mutates NOTHING. Flip --dry-run to --apply ONLY after a "
+                "human-validated fleet-wide dry-run — constitution §2, do "
+                "NOT auto-mass-close 12 repos on first fire. --apply is "
+                "fail-closed: one intent-registry card (branch + head SHA "
+                "per PR) is written before any close. See "
+                "_ecosystem.pr_expire.run_expire."
+            ),
         ),
     ]
 

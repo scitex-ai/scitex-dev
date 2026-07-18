@@ -30,6 +30,7 @@ from ._cmds import (
     _jobs_cron,
     _jobs_systemd,
     _list,
+    _pr,
     _up,
     _prune_merged,
     _regen_umbrella,
@@ -113,6 +114,7 @@ def register_ecosystem_commands(main_group):
     _sync.register(ecosystem)
     _system_deps.register(ecosystem)
     _prune_merged.register(ecosystem)
+    _pr.register(ecosystem)
     _branch_protection.register(ecosystem)
     _ci_template.register(ecosystem)
     _regen_umbrella.register(ecosystem)
