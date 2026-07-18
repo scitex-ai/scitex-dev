@@ -1,5 +1,11 @@
 """Tests for the bundled ``scitex_dev/_hooks/pre-push.sh`` gate script.
 
+Named ``test___init___pre_push.py``, not ``test_pre_push.py``: the script
+under test is a ``.sh``, so the only Python module this suite has to mirror
+is ``_hooks/__init__.py`` — which is what it imports (``pre_push_sh_path``).
+``_pre_push`` is the PS-204 descriptor suffix distinguishing it from
+``test___init__.py`` (the run_testmon half of the same module).
+
 Companion to ``tests/scitex_dev/_cli/_hooks_cli/test__pre_push.py`` (the
 CLI half). This half drives the shipped shell script directly:
 

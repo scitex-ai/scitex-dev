@@ -12,10 +12,26 @@ import json as _json
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from .cli import main_group
 
 
-@main_group.command("sweep")
+@main_group.command(
+    "sweep",
+    cls=SpecCommand,
+    help_spec=CliHelp(
+        summary="Lint README + docs (.md/.rst) across the SciTeX ecosystem.",
+        examples=(
+            Example("{prog} linter sweep", "Sweep every non-archived package."),
+            Example(
+                "{prog} linter sweep --package figrecipe --package scitex-io",
+                "Sweep only the named packages.",
+            ),
+            Example("{prog} linter sweep --json", "Machine-readable report."),
+            Example("{prog} linter sweep --strict", "Exit non-zero on issues (CI)."),
+        ),
+    ),
+)
 @click.option(
     "--package",
     "packages",
@@ -32,15 +48,6 @@ from .cli import main_group
     help="Exit non-zero if any package has issues (CI gating).",
 )
 def sweep(packages, as_json, strict):
-    """Lint README + docs (.md/.rst) across the SciTeX ecosystem.
-
-    \b
-    Example:
-        $ scitex-dev lint sweep
-        $ scitex-dev lint sweep --package figrecipe --package scitex-io
-        $ scitex-dev lint sweep --json
-        $ scitex-dev lint sweep --strict       # for CI
-    """
     from ._ecosystem_sweep import format_summary, sweep_ecosystem
 
     pkgs = list(packages) if packages else None
