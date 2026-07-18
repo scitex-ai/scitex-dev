@@ -678,6 +678,136 @@ def test_apply_raises_on_non_git_repo(tmp_path):
         call()
 
 
+# --------------------------------------------------------------------------- #
+# Shared self-hosted runner isolation — per-job gitconfig + per-leg toolcache
+#
+# Concurrent matrix/parallel jobs land on ONE self-hosted runner sharing $HOME.
+# Two collision classes must be isolated: setup-uv's shared RUNNER_TOOL_CACHE
+# copy target (scitex-ui#71 ENOENT copyfile uvx) and checkout's ~/.gitconfig
+# lock (reland of #314). Both env vars MUST be published from a STEP-scope
+# `run:` writing to $GITHUB_ENV — the `runner` context is unavailable at
+# workflow/job `env:` (actions/runner#2204 "Unrecognized named-value:
+# 'runner'"), so a job/workflow-level `env:` would render an INVALID workflow.
+# --------------------------------------------------------------------------- #
+
+
+def _render_release(**overrides):
+    kwargs = dict(
+        pkg_name="scitex-io",
+        pkg_module="scitex_io",
+        python_versions=["3.11", "3.12", "3.13"],
+        scripts={},
+    )
+    kwargs.update(overrides)
+    return render("release-ci.yml.tmpl", **kwargs)
+
+
+def _parse(body: str) -> dict:
+    yaml = pytest.importorskip("yaml")
+    # `on:` is the YAML boolean True key after safe_load — irrelevant here.
+    return yaml.safe_load(body)
+
+
+def test_pr_matrix_job_carries_per_leg_toolcache_isolation():
+    # Arrange — each matrix leg must install uv into its OWN toolcache path.
+    expected = (
+        "RUNNER_TOOL_CACHE=${{ runner.temp }}"
+        "/toolcache-py${{ matrix.python-version }}"
+    )
+    # Act
+    body = _render_pr()
+    # Assert
+    assert expected in body
+
+
+def test_release_matrix_job_carries_per_leg_toolcache_isolation():
+    # Arrange
+    expected = (
+        "RUNNER_TOOL_CACHE=${{ runner.temp }}"
+        "/toolcache-py${{ matrix.python-version }}"
+    )
+    # Act
+    body = _render_release()
+    # Assert
+    assert expected in body
+
+
+def test_pr_template_carries_per_job_gitconfig_isolation():
+    # Arrange — reland of #314: isolate ~/.gitconfig per job.
+    expected = "GIT_CONFIG_GLOBAL=${{ runner.temp }}/gitconfig"
+    # Act
+    body = _render_pr()
+    # Assert
+    assert expected in body
+
+
+def test_release_template_carries_per_job_gitconfig_isolation():
+    # Arrange
+    expected = "GIT_CONFIG_GLOBAL=${{ runner.temp }}/gitconfig"
+    # Act
+    body = _render_release()
+    # Assert
+    assert expected in body
+
+
+def test_pr_non_matrix_jobs_carry_base_toolcache_isolation():
+    # Arrange — the non-matrix setup-uv sites (import-smoke, dep-hygiene, audit)
+    # also race the shared toolcache when they run alongside the matrix job.
+    # The closing quote distinguishes the base form from the matrix job's
+    # per-leg `.../toolcache-py${{ matrix.python-version }}` form.
+    needle = 'RUNNER_TOOL_CACHE=${{ runner.temp }}/toolcache"'
+    # Act
+    body = _render_pr()
+    # Assert — appears at least once (the base, non-suffixed form).
+    assert needle in body
+
+
+def test_isolation_is_step_scope_not_job_or_workflow_env():
+    # The `runner` context is only valid at STEP scope (actions/runner#2204).
+    # Guard the regression that would place these vars in a job/workflow-level
+    # `env:` mapping (invalid workflow): no parsed job may declare an `env` key,
+    # and the workflow itself must not carry a top-level `env`.
+    # Arrange
+    doc = _parse(_render_pr())
+    # Act
+    top_level_env = "env" in doc
+    job_envs = [name for name, job in doc["jobs"].items() if "env" in job]
+    # Assert
+    assert not top_level_env and job_envs == []
+
+
+def test_every_pr_job_first_step_publishes_isolation_to_github_env():
+    # Every job must isolate BEFORE checkout so GIT_CONFIG_GLOBAL protects
+    # checkout's `git config --global`; the first step must `run:`-publish both
+    # vars to $GITHUB_ENV (single all() over every job = one assertion).
+    # Arrange
+    doc = _parse(_render_pr())
+    # Act
+    first_runs = [job["steps"][0].get("run", "") for job in doc["jobs"].values()]
+    # Assert
+    assert all(
+        "GIT_CONFIG_GLOBAL=" in r
+        and "RUNNER_TOOL_CACHE=" in r
+        and '>> "$GITHUB_ENV"' in r
+        for r in first_runs
+    )
+
+
+def test_pr_isolation_precedes_checkout_in_every_job():
+    # The isolation step must be step[0] and checkout step[1] — order matters
+    # (GIT_CONFIG_GLOBAL must be set before checkout touches ~/.gitconfig).
+    # Arrange
+    doc = _parse(_render_pr())
+    # Act
+    order_ok = [
+        "GIT_CONFIG_GLOBAL=" in job["steps"][0].get("run", "")
+        and job["steps"][1].get("uses", "").startswith("actions/checkout")
+        for job in doc["jobs"].values()
+    ]
+    # Assert
+    assert all(order_ok)
+
+
 def test_rendered_yaml_is_parseable_yaml(tmp_path):
     # Arrange
     pytest.importorskip("yaml")

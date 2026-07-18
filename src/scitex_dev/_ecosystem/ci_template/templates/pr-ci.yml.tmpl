@@ -35,6 +35,17 @@ jobs:
     name: import-smoke-on-ubuntu-py3-12
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
     steps:
+      - name: Isolate git config + uv toolcache (shared self-hosted runner)
+        # Concurrent jobs share the runner's $HOME: checkout's `git config
+        # --global` locks ~/.gitconfig, and setup-uv copies uv/uvx into the
+        # shared RUNNER_TOOL_CACHE (~/.runner-toolcache). Redirect both at
+        # runner.temp (unique per runner INSTANCE, hence per concurrent job) so
+        # jobs stay fully parallel. runner.temp is STEP-scope only (job/workflow
+        # env raise "Unrecognized named-value: 'runner'", actions/runner#2204),
+        # so publish via $GITHUB_ENV here, before checkout, to reach later steps.
+        run: |
+          echo "GIT_CONFIG_GLOBAL=${{ runner.temp }}/gitconfig" >> "$GITHUB_ENV"
+          echo "RUNNER_TOOL_CACHE=${{ runner.temp }}/toolcache" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -54,6 +65,17 @@ jobs:
     name: dep-hygiene-smoke
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
     steps:
+      - name: Isolate git config + uv toolcache (shared self-hosted runner)
+        # Concurrent jobs share the runner's $HOME: checkout's `git config
+        # --global` locks ~/.gitconfig, and setup-uv copies uv/uvx into the
+        # shared RUNNER_TOOL_CACHE (~/.runner-toolcache). Redirect both at
+        # runner.temp (unique per runner INSTANCE, hence per concurrent job) so
+        # jobs stay fully parallel. runner.temp is STEP-scope only (job/workflow
+        # env raise "Unrecognized named-value: 'runner'", actions/runner#2204),
+        # so publish via $GITHUB_ENV here, before checkout, to reach later steps.
+        run: |
+          echo "GIT_CONFIG_GLOBAL=${{ runner.temp }}/gitconfig" >> "$GITHUB_ENV"
+          echo "RUNNER_TOOL_CACHE=${{ runner.temp }}/toolcache" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -77,6 +99,18 @@ jobs:
       matrix:
         python-version: ${{ github.event_name == 'pull_request' && fromJson('<PYTHON_VERSIONS_JSON>') || fromJson('["3.12"]') }}
     steps:
+      - name: Isolate git config + uv toolcache (shared self-hosted runner)
+        # scitex-ui#71: concurrent matrix legs on ONE self-hosted runner raced
+        # setup-uv's shared RUNNER_TOOL_CACHE copy target (ENOENT copyfile
+        # .../uvx). Give each leg its OWN toolcache (per-leg suffix) and its own
+        # global gitconfig, both under runner.temp (unique per runner instance)
+        # so legs stay FULLY PARALLEL — no max-parallel serialisation.
+        # runner.temp is STEP-scope only (job/workflow env raise "Unrecognized
+        # named-value: 'runner'", actions/runner#2204), so publish via
+        # $GITHUB_ENV here, before checkout, to reach every later step.
+        run: |
+          echo "GIT_CONFIG_GLOBAL=${{ runner.temp }}/gitconfig" >> "$GITHUB_ENV"
+          echo "RUNNER_TOOL_CACHE=${{ runner.temp }}/toolcache-py${{ matrix.python-version }}" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - name: Install uv
         uses: astral-sh/setup-uv@v3
@@ -122,6 +156,18 @@ jobs:
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
     timeout-minutes: 20
     steps:
+      - name: Isolate git config + uv toolcache (shared self-hosted runner)
+        # Concurrent jobs share the runner's $HOME: checkout's `git config
+        # --global` (and this job's `git fetch` / audit-all `git worktree add`)
+        # lock ~/.gitconfig, and setup-uv copies uv/uvx into the shared
+        # RUNNER_TOOL_CACHE. Redirect both at runner.temp (unique per runner
+        # INSTANCE, hence per concurrent job) so jobs stay fully parallel.
+        # runner.temp is STEP-scope only (job/workflow env raise "Unrecognized
+        # named-value: 'runner'", actions/runner#2204), so publish via
+        # $GITHUB_ENV here, before checkout, to reach every later step.
+        run: |
+          echo "GIT_CONFIG_GLOBAL=${{ runner.temp }}/gitconfig" >> "$GITHUB_ENV"
+          echo "RUNNER_TOOL_CACHE=${{ runner.temp }}/toolcache" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           # Full history so --new-only can compute the merge-base diff against
