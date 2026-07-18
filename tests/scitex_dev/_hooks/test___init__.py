@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 from scitex_dev._hooks import run_testmon_sh_path
 
@@ -53,6 +54,74 @@ class TestRunTestmonShPath:
         assert emitted == (True, True, True, True), (
             f"run_testmon_sh_path must return an absolute, existing, "
             f"executable run_testmon.sh; got {path!r} -> {emitted}"
+        )
+
+
+# ---------------------------------------------------------------------- #
+# Deterministic interpreter (NOT a bare `python3` off ambient $PATH)      #
+# ---------------------------------------------------------------------- #
+#
+# PS-HOOK-001 bans a bare `python3` / `pytest` under a $PATH lookup. The
+# wrapper itself used to commit that anti-pattern (`python3 -m pytest
+# --testmon`). It now resolves an ABSOLUTE interpreter once up front
+# (`$SCITEX_DEV_PYTHON` → `command -v python3`) and uses it everywhere,
+# failing LOUDLY (exit 127) if none resolves.
+
+
+class TestRunTestmonResolvedInterpreter:
+    """The wrapper pins a resolved interpreter, not a bare `python3`."""
+
+    def test_run_line_uses_resolved_var_not_bare_python3(self):
+        # Arrange — locate the shipped wrapper source.
+        script = run_testmon_sh_path()
+        # Act — read its text.
+        text = Path(script).read_text(encoding="utf-8")
+        # Assert — the pytest RUN line goes through the resolved `$PY`
+        # var, the resolver uses `command -v python3` captured to a var,
+        # and NO bare `python3 -m pytest` remains.
+        emitted = (
+            '"$PY" -m pytest --testmon' in text,
+            "command -v python3" in text,
+            'PY="${SCITEX_DEV_PYTHON:-}"' in text,
+            "python3 -m pytest" not in text,
+        )
+        assert emitted == (True, True, True, True), (
+            f"run_testmon.sh must invoke a resolved interpreter, not a bare "
+            f"`python3 -m pytest`; got {emitted}"
+        )
+
+    def test_exits_loudly_when_no_interpreter_resolvable(self, tmp_path):
+        # Arrange — a sterile PATH with bash only (no python3) and no
+        # SCITEX_DEV_PYTHON override, so the resolver cannot find any
+        # interpreter and MUST fail closed rather than fall back to an
+        # ambient tool.
+        sterile = tmp_path / "sterile-bin"
+        sterile.mkdir()
+        real_bash = subprocess.run(
+            ["bash", "-c", "command -v bash"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        (sterile / "bash").symlink_to(real_bash)
+        env = {"PATH": str(sterile), "HOME": str(tmp_path), "LC_ALL": "C"}
+        # Act — invoke via an absolute bash so exec resolution does not
+        # itself depend on PATH; the wrapper's own `command -v python3`
+        # then sees the sterile PATH.
+        proc = subprocess.run(
+            [real_bash, run_testmon_sh_path()],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=str(tmp_path),
+            env=env,
+        )
+        # Assert — exit 127 AND a clear "no python3" message (never a
+        # silent skip that would let a cold suite pose as a warm run).
+        combined = proc.stdout + proc.stderr
+        emitted = (proc.returncode, "no python3 interpreter found" in combined)
+        assert emitted == (127, True), (
+            f"wrapper must fail loudly (127) when no interpreter resolves; "
+            f"got {emitted}\nstdout={proc.stdout!r}\nstderr={proc.stderr!r}"
         )
 
 

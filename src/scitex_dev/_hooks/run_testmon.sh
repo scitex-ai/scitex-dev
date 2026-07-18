@@ -2,9 +2,13 @@
 # scitex-dev — canonical pytest-testmon warm-cache wrapper.
 # -*- coding: utf-8 -*-
 #
-# This is the AUTHORITATIVE source for the testmon pre-commit hook
-# wrapper. It makes pytest-testmon worktree-resilient via a persistent
-# per-repo warm cache.
+# This is the AUTHORITATIVE source for the testmon PRE-PUSH selector.
+# It makes pytest-testmon worktree-resilient via a persistent per-repo
+# warm cache. Its sole in-fleet caller is the pre-push gate (`pre-push.sh`
+# Step 4), which invokes it so a fresh release worktree gets the warm
+# cache instead of cold-running the full suite. This is NOT a
+# `.pre-commit-config.yaml` entry: a test selector belongs at pre-push,
+# not pre-commit (see 15_pre-commit-policy.md).
 #
 # THE PROBLEM IT SOLVES
 # ---------------------
@@ -31,13 +35,40 @@
 #
 # WIRING
 # ------
-# Repos reference this script from ``.pre-commit-config.yaml`` via:
+# The pre-push gate resolves this script's absolute path via
 #
-#     entry: bash $(scitex-dev hooks show-path run_testmon)
+#     scitex-dev hooks show-path run_testmon
 #
-# so future fixes land here and every project picks them up.
+# and calls it as the Step-4 test selector, so future fixes land here and
+# every project's pre-push gate picks them up. (A `scitex-dev-testmon`
+# console script also execs this wrapper for callers that need a bare,
+# shell-expansion-free entry point.)
 
 set -euo pipefail
+
+# ---------------------------------------------------------------------- #
+# Deterministic interpreter resolution                                   #
+# ---------------------------------------------------------------------- #
+# Resolve the Python interpreter to an ABSOLUTE path ONCE, up front, and
+# use it for every `python`/`pytest` invocation below. A bare `python3`
+# off the ambient $PATH is exactly the PS-HOOK-001 anti-pattern (the
+# $PATH lottery that resolves to a different venv per machine) — this
+# wrapper must not itself commit it. Precedence:
+#   1. $SCITEX_DEV_PYTHON — explicit operator/CI override.
+#   2. `command -v python3` — the active PATH's python3, captured to an
+#      absolute path (so the recorded argv[0] contains a `/`, not a bare
+#      name), resolved deterministically for the whole run.
+# Fail LOUDLY if neither resolves — a silent skip would let a cold suite
+# masquerade as a warm-cache run.
+PY="${SCITEX_DEV_PYTHON:-}"
+if [[ -z "$PY" ]]; then
+    PY="$(command -v python3 || true)"
+fi
+if [[ -z "$PY" ]]; then
+    echo "run_testmon.sh: no python3 interpreter found on PATH." >&2
+    echo "run_testmon.sh: set SCITEX_DEV_PYTHON to an absolute interpreter." >&2
+    exit 127
+fi
 
 # --self-test: verify the cache-path resolution logic runs without a real
 # pytest by short-circuiting before the RUN stage. Mirrors run_lint.sh.
@@ -56,7 +87,7 @@ if [[ "${1:-}" == "--self-test" ]]; then
     # of which worktree invoked this script.
     GIT_COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "$GIT_ROOT/.git")"
     REPO="$(basename "$(dirname "$GIT_COMMON_DIR")")"
-    PYXY="$(python3 -c 'import sys;print(f"py{sys.version_info.major}{sys.version_info.minor}")')"
+    PYXY="$("$PY" -c 'import sys;print(f"py{sys.version_info.major}{sys.version_info.minor}")')"
     CACHE_ROOT="${SCITEX_TESTMON_CACHE_ROOT:-$HOME/.cache/scitex-testmon}"
     CACHE_DIR="$CACHE_ROOT/$REPO/$PYXY"
 
@@ -107,7 +138,7 @@ GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 # --git-common-dir rather than GIT_ROOT/--show-toplevel.
 GIT_COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "$GIT_ROOT/.git")"
 REPO="$(basename "$(dirname "$GIT_COMMON_DIR")")"
-PYXY="$(python3 -c 'import sys;print(f"py{sys.version_info.major}{sys.version_info.minor}")')"
+PYXY="$("$PY" -c 'import sys;print(f"py{sys.version_info.major}{sys.version_info.minor}")')"
 
 CACHE_ROOT="${SCITEX_TESTMON_CACHE_ROOT:-$HOME/.cache/scitex-testmon}"
 CACHE_DIR="$CACHE_ROOT/$REPO/$PYXY"
@@ -120,9 +151,10 @@ if [[ -f "$CACHE_FILE" ]]; then
 fi
 
 # RUN: pytest returns non-zero on test failures; capture the code WITHOUT
-# letting `set -e` abort before the write-back stage runs.
+# letting `set -e` abort before the write-back stage runs. `$PY` is the
+# absolute interpreter resolved up top — never a bare `python3` off $PATH.
 set +e
-python3 -m pytest --testmon "$@"
+"$PY" -m pytest --testmon "$@"
 rc=$?
 set -e
 

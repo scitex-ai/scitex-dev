@@ -16,9 +16,14 @@
 #      diff-scoped, catches the lint regressions that bite CI most often.
 #   3. `import-smoke`: import every CHANGED module under `src/` to catch
 #      the "wheel installs but runtime ImportError" class. Diff-scoped.
-#   4. Scope tests: `pytest --testmon -m "not slow and not integration"`
-#      time-bound by `timeout 60` — narrow, fast, and aborts if any
-#      collected test fails.
+#   4. Scope tests: the `run_testmon` warm-cache wrapper (resolved via
+#      `scitex-dev hooks show-path run_testmon`) running `pytest --testmon
+#      -m "not slow and not integration"`, time-bound by `timeout 60` —
+#      narrow, fast, and aborts if any collected test fails. Routing
+#      through the wrapper (not a bare `pytest --testmon`) seeds the
+#      persistent per-(repo,pyXY) `.testmondata` cache so a FRESH release
+#      worktree runs only impacted tests instead of cold-running the full
+#      suite, and pins an absolute interpreter (no ambient-$PATH lottery).
 #
 # DIFF SCOPING (key design principle):
 # All steps that CAN be scoped to `git diff` ARE scoped. Steps 2 + 3 work
@@ -385,7 +390,7 @@ if failed:
 fi
 
 # ----------------------------------------------------------------- #
-# Step 4: pytest --testmon -m "not slow and not integration"        #
+# Step 4: run_testmon warm-cache wrapper (pytest --testmon)          #
 # ----------------------------------------------------------------- #
 #
 # --testmon picks only the tests whose imported sources have changed
@@ -393,25 +398,40 @@ fi
 # `-m "not slow and not integration"` excludes heavy markers used
 # across the ecosystem. `-x` stops at the first failure so the operator
 # sees the failure quickly. The overall `timeout` is the safety net.
+#
+# We route through the canonical `run_testmon.sh` warm-cache wrapper
+# (resolved via `scitex-dev hooks show-path run_testmon`) rather than a
+# bare `pytest --testmon`: the wrapper seed-copies a persistent per-(repo,
+# pyXY) `.testmondata` into the worktree BEFORE pytest and writes it back
+# AFTER, so a FRESH release worktree runs only impacted tests instead of
+# cold-running the whole ~2500-test suite. The wrapper also pins an
+# absolute interpreter, so this step no longer resolves pytest off the
+# ambient $PATH.
 TEST_RC=0
 if [[ -d "$REPO_ROOT/tests" ]]; then
-    PYTEST_BIN=""
-    if command -v pytest >/dev/null 2>&1; then
-        PYTEST_BIN="pytest"
-    elif python3 -c "import pytest" >/dev/null 2>&1; then
-        PYTEST_BIN="python3 -m pytest"
+    # Resolve the wrapper's absolute path through the scitex-dev CLI
+    # already located in Step 1. `hooks show-path` prints the bundled
+    # run_testmon.sh path; a fallback import keeps the step working if a
+    # future refactor changes the CLI surface.
+    RUN_TESTMON=""
+    if [[ -n "$SCITEX_DEV_CMD" ]]; then
+        RUN_TESTMON="$($SCITEX_DEV_CMD hooks show-path run_testmon 2>/dev/null || true)"
     fi
-    if [[ -n "$PYTEST_BIN" ]]; then
-        echo_info "[4/4] $PYTEST_BIN --testmon -x -m 'not slow and not integration'"
+    if [[ -z "$RUN_TESTMON" ]] && command -v python3 >/dev/null 2>&1; then
+        RUN_TESTMON="$(python3 -c 'from scitex_dev._hooks import run_testmon_sh_path; print(run_testmon_sh_path())' 2>/dev/null || true)"
+    fi
+    if [[ -n "$RUN_TESTMON" && -f "$RUN_TESTMON" ]]; then
+        echo_info "[4/4] run_testmon (warm-cache) --testmon -x -m 'not slow and not integration'"
         # We deliberately do NOT pass --no-header / -q: the operator
         # needs to see what ran when something fails. stderr is the
         # right channel because git pre-push hooks emit hook output
         # interleaved with the push command's own stderr.
         # Same `if ! cmd` trap as the audit step — capture `$?`
-        # directly so the failure message names the real pytest rc,
-        # not the inverted truthy 0.
-        ( cd "$REPO_ROOT" && timeout "$DEADLINE_SECONDS" $PYTEST_BIN \
-                --testmon -x --tb=short \
+        # directly so the failure message names the real testmon rc,
+        # not the inverted truthy 0. The wrapper adds `--testmon`; we
+        # forward the selection/flags it should apply.
+        ( cd "$REPO_ROOT" && timeout "$DEADLINE_SECONDS" bash "$RUN_TESTMON" \
+                -x --tb=short \
                 -m "not slow and not integration" \
                 tests >&2 )
         TEST_RC=$?
@@ -421,8 +441,8 @@ if [[ -d "$REPO_ROOT/tests" ]]; then
             echo_success "scope tests clean"
         fi
     else
-        echo_warning "[4/4] pytest not available — scope test step SKIPPED"
-        echo_warning "      install: pip install pytest pytest-testmon"
+        echo_warning "[4/4] run_testmon wrapper not resolvable — scope test step SKIPPED"
+        echo_warning "      (scitex-dev hooks show-path run_testmon failed; is scitex-dev installed?)"
     fi
 else
     echo_warning "[4/4] no tests/ directory — scope test step SKIPPED"

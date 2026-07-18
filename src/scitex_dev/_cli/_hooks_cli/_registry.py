@@ -30,9 +30,16 @@ KNOWN_HOOKS: dict[str, tuple[str, str]] = {
         _hooks.run_lint_sh_path(),
         "docs/to_claude/hooks/post-tool-use/run_lint.sh",
     ),
+    # run_testmon is the PRE-PUSH test selector — the warm-cache wrapper
+    # that pre-push.sh Step 4 calls (resolved via `hooks show-path
+    # run_testmon`). It is deliberately NOT a `.pre-commit-config.yaml`
+    # entry: a test selector belongs at pre-push, not pre-commit (a test
+    # suite at commit time is banned by PS-HOOK-001 /
+    # 15_pre-commit-policy.md). The deploy_rel therefore lives under
+    # `pre-push/`, not `pre-commit/`.
     "run_testmon": (
         _hooks.run_testmon_sh_path(),
-        "docs/to_claude/hooks/pre-commit/run_testmon.sh",
+        "docs/to_claude/hooks/pre-push/run_testmon.sh",
     ),
     "pre_push": (
         _hooks.pre_push_sh_path(),

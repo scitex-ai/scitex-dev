@@ -298,3 +298,125 @@ class TestPrePushAuditRcPropagation:
             f"rc={proc.returncode}\nstdout={proc.stdout!r}\n"
             f"stderr={proc.stderr!r}"
         )
+
+
+# ---------------------------------------------------------------------- #
+# Step 4 routes through the run_testmon warm-cache wrapper                #
+# ---------------------------------------------------------------------- #
+#
+# Step 4 must NOT run a bare `pytest --testmon`; it must resolve and call
+# the canonical `run_testmon.sh` warm-cache wrapper (via `scitex-dev hooks
+# show-path run_testmon`) so a FRESH release worktree gets the persistent
+# `.testmondata` cache instead of a cold full-suite run. And the wrapper's
+# rc MUST propagate — a failing testmon run blocks the push (the same
+# `if ! cmd` rc-zeroing trap the audit step avoids).
+
+
+def _link_needed_bins(sterile: Path, names: list[str]) -> None:
+    """Symlink each real binary in ``names`` into ``sterile``."""
+    for bin_name in names:
+        real = subprocess.run(
+            ["bash", "-c", f"command -v {bin_name}"],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        if real and Path(real).exists():
+            (sterile / bin_name).symlink_to(real)
+
+
+class TestPrePushStep4RoutesThroughWrapper:
+    """Step 4 calls the run_testmon wrapper and propagates its rc."""
+
+    def test_step4_source_calls_wrapper_not_bare_pytest(self):
+        # Arrange — locate the shipped pre-push gate source.
+        script = Path(pre_push_sh_path())
+        # Act — read its text.
+        text = script.read_text(encoding="utf-8")
+        # Assert — Step 4 resolves the wrapper via `hooks show-path
+        # run_testmon` and invokes it as `bash "$RUN_TESTMON"`, and the
+        # old bare `$PYTEST_BIN --testmon` invocation is gone.
+        emitted = (
+            "hooks show-path run_testmon" in text,
+            'bash "$RUN_TESTMON"' in text,
+            "$PYTEST_BIN" not in text,
+        )
+        assert emitted == (True, True, True), (
+            f"pre-push Step 4 must route through the run_testmon wrapper, "
+            f"not a bare pytest; got {emitted}"
+        )
+
+    def test_failing_wrapper_blocks_push_and_names_the_rc(self, tmp_path):
+        # Arrange — a stub `scitex-dev` whose `--version` + `audit-all`
+        # succeed (so the gate reaches Step 4) and whose `hooks show-path
+        # run_testmon` returns a stub wrapper that exits 1 (a failing
+        # testmon run). tests/ must exist for Step 4 to fire.
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "tests").mkdir()
+        subprocess.run(
+            ["git", "init", "--initial-branch=main", str(repo)],
+            check=True,
+            capture_output=True,
+        )
+        sterile = tmp_path / "sterile-bin"
+        sterile.mkdir()
+        _link_needed_bins(
+            sterile,
+            ["bash", "git", "timeout", "basename", "dirname", "cat", "sh"],
+        )
+        wrapper = sterile / "stub_run_testmon.sh"
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            'echo "[STUB run_testmon] argv: $*" >&2\n'
+            "exit 1\n"
+        )
+        wrapper.chmod(0o755)
+        stub = sterile / "scitex-dev"
+        stub.write_text(
+            "#!/bin/sh\n"
+            'if [ "$1" = "--version" ]; then\n'
+            '    echo "scitex-dev 99.99.99 (stub)"\n'
+            "    exit 0\n"
+            "fi\n"
+            'if [ "$1" = "ecosystem" ] && [ "$2" = "audit-all" ]; then\n'
+            "    exit 0\n"
+            "fi\n"
+            'if [ "$1" = "hooks" ] && [ "$2" = "show-path" ] '
+            '&& [ "$3" = "run_testmon" ]; then\n'
+            f'    echo "{wrapper}"\n'
+            "    exit 0\n"
+            "fi\n"
+            "exit 1\n"
+        )
+        stub.chmod(0o755)
+        env = {
+            "PATH": str(sterile),
+            "HOME": str(tmp_path),
+            "LC_ALL": "C",
+            "SCITEX_DEV_PREPUSH_TIMEOUT": "10",
+        }
+        # Act
+        proc = subprocess.run(
+            ["bash", pre_push_sh_path()],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            cwd=str(repo),
+            env=env,
+        )
+        # Assert — exit non-zero AND the stub wrapper actually fired
+        # (proves routing) AND the real rc=1 is named (NOT the inverted
+        # 0) AND the push is BLOCKED naming the scope-test failure.
+        combined = proc.stdout + proc.stderr
+        emitted = (
+            proc.returncode != 0,
+            "[STUB run_testmon]" in combined,
+            "scope tests failed (rc=1)" in combined,
+            "scope tests returned 1" in combined,
+            "PUSH BLOCKED" in combined,
+        )
+        assert emitted == (True, True, True, True, True), (
+            f"failing wrapper must block the push and name rc=1; got "
+            f"{emitted}\nrc={proc.returncode}\nstdout={proc.stdout!r}\n"
+            f"stderr={proc.stderr!r}"
+        )

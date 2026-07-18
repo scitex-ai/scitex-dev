@@ -138,11 +138,21 @@ scitex-dev ecosystem audit-project --path . --rule PS-HOOK-001
 Opt-out (rare — prefer fixing the hook): put `# PS-HOOK-001: allow` anywhere in
 `.pre-commit-config.yaml`.
 
-## Do not reach for a "warm cache" wrapper
+## A warm-cache wrapper is a PRE-PUSH tool, not a pre-commit one
 
-`scitex-dev-testmon` exists and is **broken** — it shells a bare `python3` off
-the `$PATH` (exit 4 in a clean env), it is referenced by **zero** repos, and
-scitex-dev does not dogfood it. A wrapper nobody calls, and that does not work,
-is worse than no wrapper: its existence makes everyone believe the problem is
-solved. Do not build another one. The fix for "the commit-time test gate is
-slow" is not a faster gate — it is **no gate**. Run the tests in CI.
+The core rule above is unchanged: **there is no test suite at pre-commit; tests
+belong in CI.** The fix for "the commit-time test gate is slow" is not a faster
+gate — it is **no gate** at commit time.
+
+A warm-cache testmon wrapper (`scitex-dev-testmon` / `run_testmon.sh`) does have
+one sanctioned home, but it is a *different gate*: the **pre-push** hook
+(`scitex-dev hooks enable-pre-push`), which runs a narrow, diff-scoped,
+time-bound subset before `git push` so the operator does not push → CI-red →
+patch → push merry-go-round. There the wrapper earns its keep — it seed-copies a
+persistent per-(repo, pyXY) `.testmondata` so a fresh release worktree runs only
+impacted tests instead of cold-running the full suite. (The earlier
+bare-`$PATH`/`python3` defect that made it inert has been fixed: it now pins an
+absolute interpreter, and pre-push.sh Step 4 is its live caller.) That does
+**not** license a commit-time test gate: keep the wrapper at pre-push, keep
+pre-commit for fast/bounded/deterministic checks, and keep the heavy suite in
+CI.
