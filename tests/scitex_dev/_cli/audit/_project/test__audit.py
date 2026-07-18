@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 
 from scitex_dev._cli.audit._project import RULES, audit_project
 from scitex_dev._cli.audit._project._audit import (
@@ -1397,6 +1398,128 @@ def test_ps142_silent_with_filetree(tmp_path):
     (repo / "README.md").write_text(_full_compliant_readme())
     rules = _violations_for(repo, "demo")
     assert "PS-142" not in rules
+
+
+# REGRESSION (PS-142 truncation): the checker used to read only the first
+# 16384 chars of a README, so a perfectly present `## Architecture` section
+# living past that offset was reported as "missing mandatory
+# `## Architecture`" — a false positive shipped to the whole fleet. A check
+# that cannot see the whole input must not report ABSENCE.
+_OLD_README_WINDOW = 16384
+
+
+def _readme_structure_details(repo: Path, rule: str) -> list[str]:
+    """Return the detail strings `check_readme_structure` emitted for `rule`."""
+    from scitex_dev._cli.audit._project._audit import Violation
+    from scitex_dev._cli.audit._project._check_readme_structure import (
+        check_readme_structure,
+    )
+
+    out: list = []
+    check_readme_structure(repo, Violation, out)
+    return [v.detail for v in out if v.rule == rule]
+
+
+def _readme_with_architecture_past_old_window() -> str:
+    """A compliant README padded so `## Architecture` lands past 16 KiB.
+
+    Canonical section order is preserved, so PS-143 must stay silent too.
+    """
+    body = _full_compliant_readme()
+    filler = "\nPadding line to push later sections past the old window.\n" * 400
+    return body.replace("## Architecture\n", filler + "\n## Architecture\n", 1)
+
+
+@pytest.fixture
+def repo_with_late_architecture(tmp_path):
+    repo = _make_repo(tmp_path, "demo")
+    (repo / "README.md").write_text(_readme_with_architecture_past_old_window())
+    return repo
+
+
+def test_fixture_actually_places_architecture_past_the_old_window():
+    # Arrange: guards the regression fixture itself — if padding ever stops
+    # pushing Architecture past 16 KiB, the tests below pass vacuously.
+    # Act
+    body = _readme_with_architecture_past_old_window()
+    # Assert
+    assert body.index("## Architecture") > _OLD_README_WINDOW
+
+
+def test_ps142_silent_when_architecture_sits_past_the_old_16kib_window(
+    repo_with_late_architecture,
+):
+    # Arrange
+    repo = repo_with_late_architecture
+    # Act
+    rules = _violations_for(repo, "demo")
+    # Assert
+    assert "PS-142" not in rules
+
+
+def test_ps143_silent_when_sections_sit_past_the_old_16kib_window(
+    repo_with_late_architecture,
+):
+    # Arrange
+    repo = repo_with_late_architecture
+    # Act
+    rules = _violations_for(repo, "demo")
+    # Assert
+    assert "PS-143" not in rules
+
+
+def test_ps142_still_fires_when_architecture_genuinely_missing_in_long_readme(
+    tmp_path,
+):
+    # CONTROL for the truncation fix: proves the window was removed, not the
+    # rule weakened. A LONG README (past the old 16 KiB boundary) that really
+    # has no `## Architecture` must still be reported as missing.
+    # Arrange
+    repo = _make_repo(tmp_path, "demo")
+    body = _readme_with_architecture_past_old_window().replace(
+        "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```\n\n",
+        "",
+    )
+    (repo / "README.md").write_text(body)
+    # Act
+    rules = _violations_for(repo, "demo")
+    # Assert
+    assert "PS-142" in rules
+
+
+def test_ps142_fires_when_late_architecture_section_body_is_empty(tmp_path):
+    # Proves the late section is actually PARSED, not merely located: an
+    # `## Architecture` past the old window with no diagram in its body (and
+    # no Demo/Quick Start visual fallback) must report the body violation.
+    # Arrange
+    repo = _make_repo(tmp_path, "demo")
+    body = _readme_with_architecture_past_old_window()
+    body = body.replace(
+        "## Architecture\n\n```\ndemo/\n├── core/\n│   └── __init__.py\n└── cli/\n```",
+        "## Architecture\n",
+    )
+    body = body.replace(
+        "## Demo\n\n![Hilbert](docs/hilbert.png)",
+        "## Demo\n\nLook at this cool thing.",
+    )
+    (repo / "README.md").write_text(body)
+    # Act
+    details = _readme_structure_details(repo, "PS-142")
+    # Assert
+    assert any("no diagram" in d for d in details), details
+
+
+def test_read_readme_returns_whole_file_not_a_head_slice(tmp_path):
+    # Arrange
+    from scitex_dev._cli.audit._project._readme_structure_shared import read_readme
+
+    readme = tmp_path / "README.md"
+    text = "# demo\n\n" + ("x" * 40000) + "\n\n## Architecture\n\n```mermaid\nA-->B\n```\n"
+    readme.write_text(text)
+    # Act
+    got = read_readme(readme)
+    # Assert
+    assert got == text
 
 
 def test_ps143_fires_when_architecture_appears_before_installation(tmp_path):
