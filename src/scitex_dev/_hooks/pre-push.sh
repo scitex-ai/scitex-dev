@@ -83,7 +83,7 @@ if [[ "${SCITEX_DEV_SKIP_PREPUSH:-0}" == "1" ]]; then
 fi
 
 # --self-test: smoke-check the hook works without invoking git/pytest.
-# Used by `tests/scitex_dev/_hooks/test_pre_push.py` so we don't need
+# Used by `tests/scitex_dev/_hooks/test___init___pre_push.py` so we don't need
 # to spin up a real git repo to validate the script can at least parse.
 if [[ "${1:-}" == "--self-test" ]]; then
     echo "=== Self-test: $(basename "$0") ==="
