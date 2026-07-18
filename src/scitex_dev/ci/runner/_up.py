@@ -18,6 +18,7 @@ import tempfile
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 
 # Absolute SLURM paths: the lease query runs in a NON-interactive login shell
@@ -186,7 +187,51 @@ def _resolve_lease(target: str, user: str, jobname: str) -> tuple[str, str]:
 
 
 def register(group: click.Group) -> None:
-    @group.command()
+    @group.command(
+        "up",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Start the persistent Actions runner on the HPC compute node.",
+            description=(
+                "How it works (SSH-vector-safe — no per-runner login-node "
+                "srun client):\n"
+                "  1. Resolve the RUNNING CI lease's jobid AND allocated "
+                "compute node.\n"
+                "  2. Stage launcher.sh on the shared FS via a login-node ssh "
+                "that does ONLY file I/O (no long-lived process — leaves "
+                "nothing behind).\n"
+                "  3. SSH STRAIGHT to the compute node (ProxyJump through a "
+                "login node) and `setsid nohup bash launcher.sh &` — the ssh "
+                "returns at once, so the runner runs ON the lease's node with "
+                "ZERO persistent login-node srun/ssh client.\n"
+                "  4. The launcher downloads + caches the GitHub runner "
+                "tarball, registers the runner, and runs a persistent run.sh "
+                "loop on the node.\n"
+                "\n"
+                "The GH_TOKEN is passed via env (never in argv) to avoid "
+                "leaking it."
+            ),
+            examples=(
+                Example("{prog} ci runner up", "Start the configured runner."),
+                Example(
+                    "{prog} ci runner up --replace-runner",
+                    "Replace an existing same-named runner.",
+                ),
+                Example(
+                    "{prog} ci runner up --name spartan-cpu-runner-02 "
+                    "--home /data/ci/actions-runner-02",
+                    "Add a second executor for a parallel matrix.",
+                ),
+                Example(
+                    "{prog} ci runner up --repo ywatanabe1989/scitex-todo "
+                    "--name spartan-cpu-todo-01 "
+                    "--home /data/ci/actions-runner-todo "
+                    "--labels self-hosted,spartan-cpu,scitex-ci",
+                    "Ecosystem rollout: another repo on the SAME lease.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--launcher",
         default=None,
@@ -239,36 +284,6 @@ def register(group: click.Group) -> None:
         repo_override: str | None,
         labels_override: str | None,
     ) -> None:
-        """Start the persistent GitHub Actions runner on the HPC compute node.
-
-        \b
-        How it works (SSH-vector-safe — no per-runner login-node srun client):
-          1. Resolve the RUNNING CI lease's jobid AND allocated compute node.
-          2. Stage launcher.sh on the shared FS via a login-node ssh that does
-             ONLY file I/O (no long-lived process — leaves nothing behind).
-          3. SSH STRAIGHT to the compute node (ProxyJump through a login node)
-             and `setsid nohup bash launcher.sh &` — the ssh returns at once,
-             so the runner runs ON the lease's node with ZERO persistent
-             login-node srun/ssh client.
-          4. The launcher downloads + caches the GitHub runner tarball,
-             registers the runner, and runs a persistent run.sh loop on the node.
-
-        \b
-        The GH_TOKEN is passed via env (never in argv) to avoid leaking it.
-
-        \b
-        Examples:
-          $ scitex-dev ci runner up
-          $ scitex-dev ci runner up --replace-runner
-          # add a second executor (home-clean parallel matrix):
-          $ scitex-dev ci runner up --name spartan-cpu-runner-02 \\
-              --home /data/.../punim0264/.../ci/actions-runner-02
-          # ecosystem rollout: a runner for ANOTHER repo on the SAME lease
-          $ scitex-dev ci runner up --repo ywatanabe1989/scitex-todo \\
-              --name spartan-cpu-todo-01 \\
-              --home /data/.../punim0264/.../ci/actions-runner-todo \\
-              --labels self-hosted,spartan-cpu,scitex-ci
-        """
         cfg = config.load_runner_config()
         target = config._ssh_target(cfg)
         gh_token = config.get_gh_token(cfg)

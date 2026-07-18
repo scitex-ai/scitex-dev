@@ -6,137 +6,18 @@ Also hosts the back-compat shims `ecosystem dashboard` (deprecated bare-noun
 that prints a redirect and exits 2) and `ecosystem start-dashboard` (web UI
 entry point). Both are kept here because they're dashboard-related; they're
 intentionally back-compat shims, not new surface.
+
+Thin orchestrator: the ssh remote-render path, the `export` leaf and the
+`start-dashboard` web shim live in the `_dashboard_{remote,export,web}`
+siblings so this module stays under the repo line-limit.
 """
 
 import click
 
-
-def _render_remote_dashboard(
-    *,
-    host: str,
-    verbosity: int,
-    packages: list,
-    jobs: int,
-    with_tests: str,
-    as_json: bool,
-) -> None:
-    """Stream `dashboard list --json-stream` from `host`; render live.
-
-    Uses ``--json-stream`` (one JSON snapshot per line, emitted after
-    each enricher batch completes) so the local view fills in
-    incrementally — same UX as a local `dashboard list`. Without this,
-    ssh blocks for the full ~40s while the remote runs every enricher.
-
-    If ``as_json`` is requested, the last (= most complete) snapshot
-    is forwarded verbatim.
-    """
-    import json as _json
-    import subprocess
-
-    from rich.console import Console
-    from rich.live import Live
-
-    from .._dashboard._render import render_table
-    from .._dashboard._state import PackageState
-
-    remote_cmd_parts = [
-        "scitex-dev",
-        "ecosystem",
-        "dashboard",
-        "list",
-        "--json-stream",
-        "-j",
-        str(jobs),
-        "--with-tests",
-        with_tests,
-    ]
-    if verbosity > 1:
-        remote_cmd_parts.append("-" + "v" * (verbosity - 1))
-    for p in packages:
-        remote_cmd_parts.extend(["-p", p])
-    remote_cmd = " ".join(remote_cmd_parts)
-    # `bash -lc` so the user's PATH (incl. ~/.env-*/bin) is sourced.
-    # `-o BatchMode=yes` avoids interactive password prompts hanging.
-    ssh_cmd = [
-        "ssh",
-        "-o",
-        "BatchMode=yes",
-        host,
-        f"bash -lc {_shquote(remote_cmd)}",
-    ]
-    try:
-        proc = subprocess.Popen(
-            ssh_cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-        )
-    except FileNotFoundError as e:
-        raise click.ClickException(f"ssh to {host} failed: {e}")
-
-    last_rows: list = []
-    console = Console()
-
-    def _states() -> list:
-        return [PackageState.from_dict(r) for r in last_rows]
-
-    if as_json:
-        # No live render — just drain to EOF and forward the final snapshot.
-        assert proc.stdout is not None
-        for line in proc.stdout:
-            line = line.strip()
-            if not line.startswith("["):
-                continue
-            try:
-                last_rows = _json.loads(line)
-            except _json.JSONDecodeError:
-                continue
-        proc.wait(timeout=10)
-        click.echo(_json.dumps(last_rows, indent=2, default=str))
-        return
-
-    with Live(
-        render_table([], verbosity=verbosity, host=host),
-        console=console,
-        refresh_per_second=2,
-        transient=False,
-        screen=True,
-    ) as live:
-        live.console.print(
-            f"[dim]streaming from {host} over ssh — first snapshot lands "
-            f"after the cheap basic-gather batch (~1-2s); full enrichment "
-            f"~30-60s on a cold cache[/dim]"
-        )
-        assert proc.stdout is not None
-        for line in proc.stdout:
-            line = line.strip()
-            if not line.startswith("["):
-                continue
-            try:
-                last_rows = _json.loads(line)
-            except _json.JSONDecodeError:
-                continue
-            live.update(render_table(_states(), verbosity=verbosity, host=host))
-        live.update(render_table(_states(), verbosity=verbosity, host=host))
-
-    try:
-        rc = proc.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        rc = -1
-    if rc != 0 and not last_rows:
-        err = (proc.stderr.read() if proc.stderr else "")[:2000]
-        raise click.ClickException(
-            f"remote `dashboard list` on {host} exited {rc}:\n--- stderr ---\n{err}"
-        )
-
-    console.print(render_table(_states(), verbosity=verbosity, host=host))
-
-
-def _shquote(s: str) -> str:
-    """POSIX shell single-quote a string for embedding in `bash -lc '...'`."""
-    return "'" + s.replace("'", "'\"'\"'") + "'"
+from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
+from ._dashboard_export import register_export
+from ._dashboard_remote import render_remote_dashboard
+from ._dashboard_web import register_start_dashboard
 
 
 def register(ecosystem):
@@ -159,27 +40,52 @@ def register(ecosystem):
         )
         ctx.exit(2)
 
-    @ecosystem.group("dashboard")
+    @ecosystem.group(
+        "dashboard",
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="Ecosystem health dashboard (TUI / GUI / export).",
+            description=(
+                "Subcommands: `list` is a one-shot snapshot table (good "
+                "for piping / `watch`); `start` is a live-refresh TUI (or "
+                "--gui for the Dash web view); `start-tui` is the "
+                "htop-style filterable TUI; `export` is a "
+                "machine-readable dump (json / csv / md / org / pdf).",
+                "The verbosity flag (-v / -vv / -vvv) controls column "
+                "count across all of them. -vvv pulls every cached field; "
+                "the same data layer (`gather_ecosystem_state`) feeds "
+                "every surface.",
+            ),
+        ),
+    )
     def dashboard():
-        """Ecosystem health dashboard (TUI / GUI / export).
-
-        \b
-        Subcommands:
-          list    one-shot snapshot table (good for piping / `watch`)
-          start   live-refresh TUI (or --gui for the Dash web view)
-          export  machine-readable dump (json / csv / md)
-
-        Verbosity flag (-v / -vv / -vvv) controls column count across
-        all three. -vvv pulls every cached field; same data layer feeds
-        all surfaces (`gather_ecosystem_state`).
-        """
+        pass
 
     @dashboard.command(
         "list",
-        epilog=(
-            "Example:\n"
-            "  $ scitex-dev ecosystem dashboard list -vv\n"
-            "  $ scitex-dev ecosystem dashboard list --json | jq\n"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="One-shot snapshot table of ecosystem state.",
+            description=(
+                "Live ecosystem dashboard. Visible columns at the current "
+                "verbosity are always computed (verbosity != depth); cells "
+                "fill in via `rich.live.Live` first-come-first-served as "
+                "each future completes — PyPI HTTP, gh-api CI (one GraphQL "
+                "batch), audit (one `audit-all` subprocess).",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem dashboard list -vv", "More columns."
+                ),
+                Example(
+                    "{prog} ecosystem dashboard list --json | jq",
+                    "Structured JSON.",
+                ),
+                Example(
+                    "{prog} ecosystem dashboard list --host spartan",
+                    "Inspect a remote's checkouts.",
+                ),
+            ),
         ),
     )
     @click.option(
@@ -255,12 +161,6 @@ def register(ecosystem):
     def dashboard_list(
         verbosity, package, jobs, as_json, json_stream, with_tests, host
     ):
-        """Live ecosystem dashboard. Visible columns at the current
-        verbosity are always computed (verbosity ≠ depth); cells fill
-        in via `rich.live.Live` first-come-first-served as each future
-        completes — PyPI HTTP, gh-api CI (one GraphQL batch), audit
-        (one `audit-all` subprocess).
-        """
         import time
 
         from .._dashboard import gather_ecosystem_state
@@ -276,7 +176,7 @@ def register(ecosystem):
         # from a local terminal without re-implementing the gatherer
         # over ssh.
         if host:
-            _render_remote_dashboard(
+            render_remote_dashboard(
                 host=host,
                 verbosity=verbosity,
                 packages=list(package),
@@ -390,11 +290,20 @@ def register(ecosystem):
 
     @dashboard.command(
         "start",
-        epilog=(
-            "Example:\n"
-            "  $ scitex-dev ecosystem dashboard start -vv\n"
-            "  $ scitex-dev ecosystem dashboard start --gui   # web view (deferred)\n"
-            "  $ scitex-dev ecosystem dashboard start --interval 10\n"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Live-refresh dashboard. TUI by default; --gui for the web view.",
+            examples=(
+                Example("{prog} ecosystem dashboard start -vv", "More columns."),
+                Example(
+                    "{prog} ecosystem dashboard start --gui",
+                    "Dash web view (deferred).",
+                ),
+                Example(
+                    "{prog} ecosystem dashboard start --interval 10",
+                    "Refresh every 10s.",
+                ),
+            ),
         ),
     )
     @click.option("-v", "verbosity", count=True, default=1)
@@ -417,7 +326,6 @@ def register(ecosystem):
         help="No-op confirmation flag retained for §2 audit-cli compliance.",
     )
     def dashboard_start(verbosity, gui, interval, dry_run, yes):
-        """Live-refresh dashboard. TUI by default; --gui for the web view."""
         if dry_run:
             click.echo(
                 f"would render: verbosity={verbosity} interval={interval}s "
@@ -464,19 +372,24 @@ def register(ecosystem):
 
     @dashboard.command(
         "start-tui",
-        epilog=(
-            "Keys:\n"
-            "  /          start filter\n"
-            "  Escape     clear filter\n"
-            "  r          refresh data\n"
-            "  q          quit\n"
-            "  j/k ↓/↑    navigate rows\n"
-            "  g / G      jump to top / bottom\n"
-            "\n"
-            "Example:\n"
-            "  $ scitex-dev ecosystem dashboard start-tui\n"
-            "  $ scitex-dev ecosystem dashboard start-tui -p scitex-io,scitex-stats\n"
-            "  $ scitex-dev ecosystem dashboard start-tui -vv\n"
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="htop-style TUI with live keystroke filter.",
+            description=(
+                "Requires the optional `textual` package "
+                "(`pip install textual`).",
+                "Keys: `/` start filter; Escape clear filter; `r` refresh "
+                "data; `q` quit; `j`/`k` or down/up navigate rows; `g` / "
+                "`G` jump to top / bottom.",
+            ),
+            examples=(
+                Example("{prog} ecosystem dashboard start-tui", "Launch the TUI."),
+                Example(
+                    "{prog} ecosystem dashboard start-tui -p scitex-io,scitex-stats",
+                    "Limit to two packages.",
+                ),
+                Example("{prog} ecosystem dashboard start-tui -vv", "More columns."),
+            ),
         ),
     )
     @click.option(
@@ -513,11 +426,6 @@ def register(ecosystem):
         help="No-op confirmation flag retained for §2 audit-cli compliance.",
     )
     def dashboard_tui(verbosity, package, jobs, dry_run, yes):
-        """htop-style TUI with live keystroke filter.
-
-        Requires the optional `textual` package. Install with:
-          pip install textual
-        """
         raw_pkgs: list[str] = []
         for entry in package:
             raw_pkgs.extend(p.strip() for p in entry.split(",") if p.strip())
@@ -553,206 +461,12 @@ def register(ecosystem):
             click.echo(f"error: {exc}", err=True)
             raise SystemExit(2)
 
-    @dashboard.command(
-        "export",
-        epilog=(
-            "Example:\n"
-            "  $ scitex-dev ecosystem dashboard export --format json | jq\n"
-            "  $ scitex-dev ecosystem dashboard export --format csv > state.csv\n"
-            "  $ scitex-dev ecosystem dashboard export --format md   # paste into README\n"
-            "  $ scitex-dev ecosystem dashboard export --format org > report.org\n"
-            "  $ scitex-dev ecosystem dashboard export --format pdf -o report.pdf\n"
-        ),
-    )
-    @click.option(
-        "--format",
-        "fmt",
-        type=click.Choice(["json", "csv", "md", "org", "pdf"]),
-        default="json",
-        help=(
-            "Output format. `org` emits a ywatanabe-convention Org-mode "
-            "report (the 'usual PDF' source); `pdf` runs the org→pdf "
-            "convert via pandoc / `emacs --batch` and writes the .pdf "
-            "(+ .org sidecar) to the path given by --output."
-        ),
-    )
-    @click.option(
-        "-v",
-        "verbosity",
-        count=True,
-        default=3,
-        help="Default -vvv (all columns) for export.",
-    )
-    @click.option("--package", "-p", multiple=True)
-    @click.option(
-        "--output",
-        "-o",
-        "output",
-        default=None,
-        type=click.Path(),
-        help=(
-            "Output file path (required for --format pdf; optional for "
-            "other formats — defaults to stdout). For pdf the .org "
-            "sidecar is written next to the .pdf with the same stem."
-        ),
-    )
-    @click.option(
-        "--dry-run",
-        is_flag=True,
-        help="Print row count + format that would be emitted; no payload written.",
-    )
-    @click.option(
-        "-y",
-        "--yes",
-        "yes",
-        is_flag=True,
-        help="No-op confirmation flag retained for §2 audit-cli compliance.",
-    )
-    def dashboard_export(fmt, verbosity, package, output, dry_run, yes):
-        """Machine-readable dump of the dashboard state."""
-        from pathlib import Path
+    register_export(dashboard)
 
-        from .._dashboard import _export as exp
-        from .._dashboard import gather_ecosystem_state
-        from .._dashboard._render import (
-            cols_for_verbosity,
-            enrichers_for_cols,
-        )
+    # Back-compat shim: web UI entry point. Kept dashboard-adjacent; the
+    # `start-dashboard` name predates the `dashboard` group and is
+    # preserved for external scripts/CI.
+    register_start_dashboard(ecosystem)
 
-        # Make sure the gh-release enricher always runs for org/pdf/md
-        # exports so the RELEASE column has real data. The export CLI
-        # defaults to -vvv, but `gather_ecosystem_state`'s verbosity →
-        # enrichers heuristic doesn't include `gh-release` (it's only
-        # added by `dashboard list` based on visible columns). Without
-        # this, reports always show N/C for GH-Release, defeating the
-        # point of the column.
-        enrichers = enrichers_for_cols(cols_for_verbosity(verbosity))
-        if fmt in ("md", "org", "pdf"):
-            enrichers.add("gh-release")
-            if verbosity < 2:
-                enrichers.add("pypi")  # PYPI column also needs network
 
-        states = gather_ecosystem_state(
-            verbosity=verbosity,
-            packages=list(package) or None,
-            enrichers=enrichers,
-        )
-        if dry_run:
-            click.echo(
-                f"would emit: format={fmt} rows={len(states)} "
-                f"verbosity={verbosity}"
-                + (f" output={output}" if output else "")
-            )
-            return
-        del yes
-
-        # PDF follows the ywatanabe "usual PDF" convention: the .org
-        # is the canonical source and the .pdf is rendered from it by
-        # pandoc or `emacs --batch`. PDF therefore needs a filesystem
-        # path; everything else can go to stdout if no -o is given.
-        if fmt == "pdf":
-            if not output:
-                # Timestamped default so the operator always gets
-                # something usable, even from a redirected stdout.
-                from datetime import datetime as _dt
-
-                output = str(
-                    Path(
-                        f"scitex-ecosystem-"
-                        f"{_dt.now().strftime('%Y%m%d-%H%M%S')}.pdf"
-                    ).resolve()
-                )
-            result = exp.to_pdf(states, output)
-            if result["status"] == "ok":
-                click.echo(
-                    f"wrote {result['pdf']} (org sidecar: {result['org']}) "
-                    f"via {result['tool']}"
-                )
-            elif result["status"] == "org_only":
-                # Exit 0 — the .org file is still a usable artefact.
-                # The 2026-05-27 instructions explicitly say "do not
-                # block" when the host lacks the converter.
-                click.echo(
-                    f"wrote {result['org']} but could not produce PDF: "
-                    f"{result['reason']}",
-                    err=True,
-                )
-            else:
-                click.echo(
-                    f"wrote {result['org']} but {result['tool']} failed: "
-                    f"{result.get('error', 'unknown error')}",
-                    err=True,
-                )
-                raise SystemExit(2)
-            return
-
-        if fmt == "org":
-            text = exp.to_org(states)
-        elif fmt == "json":
-            text = exp.to_json(states)
-        elif fmt == "csv":
-            text = exp.to_csv(states)
-        elif fmt == "md":
-            text = exp.to_markdown(states)
-        else:  # pragma: no cover — click.Choice prevents this
-            raise click.ClickException(f"unknown format: {fmt}")
-
-        if output:
-            Path(output).expanduser().resolve().write_text(text, encoding="utf-8")
-            click.echo(f"wrote {output}")
-        else:
-            click.echo(text)
-
-    # Back-compat shim: web UI entry point. Kept here because it's
-    # dashboard-related; the `start-dashboard` name predates the
-    # `dashboard` group and is preserved for external scripts/CI.
-    @ecosystem.command("start-dashboard")
-    @click.option("--port", default=8050, type=int, help="Port to serve on.")
-    @click.option("--host", default="0.0.0.0", help="Host to bind to.")
-    @click.option("--debug", is_flag=True, help="Enable debug/reload mode.")
-    @click.option(
-        "--no-browser", is_flag=True, help="Do not open browser automatically."
-    )
-    @click.option("--force", is_flag=True, help="Kill existing process on the port.")
-    @click.option(
-        "--background", is_flag=True, help="Run dashboard in a background process."
-    )
-    @click.option(
-        "--dry-run", is_flag=True, help="Print what would be done; do not start."
-    )
-    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-    def ecosystem_start_dashboard(
-        port, host, debug, no_browser, force, background, dry_run, yes
-    ):
-        """Launch the ecosystem dashboard web UI.
-
-        \b
-        Example:
-            $ scitex-dev ecosystem start-dashboard
-            $ scitex-dev ecosystem start-dashboard --port 9000 --background
-            $ scitex-dev ecosystem start-dashboard --dry-run
-        """
-        del yes  # accepted for §2; dashboard launch is non-interactive
-        if dry_run:
-            click.echo(
-                f"would launch dashboard on {host}:{port} "
-                f"(background={background}, debug={debug}, force={force})"
-            )
-            return
-        if background:
-            # Delegate to run_background so log + pid land under
-            # ~/.scitex/dev/runtime/ per 01_arch_06_local-state-directories.md.
-            from ....dashboard.app import run_background
-
-            run_background(host=host, port=port, force=force)
-            click.echo(f"Dashboard started in background on {host}:{port}")
-        else:
-            from ....dashboard import run_dashboard
-
-            run_dashboard(
-                port=port,
-                host=host,
-                debug=debug,
-                open_browser=not no_browser,
-                force=force,
-            )
+# EOF

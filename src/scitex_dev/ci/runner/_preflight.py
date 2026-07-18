@@ -22,6 +22,7 @@ import json
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 from ._status import _lease_label, _lease_status, _runner_status
 
@@ -41,7 +42,31 @@ def _required_label(cfg: dict) -> str:
 
 
 def register(group: click.Group) -> None:
-    @group.command()
+    @group.command(
+        "preflight",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Fail-loud CI-readiness gate (for a git pre-push hook).",
+            description=(
+                "\b\n"
+                "Exits 0 only when BOTH are true:\n"
+                "  * a RUNNING SLURM CI lease exists (pending leases don't\n"
+                "    count), and\n"
+                "  * at least one runner with the required label is online.\n"
+                "\n"
+                "Otherwise exits non-zero so the pre-push hook aborts the "
+                "push — no silent fallback to a github-hosted runner."
+            ),
+            examples=(
+                Example("{prog} ci runner preflight", "Gate a push on CI readiness."),
+                Example(
+                    "{prog} ci runner preflight --json",
+                    "Structured readiness report.",
+                ),
+            ),
+            exit_codes=((0, "lease running AND a labelled runner online"), (1, "not ready")),
+        ),
+    )
     @click.option(
         "--json",
         "as_json",
@@ -50,22 +75,6 @@ def register(group: click.Group) -> None:
         help="Output the readiness report as structured JSON.",
     )
     def preflight(as_json: bool) -> None:
-        """Fail-loud CI-readiness gate (for a git pre-push hook).
-
-        \b
-        Exits 0 only when BOTH are true:
-          * a RUNNING SLURM CI lease exists (pending leases don't count), and
-          * at least one runner with the required label is online.
-        Otherwise exits non-zero so the pre-push hook aborts the push —
-        no silent fallback to a github-hosted runner.
-
-        \b
-        Example:
-          $ scitex-dev ci runner preflight
-          $ scitex-dev ci runner preflight --json
-          # in .git/hooks/pre-push:
-          #   exec scitex-dev ci runner preflight
-        """
         cfg = config.load_runner_config()
         label = _required_label(cfg)
 
