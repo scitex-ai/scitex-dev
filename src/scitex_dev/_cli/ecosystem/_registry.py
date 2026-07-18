@@ -23,7 +23,6 @@ from ._cmds import (
     _branch_protection,
     _ci_template,
     _clean,
-    _dashboard,
     _drift_report,
     _git,
     _install_gate,
@@ -92,11 +91,9 @@ def register_ecosystem_commands(main_group):
             with click.Context(cmd, info_name=name, parent=parent_ctx) as sub_ctx:
                 click.echo(cmd.get_help(sub_ctx))
 
-    # Per-area command modules. Order is mostly stylistic, but
-    # `_dashboard` MUST register the deprecated `dashboard` Click
-    # command BEFORE the live `dashboard` Group so the Group wins on
-    # name collision (Click later-wins). The module enforces that
-    # internal ordering.
+    # Per-area command modules. Order is stylistic. The dashboard
+    # surfaces moved to the canonical `gui` group (§12); their Phase W
+    # aliases are registered from `_cli/gui/` once both groups exist.
     _list.register(ecosystem)
     _versions.register(ecosystem)
     _drift_report.register(ecosystem)
@@ -105,7 +102,6 @@ def register_ecosystem_commands(main_group):
     _audit_registry_layout.register(ecosystem)
     _audit_local_state.register(ecosystem)
     _audit_summary.register(ecosystem)
-    _dashboard.register(ecosystem)
     _audit_all.register(ecosystem)
     _clean.register(ecosystem)
     _install_gate.register(ecosystem)

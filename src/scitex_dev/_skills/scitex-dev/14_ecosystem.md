@@ -189,7 +189,10 @@ scitex-dev ecosystem diff             # show remote diffs
 scitex-dev ecosystem fix-mismatches --dry-run
 scitex-dev ecosystem fix-mismatches
 
-# Dashboard
-scitex-dev ecosystem dashboard --port 8050
-scitex-dev ecosystem dashboard --background
+# Dashboard — the canonical `gui` group (§12 19_gui-commands.md)
+scitex-dev gui open --port 8050       # auto-serve (detached) + open a browser
+scitex-dev gui serve                  # foreground, headless
+scitex-dev gui status                 # running? where?
+scitex-dev gui stop --yes
+scitex-dev gui list -vv               # same state, as a terminal table
 ```
