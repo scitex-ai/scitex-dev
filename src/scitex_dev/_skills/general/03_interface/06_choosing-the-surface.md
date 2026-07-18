@@ -95,10 +95,10 @@ it further: hook it, then let CLAUDE.md not mention it at all.
 
 ## Related Skills
 
-These two live in the Claude Code skills directory (`~/.claude/skills/`), not in this package — invoke them by name rather than by path, since this file ships inside `scitex-dev` and installs wherever the package does:
+Both are upstream Anthropic skills, not package content. Linked to source rather than to a local path — a machine-specific path is wrong for anyone installing `scitex-dev` from PyPI, and a stale path is worse than none:
 
-- **`mcp-builder`** — building a new MCP server (TypeScript or Python). Reach for it when the need is NEW connectivity to a service, not knowledge about an existing one.
-- **`skill-creator`** — drafting, testing and iterating a skill, including its eval tooling and description optimisation. Reach for it when capturing a workflow or judgment, per the template and description guidance below.
+- **[mcp-builder](https://github.com/anthropics/skills/tree/main/skills/mcp-builder)** — building a new MCP server (TypeScript or Python). Reach for it when the need is NEW connectivity to a service, not knowledge about one that already exists.
+- **[skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)** — drafting, testing and iterating a skill, including its eval tooling and description optimisation. Reach for it when capturing a workflow or judgment, per the template and description guidance below.
 
 Within this package, the neighbouring interface docs are `02_cli/` (noun-verb command structure), `03_mcp/` (server registration), and `04_skills/` (frontmatter, indexing, export).
 
@@ -231,9 +231,7 @@ If you see "Connection refused":
 
 ### References
 
-Claude Code skills, invoked by name (not shipped with this package):
+Upstream Anthropic skills (not shipped with this package):
 
-- `mcp-builder`
-- `skill-creator`
-
-Both live under the Claude Code skills directory on a configured machine. Referenced by name deliberately — an absolute path would be wrong for anyone who installs `scitex-dev` from PyPI, and a stale path is worse than none.
+- <https://github.com/anthropics/skills/tree/main/skills/mcp-builder>
+- <https://github.com/anthropics/skills/tree/main/skills/skill-creator>
