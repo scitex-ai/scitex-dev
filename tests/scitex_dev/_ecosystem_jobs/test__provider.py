@@ -58,3 +58,33 @@ def test_drift_report_timer_cadence_is_conservative_six_hours():
     cadence = by_name["drift-report"].on_unit_active_sec
     # Assert
     assert cadence == "6h"
+
+
+def test_provider_registers_the_pr_expire_cron():
+    """The fleet PR-expiry primitive is registered as a daily cron job."""
+    # Arrange
+    cron_names = {job.name for job in provide_jobs() if job.kind == "cron"}
+    # Act
+    registered = "pr-expire" in cron_names
+    # Assert
+    assert registered
+
+
+def test_pr_expire_job_ships_in_dry_run_mode_not_apply():
+    """SAFETY: the scheduled job must NOT auto-mass-close the fleet on first fire."""
+    # Arrange
+    by_name = {job.name: job for job in provide_jobs()}
+    # Act
+    command = by_name["pr-expire"].command
+    # Assert
+    assert "--dry-run" in command and "--apply" not in command
+
+
+def test_pr_expire_job_runs_the_ecosystem_pr_expire_primitive():
+    """The cron drives `ecosystem pr expire --all` across the fleet."""
+    # Arrange
+    by_name = {job.name: job for job in provide_jobs()}
+    # Act
+    command = by_name["pr-expire"].command
+    # Assert
+    assert "ecosystem pr expire --all" in command
