@@ -12,6 +12,8 @@ import sys
 
 import click
 
+from .._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
+
 
 def _completion_script(shell):
     from ._cmd_completion import _generate_completion_script
@@ -22,17 +24,46 @@ def _completion_script(shell):
 def register(main_group):
     """Attach the completion commands to ``main_group``."""
 
-    @main_group.group("completion")
+    @main_group.group(
+        "completion",
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="Shell tab-completion management.",
+            examples=(
+                Example(
+                    "{prog} linter completion install --shell bash",
+                    "Install completion into ~/.bashrc.",
+                ),
+                Example(
+                    "{prog} linter show-completion-status",
+                    "Report whether completion is installed.",
+                ),
+            ),
+        ),
+    )
     def completion_group():
-        """Shell tab-completion management.
+        pass
 
-        \b
-        Example:
-            $ scitex-dev linter completion install --shell bash
-            $ scitex-dev linter show-completion-status
-        """
-
-    @completion_group.command("install")
+    @completion_group.command(
+        "install",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Install completion to shell RC file.",
+            examples=(
+                Example(
+                    "{prog} linter completion install", "Auto-detect the shell."
+                ),
+                Example(
+                    "{prog} linter completion install --shell zsh",
+                    "Target ~/.zshrc explicitly.",
+                ),
+                Example(
+                    "{prog} linter completion install --dry-run",
+                    "Show what would be written.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--shell",
         type=click.Choice(["bash", "zsh"]),
@@ -56,14 +87,6 @@ def register(main_group):
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
     def completion_install(shell, dry_run, yes, as_json):
-        """Install completion to shell RC file.
-
-        \b
-        Example:
-            $ scitex-dev linter completion install
-            $ scitex-dev linter completion install --shell zsh
-            $ scitex-dev linter completion install --dry-run
-        """
         import os
 
         if not shell:
@@ -99,18 +122,26 @@ def register(main_group):
         click.echo(f"Completion installed in {rc_file}")
         click.echo(f"Reload with: source {rc_file}")
 
-    @main_group.command("show-completion-status")
+    @main_group.command(
+        "show-completion-status",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Show shell completion installation status.",
+            examples=(
+                Example(
+                    "{prog} linter show-completion-status", "Human-readable status."
+                ),
+                Example(
+                    "{prog} linter show-completion-status --json",
+                    "Machine-readable status.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
     def show_completion_status(as_json):
-        """Show shell completion installation status.
-
-        \b
-        Example:
-            $ scitex-dev linter show-completion-status
-            $ scitex-dev linter show-completion-status --json
-        """
         import os
 
         shell_env = os.environ.get("SHELL", "")
@@ -137,34 +168,48 @@ def register(main_group):
         if not installed:
             click.echo("\nInstall with: scitex-dev linter completion install")
 
-    @main_group.command("show-completion-bash")
+    @main_group.command(
+        "show-completion-bash",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Print the bash completion script to stdout.",
+            examples=(
+                Example(
+                    "{prog} linter show-completion-bash "
+                    "> /etc/bash_completion.d/scitex-dev-linter",
+                    "Install system-wide.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
     def show_completion_bash(as_json):
-        """Print the bash completion script to stdout.
-
-        \b
-        Example:
-            $ scitex-dev linter show-completion-bash > /etc/bash_completion.d/scitex-dev-linter
-        """
         script = _completion_script("bash")
         if as_json:
             click.echo(json.dumps({"shell": "bash", "script": script}, indent=2))
         else:
             click.echo(script)
 
-    @main_group.command("show-completion-zsh")
+    @main_group.command(
+        "show-completion-zsh",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Print the zsh completion script to stdout.",
+            examples=(
+                Example(
+                    "{prog} linter show-completion-zsh "
+                    "> ~/.zsh/completions/_scitex-dev-linter",
+                    "Install for the current user.",
+                ),
+            ),
+        ),
+    )
     @click.option(
         "--json", "as_json", is_flag=True, default=False, help="Output as JSON."
     )
     def show_completion_zsh(as_json):
-        """Print the zsh completion script to stdout.
-
-        \b
-        Example:
-            $ scitex-dev linter show-completion-zsh > ~/.zsh/completions/_scitex-dev-linter
-        """
         script = _completion_script("zsh")
         if as_json:
             click.echo(json.dumps({"shell": "zsh", "script": script}, indent=2))

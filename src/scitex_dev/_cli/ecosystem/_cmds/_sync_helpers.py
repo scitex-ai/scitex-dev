@@ -4,7 +4,7 @@
 
 Local git introspection (read-only by default) plus the
 `ssh host bash -lc '<scitex-dev ... --json>'` round-trip pattern reused
-from `_dashboard._render_remote_dashboard`. Both commands speak the same
+from `_cli/gui/_shared.render_remote`. Both commands speak the same
 per-package data shape so a remote payload deserialises identically to a
 local one.
 """
@@ -99,7 +99,7 @@ def run_remote_json(host: str, remote_argv: list[str]) -> tuple[int, str, str]:
     Returns (returncode, stdout, stderr). The remote command is sourced
     through `bash -lc` so the user's PATH (incl. ~/.env-*/bin) is set up,
     and `-o BatchMode=yes` prevents an interactive password prompt from
-    hanging the call. Mirrors `_dashboard._render_remote_dashboard`.
+    hanging the call. Mirrors `_cli/gui/_shared.render_remote`.
     """
     remote_cmd = " ".join(["scitex-dev", *remote_argv])
     ssh_cmd = [

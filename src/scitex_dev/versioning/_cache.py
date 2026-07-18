@@ -36,64 +36,38 @@ PARAMETERISATION
 Every path/knob is driven by the :class:`VersioningConfig` handed in, so two
 leaves never collide: each has its own ``<PREFIX>_CACHE`` override, its own
 ``<PREFIX>_TTL_S``, and its own cache subpath under ``$SCITEX_DIR``.
+
+WHERE THE RULES ACTUALLY LIVE: ``_fastpath``
+---------------------------------------------
+The TTL, the ``$SCITEX_DIR`` / ``<PREFIX>_CACHE`` path resolution and the
+"do we trust this file?" rule are DEFINED IN :mod:`._fastpath` and imported
+here — not the other way round. That module is stdlib-only so a consumer can
+pre-gate on a warm cache in ~0.02 ms without paying ~200 ms to import this
+package (see its docstring for the measurement). The dependency points
+cheap <- heavy deliberately: if it were reversed, the first import added to
+this module would silently un-fast the fast path.
+
+This module keeps only what genuinely needs the :class:`Report` type: the
+writer, and the reader's final ``dict -> Report`` step.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import time
 from pathlib import Path
 
+from ._fastpath import DEFAULT_TTL_S, cache_path, read_cache_raw, scitex_dir, ttl_s
 from ._model import Report
 
-__all__ = ["DEFAULT_TTL_S", "cache_path", "read_cache", "scitex_dir", "write_cache"]
-
-# 24 h against an hourly refresher: 24 consecutive misses before we fall
-# silent. Deliberately generous — a loaded host may simply not schedule a
-# cron job for a long while, and a tight TTL there just makes us blind.
-DEFAULT_TTL_S = 24 * 60 * 60
-
-_ENV_SCITEX_DIR = "SCITEX_DIR"
-
-
-def scitex_dir() -> Path:
-    """``$SCITEX_DIR``, else ``~/.scitex``. Resolved per call.
-
-    Mirrors the ecosystem's ``local_state.user_root()`` one-line contract in
-    stdlib, so no heavy import lands on the CLI hot path.
-    """
-    env = os.environ.get(_ENV_SCITEX_DIR)
-    return Path(env) if env else Path.home() / ".scitex"
-
-
-def cache_path(config) -> Path:
-    """Where this leaf's currency cache lives. Resolved per call.
-
-    ``<PREFIX>_CACHE`` overrides it outright — the seam tests use, and the
-    way a container can be pointed at the host's cache instead of its own
-    empty ``$HOME``.
-    """
-    override = os.environ.get(config.env_cache)
-    if override:
-        return Path(override)
-    return scitex_dir().joinpath(*config.cache_subpath)
-
-
-def ttl_s(config) -> int:
-    """Cache lifetime. ``<PREFIX>_TTL_S`` overrides the default.
-
-    A garbage value falls back to the default rather than raising — a typo in
-    an env var must not break the CLI.
-    """
-    raw = os.environ.get(config.env_ttl)
-    if not raw:
-        return DEFAULT_TTL_S
-    try:
-        value = int(raw)
-    except ValueError:
-        return DEFAULT_TTL_S
-    return value if value > 0 else DEFAULT_TTL_S
+__all__ = [
+    "DEFAULT_TTL_S",
+    "cache_path",
+    "read_cache",
+    "scitex_dir",
+    "ttl_s",
+    "write_cache",
+]
 
 
 def write_cache(config, report: Report, path: Path | None = None) -> Path:
@@ -124,24 +98,17 @@ def read_cache(
     file, malformed JSON, a report with no timestamp, and a report older than
     the TTL. Each of those is an absence of current evidence, and this
     function refuses to dress any of them up as an answer.
+
+    The trust rule itself is :func:`._fastpath.read_cache_raw` — stated once,
+    so the cheap pre-gate and this reader can never disagree about which
+    caches are warm. All this adds is the ``dict -> Report`` step.
     """
-    target = path or cache_path(config)
-    try:
-        raw = json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(raw, dict):
-        return None
-
-    report = Report.from_dict(raw)
-    if not report.generated_at:
-        return None
-
-    age = (time.time() if now is None else now) - report.generated_at
+    target = path if path is not None else cache_path(config)
     limit = ttl_s(config) if max_age_s is None else max_age_s
-    if age > limit:
+    raw = read_cache_raw(target, now=now, max_age_s=limit)
+    if raw is None:
         return None
-    return report
+    return Report.from_dict(raw)
 
 
 # EOF

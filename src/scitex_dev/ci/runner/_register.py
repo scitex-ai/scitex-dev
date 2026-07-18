@@ -7,11 +7,43 @@ from pathlib import Path
 
 import click
 
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 
 
 def register(group: click.Group) -> None:
-    @group.command("register")
+    @group.command(
+        "register",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Register a repo with the scitex-ci workflow.",
+            description=(
+                "Copies the ci.yml template into the repo + sets 3 Actions "
+                "Variables.\n"
+                "\n"
+                "Steps:\n"
+                "  1. Copy .github/workflows/ci.yml from the shipped template.\n"
+                "  2. Set Actions Variable CI_RUNS_ON to "
+                "'[\"self-hosted\",\"scitex-ci\"]'.\n"
+                "  3. Set Actions Variable SCITEX_CI_APPTAINER to the "
+                "configured apptainer path.\n"
+                "  4. Set Actions Variable SCITEX_CI_SIF to the configured "
+                "SIF path.\n"
+                "  5. Print the fork-PR approval reminder (no repo settings "
+                "are mutated)."
+            ),
+            examples=(
+                Example(
+                    "{prog} ci runner register ../scitex-stats --yes",
+                    "Register a repo non-interactively.",
+                ),
+                Example(
+                    "{prog} ci runner register ../figrecipe --dry-run",
+                    "Preview without changing anything.",
+                ),
+            ),
+        ),
+    )
     @click.argument(
         "repo_path",
         type=click.Path(exists=True, file_okay=False, dir_okay=True),
@@ -37,24 +69,6 @@ def register(group: click.Group) -> None:
     def register_cmd(
         repo_path: str, workflow_name: str, dry_run: bool, yes: bool
     ) -> None:
-        """Register a repo with the scitex-ci workflow.
-
-        \b
-        Copies the ci.yml template into the repo + sets 3 Actions Variables.
-
-        \b
-        Steps:
-          1. Copy .github/workflows/ci.yml from the shipped template.
-          2. Set Actions Variable CI_RUNS_ON to '["self-hosted","scitex-ci"]'.
-          3. Set Actions Variable SCITEX_CI_APPTAINER to the configured apptainer path.
-          4. Set Actions Variable SCITEX_CI_SIF to the configured SIF path.
-          5. Print the fork-PR approval reminder (no repo settings are mutated).
-
-        \b
-        Example:
-          $ scitex-dev ci runner register ../scitex-stats --yes
-          $ scitex-dev ci runner register ../figrecipe --dry-run
-        """
         cfg = config.load_runner_config()
         config.get_gh_token(cfg)
 
