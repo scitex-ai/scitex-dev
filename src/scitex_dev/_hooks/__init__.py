@@ -50,4 +50,25 @@ def run_testmon_sh_path() -> str:
     return str(pathlib.Path(HOOK_DIR) / "run_testmon.sh")
 
 
-__all__ = ["HOOK_DIR", "run_lint_sh_path", "run_testmon_sh_path"]
+def pre_push_sh_path() -> str:
+    """Return the absolute filesystem path of the canonical ``pre-push.sh``.
+
+    The local pre-push gate runs the SAME audit conformance check CI
+    runs (``scitex-dev ecosystem audit-all``) plus a diff-scoped
+    ruff/import-smoke/testmon subset BEFORE ``git push``, so the
+    operator does not push → CI red → push fix → CI red merry-go-round.
+    Resolved the same way as :func:`run_lint_sh_path` so operator-project
+    bootstrap and the ``scitex-dev hooks`` CLI never string-concatenate
+    ``HOOK_DIR``. Installed (as a symlink named ``pre-push``, no ``.sh``
+    suffix — git's pre-push contract is filename-based) via
+    ``scitex-dev hooks enable-pre-push --target <repo>``.
+    """
+    return str(pathlib.Path(HOOK_DIR) / "pre-push.sh")
+
+
+__all__ = [
+    "HOOK_DIR",
+    "run_lint_sh_path",
+    "run_testmon_sh_path",
+    "pre_push_sh_path",
+]
