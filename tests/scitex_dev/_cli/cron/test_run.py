@@ -75,13 +75,16 @@ def test_exec_log_lands_under_runtime_logs(fake_home):
 
 def test_exec_captures_subprocess_stderr_into_the_log(fake_home):
     # Arrange — the host script does not exist under the fake HOME, so
-    # /bin/sh writes a "not found" diagnostic. That message is exactly
+    # the shell writes a diagnostic naming it. That message is exactly
     # the kind of output an operator greps for, and it comes from a
     # CHILD process — which is why the redirect is fd-level.
     # Act
     log, _ = _exec_with_log("ci-runner-ensure", fake_home)
-    # Assert
-    assert "not found" in log.read_text()
+    # Assert — match the SCRIPT NAME, not the diagnostic wording: dash
+    # says "not found" while bash says "No such file or directory", and
+    # /bin/sh is one or the other depending on the host. Every shell
+    # names the command it could not run.
+    assert "ci-runner-ensure-cron.sh" in log.read_text()
 
 
 def test_exec_propagates_the_bodys_exit_code(fake_home):
