@@ -4,7 +4,17 @@ from __future__ import annotations
 
 import pytest
 
-from scitex_dev._cli.cron import _jobs
+from scitex_dev._cli.cron import _job_commands, _jobs
+
+
+def shell_body(name: str) -> str:
+    """The job's PURE shell payload (no mkdir / redirect / rotation).
+
+    Since the 2026-07-19 cron cleanup the crontab command is only
+    ``scitex-dev cron exec <name>``; the payload of a shell-bodied job
+    moved here, where `cron exec` runs it under the shared log sink.
+    """
+    return _job_commands.JOB_SHELL_BODIES[name]
 
 
 def test_registry_has_ci_watch_entry():
@@ -30,12 +40,16 @@ def test_ci_watch_command_invokes_scitex_dev_cron_exec():
     assert "scitex-dev cron exec ci-watch" in spec.command
 
 
-def test_ci_watch_command_writes_to_log_under_scitex_dev():
+def test_ci_watch_logs_under_dev_runtime_logs():
     # Arrange
-    # Act
-    spec = _jobs.get_job("ci-watch")
-    # Assert
-    assert "/.scitex/dev/logs/cron-ci-watch.log" in spec.command
+    # Act — the log path is resolved by the verb now, not spelled into
+    # the crontab line.
+    log = _job_commands.log_path_for("ci-watch")
+    # Assert — under runtime/, per the operator directive recorded in
+    # jobs/_respawn.py:26. The pre-cleanup ~/.scitex/dev/logs/ violated it.
+    assert log.as_posix().endswith(
+        "/.scitex/dev/runtime/logs/cron-ci-watch.log"
+    )
 
 
 def test_ci_watch_description_non_empty():
@@ -101,12 +115,14 @@ def test_worktree_gc_command_invokes_scitex_dev_cron_exec():
     assert "scitex-dev cron exec worktree-gc" in spec.command
 
 
-def test_worktree_gc_command_writes_to_named_log_file():
+def test_worktree_gc_logs_under_dev_runtime_logs():
     # Arrange
     # Act
-    spec = _jobs.get_job("worktree-gc")
+    log = _job_commands.log_path_for("worktree-gc")
     # Assert
-    assert "/.scitex/dev/logs/cron-worktree-gc.log" in spec.command
+    assert log.as_posix().endswith(
+        "/.scitex/dev/runtime/logs/cron-worktree-gc.log"
+    )
 
 
 def test_worktree_gc_description_mentions_managed_segment():
@@ -157,12 +173,14 @@ def test_task_harvest_command_invokes_scitex_dev_cron_exec():
     assert "scitex-dev cron exec task-harvest" in spec.command
 
 
-def test_task_harvest_command_writes_to_named_log_file():
+def test_task_harvest_logs_under_dev_runtime_logs():
     # Arrange
     # Act
-    spec = _jobs.get_job("task-harvest")
+    log = _job_commands.log_path_for("task-harvest")
     # Assert
-    assert "/.scitex/dev/logs/cron-task-harvest.log" in spec.command
+    assert log.as_posix().endswith(
+        "/.scitex/dev/runtime/logs/cron-task-harvest.log"
+    )
 
 
 def test_task_harvest_description_mentions_tasks_yaml():
@@ -223,12 +241,14 @@ def test_cred_distribute_command_invokes_scitex_dev_cron_exec():
     assert "scitex-dev cron exec cred-distribute" in spec.command
 
 
-def test_cred_distribute_command_writes_to_named_log_file():
+def test_cred_distribute_logs_under_dev_runtime_logs():
     # Arrange
     # Act
-    spec = _jobs.get_job("cred-distribute")
+    log = _job_commands.log_path_for("cred-distribute")
     # Assert
-    assert "/.scitex/dev/logs/cron-cred-distribute.log" in spec.command
+    assert log.as_posix().endswith(
+        "/.scitex/dev/runtime/logs/cron-cred-distribute.log"
+    )
 
 
 def test_cred_distribute_description_mentions_sac_distribute_verb():
@@ -284,12 +304,14 @@ def test_spartan_conn_monitor_command_invokes_scitex_dev_cron_exec():
     assert "scitex-dev cron exec spartan-conn-monitor" in spec.command
 
 
-def test_spartan_conn_monitor_command_writes_to_log_under_scitex_dev():
+def test_spartan_conn_monitor_logs_under_dev_runtime_logs():
     # Arrange
     # Act
-    spec = _jobs.get_job("spartan-conn-monitor")
+    log = _job_commands.log_path_for("spartan-conn-monitor")
     # Assert
-    assert "/.scitex/dev/logs/cron-spartan-conn-monitor.log" in spec.command
+    assert log.as_posix().endswith(
+        "/.scitex/dev/runtime/logs/cron-spartan-conn-monitor.log"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -325,38 +347,34 @@ def test_creds_rotate_all_schedule_is_top_of_every_hour():
     assert spec.schedule == "0 * * * *"
 
 
-def test_creds_rotate_all_command_invokes_creds_rotate_all_yes():
+def test_creds_rotate_all_body_invokes_creds_rotate_all_yes():
     # Arrange
-    # Act
-    spec = _jobs.get_job("creds-rotate-all")
+    # Act — the payload moved out of the crontab into the shell body the
+    # verb executes; the crontab line is now just `cron exec`.
+    body = shell_body("creds-rotate-all")
     # Assert
-    assert "scitex-dev creds rotate-all --yes" in spec.command
+    assert body == "scitex-dev creds rotate-all --yes"
 
 
-def test_creds_rotate_all_command_writes_to_creds_rotate_log():
+def test_creds_rotate_all_logs_to_creds_rotate_slug_under_runtime():
     # Arrange
     # Act
-    spec = _jobs.get_job("creds-rotate-all")
-    # Assert — the ad-hoc line this entry retires writes to exactly this
-    # path (NO `cron-` prefix); dashboards tailing it must keep working.
-    assert "/.scitex/dev/logs/creds-rotate.log" in spec.command
+    log = _job_commands.log_path_for("creds-rotate-all")
+    # Assert — the slug stays `creds-rotate` (NO `cron-` prefix): the
+    # ad-hoc line this entry retired used exactly that basename and
+    # dashboards tailing it must keep working. Only the DIRECTORY moves,
+    # from ~/.scitex/dev/logs/ to the mandated runtime/ layer.
+    assert log.as_posix().endswith("/.scitex/dev/runtime/logs/creds-rotate.log")
 
 
-def test_creds_rotate_all_command_keeps_one_mib_rotation_threshold():
+def test_creds_rotate_all_body_carries_no_inline_plumbing():
     # Arrange
     # Act
-    spec = _jobs.get_job("creds-rotate-all")
-    # Assert — the 1-MiB rotate-to-.1 threshold from the ad-hoc installer
-    # (_creds._cron.build_cron_line) is preserved in the managed line.
-    assert "1048576" in spec.command
-
-
-def test_creds_rotate_all_command_keeps_stat_size_check():
-    # Arrange
-    # Act
-    spec = _jobs.get_job("creds-rotate-all")
-    # Assert — the `stat -c%s` size probe of the rotation guard survives.
-    assert "stat -c%s" in spec.command
+    body = shell_body("creds-rotate-all")
+    # Assert — the operator's complaint: mkdir / redirect / rotation
+    # belong to the verb, not to the line. This job carried ALL THREE
+    # inline; none may survive in the payload.
+    assert "mkdir" not in body and ">>" not in body and "stat -c%s" not in body
 
 
 def test_creds_rotate_all_description_mentions_rotate_all_verb():
@@ -405,20 +423,23 @@ def test_ci_runner_ensure_schedule_is_every_thirty_minutes():
     assert spec.schedule == "*/30 * * * *"
 
 
-def test_ci_runner_ensure_command_runs_the_host_script():
+def test_ci_runner_ensure_body_runs_the_host_script():
     # Arrange
     # Act
-    spec = _jobs.get_job("ci-runner-ensure")
-    # Assert
-    assert "$HOME/.scitex/dev/ci-runner-ensure-cron.sh" in spec.command
+    body = shell_body("ci-runner-ensure")
+    # Assert — $HOME, never ~: cron's /bin/sh -c does not reliably expand
+    # a tilde (operator directive 2026-07-19).
+    assert body == "$HOME/.scitex/dev/ci-runner-ensure-cron.sh"
 
 
-def test_ci_runner_ensure_command_writes_to_named_log_file():
+def test_ci_runner_ensure_logs_under_dev_runtime_logs():
     # Arrange
     # Act
-    spec = _jobs.get_job("ci-runner-ensure")
+    log = _job_commands.log_path_for("ci-runner-ensure")
     # Assert
-    assert "/.scitex/dev/logs/ci-runner-ensure.log" in spec.command
+    assert log.as_posix().endswith(
+        "/.scitex/dev/runtime/logs/ci-runner-ensure.log"
+    )
 
 
 def test_ci_runner_ensure_description_non_empty():
@@ -467,20 +488,22 @@ def test_ci_runner_workgc_schedule_is_every_six_hours():
     assert spec.schedule == "0 */6 * * *"
 
 
-def test_ci_runner_workgc_command_runs_the_host_script():
+def test_ci_runner_workgc_body_runs_the_host_script():
     # Arrange
     # Act
-    spec = _jobs.get_job("ci-runner-workgc")
+    body = shell_body("ci-runner-workgc")
     # Assert
-    assert "$HOME/.scitex/dev/ci-runner-workgc-cron.sh" in spec.command
+    assert body == "$HOME/.scitex/dev/ci-runner-workgc-cron.sh"
 
 
-def test_ci_runner_workgc_command_writes_to_named_log_file():
+def test_ci_runner_workgc_logs_under_dev_runtime_logs():
     # Arrange
     # Act
-    spec = _jobs.get_job("ci-runner-workgc")
+    log = _job_commands.log_path_for("ci-runner-workgc")
     # Assert
-    assert "/.scitex/dev/logs/ci-runner-workgc.log" in spec.command
+    assert log.as_posix().endswith(
+        "/.scitex/dev/runtime/logs/ci-runner-workgc.log"
+    )
 
 
 def test_ci_runner_workgc_description_non_empty():
@@ -532,29 +555,22 @@ def test_ecosystem_sync_schedule_is_top_of_every_hour():
     assert spec.schedule == "0 * * * *"
 
 
-def test_ecosystem_sync_command_invokes_ecosystem_sync_yes():
+def test_ecosystem_sync_body_invokes_ecosystem_sync_yes():
     # Arrange
     # Act
-    spec = _jobs.get_job("ecosystem-sync")
+    body = shell_body("ecosystem-sync")
     # Assert — must call the mutating self-pull, not the read-only preview.
-    assert "scitex-dev ecosystem sync --yes" in spec.command
+    assert body == "scitex-dev ecosystem sync --yes"
 
 
-def test_ecosystem_sync_command_writes_to_named_log_file():
+def test_ecosystem_sync_logs_under_dev_runtime_logs():
     # Arrange
     # Act
-    spec = _jobs.get_job("ecosystem-sync")
+    log = _job_commands.log_path_for("ecosystem-sync")
     # Assert
-    assert "/.scitex/dev/logs/cron-ecosystem-sync.log" in spec.command
-
-
-def test_ecosystem_sync_command_keeps_one_mib_rotation_threshold():
-    # Arrange
-    # Act
-    spec = _jobs.get_job("ecosystem-sync")
-    # Assert — a sweep over ~60 repos writes a table each run, so the
-    # 1-MiB rotate-to-.1 guard must be present.
-    assert "1048576" in spec.command
+    assert log.as_posix().endswith(
+        "/.scitex/dev/runtime/logs/cron-ecosystem-sync.log"
+    )
 
 
 def test_ecosystem_sync_description_mentions_ff_only_safety():
@@ -610,27 +626,27 @@ def test_scholar_library_sync_schedule_is_every_six_hours_offset():
 def test_scholar_library_sync_command_pushes_library_to_spartan():
     # Arrange
     # Act
-    spec = _jobs.get_job("scholar-library-sync")
+    body = shell_body("scholar-library-sync")
     # Assert — one-way push: local library/ source, spartan: destination.
     assert (
         "scitex-ssh sync $HOME/.scitex/scholar/library/ "
-        "spartan:.scitex/scholar/library/" in spec.command
+        "spartan:.scitex/scholar/library/" in body
     )
 
 
 def test_scholar_library_sync_command_never_passes_delete():
     # Arrange
     # Act
-    spec = _jobs.get_job("scholar-library-sync")
+    body = shell_body("scholar-library-sync")
     # Assert — WSL is authority but a WSL-side pruning must never reap
     # Spartan copies; --delete is forbidden by design.
-    assert "--delete" not in spec.command
+    assert "--delete" not in body
 
 
 def test_scholar_library_sync_command_excludes_all_index_db_siblings():
     # Arrange
     # Act
-    spec = _jobs.get_job("scholar-library-sync")
+    body = shell_body("scholar-library-sync")
     # Assert — the index is DERIVED state; shipping a live SQLite file
     # mid-write corrupts it. All four siblings must be excluded.
     missing = [
@@ -641,7 +657,7 @@ def test_scholar_library_sync_command_excludes_all_index_db_siblings():
             "index.db-wal",
             "index.db-shm",
         )
-        if f"--exclude {name}" not in spec.command
+        if f"--exclude {name}" not in body
     ]
     assert missing == []
 
@@ -649,19 +665,19 @@ def test_scholar_library_sync_command_excludes_all_index_db_siblings():
 def test_scholar_library_sync_command_rebuilds_remote_index_after_push():
     # Arrange
     # Act
-    spec = _jobs.get_job("scholar-library-sync")
+    body = shell_body("scholar-library-sync")
     # Assert
-    assert "scitex-scholar library db build" in spec.command
+    assert "scitex-scholar library db build" in body
 
 
 def test_scholar_library_sync_command_short_circuits_rebuild_on_rsync_failure():
     # Arrange
-    spec = _jobs.get_job("scholar-library-sync")
+    body = shell_body("scholar-library-sync")
     # Act — the rebuild must come after the sync joined by && so a partial
     # tree is never indexed.
-    sync_pos = spec.command.index("scitex-ssh sync")
-    rebuild_pos = spec.command.index("scitex-scholar library db build")
-    joiner = spec.command[sync_pos:rebuild_pos]
+    sync_pos = body.index("scitex-ssh sync")
+    rebuild_pos = body.index("scitex-scholar library db build")
+    joiner = body[sync_pos:rebuild_pos]
     # Assert
     assert "&&" in joiner
 
@@ -669,60 +685,57 @@ def test_scholar_library_sync_command_short_circuits_rebuild_on_rsync_failure():
 def test_scholar_library_sync_command_precreates_remote_dir():
     # Arrange
     # Act
-    spec = _jobs.get_job("scholar-library-sync")
+    body = shell_body("scholar-library-sync")
     # Assert — mkdir -p over ssh instead of rsync --mkpath (Spartan's rsync
     # predates 3.2.3).
-    assert "ssh spartan 'mkdir -p ~/.scitex/scholar/library'" in spec.command
+    # $HOME rather than ~ per the 2026-07-19 directive; inside the single
+    # quotes it reaches the REMOTE shell literally and expands there.
+    assert "ssh spartan 'mkdir -p $HOME/.scitex/scholar/library'" in body
 
 
 def test_scholar_library_sync_command_runs_noninteractive():
     # Arrange
     # Act
-    spec = _jobs.get_job("scholar-library-sync")
+    body = shell_body("scholar-library-sync")
     # Assert — cron has no TTY; the CLI confirmation must be suppressed.
-    assert "--yes" in spec.command
+    assert "--yes" in body
 
 
 def test_scholar_library_sync_logs_under_scholar_runtime_dir():
     # Arrange
     # Act
-    spec = _jobs.get_job("scholar-library-sync")
+    log = _job_commands.log_path_for("scholar-library-sync")
     # Assert — per the 2026-07-01 operator directive, the log lives under
-    # the SCHOLAR leaf's user-level runtime dir, not ~/.scitex/dev/.
-    assert "/.scitex/scholar/runtime/logs/cron-library-sync.log" in spec.command
-
-
-def test_scholar_library_sync_command_keeps_one_mib_rotation_threshold():
-    # Arrange
-    # Act
-    spec = _jobs.get_job("scholar-library-sync")
-    # Assert
-    assert "1048576" in spec.command
+    # the SCHOLAR leaf's user-level runtime dir, not ~/.scitex/dev/: the
+    # data being synced is scholar state, so its log lives with it.
+    assert log.as_posix().endswith(
+        "/.scitex/scholar/runtime/logs/cron-library-sync.log"
+    )
 
 
 def test_scholar_library_sync_command_runs_dedupe_apply_before_sync():
     # Arrange
-    spec = _jobs.get_job("scholar-library-sync")
+    body = shell_body("scholar-library-sync")
     # Act — dedupe resolves duplicate-DOI dirs BEFORE they can sync to
     # Spartan or fail the remote build (scholar's sequencing requirement).
-    dedupe_pos = spec.command.index(
+    dedupe_pos = body.index(
         "scitex-scholar library dedupe --apply "
         "--library-root $HOME/.scitex/scholar/library"
     )
-    sync_pos = spec.command.index("scitex-ssh sync")
+    sync_pos = body.index("scitex-ssh sync")
     # Assert
     assert dedupe_pos < sync_pos
 
 
 def test_scholar_library_sync_command_gates_sync_on_dedupe_success():
     # Arrange
-    spec = _jobs.get_job("scholar-library-sync")
+    body = shell_body("scholar-library-sync")
     # Act — && between dedupe and the rest: --apply exits non-zero ONLY on
     # unresolved conflicts or apply/IO error (contract pinned with
     # scholar), and that must block the push fail-loud.
-    dedupe_pos = spec.command.index("library dedupe --apply")
-    sync_pos = spec.command.index("scitex-ssh sync")
-    joiner = spec.command[dedupe_pos:sync_pos]
+    dedupe_pos = body.index("library dedupe --apply")
+    sync_pos = body.index("scitex-ssh sync")
+    joiner = body[dedupe_pos:sync_pos]
     # Assert
     assert "&&" in joiner
 
@@ -730,7 +743,118 @@ def test_scholar_library_sync_command_gates_sync_on_dedupe_success():
 def test_scholar_library_sync_command_never_hard_deletes():
     # Arrange
     # Act
-    spec = _jobs.get_job("scholar-library-sync")
+    body = shell_body("scholar-library-sync")
     # Assert — dedupe must stay quarantine-based (reversible); the
     # irreversible flag is forbidden in the unattended cron line.
-    assert "--hard-delete" not in spec.command
+    assert "--hard-delete" not in body
+
+
+# ---------------------------------------------------------------------------
+# Registry-wide invariants for the 2026-07-19 cron cleanup. These are the
+# operator's three asks, pinned once for EVERY job rather than job-by-job:
+#   1. mkdir / redirect / rotation belong to the cron verb, not the line.
+#   2. generated shell text uses $HOME, never ~.
+#   3. the crontab is not to be noisy.
+# ---------------------------------------------------------------------------
+
+
+def test_every_crontab_command_is_exactly_cron_exec_name():
+    # Arrange
+    # Act
+    offenders = {
+        spec.name: spec.command
+        for spec in _jobs.list_jobs()
+        if spec.command != f"scitex-dev cron exec {spec.name}"
+    }
+    # Assert — schedule + command + marker is the WHOLE line.
+    assert offenders == {}
+
+
+def test_no_crontab_command_carries_shell_plumbing():
+    # Arrange
+    # Act — mkdir, redirect, rotation, and command chaining are exactly
+    # the noise the operator objected to ("cron が汚すぎる").
+    noise = ("mkdir", ">>", "2>&1", "stat -c%s", ";", "&&", "$(dirname")
+    offenders = {
+        spec.name: [tok for tok in noise if tok in spec.command]
+        for spec in _jobs.list_jobs()
+        if any(tok in spec.command for tok in noise)
+    }
+    # Assert
+    assert offenders == {}
+
+
+def test_no_generated_shell_text_uses_bare_tilde_home():
+    # Arrange — ~ is expanded only by an interactive shell in command
+    # position; cron's /bin/sh -c context and $(dirname ~/...) do NOT
+    # reliably expand it, so generated text must use $HOME.
+    generated = [spec.command for spec in _jobs.list_jobs()]
+    generated += list(_job_commands.JOB_SHELL_BODIES.values())
+    # Act
+    offenders = [text for text in generated if "~/" in text]
+    # Assert
+    assert offenders == []
+
+
+def test_every_job_logs_under_a_runtime_logs_directory():
+    # Arrange
+    # Act — runtime/ is the documented regenerable-state layer,
+    # redirectable off GPFS for inode safety; job logs are exactly the
+    # high-cardinality regenerable writes it exists for.
+    offenders = {
+        spec.name: _job_commands.log_path_for(spec.name).as_posix()
+        for spec in _jobs.list_jobs()
+        if "/runtime/logs/" not in _job_commands.log_path_for(spec.name).as_posix()
+    }
+    # Assert
+    assert offenders == {}
+
+
+def test_no_job_logs_under_the_forbidden_dev_logs_directory():
+    # Arrange
+    # Act — the specific directive being violated before this cleanup
+    # (jobs/_respawn.py:25-27): never ~/.scitex/<pkg>/logs/.
+    offenders = {
+        spec.name: _job_commands.log_path_for(spec.name).as_posix()
+        for spec in _jobs.list_jobs()
+        if "/.scitex/dev/logs/" in _job_commands.log_path_for(spec.name).as_posix()
+    }
+    # Assert
+    assert offenders == {}
+
+
+def test_every_registered_job_has_a_body_or_a_shell_payload():
+    # Arrange — a registry entry with neither a dispatch branch nor a
+    # shell payload would fail at cron time, not at test time.
+    from scitex_dev._cli.cron import run as run_mod
+
+    python_bodied = {
+        "ci-watch",
+        "quota-keepalive",
+        "worktree-gc",
+        "task-harvest",
+        "cred-distribute",
+        "spartan-conn-monitor",
+    }
+    # Act
+    orphans = [
+        name
+        for name in _jobs.JOB_REGISTRY
+        if name not in python_bodied
+        and name not in _job_commands.JOB_SHELL_BODIES
+    ]
+    # Assert
+    assert orphans == [] and run_mod is not None
+
+
+def test_shell_payloads_carry_no_inline_plumbing():
+    # Arrange
+    # Act — the payloads are PURE; `cron exec` supplies mkdir, redirect
+    # and rotation for all of them uniformly.
+    offenders = {
+        name: body
+        for name, body in _job_commands.JOB_SHELL_BODIES.items()
+        if "mkdir -p $(dirname" in body or ">>" in body or "stat -c%s" in body
+    }
+    # Assert
+    assert offenders == {}

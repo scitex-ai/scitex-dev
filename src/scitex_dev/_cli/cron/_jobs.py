@@ -60,7 +60,6 @@ from ._job_commands import (  # noqa: F401
     _cred_distribute_command,
     _creds_rotate_all_command,
     _ecosystem_sync_command,
-    _log_rotate_guard,
     _quota_keepalive_command,
     _scholar_library_sync_command,
     _spartan_conn_monitor_command,
@@ -161,7 +160,8 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
         description=(
             "Poll the 3 Spartan login nodes for the ywatanabe user's "
             "ssh-agents / login sessions / total procs / srun; append a TSV "
-            "row per node to ~/.scitex/dev/runtime/spartan-conn-monitor.tsv; "
+            "row per node to "
+            "$HOME/.scitex/dev/runtime/spartan-conn-monitor.tsv; "
             "audio-notify + PHONE-CALL the operator if ssh-agents>15, srun>50, "
             "or procs>250 (early warning before the HPC admin notices). See "
             "_spartan_conn_monitor.run_once."
@@ -181,9 +181,10 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "managed ecosystem checkout via `scitex-dev creds rotate-all "
             "--yes`. Federates the ad-hoc host line "
             "(# scitex-dev creds-rotate (managed)) into the managed block; "
-            "keeps that line's 1-MiB log-rotation guard and writes to "
-            "~/.scitex/dev/logs/creds-rotate.log. See _creds._cron / "
-            "_creds._rotate."
+            "the 1-MiB log-rotation guard that line carried inline is now "
+            "applied by `cron exec` to every job. Log at "
+            "$HOME/.scitex/dev/runtime/logs/creds-rotate.log. See "
+            "_creds._cron / _creds._rotate."
         ),
     ),
     "ci-runner-ensure": JobSpec(
@@ -198,7 +199,7 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "Ensure the self-hosted GitHub Actions runners are present & "
             "alive by running ~/.scitex/dev/ci-runner-ensure-cron.sh. "
             "Federates the ad-hoc host crontab line into the managed "
-            "block. Log at ~/.scitex/dev/logs/ci-runner-ensure.log."
+            "block. Log at $HOME/.scitex/dev/runtime/logs/ci-runner-ensure.log."
         ),
     ),
     "ci-runner-workgc": JobSpec(
@@ -213,7 +214,7 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "Garbage-collect the self-hosted CI runners' _work/ staging "
             "trees by running ~/.scitex/dev/ci-runner-workgc-cron.sh. "
             "Federates the ad-hoc host crontab line into the managed "
-            "block. Log at ~/.scitex/dev/logs/ci-runner-workgc.log."
+            "block. Log at $HOME/.scitex/dev/runtime/logs/ci-runner-workgc.log."
         ),
     ),
     "ecosystem-sync": JobSpec(
@@ -232,7 +233,8 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "un-pushed work is never clobbered. Closes the drift loop that "
             "let checkouts silently serve stale code (the workstation's own "
             "scitex-dev was 18 commits behind v0.21.0; the Spartan runner "
-            "145 behind). Log at ~/.scitex/dev/logs/cron-ecosystem-sync.log."
+            "145 behind). Log at "
+            "$HOME/.scitex/dev/runtime/logs/cron-ecosystem-sync.log."
         ),
     ),
     "scholar-library-sync": JobSpec(
@@ -253,7 +255,7 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "each push. Requires scitex-ssh>=1.1.0 ([sync] extra) + rsync "
             "(scitex-dev SystemDepSpec). Card scholar-library-cross-"
             "machine-sync-20260701. Log at "
-            "~/.scitex/scholar/runtime/logs/cron-library-sync.log."
+            "$HOME/.scitex/scholar/runtime/logs/cron-library-sync.log."
         ),
     ),
     # Future entries land here. Suggested naming pattern: short
