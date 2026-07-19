@@ -27,3 +27,4 @@ in [00_overview.md](00_overview.md).
 - [03_mcp/](03_mcp/) — fastmcp, tool naming, reproducibility, standard commands (start at [SKILL.md](03_mcp/SKILL.md))
 - [04_skills/](04_skills/) — `_skills/` layout, SKILL.md format, registration, export, frontmatter, public-vs-private (start at [SKILL.md](04_skills/SKILL.md))
 - [05_http-api/](05_http-api/) — Optional FastAPI delegation (start at [SKILL.md](05_http-api/SKILL.md))
+- [06_choosing-the-surface.md](06_choosing-the-surface.md) — WHICH surface should carry a capability: MCP vs CLI vs Skill vs Hook vs CLAUDE.md, decided by what must be true at runtime. Read before adding a capability, when a prose rule keeps being violated (promote to a hook), or when CLAUDE.md is growing (demote to a skill).
