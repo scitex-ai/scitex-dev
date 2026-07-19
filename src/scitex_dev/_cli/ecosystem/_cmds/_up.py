@@ -66,7 +66,11 @@ from ._up_supervisor_unit import (
     build_supervisor_unit_text,
     write_supervisor_unit,
 )
-from ._up_timer_lowering import collect_cron_jobs
+from ._up_timer_lowering import (
+    TimerLoweringError,
+    collect_cron_jobs,
+    degraded_job_names,
+)
 
 
 def _unit_dir() -> Path:
@@ -90,6 +94,10 @@ class UpResult:
 
     cron_jobs_installed: int = 0
     timer_jobs_lowered_to_cron: int = 0
+    #: Timer jobs whose declared properties cron cannot honour and that
+    #: were lowered anyway under ``--allow-lossy-timer-lowering``. Non-
+    #: zero means the deployed artifact is WEAKER than the registry says.
+    timer_jobs_degraded: int = 0
     supervisor_unit_written: bool = False
     supervisor_unit_enabled: bool = False
     systemctl_missing: bool = False
@@ -220,6 +228,7 @@ def _supports_extra_providers(discover_callable) -> bool:
 def run_up(
     *,
     yes: bool = False,
+    allow_lossy_timer_lowering: bool = False,
     systemctl_runner: Callable[..., subprocess.CompletedProcess] | None = None,
     unit_dir: Path | None = None,
     echo: Callable[[str], None] | None = None,
@@ -231,6 +240,12 @@ def run_up(
     ``which`` is the executable-lookup seam (defaults to ``shutil.which``);
     tests pass a hand-rolled fake to exercise the systemctl-absent path
     without patching production internals.
+
+    ``allow_lossy_timer_lowering`` opts into deploying timer jobs whose
+    declared properties (``timeout_sec`` …) cron cannot carry. Without
+    it, such a job ABORTS the reconcile with a structured ``error`` on
+    the result rather than quietly installing a weaker artifact under
+    the same name; with it, every degraded job is echoed in full.
     """
     runner = systemctl_runner or _default_systemctl_runner
     udir = unit_dir or _unit_dir()
@@ -246,7 +261,18 @@ def run_up(
         if _supports_extra_providers(discover)
         else discover()
     )
-    cron_merged, _cron_native_n, timer_lowered_n = collect_cron_jobs(jobs)
+    # A timer JobSpec declaring a guarantee cron cannot honour must NOT
+    # deploy silently weakened under the same name. Default: refuse the
+    # whole reconcile and say which job/property/surface is at fault.
+    degraded_n = len(degraded_job_names(jobs))
+    try:
+        cron_merged, _cron_native_n, timer_lowered_n = collect_cron_jobs(
+            jobs,
+            allow_lossy=allow_lossy_timer_lowering,
+            on_degrade=log,
+        )
+    except TimerLoweringError as exc:
+        return UpResult(error=str(exc))
 
     cron_installed = _install_cron_block(cron_jobs=cron_merged, yes=yes, echo=log)
 
@@ -261,6 +287,7 @@ def run_up(
     return UpResult(
         cron_jobs_installed=cron_installed,
         timer_jobs_lowered_to_cron=timer_lowered_n,
+        timer_jobs_degraded=degraded_n,
         supervisor_unit_written=True,
         supervisor_unit_enabled=supervisor_enabled,
         systemctl_missing=systemctl_missing,
@@ -319,14 +346,37 @@ def register(ecosystem):
             "but does NOT touch the crontab or ask systemctl to do anything."
         ),
     )
-    def ecosystem_up_cmd(yes: bool) -> None:
-        result = run_up(yes=yes)
+    @click.option(
+        "--allow-lossy-timer-lowering",
+        is_flag=True,
+        default=False,
+        help=(
+            "Deploy timer-kind jobs whose declared properties cron cannot "
+            "carry (timeout_sec, on_boot_sec, venv). WITHOUT this flag such "
+            "a job aborts the reconcile, naming the job / surface / "
+            "property, rather than silently installing a weaker artifact "
+            "under the same name. WITH it, every degraded job is reported "
+            "in full before the crontab is written — degraded, but never "
+            "silent."
+        ),
+    )
+    def ecosystem_up_cmd(yes: bool, allow_lossy_timer_lowering: bool) -> None:
+        result = run_up(
+            yes=yes,
+            allow_lossy_timer_lowering=allow_lossy_timer_lowering,
+        )
         click.echo("")
         click.echo("=== ecosystem up summary ===")
         click.echo(f"  cron entries installed:       {result.cron_jobs_installed}")
         click.echo(
             f"  (of which timer-lowered):     {result.timer_jobs_lowered_to_cron}"
         )
+        if result.timer_jobs_degraded:
+            click.echo(
+                f"  (of which DEGRADED):          {result.timer_jobs_degraded} "
+                "— declared guarantees NOT honoured on cron; see the "
+                "per-job reports above"
+            )
         click.echo(f"  supervisor unit written:      {result.supervisor_unit_written}")
         click.echo(f"  supervisor unit enabled+now:  {result.supervisor_unit_enabled}")
         if result.systemctl_missing:
