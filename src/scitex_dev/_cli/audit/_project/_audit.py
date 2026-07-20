@@ -217,6 +217,13 @@ def audit_project(
 
     check_ps215_broken_install_remedy(repo_root, distribution, Violation, violations)
     # hook-bypass: line-limit
+    # PS-216: direct-URL/VCS deps in publishable metadata. PyPI/twine reject
+    # direct references on upload (even inside extras), silently blocking the
+    # release of an otherwise-green package.
+    from ._check_no_url_deps import check_ps216_no_url_deps
+
+    check_ps216_no_url_deps(repo_root, Violation, violations)
+    # hook-bypass: line-limit
     from ._check_console_script_core_deps import (
         check_ps213_console_script_core_deps,
     )
