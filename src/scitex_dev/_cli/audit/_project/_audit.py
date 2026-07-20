@@ -224,6 +224,17 @@ def audit_project(
 
     check_ps216_no_url_deps(repo_root, Violation, violations)
     # hook-bypass: line-limit
+    # PS-218/PS-219: CLI-normalization conformance (items 4-5). Health-check
+    # verb standardizes on `doctor` (`health` is a deprecated alias); version
+    # standardizes on the `--version`/`-V` flag (not a `version` subcommand).
+    # Both W during leaf migration. Detection is static (reads source, never
+    # imports the leaf) and gated to never false-positive on `--version`.
+    from ._check_doctor_health_naming import check_ps218_doctor_health_naming
+    from ._check_version_flag import check_ps219_version_flag
+
+    check_ps218_doctor_health_naming(repo_root, Violation, violations)
+    check_ps219_version_flag(repo_root, Violation, violations)
+    # hook-bypass: line-limit
     from ._check_console_script_core_deps import (
         check_ps213_console_script_core_deps,
     )
