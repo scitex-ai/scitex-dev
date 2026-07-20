@@ -25,6 +25,26 @@ from scitex_dev._core.test_execution import (
 )
 
 
+def test_malformed_yaml_recipe_fails_safe_to_local(tmp_path):
+    # Arrange — a syntactically broken recipe the auto-loaded plugin must not choke on
+    bad = tmp_path / "test-execution.yaml"
+    bad.write_text(": : broken\n[unclosed")
+    # Act
+    recipe = load_recipe(bad)
+    # Assert — fails safe to the inert default rather than raising
+    assert recipe.mode == "local"
+
+
+def test_invalid_mode_value_fails_safe_to_local(tmp_path):
+    # Arrange — a recipe whose mode is not a known value
+    bad = tmp_path / "test-execution.yaml"
+    bad.write_text("mode: not-a-real-mode\n")
+    # Act
+    recipe = load_recipe(bad)
+    # Assert — the __post_init__ ValueError is downgraded, never crashes pytest
+    assert recipe.mode == "local"
+
+
 def test_default_mode_is_local():
     # Arrange
     default_kwargs = {}

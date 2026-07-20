@@ -146,18 +146,36 @@ def _from_mapping(data: Mapping[str, Any] | None) -> TestExecutionConfig:
 
 
 def load_recipe(path: str | Path | None) -> TestExecutionConfig:
-    """Load a recipe from a YAML file; a missing/empty file → default (local)."""
+    """Load a recipe from a YAML file; a missing/empty file → default (local).
+
+    FAILS SAFE: this is called by an auto-loaded pytest plugin in every
+    environment where scitex-dev is installed, so a malformed YAML, an
+    unreadable file, or an invalid ``mode`` value must NEVER crash pytest.
+    Any error is downgraded to a warning and the inert default (mode=local)
+    is returned — a broken recipe disables the guard, it does not brick the
+    test run.
+    """
     if path is None:
         return TestExecutionConfig()
     p = Path(path).expanduser()
     if not p.exists():
         return TestExecutionConfig()
-    import yaml
+    try:
+        import yaml
 
-    data = yaml.safe_load(p.read_text()) or {}
-    if not isinstance(data, Mapping):
+        data = yaml.safe_load(p.read_text()) or {}
+        if not isinstance(data, Mapping):
+            return TestExecutionConfig()
+        return _from_mapping(data)
+    except Exception as exc:  # noqa: BLE001 — fail-safe guard, never break pytest
+        import warnings
+
+        warnings.warn(
+            f"scitex-dev: ignoring unreadable test-execution recipe {p} "
+            f"({type(exc).__name__}: {exc}); defaulting to mode=local.",
+            stacklevel=2,
+        )
         return TestExecutionConfig()
-    return _from_mapping(data)
 
 
 def load_test_execution(
@@ -242,13 +260,19 @@ def discover_recipe(
     explicit = env.get(RECIPE_PATH_ENV)
     if explicit:
         return load_recipe(explicit)
-    here = Path(start).resolve() if start is not None else Path.cwd().resolve()
-    for candidate in [here, *here.parents]:
-        if (candidate / ".git").exists():
-            matches = sorted((candidate / ".scitex").glob(f"*/{RECIPE_FILENAME}"))
-            if matches:
-                return load_recipe(matches[0])
-            break
+    # Fail SAFE around filesystem discovery too (cwd may be gone, globs may
+    # error): a discovery failure must never crash the pytest run — default
+    # to the inert local mode. `load_recipe` handles its own parse errors.
+    try:
+        here = Path(start).resolve() if start is not None else Path.cwd().resolve()
+        for candidate in [here, *here.parents]:
+            if (candidate / ".git").exists():
+                matches = sorted((candidate / ".scitex").glob(f"*/{RECIPE_FILENAME}"))
+                if matches:
+                    return load_recipe(matches[0])
+                break
+    except Exception:  # noqa: BLE001 — fail-safe guard, never break pytest
+        return TestExecutionConfig()
     return TestExecutionConfig()
 
 
