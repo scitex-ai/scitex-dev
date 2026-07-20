@@ -62,6 +62,12 @@ class PackageConfig:
     pypi_name: str
     github_repo: str | None = None
     import_name: str | None = None
+    # Per-leaf progressive-disclosure knobs, centrally managed by scitex-dev
+    # (operator directive 2026-07-20). When False, scitex-dev's aggregators
+    # treat the package's skills / MCP server as OFF for context-budget
+    # scoping — nothing is uninstalled, it is simply not surfaced.
+    skills_enabled: bool = True
+    mcp_enabled: bool = True
 
 
 @dataclass
@@ -188,6 +194,8 @@ def _parse_package_config(data: dict[str, Any]) -> PackageConfig:
         pypi_name=data.get("pypi_name", data.get("name", "")),
         github_repo=data.get("github_repo"),
         import_name=data.get("import_name"),
+        skills_enabled=bool(data.get("skills_enabled", True)),
+        mcp_enabled=bool(data.get("mcp_enabled", True)),
     )
 
 
@@ -228,6 +236,8 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
             pypi_name=info.get("pypi_name", name),
             github_repo=info.get("github_repo"),
             import_name=info.get("import_name"),
+            skills_enabled=bool(info.get("skills_enabled", True)),
+            mcp_enabled=bool(info.get("mcp_enabled", True)),
         )
 
     # Override with config file entries (if any)
@@ -331,6 +341,24 @@ def get_enabled_remotes(config: DevConfig | None = None) -> list[GitHubRemote]:
     return [r for r in config.github_remotes if r.enabled]
 
 
+def get_enabled_skills(config: DevConfig | None = None) -> list[PackageConfig]:
+    """Resolved view: packages whose skills are enabled (progressive-disclosure knob).
+
+    scitex-dev aggregators (skills index, per-agent scoping) consult this so a
+    package's skills load into context ONLY when centrally enabled.
+    """
+    if config is None:
+        config = load_config()
+    return [p for p in config.packages if p.skills_enabled]
+
+
+def get_enabled_mcp(config: DevConfig | None = None) -> list[PackageConfig]:
+    """Resolved view: packages whose MCP server is enabled (progressive-disclosure knob)."""
+    if config is None:
+        config = load_config()
+    return [p for p in config.packages if p.mcp_enabled]
+
+
 def config_to_dict(config: DevConfig, config_path: Path | None = None) -> dict:
     """Serialize a DevConfig to a plain dict for JSON responses.
 
@@ -353,6 +381,8 @@ def config_to_dict(config: DevConfig, config_path: Path | None = None) -> dict:
                 "local_path": p.local_path,
                 "pypi_name": p.pypi_name,
                 "github_repo": p.github_repo,
+                "skills_enabled": p.skills_enabled,
+                "mcp_enabled": p.mcp_enabled,
             }
             for p in config.packages
         ],
