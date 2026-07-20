@@ -1215,3 +1215,11 @@ for _c, _sec, _msg, _sev, _slug in (
     *_VERSION_FLAG_RULES,
 ):
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
+# PS-220 — `print(...)` in scitex source (enforce scitex-logging). Co-located
+# rule, merged on the same terms as HOOK_RULES / URL_DEP_RULES / VERSION_FLAG.
+from ._check_no_print import PRINT_FORBIDDEN_RULES as _PRINT_FORBIDDEN_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in _PRINT_FORBIDDEN_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
