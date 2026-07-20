@@ -75,3 +75,13 @@ def test_skills_install_alias_shares_export_help():
     install_result = runner.invoke(_make_root(), ["skills", "install", "--help"])
     # Assert
     assert export_result.exit_code == 0 and install_result.exit_code == 0
+
+
+def test_group_exposes_the_federated_subcommands():
+    # Arrange -- a leaf gets its whole `skills` verb in one line; the
+    # built group must carry the subcommands leaves used to hand-roll.
+    group = skills_click_group(package="scitex-fake-pkg")
+    # Act
+    names = set(group.commands)
+    # Assert
+    assert {"list", "get", "export", "install"} <= names
