@@ -5,6 +5,44 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.33.0] - 2026-07-21
+
+### Added
+- **`ecosystem gui` launcher + 3129X port-registry SSOT (#378, #379).** A
+  fan-out launcher (`ecosystem gui list|open`) for the leaf-package browser
+  GUIs, backed by a machine-readable port-registry SSOT (`RESERVED_PORTS`,
+  the scitex-dev-owned 3129X/3130X assignment table) with a `gui audit`
+  conformance auditor that catches port collisions and pending leaf
+  migrations. Distinct from the top-level `gui` dashboard group.
+- **`skills_click_group` federation primitive + PS-217 auditor (#382).** A
+  shared `skills` command-group builder leaves import in one line (mirroring
+  `docs_click_group`), plus a WARN conformance auditor flagging leaves that
+  still hand-roll a `_cli/_skills.py` instead of the primitive.
+- **CLI-normalization + packaging conformance auditors (#381, #383).** PS-216
+  flags direct-URL/VCS dependencies in publishable metadata (a silent
+  PyPI-upload-reject guard, even inside extras); PS-218 / PS-219 flag a
+  `health` verb without `doctor` and a `version` subcommand instead of the
+  `--version` flag.
+- **Generalized test-execution recipe + knob + guard (#385).** A
+  host/scheduler-agnostic `TestExecutionConfig` recipe (`local` |
+  `remote-required`, with a `submit_template` and marker env), a per-package
+  `test_execution` knob, and an auto-loaded `pytest11` guard that blocks
+  local pytest when a package mandates remote — the policy layer of the
+  compute-execution fabric. Fails safe (a malformed recipe never crashes
+  pytest).
+
+### Changed
+- **pytest-xdist `-n auto` standardized across CI (#384).** scitex-dev's own
+  pytest-matrix workflow and the `pr-ci` / `release-ci` leaf templates now
+  parallelise across all runner cores (serial runs overran the ~28 min cap →
+  minutes); the templates install `pytest-xdist` explicitly so `-n auto`
+  works on any leaf.
+
+### Fixed
+- **PS-142 README-structure false-positive regression test (#380).** Pins the
+  full-README scan so a mandatory section past the old 16 KiB truncation
+  boundary is found (the underlying fix shipped earlier in #365).
+
 ## [0.32.0] - 2026-07-20
 
 ### Added
