@@ -57,10 +57,17 @@ jobs:
           uv pip install --python .venv/bin/python -e ".[all,dev]" \
             || uv pip install --python .venv/bin/python -e ".[dev]" \
             || uv pip install --python .venv/bin/python -e .
+          # pytest-xdist powers `pytest -n auto` (parallel suite, below).
+          # Install it explicitly so `-n auto` works even on a leaf whose
+          # [dev] extra doesn't yet pin pytest-xdist.
+          uv pip install --python .venv/bin/python pytest-xdist
       - name: Run tests
+        # -n auto: parallelise across all runner cores (pytest-xdist). Each
+        # worker is a separate process, so matplotlib/global state stays
+        # isolated per worker — the safe way to parallelise the suite.
         run: |
           export PATH="$PWD/.venv/bin:$PATH"
-          .venv/bin/pytest tests/ --cov=src/<PKG_MODULE> --cov-report=xml --cov-report=term
+          .venv/bin/pytest tests/ -n auto --cov=src/<PKG_MODULE> --cov-report=xml --cov-report=term
       - name: Upload coverage to Codecov
         # continue-on-error so a tokenless runner (e.g. self-hosted
         # spartan-cpu, where CODECOV_TOKEN is unset) does NOT fail the
