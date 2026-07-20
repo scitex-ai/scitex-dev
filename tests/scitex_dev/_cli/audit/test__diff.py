@@ -186,19 +186,39 @@ def test_filter_to_net_new_lines_keeps_the_net_new_finding():
 
 
 def _seed_repo(path):
-    """Create a minimal real git repo with a `develop` ref + one commit."""
+    """Create a minimal real git repo with a `develop` ref + one commit.
+
+    Every git subprocess runs with GIT_CONFIG_GLOBAL/GIT_CONFIG_SYSTEM pinned to
+    os.devnull and an explicit author/committer identity in the env. A shared CI
+    runner whose global or system gitconfig is missing/unreadable would otherwise
+    make even ``git add`` fail with "fatal: unknown error occurred while reading
+    the configuration files" (observed as a flake on the pooled self-hosted
+    runner, 2026-07-20). Pinning the config paths makes the test independent of
+    the host's git configuration.
+    """
+    import os
     import subprocess
 
-    subprocess.run(["git", "init", "-q", str(path)], check=True)
-    subprocess.run(
-        ["git", "-C", str(path), "config", "user.email", "test@example.com"],
-        check=True,
-    )
-    subprocess.run(["git", "-C", str(path), "config", "user.name", "test"], check=True)
+    env = {
+        **os.environ,
+        "GIT_CONFIG_GLOBAL": os.devnull,
+        "GIT_CONFIG_SYSTEM": os.devnull,
+        "GIT_AUTHOR_NAME": "test",
+        "GIT_AUTHOR_EMAIL": "test@example.com",
+        "GIT_COMMITTER_NAME": "test",
+        "GIT_COMMITTER_EMAIL": "test@example.com",
+    }
+
+    def _git(*args):
+        subprocess.run(["git", *args], check=True, env=env)
+
+    _git("init", "-q", str(path))
+    _git("-C", str(path), "config", "user.email", "test@example.com")
+    _git("-C", str(path), "config", "user.name", "test")
     (path / "README.md").write_text("seed\n")
-    subprocess.run(["git", "-C", str(path), "add", "."], check=True)
-    subprocess.run(["git", "-C", str(path), "commit", "-q", "-m", "seed"], check=True)
-    subprocess.run(["git", "-C", str(path), "branch", "-M", "develop"], check=True)
+    _git("-C", str(path), "add", ".")
+    _git("-C", str(path), "commit", "-q", "-m", "seed")
+    _git("-C", str(path), "branch", "-M", "develop")
 
 
 def test_worktree_at_yields_a_real_checkout(tmp_path):
