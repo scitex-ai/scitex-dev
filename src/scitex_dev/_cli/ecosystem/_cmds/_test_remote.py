@@ -120,6 +120,7 @@ def register(ecosystem):
         import subprocess as _sp
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
+        from ...._core.test_execution import load_test_execution, render_submit
         from ...._ecosystem import ECOSYSTEM, get_local_path
 
         if all_packages:
@@ -187,6 +188,24 @@ def register(ecosystem):
             #      scitex-dev[cli-audit] for the audit gate,
             #   4. pytest -n auto when xdist is available, otherwise serial.
             prelude = (remote_prelude + "; ") if remote_prelude else ""
+            # Per-package test-execution recipe (host/scheduler-AGNOSTIC). When
+            # it carries a `submit_template`, render it for the pytest command
+            # (e.g. wrap in `srun`/`qsub`/`sbatch` — user-supplied); otherwise
+            # fall back to the built-in xdist-or-serial invocation so absent
+            # recipes preserve current behavior. Always export the recipe's
+            # marker env so the auto-loaded pytest guard allows the run HERE
+            # (this IS the sanctioned remote).
+            recipe = load_test_execution(pkg)
+            if recipe.submit_template:
+                pytest_block = render_submit(recipe, f"--tb=short {test_path}")
+            else:
+                pytest_block = (
+                    "if python -c 'import xdist' 2>/dev/null; then "
+                    f"  python -m pytest -n auto --tb=short {test_path}; "
+                    "else "
+                    f"  python -m pytest --tb=short {test_path}; "
+                    "fi"
+                )
             # Tilde-bearing paths intentionally left UNQUOTED so the remote
             # shell expands `~` to $HOME. Internal-controlled, no spaces.
             # SCITEX_DEV_REGISTRY exported so audit-project / audit-cli
@@ -196,6 +215,7 @@ def register(ecosystem):
             remote_script = (
                 f"set -e; "
                 f"export SCITEX_DEV_REGISTRY={registry_remote}; "
+                f"export {recipe.local_marker_env}=1; "
                 f"{prelude}"
                 f"if [ ! -f {remote_venv}/bin/activate ]; then "
                 f"  {remote_python} -m venv {remote_venv}; "
@@ -215,11 +235,7 @@ def register(ecosystem):
                 f"python -m pip install -e {scitex_dev_remote} --quiet; "
                 f"python -m pip install {scitex_dev_remote}[cli-audit] --quiet; "
                 f"python -m pip install pytest-xdist --quiet || true; "
-                f"if python -c 'import xdist' 2>/dev/null; then "
-                f"  python -m pytest -n auto --tb=short {test_path}; "
-                f"else "
-                f"  python -m pytest --tb=short {test_path}; "
-                f"fi"
+                f"{pytest_block}"
             )
             ssh_cmd = ["ssh", host, "bash", "-lc", shlex.quote(remote_script)]
 
