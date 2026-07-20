@@ -72,14 +72,30 @@ repeated starts — `gui serve` binds the tool's fixed port; the runtime
 state file makes this idempotent, so a re-run reuses the running
 instance instead of stacking a second one on the next free port.
 
-| Tool             | Port  |
-|------------------|-------|
-| figrecipe        | 31296 |
-| scitex-scholar   | 31297 |
-| scitex-writer    | 31298 |
-| scitex-todo      | 31299 |
-| scitex-storage   | 31290 |
-| (future GUIs)    | next free in 3129X |
+| Tool                     | Port  |
+|--------------------------|-------|
+| scitex-storage           | 31290 |
+| figrecipe                | 31296 |
+| scitex-scholar           | 31297 |
+| scitex-writer            | 31298 |
+| scitex-cards / scitex-todo (todo board) | 31299 |
+| scitex-live-paper        | 31300 |
+| (future GUIs)            | next free in the 3130X overflow block |
+
+The `3129X` block (31290-31299) is **full** and shared with non-GUI
+SciTeX services — 31291 crossref-local, 31292 openalex-local, 31293
+scitex-audio, 31294/31295 scitex-hub staging/dev — so a GUI must NOT
+claim a `3129X` port without checking it is free (picking a taken one
+is a real runtime collision; an earlier draft put cards→31291 and
+live-paper→31292, both collisions). Because `3129X` is full, GUI
+surfaces that do not already own a slot there overflow into the next
+block, **3130X** (31300+); `scitex-live-paper` is the first entry.
+
+**This table is DERIVED from the machine-readable SSOT**
+`scitex_dev._ecosystem.gui_registry` (`GUI_SURFACES` + `RESERVED_PORTS`).
+Code is authoritative; if this prose and the registry disagree, the
+registry wins and this table is the drift. `scitex-dev ecosystem gui
+audit` enforces it.
 
 This block is orthogonal to the `3129X` reverse-tunnel ports used by
 scitex-hub for staging/dev — those stay as-is; this table is the
