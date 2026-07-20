@@ -110,4 +110,28 @@ def test_skills_status_json_exits_zero(tmp_path):
     assert result.exit_code == 0
 
 
+def test_mcp_disable_dry_run_leaves_state_unwritten(tmp_path):
+    # Arrange
+    state = tmp_path / "ks.json"
+    # Act
+    CliRunner().invoke(
+        main, ["mcp", "disable", "scitex-io", "--dry-run"],
+        env={"SCITEX_DEV_KNOB_STATE": str(state)},
+    )
+    # Assert
+    assert not state.exists()
+
+
+def test_skills_enable_dry_run_leaves_state_unwritten(tmp_path):
+    # Arrange
+    state = tmp_path / "ks.json"
+    # Act
+    CliRunner().invoke(
+        main, ["skills", "enable", "scitex-io", "--dry-run"],
+        env={"SCITEX_DEV_KNOB_STATE": str(state)},
+    )
+    # Assert
+    assert not state.exists()
+
+
 # EOF

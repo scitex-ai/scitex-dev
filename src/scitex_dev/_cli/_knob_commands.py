@@ -63,7 +63,15 @@ def add_knob_commands(group: click.Group, kind: str) -> click.Group:
         ),
     )
     @click.argument("package")
-    def knob_enable(package):
+    @click.option(
+        "--dry-run", is_flag=True, help="Print what would change; do not write."
+    )
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def knob_enable(package, dry_run, yes):
+        del yes  # non-interactive; accepted for CLI-audit §2
+        if dry_run:
+            click.echo(f"would enable {kind} for {package}")
+            return
         path = set_package_knob(package, kind, True)
         click.echo(f"{kind} enabled for {package} ({path})")
 
@@ -81,7 +89,15 @@ def add_knob_commands(group: click.Group, kind: str) -> click.Group:
         ),
     )
     @click.argument("package")
-    def knob_disable(package):
+    @click.option(
+        "--dry-run", is_flag=True, help="Print what would change; do not write."
+    )
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def knob_disable(package, dry_run, yes):
+        del yes  # non-interactive; accepted for CLI-audit §2
+        if dry_run:
+            click.echo(f"would disable {kind} for {package}")
+            return
         path = set_package_knob(package, kind, False)
         click.echo(f"{kind} disabled for {package} ({path})")
 
