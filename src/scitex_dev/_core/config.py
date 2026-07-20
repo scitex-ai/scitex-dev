@@ -377,7 +377,7 @@ def _knob_state_path() -> Path:
     override = os.getenv("SCITEX_DEV_KNOB_STATE")
     if override:
         return Path(override).expanduser()
-    return local_state.path("dev", "knob-state.json")
+    return local_state.path("dev", "runtime", "knob-state.json")
 
 
 def _load_knob_state(path: Path | None = None) -> dict[str, dict[str, bool]]:
