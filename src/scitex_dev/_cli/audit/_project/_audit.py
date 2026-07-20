@@ -314,6 +314,13 @@ def audit_project(
     from ._check_runtime_separation import check_runtime_separation
 
     check_runtime_separation(repo_root, Violation, violations)
+    # PS-217: skills CLI federation — fires when a leaf ships a hand-rolled
+    # src/<pkg>/_cli/_skills.py that does NOT import scitex-dev's shared
+    # skills_click_group primitive. WARN-only tracking signal for the
+    # CLI-normalization fan-out. Scope = all project kinds with a src/ layout.
+    from ._check_skills_federation import check_skills_federation
+
+    check_skills_federation(repo_root, Violation, violations)
     if not skip_mirror:
         from ._check_smoke_e2e_layers import (
             check_ps211_smoke_layer,

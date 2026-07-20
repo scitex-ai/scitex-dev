@@ -1196,3 +1196,13 @@ from ._check_no_url_deps import URL_DEP_RULES as _URL_DEP_RULES  # noqa: E402
 
 for _c, _sec, _msg, _sev, _slug in _URL_DEP_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
+# PS-217 — skills CLI federation conformance (co-located rule, merged on
+# the same terms as HOOK_RULES / URL_DEP_RULES).
+from ._check_skills_federation import (  # noqa: E402
+    SKILLS_FEDERATION_RULES as _SKILLS_FEDERATION_RULES,
+)
+
+for _c, _sec, _msg, _sev, _slug in _SKILLS_FEDERATION_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
