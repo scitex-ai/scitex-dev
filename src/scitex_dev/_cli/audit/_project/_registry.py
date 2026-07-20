@@ -1196,3 +1196,14 @@ from ._check_no_url_deps import URL_DEP_RULES as _URL_DEP_RULES  # noqa: E402
 
 for _c, _sec, _msg, _sev, _slug in _URL_DEP_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
+# PS-218 / PS-219 — CLI-normalization conformance auditors (items 4-5),
+# co-located rules merged on the same terms as URL_DEP_RULES.
+from ._check_doctor_health_naming import (  # noqa: E402
+    DOCTOR_HEALTH_RULES as _DOCTOR_HEALTH_RULES,
+)
+from ._check_version_flag import VERSION_FLAG_RULES as _VERSION_FLAG_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in (*_DOCTOR_HEALTH_RULES, *_VERSION_FLAG_RULES):
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
