@@ -242,8 +242,9 @@ def test_knob_state_overrides_config_yaml(tmp_path):
 def test_error_severity_returns_stale_exit_code():
     # Arrange
     msg = "editable scitex-dev: HEAD (abc) is 2 commit(s) behind its remote."
-    # Act
-    code = _react_to_drift(msg, "error", io.StringIO())
+    # Act — capture stderr so the emit does not pollute test output.
+    with contextlib.redirect_stderr(io.StringIO()):
+        code = _react_to_drift(msg, "error")
     # Assert — hard-fail (non-zero) after printing.
     assert code == EXIT_STALE
 
@@ -252,19 +253,32 @@ def test_warn_severity_returns_zero():
     # Arrange
     msg = "editable scitex-dev: HEAD (abc) is 2 commit(s) behind its remote."
     # Act
-    code = _react_to_drift(msg, "warn", io.StringIO())
+    with contextlib.redirect_stderr(io.StringIO()):
+        code = _react_to_drift(msg, "warn")
     # Assert — continue (exit 0).
     assert code == 0
 
 
-def test_warn_severity_prints_the_line():
-    # Arrange
-    buf = io.StringIO()
+def test_warn_output_carries_severity_prefix():
+    # Arrange — the message goes through scitex-logging, which auto-prefixes.
     msg = "editable scitex-dev: HEAD (abc) is 2 commit(s) behind its remote."
+    buf = io.StringIO()
     # Act
-    _react_to_drift(msg, "warn", buf)
+    with contextlib.redirect_stderr(buf):
+        _react_to_drift(msg, "warn")
     # Assert
-    assert "[scitex-dev]" in buf.getvalue()
+    assert "WARN" in buf.getvalue()
+
+
+def test_error_output_carries_severity_prefix():
+    # Arrange
+    msg = "editable scitex-dev: HEAD (abc) is 2 commit(s) behind its remote."
+    buf = io.StringIO()
+    # Act
+    with contextlib.redirect_stderr(buf):
+        _react_to_drift(msg, "error")
+    # Assert — scitex-logging emits "ERRO:"; the fallback emits "ERROR:".
+    assert "ERRO" in buf.getvalue().upper()
 
 
 # EOF

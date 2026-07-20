@@ -301,6 +301,12 @@ def _pypi_drift(distribution: str) -> str | None:
 EXIT_STALE = 3
 _SEVERITIES = ("silent", "warn", "error")
 _SEVERITY_DEFAULT = "warn"
+# Appended to every emitted staleness line (operator request) so the reader
+# always sees how to control it: the env kill-switch + the severity knob.
+# (Being AHEAD of the remote is silently ignored and needs no note.)
+_SUPPRESS_HINT = (
+    "suppress: SCITEX_DEV_NO_DRIFT_WARN=1 · severity: staleness_severity knob"
+)
 
 
 def _severity_from_config() -> str | None:
@@ -388,7 +394,7 @@ def _react_to_drift(message: str | None, severity: str, stream=None) -> int:
     if not message or severity == "silent":
         return 0
     level = "error" if severity == "error" else "warn"
-    _log_stale(level, message, stream)
+    _log_stale(level, f"{message}  ({_SUPPRESS_HINT})", stream)
     return EXIT_STALE if severity == "error" else 0
 
 
