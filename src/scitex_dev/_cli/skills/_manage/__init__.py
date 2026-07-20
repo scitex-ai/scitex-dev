@@ -16,6 +16,7 @@ from ._explain_self_cmd import register as _register_explain_self
 from ._get_cmd import register as _register_get
 from ._init_cmd import register as _register_init
 from ._install_cmd import register as _register_install
+from ._knob_cmd import register as _register_knob
 from ._list_cmd import register as _register_list
 
 
@@ -41,6 +42,7 @@ def register_skills_commands(main_group):
     _register_install(skills)
     _register_explain_self(skills)
     _register_expand_tags(skills)
+    _register_knob(skills)
 
     return skills
 
