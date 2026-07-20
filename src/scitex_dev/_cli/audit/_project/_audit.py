@@ -224,6 +224,14 @@ def audit_project(
 
     check_ps216_no_url_deps(repo_root, Violation, violations)
     # hook-bypass: line-limit
+    # PS-220: `print(...)` in package source. SciTeX code must emit messages
+    # through scitex-logging (aligned WARN:/ERRO:/SUCC: prefixes), never the
+    # builtin print. AST-scans src/<pkg>/**.py; tests/scripts/examples/docs
+    # excluded; `# noqa` opts a line out.
+    from ._check_no_print import check_ps220_no_print
+
+    check_ps220_no_print(repo_root, Violation, violations)
+    # hook-bypass: line-limit
     # PS-218/PS-219: CLI-normalization conformance (items 4-5). Health-check
     # verb standardizes on `doctor` (`health` is a deprecated alias); version
     # standardizes on the `--version`/`-V` flag (not a `version` subcommand).
