@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""PS-220 — `[all]`-closure on PUBLIC optional-dependency extras.
+"""PS-221 — `[all]`-closure on PUBLIC optional-dependency extras.
 
 Anti-landmine this prevents (silent under-install of a public feature):
 the operator policy is that a PUBLIC install extra must be `[all]` or bare
@@ -21,11 +21,11 @@ For each package `pyproject.toml` `[project.optional-dependencies]`:
      an underscore and is not `all` itself. Underscore-prefixed extras
      (`_ci`, `_docs`, …) are INTERNAL splits — deliberately exempt from
      closure (that is the sanctioned way to carve out a non-public group).
-  2. If there are public groups but NO `all` group at all → PS-220
+  2. If there are public groups but NO `all` group at all → PS-221
      (a package offering public extras must expose the `[all]` umbrella).
   3. Otherwise, every requirement (compared by CANONICALIZED distribution
      name — `Foo_Bar` == `foo-bar`) in each public group must also appear
-     in `all`. Any requirement missing from `all` → PS-220.
+     in `all`. Any requirement missing from `all` → PS-221.
 
 Self-reference handling
 -----------------------
@@ -138,12 +138,12 @@ def _all_closure_names(
     return names
 
 
-def check_ps220_extras_all_closure(
+def check_ps221_extras_all_closure(
     repo: Path,
     violation_cls: type,
     out: list,
 ) -> None:
-    """Append PS-220 violations for public extras not closed under `[all]`.
+    """Append PS-221 violations for public extras not closed under `[all]`.
 
     Parameters
     ----------
@@ -178,7 +178,7 @@ def check_ps220_extras_all_closure(
     if not isinstance(all_group, list):
         out.append(
             violation_cls(
-                "PS-220",
+                "PS-221",
                 where,
                 (
                     "package declares PUBLIC optional-dependency extras "
@@ -209,7 +209,7 @@ def check_ps220_extras_all_closure(
             if canon not in all_names:
                 out.append(
                     violation_cls(
-                        "PS-220",
+                        "PS-221",
                         where,
                         (
                             f"requirement `{req}` in PUBLIC extra "
@@ -242,7 +242,7 @@ def check_ps220_extras_all_closure(
 # (code, section, message, severity, slug)
 ALL_CLOSURE_RULES: list[tuple[str, str, str, str, str]] = [
     (
-        "PS-220",
+        "PS-221",
         "§3",
         (
             "public optional-dependency extra not closed under `[all]`: a "

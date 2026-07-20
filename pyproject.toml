@@ -108,6 +108,7 @@ docs = [
 all = [
     "scitex-dev[mcp]",
     "scitex-dev[skills]",
+    "scitex-dev[sync]",
     "scitex-dev[dev]",
     "scitex-dev[docs]",
     "scitex-dev[umbrella-regen]",
