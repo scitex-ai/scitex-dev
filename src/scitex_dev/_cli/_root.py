@@ -32,7 +32,8 @@ COMMAND_CATEGORIES = [
             "host",
         ],
     ),
-    ("Service", ["mcp", "service", "cron"]),
+    # `gui` renders under Service per §4a 10a_command-categories.md.
+    ("Service", ["gui", "mcp", "service", "cron"]),
     ("Diagnostics", ["doctor"]),
     ("Introspection", ["docs", "skills", "list-python-apis", "show-config"]),
     ("Shell", ["install-shell-completion", "print-shell-completion"]),
@@ -215,6 +216,13 @@ register_icons_command(main)
 from .ecosystem._registry import register_ecosystem_commands
 
 ecosystem_group = register_ecosystem_commands(main)
+
+# `gui` — canonical §12 group. Wired here, not in the ecosystem
+# registry, because its Phase W aliases need BOTH groups to exist:
+# `ecosystem dashboard` / `start-dashboard` forward onto `gui`.
+from .gui import register as _register_gui
+
+gui_group = _register_gui(main)
 
 # Stats now lives under `ecosystem` per noun-verb hierarchy. The legacy
 # top-level `show-stats` is kept as a hidden deprecation alias for one

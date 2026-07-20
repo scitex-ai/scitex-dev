@@ -71,12 +71,17 @@ def test_quota_keepalive_command_invokes_scitex_dev_cron_exec():
     assert "scitex-dev cron exec quota-keepalive" in spec.command
 
 
-def test_quota_keepalive_command_writes_to_named_log_file():
+def test_quota_keepalive_logs_under_dev_runtime_logs():
     # Arrange
-    # Act
-    spec = _jobs.get_job("quota-keepalive")
-    # Assert
-    assert "/.scitex/dev/logs/cron-quota-keepalive.log" in spec.command
+    from scitex_dev._cli.cron import _job_commands
+
+    # Act — the log path is owned by the verb now, not spelled into the
+    # crontab line.
+    log = _job_commands.log_path_for("quota-keepalive")
+    # Assert — under runtime/, per the directive in jobs/_respawn.py:26.
+    assert log.as_posix().endswith(
+        "/.scitex/dev/runtime/logs/cron-quota-keepalive.log"
+    )
 
 
 def test_quota_keepalive_description_non_empty():

@@ -1,58 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""`ecosystem dashboard export` — machine-readable dashboard dumps.
+"""`scitex-dev gui export` — machine-readable dump of the ecosystem state.
 
-Split out of ``_dashboard.py`` to keep that module under the repo's
-line-limit. The org/pdf branch (the "usual PDF" convention) is the bulk
-of it and is independent of the live-render commands.
+Moved verbatim from `ecosystem dashboard export` when §12's canonical
+`gui` group landed; the old path still works through the Phase W alias
+in `_aliases.py`.
 """
 
 from __future__ import annotations
 
 import click
 
-from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ._shared import resolve_packages
+
+__all__ = ["register"]
 
 
-def register_export(dashboard) -> None:
-    """Wire `export` onto the `dashboard` group."""
-
-    @dashboard.command(
+def register(gui: click.Group) -> None:
+    @gui.command(
         "export",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Machine-readable dump of the dashboard state.",
+            summary="Dump the ecosystem state as json / csv / md / org / pdf.",
             description=(
-                "Defaults to -vvv (all columns). For the `md` / `org` / "
-                "`pdf` formats the gh-release enricher is forced on (and "
-                "`pypi` below -vv) so the RELEASE and PYPI columns carry "
-                "real data rather than N/C.",
-                "`org` emits a ywatanabe-convention Org-mode report — the "
-                "'usual PDF' source; `pdf` runs the org->pdf convert via "
-                "pandoc / `emacs --batch` and writes the .pdf plus its "
-                ".org sidecar to the path given by --output.",
+                "`org` emits a ywatanabe-convention Org-mode report (the "
+                "'usual PDF' source); `pdf` runs the org→pdf convert via "
+                "pandoc or `emacs --batch` and writes the .pdf plus its "
+                ".org sidecar to --output. Defaults to -vvv (all columns)."
             ),
             examples=(
                 Example(
-                    "{prog} ecosystem dashboard export --format json | jq",
-                    "Pipe JSON to jq.",
+                    "{prog} gui export --format json | jq", "Machine-readable dump."
                 ),
-                Example(
-                    "{prog} ecosystem dashboard export --format csv > state.csv",
-                    "Spreadsheet dump.",
-                ),
-                Example(
-                    "{prog} ecosystem dashboard export --format md",
-                    "Paste into README.",
-                ),
-                Example(
-                    "{prog} ecosystem dashboard export --format org > report.org",
-                    "Org-mode report.",
-                ),
-                Example(
-                    "{prog} ecosystem dashboard export --format pdf -o report.pdf",
-                    "PDF (+ .org sidecar).",
-                ),
+                Example("{prog} gui export --format csv > state.csv", "Spreadsheet."),
+                Example("{prog} gui export --format pdf -o report.pdf", "The usual PDF."),
             ),
         ),
     )
@@ -61,12 +43,8 @@ def register_export(dashboard) -> None:
         "fmt",
         type=click.Choice(["json", "csv", "md", "org", "pdf"]),
         default="json",
-        help=(
-            "Output format. `org` emits a ywatanabe-convention Org-mode "
-            "report (the 'usual PDF' source); `pdf` runs the org→pdf "
-            "convert via pandoc / `emacs --batch` and writes the .pdf "
-            "(+ .org sidecar) to the path given by --output."
-        ),
+        show_default=True,
+        help="Output format.",
     )
     @click.option(
         "-v",
@@ -75,7 +53,7 @@ def register_export(dashboard) -> None:
         default=3,
         help="Default -vvv (all columns) for export.",
     )
-    @click.option("--package", "-p", multiple=True)
+    @click.option("--package", "-p", multiple=True, help="Limit to specific packages.")
     @click.option(
         "--output",
         "-o",
@@ -84,8 +62,8 @@ def register_export(dashboard) -> None:
         type=click.Path(),
         help=(
             "Output file path (required for --format pdf; optional for "
-            "other formats — defaults to stdout). For pdf the .org "
-            "sidecar is written next to the .pdf with the same stem."
+            "other formats — defaults to stdout). For pdf the .org sidecar "
+            "is written next to the .pdf with the same stem."
         ),
     )
     @click.option(
@@ -100,12 +78,12 @@ def register_export(dashboard) -> None:
         is_flag=True,
         help="No-op confirmation flag retained for §2 audit-cli compliance.",
     )
-    def dashboard_export(fmt, verbosity, package, output, dry_run, yes):
+    def gui_export(fmt, verbosity, package, output, dry_run, yes):
         from pathlib import Path
 
-        from .._dashboard import _export as exp
-        from .._dashboard import gather_ecosystem_state
-        from .._dashboard._render import (
+        from ..ecosystem._dashboard import _export as exp
+        from ..ecosystem._dashboard import gather_ecosystem_state
+        from ..ecosystem._dashboard._render import (
             cols_for_verbosity,
             enrichers_for_cols,
         )
@@ -114,9 +92,8 @@ def register_export(dashboard) -> None:
         # exports so the RELEASE column has real data. The export CLI
         # defaults to -vvv, but `gather_ecosystem_state`'s verbosity →
         # enrichers heuristic doesn't include `gh-release` (it's only
-        # added by `dashboard list` based on visible columns). Without
-        # this, reports always show N/C for GH-Release, defeating the
-        # point of the column.
+        # added by `gui list` based on visible columns). Without this,
+        # reports always show N/C for GH-Release, defeating the column.
         enrichers = enrichers_for_cols(cols_for_verbosity(verbosity))
         if fmt in ("md", "org", "pdf"):
             enrichers.add("gh-release")
@@ -125,22 +102,21 @@ def register_export(dashboard) -> None:
 
         states = gather_ecosystem_state(
             verbosity=verbosity,
-            packages=list(package) or None,
+            packages=resolve_packages(package),
             enrichers=enrichers,
         )
         if dry_run:
             click.echo(
                 f"would emit: format={fmt} rows={len(states)} "
-                f"verbosity={verbosity}"
-                + (f" output={output}" if output else "")
+                f"verbosity={verbosity}" + (f" output={output}" if output else "")
             )
             return
         del yes
 
-        # PDF follows the ywatanabe "usual PDF" convention: the .org
-        # is the canonical source and the .pdf is rendered from it by
-        # pandoc or `emacs --batch`. PDF therefore needs a filesystem
-        # path; everything else can go to stdout if no -o is given.
+        # PDF follows the ywatanabe "usual PDF" convention: the .org is
+        # the canonical source and the .pdf is rendered from it by pandoc
+        # or `emacs --batch`. PDF therefore needs a filesystem path;
+        # everything else can go to stdout if no -o is given.
         if fmt == "pdf":
             if not output:
                 # Timestamped default so the operator always gets
@@ -149,8 +125,7 @@ def register_export(dashboard) -> None:
 
                 output = str(
                     Path(
-                        f"scitex-ecosystem-"
-                        f"{_dt.now().strftime('%Y%m%d-%H%M%S')}.pdf"
+                        f"scitex-ecosystem-{_dt.now().strftime('%Y%m%d-%H%M%S')}.pdf"
                     ).resolve()
                 )
             result = exp.to_pdf(states, output)
@@ -160,9 +135,9 @@ def register_export(dashboard) -> None:
                     f"via {result['tool']}"
                 )
             elif result["status"] == "org_only":
-                # Exit 0 — the .org file is still a usable artefact.
-                # The 2026-05-27 instructions explicitly say "do not
-                # block" when the host lacks the converter.
+                # Exit 0 — the .org file is still a usable artefact. The
+                # 2026-05-27 instructions explicitly say "do not block"
+                # when the host lacks the converter.
                 click.echo(
                     f"wrote {result['org']} but could not produce PDF: "
                     f"{result['reason']}",

@@ -58,13 +58,27 @@ def package_of(job: JobSpec) -> str:
     return job.name.split(".", 1)[0]
 
 
+def runtime_dir_for_package(package: str, *, home: Path | None = None) -> Path:
+    """Return ``<home>/.scitex/<package>/runtime``.
+
+    The package-keyed primitive underneath :func:`runtime_dir`. Split out
+    so callers that know their owning package but do NOT hold a
+    :class:`JobSpec` (e.g. the ``_cli.cron`` registry, whose specs are a
+    separate dataclass) can resolve the SAME runtime tree without
+    reimplementing the layout or synthesising a fake spec.
+
+    ``home`` is a test seam; production passes ``Path.home()``.
+    """
+    base = home if home is not None else Path.home()
+    return base / ".scitex" / package / "runtime"
+
+
 def runtime_dir(job: JobSpec, *, home: Path | None = None) -> Path:
     """Return ``<home>/.scitex/<pkg>/runtime`` for ``job``.
 
     ``home`` is a test seam; production passes ``Path.home()``.
     """
-    base = home if home is not None else Path.home()
-    return base / ".scitex" / package_of(job) / "runtime"
+    return runtime_dir_for_package(package_of(job), home=home)
 
 
 def log_path(job: JobSpec, *, home: Path | None = None) -> Path:
@@ -180,6 +194,7 @@ __all__ = [
     "DEFAULT_BACKOFF_MAX_SEC",
     "package_of",
     "runtime_dir",
+    "runtime_dir_for_package",
     "log_path",
     "flag_path",
     "pidfile_path",

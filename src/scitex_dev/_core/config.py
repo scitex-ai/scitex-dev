@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -62,6 +63,12 @@ class PackageConfig:
     pypi_name: str
     github_repo: str | None = None
     import_name: str | None = None
+    # Per-leaf progressive-disclosure knobs, centrally managed by scitex-dev
+    # (operator directive 2026-07-20). When False, scitex-dev's aggregators
+    # treat the package's skills / MCP server as OFF for context-budget
+    # scoping — nothing is uninstalled, it is simply not surfaced.
+    skills_enabled: bool = True
+    mcp_enabled: bool = True
 
 
 @dataclass
@@ -188,6 +195,8 @@ def _parse_package_config(data: dict[str, Any]) -> PackageConfig:
         pypi_name=data.get("pypi_name", data.get("name", "")),
         github_repo=data.get("github_repo"),
         import_name=data.get("import_name"),
+        skills_enabled=bool(data.get("skills_enabled", True)),
+        mcp_enabled=bool(data.get("mcp_enabled", True)),
     )
 
 
@@ -228,6 +237,8 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
             pypi_name=info.get("pypi_name", name),
             github_repo=info.get("github_repo"),
             import_name=info.get("import_name"),
+            skills_enabled=bool(info.get("skills_enabled", True)),
+            mcp_enabled=bool(info.get("mcp_enabled", True)),
         )
 
     # Override with config file entries (if any)
@@ -238,6 +249,9 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
                 pkg_map[parsed.name] = parsed
 
     packages = list(pkg_map.values())
+
+    # Overlay machine-managed knob-state (CLI toggles) at highest precedence.
+    _apply_knob_state(packages)
 
     # Parse hosts
     hosts = []
@@ -331,6 +345,94 @@ def get_enabled_remotes(config: DevConfig | None = None) -> list[GitHubRemote]:
     return [r for r in config.github_remotes if r.enabled]
 
 
+def get_enabled_skills(config: DevConfig | None = None) -> list[PackageConfig]:
+    """Resolved view: packages whose skills are enabled (progressive-disclosure knob).
+
+    scitex-dev aggregators (skills index, per-agent scoping) consult this so a
+    package's skills load into context ONLY when centrally enabled.
+    """
+    if config is None:
+        config = load_config()
+    return [p for p in config.packages if p.skills_enabled]
+
+
+def get_enabled_mcp(config: DevConfig | None = None) -> list[PackageConfig]:
+    """Resolved view: packages whose MCP server is enabled (progressive-disclosure knob)."""
+    if config is None:
+        config = load_config()
+    return [p for p in config.packages if p.mcp_enabled]
+
+
+_KNOB_KINDS = ("skills", "mcp")
+
+
+def _knob_state_path() -> Path:
+    """Machine-managed knob-state file.
+
+    The CLI / aggregators write here; the hand-authored ``config.yaml`` is never
+    rewritten. Keeping the two apart means toggling a knob can never clobber the
+    operator's config comments, and a diff of the state file shows exactly which
+    packages were deliberately turned off.
+    """
+    override = os.getenv("SCITEX_DEV_KNOB_STATE")
+    if override:
+        return Path(override).expanduser()
+    return local_state.path("dev", "runtime", "knob-state.json")
+
+
+def _load_knob_state(path: Path | None = None) -> dict[str, dict[str, bool]]:
+    """Load the knob-state file, tolerating absence / corruption (default: empty).
+
+    ``path`` defaults to :func:`_knob_state_path`; it is injectable so callers
+    (and tests) never need env vars or mocks.
+    """
+    if path is None:
+        path = _knob_state_path()
+    if not path.exists():
+        return {"skills": {}, "mcp": {}}
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {"skills": {}, "mcp": {}}
+    return {
+        "skills": dict(data.get("skills", {})),
+        "mcp": dict(data.get("mcp", {})),
+    }
+
+
+def _apply_knob_state(
+    packages: list[PackageConfig], path: Path | None = None
+) -> None:
+    """Overlay the machine-managed knob-state (highest precedence) in place."""
+    state = _load_knob_state(path)
+    skills, mcp = state["skills"], state["mcp"]
+    for p in packages:
+        if p.name in skills:
+            p.skills_enabled = bool(skills[p.name])
+        if p.name in mcp:
+            p.mcp_enabled = bool(mcp[p.name])
+
+
+def set_package_knob(
+    name: str, kind: str, enabled: bool, path: Path | None = None
+) -> Path:
+    """Persist a per-package skills/mcp knob to the machine-managed state file.
+
+    ``kind`` is ``"skills"`` or ``"mcp"``. ``path`` defaults to
+    :func:`_knob_state_path` (injectable for tests). Returns the state-file path.
+    The hand-authored ``config.yaml`` is never touched.
+    """
+    if kind not in _KNOB_KINDS:
+        raise ValueError(f"kind must be one of {_KNOB_KINDS}, got {kind!r}")
+    if path is None:
+        path = _knob_state_path()
+    state = _load_knob_state(path)
+    state[kind][name] = bool(enabled)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    return path
+
+
 def config_to_dict(config: DevConfig, config_path: Path | None = None) -> dict:
     """Serialize a DevConfig to a plain dict for JSON responses.
 
@@ -353,6 +455,8 @@ def config_to_dict(config: DevConfig, config_path: Path | None = None) -> dict:
                 "local_path": p.local_path,
                 "pypi_name": p.pypi_name,
                 "github_repo": p.github_repo,
+                "skills_enabled": p.skills_enabled,
+                "mcp_enabled": p.mcp_enabled,
             }
             for p in config.packages
         ],

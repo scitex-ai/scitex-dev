@@ -1,18 +1,45 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Remote rendering path for `ecosystem dashboard list --host`.
+"""Helpers shared by the terminal surfaces mounted on the `gui` group.
 
-Split out of ``_dashboard.py`` to keep that module under the repo's
-line-limit; the ssh/`--json-stream` transport is a self-contained
-concern with no dependency on the Click wiring around it.
+Package-selection parsing and the ssh streaming renderer used by
+`gui list --host`. Kept apart from the command modules so each of those
+stays a thin, readable Click layer.
 """
 
 from __future__ import annotations
 
 import click
 
+__all__ = ["render_remote", "resolve_packages", "shquote"]
 
-def render_remote_dashboard(
+
+def shquote(s: str) -> str:
+    """POSIX shell single-quote a string for embedding in `bash -lc '...'`."""
+    return "'" + s.replace("'", "'\"'\"'") + "'"
+
+
+def resolve_packages(package: tuple[str, ...]) -> list[str] | None:
+    """`-p` accepts repeats, comma-separated values, and the literal `all`.
+
+    Mirrors `audit-all`'s argument style. Returns None for "every
+    package" — both the `all` literal and the no-flag default.
+    """
+    raw: list[str] = []
+    for entry in package:
+        raw.extend(p.strip() for p in entry.split(",") if p.strip())
+    if "all" in raw or not raw:
+        return None
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in raw:
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
+def render_remote(
     *,
     host: str,
     verbosity: int,
@@ -21,15 +48,15 @@ def render_remote_dashboard(
     with_tests: str,
     as_json: bool,
 ) -> None:
-    """Stream `dashboard list --json-stream` from `host`; render live.
+    """Stream `gui list --json-stream` from `host`; render live.
 
     Uses ``--json-stream`` (one JSON snapshot per line, emitted after
     each enricher batch completes) so the local view fills in
-    incrementally — same UX as a local `dashboard list`. Without this,
-    ssh blocks for the full ~40s while the remote runs every enricher.
+    incrementally — same UX as a local `gui list`. Without this, ssh
+    blocks for the full ~40s while the remote runs every enricher.
 
-    If ``as_json`` is requested, the last (= most complete) snapshot
-    is forwarded verbatim.
+    If ``as_json`` is requested, the last (= most complete) snapshot is
+    forwarded verbatim.
     """
     import json as _json
     import subprocess
@@ -37,13 +64,12 @@ def render_remote_dashboard(
     from rich.console import Console
     from rich.live import Live
 
-    from .._dashboard._render import render_table
-    from .._dashboard._state import PackageState
+    from ..ecosystem._dashboard._render import render_table
+    from ..ecosystem._dashboard._state import PackageState
 
     remote_cmd_parts = [
         "scitex-dev",
-        "ecosystem",
-        "dashboard",
+        "gui",
         "list",
         "--json-stream",
         "-j",
@@ -129,15 +155,10 @@ def render_remote_dashboard(
     if rc != 0 and not last_rows:
         err = (proc.stderr.read() if proc.stderr else "")[:2000]
         raise click.ClickException(
-            f"remote `dashboard list` on {host} exited {rc}:\n--- stderr ---\n{err}"
+            f"remote `gui list` on {host} exited {rc}:\n--- stderr ---\n{err}"
         )
 
     console.print(render_table(_states(), verbosity=verbosity, host=host))
-
-
-def shquote(s: str) -> str:
-    """POSIX shell single-quote a string for embedding in `bash -lc '...'`."""
-    return "'" + s.replace("'", "'\"'\"'") + "'"
 
 
 # EOF

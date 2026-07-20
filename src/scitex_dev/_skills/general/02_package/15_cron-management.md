@@ -75,16 +75,49 @@ appending.
    "rotate-all": JobSpec(
        name="rotate-all",
        schedule="0 * * * *",
-       command="scitex-dev cron exec rotate-all >> ~/.scitex/dev/logs/cron-rotate-all.log 2>&1",
+       command=_rotate_all_command(),   # -> "scitex-dev cron exec rotate-all"
        description="Rotate CLAUDE_CODE_CREDENTIALS_JSON across the ecosystem.",
    ),
    ```
+   **Never put `mkdir`, `>>`, `2>&1` or a rotation guard in the
+   command.** The verb owns all of it (see "Logging is owned by the
+   verb" below); the line is schedule + command + marker, full stop.
 3. **Wire the exec-body.** Add a dispatch branch in
    `src/scitex_dev/_cli/cron/run.py` so `scitex-dev cron exec rotate-all`
-   actually invokes your `run_once`.
+   actually invokes your `run_once`. If the job is a shell pipeline
+   rather than a Python body, add its PURE payload (no plumbing) to
+   `_job_commands.JOB_SHELL_BODIES` instead.
 4. **Pin it.** Add a test that asserts the registry entry exists with
    the expected schedule + command — see
    `tests/scitex_dev/_cli/cron/test__jobs.py` for the pattern.
+
+## Logging is owned by the verb
+
+`scitex-dev cron exec <name>` creates its own log directory, rotates the
+log past 1 MiB, and redirects stdout + stderr into it. The shared
+implementation is `scitex_dev.jobs._logsink`; the per-job destination is
+`_job_commands.JOB_LOG_TARGETS` (defaulting to package `dev`, slug
+`cron-<name>`), resolving to:
+
+```
+$HOME/.scitex/<package>/runtime/logs/<slug>.log
+```
+
+Three rules follow from this:
+
+- **Logs live under `runtime/`**, never `~/.scitex/<pkg>/logs/`.
+  `runtime/` is the documented regenerable-state layer and is
+  redirectable off GPFS for inode safety.
+- **Generated shell text uses `$HOME`, never `~`.** A tilde is expanded
+  only by an interactive shell in command position; cron's `/bin/sh -c`
+  context and `$(dirname ~/...)` do not reliably expand it.
+- **Logging failures are loud.** If the log dir cannot be created or the
+  log cannot be opened, the job exits non-zero with the reason rather
+  than running unlogged — a job whose logging silently stopped is
+  indistinguishable from one that ran fine.
+
+Use `scitex-dev cron exec <name> --no-log` to run a job interactively
+with output on the terminal.
 
 That's the whole diff. The CLI verbs (`list`, `install`, `remove`,
 `status`) automatically pick up the new entry — no per-job wiring on
@@ -160,7 +193,8 @@ Until that lands, this GC is the continuous cleanup loop.
 ## Related skills
 
 - [01_ecosystem/06_dot_scitex_directory.md](../01_ecosystem/06_dot_scitex_directory.md)
-  — Where each managed job logs (`~/.scitex/dev/logs/cron-<name>.log`).
+  — Where each managed job logs
+  (`$HOME/.scitex/dev/runtime/logs/cron-<name>.log`).
 - [02_package/07_github-actions.md](07_github-actions.md) —
   CI workflows referenced by `ci-watch` for green-vs-red detection.
 - [02_package/12_no-mocks.md](12_no-mocks.md) — Why

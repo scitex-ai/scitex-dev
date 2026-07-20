@@ -57,19 +57,36 @@ def test_every_builder_returns_nonempty_shell_line():
     assert empty == []
 
 
-def test_log_rotate_guard_embeds_threshold_and_target():
-    # Arrange
-    log = "$HOME/.scitex/dev/logs/example.log"
+def test_no_builder_emits_an_inline_log_rotation_guard():
+    # Arrange — the 1-MiB guard used to be spliced into the crontab line
+    # by `_log_rotate_guard`. It now lives in the shared log sink
+    # (`jobs._logsink.rotate_if_large`), which applies it to EVERY job
+    # rather than the two lines that happened to carry it.
     # Act
-    guard = _job_commands._log_rotate_guard(log)
-    # Assert — must reference the 1-MiB threshold and rotate to <log>.1.
-    assert str(_job_commands._LOG_ROTATE_BYTES) in guard and f"{log}.1" in guard
+    offenders = [
+        n
+        for n in _BUILDER_NAMES
+        if "stat -c%s" in getattr(_job_commands, n)()
+    ]
+    # Assert
+    assert offenders == []
 
 
-def test_log_rotate_guard_ends_with_composable_separator():
+def test_builders_no_longer_expose_the_retired_rotation_guard():
     # Arrange
     # Act
-    guard = _job_commands._log_rotate_guard("$HOME/x.log")
-    # Assert — documented contract: trailing "; " so it composes directly
-    # in front of a command body.
-    assert guard.endswith("; ")
+    # Assert — leaving a dead helper around invites re-inlining it.
+    assert not hasattr(_job_commands, "_log_rotate_guard")
+
+
+def test_every_builder_emits_only_the_cron_exec_invocation():
+    # Arrange — the operator's ask: the line carries schedule + command,
+    # with all plumbing owned by the verb.
+    # Act
+    offenders = [
+        n
+        for n in _BUILDER_NAMES
+        if not getattr(_job_commands, n)().startswith("scitex-dev cron exec ")
+    ]
+    # Assert
+    assert offenders == []
