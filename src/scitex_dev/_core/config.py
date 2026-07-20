@@ -374,6 +374,9 @@ def _knob_state_path() -> Path:
     operator's config comments, and a diff of the state file shows exactly which
     packages were deliberately turned off.
     """
+    override = os.getenv("SCITEX_DEV_KNOB_STATE")
+    if override:
+        return Path(override).expanduser()
     return local_state.path("dev", "knob-state.json")
 
 

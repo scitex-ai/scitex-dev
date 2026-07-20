@@ -273,6 +273,10 @@ def register_mcp_commands(main: click.Group) -> click.Group:
                 click.echo("    -> Result")
                 click.echo()
 
+    from ._knob_commands import add_knob_commands
+
+    add_knob_commands(mcp, "mcp")
+
     return mcp
 
 
