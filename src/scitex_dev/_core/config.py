@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -249,6 +250,9 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
 
     packages = list(pkg_map.values())
 
+    # Overlay machine-managed knob-state (CLI toggles) at highest precedence.
+    _apply_knob_state(packages)
+
     # Parse hosts
     hosts = []
     if "hosts" in data and isinstance(data["hosts"], list):
@@ -357,6 +361,73 @@ def get_enabled_mcp(config: DevConfig | None = None) -> list[PackageConfig]:
     if config is None:
         config = load_config()
     return [p for p in config.packages if p.mcp_enabled]
+
+
+_KNOB_KINDS = ("skills", "mcp")
+
+
+def _knob_state_path() -> Path:
+    """Machine-managed knob-state file.
+
+    The CLI / aggregators write here; the hand-authored ``config.yaml`` is never
+    rewritten. Keeping the two apart means toggling a knob can never clobber the
+    operator's config comments, and a diff of the state file shows exactly which
+    packages were deliberately turned off.
+    """
+    return local_state.path("dev", "knob-state.json")
+
+
+def _load_knob_state(path: Path | None = None) -> dict[str, dict[str, bool]]:
+    """Load the knob-state file, tolerating absence / corruption (default: empty).
+
+    ``path`` defaults to :func:`_knob_state_path`; it is injectable so callers
+    (and tests) never need env vars or mocks.
+    """
+    if path is None:
+        path = _knob_state_path()
+    if not path.exists():
+        return {"skills": {}, "mcp": {}}
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {"skills": {}, "mcp": {}}
+    return {
+        "skills": dict(data.get("skills", {})),
+        "mcp": dict(data.get("mcp", {})),
+    }
+
+
+def _apply_knob_state(
+    packages: list[PackageConfig], path: Path | None = None
+) -> None:
+    """Overlay the machine-managed knob-state (highest precedence) in place."""
+    state = _load_knob_state(path)
+    skills, mcp = state["skills"], state["mcp"]
+    for p in packages:
+        if p.name in skills:
+            p.skills_enabled = bool(skills[p.name])
+        if p.name in mcp:
+            p.mcp_enabled = bool(mcp[p.name])
+
+
+def set_package_knob(
+    name: str, kind: str, enabled: bool, path: Path | None = None
+) -> Path:
+    """Persist a per-package skills/mcp knob to the machine-managed state file.
+
+    ``kind`` is ``"skills"`` or ``"mcp"``. ``path`` defaults to
+    :func:`_knob_state_path` (injectable for tests). Returns the state-file path.
+    The hand-authored ``config.yaml`` is never touched.
+    """
+    if kind not in _KNOB_KINDS:
+        raise ValueError(f"kind must be one of {_KNOB_KINDS}, got {kind!r}")
+    if path is None:
+        path = _knob_state_path()
+    state = _load_knob_state(path)
+    state[kind][name] = bool(enabled)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    return path
 
 
 def config_to_dict(config: DevConfig, config_path: Path | None = None) -> dict:
