@@ -5,6 +5,39 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.32.0] - 2026-07-20
+
+### Added
+- **Per-leaf skills/mcp progressive-disclosure knobs (#372, #373, #374).**
+  `PackageConfig` gains `skills_enabled` / `mcp_enabled` (default-on,
+  fail-safe), a machine-managed `~/.scitex/dev/runtime/knob-state.json`
+  (config.yaml is never rewritten), and a `scitex-dev skills|mcp
+  {status,enable,disable}` CLI. Lets scitex-dev centrally control which
+  packages' skills / MCP surface into agent context — the first piece of
+  the progressive-disclosure context-budget work (measured: the skills
+  corpus alone was ~30% of a 1M-token window).
+
+### Fixed
+- **timer→cron lowering must not silently drop declared guarantees (#369).**
+  Lowering a `kind="timer"` JobSpec to a cron line dropped `timeout_sec`,
+  `venv`, and `on_boot_sec` without a word; it now refuses (fail-loud) when
+  a real guarantee would be lost, with an explicit `--allow-lossy-timer-lowering`
+  opt-in and a guard-rail test that every JobSpec field is classified.
+- **git-env isolation in the audit worktree tests (#371).** `_seed_repo`
+  now pins `GIT_CONFIG_GLOBAL`/`SYSTEM` to `os.devnull` with an explicit
+  author identity, so a broken/unreadable gitconfig on a shared runner can
+  no longer flake `test_worktree_at_*`.
+
+### Changed
+- **Pruned drift-prone cruft from the skills interface corpus (#370).**
+  Removed a dated generated MCP drift-report and duplicated skill-creator
+  boilerplate from the surface-choice doc; the TODO backlogs were kept
+  (still referenced) pending a considered cleanup.
+- **Config-layout: untracked stray machine state (#375).** `.scitex/clew/db.sqlite`
+  was tracked by accident; it is machine state (the `.gitignore` already
+  intended to ignore it), so it is now untracked — dogfooding the config-layout
+  convention (config vs. gitignored `runtime/`) before enforcing it fleet-wide.
+
 ## [0.31.1] - 2026-07-17
 
 ### Fixed
