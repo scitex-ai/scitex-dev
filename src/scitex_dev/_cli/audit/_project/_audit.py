@@ -217,6 +217,24 @@ def audit_project(
 
     check_ps215_broken_install_remedy(repo_root, distribution, Violation, violations)
     # hook-bypass: line-limit
+    # PS-216: direct-URL/VCS deps in publishable metadata. PyPI/twine reject
+    # direct references on upload (even inside extras), silently blocking the
+    # release of an otherwise-green package.
+    from ._check_no_url_deps import check_ps216_no_url_deps
+
+    check_ps216_no_url_deps(repo_root, Violation, violations)
+    # hook-bypass: line-limit
+    # PS-218/PS-219: CLI-normalization conformance (items 4-5). Health-check
+    # verb standardizes on `doctor` (`health` is a deprecated alias); version
+    # standardizes on the `--version`/`-V` flag (not a `version` subcommand).
+    # Both W during leaf migration. Detection is static (reads source, never
+    # imports the leaf) and gated to never false-positive on `--version`.
+    from ._check_doctor_health_naming import check_ps218_doctor_health_naming
+    from ._check_version_flag import check_ps219_version_flag
+
+    check_ps218_doctor_health_naming(repo_root, Violation, violations)
+    check_ps219_version_flag(repo_root, Violation, violations)
+    # hook-bypass: line-limit
     from ._check_console_script_core_deps import (
         check_ps213_console_script_core_deps,
     )
@@ -307,6 +325,13 @@ def audit_project(
     from ._check_runtime_separation import check_runtime_separation
 
     check_runtime_separation(repo_root, Violation, violations)
+    # PS-217: skills CLI federation — fires when a leaf ships a hand-rolled
+    # src/<pkg>/_cli/_skills.py that does NOT import scitex-dev's shared
+    # skills_click_group primitive. WARN-only tracking signal for the
+    # CLI-normalization fan-out. Scope = all project kinds with a src/ layout.
+    from ._check_skills_federation import check_skills_federation
+
+    check_skills_federation(repo_root, Violation, violations)
     if not skip_mirror:
         from ._check_smoke_e2e_layers import (
             check_ps211_smoke_layer,

@@ -55,7 +55,7 @@ def test_load_knob_state_returns_empty_when_file_absent(tmp_path):
     # Act
     state = _load_knob_state(state_file)
     # Assert
-    assert state == {"skills": {}, "mcp": {}}
+    assert state == {"skills": {}, "mcp": {}, "test_execution": {}}
 
 
 def test_load_knob_state_tolerates_corrupt_file(tmp_path):
@@ -65,7 +65,7 @@ def test_load_knob_state_tolerates_corrupt_file(tmp_path):
     # Act
     state = _load_knob_state(state_file)
     # Assert
-    assert state == {"skills": {}, "mcp": {}}
+    assert state == {"skills": {}, "mcp": {}, "test_execution": {}}
 
 
 def test_apply_knob_state_disables_skills_on_matching_package(tmp_path):

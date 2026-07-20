@@ -1188,3 +1188,30 @@ from ._check_precommit_hooks import HOOK_RULES as _HOOK_RULES  # noqa: E402
 
 for _c, _sec, _msg, _sev, _slug in _HOOK_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
+# PS-216 — direct-URL/VCS deps in publishable metadata (co-located rule,
+# merged on the same terms as HOOK_RULES / EXTRA_RULES).
+from ._check_no_url_deps import URL_DEP_RULES as _URL_DEP_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in _URL_DEP_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
+# PS-217 — skills CLI federation; PS-218/PS-219 — CLI-normalization
+# doctor/health + version-flag conformance (co-located rules, merged on the
+# same terms as HOOK_RULES / URL_DEP_RULES).
+from ._check_skills_federation import (  # noqa: E402
+    SKILLS_FEDERATION_RULES as _SKILLS_FEDERATION_RULES,
+)
+from ._check_doctor_health_naming import (  # noqa: E402
+    DOCTOR_HEALTH_RULES as _DOCTOR_HEALTH_RULES,
+)
+from ._check_version_flag import VERSION_FLAG_RULES as _VERSION_FLAG_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in (
+    *_SKILLS_FEDERATION_RULES,
+    *_DOCTOR_HEALTH_RULES,
+    *_VERSION_FLAG_RULES,
+):
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)

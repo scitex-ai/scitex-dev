@@ -6,13 +6,27 @@
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from scitex_config._ecosystem import local_state
+
+from ._default_config import create_default_config as _write_default_config
+
+# Knob-state layer (skills / mcp / test-execution). Re-exported here so the
+# historical ``from scitex_dev._core.config import set_package_knob`` (and the
+# private helpers the tests import) keep resolving after the extraction.
+from ._knobs import (  # noqa: F401
+    _KNOB_KINDS,
+    _apply_knob_state,
+    _knob_state_path,
+    _load_knob_state,
+    set_package_knob,
+    set_package_test_execution,
+)
+from .test_execution import DEFAULT_MODE as _DEFAULT_TEST_EXECUTION_MODE
 
 
 @dataclass
@@ -69,6 +83,12 @@ class PackageConfig:
     # scoping — nothing is uninstalled, it is simply not surfaced.
     skills_enabled: bool = True
     mcp_enabled: bool = True
+    # Test-execution policy mode: "local" (allow local pytest) or
+    # "remote-required" (local pytest is an ERROR; suite must run remote).
+    # Resolved the same way as skills/mcp: ECOSYSTEM default → config.yaml →
+    # knob-state.json. The rich recipe (host + submit template + marker env)
+    # lives in the package's own config-layout — see _core.test_execution.
+    test_execution: str = "local"
 
 
 @dataclass
@@ -197,6 +217,7 @@ def _parse_package_config(data: dict[str, Any]) -> PackageConfig:
         import_name=data.get("import_name"),
         skills_enabled=bool(data.get("skills_enabled", True)),
         mcp_enabled=bool(data.get("mcp_enabled", True)),
+        test_execution=str(data.get("test_execution", _DEFAULT_TEST_EXECUTION_MODE)),
     )
 
 
@@ -239,6 +260,9 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
             import_name=info.get("import_name"),
             skills_enabled=bool(info.get("skills_enabled", True)),
             mcp_enabled=bool(info.get("mcp_enabled", True)),
+            test_execution=str(
+                info.get("test_execution", _DEFAULT_TEST_EXECUTION_MODE)
+            ),
         )
 
     # Override with config file entries (if any)
@@ -363,74 +387,18 @@ def get_enabled_mcp(config: DevConfig | None = None) -> list[PackageConfig]:
     return [p for p in config.packages if p.mcp_enabled]
 
 
-_KNOB_KINDS = ("skills", "mcp")
+def get_test_execution_mode(name: str, config: DevConfig | None = None) -> str:
+    """Resolved test-execution MODE for package ``name`` (default ``"local"``).
 
-
-def _knob_state_path() -> Path:
-    """Machine-managed knob-state file.
-
-    The CLI / aggregators write here; the hand-authored ``config.yaml`` is never
-    rewritten. Keeping the two apart means toggling a knob can never clobber the
-    operator's config comments, and a diff of the state file shows exactly which
-    packages were deliberately turned off.
+    Reads the fully-resolved ``PackageConfig.test_execution`` (ECOSYSTEM →
+    config.yaml → knob-state.json). Unknown packages resolve to the default.
     """
-    override = os.getenv("SCITEX_DEV_KNOB_STATE")
-    if override:
-        return Path(override).expanduser()
-    return local_state.path("dev", "runtime", "knob-state.json")
-
-
-def _load_knob_state(path: Path | None = None) -> dict[str, dict[str, bool]]:
-    """Load the knob-state file, tolerating absence / corruption (default: empty).
-
-    ``path`` defaults to :func:`_knob_state_path`; it is injectable so callers
-    (and tests) never need env vars or mocks.
-    """
-    if path is None:
-        path = _knob_state_path()
-    if not path.exists():
-        return {"skills": {}, "mcp": {}}
-    try:
-        data = json.loads(path.read_text())
-    except (json.JSONDecodeError, OSError):
-        return {"skills": {}, "mcp": {}}
-    return {
-        "skills": dict(data.get("skills", {})),
-        "mcp": dict(data.get("mcp", {})),
-    }
-
-
-def _apply_knob_state(
-    packages: list[PackageConfig], path: Path | None = None
-) -> None:
-    """Overlay the machine-managed knob-state (highest precedence) in place."""
-    state = _load_knob_state(path)
-    skills, mcp = state["skills"], state["mcp"]
-    for p in packages:
-        if p.name in skills:
-            p.skills_enabled = bool(skills[p.name])
-        if p.name in mcp:
-            p.mcp_enabled = bool(mcp[p.name])
-
-
-def set_package_knob(
-    name: str, kind: str, enabled: bool, path: Path | None = None
-) -> Path:
-    """Persist a per-package skills/mcp knob to the machine-managed state file.
-
-    ``kind`` is ``"skills"`` or ``"mcp"``. ``path`` defaults to
-    :func:`_knob_state_path` (injectable for tests). Returns the state-file path.
-    The hand-authored ``config.yaml`` is never touched.
-    """
-    if kind not in _KNOB_KINDS:
-        raise ValueError(f"kind must be one of {_KNOB_KINDS}, got {kind!r}")
-    if path is None:
-        path = _knob_state_path()
-    state = _load_knob_state(path)
-    state[kind][name] = bool(enabled)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
-    return path
+    if config is None:
+        config = load_config()
+    for p in config.packages:
+        if p.name == name:
+            return p.test_execution
+    return _DEFAULT_TEST_EXECUTION_MODE
 
 
 def config_to_dict(config: DevConfig, config_path: Path | None = None) -> dict:
@@ -457,6 +425,7 @@ def config_to_dict(config: DevConfig, config_path: Path | None = None) -> dict:
                 "github_repo": p.github_repo,
                 "skills_enabled": p.skills_enabled,
                 "mcp_enabled": p.mcp_enabled,
+                "test_execution": p.test_execution,
             }
             for p in config.packages
         ],
@@ -490,90 +459,8 @@ def get_config_path() -> Path:
 
 
 def create_default_config() -> Path:
-    """Create default config file if it doesn't exist.
-
-    Returns
-    -------
-    Path
-        Path to the config file.
-    """
-    config_path = _get_default_config_path()
-    config_path.parent.mkdir(parents=True, exist_ok=True)
-
-    if config_path.exists():
-        return config_path
-
-    default_config = """\
-# SciTeX Developer Configuration
-# Timestamp: 2026-02-02
-
-# Ecosystem packages to track
-packages:
-  - name: scitex
-    local_path: ~/proj/scitex-python
-    pypi_name: scitex
-    github_repo: ywatanabe1989/scitex-python
-    import_name: scitex
-  - name: figrecipe
-    local_path: ~/proj/figrecipe
-    pypi_name: figrecipe
-    github_repo: ywatanabe1989/figrecipe
-    import_name: figrecipe
-  - name: scitex-hub
-    local_path: ~/proj/scitex-hub
-    pypi_name: scitex-hub
-    github_repo: ywatanabe1989/scitex-hub
-    import_name: scitex_hub
-  - name: scitex-writer
-    local_path: ~/proj/scitex-writer
-    pypi_name: scitex-writer
-    github_repo: ywatanabe1989/scitex-writer
-    import_name: scitex_writer
-  - name: crossref-local
-    local_path: ~/proj/crossref-local
-    pypi_name: crossref-local
-    github_repo: ywatanabe1989/crossref-local
-    import_name: crossref_local
-
-# Hosts to check via SSH
-hosts:
-  - name: ywata-note-win
-    hostname: localhost
-    user: ywatanabe
-    role: dev
-    enabled: true
-  - name: nas
-    hostname: nas.local
-    user: ywatanabe
-    role: staging
-    enabled: true
-  - name: scitex-hub
-    hostname: scitex.ai
-    user: deploy
-    role: prod
-    enabled: false
-
-# GitHub remotes to check
-github_remotes:
-  - name: ywatanabe1989
-    org: ywatanabe1989
-    enabled: true
-  - name: scitex-ai
-    org: scitex-ai
-    enabled: false
-
-# PyPI accounts
-pypi_accounts:
-  - name: ywatanabe1989
-    enabled: true
-
-# Branches to track
-branches:
-  - main
-  - develop
-"""
-    config_path.write_text(default_config)
-    return config_path
+    """Create the default config file at the canonical path if it's absent."""
+    return _write_default_config(_get_default_config_path())
 
 
 # EOF
