@@ -73,3 +73,44 @@ def test_gui_open_dry_run_does_not_open_browser():
     result = CliRunner().invoke(main, ["ecosystem", "gui", "open", "--dry-run"])
     # Assert
     assert "opening" not in result.output
+
+
+def test_gui_audit_is_registered():
+    # Arrange
+    main = _build_cli()
+    # Act
+    result = CliRunner().invoke(main, ["ecosystem", "gui", "audit", "--help"])
+    # Assert
+    assert result.exit_code == 0
+
+
+def test_gui_audit_exit_nonzero_while_migrations_pending():
+    # Arrange
+    main = _build_cli()
+    # Act
+    result = CliRunner().invoke(main, ["ecosystem", "gui", "audit", "--json"])
+    # Assert
+    assert result.exit_code == 1
+
+
+def test_gui_audit_json_reports_cards_pending_migration():
+    # Arrange
+    main = _build_cli()
+    # Act
+    result = CliRunner().invoke(main, ["ecosystem", "gui", "audit", "--json"])
+    payload = json.loads(result.output)
+    # Assert
+    assert any(
+        f["package"] == "scitex-cards" and f["kind"] == "pending-migration"
+        for f in payload["findings"]
+    )
+
+
+def test_gui_audit_has_no_reservation_violations_on_correct_registry():
+    # Arrange
+    main = _build_cli()
+    # Act
+    result = CliRunner().invoke(main, ["ecosystem", "gui", "audit", "--json"])
+    payload = json.loads(result.output)
+    # Assert
+    assert payload["errors"] == 0

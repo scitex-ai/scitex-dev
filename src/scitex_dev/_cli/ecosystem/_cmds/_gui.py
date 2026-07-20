@@ -16,8 +16,57 @@ import webbrowser
 
 import click
 
-from ...._ecosystem.gui_registry import gui_surfaces
+from ...._ecosystem.gui_registry import RESERVED_PORTS, gui_surfaces
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
+
+
+def _audit_findings():
+    """Return GUI-port fan-out findings as a list of dicts.
+
+    Two check classes, each finding a fixed shape
+    ``{package, kind, severity, actual, target, detail}``:
+
+    - ``reservation-violation`` (severity ``error``): a surface's
+      ``target_port`` is not reserved to that package in
+      ``RESERVED_PORTS`` -- a bad registry edit that would re-collide
+      with another service. Should never fire on a correct registry.
+    - ``pending-migration`` (severity ``warning``): the leaf still
+      binds ``actual_port`` != its assigned ``target_port`` -- the
+      leaf fan-out has not landed yet (e.g. cards 8051 -> 31299,
+      live-paper 8765 -> 31300).
+    """
+    findings = []
+    for s in gui_surfaces():
+        owner = RESERVED_PORTS.get(s.target_port)
+        if owner != s.package:
+            findings.append(
+                {
+                    "package": s.package,
+                    "kind": "reservation-violation",
+                    "severity": "error",
+                    "actual": s.actual_port,
+                    "target": s.target_port,
+                    "detail": (
+                        f"target {s.target_port} is reserved to "
+                        f"{owner or '<unreserved>'}, not {s.package}"
+                    ),
+                }
+            )
+        elif s.actual_port != s.target_port:
+            findings.append(
+                {
+                    "package": s.package,
+                    "kind": "pending-migration",
+                    "severity": "warning",
+                    "actual": s.actual_port,
+                    "target": s.target_port,
+                    "detail": (
+                        f"{s.package} still binds {s.actual_port}; "
+                        f"assigned target is {s.target_port}"
+                    ),
+                }
+            )
+    return findings
 
 
 def register(ecosystem):
@@ -126,3 +175,57 @@ def register(ecosystem):
             else:
                 click.echo(f"opening {s.package}: {target}")
                 webbrowser.open(target)
+
+    @gui.command(
+        "audit",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Audit each leaf GUI's port against the registry SSOT.",
+            description=(
+                "Fan-out auditor for the 3129X/3130X GUI port scheme. "
+                "Reports two finding classes: 'reservation-violation' "
+                "(a target port is not reserved to that package -- a bad "
+                "registry edit that would re-collide with another "
+                "service) and 'pending-migration' (a leaf still binds its "
+                "old actual port instead of its assigned target, e.g. "
+                "cards 8051->31299). Exits non-zero when any finding "
+                "exists so it CAN gate CI once the leaf fan-out lands; it "
+                "is a diagnostic today, not wired into the blocking CI "
+                "matrix (develop must not go red on known-pending "
+                "migrations)."
+            ),
+            examples=(
+                Example("{prog} ecosystem gui audit", "Report GUI-port drift."),
+                Example("{prog} ecosystem gui audit --json", "Structured JSON output."),
+            ),
+        ),
+    )
+    @click.option("--json", "as_json", is_flag=True, help="Output as structured JSON.")
+    def gui_audit(as_json):
+        findings = _audit_findings()
+        n_errors = sum(1 for f in findings if f["severity"] == "error")
+        exit_code = 1 if findings else 0
+
+        if as_json:
+            click.echo(
+                json.dumps(
+                    {
+                        "findings": findings,
+                        "errors": n_errors,
+                        "exit_code": exit_code,
+                    }
+                )
+            )
+            raise SystemExit(exit_code)
+
+        if not findings:
+            click.echo("gui audit: all leaf GUI ports conform to the registry.")
+            raise SystemExit(exit_code)
+
+        click.echo(f"gui audit: {len(findings)} finding(s) ({n_errors} error)")
+        for f in findings:
+            click.echo(
+                f"  [{f['severity']:7s}] {f['package']:20s} {f['kind']:22s} "
+                f"actual={f['actual']} target={f['target']} — {f['detail']}"
+            )
+        raise SystemExit(exit_code)
