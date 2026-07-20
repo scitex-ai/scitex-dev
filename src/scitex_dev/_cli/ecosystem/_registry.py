@@ -25,6 +25,7 @@ from ._cmds import (
     _clean,
     _drift_report,
     _git,
+    _gui,
     _install_gate,
     _jobs_cron,
     _jobs_systemd,
@@ -98,6 +99,7 @@ def register_ecosystem_commands(main_group):
     _versions.register(ecosystem)
     _drift_report.register(ecosystem)
     _git.register(ecosystem)
+    _gui.register(ecosystem)
     _audit_per_target.register(ecosystem)
     _audit_registry_layout.register(ecosystem)
     _audit_local_state.register(ecosystem)
