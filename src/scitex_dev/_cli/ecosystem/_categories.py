@@ -36,6 +36,7 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
         "Discovery",
         [
             "list",
+            "gui",
             "show-graph",
             "show-stats",
             # `dashboard` / `start-dashboard` moved to the top-level
