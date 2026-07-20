@@ -1188,3 +1188,11 @@ from ._check_precommit_hooks import HOOK_RULES as _HOOK_RULES  # noqa: E402
 
 for _c, _sec, _msg, _sev, _slug in _HOOK_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
+# PS-216 — direct-URL/VCS deps in publishable metadata (co-located rule,
+# merged on the same terms as HOOK_RULES / EXTRA_RULES).
+from ._check_no_url_deps import URL_DEP_RULES as _URL_DEP_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in _URL_DEP_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
