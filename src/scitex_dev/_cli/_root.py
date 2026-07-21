@@ -137,14 +137,23 @@ def main(
     # shell-completion and repeat invocations are guarded inside emit_if_drift.
     # An error-severity abort raises SystemExit and MUST propagate; any other
     # internal fault is swallowed so the check can never break the host CLI.
-    from scitex_dev._release.check_editable_drift import emit_if_drift
+    import os as _os
 
-    try:
-        emit_if_drift()
-    except SystemExit:
-        raise
-    except Exception:  # noqa: BLE001 — staleness check must never break the CLI
-        pass
+    # Suppress the drift emission inside a pytest run: this guard fires on
+    # EVERY CLI invocation, so when unrelated tests invoke the `scitex-dev`
+    # CLI it would print a drift line into their captured output whenever the
+    # test checkout is behind its remote — polluting assertions across suites
+    # (seen on the self-hosted runner). Direct unit tests of check() /
+    # emit_if_drift bypass main() and are unaffected.
+    if not _os.environ.get("PYTEST_CURRENT_TEST"):
+        from scitex_dev._release.check_editable_drift import emit_if_drift
+
+        try:
+            emit_if_drift()
+        except SystemExit:
+            raise
+        except Exception:  # noqa: BLE001 — staleness check must never break the CLI
+            pass
 
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())

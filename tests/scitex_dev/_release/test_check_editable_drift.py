@@ -22,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -259,13 +260,42 @@ def test_warn_severity_returns_zero():
     assert code == 0
 
 
+@contextlib.contextmanager
+def _capture_drift_log(buf: io.StringIO):
+    """Deterministically capture the staleness line into ``buf``.
+
+    ``_log_stale`` emits through ``scitex_logging.getLogger("scitex_dev")``,
+    whose StreamHandler is bound to the REAL ``sys.stderr`` at import time —
+    so ``contextlib.redirect_stderr`` (which swaps ``sys.stderr`` afterwards)
+    captures nothing whenever another test imported scitex-logging first, an
+    xdist-order flake. We instead attach our OWN handler to that exact
+    ``scitex_dev`` logger, so the record lands in ``buf`` regardless of the
+    global handler state; the ``levelname`` carries the WARN/ERRO prefix the
+    assertion looks for. The buffer is also passed as the plain fallback
+    ``stream`` so the no-scitex-logging path lands in ``buf`` too.
+    """
+    handler = logging.StreamHandler(buf)
+    handler.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+    handler.setLevel(logging.DEBUG)
+    logger = logging.getLogger("scitex_dev")
+    prev_level = logger.level
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    try:
+        yield
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(prev_level)
+
+
 def test_warn_output_carries_severity_prefix():
     # Arrange — the message goes through scitex-logging, which auto-prefixes.
     msg = "editable scitex-dev: HEAD (abc) is 2 commit(s) behind its remote."
     buf = io.StringIO()
-    # Act
-    with contextlib.redirect_stderr(buf):
-        _react_to_drift(msg, "warn")
+    # Act — capture on the scitex_dev logger (xdist-deterministic; NOT
+    # redirect_stderr, which scitex-logging's import-time binding defeats).
+    with _capture_drift_log(buf):
+        _react_to_drift(msg, "warn", stream=buf)
     # Assert
     assert "WARN" in buf.getvalue()
 
@@ -275,8 +305,8 @@ def test_error_output_carries_severity_prefix():
     msg = "editable scitex-dev: HEAD (abc) is 2 commit(s) behind its remote."
     buf = io.StringIO()
     # Act
-    with contextlib.redirect_stderr(buf):
-        _react_to_drift(msg, "error")
+    with _capture_drift_log(buf):
+        _react_to_drift(msg, "error", stream=buf)
     # Assert — scitex-logging emits "ERRO:"; the fallback emits "ERROR:".
     assert "ERRO" in buf.getvalue().upper()
 

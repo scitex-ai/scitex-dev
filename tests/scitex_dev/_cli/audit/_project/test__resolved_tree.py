@@ -21,6 +21,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json as _json
+import logging
 import shutil
 import subprocess
 from pathlib import Path
@@ -53,16 +54,35 @@ def _json_payload(repo: Path, name: str = "demo") -> dict:
 
 
 def _human_output(repo: Path, name: str = "demo") -> str:
-    """Run audit_project in human mode; return combined stdout+stderr.
+    """Run audit_project in human mode; return combined stdout + banner text.
 
-    The INFO banner is emitted through scitex-logging (stderr rail), so
-    both streams are captured and concatenated.
+    The INFO banner is emitted through ``scitex_logging.getLogger(
+    "scitex_dev.audit")`` (see ``.._emit.emit``), whose handler is bound to
+    the REAL ``sys.stderr`` at import time — so ``redirect_stderr`` captures
+    nothing whenever another test imported scitex-logging first (an
+    xdist-order flake). We instead attach our OWN handler to that exact
+    ``scitex_dev.audit`` logger, so the banner record lands in ``banner``
+    deterministically regardless of the global handler state. ``stdout`` and
+    real ``stderr`` are still captured so the fallback (no-scitex-logging)
+    ``click.echo`` rail is covered too.
     """
     out = io.StringIO()
     err = io.StringIO()
-    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        audit_project(name, repo=repo, json_out=False)
-    return out.getvalue() + err.getvalue()
+    banner = io.StringIO()
+    handler = logging.StreamHandler(banner)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    handler.setLevel(logging.DEBUG)
+    logger = logging.getLogger("scitex_dev.audit")
+    prev_level = logger.level
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    try:
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            audit_project(name, repo=repo, json_out=False)
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(prev_level)
+    return out.getvalue() + err.getvalue() + banner.getvalue()
 
 
 # ---------------------------------------------------------------------------
