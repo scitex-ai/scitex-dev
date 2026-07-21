@@ -37,20 +37,29 @@ def main() -> None:
     if not categories:
         categories = {"umbrella", "library", "external-lib"}
 
-    # Locate the registry file.  This script lives in scripts/quality/
+    # Locate the registry file(s).  This script lives in scripts/quality/
     # inside the scitex-dev repo.
-    # The ECOSYSTEM dict lives in _registry.py (not _core.py which only
-    # re-exports it).  Fall back to the legacy ecosystem.py for old tags.
+    # Newest layout: the ECOSYSTEM table is split across two literal part
+    # modules (_registry_data_1.py / _registry_data_2.py — the 512-line
+    # file cap); concatenate them in order.  Fall back to the single-file
+    # _registry.py layout, then to the legacy ecosystem.py for old tags.
     repo_root = Path(__file__).resolve().parents[2]
-    eco_new = repo_root / "src" / "scitex_dev" / "_ecosystem" / "_registry.py"
+    eco_dir = repo_root / "src" / "scitex_dev" / "_ecosystem"
+    parts = [eco_dir / "_registry_data_1.py", eco_dir / "_registry_data_2.py"]
+    eco_new = eco_dir / "_registry.py"
     eco_old = repo_root / "src" / "scitex_dev" / "ecosystem.py"
-    eco_py = eco_new if eco_new.is_file() else eco_old
 
-    if not eco_py.is_file():
+    if all(p.is_file() for p in parts):
+        sources = parts
+    elif eco_new.is_file():
+        sources = [eco_new]
+    elif eco_old.is_file():
+        sources = [eco_old]
+    else:
         print("ERROR: ecosystem registry file not found", file=sys.stderr)
         sys.exit(1)
 
-    text = eco_py.read_text(encoding="utf-8")
+    text = "\n".join(p.read_text(encoding="utf-8") for p in sources)
 
     # Match entries like:
     #     "scitex-stats": {
