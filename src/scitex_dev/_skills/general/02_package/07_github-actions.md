@@ -7,6 +7,36 @@ tags: [scitex-general-package-github-actions]
 
 # GitHub Actions (SciTeX)
 
+## THE canonical CI mechanism — one thin org-reusable caller
+
+Operator decision (2026-07-21): every scitex-* repo ships exactly ONE CI
+workflow, `.github/workflows/ci.yml` — a thin caller that delegates all job
+bodies to the org-level reusable workflows in `scitex-ai/.github@main`
+(`pytest-matrix.yml`, `import-smoke.yml`, `quality-audit.yml`,
+`rtd-sphinx-build.yml`). A shared workflow cannot drift per-repo.
+
+Deploy it with the single mechanism:
+
+```bash
+scitex-dev ecosystem ci-template apply <repo-dir> --yes
+# or (alias that also sets the CI_RUNS_ON Actions Variable):
+scitex-dev ci runner register <repo-dir> --yes
+```
+
+Rules:
+
+- Runner selection: Actions Variable `CI_RUNS_ON`, default
+  `["self-hosted","Linux","X64","scitex-ci"]`. NEVER `ubuntu-latest`
+  (PS-169 audit ERROR).
+- Do NOT hand-write per-repo CI job bodies (the retired consolidated
+  `pr-ci.yml`/`release-ci.yml` pair and the in-SIF `ci.yml.template` are
+  gone); `apply` deletes superseded files, including `newb-docs*`.
+- Preserved alongside `ci.yml`: `cla.yml`, `auto-merge-to-develop.*`,
+  `pypi-publish-*`, `rtd-sphinx-*`.
+- Branch protection must reference the caller contexts
+  (`"<caller-job-id> / <reusable job name>"`, e.g.
+  `pytest-matrix / pytest-matrix-on-ubuntu-py3.12`); `apply` gates on this.
+
 ## Test job — install with the `[dev]` extra
 
 CI runners start clean: no `pytest`, no `pytest-cov`, no `pytest-asyncio`, no project deps. The single canonical install line in every test workflow is:

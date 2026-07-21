@@ -29,10 +29,11 @@ def register(ecosystem) -> None:
         invoke_without_command=True,
         cls=SpecGroup,
         help_spec=CliHelp(
-            summary="Roll canonical CI-speedup workflows to a scitex-* repo.",
+            summary="Roll the canonical org-reusable ci.yml caller to a scitex-* repo.",
             description=(
-                "Verbs: `apply` writes pr-ci.yml + release-ci.yml, "
-                "deletes consolidated standalone workflows, and "
+                "Verbs: `apply` writes the thin ci.yml caller (delegating "
+                "to scitex-ai/.github@main), deletes superseded workflows "
+                "(pr-ci/release-ci, granular files, newb-docs), and "
                 "enforces the branch-protection gate.",
             ),
         ),
@@ -46,7 +47,7 @@ def register(ecosystem) -> None:
         "apply",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Apply the CI templates to REPO_DIR.",
+            summary="Apply the canonical ci.yml caller to REPO_DIR.",
             description=(
                 "Mutating verb: defaults to dry-run unless --yes is "
                 "passed. This keeps the §2 audit-cli convention that "
@@ -65,7 +66,8 @@ def register(ecosystem) -> None:
                 Example(
                     '{prog} ecosystem ci-template apply ../scitex-io '
                     '--python-versions \'["3.12","3.13"]\' --yes',
-                    "Override the Python matrix.",
+                    "Override the matrix the GATE expects (actual matrix "
+                    "is pinned org-side).",
                 ),
             ),
         ),
@@ -85,9 +87,8 @@ def register(ecosystem) -> None:
         "-y",
         "yes",
         is_flag=True,
-        help="Actually write pr-ci.yml + release-ci.yml and delete "
-        "consolidated standalone workflows. Required for mutating apply "
-        "(§2 audit-cli convention).",
+        help="Actually write ci.yml and delete superseded workflows. "
+        "Required for mutating apply (§2 audit-cli convention).",
     )
     @click.option(
         "--branch",
@@ -99,7 +100,9 @@ def register(ecosystem) -> None:
         "--python-versions",
         "python_versions_json",
         default=None,
-        help='Override matrix as JSON list, e.g. \'["3.11","3.12","3.13"]\'.',
+        help='Override the matrix the gate expects, as JSON list, e.g. '
+        '\'["3.11","3.12","3.13"]\'. Informational: the actual matrix is '
+        "pinned org-side in scitex-ai/.github@main.",
     )
     @click.option(
         "--skip-required-check-gate",

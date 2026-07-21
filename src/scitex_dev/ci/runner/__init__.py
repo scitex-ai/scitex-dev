@@ -10,7 +10,9 @@ Verbs:
   * ``up``               — start the persistent runner on the HPC node
   * ``down``             — deregister the runner + stop it
   * ``renew``            — renew the SLURM CI lease job
-  * ``onboard <repo>``   — copy the ci.yml template into a repo + set vars
+  * ``register <repo>``  — deploy the canonical org-reusable ci.yml caller
+                           (thin alias of ``ecosystem ci-template apply``)
+                           + set the CI_RUNS_ON Actions Variable
   * ``validate-health``  — tri-state health signal (up/wedged/unknown); FAIL
                            LOUD, never silently falls back to a hosted runner
 """

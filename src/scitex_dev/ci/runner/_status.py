@@ -17,8 +17,10 @@ from . import config
 class XdistConstants:
     """Adaptive xdist tuning constants — single source of truth.
 
-    These mirror the logic in ci.yml.template so the CLI and the template
-    never drift.
+    These mirrored the retired in-SIF ci.yml.template (deleted 2026-07-21;
+    the canonical workflow is now the org-reusable caller rendered by
+    ``ecosystem ci-template apply``). Kept for the status view's tuning
+    readout.
     """
 
     BINS = [
@@ -162,7 +164,7 @@ def _reservation_lease_status(cfg: dict, res_cfg: dict, *, hpc_runner=None) -> d
 def _compute_xdist_n(n_tests: int, nproc: int | None = None) -> int:
     """Compute the adaptive xdist N for a given test count.
 
-    Mirrors the logic in ci.yml.template.
+    Mirrors the heuristic of the retired in-SIF ci.yml.template.
     """
     if nproc is None:
         nproc = _nproc()
