@@ -5,6 +5,48 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.34.0] - 2026-07-21
+
+### Added
+- **CURRENCY gate — `scitex_dev.staleness.ensure_current()` (#396).** Public,
+  reusable version-currency + install-integrity primitive (operator
+  directive: consumers such as scitex-cards gate their invocation at ERROR
+  severity). INTEGRITY half (always, local): flags ambiguous metadata
+  (multiple dist-infos claiming one distribution) and partial installs
+  (RECORD-listed files missing on disk — parsed from RECORD directly, since
+  py3.12 `Distribution.files` silently drops missing entries). FRESHNESS
+  half (fail-safe): installed vs per-dist cached PyPI latest (TTL,
+  detached opportunistic refresh, never a blocking network call;
+  offline → PASS), editable installs via behind-upstream git. Severity
+  ladder: explicit arg > `$SCITEX_DEV_CURRENCY_SEVERITY` >
+  `currency_severity` knob > `error` (raises `StalenessError` with the
+  exact remedy command). `SCITEX_DEV_NO_CURRENCY_GATE=1` bypasses but logs
+  a loud WARN. The scitex-dev CLI self-checks its own install integrity at
+  startup (warn). Motivated by the 2026-07-21 venv incident where 0.17.4
+  metadata sat over a 0.16-era file set and every version probe lied.
+- **PS-221 `[all]`-closure audit rule + pyproject compliance (#395,
+  consolidates #391/#393).** ERROR-severity rule: every public
+  (non-underscore, non-`all`) extra must be a subset of `[all]`; scitex-dev's
+  own `sync` extra brought into `[all]` (the rule's first catch was its own
+  package). Plus the CLI drift-guard suppression under pytest.
+
+### Fixed
+- **Deterministic audit target-tree resolution (#397).** Explicit
+  `--path` > current checkout (git toplevel of cwd, PEP-503 name match —
+  correct inside linked worktrees and CI checkouts) > ecosystem-registry
+  `local_path`. Previously the per-target audit CLIs injected the registry
+  path as if explicit, so a CI run could silently grade a different
+  develop checkout (the wrong-tree incident #395 exposed). The resolved-tree
+  banner (#392) now also names which rule won (`via explicit|cwd|registry`),
+  and `--json` payloads carry `resolved_via`.
+- **De-flaked 6 FM001 promotion tests on figrecipe detection-skew (#394)**
+  (plugin-provided rule absent ⇒ skip like their plugin-path siblings, not
+  hard-fail) **and 4 xdist-order-fragile tests (#395)** (resolved-tree ×2
+  pinned to the checkout under test; staleness-prefix ×2 capture
+  scitex-logging via a named-logger handler instead of `redirect_stderr`).
+  Two pre-existing PS-204/PS-205 violations the wrong-tree audit had masked
+  were also fixed (test-file renames).
+
 ## [0.33.0] - 2026-07-21
 
 ### Added
