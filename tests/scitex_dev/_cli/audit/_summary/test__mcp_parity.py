@@ -468,6 +468,51 @@ class TestAuditedRepoRoot:
         # Assert
         assert resolved == repo
 
+    def test_audited_tree_wins_over_registry_local_path(self, tmp_path):
+        """The import-resolved (audited) tree outranks the registry local_path.
+
+        Self-hosted CI runners often carry a stale ``~/proj/<pkg>`` checkout
+        at the registry path; §6 exemptions must be read from the tree under
+        audit (scitex-orochi #460), so the registry may only decide when no
+        importable checkout exists.
+        """
+        # Arrange
+        import sys
+
+        repo = _build_importable_repo(tmp_path, "scitex_parityprecedence")
+        stale = tmp_path / "stale-registry-checkout"
+        stale.mkdir()
+        (stale / "pyproject.toml").write_text(
+            '[project]\nname = "scitex-parityprecedence"\nversion = "0.0.0"\n'
+        )
+        sys.path.insert(0, str(repo / "src"))
+        try:
+            # Act
+            resolved = _audited_repo_root(
+                "scitex-parityprecedence",
+                registry_resolver=lambda pkg: stale,
+            )
+        finally:
+            sys.path.remove(str(repo / "src"))
+            sys.modules.pop("scitex_parityprecedence", None)
+        # Assert
+        assert resolved == repo
+
+    def test_registry_local_path_decides_when_package_not_importable(
+        self, tmp_path
+    ):
+        """Without an importable checkout, the registry local_path still resolves."""
+        # Arrange
+        registry_dir = tmp_path / "registry-checkout"
+        registry_dir.mkdir()
+        # Act
+        resolved = _audited_repo_root(
+            "scitex-no-such-importable-package",
+            registry_resolver=lambda pkg: registry_dir,
+        )
+        # Assert
+        assert resolved == registry_dir
+
     def test_exemption_read_from_import_resolved_tree_config(self, tmp_path):
         """is_mcp_parity_exempt honors a config-only flag on the import-resolved tree."""
         # Arrange
