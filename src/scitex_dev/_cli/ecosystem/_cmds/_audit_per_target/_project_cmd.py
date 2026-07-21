@@ -52,11 +52,12 @@ def register(ecosystem):
         type=click.Path(exists=True, file_okay=False, dir_okay=True),
         default=None,
         help=(
-            "Repo root to audit (defaults to the registry's local_path or "
-            "the installed package's location). Use `--path` when running "
-            "from a git worktree so the audit sees the worktree's source "
-            "instead of the editable install — lets worktree agents "
-            "self-verify before pushing. `--repo` is a legacy alias."
+            "Repo root to audit — always wins when given. Without it, "
+            "resolution is deterministic: the CURRENT checkout (git "
+            "toplevel of the cwd, when its pyproject [project].name "
+            "matches DISTRIBUTION — covers worktrees and CI checkouts), "
+            "else the registry's local_path, else the installed "
+            "package's location. `--repo` is a legacy alias."
         ),
     )
     @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
@@ -78,18 +79,13 @@ def register(ecosystem):
         ),
     )
     def ecosystem_audit_project(distribution, repo_path, json_out, rules, severity):
-        from pathlib import Path
-
-        from ....._ecosystem import ECOSYSTEM
         from ....audit import _project as _cli_audit_project
+        from ....audit._target_tree import resolve_target_tree
 
-        repo = Path(repo_path).expanduser() if repo_path else None
-        if repo is None:
-            local = ECOSYSTEM.get(distribution, {}).get("local_path")
-            if local:
-                cand = Path(local).expanduser()
-                if cand.is_dir():
-                    repo = cand
+        # Deterministic target-tree resolution (operator directive
+        # 2026-07-21): explicit --path > current checkout (cwd git
+        # toplevel, incl. linked worktrees) > registry local_path.
+        repo, resolved_via = resolve_target_tree(distribution, repo_path)
 
         raise SystemExit(
             _cli_audit_project.audit_project(
@@ -98,6 +94,7 @@ def register(ecosystem):
                 json_out=json_out,
                 rules=set(rules) if rules else None,
                 severity=severity,
+                resolved_via=resolved_via,
             )
         )
 

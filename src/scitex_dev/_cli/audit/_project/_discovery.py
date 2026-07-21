@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from .._target_tree import dist_names_match
+
 
 def _import_name(distribution: str) -> str:
     """Mirror sibling auditors: dist -> import name (`-` -> `_`)."""
@@ -52,6 +54,8 @@ def _looks_like_checkout_of(repo: Path, distribution: str) -> bool:
          when present. A declared name that DISAGREES is a hard no, not
          a fall-through: a repo that says it is something else is not
          this distribution's checkout, whatever its directory is called.
+         Compared PEP-503-normalized (case / `-` / `_` / `.` folded), so
+         `Demo_Pkg` IS a checkout of `demo-pkg`.
       2. Layout — `src/<import_name>/` or a flat `<import_name>/__init__.py`.
          This is what carries git WORKTREES, whose directory is named for
          the branch (`.worktrees/feat-x`), not the distribution.
@@ -62,13 +66,13 @@ def _looks_like_checkout_of(repo: Path, distribution: str) -> bool:
         return False
     declared = _pyproject_name(repo)
     if declared is not None:
-        return declared == distribution
+        return dist_names_match(declared, distribution)
     import_name = _import_name(distribution)
     if (repo / "src" / import_name).is_dir():
         return True
     if (repo / import_name / "__init__.py").is_file():
         return True
-    return repo.name == distribution
+    return dist_names_match(repo.name, distribution)
 
 
 def _cwd_git_root(distribution: str) -> Path | None:
@@ -91,19 +95,28 @@ def _cwd_git_root(distribution: str) -> Path | None:
     return root if _looks_like_checkout_of(root, distribution) else None
 
 
-def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
-    """Return the repo root Path or None if it can't be located.
+def _resolve_repo_root_with_rule(
+    distribution: str, repo: Path | None
+) -> tuple[Path | None, str | None]:
+    """Return ``(repo_root, rule)``; ``(None, None)`` if it can't be located.
+
+    ``rule`` names which resolution step picked the tree — ``"explicit"``
+    / ``"cwd"`` / ``"import"`` / ``"proj-guess"`` — and is threaded into
+    the resolved-tree banner (``via <rule>``) so a wrong-tree resolution
+    is diagnosable at a glance.
 
     Resolution order, first hit wins:
 
-      1. An explicit `repo` (i.e. ``--path``) — always authoritative.
+      1. An explicit `repo` (i.e. ``--path``) — always authoritative
+         (``explicit``).
       2. The CWD's git-root, when it looks like `distribution`'s checkout
-         (see `_looks_like_checkout_of`).
+         (see `_looks_like_checkout_of`) (``cwd``).
       3. The installed package's location via `importlib.util.find_spec`,
-         walked up to the repo root (assumed to contain `pyproject.toml`).
+         walked up to the repo root (assumed to contain `pyproject.toml`)
+         (``import``).
       4. A `~/proj/<distribution>` (and `/home/*/proj/<distribution>`)
-         development guess.
-      5. None.
+         development guess (``proj-guess``).
+      5. ``(None, None)``.
 
     Steps 3-4 answer "where is a checkout of this distribution on this
     disk?", which is NOT the question a CI gate is asking — it wants "the
@@ -124,24 +137,24 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
     PS-204 orphan-test hinter (see ``_check_orphan_hint.build_orphan_hinter``).
     """
     if repo is not None:
-        return repo.resolve()
+        return repo.resolve(), "explicit"
     from_cwd = _cwd_git_root(distribution)
     if from_cwd is not None:
-        return from_cwd
+        return from_cwd, "cwd"
     import importlib.util
 
     spec = importlib.util.find_spec(_import_name(distribution))
     if spec is None or not spec.submodule_search_locations:
-        return None
+        return None, None
     for loc in spec.submodule_search_locations:
         # src/<pkg>/__init__.py → walk up two levels for src layout
         candidate = Path(loc).parent.parent
         if (candidate / "pyproject.toml").is_file():
-            return candidate
+            return candidate, "import"
         # flat layout fallback
         candidate = Path(loc).parent
         if (candidate / "pyproject.toml").is_file():
-            return candidate
+            return candidate, "import"
 
     # Fallback: module is in site-packages (non-editable PyPI install).
     # Try common development checkout locations.
@@ -162,9 +175,15 @@ def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
     for root in proj_roots:
         candidate = root / distribution
         if (candidate / "pyproject.toml").is_file():
-            return candidate.resolve()
+            return candidate.resolve(), "proj-guess"
 
-    return None
+    return None, None
+
+
+def _resolve_repo_root(distribution: str, repo: Path | None) -> Path | None:
+    """Back-compat wrapper: `_resolve_repo_root_with_rule` minus the rule."""
+    root, _rule = _resolve_repo_root_with_rule(distribution, repo)
+    return root
 
 
 def _src_pkg_dir(repo: Path, distribution: str) -> Path | None:

@@ -227,3 +227,68 @@ def test_human_output_banner_says_auditing(tmp_path):
     text = _human_output(repo)
     # Assert
     assert f"auditing {repo}" in text
+
+
+# ---------------------------------------------------------------------------
+# resolution-rule token: the banner/payload name WHICH rule picked the tree
+# (operator directive 2026-07-21 — wrong-tree resolutions must be
+# diagnosable at a glance: explicit / cwd / registry / import / proj-guess)
+# ---------------------------------------------------------------------------
+
+
+@contextlib.contextmanager
+def _chdir(target: Path):
+    """`os.chdir` to `target`, restoring the previous CWD on exit."""
+    import os
+
+    previous = Path.cwd()
+    os.chdir(target)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
+
+
+def test_human_banner_names_the_explicit_resolution_rule(tmp_path):
+    """An explicitly passed repo is announced as resolved 'via explicit'."""
+    # Arrange
+    repo = _make_repo(tmp_path)
+    # Act
+    text = _human_output(repo)
+    # Assert
+    assert "via explicit" in text
+
+
+def test_json_payload_reports_resolved_via_explicit(tmp_path):
+    """--json carries `resolved_via` = 'explicit' for a passed repo."""
+    # Arrange
+    repo = _make_repo(tmp_path)
+    # Act
+    payload = _json_payload(repo)
+    # Assert
+    assert payload["resolved_via"] == "explicit"
+
+
+def test_json_payload_reports_resolved_via_cwd_inside_checkout(git_repo):
+    """No repo + cwd inside the checkout → `resolved_via` = 'cwd'."""
+    # Arrange — cwd inside a real git checkout whose pyproject names `demo`.
+    buf = io.StringIO()
+    # Act
+    with _chdir(git_repo), contextlib.redirect_stdout(buf):
+        audit_project("demo", repo=None, json_out=True)
+    payload = _json.loads(buf.getvalue())
+    # Assert
+    assert payload["resolved_via"] == "cwd"
+
+
+def test_caller_supplied_resolved_via_overrides_the_inferred_label(tmp_path):
+    """The CLI's registry rule survives into the payload via `resolved_via`."""
+    # Arrange — simulate `ecosystem audit-project` resolving via the registry.
+    repo = _make_repo(tmp_path)
+    buf = io.StringIO()
+    # Act
+    with contextlib.redirect_stdout(buf):
+        audit_project("demo", repo=repo, json_out=True, resolved_via="registry")
+    payload = _json.loads(buf.getvalue())
+    # Assert
+    assert payload["resolved_via"] == "registry"

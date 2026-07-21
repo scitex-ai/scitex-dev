@@ -19,7 +19,9 @@ def register(ecosystem):
                 "`audit.skip` defers specific PA rules (e.g. "
                 "PA-306/PA-307) and a `django` project-type relaxes "
                 "PA-306 (no-mocks) to a warning. The repo root is taken "
-                "from `--repo`, else the registry's `local_path`. "
+                "from `--path`/`--repo`, else the CURRENT checkout when "
+                "the cwd is inside a checkout of DISTRIBUTION, else the "
+                "registry's `local_path`. "
                 "Foundation rules (PA<§><idx>): PA-101-104 (§1 "
                 "naming/visibility), PA-201-203 (§2 version), PA-301 "
                 "(§3 lazy imports), PA-501 (§5 future annotations). See "
@@ -46,11 +48,12 @@ def register(ecosystem):
         type=click.Path(exists=True, file_okay=False, dir_okay=True),
         default=None,
         help=(
-            "Repo root to audit (defaults to the registry's local_path or "
-            "the installed package's location). Use `--path` when running "
-            "from a git worktree so the audit sees the worktree's source "
-            "instead of the editable install — lets worktree agents "
-            "self-verify before pushing. `--repo` is a legacy alias."
+            "Repo root to audit — always wins when given. Without it, "
+            "resolution is deterministic: the CURRENT checkout (git "
+            "toplevel of the cwd, when its pyproject [project].name "
+            "matches DISTRIBUTION — covers worktrees and CI checkouts), "
+            "else the registry's local_path, else the installed "
+            "package's location. `--repo` is a legacy alias."
         ),
     )
     @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
@@ -61,18 +64,13 @@ def register(ecosystem):
         help="Restrict to specific rule codes (e.g. --rule PA-101). Repeatable.",
     )
     def ecosystem_audit_python_apis(distribution, repo_path, json_out, rules):
-        from pathlib import Path
-
-        from ....._ecosystem import ECOSYSTEM
         from ....audit import _api as _cli_audit_api
+        from ....audit._target_tree import resolve_target_tree
 
-        repo = Path(repo_path).expanduser() if repo_path else None
-        if repo is None:
-            local = ECOSYSTEM.get(distribution, {}).get("local_path")
-            if local:
-                cand = Path(local).expanduser()
-                if cand.is_dir():
-                    repo = cand
+        # Deterministic target-tree resolution (operator directive
+        # 2026-07-21): explicit --path > current checkout (cwd git
+        # toplevel, incl. linked worktrees) > registry local_path.
+        repo, _resolved_via = resolve_target_tree(distribution, repo_path)
 
         raise SystemExit(
             _cli_audit_api.audit_api(
