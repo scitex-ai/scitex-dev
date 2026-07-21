@@ -1,14 +1,33 @@
-"""``scitex-dev ci runner register <repo>`` — copy CI template + set vars."""
+"""``scitex-dev ci runner register <repo>`` — thin alias of the canonical
+CI mechanism (``scitex-dev ecosystem ci-template apply``) + CI_RUNS_ON var.
+
+This command used to copy its OWN ``ci.yml.template`` (the in-SIF
+single-CI body) — a second canonical template body that drifted against
+``scitex_dev._ecosystem.ci_template``. That body is DELETED (operator
+decision, 2026-07-21: one canonical shape = the thin org-reusable
+caller); the workflow file is now rendered/deployed exclusively by
+``ci_template.apply``, and this verb only adds the runner-selection
+Actions Variable on top.
+"""
 
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 
 import click
 
+from ..._ecosystem.ci_template import (
+    ApplyError,
+    BranchProtectionGateError,
+    apply as _ci_template_apply,
+)
 from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
+
+#: The one sanctioned CI_RUNS_ON default — self-hosted only, NEVER
+#: ubuntu-latest (PS-169). Must match the default documented in
+#: ``ci_template/templates/ci.yml.tmpl``.
+CI_RUNS_ON_DEFAULT = '["self-hosted","Linux","X64","scitex-ci"]'
 
 
 def register(group: click.Group) -> None:
@@ -16,20 +35,17 @@ def register(group: click.Group) -> None:
         "register",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Register a repo with the scitex-ci workflow.",
+            summary="Register a repo with the canonical scitex CI caller.",
             description=(
-                "Copies the ci.yml template into the repo + sets 3 Actions "
-                "Variables.\n"
+                "Thin alias of `ecosystem ci-template apply` + the "
+                "CI_RUNS_ON Actions Variable.\n"
                 "\n"
                 "Steps:\n"
-                "  1. Copy .github/workflows/ci.yml from the shipped template.\n"
-                "  2. Set Actions Variable CI_RUNS_ON to "
-                "'[\"self-hosted\",\"scitex-ci\"]'.\n"
-                "  3. Set Actions Variable SCITEX_CI_APPTAINER to the "
-                "configured apptainer path.\n"
-                "  4. Set Actions Variable SCITEX_CI_SIF to the configured "
-                "SIF path.\n"
-                "  5. Print the fork-PR approval reminder (no repo settings "
+                "  1. Deploy .github/workflows/ci.yml via the canonical "
+                "ci-template mechanism (thin caller delegating to "
+                "scitex-ai/.github@main; deletes superseded workflows).\n"
+                f"  2. Set Actions Variable CI_RUNS_ON to '{CI_RUNS_ON_DEFAULT}'.\n"
+                "  3. Print the fork-PR approval reminder (no repo settings "
                 "are mutated)."
             ),
             examples=(
@@ -49,11 +65,6 @@ def register(group: click.Group) -> None:
         type=click.Path(exists=True, file_okay=False, dir_okay=True),
     )
     @click.option(
-        "--workflow-name",
-        default="ci.yml",
-        help="Workflow filename. Default: ci.yml",
-    )
-    @click.option(
         "--dry-run",
         is_flag=True,
         default=False,
@@ -66,8 +77,15 @@ def register(group: click.Group) -> None:
         default=False,
         help="Skip the confirmation prompt (required for non-interactive use).",
     )
+    @click.option(
+        "--skip-required-check-gate",
+        is_flag=True,
+        default=False,
+        help="DANGEROUS — bypass the branch-protection compatibility gate "
+        "(passed through to ci-template apply). Debugging only.",
+    )
     def register_cmd(
-        repo_path: str, workflow_name: str, dry_run: bool, yes: bool
+        repo_path: str, dry_run: bool, yes: bool, skip_required_check_gate: bool
     ) -> None:
         cfg = config.load_runner_config()
         config.get_gh_token(cfg)
@@ -96,71 +114,68 @@ def register(group: click.Group) -> None:
             )
         owner, repo = m.group(1), m.group(2)
 
-        template_path = Path(__file__).parent / "templates" / "ci.yml.template"
-        if not template_path.exists():
-            raise click.ClickException(f"Template not found: {template_path}")
-
-        workflow_dir = Path(repo_path) / ".github" / "workflows"
-        workflow_file = workflow_dir / workflow_name
-
-        if dry_run:
-            click.echo(f"[dry-run] Would copy template to {workflow_file}")
-            click.echo(f"[dry-run] Would set Actions Variables on {owner}/{repo}:")
-            click.echo('  CI_RUNS_ON = \'["self-hosted","scitex-ci"]\'')
-            click.echo(f"  SCITEX_CI_APPTAINER = {cfg['hpc']['apptainer']}")
-            click.echo(f"  SCITEX_CI_SIF = {cfg['hpc']['sif']}")
-            return
-
         # Mutating from here on — refuse without --yes (no interactive prompt).
-        if not yes:
+        if not dry_run and not yes:
             raise click.ClickException(
                 f"Refusing to register {owner}/{repo} without --yes/-y "
-                f"(writes {workflow_name} + sets 3 Actions Variables). "
-                "Re-run with --yes to confirm, or --dry-run to preview."
+                "(writes ci.yml, deletes superseded workflows, sets the "
+                "CI_RUNS_ON Actions Variable). Re-run with --yes to "
+                "confirm, or --dry-run to preview."
             )
 
-        # Step 1: Copy template
-        workflow_dir.mkdir(parents=True, exist_ok=True)
-        workflow_file.write_text(template_path.read_text())
-        click.echo(f"Copied ci.yml.template → {workflow_file}")
-
-        # Step 2: Set Actions Variables via gh api
-        def _set_var(name: str, value: str) -> None:
-            click.echo(f"Setting Actions Variable {name} on {owner}/{repo}...")
-            result = subprocess.run(
-                [
-                    "gh",
-                    "api",
-                    f"repos/{owner}/{repo}/actions/variables/{name}",
-                    "-X",
-                    "POST",
-                    "-f",
-                    f"value={value}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=30,
+        # Step 1: Deploy the canonical thin caller via the ONE mechanism.
+        try:
+            result = _ci_template_apply(
+                repo_path,
+                dry_run=dry_run,
+                skip_required_check_gate=skip_required_check_gate,
             )
-            if result.returncode != 0:
-                click.echo(
-                    f"  Warning: {result.stderr.strip()[:100]}",
-                )
+        except BranchProtectionGateError as exc:
+            raise click.ClickException(str(exc))
+        except ApplyError as exc:
+            raise click.ClickException(str(exc))
 
-        _set_var("CI_RUNS_ON", '["self-hosted","scitex-ci"]')
-        _set_var("SCITEX_CI_APPTAINER", cfg["hpc"]["apptainer"])
-        _set_var("SCITEX_CI_SIF", cfg["hpc"]["sif"])
+        prefix = "[dry-run] Would write" if dry_run else "Wrote"
+        for p in result.written_paths:
+            click.echo(f"{prefix}: {p}")
+        prefix = "[dry-run] Would delete" if dry_run else "Deleted"
+        for p in result.deleted_paths:
+            click.echo(f"{prefix}: {p}")
 
-        # Step 3: Fork-PR approval is a manual repo setting — do NOT mutate the
-        # repo's default branch (an earlier version PATCHed default_branch=main,
-        # which is destructive and unrelated to fork-PR approval).
+        if dry_run:
+            click.echo(f"[dry-run] Would set Actions Variable on {owner}/{repo}:")
+            click.echo(f"  CI_RUNS_ON = '{CI_RUNS_ON_DEFAULT}'")
+            return
+
+        # Step 2: Set the runner-selection Actions Variable via gh api.
+        click.echo(f"Setting Actions Variable CI_RUNS_ON on {owner}/{repo}...")
+        var_result = subprocess.run(
+            [
+                "gh",
+                "api",
+                f"repos/{owner}/{repo}/actions/variables/CI_RUNS_ON",
+                "-X",
+                "POST",
+                "-f",
+                f"value={CI_RUNS_ON_DEFAULT}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if var_result.returncode != 0:
+            click.echo(f"  Warning: {var_result.stderr.strip()[:100]}")
+
+        # Step 3: Fork-PR approval is a manual repo setting — do NOT mutate
+        # the repo's settings here.
         click.echo(
             "  (Set fork-PR approval manually: repo Settings → Actions → "
             "Require approval for all outside collaborators)"
         )
 
-        click.echo(f"\n✓ {owner}/{repo} registered with scitex-ci.")
-        click.echo(f"  Review: {workflow_file}")
-        click.echo("  Variables: CI_RUNS_ON, SCITEX_CI_APPTAINER, SCITEX_CI_SIF")
+        click.echo(f"\n✓ {owner}/{repo} registered with the canonical scitex CI.")
+        click.echo("  Workflow: .github/workflows/ci.yml (org-reusable caller)")
+        click.echo(f"  Variable: CI_RUNS_ON = '{CI_RUNS_ON_DEFAULT}'")
 
 
 # EOF

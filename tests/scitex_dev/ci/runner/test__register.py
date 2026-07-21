@@ -62,6 +62,29 @@ def test_ci_runner_register_help_lists_yes_flag() -> None:
     assert "--yes" in result.output
 
 
+def test_ci_runner_register_help_declares_ci_template_alias() -> None:
+    # register is a THIN ALIAS of the canonical mechanism (ecosystem
+    # ci-template apply) — its help must say so, not describe a second
+    # template body.
+    # Arrange
+    root = _build_root_group()
+    # Act
+    result = CliRunner().invoke(root, ["ci", "runner", "register", "--help"])
+    # Assert
+    assert "ci-template" in result.output
+
+
+def test_ci_runner_register_default_matches_canonical_self_hosted_labels() -> None:
+    # Arrange
+    from scitex_dev.ci.runner._register import CI_RUNS_ON_DEFAULT
+
+    expected = '["self-hosted","Linux","X64","scitex-ci"]'
+    # Act
+    actual = CI_RUNS_ON_DEFAULT
+    # Assert
+    assert actual == expected
+
+
 def test_preflight_required_label_picks_non_builtin() -> None:
     # Arrange
     from scitex_dev.ci.runner._preflight import _required_label
