@@ -155,6 +155,21 @@ def main(
         except Exception:  # noqa: BLE001 — staleness check must never break the CLI
             pass
 
+        # CURRENCY-gate integrity self-check (operator directive 2026-07-21):
+        # catch a broken scitex-dev install itself (ambiguous dist-info /
+        # RECORD-listed files missing on disk — the venv-corruption incident
+        # where every version probe lied). Integrity half only — freshness is
+        # already covered by emit_if_drift() above (which owns the once-per-
+        # process/subprocess suppression) — at WARN so the CLI keeps working.
+        try:
+            from scitex_dev.staleness import ensure_current
+
+            ensure_current(
+                "scitex-dev", severity="warn", _halves=("integrity",)
+            )
+        except Exception:  # noqa: BLE001 — self-check must never break the CLI
+            pass
+
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
