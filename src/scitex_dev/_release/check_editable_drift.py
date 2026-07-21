@@ -49,19 +49,10 @@ _ENV_DISABLE = "SCITEX_DEV_NO_DRIFT_WARN"
 _MIN_INTERVAL_SECONDS = 30
 
 
-def _editable_source_dir(distribution: str) -> Path | None:
-    """Return the editable-install source directory, or None if not editable.
-
-    Reads `<dist-info>/direct_url.json` per PEP 610.
-    """
-    try:
-        from importlib.metadata import distribution as _dist
-    except ImportError:
-        return None
-    try:
-        meta = _dist(distribution)
-    except Exception:
-        return None
+def _editable_dir_from_meta(meta) -> Path | None:
+    """Editable source dir from a Distribution's ``direct_url.json`` (PEP 610),
+    or None. Shared with :mod:`scitex_dev.staleness` (path-aware callers pass
+    their own resolved Distribution instead of a global name lookup)."""
     try:
         raw = meta.read_text("direct_url.json")
     except Exception:
@@ -78,6 +69,22 @@ def _editable_source_dir(distribution: str) -> Path | None:
     if url.startswith("file://"):
         return Path(url[len("file://") :])
     return None
+
+
+def _editable_source_dir(distribution: str) -> Path | None:
+    """Return the editable-install source directory, or None if not editable.
+
+    Reads `<dist-info>/direct_url.json` per PEP 610.
+    """
+    try:
+        from importlib.metadata import distribution as _dist
+    except ImportError:
+        return None
+    try:
+        meta = _dist(distribution)
+    except Exception:
+        return None
+    return _editable_dir_from_meta(meta)
 
 
 def _git_state_mtime(repo: Path) -> float | None:
@@ -202,7 +209,7 @@ def _behind_upstream(repo: Path) -> int | None:
     return int(parts[0])
 
 
-def _compute_drift(repo: Path) -> str | None:
+def _compute_drift(repo: Path, distribution: str = "scitex-dev") -> str | None:
     """Editable path — warn ONLY when the checkout is BEHIND its remote.
 
     "Stale" == a newer scitex-dev is available to pull, i.e. HEAD is behind
@@ -224,8 +231,8 @@ def _compute_drift(repo: Path) -> str | None:
     except (ValueError, OSError):
         return None
     return (
-        f"editable scitex-dev: HEAD ({head}) is {behind} commit(s) behind its "
-        f"remote — run: git -C {repo} pull --ff-only"
+        f"editable {distribution}: HEAD ({head}) is {behind} commit(s) behind "
+        f"its remote — run: git -C {repo} pull --ff-only"
     )
 
 
@@ -309,8 +316,8 @@ _SUPPRESS_HINT = (
 )
 
 
-def _severity_from_config() -> str | None:
-    """`staleness_severity` from the hand-authored ``~/.scitex/dev/config.yaml``.
+def _severity_from_config(key: str = "staleness_severity") -> str | None:
+    """``key`` from the hand-authored ``~/.scitex/dev/config.yaml``.
 
     ``$SCITEX_DEV_CONFIG`` overrides the path (injectable for tests).
     """
@@ -326,12 +333,12 @@ def _severity_from_config() -> str | None:
     import yaml
 
     data = yaml.safe_load(path.read_text()) or {}
-    val = data.get("staleness_severity")
+    val = data.get(key)
     return str(val).strip().lower() if val else None
 
 
-def _severity_from_knob_state() -> str | None:
-    """`staleness_severity` from the machine-managed ``knob-state.json``.
+def _severity_from_knob_state(key: str = "staleness_severity") -> str | None:
+    """``key`` from the machine-managed ``knob-state.json``.
 
     Reuses the same state file and ``$SCITEX_DEV_KNOB_STATE`` override the
     skills/mcp/test_execution knobs use.
@@ -342,22 +349,27 @@ def _severity_from_knob_state() -> str | None:
     if not path.is_file():
         return None
     data = json.loads(path.read_text())
-    val = data.get("staleness_severity")
+    val = data.get(key)
     return str(val).strip().lower() if val else None
 
 
-def _resolve_severity() -> str:
+def _resolve_severity(
+    key: str = "staleness_severity", default: str = _SEVERITY_DEFAULT
+) -> str:
     """`silent` | `warn` (default) | `error`, resolved with the standard
     ECOSYSTEM(default) → config.yaml → knob-state.json precedence.
 
-    Only consulted when a drift message already exists (off the hot path).
-    Any failure or unrecognised value degrades to the default — a bad knob
-    must never break the host command.
+    ``key``/``default`` parameterize the knob name so the currency gate
+    (:mod:`scitex_dev.staleness`, key ``currency_severity``, default
+    ``error``) reuses the exact resolution ladder. Only consulted when a
+    drift message already exists (off the hot path). Any failure or
+    unrecognised value degrades to the default — a bad knob must never
+    break the host command.
     """
-    severity = _SEVERITY_DEFAULT
+    severity = default
     for reader in (_severity_from_config, _severity_from_knob_state):
         try:
-            value = reader()
+            value = reader(key)
         except Exception:  # noqa: BLE001 — fail-safe: never break the CLI
             value = None
         if value in _SEVERITIES:
