@@ -106,6 +106,8 @@ def audit_project(
     repo_root = _resolve_repo_root(distribution, repo)
     violations: list[Violation] = []
 
+    from ._resolved_tree import resolved_context, surface_resolved_tree
+    resolved_ctx = resolved_context(repo_root)
     if repo_root is None:
         if json_out:
             import json as _json
@@ -115,6 +117,7 @@ def audit_project(
                     {
                         "distribution": distribution,
                         "repo": None,
+                        **resolved_ctx,
                         "violations": [],
                     },
                     indent=2,
@@ -127,6 +130,8 @@ def audit_project(
             err=True,
         )
         return 2
+
+    surface_resolved_tree(distribution, resolved_ctx, json_out)
 
     # Category-aware skip — see `should_skip_audit` in _ecosystem._core.
     try:
@@ -413,6 +418,7 @@ def audit_project(
                 {
                     "distribution": distribution,
                     "repo": str(repo_root),
+                    **resolved_ctx,
                     "violations": [
                         {
                             "rule": v.rule,
