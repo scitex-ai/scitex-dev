@@ -69,13 +69,22 @@ def resolved_context(repo_root: Path | None) -> dict[str, str | None]:
 
 
 def surface_resolved_tree(
-    distribution: str, ctx: dict[str, str | None], json_out: bool
+    distribution: str,
+    ctx: dict[str, str | None],
+    json_out: bool,
+    via: str | None = None,
 ) -> None:
     """Announce the resolved tree at INFO, BEFORE any audit results.
 
+    ``via`` names WHICH resolution rule picked the tree (``explicit`` /
+    ``cwd`` / ``registry`` / ``import`` / ``proj-guess`` — see
+    ``.._target_tree`` and ``._discovery._resolve_repo_root_with_rule``),
+    so a wrong-tree surprise is diagnosable from the banner alone.
+
     Human rail only: no-op when ``json_out`` is set (the machine payload
-    carries the same three fields) and no-op when the path could not be
-    resolved (the caller prints its own 'cannot locate repo' error then).
+    carries the same fields plus ``resolved_via``) and no-op when the
+    path could not be resolved (the caller prints its own 'cannot locate
+    repo' error then).
     """
     if json_out:
         return
@@ -84,7 +93,8 @@ def surface_resolved_tree(
         return
     branch = ctx.get("branch") or "?"
     head = ctx.get("head") or "?"
+    via_txt = f", via {via}" if via else ""
     emit(
         "info",
-        f"{distribution}: auditing {path} (branch {branch}, HEAD {head})",
+        f"{distribution}: auditing {path} (branch {branch}, HEAD {head}{via_txt})",
     )
