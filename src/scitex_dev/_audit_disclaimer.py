@@ -62,7 +62,7 @@ def _skill_hints_text() -> str:
         f"(CLI reference, ecosystem helpers, agentic-test). Not audit rules.\n"
         f"escalation: think a rule fires wrongly, is too strict, or that "
         f"a missing rule should exist? Open an issue at "
-        f"https://github.com/ywatanabe1989/scitex-dev/issues/new with "
+        f"https://github.com/scitex-ai/scitex-dev/issues/new with "
         f"the violation block above pasted in — that's the feedback loop "
         f"the rule corpus learns from."
     )

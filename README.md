@@ -16,14 +16,14 @@
 <p align="center">
   <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/v/scitex-dev?label=PyPI" alt="PyPI"></a>
   <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/pyversions/scitex-dev?label=Python" alt="Python"></a>
-  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/rtd-sphinx-build-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/rtd-sphinx-build-on-ubuntu-latest.yml?branch=develop&label=RTD" alt="RTD"></a>
+  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/rtd-sphinx-build-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/rtd-sphinx-build-on-ubuntu-latest.yml?branch=develop&label=RTD" alt="RTD"></a>
   <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?label=License" alt="License"></a>
 </p>
 <p align="center">
-  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=Tests" alt="Tests"></a>
-  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=Install-Check" alt="Install-Check"></a>
-  <a href="https://github.com/ywatanabe1989/scitex-dev/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/scitex-dev/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=Quality" alt="Quality"></a>
-  <a href="https://codecov.io/gh/ywatanabe1989/scitex-dev"><img src="https://img.shields.io/codecov/c/github/ywatanabe1989/scitex-dev/develop?label=CodeCov" alt="CodeCov"></a>
+  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=Tests" alt="Tests"></a>
+  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=Install-Check" alt="Install-Check"></a>
+  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=Quality" alt="Quality"></a>
+  <a href="https://codecov.io/gh/scitex-ai/scitex-dev"><img src="https://img.shields.io/codecov/c/github/scitex-ai/scitex-dev/develop?label=CodeCov" alt="CodeCov"></a>
 </p>
 <!-- scitex-badges:end -->
 
@@ -265,7 +265,7 @@ scitex-dev skills export --package scitex-dev  # Export to Claude Code
 # Private skills (~/.scitex/*/skills/*-private/) are symlinked automatically
 ```
 
-> **[Full skills directory](https://github.com/ywatanabe1989/scitex-dev/tree/develop/src/scitex_dev/_skills)**
+> **[Full skills directory](https://github.com/scitex-ai/scitex-dev/tree/develop/src/scitex_dev/_skills)**
 
 | Skill | Content |
 |-------|---------|

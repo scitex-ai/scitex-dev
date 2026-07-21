@@ -39,7 +39,7 @@ scitex-ui                 github.com/ywatanabe1989/scitex-ui
 scitex-app                github.com/ywatanabe1989/scitex-app
 scitex-audio              github.com/ywatanabe1989/scitex-audio
 scitex-scholar            github.com/ywatanabe1989/scitex-scholar
-scitex-dev                github.com/ywatanabe1989/scitex-dev
+scitex-dev                github.com/scitex-ai/scitex-dev
 singularity-template      github.com/ywatanabe1989/singularity-template
 ```
 
