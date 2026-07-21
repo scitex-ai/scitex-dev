@@ -39,7 +39,7 @@ DEFAULT_ON_BOOT_SEC = "15min"
 DEFAULT_ON_UNIT_ACTIVE_SEC = "1h"
 
 # Documentation URL stamped into generated units (operator breadcrumb).
-_DOC_URL = "https://github.com/ywatanabe1989/scitex-dev"
+_DOC_URL = "https://github.com/scitex-ai/scitex-dev"
 
 
 def derive_on_unit_active_sec(schedule: str) -> str:
