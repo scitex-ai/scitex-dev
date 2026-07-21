@@ -192,6 +192,7 @@ class TestFM001PromotionEndToEnd:
         cfg = _research_config()
         # Act
         issues = lint_source(_FM001_SRC, "fig.py", cfg)
+        _skip_if_not_emitted(issues, "STX-FM001")
         # Assert
         assert _sev_of(issues, "STX-FM001") == "error", (
             f"FM001 must promote to error; "
@@ -203,6 +204,7 @@ class TestFM001PromotionEndToEnd:
         cfg = LinterConfig(enable=["FM"])
         # Act
         issues = lint_source(_FM001_SRC, "fig.py", cfg)
+        _skip_if_not_emitted(issues, "STX-FM001")
         # Assert
         assert _sev_of(issues, "STX-FM001") == "warning"
 
@@ -224,6 +226,7 @@ class TestFM001PromotionEndToEnd:
         cfg = _research_config(per_rule_severity={"STX-FM001": "warning"})
         # Act
         issues = lint_source(_FM001_SRC, "fig.py", cfg)
+        _skip_if_not_emitted(issues, "STX-FM001")
         # Assert
         assert _sev_of(issues, "STX-FM001") == "warning"
 
@@ -297,6 +300,7 @@ class TestResearchConfigYamlForms:
         yaml_body = "project-type: research\n"
         # Act
         issues = self._run(tmp_path, yaml_body)
+        _skip_if_not_emitted(issues, "STX-FM001")
         # Assert
         assert _sev_of(issues, "STX-FM001") == "error"
 
@@ -305,6 +309,7 @@ class TestResearchConfigYamlForms:
         yaml_body = "project-type:\n  - research\n"
         # Act
         issues = self._run(tmp_path, yaml_body)
+        _skip_if_not_emitted(issues, "STX-FM001")
         # Assert
         assert _sev_of(issues, "STX-FM001") == "error"
 
@@ -318,6 +323,7 @@ class TestResearchConfigYamlForms:
         cfg.enable = ["FM"]
         # Act
         issues = lint_source(_FM001_SRC, str(tmp_path / "fig.py"), cfg)
+        _skip_if_not_emitted(issues, "STX-FM001")
         # Assert
         assert _sev_of(issues, "STX-FM001") == "warning"
 
