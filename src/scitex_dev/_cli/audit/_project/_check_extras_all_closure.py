@@ -18,14 +18,30 @@ Decision rule the auditor enforces
 For each package `pyproject.toml` `[project.optional-dependencies]`:
 
   1. Collect the PUBLIC groups: every extra whose name does NOT start with
-     an underscore and is not `all` itself. Underscore-prefixed extras
-     (`_ci`, `_docs`, …) are INTERNAL splits — deliberately exempt from
-     closure (that is the sanctioned way to carve out a non-public group).
+     an underscore and is not `all` itself. (Underscore-prefixed names are
+     skipped defensively, but they are NOT a sanctioned remedy: PEP 508/685
+     forbids a leading underscore in an extra name — setuptools refuses to
+     build such a `pyproject.toml`, hatchling rejects the metadata, and
+     pip/uv reject the request form — so no buildable package can actually
+     carry one. The remedy for a violation is closure-by-inclusion, never
+     an underscore rename; see "Remedy" below.)
   2. If there are public groups but NO `all` group at all → PS-221
      (a package offering public extras must expose the `[all]` umbrella).
   3. Otherwise, every requirement (compared by CANONICALIZED distribution
      name — `Foo_Bar` == `foo-bar`) in each public group must also appear
      in `all`. Any requirement missing from `all` → PS-221.
+
+Remedy
+------
+
+CLOSURE-BY-INCLUSION: reference every public extra from `all` via a
+self-reference, e.g. `all = ["mypkg[viz,editor,dev,docs]"]` (or one
+`mypkg[extra]` line per extra) — the shape scitex-dev / scitex-scholar /
+scitex-session / scitex-logging ship. Adding the concrete requirements to
+`all` directly is equally valid, just harder to keep in sync. Renaming an
+extra with a leading underscore is NOT a remedy: PEP 508/685 forbids it,
+and the build backends enforce that (empirically: five repos broke on the
+old underscore advice in 2026-07 before reverting).
 
 Self-reference handling
 -----------------------
@@ -185,11 +201,13 @@ def check_ps221_extras_all_closure(
                     f"({', '.join(sorted(public))}) but NO `all` group. Policy: "
                     "a public extra must be `[all]` or bare only — "
                     "`pip install <pkg>[all]` must pull EVERYTHING public. "
-                    "Add an `all` extra that is a SUPERSET of every public "
-                    "extra (e.g. `all = [\"<pkg>[" + ",".join(sorted(public))
-                    + "]\"]`), or make the non-`all` groups INTERNAL by "
-                    "underscore-prefixing their names (`_ci`, `_docs`), which "
-                    "are exempt from this closure rule."
+                    "Fix (closure-by-inclusion): add an `all` extra that "
+                    "references every public extra by self-reference, e.g. "
+                    "`all = [\"<pkg>[" + ",".join(sorted(public))
+                    + "]\"]`. Do NOT rename extras with a leading underscore "
+                    "to make them internal — PEP 508/685 forbids "
+                    "leading-underscore extra names, and setuptools/"
+                    "hatchling/pip/uv all reject them."
                 ),
             )
         )
@@ -220,11 +238,13 @@ def check_ps221_extras_all_closure(
                             "— a public requirement absent from `all` silently "
                             "under-installs (the user runs the documented "
                             "\"give me everything\" install and is still "
-                            "missing this feature). Fix: add this requirement "
-                            "to `all` (or reference the extra from `all` via "
-                            f"`<pkg>[{name}]`). If this group is meant to be "
-                            "INTERNAL, rename it with an underscore prefix "
-                            f"(`_{name}`), which is exempt from closure."
+                            "missing this feature). Fix (closure-by-"
+                            "inclusion): reference the extra from `all` via "
+                            f"`<pkg>[{name}]` — the idiomatic shape — or add "
+                            "this requirement to `all` directly. Do NOT "
+                            "rename the extra with a leading underscore: PEP "
+                            "508/685 forbids leading-underscore extra names, "
+                            "and setuptools/hatchling/pip/uv all reject them."
                         ),
                     )
                 )
@@ -253,10 +273,12 @@ ALL_CLOSURE_RULES: list[tuple[str, str, str, str, str]] = [
             "extra must be `[all]` or bare ONLY, so `pip install <pkg>[all]` "
             "pulls EVERYTHING public; every public extra must be a SUBSET of "
             "`all`. A public requirement absent from `all` silently "
-            "under-installs. Fix: add the requirement to `all` (or reference "
-            "the extra from `all`), or make the group INTERNAL by "
-            "underscore-prefixing its name (`_ci`, `_docs`) — underscore "
-            "extras are exempt from closure."
+            "under-installs. Fix (closure-by-inclusion): reference every "
+            "public extra from `all` via a self-reference "
+            "(`all = [\"<pkg>[extra1,extra2]\"]`) or add the requirement to "
+            "`all` directly. Do NOT rename extras with a leading underscore "
+            "— PEP 508/685 forbids leading-underscore extra names, and "
+            "setuptools/hatchling/pip/uv all reject them."
         ),
         "E",
         "public-extra-not-closed-under-all",

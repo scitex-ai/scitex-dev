@@ -3,7 +3,9 @@ description: |
   [TOPIC] Three-tier dependency policy for every scitex-* package and
   the canonical helper for optional imports.
   [DETAILS] Two install modes (default + [all]) plus [dev]. No
-  fragmented extras. `scitex_dev.try_import_optional` is the
+  fragmented extras. `[all]` is CLOSED over every public extra —
+  including [dev] — via self-references (enforced as PS-221).
+  `scitex_dev.try_import_optional` is the
   ecosystem-wide handler for genuinely optional dependencies — raw
   try/except ImportError is forbidden. Auditors and reviewers check
   this every commit.
@@ -26,16 +28,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-all = [
-    # Tier 2 — fully-featured. `pip install <pkg>[all]` enables every
-    # graceful-degradation feature the package offers. Heavy or
-    # platform-specific packages live here.
-]
-
 dev = [
     # Tier 3 — what the maintainer needs to develop the package
     # itself. pytest, pytest-cov, pre-commit, nbconvert, ipykernel,
-    # etc. NOT included by [all].
+    # etc.
+]
+
+all = [
+    # Tier 2 — fully-featured. `pip install <pkg>[all]` enables every
+    # graceful-degradation feature the package offers. Heavy or
+    # platform-specific packages live here — PLUS a self-reference to
+    # every other public extra, e.g. "<pkg>[dev]", so that `all` is
+    # CLOSED: every public extra is a subset of [all] (PS-221).
 ]
 ```
 
@@ -104,6 +108,17 @@ Things only the **maintainer** of this package needs:
 `[dev]` does **not** include packages that are already in `default`
 (hard) — `pip install -e ".[dev]"` walks `default` automatically.
 
+`[dev]` is still a **public extra**, so the PS-221 `[all]`-closure rule
+applies to it like any other: `all` must reference it (`"<pkg>[dev]"`),
+so `pip install <pkg>[all]` pulls the dev tooling too. That is the
+enforced, shipped shape (scitex-dev / scitex-scholar / scitex-session /
+scitex-logging all do this). The conceptual maintainer-vs-consumer split
+lives in which extra you *ask for* (`[dev]` vs `[all]`), not in `[all]`
+excluding it. Do not try to carve out a non-public group by
+underscore-prefixing its name (`_dev`): PEP 508/685 forbids
+leading-underscore extra names — setuptools/hatchling/pip/uv all reject
+them.
+
 ## Optional imports must use `try_import_optional`
 
 `scitex_dev._core.imports.try_import_optional` is the **only**
@@ -157,7 +172,9 @@ import scitex_logging
 ## Audit hooks
 
 ```bash
-# pyproject section count check (default + [all] + [dev] only).
+# pyproject section count check (default + [all] + [dev] only) and
+# PS-221 [all]-closure (every public extra must be a subset of [all];
+# severity E, blocking).
 scitex-dev ecosystem audit-project <pkg>
 
 # Raw try/except-on-import grep (catch bypass attempts).

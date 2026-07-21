@@ -120,8 +120,11 @@ def test_ps221_silent_when_all_public_extras_are_subset_of_all(tmp_path):
 
 
 def test_ps221_silent_on_underscore_internal_extra_not_in_all(tmp_path):
-    # Arrange — `_ci` is an INTERNAL underscore extra; its reqs need not be
-    # in `all`. `viz` (public) IS in `all`, so nothing should fire.
+    # Arrange — `_ci` starts with an underscore, so the checker skips it
+    # DEFENSIVELY (PEP 508/685 forbids leading-underscore extra names, so no
+    # buildable package carries one — but the auditor must not crash or
+    # false-positive on a broken tree that does). `viz` (public) IS in
+    # `all`, so nothing should fire.
     _write(
         tmp_path,
         '[project]\nname = "scitex-fake"\ndependencies = ["numpy>=1.0"]\n'
@@ -185,7 +188,8 @@ def test_ps221_silent_when_no_optional_dependencies(tmp_path):
 
 
 def test_ps221_silent_when_only_internal_extras(tmp_path):
-    # Arrange — only underscore extras + `all`: no public groups to close.
+    # Arrange — only underscore extras (defensively skipped; such names are
+    # not buildable per PEP 508/685): no public groups to close.
     _write(
         tmp_path,
         '[project]\nname = "scitex-fake"\ndependencies = ["numpy>=1.0"]\n'
