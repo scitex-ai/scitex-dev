@@ -12,6 +12,7 @@ branches MUST NOT set this — drift goes silent.
 """
 
 import shutil
+from pathlib import Path
 
 import pytest
 
@@ -35,4 +36,12 @@ def test_audit_all_clean():
         )
     from scitex_dev.testing import audit_all_for_package
 
-    audit_all_for_package('scitex-dev')
+    # Anchor the audit on THIS checkout (the tree pytest is running against),
+    # threaded through as `--path`. Without it, audit-all falls back to a
+    # resolve-by-name `~/proj/<pkg>` development guess; on the shared
+    # self-hosted (Spartan pooled) runner that guess resolves the operator's
+    # `/home/ywatanabe/proj/scitex-dev` develop checkout — a DIFFERENT tree
+    # and commit than the one under test — so the gate graded stale source
+    # (the resolved-tree banner from PR #392 surfaced exactly this). The file
+    # lives at <root>/tests/develop/test_audit.py, so parents[2] is the root.
+    audit_all_for_package('scitex-dev', path=Path(__file__).resolve().parents[2])
