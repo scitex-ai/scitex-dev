@@ -7,8 +7,10 @@ That is byte-for-byte the layout ``pip install`` produces and the layout
 a wheel unpacks to, so ``importlib.metadata`` discovers them and the
 probe subprocess imports them exactly as it would a published artifact.
 
-Each scenario is built once (session-scoped fixture) because every audit
-spawns a real probe subprocess; the tests then assert one property each.
+Each scenario is a function-scoped fixture that builds its distribution
+and runs one real audit; the tests then assert one property each. The
+fixtures write files, so they must not be shared across tests (STX-TQ004)
+— every test gets its own `tmp_path` and its own probe subprocess.
 """
 
 from __future__ import annotations
@@ -92,11 +94,11 @@ def _zip_as_wheel(site: Path, wheel_path: Path) -> Path:
 # ----------------------------------------------------------------------
 
 
-@pytest.fixture(scope="session")
-def resolving_report(tmp_path_factory) -> EntryPointAuditReport:
+@pytest.fixture
+def resolving_report(tmp_path: Path) -> EntryPointAuditReport:
     """Declared target that imports cleanly."""
     site = _install_dist(
-        tmp_path_factory.mktemp("good") / "site",
+        tmp_path / "site",
         "good-dist",
         entry_points="[pytest11]\ngood_plugin = good_pkg.plugin\n",
         modules={"good_pkg.plugin": "VALUE = 1\n"},
@@ -104,11 +106,11 @@ def resolving_report(tmp_path_factory) -> EntryPointAuditReport:
     return audit_entry_point_imports("good-dist", search_paths=[site])
 
 
-@pytest.fixture(scope="session")
-def resolving_attr_report(tmp_path_factory) -> EntryPointAuditReport:
+@pytest.fixture
+def resolving_attr_report(tmp_path: Path) -> EntryPointAuditReport:
     """Declared `module:attr` target whose attribute exists."""
     site = _install_dist(
-        tmp_path_factory.mktemp("attr") / "site",
+        tmp_path / "site",
         "attr-dist",
         entry_points="[console_scripts]\nrunme = attr_pkg.cli:main\n",
         modules={"attr_pkg.cli": "def main():\n    return 0\n"},
@@ -116,11 +118,11 @@ def resolving_attr_report(tmp_path_factory) -> EntryPointAuditReport:
     return audit_entry_point_imports("attr-dist", search_paths=[site])
 
 
-@pytest.fixture(scope="session")
-def absent_module_report(tmp_path_factory) -> EntryPointAuditReport:
+@pytest.fixture
+def absent_module_report(tmp_path: Path) -> EntryPointAuditReport:
     """Package ships, but the declared SUBMODULE does not exist."""
     site = _install_dist(
-        tmp_path_factory.mktemp("dangling") / "site",
+        tmp_path / "site",
         "dangling-dist",
         entry_points=(
             "[pytest11]\ndangling_plugin = dangling_pkg._absent_plugin\n"
@@ -130,11 +132,11 @@ def absent_module_report(tmp_path_factory) -> EntryPointAuditReport:
     return audit_entry_point_imports("dangling-dist", search_paths=[site])
 
 
-@pytest.fixture(scope="session")
-def absent_top_level_report(tmp_path_factory) -> EntryPointAuditReport:
+@pytest.fixture
+def absent_top_level_report(tmp_path: Path) -> EntryPointAuditReport:
     """Nothing named by the target was shipped at all."""
     site = _install_dist(
-        tmp_path_factory.mktemp("vanished") / "site",
+        tmp_path / "site",
         "vanished-dist",
         entry_points="[pytest11]\nvanished = vanished_pkg.plugin\n",
         modules={"other_pkg.thing": "VALUE = 1\n"},
@@ -142,11 +144,11 @@ def absent_top_level_report(tmp_path_factory) -> EntryPointAuditReport:
     return audit_entry_point_imports("vanished-dist", search_paths=[site])
 
 
-@pytest.fixture(scope="session")
-def raising_module_report(tmp_path_factory) -> EntryPointAuditReport:
+@pytest.fixture
+def raising_module_report(tmp_path: Path) -> EntryPointAuditReport:
     """Target module EXISTS; its own import chain raises ImportError."""
     site = _install_dist(
-        tmp_path_factory.mktemp("broken") / "site",
+        tmp_path / "site",
         "broken-dist",
         entry_points="[pytest11]\nbroken_plugin = broken_pkg.plugin\n",
         modules={"broken_pkg.plugin": f"import {_ABSENT_DEP}\n"},
@@ -154,11 +156,11 @@ def raising_module_report(tmp_path_factory) -> EntryPointAuditReport:
     return audit_entry_point_imports("broken-dist", search_paths=[site])
 
 
-@pytest.fixture(scope="session")
-def mixed_failure_report(tmp_path_factory) -> EntryPointAuditReport:
+@pytest.fixture
+def mixed_failure_report(tmp_path: Path) -> EntryPointAuditReport:
     """One absent target and one raising target in one distribution."""
     site = _install_dist(
-        tmp_path_factory.mktemp("mixed") / "site",
+        tmp_path / "site",
         "mixed-dist",
         entry_points=(
             "[pytest11]\ngone = mixed_pkg._absent\nraises = mixed_pkg.explodes\n"
@@ -170,11 +172,11 @@ def mixed_failure_report(tmp_path_factory) -> EntryPointAuditReport:
     return audit_entry_point_imports("mixed-dist", search_paths=[site])
 
 
-@pytest.fixture(scope="session")
-def absent_attr_report(tmp_path_factory) -> EntryPointAuditReport:
+@pytest.fixture
+def absent_attr_report(tmp_path: Path) -> EntryPointAuditReport:
     """Module imports, but the declared attribute is not defined."""
     site = _install_dist(
-        tmp_path_factory.mktemp("noattr") / "site",
+        tmp_path / "site",
         "noattr-dist",
         entry_points="[console_scripts]\nrunme = noattr_pkg.cli:main\n",
         modules={"noattr_pkg.cli": "OTHER = 1\n"},
@@ -182,32 +184,32 @@ def absent_attr_report(tmp_path_factory) -> EntryPointAuditReport:
     return audit_entry_point_imports("noattr-dist", search_paths=[site])
 
 
-@pytest.fixture(scope="session")
-def no_entry_points_site(tmp_path_factory) -> Path:
+@pytest.fixture
+def no_entry_points_site(tmp_path: Path) -> Path:
     """CONTROL: a real distribution declaring no entry points at all."""
     return _install_dist(
-        tmp_path_factory.mktemp("quiet") / "site",
+        tmp_path / "site",
         "quiet-dist",
         entry_points="",
         modules={"quiet_pkg.thing": "VALUE = 1\n"},
     )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def no_entry_points_report(
     no_entry_points_site: Path,
 ) -> EntryPointAuditReport:
-    """CONTROL ARM: audit of a distribution with nothing declared."""
+    """CONTROL ARM: audit of a distribution declaring no entry points."""
     return audit_entry_point_imports(
         "quiet-dist", search_paths=[no_entry_points_site]
     )
 
 
-@pytest.fixture(scope="session")
-def empty_entry_points_report(tmp_path_factory) -> EntryPointAuditReport:
+@pytest.fixture
+def empty_entry_points_report(tmp_path: Path) -> EntryPointAuditReport:
     """CONTROL ARM: entry_points.txt present but declaring nothing."""
     site = _install_dist(
-        tmp_path_factory.mktemp("emptyeps") / "site",
+        tmp_path / "site",
         "empty-eps-dist",
         entry_points="\n",
         modules={"empty_eps_pkg.thing": "VALUE = 1\n"},
@@ -215,12 +217,12 @@ def empty_entry_points_report(tmp_path_factory) -> EntryPointAuditReport:
     return audit_entry_point_imports("empty-eps-dist", search_paths=[site])
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def wheel_with_dropped_module_report(
-    tmp_path_factory,
+    tmp_path: Path,
 ) -> EntryPointAuditReport:
     """The packaging bug: correct declaration, module absent from wheel."""
-    tmp = tmp_path_factory.mktemp("wheelbug")
+    tmp = tmp_path
     site = _install_dist(
         tmp / "site",
         "wheelbug-dist",
@@ -232,10 +234,10 @@ def wheel_with_dropped_module_report(
     return audit_wheel_entry_point_imports(wheel, "wheelbug-dist")
 
 
-@pytest.fixture(scope="session")
-def intact_wheel_report(tmp_path_factory) -> EntryPointAuditReport:
+@pytest.fixture
+def intact_wheel_report(tmp_path: Path) -> EntryPointAuditReport:
     """A wheel carrying every module its dist-info declares."""
-    tmp = tmp_path_factory.mktemp("wheelok")
+    tmp = tmp_path
     site = _install_dist(
         tmp / "site",
         "wheelok-dist",
@@ -246,7 +248,7 @@ def intact_wheel_report(tmp_path_factory) -> EntryPointAuditReport:
     return audit_wheel_entry_point_imports(wheel, "wheelok-dist")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def synthetic_failing_report() -> EntryPointAuditReport:
     """One missing, one broken, one ok — for summary formatting."""
     return EntryPointAuditReport(
