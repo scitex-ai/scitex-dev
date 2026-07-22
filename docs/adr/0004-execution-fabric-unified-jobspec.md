@@ -196,7 +196,19 @@ skipped must never count as clean.
 
 | Phase | Scope | Status | Exit criteria |
 | --- | --- | --- | --- |
-| **P1** | **Tests** | Shipped (#385, v0.33.0; design locked by #388) | (a) recipe + `test_execution` knob + auto-loaded `pytest11` guard live (done); (b) literal `-n auto` replaced by allocated-cpus per backend (`$SLURM_CPUS_PER_TASK` / `ResourceSpec.cpu`); (c) at least one `remote-required` package runs end-to-end through the scitex-hpc `slurm` backend and every run emits a conformant `JobReceipt`. |
+| **P1** | **Tests** | Shipped (#385, v0.33.0; design locked by #388) | (a) recipe + `test_execution` knob + auto-loaded `pytest11` guard live (done); (b) literal `-n auto` resolved from allocated-cpus per backend via `scitex_dev._core.test_execution.allocated_cpus` (done for `ecosystem test-remote`); (c) at least one `remote-required` package runs end-to-end through the scitex-hpc `slurm` backend and every run emits a conformant `JobReceipt`. |
+
+> **P1(b) correction (measured 2026-07-23).** An earlier draft of this row
+> named `$SLURM_CPUS_PER_TASK` as *the* source. It is not sufficient: on the
+> Spartan CI runner that variable is **empty**. The runner is reached by ssh
+> and adopted into the lease cgroup (`job_27144058/step_extern`), so it
+> inherits the **cpuset** but not the step's Slurm environment. Measured on
+> spartan-bm155 inside the 48-CPU lease: `sched_getaffinity`=48,
+> `os.cpu_count()`=128, `psutil.cpu_count()`=128, both `SLURM_*` vars unset.
+> `sched_getaffinity` is therefore the authoritative fallback, and the reason
+> `-n auto` misbehaves at all is that pytest-xdist consults **psutil before**
+> `sched_getaffinity` (`xdist/plugin.py` 3.8.0 L26-34) — not, as first
+> assumed, that `auto` is inherently allocation-blind.
 | **P2** | **CI** | Wave 1 in flight (#400 canonical caller; drift inventory 2026-07-21) | (a) every scitex repo carries the thin org-reusable `ci.yml` caller and nothing else (six generations → one); (b) runner labels unified to ONE vocabulary selected via `vars.CI_RUNS_ON`; (c) zero `ubuntu-latest` / GitHub-hosted jobs in scitex repos (PS-169 at ERROR); (d) auditor rule ERRORs on non-canonical workflow files, so drift cannot silently return. |
 | **P3** | **Agent/fleet jobs** | Design open (federation contract 2026-07-20; this ADR fixes the taxonomy) | (a) `scitex_dev.jobs.JobSpec` carries the intent/mechanism split (intents accepted; mechanism chosen at lowering; back-compat mapping for `service`/`timer`/`cron`); (b) zero leaf-local or hand-rolled host crons — every repetitive job discoverable via `scitex-dev ecosystem` from an entry-point provider; (c) sac's daemon/restart passes declared through the federation (sac keeps the logic, scitex-dev installs the schedule); (d) periodic fleet jobs eligible for pool placement (Spartan backfill) where they don't need host-locality. |
 

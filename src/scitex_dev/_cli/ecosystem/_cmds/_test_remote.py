@@ -4,7 +4,39 @@
 
 import click
 
+from ...._core.test_execution import (
+    ALLOCATED_CPUS_PY_SNIPPET,
+    XDIST_AUTO_WORKERS_ENV,
+)
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+
+
+def _xdist_pytest_block(test_path: str) -> str:
+    """Remote pytest invocation whose worker count follows the ALLOCATION.
+
+    A bare ``pytest -n auto`` is wrong on an allocated node: pytest-xdist asks
+    psutil first, and psutil reports the whole machine regardless of the
+    cgroup/cpuset the job is confined to (see
+    ``scitex_dev._core.test_execution.allocated_cpus`` for the measured
+    numbers — 128 workers into a 48-CPU Spartan lease).
+
+    ``-n auto`` is KEPT, and corrected at its source: xdist consults
+    ``PYTEST_XDIST_AUTO_NUM_WORKERS`` ahead of psutil, so exporting it fixes
+    this invocation *and* any nested pytest the suite may spawn. The count is
+    computed ON THE REMOTE — the local box's allocation says nothing about the
+    remote's — and echoed so a CI log shows what was actually used.
+    """
+    return (
+        "if python -c 'import xdist' 2>/dev/null; then "
+        f"  {XDIST_AUTO_WORKERS_ENV}=\"$(python -c '{ALLOCATED_CPUS_PY_SNIPPET}')\"; "
+        f"  export {XDIST_AUTO_WORKERS_ENV}; "
+        f'  echo "scitex-dev: xdist workers=${XDIST_AUTO_WORKERS_ENV} '
+        '(allocation-derived)"; '
+        f"  python -m pytest -n auto --tb=short {test_path}; "
+        "else "
+        f"  python -m pytest --tb=short {test_path}; "
+        "fi"
+    )
 
 
 def register(ecosystem):
@@ -16,7 +48,9 @@ def register(ecosystem):
             description=(
                 "rsync local checkouts to HOST, SSH in, install (`pip "
                 "install -e .[dev]`), run pytest with `-n auto` (xdist "
-                "when available), stream output, and propagate the "
+                "when available, with the worker count pinned to the "
+                "REMOTE's CPU allocation rather than its core count), "
+                "stream output, and propagate the "
                 "exit code. Excludes `.git/`, `__pycache__/`, "
                 "`*.egg-info/`, `_sphinx_html/`, `GITIGNORED/`, "
                 "`.scitex/`. With `--all`, fans out across every "
@@ -199,13 +233,7 @@ def register(ecosystem):
             if recipe.submit_template:
                 pytest_block = render_submit(recipe, f"--tb=short {test_path}")
             else:
-                pytest_block = (
-                    "if python -c 'import xdist' 2>/dev/null; then "
-                    f"  python -m pytest -n auto --tb=short {test_path}; "
-                    "else "
-                    f"  python -m pytest --tb=short {test_path}; "
-                    "fi"
-                )
+                pytest_block = _xdist_pytest_block(test_path)
             # Tilde-bearing paths intentionally left UNQUOTED so the remote
             # shell expands `~` to $HOME. Internal-controlled, no spaces.
             # SCITEX_DEV_REGISTRY exported so audit-project / audit-cli
