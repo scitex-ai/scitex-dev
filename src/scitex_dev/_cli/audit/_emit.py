@@ -112,7 +112,13 @@ def _announce_degraded(logger: logging.Logger, level: str) -> None:
     logger.warning(f"audit emit degraded: {_degraded_reason}")
 
 
-def emit(level: str, text: str, *, err: bool = False) -> None:
+def emit(
+    level: str,
+    text: str,
+    *,
+    err: bool = False,
+    logger: logging.Logger | None = None,
+) -> None:
     """Emit `text` at `level` through scitex-logging when available.
 
     Parameters
@@ -127,15 +133,21 @@ def emit(level: str, text: str, *, err: bool = False) -> None:
         Route to stderr in the fallback path. Ignored by the
         scitex-logging path (which honours the logger's own stream
         configuration).
+    logger
+        Emit through this logger instead of the module-level
+        `scitex_dev.audit` one. The injection seam that lets a caller
+        (or a test) supply a real logger whose class is known, rather
+        than depending on process-global `setLoggerClass` history.
     """
-    if _logger is not None:
+    target = _logger if logger is None else logger
+    if target is not None:
         levelno, method = _LEVELS.get(level, _LEVELS["info"])
-        fn = getattr(_logger, method, None)
+        fn = getattr(target, method, None)
         if fn is None:
             # Lost the logger-class name race — announce, then emit at the
             # SAME numeric level so the rendered levelname is unchanged.
-            _announce_degraded(_logger, method)
-            _logger.log(levelno, text)
+            _announce_degraded(target, method)
+            target.log(levelno, text)
             return
         fn(text)
         return
