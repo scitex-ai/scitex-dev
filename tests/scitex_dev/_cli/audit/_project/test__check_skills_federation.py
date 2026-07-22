@@ -108,3 +108,50 @@ class TestPS217DoesNotFire:
         out = _findings(tmp_path)
         # Assert
         assert not any(v.rule == "PS-217" for v in out)
+
+
+# ===== dep-free trio carve-out =====
+#
+# The rule text always said the trio (todo/sac/cct) is out of scope, but
+# the exemption was never implemented, so a hand-rolled `_skills.py` in
+# those packages was flagged anyway. Federating them is FORBIDDEN — they
+# must not import scitex-dev — so the finding was unactionable by
+# construction and inflated the reported PS-217 debt.
+
+
+class TestPS217DepFreeTrioExempt:
+    def test_scitex_cards_hand_rolled_no_fire(self, tmp_path: Path) -> None:
+        # Arrange — todo/cards ships the hand-rolled shape by design.
+        repo = _make_leaf_skills(tmp_path, _HAND_ROLLED, pkg_name="scitex_cards")
+        # Act
+        out = _findings(repo)
+        # Assert
+        assert not any(v.rule == "PS-217" for v in out)
+
+    def test_sac_hand_rolled_no_fire(self, tmp_path: Path) -> None:
+        # Arrange
+        repo = _make_leaf_skills(
+            tmp_path, _HAND_ROLLED, pkg_name="scitex_agent_container"
+        )
+        # Act
+        out = _findings(repo)
+        # Assert
+        assert not any(v.rule == "PS-217" for v in out)
+
+    def test_cct_hand_rolled_no_fire(self, tmp_path: Path) -> None:
+        # Arrange
+        repo = _make_leaf_skills(
+            tmp_path, _HAND_ROLLED, pkg_name="claude_code_telegrammer"
+        )
+        # Act
+        out = _findings(repo)
+        # Assert
+        assert not any(v.rule == "PS-217" for v in out)
+
+    def test_non_trio_package_still_fires(self, tmp_path: Path) -> None:
+        # Arrange — guard against the carve-out over-matching.
+        repo = _make_leaf_skills(tmp_path, _HAND_ROLLED, pkg_name="scitex_io")
+        # Act
+        out = _findings(repo)
+        # Assert
+        assert any(v.rule == "PS-217" for v in out)

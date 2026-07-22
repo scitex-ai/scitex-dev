@@ -74,6 +74,28 @@ SKILLS_FEDERATION_RULES = [
 # is the discriminator between a federated leaf and a copy-paste one.
 _PRIMITIVE_MARKER = "skills_click_group"
 
+# The dep-free trio (todo / sac / cct). These packages MUST NOT import
+# scitex-dev — they are deliberately standalone so a bare
+# `pip install <pkg>` yields a fully working CLI with no ecosystem
+# dependency (operator directive: standalone-independence over DRY).
+# Federating their `skills` verb would make the verb require scitex-dev
+# at CLI-import time, which is exactly what that rule forbids.
+#
+# The exemption was documented in this module's rule text from the start
+# ("the dep-free trio (todo/sac/cct) is intentionally out of scope") but
+# was never IMPLEMENTED, so the check flagged the trio anyway and the
+# reported count overstated the real debt. Keyed on the source-package
+# directory name (``src/<pkg>/``), which is the only identity available
+# here — the repo may be checked out under any directory name.
+_DEP_FREE_TRIO_PKG_DIRS = frozenset(
+    {
+        "scitex_cards",  # scitex-todo / scitex-cards
+        "scitex_todo",  # legacy module name for the same package
+        "scitex_agent_container",  # sac
+        "claude_code_telegrammer",  # cct
+    }
+)
+
 
 def _src_pkg_dirs(repo: Path) -> list[Path]:
     """Return every ``src/<pkg>/`` directory under ``repo``.
@@ -116,6 +138,10 @@ def check_skills_federation(
     ``cli.add_command(skills_click_group(package="<pkg>"))``.
     """
     for pkg_dir in _src_pkg_dirs(repo):
+        # The dep-free trio must not import scitex-dev — federating its
+        # `skills` verb is forbidden, so flagging it is a false positive.
+        if pkg_dir.name in _DEP_FREE_TRIO_PKG_DIRS:
+            continue
         skills_py = pkg_dir / "_cli" / "_skills.py"
         if not skills_py.is_file():
             continue
