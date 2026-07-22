@@ -18,3 +18,4 @@ Builds on the package layout ([../02_package/SKILL.md](../02_package/SKILL.md)).
 4. [03_env-vars-and-state.md](03_env-vars-and-state.md) — Documenting env vars + local state surfaces
 5. [03_rtd.md](03_rtd.md) — Read the Docs onboarding, `.readthedocs.yaml`, build config
 6. [04_robust-ci.md](04_robust-ci.md) — Robust docs-CI: keep `sphinx-build -W` strict while defending the 4 benign failure modes
+7. [05_adr.md](05_adr.md) — Architecture Decision Records: what an ADR is, when to write one, where it lives, and the copy/paste template
