@@ -104,9 +104,9 @@ a matched line with `0`. `MARK AAA:BBB:CCC` → `1:0:BBB:CCC`.
 The control string is still found while the surrounding content is destroyed.
 Rules 1–3 protect against false *absence*; this failure returns non-zero.
 
-For anything you will quote or act on, use a second reader of a different kind.
-Instance: a count claim was re-run through `git grep` — git's own matcher, not
-GNU grep — and agreed. One engine's count never addressed it.
+For anything you will quote or act on, use a second reader of a different kind:
+a count claim was re-run through `git grep` — git's own matcher, not GNU grep —
+and agreed. One engine's count never addressed it.
 
 Related tell: nonsense output gets normalised — `1 matches in 0 files:` is
 internally contradictory and was read as clean anyway.
@@ -118,7 +118,7 @@ internally contradictory and was read as clean anyway.
 Ask the tool which artifact it resolves (`--show-config`,
 `python -c "import X; print(X.__file__)"`) first. The tell is identical every
 time: *you reach for the artifact by absolute path, because that is how you
-inspect a file you already believe in.*
+inspect a file you believe in.*
 
 - A config compared byte-for-byte between two agents that **neither agent's
   tool reads**; the real configuration was compiled-in defaults.
