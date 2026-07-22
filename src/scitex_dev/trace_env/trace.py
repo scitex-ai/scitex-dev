@@ -24,6 +24,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import scitex_logging as slogging
+
 from .config import (
     ExecStageHit,
     TraceEnvResult,
@@ -32,6 +34,8 @@ from .config import (
     is_secret_shaped,
     redact,
 )
+
+log = slogging.getLogger(__name__)
 
 _STRACE_MISSING = (
     "strace is required for --trace mode but was not found on PATH.\n"
@@ -309,10 +313,9 @@ def trace_env_vars(
 
     out_path = _new_log_path(command)
     if announce:
-        print(
+        log.info(
             f"[trace-env-vars] tracing under strace (multi-stage launches "
-            f"can take a while) — watch live: tail -f {out_path}",
-            file=sys.stderr,
+            f"can take a while) — watch live: tail -f {out_path}"
         )
     stderr_text = ""
     argv = [

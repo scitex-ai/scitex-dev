@@ -15,6 +15,10 @@ import json
 import sys
 from pathlib import Path
 
+import scitex_logging as slogging
+
+log = slogging.getLogger(__name__)
+
 
 def register_docs_subcommand(
     subparsers: argparse._SubParsersAction,
@@ -157,7 +161,7 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
     try:
         result = get_docs(package=package, format=fetch_fmt, page=args.page)
     except LookupError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        log.error(str(e))
         sys.exit(2)
 
     # --list: show page index

@@ -63,12 +63,15 @@ fakes — no monkeypatching of ``time`` or filesystem.
 from __future__ import annotations
 
 import os
-import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
+
+import scitex_logging as slogging
+
+log = slogging.getLogger(__name__)
 
 
 # The store-resolution chain for ``tasks.yaml`` (highest precedence
@@ -192,11 +195,7 @@ def run_once(
 
     if not resolved.exists():
         msg = f"tasks.yaml not found at {resolved}"
-        print(
-            f"[task-harvest {timestamp}] ERROR: {msg}",
-            file=sys.stderr,
-            flush=True,
-        )
+        log.error(f"[task-harvest {timestamp}] {msg}")
         return TaskHarvestResult(
             tasks_path=str(resolved), scanned=0, error=msg
         )
@@ -205,11 +204,7 @@ def run_once(
         doc = _load_yaml(resolved)
     except Exception as exc:  # noqa: BLE001 — best-effort logging
         msg = f"failed to load {resolved}: {exc.__class__.__name__}: {exc}"
-        print(
-            f"[task-harvest {timestamp}] ERROR: {msg}",
-            file=sys.stderr,
-            flush=True,
-        )
+        log.error(f"[task-harvest {timestamp}] {msg}")
         return TaskHarvestResult(
             tasks_path=str(resolved), scanned=0, error=msg
         )

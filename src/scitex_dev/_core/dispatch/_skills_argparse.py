@@ -15,6 +15,10 @@ import json
 import sys
 from pathlib import Path
 
+import scitex_logging as slogging
+
+log = slogging.getLogger(__name__)
+
 
 def register_skills_subcommand(
     subparsers: argparse._SubParsersAction,
@@ -188,7 +192,7 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
         return
     exported = export_skills(dest, package=package, clean=clean, source=source)
     if not exported:
-        print(f"No skills found for {package}.", file=sys.stderr)
+        log.error(f"No skills found for {package}.")
         sys.exit(2)
     if getattr(args, "as_json", False):
         print(
@@ -222,8 +226,10 @@ def _skills_get(args: argparse.Namespace, package: str) -> None:
         else:
             print(content)
     else:
-        print(f"Skill '{args.name}' not found in {package}.", file=sys.stderr)
-        print(f"Run: {package} skills list", file=sys.stderr)
+        log.error(
+            f"Skill '{args.name}' not found in {package}. "
+            f"Run: {package} skills list"
+        )
         sys.exit(2)
 
 
