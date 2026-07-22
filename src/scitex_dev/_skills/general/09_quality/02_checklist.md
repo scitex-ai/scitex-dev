@@ -21,8 +21,7 @@ delegate big ones to subagents.
 Acting on what a pass finds — response protocol, do-not-touch guard, and the
 release-blocking probes (§11–§19) — is [07_release-gate-probes.md](07_release-gate-probes.md).
 Failure-mode cookbook: [01_failure-playbook.md](01_failure-playbook.md) (triage
-table; recipes in `05_packaging-and-release-failures.md` and
-`06_compat-and-refactor-drift.md`).
+table; recipes in `05_packaging-…` and `06_compat-and-refactor-drift.md`).
 
 ## 0. Prerequisites
 
@@ -72,8 +71,8 @@ Flag `failure`, `cancelled`, `in_progress > 1h`.
 Severity: **CRITICAL** blocks release; **HIGH** one pkg; **MEDIUM**
 test bug; **LOW** cosmetic. Full cookbook (~18 patterns): triage table in
 [01_failure-playbook.md](01_failure-playbook.md), recipes in
-[05_packaging-and-release-failures.md](05_packaging-and-release-failures.md)
-and [06_compat-and-refactor-drift.md](06_compat-and-refactor-drift.md).
+[05_packaging-and-release-failures.md](05_packaging-and-release-failures.md) and
+[06_compat-and-refactor-drift.md](06_compat-and-refactor-drift.md).
 
 ## 4. Test scope purity
 
