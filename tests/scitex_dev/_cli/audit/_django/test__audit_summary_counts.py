@@ -139,25 +139,31 @@ def _messages(lines) -> str:
     return "\n".join(message for _level, message in lines)
 
 
+# Each fixture builds into its OWN subdirectory of tmp_path. Sharing
+# tmp_path would silently defeat the mutation control below: `_build`
+# only ADDS files, so building "dirty" over an existing "clean" tree
+# leaves asgi/wsgi in place and both trees come out clean — the two
+# halves then compare equal for a reason that has nothing to do with the
+# banner. Caught by that test failing on the first run.
 @pytest.fixture
 def clean_lines(tmp_path, caplog):
     """Banner lines for a tree with zero DJ-107 findings."""
-    _build(tmp_path, server_entrypoints=True)
-    return _audit_and_capture_log(tmp_path, caplog, rules={"DJ-107"})
+    repo = _build(tmp_path / "clean", server_entrypoints=True)
+    return _audit_and_capture_log(repo, caplog, rules={"DJ-107"})
 
 
 @pytest.fixture
 def warning_lines(tmp_path, caplog):
     """Banner lines for a tree with one live W finding (missing asgi/wsgi)."""
-    _build(tmp_path, server_entrypoints=False)
-    return _audit_and_capture_log(tmp_path, caplog, rules={"DJ-107"})
+    repo = _build(tmp_path / "dirty", server_entrypoints=False)
+    return _audit_and_capture_log(repo, caplog, rules={"DJ-107"})
 
 
 @pytest.fixture
 def error_lines(tmp_path, caplog):
     """Banner lines for a tree with one live E finding (no `config/`)."""
-    _build_error_tree(tmp_path)
-    return _audit_and_capture_log(tmp_path, caplog, rules={"DJ-101"})
+    repo = _build_error_tree(tmp_path / "err")
+    return _audit_and_capture_log(repo, caplog, rules={"DJ-101"})
 
 
 @pytest.fixture
@@ -229,8 +235,8 @@ def test_live_warning_headline_is_emitted_at_warn_level(warning_lines):
     # Arrange — an `info` downgrade would be invisible in real use
     # Act
     levels = [lvl for lvl, msg in warning_lines if "warning(s)" in msg]
-    # Assert
-    assert levels and set(levels) == {"WARNING"}
+    # Assert — scitex-logging's own level name, as #417 pins "SUCC"
+    assert levels and set(levels) == {"WARN"}
 
 
 def test_live_warning_names_how_to_list_below_floor_findings(warning_lines):
@@ -249,11 +255,17 @@ def test_live_warning_still_exits_zero(tmp_path):
     assert code == 0
 
 
-def test_live_warning_output_differs_from_a_clean_tree(clean_lines, warning_lines):
-    # Arrange — the mutation control: pre-fix these two were identical
+def test_live_warning_output_differs_from_a_clean_tree(tmp_path, clean_lines, warning_lines):
+    # Arrange — the mutation control: pre-fix these two were identical.
+    # The two trees live in different subdirectories, and the banner names
+    # the tree it graded, so the raw messages differ by PATH alone. Erase
+    # the path first: otherwise this passes without the fix and proves
+    # nothing about the banner.
+    clean = _messages(clean_lines).replace(str(tmp_path / "clean"), "<ROOT>")
+    warned = _messages(warning_lines).replace(str(tmp_path / "dirty"), "<ROOT>")
     # Act
     # Assert
-    assert _messages(clean_lines) != _messages(warning_lines)
+    assert clean != warned
 
 
 # --- errors: unchanged, still blocking --------------------------------------
@@ -270,8 +282,8 @@ def test_error_finding_headline_is_emitted_at_error_level(error_lines):
     # Arrange
     # Act
     levels = [lvl for lvl, msg in error_lines if "error(s)" in msg]
-    # Assert
-    assert levels and set(levels) == {"ERROR"}
+    # Assert — scitex-logging's own level name, as #417 pins "SUCC"
+    assert levels and set(levels) == {"ERRO"}
 
 
 def test_error_finding_suppresses_the_success_banner(error_lines):
