@@ -48,20 +48,17 @@ absence conclusion is licensed.
 - `rg` served by GNU grep, erroring out, returning zero.
 - A `tsc` invocation that never executed; the grep for `error TS` over the
   failure text honestly returned zero.
-- `crontab -l | grep -i sac` → "no restarter scheduled". The entry invokes
-  `bin/auth-heal.py` — no `sac` substring. The filter *could not* have matched.
+- Three patterns that *could not* have matched what was there: `grep -i sac`
+  over a crontab whose entry invokes `bin/auth-heal.py`; `refs/tags/[0-9]+\.`
+  over 160 `v`-prefixed tags; a `~`-relative operator path inside a container
+  where `~` is `/home/agent` (107 entries read as zero).
 - `grep … | head -30` truncated a search into apparent absence; the finding was
   below the cut. Same shape twice in one hour: 8 real audit ERRORs sat below a
   47-warning block in both incidents.
-- Tag pattern `refs/tags/[0-9]+\.` matched nothing because tags are
-  `v`-prefixed. 160 tags read as zero.
-- `fd … 2>/dev/null` returned empty because the binary was absent. The
-  suppressed stderr made *missing tool* indistinguishable from *no matches*.
-- `rg --no-filename "^ *model:" DIR/ 2>/dev/null` → zero lines over 102 files
-  that match. Under grep, a directory arg without `-r` matches nothing, and
-  `2>/dev/null` discarded "Is a directory".
-- Container `~` is `/home/agent`, not the operator's home; a `~`-relative check
-  of an operator path returned zero against a 107-entry directory.
+- `2>/dev/null` twice turned a broken probe into an empty one: `fd …` with the
+  binary absent, and `rg --no-filename "^ *model:" DIR/` over 102 matching
+  files (served by grep, where a directory arg without `-r` matches nothing).
+  The discarded stderr was the whole diagnosis.
 
 TELL: any zero or empty you are about to reason from.
 CHECK: a positive control **in the same invocation** — search for something you
@@ -79,9 +76,8 @@ Instance: a probe varied a flag *and* a pattern, attributed the difference to
 the flag, and sent a peer a false confirmation of their root cause. It was the
 pattern — an anchored regex against an indented line.
 
-A two-variable probe cannot license a one-variable conclusion. Sending one to a
-peer is worse than keeping it: it reads as independent confirmation and
-corrupts their conclusion too.
+A two-variable probe cannot license a one-variable conclusion, and sending one
+to a peer corrupts their conclusion too (§6).
 
 ## 3. Causal claims at all → hunt the counter-example
 
@@ -110,9 +106,9 @@ The control string is still found while the surrounding content is destroyed.
 Rules 1–3 protect against false *absence*; this failure produces non-zero,
 plausible, wrong results.
 
-For anything you will quote or act on, read the file, or use a second reader of
-a different kind. Instance: a count claim was re-run through `git grep` (git's
-own matcher, not GNU grep) and agreed. One engine's count never addressed it.
+For anything you will quote or act on, use a second reader of a different kind.
+Instance: a count claim was re-run through `git grep` — git's own matcher, not
+GNU grep — and agreed. One engine's count never addressed it.
 
 Related tell: nonsense output gets normalised — `1 matches in 0 files:` is
 internally contradictory and was read as clean anyway.
@@ -157,17 +153,24 @@ fail.
 one: a missing guard gets built, a present-but-inert one closes the ticket and
 is then cited as coverage. One day's instances: a CI recovery path behind an
 unset variable; a reconciler installed-but-disabled against an enabled preset;
-a health gate that read *absence* as green; a lint rule shipped at a severity
-its own exit code ignored; a cleaner scoped to a directory the bloat was not
-in, printing `removed=0 kept=235` — the same output a clean tree produces.
+a health gate that read *absence* as green; a cleaner scoped to a directory not
+containing the bloat, printing `removed=0 kept=235` — what a clean tree prints.
 Never accept "there is a check for that" — ask when it last fired and what it
-did.
+did. Worst measured case: `audit-project` printed `SUCC` over 53 live findings,
+its summary counting errors only. So a CLI-driven mutation proof **cannot fail**
+while the rule under test sits at severity `W` — plant a violation, the CLI
+still says SUCC. A week of such proofs of `W`-severity rules is now treated as
+UNPERFORMED rather than as passed.
 
-**Layer-blind — the probe runs below the effect.** A probe at layer N+1 cannot
-observe an effect at layer N, and reports *the absence of the phenomenon*
-rather than its own blindness. Instance: an engagement qualifier inside a shell
-script, where the effect operates on the tool-call layer above it; it reported
-NOT-ENGAGED on a container where an inline call demonstrably engaged.
+**Mispositioned — the probe never reaches what is under test.** It then reports
+*the absence of the phenomenon* rather than its own blindness. Below the effect:
+an engagement qualifier inside a shell script, where the effect operates on the
+tool-call layer above it; it reported NOT-ENGAGED on a container where an inline
+call demonstrably engaged. Upstream of it: a pool health probe returned 403 in
+16ms — the ACL gate rejects *before* the worker pool, so a fast rejection and a
+healthy pool are one reading. The `SUCC` banner above is the same shape at the
+reporting layer: decided upstream of the finding count. Ask what the probe must
+traverse to reach the failure you care about.
 
 **Sampling — the unit of variation is the Bash call.** Identical command text
 gave one result 5/5 in one invocation and the opposite 20/20 in another, each
@@ -180,7 +183,20 @@ relabelling every case UNKNOWN — green, and the true-zero signal destroyed. Th
 control arm — *readable and genuinely empty STILL reports zero* — is what
 distinguishes the repair from the relabel. Mutation-prove both arms.
 
-## 9. Status words that fuse a failed measurement into a clean one
+## 9. A degrade branch is where a hard failure hides
+
+For every `except` that degrades rather than fails, ask what would tell you it
+fired. Instance: `try: import … except: warn` turned an `ImportError` into a log
+line. `_resolve_runtime_self_identity` was extracted but never re-exported,
+three callers still imported it from the old module, and both self-peer call
+sites degraded to "continues without persisted self-peers". Self-peer
+persistence was OFF on develop while the service reported normal operation.
+
+TELL: a fallback whose only trace is a log line nothing asserts on.
+CHECK: make the degraded path emit a value the caller's summary must carry, so
+the degradation surfaces where the result is read — not only where it happened.
+
+## 10. Status words that fuse a failed measurement into a clean one
 
 - **Skipped is not passed.** A CI summary read "8 passed" where one leg was
   `skipping`. Report the skipped state as its own state; never fold it into a
@@ -191,7 +207,7 @@ distinguishes the repair from the relabel. Mutation-prove both arms.
   *deferred-with-a-declaration*.
 - A count that includes what it did not check is not a count.
 
-## 10. Commissioned findings land as cards, not prose
+## 11. Commissioned findings land as cards, not prose
 
 A commissioned finding is the easiest kind to shelve: it arrives as a **report**,
 not a **symptom**. A symptom interrupts you; a report waits. Measured:
