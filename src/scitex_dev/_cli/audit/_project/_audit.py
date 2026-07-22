@@ -219,7 +219,23 @@ def audit_project(
     _floor = {"error": {"E"}, "warning": {"E", "W"}, "info": {"E", "W", "I"}}
     visible_set = _floor.get(severity, _floor["error"])
     visible = [v for v in violations if v.severity in visible_set]
+    # Counts are taken over EVERY surviving finding, not over `visible`.
+    # The severity floor governs which findings get LISTED; it must never
+    # govern what the summary CLAIMS. Deriving the headline from `visible`
+    # made a W-severity rule structurally unable to be reported at the
+    # default floor: 53 live PS-220 findings printed as `SUCC: … no
+    # project-structure violations`, byte-identical to a genuinely clean
+    # tree. That is not a cosmetic defect — it made every CLI-driven
+    # mutation proof of a W rule a guaranteed pass, because planting the
+    # violation could not change the output. Reported by
+    # scitex-agent-container 2026-07-23; see the staged-rollout premise in
+    # `_check_no_print` (PS-220 E→W, PR #410) which promised findings stay
+    # VISIBLE while they stop BLOCKING.
     n_errors = sum(1 for v in violations if v.severity == "E")
+    n_warnings = sum(1 for v in violations if v.severity == "W")
+    n_infos = sum(1 for v in violations if v.severity == "I")
+    # Exit code is unchanged and deliberately so: W/I findings still never
+    # block. This fix changes what is REPORTED, never what fails.
     exit_code = 1 if n_errors > 0 else 0
 
     if json_out:
@@ -247,6 +263,12 @@ def audit_project(
                     ],
                     "exit_code": exit_code,
                     "errors": n_errors,
+                    # Both counts always present, and both counted over
+                    # every surviving finding — a consumer reading only
+                    # `errors` would inherit the same blind spot the
+                    # human summary had.
+                    "warnings": n_warnings,
+                    "infos": n_infos,
                 },
                 indent=2,
             )
@@ -290,8 +312,12 @@ def audit_project(
                 err=True,
             )
 
-    if not visible:
-        # No findings at the requested severity floor. Name the tree we
+    if not violations:
+        # ZERO findings at ANY severity — the only state that earns SUCC.
+        # This condition used to read `if not visible`, i.e. "nothing to
+        # print at the current floor", which is a different and much
+        # weaker claim: at the default `error` floor it declared success
+        # over any number of live W/I findings. Name the tree we
         # graded, exactly as the violation headline below does: a CLEAN
         # result is precisely the one nobody double-checks, so it is the
         # one that must say what it read. Resolution can land on a tree
@@ -310,20 +336,35 @@ def audit_project(
         emit_disclaimer()
         return exit_code
 
-    n_w = sum(1 for v in visible if v.severity == "W")
-    n_i = sum(1 for v in visible if v.severity == "I")
     headline_level = "error" if exit_code else "warning"
     # Name the CATEGORY on the failure line, exactly as the clean line
     # above does ("no project-structure violations"). An unlabelled
     # `scitex-hub (/path): 3 error(s)` is unattributable in an audit-all
     # log that interleaves six auditors — sac PRs #813/#814 both read a
     # real violation as a broken gate because of it, costing a CI cycle.
-    summary = f"{distribution} ({repo_root}): project-structure: {n_errors} error(s)"
-    if n_w:
-        summary += f", {n_w} warning(s)"
-    if n_i:
-        summary += f", {n_i} info"
+    #
+    # Error AND warning counts are BOTH always printed, even at zero, so
+    # the headline has one fixed shape a reader (or a grep) can rely on.
+    # `0 error(s), 53 warning(s)` states the tree is unblocked AND not
+    # clean; omitting the zero would leave the two states indistinguishable
+    # at a glance. Info stays conditional — it is a much rarer band.
+    summary = (
+        f"{distribution} ({repo_root}): project-structure: "
+        f"{n_errors} error(s), {n_warnings} warning(s)"
+    )
+    if n_infos:
+        summary += f", {n_infos} info"
     _emit(headline_level, summary)
+    if not visible:
+        # Findings exist but all sit below the requested floor, so the
+        # per-finding list below prints nothing. Say so and say how to
+        # see them — a count with no way to reach the detail is the
+        # half-fix that would leave PS-220's rollout promise unmet.
+        _emit(
+            "warning",
+            f"  (no finding at or above severity '{severity}'; "
+            f"re-run with `--severity warning` to list them)",
+        )
     for v in visible:
         sev = (
             "error"
