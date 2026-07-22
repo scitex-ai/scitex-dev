@@ -12,6 +12,11 @@ legitimately use test doubles for external services (HTTP/browser/telegram/
 ssh); PA-307 (test-quality) still applies at full severity.
 """
 
+from ._enforce_logging import (
+    ENFORCE_LOGGING_REASONED_LEVELS,
+    ENFORCE_LOGGING_VALUES,
+    parse_enforce_logging,
+)
 from ._loader import (
     CAPABILITY_RULES,
     KNOWN_CAPABILITIES,
@@ -26,6 +31,8 @@ from ._loader import (
 
 __all__ = [
     "CAPABILITY_RULES",
+    "ENFORCE_LOGGING_REASONED_LEVELS",
+    "ENFORCE_LOGGING_VALUES",
     "KNOWN_CAPABILITIES",
     "PROJECT_TYPES",
     "Exemption",
@@ -33,5 +40,6 @@ __all__ = [
     "capability_for_rule",
     "detect_project_types",
     "load_config",
+    "parse_enforce_logging",
     "write_config",
 ]

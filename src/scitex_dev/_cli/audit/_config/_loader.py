@@ -69,9 +69,15 @@ CAPABILITY_RULES: dict[str, frozenset[str]] = {
 
 KNOWN_CAPABILITIES = frozenset(CAPABILITY_RULES)
 
-# Accepted values for the `audit.enforce-logging` knob (PS-220). See
-# `ProjectConfig.enforce_logging` and `_check_no_print.resolve_ps220_severity`.
-ENFORCE_LOGGING_VALUES = frozenset({"error", "warning", "off"})
+# `audit.enforce-logging` — PS-220's per-package severity declaration. The
+# parsing (and the MANDATORY-reason rule on any level that deviates from the
+# staged `warning` default) lives in `._enforce_logging`; re-exported here so
+# existing importers of the loader keep working.
+from ._enforce_logging import (  # noqa: E402
+    ENFORCE_LOGGING_REASONED_LEVELS,
+    ENFORCE_LOGGING_VALUES,
+    parse_enforce_logging,
+)
 
 
 # Per-SITE rule EXEMPTION with a MANDATORY written reason (operator directive
@@ -179,14 +185,20 @@ class ProjectConfig:
     capabilities: frozenset[str] = frozenset()
     exemptions: tuple[Exemption, ...] = ()
     exemption_errors: tuple[str, ...] = ()
-    # `audit.enforce-logging` — explicit knob for the PS-220 no-bare-print
-    # mandate: "error" | "warning" | "off". None means "use the project-type
-    # default" (see `_check_no_print.resolve_ps220_severity`): ERROR for
-    # ecosystem packages, WARNING for research projects, because the operator
-    # has NOT yet decided whether the logging mandate binds paper-producing
-    # research trees. Any unrecognised value is ignored (falls back to the
-    # default) rather than silently disabling the gate.
+    # `audit.enforce-logging` — the PS-220 no-bare-print STAGED-ROLLOUT knob:
+    # "error" | "warning" | "off". None means "use the default" (see
+    # `_check_no_print.resolve_ps220_severity`), which is WARNING for every
+    # project type: the operator staged the rollout so each package opts IN to
+    # `error` once its print migration is done.
+    #
+    # `error` and `off` deviate from that default and so carry a MANDATORY
+    # written `reason` (kept in `enforce_logging_reason`). A declaration that
+    # was rejected — bare shorthand, unknown level, blank reason — leaves this
+    # None and records why in `enforce_logging_errors`, so a rejected opt-in
+    # never silently reads as either enforced or silenced.
     enforce_logging: str | None = None
+    enforce_logging_reason: str | None = None
+    enforce_logging_errors: tuple[str, ...] = ()
     whitelist_path: Path | None = None
     metadata: dict = field(default_factory=dict)
     source: str = "config"  # "config" | "heuristic" | "override"
@@ -422,19 +434,11 @@ def load_config(
         wl = audit.get("whitelist")
         exemptions, exemption_errors = _parse_exemptions(audit.get("exemptions"))
         raw_enforce = audit.get("enforce-logging", audit.get("enforce_logging"))
-        # YAML 1.1 parses bare `off`/`no` as boolean False and `on`/`yes` as
-        # True, so `enforce-logging: off` arrives as a bool, not the string.
-        # Reading it as a string would make the knob silently no-op and fall
-        # back to the default — the exact class of silent-suppression bug this
-        # whole change is about. Map the booleans explicitly.
-        if raw_enforce is False:
-            enforce_logging = "off"
-        elif raw_enforce is True:
-            enforce_logging = "error"
-        else:
-            enforce_logging = str(raw_enforce).strip().lower() if raw_enforce else None
-        if enforce_logging not in ENFORCE_LOGGING_VALUES:
-            enforce_logging = None
+        (
+            enforce_logging,
+            enforce_logging_reason,
+            enforce_logging_errors,
+        ) = parse_enforce_logging(raw_enforce)
         return ProjectConfig(
             project_types=types,
             skip=frozenset(skip),
@@ -442,6 +446,8 @@ def load_config(
             exemptions=exemptions,
             exemption_errors=exemption_errors,
             enforce_logging=enforce_logging,
+            enforce_logging_reason=enforce_logging_reason,
+            enforce_logging_errors=enforce_logging_errors,
             whitelist_path=Path(wl) if wl else None,
             metadata=raw.get("metadata") or {},
             source=source,
@@ -488,6 +494,8 @@ __all__ = [
     "CAPABILITY_RULES",
     "KNOWN_CAPABILITIES",
     "ENFORCE_LOGGING_VALUES",
+    "ENFORCE_LOGGING_REASONED_LEVELS",
+    "parse_enforce_logging",
     "capability_for_rule",
     "Exemption",
     "ProjectConfig",

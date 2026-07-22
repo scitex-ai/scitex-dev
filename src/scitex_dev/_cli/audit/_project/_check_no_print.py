@@ -49,12 +49,13 @@ and the rejection is itself reported as a violation. An exemption with no
 stated reason is precisely the unexamined suppression this rule exists to
 catch.
 
-The legacy `# noqa` hatch still works for ONE release (see
-`_LEGACY_NOQA_ENABLED`) but is DEPRECATED: it is a blanket, reasonless
-flag that any unrelated `# noqa: E501` silences by accident, and it
-leaves no auditable record of why. Sites carrying it now report as
-`PS-220-noqa-deprecated` (severity W) so the fleet can migrate to
-`audit.exemptions` without going red on promotion day.
+The legacy `# noqa` hatch is GONE (removed 2026-07-23). It was a blanket,
+reasonless flag that any unrelated `# noqa: E501` silenced by accident, and
+it left no auditable record of why. It was deprecated for one release with a
+`PS-220-noqa-deprecated` notice; a sweep of all 118 repos under
+`/home/ywatanabe/proj` at removal time (8956 `src/**.py` files, 4448 flagged
+sites) found ZERO sites using it, with a planted-user control confirming the
+sweep could see one. `audit.exemptions` is the only per-site opt-out.
 
 Scope / exclusions
 ------------------
@@ -66,29 +67,50 @@ which already excludes repo-root `tests/`, `scripts/`, `examples/`, and
 `examples`, or `docs` (an in-package copy, e.g. `src/<pkg>/scripts/`) is
 skipped too.
 
-Severity — project-type aware
------------------------------
+Severity — a STAGED rollout, opt-in per package
+-----------------------------------------------
 
-E (error) for SciTeX ECOSYSTEM PACKAGES. Promoted from W on 2026-07-22 by
-operator directive: the rule must ENFORCE the mandate, not leave it to
-review. It shipped at W in its own rule tuple, and because the default
-severity floor is `error`, its findings were not even PRINTED unless
-someone passed `--severity warning` — a gate that could not fail. The
-severity lives HERE, in the rule tuple, not in
+**W (warning) by default, for every project type.** The rule was promoted
+to E ecosystem-wide on 2026-07-22 (PR #406); the measured blast radius —
+44 repos newly FAILING on 1856 findings, top-5 repos carrying 64 % of them
+(`GITIGNORED/ps220-blast-radius-20260722.md`) — is why the operator restaged
+it on 2026-07-23 (Telegram 1691/1692)::
+
+    「print に関しては順次やっていきましょうか。
+      とりあえず warning で、移行できたものから red で」
+    「red というか、エラー判定ってことですね」
+
+This is a staged rollout, NOT a retreat: the findings stay fully visible on
+every audit run, and each package promotes ITSELF to error the moment its
+migration lands. The severity lives HERE, in the rule tuple, not in
 `_registry._SEVERITY_OVERRIDES`.
 
-The error severity is SCOPED. `resolve_ps220_severity` decides the
-effective severity per project:
+`resolve_ps220_severity` decides the effective severity per project:
 
-* ``project-type: [pip]`` (an ecosystem package) ⇒ **E**.
-* ``project-type: [pip, research]`` (a hybrid) ⇒ **W**. The operator has
-  NOT decided whether the logging mandate binds paper-producing research
-  trees, so the conservative default surfaces the debt instead of wedging
-  a publish on a decision nobody made.
+* ``audit.enforce-logging`` (see `_config._enforce_logging`) wins whenever
+  it was ACCEPTED — this is the per-package opt-in::
+
+      audit:
+        enforce-logging:
+          level: error
+          reason: "print migration complete (PR #412)"
+
+  ``error`` and ``off`` deviate from the default and so carry a MANDATORY
+  written reason; a bare ``enforce-logging: error`` is rejected. ``warning``
+  is accepted bare, because it is the default and changes nothing.
+* Otherwise ⇒ **W**, for ``[pip]`` and ``[pip, research]`` alike.
 * ``project-type: [research]`` alone ⇒ the rule never fires at all —
   `ProjectConfig.applies` admits ``PS-`` codes only for ``pip`` projects.
-* ``audit.enforce-logging: error|warning|off`` overrides all of the
-  above, so a repo can write the decision down explicitly.
+
+Config errors are NOT staged
+----------------------------
+
+A rejected `audit.exemptions` entry or a rejected `audit.enforce-logging`
+declaration is reported at **E**, regardless of the project's staged PS-220
+severity. The staging is about MIGRATION DEBT — a real print that has not
+been converted yet. A malformed override is not debt; it is a config error,
+and the whole point of the mandatory-reason design is that it must never
+read as a quiet no-op the author believes worked.
 """
 
 from __future__ import annotations
@@ -103,10 +125,16 @@ from ._print_discriminator import should_flag
 # of scope because `_src_files` walks `src/` only.
 _EXCLUDED_PARTS = frozenset({"tests", "scripts", "examples", "docs"})
 
-# Deprecated inline hatch. Kept working for ONE release so promoting PS-220
-# to E does not red the whole fleet on the same day; every hit is reported as
-# a W-severity deprecation notice pointing at `audit.exemptions`.
-_LEGACY_NOQA_ENABLED = True
+# PS-220's staged default severity — see the module docstring. Kept as a
+# named constant because `_emit` needs to know which severity is the rule
+# tuple's REGISTERED one (a per-finding override is only worth setting when
+# it would actually change something).
+_DEFAULT_SEVERITY = "W"
+
+# Config errors (a rejected exemption entry, a rejected enforce-logging
+# declaration) are reported at E regardless of the project's staged PS-220
+# severity. Staging covers migration debt, not malformed config.
+_CONFIG_ERROR_SEVERITY = "E"
 
 
 def _src_files(repo: Path) -> list[Path]:
@@ -141,24 +169,6 @@ def _src_files(repo: Path) -> list[Path]:
             continue
         out.append(p)
     return out
-
-
-def _line_opts_out(lines: list[str], node: ast.AST) -> bool:
-    """True iff any physical line spanned by `node` carries a `# noqa`.
-
-    DEPRECATED — see the module docstring. This is a blanket, reasonless
-    hatch: an unrelated `# noqa: E501` silences PS-220 by accident, and it
-    records no reason anywhere an auditor can read.
-    """
-    start = getattr(node, "lineno", None)
-    if start is None:
-        return False
-    end = getattr(node, "end_lineno", start) or start
-    for lineno in range(start, end + 1):
-        idx = lineno - 1
-        if 0 <= idx < len(lines) and "noqa" in lines[idx]:
-            return True
-    return False
 
 
 def _print_calls(text: str) -> tuple[ast.AST | None, list[ast.Call]]:
@@ -204,40 +214,34 @@ _FIX_HINT = (
 def resolve_ps220_severity(config) -> str | None:
     """Resolve PS-220's effective severity for a project. None ⇒ do not fire.
 
-    The no-bare-print mandate is an ERROR for SciTeX ECOSYSTEM PACKAGES. It is
-    deliberately NOT an error for RESEARCH projects: the operator has not yet
-    ruled on whether the logging mandate binds paper-producing trees, and the
-    conservative default for an undecided question is to surface the debt
-    (``W``) rather than to wedge a publish on a decision nobody made. Mirrors
-    the established project-type severity branch for PA-306 under a ``django``
-    project-type (`_cli/audit/_api/_audit.py:184-190`).
+    PS-220 is a STAGED rollout (operator directive 2026-07-23): the default is
+    ``W`` for EVERY project type, and a package opts IN to ``E`` once it has
+    finished migrating its prints to scitex-logging. See the module docstring
+    for the directive and the blast-radius measurement behind it.
 
     Resolution order:
 
-    1. Explicit ``audit.enforce-logging`` in ``.scitex/dev/config.yaml``
-       (``error`` / ``warning`` / ``off``) always wins — the decision point is
-       per-repo and written down.
-    2. Otherwise ``research`` in ``project-type`` ⇒ ``W``.
-    3. Otherwise ``E`` (the rule tuple's registered severity).
+    1. An ACCEPTED ``audit.enforce-logging`` declaration in
+       ``.scitex/dev/config.yaml`` wins — this is the per-package opt-in.
+       ``error`` / ``off`` require a written reason and are parsed by
+       `_config._enforce_logging.parse_enforce_logging`; a REJECTED
+       declaration never reaches here (the loader leaves ``enforce_logging``
+       None), so a reasonless opt-in cannot enforce anything.
+    2. Otherwise ``W`` — the staged default, for ``[pip]`` and
+       ``[pip, research]`` alike.
 
     Note a research-ONLY project never reaches this at all: PS-220 is a ``PS-``
-    code, and `ProjectConfig.applies` (`_config/_loader.py:187-189`) admits
-    ``PS-`` rules only when ``pip`` is among the project types, so the auditor
-    drops the findings wholesale. This function is what governs the HYBRID
-    ``project-type: [pip, research]`` repo, which is the case that would
-    otherwise be silently promoted to an error.
+    code, and `ProjectConfig.applies` admits ``PS-`` rules only when ``pip`` is
+    among the project types, so the auditor drops the findings wholesale.
     """
     explicit = getattr(config, "enforce_logging", None)
     if explicit == "off":
         return None
-    if explicit == "warning":
-        return "W"
     if explicit == "error":
         return "E"
-    types = getattr(config, "project_types", frozenset()) or frozenset()
-    if "research" in types:
-        return "W"
-    return "E"
+    if explicit == "warning":
+        return _DEFAULT_SEVERITY
+    return _DEFAULT_SEVERITY
 
 
 def _emit(out: list, violation_cls, severity: str, rule: str, where: str, detail: str):
@@ -246,11 +250,12 @@ def _emit(out: list, violation_cls, severity: str, rule: str, where: str, detail
     `Violation.severity_override` is the auditor's established way to set a
     severity per finding rather than per rule (see `_violation.py:19-25` and
     `_new_vs_baseline.escalate_new_violations`). It is only set when it would
-    actually change something, so the rule's registered severity stays the
+    actually change something — i.e. when `severity` differs from the rule
+    tuple's REGISTERED severity — so the rule's registered severity stays the
     default story a reader gets.
     """
     v = violation_cls(rule, where, detail)
-    if severity != "E":
+    if severity != _DEFAULT_SEVERITY:
         try:
             v.severity_override = severity
         except (AttributeError, TypeError):  # pragma: no cover - stub classes
@@ -259,14 +264,15 @@ def _emit(out: list, violation_cls, severity: str, rule: str, where: str, detail
     return v
 
 
-def _report_rejected_exemptions(
-    repo: Path, config, violation_cls, out: list, severity: str
-) -> None:
-    """Surface `audit.exemptions` entries that were rejected as malformed.
+def _report_config_errors(repo: Path, config, violation_cls, out: list) -> None:
+    """Surface rejected `audit.exemptions` / `audit.enforce-logging` entries.
 
-    A rejected entry exempts NOTHING (the site still fires). Reporting it
-    separately is what keeps a blank-reason exemption from reading as a
-    quiet no-op the author believes worked.
+    A rejected exemption exempts NOTHING (the site still fires); a rejected
+    enforce-logging declaration enforces and silences NOTHING (the project
+    falls back to the staged default). Reporting each one separately, at
+    ``E``, is what keeps a reasonless override from reading as a quiet no-op
+    the author believes worked — which is the entire point of demanding a
+    written reason in the first place.
     """
     for notice in tuple(getattr(config, "exemption_errors", ()) or ()):
         if not notice.startswith("PS-220"):
@@ -274,13 +280,26 @@ def _report_rejected_exemptions(
         _emit(
             out,
             violation_cls,
-            severity,
+            _CONFIG_ERROR_SEVERITY,
             "PS-220",
             str(repo / ".scitex/dev/config.yaml"),
             (
                 f"Invalid `audit.exemptions` entry — {notice}. The entry "
                 f"does NOT exempt anything; an exemption must state WHY "
                 f"the site is exempt."
+            ),
+        )
+    for notice in tuple(getattr(config, "enforce_logging_errors", ()) or ()):
+        _emit(
+            out,
+            violation_cls,
+            _CONFIG_ERROR_SEVERITY,
+            "PS-220",
+            str(repo / ".scitex/dev/config.yaml"),
+            (
+                f"Invalid `audit.enforce-logging` declaration — {notice} "
+                f"PS-220 stays at its staged default severity "
+                f"({_DEFAULT_SEVERITY}) for this project."
             ),
         )
 
@@ -315,13 +334,15 @@ def check_ps220_no_print(
         except Exception:  # pragma: no cover - config is best-effort here
             config = None
 
-    severity = resolve_ps220_severity(config) if config is not None else "E"
+    severity = (
+        resolve_ps220_severity(config) if config is not None else _DEFAULT_SEVERITY
+    )
     if severity is None:
         # `audit.enforce-logging: off` — the project has explicitly opted out.
         return
 
     if config is not None:
-        _report_rejected_exemptions(repo, config, violation_cls, out, severity)
+        _report_config_errors(repo, config, violation_cls, out)
 
     exemption_for = getattr(config, "exemption_for", None)
 
@@ -333,7 +354,6 @@ def check_ps220_no_print(
         tree, calls = _print_calls(text)
         if tree is None or not calls:
             continue
-        lines = text.splitlines()
         rel = _relative(py, repo)
         for node in calls:
             flag, why = should_flag(tree, node)
@@ -342,29 +362,6 @@ def check_ps220_no_print(
             line_no = getattr(node, "lineno", 0)
 
             if exemption_for is not None and exemption_for("PS-220", rel, line_no):
-                continue
-
-            if _LEGACY_NOQA_ENABLED and _line_opts_out(lines, node):
-                # Always W — the deprecation notice must never be the thing
-                # that reds a build; it exists to give the fleet a migration
-                # window off the reasonless hatch.
-                _emit(
-                    out,
-                    violation_cls,
-                    "W",
-                    "PS-220-noqa-deprecated",
-                    f"{py}:{line_no}",
-                    (
-                        f"`print(...)` at line {line_no} is suppressed by a "
-                        f"DEPRECATED bare `# noqa`. That hatch is blanket "
-                        f"and reasonless — an unrelated `# noqa: E501` "
-                        f"silences PS-220 by accident, and it records no "
-                        f"auditable reason. It stops working next release. "
-                        f"Migrate to `.scitex/dev/config.yaml` "
-                        f"`audit.exemptions: PS-220:` with `path: {rel}`, "
-                        f"`line: {line_no}`, and a written `reason`."
-                    ),
-                )
                 continue
 
             _emit(
@@ -384,10 +381,13 @@ def check_ps220_no_print(
 # `_check_no_url_deps.URL_DEP_RULES` / `_check_version_flag.VERSION_FLAG_RULES`);
 # `_registry.py` merges `PRINT_FORBIDDEN_RULES` on the same terms.
 #
-# Severity E (operator directive 2026-07-22). The severity lives HERE, in the
-# rule tuple — NOT in `_registry._SEVERITY_OVERRIDES`. Both are honoured now
-# that `_patch` runs after the co-located merges, but the co-located tuple is
-# the rule's own home and is what a reader checks first.
+# Severity W — the STAGED-ROLLOUT default (operator directive 2026-07-23; it
+# was briefly E ecosystem-wide in 0.35.0 / PR #406). A package promotes ITSELF
+# to E via `audit.enforce-logging` once its print migration lands; see
+# `resolve_ps220_severity` and `_config._enforce_logging`. The severity lives
+# HERE, in the rule tuple — NOT in `_registry._SEVERITY_OVERRIDES`. Both are
+# honoured now that `_patch` runs after the co-located merges, but the
+# co-located tuple is the rule's own home and is what a reader checks first.
 #
 # (code, section, message, severity, slug)
 PRINT_FORBIDDEN_RULES: list[tuple[str, str, str, str, str]] = [
@@ -410,25 +410,14 @@ PRINT_FORBIDDEN_RULES: list[tuple[str, str, str, str, str]] = [
             "undecidable destination or payload, fires and needs a per-site "
             "`audit.exemptions` entry carrying a MANDATORY reason. Scope is "
             "the shippable `src/<pkg>/**.py` tree "
-            "(tests/scripts/examples/docs excluded)."
+            "(tests/scripts/examples/docs excluded). Reported as a WARNING by "
+            "default: the rollout is staged, and a package opts IN to an "
+            "error-level gate once its migration is done, by declaring "
+            "`audit.enforce-logging: {level: error, reason: \"...\"}` in "
+            "`.scitex/dev/config.yaml`."
         ),
-        "E",
+        _DEFAULT_SEVERITY,
         "source-uses-print-not-scitex-logging",
-    ),
-    (
-        "PS-220-noqa-deprecated",
-        "§2",
-        (
-            "A PS-220 site is suppressed by the DEPRECATED bare `# noqa` "
-            "hatch. That hatch is blanket and reasonless: an unrelated "
-            "`# noqa: E501` silences PS-220 by accident, and it leaves no "
-            "auditable record of WHY the site is exempt. Migrate to a per-site "
-            "`.scitex/dev/config.yaml` `audit.exemptions: PS-220:` entry with "
-            "`path`, `line`, and a written `reason`. The `# noqa` hatch is "
-            "honoured for ONE more release, then removed."
-        ),
-        "W",
-        "ps220-noqa-hatch-deprecated",
     ),
 ]
 

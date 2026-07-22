@@ -7,6 +7,51 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **PS-220 restaged: WARNING by default, error per-package opt-in.** 0.35.0
+  (#406) promoted PS-220 to ERROR ecosystem-wide. The measured blast radius
+  — 44 repos newly FAILING on 1856 findings, top-5 repos carrying 64 % of
+  them — led the operator to restage the rollout (Telegram 1691/1692):
+  「とりあえず warning で、移行できたものから red で」. The rule now
+  reports at `W` for every project type, and a package opts IN to an
+  error-level gate when its migration lands:
+
+  ```yaml
+  audit:
+    enforce-logging:
+      level: error
+      reason: "print migration complete (PR #412)"
+  ```
+
+  This is staging, not retreat: every finding stays visible on every audit
+  run, and nothing about what the rule DETECTS changed.
+
+- **`audit.enforce-logging` now demands a written reason.** `error` and
+  `off` deviate from the default and so carry a MANDATORY `reason`;
+  `warning` is accepted bare because it IS the default and changes
+  nothing. A missing or whitespace-only reason is a HARD CONFIG ERROR, not
+  a silent default: the declaration does NOT take effect (the project
+  falls back to `W`) AND the rejection is reported at `E`, so a package
+  can never believe it is gated — or silenced — when it is not. The old
+  bare shorthands `enforce-logging: error` / `enforce-logging: off` (and
+  their YAML 1.1 boolean spellings `on` / `off`) are rejected for exactly
+  this reason. Unrecognised values are now rejected loudly instead of
+  falling back silently. Parsing lives in
+  `_cli/audit/_config/_enforce_logging.py`.
+
+  Config errors are NOT staged: a rejected exemption entry and a rejected
+  enforce-logging declaration are both reported at `E` regardless of the
+  project's PS-220 severity. Staging covers migration debt; a malformed
+  override is not debt.
+
+### Removed
+- **The blanket `# noqa` hatch for PS-220, and its `PS-220-noqa-deprecated`
+  notice.** Deprecated in 0.35.0 for one release. A sweep of all 118 repos
+  under `~/proj` (8956 `src/**.py` files, 4448 flagged sites) found ZERO
+  sites using it, with a planted-user control confirming the sweep could
+  detect one. `audit.exemptions` — pinned to one rule at one file:line,
+  with a mandatory reason — is now the only per-site opt-out.
+
 ## [0.35.0] - 2026-07-22
 
 ### Added

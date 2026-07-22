@@ -9,8 +9,9 @@ whether PS-220 fires.
 
 The discriminator itself is unit-tested in `test__print_discriminator.py`;
 these tests cover the file walk, the scope exclusions, the per-site
-`audit.exemptions` surface, the deprecated `# noqa` hatch, and the
-project-type-aware severity.
+`audit.exemptions` surface, the removal of the `# noqa` hatch, and the
+STAGED severity (warning by default; each package opts in to error via
+`audit.enforce-logging` with a mandatory written reason).
 """
 
 from __future__ import annotations
@@ -244,12 +245,12 @@ def test_exemption_does_not_leak_to_a_different_file(tmp_path):
     assert "PS-220" in _codes(out)
 
 
-# --- deprecated `# noqa` hatch ----------------------------------------------
+# --- the `# noqa` hatch is REMOVED ------------------------------------------
 
 
-def test_noqa_hatch_reports_as_deprecated_not_silent(tmp_path):
-    # Arrange — the legacy hatch keeps WORKING (no PS-220) for one release,
-    # but it is no longer invisible.
+def test_noqa_no_longer_suppresses_a_flagged_print(tmp_path):
+    # Arrange — the removed hatch must not silence the site any more. A sweep
+    # of all 118 repos under ~/proj found ZERO users before deleting it.
     _write_src(
         tmp_path,
         "scitex_demo/_cli.py",
@@ -258,12 +259,24 @@ def test_noqa_hatch_reports_as_deprecated_not_silent(tmp_path):
     # Act
     out = _run(tmp_path)
     # Assert
-    assert _codes(out) == ["PS-220-noqa-deprecated"]
+    assert _codes(out) == ["PS-220"]
 
 
-def test_noqa_on_an_already_spared_print_reports_nothing(tmp_path):
-    # Arrange — the discriminator spares this site structurally, so there is
-    # no suppression to deprecate and no notice to raise.
+def test_noqa_no_longer_emits_the_retired_deprecation_code(tmp_path):
+    # Arrange — `PS-220-noqa-deprecated` is gone; nothing may still emit it
+    _write_src(
+        tmp_path,
+        "scitex_demo/_cli.py",
+        "def render():\n    print('done')  # noqa\n",
+    )
+    # Act
+    out = _run(tmp_path)
+    # Assert
+    assert "PS-220-noqa-deprecated" not in _codes(out)
+
+
+def test_noqa_on_a_structurally_spared_print_still_reports_nothing(tmp_path):
+    # Arrange — the discriminator spares this site regardless of the comment
     _write_src(
         tmp_path,
         "scitex_demo/_cli.py",
@@ -275,34 +288,21 @@ def test_noqa_on_an_already_spared_print_reports_nothing(tmp_path):
     assert out == []
 
 
-def test_noqa_deprecation_notice_never_carries_error_severity(tmp_path):
-    # Arrange — the migration notice must not be what reds a build
-    _write_src(
-        tmp_path,
-        "scitex_demo/_cli.py",
-        "def render(report):\n    print(f'{report}')  # noqa\n",
-    )
-    # Act
-    out = _run(tmp_path)
-    # Assert
-    assert out[0].severity_override == "W"
+# --- staged default: WARNING for everyone ------------------------------------
 
 
-# --- project-type-aware severity --------------------------------------------
-
-
-def test_pip_package_resolves_ps220_to_error(tmp_path):
-    # Arrange
+def test_pip_package_resolves_ps220_to_warning_by_default(tmp_path):
+    # Arrange — the staged rollout defaults every package to warning
     _write_config(tmp_path, "project-type:\n  - pip\n")
     cfg = load_config(tmp_path)
     # Act
     severity = resolve_ps220_severity(cfg)
     # Assert
-    assert severity == "E"
+    assert severity == "W"
 
 
-def test_research_hybrid_resolves_ps220_to_warning(tmp_path):
-    # Arrange — the operator has NOT ruled on research trees
+def test_research_hybrid_resolves_ps220_to_warning_by_default(tmp_path):
+    # Arrange
     _write_config(tmp_path, "project-type:\n  - pip\n  - research\n")
     cfg = load_config(tmp_path)
     # Act
@@ -311,18 +311,8 @@ def test_research_hybrid_resolves_ps220_to_warning(tmp_path):
     assert severity == "W"
 
 
-def test_research_hybrid_findings_carry_warning_override(tmp_path):
-    # Arrange
-    _write_src(tmp_path, "scitex_demo/_core.py", "def go():\n    print('hello')\n")
-    _write_config(tmp_path, "project-type:\n  - pip\n  - research\n")
-    # Act
-    out = _run(tmp_path)
-    # Assert
-    assert out[0].severity_override == "W"
-
-
-def test_pip_package_findings_carry_no_severity_override(tmp_path):
-    # Arrange — E is the rule's registered severity, so no override is needed
+def test_default_findings_carry_no_severity_override(tmp_path):
+    # Arrange — W is now the rule's registered severity, so no override needed
     _write_src(tmp_path, "scitex_demo/_core.py", "def go():\n    print('hello')\n")
     _write_config(tmp_path, "project-type:\n  - pip\n")
     # Act
@@ -331,11 +321,24 @@ def test_pip_package_findings_carry_no_severity_override(tmp_path):
     assert out[0].severity_override is None
 
 
-def test_enforce_logging_error_overrides_research_default(tmp_path):
-    # Arrange — a research repo that WANTS the mandate writes it down
+# --- opt-in to error: the reason is MANDATORY --------------------------------
+
+
+_OPT_IN_YAML = (
+    "project-type:\n"
+    "  - pip\n"
+    "audit:\n"
+    "  enforce-logging:\n"
+    "    level: {level}\n"
+    "    reason: {reason}\n"
+)
+
+
+def test_opt_in_with_a_written_reason_resolves_to_error(tmp_path):
+    # Arrange — the package declares its print migration complete
     _write_config(
         tmp_path,
-        "project-type:\n  - pip\n  - research\naudit:\n  enforce-logging: error\n",
+        _OPT_IN_YAML.format(level="error", reason='"migration complete (PR #412)"'),
     )
     cfg = load_config(tmp_path)
     # Act
@@ -344,9 +347,21 @@ def test_enforce_logging_error_overrides_research_default(tmp_path):
     assert severity == "E"
 
 
-def test_enforce_logging_warning_overrides_package_default(tmp_path):
+def test_opt_in_with_a_written_reason_stores_that_reason(tmp_path):
     # Arrange
-    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: warning\n")
+    _write_config(
+        tmp_path,
+        _OPT_IN_YAML.format(level="error", reason='"migration complete (PR #412)"'),
+    )
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.enforce_logging_reason == "migration complete (PR #412)"
+
+
+def test_opt_in_with_blank_reason_does_not_reach_error_severity(tmp_path):
+    # Arrange — a reasonless opt-in must not enforce anything
+    _write_config(tmp_path, _OPT_IN_YAML.format(level="error", reason='"   "'))
     cfg = load_config(tmp_path)
     # Act
     severity = resolve_ps220_severity(cfg)
@@ -354,21 +369,64 @@ def test_enforce_logging_warning_overrides_package_default(tmp_path):
     assert severity == "W"
 
 
-def test_enforce_logging_off_stops_the_rule_firing(tmp_path):
-    # Arrange — bare `off` is YAML 1.1 boolean False, not the string "off"
+def test_opt_in_with_blank_reason_is_reported_as_a_rejected_declaration(tmp_path):
+    # Arrange — a rejected opt-in must not read as a quiet no-op
     _write_src(tmp_path, "scitex_demo/_core.py", "def go():\n    print('hello')\n")
-    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: off\n")
+    _write_config(tmp_path, _OPT_IN_YAML.format(level="error", reason='"   "'))
     # Act
     out = _run(tmp_path)
     # Assert
-    assert out == []
+    assert any("REJECTED" in v.detail for v in out)
 
 
-def test_quoted_enforce_logging_off_stops_the_rule_firing(tmp_path):
-    # Arrange — the quoted spelling must behave identically to the bare one
+def test_rejected_declaration_is_reported_at_error_severity(tmp_path):
+    # Arrange — a malformed config is a hard error, not staged migration debt
+    _write_src(tmp_path, "scitex_demo/_core.py", "def go():\n    print('hello')\n")
+    _write_config(tmp_path, _OPT_IN_YAML.format(level="error", reason='"   "'))
+    # Act
+    out = _run(tmp_path)
+    notices = [v for v in out if "REJECTED" in v.detail]
+    # Assert
+    assert notices[0].severity_override == "E"
+
+
+def test_bare_error_shorthand_is_rejected_for_carrying_no_reason(tmp_path):
+    # Arrange — the pre-staging spelling `enforce-logging: error` has no reason
+    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: error\n")
+    cfg = load_config(tmp_path)
+    # Act
+    severity = resolve_ps220_severity(cfg)
+    # Assert
+    assert severity == "W"
+
+
+def test_bare_error_shorthand_records_a_rejection_notice(tmp_path):
+    # Arrange
+    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: error\n")
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert any("REJECTED" in n for n in cfg.enforce_logging_errors)
+
+
+def test_yaml_boolean_true_shorthand_is_rejected_for_carrying_no_reason(tmp_path):
+    # Arrange — bare `on`/`yes` is YAML 1.1 boolean True, i.e. `error`
+    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: on\n")
+    cfg = load_config(tmp_path)
+    # Act
+    severity = resolve_ps220_severity(cfg)
+    # Assert
+    assert severity == "W"
+
+
+# --- `off` also demands a reason ---------------------------------------------
+
+
+def test_off_with_a_written_reason_stops_the_rule_firing(tmp_path):
+    # Arrange
     _write_src(tmp_path, "scitex_demo/_core.py", "def go():\n    print('hello')\n")
     _write_config(
-        tmp_path, 'project-type:\n  - pip\naudit:\n  enforce-logging: "off"\n'
+        tmp_path, _OPT_IN_YAML.format(level="off", reason='"vendored third-party tree"')
     )
     # Act
     out = _run(tmp_path)
@@ -376,24 +434,84 @@ def test_quoted_enforce_logging_off_stops_the_rule_firing(tmp_path):
     assert out == []
 
 
-def test_yaml_boolean_true_enforce_logging_resolves_to_error(tmp_path):
-    # Arrange — bare `on`/`yes` is YAML 1.1 boolean True
-    _write_config(tmp_path, "project-type:\n  - pip\n  - research\naudit:\n  enforce-logging: on\n")
+def test_quoted_off_level_with_a_reason_behaves_like_the_bare_one(tmp_path):
+    # Arrange — YAML 1.1 turns bare `off` into False; both spellings must match
+    _write_src(tmp_path, "scitex_demo/_core.py", "def go():\n    print('hello')\n")
+    _write_config(
+        tmp_path,
+        _OPT_IN_YAML.format(level='"off"', reason='"vendored third-party tree"'),
+    )
+    # Act
+    out = _run(tmp_path)
+    # Assert
+    assert out == []
+
+
+def test_bare_off_shorthand_is_rejected_and_the_rule_still_fires(tmp_path):
+    # Arrange — the strongest suppression available must never be reasonless
+    _write_src(tmp_path, "scitex_demo/_core.py", "def go():\n    print('hello')\n")
+    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: off\n")
+    # Act
+    out = _run(tmp_path)
+    # Assert
+    assert "PS-220" in _codes(out)
+
+
+# --- `warning` needs no reason (it IS the default) ---------------------------
+
+
+def test_bare_warning_shorthand_is_accepted_without_a_reason(tmp_path):
+    # Arrange — writing the default changes nothing, so it needs no rationale
+    _write_config(
+        tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: warning\n"
+    )
     cfg = load_config(tmp_path)
     # Act
     severity = resolve_ps220_severity(cfg)
     # Assert
-    assert severity == "E"
+    assert severity == "W"
 
 
-def test_unrecognised_enforce_logging_value_falls_back_to_default(tmp_path):
-    # Arrange — a typo must not silently disable the gate
+def test_bare_warning_shorthand_records_no_rejection_notice(tmp_path):
+    # Arrange
+    _write_config(
+        tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: warning\n"
+    )
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.enforce_logging_errors == ()
+
+
+def test_unrecognised_enforce_logging_value_falls_back_to_the_staged_default(tmp_path):
+    # Arrange — a typo must not silently change the gate in either direction
     _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: maybe\n")
     cfg = load_config(tmp_path)
     # Act
     severity = resolve_ps220_severity(cfg)
     # Assert
-    assert severity == "E"
+    assert severity == "W"
+
+
+def test_unrecognised_enforce_logging_value_records_a_rejection_notice(tmp_path):
+    # Arrange — falling back must be LOUD, not silent
+    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: maybe\n")
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert any("not a recognised level" in n for n in cfg.enforce_logging_errors)
+
+
+def test_mapping_without_a_level_is_rejected(tmp_path):
+    # Arrange — a reason with no level declares nothing
+    _write_config(
+        tmp_path,
+        "project-type:\n  - pip\naudit:\n  enforce-logging:\n    reason: \"we tried\"\n",
+    )
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert any("missing `level`" in n for n in cfg.enforce_logging_errors)
 
 
 # EOF
