@@ -16,8 +16,9 @@ with raw `pd.read_parquet` / `np.load` calls lint clean:
   emit a one-shot summary the first time the count goes non-zero so the
   miss can't pass silently for the whole run.
 
-Both notices go to ``sys.stderr`` so the PostToolUse ``run_lint.sh``
-hook's existing ``>&2`` convention propagates them to the agent.
+Both notices go through scitex-logging at WARNING level, which writes to
+``sys.stderr``, so the PostToolUse ``run_lint.sh`` hook's existing ``>&2``
+convention propagates them to the agent.
 ``SCITEX_DEV_LINTER_QUIET=1`` suppresses both — used by the test suite
 and by humans who genuinely want a silent run.
 
@@ -32,8 +33,11 @@ notices kill.
 from __future__ import annotations
 
 import os
-import sys
 import threading
+
+import scitex_logging as slogging
+
+log = slogging.getLogger(__name__)
 
 
 # Categories that signal "this is IO / path / structural coverage" — if a
@@ -138,14 +142,13 @@ def _maybe_emit_l1() -> None:
         # positives. The structural-rule case stays covered by L2.
         return
     _emitted_l1 = True
-    print(
-        "\033[33m[scitex-dev linter] WARNING: no IO/PA category rules "
+    log.warning(
+        "[scitex-dev linter] no IO/PA category rules "
         "registered — scitex-io plugin is NOT installed in this venv. "
         "All `pd.read_*` / `np.load/save` / `pickle.dump/load` / "
         "`df.to_*` / `open()` checks (STX-IO001-014, STX-PA001-005) are "
         "SILENTLY skipped. Run `pip install scitex-io` to enable. Set "
-        "SCITEX_DEV_LINTER_QUIET=1 to suppress this notice.\033[0m",
-        file=sys.stderr,
+        "SCITEX_DEV_LINTER_QUIET=1 to suppress this notice."
     )
 
 
@@ -161,14 +164,13 @@ def _maybe_emit_l2() -> None:
     for req, n in sorted(_skip_counts.items()):
         parts.append(f"{n} rule(s) requiring `{req}` (not importable)")
     summary = "; ".join(parts)
-    print(
-        f"\033[33m[scitex-dev linter] WARNING: {summary} silently "
+    log.warning(
+        f"[scitex-dev linter] {summary} silently "
         "skipped via `requires=` gate. The package that provides "
         "these rules is registered but the dependency the rules check "
         "for is missing from this venv. Install the missing dep (e.g. "
         "`pip install scitex` for the umbrella) to enable them. Set "
-        "SCITEX_DEV_LINTER_QUIET=1 to suppress.\033[0m",
-        file=sys.stderr,
+        "SCITEX_DEV_LINTER_QUIET=1 to suppress."
     )
 
 
