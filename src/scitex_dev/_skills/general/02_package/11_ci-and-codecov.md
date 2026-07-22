@@ -230,6 +230,42 @@ def test_audit_all_clean():
 the spec, not for muffling a real violation. If a rule fires, fix the
 package; don't add a skip.
 
+### Deferring a rule to a migration campaign
+
+The wrapper's `skip_rules=` kwarg only masked the *pytest* gate. The org
+reusable workflow calls `scitex-dev ecosystem audit-all` directly, which
+used to bypass it entirely — so `develop` could be green while unified
+CI was red on identical code (measured in scitex-hub PR #433).
+
+Declare deferrals in `<repo>/.scitex/dev/config.yaml` instead. Both
+gates read the same source:
+
+```yaml
+audit:
+  skip-rules:
+    PS-139: "TQ-migration campaign — tracked in scitex-hub#412"
+    "§6": "MCP parity lands with the umbrella-thinning wave"
+```
+
+Rules:
+
+- **A rationale is mandatory.** A bare list (`- PS-139`) is rejected
+  with exit 2, naming the entry. A deferral that cannot say why is the
+  abandonment the mechanism exists to catch.
+- **Honouring is never silent.** `audit-all` always prints a MASKED
+  INVENTORY — the total, each rule id, its masked count and its written
+  reason — in the normal output, not behind a flag.
+- **The summary states both numbers**: unmasked errors *and* masked
+  count. "0 errors" while 150 are masked is a lie of omission.
+- The exit code is still driven by *unmasked* findings. Declaring one
+  deferral never blanket-silences anything else.
+- A declared rule matching zero violations is reported as removable —
+  the campaign it waited on has landed.
+
+This is distinct from the legacy `audit.skip` (bare codes, honoured only
+by `audit-project`, applied silently) and from `audit.capabilities` (a
+declared package *property* gating a fixed rule set).
+
 ## Track `.scitex/dev/config.yaml`
 
 Audit whitelists (`audit.root-whitelist.files:` etc.) live at

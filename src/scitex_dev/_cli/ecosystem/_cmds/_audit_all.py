@@ -235,19 +235,53 @@ def register(ecosystem):
                     err=True,
                 )
                 return a, {"exit": 1, "error": str(e)}
+            # `_raw` carries the auditor's combined text for skip-rule
+            # classification and is POPPED before the JSON payload is
+            # assembled, so it never changes the published shape. Without
+            # it, --json mode parsed stdout into `data` and kept no text,
+            # so masking silently classified nothing and every declared
+            # deferral was ignored for machine consumers.
+            raw_text = (r.stdout or "") + "\n" + (r.stderr or "")
             if as_json:
                 payload = r.stdout.strip() or "null"
                 try:
-                    return a, {"exit": r.returncode, "data": _json.loads(payload)}
+                    res = {"exit": r.returncode, "data": _json.loads(payload)}
                 except _json.JSONDecodeError:
-                    return a, {"exit": r.returncode, "raw": payload}
+                    res = {"exit": r.returncode, "raw": payload}
+                res["_raw"] = raw_text
+                return a, res
             return a, {
                 "exit": r.returncode,
                 "stdout": r.stdout,
                 "stderr": r.stderr,
+                "_raw": raw_text,
             }
 
-        def _run_one(distribution: str) -> tuple[str, int, dict]:
+        # Declared deferrals (`audit.skip-rules`). Honoured NATIVELY here
+        # so the org reusable workflow and the per-repo pytest wrapper
+        # grade the same thing — they used to disagree, leaving develop
+        # green while unified CI was red on identical code. Honouring is
+        # never silent: see the masked inventory emitted below.
+        #
+        # A malformed / rationale-less entry raises, and we let it: a
+        # deferral config we cannot trust must not be graded as if the
+        # repo had declared no deferrals at all.
+        from ...audit._config._skip_rules import SkipRuleConfigError
+        from ._audit_masking import (
+            classify_output,
+            json_payload,
+            render_inventory,
+            render_summary,
+            resolve_skip_rules,
+        )
+
+        try:
+            skip_rules_by_pkg = resolve_skip_rules(pkgs, explicit_path)
+        except SkipRuleConfigError as e:
+            click.echo(f"error: {e}", err=True)
+            _sys.exit(2)
+
+        def _run_one(distribution: str) -> tuple[str, int, dict, object]:
             collected: dict = {}
             if per_pkg_workers == 1:
                 for a in audits:
@@ -263,7 +297,21 @@ def register(ecosystem):
             # regardless of which audit finished first.
             results = {a: collected[a] for a in audits}
             pkg_exit = 1 if any(r.get("exit", 0) != 0 for r in results.values()) else 0
-            return distribution, pkg_exit, results
+
+            # Re-classify against declared skips. A sub-auditor that
+            # failed ONLY on deferred rules no longer fails the run; one
+            # that reported anything undeclared still does.
+            # Classify ALWAYS, even with zero declared skips, so the
+            # summary's error/masked counts are measured rather than
+            # inferred from a subprocess exit code.
+            rules = skip_rules_by_pkg.get(distribution) or []
+            combined = "\n".join(
+                r.pop("_raw", "") or "" for r in results.values()
+            )
+            report = classify_output(combined, rules)
+            if pkg_exit and report.fully_masked:
+                pkg_exit = 0
+            return distribution, pkg_exit, results, report
 
         # --new-only orchestration: stage the base ref via worktree-
         # detach + run the SAME audit-all against the base path + diff
@@ -284,7 +332,7 @@ def register(ecosystem):
             distribution = pkgs[0]
             # Run audit-all against HEAD first; reuse the existing
             # dispatch path so behaviour matches strict mode 1:1.
-            _, _head_exit, head_results = _run_one(distribution)
+            _, _head_exit, head_results, _ = _run_one(distribution)
             head_combined = "\n".join(
                 (res.get("stdout") or "") + "\n" + (res.get("stderr") or "")
                 for res in head_results.values()
@@ -337,6 +385,7 @@ def register(ecosystem):
             _sys.exit(1 if net_new else 0)
 
         all_results: dict[str, dict] = {}
+        mask_reports: dict[str, object] = {}
         overall_exit = 0
 
         multi = len(pkgs) > 1
@@ -356,14 +405,27 @@ def register(ecosystem):
                 if r.get("stderr"):
                     click.echo(r["stderr"], err=True)
 
+        def _emit_mask(name: str, report) -> None:
+            """Print the masked inventory. NEVER behind a verbosity flag.
+
+            Routed to stderr alongside the auditor headlines so it lands
+            in CI logs on the same stream as the findings it explains.
+            """
+            if as_json or report is None:
+                return
+            for line in render_inventory(report, name):
+                click.echo(line, err=True)
+
         # Run packages. When multiple packages run in parallel, collect all
         # results first, then print in the input `pkgs` order so the summary
         # is deterministic regardless of completion order.
         if jobs <= 1 or not multi:
             for d in pkgs:
-                name, rc, res = _run_one(d)
+                name, rc, res, rep = _run_one(d)
                 all_results[name] = res
+                mask_reports[name] = rep
                 _emit_pkg(name, res)
+                _emit_mask(name, rep)
                 if rc != 0:
                     overall_exit = 1
         else:
@@ -371,11 +433,13 @@ def register(ecosystem):
                 futs = {ex.submit(_run_one, d): d for d in pkgs}
                 rc_by_pkg: dict[str, int] = {}
                 for f in as_completed(futs):
-                    name, rc, res = f.result()
+                    name, rc, res, rep = f.result()
                     all_results[name] = res
+                    mask_reports[name] = rep
                     rc_by_pkg[name] = rc
             for d in pkgs:
                 _emit_pkg(d, all_results[d])
+                _emit_mask(d, mask_reports[d])
                 if rc_by_pkg[d] != 0:
                     overall_exit = 1
 
@@ -385,6 +449,7 @@ def register(ecosystem):
                     {
                         "distributions": pkgs,
                         "results": all_results,
+                        "skip_rules": json_payload(mask_reports, pkgs),
                         "exit_code": overall_exit,
                     },
                     indent=2,
@@ -393,8 +458,27 @@ def register(ecosystem):
         else:
             from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
+            # Per-package summary — ALWAYS, single or multi. It must state
+            # BOTH numbers: real errors AND masked count. A summary that
+            # reports only "0 errors" while 150 are masked is a lie of
+            # omission, and is exactly how develop stayed green while the
+            # unified CI was red on identical code.
+            click.echo("", err=True)
+            for d in pkgs:
+                rep = mask_reports.get(d)
+                if rep is None:
+                    continue
+                click.echo(
+                    render_summary(
+                        d,
+                        unmasked_errors=rep.unmasked_error_count,
+                        unmasked_total=rep.unmasked_count,
+                        masked=rep.masked_count,
+                        declared=len(rep.skip_rules),
+                    ),
+                    err=True,
+                )
             if len(pkgs) > 1:
-                click.echo("", err=True)
                 click.echo(f"summary: audited {len(pkgs)} package(s)", err=True)
                 fails = [
                     n

@@ -462,7 +462,9 @@ def audit_django(
     n_w = sum(1 for v in visible if v.severity == "W")
     n_i = sum(1 for v in visible if v.severity == "I")
     headline_level = "error" if exit_code else "warning"
-    summary = f"{distribution} ({repo_root}): {n_errors} error(s)"
+    # Category-named failure line — mirrors the clean line's
+    # "no Django-standard violations". See the note in _project/_audit.py.
+    summary = f"{distribution} ({repo_root}): Django-standard: {n_errors} error(s)"
     if n_w:
         summary += f", {n_w} warning(s)"
     if n_i:

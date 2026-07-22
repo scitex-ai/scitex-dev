@@ -230,7 +230,7 @@ def _emit_human(package: str, status: str, violations: list) -> None:
         _emit("info", f"{package}: no console script — skipped")
         return
     if status.startswith("not-auditable"):
-        _emit("error", f"{package}: {status}", err=True)
+        _emit("error", f"{package}: CLI conventions: {status}", err=True)
         return
     from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
@@ -241,7 +241,9 @@ def _emit_human(package: str, status: str, violations: list) -> None:
     sev = _max_severity(violations)
     level = "error" if sev == "error" else "warning"
     noun = "error(s)" if sev == "error" else "warning(s)"
-    _emit(level, f"{package}: {len(violations)} {noun}")
+    # Category-named failure line — mirrors the clean line's
+    # "no CLI convention violations". See the note in _project/_audit.py.
+    _emit(level, f"{package}: CLI conventions: {len(violations)} {noun}")
     for v in violations:
         _emit(level, f"  [{v.rule}] {v.command}: {v.message}")
     emit_disclaimer()

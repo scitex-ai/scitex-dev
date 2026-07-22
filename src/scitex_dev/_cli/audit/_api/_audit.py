@@ -227,7 +227,9 @@ def audit_api(
 
     has_error = any(_effective_severity(v.rule) == "error" for v in violations)
     headline_level = "error" if has_error else "warning"
-    _emit(headline_level, f"{distribution}: {len(violations)} violation(s)")
+    # Category-named failure line — mirrors the clean line's
+    # "no Python API violations". See the note in _project/_audit.py.
+    _emit(headline_level, f"{distribution}: Python API: {len(violations)} violation(s)")
     # Per-violation lines use the rule's effective severity so a mixed run
     # shows each rule at its actual level (warnings for PA-301, errors for
     # PA-307, and PA-306 as a warning when django-relaxed).
