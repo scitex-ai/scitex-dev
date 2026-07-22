@@ -1243,6 +1243,17 @@ from ._check_extras_all_closure import (  # noqa: E402
 for _c, _sec, _msg, _sev, _slug in _ALL_CLOSURE_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
+# PS-222 — `.scitex/<pkg-short>/` config-layout convention (co-located rule,
+# merged on the same terms as ALL_CLOSURE_RULES / PRINT_FORBIDDEN_RULES).
+# Severity W lives in the tuple, NOT in `_SEVERITY_OVERRIDES` — see the note
+# beside `_patch`: an override for a co-located rule is a silent no-op.
+from ._check_config_layout import (  # noqa: E402
+    CONFIG_LAYOUT_RULES as _CONFIG_LAYOUT_RULES,
+)
+
+for _c, _sec, _msg, _sev, _slug in _CONFIG_LAYOUT_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
 # hook-bypass: line-limit
 # ---------------------------------------------------------------------------
 # Severity/slug overrides are applied LAST, so the table is honest for EVERY

@@ -118,6 +118,15 @@ def run_checks(
     from ._check_extras_all_closure import check_ps221_extras_all_closure
 
     check_ps221_extras_all_closure(repo_root, Violation, violations)
+    # PS-222: `.scitex/<pkg-short>/` config-layout convention. Everything
+    # directly under a package's local-state root is TRACKED except
+    # `runtime/`, the one gitignored subdir; the primary config is always
+    # named `config.yaml`, never a `<pkg-short>.yaml` alias, and a package
+    # scope is always a directory (never a bare `.scitex/<pkg>.yaml` file).
+    # W during bake-in; opt out only via `audit.exemptions` with a reason.
+    from ._check_config_layout import check_ps222_config_layout
+
+    check_ps222_config_layout(repo_root, Violation, violations)
     # PS-218/PS-219: CLI-normalization conformance (items 4-5). Health-check
     # verb standardizes on `doctor` (`health` is a deprecated alias); version
     # standardizes on the `--version`/`-V` flag (not a `version` subcommand).
