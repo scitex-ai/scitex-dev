@@ -435,20 +435,24 @@ def audit_django(
     if json_out:
         import json as _json
 
+        def _as_dict(v: Violation) -> dict:
+            return {
+                "rule": v.rule,
+                "where": v.where,
+                "detail": v.detail,
+                "severity": v.severity,
+            }
+
+        # `violations` stays floor-filtered (honours --severity); `violations_total`
+        # lists EVERY surviving finding so --json never silently omits a below-floor
+        # W (the residual half of #417/#420: was `[]` while `warnings`>0 by count).
         click.echo(
             _json.dumps(
                 {
                     "distribution": distribution,
                     "repo": str(repo_root),
-                    "violations": [
-                        {
-                            "rule": v.rule,
-                            "where": v.where,
-                            "detail": v.detail,
-                            "severity": v.severity,
-                        }
-                        for v in visible
-                    ],
+                    "violations": [_as_dict(v) for v in visible],
+                    "violations_total": [_as_dict(v) for v in violations],
                     "exit_code": exit_code,
                     "errors": n_errors,
                     # Counted over every surviving finding — a consumer
