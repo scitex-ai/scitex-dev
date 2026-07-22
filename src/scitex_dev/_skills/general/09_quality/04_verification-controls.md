@@ -46,13 +46,16 @@ layer — decided upstream of the finding count. Ask what a probe must traverse
 to reach the failure you care about.
 
 A scoped checker is mispositioned by construction when the scope does not
-recurse. Instance: `check_skill_dir` iterates one directory (`iterdir`, not
-`rglob`), so pointing it at `_skills/general/` reports **clean at any size** —
-`general/` holds only subdirectories, and every leaf that could violate the
-size rule lives one level down. Two agents in a row read that green as
-coverage for `general/09_quality/`. Aim a scoped checker at the directory that
-actually holds the files, then prove the aim: inflate one file past the
-threshold, confirm the violation fires, restore.
+recurse. Measured 2026-07-23: `check_skill_dir` iterates one directory
+(`iterdir`, not `rglob`), so aimed at `_skills/general/` it examined **1 leaf**
+(`40_playground.md`) and never saw the 5 leaves under `09_quality/` at all. It
+is not silent — it reported an unrelated `§3.index-monolith` on `general/`'s own
+SKILL.md — and that is what makes it worse: a report about *some* file reads as
+a report about *your* file. Two agents in a row took it as size coverage for
+`09_quality/`. Aim a scoped checker at the directory that actually holds the
+files, then prove the aim: the same run on `09_quality/` said CLEAN, and
+inflating one leaf to 30080 B made `§4.monolith` fire — so the CLEAN was earned,
+not structural.
 
 **Sampling — the unit of variation is the Bash call.** Identical command text
 gave one result 5/5 in one invocation and the opposite 20/20 in another, each
