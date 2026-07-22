@@ -43,6 +43,12 @@ _OVERRIDES_ANCHOR = "_SEVERITY_OVERRIDES: dict[str, str] = {"
 # of rule the trap made unreachable.
 _LATE_RULE = "PS-220"
 
+# The severity injected by the behavioural test. It MUST differ from the
+# rule's own registered severity, or the test is a tautology that passes even
+# under the broken ordering. PS-220 is registered at "W" (its staged-rollout
+# default), so the injection promotes it to "E".
+_INJECTED_SEVERITY = "E"
+
 
 # --- structural: the apply must come after every merge ----------------------
 
@@ -126,21 +132,29 @@ def _exec_registry_with_override(code: str, severity: str) -> dict:
     return ns["RULES"]
 
 
-def test_injected_override_reaches_a_late_merged_rule():
-    # Arrange — demote PS-220 to W purely inside the re-executed namespace.
-    # Under the old ordering this had NO effect; PS-220 stayed at its
-    # co-located "E" and the table lied.
+def test_injected_severity_differs_from_the_rules_registered_one():
+    # Arrange — guards the two tests below from becoming tautologies
     # Act
-    rules = _exec_registry_with_override(_LATE_RULE, "W")
+    registered = _registry.RULES[_LATE_RULE].severity
     # Assert
-    assert rules[_LATE_RULE].severity == "W"
+    assert registered != _INJECTED_SEVERITY
+
+
+def test_injected_override_reaches_a_late_merged_rule():
+    # Arrange — promote PS-220 to E purely inside the re-executed namespace.
+    # Under the old ordering this had NO effect; PS-220 kept its co-located
+    # severity and the table lied.
+    # Act
+    rules = _exec_registry_with_override(_LATE_RULE, _INJECTED_SEVERITY)
+    # Assert
+    assert rules[_LATE_RULE].severity == _INJECTED_SEVERITY
 
 
 def test_injected_override_does_not_mutate_the_live_registry():
     # Arrange
     before = _registry.RULES[_LATE_RULE].severity
     # Act
-    _exec_registry_with_override(_LATE_RULE, "W")
+    _exec_registry_with_override(_LATE_RULE, _INJECTED_SEVERITY)
     # Assert
     assert _registry.RULES[_LATE_RULE].severity == before
 
