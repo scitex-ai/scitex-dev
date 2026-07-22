@@ -55,6 +55,29 @@ versions follow [Semantic Versioning](https://semver.org/).
   untouched: they need the console API still being designed.
 
 ### Fixed
+- **`skills list` and `skills get` were broken and now work again (#423).**
+  The symptom: running `skills list` or `skills get` raised
+  `ModuleNotFoundError: No module named 'scitex_dev._core._ecosystem'` (and
+  the `._docs` equivalent). This hit BOTH front-ends — argparse and Click —
+  in every downstream package using the shared
+  `register_skills_subcommand` / `skills_click_group` surface, because
+  `_skills_click.py` imports `_skills_get` / `_skills_list` FROM
+  `_skills_argparse` and so inherited the fault.
+
+  Cause: the `dispatch.py` → `dispatch/` package split (2026-07-11,
+  CLI-standardization audit pass 4b) added one nesting level. The Click
+  flavors were corrected to `...`, but both argparse flavors kept the
+  flat-module `..` depth, which resolves to the non-existent
+  `scitex_dev._core._ecosystem` / `._docs`. 7 sites: 5 in
+  `_skills_argparse`, 2 in `_docs_argparse`.
+
+  The imports are function-local, so the modules imported cleanly and only
+  exploded when a command actually RAN — which is why import-smoke and the
+  split's own tests stayed green: they asserted argv PARSING and never
+  called `args.func`. The new tests dispatch through `args.func` against the
+  real entry points, plus `find_spec` assertions pinning that the backing
+  modules live under the package root and NOT under `scitex_dev._core`.
+
 - **`audit-project` never prints SUCC over live warning findings (#417).**
   The success banner was decided from the severity-FLOOR-filtered finding
   list, so at the default `--severity error` a tree carrying live W findings
