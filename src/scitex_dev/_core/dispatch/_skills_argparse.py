@@ -138,7 +138,7 @@ def _skills_list(args: argparse.Namespace, package: str) -> None:
     import logging
 
     logging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
-    from .._ecosystem._skills.skills import list_skills
+    from ..._ecosystem._skills.skills import list_skills
 
     result = list_skills(package=package)
     if args.as_json:
@@ -162,9 +162,9 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
     import logging
 
     logging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
-    from .._ecosystem._skills.skills import export_skills
+    from ..._ecosystem._skills.skills import export_skills
 
-    from .._ecosystem._skills.skills import _get_default_export_dest
+    from ..._ecosystem._skills.skills import _get_default_export_dest
 
     dest = (
         Path(args.dest) if getattr(args, "dest", None) else _get_default_export_dest()
@@ -172,7 +172,7 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
     source = getattr(args, "source", "installed")
     clean = getattr(args, "clean", False)
     if getattr(args, "dry_run", False):
-        from .._ecosystem._skills.skills import list_skills
+        from ..._ecosystem._skills.skills import list_skills
 
         result = {
             k: [e["name"] + ".md" for e in v]
@@ -215,7 +215,7 @@ def _skills_get(args: argparse.Namespace, package: str) -> None:
         _skills_list(argparse.Namespace(as_json=False), package)
         return
 
-    from .._ecosystem._skills.skills import get_skill
+    from ..._ecosystem._skills.skills import get_skill
 
     content = get_skill(package=package, name=args.name)
     if content:
