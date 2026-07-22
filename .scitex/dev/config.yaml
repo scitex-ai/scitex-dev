@@ -4,6 +4,42 @@
 # config schema and rule index.
 
 audit:
+  # PS-220 (no bare `print` — use scitex-logging) is reported but does NOT
+  # fail THIS repo's own audit yet. scitex-dev is the repository that DEFINES
+  # and enforces PS-220, so read that sentence twice: the rule's own author is
+  # currently exempt from it at warning level.
+  #
+  # REASON: scitex-dev's own source carries 132 flagged `print` sites (87
+  # prose-to-stdout, 33 stderr, 9 undecidable payload, 3 undecidable
+  # destination). Migrating them is NOT a mechanical rename: scitex-logging
+  # writes every console record to STDERR (scitex-logging/_handlers.py:52-101),
+  # so converting a `print` that currently writes to STDOUT MOVES THAT OUTPUT
+  # TO STDERR and can break any consumer parsing this CLI's stdout. That is a
+  # behavioural change to a parsed interface the whole fleet shells out to, and
+  # it needs its own reviewed PR with per-site judgement about what is a
+  # message and what is payload. A 132-entry `audit.exemptions` list was
+  # rejected as the alternative: every reason would read "not migrated yet",
+  # which is exactly the reasonless park the mandatory-reason design exists to
+  # catch.
+  #
+  # This is the declared migration state, not a suppression:
+  #   * the rule stays at ERROR for every other package — enforcement is not
+  #     weakened for anyone else;
+  #   * `warning`, never `off` — all 132 findings stay VISIBLE on every audit
+  #     run, so the debt cannot go quiet. See all 132 with (verified
+  #     2026-07-22 — prints 132 findings, exits 0):
+  #       scitex-dev ecosystem audit-project scitex-dev \
+  #           --severity warning --rule PS-220
+  #     (the flag is `--rule`, singular and repeatable — not `--rules`)
+  #
+  # REMOVAL CONDITION — this key is retired by scitex-todo card
+  #   ps220-selfmigrate-scitex-dev
+  # ("[PS-220] Migrate scitex-dev's own 132 print sites to scitex-logging,
+  # then delete audit.enforce-logging"), owner scitex-dev. That card's step 3
+  # IS the deletion of this key; its step 4 is scitex-dev's self-audit passing
+  # with PS-220 at E. Introduced by PR #406.
+  enforce-logging: warning
+
   # Whitelisted top-level directories/files that PS-103 would otherwise
   # flag as "junk at repo root". Empty for now; add an entry only when the
   # artefact genuinely belongs in this repo's root (otherwise relocate to
