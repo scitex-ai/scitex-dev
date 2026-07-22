@@ -21,6 +21,9 @@ Public API
 - ``MARKER_PREFIX``        — leading sentinel ``# scitex-dev cron: ``
 - ``managed_marker(name)`` — full marker comment for a given job name
 - ``build_line(...)``      — pure builder for a managed crontab line
+- ``CrontabRead``          — outcome of a read: text + whether it was READABLE
+- ``read_crontab_state()`` — read the crontab, distinguishing "empty" from
+                             "could not look" (no binary / read error)
 - ``read_crontab()``       — current user's crontab as text (``""`` if none)
 - ``write_crontab(text)``  — replace the entire crontab from text
 - ``parse_managed(text)``  — yield ``(name, schedule, command, raw_line)``
@@ -79,17 +82,42 @@ def build_line(name: str, schedule: str, command: str) -> str:
     return f"{schedule} {command} {managed_marker(name)}"
 
 
-def read_crontab(
+@dataclass(frozen=True)
+class CrontabRead:
+    """The outcome of one ``crontab -l`` attempt.
+
+    Three states, deliberately distinct — collapsing the third into the
+    second is what made ``cron list`` report a confident "installed (0)"
+    from a container that had no ``crontab`` binary at all:
+
+      * ``readable=True``,  ``text`` non-empty — the crontab was read.
+      * ``readable=True``,  ``text == ""``     — read fine, genuinely empty.
+      * ``readable=False``, ``reason`` set     — we could NOT look. Callers
+        must render this as UNKNOWN, never as zero.
+    """
+
+    text: str
+    readable: bool
+    reason: str | None = None
+
+
+# `crontab -l` exits non-zero for the perfectly ordinary "this user has no
+# crontab" case. That IS an empty crontab; anything else non-zero is a
+# genuine failure to read.
+_NO_CRONTAB_RE = re.compile(r"no crontab for", re.IGNORECASE)
+
+
+def read_crontab_state(
     *,
     runner: Callable[..., subprocess.CompletedProcess] | None = None,
-) -> str:
-    """Return the current user's crontab text (``""`` if none).
+) -> CrontabRead:
+    """Read the current user's crontab, reporting readability honestly.
 
-    No ``crontab`` binary on PATH is treated as "no crontab" (returns ``""``),
-    honouring the documented contract above: read-only paths (``cron list`` /
-    any ``*-dry-run``) must work in crontab-less environments (CI, containers).
-    Writes still fail loud -- ``write_crontab`` raises when the binary is
-    absent, since you cannot modify a crontab on a system that has none.
+    Read-only paths (``cron list`` / ``cron status`` / any ``*-dry-run``)
+    must still WORK in crontab-less environments (CI, containers) — they
+    just must not claim to have found zero managed lines there. Writes
+    remain loud: ``write_crontab`` raises when the binary is absent, since
+    you cannot modify a crontab on a system that has none.
     """
     run = runner or subprocess.run
     try:
@@ -101,12 +129,36 @@ def read_crontab(
             timeout=15,
         )
     except FileNotFoundError:
-        return ""
+        return CrontabRead("", False, "'crontab' not found on PATH")
+    except subprocess.TimeoutExpired:
+        return CrontabRead("", False, "'crontab -l' timed out")
+    except OSError as exc:
+        return CrontabRead("", False, f"'crontab -l' failed: {exc}")
     if r.returncode != 0:
-        # `crontab -l` returns 1 on "no crontab for $USER" — that's empty
-        # for our purposes, not an error.
-        return ""
-    return r.stdout
+        detail = (r.stderr or "").strip() or (r.stdout or "").strip()
+        if _NO_CRONTAB_RE.search(detail):
+            return CrontabRead("", True, None)
+        return CrontabRead(
+            "",
+            False,
+            f"'crontab -l' exited {r.returncode}"
+            + (f": {detail}" if detail else ""),
+        )
+    return CrontabRead(r.stdout, True, None)
+
+
+def read_crontab(
+    *,
+    runner: Callable[..., subprocess.CompletedProcess] | None = None,
+) -> str:
+    """Return the current user's crontab text (``""`` if none or unreadable).
+
+    Lossy by design, and kept only for callers that genuinely cannot act on
+    the difference. Anything that REPORTS to a human or a machine must use
+    :func:`read_crontab_state` instead, so "could not look" is never
+    rendered as "looked, found nothing".
+    """
+    return read_crontab_state(runner=runner).text
 
 
 def write_crontab(

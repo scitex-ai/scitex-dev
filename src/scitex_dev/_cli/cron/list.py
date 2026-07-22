@@ -67,12 +67,15 @@ def register(group: click.Group) -> None:
             for s in list_jobs()
         ]
         installed: list[dict] = []
+        unreadable_reason: str | None = None
         if not registry_only:
             try:
-                current = _crontab.read_crontab()
+                read = _crontab.read_crontab_state()
             except RuntimeError as exc:
                 raise click.ClickException(str(exc)) from exc
-            for line in _crontab.parse_managed(current):
+            if not read.readable:
+                unreadable_reason = read.reason or "crontab unavailable"
+            for line in _crontab.parse_managed(read.text):
                 spec = JOB_REGISTRY.get(line.name)
                 status, _color = _classify(line, spec)
                 installed.append(
@@ -85,9 +88,19 @@ def register(group: click.Group) -> None:
                 )
 
         if as_json:
-            payload = {"registry": registry, "installed": installed}
+            # `installed` is null — NOT [] — when the crontab could not be
+            # read, so a machine consumer counting it cannot mistake
+            # "could not look" for "looked, found zero".
+            payload = {
+                "registry": registry,
+                "installed": None if unreadable_reason else installed,
+                "installed_state": "unknown" if unreadable_reason else "read",
+                "installed_unavailable_reason": unreadable_reason,
+            }
             if registry_only:
                 payload.pop("installed")
+                payload.pop("installed_state")
+                payload.pop("installed_unavailable_reason")
             click.echo(json.dumps(payload, indent=2))
             return
 
@@ -102,6 +115,22 @@ def register(group: click.Group) -> None:
             return
 
         click.echo("")
+        if unreadable_reason:
+            click.secho(
+                f"installed: UNKNOWN ({unreadable_reason})",
+                bold=True,
+                fg="yellow",
+            )
+            click.echo(
+                "  Could not read this host's crontab, so nothing is known "
+                "about what is installed."
+            )
+            click.echo(
+                "  This is NOT 'zero jobs installed' — the jobs may well be "
+                "running elsewhere (e.g. on the host, not in this container)."
+            )
+            return
+
         click.secho(f"installed ({len(installed)}):", bold=True)
         if not installed:
             click.echo("  (none)")

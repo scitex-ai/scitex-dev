@@ -72,17 +72,24 @@ def register(group: click.Group) -> None:
     )
     def status_cmd(as_json: bool) -> None:
         try:
-            current = _crontab.read_crontab()
+            read = _crontab.read_crontab_state()
         except RuntimeError as exc:
             raise click.ClickException(str(exc)) from exc
 
-        managed = {m.name: m for m in _crontab.parse_managed(current)}
+        unreadable_reason = (
+            None if read.readable else (read.reason or "crontab unavailable")
+        )
+        managed = {m.name: m for m in _crontab.parse_managed(read.text)}
 
         rows: list[dict] = []
         for name in sorted(JOB_REGISTRY):
             spec = JOB_REGISTRY[name]
             line = managed.get(name)
-            if line is None:
+            if unreadable_reason:
+                # We could not look. "no" would be a claim we cannot make.
+                installed = "unknown"
+                schedule = spec.schedule
+            elif line is None:
                 installed = "no"
                 schedule = spec.schedule
             elif line.schedule != spec.schedule or line.command != spec.command:
@@ -108,8 +115,29 @@ def register(group: click.Group) -> None:
         ]
 
         if as_json:
-            click.echo(json.dumps({"jobs": rows, "unknown": unknown}, indent=2))
+            click.echo(
+                json.dumps(
+                    {
+                        "jobs": rows,
+                        "unknown": unknown,
+                        "crontab_state": (
+                            "unknown" if unreadable_reason else "read"
+                        ),
+                        "crontab_unavailable_reason": unreadable_reason,
+                    },
+                    indent=2,
+                )
+            )
             return
+
+        if unreadable_reason:
+            click.secho(
+                f"crontab: UNKNOWN ({unreadable_reason}) — "
+                "the 'installed' column below is unknown, not 'no'.",
+                bold=True,
+                fg="yellow",
+            )
+            click.echo("")
 
         click.secho(
             f"{'name':16s} {'installed':10s} {'schedule':14s} "
