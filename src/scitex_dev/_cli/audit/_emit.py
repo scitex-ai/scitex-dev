@@ -41,7 +41,7 @@ passes none of them.
 The degraded path is still announced once at WARNING and recorded in
 `degraded_reason()`, so it can never pass for a healthy run — a degrade
 branch that leaves no trace is where a hard failure hides
-(`_skills/general/09_quality/03_verification-doctrine.md` §8).
+(`_skills/general/09_quality/04_verification-controls.md` §8).
 """
 
 from __future__ import annotations
