@@ -464,6 +464,7 @@ severity `W` during bake-in.
 - `03_interface/02_cli/12_config-and-env.md` §6b — config-file resolution uses this layout.
 - `01_ecosystem/03_modules-and-standalone-packages.md` §5–§6 — `PathManager` dependency-injection pattern.
 - `01_ecosystem/04_environment-variables.md` — `SCITEX_DIR` and per-package `SCITEX_<PKG>_CONFIG`.
+- `01_ecosystem/17_config-layout-enforcement.md` — **PS-222**, the mechanical rule enforcing §4a/§4b's tracked-vs-`runtime/` split on disk.
 - `03_interface/04_skills/06_public-vs-private.md` — private skills live under `<pkg-short>/shared/skills/`.
 - `scitex-resource` `_machine.py` — reference implementation of cross-package SoC (machine identity).
 
