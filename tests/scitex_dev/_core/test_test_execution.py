@@ -11,11 +11,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import os
+import subprocess
+import sys
+
 from scitex_dev._core.test_execution import (
+    ALLOCATED_CPUS_PY_SNIPPET,
     DEFAULT_MARKER_ENV,
     RECIPE_PATH_ENV,
+    XDIST_AUTO_WORKERS_ENV,
     TestExecutionConfig,
     _pkg_short,
+    allocated_cpus,
     discover_recipe,
     guard_message,
     is_on_sanctioned_remote,
@@ -278,6 +285,172 @@ def test_discover_recipe_defaults_local_without_git(tmp_path):
     recipe = discover_recipe(start=plain, environ={})
     # Assert
     assert recipe.mode == "local"
+
+
+# ---------------------------------------------------------------------------
+# allocated_cpus — the xdist worker-count policy (ADR-0004 P1(b)).
+#
+# These pin the behaviour that a bare `pytest -n auto` does NOT have: on the
+# Spartan CI runner (48-CPU lease on a 128-CPU node) xdist asked psutil, got
+# 128, and oversubscribed 2.7x. No mocks — env maps are passed in explicitly
+# and the subprocess checks run the real snippet under a real interpreter.
+# ---------------------------------------------------------------------------
+
+
+def test_allocated_cpus_prefers_slurm_cpus_per_task():
+    # Arrange — inside an srun/sbatch step the allocation is explicit
+    env = {"SLURM_CPUS_PER_TASK": "48"}
+    # Act
+    n = allocated_cpus(environ=env)
+    # Assert — the allocation, NOT the machine's core count
+    assert n == 48
+
+
+def test_allocated_cpus_falls_back_to_job_cpus_per_node():
+    # Arrange — a batch allocation exposes only the per-node form
+    env = {"SLURM_JOB_CPUS_PER_NODE": "48"}
+    # Act
+    n = allocated_cpus(environ=env)
+    # Assert
+    assert n == 48
+
+
+def test_allocated_cpus_parses_repeated_node_count_form():
+    # Arrange — Slurm writes "48(x2)" when several nodes share a count
+    env = {"SLURM_JOB_CPUS_PER_NODE": "48(x2)"}
+    # Act
+    n = allocated_cpus(environ=env)
+    # Assert — the leading integer is THIS node's count
+    assert n == 48
+
+
+def test_allocated_cpus_ignores_blank_and_non_numeric_slurm_vars():
+    # Arrange — exactly what the CI runner exposes: the vars exist but empty
+    env = {"SLURM_CPUS_PER_TASK": "", "SLURM_JOB_CPUS_PER_NODE": "  "}
+    # Act
+    n = allocated_cpus(environ=env)
+    # Assert — falls through to affinity rather than crashing or returning 0
+    assert n == len(os.sched_getaffinity(0))
+
+
+def test_allocated_cpus_uses_affinity_when_no_slurm_env():
+    # Arrange — a developer laptop: no allocation at all
+    env: dict[str, str] = {}
+    # Act
+    n = allocated_cpus(environ=env)
+    # Assert — the process's real affinity mask
+    assert n == len(os.sched_getaffinity(0))
+
+
+def test_allocated_cpus_is_always_at_least_one():
+    # Arrange — a laptop must still get a usable worker count
+    env: dict[str, str] = {}
+    # Act
+    n = allocated_cpus(environ=env)
+    # Assert
+    assert n >= 1
+
+
+def test_allocated_cpus_never_exceeds_affinity_on_this_machine():
+    # Arrange — the defect in one assertion: the answer must not be the
+    # machine's core count when the process is confined to fewer CPUs.
+    affinity = len(os.sched_getaffinity(0))
+    # Act
+    n = allocated_cpus(environ={})
+    # Assert
+    assert n <= affinity
+
+
+def test_alloc_snippet_is_single_quote_safe_for_shell_embedding():
+    # Arrange — the snippet is embedded as `python -c '<snippet>'`, so a
+    # single quote in it would silently truncate the remote command.
+    snippet = ALLOCATED_CPUS_PY_SNIPPET
+    # Act
+    has_single_quote = "'" in snippet
+    # Assert
+    assert not has_single_quote
+
+
+def test_alloc_snippet_agrees_with_allocated_cpus_under_slurm_env():
+    # Arrange — the shell snippet and the Python function are one policy in
+    # two languages; run the real snippet in a real subprocess.
+    env = dict(os.environ, SLURM_CPUS_PER_TASK="7")
+    # Act
+    out = subprocess.run(
+        [sys.executable, "-c", ALLOCATED_CPUS_PY_SNIPPET],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
+    )
+    # Assert — same answer as the Python implementation
+    assert out.stdout.strip() == str(allocated_cpus(environ=env)) == "7"
+
+
+def _snippet_output_without_slurm_env() -> str:
+    """Run the real snippet with every SLURM_* allocation hint stripped."""
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("SLURM_CPUS_PER_TASK", "SLURM_JOB_CPUS_PER_NODE")
+    }
+    out = subprocess.run(
+        [sys.executable, "-c", ALLOCATED_CPUS_PY_SNIPPET],
+        capture_output=True,
+        text=True,
+        env=env,
+        check=True,
+    )
+    return out.stdout.strip()
+
+
+def test_alloc_snippet_matches_python_impl_without_slurm_env():
+    # Arrange — no allocation: the two implementations are one policy
+    expected = str(allocated_cpus(environ={}))
+    # Act
+    got = _snippet_output_without_slurm_env()
+    # Assert
+    assert got == expected
+
+
+def test_alloc_snippet_lands_on_affinity_without_slurm_env():
+    # Arrange — with no Slurm hint the answer must be the affinity mask
+    expected = str(len(os.sched_getaffinity(0)))
+    # Act
+    got = _snippet_output_without_slurm_env()
+    # Assert
+    assert got == expected
+
+
+def test_remote_pytest_block_exports_xdist_auto_workers_env():
+    # Arrange — the emitted remote command is the actual deliverable
+    from scitex_dev._cli.ecosystem._cmds._test_remote import _xdist_pytest_block
+
+    # Act
+    block = _xdist_pytest_block("tests/")
+    # Assert — `-n auto` is corrected at its source: the env var xdist
+    # consults BEFORE psutil is exported for the run.
+    assert f"export {XDIST_AUTO_WORKERS_ENV}" in block
+
+
+def test_remote_pytest_block_derives_worker_count_on_the_remote():
+    # Arrange — the local box's allocation says nothing about the remote's
+    from scitex_dev._cli.ecosystem._cmds._test_remote import _xdist_pytest_block
+
+    # Act
+    block = _xdist_pytest_block("tests/")
+    # Assert — command substitution runs the policy snippet remotely
+    assert f"$(python -c '{ALLOCATED_CPUS_PY_SNIPPET}')" in block
+
+
+def test_remote_pytest_block_keeps_serial_fallback_without_xdist():
+    # Arrange — a remote without xdist must still run the suite
+    from scitex_dev._cli.ecosystem._cmds._test_remote import _xdist_pytest_block
+
+    # Act
+    block = _xdist_pytest_block("tests/")
+    # Assert
+    assert "python -m pytest --tb=short tests/" in block
 
 
 # EOF

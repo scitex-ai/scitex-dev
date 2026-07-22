@@ -25,11 +25,15 @@ The mechanism hardcodes NO cluster, scheduler, partition, or command. Spartan
 
     mode: remote-required
     remote_host: spartan-bm198
-    submit_template: "srun -p {partition} --time={time} pytest -n auto {pytest_args}"
+    submit_template: "srun -p {partition} -c {cpus} --time={time} pytest -n {cpus} {pytest_args}"
     local_marker_env: SCITEX_TEST_ON_REMOTE
     params:
       partition: gpu-a100
+      cpus: 16
       time: "00:30:00"
+
+(Note the explicit ``-n {cpus}`` rather than ``-n auto``: see
+``allocated_cpus`` for why ``auto`` over-subscribes a Slurm allocation.)
 
 Another user points ``remote_host`` at their own box and writes their own
 ``submit_template`` (``qsub``, ``sbatch``, a bare ``ssh`` — anything) and the
@@ -183,6 +187,87 @@ def load_test_execution(
 ) -> TestExecutionConfig:
     """Resolve + load the recipe for ``pkg`` from the config-layout."""
     return load_recipe(recipe_path(pkg, path=path))
+
+
+def allocated_cpus(environ: Mapping[str, str] | None = None) -> int:
+    """CPUs THIS process is actually allowed to use — never the machine's total.
+
+    The xdist-worker-count policy (ADR-0004 P1(b)). ``pytest -n auto`` cannot
+    be trusted to answer this: pytest-xdist's ``pytest_xdist_auto_num_workers``
+    consults **psutil first** and returns its count immediately if it gets one
+    (``xdist/plugin.py`` 3.8.0, lines 26-34) — and ``psutil.cpu_count()`` reads
+    the machine, ignoring cgroup/cpuset confinement. Only if psutil is absent
+    does xdist fall through to ``sched_getaffinity``, which IS correct.
+
+    Measured on the Spartan CI runner node (spartan-bm155, inside the
+    48-CPU lease cgroup ``job_27144058/step_extern``)::
+
+        os.sched_getaffinity(0)          48   <- the allocation
+        os.cpu_count()                  128
+        psutil.cpu_count(logical=False)  128   <- what `-n auto` used
+        psutil.cpu_count()              128
+
+    i.e. `-n auto` spawned ~128 workers into a 48-CPU allocation (observed as
+    worker ids reaching ``gw121``), a 2.7x continuous oversubscription.
+
+    Resolution order:
+
+      1. ``SLURM_CPUS_PER_TASK`` — set inside an ``srun``/``sbatch`` step.
+      2. ``SLURM_JOB_CPUS_PER_NODE`` — the batch allocation's per-node count
+         (leading integer; the ``"48(x2)"`` form is truncated to ``48``).
+      3. ``os.sched_getaffinity(0)`` — authoritative under a cgroup cpuset,
+         and the ONLY one of these present on the CI runner: the runner is
+         reached by ssh and adopted into the lease cgroup, so it inherits the
+         cpuset but NOT the step's Slurm environment variables (both SLURM_*
+         vars above measured EMPTY there).
+      4. ``os.cpu_count()`` — a developer laptop with no allocation at all.
+
+    No magic cap and no hardcoded core count: an unconstrained machine still
+    gets all of its cores, which is what a laptop or a dedicated box wants.
+    """
+    env = os.environ if environ is None else environ
+    for var in ("SLURM_CPUS_PER_TASK", "SLURM_JOB_CPUS_PER_NODE"):
+        raw = (env.get(var) or "").strip()
+        # "48(x2)" / "48,32" — the leading integer is this node's count.
+        leading = ""
+        for ch in raw:
+            if not ch.isdigit():
+                break
+            leading += ch
+        if leading:
+            n = int(leading)
+            if n > 0:
+                return n
+    getaffinity = getattr(os, "sched_getaffinity", None)
+    if getaffinity is not None:
+        try:
+            n = len(getaffinity(0))
+            if n > 0:
+                return n
+        except OSError:  # pragma: no cover - platform-dependent
+            pass
+    return max(1, os.cpu_count() or 1)
+
+
+# The same policy as `allocated_cpus`, as a one-line `python -c` snippet, for
+# invocations that must resolve the count ON A REMOTE HOST (the local box's
+# allocation is irrelevant and would be wrong). Kept beside the Python
+# implementation so the two cannot drift apart unnoticed.
+ALLOCATED_CPUS_PY_SNIPPET = (
+    "import os; "
+    '_vars = ("SLURM_CPUS_PER_TASK", "SLURM_JOB_CPUS_PER_NODE"); '
+    '_raw = next((v for v in (os.environ.get(k, "").strip() for k in _vars) '
+    "if v[:1].isdigit()), \"\"); "
+    '_n = int(_raw.split(",")[0].split("(")[0]) if _raw else 0; '
+    "_aff = len(os.sched_getaffinity(0)) "
+    'if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 1); '
+    "print(max(1, _n or _aff))"
+)
+
+
+# The env var pytest-xdist consults BEFORE psutil (xdist/plugin.py:17-24), so
+# setting it makes an unmodified `-n auto` resolve to the allocation.
+XDIST_AUTO_WORKERS_ENV = "PYTEST_XDIST_AUTO_NUM_WORKERS"
 
 
 class _SafeDict(dict):
