@@ -7,6 +7,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-07-23
+
 ### Changed
 - **PS-220 restaged: WARNING by default, error per-package opt-in.** 0.35.0
   (#406) promoted PS-220 to ERROR ecosystem-wide. The measured blast radius
@@ -51,6 +53,25 @@ versions follow [Semantic Versioning](https://semver.org/).
   sites using it, with a planted-user control confirming the sweep could
   detect one. `audit.exemptions` — pinned to one rule at one file:line,
   with a mandatory reason — is now the only per-site opt-out.
+
+### Fixed
+- **`--version` no longer answers for another package (#409).** `scitex-ui
+  --version` and `scitex-app --version` printed `scitex-dev <scitex-dev's
+  version>`; 36 downstream packages reported another package's identity.
+  `scitex_dev/_cli/__init__.py` fast-paths a bare `--version` to skip the
+  expensive `._root` import, but the predicate matched on `sys.argv[1:]`
+  alone and never checked WHO was asking. Because `scitex_dev._cli` is a
+  shared primitive that downstream CLIs import (`._completion`, `._root`),
+  the block fired during `import` in any process launched as `<other-cli>
+  --version`: it printed scitex-dev's name and version and raised
+  `SystemExit(0)` before the downstream CLI's own `main()` ran. Exit code 0,
+  so nothing looked broken — and the downstream packages' own `--version`
+  wiring was correct all along. The fast path now additionally requires
+  `sys.argv[0]` to identify scitex-dev's own console script (or `python -m
+  scitex_dev`); an unrecognised `argv[0]` declines the optimisation and
+  falls through to the real Click group — correct, just slower. No path
+  falls back to printing `scitex-dev`; that fallback WAS the defect.
+  A library must never read `sys.argv` or exit at import time.
 
 ## [0.35.0] - 2026-07-22
 
