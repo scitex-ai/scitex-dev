@@ -7,6 +7,160 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-07-23
+
+### Added
+- **Release gate: a declared entry point that does not import now fails the
+  BUILD (#421).** A dangling entry point does not fail the build on its own —
+  the wheel uploads, `pip install` succeeds, and the breakage lands in the
+  USER's tooling. `pytest11` is imported by pytest at startup, so a dangling
+  target aborts EVERY pytest run in the installed environment before
+  collection. `scitex_dev._release.entrypoint_imports` reads
+  `entry_points.txt` from the BUILT artifact's `.dist-info` and imports each
+  target in a subprocess with the artifact prepended to `PYTHONPATH`. It
+  probes the artifact, not `pyproject.toml`: a correct declaration can still
+  point at a module the build dropped, which is exactly the bug a source-only
+  check would miss. `missing` (target absent — packaging bug) is classified
+  apart from `broken` (target present, import raised — dependency/code bug);
+  the two present identically at pytest startup and route to different fixes.
+  Wired into `.github/ci/build-in-sif.sh`, before upload.
+
+- **PS-222 — the `.scitex/<pkg-short>/` config-layout convention (#416).**
+  New rule plus auditor covering where a package's own config tree lives,
+  with a `runtime/` control arm in the test suite.
+
+- **`ecosystem list --distributions` — enumeration keyed by origin remote
+  (#419).** New `_ecosystem/_enumerate.py` resolves checkout DIRECTORIES into
+  DISTRIBUTIONS by their origin remote rather than by directory name,
+  collapsing duplicate checkouts and linked worktrees into reported aliases
+  and labelling which tree was actually measured. `--org` cross-references a
+  GitHub org listing to surface repos with no local checkout; `--scan-root`
+  enumerates a directory tree, the input shape brand-wide sweeps use and
+  where duplicate checkouts appear. Unreadable paths are recorded as errors,
+  never silently dropped, and an orphaned linked worktree is now diagnosed by
+  name instead of as a generic unreadable path. The flag is OPT-IN: the
+  default `ecosystem list` output shape is unchanged, so existing callers
+  keep working.
+
+### Changed
+- **PS-220 self-migration: scitex-dev's own stderr prints moved to
+  scitex-logging, 132 → 118 findings (#415).** scitex-dev authored the
+  no-bare-print mandate while carrying 132 findings against it. This migrates
+  the STDERR bucket — 14 sites across `trace_env`, the linter
+  (`_cmd_format` / `_health` / `_cmd_completion`), the argparse dispatch
+  modules, `quality/_check.py` and `cron/_task_harvest.py` — where
+  scitex-logging provably cannot move the output, because it already writes
+  every level to `sys.stderr`. Hand-rolled ANSI in `_health` is dropped now
+  that scitex-logging owns the colouring. Stdout prints are deliberately
+  untouched: they need the console API still being designed.
+
+### Fixed
+- **`audit-project` never prints SUCC over live warning findings (#417).**
+  The success banner was decided from the severity-FLOOR-filtered finding
+  list, so at the default `--severity error` a tree carrying live W findings
+  printed output byte-identical to a genuinely clean tree — measured on
+  scitex-agent-container: 53 live PS-220 findings, `SUCC`, exit 0.
+
+  The consequence is not cosmetic. A mutation proof driven through the CLI
+  could not fail for ANY W-severity rule: planting a bare `print()` did not
+  change one byte of output, so the check meant to detect it was
+  structurally incapable of doing so. Every "mutation-proved" green produced
+  that way was unearned. It also broke the premise PS-220's E→W restage
+  (0.36.0) was granted on — that findings stay FULLY VISIBLE and only stop
+  blocking.
+
+  Reporting only; exit codes untouched:
+  - `SUCC` iff zero findings at ANY severity (was: zero at the floor)
+  - the clean line names the audited tree, as the failure line does
+  - the headline always carries both counts: `N error(s), M warning(s)`
+  - counts are taken over all surviving findings, not the floor-filtered view
+  - `--json` gains `warnings` / `infos` alongside the existing `errors`
+  - below-floor findings get a line naming how to list them
+
+  `exit_code` stays `1 if n_errors > 0 else 0`. W/I still never fail CI —
+  changing that would silently re-break every repo the 0.36.0 restage just
+  unblocked.
+
+- **`audit-django` never prints SUCC over live warning findings (#420).**
+  The same defect, reproduced in the Django auditor and fixed the same way.
+  Measured pre-fix on a fixture tree with one live DJ-107 (W) finding: the
+  dirty and clean trees produced path-normalised output comparing EQUAL, and
+  `--json` masked it identically (`"violations": []`, `"errors": 0` on a tree
+  holding one warning).
+
+- **`scitex_dev.audit` survives the logger-class name race (#422).**
+  `scitex_logging.getLogger` IS `logging.getLogger`; the logger class is
+  fixed by `setLoggerClass` state at first creation of the NAME and cached
+  forever. Anything creating `scitex_dev.audit` through the stdlib first
+  handed `_emit` a plain `Logger` with no `.success`, crashing every auditor
+  (`_project` / `_django` / `_api` / `_summary`) — a hard `AttributeError`
+  reachable purely by import ordering. The eager method table dereferenced
+  `.success` on every call, so even `emit('info', ...)` crashed. The level
+  method is now resolved per call via `getattr`; on a poisoned logger the
+  emit goes through `Logger.log(levelno)` — scitex-logging registers level
+  NUMBERS globally (SUCCESS=31 → `SUCC`), so `levelno`/`levelname` are
+  unchanged, not degraded. The degrade is announced once at WARNING and
+  recorded in `degraded_reason()`, so it cannot pass for a healthy run.
+
+- **`cron list` distinguishes "crontab unreadable" from "zero installed"
+  (#413).** `scitex-dev cron list` printed `installed (0): (none)` when it
+  could not read the crontab AT ALL — cannot-look rendered as
+  looked-and-found-zero. Reads failed soft (`read_crontab` returned `""` on a
+  missing binary) while writes failed loud, and only the read path reported.
+  This nearly caused a false fleet-wide automation-outage escalation: a peer
+  agent ran `cron list` in a container with no `crontab` binary, read "13
+  jobs registered, NONE installed", and was one step from escalating. The
+  jobs were running fine on the host; only the container could not look.
+
+  A third state (`CrontabRead` / `read_crontab_state`) is added at the source
+  and plumbed through both reporting surfaces. Human output:
+  `installed: UNKNOWN ('crontab' not found on PATH)` plus an explicit "this
+  is NOT zero jobs installed" note; `cron status` gains a banner and per-job
+  `installed: unknown` instead of a fabricated `no`. JSON: `cron list`
+  reports `installed: null` — NOT `[]`, so a consumer calling `len()` cannot
+  silently read zero — alongside `installed_state` and
+  `installed_unavailable_reason`; `cron status` gains `crontab_state` and
+  `crontab_unavailable_reason`. A non-zero `crontab -l` whose message is
+  `no crontab for <user>` stays READABLE-and-empty: that is an ordinary empty
+  crontab, not a failure to look. The write path is untouched —
+  `write_crontab` still raises, which is correct.
+
+- **`ecosystem test-remote` derives the xdist worker count from the CPU
+  ALLOCATION, not the node (#412).** `pytest -n auto` over-subscribed an
+  allocated node. The cause is narrower than "auto reads the machine's core
+  count": xdist's `pytest_xdist_auto_num_workers` consults psutil FIRST and
+  returns its count immediately, and psutil ignores cgroup/cpuset
+  confinement; only if psutil is absent does it fall through to the correct
+  `sched_getaffinity`. Measured on spartan-bm155 inside a 48-CPU lease
+  cgroup: `sched_getaffinity` 48, `os.cpu_count()` 128,
+  `psutil.cpu_count()` 128 — i.e. ~128 workers into a 48-CPU allocation, a
+  2.7x continuous over-subscription (corroborated by worker ids reaching
+  gw121 in a scitex-hub run). New `allocated_cpus()` in
+  `_core/test_execution.py` resolves `SLURM_CPUS_PER_TASK`, then
+  `SLURM_JOB_CPUS_PER_NODE` (including the `48(x2)` form), then
+  `sched_getaffinity`, then `os.cpu_count()` — no magic cap and no hardcoded
+  core count, so an unconstrained laptop still gets all its cores.
+  `ecosystem test-remote` keeps `-n auto` and corrects it at its source by
+  exporting `PYTEST_XDIST_AUTO_NUM_WORKERS`, which xdist consults ahead of
+  psutil.
+
+### Documentation
+- **Verification doctrine added to `general/09_quality` (#414).** Every
+  verification failure recorded across the fleet on 2026-07-22/23 is one
+  shape: a failed measurement rendered as a confident value. The leaf states
+  that once and organises the defences by claim type — absence claims need a
+  positive control, causal claims need one varied variable and a hunted
+  counter-example, content claims need a second independent reader, artifact
+  claims need the artifact actually in use, peer claims need corroboration
+  independent in kind. Carries the six-state search-failure taxonomy, the
+  vacuous / inert / layer-blind / sampling control failures, the both-arms
+  rule for fixing a masking bug, and the status words that fuse a failed
+  measurement into a clean one (`skipped`, `declared-masked`, `0`).
+
+- **A degrade branch is where a hard failure hides (#418).** Doctrine on
+  masking: degrade paths swallow hard failures, and a mispositioned probe
+  cannot fail.
+
 ## [0.36.0] - 2026-07-23
 
 ### Changed
