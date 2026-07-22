@@ -25,6 +25,7 @@ from scitex_dev._ecosystem._enumerate import (
     enumerate_distributions,
     normalize_remote,
     read_origin,
+    scan_checkout_root,
 )
 
 IO_ORIGIN = "git@github.com:scitex-ai/scitex-io.git"
@@ -526,6 +527,58 @@ def test_summary_line_states_the_measured_tree(duplicate_checkouts):
     line = result.summary_line()
     # Assert
     assert "Measured tree:" in line
+
+
+# --------------------------------------------------------------------- #
+# Directory-scan input — the shape brand-wide sweeps actually use        #
+# --------------------------------------------------------------------- #
+
+
+def test_scan_checkout_root_finds_every_git_checkout_under_the_root(tmp_path):
+    # Arrange
+    _make_checkout(tmp_path, "scitex-io", IO_ORIGIN)
+    _make_checkout(tmp_path, "scitex-io-dotscitex", IO_ORIGIN)
+    (tmp_path / "not-a-repo").mkdir()
+    # Act
+    found = scan_checkout_root(str(tmp_path))
+    # Assert
+    assert found == [
+        str(tmp_path / "scitex-io"),
+        str(tmp_path / "scitex-io-dotscitex"),
+    ]
+
+
+def test_scan_checkout_root_of_a_missing_directory_returns_empty(tmp_path):
+    # Arrange
+    missing = tmp_path / "nope"
+    # Act
+    found = scan_checkout_root(str(missing))
+    # Assert
+    assert found == []
+
+
+def test_directory_scan_of_duplicate_checkouts_yields_one_distribution(tmp_path):
+    # Arrange — the ~/proj shape: two dirs, one repo
+    _make_checkout(tmp_path, "scitex-io", IO_ORIGIN)
+    _make_checkout(tmp_path, "scitex-io-dotscitex", IO_ORIGIN)
+    # Act
+    result = enumerate_distributions(paths=scan_checkout_root(str(tmp_path)))
+    # Assert
+    assert result.distribution_count == 1
+
+
+def test_orphaned_worktree_error_names_the_worktree_failure_explicitly(tmp_path):
+    # Arrange — a linked worktree whose main checkout has been removed
+    import shutil
+
+    main = _make_checkout(tmp_path, "scitex-io", IO_ORIGIN)
+    worktree = tmp_path / "scitex-io-feature"
+    _git(main, "worktree", "add", "-q", "-b", "feature", str(worktree))
+    shutil.rmtree(main)
+    # Act
+    result = enumerate_distributions(paths=[str(worktree)])
+    # Assert
+    assert any("orphaned-worktree" in e for e in result.errors)
 
 
 # EOF

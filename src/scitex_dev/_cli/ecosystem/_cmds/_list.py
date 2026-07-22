@@ -9,6 +9,91 @@ import click
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 
 
+def _emit_distributions(package, category, org, as_json, names_only, scan_root=None):
+    """Render the origin-remote-identity enumeration (``list --distributions``).
+
+    The output LABELS itself: it names the tree it measured, separates a
+    directory count from a distribution count, and states how many
+    aliases were collapsed and how many org repos have no local checkout.
+    A caller can tell a complete enumeration from a filtered one without
+    reading this source.
+    """
+    from ...._ecosystem import ECOSYSTEM
+    from ...._ecosystem._enumerate import (
+        enumerate_distributions,
+        fetch_org_repos,
+        scan_checkout_root,
+    )
+
+    if scan_root:
+        paths = scan_checkout_root(scan_root)
+        filtered = False
+        source = f"directory scan of {scan_root}"
+    else:
+        selected = set(package) if package else set(ECOSYSTEM)
+        if category:
+            cat_set = set(category)
+            selected = {
+                p for p in selected if ECOSYSTEM.get(p, {}).get("category") in cat_set
+            }
+        filtered = bool(package or category)
+
+        from pathlib import Path as _Path
+
+        paths = [
+            str(_Path(ECOSYSTEM[p]["local_path"]).expanduser())
+            for p in sorted(selected)
+            if ECOSYSTEM.get(p, {}).get("local_path")
+        ]
+        source = "registry local_path entries"
+
+    org_repos = None
+    org_error = None
+    if org:
+        org_repos, org_error = fetch_org_repos(org)
+        if org_error:
+            org_repos = None
+
+    result = enumerate_distributions(
+        paths=paths, org_repos=org_repos, org=org, org_error=org_error
+    )
+
+    if names_only:
+        for dist in result.distributions:
+            click.echo(dist.registry_name or dist.repo)
+        return
+
+    if as_json:
+        payload = result.to_dict()
+        payload["selection"] = "filtered" if filtered else "complete"
+        payload["source"] = source
+        click.echo(json.dumps(payload))
+        return
+
+    scope = "filtered subset" if filtered else "complete"
+    click.echo(f"Source: {source} ({scope}).")
+    click.echo(result.summary_line())
+    if not org:
+        click.echo(
+            "Org listing NOT queried (pass --org scitex-ai): repos with no "
+            "local checkout are NOT represented in these counts."
+        )
+    click.echo("")
+    for dist in result.distributions:
+        if not dist.checked_out:
+            click.echo(f"  {dist.repo:45s} NOT-CHECKED-OUT")
+            continue
+        label = dist.registry_name or dist.repo
+        click.echo(f"  {label:25s} {dist.repo}")
+        for alias in dist.aliases:
+            click.echo(f"      alias ({alias.reason}): {alias.path}")
+    if result.errors:
+        click.echo("")
+        click.echo(f"UNREADABLE ({len(result.errors)}) — excluded from counts above:")
+        for err in result.errors:
+            click.echo(f"  ! {err}", err=True)
+
+
 def register(ecosystem):
     @ecosystem.command(
         "list",
@@ -24,6 +109,14 @@ def register(ecosystem):
                     "One package with version details.",
                 ),
                 Example("{prog} ecosystem list -c library", "Filter by category."),
+                Example(
+                    "{prog} ecosystem list --distributions",
+                    "Count DISTRIBUTIONS (origin-remote identity), not directories.",
+                ),
+                Example(
+                    "{prog} ecosystem list --distributions --org scitex-ai",
+                    "Also surface org repos that have no local checkout.",
+                ),
             ),
         ),
     )
@@ -48,8 +141,53 @@ def register(ecosystem):
             "`scitex-dev ecosystem list -q | xargs scitex-dev ecosystem audit-all`."
         ),
     )
-    def ecosystem_list(package, category, versions, as_json, names_only):
+    @click.option(
+        "--distributions",
+        "as_distributions",
+        is_flag=True,
+        help=(
+            "Enumerate DISTRIBUTIONS instead of registry directories: identity "
+            "comes from each checkout's origin remote, so duplicate checkouts "
+            "and git worktrees collapse into one entry (reported as aliases, "
+            "never dropped). Opt-in — the default output shape is unchanged."
+        ),
+    )
+    @click.option(
+        "--org",
+        default=None,
+        help=(
+            "With --distributions: cross-reference this GitHub org (e.g. "
+            "scitex-ai) so repos with no local checkout are reported as "
+            "not-checked-out instead of vanishing."
+        ),
+    )
+    @click.option(
+        "--scan-root",
+        default=None,
+        help=(
+            "With --distributions: enumerate every git checkout directly "
+            "under this directory (e.g. ~/proj) instead of the registry's "
+            "local_path entries. This is the input shape brand-wide sweeps "
+            "use, and where duplicate checkouts actually appear."
+        ),
+    )
+    def ecosystem_list(
+        package,
+        category,
+        versions,
+        as_json,
+        names_only,
+        as_distributions,
+        org,
+        scan_root,
+    ):
         from ...._ecosystem import ECOSYSTEM, get_all_packages
+
+        if as_distributions:
+            _emit_distributions(
+                package, category, org, as_json, names_only, scan_root=scan_root
+            )
+            return
 
         pkgs = list(package) if package else get_all_packages()
         if category:

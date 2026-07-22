@@ -61,6 +61,7 @@ __all__ = [
     "normalize_remote",
     "read_origin",
     "registry_checkout_paths",
+    "scan_checkout_root",
 ]
 
 
@@ -279,6 +280,28 @@ def registry_checkout_paths() -> Dict[str, str]:
     return out
 
 
+def scan_checkout_root(root: str) -> List[str]:
+    """Return every immediate child of ``root`` that is a git checkout.
+
+    This is the DIRECTORY-shaped input that brand-wide sweeps actually
+    use, and the input where double-counting bites: a scan of
+    ``~/proj`` sees ``scitex-io`` and ``scitex-io-dotscitex`` as two
+    things. Feed the result to :func:`enumerate_distributions` to get
+    distributions back out. Sorted for determinism.
+    """
+    base = Path(root).expanduser()
+    if not base.is_dir():
+        return []
+    out: List[str] = []
+    for child in sorted(base.iterdir()):
+        try:
+            if child.is_dir() and (child / ".git").exists():
+                out.append(str(child))
+        except OSError:  # pragma: no cover - unreadable mount entry
+            continue
+    return out
+
+
 def fetch_org_repos(org: str, timeout: float = 60.0) -> tuple[List[str], Optional[str]]:
     """Return ``(repos, error)`` — ``owner/name`` for every repo in ``org``.
 
@@ -367,6 +390,11 @@ def enumerate_distributions(
     for path in path_list:
         repo, error = read_origin(Path(path))
         if repo is None:
+            if _is_linked_worktree(Path(path)):
+                # An orphaned linked worktree: its .git file still points at a
+                # main checkout that has moved or gone. Say WHICH failure this
+                # is — a caller must not read it as a distinct distribution.
+                error = f"orphaned-worktree (unresolvable gitdir): {error}"
             errors.append(error or f"unresolved: {path}")
             unresolved.append(path)
             continue
