@@ -1,0 +1,143 @@
+name: release-ci
+
+# Post-merge validation gate. Runs on push to protected branches
+# (main, develop) and as the canonical scheduled run. Always uses the
+# FULL pytest matrix — no conditional skipping — so the protected-branch
+# history is exercised on every supported Python.
+#
+# L1 concurrency — coalesce overlapping pushes on the same branch.
+# L5a uv-managed Python (`uv python install` + `uv venv --python`) so each
+#     matrix leg pins its interpreter independently of the runner.
+# L5b .venv/bin on PATH so console scripts resolve without `uv run`.
+
+on:
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: "0 7 * * *"  # nightly 07:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: <PYTHON_VERSIONS_JSON>
+    steps:
+      - name: Isolate git config + uv toolcache (shared self-hosted runner)
+        # scitex-ui#71: concurrent matrix legs on ONE self-hosted runner raced
+        # setup-uv's shared RUNNER_TOOL_CACHE copy target (ENOENT copyfile
+        # .../uvx). Give each leg its OWN toolcache (per-leg suffix) and its own
+        # global gitconfig, both under runner.temp (unique per runner instance)
+        # so legs stay FULLY PARALLEL — no max-parallel serialisation.
+        # runner.temp is STEP-scope only (job/workflow env raise "Unrecognized
+        # named-value: 'runner'", actions/runner#2204), so publish via
+        # $GITHUB_ENV here, before checkout, to reach every later step.
+        run: |
+          echo "GIT_CONFIG_GLOBAL=${{ runner.temp }}/gitconfig" >> "$GITHUB_ENV"
+          echo "RUNNER_TOOL_CACHE=${{ runner.temp }}/toolcache-py${{ matrix.python-version }}" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python ${{ matrix.python-version }} (uv-managed)
+        run: uv python install ${{ matrix.python-version }}
+      - name: Create uv venv on this matrix Python
+        run: uv venv --python ${{ matrix.python-version }} .venv
+      - name: Install dependencies
+        run: |
+          uv pip install --python .venv/bin/python -e ".[all,dev]" \
+            || uv pip install --python .venv/bin/python -e ".[dev]" \
+            || uv pip install --python .venv/bin/python -e .
+      - name: Run tests
+        run: |
+          export PATH="$PWD/.venv/bin:$PATH"
+          .venv/bin/pytest tests/ --cov=src/<PKG_MODULE> --cov-report=xml --cov-report=term
+      - name: Upload coverage to Codecov
+        # continue-on-error so a tokenless runner (e.g. self-hosted
+        # spartan-cpu, where CODECOV_TOKEN is unset) does NOT fail the
+        # job. codecov-action@v5 exits 255 on a pre-flight token check
+        # that `fail_ci_if_error: false` does not catch — that exit must
+        # not red the leg. Where the token IS provisioned (a repo
+        # *secret*, never a *variable*, so it can't be gated in `if:`),
+        # the upload still happens.
+        if: always() && matrix.python-version == '3.12'
+        continue-on-error: true
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  import-smoke:
+    name: import-smoke-on-ubuntu-py3-12
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
+    steps:
+      - name: Isolate git config + uv toolcache (shared self-hosted runner)
+        # Concurrent jobs share the runner's $HOME: checkout's `git config
+        # --global` locks ~/.gitconfig, and setup-uv copies uv/uvx into the
+        # shared RUNNER_TOOL_CACHE (~/.runner-toolcache). Redirect both at
+        # runner.temp (unique per runner INSTANCE, hence per concurrent job) so
+        # jobs stay fully parallel. runner.temp is STEP-scope only (job/workflow
+        # env raise "Unrecognized named-value: 'runner'", actions/runner#2204),
+        # so publish via $GITHUB_ENV here, before checkout, to reach later steps.
+        run: |
+          echo "GIT_CONFIG_GLOBAL=${{ runner.temp }}/gitconfig" >> "$GITHUB_ENV"
+          echo "RUNNER_TOOL_CACHE=${{ runner.temp }}/toolcache" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python 3.12 (uv-managed)
+        run: uv python install 3.12
+      - name: Install (no extras) in uv venv
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e .
+      - name: Import smoke
+        run: .venv/bin/python -c "import <PKG_MODULE>; print(getattr(<PKG_MODULE>, '__version__', 'unversioned'))"
+
+  audit:
+    name: audit
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
+    timeout-minutes: 20
+    steps:
+      - name: Isolate git config + uv toolcache (shared self-hosted runner)
+        # Concurrent jobs share the runner's $HOME: checkout's `git config
+        # --global` (and audit-all's `git worktree add`) lock ~/.gitconfig, and
+        # setup-uv copies uv/uvx into the shared RUNNER_TOOL_CACHE. Redirect both
+        # at runner.temp (unique per runner INSTANCE, hence per concurrent job)
+        # so jobs stay fully parallel. runner.temp is STEP-scope only (job/
+        # workflow env raise "Unrecognized named-value: 'runner'",
+        # actions/runner#2204), so publish via $GITHUB_ENV here, before
+        # checkout, to reach every later step.
+        run: |
+          echo "GIT_CONFIG_GLOBAL=${{ runner.temp }}/gitconfig" >> "$GITHUB_ENV"
+          echo "RUNNER_TOOL_CACHE=${{ runner.temp }}/toolcache" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+      - name: Set up Python 3.12 (uv-managed)
+        run: uv python install 3.12
+      - name: Install package + audit tooling
+        run: |
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python -e ".[dev]"
+          uv pip install --python .venv/bin/python "scitex-dev[cli-audit]"
+      - name: Run scitex-dev ecosystem audit-all
+        run: |
+          export PATH="$PWD/.venv/bin:$PATH"
+          scitex-dev ecosystem audit-all <PKG_NAME> --no-version-check
