@@ -132,6 +132,6 @@ No functional overlap.
 
 - `01_ecosystem/06_dot_scitex_directory.md` — the layout this rule enforces (§4a tracked, §4b runtime, §5 forbidden locations).
 - `01_ecosystem/12_local-state-resolution.md` — resolving these paths in code (`path()` / `user_path()` / `runtime_path()`).
-- `09_quality/03_verification-doctrine.md` — why the control arm in §2 is not optional.
+- `09_quality/04_verification-controls.md` §8 — why the control arm in §2 is not optional.
 
 <!-- EOF -->
