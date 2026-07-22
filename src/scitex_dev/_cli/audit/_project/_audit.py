@@ -313,7 +313,12 @@ def audit_project(
     n_w = sum(1 for v in visible if v.severity == "W")
     n_i = sum(1 for v in visible if v.severity == "I")
     headline_level = "error" if exit_code else "warning"
-    summary = f"{distribution} ({repo_root}): {n_errors} error(s)"
+    # Name the CATEGORY on the failure line, exactly as the clean line
+    # above does ("no project-structure violations"). An unlabelled
+    # `scitex-hub (/path): 3 error(s)` is unattributable in an audit-all
+    # log that interleaves six auditors — sac PRs #813/#814 both read a
+    # real violation as a broken gate because of it, costing a CI cycle.
+    summary = f"{distribution} ({repo_root}): project-structure: {n_errors} error(s)"
     if n_w:
         summary += f", {n_w} warning(s)"
     if n_i:

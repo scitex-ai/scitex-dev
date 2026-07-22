@@ -5,6 +5,45 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **`audit.skip-rules` — sanctioned per-rule deferrals, honoured by
+  `audit-all` natively.** Declaring a deferral to a named migration
+  campaign in `<repo>/.scitex/dev/config.yaml` now affects BOTH gates.
+  Previously the per-repo pytest wrapper honoured its `skip_rules=`
+  kwarg while the org reusable workflow called `ecosystem audit-all`
+  directly and bypassed it, so `develop` could be green while unified CI
+  was red on identical code (measured in scitex-hub PR #433).
+
+  Honouring is never silent. `audit-all` always emits a **MASKED
+  INVENTORY** — the total, each rule id, its per-rule masked count and
+  its written rationale — in the normal output, not behind a verbosity
+  flag. The per-package summary now always states BOTH numbers (unmasked
+  errors AND masked count) for single- and multi-package runs alike; a
+  summary reporting only "0 errors" while 150 are masked is a lie of
+  omission. The exit code stays driven by unmasked findings.
+
+  **A skip entry with no written rationale is REJECTED** (exit 2, naming
+  the offending entry). Distinct from the legacy `audit.skip` (bare
+  codes, `audit-project`-only, silent) and from `audit.capabilities`.
+
+### Fixed
+- **Every auditor summary line now NAMES its category, pass or fail.**
+  The clean lines always did ("no project-structure violations"); the
+  FAILURE lines did not, so `audit-all` emitted three named SUCC lines
+  and then a bare `<pkg> (<path>): 3 error(s)` whose category was never
+  stated. sac PRs #813 and #814 both misread a real violation as a
+  broken gate because of it, wasting a CI cycle. Fixed across all five:
+  `CLI conventions`, `skills`, `Python API`, `project-structure`,
+  `Django-standard`.
+
+### Changed
+- `_cli/audit/_skills/_audit.py` (631 lines) split into `_registry.py` /
+  `_violation.py` / `_discovery.py` / `_checks.py` + a facade, mirroring
+  the sibling `_project/` package. Pure extraction; the facade
+  re-exports the original public surface.
+
 ## [0.34.0] - 2026-07-21
 
 ### Added
