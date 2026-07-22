@@ -1170,7 +1170,17 @@ def _patch(rule: Rule) -> Rule:
     return Rule(rule.code, rule.section, rule.message, sev, slug)
 
 
-RULES = {code: _patch(rule) for code, rule in RULES.items()}
+# NOTE — `_patch` is applied ONCE, at the BOTTOM of this module, AFTER every
+# co-located/sidecar rule set below has been merged into RULES.
+#
+# It used to run HERE, before those merges, which made `_SEVERITY_OVERRIDES`
+# and `_SLUGS` a SILENT NO-OP for every rule registered after this point
+# (EXTRA_RULES, HOOK_RULES, URL_DEP_RULES, SKILLS/DOCTOR/VERSION,
+# PRINT_FORBIDDEN_RULES, ALL_CLOSURE_RULES — 31 rules as of 2026-07-22).
+# Adding e.g. `"PS-220": "E"` to the override table did nothing at all, with
+# no error and no warning: a severity table that silently ignores entries is
+# itself a gate that cannot fail. Keep the application at the bottom, and see
+# `test__registry_severity_overrides.py` for the regression that pins it.
 
 # hook-bypass: line-limit
 # Sidecar rule registration — see ._extra_rules / GITIGNORED/REFACTORING.md.
@@ -1232,3 +1242,11 @@ from ._check_extras_all_closure import (  # noqa: E402
 
 for _c, _sec, _msg, _sev, _slug in _ALL_CLOSURE_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
+# ---------------------------------------------------------------------------
+# Severity/slug overrides are applied LAST, so the table is honest for EVERY
+# registered rule — the ones defined literally in `RULES` above AND every
+# co-located/sidecar set merged in between. See the note beside `_patch`.
+# ---------------------------------------------------------------------------
+RULES = {code: _patch(rule) for code, rule in RULES.items()}
