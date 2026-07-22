@@ -7,7 +7,29 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-07-22
+
 ### Added
+- **PS-220 (no bare `print` in package source) promoted to ERROR (#406).**
+  The no-bare-print mandate is now enforced, not advisory, for SciTeX
+  ecosystem packages. Machine-readable stdout is spared STRUCTURALLY — a
+  stdout `print` whose sole argument is a serializer call or a rendered
+  payload variable does not fire, because scitex-logging writes to stderr
+  and would corrupt a `--json` payload or piped data. Everything else,
+  including any undecidable destination, fires and needs a per-site
+  `audit.exemptions` entry carrying a MANDATORY written reason; the
+  legacy blanket `# noqa` hatch is deprecated (`PS-220-noqa-deprecated`,
+  `W`) and honoured for one more release. Severity is project-type
+  scoped: an explicit `audit.enforce-logging` (`error` / `warning` /
+  `off`) always wins, otherwise a `research` project type resolves to `W`
+  rather than wedging a publish on a decision nobody has made.
+
+  Fixes a latent hole found while implementing it: `_SEVERITY_OVERRIDES`
+  was applied BEFORE the co-located rule registrations, making it a
+  SILENT no-op for 31 rules — adding `"PS-220": "E"` to the override
+  table did nothing at all, with no error and no warning. A severity
+  table that silently ignores entries is itself a gate that cannot fail.
+
 - **`audit.skip-rules` — sanctioned per-rule deferrals, honoured by
   `audit-all` natively.** Declaring a deferral to a named migration
   campaign in `<repo>/.scitex/dev/config.yaml` now affects BOTH gates.
@@ -29,6 +51,19 @@ versions follow [Semantic Versioning](https://semver.org/).
   codes, `audit-project`-only, silent) and from `audit.capabilities`.
 
 ### Fixed
+- **The §6 MCP exemption is read from the AUDITED tree, not the runner's
+  registry checkout (#405).** `_audited_repo_root` preferred the ecosystem
+  registry's `local_path`, and a self-hosted CI runner's home often carries
+  a `~/proj/<pkg>` checkout at exactly that path. A PR declaring
+  `mcp_parity_exempt` / `mcp_tools_allowlist` in its own
+  `.scitex/dev/config.yaml` therefore could never turn its own
+  quality-audit green: the exemption was read from the STALE tree instead
+  of the editable-installed PR checkout under audit (scitex-orochi #460;
+  blocking scitex-hub #433, whose 52-entry `audit.mcp-tools-allowlist` was
+  correct and declared but had no effect in CI). Resolution order is now
+  import-derived root first (the tree actually being audited), with the
+  registry `local_path` deciding only for non-editable site-packages
+  installs where no audited tree exists on disk.
 - **Every auditor summary line now NAMES its category, pass or fail.**
   The clean lines always did ("no project-structure violations"); the
   FAILURE lines did not, so `audit-all` emitted three named SUCC lines
