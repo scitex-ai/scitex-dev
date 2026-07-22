@@ -174,6 +174,100 @@ def _maybe_emit_l2() -> None:
     )
 
 
+def _l1_active_unlocked() -> bool:
+    """Return True iff the L1 condition (no IO/PA rules registered) holds.
+
+    Same predicate as :func:`_maybe_emit_l1` MINUS the emit-once flag and
+    the ``_quiet()`` gate. Those two belong to the NOTICE, not to the
+    fact: a run that suppressed the preamble (``SCITEX_DEV_LINTER_QUIET``)
+    still skipped the rules, and its verdict must still say so. Caller
+    holds the lock.
+    """
+    if not _loaded:
+        return False
+    if _io_rule_count + _pa_rule_count > 0:
+        return False
+    return not _scitex_io_installed()
+
+
+def skipped_categories() -> list[dict]:
+    """Return structured records of rule categories that did NOT run.
+
+    This is the RESULT-level counterpart to the L1/L2 stderr notices. The
+    notices are a preamble an agent may never read; these records are
+    meant to be folded into the verdict itself (``validate-files``'s
+    human summary and its ``--json`` payload) so a "clean" that only
+    covered part of the rule corpus is DISTINGUISHABLE from a "clean"
+    that covered all of it.
+
+    Each record is a dict with a stable ``kind`` discriminator:
+
+    * ``"plugin_missing"`` — the L1 fact. No ``io``/``path`` category
+      rules registered because the providing plugin (scitex-io) is
+      absent, so STX-IO001-014 / STX-PA001-005 never evaluated.
+    * ``"requires_gate"`` — the L2 fact, one record per distinct
+      ``requires=`` string. Rules registered but were dropped per-visit
+      because the dependency they check for is not importable.
+
+    Returns an empty list when every rule category ran — which is what
+    makes "nothing was skipped" an assertable, falsifiable claim rather
+    than an absence of output.
+    """
+    with _lock:
+        records: list[dict] = []
+        if _l1_active_unlocked():
+            records.append(
+                {
+                    "kind": "plugin_missing",
+                    "categories": ["io", "path"],
+                    "rules": "STX-IO001-014, STX-PA001-005",
+                    "reason": (
+                        "no IO/PA category rules registered — the scitex-io "
+                        "plugin is not installed in this venv"
+                    ),
+                    "remedy": "pip install scitex-io",
+                }
+            )
+        for req, n in sorted(_skip_counts.items()):
+            records.append(
+                {
+                    "kind": "requires_gate",
+                    "requires": req,
+                    "skipped_evaluations": n,
+                    "reason": (
+                        f"{n} rule evaluation(s) dropped via the `requires=` "
+                        f"gate — `{req}` is not importable in this venv"
+                    ),
+                    "remedy": f"pip install {req}",
+                }
+            )
+        return records
+
+
+def describe_skips(records: list[dict] | None = None) -> list[str]:
+    """Render ``skipped_categories()`` records as human verdict lines.
+
+    Returns ``[]`` when nothing was skipped, so a caller can append the
+    result unconditionally. The first line is the COUNT (the part that
+    qualifies the verdict); the rest are per-record detail with remedy.
+    """
+    if records is None:
+        records = skipped_categories()
+    if not records:
+        return []
+    lines = [
+        f"NOT ALL RULES RAN: {len(records)} rule category group(s) skipped "
+        f"— this verdict covers only the rules that ran."
+    ]
+    for rec in records:
+        if rec["kind"] == "plugin_missing":
+            what = f"{'/'.join(rec['categories'])} ({rec['rules']})"
+        else:
+            what = f"requires=`{rec['requires']}`"
+        lines.append(f"  - {what}: {rec['reason']}. Fix: {rec['remedy']}")
+    return lines
+
+
 def health_snapshot() -> dict:
     """Return a snapshot of linter health — used by ``linter doctor``."""
     with _lock:
