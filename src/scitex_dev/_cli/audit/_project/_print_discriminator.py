@@ -90,11 +90,19 @@ def _enclosing_assignments(tree: ast.AST, target: ast.AST) -> list[ast.Assign]:
 
 def _assignments_to(tree: ast.AST, call: ast.Call, name: str) -> list[ast.expr]:
     """Value expressions assigned to `name` in the scope enclosing `call`."""
-    out: list[ast.expr] = []
-    for assign in _enclosing_assignments(tree, call):
-        if any(isinstance(t, ast.Name) and t.id == name for t in assign.targets):
-            out.append(assign.value)
-    return out
+    call_line = getattr(call, "lineno", None)
+    if call_line is None:
+        return []
+    candidates = [
+        assign
+        for assign in _enclosing_assignments(tree, call)
+        if any(isinstance(t, ast.Name) and t.id == name for t in assign.targets)
+        and getattr(assign, "lineno", call_line) <= call_line
+    ]
+    if not candidates:
+        return []
+    nearest = max(candidates, key=lambda a: a.lineno)
+    return [nearest.value]
 
 
 def _resolve_name_stream(tree: ast.AST, call: ast.Call, name: str) -> str:

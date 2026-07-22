@@ -87,6 +87,67 @@ def test_local_name_resolving_to_stdout_reads_as_stdout():
     assert actual == STDOUT
 
 
+# The real `emit_result` shape from `src/scitex_dev/_cli/_utils.py:35-51`.
+# Three branches each rebind `out`; only the LAST one is stderr. Collecting
+# every assignment let that stderr poison the stdout writers above it, so
+# genuine `--json` payload writers were reported as "writes to stderr".
+# CI caught this on scitex-dev's own tree (PR #406, run 29906963643).
+_BRANCH_CHAIN = (
+    "import sys, json\n"
+    "def emit_result(result, as_json=False, file=None):\n"
+    "    if as_json:\n"
+    "        out = file or sys.stdout\n"
+    "        print(result.to_json(), file=out)\n"
+    "    elif result.success:\n"
+    "        out = file or sys.stdout\n"
+    "        data = result.data\n"
+    "        print(json.dumps(data, indent=2, default=str), file=out)\n"
+    "    else:\n"
+    "        out = file or sys.stderr\n"
+    "        print(f'Error: {result.error}', file=out)\n"
+)
+
+
+def _print_on_line(src: str, line: int) -> tuple[ast.AST, ast.Call]:
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "print"
+            and node.lineno == line
+        ):
+            return tree, node
+    raise AssertionError(f"no bare print() on line {line}")
+
+
+@pytest.mark.parametrize(
+    "line, expected",
+    [
+        (5, STDOUT),   # `out = file or sys.stdout` two lines above
+        (9, STDOUT),   # a different stdout branch
+        (12, STDERR),  # the stderr branch
+    ],
+)
+def test_branch_chain_resolves_each_destination_independently(line, expected):
+    # Arrange
+    tree, call = _print_on_line(_BRANCH_CHAIN, line)
+    # Act
+    actual = destination(tree, call)
+    # Assert
+    assert actual == expected
+
+
+@pytest.mark.parametrize("line, expected", [(5, False), (9, False), (12, True)])
+def test_branch_chain_spares_only_the_payload_writers(line, expected):
+    # Arrange
+    tree, call = _print_on_line(_BRANCH_CHAIN, line)
+    # Act
+    flag, _why = should_flag(tree, call)
+    # Assert
+    assert flag is expected
+
+
 def test_local_name_that_can_be_stderr_reads_as_stderr():
     # Arrange — fail-closed: if a destination CAN be stderr, treat it as stderr.
     src = (
