@@ -136,7 +136,7 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
     import logging
 
     logging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
-    from .._docs.docs import get_docs
+    from ..._docs.docs import get_docs
 
     # --tldr: concise quick-start
     if args.tldr:
@@ -205,7 +205,7 @@ def _get_tldr(package: str) -> str:
 
     Tries to extract from built docs, falls back to a generic template.
     """
-    from .._docs.docs import get_docs
+    from ..._docs.docs import get_docs
 
     try:
         result = get_docs(package=package)

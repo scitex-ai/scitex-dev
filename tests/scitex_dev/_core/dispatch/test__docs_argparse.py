@@ -45,3 +45,40 @@ def test_docs_get_json_flag_parses():
     args = parser.parse_args(["docs", "get", "api", "--json"])
     # Assert
     assert args.as_json is True
+
+
+# --- EXECUTION tests -------------------------------------------------
+# The parse-only tests above never call `args.func`, so they cannot catch
+# a broken function-local import. `_docs_argparse` carried the same
+# flat-module `..` depth as `_skills_argparse` after the `dispatch.py` ->
+# `dispatch/` split, resolving to the non-existent
+# `scitex_dev._core._docs`. These tests dispatch for real.
+
+
+def _make_real_package_parser():
+    """Parser bound to `scitex-dev`, which registers a real
+    `scitex_dev.docs` entry point, so execution resolves genuine docs."""
+    root = argparse.ArgumentParser(prog="scitex-dev")
+    subparsers = root.add_subparsers(dest="command")
+    register_docs_subcommand(subparsers, package="scitex-dev")
+    return root
+
+
+def test_docs_list_executes_real_dispatch_path(capsys):
+    # Arrange
+    parser = _make_real_package_parser()
+    args = parser.parse_args(["docs", "list"])
+    # Act
+    args.func(args)
+    # Assert
+    assert capsys.readouterr().out.strip()
+
+
+def test_docs_backing_module_is_absent_under_core():
+    # Arrange
+    import importlib
+
+    # Act
+    found = importlib.util.find_spec("scitex_dev._core._docs")
+    # Assert
+    assert found is None
