@@ -100,8 +100,27 @@ def _do_check(
         if issues:
             all_results[str(f)] = issues
 
+    # Rule categories that never ran (missing plugin / unmet `requires=`).
+    # Folded into the VERDICT below — a preamble warning on stderr is not
+    # a result, and an agent that reads only the result would otherwise
+    # take "clean" to mean "clean on the whole rule corpus" when it means
+    # "clean on the rules that ran". Never affects the exit code: a
+    # missing OPTIONAL plugin is not a lint failure.
+    from ._health import describe_skips, skipped_categories
+
+    skips = skipped_categories()
+
     if as_json:
         combined = {fp: to_json(issues, fp) for fp, issues in all_results.items()}
+        # Top-level metadata under a key that cannot collide with a file
+        # entry (every other key is a str(Path) ending in .py/.ipynb).
+        # Always present, so an agent can branch on the FIELD rather than
+        # having to detect the absence of one.
+        combined["_meta"] = {
+            "skipped_category_count": len(skips),
+            "skipped_categories": skips,
+            "all_rules_ran": not skips,
+        }
         click.echo(json.dumps(combined, indent=2))
         has_errors = any(
             any(i.rule.severity == "error" for i in issues)
@@ -111,10 +130,14 @@ def _do_check(
 
     if not all_results:
         msg = "All files clean"
+        if skips:
+            msg = "All files clean ON THE RULES THAT RAN"
         if use_color:
             click.echo(f"\033[92m{msg}\033[0m")
         else:
             click.echo(msg)
+        for line in describe_skips(skips):
+            click.echo(line)
         return 0
 
     has_errors = False
@@ -125,6 +148,8 @@ def _do_check(
                 has_errors = True
         click.echo(format_summary(issues, filepath, color=use_color))
         click.echo()
+    for line in describe_skips(skips):
+        click.echo(line)
     return 2 if has_errors else 1
 
 
