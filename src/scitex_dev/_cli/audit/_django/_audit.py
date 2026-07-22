@@ -424,6 +424,12 @@ def audit_django(
     visible_set = _floor.get(severity, _floor["error"])
     visible = [v for v in violations if v.severity in visible_set]
     n_errors = sum(1 for v in violations if v.severity == "E")
+    # Counted over EVERY surviving finding, not the floor-filtered
+    # `visible` — else the warning count reads zero at the `error` floor.
+    n_warnings = sum(1 for v in violations if v.severity == "W")
+    n_infos = sum(1 for v in violations if v.severity == "I")
+    # Exit code unchanged: W/I never block. This changes what is
+    # REPORTED, never what fails.
     exit_code = 1 if n_errors > 0 else 0
 
     if json_out:
@@ -445,6 +451,10 @@ def audit_django(
                     ],
                     "exit_code": exit_code,
                     "errors": n_errors,
+                    # Counted over every surviving finding — a consumer
+                    # reading only `errors` would inherit the same blind spot.
+                    "warnings": n_warnings,
+                    "infos": n_infos,
                 },
                 indent=2,
             )
@@ -454,22 +464,37 @@ def audit_django(
     from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
     from .._emit import emit as _emit
 
-    if not visible:
-        _emit("success", f"{distribution}: no Django-standard violations")
+    if not violations:
+        # SUCC iff ZERO findings at ANY severity. This used to read
+        # `if not visible` — "nothing to print at the current floor" —
+        # which at the default `error` floor declared success over live
+        # W/I findings, byte-identical to a clean tree. Name the tree
+        # graded, as the failure line does. See _project/_audit.py.
+        _emit(
+            "success",
+            f"{distribution} ({repo_root}): no Django-standard violations",
+        )
         emit_disclaimer()
         return exit_code
 
-    n_w = sum(1 for v in visible if v.severity == "W")
-    n_i = sum(1 for v in visible if v.severity == "I")
     headline_level = "error" if exit_code else "warning"
-    # Category-named failure line — mirrors the clean line's
-    # "no Django-standard violations". See the note in _project/_audit.py.
-    summary = f"{distribution} ({repo_root}): Django-standard: {n_errors} error(s)"
-    if n_w:
-        summary += f", {n_w} warning(s)"
-    if n_i:
-        summary += f", {n_i} info"
+    # Category-named failure line; both counts always printed, even at
+    # zero, so the headline has one fixed shape a grep can rely on.
+    summary = (
+        f"{distribution} ({repo_root}): Django-standard: "
+        f"{n_errors} error(s), {n_warnings} warning(s)"
+    )
+    if n_infos:
+        summary += f", {n_infos} info"
     _emit(headline_level, summary)
+    if not visible:
+        # Findings exist but all sit below the floor, so the list below
+        # prints nothing. Say so, and say how to reach the detail.
+        _emit(
+            "warning",
+            f"  (no finding at or above severity '{severity}'; "
+            f"re-run with `--severity warning` to list them)",
+        )
     for v in visible:
         sev = (
             "error"
