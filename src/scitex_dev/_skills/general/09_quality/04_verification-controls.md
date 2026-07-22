@@ -30,10 +30,28 @@ unset variable; a health gate that read *absence* as green; a cleaner scoped to
 a directory not containing the bloat, printing `removed=0 kept=235` — what a
 clean tree prints. Never accept "there is a check for that" — ask when it last
 fired and what it did. Worst measured case: `audit-project` printed `SUCC` over
-53 live findings, its summary counting errors only. So a CLI-driven mutation
-proof **cannot fail** while the rule under test sits at severity `W` — plant a
-violation, the CLI still says SUCC. A week of such proofs is now treated as
-UNPERFORMED, not passed.
+live warning findings, its summary counting errors only. So a CLI-driven
+mutation proof **cannot fail** while the rule under test sits at severity `W` —
+plant a violation, the CLI still says SUCC.
+
+That defect was real; the blast-radius claim that followed it was not. "A week
+of such proofs is void" was asserted without enumerating which proofs it named,
+and a census (2026-07-23) that enumerated them found **0**. The six W project
+rules verified through `audit_project(...)` — PS-220, PS-CLEW-001,
+RP-201/202/204/205 — all pass `json_out=True`, whose branch returns *before* the
+defective summary block; two sit inside `visible` at `severity="warning"`
+anyway. The author was reasoning about 2 rules; the set is 53 (42 project, 11
+django) — W is the dataclass default (`_registry.py:27`), so a rule inherits it
+by omission, and that is where the estimate came from luck, not a count.
+
+TELL: an alarming claim about verification-that-*failed* pulls attention onto the
+tested rules and away from the untested ones. The same census found the worse
+thing underneath: **17 of the 53 W rules have no identified proof at all** —
+PS-145/147/150/151/157/165/166/167/206b/211/212 and DJ-103/105/107/109/202/203,
+zero test-file references to the rule ID. Bound: 17 is an upper bound on
+*untested* and a firm lower bound on *not verifiable by rule-ID search* — a test
+can exercise a rule without naming its code; the census ran no suite and measured
+no coverage.
 
 **Mispositioned — the probe never reaches what is under test.** It reports *the
 absence of the phenomenon* rather than its own blindness. Below the effect: an
