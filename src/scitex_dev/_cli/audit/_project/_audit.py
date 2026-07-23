@@ -241,6 +241,29 @@ def audit_project(
     if json_out:
         import json as _json
 
+        def _as_dict(v: Violation) -> dict:
+            return {
+                "rule": v.rule,
+                "where": v.where,
+                "detail": v.detail,
+                "severity": v.severity,
+            }
+
+        # `violations` stays FLOOR-FILTERED (== `visible`), so the machine
+        # payload honours `--severity` exactly as the human per-finding list
+        # does — a consumer that asked for `error` still gets only E rows
+        # here. But the floor must govern what is LISTED, never what the
+        # payload as a whole DISCLOSES: at the default `error` floor a tree
+        # of live W findings emitted `"violations": []` while `warnings`
+        # read a positive count, so a `--json` mutation proof written at the
+        # default floor read an empty list and could not fail — the exact
+        # blind spot #417 removed from the human summary's COUNTS, left
+        # behind on the machine path's LIST. `violations_total` therefore
+        # carries EVERY surviving finding with its severity, below-floor
+        # ones included, so nothing is silently omitted and a consumer can
+        # filter for itself. It is additive: `violations` is unchanged, and
+        # `len([v for v in violations_total if v["severity"] == "W"])` equals
+        # `warnings` by construction.
         click.echo(
             _json.dumps(
                 {
@@ -248,15 +271,8 @@ def audit_project(
                     "repo": str(repo_root),
                     **resolved_ctx,
                     "resolved_via": via,
-                    "violations": [
-                        {
-                            "rule": v.rule,
-                            "where": v.where,
-                            "detail": v.detail,
-                            "severity": v.severity,
-                        }
-                        for v in visible
-                    ],
+                    "violations": [_as_dict(v) for v in visible],
+                    "violations_total": [_as_dict(v) for v in violations],
                     "capability_skips": [
                         {"rule": rule, "capability": cap}
                         for rule, cap in capability_skipped
