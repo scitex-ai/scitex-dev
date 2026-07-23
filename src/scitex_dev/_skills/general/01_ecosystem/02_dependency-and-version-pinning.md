@@ -58,47 +58,10 @@ Downstream is **standalone**, not **zero-dep**. Third-party runtime deps (numpy,
 
 Good example (`figrecipe`): `matplotlib`, `numpy`, `ruamel.yaml`, `scipy`, `click`, `rich` — six tight runtime deps, everything else (Pillow, seaborn, scitex integration) behind extras.
 
-## `[dev]` extras completeness — fastmcp lesson, 2026-05-02
-
-**Rule.** `[dev]` MUST install every dependency that this package's own
-test suite imports unconditionally. The only legitimate way to leave
-something out of `[dev]` is to also gate the tests with
-`pytest.importorskip(...)`. Pick one.
-
-The boundary is **whose feature is being tested**:
-
-| Tested feature lives in… | `[dev]` does | Tests do |
-|---|---|---|
-| **This package's own `src/`** (e.g. `scitex-notebook`'s MCP server uses `fastmcp`) | Pull the optional 3rd-party dep in so a fresh `pip install -e .[dev]` runs the full suite. **Do NOT** `importorskip`. | Run unconditionally — the feature is yours; commit to testing it. |
-| **A sibling `scitex-*` package** (cross-cascade integration test) | Leave the sibling out. Listing it pulls in heavy transitive deps, can shadow editable installs ([03_interface/03_mcp/09 lesson 4](../03_interface/03_mcp/09_lessons-and-pitfalls.md)), and re-introduces lockstep coupling. | `pytest.importorskip("scitex_<sibling>")` — exists when the sibling is around, skips cleanly when not. |
-| **A 3rd-party dep this package merely *integrates with*** (e.g. matplotlib plot test) | Pragmatic — include if every CI matrix entry has it; skip if some dimensions deliberately exclude it. | Match the `[dev]` choice. |
-
-**Symmetric pyproject pattern.** When a package has an optional feature
-extra `[X]` (e.g. `[mcp]`) AND the test suite covers that feature, the
-`[dev]` extra must include the same dep:
-
-```toml
-[project.optional-dependencies]
-mcp = ["fastmcp>=2.0"]                # production users opt in
-dev = [
-    "pytest>=7.0", "pytest-cov>=4.0", "ruff",
-    # Optional features whose tests live in the suite — installed in
-    # [dev] so a fresh `pip install -e .[dev]` runs the full suite.
-    "fastmcp>=2.0",
-]
-```
-
-**Why this matters.** A bare `pip install -e .[dev]` is the canonical
-contributor-onboarding command and what every CI workflow runs
-([02_package/07_github-actions.md](../02_package/07_github-actions.md)).
-If `[dev]` is incomplete, contributors hit `ModuleNotFoundError` at
-test-collection time and CI breaks on the first push that touches the
-feature. The 2026-05-02 scitex-notebook MCP refactor hit this exact
-failure mode on its first push to `develop`.
-
-**Detection.** `audit-project`'s `PS-210` check flags any pyproject extra
-whose declared deps are referenced unconditionally from `tests/` but
-missing from `[dev]`.
+For `[dev]` extras completeness (the fastmcp lesson — which optional
+deps `[dev]` must install vs `pytest.importorskip`, the symmetric
+pyproject pattern, `PS-210`), see
+[19_dev-extras-completeness.md](19_dev-extras-completeness.md).
 
 ## Optional Dependency Pattern
 
@@ -130,71 +93,11 @@ def some_feature_requiring_scitex():
         )
 ```
 
-## Version Pinning Rules
-
-**Principle**: pin the **minimum** version that contains features you rely on. Do **not** pin upper bounds unless a known incompatibility exists. This keeps the ecosystem composable and avoids lockstep upgrades.
-
-### Lower bound: always set it
-```toml
-# Good
-dependencies = [
-    "numpy>=1.21.0",         # we use numpy.typing, first in 1.21
-    "scitex-io>=0.3.0",      # we call scitex-io.save with new dry_run= kwarg
-]
-
-# Bad
-dependencies = [
-    "numpy",                 # ambiguous — breaks reproducibility of CI
-    "scitex-io==0.3.4",      # too tight — blocks consumers
-]
-```
-
-### Upper bound: only when proven broken
-- Add `,<X` **only** when a specific release is known to break, and open an issue to track.
-- Prefer fixing forward (new release with `>=Y.Z`) over capping upstream.
-- Never cap by default — capping a major version (`<2`) traps consumers.
-
-### When YOU update a package, bump minima in consumers
-
-When you cut `scitex-io 0.4.0` containing a new feature used by `scitex`:
-
-1. In `scitex-io`: bump its own version → `0.4.0`, publish, tag.
-2. In every consumer (middle + upstream + downstream that uses it via `[scitex]` extra):
-   - Bump its `scitex-io` lower bound to the new minimum that contains the feature.
-   - Add a note in the consumer's CHANGELOG linking the feature used.
-   - Bump the consumer's own **patch** version (feature now requires newer dep).
-3. **Do not** bump minima speculatively — only when you actually use a new API.
-4. **Breaking changes** (rename, signature change, removal):
-   - Major-bump the producing package.
-   - Update every consumer's lower bound **and** code in the same coordinated release wave.
-   - Consumers should fail fast on the old minimum rather than silently accept it.
-
-### SciTeX-ecosystem-specific rules
-
-- **Downstream → middle/upstream**: runtime minima live only inside **optional extras** (`[scitex]`). The bare install stays ecosystem-free.
-  ```toml
-  [project.optional-dependencies]
-  scitex = ["scitex-io>=0.4.0", "scitex[session]>=2.24.0"]
-  ```
-- **Middle → downstream**: minima go under **test** extras (plugin targets for integration tests), not runtime.
-  ```toml
-  [project.optional-dependencies]
-  dev = ["scitex-dev", "pytest>=7.0", "figrecipe>=0.13.0"]  # for cascade tests
-  ```
-- **Upstream → everything**: minima go under **runtime** deps with matched version ranges.
-  ```toml
-  dependencies = [
-      "scitex-io>=0.4.0",
-      "scitex-stats>=0.5.0",
-      "figrecipe>=0.13.0",
-  ]
-  ```
-- **Coordinated waves**: when multiple ecosystem packages change together, bump them in one wave with matched minima so a fresh `pip install scitex` resolves cleanly.
-- **`scitex-dev ecosystem sync`** (or equivalent) is the canonical tool for fanning minima updates across the ecosystem. Prefer it over hand-editing.
-
-### Quick rule of thumb
-
-> Raise a lower bound **only** when you rely on something that version introduced. Lower it **never**. Cap an upper bound **only** when a release is proven broken.
+For the full **Version Pinning Rules** (lower/upper bounds, bumping
+consumer minima on release, breaking-change coordinated waves, the
+SciTeX-ecosystem-specific downstream/middle/upstream layering, and the
+quick rule of thumb), see
+[18_version-pinning-rules.md](18_version-pinning-rules.md).
 
 ## Quick Checklist (dependencies & versions)
 
