@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Ecosystem Wide Rules
-  [DETAILS] Cross-package conventions every `scitex-*` repo follows — the 3-layer cascade hierarchy and test scope, dependency hygiene + optional extras + version-pinning rules, the module-vs-standalone-package decision, the `SCITEX_<MODULE_NAME>_*` env-var prefix rule, the umbrella `scitex.<name>` thin-re-export bridge with lazy-import guard, the `<project>/.scitex/<pkg-short>/` + `~/.scitex/<pkg-short>/` local-state layout, AGPL-3.0-only + CLA policy, per-package linter plugins, package categories, the `project-type: research` auditor carve-outs, and the model-serving vs model-consumption HTTP-only boundary. Use when touching any `scitex-*` package or onboarding a research repo to ecosystem standards.
+  [DETAILS] Cross-package conventions every `scitex-*` repo follows — the 3-layer cascade hierarchy and test scope, dependency hygiene + optional extras + version-pinning rules, the module-vs-standalone-package decision, the `SCITEX_<MODULE_NAME>_*` env-var prefix rule, the umbrella `scitex.<name>` thin-re-export bridge with lazy-import guard, the `<project>/.scitex/<pkg-short>/` + `~/.scitex/<pkg-short>/` local-state layout, AGPL-3.0-only + CLA policy, per-package linter plugins, package categories, the `project-type: research` auditor carve-outs, and the model-serving (scitex-genai) vs model-consumption (sac) HTTP-only boundary. Use when touching any `scitex-*` package or onboarding a research repo to ecosystem standards.
 tags: [scitex-general-ecosystem-index]
 ---
 
