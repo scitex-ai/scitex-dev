@@ -7,7 +7,11 @@ every managed checkout's develop current via the non-destructive
 
 from __future__ import annotations
 
-from scitex_dev._ecosystem_jobs._provider import provide_jobs
+from scitex_dev._ecosystem_jobs._provider import (
+    JOB_SHELL_BODIES,
+    log_path_for,
+    provide_jobs,
+)
 
 
 def test_provider_registers_the_self_pull_timer():
@@ -20,14 +24,32 @@ def test_provider_registers_the_self_pull_timer():
     assert registered
 
 
-def test_self_pull_runs_the_ff_only_sync_sweep():
-    """The timer drives the existing ff-only `ecosystem sync` (never clobbers)."""
+def test_self_pull_command_is_the_bare_exec_verb():
+    """The verb owns logging (#367), so command is the bare `cron exec` line."""
     # Arrange
     by_name = {job.name: job for job in provide_jobs()}
     # Act
     command = by_name["ecosystem-self-pull"].command
     # Assert
-    assert "ecosystem sync --yes" in command
+    assert command == "scitex-dev ecosystem cron exec ecosystem-self-pull"
+
+
+def test_self_pull_body_runs_the_ff_only_sync_sweep():
+    """The pure shell body drives the existing ff-only `ecosystem sync`."""
+    # Arrange
+    # Act
+    body = JOB_SHELL_BODIES["ecosystem-self-pull"]
+    # Assert
+    assert "ecosystem sync --yes" in body
+
+
+def test_self_pull_logs_under_runtime_logs():
+    """The job's log resolves under `runtime/logs/`, never `dev/logs/`."""
+    # Arrange
+    # Act
+    log = log_path_for("ecosystem-self-pull").as_posix()
+    # Assert
+    assert log.endswith(".scitex/dev/runtime/logs/timer-ecosystem-self-pull.log")
 
 
 def test_provider_registers_the_drift_report_timer():
@@ -40,14 +62,23 @@ def test_provider_registers_the_drift_report_timer():
     assert registered
 
 
-def test_drift_report_timer_runs_the_ecosystem_drift_report():
-    """The timer drives the read-only `ecosystem drift-report` observe pass."""
+def test_drift_report_body_runs_the_ecosystem_drift_report():
+    """The pure shell body drives the read-only `ecosystem drift-report`."""
+    # Arrange
+    # Act
+    body = JOB_SHELL_BODIES["drift-report"]
+    # Assert
+    assert "ecosystem drift-report" in body
+
+
+def test_drift_report_command_is_the_bare_exec_verb():
+    """The timer's ExecStart is the bare `cron exec` line (verb owns logging)."""
     # Arrange
     by_name = {job.name: job for job in provide_jobs()}
     # Act
     command = by_name["drift-report"].command
     # Assert
-    assert "ecosystem drift-report" in command
+    assert command == "scitex-dev ecosystem cron exec drift-report"
 
 
 def test_drift_report_timer_cadence_is_conservative_six_hours():
@@ -70,21 +101,28 @@ def test_provider_registers_the_pr_expire_cron():
     assert registered
 
 
-def test_pr_expire_job_ships_in_dry_run_mode_not_apply():
-    """SAFETY: the scheduled job must NOT auto-mass-close the fleet on first fire."""
+def test_pr_expire_body_ships_in_dry_run_mode():
+    """SAFETY: the scheduled job runs in --dry-run — no auto-mass-close."""
     # Arrange
-    by_name = {job.name: job for job in provide_jobs()}
     # Act
-    command = by_name["pr-expire"].command
+    body = JOB_SHELL_BODIES["pr-expire"]
     # Assert
-    assert "--dry-run" in command and "--apply" not in command
+    assert "--dry-run" in body
 
 
-def test_pr_expire_job_runs_the_ecosystem_pr_expire_primitive():
+def test_pr_expire_body_does_not_apply():
+    """SAFETY: the scheduled job must NOT pass --apply on first fire."""
+    # Arrange
+    # Act
+    body = JOB_SHELL_BODIES["pr-expire"]
+    # Assert
+    assert "--apply" not in body
+
+
+def test_pr_expire_body_runs_the_ecosystem_pr_expire_primitive():
     """The cron drives `ecosystem pr expire --all` across the fleet."""
     # Arrange
-    by_name = {job.name: job for job in provide_jobs()}
     # Act
-    command = by_name["pr-expire"].command
+    body = JOB_SHELL_BODIES["pr-expire"]
     # Assert
-    assert "ecosystem pr expire --all" in command
+    assert "ecosystem pr expire --all" in body
