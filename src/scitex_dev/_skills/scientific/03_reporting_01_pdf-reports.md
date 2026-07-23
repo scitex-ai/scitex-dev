@@ -144,82 +144,11 @@ some <10 MB). If the PDF exceeds the target:
 3. **Split** into `report-part1.pdf`, `report-part2.pdf` if still too
    large. Mention the split in the email body.
 
-## Delivery: Email Rules
+## Delivery & tracking
 
-Every delivery email MUST include:
-
-1. **PDF attachment** (the report itself — never just inline PNGs).
-2. **Issue-tracker URL** in the body, linking to the tracking issue
-   (e.g. `https://github.com/<org>/<repo>/issues/<n>`).
-3. **Summary** of key findings in the email body (mirrors the executive
-   summary section).
-4. **Timestamp** in the subject line.
-5. **File path** on the source machine, for collaborators with shared
-   filesystem access.
-
-Subject format:
-
-```
-[<Project>] <Analysis> Report YYYY-MM-DD — <one-line key finding>
-```
-
-```python
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
-
-msg = MIMEMultipart()
-msg["Subject"] = f"[{project}] {analysis} Report {date} — {summary}"
-msg["From"] = from_addr
-msg["To"]   = to_addr
-
-body = f"""\
-{project} {analysis} Report
-
-Tracking issue: {issue_url}
-
-Key findings:
-- {finding_1}
-- {finding_2}
-
-Report on <host>: {report_path}
-"""
-msg.attach(MIMEText(body, "plain"))
-
-with open(report_path, "rb") as fh:
-    part = MIMEBase("application", "pdf")
-    part.set_payload(fh.read())
-encoders.encode_base64(part)
-part.add_header("Content-Disposition", f'attachment; filename="{report_path.name}"')
-msg.attach(part)
-
-with smtplib.SMTP("localhost", 25) as server:
-    server.sendmail(from_addr, [to_addr], msg.as_string())
-```
-
-Check `report_path.stat().st_size < 10 * 1024 * 1024` before attaching;
-fall through to size-management above on failure.
-
-## Tracking: Issue Comment
-
-After successful delivery, comment on the tracking issue so the
-delivery history lives next to the analysis spec:
-
-```bash
-gh issue comment <n> --repo <org>/<repo> --body "$(cat <<EOF
-Report delivered: $(basename "$report_path")
-Path: $report_path
-Size: $(du -h "$report_path" | cut -f1)
-Email: sent (or: failed — <reason>)
-EOF
-)"
-```
-
-The issue thread becomes the canonical delivery log: every report PDF is
-discoverable from the analysis ticket, and failures are visible to
-everyone watching the issue.
+Email delivery rules (attachment, issue URL, subject format, `smtplib` send with
+pre-attach size check) and the post-delivery issue-comment tracking log live in
+[03_reporting_03_pdf-report-delivery.md](03_reporting_03_pdf-report-delivery.md).
 
 ## See also
 
