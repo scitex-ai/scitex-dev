@@ -14,8 +14,12 @@ ecosystem maintainers. Sits atop the docs tier
 ## Sections
 
 1. [01_version-control.md](01_version-control.md) — Branches, tags, release waves, release gates (core workflow)
+   - [16_version-control-preflight.md](16_version-control-preflight.md) — Preflight state checks (uncommitted changes, wrong branch, upstream tracking) before pull/install/checkout
+   - [17_develop-to-main-sync.md](17_develop-to-main-sync.md) — When to merge `develop` → `main`: tag-push auto-sync workflow, change-kind table, manual fallback
 2. [02_periodic-audits.md](02_periodic-audits.md) — Run `audit-all` continuously while editing — cron / tmux / agent loops, JSON contract, Claude Code mechanisms
 3. [03_release-automation.md](03_release-automation.md) — Automation commands, ecosystem sync CLI, MCP tools, Python API
+   - [18_end-to-end-release-flow.md](18_end-to-end-release-flow.md) — End-to-end release flow (develop → PyPI), opt-in only: authorization doctrine, pre-flight checklist, `/loop until pypi` sequence, trusted-publisher setup
+   - [19_release-pipeline-gotchas.md](19_release-pipeline-gotchas.md) — Release-pipeline gotchas: gh-CI as the real gate, enforce_admins, no-retag/PATCH bump, hatchling duplicate-filename, CLA allowlist, quota pressure
 4. [04_skills-self-explain.md](04_skills-self-explain.md) — Quality measure for skill content
 5. [05_doc-surfaces.md](05_doc-surfaces.md) — Which documentation surface beats which
 6. [06_subprocess-coverage.md](06_subprocess-coverage.md) — Subprocess coverage wiring (parallel + COVERAGE_PROCESS_START + `.pth` shim)
@@ -24,7 +28,11 @@ ecosystem maintainers. Sits atop the docs tier
 9. [09_ecosystem-tq-migration.md](09_ecosystem-tq-migration.md) — Per-peer migration playbook for the no-mocks + test-quality rules; four-pass sequence, dispatch template, rollback contract
 10. [10_package-maintenance-prompt.md](10_package-maintenance-prompt.md) — Reusable package-maintenance prompt
 11. [11_dependency-tiers.md](11_dependency-tiers.md) — Dependency tier model
+    - [20_optional-import-helper.md](20_optional-import-helper.md) — Optional imports must use `try_import_optional`; promotion from `[all]` to hard deletes the helper
 12. [12_ci-feedback-decoupled-pollers.md](12_ci-feedback-decoupled-pollers.md) — CI-feedback decoupled-pollers convention (the owning agent hears its PR's CI result)
 13. [13_version-drift-management.md](13_version-drift-management.md) — Version drift across the distributed fleet: the 8-layer drift matrix, the observe→reconcile loop (`ecosystem validate-versions`), the release→propagate→rebuild→restart lifecycle, the agent rebuild/restart protocol, and the sibling axis of documentation drift (loosely-coupled docs; generate-or-audit-or-fix)
+    - [21_baked-artifact-drift-loop.md](21_baked-artifact-drift-loop.md) — The baked-artifact gap (container image + agent overlay) and the SoC-split never-again loop (detect/judge/rebuild-remotely/verify/swap)
+    - [23_agent-rebuild-restart-protocol.md](23_agent-rebuild-restart-protocol.md) — Agent rebuild/restart protocol when infra packages change: release-first, rebuild once, rolling-restart at a quiet window, interim env-shim
+    - [22_documentation-drift.md](22_documentation-drift.md) — Documentation drift: where it hides, existing detectors, and the three durable moves (generate / audit-rule / fix-at-notice)
 14. [14_release-and-pin-doctrine.md](14_release-and-pin-doctrine.md) — Operator release/versioning doctrine (constitution-referenceable): aggressive-publish with no approval gate (autonomous develop→main→tag→PyPI + fix-forward), and the scitex-python umbrella as the single deterministic pin-point — it exact-pins (`==`) every scitex member while leaves keep `>=` — with how-to-apply + scitex-dev umbrella-`==` enforcement
 15. [15_pre-commit-policy.md](15_pre-commit-policy.md) — What may run in a pre-commit hook: FAST, BOUNDED, DETERMINISTIC checks only, never the test suite (tests belong in CI). Why a `language: system` hook invoking a Python tool is banned — it is a `$PATH` lookup, so it resolves to whichever venv is active at commit time (figrecipe's testmon hook ran ZERO tests fleet-wide for weeks while blocking every Python commit; davinci-resolve-mcp's took >14 min per commit). The only sanctioned commit-time test gate is `language: python` + `additional_dependencies:`. Enforced by audit rule PS-HOOK-001
