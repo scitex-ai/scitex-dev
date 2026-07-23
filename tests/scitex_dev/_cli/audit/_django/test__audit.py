@@ -145,6 +145,30 @@ def test_dj102_fires_when_settings_is_single_module(tmp_path):
     assert "DJ-102" in fired
 
 
+def test_dj103_fires_when_settings_init_has_no_env_dispatch(tmp_path):
+    # Arrange — overwrite config/settings/__init__.py so it carries neither
+    # the SCITEX_<PKG>_ENV dispatch token nor a `from .settings_<env> import *`.
+    repo = _make_conforming_repo(tmp_path)
+    (repo / "config" / "settings" / "__init__.py").write_text(
+        "INSTALLED_APPS = []\n"
+    )
+    # Act
+    fired = _violations(repo)
+    # Assert
+    assert "DJ-103" in fired
+
+
+def test_dj105_fires_without_per_env_settings_modules(tmp_path):
+    # Arrange — remove both per-env settings modules
+    repo = _make_conforming_repo(tmp_path)
+    (repo / "config" / "settings" / "settings_dev.py").unlink()
+    (repo / "config" / "settings" / "settings_prod.py").unlink()
+    # Act
+    fired = _violations(repo)
+    # Assert
+    assert "DJ-105" in fired
+
+
 def test_dj104_fires_without_settings_shared(tmp_path):
     # Arrange
     repo = _make_conforming_repo(tmp_path)
@@ -175,6 +199,19 @@ def test_dj108_fires_without_manage_py(tmp_path):
     assert "DJ-108" in fired
 
 
+def test_dj109_fires_when_manage_py_omits_config_settings(tmp_path):
+    # Arrange — manage.py present but pointing at a non-config settings module
+    repo = _make_conforming_repo(tmp_path)
+    (repo / "manage.py").write_text(
+        "import os\n"
+        'os.environ.setdefault("DJANGO_SETTINGS_MODULE", "demo.settings")\n'
+    )
+    # Act
+    fired = _violations(repo)
+    # Assert
+    assert "DJ-109" in fired
+
+
 def test_dj110_fires_with_legacy_project_package(tmp_path):
     # Arrange
     repo = _make_conforming_repo(tmp_path)
@@ -201,6 +238,26 @@ def test_dj201_fires_without_apps_dir(tmp_path):
     fired = _violations(repo)
     # Assert
     assert "DJ-201" in fired
+
+
+def test_dj202_fires_when_apps_dir_missing_init(tmp_path):
+    # Arrange — apps/ exists but has no __init__.py
+    repo = _make_conforming_repo(tmp_path)
+    (repo / "apps" / "__init__.py").unlink()
+    # Act
+    fired = _violations(repo)
+    # Assert
+    assert "DJ-202" in fired
+
+
+def test_dj203_fires_when_no_registered_apps(tmp_path):
+    # Arrange — remove the only registered app, leaving apps/ empty of apps.py
+    repo = _make_conforming_repo(tmp_path)
+    shutil.rmtree(repo / "apps" / "infra" / "demo_app")
+    # Act
+    fired = _violations(repo)
+    # Assert
+    assert "DJ-203" in fired
 
 
 def test_dj204_fires_for_app_without_appconfig(tmp_path):
