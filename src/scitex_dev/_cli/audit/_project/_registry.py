@@ -1254,6 +1254,15 @@ from ._check_config_layout import (  # noqa: E402
 for _c, _sec, _msg, _sev, _slug in _CONFIG_LAYOUT_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
+# PS-223 — non-`runtime/` logs-path string literal in package source
+# (co-located rule, merged on the same terms as CONFIG_LAYOUT_RULES).
+# Severity W lives in the tuple, NOT in `_SEVERITY_OVERRIDES` — see the note
+# beside `_patch`: an override for a co-located rule is a silent no-op.
+from ._check_logs_path import LOGS_PATH_RULES as _LOGS_PATH_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in _LOGS_PATH_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
 # hook-bypass: line-limit
 # ---------------------------------------------------------------------------
 # Severity/slug overrides are applied LAST, so the table is honest for EVERY
