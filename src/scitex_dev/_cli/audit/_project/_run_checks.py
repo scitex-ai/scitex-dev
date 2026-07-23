@@ -127,6 +127,15 @@ def run_checks(
     from ._check_config_layout import check_ps222_config_layout
 
     check_ps222_config_layout(repo_root, Violation, violations)
+    # PS-223: non-`runtime/` logs-path string literal in package source.
+    # Package logs live under the gitignored `runtime/logs/` layer, never
+    # directly under `~/.scitex/<pkg>/logs/` (the pre-#367/#433 location).
+    # AST-scans src/<pkg>/**.py for path-token string literals; docstrings,
+    # comments and whitespace-bearing description/help strings are spared.
+    # W during bake-in; opt out only via `audit.exemptions` with a reason.
+    from ._check_logs_path import check_ps223_logs_path
+
+    check_ps223_logs_path(repo_root, Violation, violations)
     # PS-218/PS-219: CLI-normalization conformance (items 4-5). Health-check
     # verb standardizes on `doctor` (`health` is a deprecated alias); version
     # standardizes on the `--version`/`-V` flag (not a `version` subcommand).
