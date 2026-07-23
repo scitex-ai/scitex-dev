@@ -230,8 +230,8 @@ def _register_install_cron(creds: click.Group) -> None:
                 "Idempotent: a single line tagged `# scitex-dev "
                 "creds-rotate (managed)` is managed in place — "
                 "reinstall replaces it. Logs to "
-                "~/.scitex/dev/logs/creds-rotate.log (size-rotated at 1 "
-                "MiB).",
+                "~/.scitex/dev/runtime/logs/creds-rotate.log (size-rotated "
+                "at 1 MiB).",
             ),
             examples=(
                 Example("{prog} creds install-cron --dry-run", "Preview the cron line."),
