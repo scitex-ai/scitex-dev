@@ -26,4 +26,6 @@ The Python API is the **single source of truth**. CLI, MCP, and HTTP all delegat
 12. [12_audit-checklist.md](12_audit-checklist.md) — release-gate checklist
 13. [13_imports-and-shadowing.md](13_imports-and-shadowing.md) — stdlib vs `scitex.os` / `scitex.io` resolution, aliasing rules
 14. [14_numeric-literals.md](14_numeric-literals.md) — `_` thousands separators for literals ≥ 1_000 (`21_600`, not `21600`); PEP 515
-15. [TODO.md](TODO.md) — open conversion items, audit-api linter design
+15. [15_optional-deps-audit.md](15_optional-deps-audit.md) — optional-dep audit rules + `pytest.importorskip` test-side counterpart
+16. [16_pep562-startup-lazy-imports.md](16_pep562-startup-lazy-imports.md) — PEP 562 `__getattr__` for CLI startup-time speed
+17. [TODO.md](TODO.md) — open conversion items, audit-api linter design
