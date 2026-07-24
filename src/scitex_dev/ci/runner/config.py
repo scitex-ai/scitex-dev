@@ -172,7 +172,7 @@ def load_runner_config(
     if not cfg_path.exists():
         raise SystemExit(
             f"missing private config at {cfg_path}; "
-            f"run: scitex-dev ci runner onboard … to get started, or create "
+            f"run: scitex-dev ci runner register … to get started, or create "
             f"~/.scitex/dev/config/ci-runner.yaml with your bindings"
         )
 

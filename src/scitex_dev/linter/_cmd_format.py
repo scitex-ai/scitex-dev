@@ -4,7 +4,11 @@ import difflib
 import sys
 from pathlib import Path
 
+import scitex_logging as slogging
+
 from .fixer import fix_source
+
+log = slogging.getLogger(__name__)
 
 
 def register(subparsers) -> None:
@@ -30,12 +34,12 @@ def cmd_format(args) -> int:
     config = load_config(args.path)
     target = Path(args.path)
     if not target.exists():
-        print(f"Error: {args.path} not found", file=sys.stderr)
+        log.error(f"{args.path} not found")
         return 2
 
     files = _collect_files(target, config=config)
     if not files:
-        print(f"No Python files found in {args.path}", file=sys.stderr)
+        log.warning(f"No Python files found in {args.path}")
         return 0
 
     changed_count = 0

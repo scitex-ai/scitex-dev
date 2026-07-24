@@ -69,6 +69,95 @@ CAPABILITY_RULES: dict[str, frozenset[str]] = {
 
 KNOWN_CAPABILITIES = frozenset(CAPABILITY_RULES)
 
+# `audit.enforce-logging` — PS-220's per-package severity declaration. The
+# parsing (and the MANDATORY-reason rule on any level that deviates from the
+# staged `warning` default) lives in `._enforce_logging`; re-exported here so
+# existing importers of the loader keep working.
+from ._enforce_logging import (  # noqa: E402
+    ENFORCE_LOGGING_REASONED_LEVELS,
+    ENFORCE_LOGGING_VALUES,
+    parse_enforce_logging,
+)
+
+
+# Per-SITE rule EXEMPTION with a MANDATORY written reason (operator directive
+# 2026-07-22 — the no-bare-print mandate).
+#
+# This follows the ``audit.capabilities`` doctrine above (fixed scope + a
+# VISIBLE notice) rather than the blanket ``audit.skip``: an exemption names
+# ONE rule at ONE file:line and must SAY WHY. It cannot silence a rule
+# repo-wide, and it cannot be written without a reason::
+#
+#     audit:
+#       exemptions:
+#         PS-220:
+#           - path: src/pkg/_cli/_report.py
+#             line: 88
+#             reason: "renders the --json payload a shell consumes"
+#
+# An entry whose ``reason`` is missing, empty, or whitespace-only is REJECTED
+# — it does NOT exempt the site, and the rejection is surfaced via
+# :attr:`ProjectConfig.exemption_errors` so it reads as a config error rather
+# than as a silent pass. An exemption with no stated reason is exactly the
+# unexamined suppression the rule exists to catch.
+@dataclass(frozen=True)
+class Exemption:
+    """One accepted ``audit.exemptions`` entry (rule + site + reason)."""
+
+    rule: str
+    path: str
+    line: int
+    reason: str
+
+
+def _parse_exemptions(
+    raw: object,
+) -> tuple[tuple[Exemption, ...], tuple[str, ...]]:
+    """Split an ``audit.exemptions`` block into (accepted, rejection notices).
+
+    Shape is ``{rule_code: [{path, line, reason}, ...]}``. Anything that does
+    not match — a non-mapping block, a non-list rule value, a non-mapping
+    entry, a missing/blank ``reason``, an unparseable ``line`` — is REJECTED
+    with a human-readable notice rather than silently dropped or silently
+    honoured.
+    """
+    if not isinstance(raw, dict):
+        return (), ()
+    accepted: list[Exemption] = []
+    errors: list[str] = []
+    for rule, entries in raw.items():
+        rule = str(rule).strip()
+        if not isinstance(entries, list):
+            errors.append(f"{rule}: exemptions must be a list of entries")
+            continue
+        for idx, entry in enumerate(entries):
+            label = f"{rule}[{idx}]"
+            if not isinstance(entry, dict):
+                errors.append(f"{label}: entry must be a mapping")
+                continue
+            path = str(entry.get("path") or "").strip()
+            reason = str(entry.get("reason") or "").strip()
+            raw_line = entry.get("line")
+            if not path:
+                errors.append(f"{label}: missing `path`")
+                continue
+            if not reason:
+                # The whole point of the surface: no reason, no exemption.
+                errors.append(
+                    f"{label} ({path}): REJECTED — `reason` is empty; an "
+                    f"exemption must state WHY this site is exempt"
+                )
+                continue
+            try:
+                line = int(raw_line)
+            except (TypeError, ValueError):
+                errors.append(f"{label} ({path}): `line` must be an integer")
+                continue
+            accepted.append(
+                Exemption(rule=rule, path=path.replace("\\", "/"), line=line, reason=reason)
+            )
+    return tuple(accepted), tuple(errors)
+
 
 def capability_for_rule(rule: str) -> str | None:
     """Return the capability whose declaration skips ``rule`` (or None).
@@ -94,9 +183,40 @@ class ProjectConfig:
     project_types: frozenset[str]
     skip: frozenset[str] = frozenset()
     capabilities: frozenset[str] = frozenset()
+    exemptions: tuple[Exemption, ...] = ()
+    exemption_errors: tuple[str, ...] = ()
+    # `audit.enforce-logging` — the PS-220 no-bare-print STAGED-ROLLOUT knob:
+    # "error" | "warning" | "off". None means "use the default" (see
+    # `_check_no_print.resolve_ps220_severity`), which is WARNING for every
+    # project type: the operator staged the rollout so each package opts IN to
+    # `error` once its print migration is done.
+    #
+    # `error` and `off` deviate from that default and so carry a MANDATORY
+    # written `reason` (kept in `enforce_logging_reason`). A declaration that
+    # was rejected — bare shorthand, unknown level, blank reason — leaves this
+    # None and records why in `enforce_logging_errors`, so a rejected opt-in
+    # never silently reads as either enforced or silenced.
+    enforce_logging: str | None = None
+    enforce_logging_reason: str | None = None
+    enforce_logging_errors: tuple[str, ...] = ()
     whitelist_path: Path | None = None
     metadata: dict = field(default_factory=dict)
     source: str = "config"  # "config" | "heuristic" | "override"
+
+    def exemption_for(self, rule: str, rel_path: str, line: int) -> Exemption | None:
+        """Return the accepted exemption covering ``rule`` at ``rel_path:line``.
+
+        ``rel_path`` is POSIX-normalised and compared to the configured
+        ``path`` verbatim, so an exemption is pinned to ONE site — it cannot
+        drift into covering a whole directory or a whole rule. Returns None
+        when no accepted exemption matches (an entry rejected for a blank
+        reason never matches, by construction).
+        """
+        needle = rel_path.replace("\\", "/")
+        for ex in self.exemptions:
+            if ex.rule == rule and ex.path == needle and ex.line == line:
+                return ex
+        return None
 
     def has_capability(self, name: str) -> bool:
         """True iff the project declared the ``name`` capability.
@@ -312,10 +432,22 @@ def load_config(
         if isinstance(caps, str):
             caps = [caps]
         wl = audit.get("whitelist")
+        exemptions, exemption_errors = _parse_exemptions(audit.get("exemptions"))
+        raw_enforce = audit.get("enforce-logging", audit.get("enforce_logging"))
+        (
+            enforce_logging,
+            enforce_logging_reason,
+            enforce_logging_errors,
+        ) = parse_enforce_logging(raw_enforce)
         return ProjectConfig(
             project_types=types,
             skip=frozenset(skip),
             capabilities=frozenset(c for c in caps if c in KNOWN_CAPABILITIES),
+            exemptions=exemptions,
+            exemption_errors=exemption_errors,
+            enforce_logging=enforce_logging,
+            enforce_logging_reason=enforce_logging_reason,
+            enforce_logging_errors=enforce_logging_errors,
             whitelist_path=Path(wl) if wl else None,
             metadata=raw.get("metadata") or {},
             source=source,
@@ -361,7 +493,11 @@ __all__ = [
     "CONFIG_REL_PATH",
     "CAPABILITY_RULES",
     "KNOWN_CAPABILITIES",
+    "ENFORCE_LOGGING_VALUES",
+    "ENFORCE_LOGGING_REASONED_LEVELS",
+    "parse_enforce_logging",
     "capability_for_rule",
+    "Exemption",
     "ProjectConfig",
     "detect_project_types",
     "load_config",

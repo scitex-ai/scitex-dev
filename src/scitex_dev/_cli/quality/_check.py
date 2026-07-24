@@ -4,6 +4,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import scitex_logging as slogging
+
+log = slogging.getLogger(__name__)
+
 from ..._ecosystem._release.pyproject_lint import lint_pyproject
 from ..._release.publisher import publish_release
 from ..._release.rtd_onboard import onboard_rtd
@@ -82,9 +86,7 @@ def release_publish_cli(
             data = tomllib.load(fh)
         version = (data.get("project") or {}).get("version")
     if not version:
-        print(
-            "error: --version required (and pyproject.toml has none)", file=sys.stderr
-        )
+        log.error("--version required (and pyproject.toml has none)")
         return 1
     rep = publish_release(repo, version, notes=notes, dry_run=dry_run)
     print(rep.render())

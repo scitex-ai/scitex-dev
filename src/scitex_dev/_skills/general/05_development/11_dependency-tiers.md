@@ -3,7 +3,9 @@ description: |
   [TOPIC] Three-tier dependency policy for every scitex-* package and
   the canonical helper for optional imports.
   [DETAILS] Two install modes (default + [all]) plus [dev]. No
-  fragmented extras. `scitex_dev.try_import_optional` is the
+  fragmented extras. `[all]` is CLOSED over every public extra —
+  including [dev] — via self-references (enforced as PS-221).
+  `scitex_dev.try_import_optional` is the
   ecosystem-wide handler for genuinely optional dependencies — raw
   try/except ImportError is forbidden. Auditors and reviewers check
   this every commit.
@@ -26,16 +28,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-all = [
-    # Tier 2 — fully-featured. `pip install <pkg>[all]` enables every
-    # graceful-degradation feature the package offers. Heavy or
-    # platform-specific packages live here.
-]
-
 dev = [
     # Tier 3 — what the maintainer needs to develop the package
     # itself. pytest, pytest-cov, pre-commit, nbconvert, ipykernel,
-    # etc. NOT included by [all].
+    # etc.
+]
+
+all = [
+    # Tier 2 — fully-featured. `pip install <pkg>[all]` enables every
+    # graceful-degradation feature the package offers. Heavy or
+    # platform-specific packages live here — PLUS a self-reference to
+    # every other public extra, e.g. "<pkg>[dev]", so that `all` is
+    # CLOSED: every public extra is a subset of [all] (PS-221).
 ]
 ```
 
@@ -104,60 +108,31 @@ Things only the **maintainer** of this package needs:
 `[dev]` does **not** include packages that are already in `default`
 (hard) — `pip install -e ".[dev]"` walks `default` automatically.
 
+`[dev]` is still a **public extra**, so the PS-221 `[all]`-closure rule
+applies to it like any other: `all` must reference it (`"<pkg>[dev]"`),
+so `pip install <pkg>[all]` pulls the dev tooling too. That is the
+enforced, shipped shape (scitex-dev / scitex-scholar / scitex-session /
+scitex-logging all do this). The conceptual maintainer-vs-consumer split
+lives in which extra you *ask for* (`[dev]` vs `[all]`), not in `[all]`
+excluding it. Do not try to carve out a non-public group by
+underscore-prefixing its name (`_dev`): PEP 508/685 forbids
+leading-underscore extra names — setuptools/hatchling/pip/uv all reject
+them.
+
 ## Optional imports must use `try_import_optional`
 
-`scitex_dev._core.imports.try_import_optional` is the **only**
-sanctioned way to import a `[all]`-tier dependency. Raw
-`try/except ImportError` is forbidden ecosystem-wide.
-
-```python
-from scitex_dev import try_import_optional
-
-# Optional torch dep (lives in [all])
-torch = try_import_optional("torch", extra="all", pkg="scitex-stats")
-if torch is None:
-    # Numpy fallback path
-    ...
-
-# Optional module + attr
-go_eda = try_import_optional(
-    "scitex_genai.protocols.go_eda",
-    attr="rank_findings",
-    extra="all",
-    pkg="scitex-app",
-)
-```
-
-Why the helper instead of try/except:
-
-- Install hint registered in `scitex_dev._core.imports._HINTS` — error
-  paths can call `last_install_hint("torch")` to surface
-  "pip install scitex-stats[all]" automatically.
-- Single helper means error messages improve across the ecosystem
-  when scitex-dev releases — no per-package follow-up.
-- Grep target: `try_import_optional(` immediately tells readers
-  this is an optional dep, while bare `try: import X` is ambiguous.
-
-## When a package gets *promoted* from `[all]` to hard
-
-The try_import_optional call becomes a plain `import` — delete the
-helper at the call site. The helper is for *genuinely* optional;
-once a dep is mandatory, keeping the helper there is dead theater.
-
-```python
-# Before (when scitex-logging was in [all]):
-scitex_logging = try_import_optional("scitex_logging", extra="all", pkg="scitex-stats")
-if scitex_logging is None:
-    import logging as scitex_logging  # stdlib fallback
-
-# After (scitex-logging is hard):
-import scitex_logging
-```
+`scitex_dev._core.imports.try_import_optional` is the only sanctioned way to
+import a `[all]`-tier dependency — raw `try/except ImportError` is forbidden
+ecosystem-wide. The usage pattern, why the helper (install hints, ecosystem-wide
+error improvements, grep target), and what to do when a package is promoted from
+`[all]` to hard are in [20_optional-import-helper.md](20_optional-import-helper.md).
 
 ## Audit hooks
 
 ```bash
-# pyproject section count check (default + [all] + [dev] only).
+# pyproject section count check (default + [all] + [dev] only) and
+# PS-221 [all]-closure (every public extra must be a subset of [all];
+# severity E, blocking).
 scitex-dev ecosystem audit-project <pkg>
 
 # Raw try/except-on-import grep (catch bypass attempts).

@@ -2,7 +2,15 @@
 # -*- coding: utf-8 -*-
 """``scitex-dev ecosystem ci-template apply`` — programmatic core.
 
-Behavioural contract (see PR description for full rationale):
+THE single canonical CI mechanism for the scitex fleet (operator decision,
+2026-07-21): every repo ships ONE thin ``ci.yml`` that delegates its job
+bodies to the org-level reusable workflows in ``scitex-ai/.github@main``.
+A shared workflow cannot drift per-repo — the dual-canonical era
+(consolidated ``pr-ci.yml``/``release-ci.yml`` templates here vs. the
+``ci runner register`` in-SIF ``ci.yml.template``) is over; both losers
+now route through this module or are deleted.
+
+Behavioural contract:
 
 1. **Detect target repo state** — parse ``pyproject.toml`` to derive
    ``PKG_NAME`` (``[project].name``) and ``PKG_MODULE`` (``-`` → ``_``).
@@ -10,21 +18,20 @@ Behavioural contract (see PR description for full rationale):
 
 2. **Branch-protection compatibility gate** — query the target's
    ``required_status_checks`` for ``develop`` and ``main`` via ``gh api``.
-   If any required context is NOT in the rendered templates' emitted
-   job-names, refuse to apply. ``skip_required_check_gate=True`` bypasses
-   (operator-debug only).
+   If any required context is NOT in the caller's emitted check-run names
+   (``"<caller-job-id> / <reusable job name>"``), refuse to apply.
+   ``skip_required_check_gate=True`` bypasses (operator-debug only).
 
-3. **Substitute templates** — read vendored ``*.tmpl`` files and replace
-   ``<PKG_NAME>``, ``<PKG_MODULE>``, ``<PYTHON_VERSIONS_JSON>``,
-   ``<CLI_HELP_BLOCK>``. The CLI-help block is derived from
-   ``[project.scripts]`` so consoles imported via entry-points get a
-   smoke ``--help`` exercise inside the import-smoke job.
+3. **Substitute template** — read the vendored ``ci.yml.tmpl`` and replace
+   ``<PKG_NAME>`` / ``<PKG_MODULE>`` (provenance header only — the org
+   reusable workflows self-derive the package from the checkout).
 
-4. **Apply changes** — write ``pr-ci.yml`` + ``release-ci.yml``; delete
-   consolidated standalone workflows by HARDCODED PREFIX LIST (no
-   heuristic content-matching, to avoid clobbering an unfamiliar
-   workflow that happens to share a prefix). Keep CLA / publish /
-   auto-merge / RTD untouched.
+4. **Apply changes** — write ``ci.yml``; delete superseded workflows by
+   HARDCODED PREFIX LIST (no heuristic content-matching): the retired
+   consolidated ``pr-ci.yml``/``release-ci.yml``, the granular
+   ``import-smoke-*``/``pytest-matrix-*``/``dep-hygiene-smoke*``/
+   ``*quality-audit*`` files, and ``newb-docs*`` (operator-ordered removal
+   fleet-wide). Keep CLA / auto-merge / publish / RTD untouched.
 
 5. **--dry-run** — skip writes; return the intended diff for the caller
    to print.
@@ -60,7 +67,7 @@ class ApplyError(RuntimeError):
 
 
 class BranchProtectionGateError(ApplyError):
-    """The gate found required contexts the new templates won't publish."""
+    """The gate found required contexts the new caller won't publish."""
 
     def __init__(self, missing: Dict[str, List[str]]):
         self.missing = missing  # {branch: [missing_context, ...]}
@@ -68,8 +75,11 @@ class BranchProtectionGateError(ApplyError):
         for branch, ctxs in sorted(missing.items()):
             msg_lines.append(f"  {branch}: missing {ctxs!r}")
         msg_lines.append(
-            "Refusing to apply (would deadlock PRs). Re-run with "
-            "skip_required_check_gate=True only for debugging."
+            "The reusable-caller check contexts are "
+            '"<caller-job-id> / <reusable job name>" — update branch '
+            "protection alongside this migration. Refusing to apply "
+            "(would deadlock PRs). Re-run with skip_required_check_gate=True "
+            "only for debugging."
         )
         super().__init__("\n".join(msg_lines))
 
@@ -104,23 +114,34 @@ class ApplyResult:
 # --------------------------------------------------------------------------- #
 
 
+# The org-side pytest-matrix.yml currently pins this matrix itself
+# (``workflow_call: {}`` — no inputs). Kept here ONLY to compute the gate's
+# expected check-run names; changing it does not change what actually runs.
 DEFAULT_PYTHON_VERSIONS: List[str] = ["3.11", "3.12", "3.13"]
 
-# Hardcoded prefix list for the delete-on-apply heuristic. ONLY files
-# matching one of these prefixes are eligible for deletion; unknown
-# workflows are left alone. Keep this list narrow.
+# The one canonical per-repo workflow this mechanism emits.
+CANONICAL_WORKFLOW = "ci.yml"
+
+# Hardcoded prefix list for the delete-on-apply step. ONLY files matching
+# one of these prefixes are eligible for deletion; unknown workflows are
+# left alone. Keep this list narrow.
 _DELETABLE_WORKFLOW_PREFIXES: Tuple[str, ...] = (
+    # Retired consolidated pair (the losing canonical mechanism).
+    "pr-ci.yml",
+    "release-ci.yml",
+    # Granular pre-consolidation files.
     "import-smoke-",
     "pytest-matrix-",
     "dep-hygiene-smoke",
+    # Operator-ordered fleet-wide removal (2026-07-21).
+    "newb-docs",
     # `<pkg>-quality-audit*` is covered by the live-check in
     # ``_eligible_for_delete``: filename contains "quality-audit".
 )
 
 # Workflows that MUST be preserved no matter what (operator-edited).
 _PROTECTED_WORKFLOWS: Tuple[str, ...] = (
-    "pr-ci.yml",
-    "release-ci.yml",
+    CANONICAL_WORKFLOW,
     "cla.yml",
     "auto-merge-to-develop.yaml",
     "auto-merge-to-develop.yml",
@@ -148,49 +169,21 @@ def _load_template(name: str) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _cli_help_block(scripts: Dict[str, str]) -> str:
-    """Render the ``<CLI_HELP_BLOCK>`` payload (steps inside import-smoke).
-
-    Each ``[project.scripts]`` entry becomes::
-
-          - name: smoke <name> --help
-            run: .venv/bin/<name> --help
-
-    With no scripts, emit empty string — the template line is consumed.
-    """
-    if not scripts:
-        return ""
-    lines: List[str] = []
-    for entry in sorted(scripts):
-        # YAML indent: 6 spaces (matches `steps:` items in template).
-        lines.append(f"      - name: smoke {entry} --help")
-        lines.append(f"        run: .venv/bin/{entry} --help")
-    return "\n".join(lines)
-
-
 def render(
     template_name: str,
     *,
     pkg_name: str,
     pkg_module: str,
-    python_versions: Sequence[str],
-    scripts: Optional[Dict[str, str]] = None,
 ) -> str:
-    """Pure substitution. Exposed for tests + manual diffing."""
+    """Pure substitution. Exposed for tests + manual diffing.
+
+    The thin caller is package-agnostic at the job level (org reusable
+    workflows self-derive the package from the checkout), so substitution
+    only stamps the provenance header. No other placeholder may survive.
+    """
     body = _load_template(template_name)
     body = body.replace("<PKG_NAME>", pkg_name)
     body = body.replace("<PKG_MODULE>", pkg_module)
-    body = body.replace(
-        "<PYTHON_VERSIONS_JSON>",
-        json.dumps(list(python_versions)),
-    )
-    help_block = _cli_help_block(scripts or {})
-    # The placeholder occupies its own line; substitute the line content.
-    # Empty block → drop the placeholder line entirely.
-    if not help_block:
-        body = body.replace("<CLI_HELP_BLOCK>\n", "")
-    else:
-        body = body.replace("<CLI_HELP_BLOCK>", help_block)
     return body
 
 
@@ -202,28 +195,27 @@ def render(
 def emitted_job_names(
     python_versions: Sequence[str], *, include_preserved: bool = True
 ) -> List[str]:
-    """Return the sorted set of GitHub check-run names the rendered
-    templates publish, given a python-versions matrix.
+    """Return the sorted set of GitHub check-run names the rendered caller
+    publishes, given the org-side python-versions matrix.
 
-    Used by the branch-protection gate. MUST stay in lock-step with the
-    ``name:`` fields in the .tmpl files; tests assert the rendered YAML
-    really does publish these names (no drift).
+    Under ``workflow_call`` GitHub renders each check-run context as
+    ``"<caller-job-id> / <reusable job name>"`` — the caller-job ids in
+    ``ci.yml.tmpl`` and the job names inside ``scitex-ai/.github@main``
+    MUST stay in lock-step with this list; tests pin the caller side.
 
     When ``include_preserved`` is True (default), also include the
     well-known check-run names emitted by *preserved* workflows that the
     apply step never removes (cla.yml → ``CLAssistant``; rtd-sphinx-*.yml
-    → ``sphinx`` / ``docs``). This prevents the gate from refusing
-    repos whose ``required_status_checks`` reference those check-run
-    names. Pass ``include_preserved=False`` for tests that need the
-    pure-rendered-template set.
+    → ``sphinx`` / ``docs``). Pass ``include_preserved=False`` for tests
+    that need the pure-caller set.
     """
     names = {
-        "import-smoke-on-ubuntu-py3-12",
-        "dep-hygiene-smoke",
-        "audit",
+        "import-smoke / import-smoke-on-ubuntu-py3-12",
+        "quality-audit / audit",
+        "rtd-sphinx-build / docs-sphinx",
     }
     for pv in python_versions:
-        names.add(f"pytest-matrix-on-ubuntu-py{pv}")
+        names.add(f"pytest-matrix / pytest-matrix-on-ubuntu-py{pv}")
     if include_preserved:
         names.update(_preserved_workflow_job_names())
     return sorted(names)
@@ -260,10 +252,6 @@ def _derive_pkg(meta: dict) -> Tuple[str, str]:
         raise ApplyError("pyproject.toml [project].name missing")
     module = name.replace("-", "_")
     return name, module
-
-
-def _derive_scripts(meta: dict) -> Dict[str, str]:
-    return dict(meta.get("project", {}).get("scripts", {}))
 
 
 def _detect_owner_repo(repo_dir: Path) -> Optional[str]:
@@ -394,7 +382,7 @@ def apply(
     required_contexts_lookup=None,
     owner_repo_lookup=None,
 ) -> ApplyResult:
-    """Apply the CI templates to *repo_dir*.
+    """Apply the canonical thin-caller CI workflow to *repo_dir*.
 
     Parameters
     ----------
@@ -407,7 +395,8 @@ def apply(
         commit. Today, ``apply`` writes to the working tree; the operator
         commits.
     python_versions
-        Override the pytest matrix. Default ["3.11","3.12","3.13"].
+        Override the matrix the GATE expects (informational — the actual
+        matrix is pinned org-side in scitex-ai/.github@main).
     skip_required_check_gate
         Skip the gate. DANGEROUS — never use in batch.
     required_contexts_lookup
@@ -422,7 +411,6 @@ def apply(
         raise ApplyError(f"not a git repo: {repo_dir}")
     meta = _read_pyproject(repo_dir)
     pkg_name, pkg_module = _derive_pkg(meta)
-    scripts = _derive_scripts(meta)
 
     pvs = list(python_versions or DEFAULT_PYTHON_VERSIONS)
     emitted = emitted_job_names(pvs)
@@ -448,21 +436,12 @@ def apply(
         if missing:
             raise BranchProtectionGateError(missing)
 
-    # Render
+    # Render — ONE canonical workflow.
     rendered = {
-        ".github/workflows/pr-ci.yml": render(
-            "pr-ci.yml.tmpl",
+        f".github/workflows/{CANONICAL_WORKFLOW}": render(
+            "ci.yml.tmpl",
             pkg_name=pkg_name,
             pkg_module=pkg_module,
-            python_versions=pvs,
-            scripts=scripts,
-        ),
-        ".github/workflows/release-ci.yml": render(
-            "release-ci.yml.tmpl",
-            pkg_name=pkg_name,
-            pkg_module=pkg_module,
-            python_versions=pvs,
-            scripts=scripts,
         ),
     }
 

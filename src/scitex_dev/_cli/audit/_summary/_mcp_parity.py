@@ -57,85 +57,13 @@ _YAML_MCP_PARITY_EXEMPT_RE = re.compile(
 )
 
 
-def _repo_root_from_import(package: str) -> Path | None:
-    """Resolve the package's repo root from the installed/checked-out tree.
-
-    Walks up from the import location (``src/<pkg>/__init__.py``) to the
-    repo root that holds ``pyproject.toml``. Mirrors audit-project's
-    ``_resolve_repo_root`` so the §6 exemption can be read from the tree
-    that is actually being audited — critical in CI, where the editable
-    install lives at ``$GITHUB_WORKSPACE`` and the ecosystem registry's
-    fixed ``local_path`` does not exist on the runner.
-    """
-    import importlib.util
-
-    import_name = _import_name(package)
-    try:
-        spec = importlib.util.find_spec(import_name)
-    except (ImportError, ValueError, ModuleNotFoundError):
-        return None
-    if spec is None or not spec.submodule_search_locations:
-        return None
-    for loc in spec.submodule_search_locations:
-        # src/<pkg>/__init__.py → repo root is two levels up (src layout)
-        candidate = Path(loc).parent.parent
-        if (candidate / "pyproject.toml").is_file():
-            return candidate
-        # flat layout fallback
-        candidate = Path(loc).parent
-        if (candidate / "pyproject.toml").is_file():
-            return candidate
-
-    # Fallback: module is in site-packages (non-editable PyPI install), so
-    # walking up from its location won't find pyproject.toml. Try common
-    # development checkout locations: $HOME/proj/<package>/ (which matches
-    # the ecosystem registry's ~/proj/<name> convention) and all
-    # /home/*/proj/<package>/ for container/multi-user environments.
-    proj_roots: list[Path] = []
-    try:
-        home_proj = Path.home() / "proj"
-        if home_proj.is_dir():
-            proj_roots.append(home_proj)
-    except Exception:
-        pass
-    try:
-        for home_dir in Path("/home").iterdir():
-            p = home_dir / "proj"
-            if p.is_dir() and p not in proj_roots:
-                proj_roots.append(p)
-    except Exception:
-        pass
-    for root in proj_roots:
-        candidate = root / package
-        if (candidate / "pyproject.toml").is_file():
-            return candidate.resolve()
-
-    return None
-
-
-def _audited_repo_root(package: str) -> Path | None:
-    """Best-effort local checkout path for `package`.
-
-    Prefers the ecosystem registry's ``local_path`` (the dev workstation
-    case), then falls back to the installed/checked-out tree via
-    ``find_spec``. The fallback is what makes the §6 exemption work in CI,
-    where the registry path is absent but the package is editable-installed
-    from the checkout.
-    """
-    try:
-        from ...._ecosystem import get_local_path
-    except ImportError:
-        get_local_path = None  # type: ignore[assignment]
-
-    if get_local_path is not None:
-        try:
-            path = get_local_path(package)
-        except Exception:
-            path = None
-        if path is not None and path.is_dir():
-            return path
-
-    return _repo_root_from_import(package)
+# Repo-root resolution (which tree do we read exemptions from?) lives in
+# `_mcp_repo_root` — audited tree first, registry local_path fallback.
+# Re-imported here so existing importers/tests keep their paths.
+from ._mcp_repo_root import (  # noqa: E402  (after regex constants)
+    _audited_repo_root,
+    _repo_root_from_import,  # noqa: F401  -- re-export for existing importers
+)
 
 
 def is_mcp_parity_exempt(package: str, repo: Path | None = None) -> bool:

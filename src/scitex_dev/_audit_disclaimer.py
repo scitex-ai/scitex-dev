@@ -30,6 +30,18 @@ def _skills_root() -> str:
     return str(Path(_m.__file__).parent / "_skills")
 
 
+def _issues_url() -> str:
+    """Issue-tracker URL derived from the ecosystem registry's own
+    ``scitex-dev`` entry, so an org/repo rename propagates here
+    automatically instead of leaving a second hardcode to drift
+    (the ywatanabe1989 -> scitex-ai org migration caught exactly
+    such a stale self-reference)."""
+    from scitex_dev._ecosystem._registry import ECOSYSTEM
+
+    repo = ECOSYSTEM["scitex-dev"]["github_repo"]
+    return f"https://github.com/{repo}/issues/new"
+
+
 def _skill_hints_text() -> str:
     """Per-rule-prefix pointer into the two skill trees that scitex-dev
     carries.
@@ -62,7 +74,7 @@ def _skill_hints_text() -> str:
         f"(CLI reference, ecosystem helpers, agentic-test). Not audit rules.\n"
         f"escalation: think a rule fires wrongly, is too strict, or that "
         f"a missing rule should exist? Open an issue at "
-        f"https://github.com/ywatanabe1989/scitex-dev/issues/new with "
+        f"{_issues_url()} with "
         f"the violation block above pasted in — that's the feedback loop "
         f"the rule corpus learns from."
     )

@@ -5,6 +5,365 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.37.0] - 2026-07-23
+
+### Added
+- **Release gate: a declared entry point that does not import now fails the
+  BUILD (#421).** A dangling entry point does not fail the build on its own —
+  the wheel uploads, `pip install` succeeds, and the breakage lands in the
+  USER's tooling. `pytest11` is imported by pytest at startup, so a dangling
+  target aborts EVERY pytest run in the installed environment before
+  collection. `scitex_dev._release.entrypoint_imports` reads
+  `entry_points.txt` from the BUILT artifact's `.dist-info` and imports each
+  target in a subprocess with the artifact prepended to `PYTHONPATH`. It
+  probes the artifact, not `pyproject.toml`: a correct declaration can still
+  point at a module the build dropped, which is exactly the bug a source-only
+  check would miss. `missing` (target absent — packaging bug) is classified
+  apart from `broken` (target present, import raised — dependency/code bug);
+  the two present identically at pytest startup and route to different fixes.
+  Wired into `.github/ci/build-in-sif.sh`, before upload.
+
+- **PS-222 — the `.scitex/<pkg-short>/` config-layout convention (#416).**
+  New rule plus auditor covering where a package's own config tree lives,
+  with a `runtime/` control arm in the test suite.
+
+- **`ecosystem list --distributions` — enumeration keyed by origin remote
+  (#419).** New `_ecosystem/_enumerate.py` resolves checkout DIRECTORIES into
+  DISTRIBUTIONS by their origin remote rather than by directory name,
+  collapsing duplicate checkouts and linked worktrees into reported aliases
+  and labelling which tree was actually measured. `--org` cross-references a
+  GitHub org listing to surface repos with no local checkout; `--scan-root`
+  enumerates a directory tree, the input shape brand-wide sweeps use and
+  where duplicate checkouts appear. Unreadable paths are recorded as errors,
+  never silently dropped, and an orphaned linked worktree is now diagnosed by
+  name instead of as a generic unreadable path. The flag is OPT-IN: the
+  default `ecosystem list` output shape is unchanged, so existing callers
+  keep working.
+
+### Changed
+- **PS-220 self-migration: scitex-dev's own stderr prints moved to
+  scitex-logging, 132 → 118 findings (#415).** scitex-dev authored the
+  no-bare-print mandate while carrying 132 findings against it. This migrates
+  the STDERR bucket — 14 sites across `trace_env`, the linter
+  (`_cmd_format` / `_health` / `_cmd_completion`), the argparse dispatch
+  modules, `quality/_check.py` and `cron/_task_harvest.py` — where
+  scitex-logging provably cannot move the output, because it already writes
+  every level to `sys.stderr`. Hand-rolled ANSI in `_health` is dropped now
+  that scitex-logging owns the colouring. Stdout prints are deliberately
+  untouched: they need the console API still being designed.
+
+### Fixed
+- **`skills list` and `skills get` were broken and now work again (#423).**
+  The symptom: running `skills list` or `skills get` raised
+  `ModuleNotFoundError: No module named 'scitex_dev._core._ecosystem'` (and
+  the `._docs` equivalent). This hit BOTH front-ends — argparse and Click —
+  in every downstream package using the shared
+  `register_skills_subcommand` / `skills_click_group` surface, because
+  `_skills_click.py` imports `_skills_get` / `_skills_list` FROM
+  `_skills_argparse` and so inherited the fault.
+
+  Cause: the `dispatch.py` → `dispatch/` package split (2026-07-11,
+  CLI-standardization audit pass 4b) added one nesting level. The Click
+  flavors were corrected to `...`, but both argparse flavors kept the
+  flat-module `..` depth, which resolves to the non-existent
+  `scitex_dev._core._ecosystem` / `._docs`. 7 sites: 5 in
+  `_skills_argparse`, 2 in `_docs_argparse`.
+
+  The imports are function-local, so the modules imported cleanly and only
+  exploded when a command actually RAN — which is why import-smoke and the
+  split's own tests stayed green: they asserted argv PARSING and never
+  called `args.func`. The new tests dispatch through `args.func` against the
+  real entry points, plus `find_spec` assertions pinning that the backing
+  modules live under the package root and NOT under `scitex_dev._core`.
+
+- **`audit-project` never prints SUCC over live warning findings (#417).**
+  The success banner was decided from the severity-FLOOR-filtered finding
+  list, so at the default `--severity error` a tree carrying live W findings
+  printed output byte-identical to a genuinely clean tree — measured on
+  scitex-agent-container: 53 live PS-220 findings, `SUCC`, exit 0.
+
+  The consequence is not cosmetic. A mutation proof driven through the CLI
+  could not fail for ANY W-severity rule: planting a bare `print()` did not
+  change one byte of output, so the check meant to detect it was
+  structurally incapable of doing so. Every "mutation-proved" green produced
+  that way was unearned. It also broke the premise PS-220's E→W restage
+  (0.36.0) was granted on — that findings stay FULLY VISIBLE and only stop
+  blocking.
+
+  Reporting only; exit codes untouched:
+  - `SUCC` iff zero findings at ANY severity (was: zero at the floor)
+  - the clean line names the audited tree, as the failure line does
+  - the headline always carries both counts: `N error(s), M warning(s)`
+  - counts are taken over all surviving findings, not the floor-filtered view
+  - `--json` gains `warnings` / `infos` alongside the existing `errors`
+  - below-floor findings get a line naming how to list them
+
+  `exit_code` stays `1 if n_errors > 0 else 0`. W/I still never fail CI —
+  changing that would silently re-break every repo the 0.36.0 restage just
+  unblocked.
+
+- **`audit-django` never prints SUCC over live warning findings (#420).**
+  The same defect, reproduced in the Django auditor and fixed the same way.
+  Measured pre-fix on a fixture tree with one live DJ-107 (W) finding: the
+  dirty and clean trees produced path-normalised output comparing EQUAL, and
+  `--json` masked it identically (`"violations": []`, `"errors": 0` on a tree
+  holding one warning).
+
+- **`scitex_dev.audit` survives the logger-class name race (#422).**
+  `scitex_logging.getLogger` IS `logging.getLogger`; the logger class is
+  fixed by `setLoggerClass` state at first creation of the NAME and cached
+  forever. Anything creating `scitex_dev.audit` through the stdlib first
+  handed `_emit` a plain `Logger` with no `.success`, crashing every auditor
+  (`_project` / `_django` / `_api` / `_summary`) — a hard `AttributeError`
+  reachable purely by import ordering. The eager method table dereferenced
+  `.success` on every call, so even `emit('info', ...)` crashed. The level
+  method is now resolved per call via `getattr`; on a poisoned logger the
+  emit goes through `Logger.log(levelno)` — scitex-logging registers level
+  NUMBERS globally (SUCCESS=31 → `SUCC`), so `levelno`/`levelname` are
+  unchanged, not degraded. The degrade is announced once at WARNING and
+  recorded in `degraded_reason()`, so it cannot pass for a healthy run.
+
+- **`cron list` distinguishes "crontab unreadable" from "zero installed"
+  (#413).** `scitex-dev cron list` printed `installed (0): (none)` when it
+  could not read the crontab AT ALL — cannot-look rendered as
+  looked-and-found-zero. Reads failed soft (`read_crontab` returned `""` on a
+  missing binary) while writes failed loud, and only the read path reported.
+  This nearly caused a false fleet-wide automation-outage escalation: a peer
+  agent ran `cron list` in a container with no `crontab` binary, read "13
+  jobs registered, NONE installed", and was one step from escalating. The
+  jobs were running fine on the host; only the container could not look.
+
+  A third state (`CrontabRead` / `read_crontab_state`) is added at the source
+  and plumbed through both reporting surfaces. Human output:
+  `installed: UNKNOWN ('crontab' not found on PATH)` plus an explicit "this
+  is NOT zero jobs installed" note; `cron status` gains a banner and per-job
+  `installed: unknown` instead of a fabricated `no`. JSON: `cron list`
+  reports `installed: null` — NOT `[]`, so a consumer calling `len()` cannot
+  silently read zero — alongside `installed_state` and
+  `installed_unavailable_reason`; `cron status` gains `crontab_state` and
+  `crontab_unavailable_reason`. A non-zero `crontab -l` whose message is
+  `no crontab for <user>` stays READABLE-and-empty: that is an ordinary empty
+  crontab, not a failure to look. The write path is untouched —
+  `write_crontab` still raises, which is correct.
+
+- **`ecosystem test-remote` derives the xdist worker count from the CPU
+  ALLOCATION, not the node (#412).** `pytest -n auto` over-subscribed an
+  allocated node. The cause is narrower than "auto reads the machine's core
+  count": xdist's `pytest_xdist_auto_num_workers` consults psutil FIRST and
+  returns its count immediately, and psutil ignores cgroup/cpuset
+  confinement; only if psutil is absent does it fall through to the correct
+  `sched_getaffinity`. Measured on spartan-bm155 inside a 48-CPU lease
+  cgroup: `sched_getaffinity` 48, `os.cpu_count()` 128,
+  `psutil.cpu_count()` 128 — i.e. ~128 workers into a 48-CPU allocation, a
+  2.7x continuous over-subscription (corroborated by worker ids reaching
+  gw121 in a scitex-hub run). New `allocated_cpus()` in
+  `_core/test_execution.py` resolves `SLURM_CPUS_PER_TASK`, then
+  `SLURM_JOB_CPUS_PER_NODE` (including the `48(x2)` form), then
+  `sched_getaffinity`, then `os.cpu_count()` — no magic cap and no hardcoded
+  core count, so an unconstrained laptop still gets all its cores.
+  `ecosystem test-remote` keeps `-n auto` and corrects it at its source by
+  exporting `PYTEST_XDIST_AUTO_NUM_WORKERS`, which xdist consults ahead of
+  psutil.
+
+### Documentation
+- **Verification doctrine added to `general/09_quality` (#414).** Every
+  verification failure recorded across the fleet on 2026-07-22/23 is one
+  shape: a failed measurement rendered as a confident value. The leaf states
+  that once and organises the defences by claim type — absence claims need a
+  positive control, causal claims need one varied variable and a hunted
+  counter-example, content claims need a second independent reader, artifact
+  claims need the artifact actually in use, peer claims need corroboration
+  independent in kind. Carries the six-state search-failure taxonomy, the
+  vacuous / inert / layer-blind / sampling control failures, the both-arms
+  rule for fixing a masking bug, and the status words that fuse a failed
+  measurement into a clean one (`skipped`, `declared-masked`, `0`).
+
+- **A degrade branch is where a hard failure hides (#418).** Doctrine on
+  masking: degrade paths swallow hard failures, and a mispositioned probe
+  cannot fail.
+
+## [0.36.0] - 2026-07-23
+
+### Changed
+- **PS-220 restaged: WARNING by default, error per-package opt-in.** 0.35.0
+  (#406) promoted PS-220 to ERROR ecosystem-wide. The measured blast radius
+  — 44 repos newly FAILING on 1856 findings, top-5 repos carrying 64 % of
+  them — led the operator to restage the rollout (Telegram 1691/1692):
+  「とりあえず warning で、移行できたものから red で」. The rule now
+  reports at `W` for every project type, and a package opts IN to an
+  error-level gate when its migration lands:
+
+  ```yaml
+  audit:
+    enforce-logging:
+      level: error
+      reason: "print migration complete (PR #412)"
+  ```
+
+  This is staging, not retreat: every finding stays visible on every audit
+  run, and nothing about what the rule DETECTS changed.
+
+- **`audit.enforce-logging` now demands a written reason.** `error` and
+  `off` deviate from the default and so carry a MANDATORY `reason`;
+  `warning` is accepted bare because it IS the default and changes
+  nothing. A missing or whitespace-only reason is a HARD CONFIG ERROR, not
+  a silent default: the declaration does NOT take effect (the project
+  falls back to `W`) AND the rejection is reported at `E`, so a package
+  can never believe it is gated — or silenced — when it is not. The old
+  bare shorthands `enforce-logging: error` / `enforce-logging: off` (and
+  their YAML 1.1 boolean spellings `on` / `off`) are rejected for exactly
+  this reason. Unrecognised values are now rejected loudly instead of
+  falling back silently. Parsing lives in
+  `_cli/audit/_config/_enforce_logging.py`.
+
+  Config errors are NOT staged: a rejected exemption entry and a rejected
+  enforce-logging declaration are both reported at `E` regardless of the
+  project's PS-220 severity. Staging covers migration debt; a malformed
+  override is not debt.
+
+### Removed
+- **The blanket `# noqa` hatch for PS-220, and its `PS-220-noqa-deprecated`
+  notice.** Deprecated in 0.35.0 for one release. A sweep of all 118 repos
+  under `~/proj` (8956 `src/**.py` files, 4448 flagged sites) found ZERO
+  sites using it, with a planted-user control confirming the sweep could
+  detect one. `audit.exemptions` — pinned to one rule at one file:line,
+  with a mandatory reason — is now the only per-site opt-out.
+
+### Fixed
+- **`--version` no longer answers for another package (#409).** `scitex-ui
+  --version` and `scitex-app --version` printed `scitex-dev <scitex-dev's
+  version>`; 36 downstream packages reported another package's identity.
+  `scitex_dev/_cli/__init__.py` fast-paths a bare `--version` to skip the
+  expensive `._root` import, but the predicate matched on `sys.argv[1:]`
+  alone and never checked WHO was asking. Because `scitex_dev._cli` is a
+  shared primitive that downstream CLIs import (`._completion`, `._root`),
+  the block fired during `import` in any process launched as `<other-cli>
+  --version`: it printed scitex-dev's name and version and raised
+  `SystemExit(0)` before the downstream CLI's own `main()` ran. Exit code 0,
+  so nothing looked broken — and the downstream packages' own `--version`
+  wiring was correct all along. The fast path now additionally requires
+  `sys.argv[0]` to identify scitex-dev's own console script (or `python -m
+  scitex_dev`); an unrecognised `argv[0]` declines the optimisation and
+  falls through to the real Click group — correct, just slower. No path
+  falls back to printing `scitex-dev`; that fallback WAS the defect.
+  A library must never read `sys.argv` or exit at import time.
+
+## [0.35.0] - 2026-07-22
+
+### Added
+- **PS-220 (no bare `print` in package source) promoted to ERROR (#406).**
+  The no-bare-print mandate is now enforced, not advisory, for SciTeX
+  ecosystem packages. Machine-readable stdout is spared STRUCTURALLY — a
+  stdout `print` whose sole argument is a serializer call or a rendered
+  payload variable does not fire, because scitex-logging writes to stderr
+  and would corrupt a `--json` payload or piped data. Everything else,
+  including any undecidable destination, fires and needs a per-site
+  `audit.exemptions` entry carrying a MANDATORY written reason; the
+  legacy blanket `# noqa` hatch is deprecated (`PS-220-noqa-deprecated`,
+  `W`) and honoured for one more release. Severity is project-type
+  scoped: an explicit `audit.enforce-logging` (`error` / `warning` /
+  `off`) always wins, otherwise a `research` project type resolves to `W`
+  rather than wedging a publish on a decision nobody has made.
+
+  Fixes a latent hole found while implementing it: `_SEVERITY_OVERRIDES`
+  was applied BEFORE the co-located rule registrations, making it a
+  SILENT no-op for 31 rules — adding `"PS-220": "E"` to the override
+  table did nothing at all, with no error and no warning. A severity
+  table that silently ignores entries is itself a gate that cannot fail.
+
+- **`audit.skip-rules` — sanctioned per-rule deferrals, honoured by
+  `audit-all` natively.** Declaring a deferral to a named migration
+  campaign in `<repo>/.scitex/dev/config.yaml` now affects BOTH gates.
+  Previously the per-repo pytest wrapper honoured its `skip_rules=`
+  kwarg while the org reusable workflow called `ecosystem audit-all`
+  directly and bypassed it, so `develop` could be green while unified CI
+  was red on identical code (measured in scitex-hub PR #433).
+
+  Honouring is never silent. `audit-all` always emits a **MASKED
+  INVENTORY** — the total, each rule id, its per-rule masked count and
+  its written rationale — in the normal output, not behind a verbosity
+  flag. The per-package summary now always states BOTH numbers (unmasked
+  errors AND masked count) for single- and multi-package runs alike; a
+  summary reporting only "0 errors" while 150 are masked is a lie of
+  omission. The exit code stays driven by unmasked findings.
+
+  **A skip entry with no written rationale is REJECTED** (exit 2, naming
+  the offending entry). Distinct from the legacy `audit.skip` (bare
+  codes, `audit-project`-only, silent) and from `audit.capabilities`.
+
+### Fixed
+- **The §6 MCP exemption is read from the AUDITED tree, not the runner's
+  registry checkout (#405).** `_audited_repo_root` preferred the ecosystem
+  registry's `local_path`, and a self-hosted CI runner's home often carries
+  a `~/proj/<pkg>` checkout at exactly that path. A PR declaring
+  `mcp_parity_exempt` / `mcp_tools_allowlist` in its own
+  `.scitex/dev/config.yaml` therefore could never turn its own
+  quality-audit green: the exemption was read from the STALE tree instead
+  of the editable-installed PR checkout under audit (scitex-orochi #460;
+  blocking scitex-hub #433, whose 52-entry `audit.mcp-tools-allowlist` was
+  correct and declared but had no effect in CI). Resolution order is now
+  import-derived root first (the tree actually being audited), with the
+  registry `local_path` deciding only for non-editable site-packages
+  installs where no audited tree exists on disk.
+- **Every auditor summary line now NAMES its category, pass or fail.**
+  The clean lines always did ("no project-structure violations"); the
+  FAILURE lines did not, so `audit-all` emitted three named SUCC lines
+  and then a bare `<pkg> (<path>): 3 error(s)` whose category was never
+  stated. sac PRs #813 and #814 both misread a real violation as a
+  broken gate because of it, wasting a CI cycle. Fixed across all five:
+  `CLI conventions`, `skills`, `Python API`, `project-structure`,
+  `Django-standard`.
+
+### Changed
+- `_cli/audit/_skills/_audit.py` (631 lines) split into `_registry.py` /
+  `_violation.py` / `_discovery.py` / `_checks.py` + a facade, mirroring
+  the sibling `_project/` package. Pure extraction; the facade
+  re-exports the original public surface.
+
+## [0.34.0] - 2026-07-21
+
+### Added
+- **CURRENCY gate — `scitex_dev.staleness.ensure_current()` (#396).** Public,
+  reusable version-currency + install-integrity primitive (operator
+  directive: consumers such as scitex-cards gate their invocation at ERROR
+  severity). INTEGRITY half (always, local): flags ambiguous metadata
+  (multiple dist-infos claiming one distribution) and partial installs
+  (RECORD-listed files missing on disk — parsed from RECORD directly, since
+  py3.12 `Distribution.files` silently drops missing entries). FRESHNESS
+  half (fail-safe): installed vs per-dist cached PyPI latest (TTL,
+  detached opportunistic refresh, never a blocking network call;
+  offline → PASS), editable installs via behind-upstream git. Severity
+  ladder: explicit arg > `$SCITEX_DEV_CURRENCY_SEVERITY` >
+  `currency_severity` knob > `error` (raises `StalenessError` with the
+  exact remedy command). `SCITEX_DEV_NO_CURRENCY_GATE=1` bypasses but logs
+  a loud WARN. The scitex-dev CLI self-checks its own install integrity at
+  startup (warn). Motivated by the 2026-07-21 venv incident where 0.17.4
+  metadata sat over a 0.16-era file set and every version probe lied.
+- **PS-221 `[all]`-closure audit rule + pyproject compliance (#395,
+  consolidates #391/#393).** ERROR-severity rule: every public
+  (non-underscore, non-`all`) extra must be a subset of `[all]`; scitex-dev's
+  own `sync` extra brought into `[all]` (the rule's first catch was its own
+  package). Plus the CLI drift-guard suppression under pytest.
+
+### Fixed
+- **Deterministic audit target-tree resolution (#397).** Explicit
+  `--path` > current checkout (git toplevel of cwd, PEP-503 name match —
+  correct inside linked worktrees and CI checkouts) > ecosystem-registry
+  `local_path`. Previously the per-target audit CLIs injected the registry
+  path as if explicit, so a CI run could silently grade a different
+  develop checkout (the wrong-tree incident #395 exposed). The resolved-tree
+  banner (#392) now also names which rule won (`via explicit|cwd|registry`),
+  and `--json` payloads carry `resolved_via`.
+- **De-flaked 6 FM001 promotion tests on figrecipe detection-skew (#394)**
+  (plugin-provided rule absent ⇒ skip like their plugin-path siblings, not
+  hard-fail) **and 4 xdist-order-fragile tests (#395)** (resolved-tree ×2
+  pinned to the checkout under test; staleness-prefix ×2 capture
+  scitex-logging via a named-logger handler instead of `redirect_stderr`).
+  Two pre-existing PS-204/PS-205 violations the wrong-tree audit had masked
+  were also fixed (test-file renames).
+
 ## [0.33.0] - 2026-07-21
 
 ### Added

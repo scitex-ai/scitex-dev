@@ -15,6 +15,10 @@ import json
 import sys
 from pathlib import Path
 
+import scitex_logging as slogging
+
+log = slogging.getLogger(__name__)
+
 
 def register_skills_subcommand(
     subparsers: argparse._SubParsersAction,
@@ -134,7 +138,7 @@ def _skills_list(args: argparse.Namespace, package: str) -> None:
     import logging
 
     logging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
-    from .._ecosystem._skills.skills import list_skills
+    from ..._ecosystem._skills.skills import list_skills
 
     result = list_skills(package=package)
     if args.as_json:
@@ -158,9 +162,9 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
     import logging
 
     logging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
-    from .._ecosystem._skills.skills import export_skills
+    from ..._ecosystem._skills.skills import export_skills
 
-    from .._ecosystem._skills.skills import _get_default_export_dest
+    from ..._ecosystem._skills.skills import _get_default_export_dest
 
     dest = (
         Path(args.dest) if getattr(args, "dest", None) else _get_default_export_dest()
@@ -168,7 +172,7 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
     source = getattr(args, "source", "installed")
     clean = getattr(args, "clean", False)
     if getattr(args, "dry_run", False):
-        from .._ecosystem._skills.skills import list_skills
+        from ..._ecosystem._skills.skills import list_skills
 
         result = {
             k: [e["name"] + ".md" for e in v]
@@ -188,7 +192,7 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
         return
     exported = export_skills(dest, package=package, clean=clean, source=source)
     if not exported:
-        print(f"No skills found for {package}.", file=sys.stderr)
+        log.error(f"No skills found for {package}.")
         sys.exit(2)
     if getattr(args, "as_json", False):
         print(
@@ -211,7 +215,7 @@ def _skills_get(args: argparse.Namespace, package: str) -> None:
         _skills_list(argparse.Namespace(as_json=False), package)
         return
 
-    from .._ecosystem._skills.skills import get_skill
+    from ..._ecosystem._skills.skills import get_skill
 
     content = get_skill(package=package, name=args.name)
     if content:
@@ -222,8 +226,10 @@ def _skills_get(args: argparse.Namespace, package: str) -> None:
         else:
             print(content)
     else:
-        print(f"Skill '{args.name}' not found in {package}.", file=sys.stderr)
-        print(f"Run: {package} skills list", file=sys.stderr)
+        log.error(
+            f"Skill '{args.name}' not found in {package}. "
+            f"Run: {package} skills list"
+        )
         sys.exit(2)
 
 

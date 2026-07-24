@@ -26,7 +26,8 @@ def register(ci_group: click.Group) -> click.Group:
                 "  up                — start the persistent runner\n"
                 "  down              — deregister the runner + stop it\n"
                 "  renew             — renew the SLURM CI lease job\n"
-                "  register <repo>   — copy the ci.yml template into a repo\n"
+                "  register <repo>   — deploy the canonical org-reusable "
+                "ci.yml caller (alias of ecosystem ci-template apply)\n"
                 "  preflight         — fail-loud CI-readiness gate (for pre-push)\n"
                 "  validate-health   — tri-state health signal (up/wedged/unknown)"
             ),

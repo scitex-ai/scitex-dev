@@ -13,8 +13,10 @@ warning noise.
 This module intentionally does NOT reinvent git-diffing. The repo already
 has a diff-aware baseline mechanism — `scitex_dev._cli.audit._diff` — built
 for `ecosystem audit-all --new-only --since BASE_REF` (lead task #40 part
-b; CI wiring in `.github/workflows/*quality-audit*.yml` and the
-`pr-ci.yml.tmpl` template, both requiring `fetch-depth: 0`). That mechanism
+b; CI wiring historically in `.github/workflows/*quality-audit*.yml` and
+the retired consolidated `pr-ci.yml.tmpl` template, both requiring
+`fetch-depth: 0`; the canonical org-reusable quality-audit.yml currently
+runs a FULL audit without `--new-only` — an org-side gap). That mechanism
 diffs two FULL audit-run stdout streams and *drops* lines already present
 at baseline — coarse, and only invoked when the caller opts in with
 `--new-only`.

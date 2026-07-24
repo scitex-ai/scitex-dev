@@ -7,6 +7,8 @@ tags: [scitex-general-package-ci-codecov]
 
 # CI and Codecov Setup
 
+> Split-out leaves of THIS section: [badges, gotchas, reaching 90%](11b_codecov-badges-and-coverage.md) · [the mandatory audit test + config deferrals](11c_codecov-audit-test-and-config.md) · [hard cov-fail-under gate + dev-bootstrap + workflow merge](11d_codecov-gate-and-dev-bootstrap.md)
+
 ## Reference package
 
 `scitex-io` is the canonical example. When wiring coverage on a new peer,
@@ -153,216 +155,17 @@ Note: codecov-action@v5 supports tokenless uploads for public repos, but the
 explicit token is more reliable for badge ingestion (the first tokenless
 upload on a brand-new repo sometimes lags before the badge resolves).
 
-## Common gotchas
+## Badges, common gotchas, and reaching ≥ 90%
 
-- **Upload skipped on test failure.** Add `if: always() && matrix.python-version == '3.12'`
-  to the codecov step. Pytest writes `coverage.xml` even when tests fail; the
-  upload step just needs to opt back in to running on failure.
-- **Coverage stuck at ~19%.** CI is installing only `.[dev]`, so loaders
-  guarded by `pytest.importorskip("h5py")` etc. get skipped. Install
-  `.[all,dev]` to exercise the full scientific stack.
-- **Badge shows "unknown" forever.** Repo not activated on codecov.io and/or
-  `CODECOV_TOKEN` missing. Set the secret; the first successful upload
-  auto-activates the repo.
-- **Codecov drops uploads silently.** `fail_ci_if_error: false` swallows the
-  error so CI stays green. Check the workflow step logs (search for
-  "codecov") for the real cause — usually a missing token or a malformed
-  `coverage.xml` path.
+> Moved to its own leaf: [11b_codecov-badges-and-coverage.md](11b_codecov-badges-and-coverage.md) — the README two-row badge layout + codecov badge URL, the common gotchas (upload skipped on failure, coverage stuck at ~19%, badge "unknown", silent drops), and the honest tradeoffs for reaching ≥ 90% coverage.
 
-## Badge in README
+## The mandatory audit test and config deferrals
 
-Two-row layout. Top row = release metadata, bottom row = build health:
+> Moved to its own leaf: [11c_codecov-audit-test-and-config.md](11c_codecov-audit-test-and-config.md) — the mandatory `tests/develop/test_audit.py` running `audit-all`, why `skip_rules=` is not for muffling real violations, deferring a rule to a migration campaign via `audit.skip-rules`, and the `.gitignore` exception that tracks `.scitex/dev/config.yaml`.
 
-```markdown
-[![PyPI](https://img.shields.io/pypi/v/<pkg>.svg)](https://pypi.org/project/<pkg>/)
-[![Python](https://img.shields.io/pypi/pyversions/<pkg>.svg)](https://pypi.org/project/<pkg>/)
-[![Read the Docs](https://readthedocs.org/projects/<pkg>/badge/?version=latest)](https://<pkg>.readthedocs.io/)
+## Hard coverage gate, dev-bootstrap deps, and workflow merge
 
-[![Tests](https://github.com/<owner>/<pkg>/actions/workflows/test.yml/badge.svg)](https://github.com/<owner>/<pkg>/actions/workflows/test.yml)
-[![Install Test](https://github.com/<owner>/<pkg>/actions/workflows/install-test.yml/badge.svg)](https://github.com/<owner>/<pkg>/actions/workflows/install-test.yml)
-[![codecov](https://codecov.io/gh/<owner>/<pkg>/graph/badge.svg)](https://codecov.io/gh/<owner>/<pkg>)
-```
-
-Codecov badge URL pattern: `https://codecov.io/gh/<owner>/<pkg>/graph/badge.svg`.
-
-## Reaching ≥ 90% coverage
-
-Honest tradeoffs — there is no shortcut:
-
-- **Per-format loaders** (`_save_modules/`, `_load_modules/`) need real
-  round-trip tests. One test per format: save → load → assert equal. This is
-  the bulk of the coverage work for I/O-heavy packages.
-- **CLI / MCP scaffolding** — either write smoke tests (invoke each
-  subcommand with `--help` and assert exit 0) OR add to `codecov.yml` ignore
-  list. Judgment call per package; smoke tests are usually cheap.
-- **Pure interface code** (shell-completion shims, generated scaffolding,
-  `__main__.py` thunks) — ignore in `codecov.yml`. These are not testable
-  units.
-- 90% is achievable **only** with real tests for the format loaders.
-  Ignoring everything but the core to inflate the number is dishonest and
-  will rot when someone later removes the ignores.
-
-## Mandatory `tests/develop/test_audit.py`
-
-Every package must ship a `tests/develop/test_audit.py` that runs
-`scitex-dev ecosystem audit-all <distribution>` as a normal pytest test.
-This makes audit conformance part of the failing-CI signal instead of a
-separate check the team learns to ignore.
-
-Generate it with `scitex-dev ecosystem write-audit-test` and commit. The
-default body looks like:
-
-```python
-import shutil
-import pytest
-
-def test_audit_all_clean():
-    if shutil.which("scitex-dev") is None:
-        pytest.skip(
-            "scitex-dev not installed — add scitex-dev[cli-audit] to "
-            "[project.optional-dependencies.dev]"
-        )
-    from scitex_dev.testing import audit_all_for_package
-    audit_all_for_package("<distribution>")
-```
-
-`skip_rules=(...)` is for true convention-deviations that need a fix in
-the spec, not for muffling a real violation. If a rule fires, fix the
-package; don't add a skip.
-
-## Track `.scitex/dev/config.yaml`
-
-Audit whitelists (`audit.root-whitelist.files:` etc.) live at
-`<repo>/.scitex/dev/config.yaml`. The directory is gitignored by default
-(`.scitex/` is runtime state for local tooling), so add a `.gitignore`
-exception so CI sees the same whitelist as local:
-
-```gitignore
-# .gitignore
-.scitex/*
-!.scitex/dev/
-.scitex/dev/*
-!.scitex/dev/config.yaml
-```
-
-A directory-level `.scitex/` exclusion blocks negation; switch to
-file-level so the negation rule applies.
-
-## Hard `--cov-fail-under` gate (optional)
-
-The Codecov `coverage.status.project.target` setting is the primary
-gate; it runs after the upload and posts a check on PRs. For an
-additional pre-upload guard, add `--cov-fail-under=90` to the pytest
-invocation:
-
-```yaml
-- name: Run tests with coverage
-  run: |
-    python -m pytest "$GITHUB_WORKSPACE/tests/" -v --tb=short --timeout=120 \
-      --cov=src/${{ steps.pkg.outputs.import_name }} \
-      --cov-report=xml --cov-report=term \
-      --cov-fail-under=90
-```
-
-Only adopt this once the package is already ≥ 90 %; setting it earlier
-just makes CI permanently red.
-
-## Dev-bootstrap MUST install marker-providing packages
-
-The `[dev]` extras (or whatever extras the bootstrap installs) MUST
-include every package that registers a pytest marker / collector
-plugin the test suite uses. The campaign found two recurring offenders:
-
-- **`pytest-asyncio`** — without it, `@pytest.mark.asyncio` decorated
-  tests emit `PytestUnknownMarkWarning` and the coroutine body never
-  awaits anything (the test silently "passes" by doing nothing).
-- **`fastmcp`** — without it, MCP-server tests skip via
-  `pytest.importorskip("fastmcp")` and the entire MCP surface goes
-  un-exercised in CI; the badge is green for the wrong reason.
-
-Both belong in `[project.optional-dependencies].dev` (or `.test`, if
-the package splits them) and must be installed by every CI workflow
-that runs `pytest tests/`. Verify with:
-
-```bash
-.venv/bin/python -c "import pytest_asyncio, fastmcp; print('ok')"
-```
-
-If this fails after `pip install -e .[dev]`, the extras are missing the
-package. Add it; do not paper over with a workflow-level
-`pip install pytest-asyncio` — the dev-bootstrap is the source of
-truth for "everything a developer needs to run the suite".
-
-The bootstrap gap manifests as confusing
-`PytestUnknownMarkWarning: Unknown pytest.mark.asyncio` lines in the
-CI log; that warning is the symptom of this rule being violated.
-
-## Test-file imports of optional deps must `pytest.importorskip`
-
-Any `import <optional-dep>` at module top of a test file MUST be
-guarded:
-
-```python
-import pytest
-h5py = pytest.importorskip("h5py")
-```
-
-Otherwise the test module fails at *collection* if the optional dep is
-absent, which silently aborts ALL tests in that pytest run — coverage
-upload never happens, masking the real state of every other test in the
-package.
-
-This is the contract Codecov assumes. Rule code reserved: **PA-303**
-(see `03_interface/01_python-api/TODO.md`).
-
-## Merge `Test` + `Install Test` into one workflow
-
-Two badges saying "tests pass" is redundant. Keep both jobs but
-collapse them into a single `test.yml`:
-
-```yaml
-jobs:
-  test:                  # the existing pytest matrix
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
-    steps: [...]
-
-  install-check:         # what install-test.yml currently does
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-      - run: |
-          python -m venv .venv
-          .venv/bin/pip install -e .
-          .venv/bin/python -c "import <import_name>"
-```
-
-One workflow → one badge → one re-run button. Delete the old
-`install-test.yml`. Update the README badge block to remove the second
-Tests row.
-
-## `tests/integration/<mirror>/` for `_real.py` tests
-
-PS-204 (orphan test file) flags `tests/<pkg>/<mirror>/test_X_real.py`
-because there is no `src/<pkg>/<mirror>/_X_real.py` to mirror. The
-`_real` suffix is the SciTeX convention for "integration test with
-real I/O, no mocks" — a deliberate sibling of `test_X.py`. Two clean
-ways to satisfy both conventions:
-
-1. **Move** to `tests/integration/<mirror>/test_X_real.py`. PS-204 only
-   scans `tests/<pkg>/<mirror>/`, so the orphan rule doesn't fire and
-   pytest still collects them via `tests/`.
-2. **Merge** the contents into `tests/<pkg>/<mirror>/test_X.py` as a
-   `class TestIntegration:` block. Heavier rewrite; only worth it when
-   the file is small.
-
-Add `__init__.py` to each new `tests/integration/<mirror>/` directory
-so pytest's rootdir-import mode disambiguates basename collisions
-(e.g. two `test__zarr_real.py` under different mirror dirs).
+> Moved to its own leaf: [11d_codecov-gate-and-dev-bootstrap.md](11d_codecov-gate-and-dev-bootstrap.md) — the optional `--cov-fail-under=90` guard, the rule that `[dev]` must install marker-providing packages (pytest-asyncio, fastmcp), the test-file `pytest.importorskip` requirement, merging `Test` + `Install Test` into one workflow, and `tests/integration/<mirror>/` placement for `_real.py` tests.
 
 ## Related skills
 

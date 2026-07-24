@@ -59,78 +59,10 @@ ROOT_HELP_SPEC = CliHelp(
     see_also=("{prog} docs — browse doctrine and package documentation",),
 )
 
-def _command_to_dict(
-    cmd: click.Command,
-    parent_ctx: click.Context | None,
-    info_name: str,
-) -> dict:
-    """Serialize one click command (and its subcommands recursively) to a dict."""
-    sub_ctx = click.Context(cmd, parent=parent_ctx, info_name=info_name)
-    options: list[dict] = []
-    arguments: list[dict] = []
-    for p in cmd.params:
-        if isinstance(p, click.Argument):
-            arguments.append({"name": p.name, "required": p.required})
-        else:
-            options.append(
-                {
-                    "name": p.name,
-                    "opts": list(p.opts),
-                    "help": getattr(p, "help", "") or "",
-                    "is_flag": bool(getattr(p, "is_flag", False)),
-                }
-            )
-    out: dict = {
-        "name": info_name,
-        "help": (cmd.help or "").strip(),
-        "short_help": (cmd.short_help or "").strip(),
-        "options": options,
-        "arguments": arguments,
-    }
-    if isinstance(cmd, click.Group):
-        commands: dict = {}
-        for sub in sorted(cmd.list_commands(sub_ctx)):
-            sub_cmd = cmd.get_command(sub_ctx, sub)
-            if sub_cmd is None:
-                continue
-            commands[sub] = _command_to_dict(sub_cmd, sub_ctx, sub)
-        out["commands"] = commands
-    return out
-
-def _show_recursive_help(ctx: click.Context) -> None:
-    """Recursively show help for all commands. Honours ctx.obj['json']."""
-    if ctx.obj and ctx.obj.get("json"):
-        import json as _json
-
-        tree = _command_to_dict(
-            ctx.command, ctx.parent, ctx.info_name or "scitex-dev"
-        )
-        click.echo(_json.dumps(tree, indent=2))
-        return
-
-    click.echo(ctx.get_help())
-    click.echo()
-    group = ctx.command
-    if isinstance(group, click.Group):
-        for name in sorted(group.list_commands(ctx)):
-            cmd = group.get_command(ctx, name)
-            sub_ctx = click.Context(cmd, parent=ctx, info_name=name)
-            click.echo(f"{'=' * 60}")
-            click.echo(f"Command: {name}")
-            click.echo(f"{'=' * 60}")
-            click.echo(sub_ctx.get_help())
-            click.echo()
-            if isinstance(cmd, click.Group):
-                for sub_name in sorted(cmd.list_commands(sub_ctx)):
-                    sub_cmd = cmd.get_command(sub_ctx, sub_name)
-                    sub_sub_ctx = click.Context(
-                        sub_cmd, parent=sub_ctx, info_name=sub_name
-                    )
-                    click.echo(f"  {'─' * 56}")
-                    click.echo(f"  Subcommand: {name} {sub_name}")
-                    click.echo(f"  {'─' * 56}")
-                    click.echo(sub_sub_ctx.get_help())
-                    click.echo()
+# Recursive help-rendering helpers extracted to keep this file under the
+# 512-line limit. Re-exported so `from ..._root import _show_recursive_help`
+# (and `_command_to_dict`) keep resolving for existing callers/tests.
+from ._root_help import _command_to_dict, _show_recursive_help
 
 def _get_version() -> str:
     try:
@@ -197,6 +129,46 @@ def main(
     if help_recursive:
         _show_recursive_help(ctx)
         ctx.exit(0)
+
+    # Version-staleness guard: warn — or hard-fail when the severity knob is
+    # `error` — if this scitex-dev install is BEHIND its remote (editable) or
+    # the latest published version (wheel). Placed after the --version /
+    # --help-recursive short-circuits so a version/help query never trips it;
+    # shell-completion and repeat invocations are guarded inside emit_if_drift.
+    # An error-severity abort raises SystemExit and MUST propagate; any other
+    # internal fault is swallowed so the check can never break the host CLI.
+    import os as _os
+
+    # Suppress the drift emission inside a pytest run: this guard fires on
+    # EVERY CLI invocation, so when unrelated tests invoke the `scitex-dev`
+    # CLI it would print a drift line into their captured output whenever the
+    # test checkout is behind its remote — polluting assertions across suites
+    # (seen on the self-hosted runner). Direct unit tests of check() /
+    # emit_if_drift bypass main() and are unaffected.
+    if not _os.environ.get("PYTEST_CURRENT_TEST"):
+        from scitex_dev._release.check_editable_drift import emit_if_drift
+
+        try:
+            emit_if_drift()
+        except SystemExit:
+            raise
+        except Exception:  # noqa: BLE001 — staleness check must never break the CLI
+            pass
+
+        # CURRENCY-gate integrity self-check (operator directive 2026-07-21):
+        # catch a broken scitex-dev install itself (ambiguous dist-info /
+        # RECORD-listed files missing on disk — the venv-corruption incident
+        # where every version probe lied). Integrity half only — freshness is
+        # already covered by emit_if_drift() above (which owns the once-per-
+        # process/subprocess suppression) — at WARN so the CLI keeps working.
+        try:
+            from scitex_dev.staleness import ensure_current
+
+            ensure_current(
+                "scitex-dev", severity="warn", _halves=("integrity",)
+            )
+        except Exception:  # noqa: BLE001 — self-check must never break the CLI
+            pass
 
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())

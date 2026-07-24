@@ -67,7 +67,7 @@ def build_supervisor_unit_text() -> str:
         "Description=SciTeX ecosystem supervisor — manages every "
         "kind=service JobSpec as a child process; the SOLE per-host "
         "systemd entry for the SciTeX fleet\n"
-        "Documentation=https://github.com/ywatanabe1989/scitex-dev\n"
+        "Documentation=https://github.com/scitex-ai/scitex-dev\n"
         "After=network-online.target\n"
         "Wants=network-online.target\n"
         "\n"

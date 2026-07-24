@@ -16,7 +16,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from scitex_dev._cli import _is_bare_version_invocation
+from scitex_dev._cli import _is_bare_version_invocation, _should_fast_path_version
 
 
 def test_bare_version_flag_is_fast_path():
@@ -89,3 +89,72 @@ def test_real_process_version_invocation_exits_zero():
     proc = subprocess.run(argv, capture_output=True, text=True, timeout=30)
     # Assert
     assert proc.returncode == 0
+
+
+# --------------------------------------------------------------------------
+# argv[0] gate — a DOWNSTREAM package importing this shared primitive must
+# never be hijacked into reporting scitex-dev's identity.
+#
+# Regression: `scitex-ui --version` / `scitex-app --version` printed
+# `scitex-dev <ver>` because the fast path matched on argv[1:] alone, then
+# printed and raised SystemExit(0) during `import scitex_dev._cli`.
+# --------------------------------------------------------------------------
+
+_DOWNSTREAM_IMPORT = (
+    "import sys; sys.argv=['scitex-ui', '--version']; "
+    "import scitex_dev._cli; print('IMPORT-COMPLETED')"
+)
+
+
+def test_downstream_console_script_is_not_fast_pathed():
+    # Arrange
+    argv0, rest = "/venv/bin/scitex-ui", ["--version"]
+    # Act
+    result = _should_fast_path_version([argv0, *rest])
+    # Assert
+    assert result is False
+
+
+def test_own_console_script_is_fast_pathed():
+    # Arrange
+    argv0, rest = "/venv/bin/scitex-dev", ["--version"]
+    # Act
+    result = _should_fast_path_version([argv0, *rest])
+    # Assert
+    assert result is True
+
+
+def test_python_dash_m_entry_point_is_fast_pathed():
+    # Arrange
+    argv0, rest = "/site-packages/scitex_dev/__main__.py", ["-V"]
+    # Act
+    result = _should_fast_path_version([argv0, *rest])
+    # Assert
+    assert result is True
+
+
+def test_unrecognised_argv0_declines_the_optimisation():
+    # Arrange — cannot prove we are scitex-dev, so we must NOT claim to be
+    argv0, rest = "", ["--version"]
+    # Act
+    result = _should_fast_path_version([argv0, *rest])
+    # Assert
+    assert result is False
+
+
+def test_downstream_import_does_not_print_scitex_dev_identity():
+    # Arrange
+    argv = [sys.executable, "-c", _DOWNSTREAM_IMPORT]
+    # Act
+    proc = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+    # Assert
+    assert "scitex-dev " not in proc.stdout
+
+
+def test_downstream_import_is_not_killed_by_system_exit():
+    # Arrange
+    argv = [sys.executable, "-c", _DOWNSTREAM_IMPORT]
+    # Act
+    proc = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+    # Assert
+    assert "IMPORT-COMPLETED" in proc.stdout

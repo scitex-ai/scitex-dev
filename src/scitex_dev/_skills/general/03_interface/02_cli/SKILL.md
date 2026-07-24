@@ -38,6 +38,8 @@ Canonical CLI rules for every `scitex-*` package. Split into focused files; load
 | [17_option-positional-ordering.md](17_option-positional-ordering.md)                              | §10 — options on either side of positional must both parse (PS-134) |
 | [18_dev-subgroup-and-ecosystem-placement.md](18_dev-subgroup-and-ecosystem-placement.md)          | §11 — per-package `dev` subgroup; ecosystem ops only under `scitex dev ecosystem` |
 | [19_gui-commands.md](19_gui-commands.md)                                                          | §12 — canonical `gui` group (`open`/`serve`/`status`/`stop`)       |
+| [21_noun-verb-vocabulary.md](21_noun-verb-vocabulary.md)                                          | §1d — recommended noun & verb vocabulary tables (nouns, transitive/intransitive verbs, synonym avoidance) |
+| [22_audit-cli-coverage-matrix.md](22_audit-cli-coverage-matrix.md)                                | §1e — per-rule `audit-cli` coverage matrix                        |
 
 ## Cross-references
 

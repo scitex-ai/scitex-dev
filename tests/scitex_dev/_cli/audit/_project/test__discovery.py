@@ -231,6 +231,22 @@ def test_looks_like_checkout_of_rejects_tree_without_pyproject(tmp_path):
     assert verdict is False
 
 
+def test_looks_like_checkout_of_accepts_pep503_name_variant(tmp_path):
+    """A declared `Scitex_IO` IS a checkout of `scitex-io` (PEP-503 fold)."""
+    # Arrange
+    from scitex_dev._cli.audit._project._discovery import _looks_like_checkout_of
+
+    checkout = tmp_path / "wt"
+    checkout.mkdir()
+    (checkout / "pyproject.toml").write_text(
+        '[project]\nname = "Scitex_IO"\nversion = "0.0.0"\n', encoding="utf-8"
+    )
+    # Act
+    verdict = _looks_like_checkout_of(checkout, "scitex-io")
+    # Assert
+    assert verdict is True
+
+
 def test_looks_like_checkout_of_accepts_src_layout_without_declared_name(tmp_path):
     """With no parseable `[project] name`, `src/<pkg>/` is enough evidence."""
     # Arrange

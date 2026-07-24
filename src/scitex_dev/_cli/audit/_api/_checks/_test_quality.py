@@ -14,17 +14,32 @@ from ._model import Violation
 
 
 def _audit_test_quality(
-    init_path: Path, distribution: str, import_name: str
+    init_path: Path,
+    distribution: str,
+    import_name: str,
+    *,
+    repo_root: Path | None = None,
 ) -> list[Violation]:
     """PA-307 — run the linter's STX-TQ001-007 detection across the
     repo's `tests/` (and `conftest.py`) and re-emit each finding as a
     PA-307 violation. Avoids duplicating the AST detection logic that
     already lives in `scitex_dev.linter.checker`.
+
+    ``repo_root`` (the ``--path`` target that ``resolve_target_tree`` already
+    resolved: --path > current checkout > registry local_path) is PREFERRED
+    for locating the ``tests/`` tree. Tests live in the REPO, not the installed
+    wheel — deriving the tree from an import-resolved ``init_path`` scans the
+    wrong tree (a site-packages install has no ``tests/``), finds zero
+    candidates, and would report a SILENT 0 indistinguishable from a clean
+    pass. When no test files are found, a loud skip-warning is emitted so a
+    "0" is never mistaken for "the gate ran and passed" — the same visible-skip
+    discipline the IO/PA category already has.
     """
     out: list[Violation] = []
-    pkg_root = init_path.parent  # <repo>/src/<pkg>/
-    src_parent = pkg_root.parent
-    repo_root = src_parent.parent if src_parent.name == "src" else src_parent
+    if repo_root is None:
+        pkg_root = init_path.parent  # <repo>/src/<pkg>/
+        src_parent = pkg_root.parent
+        repo_root = src_parent.parent if src_parent.name == "src" else src_parent
 
     # Scope: tests/ tree (recursively, all *.py) + every conftest.py
     # under the repo. Fixtures often live in conftest.py and TQ004/TQ005
@@ -53,6 +68,19 @@ def _audit_test_quality(
             candidates.append(conftest)
 
     if not candidates:
+        # LOUD skip — never a silent 0. A quality gate that returns "clean"
+        # without having scanned anything is worse than one that errors: it
+        # reads as a pass. Make the not-run visible (stderr, like the other
+        # audit-api warnings) so it cannot be mistaken for zero violations.
+        import click
+
+        click.echo(
+            f"WARN: audit-api: STX-TQ (PA-307) found no test files under "
+            f"{tests_dir} — the test-quality gate did NOT run (skipped, not "
+            f"clean). If tests exist, pass --path <repo checkout> so the "
+            f"repo's tests/ tree is scanned instead of the installed package.",
+            err=True,
+        )
         return out
 
     # Re-use the linter's detection rather than duplicate the AST logic.

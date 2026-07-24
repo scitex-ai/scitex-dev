@@ -31,6 +31,7 @@ Canonical rules for the **Skills** interface (the fourth of the five — Python 
 | [12_quality-checklist.md](12_quality-checklist.md)                         | Release-gate checklist for `_skills/` directories                  |
 | [13_standard-template.md](13_standard-template.md)                         | Scaffold template — `scitex-dev skills init` clones this           |
 | [14_general-skills-inheritance.md](14_general-skills-inheritance.md)       | How `general/` ships via scitex-dev so every install gets the rules|
+| [15_skills-audit-automation.md](15_skills-audit-automation.md)             | §9 — `audit-skills` linter rule-code table, `--fix`, exit codes    |
 
 ## Related
 

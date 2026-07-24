@@ -9,7 +9,7 @@ the line is replaced in place rather than appended.
 Public API
 ----------
 - ``MARKER``            — sentinel comment that identifies our line
-- ``LOG_PATH``          — default log destination
+- ``LOG_PATH``          — default log destination (under ``runtime/logs/``)
 - ``build_cron_line``   — pure builder (used by tests + install)
 - ``read_crontab``      — current user's crontab as text (``""`` if none)
 - ``write_crontab``     — replace the entire crontab from text
@@ -24,8 +24,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ..jobs._logsink import log_path as _logsink_log_path
+
 MARKER = "# scitex-dev creds-rotate (managed)"
-LOG_PATH = Path.home() / ".scitex" / "dev" / "logs" / "creds-rotate.log"
+# Per the operator directive (jobs/_respawn.py:25-27) ALL log output lands
+# under ``$HOME/.scitex/<pkg>/runtime/logs/<slug>.log``, NEVER the pre-#367
+# ``$HOME/.scitex/dev/logs/`` location. Computed through the SAME shared
+# ``jobs._logsink`` helper (keyed on package ``dev`` + slug ``creds-rotate``)
+# the federated cron/timer surface uses, so there is exactly one path
+# convention across every scitex-dev-managed job. The basename is preserved
+# so existing operator greps / dashboards keep working.
+LOG_PATH = _logsink_log_path("dev", "creds-rotate")
 _LOG_ROTATE_BYTES = 1_048_576  # 1 MiB — rotate via `mv` to .1 on overflow
 
 

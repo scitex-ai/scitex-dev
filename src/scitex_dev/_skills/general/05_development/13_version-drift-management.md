@@ -127,152 +127,29 @@ infra fast; never let green-CI go dark for days.
 
 ## 5. The baked-artifact gap and the never-again loop (the north star)
 
-`validate-versions` covers layers 1–4, 7, 8 well. It does **not** yet see
-inside layer 5 (container base image) or layer 6 (agent overlays) — the
-two layers that need a rebuild/restart rather than a `pip install`.
-`deploy-freshness` (the auto-restart engine for host units) is **no help
-here**: it is venv-scoped — it introspects its *own* cron venv via
-`importlib.metadata`, not the unit's ExecStart interpreter — and has
-**zero awareness of SIF contents**, so it cannot see a stale package
-baked into an immutable image. Baked-SIF drift needs a **sibling
-detector**, not an extension of deploy-freshness.
-
-**2026-07-08 incident — the gap materializing.** The running sac-base
-SIF (built 2026-07-05) had baked `scitex-todo 0.7.32` while PyPI had
-moved to 0.7.43. The baked 0.7.32 MCP server CPU-spins (fixed 0.7.39+),
-so an immutable image shipped a *known-buggy* dep fleet-wide and
-contributed to a host-saturation incident. **Root cause: immutable
-artifact + continuous upstream (~1 release/day) + no rebuild trigger +
-no scheduled detector.** A SIF bakes whatever the `>=` floors resolve to
-*at build time*, then is frozen; nothing updates it, and — critically —
-the existing drift report was **never scheduled**, so it only ran when a
-human ran it. Nobody was watching.
-
-**The never-again loop.** Ownership is split by concern (SoC):
-scitex-dev owns *when + why to rebuild* (policy); `scitex-agent-container`
-owns *how* (`sac versions` reporter + `sac image build --remote`
-actuator); `scitex-hpc` owns the HPC build recipe.
-
-1. **Detect** — schedule the existing `validate-versions`/drift-report as a
-   `scitex_dev.jobs` cron so it runs every N minutes, not on demand.
-   Side A = `sac versions --json` (the baked/installed truth; a *pure*
-   state reporter — no PyPI/policy logic in it). Side B = PyPI-latest.
-   Compare against the **declared target** for each consumer.
-2. **Judge (policy — scitex-dev)** — triggers, in priority: a baked
-   package publishes a release crossing a threshold (**publish-driven is
-   the primary trigger** — the release cadence outpaces any age-based
-   SLA); a short staleness SLA; a known-buggy-baked denylist (e.g.
-   `scitex-todo<0.7.39`); manual. The compare/judgment lives in
-   scitex-dev so `sac versions` can stay a pure reporter.
-3. **Rebuild REMOTELY** — `sac image build --remote hpc:spartan`. A local
-   rebuild OOMs the host (part of the 2026-07-08 incident); Spartan is
-   the executor. The build MUST accept **exact target versions**
-   (`--target-versions scitex-todo==0.7.46`), never re-resolve `>=`
-   floors — otherwise the rebuild re-introduces the same build-time
-   nondeterminism that caused the drift.
-4. **Verify (fail loud)** — post-build, assert *inside* the SIF that the
-   baked version equals the target (`python -c "import scitex_todo as m;
-   assert m.__version__=='0.7.46'"`). Never swap an unverified image.
-   Emit a machine-readable baked manifest (resolved versions + SIF
-   digest + build UTC timestamp + source `.def` commit) so the monitor
-   can diff what actually shipped.
-5. **Swap + restart** — atomic swap, clean restart (§6).
-
-**Parity = "matches its DECLARED target," not "all hosts identical."**
-Consumers legitimately diverge — the Spartan clew-capsule SIF may be
-pinned to an older version by design. The monitor flags *deviation from
-each consumer's declared target row*, never inter-host difference; a
-declared divergence is not drift, and treating it as one is a false
-alarm.
-
-**Keep the mechanism GENERAL; put the fleet-specifics in config.** The
-drift monitor, the rebuild policy, and the jobs/CRUD surface are *public*
-tooling — anyone using SciTeX packages should be able to run them. Our
-fleet's particulars (Spartan, specific SIF images, host topology, which
-consumer is pinned where) are **not** hardcoded into the mechanism; they
-live in a **user-level, git-tracked config** the generic mechanism reads.
-That is the general-vs-specific seam: the code ships the *engine*, the
-user config declares the *targets*. Which packages to watch is driven by
-**ecosystem tags** — the always-present infra packages
-(`scitex-agent-container`, `scitex-todo`, `claude-code-telegrammer`) are
-tagged `shared`/`infra` in the ecosystem registry, and each project's
-monitored set is derived from those tags rather than a hand-kept list.
+The two layers `validate-versions` can't see (5 = container base image, 6 =
+agent overlays), why `deploy-freshness` is no help, the 2026-07-08 baked-SIF
+incident, the SoC-split never-again loop (detect / judge / rebuild-remotely /
+verify-fail-loud / swap-restart), the parity definition, and keeping the
+mechanism general with fleet-specifics in config are in
+[21_baked-artifact-drift-loop.md](21_baked-artifact-drift-loop.md).
 
 ## 6. Agent rebuild/restart protocol
 
-When **infra packages** change (`scitex-agent-container`,
-`scitex-todo`, `claude-code-telegrammer` — the ones every agent's
-runtime depends on), the container/overlay layers (5, 6) are stale until
-a rebuild+restart. Protocol:
-
-1. **Release the infra packages first** (§3 through step 3) so the image
-   build pulls a stable published version, not a moving editable.
-2. **Rebuild the base image once** so its baked venv has the new
-   versions.
-3. **Rolling-restart agents onto the new image** — one at a time, at a
-   coordinated low-activity window. A restart drops the agent's live
-   session, so:
-   - never restart an agent mid-task or mid-operator-session;
-   - let each agent reach a natural break and self-restart (or ping
-     `scitex-agent-container` for `sac agents restart <name> -y`);
-   - a plain restart only picks up the change if the image/deploy was
-     rebuilt first — otherwise it re-materializes the same stale state.
-4. **Interim workaround** beats a disruptive emergency restart: if a
-   change only needs a config/env fix, a targeted `env -u VAR` /
-   `unset VAR` shim (cf. the `SCITEX_TODO_AGENT` legacy-var episode)
-   keeps the agent working until its natural restart window.
-
-**Answer to "when do I rebuild/restart all agents?"** — batch it:
-release the changed infra packages, rebuild the image once, then
-rolling-restart at the next quiet window. Don't restart per-merge; the
-interim shims cover the gap, and a coordinated wave avoids N disruptive
-session-drops.
+When infra packages change (`scitex-agent-container`, `scitex-todo`,
+`claude-code-telegrammer`), the container/overlay layers (5, 6) are stale until
+a rebuild+restart. The protocol — release infra first, rebuild the base image
+once, rolling-restart at a coordinated quiet window (never mid-task), interim
+env-shim over emergency restart, and batching the wave — is in
+[23_agent-rebuild-restart-protocol.md](23_agent-rebuild-restart-protocol.md).
 
 ## 7. Documentation drift — the loosely-coupled sibling
 
-Version drift is about *which code runs where*. **Documentation drift**
-is the parallel axis: does the doc still match the code it describes?
-It is in some ways harder, because docs are only **loosely coupled** to
-code — nothing forces a README, skill, CLI-reference, docstring, or
-example to update when the code under it changes, so it drifts silently
-and becomes *confidently wrong* (worse than absent — a reader trusts
-it). The constitution's Principle 1 is the governing rule:
-**documents and skills are never the source of truth; verify against
-the code.**
-
-Where it hides (drift layers, doc edition): `README.md` (sections,
-badges, install/usage snippets), the `_skills/<pkg>/` tree, CLI
-`--help` vs the hand-written CLI-reference, docstrings vs signatures,
-`_demo_*.py`/examples vs the current API, and cross-package references
-(one package's doc naming another's moved symbol).
-
-Detectors that already exist in scitex-dev — use them, don't reinvent:
-
-```bash
-scitex-dev ecosystem audit-all <pkg>        # includes the doc-surface rules below
-scitex-dev ecosystem audit-skills <pkg>     # _skills/<pkg>/ §1–§FM structure
-```
-
-- README structure / sections / badge rules (PS-1xx) — see
-  `_cli/audit/_project/_check_readme_*.py`.
-- Skills structure + self-explain quality —
-  [04_skills-self-explain.md](04_skills-self-explain.md).
-- Doc-surface precedence (which surface wins when two disagree) —
-  [05_doc-surfaces.md](05_doc-surfaces.md).
-
-Three durable moves, in preference order (mirror the version-drift
-strategy: one SSoT + a cheap detector):
-
-1. **Generate the doc from the code** so it *cannot* drift — CLI
-   reference from `--help`, the API tree from introspection
-   (`list-python-apis`), config docs from the schema. Generated docs
-   are always in sync by construction.
-2. **Put the assertion under an audit rule** where prose is
-   unavoidable, so a drifted doc becomes a *red check* (the same
-   feedback-loop principle as §4) instead of a silent lie.
-3. **Fix at the point of notice** — a doc that contradicts the code is
-   a bug in the doc; correct it then and there (constitution §3,
-   keep-it-tidy), never treat it as "someone else's cleanup."
+The parallel axis — does the doc still match the code it describes? Where it
+hides (README, `_skills/`, CLI help vs reference, docstrings, demos,
+cross-package refs), the existing scitex-dev detectors, and the three durable
+moves (generate from code; put under an audit rule; fix at the point of notice)
+are in [22_documentation-drift.md](22_documentation-drift.md).
 
 ## 8. Speed doctrine (why this exists)
 

@@ -1,10 +1,21 @@
 """Editable-install drift warning.
 
 Fires once per process (CLI invocation, first `import scitex_dev`, MCP
-server boot) when:
+server boot). It warns ONLY when a NEWER scitex-dev is AVAILABLE — i.e. the
+installed one is genuinely BEHIND — never merely because a dev checkout is
+ahead of the last release tag (that ahead-of-tag false positive, which also
+emitted a bare `git pull --rebase` bomb, is exactly what this fixes).
 
-1. The package is installed editable (`pip install -e .`), AND
-2. The working-tree HEAD differs from the latest release tag.
+- Editable (`pip install -e .`) install: HEAD is BEHIND its tracking
+  upstream (`origin/<branch>`). Remedy is CWD-independent + non-destructive:
+  `git -C <abs-repo-path> pull --ff-only` (NEVER a bare `git pull` or
+  `--rebase` — from another CWD those hit the wrong repo / rewrite work).
+- Wheel (PyPI) install: installed version < latest, where "latest" comes
+  ONLY from a pre-existing version-cache file (no network on the hot path;
+  the cache refresher is a separate task). Remedy is `pip install -U`.
+
+Severity is knob-controlled (default `warn`; `error` hard-fails the
+command), resolved ECOSYSTEM → config.yaml → knob-state.json.
 
 Designed to be **silent and fast** on the hot path:
 
@@ -38,19 +49,10 @@ _ENV_DISABLE = "SCITEX_DEV_NO_DRIFT_WARN"
 _MIN_INTERVAL_SECONDS = 30
 
 
-def _editable_source_dir(distribution: str) -> Path | None:
-    """Return the editable-install source directory, or None if not editable.
-
-    Reads `<dist-info>/direct_url.json` per PEP 610.
-    """
-    try:
-        from importlib.metadata import distribution as _dist
-    except ImportError:
-        return None
-    try:
-        meta = _dist(distribution)
-    except Exception:
-        return None
+def _editable_dir_from_meta(meta) -> Path | None:
+    """Editable source dir from a Distribution's ``direct_url.json`` (PEP 610),
+    or None. Shared with :mod:`scitex_dev.staleness` (path-aware callers pass
+    their own resolved Distribution instead of a global name lookup)."""
     try:
         raw = meta.read_text("direct_url.json")
     except Exception:
@@ -67,6 +69,22 @@ def _editable_source_dir(distribution: str) -> Path | None:
     if url.startswith("file://"):
         return Path(url[len("file://") :])
     return None
+
+
+def _editable_source_dir(distribution: str) -> Path | None:
+    """Return the editable-install source directory, or None if not editable.
+
+    Reads `<dist-info>/direct_url.json` per PEP 610.
+    """
+    try:
+        from importlib.metadata import distribution as _dist
+    except ImportError:
+        return None
+    try:
+        meta = _dist(distribution)
+    except Exception:
+        return None
+    return _editable_dir_from_meta(meta)
 
 
 def _git_state_mtime(repo: Path) -> float | None:
@@ -142,55 +160,254 @@ def _is_completion_context() -> bool:
     return any(k == "_CLICK_COMPLETE" or k.endswith("_COMPLETE") for k in os.environ)
 
 
-def _compute_drift(repo: Path) -> str | None:
-    """Return a one-line warning, or None if up-to-date / unknown.
+def _upstream_ref(repo: Path) -> str | None:
+    """Resolve the tracking upstream for HEAD (e.g. ``origin/develop``).
 
-    "Ahead-only" returns None — when you're working on develop you are
-    *supposed* to be ahead of the latest release tag, so a warning there
-    is just noise. We only nudge on "behind" (you should pull) or
-    "diverged" (you should rebase / fast-forward).
+    Resolution order:
+      1. The configured upstream via ``@{u}`` (``origin/<branch>``).
+      2. ``origin/<current-branch>`` if such a remote-tracking ref exists.
+      3. ``origin/HEAD``, then ``origin/develop`` / ``origin/main``.
+    Returns None when nothing resolves (→ AXIS 1 stays silent, fail-safe).
     """
-    # Use `git tag --sort=-v:refname` (highest-semver-first) instead of
-    # `git describe --tags`, which only finds tags REACHABLE FROM HEAD.
-    # Reachability fails the standard gitflow case where v* tags live
-    # on the main branch's merge commit but the user is checked out on
-    # develop — develop hasn't been fast-forwarded to include the
-    # merge, so describe walks back to the previous on-branch tag.
-    # We want "latest published version" regardless of branch topology.
-    raw = _run_git(
-        repo,
-        "tag",
-        "--list",
-        "v[0-9]*",
-        "--sort=-v:refname",
-    )
-    latest_tag = raw.splitlines()[0].strip() if raw else ""
-    head = _run_git(repo, "rev-parse", "--short", "HEAD")
-    if not latest_tag or not head:
+    ref = _run_git(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+    if ref:
+        return ref
+    branch = _run_git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+    candidates: list[str] = []
+    if branch and branch != "HEAD":
+        candidates.append(f"origin/{branch}")
+    head_ref = _run_git(repo, "rev-parse", "--abbrev-ref", "origin/HEAD")
+    if head_ref:
+        candidates.append(head_ref)
+    candidates += ["origin/develop", "origin/main"]
+    for cand in candidates:
+        if _run_git(repo, "rev-parse", "--verify", "--quiet", cand) is not None:
+            return cand
+    return None
+
+
+def _behind_upstream(repo: Path) -> int | None:
+    """Commits the tracking upstream has that HEAD lacks (i.e. BEHIND count).
+
+    Returns the behind count, 0 if level/ahead, or None when there is no
+    resolvable upstream (→ stay silent, fail-safe). Uses only the LOCAL
+    remote-tracking ref (as fresh as the last ``git fetch``) — no network.
+    """
+    upstream = _upstream_ref(repo)
+    if not upstream:
         return None
-    # rev-list --count A..B works fine for non-ancestor tags; it counts
-    # commits in B not reachable from A (and vice versa for the reverse).
-    ahead = _run_git(repo, "rev-list", "--count", f"{latest_tag}..HEAD")
-    behind = _run_git(repo, "rev-list", "--count", f"HEAD..{latest_tag}")
+    # `--left-right --count A...B` → "<left-only>\t<right-only>":
+    # left = commits in upstream not in HEAD = BEHIND.
+    counts = _run_git(
+        repo, "rev-list", "--left-right", "--count", f"{upstream}...HEAD"
+    )
+    if not counts:
+        return None
+    parts = counts.split()
+    if len(parts) != 2:
+        return None
+    return int(parts[0])
+
+
+def _compute_drift(repo: Path, distribution: str = "scitex-dev") -> str | None:
+    """Editable path — warn ONLY when the checkout is BEHIND its remote.
+
+    "Stale" == a newer scitex-dev is available to pull, i.e. HEAD is behind
+    ``origin/<branch>``. The remedy is CWD-independent + non-destructive:
+    ``git -C <abs-repo-path> pull --ff-only`` — NEVER a bare ``git pull`` or
+    ``--rebase`` (from another CWD those hit the wrong repo / rewrite work).
+
+    Being AHEAD of the latest release tag (unreleased dev commits on
+    ``develop``) is NORMAL and is NOT flagged — that was the reported false
+    positive. Any git error / no upstream / not a repo → None (fail-safe).
+    """
     try:
-        n_ahead = int(ahead or "0")
-        n_behind = int(behind or "0")
-    except ValueError:
+        behind = _behind_upstream(repo)
+        if not behind:
+            return None
+        head = _run_git(repo, "rev-parse", "--short", "HEAD")
+        if not head:
+            return None
+    except (ValueError, OSError):
         return None
-    if n_behind == 0:
-        # Quiet on "ahead-only" — develop is *supposed* to be ahead of the
-        # latest release tag; warning there is just startup noise. Only
-        # the "behind" and "diverged" cases call for action.
-        return None
-    if n_ahead and n_behind:
-        return (
-            f"editable scitex-dev: HEAD ({head}) diverged from latest tag "
-            f"{latest_tag} (+{n_ahead}/−{n_behind}). `git pull --rebase`?"
-        )
     return (
-        f"editable scitex-dev: HEAD ({head}) is {n_behind} commit(s) behind "
-        f"latest tag {latest_tag} — `git pull` or `pip install -U scitex-dev`."
+        f"editable {distribution}: HEAD ({head}) is {behind} commit(s) behind "
+        f"its remote — run: git -C {repo} pull --ff-only"
     )
+
+
+def _installed_version(distribution: str) -> str | None:
+    """The version recorded in the installed dist metadata, or None."""
+    try:
+        from importlib.metadata import version as _version
+
+        return _version(distribution)
+    except Exception:  # noqa: BLE001 — fail-safe: absence must never crash
+        return None
+
+
+def _cached_latest(distribution: str) -> str | None:
+    """Latest published version from a pre-existing version-cache file, or None.
+
+    We DO NOT build or refresh the cache here (that is a separate task) and we
+    NEVER hit the network on this hot path. If a refresher has already written
+    a cache file we read it; otherwise there is no evidence and we stay silent.
+
+    Path resolution: ``$SCITEX_DEV_VERSION_CACHE`` override (injectable for
+    tests), else ``~/.scitex/dev/runtime/version-latest.json``. Tolerant of a
+    bare ``{"latest": "x"}`` / ``{"version": "x"}`` shape.
+    """
+    override = os.getenv("SCITEX_DEV_VERSION_CACHE")
+    if override:
+        path = Path(override).expanduser()
+    else:
+        try:
+            from scitex_config._ecosystem import local_state
+
+            path = local_state.path("dev", "runtime", "version-latest.json")
+        except Exception:  # noqa: BLE001 — fail-safe
+            return None
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    val = data.get("latest") or data.get("version")
+    return str(val).strip() if val else None
+
+
+def _is_older(installed: str, latest: str) -> bool:
+    """True iff ``installed`` is strictly older than ``latest`` (PEP 440)."""
+    try:
+        from packaging.version import Version
+
+        return Version(installed) < Version(latest)
+    except Exception:  # noqa: BLE001 — never crash on an odd version string
+        return installed != latest and installed < latest
+
+
+def _pypi_drift(distribution: str) -> str | None:
+    """Non-editable path — warn when the installed version is behind latest.
+
+    "Latest" comes only from a pre-existing version-cache file; without one we
+    stay silent (no network on the hot path). Remedy is ``pip install -U``.
+    """
+    installed = _installed_version(distribution)
+    latest = _cached_latest(distribution)
+    if not installed or not latest:
+        return None
+    if not _is_older(installed, latest):
+        return None
+    return (
+        f"scitex-dev {installed} is behind latest {latest} — run: "
+        f"pip install -U {distribution}"
+    )
+
+
+# Exit code used only when the severity knob is `error`. Distinct from
+# click's 1/2 so a staleness abort is never mistaken for a usage error.
+EXIT_STALE = 3
+_SEVERITIES = ("silent", "warn", "error")
+_SEVERITY_DEFAULT = "warn"
+# Appended to every emitted staleness line (operator request) so the reader
+# always sees how to control it: the env kill-switch + the severity knob.
+# (Being AHEAD of the remote is silently ignored and needs no note.)
+_SUPPRESS_HINT = (
+    "suppress: SCITEX_DEV_NO_DRIFT_WARN=1 · severity: staleness_severity knob"
+)
+
+
+def _severity_from_config(key: str = "staleness_severity") -> str | None:
+    """``key`` from the hand-authored ``~/.scitex/dev/config.yaml``.
+
+    ``$SCITEX_DEV_CONFIG`` overrides the path (injectable for tests).
+    """
+    override = os.getenv("SCITEX_DEV_CONFIG")
+    if override:
+        path = Path(override).expanduser()
+    else:
+        from scitex_config._ecosystem import local_state
+
+        path = local_state.path("dev", "config.yaml")
+    if not path.is_file():
+        return None
+    import yaml
+
+    data = yaml.safe_load(path.read_text()) or {}
+    val = data.get(key)
+    return str(val).strip().lower() if val else None
+
+
+def _severity_from_knob_state(key: str = "staleness_severity") -> str | None:
+    """``key`` from the machine-managed ``knob-state.json``.
+
+    Reuses the same state file and ``$SCITEX_DEV_KNOB_STATE`` override the
+    skills/mcp/test_execution knobs use.
+    """
+    from scitex_dev._core._knobs import _knob_state_path
+
+    path = _knob_state_path()
+    if not path.is_file():
+        return None
+    data = json.loads(path.read_text())
+    val = data.get(key)
+    return str(val).strip().lower() if val else None
+
+
+def _resolve_severity(
+    key: str = "staleness_severity", default: str = _SEVERITY_DEFAULT
+) -> str:
+    """`silent` | `warn` (default) | `error`, resolved with the standard
+    ECOSYSTEM(default) → config.yaml → knob-state.json precedence.
+
+    ``key``/``default`` parameterize the knob name so the currency gate
+    (:mod:`scitex_dev.staleness`, key ``currency_severity``, default
+    ``error``) reuses the exact resolution ladder. Only consulted when a
+    drift message already exists (off the hot path). Any failure or
+    unrecognised value degrades to the default — a bad knob must never
+    break the host command.
+    """
+    severity = default
+    for reader in (_severity_from_config, _severity_from_knob_state):
+        try:
+            value = reader(key)
+        except Exception:  # noqa: BLE001 — fail-safe: never break the CLI
+            value = None
+        if value in _SEVERITIES:
+            severity = value  # later readers (knob-state) win — highest precedence
+    return severity
+
+
+def _log_stale(level: str, text: str, stream=None) -> None:
+    """Emit the staleness line through scitex-logging (auto ``WARN:``/``ERRO:``
+    severity prefix — the operator's requested, uncluttered format).
+
+    Falls back to a plain stderr line with an explicit ``WARN:``/``ERROR:``
+    prefix when scitex-logging is unavailable, so a pristine venv still gets a
+    severity-tagged message instead of a heavy new dep or a crash.
+    """
+    try:
+        import scitex_logging
+
+        logger = scitex_logging.getLogger("scitex_dev")
+        (logger.error if level == "error" else logger.warning)(text)
+        return
+    except Exception:  # noqa: BLE001 — fail-safe: a warning must never crash
+        prefix = "ERROR" if level == "error" else "WARN"
+        print(f"{prefix}: {text}", file=stream if stream is not None else sys.stderr)
+
+
+def _react_to_drift(message: str | None, severity: str, stream=None) -> int:
+    """Emit the drift line (if any) at the right level and return an exit code.
+
+    Returns :data:`EXIT_STALE` only when ``severity == "error"`` and there IS
+    a message — the caller then aborts non-zero to FORCE the update. ``warn``
+    logs at WARNING and returns 0 (continue); ``silent`` stays quiet.
+    """
+    if not message or severity == "silent":
+        return 0
+    level = "error" if severity == "error" else "warn"
+    _log_stale(level, f"{message}  ({_SUPPRESS_HINT})", stream)
+    return EXIT_STALE if severity == "error" else 0
 
 
 def _read_cache() -> dict:
@@ -218,7 +435,9 @@ def check(distribution: str = "scitex-dev") -> str | None:
         return None
     src = _editable_source_dir(distribution)
     if src is None:
-        return None
+        # Non-editable (wheel) install: warn only when a pre-existing version
+        # cache shows the installed version is behind the latest published one.
+        return _pypi_drift(distribution)
     state_mtime = _git_state_mtime(src)
     if state_mtime is None:
         return None
@@ -273,8 +492,14 @@ def emit_if_drift(distribution: str = "scitex-dev") -> None:
         return
     emit_if_drift._emitted = True  # type: ignore[attr-defined]
     msg = check(distribution)
-    if msg:
-        print(f"[scitex-dev] {msg}", file=sys.stderr)
     # Mark for any subprocess we spawn, regardless of whether we printed
     # (no-drift state should also propagate so the env stays consistent).
     os.environ[_SUBPROCESS_MARKER] = "1"
+    severity = _resolve_severity() if msg else _SEVERITY_DEFAULT
+    code = _react_to_drift(msg, severity)
+    if code:
+        # severity=error on a genuinely stale checkout: hard-fail the command
+        # (after printing the copy-paste remedy) so the update is not ignored.
+        # SystemExit is NOT caught by the `except Exception` at the import
+        # callsite, so it propagates and the process exits non-zero.
+        raise SystemExit(code)

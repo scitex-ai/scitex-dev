@@ -233,57 +233,102 @@ def register(ecosystem) -> None:
             "last start): `systemctl --user restart <unit>` only (no pip)."
         ),
     )
-    def cron_exec(name: str, apply: bool) -> None:
+    @click.option(
+        "--no-log",
+        "no_log",
+        is_flag=True,
+        default=False,
+        help="Write output to the terminal instead of the job's runtime log "
+        "file. For interactive testing — cron/systemd always want the default.",
+    )
+    def cron_exec(name: str, apply: bool, no_log: bool) -> None:
         from ....jobs import jobs_of_kind
 
-        # Verify the named job is actually in the federation.
-        all_cron_jobs = jobs_of_kind("cron")
-        names = {j.name for j in all_cron_jobs}
+        # Verify the named job is in the federation. Both cron-kind (crontab)
+        # and timer-kind (systemd) scitex-dev jobs route their body through
+        # THIS verb so the log sink (mkdir + rotate + fd-level redirect) lives
+        # in one place; a timer's `ExecStart=scitex-dev ecosystem cron exec
+        # <name>` resolves cleanly, unlike the old inline shell string that a
+        # systemd exec (no shell) mangled.
+        all_jobs = jobs_of_kind("cron") + jobs_of_kind("timer")
+        names = {j.name for j in all_jobs}
         if name not in names:
             known = ", ".join(sorted(names)) or "(none)"
             raise click.ClickException(
-                f"unknown federated cron job: {name!r}. Discovered: {known}"
+                f"unknown federated cron/timer job: {name!r}. Discovered: {known}"
             )
 
-        if name == "deploy-freshness":
-            from ...._ecosystem_jobs import _deploy_freshness
-
-            result = _deploy_freshness.run_once(apply=apply)
-            if result.error is not None:
-                raise click.ClickException(result.error)
+        if no_log:
+            _dispatch_federated_job(name, apply=apply, all_jobs=all_jobs)
             return
 
-        # Defensive — a JobSpec is discovered but no dispatch branch
-        # exists. Means a leaf registered a federated cron job that
-        # scitex-dev's ecosystem cron exec doesn't know how to run.
-        # That's OK for the OTHER cron-kind jobs leaves declare —
-        # they shell out to the leaf's OWN CLI via JobSpec.command,
-        # and we never reach this dispatch (the crontab line invokes
-        # the leaf's CLI directly, not `ecosystem cron exec`).
-        # But if someone DID call `ecosystem cron exec <leaf-job>`,
-        # the right thing is to shell out to the JobSpec.command
-        # itself rather than crash.
-        import shlex
+        # The verb OWNS logging: mkdir + rotate + fd-level (os.dup2) redirect
+        # of stdout+stderr into $HOME/.scitex/<pkg>/runtime/logs/<slug>.log,
+        # so child processes (ssh/rsync/sac/git the bodies spawn) are captured
+        # too — that is what operators grep. FAIL LOUD: a LogSinkError means
+        # the job does NOT run unlogged.
+        from ...._ecosystem_jobs._provider import log_path_for
+        from ....jobs._logsink import LogSinkError, redirect_to_log
+
+        log = log_path_for(name)
+        try:
+            with redirect_to_log(log):
+                _dispatch_federated_job(name, apply=apply, all_jobs=all_jobs)
+        except LogSinkError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+
+def _dispatch_federated_job(name: str, *, apply: bool, all_jobs) -> None:
+    """Run federated job ``name``'s body. Raises on failure.
+
+    Split out of the Click callback so the log-sink wrapper stays a single
+    ``with`` block around ONE call (mirrors ``_cli.cron.run._run_body``).
+    """
+    if name == "deploy-freshness":
+        from ...._ecosystem_jobs import _deploy_freshness
+
+        result = _deploy_freshness.run_once(apply=apply)
+        if result.error is not None:
+            raise click.ClickException(result.error)
+        return
+
+    # Pure shell-body job (host script / console-script pipeline). The body
+    # carries NO mkdir / redirect / rotation — the caller's log sink supplies
+    # all three; the child inherits fds 1/2, already redirected at fd level.
+    from ...._ecosystem_jobs._provider import JOB_SHELL_BODIES
+
+    if name in JOB_SHELL_BODIES:
         import subprocess
 
-        spec = next(j for j in all_cron_jobs if j.name == name)
-        # Strip the wrapper `mkdir ...; <cmd> >> log 2>&1` if present
-        # — the operator's interactive `cron exec` shouldn't double-write.
-        # Best-effort: take the last `;`-delimited segment.
-        cmd_str = spec.command.split(";")[-1].strip()
-        # Drop any trailing `>> log 2>&1` redirect.
-        for redir in (" >> ", " > ", " 2>>", " 2>"):
-            idx = cmd_str.find(redir)
-            if idx > 0:
-                cmd_str = cmd_str[:idx].strip()
-        argv = shlex.split(cmd_str)
-        if not argv:
-            raise click.ClickException(
-                f"cron job {name!r}: empty command after wrapper strip"
-            )
-        r = subprocess.run(argv, check=False)
-        if r.returncode != 0:
-            raise SystemExit(r.returncode)
+        completed = subprocess.run(
+            JOB_SHELL_BODIES[name], shell=True, check=False
+        )
+        if completed.returncode != 0:
+            raise SystemExit(completed.returncode)
+        return
+
+    # Defensive — a JobSpec is discovered but no dispatch branch exists. That
+    # is expected for the OTHER leaves' cron jobs: their crontab line invokes
+    # the leaf's OWN CLI directly (never `ecosystem cron exec`), so we only
+    # reach here if someone runs `ecosystem cron exec <leaf-job>` by hand.
+    # Shell out to the JobSpec.command rather than crash.
+    import shlex
+    import subprocess
+
+    spec = next(j for j in all_jobs if j.name == name)
+    cmd_str = spec.command.split(";")[-1].strip()
+    for redir in (" >> ", " > ", " 2>>", " 2>"):
+        idx = cmd_str.find(redir)
+        if idx > 0:
+            cmd_str = cmd_str[:idx].strip()
+    argv = shlex.split(cmd_str)
+    if not argv:
+        raise click.ClickException(
+            f"cron job {name!r}: empty command after wrapper strip"
+        )
+    r = subprocess.run(argv, check=False)
+    if r.returncode != 0:
+        raise SystemExit(r.returncode)
 
 
 def _source_of(name: str) -> str:

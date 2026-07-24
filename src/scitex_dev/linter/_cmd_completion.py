@@ -1,7 +1,10 @@
 """CLI subcommand: completion — shell tab completion for scitex-linter."""
 
 import os
-import sys
+
+import scitex_logging as slogging
+
+log = slogging.getLogger(__name__)
 
 
 def _generate_completion_script(shell: str) -> str:
@@ -133,7 +136,7 @@ def _cmd_show(shell: str) -> int:
     if script:
         print(script)
         return 0
-    print(f"Unsupported shell: {shell}", file=sys.stderr)
+    log.error(f"Unsupported shell: {shell}")
     return 1
 
 
@@ -148,7 +151,7 @@ def _cmd_install(args) -> int:
 
     script = _generate_completion_script(shell)
     if not script:
-        print(f"Unsupported shell: {shell}", file=sys.stderr)
+        log.error(f"Unsupported shell: {shell}")
         return 1
 
     rc_file = os.path.expanduser("~/.bashrc" if shell == "bash" else "~/.zshrc")
