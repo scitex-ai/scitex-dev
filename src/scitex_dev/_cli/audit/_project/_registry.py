@@ -1264,6 +1264,20 @@ for _c, _sec, _msg, _sev, _slug in _LOGS_PATH_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
 # hook-bypass: line-limit
+# PS-224 — CI runner destination must exist in the scitex-dev machine
+# registry (co-located rule, merged on the same terms as LOGS_PATH_RULES).
+# Severity **E** lives in the tuple, NOT in `_SEVERITY_OVERRIDES` — see the
+# note beside `_patch`: an override for a co-located rule is a silent no-op,
+# and a rule that ships at E precisely so it CAN fail a build must never have
+# its severity routed through a table that would drop it.
+from ._check_runner_destinations import (  # noqa: E402
+    RUNNER_DESTINATION_RULES as _RUNNER_DESTINATION_RULES,
+)
+
+for _c, _sec, _msg, _sev, _slug in _RUNNER_DESTINATION_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
 # ---------------------------------------------------------------------------
 # Severity/slug overrides are applied LAST, so the table is honest for EVERY
 # registered rule — the ones defined literally in `RULES` above AND every
