@@ -135,7 +135,15 @@ def audit_api(
     violations.extend(_audit_umbrella_imports(init_path, distribution, import_name))
     violations.extend(_audit_playwright_capture(init_path, distribution, import_name))
     violations.extend(_audit_no_mocks(init_path, distribution, import_name))
-    violations.extend(_audit_test_quality(init_path, distribution, import_name))
+    # TQ scans the repo's tests/ tree — which lives in the source checkout,
+    # NOT the installed wheel. Pass the resolved repo_root (--path target) so
+    # it does not fall back to the import-resolved init_path (site-packages),
+    # which has no tests/ and would report a silent 0. See #435.
+    violations.extend(
+        _audit_test_quality(
+            init_path, distribution, import_name, repo_root=repo_root
+        )
+    )
     if rules:
         violations = [v for v in violations if v.rule in rules]
 
