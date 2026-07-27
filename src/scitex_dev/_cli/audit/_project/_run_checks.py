@@ -176,6 +176,14 @@ def run_checks(
     from ._check_hosted_runners import check_ps169_hosted_runners
 
     check_ps169_hosted_runners(repo_root, Violation, violations)
+    # PS-224: every `runs-on` must name a destination the scitex-dev MACHINE
+    # REGISTRY serves. Static, pre-merge, severity E — GitHub queues an
+    # unmatchable job forever instead of rejecting it, so without this the
+    # only symptom is a workflow that silently never runs (three scheduled
+    # runs sat undispatched from 2026-05-15 while 17 runners idled).
+    from ._check_runner_destinations import check_ps224_runner_destinations
+
+    check_ps224_runner_destinations(repo_root, Violation, violations)
     from ._check_secret_env_prefix import check_ps168_secret_env_prefix
 
     check_ps168_secret_env_prefix(repo_root, distribution, Violation, violations)
