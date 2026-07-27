@@ -297,6 +297,7 @@ def audit_cli(
     min_severity: str | None = None,
     timeout: float = 30.0,
     baseline_path: str | None = None,
+    repo_root=None,
 ) -> int:
     """Audit a package's installed CLI; return exit code (always 0 — warn-only).
 
@@ -349,4 +350,5 @@ def audit_cli(
         min_severity=min_severity,
         timeout=timeout,
         baseline_path=baseline_path,
+        repo_root=repo_root,
     )

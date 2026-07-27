@@ -143,10 +143,15 @@ def _audit_one(
     behavioral: bool = False,
     timeout: float = 30.0,
     ep_value_for=None,
+    repo_root=None,
 ) -> tuple[str, list]:
     """Audit a single package; return (status, violations).
 
     Status is one of: "ok", "warn", "skip-mcp", "not-found", "not-auditable".
+
+    ``repo_root`` (from ``--path`` via ``resolve_target_tree``) roots the
+    static §2/§11 source scans at that checkout (`_cli_repo_scans`) so
+    audit-cli honours ``--path``; the command-tree walk stays import-based.
     """
     from ._audit import (
         _check_cli_framework,
@@ -195,8 +200,13 @@ def _audit_one(
     _check_config_help(cmd, package, out)
     _scan_env_vars(package, out)
     _check_startup_speed(package, out)
-    _check_no_interactive_prompts(package, out)
-    _check_cli_framework(package, out)
+    if repo_root is None:
+        _check_no_interactive_prompts(package, out)
+        _check_cli_framework(package, out)
+    else:
+        from ._cli_repo_scans import scan_repo_source
+
+        scan_repo_source(package, repo_root, out)
     _check_option_positional_ordering(package, cmd, out)
     # §1f — verb_exceptions entries must carry a `# why` comment.
     check_verb_exception_comments(package, out)
@@ -295,6 +305,7 @@ def run_audit(
     min_severity: str | None = None,
     timeout: float = 30.0,
     baseline_path: str | Path | None = None,
+    repo_root: Path | None = None,
 ) -> int:
     """Audit a single package (single-target mode).
 
@@ -323,7 +334,9 @@ def run_audit(
             _emit_skip("skip", f"{package}: {reason}")
         return 0
 
-    status, violations = _audit_one(package, behavioral=behavioral, timeout=timeout)
+    status, violations = _audit_one(
+        package, behavioral=behavioral, timeout=timeout, repo_root=repo_root
+    )
     violations = _filter_violations(violations, rules, exclude, min_severity)
 
     bl_path = resolve_baseline_path(baseline_path)

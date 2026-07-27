@@ -67,6 +67,23 @@ def register(ecosystem):
     )
     @click.argument("package", required=False)
     @click.option(
+        "--path",
+        "--repo",
+        "repo_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        default=None,
+        help=(
+            "Repo root to audit — always wins when given. Without it, "
+            "resolution is deterministic: the CURRENT checkout (git "
+            "toplevel of the cwd, when its pyproject [project].name "
+            "matches PACKAGE — covers worktrees and CI checkouts), else "
+            "the registry's local_path, else the installed package's "
+            "location. `--repo` is a legacy alias. The static §2/§11 "
+            "source scans are rooted here; the command-tree walk audits "
+            "the installed console script. Ignored with --all."
+        ),
+    )
+    @click.option(
         "--all",
         "audit_all",
         is_flag=True,
@@ -140,6 +157,7 @@ def register(ecosystem):
     )
     def ecosystem_audit_cli(
         package,
+        repo_path,
         audit_all,
         behavioral,
         output_json,
@@ -152,6 +170,20 @@ def register(ecosystem):
         baseline_path,
     ):
         from ....audit import _summary as _cli_audit
+
+        # Deterministic target-tree resolution (operator directive
+        # 2026-07-21): explicit --path > current checkout (cwd git
+        # toplevel, incl. linked worktrees) > registry local_path. Shared
+        # with the other per-target auditors so --path wins uniformly.
+        # --all runs many packages, so tree resolution is single-target
+        # only (no repo when auditing the whole registry).
+        repo = None
+        if not audit_all and package is not None:
+            from ....audit._target_tree import resolve_target_tree
+            from ....audit._summary._cli_repo_scans import surface_cli_tree
+
+            repo, resolved_via = resolve_target_tree(package, repo_path)
+            surface_cli_tree(package, repo, resolved_via, output_json)
 
         raise SystemExit(
             _cli_audit.audit_cli(
@@ -166,6 +198,7 @@ def register(ecosystem):
                 min_severity=min_severity,
                 timeout=timeout,
                 baseline_path=baseline_path,
+                repo_root=repo,
             )
         )
 
