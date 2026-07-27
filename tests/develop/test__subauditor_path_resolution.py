@@ -8,16 +8,53 @@ DIFFERENT tree while reporting as if they graded the PR. These tests show
 the fix: given an explicit checkout at a path that is NOT the registry /
 install location, each newly-path-aware sub-auditor resolves THAT tree.
 
+This is a CROSS-CUTTING integration test (skills + mcp + cli) that
+mirrors no single ``src/`` module, so it lives under ``tests/develop/``
+(alongside the ``test_audit.py`` exemplar) — the integration-test
+location PS-204's orphan-test-file rule scans past (PS-204 only walks
+``tests/<pkg>/``).
+
 PA-306 no-mocks: every test builds a REAL temp checkout (``tmp_path``)
 and calls the real resolver / auditor entry points — no monkeypatch, no
-mocker. PA-307 test-quality: ``# Arrange`` / ``# Act`` / ``# Assert``
-markers, one assertion per test.
+mocker. The two banner tests capture the ``scitex_dev.audit`` INFO record
+by attaching their OWN handler to that logger (its module handler binds
+to the real ``sys.stderr`` at import time, so ``capsys`` misses it in
+xdist order — the same flake documented in
+``_cli/audit/_project/test__resolved_tree.py``). PA-307 test-quality:
+``# Arrange`` / ``# Act`` / ``# Assert`` markers, one assertion per test.
 """
 
 from __future__ import annotations
 
+import io
 import json
+import logging
 from pathlib import Path
+
+
+def _logger_banner(run) -> str:
+    """Run ``run()`` and return the ``scitex_dev.audit`` log text it emits.
+
+    The resolved-tree banner is a scitex-logging INFO record whose module
+    handler is bound to the REAL ``sys.stderr`` at import time, so
+    ``capsys`` / ``redirect_stderr`` capture nothing under xdist ordering.
+    Attaching a handler to the exact ``scitex_dev.audit`` logger captures
+    the record deterministically regardless of global handler state.
+    """
+    banner = io.StringIO()
+    handler = logging.StreamHandler(banner)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    handler.setLevel(logging.DEBUG)
+    logger = logging.getLogger("scitex_dev.audit")
+    prev_level = logger.level
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    try:
+        run()
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(prev_level)
+    return banner.getvalue()
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +101,7 @@ def test_audit_skills_repo_root_is_not_the_install_location(tmp_path, capsys):
     assert str(tmp_path) in (data["skills_dir"] or "")
 
 
-def test_audit_skills_repo_root_banner_names_the_path(tmp_path, capsys):
+def test_audit_skills_repo_root_banner_names_the_path(tmp_path):
     """The human-rail resolved-tree banner announces the --path checkout."""
     # Arrange
     dist = "demo-skillpkg"
@@ -72,10 +109,13 @@ def test_audit_skills_repo_root_banner_names_the_path(tmp_path, capsys):
     from scitex_dev._cli.audit._skills._audit import audit_skills
 
     # Act
-    audit_skills(dist, json_out=False, repo_root=tmp_path, resolved_via="explicit")
-    err = capsys.readouterr().err
+    text = _logger_banner(
+        lambda: audit_skills(
+            dist, json_out=False, repo_root=tmp_path, resolved_via="explicit"
+        )
+    )
     # Assert
-    assert str(tmp_path) in err
+    assert str(tmp_path) in text
 
 
 # ---------------------------------------------------------------------------
@@ -205,15 +245,16 @@ def test_audit_mcp_parity_skips_section6_when_repo_declares_exempt(tmp_path):
     assert out == []
 
 
-def test_audit_mcp_run_banner_names_the_path(tmp_path, capsys):
+def test_audit_mcp_run_banner_names_the_path(tmp_path):
     """run_audit_mcp(repo=--path) surfaces the resolved-tree banner."""
     # Arrange — an unimportable package: no MCP server, but the banner emits.
     from scitex_dev._cli.audit._summary._mcp_audit import run_audit_mcp
 
     # Act
-    run_audit_mcp(
-        "demo-nonexistent-pkg", repo=tmp_path, resolved_via="explicit"
+    text = _logger_banner(
+        lambda: run_audit_mcp(
+            "demo-nonexistent-pkg", repo=tmp_path, resolved_via="explicit"
+        )
     )
-    err = capsys.readouterr().err
     # Assert
-    assert str(tmp_path) in err
+    assert str(tmp_path) in text
