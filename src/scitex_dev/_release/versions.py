@@ -13,6 +13,7 @@ from typing import Any
 
 from .._ecosystem import ECOSYSTEM, get_all_packages, get_local_path
 from ._install_probe import probe_install
+from . import dist_info_integrity as _dii
 
 
 def get_version_from_toml(path: Path) -> str | None:
@@ -288,6 +289,11 @@ def _determine_status(info: dict[str, Any]) -> tuple[str, list[str]]:
     """Determine version status and issues."""
     issues = []
 
+    # A dirty install (2+ dist-info dirs) voids every comparison below.
+    dirty = _dii.dist_info_status(info.get("local", {}))
+    if dirty is not None:
+        return dirty
+
     toml_ver = info.get("local", {}).get("pyproject_toml")
     installed_ver = info.get("local", {}).get("installed")
     tag_ver = _normalize_version(info.get("git", {}).get("latest_tag"))
@@ -384,6 +390,9 @@ def list_versions(packages: list[str] | None = None) -> dict[str, Any]:
         if not probe.trustworthy and probe.metadata_version is not None:
             info["local"]["install_warning"] = probe.detail
 
+        # Dist-info-count integrity: count != 1 = untrustworthy install.
+        _dii.annotate_dist_info_integrity(info["local"], pypi_name)
+
         # Git sources
         if local_path and local_path.exists():
             info["git"]["latest_tag"] = get_git_latest_tag(local_path)
@@ -428,6 +437,7 @@ def check_versions(packages: list[str] | None = None) -> dict[str, Any]:
         "total": len(versions),
         "ok": 0,
         "mismatch": 0,
+        "dirty_install": 0,
         "unreleased": 0,
         "outdated": 0,
         "unavailable": 0,
@@ -439,7 +449,7 @@ def check_versions(packages: list[str] | None = None) -> dict[str, Any]:
         if status in summary:
             summary[status] += 1
 
-    return {"packages": versions, "summary": summary}
+    return {"packages": versions, "summary": summary, "note": _dii.DIST_INFO_NOTE}
 
 
 def get_mismatches(packages: list[str] | None = None) -> dict[str, Any]:
