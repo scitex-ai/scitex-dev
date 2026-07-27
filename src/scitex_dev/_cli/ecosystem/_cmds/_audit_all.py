@@ -214,18 +214,16 @@ def register(ecosystem):
                 cmd.append("--json")
             if a == "audit-cli":
                 cmd += ["--severity", severity]
-            # Thread --path through to every sub-auditor that accepts it.
-            # audit-cli / audit-mcp-tools / audit-skills don't accept a
-            # repo-path flag yet (their checks run against the registry-
-            # resolved location); skip them so we don't error on unknown
-            # option. The 3 that DO accept --path are project/django/
-            # python-apis — exactly the ones surfacing the worktree pain
-            # (PS-2xx / DJ-1xx / PA-1xx).
-            if explicit_path and a in (
-                "audit-project",
-                "audit-django",
-                "audit-python-apis",
-            ):
+            # Thread --path through to EVERY sub-auditor. All six now
+            # accept `--path` (alias `--repo`) and resolve their target
+            # tree through the SAME shared `resolve_target_tree`, so an
+            # explicit worktree / CI checkout wins uniformly. Previously
+            # only project/django/python-apis honoured --path while
+            # cli/mcp-tools/skills silently graded the registry/import-
+            # location tree (the operator's ~/proj/<pkg> develop checkout
+            # on CI) — a false result that reported as if it graded the
+            # PR. Fixed so --path wins for all six.
+            if explicit_path:
                 cmd += ["--path", str(explicit_path)]
             try:
                 r = subprocess.run(cmd, capture_output=True, text=True, env=sub_env)

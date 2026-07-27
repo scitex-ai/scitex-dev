@@ -36,6 +36,22 @@ def register(ecosystem):
         ),
     )
     @click.argument("distribution")
+    @click.option(
+        "--path",
+        "--repo",
+        "repo_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        default=None,
+        help=(
+            "Repo root to audit — always wins when given. Without it, "
+            "resolution is deterministic: the CURRENT checkout (git "
+            "toplevel of the cwd, when its pyproject [project].name "
+            "matches DISTRIBUTION — covers worktrees and CI checkouts), "
+            "else the registry's local_path, else the installed "
+            "package's location. `--repo` is a legacy alias. The skills "
+            "tree is read from `<root>/src/<import_name>/_skills/`."
+        ),
+    )
     @click.option("--json", "json_out", is_flag=True, help="Emit JSON output.")
     @click.option(
         "--rule",
@@ -51,8 +67,15 @@ def register(ecosystem):
             "Rewrites only frontmatter; idempotent."
         ),
     )
-    def ecosystem_audit_skills(distribution, json_out, rules, fix):
+    def ecosystem_audit_skills(distribution, repo_path, json_out, rules, fix):
         from ....audit import _skills as _cli_audit_skills
+        from ....audit._target_tree import resolve_target_tree
+
+        # Deterministic target-tree resolution (operator directive
+        # 2026-07-21): explicit --path > current checkout (cwd git
+        # toplevel, incl. linked worktrees) > registry local_path. Shared
+        # with audit-project/django/python-apis so --path wins uniformly.
+        repo, resolved_via = resolve_target_tree(distribution, repo_path)
 
         raise SystemExit(
             _cli_audit_skills.audit_skills(
@@ -60,6 +83,8 @@ def register(ecosystem):
                 json_out=json_out,
                 rules=set(rules) if rules else None,
                 fix=fix,
+                repo_root=repo,
+                resolved_via=resolved_via,
             )
         )
 
