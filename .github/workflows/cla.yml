@@ -33,7 +33,7 @@ jobs:
     # Fires only for direct pushes by the repo owner. PR events keep
     # going through the full CLAssistant action below.
     if: github.event_name == 'push' && github.actor == 'ywatanabe1989'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
     permissions:
       statuses: write
     steps:
@@ -52,7 +52,7 @@ jobs:
   CLAssistant:
     # PR / comment path — unchanged from the pre-2026-06-04 workflow.
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
     steps:
       - name: CLA Assistant
         uses: contributor-assistant/github-action@v2.6.1

@@ -69,10 +69,15 @@ def _workflow(runs_on: str, job_id: str = "test") -> str:
     return f"name: ci\non: [push]\njobs:\n  {job_id}:\n    runs-on: {runs_on}\n"
 
 
-def _run(repo: Path, registry_path: Path) -> list[Violation]:
+def _run(
+    repo: Path,
+    registry_path: Path,
+    *,
+    floor: list | None = None,
+) -> list[Violation]:
     out: list[Violation] = []
     check_ps224_runner_destinations(
-        repo, Violation, out, hosts_path=registry_path
+        repo, Violation, out, hosts_path=registry_path, floor_destinations=floor
     )
     return out
 
@@ -316,9 +321,72 @@ def test_unparseable_workflow_is_flagged(tmp_path, registry):
     assert len(found) == 1
 
 
-def test_empty_registry_reports_the_registry_gap_once(tmp_path):
-    # Arrange — no machine records a runner: a registry gap, NOT a fleet of
-    # illegal workflows. Two bad jobs must still yield exactly one finding.
+# -------- FLOOR: the shipped seed backs an empty user registry -------------
+#
+# scitex-dev owns the single registry and ships the canonical seed IN its
+# own code. When a host's user-state `hosts.yaml` contributes no runner
+# destinations (absent, or a stale pre-`runner_labels` copy that
+# `create_default_hosts_yaml` won't refresh), the rule falls back to that
+# shipped seed rather than reporting a gap — a stale/empty local file must
+# not be able to turn every workflow red for a reason unrelated to the
+# workflows. It is NOT a softening: genuine mismatches still error, and if
+# even the seed carried no destinations the gap finding would return
+# (proved by the mutation test below).
+
+
+def test_empty_user_registry_falls_back_to_shipped_seed_floor(tmp_path):
+    # Arrange — user registry records a host but no runners; the fleet
+    # idiom's destination is served by the SHIPPED seed's spartan runner.
+    registry_path = tmp_path / "hosts.yaml"
+    registry_path.write_text(_REGISTRY_NO_RUNNERS)
+    repo = _repo_with_workflow(
+        tmp_path, _workflow("[self-hosted, Linux, X64, scitex-ci]")
+    )
+    # Act
+    found = _run(repo, registry_path)
+    # Assert
+    assert found == []
+
+
+def test_floor_still_flags_an_unserved_destination(tmp_path):
+    # Arrange — with the floor active, a destination the seed does not
+    # serve is STILL a violation: the floor is real data, not a blanket pass.
+    registry_path = tmp_path / "hosts.yaml"
+    registry_path.write_text(_REGISTRY_NO_RUNNERS)
+    repo = _repo_with_workflow(
+        tmp_path, _workflow("[self-hosted, Linux, X64, sapphire]")
+    )
+    # Act
+    found = _run(repo, registry_path)
+    # Assert
+    assert len(found) == 1
+
+
+def test_floor_unserved_finding_is_severity_error(tmp_path):
+    # Arrange
+    registry_path = tmp_path / "hosts.yaml"
+    registry_path.write_text(_REGISTRY_NO_RUNNERS)
+    repo = _repo_with_workflow(
+        tmp_path, _workflow("[self-hosted, Linux, X64, sapphire]")
+    )
+    # Act
+    found = _run(repo, registry_path)
+    # Assert
+    assert found[0].severity == "E"
+
+
+# -------- MUTATION PROOF: the floor is load-bearing ------------------------
+#
+# Neutralise the shipped seed by injecting an EMPTY floor through the check's
+# real `floor_destinations=` value seam (no mock — the same no-patch
+# philosophy as `hosts_path`). The empty-user registry then has nothing to
+# fall back to, and the honest "could not check" gap finding must return. If
+# these go green with `floor=[]` while the floor tests above go green with
+# the default floor, the floor is genuinely what makes those pass.
+
+
+def test_gap_finding_returns_when_even_the_seed_is_empty(tmp_path):
+    # Arrange — user registry empty AND floor neutralised: a real gap.
     registry_path = tmp_path / "hosts.yaml"
     registry_path.write_text(_REGISTRY_NO_RUNNERS)
     repo = _repo_with_workflow(
@@ -327,19 +395,19 @@ def test_empty_registry_reports_the_registry_gap_once(tmp_path):
         "  a:\n    runs-on: ubuntu-latest\n"
         "  b:\n    runs-on: [self-hosted, ghost]\n",
     )
-    # Act
-    found = _run(repo, registry_path)
+    # Act — two bad jobs must still yield exactly ONE gap finding.
+    found = _run(repo, registry_path, floor=[])
     # Assert
     assert len(found) == 1
 
 
-def test_empty_registry_finding_names_the_registry_file(tmp_path):
+def test_gap_finding_names_the_registry_file_when_seed_empty(tmp_path):
     # Arrange
     registry_path = tmp_path / "hosts.yaml"
     registry_path.write_text(_REGISTRY_NO_RUNNERS)
     repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
     # Act
-    found = _run(repo, registry_path)
+    found = _run(repo, registry_path, floor=[])
     # Assert
     assert found[0].where == str(registry_path)
 

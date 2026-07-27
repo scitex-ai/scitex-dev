@@ -75,12 +75,29 @@ therefore inherit a destination from e.g. ``scitex-ai/.github`` that its
 own YAML never mentions, and no string search of this repo can see it.
 Auditing the called repo covers it — this rule does not.
 
-Registry-gap guard
-------------------
-If the registry records NO runner destinations at all, every workflow
-would fail for a reason that has nothing to do with workflows. That case
-emits ONE finding naming the registry file, and suppresses the per-job
-noise — an honest "I could not check this", not a green.
+Registry floor (shipped seed) and the gap guard
+-----------------------------------------------
+The registry is resolved from a host's user-state ``~/.scitex/dev/hosts.yaml``.
+That file can legitimately contribute NO runner destinations — it is
+absent on a fresh host, or a STALE pre-``runner_labels`` copy that
+``create_default_hosts_yaml`` will not refresh (it only writes when the
+file is missing). If that emptiness were read as "no runners exist", every
+workflow in the fleet would turn red for a reason that has nothing to do
+with the workflows.
+
+scitex-dev owns the single machine registry and SHIPS the canonical seed
+in its own code (``scitex_dev.hosts._seed._DEFAULT_HOSTS_YAML``), so this
+rule uses that seed as a FLOOR: when the user-state registry contributes
+no destinations, it validates against
+``packaged_default_runner_destinations()`` instead. A stale or empty local
+file therefore cannot erase the shipped truth. This is not a softening —
+the floor supplies REAL, measured destinations, and a job whose labels no
+registered runner serves still errors.
+
+Only if EVEN the shipped seed carries no destinations (a code regression,
+never a deployment state) does the rule emit ONE finding naming the
+registry file and suppress the per-job noise — an honest "I could not
+check this", not a green.
 
 Supported ``runs-on`` forms
 ---------------------------
@@ -257,6 +274,7 @@ def check_ps224_runner_destinations(
     out: list,
     *,
     hosts_path: str | Path | None = None,
+    floor_destinations: list[tuple[str, frozenset[str]]] | None = None,
 ) -> None:
     """Append PS-224 violations for unregistered CI runner destinations.
 
@@ -273,21 +291,44 @@ def check_ps224_runner_destinations(
         real audit leaves this ``None`` (canonical user-scope registry);
         tests pass a real temp file, so this is a file-path seam rather
         than a patch point — no mocks.
+    floor_destinations : list[tuple[str, frozenset[str]]] | None
+        Override for the SHIPPED-seed floor used when the user registry
+        contributes no destinations. The real audit leaves this ``None``
+        (the floor is read from
+        :func:`scitex_dev.hosts.packaged_default_runner_destinations`);
+        tests pass a real list — e.g. ``[]`` to exercise the seed-empty gap
+        branch — so this is a value seam, not a patch point (no mocks).
     """
     workflows = _workflow_files(repo)
     if not workflows:
         return
 
-    from ....hosts import find_runner_host, get_hosts_yaml_path
+    from ....hosts import get_hosts_yaml_path
     from ....hosts import list_runner_destinations
+    from ....hosts import packaged_default_runner_destinations
 
     registry_file = get_hosts_yaml_path(hosts_path)
     destinations = list_runner_destinations(hosts_path=hosts_path)
     if not destinations:
-        # REGISTRY GAP, not a fleet of illegal workflows. Emitting one
-        # finding per job here would be a fleet-wide red for a reason that
-        # has nothing to do with the workflows — and a red nobody can act
-        # on teaches people to ignore the rule.
+        # FLOOR: a host's user-state registry contributes no destinations
+        # (absent file, or a stale pre-`runner_labels` copy that
+        # `create_default_hosts_yaml` won't refresh — it only writes when
+        # the file is missing). scitex-dev owns the single registry and
+        # SHIPS the canonical seed in its own code, so fall back to that
+        # rather than reporting a gap: a stale/empty local file must not be
+        # able to represent "no runners exist" and turn every workflow red.
+        # Genuine mismatches still error below — the floor supplies REAL
+        # measured destinations, not a blanket pass.
+        destinations = (
+            packaged_default_runner_destinations()
+            if floor_destinations is None
+            else floor_destinations
+        )
+    if not destinations:
+        # Only reachable if EVEN the shipped seed carries no destinations —
+        # a code regression, not a deployment state. Honest "could not
+        # check", never a green: a check that could not run must not report
+        # what a check that passed reports.
         out.append(
             violation_cls(
                 _RULE,
@@ -380,8 +421,13 @@ def check_ps224_runner_destinations(
                 )
                 continue
 
-            host = find_runner_host(labels, hosts_path=hosts_path)
-            if host is not None:
+            # Match against the RESOLVED destinations (user-state, or the
+            # shipped floor when user-state was empty) — not a fresh
+            # `find_runner_host`, which would re-read user-state and ignore
+            # the floor. Same rule as `HostRecord.serves`: a runner serves
+            # the job when its label set contains every requested label.
+            wanted = frozenset(labels)
+            if any(wanted <= served for _host, served in destinations):
                 continue
 
             out.append(

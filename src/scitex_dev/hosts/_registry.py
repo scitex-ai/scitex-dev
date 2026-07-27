@@ -37,6 +37,13 @@ from typing import Iterable
 
 from .._core.errors import ErrorCode, ScitexError
 
+# The shipped default seed + its runner destinations live in `._seed`
+# (extracted so this engine module stays focused and under the file-size
+# limit). `_DEFAULT_HOSTS_YAML` is re-imported because
+# `create_default_hosts_yaml` writes it on first use;
+# `packaged_default_runner_destinations` is re-exported for PS-224's floor.
+from ._seed import _DEFAULT_HOSTS_YAML, packaged_default_runner_destinations
+
 __all__ = [
     "HOST_KINDS",
     "HostRecord",
@@ -47,6 +54,7 @@ __all__ = [
     "get_hosts_yaml_path",
     "list_hosts",
     "list_runner_destinations",
+    "packaged_default_runner_destinations",
     "resolve",
 ]
 
@@ -56,74 +64,6 @@ __all__ = [
 HOST_KINDS: frozenset[str] = frozenset({"workstation", "hpc-login", "storage"})
 
 _ENV_HOSTS_YAML = "SCITEX_DEV_HOSTS_YAML"
-
-# Seeded on first use (see `create_default_hosts_yaml`). Real host data
-# from the operator's environment — names match the established
-# convention already referenced across scitex-dev's own skills/docs
-# (ywata-note-win, spartan, nas/nas1/nas2, mba).
-_DEFAULT_HOSTS_YAML = """\
-# SciTeX host registry — the shared port other scitex-* packages (sac,
-# scitex-hub, scitex-storage, ...) resolve through instead of inventing
-# their own host config. See `scitex_dev.hosts` for the Python API and
-# `scitex-dev host --help` for the CLI.
-#
-# kind        : one of workstation, hpc-login, storage
-# ssh_alias   : the ~/.ssh/config Host alias to reach this machine, or
-#               null when the host IS local (no SSH hop needed)
-# scitex_root : that HOST's $SCITEX_DIR (may use ~; expanded on that
-#               host, not necessarily on the machine reading this file)
-# runner_labels : the CI RUNNER DESTINATIONS this machine serves — a LIST
-#               OF LABEL SETS, one entry per distinct GitHub Actions
-#               self-hosted runner configuration registered from this
-#               machine. Absent/empty means "this machine hosts no CI
-#               runner". This field is the SOURCE OF TRUTH the PS-224
-#               audit rule validates every workflow's `runs-on:` against
-#               (see `_cli/audit/_project/_check_runner_destinations.py`).
-#
-#               Record the EFFECTIVE set, i.e. exactly what
-#               `gh api .../actions/runners` reports for that runner —
-#               that includes the labels GitHub AUTO-ASSIGNS
-#               (`self-hosted`, the OS `Linux`, the arch `X64`) on top of
-#               the `--labels` passed at registration. Recording only the
-#               `--labels` half would make every workflow that names
-#               `Linux`/`X64` look unserved.
-
-hosts:
-  ywata-note-win:
-    kind: workstation
-    ssh_alias: null
-    scitex_root: "~/.scitex"
-  spartan:
-    kind: hpc-login
-    ssh_alias: spartan
-    scitex_root: "/data/gpfs/projects/punim0264/ywatanabe/.scitex"
-    # Measured 2026-07-24 from the live GitHub Actions API (org
-    # `scitex-ai` + repo `scitex-ai/scitex-dev`): four online runners
-    # across exactly two distinct effective label sets.
-    #   spartan-cpu-org-01 / spartan-cpu-org-02
-    #     -> [self-hosted, Linux, X64, spartan-cpu]
-    #   spartan-pooled-cpu-01 / spartan-cpu-runner-02
-    #     -> [self-hosted, Linux, X64, spartan-cpu, scitex-ci]
-    runner_labels:
-      - [self-hosted, Linux, X64, spartan-cpu]
-      - [self-hosted, Linux, X64, spartan-cpu, scitex-ci]
-  nas:
-    kind: storage
-    ssh_alias: nas
-    scitex_root: "~/.scitex"
-  nas1:
-    kind: storage
-    ssh_alias: nas1
-    scitex_root: "~/.scitex"
-  nas2:
-    kind: storage
-    ssh_alias: nas2
-    scitex_root: "~/.scitex"
-  mba:
-    kind: workstation
-    ssh_alias: mba
-    scitex_root: "~/.scitex"
-"""
 
 
 class HostRegistryError(ScitexError):

@@ -83,6 +83,7 @@ from ._registry import (
     get_hosts_yaml_path,
     list_hosts,
     list_runner_destinations,
+    packaged_default_runner_destinations,
     resolve,
 )
 
@@ -96,6 +97,7 @@ __all__ = [
     "get_hosts_yaml_path",
     "list_hosts",
     "list_runner_destinations",
+    "packaged_default_runner_destinations",
     "resolve",
 ]
 
