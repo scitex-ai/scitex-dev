@@ -42,6 +42,23 @@ def register(ecosystem):
     )
     @click.argument("package", required=False)
     @click.option(
+        "--path",
+        "--repo",
+        "repo_path",
+        type=click.Path(exists=True, file_okay=False, dir_okay=True),
+        default=None,
+        help=(
+            "Repo root to audit — always wins when given. Without it, "
+            "resolution is deterministic: the CURRENT checkout (git "
+            "toplevel of the cwd, when its pyproject [project].name "
+            "matches PACKAGE — covers worktrees and CI checkouts), else "
+            "the registry's local_path, else the installed package's "
+            "location. `--repo` is a legacy alias. §6 parity config "
+            "(mcp_parity_exempt / mcp_tools_allowlist / no-mcp) is read "
+            "from this tree. Ignored with --all."
+        ),
+    )
+    @click.option(
         "--all",
         "audit_all",
         is_flag=True,
@@ -97,6 +114,7 @@ def register(ecosystem):
     )
     def ecosystem_audit_mcp_tools(
         package,
+        repo_path,
         audit_all,
         behavioral,
         output_json,
@@ -125,6 +143,15 @@ def register(ecosystem):
         if package is None:
             click.echo("error: PACKAGE is required (or pass --all)", err=True)
             raise SystemExit(2)
+
+        from ....audit._target_tree import resolve_target_tree
+
+        # Deterministic target-tree resolution (operator directive
+        # 2026-07-21): explicit --path > current checkout (cwd git
+        # toplevel, incl. linked worktrees) > registry local_path. Shared
+        # with the other per-target auditors so --path wins uniformly.
+        repo, resolved_via = resolve_target_tree(package, repo_path)
+
         raise SystemExit(
             run_audit_mcp(
                 package,
@@ -134,6 +161,8 @@ def register(ecosystem):
                 exclude=tuple(exclude_rules),
                 min_severity=min_severity,
                 timeout=timeout,
+                repo=repo,
+                resolved_via=resolved_via,
             )
         )
 

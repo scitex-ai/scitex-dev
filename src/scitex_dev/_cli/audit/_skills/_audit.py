@@ -32,7 +32,7 @@ from ._checks import (
     _check_naming,
     _check_skill_md_size,
 )
-from ._discovery import _import_name, _locate_skills_dir
+from ._discovery import _import_name, _locate_skills_dir, _locate_skills_dir_under
 from ._registry import RULES, Rule
 from ._violation import Violation
 
@@ -110,6 +110,8 @@ def audit_skills(
     rules: set[str] | None = None,
     fix: bool = False,
     skills_dir: Path | None = None,
+    repo_root: Path | None = None,
+    resolved_via: str | None = None,
 ) -> int:
     """Audit `<distribution>` against the skills checklist. Warn-only.
 
@@ -121,6 +123,19 @@ def audit_skills(
         Emit machine-readable output on stdout.
     rules : set of str, optional
         If given, only run these rule codes.
+    skills_dir : Path, optional
+        Explicit skills directory. Highest precedence — bypasses all
+        resolution (used by tests operating on a synthetic tree).
+    repo_root : Path, optional
+        Explicit repo root to audit (from ``--path`` via the shared
+        ``resolve_target_tree``). When given, the skills tree is located
+        UNDER this root (``src/<import_name>/_skills/<dist>`` or flat)
+        instead of the installed / registry location — closing the
+        wrong-tree footgun for audit-skills the same way it is closed for
+        audit-project/django/python-apis.
+    resolved_via : str, optional
+        Which rule picked ``repo_root`` (``explicit`` / ``cwd`` /
+        ``registry``) — surfaced in the resolved-tree banner.
 
     Returns
     -------
@@ -153,7 +168,27 @@ def audit_skills(
         return 0
 
     if skills_dir is None:
-        skills_dir = _locate_skills_dir(distribution)
+        if repo_root is not None:
+            skills_dir = _locate_skills_dir_under(repo_root, distribution)
+        else:
+            skills_dir = _locate_skills_dir(distribution)
+
+    # Anti wrong-tree footgun: announce the resolved checkout BEFORE any
+    # results whenever a tree was resolved via `--path` / cwd / registry
+    # (mirrors audit-project's #392 banner). Human rail only; no-op under
+    # --json and when nothing was resolved.
+    if repo_root is not None and not fix:
+        from .._project._resolved_tree import (
+            resolved_context,
+            surface_resolved_tree,
+        )
+
+        surface_resolved_tree(
+            distribution,
+            resolved_context(repo_root),
+            json_out,
+            via=resolved_via,
+        )
     violations: list[Violation] = []
 
     canonical_dir = _check_layout(skills_dir, distribution, violations)

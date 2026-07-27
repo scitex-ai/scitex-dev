@@ -86,4 +86,31 @@ def _locate_skills_dir(distribution: str) -> Path | None:
     return None
 
 
-__all__ = ["_import_name", "_locate_skills_dir"]
+def _locate_skills_dir_under(repo_root: Path, distribution: str) -> Path | None:
+    """Return `<repo_root>/src/<import_name>/_skills/<dist>` (or flat), else None.
+
+    The `--path`-honouring variant of :func:`_locate_skills_dir`: resolves
+    the skills tree under an EXPLICIT repo root (e.g. a worktree / CI
+    checkout passed via ``--path``) instead of the installed / registry
+    location, so the same wrong-tree footgun `resolve_target_tree` closed
+    for audit-project/django/python-apis is closed for audit-skills too.
+
+    Both the sub-pip-name layout (``_skills/<distribution>/``) and the
+    legacy flat layout (``_skills/``) are probed, mirroring the
+    registry-fallback branch of :func:`_locate_skills_dir`, so the caller
+    can still distinguish SK-101 from SK-102. Returns None when the repo
+    ships no ``_skills/`` tree — the caller then fires SK-101 / skips as
+    it would for any tree with no skills.
+    """
+    import_name = _import_name(distribution)
+    src_pkg = repo_root / "src" / import_name
+    candidate = src_pkg / "_skills" / distribution
+    if candidate.is_dir():
+        return candidate
+    flat = src_pkg / "_skills"
+    if flat.is_dir():
+        return flat
+    return None
+
+
+__all__ = ["_import_name", "_locate_skills_dir", "_locate_skills_dir_under"]
