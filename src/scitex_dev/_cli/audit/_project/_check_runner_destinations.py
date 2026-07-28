@@ -44,7 +44,8 @@ worth recording so they are not reintroduced under another name:
   once failed a build.
 * **No blanket suppression flag.** Individual, reasoned exemptions in
   ``.scitex/dev/config.yaml`` under ``audit.exemptions`` only
-  (constitution §2) — an exemption must state WHY.
+  (constitution §2) — an exemption must state WHY. See "Exemptions"
+  below for the exact, JOB-QUALIFIED spelling.
 
 A fleet-wide red is the INTENDED outcome: 「全て赤でいいと思います。正直に
 赤から始めて、レッドスタート」. Red is the honest measurement; the list is
@@ -99,38 +100,57 @@ never a deployment state) does the rule emit ONE finding naming the
 registry file and suppress the per-job noise — an honest "I could not
 check this", not a green.
 
+Exemptions — JOB-QUALIFIED, and a reason is MANDATORY
+-----------------------------------------------------
+Some jobs genuinely cannot run on a self-hosted node (a matrix of Emacs
+versions, `apt-get`/root installs, Docker service containers, a body that
+is entirely `gh` CLI). The only sanctioned opt-out is ``audit.exemptions``
+in ``.scitex/dev/config.yaml``, keyed by rule code, with a MANDATORY
+written ``reason``::
+
+    audit:
+      exemptions:
+        PS-224:
+          - path: .github/workflows/test.yml::test
+            line: 0
+            reason: "setup-emacs installs Nix (needs root) + a 5-version matrix"
+
+**The ``path`` is the SITE KEY, not a file path**: ``<workflow-path>::<job-id>``
+— the exact string this rule prints as the finding's location, so it can be
+copied verbatim from the audit output. It is job-qualified BY DESIGN: a
+bare file path would also exempt every OTHER job in the same file, so a
+migrated job that later regressed would go unnoticed. One entry exempts
+exactly one job.
+
+``line: 0`` — PS-224 findings are per-JOB, not per-line, so every exemption
+pins line 0 (same contract as PS-222). The whole-file findings (unreadable
+or unparseable workflow) are keyed on the BARE workflow path, since they
+name no job.
+
+A missing, blank or whitespace-only ``reason`` is REJECTED by the loader:
+the entry exempts NOTHING (the job still errors) and the rejection is
+reported at ``E`` by the shared config-error arm — an exemption with no
+stated reason is exactly the unexamined suppression this rule exists to
+catch. There is no ``# noqa`` hatch and no blanket flag.
+
 Supported ``runs-on`` forms
 ---------------------------
-::
-
-    runs-on: ubuntu-latest                              # bare string
-    runs-on: [self-hosted, Linux, X64, scitex-ci]       # list
-    runs-on: {labels: [self-hosted, scitex-ci]}         # mapping
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
-
-The last is the fleet idiom; the LITERAL FALLBACK inside the expression
-is what gets validated. That fallback is what actually runs whenever the
-``CI_RUNS_ON`` repo/org variable is unset, which is the common case — so
-validating it is validating the real destination, not a decoration.
+The scalar / list / ``labels:`` mapping / ``fromJSON(... || '[...]')``
+expression forms are all resolved — see :mod:`._runs_on_parsing`, which owns
+that pure parsing layer. The fleet idiom's LITERAL FALLBACK is what gets
+validated: it is what actually runs whenever the ``CI_RUNS_ON`` repo/org
+variable is unset, which is the common case.
 """
 
 from __future__ import annotations
 
-import json
-import re
 from pathlib import Path
-from typing import Any
 
 import yaml
 
-#: A ``${{ ... }}`` expression block (contents captured).
-_RE_EXPR_BLOCK = re.compile(r"\$\{\{\s*(.+?)\s*\}\}", re.DOTALL)
-
-#: ``fromJSON( ... )`` — the scitex CI idiom; args captured for default mining.
-_RE_FROMJSON = re.compile(r"fromJSON\s*\((.*)\)", re.IGNORECASE | re.DOTALL)
-
-#: A single-level JSON array literal, e.g. ``["self-hosted","Linux"]``.
-_RE_JSON_ARRAY = re.compile(r"(\[[^\[\]]*\])")
+from ._runs_on_parsing import describe_destinations as _describe
+from ._runs_on_parsing import resolve_destination as _resolve_destination
+from ._runs_on_parsing import workflow_files as _workflow_files
 
 _RULE = "PS-224"
 
@@ -165,8 +185,13 @@ RUNNER_DESTINATION_RULES: list[tuple[str, str, str, str, str]] = [
             "from the workflow YAML plus the registry file, with no Actions "
             "API call and no capacity dependency. Fix by targeting a "
             "registered destination, or by registering the machine that "
-            "serves the label set. Exempt a single site only via "
-            "`audit.exemptions` with a stated reason (constitution §2)."
+            "serves the label set. A job that genuinely cannot run on any "
+            "registered machine is exempted ONE JOB AT A TIME in "
+            "`.scitex/dev/config.yaml` under `audit.exemptions` -> `PS-224`, "
+            "with `path: <workflow-path>::<job-id>` (the JOB-QUALIFIED site "
+            "key this rule prints, so a file-wide exemption cannot hide a "
+            "sibling job), `line: 0`, and a mandatory `reason:` "
+            "(constitution §2) — a blank reason exempts nothing."
         ),
         "E",
         "runner-destination-unregistered",
@@ -174,97 +199,35 @@ RUNNER_DESTINATION_RULES: list[tuple[str, str, str, str, str]] = [
 ]
 
 
-def _as_labels(value: Any) -> list[str]:
-    """Flatten a raw ``runs-on`` value into its label strings.
+#: Separator between a workflow path and a job id in an exemption SITE KEY —
+#: `.github/workflows/test.yml::test`. Findings are per-JOB, so a bare path
+#: would OVER-EXEMPT: one file routinely holds a job that must stay hosted
+#: AND a job already migrated. Human-writable and greppable on purpose.
+_SITE_SEP = "::"
 
-    Handles the scalar, sequence and ``labels:``/``group:`` mapping forms.
-    Returns the labels VERBATIM — expression resolution happens later, in
-    :func:`_resolve_destination`.
+#: PS-224 findings are per-JOB, not per-line, so both the emitted site and
+#: any `audit.exemptions` entry pin line 0 (same contract as PS-222).
+_NO_LINE = 0
+
+
+def _site(rel: str, job_id: str | None = None) -> str:
+    """Site key for a finding: ``path`` or ``path::job-id``.
+
+    This exact string is BOTH the finding's reported location AND what an
+    ``audit.exemptions`` entry's ``path`` must spell, so the instruction a
+    user reads is the instruction that works.
     """
-    if isinstance(value, str):
-        return [value]
-    if isinstance(value, list):
-        return [str(v) for v in value if isinstance(v, (str, int, float))]
-    if isinstance(value, dict):
-        out: list[str] = []
-        for key in ("labels", "group"):
-            got = value.get(key)
-            if isinstance(got, str):
-                out.append(got)
-            elif isinstance(got, list):
-                out.extend(str(v) for v in got if isinstance(v, str))
-        return out
-    return []
+    return rel if job_id is None else f"{rel}{_SITE_SEP}{job_id}"
 
 
-def _fromjson_literal(args: str) -> list[str] | None:
-    """Resolve ``fromJSON(... || '<json-array>')`` to its literal fallback.
-
-    Returns the FIRST JSON-array literal in the ``fromJSON`` arguments —
-    the fleet idiom's ``|| '[...]'`` default, or a direct
-    ``fromJSON('[...]')``. ``None`` when there is no array literal to read,
-    which makes the destination unresolvable.
-    """
-    for match in _RE_JSON_ARRAY.finditer(args):
-        try:
-            parsed = json.loads(match.group(1))
-        except ValueError:
-            continue
-        if isinstance(parsed, list):
-            return [str(x) for x in parsed if isinstance(x, str)]
-    return None
-
-
-def _resolve_destination(runs_on: Any) -> list[str] | None:
-    """Resolve one ``runs-on`` to the concrete label set it requests.
-
-    Returns ``None`` when the destination is NOT statically resolvable —
-    an expression carrying no literal to read. The caller reports that as
-    a violation in its own right (the workflow does not name its
-    destination explicitly), never as a silent pass.
-    """
-    raw_labels = _as_labels(runs_on)
-    if not raw_labels:
-        return None
-    resolved: list[str] = []
-    for label in raw_labels:
-        block = _RE_EXPR_BLOCK.search(label)
-        if block is None:
-            resolved.append(label.strip())
-            continue
-        from_json = _RE_FROMJSON.search(block.group(1))
-        if from_json is None:
-            return None
-        literal = _fromjson_literal(from_json.group(1))
-        if literal is None:
-            return None
-        resolved.extend(x.strip() for x in literal)
-    concrete = [label for label in resolved if label]
-    return concrete or None
-
-
-def _workflow_files(repo: Path) -> list[Path]:
-    """Every ``.github/workflows/*.y{a,}ml`` file, sorted.
-
-    ``.github`` is a HIDDEN directory: a walker that skips dotted dirs
-    returns zero matches here, which is indistinguishable from "this repo
-    has no workflows". The path is therefore built explicitly, never
-    discovered by a recursive scan.
-    """
-    wf_dir = repo / ".github" / "workflows"
-    if not wf_dir.is_dir():
-        return []
-    return sorted(
-        path
-        for path in wf_dir.iterdir()
-        if path.is_file() and path.suffix in {".yml", ".yaml"}
-    )
-
-
-def _describe(destinations: list[tuple[str, frozenset[str]]]) -> str:
-    """Render the registry's legal destinations for a violation message."""
-    return "; ".join(
-        f"{host}: [{', '.join(sorted(labels))}]" for host, labels in destinations
+def _exempt_hint(site: str) -> str:
+    """The copy-pasteable exemption recipe for one site (reason MANDATORY)."""
+    return (
+        " If this job genuinely cannot run on any registered machine, exempt "
+        "THIS JOB (never the whole file) in `.scitex/dev/config.yaml` under "
+        f"`audit: exemptions: PS-224:` with `path: {site}`, `line: 0` and a "
+        "`reason:` saying why — the reason is mandatory (constitution §2), "
+        "and a blank one exempts nothing."
     )
 
 
@@ -275,6 +238,7 @@ def check_ps224_runner_destinations(
     *,
     hosts_path: str | Path | None = None,
     floor_destinations: list[tuple[str, frozenset[str]]] | None = None,
+    config=None,
 ) -> None:
     """Append PS-224 violations for unregistered CI runner destinations.
 
@@ -298,10 +262,37 @@ def check_ps224_runner_destinations(
         :func:`scitex_dev.hosts.packaged_default_runner_destinations`);
         tests pass a real list — e.g. ``[]`` to exercise the seed-empty gap
         branch — so this is a value seam, not a patch point (no mocks).
+    config : ProjectConfig, optional
+        Pre-loaded project config. When omitted it is loaded from ``repo``
+        so the check honours ``audit.exemptions`` on its own; passing it in
+        lets a caller that already loaded the config avoid a second read.
+        Exemption site keys are JOB-QUALIFIED (``path::job-id``) — see the
+        module docstring's "Exemptions" section.
     """
     workflows = _workflow_files(repo)
     if not workflows:
         return
+
+    if config is None:
+        try:
+            from .._config import load_config
+
+            config = load_config(repo)
+        except Exception:  # pragma: no cover - config is best-effort here
+            config = None
+
+    exemption_for = getattr(config, "exemption_for", None)
+
+    def _exempt(site: str) -> bool:
+        """True iff an ACCEPTED (reasoned) exemption covers exactly ``site``.
+
+        A rejected entry — blank/missing ``reason`` — never matches, by
+        construction in the loader, and is reported at ``E`` by the shared
+        config-error arm. So a reasonless exemption suppresses nothing.
+        """
+        if exemption_for is None:
+            return False
+        return bool(exemption_for(_RULE, site, _NO_LINE))
 
     from ....hosts import get_hosts_yaml_path
     from ....hosts import list_runner_destinations
@@ -350,10 +341,14 @@ def check_ps224_runner_destinations(
     legal = _describe(destinations)
 
     for path in workflows:
-        rel = str(path.relative_to(repo))
+        # POSIX-normalised: the site key is compared against a config-written
+        # `path`, which the loader also normalises to forward slashes.
+        rel = path.relative_to(repo).as_posix()
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError as exc:
+            if _exempt(_site(rel)):
+                continue
             out.append(
                 violation_cls(
                     _RULE,
@@ -375,6 +370,10 @@ def check_ps224_runner_destinations(
             parse_error = None
 
         if not isinstance(doc, dict):
+            # Whole-file finding: it names no job, so its site key is the
+            # BARE workflow path (a job-qualified key cannot apply here).
+            if _exempt(_site(rel)):
+                continue
             out.append(
                 violation_cls(
                     _RULE,
@@ -399,14 +398,20 @@ def check_ps224_runner_destinations(
                 # workflow, which carries its own destination in ITS file.
                 # See the module docstring's known-static-boundary note.
                 continue
+            # Per-JOB site key. A bare path would OVER-EXEMPT: the same file
+            # routinely holds a job that must stay hosted AND a job already
+            # migrated, and exempting the file would silently cover both.
+            site = _site(rel, str(job_id))
             runs_on = job["runs-on"]
             labels = _resolve_destination(runs_on)
 
             if labels is None:
+                if _exempt(site):
+                    continue
                 out.append(
                     violation_cls(
                         _RULE,
-                        rel,
+                        site,
                         f"job `{job_id}` does not name its runner destination "
                         f"explicitly: `runs-on: {runs_on}` has no statically "
                         "readable label set. Every workflow must name a "
@@ -416,7 +421,8 @@ def check_ps224_runner_destinations(
                         "whose `|| '[...]'` fallback IS the literal: "
                         "`runs-on: ${{ fromJSON(vars.CI_RUNS_ON || "
                         "'[\"self-hosted\",\"Linux\",\"X64\",\"scitex-ci\"]') "
-                        f"}}`. Registered destinations: {legal}.",
+                        f"}}`. Registered destinations: {legal}."
+                        + _exempt_hint(site),
                     )
                 )
                 continue
@@ -430,17 +436,21 @@ def check_ps224_runner_destinations(
             if any(wanted <= served for _host, served in destinations):
                 continue
 
+            if _exempt(site):
+                continue
+
             out.append(
                 violation_cls(
                     _RULE,
-                    rel,
+                    site,
                     f"job `{job_id}` targets `[{', '.join(labels)}]`, which NO "
                     f"registered machine serves (registry: {registry_file}). "
                     "GitHub does not reject an unmatchable job — it queues it "
                     "forever, so this never fails, it just never runs. Point "
                     "the job at a registered destination, or register the "
                     "machine that serves this label set in the registry's "
-                    f"`runner_labels:`. Registered destinations: {legal}.",
+                    f"`runner_labels:`. Registered destinations: {legal}."
+                    + _exempt_hint(site),
                 )
             )
 
