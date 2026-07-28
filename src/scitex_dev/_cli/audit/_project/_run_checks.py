@@ -181,6 +181,9 @@ def run_checks(
     # unmatchable job forever instead of rejecting it, so without this the
     # only symptom is a workflow that silently never runs (three scheduled
     # runs sat undispatched from 2026-05-15 while 17 runners idled).
+    # Opt out one JOB at a time via `audit.exemptions` with a reason, keyed on
+    # the job-qualified site `<workflow-path>::<job-id>` (the check loads the
+    # config itself, as PS-222/223 do).
     from ._check_runner_destinations import check_ps224_runner_destinations
 
     check_ps224_runner_destinations(repo_root, Violation, violations)

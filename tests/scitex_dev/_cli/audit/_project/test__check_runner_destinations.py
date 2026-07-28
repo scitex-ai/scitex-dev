@@ -412,4 +412,10 @@ def test_gap_finding_names_the_registry_file_when_seed_empty(tmp_path):
     assert found[0].where == str(registry_path)
 
 
+# NOTE: the `audit.exemptions` cases (job-qualified site key, the same-file
+# other-job over-exemption guard, reason-mandatory) live in the sibling
+# `test__check_runner_destinations_exemptions.py` — this file is at its
+# 512-line budget.
+
+
 # EOF

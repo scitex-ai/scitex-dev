@@ -19,7 +19,8 @@ Behavioural contract:
 2. **Branch-protection compatibility gate** — query the target's
    ``required_status_checks`` for ``develop`` and ``main`` via ``gh api``.
    If any required context is NOT in the caller's emitted check-run names
-   (``"<caller-job-id> / <reusable job name>"``), refuse to apply.
+   (``"<caller-job-id> / <reusable job name>"``), refuse to apply and print
+   the old→new context worksheet (see ``_gate``).
    ``skip_required_check_gate=True`` bypasses (operator-debug only).
 
 3. **Substitute template** — read the vendored ``ci.yml.tmpl`` and replace
@@ -27,14 +28,16 @@ Behavioural contract:
    reusable workflows self-derive the package from the checkout).
 
 4. **Apply changes** — write ``ci.yml``; delete superseded workflows by
-   HARDCODED PREFIX LIST (no heuristic content-matching): the retired
-   consolidated ``pr-ci.yml``/``release-ci.yml``, the granular
-   ``import-smoke-*``/``pytest-matrix-*``/``dep-hygiene-smoke*``/
-   ``*quality-audit*`` files, and ``newb-docs*`` (operator-ordered removal
-   fleet-wide). Keep CLA / auto-merge / publish / RTD untouched.
+   HARDCODED PREFIX LIST (no heuristic content-matching), plus any
+   protected-prefix file the emitted ci.yml genuinely supersedes. The
+   policy and the per-file reasoning live in ``_workflows``.
 
 5. **--dry-run** — skip writes; return the intended diff for the caller
-   to print.
+   to print. The returned buckets (``written``/``deleted``/``protected``/
+   ``skipped``) PARTITION ``.github/workflows/``: a dry-run that stays
+   silent about a file is indistinguishable from one that never looked at
+   it, and that silence is how a PS-224-violating leftover survived a
+   "successful" apply (measured 2026-07-28).
 
 Failure modes use distinct exception types so the CLI can render
 operator-friendly errors instead of tracebacks.
@@ -51,37 +54,29 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
+from ._errors import ApplyError
+from ._gate import BranchProtectionGateError
+from ._workflows import (
+    CANONICAL_WORKFLOW,
+    list_workflows as _list_workflows,
+    plan_workflow_changes,
+    superseded_protected_prefixes,
+)
+
 if sys.version_info >= (3, 11):
     import tomllib  # type: ignore[no-redef]
 else:  # pragma: no cover - exercised on py3.10 only
     import tomli as tomllib  # type: ignore[no-redef]
 
 
-# --------------------------------------------------------------------------- #
-# Exceptions
-# --------------------------------------------------------------------------- #
-
-
-class ApplyError(RuntimeError):
-    """Operator-facing apply failure (bad target, parse error, etc.)."""
-
-
-class BranchProtectionGateError(ApplyError):
-    """The gate found required contexts the new caller won't publish."""
-
-    def __init__(self, missing: Dict[str, List[str]]):
-        self.missing = missing  # {branch: [missing_context, ...]}
-        msg_lines = ["branch-protection gate failure — required contexts not in emitted set:"]
-        for branch, ctxs in sorted(missing.items()):
-            msg_lines.append(f"  {branch}: missing {ctxs!r}")
-        msg_lines.append(
-            "The reusable-caller check contexts are "
-            '"<caller-job-id> / <reusable job name>" — update branch '
-            "protection alongside this migration. Refusing to apply "
-            "(would deadlock PRs). Re-run with skip_required_check_gate=True "
-            "only for debugging."
-        )
-        super().__init__("\n".join(msg_lines))
+__all__ = [
+    "ApplyError",
+    "ApplyResult",
+    "BranchProtectionGateError",
+    "apply",
+    "emitted_job_names",
+    "render",
+]
 
 
 # --------------------------------------------------------------------------- #
@@ -93,6 +88,12 @@ class BranchProtectionGateError(ApplyError):
 class ApplyResult:
     """Outcome of ``apply``. ``dry_run`` callers print; live callers see the
     same fields but ``written_paths`` and ``deleted_paths`` reflect the FS.
+
+    ``written_paths`` / ``deleted_paths`` / ``protected_paths`` /
+    ``skipped_delete_paths`` are DISJOINT and together cover every file in
+    ``.github/workflows/``. ``kept_reasons`` maps ``str(path)`` to the reason
+    each KEPT file (protected or skipped) was not deleted — so "deliberately
+    preserved" is never rendered as the same silence as "never considered".
     """
 
     repo_dir: Path
@@ -104,9 +105,18 @@ class ApplyResult:
     rendered: Dict[str, str] = field(default_factory=dict)  # path-rel → content
     written_paths: List[Path] = field(default_factory=list)
     deleted_paths: List[Path] = field(default_factory=list)
+    protected_paths: List[Path] = field(default_factory=list)
     skipped_delete_paths: List[Path] = field(default_factory=list)
+    kept_reasons: Dict[str, str] = field(default_factory=dict)
+    superseded_prefixes: List[str] = field(default_factory=list)
     dry_run: bool = False
     gate_skipped: bool = False
+
+    @property
+    def kept_paths(self) -> List[Path]:
+        """Every file apply considered and deliberately KEPT (protected or
+        merely not eligible), in one list for callers that do not care which."""
+        return sorted(set(self.protected_paths) | set(self.skipped_delete_paths))
 
 
 # --------------------------------------------------------------------------- #
@@ -118,39 +128,6 @@ class ApplyResult:
 # (``workflow_call: {}`` — no inputs). Kept here ONLY to compute the gate's
 # expected check-run names; changing it does not change what actually runs.
 DEFAULT_PYTHON_VERSIONS: List[str] = ["3.11", "3.12", "3.13"]
-
-# The one canonical per-repo workflow this mechanism emits.
-CANONICAL_WORKFLOW = "ci.yml"
-
-# Hardcoded prefix list for the delete-on-apply step. ONLY files matching
-# one of these prefixes are eligible for deletion; unknown workflows are
-# left alone. Keep this list narrow.
-_DELETABLE_WORKFLOW_PREFIXES: Tuple[str, ...] = (
-    # Retired consolidated pair (the losing canonical mechanism).
-    "pr-ci.yml",
-    "release-ci.yml",
-    # Granular pre-consolidation files.
-    "import-smoke-",
-    "pytest-matrix-",
-    "dep-hygiene-smoke",
-    # Operator-ordered fleet-wide removal (2026-07-21).
-    "newb-docs",
-    # `<pkg>-quality-audit*` is covered by the live-check in
-    # ``_eligible_for_delete``: filename contains "quality-audit".
-)
-
-# Workflows that MUST be preserved no matter what (operator-edited).
-_PROTECTED_WORKFLOWS: Tuple[str, ...] = (
-    CANONICAL_WORKFLOW,
-    "cla.yml",
-    "auto-merge-to-develop.yaml",
-    "auto-merge-to-develop.yml",
-)
-# Prefix-based preservation:
-_PROTECTED_WORKFLOW_PREFIXES: Tuple[str, ...] = (
-    "pypi-publish-",
-    "rtd-sphinx-",
-)
 
 
 # --------------------------------------------------------------------------- #
@@ -205,9 +182,8 @@ def emitted_job_names(
 
     When ``include_preserved`` is True (default), also include the
     well-known check-run names emitted by *preserved* workflows that the
-    apply step never removes (cla.yml → ``CLAssistant``; rtd-sphinx-*.yml
-    → ``sphinx`` / ``docs``). Pass ``include_preserved=False`` for tests
-    that need the pure-caller set.
+    apply step never removes (cla.yml → ``CLAssistant``). Pass
+    ``include_preserved=False`` for tests that need the pure-caller set.
     """
     names = {
         "import-smoke / import-smoke-on-ubuntu-py3-12",
@@ -222,14 +198,20 @@ def emitted_job_names(
 
 
 # Well-known check-run names from preserved workflows. These files are
-# intentionally never removed by ci-template apply (see ``_PROTECTED_*``)
-# and they publish these standard names. Kept here as a small static set
-# so the gate logic never has to read or parse YAML at apply time.
+# intentionally never removed by ci-template apply (see ``_workflows``) and
+# they publish these standard names. Kept here as a small static set so the
+# gate logic never has to read or parse YAML at apply time.
+#
+# ``sphinx`` / ``docs`` USED to be listed here, on the premise that
+# ``rtd-sphinx-*.yml`` was preserved. It no longer is — the emitted ci.yml
+# carries a superseding ``rtd-sphinx-build`` job and apply now deletes the
+# standalone file, so those bare contexts will NOT be published after this
+# migration. Claiming otherwise would let the gate wave through exactly the
+# deadlock it exists to prevent; a repo still requiring them is now correctly
+# refused, with the old→new worksheet telling the operator what to change.
 def _preserved_workflow_job_names() -> set:
     return {
         "CLAssistant",   # from cla.yml
-        "sphinx",        # from rtd-sphinx-build-*.yml (most repos)
-        "docs",          # alt name some repos use for rtd-sphinx
     }
 
 
@@ -339,34 +321,6 @@ def _read_required_contexts(owner_repo: str, branch: str) -> List[str]:
 
 
 # --------------------------------------------------------------------------- #
-# Workflow file housekeeping
-# --------------------------------------------------------------------------- #
-
-
-def _eligible_for_delete(workflow_filename: str) -> bool:
-    """Return True iff *workflow_filename* matches the hardcoded delete
-    prefix list AND is not on the protected list.
-    """
-    if workflow_filename in _PROTECTED_WORKFLOWS:
-        return False
-    if any(workflow_filename.startswith(p) for p in _PROTECTED_WORKFLOW_PREFIXES):
-        return False
-    if any(workflow_filename.startswith(p) for p in _DELETABLE_WORKFLOW_PREFIXES):
-        return True
-    # `<pkg>-quality-audit*` heuristic.
-    if "quality-audit" in workflow_filename:
-        return True
-    return False
-
-
-def _list_workflows(repo_dir: Path) -> List[Path]:
-    wf_dir = repo_dir / ".github" / "workflows"
-    if not wf_dir.is_dir():
-        return []
-    return sorted(p for p in wf_dir.iterdir() if p.is_file())
-
-
-# --------------------------------------------------------------------------- #
 # Public entry-point
 # --------------------------------------------------------------------------- #
 
@@ -434,7 +388,7 @@ def apply(
             if gap:
                 missing[br] = gap
         if missing:
-            raise BranchProtectionGateError(missing)
+            raise BranchProtectionGateError(missing, emitted, owner_repo)
 
     # Render — ONE canonical workflow.
     rendered = {
@@ -445,25 +399,15 @@ def apply(
         ),
     }
 
-    # Plan deletes
-    existing = _list_workflows(repo_dir)
-    to_delete: List[Path] = []
-    skipped: List[Path] = []
-    for wf in existing:
-        rel = wf.name
-        # Never delete a file we're about to (re-)write.
-        if any(wf == repo_dir / r for r in rendered):
-            continue
-        if _eligible_for_delete(rel):
-            to_delete.append(wf)
-        else:
-            # Track skips only for non-protected non-target files so the
-            # caller can show "kept" if needed; protected workflows are
-            # noise here.
-            if rel not in _PROTECTED_WORKFLOWS and not any(
-                rel.startswith(p) for p in _PROTECTED_WORKFLOW_PREFIXES
-            ):
-                skipped.append(wf)
+    # Plan deletes. Protection for a prefix is lifted ONLY when the body we
+    # are about to write genuinely carries the superseding caller job — so a
+    # template that drops the job re-protects those files automatically.
+    superseded = superseded_protected_prefixes(rendered)
+    plan = plan_workflow_changes(
+        _list_workflows(repo_dir),
+        rendered_paths=[repo_dir / rel for rel in rendered],
+        superseded_prefixes=superseded,
+    )
 
     result = ApplyResult(
         repo_dir=repo_dir,
@@ -473,7 +417,10 @@ def apply(
         emitted_jobs=emitted,
         required_contexts=required,
         rendered=rendered,
-        skipped_delete_paths=skipped,
+        protected_paths=plan.protected,
+        skipped_delete_paths=plan.skipped,
+        kept_reasons=plan.reasons,
+        superseded_prefixes=list(superseded),
         dry_run=dry_run,
         gate_skipped=skip_required_check_gate,
     )
@@ -481,7 +428,7 @@ def apply(
     if dry_run:
         # Annotate would-be writes/deletes; do not touch FS.
         result.written_paths = [repo_dir / r for r in rendered]
-        result.deleted_paths = list(to_delete)
+        result.deleted_paths = list(plan.to_delete)
         return result
 
     # Write
@@ -492,8 +439,11 @@ def apply(
         out.write_text(content, encoding="utf-8")
         result.written_paths.append(out)
 
-    for d in to_delete:
+    for d in plan.to_delete:
         d.unlink()
         result.deleted_paths.append(d)
 
     return result
+
+
+# EOF

@@ -141,6 +141,11 @@ def register(group: click.Group) -> None:
         prefix = "[dry-run] Would delete" if dry_run else "Deleted"
         for p in result.deleted_paths:
             click.echo(f"{prefix}: {p}")
+        # Kept files are reported too: staying silent about a file apply
+        # LOOKED AT and deliberately preserved reads exactly like never
+        # having considered it.
+        for p in result.kept_paths:
+            click.echo(f"Kept: {p} — {result.kept_reasons.get(str(p), 'kept')}")
 
         if dry_run:
             click.echo(f"[dry-run] Would set Actions Variable on {owner}/{repo}:")

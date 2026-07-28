@@ -165,6 +165,41 @@ def register(ecosystem) -> None:
     return ci_template
 
 
+def _echo_bucket_coverage(result) -> None:
+    """State the blast-radius accounting out loud: how many workflow files
+    exist vs. how many the four buckets account for.
+
+    A dry-run's job is to be a COMPLETE statement of what will happen. If
+    these two numbers ever disagree, some file was neither written, deleted,
+    protected nor skipped — i.e. silently unconsidered — and the operator
+    should see that rather than infer safety from a short list.
+    """
+    wf_dir = result.repo_dir / ".github" / "workflows"
+    if not wf_dir.is_dir():
+        return
+    on_disk = {p for p in wf_dir.iterdir() if p.is_file()}
+    accounted = (
+        set(result.written_paths)
+        | set(result.deleted_paths)
+        | set(result.protected_paths)
+        | set(result.skipped_delete_paths)
+    )
+    unaccounted = sorted(on_disk - accounted)
+    click.echo(
+        f"  accounted-for   : {len(on_disk | accounted)} workflow file(s) "
+        f"= {len(result.written_paths)} written + "
+        f"{len(result.deleted_paths)} deleted + "
+        f"{len(result.protected_paths)} protected + "
+        f"{len(result.skipped_delete_paths)} skipped"
+    )
+    if unaccounted:
+        click.secho(
+            "  WARNING: these workflow files fell into NO bucket: "
+            + ", ".join(p.name for p in unaccounted),
+            fg="red",
+        )
+
+
 def _render_result(result, *, dry_run: bool) -> None:
     """Human-readable summary. ``--dry-run`` adds unified diffs for changed
     files so the operator can eyeball the substitution.
@@ -193,10 +228,20 @@ def _render_result(result, *, dry_run: bool) -> None:
         click.echo("  Would delete:" if dry_run else "  Deleted:")
         for p in result.deleted_paths:
             click.echo(f"    - {p}")
+    # Kept files are reported EXPLICITLY, with the reason. Silence about a
+    # file apply considered and preserved is indistinguishable from never
+    # having looked at it — which is how a PS-224-violating leftover once
+    # survived a "successful" apply unremarked. Together with written +
+    # deleted these buckets cover every file in .github/workflows/.
+    if result.protected_paths:
+        click.echo("  Kept (PROTECTED — deliberately preserved):")
+        for p in result.protected_paths:
+            click.echo(f"    = {p}  [{result.kept_reasons.get(str(p), 'protected')}]")
     if result.skipped_delete_paths:
         click.echo("  Kept (not eligible for delete):")
         for p in result.skipped_delete_paths:
-            click.echo(f"    = {p}")
+            click.echo(f"    = {p}  [{result.kept_reasons.get(str(p), 'kept')}]")
+    _echo_bucket_coverage(result)
 
     if dry_run:
         # Per-file unified diff against on-disk content (if any).
