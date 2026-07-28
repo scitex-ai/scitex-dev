@@ -24,6 +24,12 @@ Internal surface
 ``render(template_name, ...)``
     Pure substitution helper, exposed for tests.
 
+Policy that used to live inline in ``_apply`` now has its own modules:
+``_workflows`` (which files apply deletes / protects / skips, and WHY —
+including the conditional protection lifted by a superseding caller job)
+and ``_gate`` (the branch-protection refusal and its old→new remediation
+worksheet).
+
 The vendored template lives under ``ci_template/templates/``. The
 directory ships as package-data via ``pyproject.toml`` so the installed
 wheel can read it without a source checkout.
@@ -39,12 +45,25 @@ from ._apply import (
     emitted_job_names,
     render,
 )
+from ._gate import render_gate_failure, suggest_new_context
+from ._workflows import (
+    WorkflowPlan,
+    eligible_for_delete,
+    plan_workflow_changes,
+    superseded_protected_prefixes,
+)
 
 __all__ = [
     "apply",
     "ApplyError",
     "ApplyResult",
     "BranchProtectionGateError",
+    "eligible_for_delete",
     "emitted_job_names",
+    "plan_workflow_changes",
     "render",
+    "render_gate_failure",
+    "suggest_new_context",
+    "superseded_protected_prefixes",
+    "WorkflowPlan",
 ]

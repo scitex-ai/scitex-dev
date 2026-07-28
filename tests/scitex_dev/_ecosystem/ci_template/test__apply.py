@@ -323,13 +323,18 @@ def test_emitted_job_names_includes_preserved_workflow_names_by_default():
     assert "CLAssistant" in names
 
 
-def test_emitted_job_names_includes_sphinx_when_default():
+def test_emitted_job_names_excludes_bare_sphinx_context():
+    # INVERTED 2026-07-28 alongside the rtd-sphinx delete. The bare `sphinx`
+    # / `docs` contexts came from `rtd-sphinx-*.yml`, which apply now DELETES
+    # as superseded — so nothing publishes them after the migration. Listing
+    # them as emitted would let the gate wave through exactly the deadlock it
+    # exists to prevent (a repo requiring `sphinx` forever).
     # Arrange
     matrix = ["3.12"]
     # Act
     names = set(emitted_job_names(matrix))
     # Assert
-    assert "sphinx" in names
+    assert "sphinx" not in names
 
 
 def test_emitted_job_names_excludes_preserved_when_flag_false():
@@ -664,9 +669,13 @@ def test_live_apply_preserves_publish_workflow(tmp_path):
     assert (repo / ".github" / "workflows" / "pypi-publish-and-github-release-on-tag.yml").is_file()
 
 
-def test_live_apply_preserves_rtd_workflow(tmp_path):
-    # Preserved as before (fleet sweep may retire these later; the caller's
-    # rtd-sphinx-build job is additive, not a replacement performed here).
+def test_live_apply_deletes_superseded_rtd_sphinx_workflow(tmp_path):
+    # INVERTED 2026-07-28. `rtd-sphinx-*` was protected unconditionally on the
+    # premise that the caller's rtd-sphinx-build job was "additive". It is not
+    # — it does the same work org-side, so the standalone file is superseded.
+    # Keeping it meant every migrated repo retained a `runs-on: ubuntu-latest`
+    # workflow, i.e. a PS-224 ERROR the tool itself guaranteed and a human had
+    # to delete by hand.
     # Arrange
     repo = _make_repo(
         tmp_path,
@@ -675,7 +684,29 @@ def test_live_apply_preserves_rtd_workflow(tmp_path):
     # Act
     _apply_live(repo)
     # Assert
-    assert (repo / ".github" / "workflows" / "rtd-sphinx-build-on-ubuntu-latest.yml").is_file()
+    assert not (
+        repo / ".github" / "workflows" / "rtd-sphinx-build-on-ubuntu-latest.yml"
+    ).exists()
+
+
+def test_rtd_sphinx_stays_protected_when_ci_yml_lacks_the_superseding_job():
+    # The delete is CONDITIONAL, never blind: protection is lifted only
+    # because the body being written declares `rtd-sphinx-build`. A template
+    # that ever drops that job must re-protect the standalone files.
+    # Arrange
+    from scitex_dev._ecosystem.ci_template import eligible_for_delete
+    body_without_rtd = "name: ci\njobs:\n  pytest-matrix:\n    uses: x@main\n"
+    from scitex_dev._ecosystem.ci_template import superseded_protected_prefixes
+
+    superseded = superseded_protected_prefixes(
+        {".github/workflows/ci.yml": body_without_rtd}
+    )
+    # Act
+    deletable = eligible_for_delete(
+        "rtd-sphinx-build-on-ubuntu-latest.yml", superseded_prefixes=superseded
+    )
+    # Assert
+    assert deletable is False
 
 
 def test_live_apply_preserves_auto_merge_workflow(tmp_path):
