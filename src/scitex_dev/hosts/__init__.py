@@ -38,6 +38,28 @@ Usage
     for host in list_hosts():
         print(host.name, host.kind, host.ssh_alias)
 
+Runner destinations
+-------------------
+The registry is also the SOURCE OF TRUTH for legal CI runner
+destinations. Each machine records the label sets its self-hosted GitHub
+Actions runners serve under ``runner_labels:``, and
+:func:`find_runner_host` answers "can anything in the fleet pick up a job
+that asked for these labels?"::
+
+    from scitex_dev.hosts import find_runner_host
+
+    find_runner_host(["self-hosted", "Linux", "X64", "scitex-ci"])  # -> spartan
+    find_runner_host(["self-hosted", "scitex-agentic"])             # -> None
+
+A ``None`` is not a capacity problem — it means NO machine advertises
+that label set, so the job is undeliverable and queues forever. That is
+a real, measured failure mode: three scheduled runs (scitex-io,
+scitex-hub, scitex-writer) sat with ``updated_at == created_at`` from
+2026-05-15 while runners sat online and idle, because they named a
+destination nothing served. The PS-224 audit rule turns that into a
+pre-merge ERROR — see
+``_cli/audit/_project/_check_runner_destinations.py``.
+
 Backed by ``~/.scitex/dev/hosts.yaml`` (a DATA/STATE store — see
 ``01_ecosystem/12_local-state-resolution.md`` — resolved via
 ``local_state.user_path()`` so it is never project-shadowed), seeded
@@ -57,8 +79,11 @@ from ._registry import (
     HostRegistryError,
     UnknownHostError,
     create_default_hosts_yaml,
+    find_runner_host,
     get_hosts_yaml_path,
     list_hosts,
+    list_runner_destinations,
+    packaged_default_runner_destinations,
     resolve,
 )
 
@@ -68,8 +93,11 @@ __all__ = [
     "HostRegistryError",
     "UnknownHostError",
     "create_default_hosts_yaml",
+    "find_runner_host",
     "get_hosts_yaml_path",
     "list_hosts",
+    "list_runner_destinations",
+    "packaged_default_runner_destinations",
     "resolve",
 ]
 

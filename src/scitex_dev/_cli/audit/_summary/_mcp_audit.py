@@ -25,6 +25,8 @@ human/JSON emitters.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import click
 
 from . import FLAT_KEEPERS  # noqa: F401  -- reserved for future verb checks
@@ -124,11 +126,21 @@ from ._mcp_parity import (  # noqa: E402
 
 
 def _audit_one_mcp(
-    package: str, behavioral: bool = False, timeout: float = 30.0
+    package: str,
+    behavioral: bool = False,
+    timeout: float = 30.0,
+    repo: Path | None = None,
 ) -> tuple[str, list[Violation]]:
     """Audit a single package's MCP surface; return (status, violations).
 
     Status: "ok" | "warn" | "no-mcp-server" | "skip-not-standalone" | "not-auditable: <reason>".
+
+    ``repo`` is the explicit tree resolved from ``--path`` (via the shared
+    ``resolve_target_tree``). When given, §6 parity reads the package's
+    ``mcp_parity_exempt`` / ``mcp_tools_allowlist`` / ``no-mcp`` config
+    from THAT tree instead of the installed / registry location — so an
+    explicit worktree / CI checkout wins uniformly with the other five
+    auditors.
     """
     if _should_skip(package):
         # Umbrella + protocol-server packages aren't user-facing MCP standalones.
@@ -162,7 +174,7 @@ def _audit_one_mcp(
     _check_tool_naming(package, tool_names, out)
     _check_skills_pair(package, tool_set, out)
     _check_bridge_pattern(package, out)
-    _check_api_parity(package, tool_set, out)
+    _check_api_parity(package, tool_set, out, repo=repo)
 
     # Behavioral checks (§4 ladder + §3 subcommand presence) reuse the CLI
     # auditor's subprocess machinery to avoid duplicating it.
@@ -248,8 +260,16 @@ def run_audit_mcp(
     exclude: tuple[str, ...] = (),
     min_severity: str | None = None,
     timeout: float = 30.0,
+    repo: Path | None = None,
+    resolved_via: str | None = None,
 ) -> int:
-    """Audit a single package's MCP surface (single-target mode)."""
+    """Audit a single package's MCP surface (single-target mode).
+
+    ``repo`` is the explicit tree resolved from ``--path`` (via the shared
+    ``resolve_target_tree``); when given, §6 parity config is read from it
+    and the resolved-tree banner is surfaced before results — so
+    audit-mcp-tools honours ``--path`` uniformly with the other five.
+    """
     try:
         from ...._ecosystem import should_skip_audit
     except ImportError:
@@ -264,7 +284,22 @@ def run_audit_mcp(
         else:
             _emit("skip", f"{package}: {reason}")
         return 0
-    status, violations = _audit_one_mcp(package, behavioral=behavioral, timeout=timeout)
+
+    # Anti wrong-tree footgun: announce the resolved checkout BEFORE any
+    # results whenever a tree was resolved via `--path` / cwd / registry
+    # (mirrors audit-project's #392 banner). Human rail only.
+    if repo is not None:
+        from .._project._resolved_tree import (
+            resolved_context,
+            surface_resolved_tree,
+        )
+
+        surface_resolved_tree(
+            package, resolved_context(repo), output_json, via=resolved_via
+        )
+    status, violations = _audit_one_mcp(
+        package, behavioral=behavioral, timeout=timeout, repo=repo
+    )
     violations = _filter_violations(violations, rules, exclude, min_severity)
     if not violations and status == "warn":
         status = "ok"

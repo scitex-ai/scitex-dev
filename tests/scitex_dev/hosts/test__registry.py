@@ -354,6 +354,10 @@ def test_to_dict_round_trips_all_fields():
         "kind": "workstation",
         "ssh_alias": "mba",
         "scitex_root": "~/.scitex",
+        # A machine that hosts no CI runner serializes an empty list — the
+        # common case (a laptop, a NAS). See test__registry_runner_labels.py
+        # for the populated form.
+        "runner_labels": [],
     }
 
 

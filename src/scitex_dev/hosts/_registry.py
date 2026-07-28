@@ -37,14 +37,24 @@ from typing import Iterable
 
 from .._core.errors import ErrorCode, ScitexError
 
+# The shipped default seed + its runner destinations live in `._seed`
+# (extracted so this engine module stays focused and under the file-size
+# limit). `_DEFAULT_HOSTS_YAML` is re-imported because
+# `create_default_hosts_yaml` writes it on first use;
+# `packaged_default_runner_destinations` is re-exported for PS-224's floor.
+from ._seed import _DEFAULT_HOSTS_YAML, packaged_default_runner_destinations
+
 __all__ = [
     "HOST_KINDS",
     "HostRecord",
     "HostRegistryError",
     "UnknownHostError",
     "create_default_hosts_yaml",
+    "find_runner_host",
     "get_hosts_yaml_path",
     "list_hosts",
+    "list_runner_destinations",
+    "packaged_default_runner_destinations",
     "resolve",
 ]
 
@@ -54,49 +64,6 @@ __all__ = [
 HOST_KINDS: frozenset[str] = frozenset({"workstation", "hpc-login", "storage"})
 
 _ENV_HOSTS_YAML = "SCITEX_DEV_HOSTS_YAML"
-
-# Seeded on first use (see `create_default_hosts_yaml`). Real host data
-# from the operator's environment — names match the established
-# convention already referenced across scitex-dev's own skills/docs
-# (ywata-note-win, spartan, nas/nas1/nas2, mba).
-_DEFAULT_HOSTS_YAML = """\
-# SciTeX host registry — the shared port other scitex-* packages (sac,
-# scitex-hub, scitex-storage, ...) resolve through instead of inventing
-# their own host config. See `scitex_dev.hosts` for the Python API and
-# `scitex-dev host --help` for the CLI.
-#
-# kind        : one of workstation, hpc-login, storage
-# ssh_alias   : the ~/.ssh/config Host alias to reach this machine, or
-#               null when the host IS local (no SSH hop needed)
-# scitex_root : that HOST's $SCITEX_DIR (may use ~; expanded on that
-#               host, not necessarily on the machine reading this file)
-
-hosts:
-  ywata-note-win:
-    kind: workstation
-    ssh_alias: null
-    scitex_root: "~/.scitex"
-  spartan:
-    kind: hpc-login
-    ssh_alias: spartan
-    scitex_root: "/data/gpfs/projects/punim0264/ywatanabe/.scitex"
-  nas:
-    kind: storage
-    ssh_alias: nas
-    scitex_root: "~/.scitex"
-  nas1:
-    kind: storage
-    ssh_alias: nas1
-    scitex_root: "~/.scitex"
-  nas2:
-    kind: storage
-    ssh_alias: nas2
-    scitex_root: "~/.scitex"
-  mba:
-    kind: workstation
-    ssh_alias: mba
-    scitex_root: "~/.scitex"
-"""
 
 
 class HostRegistryError(ScitexError):
@@ -145,12 +112,41 @@ class HostRecord:
         :class:`~pathlib.Path` — expansion is deliberately deferred to
         resolve time (see the property docstring for the caveat about
         *whose* home directory it expands against).
+    runner_labels : tuple[frozenset[str], ...]
+        The CI RUNNER DESTINATIONS this machine serves: one
+        :class:`frozenset` of labels per distinct self-hosted GitHub
+        Actions runner registered from this machine. Empty (the default)
+        means the machine hosts no CI runner.
+
+        Each entry is the runner's EFFECTIVE label set — the labels
+        GitHub auto-assigns (``self-hosted`` / OS / arch) included, so it
+        matches what the Actions API reports verbatim.
+
+        A destination is served by this machine iff some entry is a
+        SUPERSET of the requested labels — that is GitHub's own
+        dispatch rule, and modelling it per-runner (rather than as one
+        flat per-machine union) is what keeps the check exact: a union
+        would green-light a combination that no single runner offers.
     """
 
     name: str
     kind: str
     ssh_alias: str | None
     scitex_root: str
+    runner_labels: tuple[frozenset[str], ...] = ()
+
+    def serves(self, labels: Iterable[str]) -> bool:
+        """True iff one of this host's runners carries every label in ``labels``.
+
+        Mirrors GitHub's dispatch rule: a job is routed to a runner whose
+        label set CONTAINS every label the job requested. An empty
+        ``labels`` request is never served — a job must name a
+        destination, and "no labels at all" names nothing.
+        """
+        wanted = frozenset(labels)
+        if not wanted:
+            return False
+        return any(wanted <= served for served in self.runner_labels)
 
     def __post_init__(self) -> None:
         if self.kind not in HOST_KINDS:
@@ -172,12 +168,13 @@ class HostRecord:
         """
         return Path(os.path.expandvars(self.scitex_root)).expanduser()
 
-    def to_dict(self) -> dict[str, str | None]:
+    def to_dict(self) -> dict[str, object]:
         return {
             "name": self.name,
             "kind": self.kind,
             "ssh_alias": self.ssh_alias,
             "scitex_root": self.scitex_root,
+            "runner_labels": [sorted(s) for s in self.runner_labels],
         }
 
 
@@ -233,6 +230,62 @@ def _load_yaml(path: Path) -> dict:
         ) from exc
 
 
+def _parse_runner_labels(
+    name: str, raw, *, hosts_path: Path
+) -> tuple[frozenset[str], ...]:
+    """Parse a host's ``runner_labels:`` block into label SETS.
+
+    Shape: a list of lists of strings — one inner list per distinct
+    self-hosted runner on the machine. Absent / ``null`` / ``[]`` means
+    the machine hosts no CI runner, which is the common case (a NAS or a
+    laptop) and is NOT an error.
+
+    Fails loud on a malformed block rather than degrading to "no runners"
+    — silently reading a typo'd registry as an empty one would turn every
+    workflow in the fleet into a PS-224 error for a reason that has
+    nothing to do with the workflows.
+    """
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise HostRegistryError(
+            f"{hosts_path}: host {name!r}: `runner_labels` must be a list of "
+            f"label lists, got {type(raw).__name__}",
+            code=ErrorCode.VALIDATION,
+            remediation=(
+                f"Write `runner_labels:` as a list of lists, e.g.\n"
+                f"  runner_labels:\n"
+                f"    - [self-hosted, Linux, X64, scitex-ci]"
+            ),
+        )
+    sets: list[frozenset[str]] = []
+    for entry in raw:
+        if isinstance(entry, str) or not isinstance(entry, list):
+            raise HostRegistryError(
+                f"{hosts_path}: host {name!r}: each `runner_labels` entry must "
+                f"be a LIST of label strings (one per runner), got "
+                f"{type(entry).__name__} {entry!r}",
+                code=ErrorCode.VALIDATION,
+                remediation=(
+                    "A bare string is ambiguous — a runner always carries a "
+                    "SET of labels. Wrap it: `- [self-hosted, Linux, X64, "
+                    "scitex-ci]`."
+                ),
+            )
+        labels = {str(label).strip() for label in entry if str(label).strip()}
+        if not labels:
+            raise HostRegistryError(
+                f"{hosts_path}: host {name!r}: empty `runner_labels` entry",
+                code=ErrorCode.VALIDATION,
+                remediation=(
+                    "Delete the empty entry, or give the runner its labels. A "
+                    "runner with no labels serves no destination."
+                ),
+            )
+        sets.append(frozenset(labels))
+    return tuple(sets)
+
+
 def _parse_host_record(name: str, data, *, hosts_path: Path) -> HostRecord:
     if not isinstance(data, dict):
         raise HostRegistryError(
@@ -260,6 +313,9 @@ def _parse_host_record(name: str, data, *, hosts_path: Path) -> HostRecord:
             kind=kind,
             ssh_alias=data.get("ssh_alias"),
             scitex_root=str(scitex_root),
+            runner_labels=_parse_runner_labels(
+                name, data.get("runner_labels"), hosts_path=hosts_path
+            ),
         )
     except HostRegistryError as exc:
         # Re-raise with the source file attached for a fully actionable
@@ -302,6 +358,44 @@ def list_hosts(*, hosts_path: str | Path | None = None) -> list[HostRecord]:
     """
     records, _path = _load_registry(hosts_path)
     return [records[name] for name in sorted(records)]
+
+
+def list_runner_destinations(
+    *, hosts_path: str | Path | None = None
+) -> list[tuple[str, frozenset[str]]]:
+    """Return every LEGAL CI runner destination the registry knows.
+
+    One ``(host_name, label_set)`` pair per registered runner, sorted by
+    host name. Hosts with no ``runner_labels`` contribute nothing.
+
+    An EMPTY result means the registry records no runner destinations at
+    all — the registry gap, not a fleet of illegal workflows. Callers
+    (notably the PS-224 audit rule) must distinguish the two: reporting
+    every workflow as illegal because the registry was never populated
+    would be a fleet-wide red for the wrong reason.
+    """
+    out: list[tuple[str, frozenset[str]]] = []
+    for host in list_hosts(hosts_path=hosts_path):
+        out.extend((host.name, labels) for labels in host.runner_labels)
+    return out
+
+
+def find_runner_host(
+    labels: Iterable[str], *, hosts_path: str | Path | None = None
+) -> HostRecord | None:
+    """Return the first registered machine that serves ``labels``, else ``None``.
+
+    "Serves" is GitHub's dispatch rule — a runner matches when its own
+    label set CONTAINS every requested label (see
+    :meth:`HostRecord.serves`). ``None`` means no registered machine can
+    ever pick this job up: the job is not merely slow, it is undeliverable
+    and will sit queued forever.
+    """
+    wanted = frozenset(labels)
+    for host in list_hosts(hosts_path=hosts_path):
+        if host.serves(wanted):
+            return host
+    return None
 
 
 def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:

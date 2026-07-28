@@ -5,12 +5,14 @@ Lead task #40 part (a): worktree-based agents must be able to point
 instead of resolving the package NAME to the registry's local_path /
 the editable install location.
 
-The three sub-auditors that already understand a repo path
-(``audit-project`` / ``audit-django`` / ``audit-python-apis``) gain
-``--path`` as an alias for the existing ``--repo``; the three that
-don't (``audit-cli`` / ``audit-mcp-tools`` / ``audit-skills``) are
-intentionally NOT extended in this PR — they audit the registry-
-resolved location and a follow-up will surface a path-aware variant.
+ALL SIX sub-auditors now honour ``--path`` (alias ``--repo``) and
+resolve their target tree through the SAME shared ``resolve_target_tree``:
+``audit-project`` / ``audit-django`` / ``audit-python-apis`` (the
+original three) plus ``audit-cli`` / ``audit-mcp-tools`` /
+``audit-skills`` (the follow-up this file's ``…threads_to_audit_cli`` /
+``…mcp_tools`` / ``…skills`` cases now assert). ``audit-all`` therefore
+threads ``--path`` to every sub-auditor uniformly instead of silently
+letting three grade the registry/import-location tree.
 
 PA-306 no-mocks: we exercise the real Click command + a real PATH-
 shimmed `scitex-dev` binary that records its argv to a tmpfile.
@@ -108,6 +110,78 @@ def test_audit_python_apis_help_retains_repo_alias(runner):
 
     # Act
     result = runner.invoke(main, ["ecosystem", "audit-python-apis", "--help"])
+    # Assert
+    assert "--repo" in result.output
+
+
+# ---------------------------------------------------------------------------
+# audit-cli / audit-mcp-tools / audit-skills: newly gained --path (+ --repo).
+# One assertion per test.
+# ---------------------------------------------------------------------------
+
+
+def test_audit_cli_help_advertises_path_flag(runner):
+    """--path appears in audit-cli --help."""
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "audit-cli", "--help"])
+    # Assert
+    assert "--path" in result.output
+
+
+def test_audit_cli_help_retains_repo_alias(runner):
+    """--repo appears in audit-cli --help (back-compat alias)."""
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "audit-cli", "--help"])
+    # Assert
+    assert "--repo" in result.output
+
+
+def test_audit_mcp_tools_help_advertises_path_flag(runner):
+    """--path appears in audit-mcp-tools --help."""
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "audit-mcp-tools", "--help"])
+    # Assert
+    assert "--path" in result.output
+
+
+def test_audit_mcp_tools_help_retains_repo_alias(runner):
+    """--repo appears in audit-mcp-tools --help."""
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "audit-mcp-tools", "--help"])
+    # Assert
+    assert "--repo" in result.output
+
+
+def test_audit_skills_help_advertises_path_flag(runner):
+    """--path appears in audit-skills --help."""
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "audit-skills", "--help"])
+    # Assert
+    assert "--path" in result.output
+
+
+def test_audit_skills_help_retains_repo_alias(runner):
+    """--repo appears in audit-skills --help."""
+    # Arrange
+    from scitex_dev._cli._root import main
+
+    # Act
+    result = runner.invoke(main, ["ecosystem", "audit-skills", "--help"])
     # Assert
     assert "--repo" in result.output
 
@@ -263,37 +337,57 @@ def test_audit_all_with_path_threads_to_audit_python_apis(runner, tmp_path):
     assert "--path" in _argvs_by_auditor(log).get("audit-python-apis", [])
 
 
-def test_audit_all_with_path_skips_audit_cli(runner, tmp_path):
-    """audit-cli must NOT receive --path (not yet path-aware)."""
+def test_audit_all_with_path_threads_to_audit_cli(runner, tmp_path):
+    """audit-cli must now receive --path (path-aware follow-up)."""
     # Arrange
     repo = tmp_path / "wt"
     repo.mkdir()
     # Act
     log, _ = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
     # Assert
-    assert "--path" not in _argvs_by_auditor(log).get("audit-cli", [])
+    assert "--path" in _argvs_by_auditor(log).get("audit-cli", [])
 
 
-def test_audit_all_with_path_skips_audit_mcp_tools(runner, tmp_path):
-    """audit-mcp-tools must NOT receive --path (not yet path-aware)."""
+def test_audit_all_with_path_threads_to_audit_mcp_tools(runner, tmp_path):
+    """audit-mcp-tools must now receive --path (path-aware follow-up)."""
     # Arrange
     repo = tmp_path / "wt"
     repo.mkdir()
     # Act
     log, _ = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
     # Assert
-    assert "--path" not in _argvs_by_auditor(log).get("audit-mcp-tools", [])
+    assert "--path" in _argvs_by_auditor(log).get("audit-mcp-tools", [])
 
 
-def test_audit_all_with_path_skips_audit_skills(runner, tmp_path):
-    """audit-skills must NOT receive --path (not yet path-aware)."""
+def test_audit_all_with_path_threads_to_audit_skills(runner, tmp_path):
+    """audit-skills must now receive --path (path-aware follow-up)."""
     # Arrange
     repo = tmp_path / "wt"
     repo.mkdir()
     # Act
     log, _ = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
     # Assert
-    assert "--path" not in _argvs_by_auditor(log).get("audit-skills", [])
+    assert "--path" in _argvs_by_auditor(log).get("audit-skills", [])
+
+
+def test_audit_all_with_path_threads_to_all_six_subauditors(runner, tmp_path):
+    """The proof: EVERY one of the six sub-auditors receives --path."""
+    # Arrange
+    repo = tmp_path / "wt"
+    repo.mkdir()
+    six = {
+        "audit-cli",
+        "audit-mcp-tools",
+        "audit-skills",
+        "audit-python-apis",
+        "audit-project",
+        "audit-django",
+    }
+    # Act
+    log, _ = _run_with_path(runner, tmp_path, "--path", str(repo), "scitex-io")
+    argvs = _argvs_by_auditor(log)
+    # Assert — all six saw --path (none silently graded another tree)
+    assert {a for a in six if "--path" in argvs.get(a, [])} == six
 
 
 def test_audit_all_without_path_does_not_pass_path_arg(runner, tmp_path):
