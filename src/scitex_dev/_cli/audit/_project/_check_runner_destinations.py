@@ -496,13 +496,13 @@ def check_ps224_runner_destinations(
                 violation_cls(
                     _RULE,
                     site,
-                    f"job `{job_id}` targets `[{', '.join(labels)}]`, which NO "
-                    f"registered machine serves (registry: {registry_file}). "
-                    "GitHub does not reject an unmatchable job — it queues it "
-                    "forever, so this never fails, it just never runs. Point "
-                    "the job at a registered destination, or register the "
-                    "machine that serves this label set in the registry's "
-                    f"`runner_labels:`. Registered destinations: {legal}."
+                    f"job `{job_id}` targets `[{', '.join(labels)}]`, NOT in "
+                    f"the destination registry ({registry_file}). Register "
+                    "the machine under `runner_labels:` or re-point the job. "
+                    "Checks REGISTRATION, not reachability: a SELF-HOSTED label "
+                    "no runner advertises queues indefinitely (never fails, never "
+                    "runs); a GitHub-HOSTED one IS served and DOES run, flagged "
+                    f"on policy. Confirm a job is idle before re-pointing. {legal}."
                     + _exempt_hint(site),
                 )
             )
