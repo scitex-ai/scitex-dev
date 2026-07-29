@@ -44,29 +44,50 @@ ERRO:   [PA-307 §3 test-quality] scitex-todo: tests/scitex_todo/test__model.py:
 
 
 def test_extract_violation_keys_finds_three_in_head():
-    """HEAD sample has 3 finding lines → 3 keys."""
+    """HEAD sample: 3 parsed findings + 1 UNPARSED summary line → 4 keys.
+
+    Count changed from 3 by the fail-open fix (2026-07-29). The extra
+    key is ``ERRO: scitex-todo: 2 error(s)`` — an ERRO line
+    ``_FINDING_RE`` cannot parse, which previously vanished. It now
+    keys as ``UNPARSED`` so an error can never contribute nothing to
+    the exit code. It appears in BASE too, so net-new is unchanged.
+    """
     # Arrange
     from scitex_dev._cli.audit._diff import extract_violation_keys
 
     # Act
     keys = extract_violation_keys(_HEAD_SAMPLE, distribution_filter="scitex-todo")
     # Assert
-    assert len(keys) == 3
+    assert len(keys) == 4
 
 
 def test_extract_violation_keys_finds_two_in_base():
-    """BASE sample has 2 finding lines → 2 keys."""
+    """BASE sample: 2 parsed findings + 1 UNPARSED summary line → 3 keys.
+
+    Same +1 as the HEAD case; see that test for why.
+    """
     # Arrange
     from scitex_dev._cli.audit._diff import extract_violation_keys
 
     # Act
     keys = extract_violation_keys(_BASE_SAMPLE, distribution_filter="scitex-todo")
     # Assert
-    assert len(keys) == 2
+    assert len(keys) == 3
 
 
 def test_extract_violation_keys_distribution_filter_excludes_others():
-    """A finding for a different dist is filtered out."""
+    """A PARSED finding for a different dist is still filtered out.
+
+    The appended ``scitex-io`` line parses, so its dist is readable and
+    the filter drops it — that contract is unchanged. The count is 4
+    rather than 3 only because HEAD's own unparsable summary line now
+    keys (see ``test_extract_violation_keys_finds_three_in_head``).
+
+    Note the deliberate asymmetry, pinned by
+    ``test_unparsable_erro_survives_a_distribution_filter``: an
+    UNPARSED line is NOT filtered, because its dist is unknown and
+    "I cannot tell whose this is" must not collapse into "not theirs".
+    """
     # Arrange
     from scitex_dev._cli.audit._diff import extract_violation_keys
 
@@ -74,7 +95,7 @@ def test_extract_violation_keys_distribution_filter_excludes_others():
     # Act
     keys = extract_violation_keys(mixed, distribution_filter="scitex-todo")
     # Assert
-    assert len(keys) == 3
+    assert len(keys) == 4
 
 
 def test_extract_violation_keys_ignores_non_finding_banners():

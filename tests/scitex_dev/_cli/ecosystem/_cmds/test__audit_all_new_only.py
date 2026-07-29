@@ -47,14 +47,30 @@ _UNREADABLE_ERRORS = (_PS_ERROR, _CLI_ERROR)
 
 
 @pytest.mark.parametrize("line", _UNREADABLE_ERRORS)
-def test_the_key_parser_cannot_read_these_error_shapes(line):
+def test_the_key_parser_now_keys_these_error_shapes(line):
+    """GAP CLOSED 2026-07-29 — this test is the inverse of what it was.
+
+    It used to assert ``keys == set()``, pinning the known gap with a
+    tripwire: "if someone widens `_FINDING_RE` so these parse, this
+    test fails loudly and tells them to re-check the fallback rather
+    than letting coverage change silently underneath it."
+
+    The tripwire fired, as designed. The gap was closed NOT by widening
+    the regex — these shapes still do not parse structurally — but by
+    `extract_violation_keys` failing OPEN: an ERRO line it cannot key
+    now becomes an ``UNPARSED`` key instead of vanishing. That is what
+    let a required gate print errors and exit 0.
+
+    `unparsed_finding_lines` below is now belt-and-braces rather than
+    the only net. Both are kept: the fallback compares raw TEXT with
+    checkout roots stripped, which stays useful for non-ERRO shapes the
+    core deliberately refuses to key.
+    """
     # Arrange
     # Act
     keys = extract_violation_keys(line)
-    # Assert — pins the KNOWN GAP. If someone widens `_FINDING_RE` so these
-    # parse, this test fails loudly and tells them to re-check the fallback
-    # rather than letting coverage change silently underneath it.
-    assert keys == set()
+    # Assert
+    assert len(keys) == 1
 
 
 @pytest.mark.parametrize("line", _UNREADABLE_ERRORS)
