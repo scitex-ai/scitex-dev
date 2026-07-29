@@ -5,16 +5,20 @@ patterns (figrecipe owns detection); these tests pin the new SEVERITY wiring
 that promotes the EXISTING figure-family rules to ERROR in research projects
 so the post-edit hook (run_lint.sh, exit 2) BLOCKS figure-bypass code.
 
-v1 promoted set (verified against figrecipe ``_linter_plugin.py``):
-- category ``figure``: STX-FM001..FM011 + STX-FIG001
+The promoted set is defined BY CATEGORY, not by rule id: every rule carrying
+category ``figure`` or ``plot`` promotes, whoever declares and emits it. Do not
+re-introduce an id enumeration here — the one that used to live in this
+docstring ("figure: STX-FM001..FM011 + STX-FIG001") silently rotted as figrecipe
+grew FM016-FM019. Measured 2026-07-29, figrecipe declares:
+- category ``figure``: STX-FM001..FM011, STX-FM016..FM019, STX-FIG001
 - category ``plot``:   STX-P001..P009
+…and that list is expected to keep growing, which is the point.
 
-Emit paths feeding one combined issue list:
-- ``FMChecker._add``                         → FM001-FM009  (scitex-dev)
-- figrecipe ``FigureMethodChecker._emit``    → FM010/FM011  (read-only)
-- figrecipe ``AxisAlignmentChecker._emit``   → FIG001       (read-only)
-- figrecipe ``StyleKwargChecker._emit``      → P006-P009    (read-only)
-- ``SciTeXChecker._add`` (axes_hints/calls)  → P001-P005
+Two emit paths feed one combined issue list:
+- ``SciTeXChecker._add`` / ``FMChecker._add`` (scitex-dev) — these apply the
+  category override themselves, at emit time.
+- every figrecipe plugin checker's ``_emit`` (read-only here) — these honour
+  ``per_rule_severity`` ONLY, so they depend entirely on the central floor.
 
 The figrecipe checkers honour only ``per_rule_severity`` and ignore the
 category override, so ``SciTeXChecker.get_issues`` applies
@@ -487,18 +491,33 @@ class TestScriptDirFilesPromoteToo:
             f"got {[(i.rule.id, i.rule.severity) for i in issues]}"
         )
 
-    def test_per_rule_pin_still_wins_under_scripts(self, tmp_path):
-        # Arrange — research tree, file under scripts/, FM010 pinned to warning.
+    @staticmethod
+    def _pin_fm010_to_warning(tmp_path):
+        """Research tree + a scripts/ file, with FM010 pinned to warning."""
         root = _make_tree(tmp_path, "research")
         target = root / "scripts" / "make_figure.py"
         cfg = load_config(start_path=str(target))
         cfg.per_rule_severity = {**cfg.per_rule_severity, "STX-FM010": "warning"}
+        return target, cfg
+
+    def test_per_rule_pin_keeps_fm010_warning_under_scripts(self, tmp_path):
+        # Arrange
+        target, cfg = self._pin_fm010_to_warning(tmp_path)
         # Act
         issues = lint_source(
             _PLUGIN_SRC, str(target), cfg, plugins=_plugin_payload()
         )
-        # Assert — the pin wins; its neighbours still promote.
+        # Assert — the operator's per-rule pin wins over the category floor.
         assert _sev_of(issues, "STX-FM010") == "warning"
+
+    def test_unpinned_neighbour_still_promotes_under_scripts(self, tmp_path):
+        # Arrange — same setup; FM011 carries no pin.
+        target, cfg = self._pin_fm010_to_warning(tmp_path)
+        # Act
+        issues = lint_source(
+            _PLUGIN_SRC, str(target), cfg, plugins=_plugin_payload()
+        )
+        # Assert — pinning one rule must not disarm the floor for the rest.
         assert _sev_of(issues, "STX-FM011") == "error"
 
     def test_stx_allow_still_suppresses_under_scripts(self, tmp_path):
