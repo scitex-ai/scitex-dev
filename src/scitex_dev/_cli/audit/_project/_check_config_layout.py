@@ -268,20 +268,16 @@ def _report_config_errors(repo: Path, config, violation_cls, out: list) -> None:
     the rejection separately is what keeps a reasonless exemption from
     reading as a quiet pass the author believes worked.
     """
-    for notice in tuple(getattr(config, "exemption_errors", ()) or ()):
-        if not notice.startswith("PS-222"):
-            continue
-        _emit(
-            out,
-            violation_cls,
-            _CONFIG_ERROR_SEVERITY,
-            str(repo / ".scitex/dev/config.yaml"),
-            (
-                f"Invalid `audit.exemptions` entry — {notice}. The entry "
-                f"does NOT exempt anything; an exemption must state WHY "
-                f"the site is exempt."
-            ),
-        )
+    from ._exemption_config_errors import report_exemption_config_errors
+
+    report_exemption_config_errors(
+        repo,
+        config,
+        "PS-222",
+        lambda where, detail: _emit(
+            out, violation_cls, _CONFIG_ERROR_SEVERITY, where, detail
+        ),
+    )
 
 
 def check_ps222_config_layout(

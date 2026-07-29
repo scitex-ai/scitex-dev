@@ -22,6 +22,16 @@ from ._baseline import (
     write_baseline,
 )
 from ._behavioral import _check_behavioral
+from ._severity import (
+    EMIT_LEVEL,
+    RULE_SEVERITY,
+    SEVERITY_ORDER,
+    format_severity_counts,
+    severity_counts,
+    severity_of,
+)
+from ._severity import filter_violations as _filter_violations
+from ._severity import max_severity as _max_severity
 
 __all__ = [
     "RULE_SEVERITY",
@@ -30,112 +40,10 @@ __all__ = [
     "run_audit_all",
 ]
 
-# --------------------------------------------------------------------- #
-# Rule severity & filtering                                              #
-# --------------------------------------------------------------------- #
-
-# Severity tiers — used by --severity to gate which findings are reported.
-#
-# Per 2026-05-06 directive: any rule that has been live long enough to ship a
-# documented spec is `error` (CI must fail). Demote a rule back to `warn` only
-# after a concrete false-positive lands on develop. `info` is reserved for
-# purely advisory categorizations (pass-through entry-points) that cannot
-# describe a violation.
-RULE_SEVERITY: dict[str, str] = {
-    "§1": "error",
-    "§1a": "error",
-    "§1b": "error",
-    "§1c": "info",
-    "§1d": "error",
-    "§1e": "info",
-    # §1f — non-canonical verb synonym (slice 4). WARN while the fleet
-    # migrates via the deprecation ladder; the baseline ratchet keeps
-    # the drift from growing.
-    "§1f": "warn",
-    "§2": "error",
-    "§3": "error",
-    "§4": "error",
-    # §4b — help not built from a CliHelp spec (slice 4). WARN: spec-built
-    # help is the enforced construction method going forward, but the
-    # existing free-form fleet migrates incrementally.
-    "§4b": "warn",
-    "§5": "error",
-    # §6 (Python API ↔ MCP tool parity). Promoted back to error 2026-05-08
-    # at user direction: severity must match the rule corpus's intent —
-    # if it's a real violation, label it as one. False-positives on
-    # utility-heavy packages should be addressed via per-package
-    # allowlists (skip_rules in test_audit.py) or a tightened threshold,
-    # not by globally demoting the rule to warn.
-    "§6": "error",
-    "§6a": "error",
-    "§6b": "error",
-    "§7": "error",
-    "§8": "error",
-    "§10": "error",
-    # §10w — warn-tier sibling of §10. Emitted only when the runner's
-    # bare-interpreter baseline already exceeds the import budget, so the
-    # marginal import cost cannot be measured reliably (loaded/NFS CI). WARN,
-    # not error, so `audit-all` exit stays 0 instead of false-flaking the fleet.
-    "§10w": "warn",
-    "§11": "error",
-    # §12 — canonical `gui {open,serve,status,stop}` command group.
-    # WARN during ecosystem migration (figrecipe/writer/scholar/todo are
-    # adopting incrementally as of 2026-07); promote once the fleet has
-    # converged, same bake-in pattern as §1f / §4b.
-    "§12": "warn",
-    # §13 — self-maintenance commands must nest under a `dev` group.
-    # WARN during the fleet migration to `<pkg> dev {daemon,cron,systemd,
-    # hooks,skills,shell}`; promote to error once the fleet has converged,
-    # same bake-in pattern as §1f / §4b / §12. The baseline ratchet
-    # contains the existing drift so only NEW top-level self-maintenance
-    # commands break CI.
-    "§13": "warn",
-    # PA-304: umbrella imports (scitex.X / import scitex) inside standalone
-    # source. Drags umbrella __init__ + lazy re-export setup into every call
-    # — measurable on NFS-mounted homes (HPC). Codified 2026-05-06 after the
-    # scitex-scholar 2.7s cold-import surfaced on Spartan.
-    "PA-304": "error",
-    # PA-305: playwright.async_api imported without capture_debug_artifacts_async
-    # call. Codified 2026-05-06 — every browser-automation decision point must
-    # capture screenshot+HTML so selector regressions are diagnosable
-    # post-mortem. See _skills/general/02_package/09_browser-automation-debugging.md.
-    "PA-305": "error",
-}
-SEVERITY_ORDER = {"info": 0, "warn": 1, "error": 2}
-
-
-def _max_severity(violations: list) -> str:
-    """Highest severity present among violations; 'info' if list is empty."""
-    best = "info"
-    for v in violations:
-        sev = RULE_SEVERITY.get(v.rule, "warn")
-        if SEVERITY_ORDER[sev] > SEVERITY_ORDER[best]:
-            best = sev
-    return best
-
-
-def _filter_violations(
-    violations: list,
-    rules: tuple[str, ...] = (),
-    exclude: tuple[str, ...] = (),
-    min_severity: str | None = None,
-) -> list:
-    """Apply --rule / --exclude / --severity gating to a violation list."""
-    out: list = []
-    threshold = SEVERITY_ORDER.get(min_severity or "info", 0)
-    rules_set = {r.lstrip("§") for r in rules}
-    excl_set = {r.lstrip("§") for r in exclude}
-    for v in violations:
-        rule_key = v.rule.lstrip("§")
-        if rules_set and rule_key not in rules_set:
-            continue
-        if rule_key in excl_set:
-            continue
-        sev = RULE_SEVERITY.get(v.rule, "warn")
-        if SEVERITY_ORDER[sev] < threshold:
-            continue
-        out.append(v)
-    return out
+# Rule severity, per-severity tallies and --rule/--exclude/--severity
+# filtering live in `_severity.py` (imported above and re-exported here,
+# so `from ._run import RULE_SEVERITY` and the `_audit.py` PEP 562
+# forwarder are unchanged).
 
 
 def _audit_one(
@@ -222,7 +130,21 @@ def _audit_one(
 
 
 def _violation_to_dict(v) -> dict:
-    return {"command": v.command, "rule": v.rule, "message": v.message}
+    """One violation as a JSON record — severity as its OWN named field.
+
+    The machine path never mislabelled warnings as errors (it carried no
+    severity at all, and `status` is a coarse "ok"/"warn"), so no consumer
+    was ever told 6 warnings were errors. But it also gave a consumer no
+    way to tell the bands apart without re-implementing `RULE_SEVERITY`.
+    Emitting `severity` closes that: the human and machine renderers now
+    read the SAME per-violation severity from `severity_of`.
+    """
+    return {
+        "command": v.command,
+        "rule": v.rule,
+        "message": v.message,
+        "severity": severity_of(v),
+    }
 
 
 def _emit_human(package: str, status: str, violations: list) -> None:
@@ -249,13 +171,31 @@ def _emit_human(package: str, status: str, violations: list) -> None:
         emit_disclaimer()
         return
     sev = _max_severity(violations)
-    level = "error" if sev == "error" else "warning"
-    noun = "error(s)" if sev == "error" else "warning(s)"
+    # The HEADLINE level tracks the run's worst finding (so a red run is
+    # visibly red, and so the line clears the audit logger's WARNING
+    # default). The COUNTS are per-severity, and each finding below is
+    # emitted at ITS OWN severity.
+    #
+    # This used to be one level for everything: `sev` labelled the
+    # headline noun AND every finding line. Measured on CI (PR #447), a
+    # single §10 breach relabelled six standing §12/§13 warn-tier
+    # findings as `ERRO:` and printed "7 error(s)" for 1 error and 6
+    # warnings. That is not only a wrong noun — `_audit_masking.
+    # is_error_line` reads severity off this very `ERRO:` prefix, so the
+    # collapse propagated into audit-all's "N unmasked error(s)" tally,
+    # defeating a downstream counter that was already correct. And a
+    # narrow timing breach read as a broad structural break, which cost
+    # real diagnosis time.
+    #
     # Category-named failure line — mirrors the clean line's
     # "no CLI convention violations". See the note in _project/_audit.py.
-    _emit(level, f"{package}: CLI conventions: {len(violations)} {noun}")
+    headline_level = "error" if sev == "error" else "warning"
+    _emit(
+        headline_level,
+        f"{package}: CLI conventions: {format_severity_counts(violations)}",
+    )
     for v in violations:
-        _emit(level, f"  [{v.rule}] {v.command}: {v.message}")
+        _emit(EMIT_LEVEL[severity_of(v)], f"  [{v.rule}] {v.command}: {v.message}")
     emit_disclaimer()
     emit_skill_hints()
 
@@ -353,6 +293,7 @@ def run_audit(
         rec = {
             "package": package,
             "status": status,
+            "severity_counts": severity_counts(violations),
             "violations": [_violation_to_dict(v) for v in violations],
         }
         if suppressed or bl_path.exists():
@@ -479,6 +420,7 @@ def run_audit_all(
         rec = {
             "package": name,
             "status": status,
+            "severity_counts": severity_counts(violations),
             "violations": [_violation_to_dict(v) for v in violations],
         }
         if baseline:

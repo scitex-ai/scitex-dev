@@ -1,16 +1,16 @@
 ---
 description: |
-  [TOPIC] GitHub Actions workflow presence (per package category).
+  [TOPIC] GitHub Actions workflow presence.
   [DETAILS] Required baseline of workflow files every SciTeX package must
-  ship, keyed on `[tool.scitex_dev] category`. Audited by PS-165 (severity
-  W during adoption). Companion to 02_package/07_github-actions.md (canonical
-  content) and 02_package/12_workflows-naming.md (filename grammar).
+  ship. Audited by PS-165 (severity W during adoption). Companion to
+  02_package/07_github-actions.md (canonical content) and
+  02_package/12_workflows-naming.md (filename grammar).
 tags: [scitex-general-package-workflow-presence]
 ---
 
 # Workflow Presence (SciTeX)
 
-## Required baseline (all categories)
+## Required baseline (every package)
 
 | Workflow                                               | Filename pattern (PS-164)                          | Why                                       |
 |--------------------------------------------------------|----------------------------------------------------|-------------------------------------------|
@@ -26,30 +26,29 @@ The RTD requirement is gated on the presence of a `docs/` tree (with
 `conf.py` at `docs/conf.py` or `docs/source/conf.py`). Packages without
 docs don't ship the build workflow.
 
-## `cli-tool` category — extra workflows
-
-Packages declaring `[tool.scitex_dev] category = "cli-tool"` additionally
-ship:
-
-| Workflow              | Filename pattern                              | Why                                                                 |
-|-----------------------|-----------------------------------------------|---------------------------------------------------------------------|
-| Runtime CLI smoke     | `sdk-runtime-smoke-on-*.yml` or               | Exercises the installed CLI end-to-end on a fresh runner, catching  |
-|                       | `cli-smoke-on-*.yml`                          | packaging / entry-point breakage that unit tests miss.              |
-
 Note: the `tests/smoke/` and `tests/e2e/` *pytest* layers (PS-211 / PS-212)
-are a separate concern — they live inside the test suite. The CLI runtime
-smoke workflow is the GitHub Actions sibling that runs the installed
-console_script.
+are a separate concern — they live inside the test suite, and are opted out
+of per-repo with `[tool.scitex_dev] no_cli` / `no_e2e`.
 
-## `library` and `infrastructure` categories
+## Retired: the per-package `category` axis
 
-No extra workflows beyond the baseline.
+PS-165 used to vary its required set on a `[tool.scitex_dev] category`
+declaration (`library` / `cli-tool` / `infrastructure`, defaulting to
+`library`), with `cli-tool` additionally requiring a runtime CLI smoke
+workflow (`sdk-runtime-smoke-on-*.yml` / `cli-smoke-on-*.yml`). A census
+of the ecosystem found **zero** repos declaring that key, so the branch
+never fired — every package was audited against the baseline regardless.
+The axis has been removed; do not declare it.
+
+This says nothing about two other, live classification channels:
+`project-type` in `<repo>/.scitex/dev/config.yaml`, and the `category`
+field on the hardcoded `scitex_dev.ECOSYSTEM` registry (its own
+`umbrella` / `external-lib` / `dataset` vocabulary).
 
 ## Audit (PS-165)
 
-`PS-165` (severity `W` during adoption) reads `[tool.scitex_dev] category`
-from `pyproject.toml` (defaults to `library`) and verifies every required
-filename pattern matches at least one file under `.github/workflows/`.
-Emits one violation per missing workflow.
+`PS-165` (severity `W` during adoption) verifies every required filename
+pattern matches at least one file under `.github/workflows/`. Emits one
+violation per missing workflow.
 
 Promote to E once the ecosystem has converged on the baseline.

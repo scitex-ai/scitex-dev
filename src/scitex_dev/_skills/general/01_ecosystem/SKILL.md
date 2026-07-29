@@ -29,7 +29,7 @@ touching any `scitex-*` package. Read before the per-package tiers
    - [25_dot-scitex-cross-package-soc.md](25_dot-scitex-cross-package-soc.md) — §9 package owns a domain, plugin-port pattern (`PS-145`)
 7. [07_license-and-cla.md](07_license-and-cla.md) — AGPL-3.0-only SPDX policy, CLA workflow template, `signatures/cla.json` shape, `pull_request_target` base-branch trap, bootstrap + audit recipes
 8. [08_linter-plugins.md](08_linter-plugins.md) — Each package ships its own lint rules via the `scitex_dev.linter.plugins` entry point; `scitex-dev linter` aggregates; doc-block linting and ecosystem-wide `lint sweep`
-9. [09_package-categories.md](09_package-categories.md) — Package category taxonomy
+9. *(retired)* — the per-package `[tool.scitex_dev] category` taxonomy was removed after a census found zero repos declaring it; see `02_package/07b_workflow-presence.md`
 10. [10_research-project-type.md](10_research-project-type.md) — `project-type: research` — research repos are NOT pip packages; auditor SKIPS publish rules and KEEPS the universal ones
 11. [11_model-serving-vs-consumption.md](11_model-serving-vs-consumption.md) — Model-serving (scitex-genai) vs model-consumption (sac via `ProviderSpec` `base_url`); contract is an HTTP endpoint, never a Python import — neither package imports the other
 12. [12_local-state-resolution.md](12_local-state-resolution.md) — Resolve on-disk state via `scitex_config._ecosystem.local_state` by DATA NATURE: `path()` for config, `user_path()` for DATA/STATE stores (user-canonical, never project-shadowed), `runtime_path()` for ephemera; `$SCITEX_DIR` relocator; no-rolled-own-resolver mandate (PS-182)

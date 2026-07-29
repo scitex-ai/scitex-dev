@@ -80,83 +80,21 @@ from ._enforce_logging import (  # noqa: E402
 )
 
 
-# Per-SITE rule EXEMPTION with a MANDATORY written reason (operator directive
-# 2026-07-22 — the no-bare-print mandate).
-#
-# This follows the ``audit.capabilities`` doctrine above (fixed scope + a
-# VISIBLE notice) rather than the blanket ``audit.skip``: an exemption names
-# ONE rule at ONE file:line and must SAY WHY. It cannot silence a rule
-# repo-wide, and it cannot be written without a reason::
-#
-#     audit:
-#       exemptions:
-#         PS-220:
-#           - path: src/pkg/_cli/_report.py
-#             line: 88
-#             reason: "renders the --json payload a shell consumes"
-#
-# An entry whose ``reason`` is missing, empty, or whitespace-only is REJECTED
-# — it does NOT exempt the site, and the rejection is surfaced via
-# :attr:`ProjectConfig.exemption_errors` so it reads as a config error rather
-# than as a silent pass. An exemption with no stated reason is exactly the
-# unexamined suppression the rule exists to catch.
-@dataclass(frozen=True)
-class Exemption:
-    """One accepted ``audit.exemptions`` entry (rule + site + reason)."""
+# `audit.exemptions` — the per-SITE rule exemption with a MANDATORY written
+# reason (operator directive 2026-07-22). Parsing, the malformed-shape notices
+# and the reporting helpers live in `._exemptions`; re-exported here so
+# existing importers of the loader keep working (same arrangement as
+# `._enforce_logging` above).
+from ._exemptions import (  # noqa: E402
+    EXEMPTION_BLOCK_PREFIX,
+    Exemption,
+    exemption_notice_applies,
+    format_exemption_notice,
+    parse_exemptions,
+)
 
-    rule: str
-    path: str
-    line: int
-    reason: str
-
-
-def _parse_exemptions(
-    raw: object,
-) -> tuple[tuple[Exemption, ...], tuple[str, ...]]:
-    """Split an ``audit.exemptions`` block into (accepted, rejection notices).
-
-    Shape is ``{rule_code: [{path, line, reason}, ...]}``. Anything that does
-    not match — a non-mapping block, a non-list rule value, a non-mapping
-    entry, a missing/blank ``reason``, an unparseable ``line`` — is REJECTED
-    with a human-readable notice rather than silently dropped or silently
-    honoured.
-    """
-    if not isinstance(raw, dict):
-        return (), ()
-    accepted: list[Exemption] = []
-    errors: list[str] = []
-    for rule, entries in raw.items():
-        rule = str(rule).strip()
-        if not isinstance(entries, list):
-            errors.append(f"{rule}: exemptions must be a list of entries")
-            continue
-        for idx, entry in enumerate(entries):
-            label = f"{rule}[{idx}]"
-            if not isinstance(entry, dict):
-                errors.append(f"{label}: entry must be a mapping")
-                continue
-            path = str(entry.get("path") or "").strip()
-            reason = str(entry.get("reason") or "").strip()
-            raw_line = entry.get("line")
-            if not path:
-                errors.append(f"{label}: missing `path`")
-                continue
-            if not reason:
-                # The whole point of the surface: no reason, no exemption.
-                errors.append(
-                    f"{label} ({path}): REJECTED — `reason` is empty; an "
-                    f"exemption must state WHY this site is exempt"
-                )
-                continue
-            try:
-                line = int(raw_line)
-            except (TypeError, ValueError):
-                errors.append(f"{label} ({path}): `line` must be an integer")
-                continue
-            accepted.append(
-                Exemption(rule=rule, path=path.replace("\\", "/"), line=line, reason=reason)
-            )
-    return tuple(accepted), tuple(errors)
+#: Back-compat alias for the pre-extraction private name.
+_parse_exemptions = parse_exemptions
 
 
 def capability_for_rule(rule: str) -> str | None:
@@ -495,7 +433,11 @@ __all__ = [
     "KNOWN_CAPABILITIES",
     "ENFORCE_LOGGING_VALUES",
     "ENFORCE_LOGGING_REASONED_LEVELS",
+    "EXEMPTION_BLOCK_PREFIX",
     "parse_enforce_logging",
+    "parse_exemptions",
+    "exemption_notice_applies",
+    "format_exemption_notice",
     "capability_for_rule",
     "Exemption",
     "ProjectConfig",

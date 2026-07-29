@@ -253,27 +253,17 @@ def _load_moby() -> dict[str, set[str]]:
 
 
 def _load_custom_dict() -> dict[str, set[str]]:
-    """Merge project + user custom dictionaries."""
-    out: dict[str, set[str]] = {}
-    candidates = [
-        Path.cwd() / ".scitex" / "dev" / "cli-audit-dict.yaml",
-        Path.home() / ".scitex" / "dev" / "cli-audit-dict.yaml",
-    ]
-    for path in reversed(candidates):
-        if not path.is_file():
-            continue
-        try:
-            data = yaml.safe_load(path.read_text()) or {}
-        except yaml.YAMLError:
-            continue
-        for tag, key in [
-            ("noun", "nouns"),
-            ("verb-t", "transitive_verbs"),
-            ("verb-i", "intransitive_verbs"),
-        ]:
-            for w in data.get(key, []) or []:
-                out.setdefault(w.lower(), set()).add(tag)
-    return out
+    """Merge project + user custom dictionaries.
+
+    Thin re-export — the implementation, and the decision of WHICH tree
+    the project layer is read from, live in `._dict_root`. The project
+    layer follows the `--path` checkout pinned by
+    `_dict_root.use_dict_root`, not the cwd (see that module's docstring
+    for the wrong-subject defect this fixed).
+    """
+    from ._dict_root import load_custom_dict
+
+    return load_custom_dict()
 
 
 def _singular_candidates(word: str) -> list[str]:
@@ -1890,130 +1880,11 @@ def _check_no_interactive_prompts(package: str, out: list[Violation]) -> None:
                 )
 
 
-def _check_startup_speed(
-    package: str,
-    out: list[Violation],
-    threshold_ms: int = 500,
-    runs: int = 3,
-) -> None:
-    """§10 — the MARGINAL cost of `import <module>` (above bare-interpreter
-    startup) must be < threshold_ms.
-
-    Click bash-completion calls the program once per Tab press to resolve
-    dynamic completions, so a slow import = unusable tab-completion. The
-    fix is PEP 562 lazy `__getattr__` in the top-level `__init__.py`
-    (see `_skills/general/03_interface/01_python-api/
-    04_lazy-imports-and-optional-deps.md`).
-
-    Measurement (2026-06-19): the metric is ``T - B`` — ``T`` is the wall-clock
-    of ``python -c "import <module>"`` and ``B`` is the wall-clock of a bare
-    ``python -c "pass"`` reference, each taken as the *best of N* runs.
-    Subtracting ``B`` cancels the interpreter + site + coverage startup baseline
-    (and the machine-speed factor inside it), so the check reflects the
-    PACKAGE's own import cost — not the runner's filesystem or CPU load.
-    best-of-N (min) warms the file cache and drops transient load spikes: the
-    earlier absolute-time check false-failed on the shared/NFS Spartan CI node,
-    where a cold first import over the network FS measured 937ms while the
-    package's real marginal cost is a few ms.
-    """
-    import subprocess as _sp
-    import sys as _sys
-    import time as _time
-
-    ep_value = _ep_value_for(package)
-    if ep_value is None:
-        return
-    # Entry-point format is "module.path:object"; take the TOP-LEVEL package.
-    module_name = ep_value.split(":", 1)[0].split(".", 1)[0]
-    if not module_name:
-        return
-
-    def _best_ms(code: str) -> float | None:
-        """Best-of-`runs` wall-clock (ms) of ``python -c <code>``; None on failure."""
-        best: float | None = None
-        for _ in range(max(1, runs)):
-            t0 = _time.perf_counter()
-            try:
-                r = _sp.run(
-                    [_sys.executable, "-c", code],
-                    capture_output=True,
-                    text=True,
-                    timeout=30,
-                )
-            except Exception:
-                return None
-            if r.returncode != 0:
-                return None  # import failure — covered elsewhere
-            dt = (_time.perf_counter() - t0) * 1000.0
-            best = dt if best is None else min(best, dt)
-        return best
-
-    # Bare interpreter reference, then the package import — same env, so site +
-    # coverage + machine-speed cancel in the difference.
-    baseline = _best_ms("pass")
-    full = _best_ms(f"import {module_name}")
-    if baseline is None or full is None:
-        return  # import failure — covered elsewhere
-
-    v = _startup_speed_violation(
-        package, module_name, baseline, full, threshold_ms, runs
-    )
-    if v is not None:
-        out.append(v)
-
-
-def _startup_speed_violation(
-    package: str,
-    module_name: str,
-    baseline: float,
-    full: float,
-    threshold_ms: int,
-    runs: int,
-) -> "Violation | None":
-    """Decide the §10 finding from already-measured timings (pure, testable).
-
-    Returns a §10 ERROR Violation when the package's marginal import cost
-    exceeds ``threshold_ms`` on a *trustworthy* measurement, a §10w WARN
-    Violation when the runner is too slow/noisy to measure reliably, or
-    ``None`` when the import is comfortably under budget.
-
-    Baseline-sanity guard
-    ---------------------
-    The metric is ``marginal = full - baseline`` (see ``_check_startup_speed``).
-    Subtracting the bare-interpreter ``baseline`` is only meaningful when
-    ``baseline`` is small relative to the budget. On a loaded / NFS CI runner
-    the *bare* interpreter alone has measured 1072–1476ms (normal ≈ 20ms);
-    once ``baseline`` exceeds the entire ``threshold_ms`` budget, the residual
-    ``marginal`` is dominated by scheduling/FS noise and flips sign run-to-run,
-    false-flaking the SAME package. In that regime we DO NOT emit the §10
-    ERROR — we emit a §10w WARNING (warn-tier severity, so ``audit-all`` exit
-    stays 0) and skip the budget assertion. On normal runners
-    (``baseline`` ≪ ``threshold_ms``) the check stays fully STRICT: the
-    marginal is measured and enforced exactly as before.
-    """
-    if baseline > threshold_ms:
-        return Violation(
-            package,
-            "§10w",
-            f"§10 import-budget SKIPPED: runner baseline {baseline:.0f}ms exceeds "
-            f"the {threshold_ms}ms budget itself — environment too slow/noisy "
-            "(likely NFS or loaded CI) to measure import time reliably; re-run on "
-            "a normal runner to enforce.",
-        )
-
-    marginal = full - baseline
-    if marginal > threshold_ms:
-        return Violation(
-            package,
-            "§10",
-            f"`import {module_name}` adds {marginal:.0f}ms over bare-interpreter "
-            f"startup (>{threshold_ms}ms threshold; import={full:.0f}ms, "
-            f"baseline={baseline:.0f}ms, best-of-{runs}). Slow tab-completion: Click "
-            "runs the program once per Tab press. Convert "
-            f"{module_name}/__init__.py to PEP 562 lazy `__getattr__` (see python-api "
-            "skill 04_lazy-imports-and-optional-deps.md, 'PEP 562 module __getattr__' section).",
-        )
-    return None
+# §10 (import budget) — `_check_startup_speed` and the pure verdict
+# helper `_startup_speed_violation` live in `_startup_speed.py`, together
+# with the trust gate that decides whether the runner can support a
+# verdict at all. Forwarded by the `__getattr__` below, so
+# `from ._audit import _check_startup_speed` still resolves.
 
 
 # --------------------------------------------------------------------- #
@@ -2052,6 +1923,13 @@ _MOVED_TO_BEHAVIORAL = frozenset(
         "_run_subprocess",
     }
 )
+# §10 import budget + its measurement-trust gate.
+_MOVED_TO_STARTUP_SPEED = frozenset(
+    {
+        "_check_startup_speed",
+        "_startup_speed_violation",
+    }
+)
 
 
 def __getattr__(name: str):
@@ -2064,4 +1942,8 @@ def __getattr__(name: str):
         from . import _behavioral
 
         return getattr(_behavioral, name)
+    if name in _MOVED_TO_STARTUP_SPEED:
+        from . import _startup_speed
+
+        return getattr(_startup_speed, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

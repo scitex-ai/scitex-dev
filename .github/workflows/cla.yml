@@ -1,17 +1,40 @@
 name: CLA Assistant
 
-# Two trigger paths:
-#   1. PRs from contributors           → CLAssistant action checks signature.
-#                                         allowlist already short-circuits to
-#                                         success for `bot*` and the repo
-#                                         owner, so owner PRs land instantly.
-#   2. Direct pushes / tag pushes      → owner-bypass job posts a synthetic
-#      by the repo owner                  `CLAssistant=success` status on the
-#                                         SHA so the release pipeline's
-#                                         sync-main step (a direct ref PATCH)
-#                                         doesn't get rejected by main's
-#                                         branch-protection rule that requires
-#                                         CLAssistant. Operator-direct: 2026-06-04.
+# Org-level reusable-workflow caller (scitex-ai/.github, fleet standard).
+#
+# This file used to inline both CLA jobs. It now delegates to the org reusable,
+# the way scitex-storage and the rest of the fleet already do. Three things
+# improve at once, which is why this shape was chosen over patching the inline
+# version:
+#
+#   1. EXECUTION MOVES TO ORG-OWNED CODE. The inline version called
+#      `contributor-assistant/github-action` — an UPSTREAM third party — at the
+#      MUTABLE tag `v2.6.1`. The reusable calls the org-owned fork
+#      `scitex-ai/github-action@114064ad` at a fixed SHA. scitex-dev was worse
+#      than the fleet standard here, not representative of it.
+#   2. NO RUNNER IS NAMED IN THIS REPO. The destination lives in the callee, on
+#      the org pool. Nothing here to drift, and no hosted-runner question to
+#      answer in this file.
+#   3. ONE PLACE TO FIX. A CLA change lands once in the org reusable instead of
+#      being re-patched across every repo that inlined it.
+#
+# WHY THE `uses:` REF IS A SHA, NOT `@main`
+# ------------------------------------------
+# Most callers (including scitex-storage) use `@main`. A mutable org-level ref
+# means a single change to the reusable lands in EVERY calling repo at once,
+# with no review in any of them — and this workflow runs on `pull_request_target`
+# and `issue_comment`, which unauthenticated strangers can fire on a PUBLIC repo,
+# holding a write token and `GH_PERSONAL_ACCESS_TOKEN`. That is precisely where an
+# unreviewed simultaneous fleet-wide change is least acceptable, so this caller
+# pins the SHA and takes reusable updates deliberately.
+#
+# WHAT THIS DOES NOT FIX
+# ----------------------
+# The callee still runs on persistent shared self-hosted runners, so CLA code
+# still executes adjacent to fleet credentials. The real hazard is CREDENTIAL
+# ADJACENCY, not the word "hosted"; the standing fix is a dedicated
+# credential-free ephemeral pool, tracked separately. This change reduces the
+# exposure to org-owned code at a fixed SHA — it does not eliminate it.
 
 on:
   issue_comment:
@@ -29,43 +52,16 @@ permissions:
   statuses: write
 
 jobs:
-  owner-bypass:
-    # Fires only for direct pushes by the repo owner. PR events keep
-    # going through the full CLAssistant action below.
-    if: github.event_name == 'push' && github.actor == 'ywatanabe1989'
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
-    permissions:
-      statuses: write
-    steps:
-      - name: Mark CLAssistant=success on this SHA (owner-allowlisted direct push)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          gh api "repos/${REPO}/statuses/${SHA}" \
-            -f state=success \
-            -f context=CLAssistant \
-            -f description="Owner-triggered direct push (CLA bypass per repo allowlist)"
-
-  CLAssistant:
-    # PR / comment path — unchanged from the pre-2026-06-04 workflow.
-    if: github.event_name != 'push'
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
-    steps:
-      - name: CLA Assistant
-        uses: contributor-assistant/github-action@v2.6.1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
-        with:
-          path-to-signatures: "signatures/cla.json"
-          path-to-document: "https://github.com/scitex-ai/scitex-dev/blob/main/CLA.md"
-          branch: "cla-signatures"
-          allowlist: bot*,ywatanabe1989,LLEmacs
-          custom-allsigned-prcomment: |
-            Thank you for signing the SciTeX CLA. Your contribution can now be reviewed.
-          custom-notsigned-prcomment: |
-            Please sign the [SciTeX CLA](https://github.com/scitex-ai/scitex-dev/blob/main/CLA.md) before your contribution can be merged.
-            Comment `I have read and agree to the SciTeX CLA.` to sign.
+  call:
+    uses: scitex-ai/.github/.github/workflows/cla.yml@399f19bec63208b064ded6bc9193f04f3681be9a # main@2026-07-23
+    # NON-DEFAULT ON PURPOSE. The reusable defaults to `bot*,ywatanabe1989`;
+    # this repo's inline version also allowlisted `LLEmacs`. Taking the default
+    # would silently start demanding a CLA signature from an already-allowlisted
+    # contributor, so the third entry is carried over explicitly.
+    #
+    # `default_branch` (main) and `owner_login` (ywatanabe1989) already match
+    # this repo's previous inline values, so they are left at their defaults.
+    with:
+      owner_allowlist: "bot*,ywatanabe1989,LLEmacs"
+    # GH_PERSONAL_ACCESS_TOKEN — the CLA-signature-storage PAT the callee needs.
+    secrets: inherit

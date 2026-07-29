@@ -14,8 +14,11 @@ Rules that talk about a specific package's API live in that package's
 - `PA-001-PA-005` → scitex-io  (paths talk about `stx.io.save()`)
 - `ST001-ST006` → scitex-stats
 - `P001-P005`   → figrecipe
-- `FM001-FM009` → figrecipe
 - `P006-P009`   → figrecipe (style-override kwargs)
+- `FM0xx`       → figrecipe (figure/millimetre + figure-doctrine; the family
+  grows, so read the live set from `scitex-dev linter rules --json` rather
+  than trusting an id range written down here)
+- `FIG001`      → figrecipe
 
 Exception: `P010` is an **engine** rule (not figrecipe's), because it is
 about the `@stx.session` injection contract — "use the injected `plt`,

@@ -54,6 +54,27 @@ _DEFAULT_HOSTS_YAML = """\
 #               the `--labels` passed at registration. Recording only the
 #               `--labels` half would make every workflow that names
 #               `Linux`/`X64` look unserved.
+#
+#               Label sets are one entry PER RUNNER, never a flattened
+#               union — a union would green-light a combination no single
+#               runner actually offers, and a job whose labels match
+#               nothing waits forever (three scheduled runs sat
+#               undispatched since 2026-05-15 for exactly this).
+#
+# CHOOSING LABELS IN A WORKFLOW — breadth matters for QUEUE TIME, and the
+# two legal choices below are NOT equivalent:
+#   [self-hosted, Linux, X64, spartan-cpu]              -> matches ALL runners
+#   [self-hosted, Linux, X64, spartan-cpu, scitex-ci]   -> matches the POOLED
+#                                                          subset only
+# `spartan-cpu` is carried by every runner; `scitex-ci` only by the pooled
+# ones. So asking for `scitex-ci` narrows the eligible set and can queue
+# behind the pooled runners even while org-level runners sit idle —
+# MEASURED 2026-07-28: a job requesting scitex-ci sat QUEUED 16 minutes;
+# the same job on spartan-cpu dispatched immediately. Both PASS PS-224, so
+# the gate cannot tell you which you wanted — it validates SERVED-ness, not
+# capacity. The org reusables in scitex-ai/.github use spartan-cpu.
+# DEFAULT TO `spartan-cpu`; add `scitex-ci` only when a job genuinely needs
+# that specific pool.
 
 hosts:
   ywata-note-win:

@@ -227,7 +227,8 @@ def test_missing_record_file_warns_at_warn_severity(tmp_path):
 
 def test_two_dist_infos_same_name_is_ambiguous(tmp_path):
     # Arrange — the incident's other face: 0.16.0 + 0.17.4 dist-infos both
-    # claiming the same distribution in ONE site dir.
+    # claiming the same distribution in ONE site dir. THE PRIMARY CASE: two
+    # COMPLETE installs must keep firing, loudly.
     site = tmp_path / "site"
     _make_dist(site, version="0.16.0")
     _make_dist(site, version="0.17.4")
@@ -238,6 +239,187 @@ def test_two_dist_infos_same_name_is_ambiguous(tmp_path):
             StalenessError, match=r"ambiguous metadata.*0\.16\.0.*0\.17\.4"
         ):
             ensure_current("demo-pkg", severity="error", _search_paths=[str(site)])
+
+
+# --- A dist-info NAME is not an install --------------------------------------
+
+
+def _make_residue_dist_info(site: Path, version: str, name: str = "demo-pkg") -> Path:
+    """An EMPTY dist-info directory — overlay residue, not an install.
+
+    `pip uninstall` removes a dist-info's FILES; on an overlay filesystem the
+    emptied DIRECTORY can survive as an entry showing through from the lower
+    layer, so a name-only count sees a duplicate that does not exist.
+    """
+    info = site / f"{name.replace('-', '_')}-{version}.dist-info"
+    info.mkdir(parents=True)
+    return info
+
+
+def _make_whiteout_standin(site: Path, version: str, name: str = "demo-pkg") -> Path:
+    """A NON-DIRECTORY entry carrying a ``*.dist-info`` name.
+
+    LABELLED STAND-IN: the real case is an overlayfs WHITEOUT — a
+    character-special device node (major 0, minor 0). This container cannot
+    create one (measured: `mknod` fails with CapEff 0000000000000000, and
+    `mount -t overlay` refuses with "must be superuser"), and STX-NM002
+    forbids faking it with a mock. A plain FILE exercises the same rejection
+    path — `Path.is_dir()` — because a whiteout, like a file, is not a
+    directory. It stands in for the whiteout; it is not one.
+    """
+    site.mkdir(parents=True, exist_ok=True)
+    entry = site / f"{name.replace('-', '_')}-{version}.dist-info"
+    entry.write_text("not a directory\n")
+    return entry
+
+
+def test_empty_residue_dist_info_is_not_ambiguous(tmp_path):
+    # Arrange — one REAL install plus an EMPTY same-package dist-info dir.
+    # A directory with no METADATA is filesystem residue, not a second
+    # distribution, so it must not manufacture an ambiguity finding.
+    site = tmp_path / "site"
+    _make_dist(site, version="0.17.4")
+    _make_residue_dist_info(site, "0.16.0")
+    # Act
+    with _gate_env(tmp_path):
+        result = ensure_current(
+            "demo-pkg", severity="error", _search_paths=[str(site)]
+        )
+    # Assert — returning None (not raising) IS the pass contract.
+    assert result is None
+
+
+def test_dist_info_with_unreadable_metadata_still_ambiguous(tmp_path):
+    # Arrange — PINNED DECISION: METADATA present but unparseable COUNTS.
+    # "Absent" means residue (a non-problem); "present but unreadable" means
+    # a CORRUPT install (a real problem the operator must see). Collapsing
+    # them would let corruption vanish through the residue door.
+    site = tmp_path / "site"
+    _make_dist(site, version="0.17.4")
+    broken = _make_residue_dist_info(site, "0.16.0")
+    (broken / "METADATA").write_bytes(b"\x00\xff\x00 not parseable metadata")
+    # Act
+    with _gate_env(tmp_path):
+        # Assert — the corrupt second install still trips the gate.
+        with pytest.raises(StalenessError, match=r"ambiguous metadata"):
+            ensure_current("demo-pkg", severity="error", _search_paths=[str(site)])
+
+
+def test_whiteout_standin_entry_is_not_ambiguous(tmp_path):
+    # Arrange — a NON-DIRECTORY entry named `demo_pkg-0.16.0.dist-info`,
+    # the labelled stand-in for an overlayfs whiteout (see the helper).
+    site = tmp_path / "site"
+    _make_dist(site, version="0.17.4")
+    _make_whiteout_standin(site, "0.16.0")
+    # Act
+    with _gate_env(tmp_path):
+        result = ensure_current(
+            "demo-pkg", severity="error", _search_paths=[str(site)]
+        )
+    # Assert — the TYPE test, not the name, decides.
+    assert result is None
+
+
+def test_dangling_symlink_dist_info_is_not_ambiguous(tmp_path):
+    # Arrange — second labelled whiteout stand-in: a dangling symlink whose
+    # name matches. `is_dir()` follows the link, finds nothing, returns False.
+    site = tmp_path / "site"
+    _make_dist(site, version="0.17.4")
+    (site / "demo_pkg-0.16.0.dist-info").symlink_to(site / "nonexistent-target")
+    # Act
+    with _gate_env(tmp_path):
+        result = ensure_current(
+            "demo-pkg", severity="error", _search_paths=[str(site)]
+        )
+    # Assert
+    assert result is None
+
+
+# --- The remediation the gate hands the reader -------------------------------
+
+
+def _ambiguity_message(tmp_path: Path) -> str:
+    """The gate's full ambiguous-metadata text for a real two-install site."""
+    site = tmp_path / "site"
+    _make_dist(site, version="0.16.0")
+    _make_dist(site, version="0.17.4")
+    with _gate_env(tmp_path):
+        with pytest.raises(StalenessError) as excinfo:
+            ensure_current("demo-pkg", severity="error", _search_paths=[str(site)])
+    return str(excinfo.value)
+
+
+def test_ambiguity_message_gives_the_ls_a_discriminator(tmp_path):
+    # Arrange
+    message = _ambiguity_message(tmp_path)
+    # Act
+    discriminator = "ls -A"
+    # Assert — the reader must be able to tell WHICH case they are in.
+    assert discriminator in message
+
+
+def test_ambiguity_message_names_the_empty_directory_tell(tmp_path):
+    # Arrange
+    message = _ambiguity_message(tmp_path)
+    # Act
+    tell = "EMPTY DIRECTORY"
+    # Assert
+    assert tell in message
+
+
+def test_ambiguity_message_offers_rmdir_for_residue(tmp_path):
+    # Arrange
+    message = _ambiguity_message(tmp_path)
+    # Act
+    safe_remedy = "rmdir"
+    # Assert — the residue case's fix removes zero files.
+    assert safe_remedy in message
+
+
+def test_ambiguity_message_says_resolution_is_unspecified(tmp_path):
+    # Arrange — CORRECTED 2026-07-29. The gate used to hand the reader
+    # "measured: it picked the OLDER one", a one-host result generalised
+    # into a rule; a third host measured the NEWER winning. Assert the
+    # SUBSTANCE (unspecified, and both directions named), not a sentence.
+    message = " ".join(_ambiguity_message(tmp_path).split()).lower()
+    # Act
+    honest = (
+        "unspecified" in message
+        and "sys.path" in message
+        and "older" in message
+        and "newer" in message
+    )
+    # Assert
+    assert honest
+
+
+def test_ambiguity_message_keeps_the_concrete_consequence(tmp_path):
+    # Arrange — the correction must not soften why the gate fires.
+    message = " ".join(_ambiguity_message(tmp_path).split()).lower()
+    # Act
+    consequence = "may not describe the files that actually run" in message
+    # Assert
+    assert consequence
+
+
+def test_ambiguity_message_labels_the_read_only_layer_case(tmp_path):
+    # Arrange — CASE 2's `rm -rf` does not transfer to a stale dist-info in a
+    # read-only lower layer; the gate's text must carry that as its own case.
+    message = " ".join(_ambiguity_message(tmp_path).split()).lower()
+    # Act
+    labelled = "case 3" in message and "does not transfer" in message
+    # Assert
+    assert labelled
+
+
+def test_ambiguity_message_no_longer_prescribes_force_reinstall(tmp_path):
+    # Arrange
+    message = _ambiguity_message(tmp_path)
+    # Act
+    old_remedy = "run: pip install -U --force-reinstall"
+    # Assert — the old one-size-fits-all instruction is gone; force-reinstall
+    # now appears only as a measured caveat, never as the prescription.
+    assert old_remedy not in message
 
 
 def test_editable_without_record_skips_integrity(tmp_path):

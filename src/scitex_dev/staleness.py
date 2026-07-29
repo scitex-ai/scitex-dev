@@ -68,6 +68,7 @@ from scitex_dev._release.check_editable_drift import (
     _log_stale,
     _resolve_severity,
 )
+from scitex_dev._release.dist_info_integrity import AMBIGUOUS_METADATA_REMEDY
 
 _ENV_BYPASS = "SCITEX_DEV_NO_CURRENCY_GATE"
 _ENV_SEVERITY = "SCITEX_DEV_CURRENCY_SEVERITY"
@@ -86,6 +87,7 @@ _SUPPRESS_HINT = (
 )
 
 
+
 class StalenessError(RuntimeError):
     """A distribution is stale or its on-disk install is broken.
 
@@ -101,11 +103,57 @@ def _canonical(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).strip().lower()
 
 
+def _is_installed_dist_info(path: Path) -> bool:
+    """True when ``path`` is a REAL installed distribution's dist-info.
+
+    A NAME MATCH IS NOT EVIDENCE OF AN INSTALL. Two INDEPENDENT conditions
+    must both hold, because on an overlay filesystem (every containerised
+    agent) at least three different things can occupy a ``*.dist-info``
+    name and a bare name-match renders them identically:
+
+    1. IT MUST ACTUALLY BE A DIRECTORY. An overlayfs WHITEOUT — the marker
+       written when an upper layer deletes an entry that exists in a lower
+       layer — is a character-special device node (major 0, minor 0), not a
+       directory. ``Path.is_dir()`` stats the entry and tests ``S_ISDIR``,
+       so it is False for a whiteout; the TYPE test, not the name, is what
+       rejects it.
+    2. IT MUST CONTAIN A ``METADATA`` ENTRY. A dist-info directory with no
+       METADATA is not an installed distribution — it is filesystem
+       residue. ``pip uninstall`` removes a dist-info's FILES; on an
+       overlay the now-empty DIRECTORY can survive as an entry showing
+       through from the lower layer.
+
+    DELIBERATE DECISION — a PRESENT-BUT-UNREADABLE ``METADATA`` COUNTS.
+    The discriminator is EXISTENCE, not parseability. "Absent" means
+    residue (a non-problem); "present but unreadable / truncated /
+    malformed" means a CORRUPT install (a real problem the operator must
+    see). Collapsing those two into one verdict would let a genuinely
+    corrupt install vanish from the report through the same door residue
+    leaves by — the exact failure mode that makes people distrust and
+    disarm a check. So: ``FileNotFoundError`` disqualifies; ANY other
+    ``OSError`` (EACCES, EIO, ELOOP …) still counts, and the contents are
+    never parsed here.
+    """
+    if not path.is_dir():
+        return False
+    try:
+        os.stat(path / "METADATA")
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    return True
+
+
 def _dist_info_dirs(
     dist_name: str, search_paths: list[str]
 ) -> dict[Path, list[Path]]:
     """Map each site dir on ``search_paths`` to the dist-info dirs claiming
-    ``dist_name`` inside it. Duplicate path entries are visited once."""
+    ``dist_name`` inside it. Duplicate path entries are visited once.
+
+    Only entries passing :func:`_is_installed_dist_info` are collected —
+    see there for why a name match alone is not evidence of an install.
+    """
     canon = _canonical(dist_name)
     suffix = ".dist-info"
     hits: dict[Path, list[Path]] = {}
@@ -125,7 +173,9 @@ def _dist_info_dirs(
         except OSError:
             continue
         for child in children:
-            if not child.name.endswith(suffix) or not child.is_dir():
+            if not child.name.endswith(suffix):
+                continue
+            if not _is_installed_dist_info(child):
                 continue
             stem = child.name[: -len(suffix)]
             name_part = stem.rsplit("-", 1)[0] if "-" in stem else stem
@@ -157,8 +207,8 @@ def _integrity_violation(dist_name: str, search_paths: list[str]) -> str | None:
                 names = ", ".join(p.name for p in infos)
                 return (
                     f"{dist_name}: ambiguous metadata — {len(infos)} dist-info "
-                    f"directories claim it in {site} ({names}) — run: "
-                    f"pip install -U --force-reinstall {dist_name}"
+                    f"directories claim it in {site} ({names}).\n"
+                    + AMBIGUOUS_METADATA_REMEDY.format(dist=dist_name)
                 )
         resolved = _resolved_dist_info(hits)
         dist = Distribution.at(resolved)

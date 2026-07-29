@@ -76,29 +76,44 @@ therefore inherit a destination from e.g. ``scitex-ai/.github`` that its
 own YAML never mentions, and no string search of this repo can see it.
 Auditing the called repo covers it — this rule does not.
 
-Registry floor (shipped seed) and the gap guard
------------------------------------------------
+Registry floor (shipped seed) — a UNION, and the gap guard
+----------------------------------------------------------
 The registry is resolved from a host's user-state ``~/.scitex/dev/hosts.yaml``.
-That file can legitimately contribute NO runner destinations — it is
+That file is MUTABLE PER HOST and is edited live (by the operator and by
+agents), and it can legitimately contribute NO runner destinations — it is
 absent on a fresh host, or a STALE pre-``runner_labels`` copy that
 ``create_default_hosts_yaml`` will not refresh (it only writes when the
-file is missing). If that emptiness were read as "no runners exist", every
-workflow in the fleet would turn red for a reason that has nothing to do
-with the workflows.
+file is missing).
 
 scitex-dev owns the single machine registry and SHIPS the canonical seed
 in its own code (``scitex_dev.hosts._seed._DEFAULT_HOSTS_YAML``), so this
-rule uses that seed as a FLOOR: when the user-state registry contributes
-no destinations, it validates against
-``packaged_default_runner_destinations()`` instead. A stale or empty local
-file therefore cannot erase the shipped truth. This is not a softening —
-the floor supplies REAL, measured destinations, and a job whose labels no
-registered runner serves still errors.
+rule validates against the **UNION** of that shipped seed and the
+user-state registry, **always** — the seed is an unconditional FLOOR that
+per-host state may only EXTEND, never subtract from. Destinations present
+in both are de-duplicated (same host name + same label set), so the
+"Registered destinations:" line lists each one once.
 
-Only if EVEN the shipped seed carries no destinations (a code regression,
-never a deployment state) does the rule emit ONE finding naming the
-registry file and suppress the per-job noise — an honest "I could not
-check this", not a green.
+Why a UNION and not a fallback
+------------------------------
+The first implementation used the seed only as a FALLBACK — it read the
+seed *when the user registry was empty*. That let per-host mutable state
+SUBTRACT from the gate's ground truth: a host that registered even ONE
+unrelated machine REPLACED the shipped seed entirely, hiding ``spartan``
+and turning every correctly-migrated job red. Because the file is edited
+live, the gate's verdict then moved under repos that changed nothing —
+measured 2026-07-29 in scitex-agent-container, where the same tree passed
+at 14:56 and failed after a 15:07 edit to ``hosts.yaml``, with no code
+change in the audited area. A central gate must validate against SSOT data
+shipped IN the package as a floor; per-host state may extend it, never
+erase it.
+
+The union is not a softening — both sides supply REAL, measured
+destinations, and a job whose labels NEITHER side serves still errors.
+
+Only if the floor AND the user-state registry are BOTH empty (a code
+regression, never a deployment state) does the rule emit ONE finding
+naming the registry file and suppress the per-job noise — an honest "I
+could not check this", not a green.
 
 Exemptions — JOB-QUALIFIED, and a reason is MANDATORY
 -----------------------------------------------------
@@ -111,16 +126,17 @@ written ``reason``::
     audit:
       exemptions:
         PS-224:
-          - path: .github/workflows/test.yml::test
+          - path: .github/workflows/test.yml::<job-id-copied-from-the-audit-output>
             line: 0
             reason: "setup-emacs installs Nix (needs root) + a 5-version matrix"
 
 **The ``path`` is the SITE KEY, not a file path**: ``<workflow-path>::<job-id>``
-— the exact string this rule prints as the finding's location, so it can be
-copied verbatim from the audit output. It is job-qualified BY DESIGN: a
-bare file path would also exempt every OTHER job in the same file, so a
-migrated job that later regressed would go unnoticed. One entry exempts
-exactly one job.
+— the exact string this rule prints as the finding's location; run the audit
+and paste THAT. The job id above is an OBVIOUS placeholder because a
+plausible-looking one invites copying a job that does not exist in the target
+repo, and an exemption keyed on a non-existent job exempts NOTHING while
+reading as done. Job-qualified BY DESIGN: a bare file path would also exempt
+every OTHER job in the same file, hiding a later regression in a migrated one.
 
 ``line: 0`` — PS-224 findings are per-JOB, not per-line, so every exemption
 pins line 0 (same contract as PS-222). The whole-file findings (unreadable
@@ -231,6 +247,29 @@ def _exempt_hint(site: str) -> str:
     )
 
 
+def _union_destinations(
+    floor: list[tuple[str, frozenset[str]]],
+    user_state: list[tuple[str, frozenset[str]]],
+) -> list[tuple[str, frozenset[str]]]:
+    """FLOOR ∪ user-state, order-stable and de-duplicated.
+
+    The shipped seed comes FIRST (it is the floor), then any user-state
+    destination the floor does not already carry. A destination present in
+    both — the common case, since the user file is usually a copy of the
+    seed — appears exactly ONCE, so the "Registered destinations:" line the
+    error prints does not list it twice.
+    """
+    out: list[tuple[str, frozenset[str]]] = []
+    seen: set[tuple[str, frozenset[str]]] = set()
+    for host, labels in (*floor, *user_state):
+        key = (host, labels)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((host, labels))
+    return out
+
+
 def check_ps224_runner_destinations(
     repo: Path,
     violation_cls: type,
@@ -256,12 +295,13 @@ def check_ps224_runner_destinations(
         tests pass a real temp file, so this is a file-path seam rather
         than a patch point — no mocks.
     floor_destinations : list[tuple[str, frozenset[str]]] | None
-        Override for the SHIPPED-seed floor used when the user registry
-        contributes no destinations. The real audit leaves this ``None``
-        (the floor is read from
+        Override for the SHIPPED-seed FLOOR, which is UNIONed with the
+        user-state registry unconditionally. The real audit leaves this
+        ``None`` (the floor is read from
         :func:`scitex_dev.hosts.packaged_default_runner_destinations`);
-        tests pass a real list — e.g. ``[]`` to exercise the seed-empty gap
-        branch — so this is a value seam, not a patch point (no mocks).
+        tests pass a real list — e.g. ``[]`` for an EMPTY floor, which with
+        an empty user registry exercises the gap branch — so this is a
+        value seam, not a patch point (no mocks).
     config : ProjectConfig, optional
         Pre-loaded project config. When omitted it is loaded from ``repo``
         so the check honours ``audit.exemptions`` on its own; passing it in
@@ -281,6 +321,18 @@ def check_ps224_runner_destinations(
         except Exception:  # pragma: no cover - config is best-effort here
             config = None
 
+    if config is not None:
+        # The arm the docstring promised: a rejected PS-224 exemption used to
+        # vanish without a word.
+        from ._exemption_config_errors import report_exemption_config_errors
+
+        report_exemption_config_errors(
+            repo,
+            config,
+            _RULE,
+            lambda where, detail: out.append(violation_cls(_RULE, where, detail)),
+        )
+
     exemption_for = getattr(config, "exemption_for", None)
 
     def _exempt(site: str) -> bool:
@@ -299,27 +351,28 @@ def check_ps224_runner_destinations(
     from ....hosts import packaged_default_runner_destinations
 
     registry_file = get_hosts_yaml_path(hosts_path)
-    destinations = list_runner_destinations(hosts_path=hosts_path)
+    # UNCONDITIONAL FLOOR ∪ per-host state. scitex-dev owns the single
+    # registry and SHIPS the canonical seed in its own code, so the seed is
+    # always in play: per-host `hosts.yaml` is mutable and edited live, and
+    # if it REPLACED the seed (the old fallback) then registering one
+    # unrelated machine would hide `spartan` and turn every migrated job
+    # red — the gate's verdict would move under repos that changed nothing.
+    # Per-host state may EXTEND the floor, never subtract from it. This is
+    # not a blanket pass: both sides are REAL measured destinations, and a
+    # job neither side serves still errors below.
+    floor = (
+        packaged_default_runner_destinations()
+        if floor_destinations is None
+        else list(floor_destinations)
+    )
+    destinations = _union_destinations(
+        floor, list_runner_destinations(hosts_path=hosts_path)
+    )
     if not destinations:
-        # FLOOR: a host's user-state registry contributes no destinations
-        # (absent file, or a stale pre-`runner_labels` copy that
-        # `create_default_hosts_yaml` won't refresh — it only writes when
-        # the file is missing). scitex-dev owns the single registry and
-        # SHIPS the canonical seed in its own code, so fall back to that
-        # rather than reporting a gap: a stale/empty local file must not be
-        # able to represent "no runners exist" and turn every workflow red.
-        # Genuine mismatches still error below — the floor supplies REAL
-        # measured destinations, not a blanket pass.
-        destinations = (
-            packaged_default_runner_destinations()
-            if floor_destinations is None
-            else floor_destinations
-        )
-    if not destinations:
-        # Only reachable if EVEN the shipped seed carries no destinations —
-        # a code regression, not a deployment state. Honest "could not
-        # check", never a green: a check that could not run must not report
-        # what a check that passed reports.
+        # Only reachable when the shipped seed AND the user-state registry
+        # BOTH carry no destinations — a code regression, not a deployment
+        # state. Honest "could not check", never a green: a check that could
+        # not run must not report what a check that passed reports.
         out.append(
             violation_cls(
                 _RULE,
@@ -427,11 +480,11 @@ def check_ps224_runner_destinations(
                 )
                 continue
 
-            # Match against the RESOLVED destinations (user-state, or the
-            # shipped floor when user-state was empty) — not a fresh
-            # `find_runner_host`, which would re-read user-state and ignore
-            # the floor. Same rule as `HostRecord.serves`: a runner serves
-            # the job when its label set contains every requested label.
+            # Match against the RESOLVED destinations (the shipped floor
+            # UNIONed with user-state) — not a fresh `find_runner_host`,
+            # which would read user-state ONLY and ignore the floor. Same
+            # rule as `HostRecord.serves`: a runner serves the job when its
+            # label set contains every requested label.
             wanted = frozenset(labels)
             if any(wanted <= served for _host, served in destinations):
                 continue

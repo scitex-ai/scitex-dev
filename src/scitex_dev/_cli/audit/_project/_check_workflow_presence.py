@@ -1,30 +1,27 @@
-"""PS-165 — `.github/workflows/` presence rules (per package category).
+"""PS-165 — `.github/workflows/` presence rules.
 
 Every SciTeX package must ship a baseline set of GitHub Actions
 workflows so the ecosystem-wide audit dashboard, badges, and branch
-protection have consistent rows to gate on. The required set is keyed
-on the package's *category*, declared in `pyproject.toml`:
+protection have consistent rows to gate on.
 
-    [tool.scitex_dev]
-    category = "library"      # default if omitted
+Spec: ``_skills/general/02_package/07b_workflow-presence.md``.
 
-Recognised categories:
+Severity W during adoption — packages can rename existing workflows
+gradually. Promote to E once the ecosystem has converged.
 
-  - ``library``        — standard scitex-* leaf with a public API.
-                          No CLI smoke/e2e required.
-  - ``cli-tool``       — package whose primary surface is a CLI.
-                          Adds tests/smoke/ + tests/e2e/ expectations
-                          (already covered by PS-211 / PS-212).
-  - ``infrastructure`` — meta/tooling/glue package (scitex-dev itself,
-                          scitex-agent-container's ops side). Same
-                          baseline as ``library`` for now.
+Retired: this check used to key its required set on a per-package
+``[tool.scitex_dev] category`` declaration in ``pyproject.toml``
+(``library`` / ``cli-tool`` / ``infrastructure``, defaulting to
+``library``). A census of the ecosystem found ZERO repos declaring
+that key, so the branch never fired and every package was audited
+against the ``library`` baseline anyway. The read path and its
+``cli-tool`` branch were removed rather than left as decoration.
 
-Spec: ``_skills/general/01_ecosystem/09_package-categories.md`` and
-``_skills/general/02_package/07b_workflow-presence.md``.
-
-Severity W during adoption — packages can self-register their category
-and rename existing workflows gradually. Promote to E once the ecosystem
-has converged.
+Note this is unrelated to two other, live classification channels:
+``project-type`` in ``<repo>/.scitex/dev/config.yaml`` (consumed by
+the auditor's loader) and the ``category`` field on
+``scitex_dev._ecosystem.ECOSYSTEM`` (a hardcoded registry with its own
+``umbrella`` / ``external-lib`` / ``dataset`` vocabulary).
 """
 
 from __future__ import annotations
@@ -32,47 +29,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Any
-
-# ---------------------------------------------------------------------------
-# pyproject.toml: read [tool.scitex_dev] category
-# ---------------------------------------------------------------------------
-
-_TOOL_BLOCK_RE = re.compile(
-    r"^\[tool\.scitex[_-]dev\](.*?)(?=^\[|\Z)",
-    re.MULTILINE | re.DOTALL,
-)
-_CATEGORY_RE = re.compile(
-    r"""^\s*category\s*=\s*["']([A-Za-z0-9_\-]+)["']\s*$""",
-    re.MULTILINE,
-)
-
-_VALID_CATEGORIES = frozenset({"library", "cli-tool", "infrastructure"})
-_DEFAULT_CATEGORY = "library"
-
-
-def read_package_category(repo: Path) -> str:
-    """Return the package category declared in pyproject.toml.
-
-    Falls back to ``"library"`` (the default) when the file or key is
-    missing. Unknown categories also fall back to ``"library"`` so a
-    typo doesn't silently disable presence checks.
-    """
-    pyproject = repo / "pyproject.toml"
-    if not pyproject.is_file():
-        return _DEFAULT_CATEGORY
-    try:
-        txt = pyproject.read_text(errors="ignore")
-    except OSError:
-        return _DEFAULT_CATEGORY
-    m = _TOOL_BLOCK_RE.search(txt)
-    if m is None:
-        return _DEFAULT_CATEGORY
-    cm = _CATEGORY_RE.search(m.group(1))
-    if cm is None:
-        return _DEFAULT_CATEGORY
-    cat = cm.group(1)
-    return cat if cat in _VALID_CATEGORIES else _DEFAULT_CATEGORY
-
 
 # ---------------------------------------------------------------------------
 # Required workflow patterns (filename stem regex → human description)
@@ -124,18 +80,6 @@ _RTD_REQUIREMENT: tuple[str, re.Pattern[str], str] = (
     "RTD Sphinx build (`rtd-sphinx-build-on-*.yml`)",
 )
 
-# cli-tool-specific additions (smoke + e2e have their own pytest test
-# layers under PS-211/PS-212; here we additionally require a runtime
-# smoke workflow that exercises the installed CLI end-to-end).
-_CLI_TOOL_EXTRAS: list[tuple[str, re.Pattern[str], str]] = [
-    (
-        "sdk-runtime-smoke",
-        re.compile(r"^(sdk-runtime|cli)-smoke-.*\.ya?ml$"),
-        "runtime CLI smoke (`sdk-runtime-smoke-on-*.yml` or `cli-smoke-on-*.yml`)",
-    ),
-]
-
-
 def _workflow_filenames(repo: Path) -> list[str]:
     wf_dir = repo / ".github" / "workflows"
     if not wf_dir.is_dir():
@@ -159,12 +103,10 @@ def _has_docs_dir(repo: Path) -> bool:
 def check_ps165_workflow_presence(
     repo: Path, violation_cls: type, out: list[Any]
 ) -> None:
-    """PS-165 — required workflows are present (per package category).
+    """PS-165 — required workflows are present.
 
-    Reads ``[tool.scitex_dev] category`` from pyproject.toml; defaults to
-    ``library``. Emits one Violation per missing required workflow.
+    Emits one Violation per missing required workflow.
     """
-    category = read_package_category(repo)
     filenames = _workflow_filenames(repo)
 
     if not filenames:
@@ -176,9 +118,9 @@ def check_ps165_workflow_presence(
                 "PS-165",
                 str(repo / ".github" / "workflows"),
                 (
-                    f"no GitHub Actions workflows found — every SciTeX package "
-                    f"(category={category!r}) must ship the baseline workflow "
-                    f"set. See _skills/general/02_package/07b_workflow-presence.md."
+                    "no GitHub Actions workflows found — every SciTeX package "
+                    "must ship the baseline workflow set. See "
+                    "_skills/general/02_package/07b_workflow-presence.md."
                 ),
             )
         )
@@ -187,8 +129,6 @@ def check_ps165_workflow_presence(
     requirements = list(_BASELINE_REQUIREMENTS)
     if _has_docs_dir(repo):
         requirements.append(_RTD_REQUIREMENT)
-    if category == "cli-tool":
-        requirements.extend(_CLI_TOOL_EXTRAS)
 
     for _key, pattern, label in requirements:
         if not any(pattern.match(name) for name in filenames):
@@ -197,8 +137,7 @@ def check_ps165_workflow_presence(
                     "PS-165",
                     str(repo / ".github" / "workflows"),
                     (
-                        f"missing required workflow for category={category!r}: "
-                        f"{label}. See "
+                        f"missing required workflow: {label}. See "
                         f"_skills/general/02_package/07b_workflow-presence.md."
                     ),
                 )
