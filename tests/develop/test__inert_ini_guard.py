@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Timestamp: 2026-07-29
-# File: tests/test__inert_ini_guard.py
+# File: tests/develop/test__inert_ini_guard.py
 
 """A declared ini setting that nothing implements must fail the run.
 
@@ -28,7 +28,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+# Lives under tests/develop/ with the other repo-level meta tests (PS-203
+# forbids a loose top-level test, and this one has no src module to mirror
+# — it exercises tests/conftest.py's session guard).
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 # A fast, self-contained target — this test only cares about startup.
 _TARGET = "tests/scitex_dev/_cli/audit/test__diff_fail_open.py"
 
