@@ -7,27 +7,154 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-07-29
+
+Upgrade if you run `scitex-dev audit` / `audit-all` or the research-mode
+linter. This release fixes four ways the audit could report a verdict that
+did not describe what it measured — a silently-dropped exemption block, a
+dictionary read from the wrong tree, a severity floor that never reached
+`scripts/`, and a headline that counted warnings as errors. Downstream repos
+reported all four against 0.38.1.
+
+Note for CHANGELOG readers: 0.38.0 and 0.38.1 were tagged without CHANGELOG
+sections. This entry covers everything merged after the v0.38.1 tag; the
+0.38.x gap is not backfilled here.
+
 ### Fixed
-- **Duplicate-dist-info resolution is UNSPECIFIED — the remediation no longer
-  says "it picked the OLDER one".** The text merged in #451 generalised ONE
-  measurement on ONE setup into a rule. `importlib.metadata` walks `sys.path`
-  in order and takes the first name match, with no version comparison and no
-  tie-break, so the winner is a property of path/directory iteration order.
-  Measured 2026-07-29 on three hosts it went both ways: two resolved the OLDER
-  dist-info (`scitex-dev` 0.38.0 over 0.38.1; `scitex-cards` two-in-one-dir),
-  one resolved the NEWER (`scitex-cards` 0.17.10 over a base-layer 0.17.9).
-  Naming a winner invites a reader to reason about which duplicate wins and
-  build a repair on that reasoning. The concrete consequence is unchanged and
-  is the point: the reported version may not describe the files that actually
-  run, in EITHER direction.
-- **The "delete the stale dist-info directory only — safe" advice is now
-  scoped to a SAME-LAYER duplicate, with the read-only-lower-layer case
-  promoted to a distinct CASE 3.** When the stale dist-info lives in a
-  read-only lower overlay layer, `rm -rf` cannot remove it — it only writes a
-  mask in the caller's upper layer, so the image still ships two dist-infos
-  and every fresh container starts broken. Fix the IMAGE. Overlay mechanics
-  there are labelled INFERRED, not measured (`mount -t overlay` needs
-  superuser and `mknod` fails here; CapEff `0000000000000000`).
+- **A malformed `audit.exemptions` block now FAILS LOUD instead of silently
+  exempting nothing (#446).** `_parse_exemptions` returned empty tuples for
+  any non-mapping block, so every exemption an author wrote vanished with no
+  output at all. scitex-hub hit this within an hour of v0.38.1 using the list
+  form (`- rule: PS-224`) and could only diagnose it by downloading the wheel
+  and reading the parser. Every malformed shape — block, per-rule value,
+  entry, non-integer line, blank reason — now emits a notice NAMING THE
+  RECEIVED TYPE and the likely mistake, and block-level notices reach every
+  rule's config-error arm. PS-224 gains the config-error arm its docstring
+  already promised.
+- **`--path` now reaches audit-cli's dictionary, and the audit prints WHICH
+  dict file it read (#448).** audit-cli resolved
+  `.scitex/dev/cli-audit-dict.yaml` from `Path.cwd()` regardless of `--path`,
+  so `audit-all <pkg> --path <worktree>` graded the pinned tree's SOURCE
+  against a DIFFERENT tree's dictionary — while the banner confidently
+  announced the pinned tree. Reported by scitex-storage against v0.38.1.
+  `surface_dict_source` now names the dict file(s) actually read, and
+  `audit_all_for_package(path=None)` warns naming the cwd it is guessing from.
+- **Research-mode severity promotion now applies under `scripts/` — previously
+  it skipped every file there (#449).** The category-severity floor ran only
+  on `SciTeXChecker.get_issues`' script path, and `is_script()` returns False
+  for anything under a configured `script_dirs` / `library_dirs` entry, whose
+  branch early-returned before promotion. Since a research repo keeps
+  essentially all figure code under `scripts/`, the promotion was inert
+  exactly where it was meant to bite: paper-scitex-clew measured STX-FM010 /
+  FM011 / FM016 / FM019 / P006–P009 at `warning` in the same file where
+  FM001 / FM002 / FM003 / FM006 / P003 reported `error`. Both exit paths now
+  share one `finalize_issues` step.
+- **Findings render at their OWN severity, and the summary reports
+  per-severity counts (#454).** `_emit_human` computed one max severity for
+  the whole run and printed every violation — and the count noun — at that
+  level: on PR #447 a single genuine §10 breach relabelled six standing
+  §12/§13 warn-tier findings as `ERRO:` and reported "7 error(s)" for 1 error
+  and 6 warnings. The collapse propagated further than cosmetics, because
+  `_audit_masking.is_error_line` reads severity off that prefix and fed
+  audit-all's "N unmasked error(s)" tally. The headline now reads
+  "1 error(s), 6 warning(s)", always printing both bands. The JSON path never
+  collapsed severities (it carried none) but gave no way to tell the bands
+  apart either; it now emits a per-violation `severity` and a per-record
+  `severity_counts`.
+- **The §10 import-budget gate now reports "COULD NOT MEASURE RELIABLY"
+  instead of a verdict it cannot support (#454).** The escape hatch fired only
+  when `baseline > threshold`, so a node with a fast bare interpreter but slow
+  cold-cache package I/O sat in the strictly-enforcing regime and blew the
+  budget — the verdict was decided by the runner's I/O weather, not the code
+  under test (measured minutes apart on the same branch: CI baseline 167ms /
+  full 781ms → ERROR; local baseline 1796ms → skipped). Subtracting a baseline
+  assumes constant overhead, but a slow-I/O node applies a multiplicative
+  slowdown and the package import does strictly more file I/O than bare
+  startup. The budget is NOT raised; instead a trust gate runs BEFORE the
+  verdict (baseline sanity as a ratio of budget, sample dispersion across all
+  N samples, and margin-within-noise). Warn-tier, always printed, always
+  counted.
+- **Duplicate dist-info: resolution is UNSPECIFIED, not "the older one", and
+  the remediation now distinguishes a same-layer duplicate from a read-only
+  lower layer (#451, #453).** `importlib.metadata` walks `sys.path` and takes
+  the first name match, with no version comparison and no tie-break, so the
+  winner is a property of path iteration order — measured on three hosts it
+  went both ways. The consequence is unchanged and is the point: the reported
+  version may not describe the files that actually run, in EITHER direction.
+  The "delete the stale dist-info directory — safe" advice is now scoped to a
+  SAME-LAYER duplicate, with the read-only-lower-layer case promoted to a
+  distinct CASE 3 (there `rm -rf` only writes a mask in the caller's upper
+  layer, so the image still ships two dist-infos and every fresh container
+  starts broken — fix the IMAGE). Overlay mechanics are labelled INFERRED, not
+  measured. Every command in the remediation was run first against throwaway
+  venvs; the prior claim that `--force-reinstall` does not remove a duplicate
+  was wrong and is corrected — it removes one per run, so re-check the count.
+- **Duplicate counting no longer treats a NAME MATCH as evidence of an install
+  (#451).** An entry must BE a directory (an overlayfs whiteout is a
+  character-special node) AND contain `METADATA`. A present-but-unreadable
+  `METADATA` still counts: absent means residue, unreadable means a corrupt
+  install, and collapsing those would let real corruption escape through the
+  residue door.
+- **PS-224's shipped floor is a UNION with per-host state, never a fallback
+  (#445).** Stale or absent per-host state can no longer subtract from the
+  floor that ships in the package.
+
+### Added
+- **A generated audit gate can no longer be missed by a partial local run
+  (#448).** The gate lives at `tests/develop/test_audit.py`, outside the
+  directory people naturally run — scitex-storage went CI-red on 4 audit
+  errors after a local green, twice. `tests/conftest.py` now carries a marked,
+  idempotent guard block: if a session would otherwise report SUCCESS and the
+  gate was never seen, the session fails and names the reason. An already-red
+  session is left alone. The guard records the gate from
+  `pytest_runtest_logreport` as well as collection, so a `-n auto` xdist run —
+  where collection happens in the workers and never reaches the controller —
+  stays green. Opt out per-run with `SCITEX_DEV_ALLOW_PARTIAL_RUN=1`. Existing
+  `tests/conftest.py` files are appended to, not replaced; your own fixtures
+  are preserved.
+
+### Removed
+- **The inert `[tool.scitex_dev] category` channel is retired (#452).** A
+  census of all 68 ecosystem repos (68/68 fetched live) plus 119 local
+  repo-root `pyproject.toml` files found ZERO declarations, against a positive
+  control of 34 repos carrying the `[tool.scitex_dev]` block at all. PS-165's
+  category branch never fired for any repo — every package was audited against
+  the `library` baseline regardless — so nothing changes for any consumer.
+  Gone: `read_package_category()`, the `_CLI_TOOL_EXTRAS` requirement list and
+  its `cli-tool` branch, category interpolation in both PS-165 messages, the
+  rule text telling packages to declare the key, and the
+  `09_package-categories.md` skill page. UNTOUCHED and unrelated:
+  `project-type` in `.scitex/dev/config.yaml` and the ECOSYSTEM registry's own
+  `category` field.
+- **`clean_stale_dist_info()` is now a deprecated, inert shim (#451).** It
+  sorted a package's dist-infos by MTIME and `rmtree`'d all but the newest,
+  and the skills-export path called it unconditionally. Mtime is not version
+  ordering. MEASURED BEFORE CHANGING ANYTHING, and the measurement lowered the
+  severity: the rmtree was UNREACHABLE — a grouping-key bug put every
+  distribution in a group of size 1, so nothing was ever deleted. No fleet
+  damage occurred and none was possible. It is removed anyway, because the
+  obvious one-line fix to that typo would ARM an mtime-ordered rmtree inside
+  an unrelated export path. Replaced by the observational
+  `find_duplicate_dist_infos()` / `report_duplicate_dist_infos()`, which group
+  correctly and therefore see duplicates the predecessor never could.
+
+### Security
+- **The CLA workflow now calls the org reusable, SHA-pinned (#447, #450).**
+  `.github/workflows/cla.yml` runs on `pull_request_target` and
+  `issue_comment` — triggers an unauthenticated stranger can fire on a public
+  repo, in BASE-repo context, holding a write token and
+  `GH_PERSONAL_ACCESS_TOKEN`. scitex-dev was still calling UPSTREAM
+  `contributor-assistant/github-action` at the mutable `@v2.6.1` tag, which
+  the action's owner could silently repoint. #450 pinned that tag to its
+  resolved SHA as an interim; #447 then deleted the inlined jobs entirely in
+  favour of the org reusable (which calls the org-owned fork at a fixed SHA),
+  itself pinned to a SHA rather than `@main` so a fleet-wide change cannot
+  land unreviewed. The `LLEmacs` owner allowlist entry is carried over
+  explicitly — taking the reusable's default would have silently started
+  demanding a CLA signature from an already-allowlisted contributor.
+  Not addressed: these jobs still run third-party code on persistent shared
+  self-hosted runners adjacent to fleet credentials. Tracked separately;
+  pinning does not fix it.
 
 ## [0.37.0] - 2026-07-23
 
