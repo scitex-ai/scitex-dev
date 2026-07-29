@@ -31,6 +31,7 @@ def test_module_imports_and_exports_callables_callable__self_explain_self_explai
 
 def test_module_imports_and_exports_callables_callable__self_explain_render_markdown():
     # Arrange
+    pytest.importorskip("newb")
     # Act
     # Assert
     from scitex_dev._cli.skills import _self_explain
@@ -138,6 +139,7 @@ class _FakeRunner:
 def test_self_explain_resolves_then_delegates_result_package_scitex_io(tmp_path):
     """scitex-dev's wrapper must resolve distribution → skills_dir → newb."""
     # Arrange
+    pytest.importorskip("newb")
     # Act
     # Assert
     from scitex_dev._cli.skills import _self_explain
@@ -165,6 +167,7 @@ def test_self_explain_resolves_then_delegates_result_package_scitex_io(tmp_path)
 def test_self_explain_resolves_then_delegates_len_runner_calls_1(tmp_path):
     """scitex-dev's wrapper must resolve distribution → skills_dir → newb."""
     # Arrange
+    pytest.importorskip("newb")
     # Act
     # Assert
     from scitex_dev._cli.skills import _self_explain
@@ -192,6 +195,7 @@ def test_self_explain_resolves_then_delegates_len_runner_calls_1(tmp_path):
 def test_self_explain_resolves_then_delegates_all_call_1_claude_haiku_4_5_for_call_in(tmp_path):
     """scitex-dev's wrapper must resolve distribution → skills_dir → newb."""
     # Arrange
+    pytest.importorskip("newb")
     # Act
     # Assert
     from scitex_dev._cli.skills import _self_explain
@@ -219,6 +223,7 @@ def test_self_explain_resolves_then_delegates_all_call_1_claude_haiku_4_5_for_ca
 def test_self_explain_runs_per_prompt_propagates_isinstance_result_what_for_list(tmp_path):
     """The runs_per_prompt kwarg must be forwarded to newb."""
     # Arrange
+    pytest.importorskip("newb")
     # Act
     # Assert
     from scitex_dev._cli.skills import _self_explain
@@ -239,6 +244,7 @@ def test_self_explain_runs_per_prompt_propagates_isinstance_result_what_for_list
 def test_self_explain_runs_per_prompt_propagates_len_result_what_for_2(tmp_path):
     """The runs_per_prompt kwarg must be forwarded to newb."""
     # Arrange
+    pytest.importorskip("newb")
     # Act
     # Assert
     from scitex_dev._cli.skills import _self_explain
