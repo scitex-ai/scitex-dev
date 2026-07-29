@@ -2,13 +2,31 @@
 # -*- coding: utf-8 -*-
 """Dist-info-count install-integrity check for the ecosystem version report.
 
-A VERSION STRING IS NOT EVIDENCE THE FIX RUNS. When one site-packages holds
-TWO ``*.dist-info`` directories for a single distribution (e.g.
-``scitex_cards-0.17.0.dist-info`` AND ``scitex_cards-0.17.7.dist-info``
-coexisting), ``importlib.metadata.version()`` reports the NEWER while the
-OLDER dist-info's uniquely-owned RECORD files can still win on disk — so
-stale code runs while every version check says "current". This has bitten
-the fleet repeatedly.
+A VERSION STRING IS NOT EVIDENCE THE FIX RUNS. When TWO ``*.dist-info``
+directories for a single distribution are visible at once (e.g.
+``scitex_cards-0.17.9.dist-info`` AND ``scitex_cards-0.17.10.dist-info``),
+WHICH ONE ``importlib.metadata`` resolves is UNSPECIFIED. It walks
+``sys.path`` entries in order and takes the FIRST dist-info whose name
+matches — no version comparison, no tie-break of any kind. The winner is a
+property of path and directory ITERATION ORDER, not of version order, and it
+goes BOTH WAYS. Measured 2026-07-29 on three hosts:
+
+* ``scitex-dev``, two complete dist-infos in one real directory
+  (``0.38.0`` written by pip, ``0.38.1`` written by uv) →
+  ``version("scitex-dev")`` resolved **0.38.0**, the OLDER.
+* ``scitex-cards``, two complete dist-infos in one directory → resolved the
+  OLDER.
+* ``scitex-cards``, ``0.17.9`` in a base layer beneath a ``0.17.10``
+  overlay → ``version("scitex-cards")`` returned **0.17.10**, the NEWER
+  (resolved dist-info ``scitex_cards-0.17.10.dist-info``; the console
+  script agreed; all visible versions ``['0.17.10', '0.17.9']``).
+
+The CONSEQUENCE is identical in every direction and is the point: the
+REPORTED version need not describe the FILES THAT ACTUALLY RUN — stale code
+can run while every version check says "current", and it can equally run
+under a stale-looking version string. Do not reason about which duplicate
+will win, and never build a repair on that reasoning. The only trustworthy
+state is exactly one. This has bitten the fleet repeatedly.
 
 This module is the package-agnostic guard: count the INSTALLED distributions
 claiming a name — see :func:`_is_installed_dist_info` for why a ``*.dist-info``
@@ -22,11 +40,20 @@ condition:
   distinctly from an ordinary version mismatch.
 
 The repair is encoded in :data:`AMBIGUOUS_METADATA_REMEDY`, and every command
-in it was RUN before being recommended (2026-07-29). It leads with how to
-tell EMPTY RESIDUE (fix: ``rmdir``, removes nothing) apart from TWO COMPLETE
-INSTALLS (fix: delete the stale dist-info DIRECTORY, or ``pip uninstall`` to
-exhaustion then install once) — because a remediation that prescribes one
-action for both is what pushes people to disarm the check instead of using it.
+in it was RUN before being recommended (2026-07-29), except where explicitly
+labelled INFERRED. It leads with how to tell THREE cases apart, because a
+remediation that prescribes one action for all of them is what pushes people
+to disarm the check instead of using it:
+
+* CASE 1 — EMPTY RESIDUE (fix: ``rmdir``, removes nothing).
+* CASE 2 — TWO COMPLETE INSTALLS in the SAME WRITABLE DIRECTORY (fix: delete
+  the stale dist-info DIRECTORY, or ``pip uninstall`` to exhaustion then
+  install once).
+* CASE 3 — the stale dist-info lives in a READ-ONLY LOWER OVERLAY LAYER.
+  CASE 2's ``rm -rf`` does NOT transfer: it cannot remove a lower-layer entry,
+  only mask it in this container's upper layer, so the image keeps shipping
+  two dist-infos and every fresh container starts broken. Fix the IMAGE.
+  (Overlay mechanics here are INFERRED, not measured — see the case text.)
 
 CORRECTION, 2026-07-29 — this module previously asserted that
 ``pip install --force-reinstall`` does NOT fix a double install. Measured, it
@@ -34,6 +61,13 @@ does remove a prior dist-info: it uninstalls the ONE installation pip resolves
 before installing (3 dist-infos → one run → 2 left; 2 → one run → 1). What is
 true is narrower: it clears one duplicate per run, not all of them, so the
 count must be re-checked afterwards rather than assumed converged.
+
+CORRECTION, 2026-07-29 (second) — this module and its remediation previously
+stated that ``importlib.metadata`` "picked the OLDER one". That was ONE
+measurement on ONE setup generalised into a rule. A third host measured the
+NEWER winning. Resolution when a distribution is duplicated is UNSPECIFIED,
+never "the older": saying "the older" invites a reader to reason about which
+one wins and build a repair on that reasoning.
 """
 
 from __future__ import annotations
@@ -72,10 +106,18 @@ the correct fix removes nothing:
 empty, so it cannot damage a live install."""
 
 _REMEDY_CASE_DOUBLE = """\
-CASE 2 — both list METADATA and RECORD: TWO COMPLETE INSTALLS coexist. This is
-the real defect. importlib.metadata locks onto whichever dist-info it
-enumerates first — measured: it picked the OLDER one, so the CLI self-reported
-the stale version while the newer files were what actually ran. With ONE
+CASE 2 — both list METADATA and RECORD, in the SAME WRITABLE DIRECTORY: TWO
+COMPLETE INSTALLS coexist. This is the real defect.
+WHICH DIST-INFO WINS IS UNSPECIFIED. importlib.metadata walks sys.path in
+order and takes the FIRST name match — no version comparison, no tie-break —
+so the winner follows path and directory ITERATION ORDER, not version order.
+It goes BOTH WAYS: measured 2026-07-29 on three hosts, two resolved the OLDER
+dist-info (scitex-dev 0.38.0 over 0.38.1; scitex-cards) and one resolved the
+NEWER (scitex-cards 0.17.10 over a base-layer 0.17.9). The consequence is the
+same either way — THE REPORTED VERSION MAY NOT DESCRIBE THE FILES THAT
+ACTUALLY RUN, in either direction. Do not predict the winner and do not build
+a repair on predicting it.
+FIX (SAME-LAYER DUPLICATE ONLY — this does NOT transfer to CASE 3): with ONE
 package tree on disk, delete the STALE dist-info DIRECTORY only (metadata, no
 payload files):
     python -c "import <module>; print(<module>.__file__)"   # confirm ONE tree
@@ -97,10 +139,22 @@ resolves, so it does not sweep duplicates. Measured: 3 dist-infos -> 1 run ->
 rather than assuming it converged."""
 
 _REMEDY_READONLY_LAYER = """\
-IF THE STALE dist-info COMES FROM A READ-ONLY BASE IMAGE LAYER, fix it in the
-IMAGE, not in the container. Deleting it from a running container only writes
-a whiteout in that container's own upper layer — the image still ships two
-dist-infos and every fresh container starts broken again."""
+CASE 3 — THE STALE dist-info LIVES IN A READ-ONLY LOWER OVERLAY LAYER (a base
+image beneath a container's overlay). This is a DIFFERENT case with a
+DIFFERENT fix, not a footnote to CASE 2. CASE 2's `rm -rf` DOES NOT TRANSFER
+here: it cannot remove a lower-layer entry at all. It only writes a whiteout
+in THIS container's own upper layer, so the container looks repaired while the
+IMAGE still ships two dist-infos — every fresh container starts broken again,
+and the "fix" evaporates on restart. FIX IT IN THE IMAGE: rebuild the layer so
+it carries exactly one dist-info. Do not `rm -rf` your way out of it.
+THE TELL: after deleting, a FRESH container from the SAME image still shows
+two dist-infos. If the duplicate comes back on every start, you are in CASE 3,
+not CASE 2.
+INFERRED, NOT MEASURED — the overlay mechanics in this case are reasoned from
+overlayfs semantics, not reproduced here: this container cannot construct the
+shape (`mount -t overlay` refuses without superuser and `mknod` fails, CapEff
+0000000000000000). Treat CASE 3 as a case to CHECK, not as a measured
+result."""
 
 #: The full duplicate-dist-info remediation, shared by this module's report
 #: verdict and by ``scitex_dev.staleness``'s CURRENCY gate so the two can never
@@ -122,8 +176,11 @@ DOUBLE_INSTALL_REMEDY = AMBIGUOUS_METADATA_REMEDY
 DIST_INFO_NOTE = (
     "Versions come from importlib.metadata — a dist-info CLAIM, not proof of "
     "the code that will actually run. Per-package 'dist_info_count' guards "
-    "this: a count != 1 means the reported version cannot be trusted (a "
-    "double install lets a stale dist-info shadow the newer one)."
+    "this: a count != 1 means the reported version cannot be trusted. With "
+    "duplicates, which dist-info wins is UNSPECIFIED — sys.path is walked in "
+    "order and the first name match wins, with no version preference — so the "
+    "reported version may be the newer OR the older, and either way need not "
+    "describe the files on disk."
 )
 
 
@@ -291,11 +348,14 @@ def dist_info_integrity(
     if count > 1:
         message = (
             f"{distribution}: DIRTY INSTALL — {count} installed distributions "
-            f"claim this name (expected exactly 1). importlib.metadata locks "
-            f"onto whichever dist-info it enumerates first (measured: the "
-            f"OLDER one), while the other dist-info's uniquely-owned RECORD "
-            f"files can still win on disk — so stale code runs while every "
-            f"version check says 'current'.\n"
+            f"claim this name (expected exactly 1). WHICH ONE "
+            f"importlib.metadata resolves is UNSPECIFIED: sys.path is walked "
+            f"in order and the FIRST name match wins, with no version "
+            f"preference — so the winner follows path iteration order, not "
+            f"version order, and measured on three hosts it went BOTH WAYS "
+            f"(two resolved the OLDER dist-info, one the NEWER). The reported "
+            f"version therefore may not describe the files that actually run, "
+            f"in either direction, while every version check says 'current'.\n"
             + AMBIGUOUS_METADATA_REMEDY.format(dist=distribution)
         )
         return {"count": count, "status": "dirty_install", "message": message}
