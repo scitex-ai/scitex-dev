@@ -135,7 +135,15 @@ def register(ecosystem):
         is_flag=True,
         help="Print the target path and contents without writing.",
     )
-    def ecosystem_install_cross_package_gate(distribution, force, dry_run):
+    @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+    def ecosystem_install_cross_package_gate(distribution, force, dry_run, yes):
+        # `install` is a MUTATING verb, so §2 of the CLI conventions requires a
+        # --yes/-y flag on it regardless of how safe this particular
+        # implementation is. Generation here is non-destructive without
+        # --force, so nothing is gated on it today — but the flag is part of
+        # the published shape of a mutating verb, and `install-audit-gate`
+        # carries it for the same reason.
+        del yes
         from ...._ecosystem import ECOSYSTEM, get_local_path
 
         if distribution not in ECOSYSTEM:
