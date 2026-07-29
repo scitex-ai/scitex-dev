@@ -26,6 +26,7 @@ the way to nonexistence. Generator and gate now cannot disagree,
 because there is only one of them.
 """
 
+import subprocess
 from pathlib import Path
 
 import click
@@ -34,7 +35,51 @@ from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ...audit._project._check_umbrella_dep_and_integration import (
     _collect_cross_package_imports,
     _own_import_name,
+    _pyproject_distribution_name,
 )
+
+
+def _enclosing_repo(start: Path) -> Path | None:
+    """Return the git worktree root containing `start`, or None.
+
+    Uses `--show-toplevel`, which resolves to the WORKTREE root — so a
+    caller standing in `.worktrees/<topic>` gets that worktree, not the
+    main checkout. That distinction is the whole point: the reporter was
+    inside a worktree when the guess sent the write elsewhere.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(start), "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    out = proc.stdout.strip()
+    return Path(out) if out else None
+
+
+def _resolve_target(distribution: str, explicit: str | None) -> tuple[Path | None, str]:
+    """Pick the tree to write into, preferring the LEAST speculative source.
+
+    Order: `--path` (the caller said so) > the cwd's enclosing repo (the
+    caller is standing in it) > the ECOSYSTEM `~/proj/<name>` guess. The
+    guess is last and is announced, because it is the one that can silently
+    name a tree the caller never mentioned.
+    """
+    from ...._ecosystem import get_local_path
+
+    if explicit:
+        return Path(explicit).expanduser().resolve(), "--path"
+    cwd_repo = _enclosing_repo(Path.cwd())
+    if cwd_repo is not None:
+        return cwd_repo, "cwd repository"
+    guessed = get_local_path(distribution)
+    return guessed, "ECOSYSTEM registry guess (~/proj/<name>)"
 
 
 def render_cross_package_gate(distribution: str, imports: list[str]) -> str:
@@ -135,8 +180,18 @@ def register(ecosystem):
         is_flag=True,
         help="Print the target path and contents without writing.",
     )
+    @click.option(
+        "--path",
+        default=None,
+        help=(
+            "Checkout to write into. Same semantics as `audit-all --path`. "
+            "Without it the cwd's repository is used; the "
+            "`~/proj/<name>` registry guess is the last resort and is "
+            "announced when used."
+        ),
+    )
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-    def ecosystem_install_cross_package_gate(distribution, force, dry_run, yes):
+    def ecosystem_install_cross_package_gate(distribution, force, dry_run, path, yes):
         # `install` is a MUTATING verb, so §2 of the CLI conventions requires a
         # --yes/-y flag on it regardless of how safe this particular
         # implementation is. Generation here is non-destructive without
@@ -154,10 +209,54 @@ def register(ecosystem):
             click.echo(f"skip  {distribution}: archived", err=True)
             raise SystemExit(0)
 
-        local = get_local_path(distribution)
+        local, source = _resolve_target(distribution, path)
         if local is None or not local.exists():
             click.echo(
                 f"error: local path for '{distribution}' missing: {local}",
+                err=True,
+            )
+            raise SystemExit(2)
+
+        # ANNOUNCE THE TARGET BEFORE TOUCHING IT. Reported 2026-07-29 by
+        # scitex-hpc: run from inside their worktree, this verb wrote to a
+        # DIFFERENT checkout sitting on `develop` and left it modified —
+        # and printed the path only AFTER the write. A path reported
+        # downstream of the action is not a safeguard.
+        click.echo(f"target: {local}  (resolved via {source})", err=True)
+
+        # THE TREE MUST BE THE DISTRIBUTION THE CALLER NAMED.
+        #
+        # This is the invariant, and it is stricter than "prefer cwd" — a
+        # first cut of this fix preferred the cwd repo and thereby answered
+        # `install-cross-package-gate scitex-hpc`, run from scitex-dev's
+        # worktree, by computing SCITEX-DEV's imports and offering to write
+        # them. It fixed the reported case by inventing a sibling: argument
+        # and target disagreed, and nothing objected.
+        #
+        # A write must not proceed while the name and the tree disagree,
+        # whichever way they were resolved. `[project].name` is the tree's
+        # own claim about what it is, and it is worktree-path-independent.
+        declared = _pyproject_distribution_name(local)
+        if declared is None:
+            click.echo(
+                f"error: {local} has no readable [project].name in "
+                "pyproject.toml, so it cannot be confirmed to be "
+                f"'{distribution}'. Refusing to write into an unidentifiable "
+                "tree.",
+                err=True,
+            )
+            raise SystemExit(2)
+        if declared != distribution:
+            click.echo(
+                f"error: refusing to write — the target tree is NOT "
+                f"'{distribution}'.\n"
+                f"  requested : {distribution}\n"
+                f"  target    : {local}  (via {source})\n"
+                f"  tree is   : {declared}  (its own [project].name)\n"
+                "Run from inside the tree you mean to modify, or pass "
+                "--path pointing at it. Distribution-name resolution "
+                "guesses `~/proj/<name>`, which on a shared host is "
+                "somebody else's checkout or the wrong commit of your own.",
                 err=True,
             )
             raise SystemExit(2)
@@ -195,6 +294,18 @@ def register(ecosystem):
 
         content = render_cross_package_gate(distribution, imports)
         init = target.parent / "__init__.py"
+
+        # Show WHAT was computed, not just where it will go. The reported
+        # run wrote 3 imports where the branch had 4 — wrong tree in, wrong
+        # content out. A gate that under-declares its imports PASSES while
+        # missing one, which is exactly the failure PS-140 exists to catch,
+        # so a silently-wrong list is worse than no gate.
+        click.echo(
+            f"computed {len(imports)} cross-package import(s) from {src_root}:",
+            err=True,
+        )
+        for name in imports:
+            click.echo(f"  - {name}", err=True)
 
         if dry_run:
             click.echo(f"# would write: {target}")
