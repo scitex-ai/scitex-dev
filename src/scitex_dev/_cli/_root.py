@@ -65,12 +65,12 @@ ROOT_HELP_SPEC = CliHelp(
 from ._root_help import _command_to_dict, _show_recursive_help
 
 def _get_version() -> str:
-    try:
-        from importlib.metadata import version
+    # Delegates so `--version` cannot report a bare number when TWO
+    # dist-infos claim the package — see `_root_version` for the measured
+    # case where this printed 0.38.0 (the OLDER of two) with no marker.
+    from ._root_version import resolve_version
 
-        return version("scitex-dev")
-    except Exception:
-        return "0.0.0-unknown"
+    return resolve_version()
 
 # Disable Click's auto --help on THIS group only (parameter, not
 # context — does not propagate to subcommands). Then re-add --help /
