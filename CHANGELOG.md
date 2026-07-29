@@ -7,6 +7,80 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-07-29
+
+**Upgrade if any CI workflow runs `audit-all --new-only`.** On 0.39.0 and
+earlier that check could print `ERRO:` lines and still exit 0 — measured on
+this repo's own REQUIRED merge gate, which passed a PR carrying two
+genuinely-new errors.
+
+### Fixed
+- **`--new-only` could print errors and exit 0 (#458, #459).** Measured on
+  real audit output: **9 finding-shaped lines produced 1 violation key.**
+  `_FINDING_RE` matches only `LEVEL: [TAG] <single-token-dist>: <msg>`, so
+  both real ERROR shapes were dropped — `[§2] <pkg> <group> <cmd>: …` (the
+  subject is a subcommand path, not a bare dist token) and
+  `[E] [PS-2xx …] /path: …` (two bracket groups). Dropped findings never
+  reached the diff, and `filter_to_net_new_lines` preserves lines it does not
+  recognise as findings, so they were reprinted verbatim **as if they were
+  narration**. The tally said zero while the output showed errors, and the
+  exit status followed the tally.
+
+  Findings the key parser cannot read are now diffed as **raw text** (with
+  both checkout roots normalised, since the baseline runs in a temporary
+  worktree). Net-new unreadable ERRORS are printed by name, and the run
+  **fails open**: `exit 1` if either the keyed or the unkeyed set is
+  non-empty. A finding the filter cannot classify must never be silently
+  reclassified as prose.
+
+  The filter still filters — a pre-existing unreadable finding is still not
+  net-new, so inherited debt does not start blocking unrelated PRs.
+
+- **`--new-only` subtracted an unknown baseline (#458).** `audit-all` exits 0
+  (clean) or 1 (findings); any other status means the baseline run itself
+  failed. That was treated as "a baseline with no findings", which suppresses
+  everything. It is now refused, and the FULL HEAD audit is reported instead.
+
+- **PS-140's remediation named a script that shipped nowhere (#457).** The
+  rule told readers to run `python /tmp/write-integration-tests.py <pkg-dir>`
+  — a path in a world-writable directory — hedged with "(or the equivalent
+  scitex-dev subcommand)". No such subcommand existed, and the checker's own
+  docstring promised to "mirror" the same phantom. Reported by scitex-hpc,
+  who hit the remediation, found nothing to run, and hand-edited a file whose
+  header says it is auto-generated.
+
+### Added
+- **`scitex-dev ecosystem install-cross-package-gate <dist>` (#457)** —
+  generates the PS-140 cross-package import gate, with `--force`, `--dry-run`
+  and `--yes`. It **imports the auditor's own** `_collect_cross_package_imports`,
+  so a freshly generated gate is clean by construction and generator and gate
+  cannot drift again. Refuses to write an empty gate: parametrizing over zero
+  names reports green over zero assertions.
+
+- **`--new-only` now discloses its denominator (#458)** — resolved baseline
+  commit, findings at HEAD vs baseline, keyed vs unkeyed counts, and how many
+  were suppressed as pre-existing. It also flags the baseline-equals-HEAD
+  signature that indicates a baseline graded the wrong tree. This disclosure
+  is what exposed the parser gap above, in one run.
+
+### Changed
+- `_cli/audit/_project/_registry.py` (1286 lines) split into `_project/_rules/`
+  (#457), and the `--new-only` path extracted to `_cmds/_audit_all_new_only.py`
+  (#458). Both are pure moves: 121 rules verified identical on
+  `(code, section, message, severity, slug)`, and the corpus ASSEMBLY —
+  severity/slug tables, co-located merges, and the final `_patch` — was
+  deliberately kept in ONE module because the regression suite pins its
+  ordering by reading module source and re-executing it. Every existing
+  import path still resolves.
+
+### Known gaps
+- The underlying divergence is unfixed: **two emitters, one hand-rolled
+  parser.** 0.40.0 makes the gate honest about what it cannot read; it does
+  not make it able to read it. A test pins the current gap so widening the
+  regex fails loudly rather than silently changing the fallback's coverage.
+- `audit-all`'s aggregate summary still does not disclose skipped rule
+  categories; the linter's `describe_skips()` has no caller under `_cli/`.
+
 ## [0.39.0] - 2026-07-29
 
 Upgrade if you run `scitex-dev audit` / `audit-all` or the research-mode
