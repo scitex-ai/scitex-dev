@@ -7,6 +7,45 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.40.3] - 2026-07-30
+
+**If you run this test suite from a venv without the `[dev]` extra, it has had
+no per-test timeout and said so only in a warning. It now refuses to run.**
+
+### Fixed
+- **A declared `pytest` ini setting that nothing implements no longer passes
+  silently (#468).** `[tool.pytest.ini_options]` accepts any key; when no
+  installed plugin registers it, pytest emits `PytestConfigWarning: Unknown
+  config option` and carries on. The setting is inert, and the run is
+  indistinguishable from one where it applied.
+
+  `timeout = 300` is the key with the stake. Its own comment promises that a
+  hung test "fails loud + names itself in ~5 min instead of wedging the whole
+  job until GitHub's 6h ceiling" — but `pytest-timeout` lives in the `[dev]`
+  extra, so a venv installed without it runs with **no per-test cap**.
+  Measured by scitex-hpc on a live host running this suite:
+  `pytest_timeout spec: ABSENT`, third-party plugins empty. Not hypothetical —
+  and visibly present, invisibly optional, since 2026-06-16 (#206).
+
+  `pytest_configure` now reads what `pyproject.toml` declares and asks pytest
+  whether it knows each key, failing with the key, the missing provider, the
+  consequence and the fix. The check is **general, not a `timeout`
+  special-case**: any declared-but-unimplemented setting is the same defect
+  with a different stake.
+
+  Verified in both directions, because a guard that cannot pass is as broken
+  as one that cannot fail — plugin present: unchanged; plugin absent: refuses,
+  zero tests run.
+
+### Known gaps
+- The guard reads `pyproject.toml` at the pytest **rootdir**. A run whose
+  rootdir resolves elsewhere (an installed package, an unusual invocation)
+  finds nothing declared and is therefore a no-op — it cannot report a setting
+  it never saw. It fails open by design: absent config is not a defect.
+- It validates that a declared key is **registered**, not that the plugin
+  providing it is a working version. A plugin present but too old to honour
+  the setting still passes.
+
 ## [0.40.2] - 2026-07-29
 
 **If you rely on the audit gate to block a merge, upgrade. On 0.40.1 and
