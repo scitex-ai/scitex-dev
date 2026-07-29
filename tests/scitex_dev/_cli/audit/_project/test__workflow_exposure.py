@@ -16,6 +16,7 @@ import yaml
 
 from scitex_dev._cli.audit._project._workflow_exposure import (
     attacker_triggerable_events,
+    delegated_exposure_detail,
     destination_detail,
     is_exposed_credential_job,
     job_secret_refs,
@@ -221,6 +222,75 @@ def test_called_reusable_workflow_reports_unexposed_a_known_bound():
     events = attacker_triggerable_events(doc)
     # Assert
     assert events == frozenset()
+
+
+ORG_CALLER_YML = """
+name: CLA Assistant
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, closed, synchronize]
+jobs:
+  call:
+    uses: scitex-ai/.github/.github/workflows/cla.yml@main
+    secrets: inherit
+"""
+
+PLAIN_CALLER_YML = """
+name: docs
+on:
+  push:
+    branches: [develop]
+jobs:
+  call:
+    uses: scitex-ai/.github/.github/workflows/docs.yml@main
+    secrets: inherit
+"""
+
+
+def test_delegating_caller_under_attacker_trigger_is_flagged():
+    """The live org-template shape, which PS-224 previously skipped entirely.
+
+    The caller names no `runs-on`, so PS-224 never looked at this job. The
+    destination is in the callee, whose own `on: workflow_call` looks safe
+    read alone. `secrets: inherit` on an attacker-triggerable caller is
+    decidable from the caller ALONE, which is why this needs no call graph.
+    """
+    # Arrange
+    doc = yaml.safe_load(ORG_CALLER_YML)
+    # Act
+    detail = delegated_exposure_detail(doc, doc["jobs"]["call"], "call")
+    # Assert
+    assert detail is not None
+
+
+def test_delegating_caller_detail_names_secrets_inherit():
+    # Arrange
+    doc = yaml.safe_load(ORG_CALLER_YML)
+    # Act
+    detail = delegated_exposure_detail(doc, doc["jobs"]["call"], "call")
+    # Assert
+    assert "secrets: inherit" in detail
+
+
+def test_delegating_caller_without_attacker_trigger_is_not_flagged():
+    """`secrets: inherit` alone is not the defect — the trigger is."""
+    # Arrange
+    doc = yaml.safe_load(PLAIN_CALLER_YML)
+    # Act
+    detail = delegated_exposure_detail(doc, doc["jobs"]["call"], "call")
+    # Assert
+    assert detail is None
+
+
+def test_non_delegating_job_is_not_flagged_as_delegating():
+    # Arrange
+    doc = yaml.safe_load(CLA_YML)
+    # Act
+    detail = delegated_exposure_detail(doc, doc["jobs"]["CLAssistant"], "CLAssistant")
+    # Assert
+    assert detail is None
 
 
 def test_unexposed_branch_still_reports_the_underlying_fact():

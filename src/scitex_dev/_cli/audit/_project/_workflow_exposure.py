@@ -153,6 +153,57 @@ def is_exposed_credential_job(doc: dict, job: Any) -> tuple[bool, frozenset[str]
     return (bool(events) and bool(secrets)), events, secrets
 
 
+def delegated_exposure_detail(doc: dict, job: Any, job_id: object) -> str | None:
+    """Flag a CALLER that hands attacker-triggerable execution to a callee.
+
+    The cheap caller-side half of the cross-file gap, and it turns out to
+    cover the common case rather than an edge case. Measured on the live
+    org template::
+
+        caller (every migrated repo):
+          on: [issue_comment, pull_request_target]   # attacker-triggerable
+          jobs.call:
+            uses: scitex-ai/.github/.github/workflows/cla.yml@main
+            secrets: inherit                          # fleet PAT propagates
+          # no `runs-on` anywhere -> PS-224 never saw this job at all
+
+        callee (scitex-ai/.github):
+          on: workflow_call                           # looks safe read alone
+          runs-on: [self-hosted, Linux, X64, spartan-cpu]
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+
+    Neither file shows the exposure, and the end-state is the one PS-224's
+    unqualified advice would have produced — reached by a different route.
+
+    ``secrets: inherit`` on an attacker-triggerable caller is decidable from
+    the caller ALONE: it says "delegate execution with every secret this
+    repo holds" without naming one. That is why this check does not wait for
+    a call graph, and why it ignores ``runs-on`` entirely — the caller has
+    none, which is exactly how the job stayed invisible.
+
+    Returns ``None`` when the job is not this shape.
+    """
+    if not isinstance(job, dict) or "uses" not in job:
+        return None
+    if str(job.get("secrets", "")).strip() != "inherit":
+        return None
+    events = attacker_triggerable_events(doc)
+    if not events:
+        return None
+    return (
+        f"job `{job_id}` delegates to `{job['uses']}` with `secrets: "
+        f"inherit` under attacker-triggerable events "
+        f"(`{'`, `'.join(sorted(events))}`). The caller names no `runs-on`, "
+        "so the destination lives in the callee and NEITHER FILE shows the "
+        "exposure on its own. `secrets: inherit` forwards every secret this "
+        "repo holds — including the fleet PAT — into a job an outsider can "
+        "start. Verify where the callee actually runs before treating this "
+        "as settled: if it targets a persistent shared runner, this already "
+        "IS the end-state this rule must never recommend. Reported from the "
+        "caller because that is the side where it is decidable."
+    )
+
+
 def destination_detail(
     job_id: object,
     labels: list[str],

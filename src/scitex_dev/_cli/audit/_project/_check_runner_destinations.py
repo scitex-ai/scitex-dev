@@ -69,12 +69,12 @@ What counts as a violation
    a check that could not run must never report what a check that passed
    reports.
 
-The one case that is NOT a violation: a job with no ``runs-on`` at all.
-That is a ``uses:`` job delegating to a reusable workflow, which carries
-its own ``runs-on`` in ITS file. **Known static boundary:** a repo can
-therefore inherit a destination from e.g. ``scitex-ai/.github`` that its
-own YAML never mentions, and no string search of this repo can see it.
-Auditing the called repo covers it — this rule does not.
+A job with no ``runs-on`` is a ``uses:`` delegation carrying its own
+destination in ITS file, and is normally NOT a violation — except when the
+caller is attacker-triggerable AND passes ``secrets: inherit``. That pair
+is decidable from the caller alone and IS flagged; measured live on the
+org template. **Known static boundary:** the destination itself still
+lives in the callee, so a repo inherits a runner its YAML never names.
 
 Registry floor (shipped seed) — a UNION, and the gap guard
 ----------------------------------------------------------
@@ -167,8 +167,7 @@ import yaml
 from ._runs_on_parsing import describe_destinations as _describe
 from ._runs_on_parsing import resolve_destination as _resolve_destination
 from ._runs_on_parsing import workflow_files as _workflow_files
-from ._workflow_exposure import destination_detail as _destination_detail
-from ._workflow_exposure import is_exposed_credential_job
+from . import _workflow_exposure as _wx
 
 _RULE = "PS-224"
 
@@ -449,9 +448,11 @@ def check_ps224_runner_destinations(
 
         for job_id, job in jobs.items():
             if not isinstance(job, dict) or "runs-on" not in job:
-                # No `runs-on` == a `uses:` job delegating to a reusable
-                # workflow, which carries its own destination in ITS file.
-                # See the module docstring's known-static-boundary note.
+                site = _site(rel, str(job_id))
+                detail = _wx.delegated_exposure_detail(doc, job, job_id)
+                if detail and not _exempt(site):
+                    d = detail + _exempt_hint(site)
+                    out.append(violation_cls(_RULE, site, d))
                 continue
             # Per-JOB site key. A bare path would OVER-EXEMPT: the same file
             # routinely holds a job that must stay hosted AND a job already
@@ -494,12 +495,12 @@ def check_ps224_runner_destinations(
             if _exempt(site):
                 continue
 
-            exposed, events, secrets = is_exposed_credential_job(doc, job)
+            exposed, events, secrets = _wx.is_exposed_credential_job(doc, job)
             out.append(
                 violation_cls(
                     _RULE,
                     site,
-                    _destination_detail(
+                    _wx.destination_detail(
                         job_id, labels, registry_file, legal, exposed, events, secrets
                     )
                     + _exempt_hint(site),
