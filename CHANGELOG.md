@@ -7,6 +7,62 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.40.2] - 2026-07-29
+
+**If you rely on the audit gate to block a merge, upgrade. On 0.40.1 and
+earlier it could print error lines and still exit 0.**
+
+### Fixed
+- **An `ERRO` the key extractor could not parse could not block (#465).**
+  `extract_violation_keys` skipped every line `_FINDING_RE` failed to match, so
+  those errors produced no violation key, could never be net-new, and could
+  never reach the exit code — while `filter_to_net_new_lines` treated the same
+  line as framing and printed it. The renderer and the counter disagreed by
+  construction, and neither could tell.
+
+  Measured on real `audit-all` output before the fix:
+
+  | distribution | `ERRO` lines printed | violation keys |
+  |---|---|---|
+  | scitex-io | 33 | **0** |
+  | scitex-stats | 1946 | 162 (29 `ERRO` dropped) |
+
+  scitex-io is the whole defect in one row: 33 errors on screen, zero keys,
+  nothing can be net-new, exit 0.
+
+  Three real `ERRO` shapes the regex cannot express: no bracketed rule tag at
+  all (the shape the module's own docstring has always advertised and the regex
+  has never matched); a subject carrying a parenthesised path; and two bracket
+  groups followed by a path rather than a distribution.
+
+  The fix is **fail-open, not a wider regex** — a wider regex is how this
+  arrived. An `ERRO` line that cannot be keyed becomes an `UNPARSED` key, so it
+  enters the diff and can block. `filter_to_net_new_lines` applies the same
+  test, or the two would disagree again in the opposite direction: a
+  pre-existing unparsed error would print on every run while counting for
+  nothing, which reads exactly like the bug being fixed.
+
+  An `UNPARSED` key is deliberately **not** subject to `distribution_filter`:
+  its distribution is unreadable, and "I cannot tell whose this is" must not
+  collapse into "not theirs".
+
+### Known gaps
+- **Fail-open covers `ERRO` only, and that restriction is deliberate.** The
+  level prefix is *not* a finding discriminator: multi-line advisory banners
+  carry it on every continuation line. A run measured 432 level-prefixed lines
+  of which 431 were currency-gate prose and 1 was a finding. Failing open on
+  any level would have manufactured ~430 findings and blocked every pull
+  request — a gate that cannot pass, exactly as broken as the gate that cannot
+  fail. A `§`-format finding emitted at **warning** severity therefore still
+  produces no key. Across two real runs no warning-severity finding was
+  dropped, but that sample was taken with the currency gate bypassed and covers
+  two distributions, so it bounds nothing.
+- **An advisory can still impersonate a finding.** Fixing that emitter-side is
+  what would let fail-open widen past `ERRO` safely.
+- **A summary line now counts.** `ERRO: <dist>: N error(s)` is unparsable and so
+  becomes an `UNPARSED` key, meaning a reported net-new count can include a
+  summary rather than only individual findings.
+
 ## [0.40.1] - 2026-07-29
 
 **Upgrade immediately if you have run `ecosystem install-cross-package-gate` or

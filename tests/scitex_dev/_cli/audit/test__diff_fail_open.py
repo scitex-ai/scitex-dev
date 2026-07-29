@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+# Timestamp: 2026-07-29
+# File: tests/scitex_dev/_cli/audit/test__diff_fail_open.py
+
+"""An ERRO the key extractor cannot parse must still be able to block.
+
+Regression cover for the P0 in which a REQUIRED merge gate printed
+error lines and exited 0. `extract_violation_keys` skipped every line
+`_FINDING_RE` could not match, so those errors produced no key, could
+not be net-new, and could not affect the exit code — while
+`filter_to_net_new_lines` kept the same lines as framing and printed
+them. The renderer and the counter disagreed by construction.
+
+Measured 2026-07-29 on real `audit-all` output: for scitex-io, 33 ERRO
+lines produced 0 keys.
+
+The second half of this file is just as load-bearing as the first. The
+obvious repair — fail open on ANY level-prefixed line — is a trap:
+multi-line advisory banners carry `WARN:` on every continuation line,
+and a scitex-dev run measured 432 level-prefixed lines of which 431
+were banner prose. That repair would manufacture ~430 findings and
+block every PR. So the WARN/INFO tests below are not padding; they pin
+the boundary that keeps this fix from becoming a gate that cannot pass.
+"""
+
+from scitex_dev._cli.audit._diff import (
+    UNPARSED_RULE,
+    compute_net_new,
+    extract_violation_keys,
+    filter_to_net_new_lines,
+)
+
+# A real dropped line, verbatim from `audit-all scitex-io` (two bracket
+# groups, and a PATH rather than a dist after them).
+UNPARSABLE_ERRO = (
+    "ERRO:   [E] [PS-221 §3 public-extra-not-closed-under-all] "
+    "/home/ywatanabe/proj/scitex-io/pyproject.toml: requirement "
+    "`pytest>=7.0` in PUBLIC extra"
+)
+
+# A real continuation line from the currency-gate advisory banner.
+BANNER_WARN = (
+    "WARN: Judge by CONTENTS, never by directory SIZE. On an overlay "
+    "filesystem (any"
+)
+
+BANNER_INFO = (
+    "INFO: scitex-io: cli-audit dict /home/agent/.scitex/dev/"
+    "cli-audit-dict.yaml (user, via home; absent)"
+)
+
+
+def test_unparsable_erro_line_still_produces_a_violation_key():
+    # Arrange
+    stdout = UNPARSABLE_ERRO
+    # Act
+    keys = extract_violation_keys(stdout)
+    # Assert
+    assert len(keys) == 1
+
+
+def test_unparsable_erro_key_is_tagged_unparsed():
+    # Arrange
+    stdout = UNPARSABLE_ERRO
+    # Act
+    keys = extract_violation_keys(stdout)
+    # Assert
+    assert next(iter(keys)).rule == UNPARSED_RULE
+
+
+def test_advisory_warn_prose_produces_no_violation_key():
+    # Arrange
+    stdout = BANNER_WARN
+    # Act
+    keys = extract_violation_keys(stdout)
+    # Assert
+    assert keys == set()
+
+
+def test_advisory_info_line_produces_no_violation_key():
+    # Arrange
+    stdout = BANNER_INFO
+    # Act
+    keys = extract_violation_keys(stdout)
+    # Assert
+    assert keys == set()
+
+
+def test_a_whole_advisory_banner_produces_no_violation_key():
+    # Arrange — the shape that would have blocked every PR in the fleet
+    stdout = "\n".join([BANNER_WARN] * 400 + [BANNER_INFO] * 30)
+    # Act
+    keys = extract_violation_keys(stdout)
+    # Assert
+    assert keys == set()
+
+
+def test_same_finding_under_a_different_checkout_root_keys_identically():
+    # Arrange — HEAD and the detached baseline worktree live at
+    # different absolute paths by construction.
+    head = UNPARSABLE_ERRO
+    base = UNPARSABLE_ERRO.replace("/home/ywatanabe/proj", "/tmp/base-wt")
+    # Act
+    net_new = compute_net_new(head, base)
+    # Assert
+    assert net_new == set()
+
+
+def test_two_different_unparsable_errors_do_not_collapse_into_one_key():
+    # Arrange — identical for far more than 60 characters, differing
+    # only at the end; a truncated excerpt would merge them.
+    prefix = "ERRO:   [E] [PS-221 §3 public-extra-not-closed-under-all] p.toml: requirement "
+    stdout = f"{prefix}`pytest>=7.0` in PUBLIC extra\n{prefix}`black>=24.0` in PUBLIC extra"
+    # Act
+    keys = extract_violation_keys(stdout)
+    # Assert
+    assert len(keys) == 2
+
+
+def test_unparsable_erro_survives_a_distribution_filter():
+    # Arrange — an unparsed line has no readable dist; "I cannot tell
+    # whose this is" must not collapse into "not theirs".
+    stdout = UNPARSABLE_ERRO
+    # Act
+    keys = extract_violation_keys(stdout, distribution_filter="scitex-io")
+    # Assert
+    assert len(keys) == 1
+
+
+def test_pre_existing_unparsable_erro_is_not_net_new():
+    # Arrange
+    head = UNPARSABLE_ERRO
+    base = UNPARSABLE_ERRO
+    # Act
+    net_new = compute_net_new(head, base)
+    # Assert
+    assert net_new == set()
+
+
+def test_newly_introduced_unparsable_erro_is_net_new():
+    # Arrange
+    head = UNPARSABLE_ERRO
+    base = ""
+    # Act
+    net_new = compute_net_new(head, base)
+    # Assert
+    assert len(net_new) == 1
+
+
+def test_filter_keeps_a_net_new_unparsable_erro_line():
+    # Arrange
+    head = UNPARSABLE_ERRO
+    net_new = compute_net_new(head, "")
+    # Act
+    rendered = filter_to_net_new_lines(head, net_new)
+    # Assert
+    assert UNPARSABLE_ERRO in rendered
+
+
+def test_filter_drops_a_pre_existing_unparsable_erro_line():
+    # Arrange — the renderer must apply the same net-new test the
+    # counter now applies, or the two disagree in the other direction.
+    head = UNPARSABLE_ERRO
+    net_new = compute_net_new(head, UNPARSABLE_ERRO)
+    # Act
+    rendered = filter_to_net_new_lines(head, net_new)
+    # Assert
+    assert UNPARSABLE_ERRO not in rendered
+
+
+def test_filter_keeps_advisory_prose_regardless_of_net_new():
+    # Arrange — banners are the audit's framing, not findings.
+    head = BANNER_WARN
+    # Act
+    rendered = filter_to_net_new_lines(head, set())
+    # Assert
+    assert BANNER_WARN in rendered
