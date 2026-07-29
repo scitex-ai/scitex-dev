@@ -343,19 +343,18 @@ class SciTeXChecker(
         # rules). They target files UNDER a configured script dir, which
         # is_script() deliberately excludes, so they run BEFORE the is_script
         # early-return and are gated on the research project-type instead.
-        org_emitted = False
         if "research" in (getattr(self.config, "project_types", None) or ()):
             from ._rules._script_organization import check_script_organization
 
-            org_emitted = check_script_organization(self)
+            check_script_organization(self)
+
+        from ._severity_promotion import finalize_issues
 
         if not self._is_script:
-            if org_emitted:
-                from .rules import SEVERITY_ORDER
-
-                self.issues.sort(
-                    key=lambda i: (-SEVERITY_ORDER[i.rule.severity], i.line)
-                )
+            # NOT a bare `return self.issues`: the category-severity floor must
+            # run here too, or figrecipe plugin-emitted figure/plot rules stay
+            # `warning` for every file under `scripts/`. See finalize_issues.
+            self.issues = finalize_issues(self.issues, self.config)
             return self.issues
 
         if not self._has_main_guard:
@@ -378,18 +377,9 @@ class SciTeXChecker(
             for line, col, src in self._figrecipe_usages:
                 self._add(p010, line, col, src)
 
-        # Central category-severity-override floor (figure-family v1). Plugin
-        # checkers shipped by figrecipe honour only per_rule_severity and
-        # ignore category_severity_override; apply it here over the combined
-        # issue list (per-rule pins still WIN). See _severity_promotion.py.
-        from ._severity_promotion import promote_category_severity
-
-        self.issues = promote_category_severity(self.issues, self.config)
-
-        # Sort: errors first, then by line
-        from .rules import SEVERITY_ORDER
-
-        self.issues.sort(key=lambda i: (-SEVERITY_ORDER[i.rule.severity], i.line))
+        # Category-severity floor + sort. Same helper as the early-return
+        # above, so both exit paths finalize identically.
+        self.issues = finalize_issues(self.issues, self.config)
         return self.issues
 
     def _add(self, rule: Rule | None, line: int, col: int, source_line: str) -> None:

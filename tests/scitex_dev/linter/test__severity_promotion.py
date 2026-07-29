@@ -328,4 +328,190 @@ class TestResearchConfigYamlForms:
         assert _sev_of(issues, "STX-FM001") == "warning"
 
 
+# ---------------------------------------------------------------------- #
+# Regression: files under `scripts/` must promote too (clew, 2026-07-29)  #
+# ---------------------------------------------------------------------- #
+#
+# ``is_script()`` returns False for anything under a configured
+# ``script_dirs`` / ``library_dirs`` entry, and ``get_issues`` used to
+# early-return on that branch BEFORE applying the category floor. In a
+# research repo essentially ALL figure code lives under ``scripts/``, so the
+# whole promotion was inert exactly where it mattered: rules emitted through
+# ``_add`` (FM001-FM009 / P001-P005) showed as ERROR while every
+# plugin-emitted rule in the SAME file (FM010/FM011/FM016/FM019, P006-P009)
+# stayed WARNING.
+#
+# These tests do NOT require figrecipe: they drive ``lint_source``'s documented
+# ``plugins=`` payload seam with a REAL checker that reproduces the figrecipe
+# emit contract (honour ``per_rule_severity``, ignore the category override).
+# Real tmp trees, real ``.scitex/dev/config.yaml`` — no monkeypatch, no mocks.
+
+
+_PLUGIN_RULE_IDS = ("STX-FM010", "STX-FM011", "STX-FM016")
+
+
+def _plugin_payload():
+    """A real plugin payload mirroring figrecipe's checker contract.
+
+    figrecipe's ``FigureMethodChecker`` / ``RawMplBypassChecker`` resolve
+    severity from ``config.per_rule_severity`` ONLY — they never consult
+    ``category_severity_override``. This checker does the same, so whatever
+    severity these rules end up with comes from the engine's central floor,
+    which is precisely what is under test.
+    """
+    import ast
+    from dataclasses import replace as _replace
+
+    from scitex_dev.linter.checker import _is_allowed_by_comment
+
+    rules = {
+        rid: Rule(
+            id=rid,
+            severity="warning",
+            category="figure",
+            message=f"{rid} message",
+            suggestion=f"{rid} suggestion",
+        )
+        for rid in _PLUGIN_RULE_IDS
+    }
+
+    class PluginFigureChecker(ast.NodeVisitor):
+        category = "figure"
+
+        def __init__(self, source_lines, config):
+            self.source_lines = source_lines
+            self.config = config
+            self.issues: list = []
+
+        def _emit(self, rule, node):
+            line = ""
+            if 1 <= node.lineno <= len(self.source_lines):
+                line = self.source_lines[node.lineno - 1].rstrip()
+            if rule.id in self.config.disable:
+                return
+            if _is_allowed_by_comment(line, rule.id):
+                return
+            sev = self.config.per_rule_severity.get(rule.id)
+            if sev:
+                rule = _replace(rule, severity=sev)
+            self.issues.append(
+                Issue(rule=rule, line=node.lineno, col=node.col_offset,
+                      source_line=line)
+            )
+
+        def visit_Call(self, node):
+            func = node.func
+            if isinstance(func, ast.Attribute):
+                if func.attr == "set_xlabel":
+                    self._emit(rules["STX-FM010"], node)
+                elif func.attr == "set_visible":
+                    self._emit(rules["STX-FM011"], node)
+                elif func.attr == "subplots":
+                    self._emit(rules["STX-FM016"], node)
+            self.generic_visit(node)
+
+    return {
+        "rules": list(rules.values()),
+        "call_rules": {},
+        "axes_hints": {},
+        "checkers": [PluginFigureChecker],
+    }
+
+
+_PLUGIN_SRC = (
+    "import matplotlib.pyplot as plt\n"
+    "fig, ax = plt.subplots()\n"
+    "ax.set_xlabel('x')\n"
+    "ax.spines['top'].set_visible(False)\n"
+)
+
+
+def _make_tree(tmp_path, project_type):
+    """Create a REAL project tree declaring *project_type*, with a scripts/ dir."""
+    (tmp_path / ".scitex" / "dev").mkdir(parents=True)
+    (tmp_path / ".scitex" / "dev" / "config.yaml").write_text(
+        f"project-type: {project_type}\n"
+    )
+    (tmp_path / "scripts").mkdir()
+    return tmp_path
+
+
+def _lint_at(path, tmp_path, *, force_enable_fm=False):
+    """Lint ``_PLUGIN_SRC`` as *path*, with config resolved from that file."""
+    cfg = load_config(start_path=str(path))
+    if force_enable_fm and "FM" not in cfg.enable:
+        cfg.enable = [*cfg.enable, "FM"]
+    return lint_source(_PLUGIN_SRC, str(path), cfg, plugins=_plugin_payload())
+
+
+class TestScriptDirFilesPromoteToo:
+    """Plugin-emitted figure rules promote for files under ``scripts/`` too."""
+
+    @pytest.mark.parametrize("rule_id", _PLUGIN_RULE_IDS)
+    def test_scripts_dir_file_promotes_in_research(self, tmp_path, rule_id):
+        # Arrange — research tree; the file lives under scripts/ (is_script
+        # False), which is where a research repo's figure code actually lives.
+        root = _make_tree(tmp_path, "research")
+        target = root / "scripts" / "make_figure.py"
+        # Act
+        issues = _lint_at(target, root)
+        # Assert
+        assert _sev_of(issues, rule_id) == "error", (
+            f"{rule_id} under scripts/ must promote to error in a research "
+            f"project; got {[(i.rule.id, i.rule.severity) for i in issues]}"
+        )
+
+    @pytest.mark.parametrize("rule_id", _PLUGIN_RULE_IDS)
+    def test_non_scripts_file_promotes_in_research(self, tmp_path, rule_id):
+        # Arrange — control for the LOCATION axis: same research tree, but the
+        # file is a plain script (is_script True). This path always worked.
+        root = _make_tree(tmp_path, "research")
+        target = root / "make_figure.py"
+        # Act
+        issues = _lint_at(target, root)
+        # Assert
+        assert _sev_of(issues, rule_id) == "error"
+
+    @pytest.mark.parametrize("rule_id", _PLUGIN_RULE_IDS)
+    def test_non_research_scripts_dir_stays_warning(self, tmp_path, rule_id):
+        # Arrange — POSITIVE CONTROL for the PROJECT-TYPE axis: an identical
+        # tree that is NOT research. Without this, "error everywhere" would be
+        # indistinguishable from a working promotion.
+        root = _make_tree(tmp_path, "pip")
+        target = root / "scripts" / "make_figure.py"
+        # Act
+        issues = _lint_at(target, root, force_enable_fm=True)
+        # Assert
+        assert _sev_of(issues, rule_id) == "warning", (
+            f"{rule_id} must stay warning outside a research project; "
+            f"got {[(i.rule.id, i.rule.severity) for i in issues]}"
+        )
+
+    def test_per_rule_pin_still_wins_under_scripts(self, tmp_path):
+        # Arrange — research tree, file under scripts/, FM010 pinned to warning.
+        root = _make_tree(tmp_path, "research")
+        target = root / "scripts" / "make_figure.py"
+        cfg = load_config(start_path=str(target))
+        cfg.per_rule_severity = {**cfg.per_rule_severity, "STX-FM010": "warning"}
+        # Act
+        issues = lint_source(
+            _PLUGIN_SRC, str(target), cfg, plugins=_plugin_payload()
+        )
+        # Assert — the pin wins; its neighbours still promote.
+        assert _sev_of(issues, "STX-FM010") == "warning"
+        assert _sev_of(issues, "STX-FM011") == "error"
+
+    def test_stx_allow_still_suppresses_under_scripts(self, tmp_path):
+        # Arrange — the per-line opt-out must survive the floor, not be
+        # resurrected by it.
+        root = _make_tree(tmp_path, "research")
+        target = root / "scripts" / "make_figure.py"
+        cfg = load_config(start_path=str(target))
+        src = "ax.set_xlabel('x')  # stx-allow: STX-FM010\n"
+        # Act
+        issues = lint_source(src, str(target), cfg, plugins=_plugin_payload())
+        # Assert
+        assert _sev_of(issues, "STX-FM010") is None
+
+
 # EOF

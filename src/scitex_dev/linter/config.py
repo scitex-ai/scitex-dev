@@ -166,14 +166,22 @@ def load_config(start_path: str | None = None) -> LinterConfig:
 
     if "research" in _project_types:
         existing = config_dict.get("category_severity_override", {}) or {}
-        # Figure-family promotion v1 (PR #264, operator directive 2026-06-28):
+        # Figure-family promotion (PR #264, operator directive 2026-06-28):
         # figrecipe owns the DETECTION of figure-bypass patterns; here we
-        # promote the EXISTING figure-family rules to ERROR in research
-        # projects so the post-edit hook (run_lint.sh, exit 2) deterministically
-        # BLOCKS figure-bypass code. The v1 set spans TWO categories:
-        #   - "figure": FM001-FM011 + FIG001
-        #   - "plot":   P001-P009
-        # (verified against figrecipe's _linter_plugin.py rule objects).
+        # promote the figure-family rules to ERROR in research projects so the
+        # post-edit hook (run_lint.sh, exit 2) deterministically BLOCKS
+        # figure-bypass code.
+        #
+        # The promoted set is defined BY CATEGORY, never by rule id: EVERY rule
+        # whose `category` is "figure" or "plot" promotes, whichever package
+        # declares it and whichever checker emits it. Do not re-introduce an
+        # id-range enumeration here — the previous comment pinned the set as
+        # "figure: FM001-FM011 + FIG001 (verified against figrecipe's
+        # _linter_plugin.py)" and then silently rotted as figrecipe grew
+        # FM016-FM019, making readers believe those rules were out of scope.
+        # (They are not: they carry category="figure" and always promoted.)
+        # `scitex-dev linter rules --json` is the live listing.
+        #
         # As always, per-rule `per_rule_severity` overrides WIN — the category
         # map is the floor, not the ceiling. `# stx-allow: STX-<ID>` per-line
         # comments remain the opt-out (handled in each checker's _add/_emit).
