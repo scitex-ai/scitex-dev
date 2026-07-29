@@ -111,13 +111,17 @@ written ``reason``::
     audit:
       exemptions:
         PS-224:
-          - path: .github/workflows/test.yml::test
+          - path: .github/workflows/test.yml::<job-id-copied-from-the-audit-output>
             line: 0
             reason: "setup-emacs installs Nix (needs root) + a 5-version matrix"
 
 **The ``path`` is the SITE KEY, not a file path**: ``<workflow-path>::<job-id>``
 — the exact string this rule prints as the finding's location, so it can be
-copied verbatim from the audit output. It is job-qualified BY DESIGN: a
+copied verbatim from the audit output. The job id is deliberately an OBVIOUS
+placeholder above: a plausible-looking example job name invites copying a job
+that does not exist in the target repo, and an exemption keyed on a
+non-existent job silently exempts NOTHING while reading as done. Run the audit,
+read the finding's location, paste THAT. It is job-qualified BY DESIGN: a
 bare file path would also exempt every OTHER job in the same file, so a
 migrated job that later regressed would go unnoticed. One entry exempts
 exactly one job.
@@ -231,6 +235,32 @@ def _exempt_hint(site: str) -> str:
     )
 
 
+def _report_config_errors(repo: Path, config, violation_cls, out: list) -> None:
+    """Surface rejected / dropped ``audit.exemptions`` for PS-224, at ``E``.
+
+    The module docstring PROMISES this ("reported at ``E`` by the shared
+    config-error arm") — but until 2026-07-29 no such arm existed in this
+    module, so a PS-224 exemption the loader rejected vanished without a word.
+    PS-224 is severity ``E`` already, so the finding needs no per-finding
+    severity override.
+
+    An escape hatch that fails silently is worse than no hatch: the author
+    reads their own config and believes it took effect.
+    """
+    from .._config import exemption_notice_applies, format_exemption_notice
+
+    for notice in tuple(getattr(config, "exemption_errors", ()) or ()):
+        if not exemption_notice_applies(notice, _RULE):
+            continue
+        out.append(
+            violation_cls(
+                _RULE,
+                str(repo / ".scitex/dev/config.yaml"),
+                format_exemption_notice(notice, _RULE),
+            )
+        )
+
+
 def check_ps224_runner_destinations(
     repo: Path,
     violation_cls: type,
@@ -280,6 +310,9 @@ def check_ps224_runner_destinations(
             config = load_config(repo)
         except Exception:  # pragma: no cover - config is best-effort here
             config = None
+
+    if config is not None:
+        _report_config_errors(repo, config, violation_cls, out)
 
     exemption_for = getattr(config, "exemption_for", None)
 

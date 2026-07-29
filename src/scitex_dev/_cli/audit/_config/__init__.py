@@ -17,11 +17,17 @@ from ._enforce_logging import (
     ENFORCE_LOGGING_VALUES,
     parse_enforce_logging,
 )
+from ._exemptions import (
+    EXEMPTION_BLOCK_PREFIX,
+    Exemption,
+    exemption_notice_applies,
+    format_exemption_notice,
+    parse_exemptions,
+)
 from ._loader import (
     CAPABILITY_RULES,
     KNOWN_CAPABILITIES,
     PROJECT_TYPES,
-    Exemption,
     ProjectConfig,
     capability_for_rule,
     detect_project_types,
@@ -33,13 +39,17 @@ __all__ = [
     "CAPABILITY_RULES",
     "ENFORCE_LOGGING_REASONED_LEVELS",
     "ENFORCE_LOGGING_VALUES",
+    "EXEMPTION_BLOCK_PREFIX",
     "KNOWN_CAPABILITIES",
     "PROJECT_TYPES",
     "Exemption",
     "ProjectConfig",
     "capability_for_rule",
     "detect_project_types",
+    "exemption_notice_applies",
+    "format_exemption_notice",
     "load_config",
     "parse_enforce_logging",
+    "parse_exemptions",
     "write_config",
 ]
