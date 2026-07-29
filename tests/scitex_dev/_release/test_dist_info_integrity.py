@@ -27,13 +27,27 @@ import pytest
 
 from scitex_dev._release.dist_info_integrity import (
     AMBIGUOUS_METADATA_REMEDY,
+    DIST_INFO_NOTE,
     DOUBLE_INSTALL_REMEDY,
+    _REMEDY_CASE_DOUBLE,
     _REMEDY_CASE_RESIDUE,
+    _REMEDY_READONLY_LAYER,
     annotate_dist_info_integrity,
     count_dist_infos,
     dist_info_integrity,
     dist_info_status,
 )
+
+
+def _flat(text: str) -> str:
+    """Whitespace-collapsed, lowercased text.
+
+    The claims under test span hard-wrapped lines, so an exact-sentence
+    assertion breaks on any re-wrap. These tests target the SUBSTANCE — that
+    resolution is stated to be unspecified, that both directions are named —
+    so the next honest rewording does not have to fight the suite.
+    """
+    return " ".join(text.split()).lower()
 
 
 def _make_empty_dist_info(site: Path, dist: str, version: str) -> Path:
@@ -367,13 +381,142 @@ def test_remedy_gives_the_two_cases_different_commands():
     assert distinct
 
 
-def test_remedy_names_the_read_only_base_image_case():
+# --- Resolution among duplicates is UNSPECIFIED ------------------------------
+# CORRECTED 2026-07-29 (second correction). The shipped text said
+# importlib.metadata "locks onto whichever dist-info it enumerates first —
+# measured: it picked the OLDER one". That was ONE measurement on ONE setup
+# generalised into a rule. Three hosts, both outcomes: scitex-dev 0.38.0 over
+# 0.38.1 (OLDER won) and scitex-cards two-in-one-dir (OLDER won), against
+# scitex-cards 0.17.10 over a base-layer 0.17.9 (NEWER won). Resolution is
+# UNSPECIFIED — sys.path order, no version preference — so "the older" is a
+# prediction nobody may build a repair on.
+
+
+def test_remedy_says_resolution_among_duplicates_is_unspecified():
     # Arrange
+    text = _flat(AMBIGUOUS_METADATA_REMEDY)
+    # Act
+    stated = "unspecified" in text
+    # Assert
+    assert stated
+
+
+def test_remedy_explains_why_resolution_is_unspecified():
+    # Arrange — a bare "unspecified" invites the reader to go find the rule
+    # anyway. The mechanism has to be named: sys.path iteration order, with
+    # no version preference of any kind.
+    text = _flat(AMBIGUOUS_METADATA_REMEDY)
+    # Act
+    names_mechanism = "sys.path" in text and (
+        "no version comparison" in text or "no version preference" in text
+    )
+    # Assert
+    assert names_mechanism
+
+
+def test_remedy_names_both_directions():
+    # Arrange — it must be visible that it goes BOTH ways; naming only one
+    # outcome is what produced the wrong rule in the first place.
+    text = _flat(AMBIGUOUS_METADATA_REMEDY)
+    # Act
+    both = "older" in text and "newer" in text
+    # Assert
+    assert both
+
+
+def test_remedy_never_predicts_which_duplicate_wins():
+    # Arrange — regression guard on the retired sentence, in either spelling.
+    text = _flat(AMBIGUOUS_METADATA_REMEDY)
+    # Act
+    predicts = "picked the older" in text or "enumerates first" in text
+    # Assert
+    assert not predicts
+
+
+def test_remedy_keeps_the_concrete_consequence():
+    # Arrange — the correction must not soften the point: the consequence is
+    # unchanged and is why the check exists.
+    text = _flat(AMBIGUOUS_METADATA_REMEDY)
+    # Act
+    consequence = "may not describe the files that actually run" in text
+    # Assert
+    assert consequence
+
+
+def test_note_says_resolution_is_unspecified_in_either_direction():
+    # Arrange — the report-level note carried the same wrong shape ("a stale
+    # dist-info shadow the newer one").
+    text = _flat(DIST_INFO_NOTE)
+    # Act
+    honest = "unspecified" in text and "newer" in text and "older" in text
+    # Assert
+    assert honest
+
+
+# --- CASE 3: read-only lower overlay layer -----------------------------------
+# The measured "delete the stale dist-info directory only — safe" advice is a
+# SAME-LAYER fix. It does not transfer to a stale dist-info in a read-only
+# lower layer, where rm -rf only masks the entry in the caller's upper layer.
+
+
+def test_read_only_layer_is_its_own_labelled_case():
+    # Arrange
+    text = _flat(AMBIGUOUS_METADATA_REMEDY)
+    # Act
+    labelled = "case 3" in text and "read-only lower overlay layer" in text
+    # Assert — a distinct case, not a footnote to CASE 2.
+    assert labelled
+
+
+def test_read_only_layer_says_the_same_layer_fix_does_not_transfer():
+    # Arrange
+    text = _flat(_REMEDY_READONLY_LAYER)
+    # Act
+    scoped = "does not transfer" in text
+    # Assert
+    assert scoped
+
+
+def test_read_only_layer_states_the_image_still_ships_two():
+    # Arrange — the failure mode is that the container looks repaired while
+    # every FRESH container starts broken again.
+    text = _flat(_REMEDY_READONLY_LAYER)
+    # Act
+    stated = "fresh container" in text
+    # Assert
+    assert stated
+
+
+def test_read_only_layer_is_labelled_inferred_not_measured():
+    # Arrange — overlay mechanics could not be reproduced here (`mount -t
+    # overlay` needs superuser, `mknod` fails, CapEff 0000000000000000), so
+    # the case must not be promoted to a measured result.
+    text = _flat(_REMEDY_READONLY_LAYER)
+    # Act
+    labelled = "inferred, not measured" in text
+    # Assert
+    assert labelled
+
+
+def test_same_layer_fix_is_scoped_to_the_same_layer():
+    # Arrange — the rm -rf prescription itself must carry its scope, so it
+    # cannot be lifted out of context into a CASE 3 situation.
+    text = _flat(_REMEDY_CASE_DOUBLE)
+    # Act
+    scoped = "same-layer" in text and "rm -rf" in text
+    # Assert
+    assert scoped
+
+
+def test_rewrite_did_not_drop_the_parts_that_were_right():
+    # Arrange — POSITIVE CONTROL for the correction above. The two things the
+    # shipped text got RIGHT are the case discriminator and the residue tell;
+    # a rewrite must not silently take them with it.
     text = AMBIGUOUS_METADATA_REMEDY
     # Act
-    case = "READ-ONLY BASE IMAGE LAYER"
-    # Assert — an in-container delete only whiteouts the caller's layer.
-    assert case in text
+    kept = "ls -A" in text and "EMPTY DIRECTORY" in text
+    # Assert
+    assert kept
 
 
 def test_double_install_remedy_alias_is_the_same_text():
@@ -426,6 +569,34 @@ def test_dirty_message_says_uninstall_repeatedly(dirty_result):
     message = result["message"]
     # Assert
     assert "pip uninstall foo` REPEATEDLY" in message
+
+
+def test_dirty_message_says_resolution_is_unspecified(dirty_result):
+    # Arrange — the verdict line above the remediation carried its own copy
+    # of the "(measured: the OLDER one)" claim.
+    result = dirty_result
+    # Act
+    message = _flat(result["message"])
+    # Assert
+    assert "unspecified" in message and "sys.path" in message
+
+
+def test_dirty_message_names_both_directions(dirty_result):
+    # Arrange
+    result = dirty_result
+    # Act
+    message = _flat(result["message"])
+    # Assert — measured both ways across three hosts.
+    assert "older" in message and "newer" in message
+
+
+def test_dirty_message_keeps_the_concrete_consequence(dirty_result):
+    # Arrange
+    result = dirty_result
+    # Act
+    message = _flat(result["message"])
+    # Assert — the point survives the correction.
+    assert "may not describe the files that actually run" in message
 
 
 def test_dirty_message_matches_repair_template(dirty_result):

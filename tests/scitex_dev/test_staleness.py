@@ -376,6 +376,42 @@ def test_ambiguity_message_offers_rmdir_for_residue(tmp_path):
     assert safe_remedy in message
 
 
+def test_ambiguity_message_says_resolution_is_unspecified(tmp_path):
+    # Arrange — CORRECTED 2026-07-29. The gate used to hand the reader
+    # "measured: it picked the OLDER one", a one-host result generalised
+    # into a rule; a third host measured the NEWER winning. Assert the
+    # SUBSTANCE (unspecified, and both directions named), not a sentence.
+    message = " ".join(_ambiguity_message(tmp_path).split()).lower()
+    # Act
+    honest = (
+        "unspecified" in message
+        and "sys.path" in message
+        and "older" in message
+        and "newer" in message
+    )
+    # Assert
+    assert honest
+
+
+def test_ambiguity_message_keeps_the_concrete_consequence(tmp_path):
+    # Arrange — the correction must not soften why the gate fires.
+    message = " ".join(_ambiguity_message(tmp_path).split()).lower()
+    # Act
+    consequence = "may not describe the files that actually run" in message
+    # Assert
+    assert consequence
+
+
+def test_ambiguity_message_labels_the_read_only_layer_case(tmp_path):
+    # Arrange — CASE 2's `rm -rf` does not transfer to a stale dist-info in a
+    # read-only lower layer; the gate's text must carry that as its own case.
+    message = " ".join(_ambiguity_message(tmp_path).split()).lower()
+    # Act
+    labelled = "case 3" in message and "does not transfer" in message
+    # Assert
+    assert labelled
+
+
 def test_ambiguity_message_no_longer_prescribes_force_reinstall(tmp_path):
     # Arrange
     message = _ambiguity_message(tmp_path)
