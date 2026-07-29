@@ -210,7 +210,7 @@ def test_inventory_is_empty_when_no_skips_are_declared():
 def test_summary_states_the_unmasked_error_count():
     """Real errors are the number that drives the exit code."""
     # Arrange
-    args = dict(unmasked_errors=0, masked=150, declared=4)
+    args = dict(unmasked_errors=0, masked=150, declared=4, inspected=0, unreadable=0)
     # Act
     line = render_summary("scitex-hub", **args)
     # Assert
@@ -220,7 +220,7 @@ def test_summary_states_the_unmasked_error_count():
 def test_summary_states_the_masked_count_alongside_it():
     """Reporting only '0 errors' while 150 are masked is a lie of omission."""
     # Arrange
-    args = dict(unmasked_errors=0, masked=150, declared=4)
+    args = dict(unmasked_errors=0, masked=150, declared=4, inspected=0, unreadable=0)
     # Act
     line = render_summary("scitex-hub", **args)
     # Assert
@@ -230,7 +230,7 @@ def test_summary_states_the_masked_count_alongside_it():
 def test_summary_states_zero_masked_when_nothing_is_deferred():
     """The masked number is unconditional, never omitted when zero."""
     # Arrange
-    args = dict(unmasked_errors=3, masked=0, declared=0)
+    args = dict(unmasked_errors=3, masked=0, declared=0, inspected=0, unreadable=0)
     # Act
     line = render_summary("scitex-dev", **args)
     # Assert
@@ -277,7 +277,7 @@ def test_unmasked_error_count_excludes_warnings():
 def test_summary_reports_warnings_separately_from_errors():
     """The warning count is surfaced, not folded into the error count."""
     # Arrange
-    args = dict(unmasked_errors=1, unmasked_total=8, masked=0, declared=0)
+    args = dict(unmasked_errors=1, unmasked_total=8, masked=0, declared=0, inspected=0, unreadable=0)
     # Act
     line = render_summary("scitex-dev", **args)
     # Assert
