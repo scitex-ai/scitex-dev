@@ -55,7 +55,19 @@ jobs:
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
     steps:
       - name: CLA Assistant
-        uses: contributor-assistant/github-action@v2.6.1
+        # PINNED TO A FULL COMMIT SHA, not the mutable `v2.6.1` tag. This step
+        # runs third-party code on `pull_request_target` / `issue_comment` —
+        # triggers any stranger can fire on this PUBLIC repo, in base-repo
+        # context, with `GH_PERSONAL_ACCESS_TOKEN` in the environment. A tag
+        # the action's owner can silently repoint is a supply-chain swap
+        # window; a SHA is immutable. Bump deliberately, never implicitly.
+        #
+        # This SHA is upstream `v2.6.1` exactly as it resolves today, so this
+        # is an immutability change ONLY — same code, no behaviour delta. The
+        # fleet standard is the ORG-OWNED fork
+        # `scitex-ai/github-action@114064ad` (node24), reached by adopting the
+        # org reusable workflow; that supersedes this pin. See PR #447.
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
