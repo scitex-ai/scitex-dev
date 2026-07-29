@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Timestamp: 2026-07-30
-# File: tests/scitex_dev/_cli/audit/test__emitter_extractor_round_trip.py
+# File: tests/scitex_dev/_cli/audit/test__diff_emitter_round_trip.py
 
 """Which emitted finding shapes can the violation-key extractor actually read?
 
