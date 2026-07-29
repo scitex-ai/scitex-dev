@@ -26,9 +26,22 @@ from pathlib import Path
 
 import pytest
 
-from scitex_dev._cli.audit._project import _registry
+from scitex_dev._cli.audit._project import _registry, _rules
 
-_SOURCE = Path(_registry.__file__).read_text(encoding="utf-8")
+# The rule LITERALS moved to `_rules/_s*.py`, but the corpus ASSEMBLY — the
+# severity/slug tables, the co-located merge loops and the final `_patch`
+# apply — deliberately stayed together in `_rules/__init__.py`, which is
+# what these tests read and re-execute. `_registry` is now a thin
+# re-export, so its source no longer carries the statements under test.
+#
+# The three mechanisms below (source regex, attribute access, exec-with-
+# injection) all require the tables, the merges and the apply to live in
+# ONE module. That is why the refactor kept them together rather than
+# splitting them into `_overrides.py` / `_colocated.py`: doing so silently
+# disabled every test in this file, which is precisely the failure mode
+# they exist to catch.
+_ASSEMBLY = _rules
+_SOURCE = Path(_ASSEMBLY.__file__).read_text(encoding="utf-8")
 
 # The statement that applies the override table.
 _APPLY_RE = re.compile(r"^RULES = \{code: _patch\(rule\) for code, rule in RULES", re.M)
@@ -124,11 +137,11 @@ def _exec_registry_with_override(code: str, severity: str) -> dict:
     )
     assert injected != _SOURCE, "override-table anchor not found; test is stale"
     ns: dict = {
-        "__name__": _registry.__name__,
-        "__file__": _registry.__file__,
-        "__package__": _registry.__package__,
+        "__name__": _ASSEMBLY.__name__,
+        "__file__": _ASSEMBLY.__file__,
+        "__package__": _ASSEMBLY.__name__,
     }
-    exec(compile(injected, _registry.__file__, "exec"), ns)
+    exec(compile(injected, _ASSEMBLY.__file__, "exec"), ns)
     return ns["RULES"]
 
 
