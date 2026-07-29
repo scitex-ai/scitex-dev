@@ -324,10 +324,22 @@ def export_skills(
 
         return export_from_pypi(dest=dest, package=package)
 
-    # Clean stale dist-info to prevent importlib.metadata confusion
-    from ..._core.dist_info import clean_stale_dist_info
+    # REPORT duplicate dist-infos; never mutate site-packages from here.
+    # Until 2026-07-29 this line called clean_stale_dist_info(), which
+    # shutil.rmtree'd every dist-info but the newest-by-MTIME. Exporting
+    # skills silently deleted package metadata across every site dir, and
+    # mtime is not version ordering (`cp -p` preserves it, image builds stamp
+    # it, an overlay lower layer carries the base image's) — so it could
+    # delete the NEWER distribution's metadata and leave a package that
+    # imports fine while reporting the wrong version. Independently of that:
+    # on a container the target may sit in the READ-ONLY BASE LAYER, where
+    # the delete only writes a whiteout that MASKS it — appearing to succeed
+    # while silently changing a property (a whiteout-free overlay) that
+    # agents check before a base-image swap. An export must not have a
+    # destructive side effect on the environment; a warning is enough.
+    from ..._core.dist_info import report_duplicate_dist_infos
 
-    clean_stale_dist_info()
+    report_duplicate_dist_infos()
 
     all_skills = list_skills(
         package=package,
