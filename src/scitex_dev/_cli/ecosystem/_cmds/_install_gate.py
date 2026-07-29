@@ -147,10 +147,23 @@ def register(ecosystem):
         is_flag=True,
         help="Print the target paths and contents without writing.",
     )
+    @click.option(
+        "--path",
+        default=None,
+        help=(
+            "Checkout to write into. Same semantics as `audit-all --path`. "
+            "Without it the cwd's repository is used; the `~/proj/<name>` "
+            "registry guess is the last resort and is announced when used."
+        ),
+    )
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-    def ecosystem_install_audit_gate(distribution, force, dry_run, yes):
+    def ecosystem_install_audit_gate(distribution, force, dry_run, path, yes):
         del yes  # generation is non-destructive when --force is absent
-        from ...._ecosystem import ECOSYSTEM, get_local_path
+        from ...._ecosystem import ECOSYSTEM
+        from ._write_target import (
+            assert_target_is_distribution,
+            resolve_write_target,
+        )
 
         if distribution not in ECOSYSTEM:
             click.echo(f"error: '{distribution}' not in ECOSYSTEM", err=True)
@@ -160,13 +173,20 @@ def register(ecosystem):
             click.echo(f"skip  {distribution}: archived", err=True)
             raise SystemExit(0)
 
-        local = get_local_path(distribution)
+        # This verb writes THREE files, one of which APPENDS to an existing
+        # `tests/conftest.py`. It previously resolved its target with the
+        # ECOSYSTEM `~/proj/<name>` guess and had no --path — the same shape
+        # that made `install-cross-package-gate` write into a checkout
+        # nobody named (measured 2026-07-29). Guard before touching anything.
+        local, target_source = resolve_write_target(distribution, path)
         if local is None or not local.exists():
             click.echo(
                 f"error: local path for '{distribution}' missing: {local}",
                 err=True,
             )
             raise SystemExit(2)
+
+        assert_target_is_distribution(local, distribution, target_source)
 
         tests = local / "tests"
         develop = tests / "develop"
