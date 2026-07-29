@@ -127,7 +127,11 @@ change exists to remove.
 
 from __future__ import annotations
 
-__all__ = ["_check_startup_speed", "_startup_speed_violation"]
+__all__ = [
+    "_check_startup_speed",
+    "_did_not_run_violation",
+    "_startup_speed_violation",
+]
 
 # A healthy bare-interpreter `python -c "pass"` costs ~20ms (the figure
 # the original §10 docstring recorded as "normal"). It is the reference
@@ -203,6 +207,39 @@ def _untrustworthy_reason(
                 "budget-sized difference"
             )
     return None
+
+
+def _did_not_run_violation(package: str, reason: str) -> "object":
+    """§10w for the case where the gate NEVER MEASURED ANYTHING.
+
+    A THIRD unknown, distinct from the two this module already had. Both
+    existing §10w bands mean "we measured, and the numbers cannot support a
+    verdict". This one means "we never got as far as measuring", and until
+    now it was represented by a bare ``return`` — so it rendered exactly
+    like a package that measured comfortably under budget.
+
+    That is the defect: `§10 did not run` and `§10 ran and found nothing`
+    were the same observable. Neither emitted a line, so a reader auditing
+    a clean report could not tell which one they were looking at, and the
+    absent case is the one that silently shrinks the gate's coverage.
+
+    Kept as §10w (WARN), not §10 (ERROR), for two reasons. The gate not
+    running is not evidence the package is slow, so an error would assert
+    something unmeasured. And severity is rule-keyed rather than
+    per-finding, so §10 cannot carry a warning band of its own — the same
+    constraint that forced the honest shape on the trust gate.
+    """
+    from ._audit import Violation
+
+    return Violation(
+        package,
+        "§10w",
+        f"§10 import-budget DID NOT RUN: {reason}. This is NOT a pass — "
+        "nothing was measured, so the budget is neither met nor exceeded. "
+        "Distinguish this from `COULD NOT MEASURE RELIABLY`, which means "
+        "the measurement happened and its numbers could not support a "
+        "verdict. Fix the cause above to put this package back under §10.",
+    )
 
 
 def _startup_speed_violation(
@@ -317,10 +354,23 @@ def _check_startup_speed(
 
     ep_value = _ep_value_for(package)
     if ep_value is None:
+        out.append(
+            _did_not_run_violation(
+                package,
+                "no console-script entry point resolved, so there is no "
+                "module to time",
+            )
+        )
         return
     # Entry-point format is "module.path:object"; take the TOP-LEVEL package.
     module_name = ep_value.split(":", 1)[0].split(".", 1)[0]
     if not module_name:
+        out.append(
+            _did_not_run_violation(
+                package,
+                f"entry point {ep_value!r} yields no top-level module name",
+            )
+        )
         return
 
     def _samples_ms(code: str) -> list[float] | None:
@@ -354,7 +404,23 @@ def _check_startup_speed(
     baseline_samples = _samples_ms("pass")
     full_samples = _samples_ms(f"import {module_name}")
     if baseline_samples is None or full_samples is None:
-        return  # import failure — covered elsewhere
+        # Which series failed says different things, so the reason names it:
+        # a failing BASELINE means the bare interpreter could not run at all
+        # (the environment is broken, and nothing here is about the package);
+        # a failing FULL means `import <module>` itself raised. The import
+        # failure is indeed reported by another check, but §10's own
+        # NON-EXECUTION was not, which is what made a shrinking gate
+        # invisible.
+        which = (
+            "the bare-interpreter baseline could not be measured (the "
+            "environment cannot run `python -c pass`)"
+            if baseline_samples is None
+            else f"`import {module_name}` failed or timed out, so no import "
+            "timing exists (the import failure itself is reported "
+            "separately)"
+        )
+        out.append(_did_not_run_violation(package, which))
+        return
 
     v = _startup_speed_violation(
         package,
