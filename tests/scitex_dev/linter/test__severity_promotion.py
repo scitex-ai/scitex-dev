@@ -5,16 +5,20 @@ patterns (figrecipe owns detection); these tests pin the new SEVERITY wiring
 that promotes the EXISTING figure-family rules to ERROR in research projects
 so the post-edit hook (run_lint.sh, exit 2) BLOCKS figure-bypass code.
 
-v1 promoted set (verified against figrecipe ``_linter_plugin.py``):
-- category ``figure``: STX-FM001..FM011 + STX-FIG001
+The promoted set is defined BY CATEGORY, not by rule id: every rule carrying
+category ``figure`` or ``plot`` promotes, whoever declares and emits it. Do not
+re-introduce an id enumeration here — the one that used to live in this
+docstring ("figure: STX-FM001..FM011 + STX-FIG001") silently rotted as figrecipe
+grew FM016-FM019. Measured 2026-07-29, figrecipe declares:
+- category ``figure``: STX-FM001..FM011, STX-FM016..FM019, STX-FIG001
 - category ``plot``:   STX-P001..P009
+…and that list is expected to keep growing, which is the point.
 
-Emit paths feeding one combined issue list:
-- ``FMChecker._add``                         → FM001-FM009  (scitex-dev)
-- figrecipe ``FigureMethodChecker._emit``    → FM010/FM011  (read-only)
-- figrecipe ``AxisAlignmentChecker._emit``   → FIG001       (read-only)
-- figrecipe ``StyleKwargChecker._emit``      → P006-P009    (read-only)
-- ``SciTeXChecker._add`` (axes_hints/calls)  → P001-P005
+Two emit paths feed one combined issue list:
+- ``SciTeXChecker._add`` / ``FMChecker._add`` (scitex-dev) — these apply the
+  category override themselves, at emit time.
+- every figrecipe plugin checker's ``_emit`` (read-only here) — these honour
+  ``per_rule_severity`` ONLY, so they depend entirely on the central floor.
 
 The figrecipe checkers honour only ``per_rule_severity`` and ignore the
 category override, so ``SciTeXChecker.get_issues`` applies
@@ -326,6 +330,207 @@ class TestResearchConfigYamlForms:
         _skip_if_not_emitted(issues, "STX-FM001")
         # Assert
         assert _sev_of(issues, "STX-FM001") == "warning"
+
+
+# ---------------------------------------------------------------------- #
+# Regression: files under `scripts/` must promote too (clew, 2026-07-29)  #
+# ---------------------------------------------------------------------- #
+#
+# ``is_script()`` returns False for anything under a configured
+# ``script_dirs`` / ``library_dirs`` entry, and ``get_issues`` used to
+# early-return on that branch BEFORE applying the category floor. In a
+# research repo essentially ALL figure code lives under ``scripts/``, so the
+# whole promotion was inert exactly where it mattered: rules emitted through
+# ``_add`` (FM001-FM009 / P001-P005) showed as ERROR while every
+# plugin-emitted rule in the SAME file (FM010/FM011/FM016/FM019, P006-P009)
+# stayed WARNING.
+#
+# These tests do NOT require figrecipe: they drive ``lint_source``'s documented
+# ``plugins=`` payload seam with a REAL checker that reproduces the figrecipe
+# emit contract (honour ``per_rule_severity``, ignore the category override).
+# Real tmp trees, real ``.scitex/dev/config.yaml`` — no monkeypatch, no mocks.
+
+
+_PLUGIN_RULE_IDS = ("STX-FM010", "STX-FM011", "STX-FM016")
+
+
+def _plugin_payload():
+    """A real plugin payload mirroring figrecipe's checker contract.
+
+    figrecipe's ``FigureMethodChecker`` / ``RawMplBypassChecker`` resolve
+    severity from ``config.per_rule_severity`` ONLY — they never consult
+    ``category_severity_override``. This checker does the same, so whatever
+    severity these rules end up with comes from the engine's central floor,
+    which is precisely what is under test.
+    """
+    import ast
+    from dataclasses import replace as _replace
+
+    from scitex_dev.linter.checker import _is_allowed_by_comment
+
+    rules = {
+        rid: Rule(
+            id=rid,
+            severity="warning",
+            category="figure",
+            message=f"{rid} message",
+            suggestion=f"{rid} suggestion",
+        )
+        for rid in _PLUGIN_RULE_IDS
+    }
+
+    class PluginFigureChecker(ast.NodeVisitor):
+        category = "figure"
+
+        def __init__(self, source_lines, config):
+            self.source_lines = source_lines
+            self.config = config
+            self.issues: list = []
+
+        def _emit(self, rule, node):
+            line = ""
+            if 1 <= node.lineno <= len(self.source_lines):
+                line = self.source_lines[node.lineno - 1].rstrip()
+            if rule.id in self.config.disable:
+                return
+            if _is_allowed_by_comment(line, rule.id):
+                return
+            sev = self.config.per_rule_severity.get(rule.id)
+            if sev:
+                rule = _replace(rule, severity=sev)
+            self.issues.append(
+                Issue(rule=rule, line=node.lineno, col=node.col_offset,
+                      source_line=line)
+            )
+
+        def visit_Call(self, node):
+            func = node.func
+            if isinstance(func, ast.Attribute):
+                if func.attr == "set_xlabel":
+                    self._emit(rules["STX-FM010"], node)
+                elif func.attr == "set_visible":
+                    self._emit(rules["STX-FM011"], node)
+                elif func.attr == "subplots":
+                    self._emit(rules["STX-FM016"], node)
+            self.generic_visit(node)
+
+    return {
+        "rules": list(rules.values()),
+        "call_rules": {},
+        "axes_hints": {},
+        "checkers": [PluginFigureChecker],
+    }
+
+
+_PLUGIN_SRC = (
+    "import matplotlib.pyplot as plt\n"
+    "fig, ax = plt.subplots()\n"
+    "ax.set_xlabel('x')\n"
+    "ax.spines['top'].set_visible(False)\n"
+)
+
+
+def _make_tree(tmp_path, project_type):
+    """Create a REAL project tree declaring *project_type*, with a scripts/ dir."""
+    (tmp_path / ".scitex" / "dev").mkdir(parents=True)
+    (tmp_path / ".scitex" / "dev" / "config.yaml").write_text(
+        f"project-type: {project_type}\n"
+    )
+    (tmp_path / "scripts").mkdir()
+    return tmp_path
+
+
+def _lint_at(path, tmp_path, *, force_enable_fm=False):
+    """Lint ``_PLUGIN_SRC`` as *path*, with config resolved from that file."""
+    cfg = load_config(start_path=str(path))
+    if force_enable_fm and "FM" not in cfg.enable:
+        cfg.enable = [*cfg.enable, "FM"]
+    return lint_source(_PLUGIN_SRC, str(path), cfg, plugins=_plugin_payload())
+
+
+class TestScriptDirFilesPromoteToo:
+    """Plugin-emitted figure rules promote for files under ``scripts/`` too."""
+
+    @pytest.mark.parametrize("rule_id", _PLUGIN_RULE_IDS)
+    def test_scripts_dir_file_promotes_in_research(self, tmp_path, rule_id):
+        # Arrange — research tree; the file lives under scripts/ (is_script
+        # False), which is where a research repo's figure code actually lives.
+        root = _make_tree(tmp_path, "research")
+        target = root / "scripts" / "make_figure.py"
+        # Act
+        issues = _lint_at(target, root)
+        # Assert
+        assert _sev_of(issues, rule_id) == "error", (
+            f"{rule_id} under scripts/ must promote to error in a research "
+            f"project; got {[(i.rule.id, i.rule.severity) for i in issues]}"
+        )
+
+    @pytest.mark.parametrize("rule_id", _PLUGIN_RULE_IDS)
+    def test_non_scripts_file_promotes_in_research(self, tmp_path, rule_id):
+        # Arrange — control for the LOCATION axis: same research tree, but the
+        # file is a plain script (is_script True). This path always worked.
+        root = _make_tree(tmp_path, "research")
+        target = root / "make_figure.py"
+        # Act
+        issues = _lint_at(target, root)
+        # Assert
+        assert _sev_of(issues, rule_id) == "error"
+
+    @pytest.mark.parametrize("rule_id", _PLUGIN_RULE_IDS)
+    def test_non_research_scripts_dir_stays_warning(self, tmp_path, rule_id):
+        # Arrange — POSITIVE CONTROL for the PROJECT-TYPE axis: an identical
+        # tree that is NOT research. Without this, "error everywhere" would be
+        # indistinguishable from a working promotion.
+        root = _make_tree(tmp_path, "pip")
+        target = root / "scripts" / "make_figure.py"
+        # Act
+        issues = _lint_at(target, root, force_enable_fm=True)
+        # Assert
+        assert _sev_of(issues, rule_id) == "warning", (
+            f"{rule_id} must stay warning outside a research project; "
+            f"got {[(i.rule.id, i.rule.severity) for i in issues]}"
+        )
+
+    @staticmethod
+    def _pin_fm010_to_warning(tmp_path):
+        """Research tree + a scripts/ file, with FM010 pinned to warning."""
+        root = _make_tree(tmp_path, "research")
+        target = root / "scripts" / "make_figure.py"
+        cfg = load_config(start_path=str(target))
+        cfg.per_rule_severity = {**cfg.per_rule_severity, "STX-FM010": "warning"}
+        return target, cfg
+
+    def test_per_rule_pin_keeps_fm010_warning_under_scripts(self, tmp_path):
+        # Arrange
+        target, cfg = self._pin_fm010_to_warning(tmp_path)
+        # Act
+        issues = lint_source(
+            _PLUGIN_SRC, str(target), cfg, plugins=_plugin_payload()
+        )
+        # Assert — the operator's per-rule pin wins over the category floor.
+        assert _sev_of(issues, "STX-FM010") == "warning"
+
+    def test_unpinned_neighbour_still_promotes_under_scripts(self, tmp_path):
+        # Arrange — same setup; FM011 carries no pin.
+        target, cfg = self._pin_fm010_to_warning(tmp_path)
+        # Act
+        issues = lint_source(
+            _PLUGIN_SRC, str(target), cfg, plugins=_plugin_payload()
+        )
+        # Assert — pinning one rule must not disarm the floor for the rest.
+        assert _sev_of(issues, "STX-FM011") == "error"
+
+    def test_stx_allow_still_suppresses_under_scripts(self, tmp_path):
+        # Arrange — the per-line opt-out must survive the floor, not be
+        # resurrected by it.
+        root = _make_tree(tmp_path, "research")
+        target = root / "scripts" / "make_figure.py"
+        cfg = load_config(start_path=str(target))
+        src = "ax.set_xlabel('x')  # stx-allow: STX-FM010\n"
+        # Act
+        issues = lint_source(src, str(target), cfg, plugins=_plugin_payload())
+        # Assert
+        assert _sev_of(issues, "STX-FM010") is None
 
 
 # EOF
