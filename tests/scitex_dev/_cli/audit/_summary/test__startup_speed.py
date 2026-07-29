@@ -334,3 +334,112 @@ class TestDispersionCriterion:
         v = _verdict(20.0, 900.0)
         # Assert
         assert v.rule == "§10"
+
+
+class TestDidNotRunIsDistinguishableFromRanAndFoundNothing:
+    """§10 never measuring must not render as §10 measuring and passing.
+
+    Imported from `._startup_speed` rather than the `._audit` re-export
+    shim: the shim lists only the two older names, and `_audit.py` is over
+    the repo's file-size cap so it cannot be edited to add a third. The
+    direct import is the honest path and does not depend on the shim.
+    """
+
+    def test_did_not_run_carries_the_warn_band(self):
+        # Arrange — the gate not running is not evidence the import is slow,
+        # so it must not be able to assert a §10 ERROR.
+        from scitex_dev._cli.audit._summary._startup_speed import (
+            _did_not_run_violation,
+        )
+
+        # Act
+        v = _did_not_run_violation("pkg", "no entry point")
+        # Assert
+        assert v.rule == "§10w"
+
+    def test_did_not_run_says_so_in_words(self):
+        # Arrange
+        from scitex_dev._cli.audit._summary._startup_speed import (
+            _did_not_run_violation,
+        )
+
+        # Act
+        v = _did_not_run_violation("pkg", "no entry point")
+        # Assert
+        assert "DID NOT RUN" in v.message
+
+    def test_did_not_run_denies_being_a_pass(self):
+        # Arrange — the whole defect was this state reading as a pass.
+        from scitex_dev._cli.audit._summary._startup_speed import (
+            _did_not_run_violation,
+        )
+
+        # Act
+        v = _did_not_run_violation("pkg", "no entry point")
+        # Assert
+        assert "NOT a pass" in v.message
+
+    def test_did_not_run_is_distinguished_from_the_trust_band(self):
+        # Arrange — both are §10w, so the TEXT must separate "never
+        # measured" from "measured, numbers unusable"; a reader seeing only
+        # the rule id cannot tell them apart.
+        from scitex_dev._cli.audit._summary._startup_speed import (
+            _did_not_run_violation,
+        )
+
+        # Act
+        v = _did_not_run_violation("pkg", "no entry point")
+        # Assert
+        assert "COULD NOT MEASURE RELIABLY" in v.message
+
+    def test_did_not_run_names_the_cause(self):
+        # Arrange — an error that only says what broke is half-written.
+        from scitex_dev._cli.audit._summary._startup_speed import (
+            _did_not_run_violation,
+        )
+
+        # Act
+        v = _did_not_run_violation("pkg", "entry point 'x:' yields no module")
+        # Assert
+        assert "entry point 'x:' yields no module" in v.message
+
+    def test_absent_entry_point_now_emits_instead_of_staying_silent(self):
+        # Arrange — POSITIVE CONTROL for the actual bug: a distribution with
+        # no console script used to append nothing at all, which is exactly
+        # what a comfortably-under-budget package appends.
+        from scitex_dev._cli.audit._summary._startup_speed import (
+            _check_startup_speed,
+        )
+
+        out: list = []
+        # Act
+        _check_startup_speed("definitely-not-a-real-distribution-xyz", out)
+        # Assert
+        assert len(out) == 1
+
+    def test_absent_entry_point_emits_the_warn_band_not_an_error(self):
+        # Arrange
+        from scitex_dev._cli.audit._summary._startup_speed import (
+            _check_startup_speed,
+        )
+
+        out: list = []
+        # Act
+        _check_startup_speed("definitely-not-a-real-distribution-xyz", out)
+        # Assert
+        assert out[0].rule == "§10w"
+
+    def test_a_clean_under_budget_run_still_emits_nothing(self):
+        # Arrange — NEGATIVE CONTROL, and the one that keeps this fix
+        # honest. Making the silent case loud is only a fix if the
+        # genuinely-clean case stays silent; otherwise every package grows
+        # a §10w and the distinction is destroyed from the other side.
+        # Act
+        v = _verdict(
+            100.0,
+            120.0,
+            baseline_samples=_steady(100.0, 101.0, 100.0),
+            full_samples=_steady(120.0, 121.0, 120.0),
+        )
+        # Assert
+        assert v is None
