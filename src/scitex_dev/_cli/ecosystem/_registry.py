@@ -26,6 +26,7 @@ from ._cmds import (
     _drift_report,
     _git,
     _gui,
+    _install_cross_package_gate,
     _install_gate,
     _jobs_cron,
     _jobs_systemd,
@@ -107,6 +108,7 @@ def register_ecosystem_commands(main_group):
     _audit_all.register(ecosystem)
     _clean.register(ecosystem)
     _install_gate.register(ecosystem)
+    _install_cross_package_gate.register(ecosystem)
     _test_remote.register(ecosystem)
     _sync_status.register(ecosystem)
     _sync.register(ecosystem)

@@ -319,12 +319,7 @@ def register(ecosystem):
         if new_only and not as_json:
             from pathlib import Path as _Path
 
-            from ...audit._diff import (
-                DiffAwareSetupError,
-                compute_net_new,
-                filter_to_net_new_lines,
-                worktree_at,
-            )
+            from ._audit_all_new_only import run_new_only_and_exit
 
             head_path = _Path(explicit_path).expanduser() if explicit_path else _Path.cwd()
             distribution = pkgs[0]
@@ -335,52 +330,16 @@ def register(ecosystem):
                 (res.get("stdout") or "") + "\n" + (res.get("stderr") or "")
                 for res in head_results.values()
             )
-            try:
-                with worktree_at(head_path, since_ref) as base_path:
-                    # Spawn audit-all in a child process pointed at the
-                    # base worktree. We deliberately use the same
-                    # scitex-dev binary the dispatcher already resolved
-                    # so the rule corpus matches across the diff.
-                    base_cmd = [
-                        scitex_dev_bin,
-                        "ecosystem",
-                        "audit-all",
-                        distribution,
-                        "--path",
-                        str(base_path),
-                        "--no-version-check",
-                    ]
-                    base_proc = subprocess.run(
-                        base_cmd,
-                        capture_output=True,
-                        text=True,
-                        env=sub_env,
-                    )
-                    base_combined = base_proc.stdout + "\n" + base_proc.stderr
-            except DiffAwareSetupError as e:
-                click.echo(
-                    f"warning: --new-only setup failed ({e}); "
-                    "falling back to strict audit.",
-                    err=True,
-                )
-                # Print the HEAD run unfiltered, exit per its result.
-                click.echo(head_combined)
-                _sys.exit(_head_exit)
-
-            net_new = compute_net_new(
-                head_combined, base_combined, distribution=distribution
+            # Never returns — the comparison owns the exit status.
+            run_new_only_and_exit(
+                head_path=head_path,
+                distribution=distribution,
+                since_ref=since_ref,
+                head_combined=head_combined,
+                head_exit=_head_exit,
+                scitex_dev_bin=scitex_dev_bin,
+                sub_env=sub_env,
             )
-            filtered = filter_to_net_new_lines(
-                head_combined, net_new, distribution=distribution
-            )
-            click.echo(filtered)
-            click.echo("", err=True)
-            click.echo(
-                f"--new-only: {len(net_new)} net-new violation(s) "
-                f"({distribution} HEAD vs {since_ref})",
-                err=True,
-            )
-            _sys.exit(1 if net_new else 0)
 
         all_results: dict[str, dict] = {}
         mask_reports: dict[str, object] = {}
