@@ -171,7 +171,18 @@ def _scan_pyproject_for_umbrella(pyproject: Path) -> list[str]:
 
 
 def _collect_cross_package_imports(src_root: Path, own_import: str) -> set[str]:
-    """Mirror `/tmp/write-integration-tests.py` so the gate stays in sync."""
+    """Return every cross-package module imported under ``src_root``.
+
+    SSoT for PS-140: `ecosystem install-cross-package-gate` IMPORTS this
+    function to generate the gate file, so the generator and the auditor
+    cannot disagree about what belongs in `CROSS_PACKAGE_IMPORTS`.
+
+    This docstring used to read "Mirror `/tmp/write-integration-tests.py`
+    so the gate stays in sync" — a promise to stay in step with a script
+    that shipped nowhere and did not exist. Two implementations of one
+    fact drift silently; this one drifted all the way to nonexistence,
+    while PS-140's remediation text still told readers to run it.
+    """
     seen: set[str] = set()
     for py in src_root.rglob("*.py"):
         if any(s in py.parts for s in ("__pycache__", "build", "dist", ".tox")):
