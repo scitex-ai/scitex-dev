@@ -268,21 +268,16 @@ def _report_config_errors(repo: Path, config, violation_cls, out: list) -> None:
     the rejection separately is what keeps a reasonless exemption from
     reading as a quiet pass the author believes worked.
     """
-    from .._config import exemption_notice_applies, format_exemption_notice
+    from ._exemption_config_errors import report_exemption_config_errors
 
-    for notice in tuple(getattr(config, "exemption_errors", ()) or ()):
-        # NOT a bare `startswith("PS-222")`: that filter drops the BLOCK-level
-        # notice (a malformed `exemptions:` block belongs to no single rule),
-        # which would silently discard the report of a silent drop.
-        if not exemption_notice_applies(notice, "PS-222"):
-            continue
-        _emit(
-            out,
-            violation_cls,
-            _CONFIG_ERROR_SEVERITY,
-            str(repo / ".scitex/dev/config.yaml"),
-            format_exemption_notice(notice, "PS-222"),
-        )
+    report_exemption_config_errors(
+        repo,
+        config,
+        "PS-222",
+        lambda where, detail: _emit(
+            out, violation_cls, _CONFIG_ERROR_SEVERITY, where, detail
+        ),
+    )
 
 
 def check_ps222_config_layout(
