@@ -123,27 +123,18 @@ _WHY_COMMENT_MARKER = "# why"
 
 
 def _dict_candidate_paths() -> list[Path]:
-    """The layered custom-dict locations (mirror `_audit._load_custom_dict`).
+    """The layered custom-dict locations — one owner, in `._dict_root`.
 
-    Deduplicated by resolved path — when the cwd IS the home directory
-    the two layers collapse to one file, which must be read once (a
-    double read would double every missing-why finding).
+    Kept as a named indirection because this module's rule bodies and
+    the existing tests both call it. The project layer is rooted at the
+    tree pinned by `_dict_root.use_dict_root` (the `--path` checkout),
+    falling back to the cwd only when nothing is pinned; the list stays
+    deduplicated by resolved path so a project-root-IS-home layout is
+    read once rather than doubling every missing-`# why` finding.
     """
-    candidates = [
-        Path.cwd() / ".scitex" / "dev" / "cli-audit-dict.yaml",
-        Path.home() / ".scitex" / "dev" / "cli-audit-dict.yaml",
-    ]
-    out: list[Path] = []
-    seen: set[str] = set()
-    for path in candidates:
-        try:
-            key = str(path.resolve())
-        except OSError:  # pragma: no cover — defensive
-            key = str(path)
-        if key not in seen:
-            seen.add(key)
-            out.append(path)
-    return out
+    from ._dict_root import dict_candidate_paths
+
+    return dict_candidate_paths()
 
 
 def load_verb_exceptions() -> tuple[set[str], list[tuple[str, Path]]]:
