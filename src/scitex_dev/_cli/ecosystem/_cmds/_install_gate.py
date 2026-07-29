@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ._gate_guard import render_conftest
 
 
 def anchor_depth(target: Path, root: Path) -> int:
@@ -109,8 +110,15 @@ def register(ecosystem):
                 "fails when any error-severity violation is reported — "
                 "so the existing `Test` workflow surfaces audit drift, "
                 "no separate `.github/workflows/audit.yml` needed. Also "
-                "creates `tests/develop/__init__.py` and an empty "
-                "`tests/conftest.py` if either is missing. This does "
+                "creates `tests/develop/__init__.py` if missing, and "
+                "installs the audit-gate COLLECTION GUARD into "
+                "`tests/conftest.py` (a marked, idempotent block appended "
+                "to whatever is already there): because the gate lives "
+                "outside `tests/<pkg>/`, `pytest tests/<pkg>/` used to "
+                "report a clean green having never run it. The guard "
+                "fails any session that would otherwise report success "
+                "without collecting the gate — opt out per-run with "
+                "`SCITEX_DEV_ALLOW_PARTIAL_RUN=1`. This does "
                 "NOT generate stub tests for the package's source "
                 "modules — it ONLY installs the canonical audit gate; "
                 "source-coverage test quality remains the package "
@@ -176,24 +184,23 @@ def register(ecosystem):
             "of the package's own logic; those live under tests/<pkg>/.\n"
             '"""\n'
         )
-        conftest_content = (
-            '"""Pytest fixtures and rootdir marker for this package.\n'
-            "\n"
-            "An empty conftest.py at tests/ is the canonical SciTeX\n"
-            "convention (audit-project PS-208) — it pins the pytest\n"
-            "rootdir and gives downstream fixtures a home.\n"
-            '"""\n'
-        )
+        # tests/conftest.py carries the collection guard, so it can no
+        # longer be skipped when it already exists — nearly every adopted
+        # repo has one, and skipping those would leave the guard reaching
+        # only brand new repos. `render_conftest` APPENDS a marked block
+        # to an existing file (idempotent, refreshes in place) instead of
+        # replacing the package's own fixtures.
+        existing_conftest = conftest.read_text() if conftest.exists() else None
+        conftest_content, conftest_action = render_conftest(existing_conftest)
 
         # Each entry: (path, content, force_required_to_overwrite).
-        # tests/develop/__init__.py and tests/conftest.py are *only*
-        # written when missing — they're shared infrastructure, never
-        # owned by the audit-test feature. The test_audit.py file IS
-        # owned: --force overwrites it on every regeneration.
+        # tests/develop/__init__.py is *only* written when missing — it's
+        # shared infrastructure, never owned by the audit-test feature.
+        # test_audit.py IS owned: --force overwrites it on every
+        # regeneration.
         plan = [
             (target, test_content, True),
             (develop_init, develop_init_content, False),
-            (conftest, conftest_content, False),
         ]
 
         if dry_run:
@@ -201,6 +208,9 @@ def register(ecosystem):
                 click.echo(f"# would write: {path}")
                 click.echo(content)
                 click.echo()
+            click.echo(f"# would {conftest_action}: {conftest}")
+            click.echo(conftest_content)
+            click.echo()
             return
 
         for path, content, owned in plan:
@@ -212,11 +222,19 @@ def register(ecosystem):
                     )
                     raise SystemExit(1)
                 if not owned:
-                    # Don't touch user-owned conftest/__init__ if present.
+                    # Don't touch a user-owned __init__ if present.
                     continue
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
             click.echo(f"wrote {path}")
+
+        if conftest_action != "current":
+            conftest.parent.mkdir(parents=True, exist_ok=True)
+            conftest.write_text(conftest_content)
+            click.echo(
+                f"{'wrote' if conftest_action == 'created' else 'updated'} "
+                f"{conftest} (audit-gate collection guard)"
+            )
 
     # Deprecated alias — write-audit-test was misleading (read like
     # "auto-generate stub tests"); the actual behaviour is "install the
