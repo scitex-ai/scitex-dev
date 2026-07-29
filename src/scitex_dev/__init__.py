@@ -28,16 +28,28 @@ Public API (20 functions)::
 
 from __future__ import annotations
 
-try:
-    from importlib.metadata import version as _v, PackageNotFoundError
+def _resolve_version() -> str:
+    """Read the installed version — DEFERRED, never at import time.
 
+    ``importlib.metadata`` drags in ``email.message``, ``email.utils`` and
+    ``zipfile``: you pay an email parser to learn a version string.
+    Measured by scitex-cards on their own package, 2026-07-30 — 223ms of a
+    425ms cold import, 52% of the total, for this one statement.
+
+    This package already had PEP 562 lazy loading for every public symbol
+    (see ``_LAZY_ATTRS`` / ``__getattr__`` below). The eager metadata read
+    sat above it and defeated it: a fully correct lazy design undone by one
+    line, which is exactly what §10 exists to catch and what a human
+    reviewer reads past.
+    """
     try:
-        __version__ = _v("scitex-dev")
+        from importlib.metadata import PackageNotFoundError, version
+    except ImportError:  # pragma: no cover — only on ancient Pythons
+        return "0.0.0+local"
+    try:
+        return version("scitex-dev")
     except PackageNotFoundError:
-        __version__ = "0.0.0+local"
-    del _v, PackageNotFoundError
-except ImportError:  # pragma: no cover — only on ancient Pythons
-    __version__ = "0.0.0+local"
+        return "0.0.0+local"
 # PEP 562 lazy public API.
 #
 # Every public name is loaded on first attribute access — `import scitex_dev`
@@ -197,6 +209,16 @@ except Exception:
 
 def __getattr__(name: str):
     """PEP 562 lazy-loader: import on first access, cache, then return."""
+    if name == "__version__":
+        # Resolved on FIRST ACCESS, then cached into globals() so PEP 562
+        # is not consulted again. Both `scitex_dev.__version__` and
+        # `from scitex_dev import __version__` route here — different code
+        # paths in CPython, same entry point, and this repo has a live
+        # caller of the `from` form at `_cli/audit/_cache.py:98`, so both
+        # are covered by tests rather than assumed equivalent.
+        value = _resolve_version()
+        globals()["__version__"] = value
+        return value
     mod_name = _LAZY_ATTRS.get(name)
     if mod_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
