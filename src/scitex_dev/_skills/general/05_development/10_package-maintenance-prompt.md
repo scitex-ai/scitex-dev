@@ -64,7 +64,7 @@ Examples of skill-file material:
 
 - "How to write a Sphinx page" (`04_docs/02_sphinx.md`).
 - "Coverage push playbook" (`05_development/08_coverage-push-playbook.md`).
-- "Package-categories taxonomy" (`01_ecosystem/09_package-categories.md`).
+- "Workflow presence baseline" (`02_package/07b_workflow-presence.md`).
 
 If you find yourself adding a paragraph of explanation to CLAUDE.md,
 it almost certainly wants to live in a skill file with a one-line

@@ -39,14 +39,11 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "PS-165",
         "§2",
         (
-            "missing required GitHub Actions workflow for the package's "
-            "category. Every SciTeX package must ship a baseline set of "
-            "workflows (cla, pytest matrix, import-smoke, pypi publish, "
-            "scitex-dev quality audit, sync-main-to-release-tag; plus "
-            "rtd-sphinx-build if docs/ ships, plus runtime CLI smoke for "
-            'category = "cli-tool"). Declare the category in '
-            'pyproject.toml under `[tool.scitex_dev] category = "..."` '
-            "(defaults to `library`). Severity W during adoption — see "
+            "missing required GitHub Actions workflow. Every SciTeX "
+            "package must ship a baseline set of workflows (cla, pytest "
+            "matrix, import-smoke, pypi publish, scitex-dev quality "
+            "audit, sync-main-to-release-tag; plus rtd-sphinx-build if "
+            "docs/ ships). Severity W during adoption — see "
             "_skills/general/02_package/07b_workflow-presence.md."
         ),
         "W",

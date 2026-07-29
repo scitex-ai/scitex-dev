@@ -30,12 +30,12 @@ project-type:
   - research
 ```
 
-**Why this axis and not `[tool.scitex_dev] category`?** The
-`category` axis (`library` / `cli-tool` / `infrastructure`, see
-[01_ecosystem/09_package-categories.md](09_package-categories.md))
-is a *publishable-package* self-declaration that drives workflow-presence
-(PS-165) and lives in `pyproject.toml`. A research project is **not a pip
-package** — it has no `src/<pkg>/`, no wheel, no `[project]` table worth
+**Why this axis and not `[tool.scitex_dev] category`?** That axis
+(`library` / `cli-tool` / `infrastructure`) was a *publishable-package*
+self-declaration in `pyproject.toml` that drove workflow-presence
+(PS-165). It has since been **retired** — a census found zero repos
+declaring it — which only reinforces the point: a research project is
+**not a pip package** — it has no `src/<pkg>/`, no wheel, no `[project]` table worth
 auditing, and is **not** in `scitex_dev.ECOSYSTEM`. Forcing a publish
 category onto it is a category error. The `project-type` list axis already
 existed for exactly this kind of repo-kind switch, and `research` was
