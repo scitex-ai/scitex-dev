@@ -262,6 +262,91 @@ def _stx_gate_path(config):
     return _stx_Path(str(root)).joinpath(*_STX_GATE_RELPARTS)
 
 
+# ---------------------------------------------------------------------------
+# A DECLARED ini SETTING THAT NOTHING IMPLEMENTS MUST NOT BE SILENT.
+#
+# `[tool.pytest.ini_options]` accepts any key. If no installed plugin
+# registers it, pytest emits `PytestConfigWarning: Unknown config option`
+# and CARRIES ON — the setting is inert, and the run looks identical to
+# one where it applied.
+#
+# `timeout = 300` is the key with a stake attached. pytest-timeout lives
+# in the `[dev]` extra, so a venv installed without it runs this suite
+# with NO per-test cap and says so only in a warning nobody reads.
+# Measured 2026-07-29 by scitex-hpc on a live host running this suite:
+#
+#     pytest_timeout spec: ABSENT
+#     registered third-party plugins:   (empty)
+#
+# So the guard whose comment promises "a single hung test fails loud +
+# names itself in ~5 min instead of wedging the whole job until GitHub's
+# 6h ceiling" was, on that host, doing nothing at all. It had been
+# visibly present and invisibly optional since 2026-06-16 (#206) — six
+# weeks for such environments to accumulate, and six weeks of readers
+# (me included) reasonably concluding that hangs were bounded.
+#
+# The check is deliberately GENERAL rather than a `timeout` special-case:
+# `timeout` is merely the key we noticed. Any declared-but-unimplemented
+# setting is the same defect with a different stake.
+#
+# Promoting `PytestConfigWarning` to an error via `-W` also catches this,
+# but it surfaces as an INTERNALERROR traceback that names no remedy.
+# This says which key, which plugin, and what to do.
+_STX_INI_PROVIDERS = {
+    "timeout": "pytest-timeout",
+    "timeout_method": "pytest-timeout",
+}
+
+
+def _stx_declared_ini_keys(config):
+    """ini keys this repo's pyproject declares, or () if unreadable."""
+    root = getattr(config, "rootpath", None) or getattr(config, "rootdir", "")
+    pyproject = _stx_Path(str(root)) / "pyproject.toml"
+    try:
+        import tomllib
+
+        with pyproject.open("rb") as fh:
+            data = tomllib.load(fh)
+    except (OSError, ImportError, ValueError):
+        # Running against an installed package, or an unreadable/invalid
+        # pyproject: nothing is declared here, so nothing can be inert.
+        return ()
+    return tuple(data.get("tool", {}).get("pytest", {}).get("ini_options", {}))
+
+
+def pytest_configure(config):
+    """Fail if a declared ini setting is not implemented by anything."""
+    inert = []
+    for key in _stx_declared_ini_keys(config):
+        try:
+            config.getini(key)
+        except ValueError:
+            inert.append(key)
+    if not inert:
+        return
+    lines = [
+        "INERT PYTEST CONFIG — declared settings that nothing implements:",
+        "",
+    ]
+    for key in inert:
+        provider = _STX_INI_PROVIDERS.get(key)
+        hint = f"install `{provider}`" if provider else "no known provider"
+        lines.append(f"  {key}  -> not registered by any plugin ({hint})")
+    lines += [
+        "",
+        "pyproject declares these, pytest accepted them, and NOTHING APPLIES",
+        "them. This run behaves as if they were absent while reporting the",
+        "same result as a run where they applied.",
+        "",
+        "If `timeout` is listed, THIS RUN HAS NO PER-TEST CAP: a hung test",
+        "wedges the job to the CI ceiling instead of failing in ~5 min.",
+        "",
+        "Fix:  pip install -e '.[dev]'   (installs the plugins the config"
+        " assumes)",
+    ]
+    raise pytest.UsageError("\n".join(lines))
+
+
 def pytest_collection_modifyitems(session, config, items):
     """Record the gate being COLLECTED (fires in-process / in xdist workers).
 
