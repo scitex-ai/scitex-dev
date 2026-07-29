@@ -77,6 +77,69 @@ _FINDING_RE = re.compile(
     r"(?P<msg>.+?)\s*$"
 )
 
+# An ERRO line the structured parser CANNOT key must still count.
+#
+# Measured 2026-07-29 on real ``audit-all`` output:
+#
+#   scitex-io   : 49 level-prefixed lines, 0 parsed, 0 keys, 33 of them ERRO
+#   scitex-stats: 1962 level-prefixed, 1917 parsed, 45 dropped, 29 of them ERRO
+#
+# For scitex-io that is the whole P0 in one line: the gate PRINTS 33
+# errors and produces ZERO keys, so nothing can be net-new and it exits
+# 0. `extract_violation_keys` skipped what it could not parse while
+# `filter_to_net_new_lines` kept the same line as framing — the renderer
+# and the counter disagreed by construction and neither knew.
+#
+# Three real ERRO shapes `_FINDING_RE` cannot express:
+#
+#   ERRO: scitex-io: CLI conventions: not-auditable: unknown
+#       ^ no bracketed rule tag at all (the module docstring above
+#         advertises this shape; the regex has never matched it)
+#   ERRO: scitex-io (/home/.../scitex-io): project-structure: 31 error(s)
+#       ^ subject carries a parenthesised path, so ``<dist>:`` fails
+#   ERRO:   [E] [PS-221 §3 ...] /home/.../pyproject.toml: requirement ...
+#       ^ TWO bracket groups, and the subject after them is a PATH
+#
+# The fix is deliberately NOT a hairier regex — a hairier regex is how
+# this got here. Anything the structured parser cannot key becomes an
+# UNPARSED key, so it participates in the diff and can block.
+#
+# WHY ONLY ``ERRO`` (this is load-bearing, not laziness): the level
+# prefix is NOT a finding discriminator. Multi-line advisory BANNERS
+# carry it on every continuation line — a scitex-dev run measured 432
+# level-prefixed lines of which 431 were currency-gate prose and 1 was
+# a finding. Failing open on any level would have manufactured ~430
+# findings and blocked every PR in the fleet: a gate that cannot pass,
+# which is exactly as broken as the gate that cannot fail. Advisories
+# are emitted at WARN/INFO; restricting fail-open to ERRO keeps prose
+# out while letting every real error through. See card
+# advisory-banner-impersonates-finding-line-20260729 for the emitter-
+# side fix that would let this widen safely.
+_ERRO_LINE_RE = re.compile(r"^ERRO:\s")
+
+# Rule code carried by a finding the structured parser could not key.
+# Reported separately from parsed findings so "N findings" never
+# silently means "N findings plus however many we could not read".
+UNPARSED_RULE = "UNPARSED"
+
+# Absolute checkout roots differ between HEAD and the temporary baseline
+# worktree, so a raw-text identity MUST drop them — otherwise every
+# unparsed line reads as net-new on every run and the gate blocks
+# everything. Collapses ``/home/x/proj/pkg/src/a.py`` to ``a.py``.
+_ABS_PATH_RE = re.compile(r"(?<![\w.])/(?:[\w.\-]+/)+")
+
+
+def _normalize_unparsed(line: str) -> str:
+    """Line-stable identity for a finding the structured parser missed.
+
+    Applies the same line-number scrubbing as a parsed finding's
+    message, then strips absolute directory prefixes so HEAD and the
+    detached baseline worktree — which live at different paths by
+    construction — produce the same identity for the same finding.
+    """
+    return _normalize_message(_ABS_PATH_RE.sub("", line))
+
+
 # Strips trailing ``:NN`` line-number suffix from a file-path token.
 # Anchored at end-of-string so a colon inside the path (Windows drives,
 # URL-shaped paths) cannot mis-fire.
@@ -149,6 +212,26 @@ class ViolationKey:
     message_excerpt: str
 
 
+def _unparsed_key(stripped_line: str) -> ViolationKey:
+    """Identity for an ERRO line the structured parser could not key.
+
+    Uses the WHOLE normalized line, not a 60-char excerpt. A parsed
+    finding can afford truncation because ``rule`` and ``file_line``
+    still separate it from its neighbours; an unparsed one has neither
+    — every one of them keys as ``(UNPARSED, "")`` plus the excerpt, so
+    truncating is the only thing standing between two different errors
+    and a single identity. Measured on real output: excerpting 33 ERRO
+    lines to 60 chars collapsed them to 4 keys, which would let a new
+    error hide behind an existing one whose first 60 characters happen
+    to match.
+    """
+    return ViolationKey(
+        rule=UNPARSED_RULE,
+        file_line="",
+        message_excerpt=_normalize_unparsed(stripped_line),
+    )
+
+
 def extract_violation_keys(
     audit_stdout: str,
     *,
@@ -162,8 +245,19 @@ def extract_violation_keys(
     """
     keys: set[ViolationKey] = set()
     for line in audit_stdout.splitlines():
-        m = _FINDING_RE.match(line.strip())
+        stripped = line.strip()
+        m = _FINDING_RE.match(stripped)
         if m is None:
+            # FAIL OPEN. An error we cannot read is still an error; the
+            # old `continue` here is what let the required gate print
+            # errors and exit 0.
+            #
+            # Deliberately NOT subject to `distribution_filter`: an
+            # unparsed line has no readable dist, and "I could not tell
+            # whose this is" must not collapse into "not theirs". An
+            # unknown is a third value, not a quiet no.
+            if _ERRO_LINE_RE.match(stripped):
+                keys.add(_unparsed_key(stripped))
             continue
         if distribution_filter and m.group("dist") != distribution_filter:
             continue
@@ -212,8 +306,22 @@ def filter_to_net_new_lines(
     """
     kept: list[str] = []
     for line in audit_stdout.splitlines():
-        m = _FINDING_RE.match(line.strip())
+        stripped = line.strip()
+        m = _FINDING_RE.match(stripped)
         if m is None:
+            # Mirror `extract_violation_keys`'s fail-open branch. If the
+            # counter now keys an unparsed ERRO, the renderer must apply
+            # the SAME net-new test to it — otherwise the two disagree
+            # again, just in the opposite direction: a pre-existing
+            # unparsed error would print on every run while counting
+            # for nothing, which reads exactly like the bug this fixes.
+            #
+            # Non-ERRO lines (banner, summary, advisory prose) are kept
+            # unconditionally — they are the audit's framing, not findings.
+            if _ERRO_LINE_RE.match(stripped):
+                if _unparsed_key(stripped) in net_new:
+                    kept.append(line)
+                continue
             kept.append(line)
             continue
         if distribution and m.group("dist") != distribution:
