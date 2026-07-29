@@ -7,6 +7,28 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **Duplicate-dist-info resolution is UNSPECIFIED — the remediation no longer
+  says "it picked the OLDER one".** The text merged in #451 generalised ONE
+  measurement on ONE setup into a rule. `importlib.metadata` walks `sys.path`
+  in order and takes the first name match, with no version comparison and no
+  tie-break, so the winner is a property of path/directory iteration order.
+  Measured 2026-07-29 on three hosts it went both ways: two resolved the OLDER
+  dist-info (`scitex-dev` 0.38.0 over 0.38.1; `scitex-cards` two-in-one-dir),
+  one resolved the NEWER (`scitex-cards` 0.17.10 over a base-layer 0.17.9).
+  Naming a winner invites a reader to reason about which duplicate wins and
+  build a repair on that reasoning. The concrete consequence is unchanged and
+  is the point: the reported version may not describe the files that actually
+  run, in EITHER direction.
+- **The "delete the stale dist-info directory only — safe" advice is now
+  scoped to a SAME-LAYER duplicate, with the read-only-lower-layer case
+  promoted to a distinct CASE 3.** When the stale dist-info lives in a
+  read-only lower overlay layer, `rm -rf` cannot remove it — it only writes a
+  mask in the caller's upper layer, so the image still ships two dist-infos
+  and every fresh container starts broken. Fix the IMAGE. Overlay mechanics
+  there are labelled INFERRED, not measured (`mount -t overlay` needs
+  superuser and `mknod` fails here; CapEff `0000000000000000`).
+
 ## [0.37.0] - 2026-07-23
 
 ### Added
