@@ -90,7 +90,8 @@ _DIST_INFO_SUFFIX = ".dist-info"
 # double-install branch.
 
 _REMEDY_IDENTIFY = """\
-FIRST, TELL THE TWO CASES APART — they have OPPOSITE fixes:
+FIRST, TELL THE THREE CASES APART — they have DIFFERENT, partly OPPOSITE fixes,
+and the fix for one DAMAGES or NO-OPS in another:
     ls -A <each dist-info dir>        # lists the directory's CONTENTS
 Judge by CONTENTS, never by directory SIZE. On an overlay filesystem (any
 container) a directory passed through from the LOWER layer reports `size 0`
