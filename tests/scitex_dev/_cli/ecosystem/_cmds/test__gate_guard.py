@@ -86,7 +86,12 @@ def guarded_package(tmp_path):
     return root
 
 
-def _run_pytest(root: Path, target: str, env_extra: dict | None = None):
+def _run_pytest(
+    root: Path,
+    target: str,
+    env_extra: dict | None = None,
+    extra_args: tuple[str, ...] = (),
+):
     """Run a real nested pytest against `root`, return the CompletedProcess."""
     import os
 
@@ -95,12 +100,21 @@ def _run_pytest(root: Path, target: str, env_extra: dict | None = None):
     if env_extra:
         env.update(env_extra)
     return subprocess.run(
-        [sys.executable, "-m", "pytest", target, "-q", "-p", "no:cacheprovider"],
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            target,
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            *extra_args,
+        ],
         cwd=root,
         capture_output=True,
         text=True,
         env=env,
-        timeout=180,
+        timeout=300,
     )
 
 
@@ -188,6 +202,72 @@ class TestGuardDoesNotFireWhenItShouldNot:
         proc = _run_pytest(guarded_package, "tests/demo_pkg/")
         # Assert
         assert proc.returncode == 0
+
+
+xdist = pytest.importorskip(
+    "xdist",
+    reason="pytest-xdist is what `pytest tests/ -n auto` (this repo's CI) uses; "
+    "without it the parallel-run contract cannot be measured at all",
+)
+
+
+class TestGuardUnderXdist:
+    """`pytest tests/ -n auto` — the shape this repo's own CI runs.
+
+    Under xdist the CONTROLLER never collects (workers do), so a guard
+    that only records collection leaves the controller's flag False —
+    and the controller is the process whose ``pytest_sessionfinish``
+    sets the session exit status. Measured on scitex-dev PR #448 before
+    this fix: `pytest tests/ -n auto` reported `5183 passed` and exited
+    1, claiming the gate never ran while the gate's own PASS was in the
+    report stream the controller had just received.
+    """
+
+    def test_whole_tree_parallel_run_is_green(self, guarded_package):
+        """The gate ran and passed, so the guard must not fire."""
+        # Arrange
+        root = guarded_package
+        # Act
+        proc = _run_pytest(root, "tests/", extra_args=("-n", "2"))
+        # Assert
+        assert proc.returncode == 0
+
+    def test_whole_tree_parallel_run_does_not_claim_the_gate_was_missed(
+        self, guarded_package
+    ):
+        """The exit code alone could be non-zero for unrelated reasons.
+
+        This pins that the specific claim — "the gate did not run" — is
+        not made about a session in which the gate demonstrably ran.
+        """
+        # Arrange
+        root = guarded_package
+        # Act
+        proc = _run_pytest(root, "tests/", extra_args=("-n", "2"))
+        # Assert
+        assert "AUDIT GATE DID NOT RUN IN THIS SESSION." not in proc.stdout
+
+    def test_partial_parallel_run_still_fails(self, guarded_package):
+        """Positive control: the guard must still bite under xdist.
+
+        Making the controller trust the report stream must not be a way
+        of switching the guard off for every parallel run.
+        """
+        # Arrange
+        root = guarded_package
+        # Act
+        proc = _run_pytest(root, "tests/demo_pkg/", extra_args=("-n", "2"))
+        # Assert
+        assert proc.returncode != 0
+
+    def test_partial_parallel_run_names_the_reason(self, guarded_package):
+        """…and says why, in the parallel case too."""
+        # Arrange
+        root = guarded_package
+        # Act
+        proc = _run_pytest(root, "tests/demo_pkg/", extra_args=("-n", "2"))
+        # Assert
+        assert "AUDIT GATE DID NOT RUN IN THIS SESSION." in proc.stdout
 
 
 class TestGuardReachesRepositoriesThatAlreadyHaveAConftest:

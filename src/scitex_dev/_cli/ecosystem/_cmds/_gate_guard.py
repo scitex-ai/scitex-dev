@@ -38,8 +38,26 @@ any run under ``tests/`` — including ``pytest tests/<pkg>/`` — because
 pytest loads conftests from the rootdir down to the collected paths.
 
 * collection: record whether the gate file was collected at all.
-* session finish: if the session is about to report SUCCESS and the gate
-  was never collected, fail it and say why.
+* per-test report: record whether the gate actually RAN.
+* session finish: if the session is about to report SUCCESS and neither
+  signal ever fired, fail it and say why.
+
+Why TWO signals, not just collection
+------------------------------------
+Under ``pytest-xdist`` (``pytest tests/ -n auto`` — what this repo's own
+CI runs) collection happens in the WORKERS, so the controller process
+never calls ``pytest_collection_modifyitems`` and its flag stays False.
+The controller is also the only process whose ``pytest_sessionfinish``
+decides the session's exit status, so a collection-only guard converts
+a fully green ``-n auto`` run — gate collected, gate passed — into a red
+one, claiming the gate never ran while its result is right there in the
+report stream. Measured on scitex-dev PR #448: 5183 passed, exit 1.
+
+``pytest_runtest_logreport`` is the signal that DOES reach the
+controller: xdist forwards every worker's reports to it. Collection is
+kept as the second signal because it is the only one that fires for a
+session which collects the gate without running it (``--collect-only``,
+or a fail-fast exit before the gate's turn).
 
 A session that is ALREADY red is left alone — the developer is
 iterating and can see the failures; converting their red into a
@@ -82,15 +100,16 @@ def render_guard_block() -> str:
 # and CI is the first thing that does.
 #
 # WHAT: a session that would otherwise report SUCCESS, but never
-# collected the gate, fails instead — naming the reason. An already-red
-# session is left alone. Opt out for one run with
+# collected OR ran the gate, fails instead — naming the reason. An
+# already-red session is left alone. Opt out for one run with
 # {OPT_OUT_ENV_VAR}=1.
 import os as _stx_os
 from pathlib import Path as _stx_Path
 
 _STX_GATE_RELPARTS = {GATE_RELPARTS!r}
+_STX_GATE_NODEID_PREFIX = {gate_rel!r}
 _STX_OPT_OUT = {OPT_OUT_ENV_VAR!r}
-_stx_gate_collected = False
+_stx_gate_seen = False
 
 
 def _stx_gate_path(config):
@@ -100,8 +119,12 @@ def _stx_gate_path(config):
 
 
 def pytest_collection_modifyitems(session, config, items):
-    """Record whether the audit gate was collected in THIS session."""
-    global _stx_gate_collected
+    """Record the gate being COLLECTED (fires in-process / in xdist workers).
+
+    The only signal that fires for a session which collects the gate
+    without running it (``--collect-only``, or an early exit).
+    """
+    global _stx_gate_seen
     try:
         gate = _stx_gate_path(config).resolve()
     except OSError:  # pragma: no cover - defensive
@@ -109,15 +132,32 @@ def pytest_collection_modifyitems(session, config, items):
     for item in items:
         try:
             if _stx_Path(str(item.fspath)).resolve() == gate:
-                _stx_gate_collected = True
+                _stx_gate_seen = True
                 return
         except OSError:  # pragma: no cover - defensive
             continue
 
 
+def pytest_runtest_logreport(report):
+    """Record the gate RUNNING — the signal that reaches an xdist controller.
+
+    Under ``-n auto`` the controller never collects, so the collection
+    hook above never fires there; xdist DOES forward every worker's test
+    reports to it. Without this, a fully green ``-n auto`` run that
+    collected and passed the gate is still reported as gate-less.
+    ``nodeid`` is always rootdir-relative with ``/`` separators.
+    """
+    global _stx_gate_seen
+    if _stx_gate_seen:
+        return
+    nodeid = getattr(report, "nodeid", "") or ""
+    if nodeid.split("::", 1)[0] == _STX_GATE_NODEID_PREFIX:
+        _stx_gate_seen = True
+
+
 def pytest_sessionfinish(session, exitstatus):
     """Turn an unqualified green from a gate-less run into a loud red."""
-    if _stx_gate_collected or exitstatus != 0:
+    if _stx_gate_seen or exitstatus != 0:
         return
     config = session.config
     if hasattr(config, "workerinput"):

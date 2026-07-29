@@ -244,15 +244,16 @@ def _shield_live_card_store(
 # and CI is the first thing that does.
 #
 # WHAT: a session that would otherwise report SUCCESS, but never
-# collected the gate, fails instead — naming the reason. An already-red
-# session is left alone. Opt out for one run with
+# collected OR ran the gate, fails instead — naming the reason. An
+# already-red session is left alone. Opt out for one run with
 # SCITEX_DEV_ALLOW_PARTIAL_RUN=1.
 import os as _stx_os
 from pathlib import Path as _stx_Path
 
 _STX_GATE_RELPARTS = ('tests', 'develop', 'test_audit.py')
+_STX_GATE_NODEID_PREFIX = 'tests/develop/test_audit.py'
 _STX_OPT_OUT = 'SCITEX_DEV_ALLOW_PARTIAL_RUN'
-_stx_gate_collected = False
+_stx_gate_seen = False
 
 
 def _stx_gate_path(config):
@@ -262,8 +263,12 @@ def _stx_gate_path(config):
 
 
 def pytest_collection_modifyitems(session, config, items):
-    """Record whether the audit gate was collected in THIS session."""
-    global _stx_gate_collected
+    """Record the gate being COLLECTED (fires in-process / in xdist workers).
+
+    The only signal that fires for a session which collects the gate
+    without running it (``--collect-only``, or an early exit).
+    """
+    global _stx_gate_seen
     try:
         gate = _stx_gate_path(config).resolve()
     except OSError:  # pragma: no cover - defensive
@@ -271,15 +276,32 @@ def pytest_collection_modifyitems(session, config, items):
     for item in items:
         try:
             if _stx_Path(str(item.fspath)).resolve() == gate:
-                _stx_gate_collected = True
+                _stx_gate_seen = True
                 return
         except OSError:  # pragma: no cover - defensive
             continue
 
 
+def pytest_runtest_logreport(report):
+    """Record the gate RUNNING — the signal that reaches an xdist controller.
+
+    Under ``-n auto`` the controller never collects, so the collection
+    hook above never fires there; xdist DOES forward every worker's test
+    reports to it. Without this, a fully green ``-n auto`` run that
+    collected and passed the gate is still reported as gate-less.
+    ``nodeid`` is always rootdir-relative with ``/`` separators.
+    """
+    global _stx_gate_seen
+    if _stx_gate_seen:
+        return
+    nodeid = getattr(report, "nodeid", "") or ""
+    if nodeid.split("::", 1)[0] == _STX_GATE_NODEID_PREFIX:
+        _stx_gate_seen = True
+
+
 def pytest_sessionfinish(session, exitstatus):
     """Turn an unqualified green from a gate-less run into a loud red."""
-    if _stx_gate_collected or exitstatus != 0:
+    if _stx_gate_seen or exitstatus != 0:
         return
     config = session.config
     if hasattr(config, "workerinput"):
