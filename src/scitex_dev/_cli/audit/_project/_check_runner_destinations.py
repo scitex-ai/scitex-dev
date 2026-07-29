@@ -167,6 +167,8 @@ import yaml
 from ._runs_on_parsing import describe_destinations as _describe
 from ._runs_on_parsing import resolve_destination as _resolve_destination
 from ._runs_on_parsing import workflow_files as _workflow_files
+from ._workflow_exposure import destination_detail as _destination_detail
+from ._workflow_exposure import is_exposed_credential_job
 
 _RULE = "PS-224"
 
@@ -492,17 +494,14 @@ def check_ps224_runner_destinations(
             if _exempt(site):
                 continue
 
+            exposed, events, secrets = is_exposed_credential_job(doc, job)
             out.append(
                 violation_cls(
                     _RULE,
                     site,
-                    f"job `{job_id}` targets `[{', '.join(labels)}]`, NOT in "
-                    f"the destination registry ({registry_file}). Register "
-                    "the machine under `runner_labels:` or re-point the job. "
-                    "Checks REGISTRATION, not reachability: a SELF-HOSTED label "
-                    "no runner advertises queues indefinitely (never fails, never "
-                    "runs); a GitHub-HOSTED one IS served and DOES run, flagged "
-                    f"on policy. Confirm a job is idle before re-pointing. {legal}."
+                    _destination_detail(
+                        job_id, labels, registry_file, legal, exposed, events, secrets
+                    )
                     + _exempt_hint(site),
                 )
             )
