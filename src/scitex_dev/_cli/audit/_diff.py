@@ -274,6 +274,52 @@ def extract_violation_keys(
     return keys
 
 
+#: Rules whose findings are NOT a property of the diff, and therefore can
+#: never be attributed to one. A timing measurement describes the repo AND
+#: the machine at that instant; net-new keying claims it describes the
+#: change. Those are different objects, and no amount of best-of-N
+#: reconciles them — widening N shrinks the straddle band around the
+#: threshold without changing what the number is about, which is worse
+#: because it looks fixed.
+#:
+#: Measured by scitex-cards, 2026-07-30, on a full audit of a develop
+#: baseline worktree against each branch — 132 findings vs 132, the SOLE
+#: difference being the §10 line:
+#:
+#:   * a PR adding a JAVASCRIPT file and one test was reported as
+#:     introducing an import-time regression;
+#:   * a PR DELETING a call, which measurably imported FASTER than develop
+#:     (351/295/249ms vs 391/394/359ms, same machine, same minute), was
+#:     reported with the identical finding text.
+#:
+#: So the same code produces the finding on one run and not another, and
+#: under `--new-only` the blame lands on whoever happened to push.
+#:
+#: Excluded from ATTRIBUTION, never from REPORTING: the full audit still
+#: emits these, and `partition_attributable` hands the count back so the
+#: caller can disclose it. A silent exclusion here would rebuild the exact
+#: defect the UNPARSED fail-open above exists to prevent.
+NON_ATTRIBUTABLE_RULES = frozenset({"§10", "§10w"})
+
+
+def is_attributable(key: ViolationKey) -> bool:
+    """Can this finding honestly be blamed on a diff?"""
+    return key.rule not in NON_ATTRIBUTABLE_RULES
+
+
+def partition_attributable(
+    keys: set[ViolationKey],
+) -> tuple[set[ViolationKey], set[ViolationKey]]:
+    """Split keys into (attributable, non_attributable).
+
+    Returns BOTH halves on purpose. A caller that only wanted the first
+    could have filtered inline; handing back the second is what makes the
+    exclusion disclosable rather than invisible.
+    """
+    attributable = {k for k in keys if is_attributable(k)}
+    return attributable, keys - attributable
+
+
 def compute_net_new(
     head_stdout: str,
     base_stdout: str,
@@ -286,10 +332,34 @@ def compute_net_new(
     flags every finding as new (line is part of the identity). Good
     enough for the first cut — refine when the false-positive rate
     becomes a problem.
+
+    Findings from `NON_ATTRIBUTABLE_RULES` are removed: they are real, but
+    they are not evidence about this diff. Use `compute_net_new_detailed`
+    when the caller needs to report what was set aside.
+    """
+    net_new, _excluded = compute_net_new_detailed(
+        head_stdout, base_stdout, distribution=distribution
+    )
+    return net_new
+
+
+def compute_net_new_detailed(
+    head_stdout: str,
+    base_stdout: str,
+    *,
+    distribution: str | None = None,
+) -> tuple[set[ViolationKey], set[ViolationKey]]:
+    """`compute_net_new`, plus the keys it declined to attribute.
+
+    The second element is what a caller prints as "N finding(s) present at
+    HEAD but not attributable to this change". Reporting zero when the
+    number is non-zero is the failure mode this split exists to make
+    impossible to reach by accident.
     """
     head = extract_violation_keys(head_stdout, distribution_filter=distribution)
     base = extract_violation_keys(base_stdout, distribution_filter=distribution)
-    return head - base
+    raw_net_new = head - base
+    return partition_attributable(raw_net_new)
 
 
 def filter_to_net_new_lines(
