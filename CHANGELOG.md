@@ -7,6 +7,56 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.40.1] - 2026-07-29
+
+**Upgrade immediately if you have run `ecosystem install-cross-package-gate` or
+`ecosystem install-audit-gate` on 0.40.0 or earlier — they could WRITE INTO A
+CHECKOUT YOU DID NOT NAME.**
+
+Reported by scitex-hpc within an hour of 0.40.0. Run from inside their worktree,
+`install-cross-package-gate` wrote to a *different* checkout sitting on
+`develop`, leaving it modified, and printed the resolved path only **after** the
+write. It also computed 3 cross-package imports where that branch had 4 — wrong
+tree in, wrong content out.
+
+### Fixed
+- **Both `install-*` verbs resolved their target by guessing (#462).** They used
+  the ECOSYSTEM `~/proj/<name>` lookup with no `--path`, so a caller could not
+  aim them correctly even knowing the hazard. `install-audit-gate` shared the
+  identical shape and is the larger hazard: it writes three files, one of which
+  **appends a marked block to an existing `tests/conftest.py`** — a wrong-tree
+  append there silently changes fixture behaviour for every test in that repo,
+  in a file no reader would think to diff.
+
+  Now:
+  * **`--path`** on both verbs, same semantics as `audit-all --path`.
+  * Resolution is least-speculative-first — `--path` > the cwd's enclosing
+    repository (via `git rev-parse --show-toplevel`, so a worktree resolves to
+    *itself*) > the registry guess, which **announces itself** when used.
+  * **The target must BE the distribution named.** Refuses (exit 2) when the
+    tree's own `[project].name` disagrees with the argument, printing
+    `requested` / `target` / `tree is`. Also refuses a tree that cannot
+    identify itself, rather than writing into it.
+  * Target and the computed payload are printed **before** any write, and the
+    guard runs **before** `--dry-run`, so it cannot be reached past.
+
+  A wrong read costs a session; a wrong write modifies a repo nobody named,
+  possibly on a protected branch. These verbs exist to remediate the wrong-tree
+  class and had the defect themselves.
+
+  Had the bad write landed in the reporter's own worktree it would have produced
+  a PS-140 gate declaring 3 of 4 imports — and a gate that PASSES while missing
+  an import is exactly the failure PS-140 exists to catch. The generator would
+  have manufactured the defect its own rule detects.
+
+### Known gaps
+- `ecosystem test-remote` also resolves via the same guess and then **rsyncs the
+  resolved local tree to a REMOTE host**. Same defect class, blast radius on
+  another machine, and no local `git checkout --` can undo it. **Not fixed
+  here** — a remote-push verb has different failure semantics and deserves its
+  own review. Tracked.
+- Everything listed under 0.40.0's Known gaps still stands.
+
 ## [0.40.0] - 2026-07-29
 
 **Upgrade if any CI workflow runs `audit-all --new-only`.** On 0.39.0 and
