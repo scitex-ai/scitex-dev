@@ -32,6 +32,27 @@ credential and serves every other repository's CI.
 This module reports exposure. It does NOT decide policy: whether a hosted
 destination is PERMITTED is a fleet directive, not a property of the YAML.
 Callers combine this answer with the directive; see PS-224's use of it.
+
+KNOWN BOUND — exposure that a single file cannot show
+-----------------------------------------------------
+This is a per-FILE reader, and one real shape defeats that. A reusable
+workflow declares ``on: workflow_call`` — which is NOT attacker-triggerable
+on its own — while the ``pull_request_target`` that reaches it lives in the
+CALLER. Read alone, the called file looks safe; read alone, the calling
+file has no ``runs-on`` for PS-224 to flag (a ``uses:`` job carries its
+destination in the file it delegates to). The exposure is real and neither
+file shows it.
+
+Measured on this repo's own ``cla.yml``: its single job is a ``uses:``
+delegation, so it reports ``exposed=False`` here — correctly, in that the
+job body holds no secret, and misleadingly, in that the workflow it calls
+inherits an attacker-triggerable trigger.
+
+Closing this needs a cross-file call graph (caller trigger + ``secrets:
+inherit`` propagation), which is a larger job than this module. Until then
+the gap is stated rather than silently carried: **absence of exposure here
+means "not visible in this file", not "not exposed."** A caller must not
+read a ``False`` as a clearance.
 """
 
 from __future__ import annotations

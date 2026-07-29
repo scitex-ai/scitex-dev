@@ -191,6 +191,38 @@ def test_exposed_branch_still_reports_the_underlying_fact():
     assert "NOT in the destination registry" in detail
 
 
+REUSABLE_CALLED_YML = """
+name: ci-called
+on:
+  workflow_call:
+    secrets:
+      GH_PERSONAL_ACCESS_TOKEN:
+        required: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hi
+"""
+
+
+def test_called_reusable_workflow_reports_unexposed_a_known_bound():
+    """Pins the gap, so a future call-graph fix has a failing anchor.
+
+    The called file declares `workflow_call`, which is not attacker-
+    triggerable on its own; the `pull_request_target` that reaches it lives
+    in the CALLER. This asserts the CURRENT (bounded) behaviour, not the
+    desired one: `False` here means "not visible in this file", never
+    "not exposed".
+    """
+    # Arrange
+    doc = yaml.safe_load(REUSABLE_CALLED_YML)
+    # Act
+    events = attacker_triggerable_events(doc)
+    # Assert
+    assert events == frozenset()
+
+
 def test_unexposed_branch_still_reports_the_underlying_fact():
     # Arrange
     workflow = PLAIN_CI_YML
