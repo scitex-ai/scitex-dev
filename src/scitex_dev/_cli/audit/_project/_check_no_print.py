@@ -274,21 +274,16 @@ def _report_config_errors(repo: Path, config, violation_cls, out: list) -> None:
     the author believes worked — which is the entire point of demanding a
     written reason in the first place.
     """
-    for notice in tuple(getattr(config, "exemption_errors", ()) or ()):
-        if not notice.startswith("PS-220"):
-            continue
-        _emit(
-            out,
-            violation_cls,
-            _CONFIG_ERROR_SEVERITY,
-            "PS-220",
-            str(repo / ".scitex/dev/config.yaml"),
-            (
-                f"Invalid `audit.exemptions` entry — {notice}. The entry "
-                f"does NOT exempt anything; an exemption must state WHY "
-                f"the site is exempt."
-            ),
-        )
+    from ._exemption_config_errors import report_exemption_config_errors
+
+    report_exemption_config_errors(
+        repo,
+        config,
+        "PS-220",
+        lambda where, detail: _emit(
+            out, violation_cls, _CONFIG_ERROR_SEVERITY, "PS-220", where, detail
+        ),
+    )
     for notice in tuple(getattr(config, "enforce_logging_errors", ()) or ()):
         _emit(
             out,

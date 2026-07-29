@@ -126,16 +126,17 @@ written ``reason``::
     audit:
       exemptions:
         PS-224:
-          - path: .github/workflows/test.yml::test
+          - path: .github/workflows/test.yml::<job-id-copied-from-the-audit-output>
             line: 0
             reason: "setup-emacs installs Nix (needs root) + a 5-version matrix"
 
 **The ``path`` is the SITE KEY, not a file path**: ``<workflow-path>::<job-id>``
-— the exact string this rule prints as the finding's location, so it can be
-copied verbatim from the audit output. It is job-qualified BY DESIGN: a
-bare file path would also exempt every OTHER job in the same file, so a
-migrated job that later regressed would go unnoticed. One entry exempts
-exactly one job.
+— the exact string this rule prints as the finding's location; run the audit
+and paste THAT. The job id above is an OBVIOUS placeholder because a
+plausible-looking one invites copying a job that does not exist in the target
+repo, and an exemption keyed on a non-existent job exempts NOTHING while
+reading as done. Job-qualified BY DESIGN: a bare file path would also exempt
+every OTHER job in the same file, hiding a later regression in a migrated one.
 
 ``line: 0`` — PS-224 findings are per-JOB, not per-line, so every exemption
 pins line 0 (same contract as PS-222). The whole-file findings (unreadable
@@ -319,6 +320,18 @@ def check_ps224_runner_destinations(
             config = load_config(repo)
         except Exception:  # pragma: no cover - config is best-effort here
             config = None
+
+    if config is not None:
+        # The arm the docstring promised: a rejected PS-224 exemption used to
+        # vanish without a word.
+        from ._exemption_config_errors import report_exemption_config_errors
+
+        report_exemption_config_errors(
+            repo,
+            config,
+            _RULE,
+            lambda where, detail: out.append(violation_cls(_RULE, where, detail)),
+        )
 
     exemption_for = getattr(config, "exemption_for", None)
 

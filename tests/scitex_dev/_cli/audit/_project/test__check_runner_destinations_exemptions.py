@@ -183,14 +183,24 @@ def test_bare_path_exemption_does_not_suppress_a_job_finding(tmp_path, registry)
 
 def test_exemption_without_a_reason_does_not_suppress(tmp_path, registry):
     # Arrange — enforced MECHANICALLY: the loader rejects a reasonless entry,
-    # so it exempts nothing (and the rejection is reported as a config error
-    # by the shared config-error arm).
+    # so it exempts nothing.
     repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
     _write_config(repo, _exemption_config(_SITE_TEST, reason=None))
     # Act
     found = _run(repo, registry)
     # Assert
-    assert len(found) == 1
+    assert _SITE_TEST in [v.where for v in found]
+
+
+def test_reasonless_exemption_is_reported_as_a_config_error(tmp_path, registry):
+    # Arrange — the module docstring PROMISED this arm long before one
+    # existed here; a rejected entry used to vanish without a word.
+    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    cfg = _write_config(repo, _exemption_config(_SITE_TEST, reason=None))
+    # Act
+    found = _run(repo, registry)
+    # Assert
+    assert str(cfg) in [v.where for v in found]
 
 
 def test_blank_reason_exemption_does_not_suppress(tmp_path, registry):
@@ -200,7 +210,72 @@ def test_blank_reason_exemption_does_not_suppress(tmp_path, registry):
     # Act
     found = _run(repo, registry)
     # Assert
-    assert len(found) == 1
+    assert _SITE_TEST in [v.where for v in found]
+
+
+# -------- the FIELD DEFECT: a list-form block must be LOUD -----------------
+#
+# scitex-hub wrote the list form within an hour of v0.38.1. The loader
+# returned "no exemptions, no errors", PS-224 kept firing, and nothing
+# anywhere said the config had been discarded — hub diagnosed it by
+# downloading the wheel and reading the parser.
+
+#: hub's exact spelling.
+_LIST_FORM_CONFIG = (
+    "project-type:\n  - pip\n"
+    "audit:\n"
+    "  exemptions:\n"
+    f"    - rule: PS-224\n      path: {_SITE_TEST}\n"
+    "      reason: 'job needs the hosted image'\n"
+)
+
+
+def test_list_form_exemptions_block_is_reported_at_the_config_file(
+    tmp_path, registry
+):
+    # Arrange
+    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    cfg = _write_config(repo, _LIST_FORM_CONFIG)
+    # Act
+    found = _run(repo, registry)
+    # Assert
+    assert str(cfg) in [v.where for v in found]
+
+
+def test_list_form_exemptions_block_notice_names_the_received_type(
+    tmp_path, registry
+):
+    # Arrange
+    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    cfg = _write_config(repo, _LIST_FORM_CONFIG)
+    # Act
+    found = _run(repo, registry)
+    details = [v.detail for v in found if v.where == str(cfg)]
+    # Assert
+    assert "got a list" in details[0]
+
+
+def test_list_form_exemptions_block_notice_names_the_likely_mistake(
+    tmp_path, registry
+):
+    # Arrange
+    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    cfg = _write_config(repo, _LIST_FORM_CONFIG)
+    # Act
+    found = _run(repo, registry)
+    details = [v.detail for v in found if v.where == str(cfg)]
+    # Assert
+    assert "Did you write `- rule: PS-224` instead of `PS-224:`?" in details[0]
+
+
+def test_list_form_exemptions_block_does_not_suppress_the_job(tmp_path, registry):
+    # Arrange — a block the parser cannot read exempts NOTHING.
+    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    _write_config(repo, _LIST_FORM_CONFIG)
+    # Act
+    found = _run(repo, registry)
+    # Assert
+    assert _SITE_TEST in [v.where for v in found]
 
 
 # -------- a non-matching exemption suppresses nothing ----------------------

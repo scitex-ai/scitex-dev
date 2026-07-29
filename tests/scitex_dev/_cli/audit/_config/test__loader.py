@@ -478,6 +478,105 @@ def test_load_config_has_no_capabilities_when_absent(tmp_path):
     assert cfg.capabilities == frozenset()
 
 
+# ---------------------------------------------------------------------------
+# `audit.exemptions` END-TO-END — from the YAML a repo owner actually writes.
+#
+# The shape-level cases live in `test__exemptions.py`; these three go through
+# a REAL `.scitex/dev/config.yaml` so the whole path (YAML -> loader ->
+# ProjectConfig) is exercised, including the POSITIVE CONTROL that the correct
+# spelling still exempts. Field defect, scitex-hub 2026-07-29.
+# ---------------------------------------------------------------------------
+
+#: hub's spelling: a LIST of entries instead of a mapping keyed by rule code.
+_HUB_LIST_FORM_YAML = (
+    "project-type:\n  - pip\n"
+    "audit:\n"
+    "  exemptions:\n"
+    "    - rule: PS-224\n"
+    "      path: .github/workflows/e2e-mobile.yml::playwright-mobile\n"
+    "      reason: 'mobile browsers ship only on the hosted image'\n"
+)
+
+#: The spelling the parser wants.
+_GOOD_MAPPING_YAML = (
+    "project-type:\n  - pip\n"
+    "audit:\n"
+    "  exemptions:\n"
+    "    PS-224:\n"
+    "      - path: .github/workflows/e2e-mobile.yml::playwright-mobile\n"
+    "        line: 0\n"
+    "        reason: 'mobile browsers ship only on the hosted image'\n"
+)
+
+
+def _write_raw_config(repo: Path, body: str) -> Path:
+    cfg = repo / ".scitex" / "dev" / "config.yaml"
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(body, encoding="utf-8")
+    return cfg
+
+
+def test_list_form_exemptions_block_records_an_error(tmp_path):
+    # Arrange — this config used to load as "no exemptions, no problems".
+    _write_raw_config(tmp_path, _HUB_LIST_FORM_YAML)
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert len(cfg.exemption_errors) == 1
+
+
+def test_list_form_exemptions_error_names_the_received_type(tmp_path):
+    # Arrange
+    _write_raw_config(tmp_path, _HUB_LIST_FORM_YAML)
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert "got a list" in cfg.exemption_errors[0]
+
+
+def test_list_form_exemptions_block_exempts_nothing(tmp_path):
+    # Arrange
+    _write_raw_config(tmp_path, _HUB_LIST_FORM_YAML)
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.exemptions == ()
+
+
+def test_mapping_form_exemptions_block_still_parses(tmp_path):
+    # Arrange — POSITIVE CONTROL: a suite asserting only the new errors would
+    # pass on a loader that rejected every shape.
+    _write_raw_config(tmp_path, _GOOD_MAPPING_YAML)
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert len(cfg.exemptions) == 1
+
+
+def test_mapping_form_exemptions_block_reports_no_errors(tmp_path):
+    # Arrange
+    _write_raw_config(tmp_path, _GOOD_MAPPING_YAML)
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert cfg.exemption_errors == ()
+
+
+def test_mapping_form_exemption_matches_its_site(tmp_path):
+    # Arrange — POSITIVE CONTROL, at the level that matters: the exemption
+    # must still SUPPRESS its site, not merely parse.
+    _write_raw_config(tmp_path, _GOOD_MAPPING_YAML)
+    # Act
+    cfg = load_config(tmp_path)
+    # Assert
+    assert (
+        cfg.exemption_for(
+            "PS-224", ".github/workflows/e2e-mobile.yml::playwright-mobile", 0
+        )
+        is not None
+    )
+
+
 def test_load_config_honours_audit_block_without_project_type(tmp_path):
     # Arrange - a config that declares ONLY an audit block (no project-type),
     # like an alias package's capability knob. The audit block must still
