@@ -178,6 +178,7 @@ def register(ecosystem):
         # --all runs many packages, so tree resolution is single-target
         # only (no repo when auditing the whole registry).
         repo = None
+        resolved_via = None
         if not audit_all and package is not None:
             from ....audit._target_tree import resolve_target_tree
             from ....audit._summary._cli_repo_scans import surface_cli_tree
@@ -185,22 +186,40 @@ def register(ecosystem):
             repo, resolved_via = resolve_target_tree(package, repo_path)
             surface_cli_tree(package, repo, resolved_via, output_json)
 
-        raise SystemExit(
-            _cli_audit.audit_cli(
-                package=package,
-                behavioral=behavioral,
-                output_json=output_json,
-                audit_all=audit_all,
-                dry_run=dry_run,
-                registry_path=registry_path,
-                rules=tuple(rules),
-                exclude=tuple(exclude_rules),
-                min_severity=min_severity,
-                timeout=timeout,
-                baseline_path=baseline_path,
-                repo_root=repo,
-            )
+        # The per-package custom dictionary (.scitex/dev/cli-audit-dict.yaml)
+        # is source read OUT OF THE TREE, so it must follow the SAME
+        # resolution as the source scans above. It used to be read from
+        # Path.cwd() unconditionally, so `--path <worktree>` graded the
+        # pinned tree's source against a DIFFERENT tree's dictionary while
+        # the banner above confidently announced the pinned tree — the
+        # wrong-subject failure, one layer down. `use_dict_root` pins it for
+        # the duration of the audit; `surface_dict_source` then names the
+        # dict file(s) actually read, so the auditor's subject is checkable
+        # against what the caller asked for.
+        from ....audit._summary._dict_root import (
+            surface_dict_source,
+            use_dict_root,
         )
+
+        with use_dict_root(repo, resolved_via or "cwd"):
+            if not audit_all and package is not None:
+                surface_dict_source(package, output_json)
+            raise SystemExit(
+                _cli_audit.audit_cli(
+                    package=package,
+                    behavioral=behavioral,
+                    output_json=output_json,
+                    audit_all=audit_all,
+                    dry_run=dry_run,
+                    registry_path=registry_path,
+                    rules=tuple(rules),
+                    exclude=tuple(exclude_rules),
+                    min_severity=min_severity,
+                    timeout=timeout,
+                    baseline_path=baseline_path,
+                    repo_root=repo,
+                )
+            )
 
 
 __all__ = ["register"]

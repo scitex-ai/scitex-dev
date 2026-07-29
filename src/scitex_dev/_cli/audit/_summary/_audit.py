@@ -253,27 +253,17 @@ def _load_moby() -> dict[str, set[str]]:
 
 
 def _load_custom_dict() -> dict[str, set[str]]:
-    """Merge project + user custom dictionaries."""
-    out: dict[str, set[str]] = {}
-    candidates = [
-        Path.cwd() / ".scitex" / "dev" / "cli-audit-dict.yaml",
-        Path.home() / ".scitex" / "dev" / "cli-audit-dict.yaml",
-    ]
-    for path in reversed(candidates):
-        if not path.is_file():
-            continue
-        try:
-            data = yaml.safe_load(path.read_text()) or {}
-        except yaml.YAMLError:
-            continue
-        for tag, key in [
-            ("noun", "nouns"),
-            ("verb-t", "transitive_verbs"),
-            ("verb-i", "intransitive_verbs"),
-        ]:
-            for w in data.get(key, []) or []:
-                out.setdefault(w.lower(), set()).add(tag)
-    return out
+    """Merge project + user custom dictionaries.
+
+    Thin re-export — the implementation, and the decision of WHICH tree
+    the project layer is read from, live in `._dict_root`. The project
+    layer follows the `--path` checkout pinned by
+    `_dict_root.use_dict_root`, not the cwd (see that module's docstring
+    for the wrong-subject defect this fixed).
+    """
+    from ._dict_root import load_custom_dict
+
+    return load_custom_dict()
 
 
 def _singular_candidates(word: str) -> list[str]:
