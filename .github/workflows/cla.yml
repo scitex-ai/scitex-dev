@@ -28,13 +28,30 @@ name: CLA Assistant
 # unreviewed simultaneous fleet-wide change is least acceptable, so this caller
 # pins the SHA and takes reusable updates deliberately.
 #
+# The 2026-07-29 bump to `ecb0345b` is one such deliberate update: the reusable
+# now DECLARES `workflow_call.secrets`, which is what makes the explicit
+# `secrets:` mapping below possible. Passing a named secret to a callee that
+# does not declare it is an error, so the SHA bump and the narrowing are one
+# change, not two.
+#
+# WHY THE `secrets:` MAPPING IS EXPLICIT, NOT `inherit`
+# -----------------------------------------------------
+# `secrets: inherit` forwards EVERY secret this repo holds. Measured
+# 2026-07-29, that was two: the CLA-storage PAT the callee actually reads, and
+# `CLAUDE_CODE_CREDENTIALS_JSON` — the fleet Claude credential, which the CLA
+# workflow has no use for. Naming the one secret the callee declares drops the
+# other from an attacker-startable job entirely.
+#
 # WHAT THIS DOES NOT FIX
 # ----------------------
 # The callee still runs on persistent shared self-hosted runners, so CLA code
 # still executes adjacent to fleet credentials. The real hazard is CREDENTIAL
 # ADJACENCY, not the word "hosted"; the standing fix is a dedicated
-# credential-free ephemeral pool, tracked separately. This change reduces the
-# exposure to org-owned code at a fixed SHA — it does not eliminate it.
+# credential-free ephemeral pool, tracked separately. Narrowing the mapping
+# shrinks the blast radius; it does not remove the adjacency, and neither this
+# file nor the callee shows that adjacency on its own — PS-224 reads one file
+# at a time, so the residual exposure is tracked as a rule gap, not as a
+# property of this workflow.
 
 on:
   issue_comment:
@@ -53,7 +70,7 @@ permissions:
 
 jobs:
   call:
-    uses: scitex-ai/.github/.github/workflows/cla.yml@399f19bec63208b064ded6bc9193f04f3681be9a # main@2026-07-23
+    uses: scitex-ai/.github/.github/workflows/cla.yml@ecb0345b88823776aad046047288623bd5d24511 # main@2026-07-29
     # NON-DEFAULT ON PURPOSE. The reusable defaults to `bot*,ywatanabe1989`;
     # this repo's inline version also allowlisted `LLEmacs`. Taking the default
     # would silently start demanding a CLA signature from an already-allowlisted
@@ -63,5 +80,7 @@ jobs:
     # this repo's previous inline values, so they are left at their defaults.
     with:
       owner_allowlist: "bot*,ywatanabe1989,LLEmacs"
-    # GH_PERSONAL_ACCESS_TOKEN — the CLA-signature-storage PAT the callee needs.
-    secrets: inherit
+    # The ONE secret the callee declares. GITHUB_TOKEN is provided to called
+    # workflows automatically and must NOT be listed here.
+    secrets:
+      GH_PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
