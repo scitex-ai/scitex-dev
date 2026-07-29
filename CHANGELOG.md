@@ -7,6 +7,58 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.40.4] - 2026-07-30
+
+**PS-224's diagnostic text told you something false, and acting on it caused
+unnecessary work.** No behaviour change — same jobs flagged, same severity,
+same registry. Only the sentence a human reads is corrected.
+
+### Fixed
+- **PS-224 claimed GitHub queues an unmatchable job forever (#472).** Verbatim
+  from the rule's own output: *"GitHub does not reject an unmatchable job — it
+  queues it forever, so this never fails, it just never runs."* False for
+  GitHub-**hosted** labels, measured twice independently — `ubuntu-latest` jobs
+  start, run and complete in under a minute. This project merged four releases
+  on those green checks while its own rule text said they could never run.
+
+  The **finding** was always right: PS-224 validates `runs-on:` against a
+  registry of self-hosted destinations, so flagging `ubuntu-latest` is correct
+  under a self-hosted-only CI policy. The **reason** collapsed two different
+  problems:
+
+  | | |
+  |---|---|
+  | nothing serves this label | the job never runs, silently |
+  | served by a pool we don't pay for | the job runs fine, against policy |
+
+  The text asserted the first while detecting the second — and the wrong reason
+  is the *more alarming* one. Acting on it as written, you re-point **working**
+  jobs at self-hosted runners believing they had never run: churn that looks
+  justified because the diagnostic said so.
+
+  The message now states what it checks, keeps the queues-forever claim scoped
+  to self-hosted label sets where it IS true, and tells the reader to confirm a
+  job is idle before re-pointing it.
+
+### Added
+- **A characterization test pinning which emitted finding shapes the key
+  extractor can read (#473).** Five emitters produce three distinct line
+  formats; the extractor expects a fourth. All three non-trivial formats fail
+  for the same reason — the subject after the rule tag is a path or a command
+  path, where a single distribution token is expected. That one mismatch is the
+  root under three separate defects fixed this week. The test pins today's
+  coverage so that unifying the emitters fails loudly here instead of shifting
+  coverage silently, and locks in the invariant that must survive it: **no
+  `ERRO` shape may ever go back to contributing nothing to the diff.**
+
+### Known gaps
+- The emitters are **not** unified — this release only measures the surface.
+  The shared `render_finding` and the per-emitter round-trip coverage it needs
+  are still to come.
+- A rule's rationale is documentation and drifts like documentation, except it
+  arrives wearing the authority of a check that just ran. PS-224 was found by a
+  peer measuring the claim; no mechanism prevents the next one.
+
 ## [0.40.3] - 2026-07-30
 
 **If you run this test suite from a venv without the `[dev]` extra, it has had
