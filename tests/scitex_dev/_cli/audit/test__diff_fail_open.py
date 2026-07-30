@@ -106,6 +106,72 @@ def test_same_finding_under_a_different_checkout_root_keys_identically():
     assert net_new == set()
 
 
+# A real dropped line whose subject is a DIRECTORY, not a file: emitted by
+# the project-structure auditor for every repo that has any findings. This
+# shape is what blocked merges repo-wide until 2026-07-31.
+UNPARSABLE_ERRO_DIR = (
+    "ERRO: scitex-todo (/home/ywatanabe/proj/scitex-cards/.worktrees/floor): "
+    "project-structure: 14 error(s), 56 warning(s), 4 info"
+)
+
+
+def test_same_finding_under_a_different_checkout_NAME_keys_identically():
+    """The directory-path case, which the prefix-only test above cannot reach.
+
+    `test_same_finding_under_a_different_checkout_root_keys_identically`
+    varies the path PREFIX (/home/ywatanabe/proj -> /tmp/base-wt), and
+    `_ABS_PATH_RE` strips prefixes correctly, so it passed throughout.
+
+    A DIRECTORY subject has no trailing slash, so the regex leaves its LAST
+    component -- and that component is the checkout NAME, which is exactly
+    what differs between HEAD and the staged baseline worktree. Measured on
+    scitex-cards 2026-07-31: 95 keys each side, 1 net-new, 1 disappeared,
+    the pair differing only by `(floor)` vs `(base-a6be1f14)`.
+    """
+    # Arrange -- same finding, same counts, two worktree NAMES.
+    head_root = "/home/ywatanabe/proj/scitex-cards/.worktrees/floor"
+    base_root = "/home/ywatanabe/proj/scitex-cards/.worktrees/base-a6be1f14"
+    base = UNPARSABLE_ERRO_DIR.replace(head_root, base_root)
+    roots = (head_root, base_root)
+    # Act
+    net_new = compute_net_new(UNPARSABLE_ERRO_DIR, base, roots=roots)
+    # Assert
+    assert net_new == set()
+
+
+def test_a_directory_finding_without_roots_still_differs():
+    """The guard is the ROOTS, not a wider regex -- shown by its absence.
+
+    Without the roots the two lines key apart. This pins WHY the parameter
+    exists, so a later "simplification" that drops it fails here rather than
+    silently restoring a repo-wide merge block.
+    """
+    # Arrange
+    base = UNPARSABLE_ERRO_DIR.replace("/.worktrees/floor", "/.worktrees/base-abc")
+    # Act
+    net_new = compute_net_new(UNPARSABLE_ERRO_DIR, base)
+    # Assert
+    assert len(net_new) == 1
+
+
+def test_two_different_files_do_not_collapse_when_roots_are_stripped():
+    """Stripping roots must not cost the file-level distinction.
+
+    The rejected alternative -- widening `_ABS_PATH_RE` to eat the final
+    component -- would make these two key as one, hiding a new finding
+    behind an existing one. That is the collision the unparsed key exists
+    to avoid, so it is asserted rather than assumed.
+    """
+    # Arrange
+    root = "/home/ywatanabe/proj/scitex-io"
+    a = f"ERRO:   [E] [PS-221 §3 x] {root}/src/a.py: requirement `p` in PUBLIC extra"
+    b = f"ERRO:   [E] [PS-221 §3 x] {root}/src/b.py: requirement `p` in PUBLIC extra"
+    # Act
+    keys = extract_violation_keys(f"{a}\n{b}", roots=(root,))
+    # Assert
+    assert len(keys) == 2
+
+
 def test_two_different_unparsable_errors_do_not_collapse_into_one_key():
     # Arrange — identical for far more than 60 characters, differing
     # only at the end; a truncated excerpt would merge them.
