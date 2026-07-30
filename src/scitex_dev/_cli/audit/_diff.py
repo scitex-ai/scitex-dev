@@ -129,7 +129,25 @@ UNPARSED_RULE = "UNPARSED"
 _ABS_PATH_RE = re.compile(r"(?<![\w.])/(?:[\w.\-]+/)+")
 
 
-def _normalize_unparsed(line: str) -> str:
+# A DIRECTORY path has no trailing slash, so `_ABS_PATH_RE` leaves its LAST
+# component — which for the two trees compared here IS the checkout name, and
+# those differ by construction. `(.../floor)` vs `(.../base-abc)` on the same
+# finding gave two identities: one phantom net-new plus one phantom
+# disappearance, on every PR emitting such a line (measured 2026-07-31 on
+# scitex-cards: 95 keys each side, 1 new, 1 gone). `audit` is required, so
+# that phantom blocked merges repo-wide.
+#
+# Widening `_ABS_PATH_RE` instead would eat the stable basename of FILE paths
+# and collapse distinct findings — the collision `_unparsed_key` exists to
+# avoid. The roots are known facts the caller already computes.
+# Longest first, so a root prefixing another leaves no fragment.
+def _strip_roots(line: str, roots: tuple[str, ...]) -> str:
+    for root in sorted((r for r in roots if r), key=len, reverse=True):
+        line = line.replace(root, "<TREE>")
+    return line
+
+
+def _normalize_unparsed(line: str, roots: tuple[str, ...] = ()) -> str:
     """Line-stable identity for a finding the structured parser missed.
 
     Applies the same line-number scrubbing as a parsed finding's
@@ -137,7 +155,7 @@ def _normalize_unparsed(line: str) -> str:
     detached baseline worktree — which live at different paths by
     construction — produce the same identity for the same finding.
     """
-    return _normalize_message(_ABS_PATH_RE.sub("", line))
+    return _normalize_message(_ABS_PATH_RE.sub("", _strip_roots(line, roots)))
 
 
 # Strips trailing ``:NN`` line-number suffix from a file-path token.
@@ -212,7 +230,7 @@ class ViolationKey:
     message_excerpt: str
 
 
-def _unparsed_key(stripped_line: str) -> ViolationKey:
+def _unparsed_key(stripped_line: str, roots: tuple[str, ...] = ()) -> ViolationKey:
     """Identity for an ERRO line the structured parser could not key.
 
     Uses the WHOLE normalized line, not a 60-char excerpt. A parsed
@@ -228,7 +246,7 @@ def _unparsed_key(stripped_line: str) -> ViolationKey:
     return ViolationKey(
         rule=UNPARSED_RULE,
         file_line="",
-        message_excerpt=_normalize_unparsed(stripped_line),
+        message_excerpt=_normalize_unparsed(stripped_line, roots),
     )
 
 
@@ -236,6 +254,7 @@ def extract_violation_keys(
     audit_stdout: str,
     *,
     distribution_filter: str | None = None,
+    roots: tuple[str, ...] = (),
 ) -> set[ViolationKey]:
     """Parse a per-auditor stdout stream into a set of violation keys.
 
@@ -257,7 +276,7 @@ def extract_violation_keys(
             # whose this is" must not collapse into "not theirs". An
             # unknown is a third value, not a quiet no.
             if _ERRO_LINE_RE.match(stripped):
-                keys.add(_unparsed_key(stripped))
+                keys.add(_unparsed_key(stripped, roots))
             continue
         if distribution_filter and m.group("dist") != distribution_filter:
             continue
@@ -325,6 +344,7 @@ def compute_net_new(
     base_stdout: str,
     *,
     distribution: str | None = None,
+    roots: tuple[str, ...] = (),
 ) -> set[ViolationKey]:
     """Return the set of violation keys present at HEAD but absent at BASE.
 
@@ -338,7 +358,7 @@ def compute_net_new(
     when the caller needs to report what was set aside.
     """
     net_new, _excluded = compute_net_new_detailed(
-        head_stdout, base_stdout, distribution=distribution
+        head_stdout, base_stdout, distribution=distribution, roots=roots
     )
     return net_new
 
@@ -348,6 +368,7 @@ def compute_net_new_detailed(
     base_stdout: str,
     *,
     distribution: str | None = None,
+    roots: tuple[str, ...] = (),
 ) -> tuple[set[ViolationKey], set[ViolationKey]]:
     """`compute_net_new`, plus the keys it declined to attribute.
 
@@ -356,8 +377,12 @@ def compute_net_new_detailed(
     number is non-zero is the failure mode this split exists to make
     impossible to reach by accident.
     """
-    head = extract_violation_keys(head_stdout, distribution_filter=distribution)
-    base = extract_violation_keys(base_stdout, distribution_filter=distribution)
+    head = extract_violation_keys(
+        head_stdout, distribution_filter=distribution, roots=roots
+    )
+    base = extract_violation_keys(
+        base_stdout, distribution_filter=distribution, roots=roots
+    )
     raw_net_new = head - base
     return partition_attributable(raw_net_new)
 
@@ -367,6 +392,7 @@ def filter_to_net_new_lines(
     net_new: set[ViolationKey],
     *,
     distribution: str | None = None,
+    roots: tuple[str, ...] = (),
 ) -> str:
     """Re-emit only those output lines whose key is in ``net_new``.
 
@@ -389,7 +415,7 @@ def filter_to_net_new_lines(
             # Non-ERRO lines (banner, summary, advisory prose) are kept
             # unconditionally — they are the audit's framing, not findings.
             if _ERRO_LINE_RE.match(stripped):
-                if _unparsed_key(stripped) in net_new:
+                if _unparsed_key(stripped, roots) in net_new:
                     kept.append(line)
                 continue
             kept.append(line)
