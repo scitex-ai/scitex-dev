@@ -52,6 +52,7 @@ def _audit_one(
     timeout: float = 30.0,
     ep_value_for=None,
     repo_root=None,
+    coverage=None,
 ) -> tuple[str, list]:
     """Audit a single package; return (status, violations).
 
@@ -103,7 +104,16 @@ def _audit_one(
         return f"not-auditable: {last_err or 'unknown'}", []
 
     out: list = []
-    _walk(cmd, [], out, root_display=package)
+    # The DENOMINATOR, accumulated alongside `out` so a verdict can state how
+    # many commands it actually inspected instead of leaving a reader unable
+    # to tell forty from zero. A caller that wants the figure passes one in
+    # (it fills in place, like `out`); callers that do not still work, and
+    # `describe_or_unknown` renders their absent denominator as NOT REPORTED.
+    from ._coverage import SurfaceCoverage
+
+    if coverage is None:
+        coverage = SurfaceCoverage()
+    _walk(cmd, [], out, root_display=package, coverage=coverage)
     _check_introspection(cmd, package, out)
     _check_config_help(cmd, package, out)
     _scan_env_vars(package, out)
@@ -126,6 +136,16 @@ def _audit_one(
     check_dev_command_group(cmd, package, out)
     if behavioral:
         _check_behavioral(package, out, cmd, timeout=timeout)
+    # REFUSE rather than pass. Zero inspected commands is not a clean CLI, it
+    # is an unanswered question — and it would otherwise render exactly like a
+    # package with forty conforming commands. Reachable when the root command
+    # itself is hidden.
+    if not coverage.is_answerable():
+        return (
+            "not-auditable: the CLI walker inspected 0 commands, so no "
+            "verdict is possible (is the root command hidden?)",
+            out,
+        )
     return ("ok" if not out else "warn"), out
 
 
@@ -147,7 +167,9 @@ def _violation_to_dict(v) -> dict:
     }
 
 
-def _emit_human(package: str, status: str, violations: list) -> None:
+def _emit_human(
+    package: str, status: str, violations: list, coverage=None
+) -> None:
     if status == "skip-mcp":
         click.echo(
             f"info  {package}: MCP / protocol server — skipped (use audit-mcp-tools when available)"
@@ -167,7 +189,16 @@ def _emit_human(package: str, status: str, violations: list) -> None:
     from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
     if status == "ok":
-        _emit("success", f"{package}: no CLI convention violations")
+        # WITH ITS DENOMINATOR. "no violations" alone read identically whether
+        # forty commands were inspected or zero, which is the whole defect:
+        # a clean verdict was indistinguishable from a run that never happened.
+        from ._coverage import describe_or_unknown
+
+        _emit(
+            "success",
+            f"{package}: no CLI convention violations "
+            f"({describe_or_unknown(coverage)})",
+        )
         emit_disclaimer()
         return
     sev = _max_severity(violations)
@@ -274,8 +305,15 @@ def run_audit(
             _emit_skip("skip", f"{package}: {reason}")
         return 0
 
+    from ._coverage import SurfaceCoverage
+
+    coverage = SurfaceCoverage()
     status, violations = _audit_one(
-        package, behavioral=behavioral, timeout=timeout, repo_root=repo_root
+        package,
+        behavioral=behavioral,
+        timeout=timeout,
+        repo_root=repo_root,
+        coverage=coverage,
     )
     violations = _filter_violations(violations, rules, exclude, min_severity)
 
@@ -300,7 +338,7 @@ def run_audit(
             rec["baseline_suppressed"] = len(suppressed)
         _emit_json([rec], registry_provenance or "single-package mode")
     else:
-        _emit_human(package, status, violations)
+        _emit_human(package, status, violations, coverage)
         if suppressed:
             _emit_baseline_suppressed(len(suppressed), bl_path)
     if write_requested:
@@ -384,7 +422,12 @@ def run_audit_all(
     any_error = False
     all_new_violations: list = []
     total_suppressed = 0
+    from ._coverage import SurfaceCoverage
+
     for name, ep, hint in targets:
+        # Fresh per package — coverage is per-CLI, and reusing one accumulator
+        # would make every package after the first report the union.
+        coverage = SurfaceCoverage()
         if hint == "not-found":
             status, violations = "not-found", []
         elif hint == "skip-mcp":
@@ -396,7 +439,10 @@ def run_audit_all(
             try:
                 with _watchdog(wall_budget):
                     status, violations = _audit_one(
-                        name, behavioral=behavioral, timeout=timeout
+                        name,
+                        behavioral=behavioral,
+                        timeout=timeout,
+                        coverage=coverage,
                     )
             except _PackageTimeout:
                 status, violations = (
@@ -412,7 +458,7 @@ def run_audit_all(
         if not violations and status == "warn":
             status = "ok"
         if not output_json:
-            _emit_human(name, status, violations)
+            _emit_human(name, status, violations, coverage)
             if suppressed:
                 _emit_baseline_suppressed(len(suppressed), bl_path)
         if _max_severity(violations) == "error" or status.startswith("not-auditable"):

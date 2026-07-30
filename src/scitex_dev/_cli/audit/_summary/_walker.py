@@ -38,6 +38,8 @@ from ._audit import (
     _is_pass_through,
 )
 
+from ._coverage import HIDDEN, SurfaceCoverage
+
 __all__ = ["_has_required_positional", "_walk"]
 
 
@@ -62,15 +64,44 @@ def _walk(
     path: list[str],
     out: list[Violation],
     root_display: str,
+    coverage: SurfaceCoverage | None = None,
 ) -> None:
-    # Skip hidden commands — not part of the public CLI surface
-    # (typically deprecation redirects kept for back-compat).
-    if getattr(cmd, "hidden", False):
-        return
+    """Walk the command tree, appending violations AND recording coverage.
+
+    ``coverage`` accumulates in place exactly as ``out`` does, so the two
+    are threaded together and neither can be forgotten independently.
+
+    It is optional only so existing callers keep working. A caller that
+    omits it gets a verdict with no denominator, which
+    :func:`._coverage.describe_or_unknown` renders as an explicit
+    "NOT REPORTED" rather than as silence — the absent case must be
+    louder than success, not indistinguishable from it.
+    """
+    # The command path is computed BEFORE the hidden check so a skip can be
+    # recorded against a real name. The early return used to happen first,
+    # which is why hidden commands left no trace at all: not inspected, not
+    # counted, and the audited surface silently shrank.
     is_root = not path
     name = root_display if is_root else (cmd.name or "<root>")
     full = " ".join(path + [name]) if path else name
+
+    # Skip hidden commands — not part of the public CLI surface
+    # (typically deprecation redirects kept for back-compat). COUNTED as
+    # skipped, never as inspected: a command nobody looked at must not
+    # contribute to a figure that reads as "checked".
+    if getattr(cmd, "hidden", False):
+        if coverage is not None:
+            coverage.record_skipped(full, HIDDEN)
+        return
     is_group = isinstance(cmd, click.Group)
+
+    # Recorded HERE, before any rule runs, because from this point the
+    # command is genuinely inspected: §2 applies to every node including
+    # the root and pass-throughs, so reaching this line IS coverage. The
+    # pass-through return below narrows WHICH rules apply; it does not mean
+    # nothing was checked.
+    if coverage is not None:
+        coverage.record_inspected(full)
 
     # §2 universal flag presence.
     _check_universal_flags(cmd, full, is_root, out)
@@ -242,4 +273,4 @@ def _walk(
     if is_group:
         next_path = [name] if is_root else path + [name]
         for sub in cmd.commands.values():
-            _walk(sub, next_path, out, root_display)
+            _walk(sub, next_path, out, root_display, coverage)
