@@ -7,6 +7,41 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-07-31
+
+> **DRAFT ENTRIES — transcribed, not authored.** These lines are faithful
+> restatements of each commit's own subject, written by scitex-cards to unblock
+> a release, NOT by the authors of the work. scitex-dev's changelog convention
+> is narrative (see 0.40.4: the defect, the measurement, why the wrong reason
+> was the more alarming one) and these entries do not meet that bar. Enrich or
+> replace before merging; the PR exists so the mechanical part is not what
+> holds a release up.
+
+### Added
+- Generated gates carry a version marker and assert their anchor (#484).
+- A clean CLI verdict states its denominator (#483).
+
+### Fixed
+- The net-new key no longer embeds the checkout name (#485). A directory-shaped
+  finding keyed differently in HEAD and the staged baseline worktree, so every
+  PR emitting one saw a phantom net-new finding plus a phantom disappearance —
+  blocking merges repo-wide on a required check.
+- §10 not running no longer looks like §10 passing (#480).
+- §10 timing findings are no longer attributable to a diff.
+- PS-224 no longer advises relocating attacker-triggerable secret jobs (#475).
+- `--version` no longer answers confidently when resolution was a coin flip.
+- The masking summary reports its denominator and refuses to hide what it could
+  not read.
+
+### Changed
+- The CLI-convention walker is extracted so it can be edited (#482).
+- `__version__` is deferred off the import path (#478).
+
+### Tests
+- The alias `__name__` check is skipped rather than relaxed (#481).
+- A missing OPTIONAL extra skips rather than fails (#479).
+
+
 ## [0.40.4] - 2026-07-30
 
 **PS-224's diagnostic text told you something false, and acting on it caused
