@@ -22,7 +22,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-_SRC = Path(__file__).resolve().parents[3] / "src" / "scitex_dev"
+# tests/scitex_dev/linter/_cmds/ -> repo root is four levels up.
+_SRC = Path(__file__).resolve().parents[4] / "src" / "scitex_dev"
 
 _DEAD_VERB = "linter rules --json"
 
