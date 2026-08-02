@@ -67,7 +67,59 @@ made in a **def file, a workflow, or a README**.
 
 ## Decision
 
-### 1. `dev` and `docs` become PEP 735 dependency groups, not extras
+### 1. THE LOAD-BEARING CLAUSE — an allowlist on extra NAMES
+
+```
+the set of names in [project.optional-dependencies] must be a subset of
+{all, dev, docs}
+```
+
+No exemption mechanism. No config file. No written reason. Statically
+decidable from one read of the toml, and it fails on exactly the mistake that
+matters: someone adding a new per-feature extra six months from now, which is
+how `[mcp]` came to exist.
+
+The operator named the real requirement when he asked for the discipline
+rather than the mechanism — *「docs あるなら新しいエクストラ作ろ、ってならな
+ければ良いです」*. The worry is not where `dev` lives; it is that the existence
+of a per-feature extra teaches the next person that adding one is normal.
+
+**On the heavy-optional objection, which I raised and which does not
+survive.** `torch` is an optional extra in 6 packages, `audio` in 5, `web` in
+6, `slurm` in 4, `browser` in 3, and I argued a strict allowlist would force
+gigabyte ABI-pinned GPU wheels onto every install. It does not. **The opt-out
+already exists and is the bare install**: core dependencies only, no `[all]`,
+no torch. Someone who does not want torch omits the extra entirely — and
+anyone with that requirement is, by construction, someone who knows how.
+
+What a strict allowlist actually removes is the MIDDLE — "I want `mcp` but not
+`torch`". That granularity is what produced the outage. Nobody needs it badly
+enough to keep a per-feature menu alive, and the escape hatch I proposed would
+have re-legalised the exact construct this rule exists to remove, one written
+reason at a time.
+
+Operator ruling, 2026-08-02: all-or-nothing, no exceptions.
+
+### 2. The allowlist alone is NOT sufficient — a stale pin stays silent
+
+Measured, not reasoned:
+
+```
+$ uv pip install --dry-run '/home/ywatanabe/proj/scitex-dev[thisextradoesnotexist]'
+warning: The package ... does not have an extra named `thisextradoesnotexist`
+EXIT=0
+```
+
+**An unknown extra is a warning, not an error.** So after `mcp` is removed
+from scitex-cards, `scitex-cards[mcp]` in sac's container definitions still
+installs, warns into a log nobody reads, and omits the capability — today's
+outage, one layer over.
+
+The allowlist stops an extra from being *created*. It does nothing about pins
+that already exist. Therefore decision 1 ships **together with** the pin
+detection in decision 5; neither half is sufficient alone.
+
+### 3. `dev` and `docs` MAY become PEP 735 dependency groups — optional, later
 
 ```toml
 [dependency-groups]
