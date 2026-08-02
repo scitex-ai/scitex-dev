@@ -122,6 +122,40 @@ _ERRO_LINE_RE = re.compile(r"^ERRO:\s")
 # silently means "N findings plus however many we could not read".
 UNPARSED_RULE = "UNPARSED"
 
+# Rule code for a per-auditor ROLL-UP TALLY — a line that COUNTS findings
+# instead of being one:
+#
+#   ERRO: scitex-todo (/home/.../scitex-cards): project-structure:
+#         14 error(s), 56 warning(s), 4 info
+#
+# The parenthesised subject defeats `<dist>:` above, so before this the
+# tally fell through the ERRO fail-open and was keyed by `_unparsed_key`
+# on its WHOLE line — counts included. Any component moving therefore
+# swapped the key: one out, one in, total unchanged.
+#
+# A tally is derived from findings ALREADY keyed individually, so keying
+# it double-counts them and guarantees a spurious net-new whenever any one
+# moves. It can never be independent evidence about a diff.
+#
+# Measured by scitex-cards 2026-08-02 on a DOCS-ONLY PR: 131 at HEAD, 131
+# at baseline, "1 net-new" — the pair differing only by `4 info` -> `6
+# info`. Deterministic across a re-run of the same commit, so it read as a
+# regression rather than a flake. Card:
+# dev-audit-new-only-reports-net-new-with-identical-counts-20260802
+#
+# Excluded from ATTRIBUTION via NON_ATTRIBUTABLE_RULES, never from
+# REPORTING — a silent drop would rebuild the defect the fail-open exists
+# to prevent.
+TALLY_RULE = "TALLY"
+
+# Anchored on the message TAIL so a real finding that merely mentions a
+# count ("expected 3 error(s) in fixture") is not swallowed.
+_TALLY_RE = re.compile(
+    r":\s*\d+\s+error\(s\)"
+    r"(?:,\s*\d+\s+warning\(s\))?"
+    r"(?:,\s*\d+\s+info)?\s*$"
+)
+
 # Absolute checkout roots differ between HEAD and the temporary baseline
 # worktree, so a raw-text identity MUST drop them — otherwise every
 # unparsed line reads as net-new on every run and the gate blocks
@@ -276,7 +310,26 @@ def extract_violation_keys(
             # whose this is" must not collapse into "not theirs". An
             # unknown is a third value, not a quiet no.
             if _ERRO_LINE_RE.match(stripped):
-                keys.add(_unparsed_key(stripped, roots))
+                # A roll-up tally is keyed SEPARATELY so its moving counts
+                # cannot masquerade as a net-new finding. Still keyed (so
+                # it stays counted and disclosable), just not attributable.
+                if _TALLY_RE.search(stripped):
+                    # Drop the numeric tail from the identity so the tally
+                    # keeps ONE stable key across runs. Leaving the counts
+                    # in would still be safe (TALLY is non-attributable),
+                    # but the key would churn on every run and show up as a
+                    # spurious add/remove pair in any raw key comparison.
+                    keys.add(
+                        ViolationKey(
+                            rule=TALLY_RULE,
+                            file_line="",
+                            message_excerpt=_TALLY_RE.sub(
+                                "", _normalize_unparsed(stripped, roots)
+                            )[:60],
+                        )
+                    )
+                else:
+                    keys.add(_unparsed_key(stripped, roots))
             continue
         if distribution_filter and m.group("dist") != distribution_filter:
             continue
@@ -318,7 +371,11 @@ def extract_violation_keys(
 #: emits these, and `partition_attributable` hands the count back so the
 #: caller can disclose it. A silent exclusion here would rebuild the exact
 #: defect the UNPARSED fail-open above exists to prevent.
-NON_ATTRIBUTABLE_RULES = frozenset({"§10", "§10w"})
+#: TALLY joins them for a different reason: §10 findings are real but
+#: describe the machine rather than the diff; a tally is not a finding at
+#: all, it is arithmetic over findings already counted. Both are honestly
+#: reported and neither can be blamed on a change.
+NON_ATTRIBUTABLE_RULES = frozenset({"§10", "§10w", TALLY_RULE})
 
 
 def is_attributable(key: ViolationKey) -> bool:
@@ -437,65 +494,9 @@ def filter_to_net_new_lines(
     return "\n".join(kept)
 
 
-# --------------------------------------------------------------------- #
-# Worktree-detach context manager                                        #
-# --------------------------------------------------------------------- #
-
-
-class DiffAwareSetupError(RuntimeError):
-    """Raised when the base-ref worktree cannot be staged."""
-
-
-@contextmanager
-def worktree_at(repo: Path, ref: str) -> Iterator[Path]:
-    """Stage ``ref`` as a temporary git worktree; yield its path.
-
-    The caller's HEAD never moves — ``git worktree add`` clones the
-    on-disk index of ``ref`` into a fresh dir under ``$TMPDIR``. On exit
-    (success or failure) we always run ``git worktree remove --force``
-    so the staging dir doesn't leak and the worktree registry stays
-    clean.
-
-    Raises ``DiffAwareSetupError`` on add failure (e.g. ref not found,
-    locked worktree, dirty index) so the diff-aware caller can degrade
-    gracefully (fall back to strict audit + a warning).
-    """
-    if not (repo / ".git").exists():
-        raise DiffAwareSetupError(
-            f"{repo} is not a git repository — diff-aware audit needs one."
-        )
-    stage = Path(tempfile.mkdtemp(prefix="audit-base-"))
-    try:
-        r = subprocess.run(
-            ["git", "-C", str(repo), "worktree", "add", "--detach", str(stage), ref],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if r.returncode != 0:
-            raise DiffAwareSetupError(
-                f"`git worktree add {ref}` failed (rc={r.returncode}): "
-                f"{r.stderr.strip()}"
-            )
-        yield stage
-    finally:
-        # Best-effort teardown: --force survives a working tree with
-        # local changes (the auditor occasionally writes pytest cache
-        # files into the worktree). Worktree registry is reaped via
-        # `prune` so a missed remove doesn't accumulate stubs.
-        try:
-            subprocess.run(
-                ["git", "-C", str(repo), "worktree", "remove", "--force", str(stage)],
-                capture_output=True,
-                check=False,
-            )
-        finally:
-            subprocess.run(
-                ["git", "-C", str(repo), "worktree", "prune"],
-                capture_output=True,
-                check=False,
-            )
-
+# Worktree staging lives in `._diff_worktree` — a VCS concern, not a
+# parsing one. Re-exported here so existing importers are unaffected.
+from ._diff_worktree import DiffAwareSetupError, worktree_at  # noqa: E402
 
 __all__ = [
     "DiffAwareSetupError",

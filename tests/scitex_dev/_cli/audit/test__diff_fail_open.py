@@ -139,17 +139,65 @@ def test_same_finding_under_a_different_checkout_NAME_keys_identically():
     assert net_new == set()
 
 
+def test_directory_finding_under_two_checkout_names_keys_identically():
+    """The roots-identity guarantee, on a fixture roots actually decides.
+
+    Its sibling above uses UNPARSABLE_ERRO_DIR, which since 2026-08-02 is a
+    TALLY and is excluded from attribution by rule. That test therefore
+    still passes but no longer demonstrates anything about `roots` -- it
+    would go green even if roots-stripping were deleted. This one keeps the
+    guarantee under test on a directory subject, which is the only shape
+    whose identity `roots` actually decides.
+    """
+    # Arrange
+    head_root = "/home/ywatanabe/proj/scitex-cards/.worktrees/floor"
+    base_root = "/home/ywatanabe/proj/scitex-cards/.worktrees/base-a6be1f14"
+    base = UNPARSABLE_ERRO_DIR_NOT_A_TALLY.replace(head_root, base_root)
+    roots = (head_root, base_root)
+    # Act
+    net_new = compute_net_new(UNPARSABLE_ERRO_DIR_NOT_A_TALLY, base, roots=roots)
+    # Assert
+    assert net_new == set()
+
+
+# A DIRECTORY-subject unparsable finding that is NOT a tally. Needed because
+# `roots` only decides identity for directory subjects: `_ABS_PATH_RE` already
+# collapses FILE paths (`/a/b/c.py` -> `c.py`) unaided, while a directory has
+# no trailing slash so its last component -- the checkout name -- survives.
+#
+# Synthetic on purpose, and that is the honest part. Of the three unparsable
+# shapes the module documents, the only directory-subject one in the wild is
+# the per-auditor tally, which since 2026-08-02 is excluded from attribution
+# by rule. So no CURRENTLY-EMITTED line exercises `roots` any more. This
+# fixture keeps the parameter under test for the next directory-subject
+# finding rather than letting the guard quietly become unreachable.
+UNPARSABLE_ERRO_DIR_NOT_A_TALLY = (
+    "ERRO: scitex-todo (/home/ywatanabe/proj/scitex-cards/.worktrees/floor): "
+    "project-structure: scan halted before completion"
+)
+
+
 def test_a_directory_finding_without_roots_still_differs():
     """The guard is the ROOTS, not a wider regex -- shown by its absence.
 
     Without the roots the two lines key apart. This pins WHY the parameter
     exists, so a later "simplification" that drops it fails here rather than
     silently restoring a repo-wide merge block.
+
+    FIXTURE CHANGED 2026-08-02, deliberately, and the reason matters more
+    than the change. This used UNPARSABLE_ERRO_DIR, which is a per-auditor
+    TALLY -- now keyed as TALLY_RULE and excluded from attribution, so its
+    net-new set is empty with OR without roots. The test would have gone on
+    passing while proving nothing about `roots`: a control that stopped
+    controlling. Swapped to a directory-subject line with no count tail so
+    the assertion still turns on the parameter it names.
     """
     # Arrange
-    base = UNPARSABLE_ERRO_DIR.replace("/.worktrees/floor", "/.worktrees/base-abc")
+    base = UNPARSABLE_ERRO_DIR_NOT_A_TALLY.replace(
+        "/.worktrees/floor", "/.worktrees/base-abc"
+    )
     # Act
-    net_new = compute_net_new(UNPARSABLE_ERRO_DIR, base)
+    net_new = compute_net_new(UNPARSABLE_ERRO_DIR_NOT_A_TALLY, base)
     # Assert
     assert len(net_new) == 1
 
