@@ -149,6 +149,31 @@ metadata — they resolve only against a local source tree. Had anything
 installed `scitex-X[dev]` from an index, this decision would have been
 unimplementable in exactly the way the underscore proposal was.
 
+### 2b. REVERSED — `all` DOES include `dev` and `docs`
+
+An earlier draft of this ADR required `all` to exclude `dev`/`docs` so `[all]`
+would stay cheap. **That is withdrawn.** It was written when `[all]` was going
+to be the runtime install form, defending against pytest and sphinx landing in
+a container image.
+
+Under the strict allowlist that premise is gone. Once every runtime capability
+is promoted to core, **the runtime install is BARE** — core only, no extras.
+`[all]` stops being the runtime shape and becomes the developer's
+give-me-everything, where the toolchain is exactly what you want. And the
+cheapness argument dissolves on its own: it existed to remove the temptation to
+hand-pick, and under the allowlist there is nothing left to hand-pick.
+
+So the idiom PS-221 already documents is correct as-is:
+
+```toml
+all = ["mypkg[dev,docs]"]
+```
+
+**PS-221 therefore needs no amendment at all.** Found by scitex-cards, who
+retracted their own "irreconcilable" framing after measuring that
+`scitex-cards`' `all` was already closed over `dev` and `docs` and the audit leg
+was green throughout.
+
 ### 2. `all` references every remaining extra BY NAME
 
 ```toml
