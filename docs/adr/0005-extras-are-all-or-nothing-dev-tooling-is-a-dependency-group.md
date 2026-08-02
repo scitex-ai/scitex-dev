@@ -114,19 +114,49 @@ firing.**
 Consequence: decisions 1 and 2 must land **together**, per package. Applying
 decision 1 alone can silently narrow `[all]`.
 
-### 3. A public extra with zero requirements is a defect
+### 3. A public extra with zero requirements is a defect — ALREADY ENFORCED
 
-`scitex-dev` ships `cli = []` and `cli-audit = []`. `pip install
-scitex-dev[cli-audit]` installs nothing while reading like it enables a
-capability — and that exact pin appears **33 times** in scitex-dev's own
-documentation, more than any other partial pin in the ecosystem. An empty
-extra is worse than a wrong one: the reader believes they have complied.
+This is **PS-214**, which already exists and already fires. Measured against
+scitex-dev today:
 
-### 4. Documentation is part of the enforcement surface
+```
+check_ps214_empty_extras -> 2 violations
+  PS-214 pyproject.toml | `[project.optional-dependencies.cli]` is an empty list
+  PS-214 pyproject.toml | `[project.optional-dependencies.cli-audit]` is an empty list
+```
 
-Flag `pip install <scitex-pkg>[<anything other than all>]` in `.md`, skills,
-workflow and container-definition files. People copy install lines; they do
-not derive them from `pyproject.toml`. Current fleet state:
+`pip install scitex-dev[cli-audit]` installs nothing while reading like it
+enables a capability, and that pin appears **33 times** in scitex-dev's own
+documentation. No new rule is needed. **The rule was firing the whole time and
+nobody saw it**, because the CI gate runs `--new-only` and both violations
+predate every baseline. A pre-existing finding is invisible by construction,
+which is the grandfathering hazard the constitution warns about
+(§2: "a blanket flag also hides every new instance of the same class") applied
+to the *reporting* layer rather than the rule layer.
+
+**Action is therefore visibility, not authorship**: a periodic full-corpus
+audit whose findings are read, separate from the per-PR `--new-only` gate.
+
+### 4. Documented pins — the gap is PEER packages, not documentation as such
+
+**PS-215 already scans** `.py` and `.md` for `pip install <pkg>[<extra>]` and
+flags an extra that does not exist or is empty. It is the right mechanism and
+it is built.
+
+Its docstring states one deliberate exclusion:
+
+> Remedies naming a DIFFERENT package (a peer's extra) are intentionally NOT
+> checked — verifying a peer's pyproject is out of scope for a cheap,
+> single-repo audit pass.
+
+**That exclusion is exactly where the outage lived.** The failing pin was
+`scitex-cards[mcp]` written in *sac's* container definitions — a peer pin, in a
+`.def` file, on both counts outside PS-215's scope. The scope limit is a real
+design constraint (a single-repo pass cannot resolve a peer's pyproject), not
+an oversight, so closing it needs the ecosystem-level pass that has the whole
+fleet in hand — `scitex-dev ecosystem`, not `audit-project`.
+
+Fleet state, for sizing that pass:
 
 | documented partial pin | occurrences |
 |---|---|
@@ -135,13 +165,28 @@ not derive them from `pyproject.toml`. Current fleet state:
 | `scitex-agent-container[mcp]` | 12 |
 | `scitex-hub[mcp]` | 6 |
 
-`scitex-agent-container[mcp]` is the shape that caused the outage.
-
 **Flag, never autofix.** scitex-cards' mechanical sweep rewrote a test comment
 quoting what a hint *used to say* into "the hint used to say `<the current
 value>`", and turned three skip reasons into a claim that is false. A rewrite
 keyed on a bare string cannot distinguish an instruction from a description
 of one.
+
+### 5. An install check must assert the CAPABILITY, not the import
+
+From sac's post-incident work, and it generalises past this ADR:
+
+> A bare `psycopg/` directory with no `__init__.py` imports as a **namespace
+> package**, so `import psycopg` SUCCEEDS and `psycopg.connect` does not
+> exist.
+
+So every guard of the form `try: import psycopg / except ImportError:` passes
+on a broken image. The partial install did not merely omit a dependency — it
+left behind something that satisfies the standard test for the dependency
+being present. That is why the symptom surfaced as *"the database does not
+exist"* rather than as a missing module.
+
+Build-time and runtime checks must assert the attribute they actually need
+(`psycopg.connect`), not that the top-level name imports.
 
 ## Rollout
 
@@ -174,10 +219,30 @@ commit when this ADR's own guidance conflicted with a shipped gate.
 
 ## Notes on how this decision was reached
 
-Recorded because the process failed in a way worth not repeating: the
-governing rule (PS-221) was already written, already enforced, and already
-printing its own rationale into CI while two agents reconstructed the question
-from first principles and reached the opposite answer. Both had measured
-*practice* — what packages do — and read non-compliance as evidence that no
-rule existed. For a norm, doctrine is the source of truth and the code is the
-compliance report.
+Recorded because the process failed the same way four times in one day, and
+the pattern is more useful than the decision.
+
+Every rule this ADR reached for **already existed**:
+
+| what was "discovered" | what was already shipped |
+|---|---|
+| extras should be all-or-nothing | PS-221, first paragraph, verbatim |
+| an empty extra is a defect | PS-214, *firing on scitex-dev right now* |
+| documented pins should be checked | PS-215 |
+| leading-underscore extras are illegal | PS-221's docstring, incl. the five repos it broke in 2026-07 |
+
+Two agents reconstructed each question from first principles and repeatedly
+reached the opposite of the shipped answer. The common error was measuring
+**practice** — what packages do — and reading non-compliance as evidence that
+no rule existed. Non-compliance and non-existence are indistinguishable when
+you only count, and the *owning* package being non-conforming reads as the
+strongest evidence against the rule.
+
+For a norm, doctrine is the source of truth and the code is the compliance
+report. Before proposing an ecosystem rule, grep all three corpora —
+`linter/_rules/` (STX-*), `audit/_project/` (PS-*), `_skills/` (doctrine) —
+and run the audit against your own repo first.
+
+The one genuinely new thing here is not a rule but a **visibility** finding:
+PS-214 has been reporting scitex-dev's two empty extras all along, into a gate
+configured to show only what is new.
