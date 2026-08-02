@@ -27,6 +27,7 @@ from scitex_dev._cli.audit._diff import (
     UNPARSED_RULE,
     compute_net_new,
     extract_violation_keys,
+    is_attributable,
     filter_to_net_new_lines,
 )
 
@@ -139,17 +140,110 @@ def test_same_finding_under_a_different_checkout_NAME_keys_identically():
     assert net_new == set()
 
 
+def test_directory_finding_under_two_checkout_names_keys_identically():
+    """The roots-identity guarantee, on a fixture roots actually decides.
+
+    Its sibling above uses UNPARSABLE_ERRO_DIR, which since 2026-08-02 is a
+    TALLY and is excluded from attribution by rule. That test therefore
+    still passes but no longer demonstrates anything about `roots` -- it
+    would go green even if roots-stripping were deleted. This one keeps the
+    guarantee under test on a directory subject, which is the only shape
+    whose identity `roots` actually decides.
+    """
+    # Arrange
+    head_root = "/home/ywatanabe/proj/scitex-cards/.worktrees/floor"
+    base_root = "/home/ywatanabe/proj/scitex-cards/.worktrees/base-a6be1f14"
+    base = UNPARSABLE_ERRO_DIR_NOT_A_TALLY.replace(head_root, base_root)
+    roots = (head_root, base_root)
+    # Act
+    net_new = compute_net_new(UNPARSABLE_ERRO_DIR_NOT_A_TALLY, base, roots=roots)
+    # Assert
+    assert net_new == set()
+
+
+# A DIRECTORY-subject unparsable finding that is NOT a tally. Needed because
+# `roots` only decides identity for directory subjects: `_ABS_PATH_RE` already
+# collapses FILE paths (`/a/b/c.py` -> `c.py`) unaided, while a directory has
+# no trailing slash so its last component -- the checkout name -- survives.
+#
+# Synthetic on purpose, and that is the honest part. Of the three unparsable
+# shapes the module documents, the only directory-subject one in the wild is
+# the per-auditor tally, which since 2026-08-02 is excluded from attribution
+# by rule. So no CURRENTLY-EMITTED line exercises `roots` any more. This
+# fixture keeps the parameter under test for the next directory-subject
+# finding rather than letting the guard quietly become unreachable.
+UNPARSABLE_ERRO_DIR_NOT_A_TALLY = (
+    "ERRO: scitex-todo (/home/ywatanabe/proj/scitex-cards/.worktrees/floor): "
+    "project-structure: scan halted before completion"
+)
+
+
+# Every unparsable ERRO shape the auditor ACTUALLY emits, per the shape list
+# in `_diff`. Deliberately excludes UNPARSABLE_ERRO_DIR_NOT_A_TALLY, which is
+# synthetic.
+CURRENTLY_EMITTED_UNPARSABLE_SHAPES = (
+    UNPARSABLE_ERRO,
+    UNPARSABLE_ERRO_DIR,
+    "ERRO: scitex-io: CLI conventions: not-auditable: unknown",
+)
+
+
+def test_roots_changes_no_ATTRIBUTABLE_key_among_emitted_shapes():
+    """Turns a comment into a tripwire (scitex-cards' suggestion, 2026-08-02).
+
+    It immediately earned that: I first asserted roots was inert for every
+    emitted shape, and this test FAILED. The tally's own key does still
+    move with roots -- its excerpt runs through `_normalize_unparsed`, and
+    the checkout name sits in its subject. So "no emitted line exercises
+    roots" was wrong. What is true is narrower and is what this asserts:
+    roots changes no ATTRIBUTABLE key, so it cannot change a verdict.
+
+    The day a directory-subject ATTRIBUTABLE finding is emitted, its key
+    starts absorbing the checkout name, this goes red, and the failure
+    lands on the person who needs to know roots became verdict-relevant --
+    instead of on whoever later debugs a per-worktree phantom net-new.
+
+    Failing here is not a bug. It means: re-read the `_strip_roots`
+    comment, and add the new shape to the fixtures above.
+    """
+    # Arrange
+    roots = ("/home/ywatanabe/proj/scitex-cards/.worktrees/floor",)
+
+    def _attributable(line, **kw):
+        return {k for k in extract_violation_keys(line, **kw) if is_attributable(k)}
+
+    # Act
+    differing = [
+        line
+        for line in CURRENTLY_EMITTED_UNPARSABLE_SHAPES
+        if _attributable(line) != _attributable(line, roots=roots)
+    ]
+
+    # Assert
+    assert differing == []
+
+
 def test_a_directory_finding_without_roots_still_differs():
     """The guard is the ROOTS, not a wider regex -- shown by its absence.
 
     Without the roots the two lines key apart. This pins WHY the parameter
     exists, so a later "simplification" that drops it fails here rather than
     silently restoring a repo-wide merge block.
+
+    FIXTURE CHANGED 2026-08-02, deliberately, and the reason matters more
+    than the change. This used UNPARSABLE_ERRO_DIR, which is a per-auditor
+    TALLY -- now keyed as TALLY_RULE and excluded from attribution, so its
+    net-new set is empty with OR without roots. The test would have gone on
+    passing while proving nothing about `roots`: a control that stopped
+    controlling. Swapped to a directory-subject line with no count tail so
+    the assertion still turns on the parameter it names.
     """
     # Arrange
-    base = UNPARSABLE_ERRO_DIR.replace("/.worktrees/floor", "/.worktrees/base-abc")
+    base = UNPARSABLE_ERRO_DIR_NOT_A_TALLY.replace(
+        "/.worktrees/floor", "/.worktrees/base-abc"
+    )
     # Act
-    net_new = compute_net_new(UNPARSABLE_ERRO_DIR, base)
+    net_new = compute_net_new(UNPARSABLE_ERRO_DIR_NOT_A_TALLY, base)
     # Assert
     assert len(net_new) == 1
 
