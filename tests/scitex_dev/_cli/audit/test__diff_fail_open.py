@@ -27,6 +27,7 @@ from scitex_dev._cli.audit._diff import (
     UNPARSED_RULE,
     compute_net_new,
     extract_violation_keys,
+    is_attributable,
     filter_to_net_new_lines,
 )
 
@@ -175,6 +176,51 @@ UNPARSABLE_ERRO_DIR_NOT_A_TALLY = (
     "ERRO: scitex-todo (/home/ywatanabe/proj/scitex-cards/.worktrees/floor): "
     "project-structure: scan halted before completion"
 )
+
+
+# Every unparsable ERRO shape the auditor ACTUALLY emits, per the shape list
+# in `_diff`. Deliberately excludes UNPARSABLE_ERRO_DIR_NOT_A_TALLY, which is
+# synthetic.
+CURRENTLY_EMITTED_UNPARSABLE_SHAPES = (
+    UNPARSABLE_ERRO,
+    UNPARSABLE_ERRO_DIR,
+    "ERRO: scitex-io: CLI conventions: not-auditable: unknown",
+)
+
+
+def test_roots_changes_no_ATTRIBUTABLE_key_among_emitted_shapes():
+    """Turns a comment into a tripwire (scitex-cards' suggestion, 2026-08-02).
+
+    It immediately earned that: I first asserted roots was inert for every
+    emitted shape, and this test FAILED. The tally's own key does still
+    move with roots -- its excerpt runs through `_normalize_unparsed`, and
+    the checkout name sits in its subject. So "no emitted line exercises
+    roots" was wrong. What is true is narrower and is what this asserts:
+    roots changes no ATTRIBUTABLE key, so it cannot change a verdict.
+
+    The day a directory-subject ATTRIBUTABLE finding is emitted, its key
+    starts absorbing the checkout name, this goes red, and the failure
+    lands on the person who needs to know roots became verdict-relevant --
+    instead of on whoever later debugs a per-worktree phantom net-new.
+
+    Failing here is not a bug. It means: re-read the `_strip_roots`
+    comment, and add the new shape to the fixtures above.
+    """
+    # Arrange
+    roots = ("/home/ywatanabe/proj/scitex-cards/.worktrees/floor",)
+
+    def _attributable(line, **kw):
+        return {k for k in extract_violation_keys(line, **kw) if is_attributable(k)}
+
+    # Act
+    differing = [
+        line
+        for line in CURRENTLY_EMITTED_UNPARSABLE_SHAPES
+        if _attributable(line) != _attributable(line, roots=roots)
+    ]
+
+    # Assert
+    assert differing == []
 
 
 def test_a_directory_finding_without_roots_still_differs():
