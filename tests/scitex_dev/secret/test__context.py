@@ -47,7 +47,7 @@ class TestTheAppIsAlwaysFirst:
 
     def test_standalone_is_the_app_root(self):
         # Arrange
-        ctx = SecretContext(app="figrecipe")
+        ctx = SecretContext(app="figrecipe", scope=Scope.standalone())
         # Act
         root = ctx.secret_root()
         # Assert
@@ -118,8 +118,15 @@ class TestIncoherentScopesAreRefused:
             Scope(**kwargs)
 
     def test_a_traversing_app_is_refused(self):
+        """A VALID scope is passed on purpose.
+
+        Without it this raises TypeError for the missing argument and never
+        reaches the app check — the test would look like it passed while
+        proving nothing about traversal. Supplying the scope makes the app
+        validation the only thing that can fail here.
+        """
         # Arrange
-        kwargs = dict(app="../../etc")
+        kwargs = dict(app="../../etc", scope=Scope.standalone())
         # Act
         raised = pytest.raises(ValueError)
         # Assert
@@ -151,14 +158,54 @@ class TestReservedNames:
         assert reason is None
 
 
-class TestStandaloneIsExplicit:
-    def test_no_owner_means_standalone(self):
+class TestScopeMustBeStated:
+    """`scope` has no default — operator directive 2026-08-04.
+
+    The point is not tidiness. A defaulted scope lets the most dangerous
+    call — a request handler that forgot to pass the requesting user —
+    construct successfully and quietly read the standalone store. A missing
+    argument is loud and immediate; a defaulted one is a silent wrong answer.
+    """
+
+    def test_omitting_scope_is_a_type_error(self):
         # Arrange
-        ctx = SecretContext(app="cards")
+        kwargs = dict(app="cards")
+        # Act
+        raised = pytest.raises(TypeError)
+        # Assert
+        with raised:
+            SecretContext(**kwargs)
+
+    def test_standalone_is_stated_not_omitted(self):
+        # Arrange
+        ctx = SecretContext(app="cards", scope=Scope.standalone())
         # Act
         standalone = ctx.is_standalone
         # Assert
         assert standalone is True
+
+    def test_standalone_never_looks_up_the_current_user(self):
+        """`Scope.standalone()` must not resolve to $USER.
+
+        If it did, a forgotten scope in a web request would resolve to the
+        SERVICE ACCOUNT's store — a successful-looking read of the wrong
+        data, which is the failure this whole design avoids.
+        """
+        # Arrange
+        scope = Scope.standalone()
+        # Act
+        owner = scope.owner
+        # Assert
+        assert owner is None
+
+    def test_everything_and_standalone_are_distinct_intentions(self):
+        """Same value, different names — a reader must not have to guess."""
+        # Arrange
+        cross = Scope.everything()
+        # Act
+        cross_cutting = cross.is_cross_cutting
+        # Assert
+        assert cross_cutting is True
 
     def test_an_owner_is_not_standalone(self):
         # Arrange
