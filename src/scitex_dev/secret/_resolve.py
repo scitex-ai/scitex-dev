@@ -2,16 +2,19 @@
 # -*- coding: utf-8 -*-
 """The leaf-facing primitive: get a credential, in whatever situation you are in.
 
-``SecretStore`` is the SSOT for a secret's VALUE, and ``Context`` says whose
-secret is being asked for. This module is what a leaf package (scitex-hub,
-scitex-writer, scitex-scholar, figrecipe, …) calls at runtime, so every leaf
-resolves credentials the same way instead of each inventing its own
-``os.environ.get`` with its own fallback rules.
+``SecretStore`` is the SSOT for a secret's VALUE, and ``SecretContext`` — an
+app plus a ``scitex_dev.scope.Scope`` — says whose secret is being asked for.
+This module is what a leaf package (scitex-hub, scitex-writer, scitex-scholar,
+figrecipe, …) calls at runtime, so every leaf resolves credentials the same way
+instead of each inventing its own ``os.environ.get`` with its own fallback
+rules.
 
-    from scitex_dev.secret import Context, resolve
+    from scitex_dev.scope import Scope
+    from scitex_dev.secret import SecretContext, resolve
 
-    resolve("api/openai", ctx=Context(pkg="writer"))                  # CLI
-    resolve("api/openai", ctx=Context(pkg="writer", user=request.user.username))
+    resolve("api/openai", ctx=SecretContext(app="writer"))          # CLI
+    resolve("api/openai", ctx=SecretContext(
+        app="writer", scope=Scope(owner=request.user.username)))    # in hub
 
 TWO SOURCES, AND WHY ENV WINS — BUT ONLY SOMETIMES
 --------------------------------------------------
@@ -47,7 +50,7 @@ import re
 from pathlib import Path
 from typing import Literal, Optional
 
-from ._context import Context, name_reservation_error
+from ._context import SecretContext, name_reservation_error
 from ._store import OK, SecretStore
 
 Source = Literal["env", "store", "default"]
@@ -60,7 +63,7 @@ class SecretUnavailable(RuntimeError):
     saying WHERE sends the reader to guess among several.
     """
 
-    def __init__(self, name: str, ctx: Context, env_var: Optional[str],
+    def __init__(self, name: str, ctx: SecretContext, env_var: Optional[str],
                  root: Path, detail: str):
         self.name = name
         self.ctx = ctx
@@ -76,18 +79,18 @@ class SecretUnavailable(RuntimeError):
             f"secret {name!r} is unavailable for {ctx.describe()}.\n"
             + env_line
             + f"  store:       {root / (name + '.gpg')} — {detail}\n"
-            f"  fix: `scitex-dev dev secret set {name} --pkg {ctx.pkg}` where the "
+            f"  fix: `scitex-dev dev secret set {name} --pkg {ctx.app}` where the "
             "key lives"
             + (f", or export {env_var} where it does not." if env_var else ".")
         )
 
 
-def store_for(ctx: Context) -> SecretStore:
+def store_for(ctx: SecretContext) -> SecretStore:
     """The ``SecretStore`` this context reads and writes."""
     return SecretStore(ctx.secret_root())
 
 
-def env_var_for(ctx: Context, name: str) -> Optional[str]:
+def env_var_for(ctx: SecretContext, name: str) -> Optional[str]:
     """The environment variable that overrides ``name``, or ``None``.
 
     ``None`` for any context carrying a user: see the module docstring — a
@@ -99,7 +102,7 @@ def env_var_for(ctx: Context, name: str) -> Optional[str]:
     directions matter, so it is a documented transformation rather than a table
     that can drift from what the code reads.
 
-        Context(pkg="hub"), "auth/oidc-client-secret"
+        SecretContext(app="hub"), "auth/oidc-client-secret"
           -> SCITEX_HUB_SECRET_AUTH_OIDC_CLIENT_SECRET
     """
     if not ctx.is_standalone:
@@ -121,7 +124,7 @@ def _from_env(env_var: Optional[str]) -> Optional[str]:
 def resolve_source(
     name: str,
     *,
-    ctx: Context,
+    ctx: SecretContext,
     default: Optional[str] = None,
     required: bool = True,
 ) -> tuple[Optional[str], Optional[Source]]:
@@ -160,7 +163,7 @@ def resolve_source(
 def resolve(
     name: str,
     *,
-    ctx: Context,
+    ctx: SecretContext,
     default: Optional[str] = None,
     required: bool = True,
 ) -> Optional[str]:

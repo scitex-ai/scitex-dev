@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-"""``Context`` — one derivation of where a secret lives, for every situation.
+"""``SecretContext`` — one derivation of where a secret lives.
 
-The same leaf app runs standalone, inside scitex-hub for a logged-in user, for
-a group, and scoped to a project. These tests pin the layout so a leaf can rely
-on ONE shape, and pin the refusals that keep one owner from addressing
-another's store.
+Built on ``scitex_dev.scope.Scope`` rather than restating it: an earlier draft
+carried its own user/group/project fields, which was a second definition of the
+same idea. These tests pin the layout so a leaf can rely on ONE shape.
 
 Pure path derivation — real environment variables, no gpg, no writes.
 """
@@ -15,7 +14,8 @@ import os
 
 import pytest
 
-from scitex_dev.secret import Context, name_reservation_error
+from scitex_dev.scope import Scope
+from scitex_dev.secret import SecretContext, name_reservation_error
 
 _HOME = "/tmp/scitex-test-home"
 
@@ -47,103 +47,75 @@ class TestTheAppIsAlwaysFirst:
 
     def test_standalone_is_the_app_root(self):
         # Arrange
-        ctx = Context(app="figrecipe")
+        ctx = SecretContext(app="figrecipe")
         # Act
         root = ctx.secret_root()
         # Assert
         assert root.as_posix() == f"{_HOME}/figrecipe/secret"
 
-    def test_a_user_nests_under_the_same_app_root(self):
+    def test_an_owner_nests_under_the_same_app_root(self):
         # Arrange
-        ctx = Context(app="cards", user="ywatanabe")
+        ctx = SecretContext(app="cards", scope=Scope(owner="ywatanabe"))
         # Act
         root = ctx.secret_root()
         # Assert
-        assert root.as_posix() == f"{_HOME}/cards/secret/users/ywatanabe"
-
-    def test_a_group_nests_under_the_same_app_root(self):
-        # Arrange
-        ctx = Context(app="scholar", group="scitex")
-        # Act
-        root = ctx.secret_root()
-        # Assert
-        assert root.as_posix() == f"{_HOME}/scholar/secret/groups/scitex"
+        assert root.as_posix() == f"{_HOME}/cards/secret/owners/ywatanabe"
 
     def test_a_project_nests_under_its_owner(self):
         # Arrange
-        ctx = Context(app="writer", user="ywatanabe", project="thesis")
+        ctx = SecretContext(
+            app="writer", scope=Scope(owner="ywatanabe", project="thesis")
+        )
         # Act
         root = ctx.secret_root()
         # Assert
         assert root.as_posix() == (
-            f"{_HOME}/writer/secret/users/ywatanabe/projects/thesis"
+            f"{_HOME}/writer/secret/owners/ywatanabe/projects/thesis"
         )
 
-    def test_a_group_project_nests_under_the_group(self):
+
+class TestOneOwnerNamespace:
+    """A user and an org cannot collide, because the URL never told them apart."""
+
+    def test_an_org_uses_the_same_shape_as_a_user(self):
         # Arrange
-        ctx = Context(app="scholar", group="scitex", project="paper1")
+        ctx = SecretContext(app="scholar", scope=Scope(owner="scitex"))
         # Act
         root = ctx.secret_root()
         # Assert
-        assert root.as_posix() == (
-            f"{_HOME}/scholar/secret/groups/scitex/projects/paper1"
-        )
+        assert root.as_posix() == f"{_HOME}/scholar/secret/owners/scitex"
 
-
-class TestOwnersAreDistinct:
-    """Two owners must never resolve to one directory."""
-
-    def test_two_users_do_not_share_a_root(self):
+    def test_two_owners_do_not_share_a_root(self):
         # Arrange
-        a = Context(app="cards", user="alice")
-        b = Context(app="cards", user="bob")
+        a = SecretContext(app="cards", scope=Scope(owner="alice"))
+        b = SecretContext(app="cards", scope=Scope(owner="bob"))
         # Act
         same = a.secret_root() == b.secret_root()
         # Assert
         assert same is False
 
-    def test_a_user_and_a_group_of_the_same_name_do_not_collide(self):
-        # Arrange
-        u = Context(app="cards", user="scitex")
-        g = Context(app="cards", group="scitex")
-        # Act
-        same = u.secret_root() == g.secret_root()
-        # Assert
-        assert same is False
 
-
-class TestIncoherentContextsAreRefused:
-    """Shapes that could not hold a readable secret fail at construction."""
-
-    def test_both_user_and_group_is_refused(self):
-        # Arrange
-        kwargs = dict(app="cards", user="ywatanabe", group="scitex")
-        # Act
-        raised = pytest.raises(ValueError, match="ONE owner")
-        # Assert
-        with raised:
-            Context(**kwargs)
+class TestIncoherentScopesAreRefused:
+    """`Scope` validates itself, so the refusals hold here too."""
 
     def test_a_project_without_an_owner_is_refused(self):
         # Arrange
-        kwargs = dict(app="cards", project="thesis")
+        kwargs = dict(project="thesis")
         # Act
-        raised = pytest.raises(ValueError, match="requires a user or a group")
+        raised = pytest.raises(ValueError, match="no owner")
         # Assert
         with raised:
-            Context(**kwargs)
+            Scope(**kwargs)
 
-    @pytest.mark.parametrize(
-        "user", ["../etc", "a/b", "", ".hidden", "with space"]
-    )
-    def test_a_traversing_or_odd_owner_is_refused(self, user):
+    @pytest.mark.parametrize("owner", ["../etc", "a/b", "", ".hidden"])
+    def test_a_traversing_or_odd_owner_is_refused(self, owner):
         # Arrange
-        kwargs = dict(app="cards", user=user)
+        kwargs = dict(owner=owner)
         # Act
         raised = pytest.raises(ValueError)
         # Assert
         with raised:
-            Context(**kwargs)
+            Scope(**kwargs)
 
     def test_a_traversing_app_is_refused(self):
         # Arrange
@@ -152,13 +124,13 @@ class TestIncoherentContextsAreRefused:
         raised = pytest.raises(ValueError)
         # Assert
         with raised:
-            Context(**kwargs)
+            SecretContext(**kwargs)
 
 
 class TestReservedNames:
-    """`users/` and `groups/` are directories, so they cannot also be secrets."""
+    """`owners/` is a directory, so it cannot also be a secret name."""
 
-    @pytest.mark.parametrize("name", ["users", "users/token", "groups/key"])
+    @pytest.mark.parametrize("name", ["owners", "owners/token"])
     def test_a_reserved_prefix_is_reported(self, name):
         # Arrange
         candidate = name
@@ -168,7 +140,7 @@ class TestReservedNames:
         assert reason is not None
 
     @pytest.mark.parametrize(
-        "name", ["api/openai", "usersx/token", "mail/sales"]
+        "name", ["api/openai", "ownersx/token", "mail/sales", "users/x"]
     )
     def test_an_ordinary_name_is_allowed(self, name):
         # Arrange
@@ -182,27 +154,19 @@ class TestReservedNames:
 class TestStandaloneIsExplicit:
     def test_no_owner_means_standalone(self):
         # Arrange
-        ctx = Context(app="cards")
+        ctx = SecretContext(app="cards")
         # Act
         standalone = ctx.is_standalone
         # Assert
         assert standalone is True
 
-    def test_a_user_is_not_standalone(self):
+    def test_an_owner_is_not_standalone(self):
         # Arrange
-        ctx = Context(app="cards", user="ywatanabe")
+        ctx = SecretContext(app="cards", scope=Scope(owner="ywatanabe"))
         # Act
         standalone = ctx.is_standalone
         # Assert
         assert standalone is False
-
-    def test_a_group_context_is_shared(self):
-        # Arrange
-        ctx = Context(app="cards", group="scitex")
-        # Act
-        shared = ctx.is_shared
-        # Assert
-        assert shared is True
 
 
 # EOF

@@ -6,12 +6,12 @@ all behaviour lives here so it is testable without a terminal.
 
 A leaf package needs three things from this module and nothing else:
 
-    Context     say which app is asking, on whose behalf, in which scope
+    SecretContext  an app + a scitex_dev.scope.Scope: whose secret is wanted
     resolve     get a credential, the same way in every situation
     register_secret_group  (in ``.cli``) mount `<app> dev secret …`
 """
 
-from ._context import Context, RESERVED_SEGMENTS, name_reservation_error
+from ._context import SecretContext, RESERVED_SEGMENTS, name_reservation_error
 from ._resolve import (
     SecretUnavailable,
     env_var_for,
@@ -34,7 +34,7 @@ from ._store import (
 
 __all__ = [
     # The leaf-facing primitive: what scitex-hub and every other leaf calls.
-    "Context",
+    "SecretContext",
     "resolve",
     "resolve_source",
     "store_for",
