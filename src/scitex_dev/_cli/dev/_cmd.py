@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import click
@@ -213,6 +214,63 @@ def _register_secret(dev: click.Group) -> None:
                 "the new key. Pass --yes to proceed deliberately."
             )
         _emit(SecretStore(root).init(recipient))
+
+    @secret.command(
+        "set", cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Store a secret someone else issued, read from stdin.",
+            description=(
+                "For credentials a PROVIDER issues — a gitea token, a Cloudflare "
+                "tunnel token, a GitHub PAT — where `generate` does not apply "
+                "because we do not choose the value. The value is read from "
+                "stdin or --from-file and NEVER from an option, because an "
+                "option value is argv and argv is world-readable via `ps`."
+            ),
+            examples=(
+                Example("pbpaste | {prog} dev secret set gitea/orochi-admin --yes",
+                        "Store a token copied from the provider's UI."),
+                Example("{prog} dev secret set cf/tunnel --from-file ./new-token --yes",
+                        "Store it from a file instead of a pipe."),
+            ),
+        ),
+    )
+    @click.argument("name")
+    @click.option("--from-file", "from_file", default=None, type=click.Path(),
+                  help="Read the value from this file instead of stdin. Not the value itself.")
+    @pkg_option
+    @dry_run_option
+    @yes_option
+    def set_cmd(name: str, from_file: str | None, pkg: str, dry_run: bool, yes: bool) -> None:
+        if dry_run:
+            source = f"the file {from_file}" if from_file else "stdin"
+            _dry_run(f"read a value from {source} and store it as {name}")
+            return
+        if from_file:
+            path = Path(from_file).expanduser()
+            if not path.is_file():
+                raise click.ClickException(f"no such file: {path}")
+            value = path.read_text(encoding="utf-8")
+        else:
+            if sys.stdin.isatty():
+                # Refuse rather than prompt: an interactive prompt is what CLI §2
+                # forbids, and silently waiting on a TTY looks like a hang.
+                raise click.ClickException(
+                    "no value on stdin. Pipe it in "
+                    "(`printf %s \"$TOKEN\" | … secret set NAME`) or pass "
+                    "--from-file PATH. The value must never be a command-line "
+                    "argument — `ps` exposes argv to every user on the host."
+                )
+            value = sys.stdin.read()
+        # A trailing newline from a pipe or editor is almost never part of the
+        # secret, and a token with a stray \n fails auth in ways that look like
+        # a wrong token rather than a formatting bug.
+        value = value.rstrip("\n")
+        if not value:
+            raise click.ClickException(
+                "refusing to store an empty value. An empty secret overwrites a "
+                "working one and fails later at the point of use, far from here."
+            )
+        _emit(SecretStore(_store_root(pkg)).store(name, value, overwrite=yes))
 
     @secret.command(
         "generate", cls=SpecCommand,

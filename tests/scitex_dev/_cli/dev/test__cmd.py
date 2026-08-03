@@ -131,6 +131,131 @@ def test_failing_show_exits_non_zero(initialised):
     assert result.exit_code != 0
 
 
+# ------------------------------------------------------------------- set
+
+_ISSUED = "provider-issued-token-Xk29fQ"
+
+
+def test_set_stores_a_value_from_stdin(initialised):
+    """The whole point: a value we did NOT generate can be stored."""
+    # Arrange
+    runner = CliRunner()
+    # Act
+    runner.invoke(main, ["dev", "secret", "set", "gitea/tok"], input=_ISSUED)
+    # Assert
+    assert (initialised / "gitea" / "tok.gpg").is_file()
+
+
+def test_set_round_trips_the_exact_value(initialised):
+    # Arrange
+    runner = CliRunner()
+    runner.invoke(main, ["dev", "secret", "set", "gitea/tok2"], input=_ISSUED)
+    # Act
+    result = runner.invoke(main, ["dev", "secret", "show", "gitea/tok2"])
+    # Assert
+    assert result.stdout == _ISSUED
+
+
+def test_set_strips_a_trailing_newline_from_a_pipe(initialised):
+    """A pasted token usually arrives with \\n; a stray \\n fails auth confusingly."""
+    # Arrange
+    runner = CliRunner()
+    runner.invoke(main, ["dev", "secret", "set", "gitea/tok3"], input=_ISSUED + "\n")
+    # Act
+    result = runner.invoke(main, ["dev", "secret", "show", "gitea/tok3"])
+    # Assert
+    assert result.stdout == _ISSUED
+
+
+def test_set_refuses_an_empty_value(initialised):
+    # Arrange
+    runner = CliRunner()
+    # Act
+    result = runner.invoke(main, ["dev", "secret", "set", "gitea/empty"], input="")
+    # Assert
+    assert result.exit_code != 0
+
+
+def test_set_refusing_empty_writes_nothing(initialised):
+    # Arrange
+    runner = CliRunner()
+    # Act
+    runner.invoke(main, ["dev", "secret", "set", "gitea/empty2"], input="")
+    # Assert
+    assert not (initialised / "gitea" / "empty2.gpg").exists()
+
+
+def test_set_reads_from_a_file(initialised, tmp_path):
+    # Arrange
+    runner = CliRunner()
+    src = tmp_path / "token.txt"
+    src.write_text(_ISSUED + "\n")
+    # Act
+    runner.invoke(main, ["dev", "secret", "set", "cf/tunnel", "--from-file", str(src)])
+    # Assert
+    assert runner.invoke(main, ["dev", "secret", "show", "cf/tunnel"]).stdout == _ISSUED
+
+
+def test_set_with_a_missing_file_is_refused(initialised, tmp_path):
+    # Arrange
+    runner = CliRunner()
+    absent = tmp_path / "no-such-token"
+    # Act
+    result = runner.invoke(main, ["dev", "secret", "set", "cf/x", "--from-file", str(absent)])
+    # Assert
+    assert result.exit_code != 0
+
+
+def test_set_dry_run_stores_nothing(initialised):
+    # Arrange
+    runner = CliRunner()
+    # Act
+    runner.invoke(main, ["dev", "secret", "set", "d/r", "--dry-run"], input=_ISSUED)
+    # Assert
+    assert not (initialised / "d" / "r.gpg").exists()
+
+
+def test_set_without_yes_refuses_to_overwrite(initialised):
+    # Arrange
+    runner = CliRunner()
+    runner.invoke(main, ["dev", "secret", "set", "dup/tok"], input=_ISSUED)
+    # Act
+    result = runner.invoke(main, ["dev", "secret", "set", "dup/tok"], input="second")
+    # Assert
+    assert result.exit_code != 0
+
+
+def test_set_with_yes_overwrites(initialised):
+    """POSITIVE CONTROL: the refusal above is about consent, not about set being broken."""
+    # Arrange
+    runner = CliRunner()
+    runner.invoke(main, ["dev", "secret", "set", "dup/tok2"], input=_ISSUED)
+    # Act
+    runner.invoke(main, ["dev", "secret", "set", "dup/tok2", "--yes"], input="second-value")
+    # Assert
+    assert runner.invoke(main, ["dev", "secret", "show", "dup/tok2"]).stdout == "second-value"
+
+
+def test_set_does_not_accept_the_value_as_an_option(initialised):
+    """The argv guarantee: there must be no --value flag to leak through `ps`."""
+    # Arrange
+    runner = CliRunner()
+    # Act
+    result = runner.invoke(main, ["dev", "secret", "set", "argv/x", "--value", _ISSUED])
+    # Assert
+    assert "no such option" in result.output.lower()
+
+
+def test_set_help_does_not_advertise_a_value_option(initialised):
+    """CONTROL for the above: the help renders, so the absence is real."""
+    # Arrange
+    runner = CliRunner()
+    # Act
+    result = runner.invoke(main, ["dev", "secret", "set", "--help"])
+    # Assert
+    assert "--from-file" in result.output
+
+
 # ---------------------------------------------------------------- --json
 
 def test_list_json_is_parseable(initialised):
