@@ -49,6 +49,14 @@ def gpg_env(tmp_path):
         # gpg-agent's socket must fit ~108 chars; a long tmp path fails here.
         pytest.skip("throwaway key creation failed (often a too-long GNUPGHOME path)")
     yield store
+    # gpg starts a gpg-agent DAEMON per GNUPGHOME and nothing reaps it when the
+    # tmp dir is removed — measured 2026-08-03: agents from a finished run were
+    # still alive 18 minutes later, one per test. Kill it explicitly, or a full
+    # suite leaks a daemon for every test that touches gpg.
+    subprocess.run(
+        ["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"],
+        capture_output=True, check=False,
+    )
     for key, value in previous.items():
         if value is None:
             os.environ.pop(key, None)

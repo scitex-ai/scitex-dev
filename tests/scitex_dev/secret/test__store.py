@@ -57,6 +57,13 @@ def gpg_home(tmp_path):
             os.environ["GNUPGHOME"] = previous
         pytest.skip(f"throwaway key creation failed: {proc.stderr.decode(errors='replace')[:200]}")
     yield home
+    # gpg leaves a gpg-agent DAEMON per GNUPGHOME; removing the tmp dir does not
+    # reap it. Measured 2026-08-03: agents from a finished run were still alive
+    # 18 minutes later, one per test. Kill it or a full suite leaks one each.
+    subprocess.run(
+        ["gpgconf", "--homedir", str(home), "--kill", "gpg-agent"],
+        capture_output=True, check=False,
+    )
     if previous is None:
         os.environ.pop("GNUPGHOME", None)
     else:
