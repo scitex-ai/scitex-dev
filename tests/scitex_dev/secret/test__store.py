@@ -489,7 +489,10 @@ def hostile_archive(tmp_path):
          "AES256", "--passphrase-fd", "0", "--output", str(encrypted), str(raw)],
         input=b"hostile-pass", capture_output=True, check=False,
     )
-    return encrypted
+    yield encrypted
+    # The intermediate tar is removed so a later test cannot accidentally read a
+    # hostile archive this fixture left lying in tmp_path.
+    raw.unlink(missing_ok=True)
 
 
 def test_archive_escaping_the_destination_is_rejected(store, hostile_archive, tmp_path):
