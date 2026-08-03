@@ -195,7 +195,10 @@ def test_cli_systemd_list_json_includes_provider_job(runner, installed_job_provi
     # Act
     result = runner.invoke(main, ["ecosystem", "systemd", "list", "--json"])
     # Assert
-    assert any(j["name"] == "testpkg.sysjob" for j in json.loads(result.output))
+    # `.stdout`, not `.output` — see the note in test__jobs_cron.py: `.output`
+    # mixes stderr, and the old spelling now warns there on its way through the
+    # Phase W alias.
+    assert any(j["name"] == "testpkg.sysjob" for j in json.loads(result.stdout))
 
 
 def test_cli_systemd_install_named_unknown_errors(runner, installed_job_provider):

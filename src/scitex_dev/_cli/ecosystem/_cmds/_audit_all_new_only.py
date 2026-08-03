@@ -185,9 +185,21 @@ def run_new_only_and_exit(
         _sys.exit(head_exit)
 
     base_resolved = resolve_ref(head_path, since_ref)
-    head_keys = extract_violation_keys(head_combined, distribution_filter=distribution)
-    base_keys = extract_violation_keys(base_combined, distribution_filter=distribution)
-    net_new = compute_net_new(head_combined, base_combined, distribution=distribution)
+    # The two trees live at different paths by construction, so BOTH halves of
+    # this diff must strip them. The raw-text half below always did; the KEY
+    # half did not, and that asymmetry made every directory-bearing finding
+    # look net-new. Computed here, above its first use, rather than at the
+    # text diff — one definition, both consumers.
+    roots = (str(base_path_used), str(head_path))
+    head_keys = extract_violation_keys(
+        head_combined, distribution_filter=distribution, roots=roots
+    )
+    base_keys = extract_violation_keys(
+        base_combined, distribution_filter=distribution, roots=roots
+    )
+    net_new = compute_net_new(
+        head_combined, base_combined, distribution=distribution, roots=roots
+    )
 
     # FALLBACK DIFF for findings the key parser cannot read. Without this
     # they are invisible in BOTH directions: absent from the key diff, and
@@ -195,15 +207,16 @@ def run_new_only_and_exit(
     # line it does not recognise as a finding) — so the run showed errors
     # and counted none. Compare their raw text instead of pretending they
     # do not exist.
-    roots = (str(base_path_used), str(head_path))
     head_unparsed = unparsed_finding_lines(head_combined, roots)
     base_unparsed = unparsed_finding_lines(base_combined, roots)
     net_new_unparsed = head_unparsed - base_unparsed
-    net_new_unparsed_errors = {
-        ln for ln in net_new_unparsed if ln.startswith("ERRO")
-    }
+    net_new_unparsed_errors = {ln for ln in net_new_unparsed if ln.startswith("ERRO")}
 
-    click.echo(filter_to_net_new_lines(head_combined, net_new, distribution=distribution))
+    click.echo(
+        filter_to_net_new_lines(
+            head_combined, net_new, distribution=distribution, roots=roots
+        )
+    )
     click.echo("", err=True)
 
     # DISCLOSE THE DENOMINATOR. The old line reported only the net-new

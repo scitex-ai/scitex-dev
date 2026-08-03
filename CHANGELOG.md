@@ -7,6 +7,150 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-07-31
+
+**A release about checks that could not tell "passed" from "never ran".** Nearly
+every entry below is the same defect wearing different clothes: a gate reported a
+clean verdict for a run in which it measured nothing, and nobody could see the
+difference from the outside. One of them was blocking merges across the whole
+ecosystem.
+
+### Fixed
+- **The net-new key embedded the checkout name, blocking merges repo-wide (#485).**
+  `_ABS_PATH_RE` matches slash-TERMINATED segments, so `/home/x/proj/pkg/src/a.py`
+  collapses to `a.py` — correct for a FILE path, where keeping the stable basename
+  is what stops two different files keying as one. A DIRECTORY subject has no
+  trailing slash, so the regex left its last component, and that component is the
+  checkout NAME, which differs between HEAD and the staged baseline worktree by
+  construction:
+
+  ```
+  ERRO: <dist> (/home/x/.worktrees/floor):    project-structure: 14 error(s)
+  ERRO: <dist> (/home/x/.worktrees/base-abc): project-structure: 14 error(s)
+  ```
+
+  Same finding, same counts, two identities — one phantom net-new plus one phantom
+  disappearance on every PR emitting such a line. Measured on scitex-cards
+  2026-07-31: 95 keys each side, 1 new, 1 gone. `audit` is a REQUIRED check, so
+  three correct PRs sat unmergeable behind a finding that did not exist.
+
+  The fix reuses what the caller already had: `_audit_all_new_only` computes
+  `roots` and passed it to `unparsed_finding_lines` — the raw-TEXT half of the
+  diff — but not to `extract_violation_keys`, the KEY half. One half was
+  checkout-independent and the other was not; that asymmetry was the defect.
+  Widening the regex was rejected: it would also eat the stable basename of file
+  paths and collapse distinct findings, which is the collision `_unparsed_key`
+  exists to avoid.
+
+  The existing `test_same_finding_under_a_different_checkout_root_keys_identically`
+  passed throughout, because it varies the path PREFIX — exactly what the regex
+  strips correctly. It exercised the working half and never the failing one.
+
+- **§10 not running looked identical to §10 passing (#480).** The gate had three
+  bare `return`s where it never measured anything — no console-script entry point,
+  an entry point yielding no top-level module name, and a failed measurement
+  subprocess. Each returned without appending a finding, which is precisely what a
+  package measuring comfortably under budget does.
+
+- **§10 timing findings were attributed to a diff.** A timing measurement describes
+  the repo AND the machine at that instant; net-new keying claims it describes the
+  change. Those are different objects, so §10 findings are no longer attributable.
+
+- **The masking summary hid what it could not read (#471).** `classify_output` did
+  a bare `continue` on any line `is_violation_line` rejected, so the summary was
+  computed over a silently narrowed set. It could print "0 unmasked error(s)" while
+  the run exited non-zero — the exit code comes from the sub-auditors' return codes
+  while the count came from whatever survived the filter.
+
+- **PS-224 advised relocating attacker-triggerable secret jobs (#475).** The
+  guidance moved jobs onto the credential box, which is the wrong direction for a
+  job an attacker can trigger.
+
+- **`--version` answered confidently when resolution was a coin flip.** Version
+  resolution is THREE-valued and the CLI collapsed it to two.
+
+### Added
+- **Generated gates carry a version marker and assert their anchor (#484).** A
+  generated artifact previously had no staleness signal, measured across
+  `~/proj/scitex-*/tests/develop/test_audit.py`.
+
+- **A clean CLI verdict states its denominator (#483).** `SUCC: <pkg>: no CLI
+  convention violations` read identically whether the walker inspected forty
+  commands or zero. A verdict without a denominator cannot be distinguished from a
+  run that never happened, and the empty case rendered as the clean case.
+
+### Changed
+- **The CLI-convention walker is extracted so it can be edited (#482).**
+  `_summary/_audit.py` was 1949 lines against a 512-line write hook, so the hook
+  refused every edit to it — blocking four separate pieces of work on the walker.
+
+- **`__version__` is deferred off the import path (#478),** one of two eager
+  metadata reads.
+
+### Tests
+- **The alias `__name__` check is skipped, not relaxed (#481).** Two
+  parametrisations failed because the scitex-todo to scitex-cards compat shim makes
+  the import succeed and then `__name__` reports the canonical module.
+
+- **A missing OPTIONAL extra skips rather than fails (#479).** Six tests in
+  `test__self_explain.py` failed when the `[skills]` extra was absent. The wrapper
+  raising `SystemExit` with an install hint is correct for the CLI path, but in a
+  test it renders as six red tests that say nothing about the change under test.
+
+- **The round-trip test is named after the module it exercises (PS-204).**
+
+## [0.40.4] - 2026-07-30
+
+**PS-224's diagnostic text told you something false, and acting on it caused
+unnecessary work.** No behaviour change — same jobs flagged, same severity,
+same registry. Only the sentence a human reads is corrected.
+
+### Fixed
+- **PS-224 claimed GitHub queues an unmatchable job forever (#472).** Verbatim
+  from the rule's own output: *"GitHub does not reject an unmatchable job — it
+  queues it forever, so this never fails, it just never runs."* False for
+  GitHub-**hosted** labels, measured twice independently — `ubuntu-latest` jobs
+  start, run and complete in under a minute. This project merged four releases
+  on those green checks while its own rule text said they could never run.
+
+  The **finding** was always right: PS-224 validates `runs-on:` against a
+  registry of self-hosted destinations, so flagging `ubuntu-latest` is correct
+  under a self-hosted-only CI policy. The **reason** collapsed two different
+  problems:
+
+  | | |
+  |---|---|
+  | nothing serves this label | the job never runs, silently |
+  | served by a pool we don't pay for | the job runs fine, against policy |
+
+  The text asserted the first while detecting the second — and the wrong reason
+  is the *more alarming* one. Acting on it as written, you re-point **working**
+  jobs at self-hosted runners believing they had never run: churn that looks
+  justified because the diagnostic said so.
+
+  The message now states what it checks, keeps the queues-forever claim scoped
+  to self-hosted label sets where it IS true, and tells the reader to confirm a
+  job is idle before re-pointing it.
+
+### Added
+- **A characterization test pinning which emitted finding shapes the key
+  extractor can read (#473).** Five emitters produce three distinct line
+  formats; the extractor expects a fourth. All three non-trivial formats fail
+  for the same reason — the subject after the rule tag is a path or a command
+  path, where a single distribution token is expected. That one mismatch is the
+  root under three separate defects fixed this week. The test pins today's
+  coverage so that unifying the emitters fails loudly here instead of shifting
+  coverage silently, and locks in the invariant that must survive it: **no
+  `ERRO` shape may ever go back to contributing nothing to the diff.**
+
+### Known gaps
+- The emitters are **not** unified — this release only measures the surface.
+  The shared `render_finding` and the per-emitter round-trip coverage it needs
+  are still to come.
+- A rule's rationale is documentation and drifts like documentation, except it
+  arrives wearing the authority of a check that just ran. PS-224 was found by a
+  peer measuring the claim; no mechanism prevents the next one.
+
 ## [0.40.3] - 2026-07-30
 
 **If you run this test suite from a venv without the `[dev]` extra, it has had

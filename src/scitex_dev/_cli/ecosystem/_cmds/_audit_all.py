@@ -432,6 +432,8 @@ def register(ecosystem):
                         unmasked_total=rep.unmasked_count,
                         masked=rep.masked_count,
                         declared=len(rep.skip_rules),
+                        inspected=rep.inspected,
+                        unreadable=len(rep.unreadable),
                     ),
                     err=True,
                 )
