@@ -447,6 +447,18 @@ from ..ci.runner import register_ci_runner_commands
 register_ci_runner_commands(main)
 
 # -------------------------------------------------------------------
+# dev — the canonical §13 self-maintenance group.
+# Step 1 of scitex-dev-unified-dev-command-group-architecture-20260718:
+# the enforcement audit (_cli/audit/_summary/_dev_group.py) already ships
+# and currently fires against this package itself, so the group has to
+# exist before anything can migrate under it. `secret` is its first verb.
+# -------------------------------------------------------------------
+
+from .dev import register_dev_commands
+
+register_dev_commands(main)
+
+# -------------------------------------------------------------------
 # linter — engine moved here from scitex-linter (soft migration)
 # `linter` is a noun per the noun-verb CLI convention (audit-cli §1).
 # -------------------------------------------------------------------
