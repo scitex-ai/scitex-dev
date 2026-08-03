@@ -1,10 +1,24 @@
 # -*- coding: utf-8 -*-
 """GPG-backed secret store for the SciTeX ecosystem.
 
-Public surface. The CLI (``<pkg> dev secret …``) is a thin wrapper over these;
+Public surface. The CLI (``<app> dev secret …``) is a thin wrapper over these;
 all behaviour lives here so it is testable without a terminal.
+
+A leaf package needs three things from this module and nothing else:
+
+    Context     say which app is asking, on whose behalf, in which scope
+    resolve     get a credential, the same way in every situation
+    register_secret_group  (in ``.cli``) mount `<app> dev secret …`
 """
 
+from ._context import Context, RESERVED_SEGMENTS, name_reservation_error
+from ._resolve import (
+    SecretUnavailable,
+    env_var_for,
+    resolve,
+    resolve_source,
+    store_for,
+)
 from ._store import (
     ALREADY_EXISTS,
     GPG_FAILED,
@@ -19,6 +33,16 @@ from ._store import (
 )
 
 __all__ = [
+    # The leaf-facing primitive: what scitex-hub and every other leaf calls.
+    "Context",
+    "resolve",
+    "resolve_source",
+    "store_for",
+    "env_var_for",
+    "SecretUnavailable",
+    "RESERVED_SEGMENTS",
+    "name_reservation_error",
+    # The store itself, for tools that manage rather than consume secrets.
     "SecretStore",
     "SecretResult",
     "generate_value",
