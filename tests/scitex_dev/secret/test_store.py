@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tarfile
 
 import pytest
 
@@ -332,3 +333,189 @@ def test_generator_refuses_a_weak_length():
     # Assert
     with pytest.raises(ValueError):
         generate_value(weak)
+
+
+# ---------------------------------------------------------------- restore
+
+@pytest.fixture()
+def backed_up(store, tmp_path):
+    """A store with three secrets and a backup archive beside it."""
+    for name in ("r/one", "r/two", "r/three"):
+        store.generate(name)
+    archive = tmp_path / "roundtrip.gpg"
+    store.backup(archive, passphrase="drill-passphrase")
+    return store, archive
+
+
+def test_restore_reports_success(backed_up, tmp_path):
+    # Arrange
+    store, archive = backed_up
+    # Act
+    result = store.restore(archive, passphrase="drill-passphrase", dest=tmp_path / "recovered")
+    # Assert
+    assert result.code == OK
+
+
+def test_restore_recovers_every_secret_name(backed_up, tmp_path):
+    """The whole point: what went in must come back out."""
+    # Arrange
+    store, archive = backed_up
+    # Act
+    result = store.restore(archive, passphrase="drill-passphrase", dest=tmp_path / "recovered2")
+    # Assert
+    assert set(result.names) == {"r/one", "r/two", "r/three"}
+
+
+def test_restore_writes_the_store_directory(backed_up, tmp_path):
+    # Arrange
+    store, archive = backed_up
+    dest = tmp_path / "recovered3"
+    # Act
+    store.restore(archive, passphrase="drill-passphrase", dest=dest)
+    # Assert
+    assert (dest / "store" / "r" / "one.gpg").is_file()
+
+
+def test_restore_with_a_wrong_passphrase_fails(backed_up, tmp_path):
+    # Arrange
+    store, archive = backed_up
+    # Act
+    result = store.restore(archive, passphrase="not-the-passphrase", dest=tmp_path / "nope")
+    # Assert
+    assert result.code == GPG_FAILED
+
+
+def test_restore_without_a_passphrase_is_refused(backed_up, tmp_path):
+    # Arrange
+    store, archive = backed_up
+    # Act
+    result = store.restore(archive, passphrase="", dest=tmp_path / "nope2")
+    # Assert
+    assert result.code == NO_RECIPIENT
+
+
+def test_restore_refuses_to_overwrite_a_populated_destination(backed_up, tmp_path):
+    """A restore drill must never be able to destroy the live store."""
+    # Arrange
+    store, archive = backed_up
+    occupied = tmp_path / "occupied"
+    occupied.mkdir()
+    (occupied / "already-here.txt").write_text("do not clobber me")
+    # Act
+    result = store.restore(archive, passphrase="drill-passphrase", dest=occupied)
+    # Assert
+    assert result.code == ALREADY_EXISTS
+
+
+def test_restore_leaves_a_populated_destination_untouched(backed_up, tmp_path):
+    # Arrange
+    store, archive = backed_up
+    occupied = tmp_path / "occupied2"
+    occupied.mkdir()
+    (occupied / "already-here.txt").write_text("do not clobber me")
+    # Act
+    store.restore(archive, passphrase="drill-passphrase", dest=occupied)
+    # Assert
+    assert (occupied / "already-here.txt").read_text() == "do not clobber me"
+
+
+def test_restore_of_a_missing_archive_reports_not_found(store, tmp_path):
+    # Arrange
+    absent = tmp_path / "never-written.gpg"
+    # Act
+    result = store.restore(absent, passphrase="x", dest=tmp_path / "nope3")
+    # Assert
+    assert result.code == NOT_FOUND
+
+
+# ------------------------------------------------------------------- sync
+
+def test_sync_commits_a_new_store(store):
+    # Arrange
+    store.generate("s/one")
+    # Act
+    result = store.sync()
+    # Assert
+    assert result.code == OK
+
+
+def test_sync_creates_a_git_repository(store):
+    # Arrange
+    store.generate("s/two")
+    # Act
+    store.sync()
+    # Assert
+    assert (store.root / ".git").is_dir()
+
+
+def test_second_sync_reports_nothing_to_do(store):
+    """POSITIVE CONTROL pairing: the first sync did commit something."""
+    # Arrange
+    store.generate("s/three")
+    store.sync()
+    # Act
+    result = store.sync()
+    # Assert
+    assert "nothing to sync" in result.detail
+
+
+def test_sync_without_a_store_reports_not_found(tmp_path, gpg_home):
+    # Arrange
+    absent = SecretStore(tmp_path / "no-such-store")
+    # Act
+    result = absent.sync()
+    # Assert
+    assert result.code == NOT_FOUND
+
+
+# ------------------------------------------- malicious archive (tar slip)
+
+@pytest.fixture()
+def hostile_archive(tmp_path):
+    """A real encrypted archive whose member escapes the destination.
+
+    Built for real — an actual tar with an actual `../` member, actually
+    gpg-encrypted — because a hand-waved 'malicious input' fixture proves
+    nothing about what the extractor does with one.
+    """
+    payload = tmp_path / "payload.txt"
+    payload.write_text("escaped content")
+    raw = tmp_path / "hostile.tar"
+    with tarfile.open(raw, "w") as archive:
+        archive.add(payload, arcname="../escaped.txt")
+    encrypted = tmp_path / "hostile.gpg"
+    subprocess.run(
+        ["gpg", "--batch", "--yes", "--quiet", "--symmetric", "--cipher-algo",
+         "AES256", "--passphrase-fd", "0", "--output", str(encrypted), str(raw)],
+        input=b"hostile-pass", capture_output=True, check=False,
+    )
+    return encrypted
+
+
+def test_archive_escaping_the_destination_is_rejected(store, hostile_archive, tmp_path):
+    # Arrange
+    dest = tmp_path / "victim"
+    # Act
+    result = store.restore(hostile_archive, passphrase="hostile-pass", dest=dest)
+    # Assert
+    assert result.code == GPG_FAILED
+
+
+def test_archive_escaping_the_destination_writes_nothing_outside(store, hostile_archive, tmp_path):
+    """The consequence that actually matters: no file lands outside dest."""
+    # Arrange
+    dest = tmp_path / "victim2"
+    # Act
+    store.restore(hostile_archive, passphrase="hostile-pass", dest=dest)
+    # Assert
+    assert not (tmp_path / "escaped.txt").exists()
+
+
+def test_a_benign_archive_still_restores(backed_up, tmp_path):
+    """POSITIVE CONTROL: the extraction filter rejects hostile input only."""
+    # Arrange
+    store, archive = backed_up
+    # Act
+    result = store.restore(archive, passphrase="drill-passphrase", dest=tmp_path / "benign")
+    # Assert
+    assert result.code == OK

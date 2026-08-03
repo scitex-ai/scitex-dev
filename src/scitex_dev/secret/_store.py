@@ -43,6 +43,7 @@ import shutil
 import stat
 import string
 import subprocess
+import tarfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -357,3 +358,155 @@ class SecretStore:
             )
         finally:
             shutil.rmtree(staging, ignore_errors=True)
+
+    def restore(self, src: Path, passphrase: str, dest: Path) -> SecretResult:
+        """Unpack a backup written by :meth:`backup` into ``dest``.
+
+        A backup nobody has ever restored is a hope, not a backup — the failure
+        mode is discovering at recovery time that the archive was empty, keyless
+        or written with a forgotten passphrase. This is the other half of that
+        loop, and it refuses to overwrite an existing store so a restore drill
+        can never destroy the live one.
+
+        The private key is NOT auto-imported. Extracting it is reversible;
+        importing it mutates the caller's keyring, which is a decision that
+        belongs to a human at recovery time, not to a convenience default.
+        """
+        if not self._gpg_available():
+            return SecretResult(GPG_MISSING, f"{self.gpg_binary} not found on PATH")
+        src = Path(src).expanduser()
+        if not src.is_file():
+            return SecretResult(NOT_FOUND, f"no backup at {src}")
+        if not passphrase:
+            return SecretResult(NO_RECIPIENT, "a passphrase is required to open the backup")
+
+        dest = Path(dest).expanduser()
+        if dest.exists() and any(dest.iterdir()):
+            return SecretResult(
+                ALREADY_EXISTS,
+                f"{dest} exists and is not empty; refusing to overwrite. "
+                "Restore to a fresh path and compare before replacing anything.",
+            )
+
+        tar_path = dest.parent / f".{dest.name}.restore.tar"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            proc = subprocess.run(
+                [self.gpg_binary, "--batch", "--yes", "--quiet", "--decrypt",
+                 "--passphrase-fd", "0", "--output", str(tar_path), str(src)],
+                input=passphrase.encode("utf-8"), capture_output=True, check=False,
+            )
+            if proc.returncode != 0:
+                err = proc.stderr.decode("utf-8", "replace").strip()
+                return SecretResult(
+                    GPG_FAILED,
+                    f"could not open {src}: {err or 'gpg failed'}. "
+                    "A wrong passphrase and a corrupt archive look identical here; "
+                    "try the passphrase first.",
+                )
+            dest.mkdir(parents=True, exist_ok=True, mode=_DIR_MODE)
+            # filter="data" REFUSES members that would escape dest, hold absolute
+            # paths, or carry device/setuid metadata. Without it, extraction is a
+            # path-traversal primitive: a crafted archive writes anywhere the
+            # process can. Python only makes this the default in 3.14, so on
+            # every version we run today the unfiltered call is the dangerous one.
+            try:
+                with tarfile.open(tar_path) as archive:
+                    archive.extractall(path=dest, filter="data")
+            except (tarfile.TarError, OSError) as exc:
+                # Must return the declared shape, not raise. A caller that gets an
+                # exception here has no `code` to branch on and is exactly as likely
+                # to log it and continue as to stop.
+                return SecretResult(
+                    GPG_FAILED,
+                    f"archive from {src} was rejected during extraction: {exc}. "
+                    "A member tried to write outside the destination, or the archive "
+                    "is corrupt. Nothing was restored.",
+                )
+        finally:
+            tar_path.unlink(missing_ok=True)
+
+        restored_store = dest / "store"
+        if not restored_store.is_dir():
+            return SecretResult(
+                GPG_FAILED,
+                f"archive opened but contains no 'store/' directory — {src} is not "
+                "a backup written by this tool, or it was truncated",
+            )
+        for path in dest.rglob("*"):
+            if path.is_file():
+                self._harden(path)
+
+        count = sum(1 for _ in restored_store.rglob("*.gpg"))
+        keys = sorted(p.name for p in dest.glob("secret-key-*.asc"))
+        return SecretResult(
+            OK,
+            f"restored {count} secret(s) to {restored_store}. "
+            + (
+                f"Private key material extracted but NOT imported: {', '.join(keys)}. "
+                "Import deliberately with `gpg --import` once you have confirmed this "
+                "is the right key."
+                if keys
+                else "No private key in this archive — the secrets are unreadable "
+                "without the original key."
+            ),
+            names=tuple(
+                str(p.relative_to(restored_store))[: -len(".gpg")]
+                for p in sorted(restored_store.rglob("*.gpg"))
+            ),
+        )
+
+    def sync(self, remote: Optional[str] = None) -> SecretResult:
+        """Commit the store to git and, if ``remote`` is set, push it.
+
+        Cross-host sharing works because the files are ALREADY encrypted — the
+        remote never sees plaintext, so an ordinary git remote is sufficient and
+        no separate secure channel is needed.
+
+        Only ``.gpg`` files and ``.gpg-id`` are committed. Nothing here can add
+        a plaintext file to the index by accident.
+        """
+        if not shutil.which("git"):
+            return SecretResult(GPG_MISSING, "git not found on PATH")
+        if not self.root.is_dir():
+            return SecretResult(NOT_FOUND, f"no store at {self.root}")
+
+        def _git(*args: str) -> subprocess.CompletedProcess:
+            return subprocess.run(
+                ["git", "-C", str(self.root), *args], capture_output=True, check=False
+            )
+
+        if not (self.root / ".git").is_dir():
+            init = _git("init", "--quiet")
+            if init.returncode != 0:
+                return SecretResult(
+                    GPG_FAILED,
+                    f"git init failed: {init.stderr.decode('utf-8', 'replace').strip()}",
+                )
+
+        _git("add", "--", ".gpg-id")
+        for path in sorted(self.root.rglob("*.gpg")):
+            _git("add", "--", str(path.relative_to(self.root)))
+
+        status = _git("status", "--porcelain")
+        if not status.stdout.strip():
+            return SecretResult(OK, "nothing to sync; store already committed")
+
+        commit = _git("commit", "--quiet", "-m", "sync secret store")
+        if commit.returncode != 0:
+            return SecretResult(
+                GPG_FAILED,
+                f"commit failed: {commit.stderr.decode('utf-8', 'replace').strip()}",
+            )
+        if not remote:
+            return SecretResult(OK, "committed locally; no remote given, so nothing was pushed")
+
+        push = _git("push", remote, "HEAD")
+        if push.returncode != 0:
+            return SecretResult(
+                GPG_FAILED,
+                f"committed locally but push to {remote} FAILED: "
+                f"{push.stderr.decode('utf-8', 'replace').strip()}. "
+                "The local commit stands; re-run sync once the remote is reachable.",
+            )
+        return SecretResult(OK, f"committed and pushed to {remote}")
