@@ -402,9 +402,18 @@ def _docs_search(query, scope, max_results, as_json):
         max_results=max_results,
     )
 
-from .skills._manage import register_skills_commands
+# -------------------------------------------------------------------
+# dev — the canonical §13 self-maintenance group (step 2 of
+# scitex-dev-unified-dev-command-group-architecture-20260718). Step 1
+# created the group and its `secret` verb; this mounts scitex-dev's OWN
+# self-maintenance surfaces — skills here, cron and hooks via
+# register_integration_commands below. Mounted EARLY so the integration
+# registrars have a group to receive.
+# -------------------------------------------------------------------
 
-register_skills_commands(main)
+from ._dev_group import install_dev_aliases, register_dev_group
+
+dev_group = register_dev_group(main)
 
 from ._completion import register_completion_command
 
@@ -436,7 +445,12 @@ deprecated_alias(
 
 from ._integrations import register_integration_commands
 
-register_integration_commands(main)
+register_integration_commands(main, dev_group)
+
+# Every moved command is now mounted on `dev`, so the Phase W aliases can
+# point at real commands. install_dev_aliases raises if one is missing —
+# an alias to nothing is indistinguishable from a clean migration.
+install_dev_aliases(main, dev_group)
 
 # -------------------------------------------------------------------
 # ci runner — self-hosted GitHub Actions runner lifecycle
@@ -445,18 +459,6 @@ register_integration_commands(main)
 from ..ci.runner import register_ci_runner_commands
 
 register_ci_runner_commands(main)
-
-# -------------------------------------------------------------------
-# dev — the canonical §13 self-maintenance group.
-# Step 1 of scitex-dev-unified-dev-command-group-architecture-20260718:
-# the enforcement audit (_cli/audit/_summary/_dev_group.py) already ships
-# and currently fires against this package itself, so the group has to
-# exist before anything can migrate under it. `secret` is its first verb.
-# -------------------------------------------------------------------
-
-from .dev import register_dev_commands
-
-register_dev_commands(main)
 
 # -------------------------------------------------------------------
 # linter — engine moved here from scitex-linter (soft migration)
