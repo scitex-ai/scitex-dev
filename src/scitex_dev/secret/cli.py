@@ -49,6 +49,7 @@ from pathlib import Path
 import click
 
 from .._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
+from ..scope import Scope
 from ._context import SecretContext, name_reservation_error
 from ._store import OK, SecretStore
 
@@ -69,7 +70,7 @@ def _root(app: str) -> Path:
     its own authorisation question; it is deliberately not reachable by
     omitting a flag here.
     """
-    return SecretContext(app=app).secret_root()
+    return SecretContext(app=app, scope=Scope.standalone()).secret_root()
 
 #: What ``--pkg`` defaults to when a caller does not say. scitex-dev's own
 #: store; a leaf passes its own short name to ``register_secret_group``.

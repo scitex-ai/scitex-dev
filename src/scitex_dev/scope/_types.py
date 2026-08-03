@@ -206,6 +206,35 @@ class Scope:
                 "reader assumes — which is how a write lands in the wrong one."
             )
 
+    @classmethod
+    def standalone(cls) -> "Scope":
+        """No owner dimension at all — the OS account IS the boundary.
+
+        A named constructor rather than an omitted argument, because
+        `Scope()` reads as "I forgot to say" and `Scope.standalone()` reads
+        as "I mean this". Callers that must state their scope explicitly
+        (see `SecretContext`, where `scope` has no default) need a way to say
+        "there is no owner here" that is a DECLARATION, not an empty value.
+
+        It never looks the current user up. `os.getenv("USER")` here would
+        turn a forgotten scope in a web request into a silent read of the
+        service account's store — a successful-looking lookup of the wrong
+        data, which is worse than the TypeError a missing argument gives.
+        """
+        return cls()
+
+    @classmethod
+    def everything(cls) -> "Scope":
+        """Across everything the asker may see — the cross-cutting view.
+
+        Identical in value to `standalone()`, deliberately distinct in NAME.
+        Both mean "no owner named", but they are different intentions: one
+        says "there is no owner dimension", the other says "every owner I am
+        allowed to see". A reader of `cards.list(scope=Scope.everything())`
+        should not have to work out which was meant.
+        """
+        return cls()
+
     @property
     def is_cross_cutting(self) -> bool:
         return self.owner is None and self.project is None
