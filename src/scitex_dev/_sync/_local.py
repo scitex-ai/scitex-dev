@@ -79,14 +79,24 @@ def _build_sync_commands(
     cmds = [f"cd {base}"]
     if install:
         # Ensure .venv symlink exists so pip resolves to the right env
-        cmds.append("test -e .venv || ln -s ~/.venv .venv 2>/dev/null || true")
+        # BRACE-SCOPED ON PURPOSE. These commands are joined by the caller with
+        # " && " into ONE remote shell string, and `||` binds to the WHOLE
+        # preceding `&&` chain rather than to the command in front of it. So a
+        # bare trailing `|| true` here would swallow the exit status of every
+        # earlier step — a failing pull would still exit 0. The braces bind the
+        # fallback to this command alone, which is what was always meant.
+        cmds.append("{ test -e .venv || ln -s ~/.venv .venv 2>/dev/null || true; }")
     if stash:
         cmds.append("git stash")
     cmds.append("git pull")
     if install:
         cmds.append(f"{host.pip_bin} install -e . -q")
     if stash:
-        cmds.append("git stash pop 2>/dev/null || true")
+        # BRACE-SCOPED — see the note above. Measured 2026-08-04: this line,
+        # unbraced and last in the chain, is why a host whose pull died on a
+        # stale .git/index.lock still reported {"status": "ok", "output": ""}.
+        # The chain short-circuited at the pull and `|| true` forced exit 0.
+        cmds.append("{ git stash pop 2>/dev/null || true; }")
     return cmds
 
 
@@ -208,7 +218,20 @@ def _sync_one_package(
         stderr = result.stderr.strip()
 
         if result.returncode == 0:
-            return {"status": "ok", "output": stdout}
+            # `stderr` is returned even on success, NOT dropped. It was
+            # previously assigned here and then referenced only on the failure
+            # branch below, so a remote command that printed a complete,
+            # actionable diagnosis to stderr and still exited 0 reported an
+            # empty result. That is exactly how git's "another git process ...
+            # remove the file manually to continue" — which NAMES the file to
+            # delete — was lost for two weeks on a host that never synced.
+            #
+            # NOTE this does NOT yet make `ok` mean "the sync happened"; it
+            # still means "the command exited 0". Requiring an observed
+            # post-condition (re-read the remote commit AND the installed
+            # version via scitex_dev.versioning.check_currency) is the
+            # remaining half, tracked separately.
+            return {"status": "ok", "output": stdout, "stderr": stderr}
         return {
             "status": "error",
             "output": stdout,
