@@ -7,6 +7,92 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-08-04
+
+**A release about saying which thing you mean.** Every entry is a place where
+something was inferred — a scope, an owner, a location — and the fix was to make
+the caller state it, so that forgetting fails loudly instead of resolving to
+whatever was nearest.
+
+### Added
+- **The scope and identity contract every SciTeX app conforms to (#499).**
+  `scitex_dev.scope` ships five frozen dataclasses — `Principal`, `Project`,
+  `Member`, `Scope`, `AppSpec` — that Django, Gitea, the CLI and every leaf
+  conform to, rather than each restating. Authority is decided by who ENFORCES,
+  not who stores: Gitea owns repo/visibility/human-ACL because it is what blocks
+  a `git clone`; scitex-dev owns the shape and the agent-as-principal concept
+  because nothing else defines them; anything in Django is a projection.
+
+  Agents are first-class principals, with one rule doing the work of three:
+  `effective_role(agent) = min(granted, owner's role on the same project)`. An
+  agent can be revoked alone; creating one gains nothing, so agents are not a
+  privilege-escalation path; and revoking the OWNER revokes their agents,
+  because the ceiling drops with them — no cascade to remember, no orphaned
+  agent still holding access after the person is gone.
+
+  `AppSpec` carries TWO independent axes, `data_lives_at` and `view`. Collapsing
+  them cannot express two of the five shipped apps: a Scholar library is not
+  rebuilt per manuscript, and Storage files belong to a person while projects
+  refer to them.
+
+- **The leaf-facing credential primitive (#500).** `resolve(name, ctx=...)` is
+  what a leaf calls at runtime, and `register_secret_group(dev, pkg=...)` gives
+  any leaf the SAME `dev secret` CLI — the same code, not a copy, because a copy
+  is what drifts and drift in a convention is invisible until someone counts
+  adoption and concludes the convention never existed.
+
+  The store is the SSOT; the environment is the injection channel, since a
+  container or CI job has no private key. **The environment is consulted only
+  for owner-less contexts**, and that limit is load-bearing: `os.environ` is
+  process-wide while a Django worker serves many users from one process, so
+  honouring an env override for a per-user secret would hand user A's value to
+  user B's request and look like a successful lookup on both.
+
+- **`<pkg> dev` — the canonical §13 self-maintenance group (#495).** scitex-dev
+  now obeys the rule it ships. `cron`, `hooks` and `skills` moved under `dev`;
+  the `scitex_dev.jobs` aggregators moved under `ecosystem dev`. Every old
+  spelling keeps working through a Phase W warn-forward alias.
+
+### Changed
+- **`SecretContext.scope` has no default (#501).** Every caller states which
+  scope it means; forgetting is a `TypeError` at the call site. The previous
+  default was the empty `Scope()` — safe in that it never guessed a user, but it
+  still let the most dangerous call construct successfully: a request handler
+  that forgot to pass the requesting user got a valid object pointed at the
+  standalone store, read real data, and returned. `Scope.standalone()` and
+  `Scope.everything()` are named constructors so the no-owner cases read as
+  declarations rather than as omissions; neither looks the current user up.
+
+### Fixed
+- **A group alias swallowed `--help` (#495).** Click's help option fires during
+  PARSING, so `scitex-dev skills self-explain --help` printed the alias's own
+  two-line help and dropped `self-explain` with no error, while the same command
+  WITHOUT `--help` forwarded correctly. Discovery through the old name — exactly
+  what a user reaches for after a rename — was the only broken part.
+- **§1a and §13 could not both be satisfied (#495).** §1a required `skills` at
+  top level; §13 requires it under `dev`. scitex-dev, which owns both rules, was
+  the first package caught in the fork and every adopter reaches it next. §1a now
+  accepts either location, preferring `dev`; a Phase W alias still does not
+  satisfy it, because an alias forwards and does not host the verbs.
+- **Two builders registered a `dev` group on main (#495).** Click's
+  `add_command` is a dict assignment, so the later silently replaced the earlier
+  and everything mounted on it: `dev` held `secret` alone, with cron/hooks/skills
+  gone and no error anywhere.
+- **A latent `AttributeError` on the credential failure path (#500).**
+  `SecretUnavailable` interpolated `ctx.pkg`, a field that stopped existing at a
+  rename. It sat on the failure path, so it would have replaced a clear "secret
+  not found" with a crash the first time a secret was genuinely missing.
+
+### Testing
+- Three tests asserted on `CliRunner.result.output`, which MIXES stderr, while
+  invoking commands that now warn there via a Phase W alias. They passed locally
+  and failed on every CI leg. The local green depended on test ORDER plus a
+  leftover marker file under `${XDG_RUNTIME_DIR:-/tmp}` suppressing a
+  once-per-session warning — so re-running locally reinforced the illusion. They
+  now read `.stdout`, the stream the contract actually names. 34 more instances
+  of the same shape remain across the suite, latent until something writes to
+  stderr on their path.
+
 ## [0.41.0] - 2026-07-31
 
 **A release about checks that could not tell "passed" from "never ran".** Nearly
