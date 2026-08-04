@@ -444,8 +444,34 @@ def register(ecosystem):
                     for n, res in all_results.items()
                     if any(r.get("exit", 0) != 0 for r in res.values())
                 ]
+                # "all packages pass" is a STRONGER claim than exit 0, and it
+                # was being printed on the exit codes alone. A package whose
+                # findings could not be CLASSIFIED never established
+                # cleanliness — the per-package line directly above already
+                # says so ("N UNREADABLE ... NOT counted as clean"), and this
+                # line was contradicting it in the same output block. The
+                # reassuring sentence is the one humans read, so it must not
+                # outrun the evidence.
+                #
+                # Deliberately OUTPUT-ONLY: the exit code is untouched here.
+                # Folding unreadable into the VERDICT is the real fix and is
+                # tracked separately — it needs the corpus measured first
+                # (a recorded run had 366 UNREADABLE of 374 inspected), or
+                # turning it on red-lights the fleet in one release.
+                unreadable_total = sum(
+                    len(rep.unreadable)
+                    for d in pkgs
+                    if (rep := mask_reports.get(d)) is not None
+                )
                 if fails:
                     click.echo(f"  failures: {', '.join(sorted(fails))}", err=True)
+                elif unreadable_total:
+                    click.echo(
+                        f"  NOT a pass: {unreadable_total} line(s) claimed to be "
+                        "findings and could not be classified, so cleanliness "
+                        "was never established for every package",
+                        err=True,
+                    )
                 else:
                     click.echo("  all packages pass", err=True)
             click.echo("", err=True)
