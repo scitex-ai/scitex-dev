@@ -12,7 +12,7 @@ definition is the thing the scope contract exists to prevent.
     from scitex_dev.scope import Scope
     from scitex_dev.secret import SecretContext
 
-    SecretContext(app="cards")                                   # standalone
+    SecretContext(app="cards", scope=Scope.standalone())          # standalone
     SecretContext(app="cards", scope=Scope(owner="ywatanabe"))    # personal
     SecretContext(app="scholar", scope=Scope(owner="scitex"))     # an org
     SecretContext(app="writer",
@@ -89,15 +89,25 @@ def name_reservation_error(name: str) -> Optional[str]:
 class SecretContext:
     """An app plus the scope whose secrets are wanted.
 
-    ``scope`` defaults to the empty ``Scope()`` — standalone, where the OS
-    account is the whole boundary. That is "no owner dimension at all", never
-    "look the current user up": a helper that guessed would make the
-    multi-owner case silently succeed in a single-owner shape, which is the
-    failure the scope contract exists to prevent.
+    ``scope`` HAS NO DEFAULT — operator directive 2026-08-04, 「明示的に渡し
+    たいなあと思っています」. Every caller states which scope it means, and a
+    caller who forgets gets a TypeError at the call site.
+
+    An earlier version defaulted to the empty ``Scope()``. That was safe in
+    the sense that it did not guess a user, but it still let the most
+    dangerous call — a request handler that forgot to pass the requesting
+    user — construct successfully and quietly read the standalone store. A
+    missing argument is a loud, immediate, unmissable failure; a defaulted
+    one is a silent wrong answer. For the standalone case say so:
+
+        SecretContext(app="writer", scope=Scope.standalone())
+        SecretContext(app="writer", scope=Scope(owner=request.user.username))
+
+    Neither form can be reached by accident, and both say what they mean.
     """
 
     app: str
-    scope: Scope = field(default_factory=Scope)
+    scope: Scope
 
     def __post_init__(self) -> None:
         # `Scope` validates its own segments (traversal, shape) at

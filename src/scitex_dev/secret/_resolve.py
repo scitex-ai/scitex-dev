@@ -12,7 +12,8 @@ rules.
     from scitex_dev.scope import Scope
     from scitex_dev.secret import SecretContext, resolve
 
-    resolve("api/openai", ctx=SecretContext(app="writer"))          # CLI
+    resolve("api/openai", ctx=SecretContext(
+        app="writer", scope=Scope.standalone()))                    # CLI
     resolve("api/openai", ctx=SecretContext(
         app="writer", scope=Scope(owner=request.user.username)))    # in hub
 
@@ -102,7 +103,8 @@ def env_var_for(ctx: SecretContext, name: str) -> Optional[str]:
     directions matter, so it is a documented transformation rather than a table
     that can drift from what the code reads.
 
-        SecretContext(app="hub"), "auth/oidc-client-secret"
+        SecretContext(app="hub", scope=Scope.standalone()),
+        "auth/oidc-client-secret"
           -> SCITEX_HUB_SECRET_AUTH_OIDC_CLIENT_SECRET
     """
     if not ctx.is_standalone:
