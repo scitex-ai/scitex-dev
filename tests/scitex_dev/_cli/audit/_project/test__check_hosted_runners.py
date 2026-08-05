@@ -1,20 +1,22 @@
 # -*- coding: utf-8 -*-
-"""PS-169 — GitHub-hosted runners are forbidden (operator mandate 2026-07-14).
+"""PS-169 — GitHub-hosted runners are ADVISORY (W); hosted is permitted.
 
-This rule is the ONLY enforcement that exists (GitHub cannot block hosted
-runners below the Enterprise plan), so its coverage is load-bearing. The
-matching design constraint is the inverse — it must NOT false-positive on the
-scitex self-hosted idiom, which resolves via `fromJSON(vars.CI_RUNS_ON ||
-'[...self-hosted...]')`. Both directions are exercised here.
+The rule REPORTS that a job runs on a hosted runner (slower than hardware we
+own) and never blocks. Detection is still load-bearing — the fleet's migration
+inventory reads these findings — so both directions are exercised: a hosted
+runner must be found, and the scitex self-hosted idiom
+(`fromJSON(vars.CI_RUNS_ON || '[...self-hosted...]')`) must NOT false-positive.
 
-The check runs against `tmp_path` (no `.git`), so the new-vs-baseline
-severity ratchet degrades silently and every finding keeps the rule default
-(W) — the tests assert on presence/count/code, not on escalated severity.
+Most tests run against `tmp_path` (no `.git`). The severity contract itself is
+pinned separately by `test_new_hosted_runner_is_not_escalated_to_error`, which
+uses a REAL git repo — without that, "no escalation" would pass for the
+uninteresting reason that no baseline resolves.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import subprocess
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -26,11 +28,17 @@ from scitex_dev._cli.audit._project._check_hosted_runners import (
 
 @dataclass
 class _Violation:
-    """Stand-in for the auditor's Violation record (`rule, where, detail`)."""
+    """Stand-in for the auditor's Violation record (`rule, where, detail`).
+
+    Carries `severity_override` because that is the field the (now removed)
+    baseline ratchet used to set to "E". A test cannot observe the ratchet's
+    ABSENCE unless the field it would have written exists here.
+    """
 
     rule: str
     where: str
     detail: str
+    severity_override: str | None = field(default=None)
 
 
 def _run_rule_on(repo: Path) -> list[_Violation]:
@@ -260,3 +268,103 @@ def test_violation_names_the_self_hosted_remedy(repo: Path) -> None:
     found = _run_rule_on(repo)
     # Assert
     assert "scitex-ci" in found[0].detail
+
+
+@pytest.fixture
+def repo_on_hosted_runner(repo: Path) -> Path:
+    """A repo whose single job runs on a plain GitHub-hosted runner."""
+    _write_workflow(
+        repo,
+        "direct.yml",
+        "name: d\non: [push]\njobs:\n  tests:\n    runs-on: ubuntu-latest\n",
+    )
+    return repo
+
+
+def test_violation_says_hosted_is_allowed(repo_on_hosted_runner: Path) -> None:
+    # Arrange
+    target = repo_on_hosted_runner
+    # Act
+    detail = _run_rule_on(target)[0].detail
+    # Assert
+    assert "ALLOWED" in detail
+
+
+def test_violation_no_longer_calls_hosted_forbidden(
+    repo_on_hosted_runner: Path,
+) -> None:
+    """A rule reporting at W while its text says "forbidden without exception"
+    teaches the reader the opposite of what the gate does — and that text is
+    what agents act on."""
+    # Arrange
+    target = repo_on_hosted_runner
+    # Act
+    detail = _run_rule_on(target)[0].detail
+    # Assert
+    assert "forbidden" not in detail.lower()
+
+
+# --- the ratchet is GONE (real git repo, or the test proves nothing) ---------
+
+
+def _run_git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+@pytest.fixture
+def newly_hosted_git_repo(tmp_path: Path) -> Path:
+    """A job MOVED onto a hosted runner atop a clean `develop` baseline.
+
+    This is the shape of a PR complying with the 2026-08-05 directive: a repo
+    whose CI ran on our own hardware moves a job to a hosted runner. The
+    removed ratchet escalated exactly this to E — blocking the compliant
+    change while leaving every long-standing `ubuntu-latest` at W, i.e.
+    permitting the status quo and forbidding its correction. Measured on
+    scitex-hub's PR #561.
+
+    The repo MUST be a REAL git repo with a resolvable `develop` baseline. On
+    a bare `tmp_path` the ratchet degrades to "no escalation" by itself, so
+    these assertions would pass against the unfixed code and prove nothing.
+    """
+    repo = tmp_path / "repo"
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    _run_git(repo, "init", "-q")
+    _run_git(repo, "config", "user.email", "test@example.com")
+    _run_git(repo, "config", "user.name", "test")
+    _write_workflow(
+        repo,
+        "ci.yml",
+        "name: ci\non: [push]\njobs:\n"
+        "  tests:\n    runs-on: [self-hosted, Linux, X64, scitex-ci]\n",
+    )
+    _run_git(repo, "add", ".")
+    _run_git(repo, "commit", "-q", "-m", "seed")
+    _run_git(repo, "branch", "-M", "develop")
+
+    # The change under review.
+    _write_workflow(
+        repo,
+        "ci.yml",
+        "name: ci\non: [push]\njobs:\n  tests:\n    runs-on: ubuntu-latest\n",
+    )
+    return repo
+
+
+def test_new_hosted_runner_is_still_reported(newly_hosted_git_repo: Path) -> None:
+    # Arrange
+    target = newly_hosted_git_repo
+    # Act
+    found = _run_rule_on(target)
+    # Assert — detection is unchanged; only the consequence moved.
+    assert len(found) == 1
+
+
+def test_new_hosted_runner_is_not_escalated_to_error(
+    newly_hosted_git_repo: Path,
+) -> None:
+    # Arrange
+    target = newly_hosted_git_repo
+    # Act
+    found = _run_rule_on(target)
+    # Assert — this is the assertion the fix exists for.
+    assert found[0].severity_override is None

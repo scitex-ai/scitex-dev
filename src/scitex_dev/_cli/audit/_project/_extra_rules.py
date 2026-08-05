@@ -475,28 +475,34 @@ EXTRA_RULES: List[Tuple[str, str, str, str, str]] = [
         "E",
         "agent-script-no-claims-json-terminus",
     ),
-    # PS-169 — GitHub-hosted runners forbidden (operator mandate 2026-07-14;
-    # reland of closed PR #344). Check + resolution logic in
-    # `_check_hosted_runners.py`. Registered here (not co-located) because that
-    # module imports `_new_vs_baseline` and importing its rule tuple back into
-    # `_registry` would close a cycle — same reason PS-214/PS-215 live here.
-    # Ships at W (bake-in); NEW violations ratchet to E via the baseline check,
-    # and the whole rule promotes to E once the fleet is confirmed clean.
+    # PS-169 — GitHub-hosted runners are ADVISORY-ONLY (W, flat, no ratchet).
+    # The 2026-07-14 "no exceptions" mandate is SUPERSEDED by the operator
+    # directive of 2026-08-05 (take Spartan out of CI; relax the CI rules;
+    # prefer scitex-compute). Detection logic in `_check_hosted_runners.py`.
+    # Registered here (not co-located) because that module imports
+    # `_new_vs_baseline` and importing its rule tuple back into `_registry`
+    # would close a cycle — same reason PS-214/PS-215 live here.
+    #
+    # Do NOT restore the baseline ratchet: it left a long-standing hosted
+    # runner at W while escalating a job newly MOVED onto hosted to E, i.e.
+    # it blocked the compliant migration and permitted the status quo.
+    # Measured on scitex-hub's PR #561, which it blocked at [E].
     (
         "PS-169",
         "§1",
         (
             "GitHub Actions job runs on a GitHub-HOSTED runner "
-            "(`ubuntu-*` / `macos-*` / `windows-*`) — forbidden without "
-            "exception (operator mandate 2026-07-14). Every SciTeX job must "
-            "run on the self-hosted pool: `runs-on: [self-hosted, Linux, X64, "
-            "scitex-ci]` or the fleet idiom `runs-on: ${{ fromJSON(vars."
-            "CI_RUNS_ON || '[\"self-hosted\",\"Linux\",\"X64\",\"scitex-ci\"]"
-            "') }}`. If the pool cannot run the job, fix the pool — never fall "
-            "back to a hosted runner. WARN during bake-in; NEW violations "
-            "ratchet to ERROR."
+            "(`ubuntu-*` / `macos-*` / `windows-*`). This is ALLOWED — hosted "
+            "runners are free for public repositories and are a legitimate "
+            "fallback — but they are SLOWER than hardware we own, so prefer "
+            "a machine we own wherever CI turnaround matters: `runs-on: "
+            "${{ fromJSON(vars.CI_RUNS_ON || '[\"self-hosted\",\"Linux\","
+            "\"X64\",\"scitex-ci\"]') }}`. Advisory only: this rule is W for "
+            "every finding and never fails a build. For the rule that DOES "
+            "block — a SELF-HOSTED destination no machine serves, which "
+            "GitHub queues forever rather than rejecting — see PS-224."
         ),
         "W",
-        "hosted-runner-forbidden",
+        "hosted-runner-slower-than-our-own",
     ),
 ]
