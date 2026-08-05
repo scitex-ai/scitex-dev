@@ -8,10 +8,24 @@ than under `tests/scitex_dev/` (PS-204 orphan-test placement).
 The defect it pins, measured on a live fleet migration 2026-07-28: apply
 shielded `rtd-sphinx-*` from deletion, so after a SUCCESSFUL apply the repo
 still carried `rtd-sphinx-build-on-ubuntu-latest.yml` — `runs-on:
-ubuntu-latest`, a PS-224 ERROR that the tool itself guaranteed on EVERY repo
-and then handed to a human to delete by hand. Asserting only "the file is
-gone" would re-pin the old premise from the other side; grading the whole
-resulting tree with the real checker is the property that actually matters.
+ubuntu-latest`, a leftover the tool itself guaranteed on EVERY repo and then
+handed to a human to delete by hand. Asserting only "the file is gone" would
+re-pin the old premise from the other side; grading the whole resulting tree
+with the real checker is the property that actually matters.
+
+WHAT CHANGED 2026-08-05, and why the two assertions now carry different
+weights. That leftover WAS a PS-224 ERROR, which is why one checker could
+carry both properties. PS-224 has since been narrowed to SELF-HOSTED
+destinations — GitHub serves its own images, so a hosted job cannot queue
+forever, the only failure PS-224 catches — and hosted runners are permitted
+outright. So the historical leftover is no longer a PS-224 violation at all:
+
+  * `test_legacy_rtd_workflow_is_gone_after_apply` now carries the 2026-07-28
+    incident. A superseded file left behind is still a defect on its own
+    terms, independent of any runner policy.
+  * `test_applied_tree_has_zero_ps224_violations` carries tree cleanliness
+    under CURRENT rules, and its positive control had to move to a separate
+    probe tree — see `test_checker_fires_on_an_unserved_destination`.
 
 No mocks (STX-NM002): a real `tmp_path` repo tree, a real `hosts.yaml`
 passed through the checker's existing `hosts_path=` file-path seam, and the
@@ -117,13 +131,40 @@ def test_applied_tree_has_zero_ps224_violations(tmp_path):
     assert found == []
 
 
-def test_pre_apply_tree_is_the_violation_this_test_would_otherwise_miss(tmp_path):
-    # POSITIVE CONTROL. Without it, a checker that silently graded nothing
-    # (empty registry, hidden `.github`, unreadable tree) would report the
-    # same clean zero as a genuine fix — "could not check" rendered as
-    # "passed". Prove the checker DOES see this violation before apply.
+#: A destination NO registered machine serves — the shape PS-224 still
+#: errors on after the 2026-08-05 narrowing.
+_UNSERVED_POOL = """\
+name: probe
+on: [push]
+jobs:
+  build:
+    runs-on: [self-hosted, Linux, X64, pool-that-no-runner-advertises]
+    steps:
+      - uses: actions/checkout@v4
+"""
+
+
+def test_checker_fires_on_an_unserved_destination(tmp_path):
+    # POSITIVE CONTROL — instrument liveness, not a claim about apply.
+    # Without it, a checker that silently graded nothing (empty registry,
+    # hidden `.github`, unreadable tree) would report the same clean zero as
+    # a genuine fix — "could not check" rendered as "passed".
+    #
+    # It probes a SEPARATE tree rather than the pre-apply repo. Until
+    # 2026-08-05 the pre-apply repo served as its own control, because the
+    # legacy `rtd-sphinx-build-on-ubuntu-latest.yml` leftover was itself a
+    # PS-224 error. PS-224 was then narrowed to SELF-HOSTED destinations —
+    # GitHub serves its own images, so such a job cannot queue forever, the
+    # only failure PS-224 catches — and that control silently went to zero.
+    # It would have passed while proving nothing, which is the exact failure
+    # mode it exists to prevent. Keep this pointed at a destination that is
+    # genuinely unserved TODAY.
     # Arrange
-    repo = _make_repo(tmp_path)
+    repo = tmp_path / "probe-repo"
+    (repo / ".github" / "workflows").mkdir(parents=True)
+    (repo / ".github" / "workflows" / "probe.yml").write_text(
+        _UNSERVED_POOL, encoding="utf-8"
+    )
     registry = _registry(tmp_path)
     # Act
     found = _ps224(repo, registry)
