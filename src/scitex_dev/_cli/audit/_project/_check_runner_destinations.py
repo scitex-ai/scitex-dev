@@ -41,7 +41,8 @@ worth recording so they are not reintroduced under another name:
 * **No severity W.** W never affects the exit code (``_audit.py``:
   ``exit_code = 1 if n_errors > 0 else 0``), which is exactly why the
   sibling PS-169 rule fires hundreds of times fleet-wide and has never
-  once failed a build.
+  once failed a build. (PS-169 is now advisory BY DESIGN — hosted runners
+  are permitted. PS-224 is the rule with teeth, and it keeps them.)
 * **No blanket suppression flag.** Individual, reasoned exemptions in
   ``.scitex/dev/config.yaml`` under ``audit.exemptions`` only
   (constitution §2) — an exemption must state WHY. See "Exemptions"
@@ -53,10 +54,21 @@ then burned down. Nothing here exists to reduce the initial red count.
 
 What counts as a violation
 --------------------------
-1. **Unserved destination** — the job's labels resolve concretely, and no
-   registered machine advertises all of them. Includes every
-   GitHub-hosted image (``ubuntu-latest`` & co.), which by construction is
-   in no machine's ``runner_labels``.
+1. **Unserved SELF-HOSTED destination** — the job's labels resolve
+   concretely, at least one is not a GitHub-provided image, and no registered
+   machine advertises all of them.
+
+   A destination made up ENTIRELY of GitHub-provided images
+   (``ubuntu-latest`` & co.) is NOT a violation: GitHub serves those itself,
+   so such a job cannot queue forever, which is the only failure this rule
+   exists to catch. They were flagged until 2026-08-05 purely as a
+   side effect — no machine in the registry advertises ``ubuntu-latest``, so
+   the "unserved" arithmetic caught them. That was harmless while PS-169
+   prohibited hosted runners outright; once the 2026-08-05 directive
+   permitted them it became a FALSE POSITIVE at severity E, blocking the very
+   migration the directive asks for. A MIXED set
+   (``[self-hosted, ubuntu-latest]``) still requests a self-hosted machine and
+   is still checked.
 2. **Unresolvable destination** — ``runs-on`` is an expression with no
    static literal to read (e.g. a bare ``${{ vars.RUNNER }}`` or
    ``${{ matrix.os }}``). The mandate is that every workflow **names its
@@ -166,6 +178,7 @@ import yaml
 
 from ._runs_on_parsing import describe_destinations as _describe
 from ._runs_on_parsing import resolve_destination as _resolve_destination
+from ._runs_on_parsing import served_by_github as _served_by_github
 from ._runs_on_parsing import workflow_files as _workflow_files
 from . import _workflow_exposure as _wx
 
@@ -183,8 +196,9 @@ RUNNER_DESTINATION_RULES: list[tuple[str, str, str, str, str]] = [
         _RULE,
         "§1",
         (
-            "GitHub Actions job targets a runner destination that the "
-            "scitex-dev MACHINE REGISTRY does not serve. scitex-dev owns the "
+            "GitHub Actions job targets a SELF-HOSTED runner destination that "
+            "the scitex-dev MACHINE REGISTRY does not serve. scitex-dev owns "
+            "the "
             "single registry of machines (`scitex_dev.hosts`, backed by "
             "`~/.scitex/dev/hosts.yaml`); each machine's `runner_labels:` "
             "records the label sets its self-hosted runners actually serve, "
@@ -216,59 +230,15 @@ RUNNER_DESTINATION_RULES: list[tuple[str, str, str, str, str]] = [
 ]
 
 
-#: Separator between a workflow path and a job id in an exemption SITE KEY —
-#: `.github/workflows/test.yml::test`. Findings are per-JOB, so a bare path
-#: would OVER-EXEMPT: one file routinely holds a job that must stay hosted
-#: AND a job already migrated. Human-writable and greppable on purpose.
-_SITE_SEP = "::"
-
-#: PS-224 findings are per-JOB, not per-line, so both the emitted site and
-#: any `audit.exemptions` entry pin line 0 (same contract as PS-222).
-_NO_LINE = 0
-
-
-def _site(rel: str, job_id: str | None = None) -> str:
-    """Site key for a finding: ``path`` or ``path::job-id``.
-
-    This exact string is BOTH the finding's reported location AND what an
-    ``audit.exemptions`` entry's ``path`` must spell, so the instruction a
-    user reads is the instruction that works.
-    """
-    return rel if job_id is None else f"{rel}{_SITE_SEP}{job_id}"
-
-
-def _exempt_hint(site: str) -> str:
-    """The copy-pasteable exemption recipe for one site (reason MANDATORY)."""
-    return (
-        " If this job genuinely cannot run on any registered machine, exempt "
-        "THIS JOB (never the whole file) in `.scitex/dev/config.yaml` under "
-        f"`audit: exemptions: PS-224:` with `path: {site}`, `line: 0` and a "
-        "`reason:` saying why — the reason is mandatory (constitution §2), "
-        "and a blank one exempts nothing."
-    )
-
-
-def _union_destinations(
-    floor: list[tuple[str, frozenset[str]]],
-    user_state: list[tuple[str, frozenset[str]]],
-) -> list[tuple[str, frozenset[str]]]:
-    """FLOOR ∪ user-state, order-stable and de-duplicated.
-
-    The shipped seed comes FIRST (it is the floor), then any user-state
-    destination the floor does not already carry. A destination present in
-    both — the common case, since the user file is usually a copy of the
-    seed — appears exactly ONCE, so the "Registered destinations:" line the
-    error prints does not list it twice.
-    """
-    out: list[tuple[str, frozenset[str]]] = []
-    seen: set[tuple[str, frozenset[str]]] = set()
-    for host, labels in (*floor, *user_state):
-        key = (host, labels)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append((host, labels))
-    return out
+# Site keys / exemption text and registry-union live in focused siblings and
+# are re-exported here so existing imports and tests keep resolving.
+from ._runner_destination_sites import (  # noqa: E402
+    _NO_LINE,
+    _SITE_SEP,
+    _exempt_hint,
+    _site,
+)
+from ._runner_destination_registry import _union_destinations  # noqa: E402
 
 
 def check_ps224_runner_destinations(
@@ -481,6 +451,15 @@ def check_ps224_runner_destinations(
                         + _exempt_hint(site),
                     )
                 )
+                continue
+
+            # GitHub-PROVIDED destinations are served by GitHub itself, so
+            # they cannot exhibit this rule's failure (queued forever because
+            # nothing serves the labels). Skipping them is a false-positive
+            # correction, not a softening — see `served_by_github`. The
+            # operator's 2026-07-24 rejection of softeners still governs every
+            # SELF-HOSTED destination below, where a mistyped label DOES hang.
+            if _served_by_github(labels):
                 continue
 
             # Match against the RESOLVED destinations (the shipped floor

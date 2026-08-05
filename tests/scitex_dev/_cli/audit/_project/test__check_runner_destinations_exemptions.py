@@ -43,10 +43,23 @@ hosts:
       - [self-hosted, Linux, X64, spartan-cpu, scitex-ci]
 """
 
+#: An unserved SELF-HOSTED destination — the vehicle every exemption test
+#: below uses to produce one PS-224 finding.
+#:
+#: These tests are about the EXEMPTION machinery (site keys, mandatory
+#: reasons, job-qualification), not about runner policy. They previously used
+#: `ubuntu-latest` for this, which was incidental: it happened to be unserved
+#: because no machine advertises it. When PS-224 was narrowed on 2026-08-05 to
+#: skip GitHub-served destinations, all of them went green for a reason that
+#: had nothing to do with exemptions — a passing suite that had stopped
+#: testing its subject. Pinning an unserved SELF-HOSTED label keeps them
+#: exercising what their names claim.
+_UNSERVED = "[self-hosted, Linux, X64, no-such-pool]"
+
 #: One file, two UNSERVED jobs — the over-exemption fixture.
 _TWO_BAD_JOBS = (
     "name: ci\non: [push]\njobs:\n"
-    "  test:\n    runs-on: ubuntu-latest\n"
+    f"  test:\n    runs-on: {_UNSERVED}\n"
     "  lint:\n    runs-on: [self-hosted, ghost]\n"
 )
 
@@ -112,7 +125,7 @@ def _run(repo: Path, registry_path: Path) -> list[Violation]:
 def test_job_finding_site_key_is_job_qualified(tmp_path, registry):
     # Arrange — the reported location IS the exemption site key, so it can be
     # copied verbatim out of the audit output.
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     # Act
     found = _run(repo, registry)
     # Assert
@@ -121,7 +134,7 @@ def test_job_finding_site_key_is_job_qualified(tmp_path, registry):
 
 def test_job_finding_detail_documents_the_working_spelling(tmp_path, registry):
     # Arrange — an instruction that does not work is worse than none.
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     # Act
     found = _run(repo, registry)
     # Assert
@@ -133,7 +146,7 @@ def test_job_finding_detail_documents_the_working_spelling(tmp_path, registry):
 
 def test_job_qualified_exemption_suppresses_that_job(tmp_path, registry):
     # Arrange
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     _write_config(repo, _exemption_config(_SITE_TEST))
     # Act
     found = _run(repo, registry)
@@ -184,7 +197,7 @@ def test_bare_path_exemption_does_not_suppress_a_job_finding(tmp_path, registry)
 def test_exemption_without_a_reason_does_not_suppress(tmp_path, registry):
     # Arrange — enforced MECHANICALLY: the loader rejects a reasonless entry,
     # so it exempts nothing.
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     _write_config(repo, _exemption_config(_SITE_TEST, reason=None))
     # Act
     found = _run(repo, registry)
@@ -195,7 +208,7 @@ def test_exemption_without_a_reason_does_not_suppress(tmp_path, registry):
 def test_reasonless_exemption_is_reported_as_a_config_error(tmp_path, registry):
     # Arrange — the module docstring PROMISED this arm long before one
     # existed here; a rejected entry used to vanish without a word.
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     cfg = _write_config(repo, _exemption_config(_SITE_TEST, reason=None))
     # Act
     found = _run(repo, registry)
@@ -205,7 +218,7 @@ def test_reasonless_exemption_is_reported_as_a_config_error(tmp_path, registry):
 
 def test_blank_reason_exemption_does_not_suppress(tmp_path, registry):
     # Arrange — whitespace is not a reason.
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     _write_config(repo, _exemption_config(_SITE_TEST, reason="   "))
     # Act
     found = _run(repo, registry)
@@ -234,7 +247,7 @@ def test_list_form_exemptions_block_is_reported_at_the_config_file(
     tmp_path, registry
 ):
     # Arrange
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     cfg = _write_config(repo, _LIST_FORM_CONFIG)
     # Act
     found = _run(repo, registry)
@@ -246,7 +259,7 @@ def test_list_form_exemptions_block_notice_names_the_received_type(
     tmp_path, registry
 ):
     # Arrange
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     cfg = _write_config(repo, _LIST_FORM_CONFIG)
     # Act
     found = _run(repo, registry)
@@ -259,7 +272,7 @@ def test_list_form_exemptions_block_notice_names_the_likely_mistake(
     tmp_path, registry
 ):
     # Arrange
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     cfg = _write_config(repo, _LIST_FORM_CONFIG)
     # Act
     found = _run(repo, registry)
@@ -270,7 +283,7 @@ def test_list_form_exemptions_block_notice_names_the_likely_mistake(
 
 def test_list_form_exemptions_block_does_not_suppress_the_job(tmp_path, registry):
     # Arrange — a block the parser cannot read exempts NOTHING.
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     _write_config(repo, _LIST_FORM_CONFIG)
     # Act
     found = _run(repo, registry)
@@ -283,7 +296,7 @@ def test_list_form_exemptions_block_does_not_suppress_the_job(tmp_path, registry
 
 def test_exemption_for_another_job_id_does_not_suppress(tmp_path, registry):
     # Arrange
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     _write_config(repo, _exemption_config(f"{_WF}::publish"))
     # Act
     found = _run(repo, registry)
@@ -293,7 +306,7 @@ def test_exemption_for_another_job_id_does_not_suppress(tmp_path, registry):
 
 def test_exemption_for_another_workflow_file_does_not_suppress(tmp_path, registry):
     # Arrange
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     _write_config(repo, _exemption_config(".github/workflows/release.yml::test"))
     # Act
     found = _run(repo, registry)
@@ -303,7 +316,7 @@ def test_exemption_for_another_workflow_file_does_not_suppress(tmp_path, registr
 
 def test_exemption_for_another_rule_does_not_suppress(tmp_path, registry):
     # Arrange — an exemption is pinned to ONE rule code.
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     _write_config(repo, _exemption_config(_SITE_TEST, rule="PS-169"))
     # Act
     found = _run(repo, registry)
@@ -313,7 +326,7 @@ def test_exemption_for_another_rule_does_not_suppress(tmp_path, registry):
 
 def test_repo_without_any_config_still_reports(tmp_path, registry):
     # Arrange — the default is unchanged: no config, rule still fires.
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(tmp_path, _workflow(_UNSERVED))
     # Act
     found = _run(repo, registry)
     # Assert

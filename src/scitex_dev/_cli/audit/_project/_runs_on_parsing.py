@@ -133,12 +133,40 @@ def describe_destinations(destinations: list[tuple[str, frozenset[str]]]) -> str
     )
 
 
+#: Runner-image prefixes GITHUB ITSELF provides. Covers `ubuntu-latest`,
+#: `ubuntu-24.04`, `macos-14`, `windows-2022` and the large/arm variants
+#: (`ubuntu-22.04-arm`, `macos-13-xlarge`, ...).
+_GITHUB_HOSTED_RE = re.compile(r"^(ubuntu|macos|windows)-", re.IGNORECASE)
+
+
+def is_github_hosted_label(label: object) -> bool:
+    """True iff ``label`` names a GitHub-provided runner image."""
+    return isinstance(label, str) and bool(_GITHUB_HOSTED_RE.match(label.strip()))
+
+
+def served_by_github(labels: list[str]) -> bool:
+    """True iff GitHub itself serves this destination, so it CANNOT hang.
+
+    Shared by the two runner rules, which need the same predicate for opposite
+    purposes: PS-169 REPORTS a github-served destination (it is slower than
+    hardware we own), and PS-224 SKIPS one (it cannot exhibit the failure that
+    rule exists to catch — a job queued forever because no machine serves its
+    labels; GitHub serves these by definition).
+
+    A MIXED set such as ``[self-hosted, ubuntu-latest]`` is NOT github-served:
+    it requests a self-hosted machine, so it must still be registered.
+    """
+    return bool(labels) and all(is_github_hosted_label(x) for x in labels)
+
+
 __all__ = [
     "as_labels",
     "fromjson_literal",
     "resolve_destination",
     "workflow_files",
     "describe_destinations",
+    "is_github_hosted_label",
+    "served_by_github",
 ]
 
 # EOF

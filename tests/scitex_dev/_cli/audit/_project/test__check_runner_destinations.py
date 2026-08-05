@@ -199,10 +199,58 @@ def test_nonexistent_machine_finding_names_the_job(tmp_path, registry):
     assert "publish" in found[0].detail
 
 
-def test_github_hosted_image_is_flagged(tmp_path, registry):
-    # Arrange — a hosted image is in no machine's runner_labels by
-    # construction, so it needs no special case to be caught.
+def test_github_hosted_image_is_not_flagged(tmp_path, registry):
+    # Arrange — INVERTED 2026-08-05. GitHub serves `ubuntu-latest` itself, so
+    # the job cannot queue forever, which is the ONLY failure PS-224 exists to
+    # catch. It was flagged until now purely because no machine in the
+    # registry advertises that label — a side effect that was harmless while
+    # PS-169 forbade hosted runners, and a false positive at severity E once
+    # the 2026-08-05 directive permitted them.
     repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    # Act
+    found = _run(repo, registry)
+    # Assert
+    assert found == []
+
+
+def test_every_github_provided_image_family_is_not_flagged(tmp_path, registry):
+    # Arrange — macOS and Windows images are GitHub-served for the same
+    # reason; pinned versions and the arm/xlarge variants must resolve the
+    # same way as `-latest`, or the exemption is a `ubuntu-latest` special
+    # case wearing a general name.
+    for image in (
+        "ubuntu-24.04",
+        "macos-14",
+        "windows-2022",
+        "ubuntu-22.04-arm",
+        "macos-13-xlarge",
+    ):
+        repo = _repo_with_workflow(tmp_path / image, _workflow(image))
+        # Act
+        found = _run(repo, registry)
+        # Assert
+        assert found == [], f"{image} should be GitHub-served"
+
+
+def test_self_hosted_mixed_with_hosted_image_is_still_flagged(tmp_path, registry):
+    # Arrange — POSITIVE CONTROL for the narrowing. A set containing
+    # `self-hosted` requests one of OUR machines, so it must still be checked;
+    # if this passes, the exemption has swallowed the rule.
+    repo = _repo_with_workflow(
+        tmp_path, _workflow("[self-hosted, Linux, X64, ubuntu-latest]")
+    )
+    # Act
+    found = _run(repo, registry)
+    # Assert
+    assert len(found) == 1
+
+
+def test_unserved_self_hosted_label_is_still_flagged(tmp_path, registry):
+    # Arrange — POSITIVE CONTROL: the failure PS-224 was built for. A typo in
+    # a self-hosted label is never rejected by GitHub, it queues forever.
+    repo = _repo_with_workflow(
+        tmp_path, _workflow("[self-hosted, Linux, X64, scitex-ci-typo]")
+    )
     # Act
     found = _run(repo, registry)
     # Assert
@@ -241,7 +289,7 @@ def test_every_unserved_job_in_a_file_is_flagged(tmp_path, registry):
     repo = _repo_with_workflow(
         tmp_path,
         "name: ci\non: [push]\njobs:\n"
-        "  a:\n    runs-on: ubuntu-latest\n"
+        "  a:\n    runs-on: [self-hosted, Linux, X64, no-such-pool]\n"
         "  b:\n    runs-on: [self-hosted, ghost]\n",
     )
     # Act
@@ -251,9 +299,14 @@ def test_every_unserved_job_in_a_file_is_flagged(tmp_path, registry):
 
 
 def test_yaml_workflow_extension_is_scanned(tmp_path, registry):
-    # Arrange — both `.yml` and `.yaml` are real in this fleet.
+    # Arrange — both `.yml` and `.yaml` are real in this fleet. The label must
+    # be an unserved SELF-HOSTED one: a GitHub-served destination is skipped
+    # since 2026-08-05, so using one here would make this pass whether or not
+    # `.yaml` is scanned at all.
     repo = _repo_with_workflow(
-        tmp_path, _workflow("ubuntu-latest"), name="release.yaml"
+        tmp_path,
+        _workflow("[self-hosted, Linux, X64, no-such-pool]"),
+        name="release.yaml",
     )
     # Act
     found = _run(repo, registry)
@@ -392,7 +445,7 @@ def test_gap_finding_returns_when_even_the_seed_is_empty(tmp_path):
     repo = _repo_with_workflow(
         tmp_path,
         "name: ci\non: [push]\njobs:\n"
-        "  a:\n    runs-on: ubuntu-latest\n"
+        "  a:\n    runs-on: [self-hosted, Linux, X64, no-such-pool]\n"
         "  b:\n    runs-on: [self-hosted, ghost]\n",
     )
     # Act — two bad jobs must still yield exactly ONE gap finding.
@@ -405,7 +458,9 @@ def test_gap_finding_names_the_registry_file_when_seed_empty(tmp_path):
     # Arrange
     registry_path = tmp_path / "hosts.yaml"
     registry_path.write_text(_REGISTRY_NO_RUNNERS)
-    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    repo = _repo_with_workflow(
+        tmp_path, _workflow("[self-hosted, Linux, X64, no-such-pool]")
+    )
     # Act
     found = _run(repo, registry_path, floor=[])
     # Assert
