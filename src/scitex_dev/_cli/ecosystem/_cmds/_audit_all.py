@@ -309,6 +309,21 @@ def register(ecosystem):
             report = classify_output(combined, rules)
             if pkg_exit and report.fully_masked:
                 pkg_exit = 0
+            elif pkg_exit and report.unmasked_count == 0 and not report.is_answerable():
+                # Everything the classifier COULD read was masked, but some
+                # lines could not be read at all — so "fully masked" is
+                # unprovable and the downgrade above was refused. Say so:
+                # a run that stays red for a reason nobody prints is the
+                # same debugging dead-end as one that goes green silently.
+                click.echo(
+                    f"WARN: {distribution}: exit stays NON-ZERO — "
+                    f"{len(report.unreadable)} line(s) claimed to be findings "
+                    "and could not be classified, so they cannot be shown to "
+                    "be covered by a declared skip-rule. First unreadable "
+                    f"line: {report.unreadable[0]!r}. Fix the emitter's line "
+                    "format, or declare the rule if it is a real finding.",
+                    err=True,
+                )
             return distribution, pkg_exit, results, report
 
         # --new-only orchestration: stage the base ref via worktree-
