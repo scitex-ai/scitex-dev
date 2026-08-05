@@ -40,19 +40,31 @@ concurrency:
   # (preserves the retired release-ci.yml coalescing semantic).
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# EACH JOB PASSES ONLY WHAT ITS CALLEE DECLARES. Measured 2026-08-05 against
+# scitex-ai/.github:
+#   pytest-matrix     workflow_call.secrets: CODECOV_TOKEN (required: false)
+#   import-smoke      workflow_call: {}      -- declares nothing
+#   quality-audit     workflow_call: {}      -- declares nothing
+#   rtd-sphinx-build  workflow_call.inputs only, no secrets
+# A callee that declares no secrets cannot RECEIVE one -- passing an undeclared
+# secret is an error -- so those three take no `secrets:` key at all. That is
+# why this is not a uniform "name the secret" edit.
+#
+# These triggers (pull_request / push / schedule) do NOT hand secrets to fork
+# PRs, so this was never the attacker-triggerable exposure that cla.yml had.
+# It is over-broad forwarding: every secret the repo holds, offered to four
+# workflows that between them want one optional token. Fixed on merit.
 jobs:
   pytest-matrix:
     uses: scitex-ai/.github/.github/workflows/pytest-matrix.yml@main
-    secrets: inherit
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   import-smoke:
     uses: scitex-ai/.github/.github/workflows/import-smoke.yml@main
-    secrets: inherit
 
   quality-audit:
     uses: scitex-ai/.github/.github/workflows/quality-audit.yml@main
-    secrets: inherit
 
   rtd-sphinx-build:
     uses: scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@main
-    secrets: inherit
