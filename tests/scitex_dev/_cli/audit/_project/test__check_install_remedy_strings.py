@@ -169,3 +169,91 @@ def test_ps215_silent_when_pyproject_absent(tmp_path):
 
 
 # EOF
+
+
+# --- PS-215 scan scope: records vs instructions ------------------------------
+
+
+def test_ps215_silent_for_changelog_entry(tmp_path):
+    """A changelog records what a PAST release shipped; it instructs nobody.
+
+    Measured 2026-08-05 on this repo: CHANGELOG.md:1186 named
+    `scitex-dev[sync]`, correct when written. Obeying PS-215 there means
+    editing the record of a past release to match today's packaging.
+    """
+    # Arrange
+    _write_pyproject(tmp_path, "editor = []\n")
+    tmp_path.joinpath("CHANGELOG.md").write_text(
+        "## v0.12\n- added editor support: `pip install scitex-writer[editor]`\n",
+        encoding="utf-8",
+    )
+    out: list = []
+    # Act
+    check_ps215_broken_install_remedy(tmp_path, "scitex-writer", _StubViolation, out)
+    # Assert
+    assert out == []
+
+
+def test_ps215_silent_for_adr_worked_example(tmp_path):
+    """An ADR ANALYSES a pin; quoting one is not recommending it.
+
+    The decisive case: ADR-0005 was written to analyse an outage caused by a
+    hand-picked extra, quoted that pin as its worked example, and PS-215
+    blocked the ADR from merging. A rule that blocks its own design
+    discussion is scoped wrong.
+    """
+    # Arrange
+    _write_pyproject(tmp_path, "editor = []\n")
+    adr_dir = tmp_path / "docs" / "adr"
+    adr_dir.mkdir(parents=True)
+    adr_dir.joinpath("0005-extras.md").write_text(
+        "The outage: defs pinned `pip install scitex-writer[editor]`, "
+        "which installs nothing.\n",
+        encoding="utf-8",
+    )
+    out: list = []
+    # Act
+    check_ps215_broken_install_remedy(tmp_path, "scitex-writer", _StubViolation, out)
+    # Assert
+    assert out == []
+
+
+def test_ps215_still_fires_in_readme(tmp_path):
+    """POSITIVE CONTROL — the exclusion must not widen to instructional docs.
+
+    A README tells a user what to run, so the harm PS-215 names is real
+    there. Without this, an over-broad skip would silence the rule across
+    all markdown and the two tests above would still pass.
+    """
+    # Arrange
+    _write_pyproject(tmp_path, "editor = []\n")
+    tmp_path.joinpath("README.md").write_text(
+        "## Install\n\n```\npip install scitex-writer[editor]\n```\n",
+        encoding="utf-8",
+    )
+    out: list = []
+    # Act
+    check_ps215_broken_install_remedy(tmp_path, "scitex-writer", _StubViolation, out)
+    # Assert
+    assert "PS-215" in _codes(out)
+
+
+def test_ps215_still_fires_in_ordinary_docs_page(tmp_path):
+    """POSITIVE CONTROL — only `docs/adr/` is excluded, not all of `docs/`.
+
+    An installation guide under docs/ is instructional and must stay
+    covered, or the ADR carve-out silently becomes a docs-wide one.
+    """
+    # Arrange
+    _write_pyproject(tmp_path, "editor = []\n")
+    guide = tmp_path / "docs" / "guide"
+    guide.mkdir(parents=True)
+    guide.joinpath("install.md").write_text(
+        "Run `pip install scitex-writer[editor]` to enable the editor.\n",
+        encoding="utf-8",
+    )
+    out: list = []
+    # Act
+    check_ps215_broken_install_remedy(tmp_path, "scitex-writer", _StubViolation, out)
+    # Assert
+    assert "PS-215" in _codes(out)
