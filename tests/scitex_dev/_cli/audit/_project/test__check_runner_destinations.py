@@ -199,10 +199,41 @@ def test_nonexistent_machine_finding_names_the_job(tmp_path, registry):
     assert "publish" in found[0].detail
 
 
-def test_github_hosted_image_is_flagged(tmp_path, registry):
-    # Arrange — a hosted image is in no machine's runner_labels by
-    # construction, so it needs no special case to be caught.
+def test_github_hosted_image_is_accepted(tmp_path, registry):
+    # Arrange — INVERTED 2026-08-02. This test previously asserted that a
+    # hosted image IS flagged, on the reasoning that it appears in no
+    # machine's runner_labels "by construction, so it needs no special case".
+    # That reasoning was sound until constitution §4 made GitHub-hosted the
+    # DEFAULT for public repos; the rule then errored on every compliant
+    # workflow. GitHub serves these on demand, always, so they cannot produce
+    # the unmatchable job PS-224 exists to report.
     repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latest"))
+    # Act
+    found = _run(repo, registry)
+    # Assert
+    assert found == []
+
+
+def test_a_typo_of_a_hosted_image_is_still_flagged(tmp_path, registry):
+    # Arrange — the acceptance is a LITERAL set, never a `ubuntu-*` prefix
+    # match. A near-miss is exactly the unservable destination this rule is
+    # for, and a fuzzy match would forgive it.
+    repo = _repo_with_workflow(tmp_path, _workflow("ubuntu-latests"))
+    # Act
+    found = _run(repo, registry)
+    # Assert
+    assert len(found) == 1
+
+
+def test_a_hosted_image_combined_with_other_labels_is_still_flagged(
+    tmp_path, registry
+):
+    # Arrange — `[ubuntu-latest, self-hosted]` matches NO runner: not the
+    # hosted pool (which serves the bare label) and no machine of ours. The
+    # acceptance requires the hosted label to be the WHOLE destination.
+    repo = _repo_with_workflow(
+        tmp_path, _workflow(["ubuntu-latest", "self-hosted"])
+    )
     # Act
     found = _run(repo, registry)
     # Assert
@@ -238,10 +269,14 @@ def test_fromjson_literal_naming_unserved_labels_is_flagged(tmp_path, registry):
 
 def test_every_unserved_job_in_a_file_is_flagged(tmp_path, registry):
     # Arrange — two bad jobs must yield two findings, not one per file.
+    # Job `a` used `ubuntu-latest` until 2026-08-02, when hosted images became
+    # ACCEPTED and this silently became a one-bad-job fixture testing nothing
+    # about per-job counting. A fictional label cannot be rehabilitated by a
+    # future policy the way a real platform image was.
     repo = _repo_with_workflow(
         tmp_path,
         "name: ci\non: [push]\njobs:\n"
-        "  a:\n    runs-on: ubuntu-latest\n"
+        "  a:\n    runs-on: moon-base-alpha\n"
         "  b:\n    runs-on: [self-hosted, ghost]\n",
     )
     # Act
@@ -251,9 +286,10 @@ def test_every_unserved_job_in_a_file_is_flagged(tmp_path, registry):
 
 
 def test_yaml_workflow_extension_is_scanned(tmp_path, registry):
-    # Arrange — both `.yml` and `.yaml` are real in this fleet.
+    # Arrange — both `.yml` and `.yaml` are real in this fleet. The subject
+    # here is the EXTENSION, so the destination just has to be one that fires.
     repo = _repo_with_workflow(
-        tmp_path, _workflow("ubuntu-latest"), name="release.yaml"
+        tmp_path, _workflow("moon-base-alpha"), name="release.yaml"
     )
     # Act
     found = _run(repo, registry)
