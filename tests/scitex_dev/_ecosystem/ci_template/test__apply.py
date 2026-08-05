@@ -148,18 +148,33 @@ def test_caller_delegates_to_all_four_org_reusable_workflows():
     assert all(u in body for u in expected_uses)
 
 
-def test_caller_jobs_are_pure_uses_calls_with_inherited_secrets():
-    # Every job must be a thin `uses:` + `secrets: inherit` pair — no local
+def test_caller_jobs_are_thin_delegations_with_no_second_body():
+    # THE INVARIANT, unchanged: every job is a thin delegation — no local
     # steps, no runs-on (a caller job cannot set one), no second body that
     # could drift against the org-side workflows.
+    #
+    # RENAMED from ...with_inherited_secrets, and the `secrets == "inherit"`
+    # clause is GONE, because that clause asserted the SHAPE OF THE DAY rather
+    # than the intent. `inherit` forwards every secret the repo holds; each
+    # callee is now passed only what it DECLARES (pytest-matrix: CODECOV_TOKEN;
+    # the other three declare nothing and so take no `secrets:` key at all —
+    # passing an undeclared secret is an error). Keeping the old clause would
+    # have pinned an over-broad forwarding rule in place under the banner of a
+    # structural guard.
+    #
+    # The check is STRICTER than before, not looser: `runs-on` and `steps` are
+    # now named and rejected explicitly, where previously they were only
+    # excluded implicitly by the exact-key-set equality.
     # Arrange
     doc = _parse(_render_ci())
+    allowed = {"uses", "secrets", "with"}
+    forbidden = {"runs-on", "steps", "container", "services"}
     # Act
     jobs = doc["jobs"].values()
     # Assert
     assert all(
-        set(job) == {"uses", "secrets"}
-        and job["secrets"] == "inherit"
+        set(job) <= allowed
+        and not (set(job) & forbidden)
         and job["uses"].startswith("scitex-ai/.github/.github/workflows/")
         and job["uses"].endswith("@main")
         for job in jobs
