@@ -18,9 +18,34 @@ and currency-banner continuation lines both vanished through that
 The boundary tested here is as load-bearing as the fix. Treating EVERY
 unclassifiable line as unknown would sweep in ordinary framing: one real
 run emitted 432 level-prefixed lines of which 431 were a single advisory
-banner. Only a line that CLAIMS to be a finding — by carrying a level
-prefix — counts as unreadable; prose that never claimed it is framing,
-and is counted only in the denominator.
+banner.
+
+THE FIRST BOUNDARY WAS DRAWN IN THE WRONG PLACE, and this file used to
+pin it there. It was "carries a level prefix", which does not survive
+contact with scitex-logging: EVERY console line carries a level, so
+banners and per-auditor headlines qualified. The note above says so
+outright — 431 of those 432 were one banner — and two tests here asserted
+that a banner continuation line and an `ERRO: <dist>: N error(s)` headline
+were both "unreadable". Re-measured 2026-08-05 on this repo's own captured
+audit output: 17 unreadable of 42 inspected, all 17 framing, ZERO true
+positives.
+
+That was tolerable only while `unreadable` was printed and nothing else.
+It now gates the masking downgrade, and a ~100%-false-positive signal
+cannot gate: it would refuse the downgrade on every run and make declared
+skip-rules inert fleet-wide.
+
+So the boundary moved to a STRUCTURAL one: a line is unreadable when it is
+finding-SHAPED (payload starts with `[`) but carries no rule id, so it
+cannot be attributed to a rule and therefore cannot be shown to be masked.
+Headlines and banners are framing, counted only in the denominator.
+
+WHAT THAT GIVES UP, recorded so it is not lost: `ERRO: <dist>: N error(s)`
+is the auditor's OWN count, and comparing it against the classifier's count
+would catch the two-inputs-one-verdict disagreement this module was written
+to expose. Nothing ever implemented that comparison — the line was captured
+and never reconciled. It wants its own named signal, not a seat in the
+bucket that gates. Card: audit-headline-count-vs-classified-count-reconcile.
 """
 
 import pytest
@@ -30,23 +55,41 @@ from scitex_dev._cli.ecosystem._cmds._audit_masking import (
     render_summary,
 )
 
-# Verbatim from a real audit-all run: unparseable by the key extractor.
-_UNREADABLE_ERRO = "ERRO: scitex-dev: 2 error(s)"
-# Verbatim continuation line from the currency-gate advisory banner.
+# Verbatim from a real audit-all run: the auditor's own HEADLINE count.
+# Framing — it summarises findings, it is not one.
+_HEADLINE = "ERRO: scitex-dev: 2 error(s)"
+# Verbatim continuation line from the currency-gate advisory banner. Prose.
 _BANNER_WARN = "WARN: Judge by CONTENTS, never by directory SIZE."
-# A line the classifier CAN read.
+# A line the classifier CAN read and CAN attribute.
 _REAL_FINDING = "ERRO:   [PA-306 §3 no-mocks] scitex-dev: tests/x.py:43: monkeypatch"
 # Framing that never claimed to be a finding.
 _FRAMING = "=== audit-cli ==="
+# Finding-SHAPED but unattributable: the legacy severity marker survived and
+# the rule-id bracket did not, so no rule can be named for it.
+_UNATTRIBUTABLE = "ERRO:   [E] scitex-dev: tests/x.py:43: rule id missing"
 
 
-def test_an_unreadable_error_line_is_recorded_rather_than_skipped():
-    # Arrange
-    text = _UNREADABLE_ERRO
+def test_a_finding_shaped_line_with_no_rule_id_is_recorded_as_unreadable():
+    # Arrange — it presents as a finding but names no rule, so it cannot be
+    # shown to be covered by a declared skip. The genuine UNKNOWN.
+    text = _UNATTRIBUTABLE
     # Act
     report = classify_output(text, [])
     # Assert
     assert len(report.unreadable) == 1
+
+
+def test_an_auditor_headline_is_framing_not_an_unreadable_finding():
+    # Arrange — `ERRO: <dist>: N error(s)` summarises findings; it is not
+    # one, and the findings it counts are classified on their own lines.
+    # This assertion is INVERTED from the original: it used to demand the
+    # headline be unreadable, which is why the signal was ~100% false
+    # positive and unfit to gate the masking downgrade.
+    text = _HEADLINE
+    # Act
+    report = classify_output(text, [])
+    # Assert
+    assert report.unreadable == []
 
 
 def test_a_readable_finding_is_not_counted_as_unreadable():
@@ -68,18 +111,21 @@ def test_framing_without_a_level_prefix_is_not_unreadable():
     assert report.unreadable == []
 
 
-def test_a_banner_continuation_line_is_reported_as_unreadable():
-    # Arrange — it wears a level prefix, so it claimed to be a finding.
+def test_a_banner_continuation_line_is_framing_not_unreadable():
+    # Arrange — wearing a level prefix is not a claim to be a finding:
+    # scitex-logging prefixes EVERY console line. This file's own header
+    # records a real run of 432 level-prefixed lines, 431 of them this one
+    # banner. Counting those as unknowns is what made the bucket useless.
     text = _BANNER_WARN
     # Act
     report = classify_output(text, [])
     # Assert
-    assert len(report.unreadable) == 1
+    assert report.unreadable == []
 
 
 def test_the_denominator_counts_every_non_blank_line():
     # Arrange
-    text = f"{_FRAMING}\n\n{_REAL_FINDING}\n{_UNREADABLE_ERRO}\n"
+    text = f"{_FRAMING}\n\n{_REAL_FINDING}\n{_HEADLINE}\n"
     # Act
     report = classify_output(text, [])
     # Assert — blank lines are not evidence of anything.
