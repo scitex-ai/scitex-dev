@@ -61,7 +61,36 @@ __all__ = [
 # Closed set of host kinds. Extend deliberately — every consumer
 # (sac / scitex-hub / scitex-storage) branches on this value, so a new
 # kind is a cross-package agreement, not a one-line drive-by edit.
-HOST_KINDS: frozenset[str] = frozenset({"workstation", "hpc-login", "storage"})
+#
+# THE AXIS IS HOW WORK REACHES THE MACHINE, NOT HOW BIG IT IS.
+# That is what a consumer actually branches on, so it is what distinguishes
+# the members:
+#
+#   workstation  someone's personal machine. May be asleep, may be behind a
+#                laptop lid. Work is not placed here by anyone but its owner.
+#   hpc-login    a login node fronting a SCHEDULER. You do not run work here;
+#                you SUBMIT it, and something else decides when it runs.
+#   compute      shared, always-on infrastructure reached DIRECTLY — ssh in
+#                and run. No scheduler, no queue, no module system.
+#   storage      a machine that holds data rather than executing work.
+#
+# `compute` vs `hpc-login` is the distinction most likely to be collapsed, so
+# it is worth stating why it must not be. Both are "big machines that run
+# things", but a consumer deciding whether it may simply START a job needs
+# opposite answers: on `hpc-login` it must submit and wait; on `compute` it
+# runs now. Sizing them by core count would put them in the same bucket and
+# lose exactly the fact anyone needs. (scitex-storage independently arrived
+# at a scheduler-flavoured word for its own vocabulary, `hpc-compute`, which
+# names a node reached THROUGH a scheduler — a different thing from this.)
+#
+# `compute` added 2026-08-05 for scitex-compute-01/02, measured by scitex-hpc:
+# 32 cores each, Ubuntu 24.04.4, Apptainer 1.5.3, and NO sbatch, NO sinfo,
+# slurmd inactive, no module system. `workstation` parses for them and is
+# wrong — they are shared headless infrastructure, not somebody's desk — and
+# a wrong kind is worse than a missing one because it answers confidently.
+HOST_KINDS: frozenset[str] = frozenset(
+    {"workstation", "hpc-login", "compute", "storage"}
+)
 
 _ENV_HOSTS_YAML = "SCITEX_DEV_HOSTS_YAML"
 
