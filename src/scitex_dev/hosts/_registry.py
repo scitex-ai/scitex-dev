@@ -112,6 +112,28 @@ class HostRecord:
         :class:`~pathlib.Path` — expansion is deliberately deferred to
         resolve time (see the property docstring for the caveat about
         *whose* home directory it expands against).
+    aliases : tuple[str, ...]
+        FORMER or ALTERNATE spellings of :attr:`name` that must keep
+        resolving to this record. Empty (the default) means the canonical
+        name is the only one.
+
+        This exists so a host can be RE-KEYED without orphaning whatever
+        already referenced the old spelling. Host names are on-disk KEYS —
+        cron entries, JobSpecs, sync configs, other packages' registry rows,
+        card scopes — and rewriting a key silently orphans every one of those.
+        The orphan renders as "nothing to do" rather than as an error, which
+        is why it is worth a schema field rather than a migration note.
+
+        The motivating case: the fleet's NAS numbering is GENERATIONAL
+        (``nas-01`` / ``nas-02`` / ``nas-03`` ascend as machines are
+        REPLACED), and the bare name ``nas`` follows whatever is current. So
+        ``nas`` is a MOVING ALIAS: the day a ``nas-04`` arrives, every config
+        keyed on ``nas`` addresses different physical hardware, with nothing
+        logged and nothing failing. A name that resolves is not an identity
+        that stays put.
+
+        A moving alias therefore belongs HERE and never in :attr:`name` — it
+        is a way to reach the host, not a way to identify it.
     runner_labels : tuple[frozenset[str], ...]
         The CI RUNNER DESTINATIONS this machine serves: one
         :class:`frozenset` of labels per distinct self-hosted GitHub
@@ -134,6 +156,7 @@ class HostRecord:
     ssh_alias: str | None
     scitex_root: str
     runner_labels: tuple[frozenset[str], ...] = ()
+    aliases: tuple[str, ...] = ()
 
     def serves(self, labels: Iterable[str]) -> bool:
         """True iff one of this host's runners carries every label in ``labels``.
@@ -175,6 +198,7 @@ class HostRecord:
             "ssh_alias": self.ssh_alias,
             "scitex_root": self.scitex_root,
             "runner_labels": [sorted(s) for s in self.runner_labels],
+            "aliases": list(self.aliases),
         }
 
 
@@ -214,137 +238,6 @@ def create_default_hosts_yaml(hosts_path: str | Path | None = None) -> Path:
         return path
     path.write_text(_DEFAULT_HOSTS_YAML)
     return path
-
-
-def _load_yaml(path: Path) -> dict:
-    import yaml
-
-    try:
-        with open(path) as f:
-            return yaml.safe_load(f) or {}
-    except yaml.YAMLError as exc:
-        raise HostRegistryError(
-            f"{path}: invalid YAML ({exc})",
-            code=ErrorCode.VALIDATION,
-            remediation=f"Fix the YAML syntax in {path}.",
-        ) from exc
-
-
-def _parse_runner_labels(
-    name: str, raw, *, hosts_path: Path
-) -> tuple[frozenset[str], ...]:
-    """Parse a host's ``runner_labels:`` block into label SETS.
-
-    Shape: a list of lists of strings — one inner list per distinct
-    self-hosted runner on the machine. Absent / ``null`` / ``[]`` means
-    the machine hosts no CI runner, which is the common case (a NAS or a
-    laptop) and is NOT an error.
-
-    Fails loud on a malformed block rather than degrading to "no runners"
-    — silently reading a typo'd registry as an empty one would turn every
-    workflow in the fleet into a PS-224 error for a reason that has
-    nothing to do with the workflows.
-    """
-    if raw is None:
-        return ()
-    if not isinstance(raw, list):
-        raise HostRegistryError(
-            f"{hosts_path}: host {name!r}: `runner_labels` must be a list of "
-            f"label lists, got {type(raw).__name__}",
-            code=ErrorCode.VALIDATION,
-            remediation=(
-                f"Write `runner_labels:` as a list of lists, e.g.\n"
-                f"  runner_labels:\n"
-                f"    - [self-hosted, Linux, X64, scitex-ci]"
-            ),
-        )
-    sets: list[frozenset[str]] = []
-    for entry in raw:
-        if isinstance(entry, str) or not isinstance(entry, list):
-            raise HostRegistryError(
-                f"{hosts_path}: host {name!r}: each `runner_labels` entry must "
-                f"be a LIST of label strings (one per runner), got "
-                f"{type(entry).__name__} {entry!r}",
-                code=ErrorCode.VALIDATION,
-                remediation=(
-                    "A bare string is ambiguous — a runner always carries a "
-                    "SET of labels. Wrap it: `- [self-hosted, Linux, X64, "
-                    "scitex-ci]`."
-                ),
-            )
-        labels = {str(label).strip() for label in entry if str(label).strip()}
-        if not labels:
-            raise HostRegistryError(
-                f"{hosts_path}: host {name!r}: empty `runner_labels` entry",
-                code=ErrorCode.VALIDATION,
-                remediation=(
-                    "Delete the empty entry, or give the runner its labels. A "
-                    "runner with no labels serves no destination."
-                ),
-            )
-        sets.append(frozenset(labels))
-    return tuple(sets)
-
-
-def _parse_host_record(name: str, data, *, hosts_path: Path) -> HostRecord:
-    if not isinstance(data, dict):
-        raise HostRegistryError(
-            f"{hosts_path}: host {name!r} must be a mapping, got "
-            f"{type(data).__name__}",
-            code=ErrorCode.VALIDATION,
-        )
-    kind = data.get("kind")
-    if not kind:
-        raise HostRegistryError(
-            f"{hosts_path}: host {name!r} is missing required field `kind`",
-            code=ErrorCode.VALIDATION,
-            remediation=f"Add `kind: <{'|'.join(sorted(HOST_KINDS))}>` to the {name!r} entry.",
-        )
-    scitex_root = data.get("scitex_root")
-    if not scitex_root:
-        raise HostRegistryError(
-            f"{hosts_path}: host {name!r} is missing required field `scitex_root`",
-            code=ErrorCode.VALIDATION,
-            remediation=f"Add `scitex_root: <path>` to the {name!r} entry.",
-        )
-    try:
-        return HostRecord(
-            name=name,
-            kind=kind,
-            ssh_alias=data.get("ssh_alias"),
-            scitex_root=str(scitex_root),
-            runner_labels=_parse_runner_labels(
-                name, data.get("runner_labels"), hosts_path=hosts_path
-            ),
-        )
-    except HostRegistryError as exc:
-        # Re-raise with the source file attached for a fully actionable
-        # message (the dataclass itself doesn't know its own file path).
-        raise HostRegistryError(
-            f"{hosts_path}: {exc.message}",
-            code=exc.error_code,
-            remediation=exc.remediation,
-        ) from exc
-
-
-def _load_registry(
-    hosts_path: str | Path | None = None,
-) -> tuple[dict[str, HostRecord], Path]:
-    path = get_hosts_yaml_path(hosts_path)
-    if not path.exists():
-        create_default_hosts_yaml(path)
-    data = _load_yaml(path)
-    raw_hosts = data.get("hosts") or {}
-    if not isinstance(raw_hosts, dict):
-        raise HostRegistryError(
-            f"{path}: top-level `hosts:` must be a mapping of name -> record",
-            code=ErrorCode.VALIDATION,
-        )
-    records = {
-        name: _parse_host_record(name, entry, hosts_path=path)
-        for name, entry in raw_hosts.items()
-    }
-    return records, path
 
 
 def list_hosts(*, hosts_path: str | Path | None = None) -> list[HostRecord]:
@@ -421,7 +314,41 @@ def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:
     try:
         return records[name]
     except KeyError:
-        raise UnknownHostError(name, records.keys(), path) from None
+        pass
 
+    # Fall back to ALIASES — a former or alternate spelling must keep
+    # resolving, which is the whole reason the field exists. Canonical keys
+    # are tried FIRST and exhaustively, so a name that is somebody's
+    # canonical key can never be captured by another record's alias list.
+    by_alias = [rec for rec in records.values() if name in rec.aliases]
+    if len(by_alias) == 1:
+        return by_alias[0]
+    if by_alias:
+        claimants = ", ".join(sorted(rec.name for rec in by_alias))
+        raise HostRegistryError(
+            f"{path}: {name!r} is claimed as an alias by more than one host "
+            f"({claimants}). An alias must identify exactly one machine — "
+            "resolving it would be a guess, and a guess about which host to "
+            "reach is how a command lands on the wrong box.",
+            code=ErrorCode.VALIDATION,
+            remediation=(
+                f"Remove {name!r} from every `aliases:` list but one in "
+                f"{path}."
+            ),
+        )
+    raise UnknownHostError(name, records.keys(), path) from None
+
+
+# Re-exported so existing imports (`from ._registry import _load_registry`)
+# keep resolving after the split. Imported at the BOTTOM, after `HostRecord`
+# is defined, because `._parse` imports it back — a top-of-file import would
+# close the cycle.
+from ._parse import (  # noqa: E402
+    _load_registry,
+    _load_yaml,
+    _parse_aliases,
+    _parse_host_record,
+    _parse_runner_labels,
+)
 
 # EOF

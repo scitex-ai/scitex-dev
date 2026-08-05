@@ -358,6 +358,12 @@ def test_to_dict_round_trips_all_fields():
         # common case (a laptop, a NAS). See test__registry_runner_labels.py
         # for the populated form.
         "runner_labels": [],
+        # Same shape for aliases: a host with only its canonical name
+        # serializes an empty list rather than omitting the key, so a consumer
+        # reading the payload never has to distinguish "no aliases" from "this
+        # producer is too old to know about aliases". See
+        # test__registry_aliases.py for the populated form.
+        "aliases": [],
     }
 
 
