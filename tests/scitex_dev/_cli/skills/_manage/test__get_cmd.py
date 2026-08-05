@@ -43,7 +43,10 @@ def _first_real_skill_name(runner) -> str:
     listing = runner.invoke(
         cli, ["skills", "list", "--package", "scitex-dev", "--json"]
     )
-    payload = json.loads(listing.output)
+    # `.stdout`, not `.output` — see the note in test__jobs_cron.py: `.output`
+    # mixes stderr, and `skills` is now a Phase W alias for `dev skills`, so it
+    # warns there before the JSON reaches stdout.
+    payload = json.loads(listing.stdout)
     names = [s["name"] for s in payload.get("scitex-dev", [])]
     if not names:
         pytest.skip("scitex-dev ships no skills in this environment")

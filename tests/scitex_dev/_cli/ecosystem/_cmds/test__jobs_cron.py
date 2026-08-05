@@ -71,7 +71,13 @@ def test_cron_list_json_emits_array(runner):
     # Act
     result = runner.invoke(main, ["ecosystem", "cron", "list", "--json"])
     # Assert
-    assert isinstance(json.loads(result.output), list)
+    # `.stdout`, not `.output`: CliRunner's `.output` MIXES stderr in, and the
+    # old spelling now forwards through a Phase W alias that warns on stderr.
+    # Reading the mixed stream made this test depend on whether the
+    # once-per-session warning had already fired — green serially, red under
+    # xdist. The command's contract is data on stdout, diagnostics on stderr;
+    # assert on the stream the contract names.
+    assert isinstance(json.loads(result.stdout), list)
 
 
 def test_cron_group_help_lists_install_verb(runner):

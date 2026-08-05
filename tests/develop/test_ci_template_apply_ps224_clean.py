@@ -13,6 +13,29 @@ and then handed to a human to delete by hand. Asserting only "the file is
 gone" would re-pin the old premise from the other side; grading the whole
 resulting tree with the real checker is the property that actually matters.
 
+WHAT CHANGED 2026-08-05, recorded rather than quietly absorbed
+--------------------------------------------------------------
+PS-224 now accepts GitHub-hosted runners (operator ruling; さいXXX.md updated
+to match). So the 2026-07-28 leftover — a `runs-on: ubuntu-latest` workflow —
+is NO LONGER a violation. Two consequences worth stating plainly, because a
+reader arriving later will otherwise mis-read these tests:
+
+1. `test_applied_tree_has_zero_ps224_violations` still asserts the right
+   property, but it can no longer FAIL for the original reason. Under the new
+   rule the leftover would grade clean even if apply left it behind. What
+   still protects that scenario is
+   `test_legacy_rtd_workflow_is_gone_after_apply`, which is policy-independent.
+2. The positive control was rewritten. It used to assert that the pre-apply
+   tree contained exactly one violation — using `ubuntu-latest` as its known
+   violation. That went to zero the moment hosted runners became legal, which
+   is the control doing its job: it reported that its own proof-of-detection
+   had been legislated away. It now uses an unregistered SELF-HOSTED pool,
+   which is an error under both the old and the new rule.
+
+The lesson is general and belongs here: a positive control must assert on the
+most STABLE known-bad case available, never on the one the surrounding policy
+debate is about.
+
 No mocks (STX-NM002): a real `tmp_path` repo tree, a real `hosts.yaml`
 passed through the checker's existing `hosts_path=` file-path seam, and the
 applier's existing `owner_repo_lookup` / `required_contexts_lookup` value
@@ -70,6 +93,38 @@ def _make_repo(tmp_path: Path) -> Path:
     return repo
 
 
+#: A destination that is unregistered under BOTH the old and the new rule:
+#: a self-hosted pool no runner advertises. `_is_github_hosted` matches only
+#: a LONE hosted label, so this combination can never be waved through as a
+#: hosted image. That stability is why the positive control uses it.
+_UNREGISTERED_POOL_WF = """\
+name: nightly
+on: [push]
+jobs:
+  heavy:
+    runs-on: [self-hosted, Linux, X64, pool-that-no-runner-advertises]
+    steps:
+      - uses: actions/checkout@v4
+"""
+
+
+def _make_repo_with_unregistered_pool(tmp_path: Path) -> Path:
+    """A minimal repo whose only workflow targets an unregistered pool.
+
+    Separate from `_make_repo` on purpose — see the control's comment.
+    """
+    repo = tmp_path / "control-repo"
+    repo.mkdir()
+    (repo / ".git").mkdir()
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-fake"\nversion = "0.0.0"\n', encoding="utf-8"
+    )
+    wf_dir = repo / ".github" / "workflows"
+    wf_dir.mkdir(parents=True)
+    (wf_dir / "nightly.yml").write_text(_UNREGISTERED_POOL_WF, encoding="utf-8")
+    return repo
+
+
 def _registry(tmp_path: Path) -> Path:
     path = tmp_path / "hosts.yaml"
     path.write_text(_REGISTRY, encoding="utf-8")
@@ -117,13 +172,29 @@ def test_applied_tree_has_zero_ps224_violations(tmp_path):
     assert found == []
 
 
-def test_pre_apply_tree_is_the_violation_this_test_would_otherwise_miss(tmp_path):
+def test_checker_detects_an_unregistered_destination_at_all(tmp_path):
     # POSITIVE CONTROL. Without it, a checker that silently graded nothing
     # (empty registry, hidden `.github`, unreadable tree) would report the
     # same clean zero as a genuine fix — "could not check" rendered as
-    # "passed". Prove the checker DOES see this violation before apply.
+    # "passed". Prove the checker DOES see a violation.
+    #
+    # It uses an UNREGISTERED SELF-HOSTED pool rather than `ubuntu-latest`,
+    # and that choice is the whole point of this rewrite. The control
+    # previously pointed at `ubuntu-latest`, which this branch legalises —
+    # so the control went to zero and reported, correctly, that its own
+    # proof-of-detection had been legislated away. A control must assert on
+    # the most STABLE known violation available, never on the one currently
+    # under debate.
+    #
+    # An unregistered self-hosted label is still an error under BOTH the old
+    # and the new rule (`_is_github_hosted` matches only a lone hosted
+    # label), so this control is policy-independent by construction.
+    #
+    # Its own tree, not `_make_repo`: adding this workflow to the shared
+    # fixture would make `test_applied_tree_has_zero_ps224_violations` fail,
+    # since `apply` has no reason to delete an arbitrary workflow.
     # Arrange
-    repo = _make_repo(tmp_path)
+    repo = _make_repo_with_unregistered_pool(tmp_path)
     registry = _registry(tmp_path)
     # Act
     found = _ps224(repo, registry)

@@ -115,6 +115,34 @@ def _normalize(name: str) -> str:
     return name.strip().lower().replace("_", "-")
 
 
+def _is_historical_record(path: Path, repo: Path) -> bool:
+    """True for docs that RECORD what was, rather than INSTRUCT what to run.
+
+    PS-215's harm statement is "a user who runs this exact command gets a
+    resolver error". That presumes the string is an INSTRUCTION. A changelog
+    entry and an ADR are not instructions — they are a record of what a past
+    release shipped, or an analysis of a decision. `scitex-dev[sync]` in a
+    v0.12 changelog entry was CORRECT when written; demanding it be edited to
+    match today's packaging destroys the record a changelog exists to keep.
+
+    Measured 2026-08-05, three separate ways in one afternoon:
+      CHANGELOG.md:1186   flagged while migrating extras (PR #491)
+      docs/adr/0005-*.md  flagged for QUOTING the very pin whose outage the
+                          ADR was written to analyse (PR #490)
+    The second is the decisive one: the ADR that argues about extras could not
+    be merged because the rule it argues about flagged its own worked example.
+    A rule that blocks its own design discussion is scoped wrong.
+
+    The `.md` scope was inherited from the README-badge checks (see this
+    module's docstring) — and a README genuinely IS instructional. The
+    inheritance carried the file glob without the speech act.
+    """
+    rel = path.relative_to(repo)
+    if rel.name.upper().startswith("CHANGELOG"):
+        return True
+    return "adr" in {seg.lower() for seg in rel.parts[:-1]}
+
+
 def _scan_files(repo: Path) -> list[Path]:
     files: list[Path] = []
     src_root = repo / "src"
@@ -124,11 +152,15 @@ def _scan_files(repo: Path) -> list[Path]:
                 continue
             files.append(py_file)
     for md_file in sorted(repo.glob("*.md")):
+        if _is_historical_record(md_file, repo):
+            continue
         files.append(md_file)
     docs_root = repo / "docs"
     if docs_root.is_dir():
         for md_file in sorted(docs_root.rglob("*.md")):
             if any(seg in md_file.parts for seg in _SKIP_DIR_SEGMENTS):
+                continue
+            if _is_historical_record(md_file, repo):
                 continue
             files.append(md_file)
     return files

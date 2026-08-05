@@ -30,6 +30,13 @@ dependencies = [
     "click>=8.0.0",
     "pyyaml>=6.0",
     'tomli>=2.0; python_version < "3.11"',
+    # HARD dependency, not optional: _cli/audit/_project/_check_extras_all_closure.py
+    # imports it at MODULE level, and _rules/__init__.py imports that module
+    # unconditionally — so it is on the eager path of `import scitex_dev._cli`.
+    # Undeclared until 2026-08-05 because pip/setuptools environments almost
+    # always have it transitively; a clean `uv` venv does not, which is why it
+    # only ever failed in CI.
+    "packaging>=21.0",
 ]
 
 [project.optional-dependencies]

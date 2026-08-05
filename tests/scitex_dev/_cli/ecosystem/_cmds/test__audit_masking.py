@@ -25,6 +25,15 @@ _OTHER = SkipRule("PS-202", "CLI noun-verb migration — scitex-hub#415")
 _CANONICAL = "ERRO:   [PS-139 §2] src/a.py: uses the legacy TQ helper"
 _LEGACY = "  [E] [PS-139 §2] src/b.py: uses the legacy TQ helper"
 _UNDECLARED = "ERRO:   [PS-999 §9] src/c.py: something nobody deferred"
+#: Finding-SHAPED (payload starts with `[`) but carrying only the legacy
+#: severity marker and no rule id, so it cannot be attributed to any rule
+#: and therefore cannot be shown to be masked. The genuine UNKNOWN.
+_UNREADABLE = "ERRO:   [E] src/d.py: severity marker only, no rule id"
+
+#: Framing the auditors print constantly. Carries a level prefix but is not
+#: finding-shaped. Must be counted in `inspected` and NOWHERE else — this is
+#: the shape that made `unreadable` ~100% false-positive before.
+_FRAMING = "INFO: scitex-hub: auditing /repo (branch develop, HEAD abc1234)"
 
 
 # --------------------------------------------------------------------- #
@@ -135,6 +144,114 @@ def test_no_findings_at_all_is_not_fully_masked():
     report = classify_output(text, [_DEFERRED])
     # Assert
     assert report.fully_masked is False
+
+
+# --------------------------------------------------------------------- #
+# is_answerable / the unreadable guard on the downgrade                   #
+# --------------------------------------------------------------------- #
+
+
+def test_report_with_nothing_unreadable_is_answerable():
+    """Positive control: a fully-read run licenses a verdict."""
+    # Arrange
+    text = f"{_CANONICAL}\n{_LEGACY}"
+    # Act
+    report = classify_output(text, [_DEFERRED])
+    # Assert
+    assert report.is_answerable() is True
+
+
+def test_report_with_an_unreadable_line_is_not_answerable():
+    """A line that claimed to be a finding and could not be read is UNKNOWN."""
+    # Arrange
+    text = _UNREADABLE
+    # Act
+    report = classify_output(text, [_DEFERRED])
+    # Assert
+    assert report.is_answerable() is False
+
+
+def test_unmasked_finding_does_not_make_a_report_unanswerable():
+    """A red verdict is an ANSWER — only unreadability withholds one.
+
+    Guards against the over-broad fix: folding `unmasked` into
+    `is_answerable` would make every failing run 'unanswerable' and
+    quietly change what the predicate means.
+    """
+    # Arrange
+    text = _UNDECLARED
+    # Act
+    report = classify_output(text, [_DEFERRED])
+    # Assert
+    assert report.is_answerable() is True
+
+
+def test_unreadable_line_defeats_the_fully_masked_downgrade():
+    """The downgrade claims 'everything that failed was declared'.
+
+    That sentence cannot be said about a line nobody could parse, so a
+    run whose readable findings are all masked must still NOT be
+    reported as fully masked. This is the pair to
+    test_run_with_only_declared_violations_is_fully_masked, which uses
+    the identical masked lines WITHOUT the unreadable one and expects
+    True — so this asserts the unreadable line is what flips it.
+    """
+    # Arrange
+    text = f"{_CANONICAL}\n{_LEGACY}\n{_UNREADABLE}"
+    # Act
+    report = classify_output(text, [_DEFERRED])
+    # Assert
+    assert report.fully_masked is False
+
+
+def test_framing_lines_are_not_counted_as_unreadable():
+    """Banners and headlines are not findings, however they are prefixed.
+
+    scitex-logging prefixes EVERY console line with a level word, so a
+    level prefix says nothing about whether a line claimed to be a
+    finding. Measured 2026-08-05 on this repo's own captured audit
+    output: 17 'unreadable' of 42 inspected, all 17 framing, zero true
+    positives.
+    """
+    # Arrange
+    text = "\n".join(
+        [
+            _FRAMING,
+            "SUCC: scitex-hub: no skills violations",
+            "WARN: scitex-hub: CLI conventions: 7 warning(s)",
+            "ERRO: scitex-hub (/repo): project-structure: 1 error(s), 9 info",
+        ]
+    )
+    # Act
+    report = classify_output(text, [_DEFERRED])
+    # Assert
+    assert report.unreadable == []
+
+
+def test_framing_lines_do_not_defeat_the_fully_masked_downgrade():
+    """The guard must close the hole without making skip-rules inert.
+
+    Every failing audit prints a headline, so if framing counted as
+    unreadable the downgrade would be refused on essentially every run
+    and declared deferrals would stop working fleet-wide. That is a
+    worse failure than the one the guard fixes, so it is pinned here.
+    """
+    # Arrange
+    text = f"{_FRAMING}\n{_CANONICAL}\n{_LEGACY}"
+    # Act
+    report = classify_output(text, [_DEFERRED])
+    # Assert
+    assert report.fully_masked is True
+
+
+def test_attributable_finding_matching_no_declared_rule_is_unmasked_not_unreadable():
+    """Carrying a rule id nobody declared is an ANSWER (red), not an unknown."""
+    # Arrange
+    text = _UNDECLARED
+    # Act
+    report = classify_output(text, [_DEFERRED])
+    # Assert
+    assert (report.unmasked_count, report.unreadable) == (1, [])
 
 
 def test_zero_declared_skips_masks_nothing():

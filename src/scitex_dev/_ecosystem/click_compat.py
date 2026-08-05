@@ -123,6 +123,16 @@ def _resolve_target(
     return resolved
 
 
+def _targets_a_group(target: click.Command | str) -> bool:
+    """Is *target* a group we can classify at registration time?
+
+    A string target resolves lazily at dispatch, so it cannot be
+    classified here; treat it as a leaf, which preserves the behaviour
+    every existing string alias already has.
+    """
+    return isinstance(target, click.Group)
+
+
 def deprecated_alias(
     group: click.Group,
     old_name: str,
@@ -190,6 +200,22 @@ def deprecated_alias(
                 f"(deprecated) Forwards to '{display}'. "
                 f"Removed in {version}."
             ),
+            # A GROUP alias must hand `--help` to the target, or the old
+            # spelling stops being usable the moment anyone asks it what
+            # it can do. Click's own help option fires during PARSING, so
+            # with it installed `<old> <verb> --help` never reaches the
+            # callback: click prints the ALIAS's two-line help and exits,
+            # swallowing `<verb>` without an error. Measured 2026-08-03 —
+            # `scitex-dev skills self-explain --help` answered "(deprecated)
+            # Forwards to 'dev skills'" and listed no verbs, while the same
+            # command WITHOUT --help forwarded correctly. Suppressing the
+            # option drops `--help` into ctx.args, which _forward re-parses
+            # through the target.
+            #
+            # Scoped to registration-time GROUP objects: a leaf alias has
+            # no subcommands to hide, and a string target cannot be
+            # classified here at all (it resolves at dispatch).
+            add_help_option=not _targets_a_group(target),
             context_settings=dict(_FORWARD_CONTEXT_SETTINGS),
         )
     else:  # phase == "error"
