@@ -307,11 +307,50 @@ def test_host_record_direct_construction_validates_kind():
 # -------- HOST_KINDS closed set ---------------------------------------------
 
 
-def test_host_kinds_is_exactly_the_three_documented_values():
+def test_host_kinds_is_exactly_the_documented_set():
+    """Pins the CLOSED set, so widening it is a deliberate, reviewed act.
+
+    Other packages branch on this value, so a member appearing without anyone
+    noticing is a cross-package change made silently. That is the whole point
+    of asserting equality rather than membership: this test is SUPPOSED to
+    fail when someone adds a kind, and its failure is the review trigger.
+    """
     # Arrange
     # Act
     # Assert
-    assert HOST_KINDS == frozenset({"workstation", "hpc-login", "storage"})
+    assert HOST_KINDS == frozenset(
+        {"workstation", "hpc-login", "compute", "storage"}
+    )
+
+
+def test_compute_is_accepted_as_a_kind():
+    # Arrange — scitex-compute-01/02: shared, always-on, reached DIRECTLY.
+    # Before this kind existed the registry raised [E001] on them, so the
+    # fleet SSOT could not express machines the fleet was about to depend on.
+    record = HostRecord(
+        name="scitex-compute-01",
+        kind="compute",
+        ssh_alias="scitex-01",
+        scitex_root="~/.scitex",
+    )
+    # Act
+    kind = record.kind
+    # Assert
+    assert kind == "compute"
+
+
+def test_an_unknown_kind_is_still_rejected():
+    """Widening the set must not soften it into 'any string goes'."""
+    # Arrange
+    # Act
+    # Assert
+    with pytest.raises(HostRegistryError):
+        HostRecord(
+            name="x",
+            kind="supercomputer",
+            ssh_alias=None,
+            scitex_root="~/.scitex",
+        )
 
 
 # -------- scitex_root_path expansion ----------------------------------------
