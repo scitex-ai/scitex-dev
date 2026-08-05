@@ -47,11 +47,40 @@ On the operator's own machine only one home exists, so there is one candidate
 and writes proceed untouched. In a container both are mounted, so there are
 two and the write refuses with both paths named.
 
+WHO CAN ACTUALLY WRITE, THEN
+----------------------------
+Read this before treating a refusal as a bug: **no containerized agent can
+write the registry by the default path.** That is the intended consequence,
+not an oversight — but it means the work must move rather than stop, and the
+error says where to. Measured on the bare host (scitex-hpc, 2026-08-05):
+
+    PRESENT   /home/ywatanabe/.scitex/dev/hosts.yaml   inode 1253677
+    ABSENT    /home/agent/...   — `/home/agent` does not exist there at all
+
+So on the host exactly one registry is visible and the write proceeds
+untouched. The shadow is purely a container artifact, and it is PER
+CONTAINER: two agents measured different inodes and mtimes for their own
+copies. No shadow is authoritative and no two agree.
+
+Doing the write from the bare host (host-exec) is therefore preferred over
+setting the env var: it SATISFIES this check by its normal rule rather than
+overriding it — the write happens where the ambiguity genuinely does not
+exist. The override is better suited to tests and to hosts with a
+non-standard layout.
+
+Worth knowing, and deliberately not acted on: a container's
+``/home/ywatanabe`` is a BIND MOUNT of the real file — same inode, 1253677,
+from inside and outside. A write there WOULD land correctly. The guard still
+refuses, because the refusal is not "this path is wrong", it is "the writer
+cannot prove which of the two is right". Refusing on ambiguity rather than on
+a guess is the conservative direction and does not depend on knowing the
+mount topology, which a process cannot portably discover.
+
 KNOWN BOUND, stated rather than papered over: a container that does NOT mount
 the operator's home sees exactly one candidate and is allowed to write to it.
 Nothing visible to the process distinguishes that from a single-home host.
-The remedy there is the same env var this module points at — set
-``SCITEX_DEV_HOSTS_YAML`` in the container spec and the question never arises.
+The remedy there is the same env var — set ``SCITEX_DEV_HOSTS_YAML`` in the
+container spec and the question never arises.
 """
 
 from __future__ import annotations
@@ -149,9 +178,17 @@ def resolve_hosts_yaml_for_write(
         "the host opens, and every layer reports success. Note the files may "
         "be byte-identical — content checks agree; only identity "
         "distinguishes them.\n"
-        f"Fix: set {_ENV_HOSTS_YAML} to the registry the fleet reads (for a "
+        "You are almost certainly in an agent container. Two ways forward, "
+        "in preference order:\n"
+        "  1. Perform the write ON THE BARE HOST (e.g. via host-exec), where "
+        "only one registry is visible and this check permits it by its "
+        "normal rule. That satisfies the guard rather than bypassing it — "
+        "the write happens where the ambiguity does not exist.\n"
+        f"  2. Set {_ENV_HOSTS_YAML} to the registry the fleet reads (for a "
         "sac agent container, in the container spec), or pass an explicit "
-        "path. Do not 'just pick the newest' — mtime is not authority."
+        "path. An explicit answer is not a guess, which is why it is "
+        "honoured.\n"
+        "Do NOT 'just pick the newest' — mtime is not authority."
     )
 
 

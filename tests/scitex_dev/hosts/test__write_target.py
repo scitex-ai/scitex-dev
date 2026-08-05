@@ -196,6 +196,28 @@ def test_refusal_names_the_variable_that_settles_it(refusal_message):
     assert names_var
 
 
+def test_refusal_says_where_a_containerized_agent_should_write_instead(
+    refusal_message,
+):
+    """The refusal blocks EVERY containerized agent from the default path.
+
+    That is intended, but it means the work must MOVE rather than stop. An
+    error that only refuses sends the reader to the operator's shell, which
+    is the thing this whole effort exists to avoid — so the remedy has to
+    name the bare host, where only one registry is visible and the same rule
+    permits the write.
+    """
+    # Arrange — assert on "bare host", NOT on "host". The refusal already
+    # contains the word "host" in "host registry", so the looser check would
+    # pass against the message that lacks the remedy entirely — a control
+    # that cannot distinguish the fixed text from the broken one.
+    message = refusal_message
+    # Act
+    names_host_route = "bare host" in message.lower()
+    # Assert
+    assert names_host_route
+
+
 # -------- an explicit answer always wins over the guessing -----------------
 
 
