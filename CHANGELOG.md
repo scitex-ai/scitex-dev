@@ -7,6 +7,97 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-08-05
+
+**A release that stops two rules from blocking the work they were meant to
+protect, and gives the host registry a way to be corrected.**
+
+The CI-runner rules were written under a "never use GitHub-hosted runners"
+mandate. The operator superseded that on 2026-08-05 — Spartan comes out of CI,
+hosted runners are a permitted fallback — and the rules had not caught up. Two
+of them were failing compliant work.
+
+### Fixed
+
+- **PS-169 no longer blocks the migration it exists to inform (#512).** The
+  rule shipped at `W` but escalated any violation NEW relative to the git
+  baseline to `E`. Under the new directive that is inverted: a repo running on
+  `ubuntu-latest` for months stayed at `W` (permitted), while a repo MOVING a
+  job off Spartan introduced a new violation and got blocked. Measured on
+  scitex-hub's PR #561, where it fired at `[E]` and blocked a PR whose fix
+  commit was titled "run the pack publish on the self-hosted pool". Every PR
+  in this migration is new-violation-shaped by definition.
+
+  The ratchet is removed, with no promote-to-`E` path left behind. Detection is
+  unchanged — hosted usage is still reported, because "why is this repo's CI
+  slow?" is a real question — but it is advisory and never fails a build. The
+  message, rule text and slug all said "forbidden without exception"; a rule
+  reporting at `W` while its text forbids teaches the reader the opposite of
+  what the gate does. `ci.yml.tmpl` carried the same claim and renders into
+  every repo, so a re-apply would have re-asserted the retired policy over a
+  per-repo fix.
+
+- **PS-224 accepts GitHub-provided destinations (#492, first shipped here).**
+  It landed on `develop` after `v0.42.0` was cut, so every repo installing
+  scitex-dev unpinned kept getting the old behaviour. Consequence measured by
+  scitex-hpc: their nightly `release-ci` failed four consecutive nights
+  (08-01..08-04), all four from this one rule — 14 violations, every one a
+  bare `[ubuntu-latest]`.
+
+  GitHub serves its own images, so such a job cannot exhibit the failure
+  PS-224 exists to catch: a destination no machine serves is not rejected, it
+  is QUEUED FOREVER. Those jobs were flagged only as a side effect of the
+  "unserved" arithmetic — harmless while hosted runners were forbidden, a false
+  positive at `E` the moment they were permitted. Self-hosted destinations are
+  still checked, at `E`, with no ratchet.
+
+- **PS-215 described a failure that cannot happen.** It told readers "a user
+  who runs this exact command gets a resolver error". `pip` does not refuse an
+  undeclared extra — it warns and EXITS 0 with the base package installed. The
+  docstring distinguished a loud case from a quiet one, and there is no loud
+  case: both exit 0. The user sees the remedy SUCCEED, hits the original
+  failure again, and has no reason to connect them. That is what makes the rule
+  worth having — not that the remedy errors, but that it cannot.
+
+### Added
+
+- **`HostRecord.aliases` — re-key a host without orphaning the old name
+  (#514).** Host names are on-disk KEYS (cron entries, JobSpecs, sync configs,
+  other packages' registry rows, card scopes); rewriting one silently orphans
+  every reference, and the orphan renders as "nothing to do" rather than as an
+  error.
+
+  The motivating case: the fleet's NAS numbering is GENERATIONAL — `nas-01` /
+  `nas-02` / `nas-03` ascend as machines are REPLACED — and the bare name `nas`
+  follows whatever is current. It is a MOVING ALIAS: when a `nas-04` arrives,
+  every config keyed on it addresses different hardware, with nothing logged.
+  A moving alias belongs in `aliases`, never in `name` — it is a way to REACH
+  a host, not a way to IDENTIFY one.
+
+  Canonical keys resolve first and exhaustively, so an alias can never capture
+  another host's canonical name. An alias claimed by two hosts raises rather
+  than picking one. Malformed alias lists fail loudly instead of degrading to
+  empty, since a silently-empty list is exactly the orphan this prevents.
+
+- **The host registry refuses an ambiguous write (#513).**
+  `get_hosts_yaml_path` resolves through `Path.home()`, which inside an agent
+  container is `/home/agent` — so a write from a container landed in a private
+  copy no host-side reader opens, and every layer reported success. Measured:
+  `sac host add` did this, and `sac host validate` then reported "ok, 2
+  peer(s)" about the shadow.
+
+  It survived because the two files are byte-identical — every CONTENT check
+  agrees, and only IDENTITY distinguishes them. Rather than detecting
+  containers (which needs a reliable signal and a hardcoded username, both of
+  which rot), the write path counts visible registries and REFUSES when more
+  than one exists. Reads are unchanged: a reader answering with what it can see
+  is defensible, a writer guessing is not.
+
+  Consequence, stated plainly because it is intended: no containerized agent
+  can write the registry by the default path. The refusal names the route —
+  run it on the bare host, where only one registry is visible and the same rule
+  permits it.
+
 ## [0.42.0] - 2026-08-04
 
 **A release about saying which thing you mean.** Every entry is a place where
