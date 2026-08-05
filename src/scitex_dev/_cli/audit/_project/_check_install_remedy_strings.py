@@ -13,11 +13,31 @@ class): package code raises/prints something like
     "Install with: pip install scitex-writer[editor]"
 
 but `[project.optional-dependencies]` either has no `editor` group at
-all, or declares it as an empty list (`editor = []`, see PS-214). A
-user who runs the suggested command either gets a resolver error (extra
-doesn't exist) or a silent no-op (extra is empty) — in the empty case
-`pip` exits 0 with nothing installed, so the user has no signal they've
-been given a dead remedy. They believe they already tried the cure.
+all, or declares it as an empty list (`editor = []`, see PS-214).
+
+BOTH CASES ARE SILENT. This docstring used to distinguish them — "a
+resolver error (extra doesn't exist) or a silent no-op (extra is
+empty)" — and the first half was wrong. Measured 2026-08-05 by
+scitex-hpc while fixing their own extras:
+
+    $ pip install scitex-hpc[nonexistent]
+    WARNING: scitex-hpc 0.x.y does not provide the extra 'nonexistent'
+    ... exit 0, base package installed, extra silently omitted
+
+`pip` does NOT refuse an undeclared extra. It warns and SUCCEEDS. So
+there is no loud case here at all:
+
+    extra does not exist  -> warning on stderr, exit 0, extra omitted
+    extra exists but empty -> exit 0, nothing extra installed
+
+Either way the user sees a successful install, believes they applied
+the cure, and hits the ORIGINAL failure again with no reason to connect
+the two. That is what makes this rule worth having — not that the
+remedy errors, but that it CANNOT error, so nothing surfaces the lie.
+
+The correction matters beyond wording: a reviewer told "the user gets a
+resolver error" reasonably concludes the failure is self-announcing and
+deprioritises it.
 
 Reference incident: scitex-writer's `_server.py` / `apps.py` / CLI told
 users to run `pip install scitex-writer[editor]` to get `scitex-app`
@@ -118,8 +138,8 @@ def _normalize(name: str) -> str:
 def _is_historical_record(path: Path, repo: Path) -> bool:
     """True for docs that RECORD what was, rather than INSTRUCT what to run.
 
-    PS-215's harm statement is "a user who runs this exact command gets a
-    resolver error". That presumes the string is an INSTRUCTION. A changelog
+    PS-215's harm statement is about "a user who runs this exact command".
+    That presumes the string is an INSTRUCTION. A changelog
     entry and an ADR are not instructions — they are a record of what a past
     release shipped, or an analysis of a decision. `scitex-dev[sync]` in a
     v0.12 changelog entry was CORRECT when written; demanding it be edited to
@@ -223,8 +243,13 @@ def _collect_ps215_violations(
                                     f"`{extra_name}` is not a declared "
                                     f"`[project.optional-dependencies]` extra "
                                     f"in this package's pyproject.toml. A user "
-                                    f"who runs this exact command gets a "
-                                    f"resolver error, not the promised fix. "
+                                    f"who runs this exact command sees it "
+                                    f"SUCCEED: pip warns `does not provide the "
+                                    f"extra '{extra_name}'` and EXITS 0, "
+                                    f"installing the base package without it. "
+                                    f"So they believe they applied the fix, "
+                                    f"hit the original failure again, and have "
+                                    f"no reason to connect the two. "
                                     f"Fix the extra name (or add the extra). "
                                     f"See scitex-writer PR #322 (reference "
                                     f"incident + fix) and PS-214."
