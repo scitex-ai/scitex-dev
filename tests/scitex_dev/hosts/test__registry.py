@@ -145,7 +145,9 @@ def test_resolve_unknown_host_raises_unknown_host_error(tmp_path):
         resolve("nonexistent-host", hosts_path=p)
 
 
-def _resolve_and_capture_unknown_host_error(name: str, hosts_path: Path) -> UnknownHostError:
+def _resolve_and_capture_unknown_host_error(
+    name: str, hosts_path: Path
+) -> UnknownHostError:
     """Resolve ``name`` and return the raised UnknownHostError.
 
     Deliberately NOT `pytest.raises` — that context manager itself
@@ -158,7 +160,9 @@ def _resolve_and_capture_unknown_host_error(name: str, hosts_path: Path) -> Unkn
         resolve(name, hosts_path=hosts_path)
     except UnknownHostError as exc:
         return exc
-    raise AssertionError("expected UnknownHostError, none was raised")  # pragma: no cover
+    raise AssertionError(
+        "expected UnknownHostError, none was raised"
+    )  # pragma: no cover
 
 
 def test_resolve_unknown_host_error_lists_known_hosts(tmp_path):
@@ -258,7 +262,7 @@ def test_invalid_kind_raises_host_registry_error(tmp_path):
 def test_missing_kind_field_raises_host_registry_error(tmp_path):
     # Arrange
     yaml_text = (
-        "hosts:\n  bad-host:\n    ssh_alias: null\n    scitex_root: \"~/.scitex\"\n"
+        'hosts:\n  bad-host:\n    ssh_alias: null\n    scitex_root: "~/.scitex"\n'
     )
     p = _write(tmp_path, yaml_text)
     # Act
@@ -319,7 +323,9 @@ def test_host_kinds_is_exactly_the_three_documented_values():
 
 def test_scitex_root_path_expands_tilde():
     # Arrange
-    record = HostRecord(name="x", kind="workstation", ssh_alias=None, scitex_root="~/.scitex")
+    record = HostRecord(
+        name="x", kind="workstation", ssh_alias=None, scitex_root="~/.scitex"
+    )
     # Act
     expanded = record.scitex_root_path
     # Assert
@@ -345,7 +351,9 @@ def test_scitex_root_path_leaves_absolute_path_unchanged():
 
 def test_to_dict_round_trips_all_fields():
     # Arrange
-    record = HostRecord(name="mba", kind="workstation", ssh_alias="mba", scitex_root="~/.scitex")
+    record = HostRecord(
+        name="mba", kind="workstation", ssh_alias="mba", scitex_root="~/.scitex"
+    )
     # Act
     payload = record.to_dict()
     # Assert
@@ -358,6 +366,9 @@ def test_to_dict_round_trips_all_fields():
         # common case (a laptop, a NAS). See test__registry_runner_labels.py
         # for the populated form.
         "runner_labels": [],
+        # Likewise for a host whose registry key is the only name it answers
+        # to. See test__aliases.py for the populated form.
+        "aliases": [],
     }
 
 

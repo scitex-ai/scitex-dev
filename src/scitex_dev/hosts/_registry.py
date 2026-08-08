@@ -42,6 +42,7 @@ from .._core.errors import ErrorCode, ScitexError
 # limit). `_DEFAULT_HOSTS_YAML` is re-imported because
 # `create_default_hosts_yaml` writes it on first use;
 # `packaged_default_runner_destinations` is re-exported for PS-224's floor.
+from ._aliases import build_alias_index, known_names, parse_aliases, resolve_via_alias
 from ._seed import _DEFAULT_HOSTS_YAML, packaged_default_runner_destinations
 
 __all__ = [
@@ -127,6 +128,23 @@ class HostRecord:
         dispatch rule, and modelling it per-runner (rather than as one
         flat per-machine union) is what keeps the check exact: a union
         would green-light a combination that no single runner offers.
+    alias : tuple[str, ...]
+        Other names :func:`resolve` accepts for this machine. Empty (the
+        default) means the key is the only name.
+
+        This is what lets :attr:`name` be a LOGICAL LABEL rather than
+        whatever the machine happens to call itself: rename the key to
+        ``scitex-laptop-01``, keep ``ywata-note-win`` as an alias, and
+        every existing caller keeps resolving while the fleet gains a
+        stable label. Without it a key rename silently un-resolves every
+        caller that still uses the old name.
+
+        Distinct from :attr:`ssh_alias`, which is one specific thing (the
+        ``~/.ssh/config`` Host to connect through) rather than a set of
+        names this host answers to. A machine with no SSH hop at all
+        (``ssh_alias: null``) can still carry aliases.
+
+        Ambiguity is refused, not ranked — see :mod:`._aliases`.
     """
 
     name: str
@@ -134,6 +152,7 @@ class HostRecord:
     ssh_alias: str | None
     scitex_root: str
     runner_labels: tuple[frozenset[str], ...] = ()
+    aliases: tuple[str, ...] = ()
 
     def serves(self, labels: Iterable[str]) -> bool:
         """True iff one of this host's runners carries every label in ``labels``.
@@ -175,6 +194,7 @@ class HostRecord:
             "ssh_alias": self.ssh_alias,
             "scitex_root": self.scitex_root,
             "runner_labels": [sorted(s) for s in self.runner_labels],
+            "aliases": list(self.aliases),
         }
 
 
@@ -289,8 +309,7 @@ def _parse_runner_labels(
 def _parse_host_record(name: str, data, *, hosts_path: Path) -> HostRecord:
     if not isinstance(data, dict):
         raise HostRegistryError(
-            f"{hosts_path}: host {name!r} must be a mapping, got "
-            f"{type(data).__name__}",
+            f"{hosts_path}: host {name!r} must be a mapping, got {type(data).__name__}",
             code=ErrorCode.VALIDATION,
         )
     kind = data.get("kind")
@@ -316,6 +335,7 @@ def _parse_host_record(name: str, data, *, hosts_path: Path) -> HostRecord:
             runner_labels=_parse_runner_labels(
                 name, data.get("runner_labels"), hosts_path=hosts_path
             ),
+            aliases=parse_aliases(name, data.get("aliases"), hosts_path=hosts_path),
         )
     except HostRegistryError as exc:
         # Re-raise with the source file attached for a fully actionable
@@ -344,6 +364,13 @@ def _load_registry(
         name: _parse_host_record(name, entry, hosts_path=path)
         for name, entry in raw_hosts.items()
     }
+    # Validate the alias index EAGERLY, on every load, not lazily inside
+    # resolve(). An ambiguous alias is a property of the FILE, so a
+    # registry that cannot answer "which machine is X" must fail for
+    # list_hosts() too -- otherwise the fleet inventory reads clean and
+    # only the one caller who happens to ask for the ambiguous name ever
+    # learns the registry is broken.
+    build_alias_index(records, hosts_path=path)
     return records, path
 
 
@@ -399,12 +426,20 @@ def find_runner_host(
 
 
 def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:
-    """Resolve a host by name.
+    """Resolve a host by its registry key, or by any of its aliases.
+
+    Keys are tried FIRST and always win. A key is the machine's own name
+    in this registry, so letting an alias shadow one would mean a host
+    could be made unreachable by a third party's config — hence
+    :mod:`._aliases` rejects that overlap outright rather than ordering
+    around it.
 
     Parameters
     ----------
     name : str
-        The host's registered short name (e.g. ``"spartan"``).
+        The host's registry key (e.g. ``"spartan"``) or one of its
+        ``aliases:`` entries (e.g. ``"ywata-note-win"`` for a host keyed
+        ``scitex-laptop-01``).
     hosts_path : str | Path | None
         Explicit override for the ``hosts.yaml`` location (see
         :func:`get_hosts_yaml_path` for the full precedence chain).
@@ -412,16 +447,22 @@ def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:
     Raises
     ------
     UnknownHostError
-        If ``name`` is not a key in the registry — fails loud, no
-        silent fallback (this repo's constitution).
+        If ``name`` is neither a key nor an alias — fails loud, no
+        silent fallback (this repo's constitution). The error lists keys
+        AND aliases, so a caller who used a legitimate alias is not told
+        it does not exist by an error that then omits it.
     HostRegistryError
-        If ``hosts.yaml`` itself is malformed.
+        If ``hosts.yaml`` itself is malformed, including an ambiguous
+        alias.
     """
     records, path = _load_registry(hosts_path)
-    try:
-        return records[name]
-    except KeyError:
-        raise UnknownHostError(name, records.keys(), path) from None
+    record = records.get(name)
+    if record is not None:
+        return record
+    aliased = resolve_via_alias(name, records, hosts_path=path)
+    if aliased is not None:
+        return records[aliased]
+    raise UnknownHostError(name, known_names(records), path) from None
 
 
 # EOF
