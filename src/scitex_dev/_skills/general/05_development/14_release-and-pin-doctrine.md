@@ -49,9 +49,15 @@ container, and agent waiting on the change.
   gate used to.
 
 **Re-ratified 2026-07-08 as a UNIVERSAL fleet rule** — the operator
-directed it be shared with every agent as a普遍ルール ("リリースは私の
-確認不要、むしろ聞かないでくださいレベルで、どんどんリリースして…これを
-普遍的なルールとしてみんなで共有してください"). It applies to every
+directed it be shared with every agent as a universal rule (普遍ルール):
+
+> 「リリースは私の確認不要、むしろ聞かないでくださいレベルで、どんどん
+>   リリースして…これを普遍的なルールとしてみんなで共有してください」
+>
+> — releases do not need my confirmation; if anything, please do NOT ask.
+>   Release freely, and share this with everyone as a universal rule.
+
+It applies to every
 agent and every scitex repo, and is mirrored in the constitution's
 delivery section so it loads for all agents, not just those who read
 this skill.

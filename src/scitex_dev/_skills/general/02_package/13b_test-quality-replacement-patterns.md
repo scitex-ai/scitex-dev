@@ -30,7 +30,7 @@ def test_register_marks_returned_user_active(): ...
 ### Multi-Act → split
 
 ```python
-# BAD (TQ007; also the article's "Act が複数")
+# BAD (TQ007; the article calls this "Act が複数" — more than one Act)
 def test_user_workflow():
     user = service.register(...)
     assert user.is_active is True

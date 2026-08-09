@@ -17,6 +17,7 @@ guard that used to be inlined into each line are OWNED BY THE VERB — see
 ``scitex_dev.jobs._logsink`` (the shared, package-generic helper) and the
 ``cron exec`` dispatcher in ``run.py`` that applies it. Operator
 directive 2026-07-19: 「mkdir とか redirect は cron verb 側が持つべきでは？」
+— shouldn't the mkdir and the redirect be owned by the cron verb?
 
 WHERE THE LOGS GO
 -----------------
@@ -44,7 +45,8 @@ reduce to ``scitex-dev cron exec <name>`` in the crontab.
 Generated shell text uses ``$HOME``, never ``~``: ``~`` is expanded only
 by an interactive shell in command position, and cron's ``/bin/sh -c``
 context does not reliably expand it (operator directive 2026-07-19:
-「~ が解決されないならば $HOME を使って」).
+「~ が解決されないならば $HOME を使って」 — if ``~`` is not resolved,
+use ``$HOME``).
 """
 
 from __future__ import annotations
