@@ -47,9 +47,7 @@ def test_ci_watch_logs_under_dev_runtime_logs():
     log = _job_commands.log_path_for("ci-watch")
     # Assert — under runtime/, per the operator directive recorded in
     # jobs/_respawn.py:26. The pre-cleanup ~/.scitex/dev/logs/ violated it.
-    assert log.as_posix().endswith(
-        "/.scitex/dev/runtime/logs/cron-ci-watch.log"
-    )
+    assert log.as_posix().endswith("/.scitex/dev/runtime/logs/cron-ci-watch.log")
 
 
 def test_ci_watch_description_non_empty():
@@ -120,9 +118,7 @@ def test_worktree_gc_logs_under_dev_runtime_logs():
     # Act
     log = _job_commands.log_path_for("worktree-gc")
     # Assert
-    assert log.as_posix().endswith(
-        "/.scitex/dev/runtime/logs/cron-worktree-gc.log"
-    )
+    assert log.as_posix().endswith("/.scitex/dev/runtime/logs/cron-worktree-gc.log")
 
 
 def test_worktree_gc_description_mentions_managed_segment():
@@ -178,9 +174,7 @@ def test_task_harvest_logs_under_dev_runtime_logs():
     # Act
     log = _job_commands.log_path_for("task-harvest")
     # Assert
-    assert log.as_posix().endswith(
-        "/.scitex/dev/runtime/logs/cron-task-harvest.log"
-    )
+    assert log.as_posix().endswith("/.scitex/dev/runtime/logs/cron-task-harvest.log")
 
 
 def test_task_harvest_description_mentions_tasks_yaml():
@@ -246,9 +240,7 @@ def test_cred_distribute_logs_under_dev_runtime_logs():
     # Act
     log = _job_commands.log_path_for("cred-distribute")
     # Assert
-    assert log.as_posix().endswith(
-        "/.scitex/dev/runtime/logs/cron-cred-distribute.log"
-    )
+    assert log.as_posix().endswith("/.scitex/dev/runtime/logs/cron-cred-distribute.log")
 
 
 def test_cred_distribute_description_mentions_sac_distribute_verb():
@@ -437,9 +429,7 @@ def test_ci_runner_ensure_logs_under_dev_runtime_logs():
     # Act
     log = _job_commands.log_path_for("ci-runner-ensure")
     # Assert
-    assert log.as_posix().endswith(
-        "/.scitex/dev/runtime/logs/ci-runner-ensure.log"
-    )
+    assert log.as_posix().endswith("/.scitex/dev/runtime/logs/ci-runner-ensure.log")
 
 
 def test_ci_runner_ensure_description_non_empty():
@@ -501,9 +491,7 @@ def test_ci_runner_workgc_logs_under_dev_runtime_logs():
     # Act
     log = _job_commands.log_path_for("ci-runner-workgc")
     # Assert
-    assert log.as_posix().endswith(
-        "/.scitex/dev/runtime/logs/ci-runner-workgc.log"
-    )
+    assert log.as_posix().endswith("/.scitex/dev/runtime/logs/ci-runner-workgc.log")
 
 
 def test_ci_runner_workgc_description_non_empty():
@@ -568,9 +556,7 @@ def test_ecosystem_sync_logs_under_dev_runtime_logs():
     # Act
     log = _job_commands.log_path_for("ecosystem-sync")
     # Assert
-    assert log.as_posix().endswith(
-        "/.scitex/dev/runtime/logs/cron-ecosystem-sync.log"
-    )
+    assert log.as_posix().endswith("/.scitex/dev/runtime/logs/cron-ecosystem-sync.log")
 
 
 def test_ecosystem_sync_description_mentions_ff_only_safety():
@@ -750,6 +736,86 @@ def test_scholar_library_sync_command_never_hard_deletes():
 
 
 # ---------------------------------------------------------------------------
+# branch-gc — config-gated (DEFAULT OFF) local-branch hygiene. Pins schedule /
+# command / log path per the §3 "Adding a new job" checklist, plus the two
+# safety facts an operator must be able to read straight off
+# `scitex-dev cron list` without opening any source.
+# ---------------------------------------------------------------------------
+
+
+def test_registry_has_branch_gc_entry():
+    # Arrange
+    # Act
+    # Assert
+    assert "branch-gc" in _jobs.JOB_REGISTRY
+
+
+def test_branch_gc_name_matches_registry_key():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("branch-gc")
+    # Assert
+    assert spec.name == "branch-gc"
+
+
+def test_branch_gc_schedule_is_daily_at_four():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("branch-gc")
+    # Assert — off the crowded 0-minute tick.
+    assert spec.schedule == "0 4 * * *"
+
+
+def test_branch_gc_command_invokes_scitex_dev_cron_exec():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("branch-gc")
+    # Assert
+    assert "scitex-dev cron exec branch-gc" in spec.command
+
+
+def test_branch_gc_logs_under_dev_runtime_logs():
+    # Arrange
+    # Act
+    log = _job_commands.log_path_for("branch-gc")
+    # Assert
+    assert log.as_posix().endswith("/.scitex/dev/runtime/logs/cron-branch-gc.log")
+
+
+def test_branch_gc_description_states_it_is_default_off():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("branch-gc")
+    # Assert — a scheduled DELETER must announce its gate in the listing.
+    assert "DEFAULT OFF" in spec.description
+
+
+def test_branch_gc_description_states_the_backup_contract():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("branch-gc")
+    # Assert
+    assert "bundle" in spec.description
+
+
+def test_branch_gc_description_disclaims_the_merged_shortcut():
+    # Arrange
+    # Act
+    spec = _jobs.get_job("branch-gc")
+    # Assert — the squash-blindness of `git branch --merged` is the reason
+    # this job exists rather than a cron wrapper around prune-merged.
+    assert "squash-merge" in spec.description
+
+
+def test_list_jobs_includes_branch_gc():
+    # Arrange
+    # Act
+    names = [s.name for s in _jobs.list_jobs()]
+    # Assert
+    assert "branch-gc" in names
+
+
+# ---------------------------------------------------------------------------
 # Registry-wide invariants for the 2026-07-19 cron cleanup. These are the
 # operator's three asks, pinned once for EVERY job rather than job-by-job:
 #   1. mkdir / redirect / rotation belong to the cron verb, not the line.
@@ -829,6 +895,7 @@ def test_every_registered_job_has_a_body_or_a_shell_payload():
     from scitex_dev._cli.cron import run as run_mod
 
     python_bodied = {
+        "branch-gc",
         "ci-watch",
         "quota-keepalive",
         "worktree-gc",
@@ -840,8 +907,7 @@ def test_every_registered_job_has_a_body_or_a_shell_payload():
     orphans = [
         name
         for name in _jobs.JOB_REGISTRY
-        if name not in python_bodied
-        and name not in _job_commands.JOB_SHELL_BODIES
+        if name not in python_bodied and name not in _job_commands.JOB_SHELL_BODIES
     ]
     # Assert
     assert orphans == [] and run_mod is not None
