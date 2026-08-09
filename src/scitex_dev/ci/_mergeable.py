@@ -52,6 +52,7 @@ caller needing only one of them does not import the rest:
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Sequence
 
 from ._check_run import CheckRun
@@ -150,8 +151,40 @@ def readiness(pr: str, repo: str) -> MergeReadiness:
 
 
 def _to_checks(raw: Sequence[dict], head: str) -> tuple[CheckRun, ...]:
-    """Normalise API rows, resolving each run's state and its commit."""
-    out: list[CheckRun] = []
+    """Normalise API rows, marking superseded attempts of the same check.
+
+    A single head can carry SEVERAL runs of one check name — a manual
+    re-run, or two workflow runs triggered for identical code (a push and
+    the pull request opened from it both match, which is routine here).
+
+    Only the latest attempt per name decides readiness. Measured 2026-08-09:
+    py3.12 died mid-step and a second run of the same commit passed.
+    Counting every row let the dead attempt poison the verdict forever — no
+    re-run could clear it, which is useless exactly when re-runs matter.
+
+    LATEST MEANS MOST RECENTLY CREATED (check-run id), NOT MOST RECENTLY
+    STARTED, and the difference is not academic. In the incident above:
+
+        id=93297989333  FAILURE  started 20:33:21   <- created LATER
+        id=93297831878  SUCCESS  started 20:44:06   <- created EARLIER,
+                                                       queued, ran later
+
+    The passing run belonged to an earlier-created workflow that sat in the
+    queue. Ordering by ``started_at`` picks it and calls the check green;
+    GitHub's branch protection picks the other one and reports BLOCKED.
+
+    Ordering by start time was this function's first implementation, and it
+    was wrong for the reason that matters: **a verifier must model the gate
+    that actually decides the merge, not a more sensible gate of its own
+    invention.** Being more permissive than branch protection is how a tool
+    tells you to merge something the platform will refuse — or worse, waves
+    through a failure the platform was right to hold.
+
+    The superseded attempts are NOT discarded. They are marked and reported,
+    so a genuinely intermittent check stays visible instead of being quietly
+    laundered into a pass by one lucky retry.
+    """
+    parsed: list[tuple[tuple, CheckRun]] = []
     for row in raw:
         status = str(row.get("status") or "").upper()
         conclusion = row.get("conclusion")
@@ -159,15 +192,43 @@ def _to_checks(raw: Sequence[dict], head: str) -> tuple[CheckRun, ...]:
         # keeps "still running" distinct from any verdict.
         state = str(conclusion or status or "UNKNOWN").upper()
         run_sha = row.get("head_sha")
-        out.append(
-            CheckRun(
-                name=str(row.get("name") or "<unnamed>"),
-                state=state,
-                head_sha=run_sha,
-                stale=bool(run_sha) and run_sha != head,
-                ran=True,
+        # Creation order first — check-run ids are monotonic, and that is
+        # what branch protection uses. Timestamps only break ties for rows
+        # with no usable id; a row we cannot place sorts first so it never
+        # displaces one we can.
+        try:
+            created_rank = int(row.get("id"))
+        except (TypeError, ValueError):
+            created_rank = -1
+        ordering = (
+            created_rank,
+            str(row.get("started_at") or ""),
+            str(row.get("completed_at") or ""),
+        )
+        parsed.append(
+            (
+                ordering,
+                CheckRun(
+                    name=str(row.get("name") or "<unnamed>"),
+                    state=state,
+                    head_sha=run_sha,
+                    stale=bool(run_sha) and run_sha != head,
+                    ran=True,
+                ),
             )
         )
+
+    latest: dict[str, tuple] = {}
+    for ordering, check in parsed:
+        current = latest.get(check.name)
+        if current is None or ordering > current[0]:
+            latest[check.name] = (ordering, check)
+
+    out: list[CheckRun] = []
+    for ordering, check in parsed:
+        winner = latest[check.name]
+        is_winner = winner[0] == ordering and winner[1] is check
+        out.append(check if is_winner else replace(check, superseded=True))
     return tuple(out)
 
 
@@ -191,14 +252,27 @@ def _decide(
             checks=checks,
         )
 
-    stale = [c for c in checks if c.stale]
-    failed = [c for c in checks if not c.stale and c.failed]
-    pending = [c for c in checks if not c.stale and c.pending]
-    skipped = [c for c in checks if not c.stale and c.skipped]
+    # Superseded attempts describe a run that a later run of the same check
+    # has replaced. They are reported below, never counted.
+    current = [c for c in checks if not c.superseded]
+    superseded = [c for c in checks if c.superseded]
+
+    stale = [c for c in current if c.stale]
+    failed = [c for c in current if not c.stale and c.failed]
+    pending = [c for c in current if not c.stale and c.pending]
+    skipped = [c for c in current if not c.stale and c.skipped]
 
     reasons.extend(c.describe() for c in stale)
     reasons.extend(c.describe() for c in failed)
     reasons.extend(c.describe() for c in pending)
+
+    # Surfaced even on a READY verdict: a check that needed a second attempt
+    # is a fact the reader should see, not something a lucky retry launders.
+    superseded_notes = [
+        f"(informational) {c.describe()}"
+        for c in superseded
+        if not c.passed
+    ]
 
     merge_state = str(view.get("mergeStateStatus") or "").upper()
     mergeable = str(view.get("mergeable") or "").upper()
@@ -206,6 +280,7 @@ def _decide(
     if stale or failed or pending:
         if skipped:
             reasons.extend(f"(informational) {c.describe()}" for c in skipped)
+        reasons.extend(superseded_notes)
         return MergeReadiness(
             readiness=Readiness.NOT_READY,
             pr=qualified,
@@ -263,6 +338,7 @@ def _decide(
 
     if skipped:
         reasons.extend(f"(informational) {c.describe()}" for c in skipped)
+    reasons.extend(superseded_notes)
 
     return MergeReadiness(
         readiness=Readiness.READY,

@@ -53,6 +53,17 @@ class CheckRun:
     #: False only when the check is absent for this head — distinct from
     #: having run and failed.
     ran: bool
+    #: True when a LATER run of the same check name exists on this same head
+    #: — a re-run, or a second workflow run of identical code. Superseded
+    #: attempts are reported but do not decide readiness.
+    #:
+    #: WHY, measured 2026-08-09: `pytest-matrix-py3.12` died mid-step at
+    #: 20:33 (infrastructure, not a test) and a second run of the SAME commit
+    #: passed at 20:44. Both rows live on the same head SHA. Counting every
+    #: row meant the dead attempt poisoned the verdict permanently — no
+    #: re-run could ever clear it. A tool that cannot be un-failed by a
+    #: successful re-run is broken precisely where re-runs exist.
+    superseded: bool = False
 
     @property
     def passed(self) -> bool:
@@ -72,6 +83,11 @@ class CheckRun:
 
     def describe(self) -> str:
         """One line, naming what is wrong and which commit it refers to."""
+        if self.superseded:
+            return (
+                f"{self.name}: {self.state} on an EARLIER attempt, superseded "
+                "by a later run of the same check on this head"
+            )
         if not self.ran:
             return f"{self.name}: NEVER RAN on this head"
         if self.stale:
