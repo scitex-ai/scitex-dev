@@ -7,6 +7,48 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`scitex_dev.store` — per-host replicas that reconcile by DIRECTED REPLAY of
+  an append-only oplog.** A host that cannot reach its peers keeps accepting
+  writes, and a new host joins by replaying from seq 0.
+
+  Reconciliation is replay of an ordered log, never a comparison of two stores.
+  The rejected alternative is not hypothetical: comparing two stores and syncing
+  the difference is the mechanism that destroyed 2,159 rows in this house on
+  2026-07-30, when absence in one store was read as a deletion in the other.
+  Replay is cheaper — one monotone integer per origin, no comparison at all —
+  and structurally incapable of that failure, because absence is never an input
+  to any decision it makes. Single-writer-per-record makes `(origin, seq)` the
+  causal order outright, so there are no Lamport clocks, no vector clocks, no
+  per-field causality metadata and no tombstone GC.
+
+  Four properties carry the safety, each of which RAISES rather than degrading:
+
+  - `fence` is a **column of the oplog**, not a value held beside it. An op
+    carries the authority it was written under wherever it travels, so a
+    superseded writer's ops arrive distinguishable from a current writer's
+    instead of replicating as legitimate.
+  - Cursor advance asserts **`first_seq == cursor + 1`**. A gap raises
+    `OplogGapError` — it does not warn and does not skip. Without it a hole in
+    the log replicates as "caught up", which is silent, undetectable loss.
+  - An **applied-intents ledger** makes writes idempotent end-to-end, so a lost
+    ACK cannot make a write that actually landed report as a refusal and send
+    the caller round again on completed work.
+  - Apply is **idempotent**: the log insert collides on `(origin, seq)` and the
+    state upsert is guarded by `stx_record.seq < excluded.seq`.
+
+  Reads are three-valued throughout (true / false / UNKNOWN, never collapsed)
+  and carry their own uncertainty — a result reports
+  `none, as of watermark {alpha:7, beta:3}, with host beta unheard-from for 4h`
+  rather than a bare "none".
+
+  SQLite needs nothing beyond stdlib; the PostgreSQL dialect lazy-imports
+  `psycopg` behind the new `store` extra. The suite runs every test against a
+  real SQLite file AND a real PostgreSQL schema — no mocks — because two fatal
+  defects in this house passed 196 tests and appeared only against a live
+  driver.
+
 ## [0.43.0] - 2026-08-05
 
 **A release that stops two rules from blocking the work they were meant to
