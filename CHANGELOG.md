@@ -7,6 +7,68 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.43.1] - 2026-08-09
+
+**The audit gate stops reading a "could not measure" notice as a violation
+of the code.** If you are on 0.38.1 and blocked by PS-169 or PS-224, come
+straight here rather than to 0.43.0 — see the upgrade note below.
+
+### Fixed
+
+- **`testing.audit_all_for_package` counted warn-tier NOTICES as violations.**
+  The classifier stripped the level word (`ERRO: ` / `WARN: `) only to *reach*
+  the rule bracket and then never read it, so a notice and a finding were
+  indistinguishable. Because the mask guard is `if skipped and not
+  non_skipped`, a SINGLE unmatched notice discarded an entire skip-rule mask
+  and failed a green tree.
+
+  Measured by scitex-hub on the real failing run: 205 violation lines
+  classified, 151 masked, **1 non-skipped** — the `[§10w] COULD NOT MEASURE
+  RELIABLY … No verdict` line, alone.
+
+  That is UNKNOWN collapsed into the failure pole. `§10`, `§10w`, `TALLY` and
+  `defer` now never count as violations, and severity is read rather than
+  discarded.
+
+  `NON_ATTRIBUTABLE_RULES` in `_cli/audit/_diff.py` already knew these lines
+  describe the machine rather than the diff; this consumer simply never
+  consulted it.
+
+- **`[defer]` — the same defect, reported 2026-07-21 and fixed at the source
+  this time.** It had been worked around downstream by adding `"defer"` to a
+  package's `skip_rules`, with the comment *"remove when scitex-dev excludes
+  notice lines from classification"*. The workaround held, so the defect
+  survived nineteen days and returned as `§10w`. Masking a could-not-measure
+  notice suppresses the one signal saying the measurement is untrustworthy,
+  so consumers should NOT carry these in `skip_rules`.
+
+### Upgrade note — if you are pinned below 0.43.0
+
+Do not use 0.43.0 as an intermediate step. The two pins are broken in
+opposite ways:
+
+| | 0.38.1 | 0.43.0 | 0.43.1 |
+|---|---|---|---|
+| PS-169 on a new hosted line | ratchets W→**E** | flat W | flat W |
+| PS-224 on `ubuntu-latest` | **rejects** | accepts | accepts |
+| §10w notice in the gate | — | **fails a clean tree** | reported, not fatal |
+
+Jump straight to 0.43.1.
+
+### Known, not fixed here
+
+The **§10 import-budget threshold** itself. In-SIF measurement (scitex-hpc)
+shows a first-launch penalty that exceeds the fixed 100ms bound on every
+interpreter — cold 136/168/193ms against warm 43-50ms — and that the cost is
+the *containerised interpreter*, not the node: same machine, host python
+cold 39ms / warm 18ms versus SIF cold 193ms / warm 46ms. A bound sampled
+once, on a freshly started container, will trip on any host running a SIF.
+That is a threshold-design question and gets its own change.
+
+An earlier reading attributed this to CI-node load; that was **refuted** by
+control measurement (loaded node 18ms, idle node 21ms) and is recorded as
+refuted rather than dropped.
+
 ## [0.43.0] - 2026-08-05
 
 **A release that stops two rules from blocking the work they were meant to
