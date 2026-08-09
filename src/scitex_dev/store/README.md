@@ -73,7 +73,7 @@ make the operator's first resolve-from-elsewhere an illegal write.
 `WriterPolicy.SINGLE_WRITER` remains available for stores that do have a
 natural, stable owner. Replay correctness does not depend on the choice.
 
-## The lizard-tail rule (トカゲのしっぽ切り)
+## The lizard-tail rule
 
 A host severed from every other host keeps working. There is no
 coordinator, no quorum and no primary: each host owns a complete local

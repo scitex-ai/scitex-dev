@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""The lizard-tail rule — トカゲのしっぽ切り.
+"""The lizard-tail rule.
 
 Operator requirement, 2026-08-09: *a single host must keep working ALONE
 when severed from every other host. No single point of failure. A host can
