@@ -7,6 +7,83 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-08-09
+
+**A release that adds the primitive an ad-hoc cleanup should have gone
+through, teaches the host registry a kind the fleet already runs on, and
+ships a correction that `0.43.0` documented but did not contain.**
+
+### Added
+
+- **`scitex_dev.hygiene` — config-gated branch GC, DEFAULT OFF, with
+  bundle-before-delete (#519).** On 2026-08-08 an ad-hoc branch cleanup deleted
+  seven local branches that were the live substrate of an in-flight operator
+  mission. This is the primitive that could not have done that, with each
+  safety property pinned by a test.
+
+  Four independent gates in series: `CleanupConfig(enabled=False)` at the
+  dataclass level; a loader that fails CLOSED on any doubt (missing or
+  unreadable file, malformed YAML, wrong shape, PyYAML absent); `apply=False`
+  in the engine, independent of config; and registry membership that installs
+  nothing, so `cron install branch-gc` stays an explicit operator act. The
+  fail-CLOSED loader is deliberately the opposite of `gate/_config.py`'s
+  documented fail-OPEN, and the docstring says why — a gate that fails closed
+  wedges the repo, while a deleter that fails open destroys work.
+
+  Arming requires `cleanup.branches.enabled: true` in BOTH the per-repo and the
+  user-scope `.scitex/dev/config.yaml` — AND, not OR. The check is `is True`
+  against the parsed value, so the string `"true"` and the integer `1` do not
+  arm it; bare `yes` / `on` do, because PyYAML resolves them to the real
+  boolean (measured and pinned). One engine backs the CLI verb, the cron job
+  and any future sweep, rather than each growing its own copy of the predicate.
+
+- **`compute` — the host kind the fleet was already running on (#517).** The
+  registry raised `[E001]` on `kind: compute`, so the fleet SSOT could not
+  express scitex-compute-01/02, machines the fleet is about to depend on.
+
+  The axis is HOW WORK REACHES THE MACHINE, not how big it is, because that is
+  what a consumer branches on: `workstation` is someone's personal machine and
+  may be asleep; `hpc-login` fronts a scheduler, so you submit and wait;
+  `compute` is shared, always-on and reached directly; `storage` holds data
+  rather than executing work. `compute` and `hpc-login` are the pair most
+  likely to be collapsed and must not be — both are "big machines that run
+  things", but a consumer deciding whether it may simply START a job needs
+  opposite answers, and sizing them by core count loses the only fact anyone
+  needs.
+
+  Measured by scitex-hpc on both machines: 32 cores, Ubuntu 24.04.4, Apptainer
+  1.5.3, and no `sbatch`, no `sinfo`, `slurmd` inactive, no module system. They
+  are not HPC nodes. `workstation` parses and is wrong — shared headless
+  infrastructure is not somebody's desk — and a wrong kind is worse than a
+  missing one because it answers confidently. The closed-set test asserts
+  EQUALITY rather than membership, so widening it fails loudly and that failure
+  is the review trigger; a companion test keeps an unknown kind rejected, so
+  widening cannot soften into "any string goes".
+
+### Fixed
+
+- **PS-215's consequence text — shipped here, not in `0.43.0` (#515).** The
+  `0.43.0` notes describe this correction, but the commit landed after the
+  `v0.43.0` tag was cut, so no install of `0.43.0` contains it. The changelog
+  entry below stands as written; this is the release that actually delivers it.
+
+  The rule told readers "a user who runs this exact command gets a resolver
+  error, not the promised fix" — false, and false in the direction that hides.
+  Measured by scitex-hpc: `pip install <pkg>[nonexistent]` warns on stderr,
+  exits 0, and installs the base package with the extra omitted. The docstring
+  distinguished a loud case from a quiet one and there is no loud case; both
+  exit 0. A reviewer told the failure is self-announcing reasonably
+  deprioritises it, and that confident user-impact claim is what led scitex-app
+  to card a false user-facing defect and open a worktree against a file that
+  ships nowhere. Corrected at three sites — the module docstring, the
+  per-finding violation detail, and the rule tuple in `_extra_rules` — plus the
+  `_is_historical_record` docstring, which quoted the same wrong phrase.
+
+  Still open, and the other half of what scitex-app reported: PS-215 can fire
+  on gitignored and untracked paths (same commit, same version, two checkouts —
+  working tree 5 errors, fresh worktree 0). That is a scoping fix on the
+  audit's exit code and is deliberately not part of this change.
+
 ## [0.43.0] - 2026-08-05
 
 **A release that stops two rules from blocking the work they were meant to
