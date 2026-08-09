@@ -65,6 +65,60 @@ def warn_on_guessed_path(cwd: Path | None = None, stream=None) -> str:
     return text
 
 
+#: Rule ids that describe THE MEASUREMENT or the REPORT rather than the code,
+#: so they can never be a violation of it. Mirrors
+#: :data:`scitex_dev._cli.audit._diff.NON_ATTRIBUTABLE_RULES`, which already
+#: knew this and which this module did not consult.
+#:
+#: `§10w` is the import-budget auditor saying COULD NOT MEASURE RELIABLY — a
+#: deliberate warn-tier "no verdict". Counting it as a violation collapses
+#: UNKNOWN into the failure pole, which is the exact three-valued-signal
+#: error the constitution names. Measured 2026-08-09 on scitex-hub: one such
+#: notice discarded a 151-line skip mask and reddened a green tree.
+#:
+#: `defer` is the `[defer] ... N finding(s) suppressed` NOTICE — arithmetic
+#: about the report, not a finding in it. Reported 2026-07-21 and worked
+#: around downstream by adding "defer" to a package's skip_rules, which is
+#: precisely why the defect survived to reappear as `§10w` nineteen days
+#: later. Both belong here.
+_NON_VIOLATION_RULES: "frozenset[str]" = frozenset(
+    {"§10", "§10w", "TALLY", "defer"}
+)
+
+#: Level words that are NOT failures. The auditors already print severity;
+#: this module used to strip it only to reach the bracket and then ignore it.
+_NON_VIOLATION_LEVELS: "frozenset[str]" = frozenset({"WARN", "INFO", "SUCC", "NOTE"})
+
+
+def _is_gate_violation(level: str, payload: str) -> bool:
+    """Does this reported line actually fail the gate?
+
+    Three kinds of bracketed line reach the classifier and only one is a
+    violation:
+
+    * ``ERRO: [PS-204 §2 ...]``  — a finding. Counts.
+    * ``WARN: [§10w ...]``       — a NOTICE about the measurement. Does not.
+    * ``[defer] ... N finding(s) suppressed`` — arithmetic. Does not.
+
+    The previous implementation counted all three, so a single warn-tier
+    notice discarded an entire skip-rule mask (the guard is
+    ``if skipped and not non_skipped``) and turned a green tree red.
+
+    That defect was reported on 2026-07-21 for the ``[defer]`` notice and
+    worked around downstream by adding "defer" to a package's skip_rules —
+    which is why it survived to reappear as ``§10w`` nineteen days later.
+    Masking a could-not-measure notice suppresses the one signal saying the
+    measurement is untrustworthy, so the fix belongs here, not in any
+    consumer's skip list.
+    """
+    if level in _NON_VIOLATION_LEVELS:
+        return False
+    return not any(
+        payload.startswith(f"[{rule} ") or payload.startswith(f"[{rule}]")
+        for rule in _NON_VIOLATION_RULES
+    )
+
+
 def audit_all_for_package(
     distribution: str,
     *,
@@ -210,10 +264,12 @@ def audit_all_for_package(
             # `WARN: `) — strip a trailing-colon word before the bracket
             # check so the rule id is reachable.
             head = stripped.split(":", 1)
-            payload = (
-                head[1].lstrip() if len(head) == 2 and head[0].isalpha() else stripped
-            )
+            has_level = len(head) == 2 and head[0].isalpha()
+            level = head[0].strip().upper() if has_level else ""
+            payload = head[1].lstrip() if has_level else stripped
             if not (payload.startswith("[") or payload.startswith("[E]")):
+                continue
+            if not _is_gate_violation(level, payload):
                 continue
             matched = [r for r in skip_rules if f"[{r} " in line or f"[{r}]" in line]
             if matched:
