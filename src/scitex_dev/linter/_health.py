@@ -33,6 +33,7 @@ notices kill.
 from __future__ import annotations
 
 import os
+import sys
 import threading
 
 import scitex_logging as slogging
@@ -215,17 +216,20 @@ def skipped_categories() -> list[dict]:
     """
     with _lock:
         records: list[dict] = []
+        interpreter = sys.executable or "python"
         if _l1_active_unlocked():
             records.append(
                 {
                     "kind": "plugin_missing",
                     "categories": ["io", "path"],
                     "rules": "STX-IO001-014, STX-PA001-005",
+                    "interpreter": interpreter,
                     "reason": (
-                        "no IO/PA category rules registered — the scitex-io "
-                        "plugin is not installed in this venv"
+                        "no IO/PA category rules registered — scitex_io is "
+                        f"not importable from {interpreter} (the interpreter "
+                        "running this linter)"
                     ),
-                    "remedy": "pip install scitex-io",
+                    "remedy": f"{interpreter} -m pip install scitex-io",
                 }
             )
         for req, n in sorted(_skip_counts.items()):
@@ -234,11 +238,13 @@ def skipped_categories() -> list[dict]:
                     "kind": "requires_gate",
                     "requires": req,
                     "skipped_evaluations": n,
+                    "interpreter": interpreter,
                     "reason": (
                         f"{n} rule evaluation(s) dropped via the `requires=` "
-                        f"gate — `{req}` is not importable in this venv"
+                        f"gate — `{req}` is not importable from {interpreter} "
+                        "(the interpreter running this linter)"
                     ),
-                    "remedy": f"pip install {req}",
+                    "remedy": f"{interpreter} -m pip install {req}",
                 }
             )
         return records
