@@ -131,6 +131,24 @@ def _worktree_gc_command() -> str:
     return exec_command("worktree-gc")
 
 
+def _branch_gc_command() -> str:
+    """The shell line installed for the ``branch-gc`` cron job.
+
+    Schedule rationale: daily at 04:00, off the crowded 0-minute tick. A
+    sweep is cheap (one ``for-each-ref`` plus a bounded set of per-branch
+    git reads), and the default age floor is 30 days with a hard floor of
+    14 — so nothing is gained by running it more often than daily and a
+    slower cadence would only widen the window in which a landed branch
+    sits around.
+
+    The body is ``_branch_gc.run_once``. Installing this job does NOT arm
+    it: every repo stays DEFAULT OFF until ``cleanup.branches.enabled:
+    true`` appears in both ``<repo>/.scitex/dev/config.yaml`` and
+    ``$HOME/.scitex/dev/config.yaml``.
+    """
+    return exec_command("branch-gc")
+
+
 def _quota_keepalive_command() -> str:
     """The shell line installed for the ``quota-keepalive`` cron job.
 

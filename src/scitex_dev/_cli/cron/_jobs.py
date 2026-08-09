@@ -54,6 +54,7 @@ class JobSpec:
 # the 512-line cap); re-imported under their original names so existing
 # callers and tests (``_jobs._ecosystem_sync_command`` ...) keep resolving.
 from ._job_commands import (  # noqa: F401
+    _branch_gc_command,
     _ci_runner_ensure_command,
     _ci_runner_workgc_command,
     _ci_watch_command,
@@ -256,6 +257,31 @@ JOB_REGISTRY: Mapping[str, JobSpec] = {
             "(scitex-dev SystemDepSpec). Card scholar-library-cross-"
             "machine-sync-20260701. Log at "
             "$HOME/.scitex/scholar/runtime/logs/cron-library-sync.log."
+        ),
+    ),
+    "branch-gc": JobSpec(
+        name="branch-gc",
+        # Daily at 04:00 — off the 0-minute crowd. A sweep is cheap and the
+        # age floor is measured in weeks, so a faster cadence buys nothing.
+        schedule="0 4 * * *",
+        command=_branch_gc_command(),
+        description=(
+            "Config-gated local-branch hygiene, DEFAULT OFF. Being in this "
+            "registry installs nothing, and even installed every repo stays "
+            "off until `cleanup.branches.enabled: true` is set in BOTH "
+            "<repo>/.scitex/dev/config.yaml AND $HOME/.scitex/dev/config.yaml. "
+            "Deletes only local refs/heads/* refs that pass five legs "
+            "(landed / older than a hard 14-day floor / not checked out in "
+            "any worktree / unprotected + no open PR / not the substrate of "
+            "an in-flight card); any unevaluable leg KEEPS. Landing is "
+            "proven by ancestor OR patch-equivalence OR merged PR — never "
+            "`git branch --merged` alone, which is blind to squash-merges. "
+            "A verified git bundle is written under "
+            "<repo>/.scitex/dev/runtime/branch-gc/<ts>/ before any delete "
+            "and the restore command is logged; an unverifiable bundle "
+            "aborts the pass with zero deletions. No remote ref, tag, "
+            "stash, reflog or worktree is ever touched. See "
+            "scitex_dev.hygiene and _branch_gc.run_once."
         ),
     ),
     # Future entries land here. Suggested naming pattern: short

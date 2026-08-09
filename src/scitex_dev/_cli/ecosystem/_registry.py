@@ -31,6 +31,7 @@ from ._cmds import (
     _list,
     _pr,
     _up,
+    _prune_branches,
     _prune_merged,
     _regen_umbrella,
     _run,
@@ -112,6 +113,7 @@ def register_ecosystem_commands(main_group):
     _sync.register(ecosystem)
     _system_deps.register(ecosystem)
     _prune_merged.register(ecosystem)
+    _prune_branches.register(ecosystem)
     _pr.register(ecosystem)
     _branch_protection.register(ecosystem)
     _ci_template.register(ecosystem)
