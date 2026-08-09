@@ -7,6 +7,18 @@ is the value you pass around, log, compare and put in a card, so that
 "which store did that write actually land in?" has an answer that does not
 require re-deriving path resolution at the call site.
 
+The locator is TYPED, not a string
+-----------------------------------
+``target.locator`` is a :class:`~._locator.SqlitePath` or a
+:class:`~._locator.PostgresDsn`, never a bare ``str``. A DSN passed to any
+filesystem API raises instead of being materialised as directories named
+after the database — see :mod:`._locator` for the 13 measured instances of
+that happening in production.
+
+``StoreTarget`` itself is likewise not path-like: it defines no
+``__fspath__``, so ``Path(target)`` is a ``TypeError`` rather than a
+stringified dataclass repr turned into a directory.
+
 Path convention
 ---------------
 SQLite targets follow the fleet's runtime-state-DB layout —
@@ -14,12 +26,8 @@ SQLite targets follow the fleet's runtime-state-DB layout —
 through ``scitex_config``'s ``runtime_path()`` rather than a
 ``Path.home()`` literal. See the ecosystem skill
 ``01_ecosystem/13_runtime-state-db-layout.md``: ``runtime/`` is the single
-subtree that gets redirected off shared/GPFS filesystems, and ``.db`` is
-the only suffix scitex-io's load dispatch recognises.
-
-Postgres targets carry a DSN instead and have no path at all. That
-asymmetry is deliberate and explicit — a target reports which of the two
-it is rather than offering a ``path`` that is sometimes meaningless.
+subtree redirected off shared/GPFS filesystems, and ``.db`` is the only
+suffix scitex-io's load dispatch recognises.
 """
 
 from __future__ import annotations
@@ -27,11 +35,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Final
 
 from ._errors import StoreTargetError
+from ._locator import DB_SUFFIX, PostgresDsn, SqlitePath, StoreLocator
 
-__all__ = ["Backend", "StoreTarget"]
+__all__ = ["Backend", "DB_SUFFIX", "StoreTarget"]
 
 
 class Backend(str, Enum):
@@ -43,28 +51,16 @@ class Backend(str, Enum):
     POSTGRES = "postgres"
 
 
-#: Suffix for SQLite stores. Fixed by convention, not preference — scitex-io
-#: registers a loader for `.db` only, so any other suffix stops round-tripping
-#: through `stx.io.load()`.
-DB_SUFFIX: Final[str] = ".db"
-
-
 @dataclass(frozen=True, slots=True)
 class StoreTarget:
     """A resolved, comparable pointer to one store."""
 
     backend: Backend
-    locator: str
+    locator: StoreLocator
     pkg: str
     name: str
 
     def __post_init__(self) -> None:
-        if not self.locator:
-            raise StoreTargetError(
-                f"StoreTarget for package {self.pkg!r} has an empty locator. "
-                "A SQLite target needs a file path; a Postgres target needs a "
-                "DSN. Neither is guessed."
-            )
         if not self.pkg:
             raise StoreTargetError(
                 "StoreTarget.pkg is empty. The package short name decides "
@@ -75,11 +71,21 @@ class StoreTarget:
                 f"StoreTarget.name {self.name!r} must be a valid identifier — "
                 "it prefixes the store's table names."
             )
-        if self.backend is Backend.SQLITE and not self.locator.endswith(DB_SUFFIX):
+        if isinstance(self.locator, str):
             raise StoreTargetError(
-                f"SQLite locator {self.locator!r} must end in {DB_SUFFIX!r}. "
-                "The ecosystem runtime-state-DB convention fixes this suffix "
-                "because scitex-io's load dispatch registers only '.db'."
+                f"StoreTarget.locator must be a SqlitePath or PostgresDsn, "
+                f"not a str ({self.locator!r}). A string locator is the bug "
+                "this type exists to prevent: it is indistinguishable from a "
+                "path to every API that takes one, and a DSN passed to Path() "
+                "silently becomes a directory tree named after the database. "
+                "Use StoreTarget.sqlite(...) or StoreTarget.postgres(...)."
+            )
+        expected = SqlitePath if self.backend is Backend.SQLITE else PostgresDsn
+        if not isinstance(self.locator, expected):
+            raise StoreTargetError(
+                f"Backend {self.backend.value!r} needs a "
+                f"{expected.__name__} locator, got "
+                f"{type(self.locator).__name__}."
             )
 
     # -- constructors -----------------------------------------------------
@@ -93,43 +99,44 @@ class StoreTarget:
     ) -> "StoreTarget":
         """The conventional SQLite target for ``pkg``.
 
-        ``<runtime>/<pkg>.db``, or ``<runtime>/<shard>/<pkg>.db`` when a
-        shard subdirectory is given. Resolution goes through
-        ``scitex_config``; this never builds a home-relative path itself.
+        ``<runtime>/<pkg>.db``, or ``<runtime>/<shard>/<pkg>.db`` with a
+        shard subdirectory. Resolution goes through ``scitex_config``; this
+        never builds a home-relative path itself.
         """
         try:
             from scitex_config._ecosystem import local_state
         except ImportError as exc:
             raise StoreTargetError(
                 "scitex_config is required to resolve a package store path "
-                f"({exc}). Install it, or construct the StoreTarget directly "
-                "with an explicit locator via StoreTarget.sqlite(...)."
+                f"({exc}). Install it, or construct the target directly with "
+                "StoreTarget.sqlite(<explicit path>, pkg=...)."
             ) from None
 
         base = local_state.runtime_path(pkg)
         directory = base / shard if shard else base
+        return cls.sqlite(directory / f"{pkg}{DB_SUFFIX}", pkg=pkg, name=name)
+
+    @classmethod
+    def sqlite(
+        cls, path: "str | Path", *, pkg: str, name: str = "store"
+    ) -> "StoreTarget":
+        """A SQLite target at an explicit path."""
         return cls(
             backend=Backend.SQLITE,
-            locator=str(directory / f"{pkg}{DB_SUFFIX}"),
+            locator=SqlitePath(Path(path)),
             pkg=pkg,
             name=name,
         )
 
     @classmethod
-    def sqlite(cls, path: "str | Path", *, pkg: str, name: str = "store") -> "StoreTarget":
-        """A SQLite target at an explicit path."""
-        return cls(backend=Backend.SQLITE, locator=str(path), pkg=pkg, name=name)
-
-    @classmethod
     def postgres(cls, dsn: str, *, pkg: str, name: str = "store") -> "StoreTarget":
         """A Postgres target at an explicit DSN."""
-        if not (dsn.startswith("postgres://") or dsn.startswith("postgresql://")):
-            raise StoreTargetError(
-                f"Postgres DSN {dsn!r} must start with 'postgres://' or "
-                "'postgresql://'. A bare host name would be parsed as a "
-                "path by some drivers and silently connect somewhere else."
-            )
-        return cls(backend=Backend.POSTGRES, locator=dsn, pkg=pkg, name=name)
+        return cls(
+            backend=Backend.POSTGRES,
+            locator=PostgresDsn(dsn),
+            pkg=pkg,
+            name=name,
+        )
 
     # -- views ------------------------------------------------------------
     @property
@@ -138,7 +145,17 @@ class StoreTarget:
 
         ``None`` means "this backend is not file-backed", never "unknown".
         """
-        return Path(self.locator) if self.backend is Backend.SQLITE else None
+        return self.locator.path if isinstance(self.locator, SqlitePath) else None
+
+    @property
+    def dsn(self) -> "str | None":
+        """The connection string, or ``None`` for file-backed backends.
+
+        Asked for BY NAME, deliberately: ``str(locator)`` renders a
+        credential-free summary, so a DSN cannot leak a password into a log
+        line by accident.
+        """
+        return self.locator.dsn if isinstance(self.locator, PostgresDsn) else None
 
     @property
     def is_file_backed(self) -> bool:
@@ -150,13 +167,16 @@ class StoreTarget:
 
         ``True`` / ``False`` for file-backed stores; ``None`` — *unknown* —
         for Postgres, where answering would require connecting. The caller
-        must handle the third value rather than read ``None`` as "no".
+        must handle the third value rather than reading ``None`` as "no".
         """
         path = self.path
         return path.exists() if path is not None else None
 
     def describe(self) -> str:
-        """One-line human form for logs and card notes."""
-        return f"{self.backend.value}:{self.locator} (pkg={self.pkg}, store={self.name})"
+        """One-line human form for logs and card notes. Credential-free."""
+        return (
+            f"{self.backend.value}:{self.locator} "
+            f"(pkg={self.pkg}, store={self.name})"
+        )
 
 # EOF

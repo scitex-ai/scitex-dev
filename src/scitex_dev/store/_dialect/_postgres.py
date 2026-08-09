@@ -60,10 +60,13 @@ class PostgresDialect(Dialect):
             ) from None
 
         try:
-            connection = psycopg.connect(target.locator, autocommit=True)
+            # `.dsn` by name — `str(locator)` renders a credential-free
+            # summary precisely so a password cannot reach a log line.
+            connection = psycopg.connect(target.dsn, autocommit=True)
         except Exception as exc:
             raise StoreTargetError(
-                f"Cannot connect to Postgres store {target.name!r}: {exc}. "
+                f"Cannot connect to Postgres store {target.name!r} at "
+                f"{target.locator}: {exc}. "
                 "Check the DSN host/port/database and that the role has "
                 "CREATE rights — the store creates its tables on first use."
             ) from None

@@ -62,7 +62,7 @@ class SQLiteDialect(Dialect):
                 f"SQLiteDialect received a non-file target {target.describe()}."
             )
         try:
-            Path(path).parent.mkdir(parents=True, exist_ok=True)
+            path.parent.mkdir(parents=True, exist_ok=True)
         except OSError as exc:
             raise StoreTargetError(
                 f"Cannot create the directory for SQLite store {path}: {exc}. "

@@ -204,13 +204,35 @@ def _as_list(field: str, value: Any) -> list[Any]:
 
 
 def _element_id(field: str, element: Any) -> Any:
+    """The element's stable identity. Required, and never inferred.
+
+    There is deliberately no fallback to position or a content hash. Both
+    converge WRONGLY on edited or duplicated elements, and they do it
+    quietly — an APPEND that tolerates id-less elements trades a loud
+    failure here for a silent one later.
+
+    The id must also be GLOBALLY unique, not merely unique locally. An
+    autoincrement primary key is worse than no id at all: two hosts each
+    appending a comment both mint ``id=8``, so replay treats two DIFFERENT
+    elements as the same one and DROPS one of them. That is a lost write
+    presenting as successful convergence, and every count still looks
+    correct. Mint ids at creation (a random token, not a counter).
+    """
     if isinstance(element, Mapping):
         if "id" not in element:
             raise StoreError(
                 f"Field {field!r} uses MergeRule.APPEND, so every element "
-                f"needs an 'id' key; got {element!r}. Without a stable id the "
-                "same element appended on two nodes would duplicate on every "
-                "replay instead of converging."
+                f"needs an 'id' key; got {element!r}.\n"
+                "\n"
+                "The id must be minted at creation and globally unique — a "
+                "random token, NOT a per-store counter. An autoincrement key "
+                "or a per-record sequence collides across hosts, and a "
+                "collision under APPEND silently DROPS one of two distinct "
+                "elements while every row count still looks right.\n"
+                "\n"
+                "Do not work around this by removing the id requirement: "
+                "falling back to positional or content-hash identity "
+                "converges wrongly on edited and duplicate elements, quietly."
             )
         return element["id"]
     return _hashable(field, element)

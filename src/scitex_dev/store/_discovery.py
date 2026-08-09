@@ -27,7 +27,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Iterable, Sequence
 
-from ._target import DB_SUFFIX, Backend, StoreTarget
+from ._target import DB_SUFFIX, StoreTarget
 
 __all__ = ["DiscoveredStore", "StoreStatus", "discover_stores"]
 
@@ -129,12 +129,7 @@ def _installed_packages(local_state: object) -> list[str]:
 
 
 def _classify(path: Path) -> DiscoveredStore:
-    target = StoreTarget(
-        backend=Backend.SQLITE,
-        locator=str(path),
-        pkg=_package_of(path),
-        name="store",
-    )
+    target = StoreTarget.sqlite(path, pkg=_package_of(path))
     try:
         connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     except sqlite3.Error as exc:
