@@ -188,6 +188,95 @@ class TestASingleAttemptIsUnaffected:
         assert not any(c.superseded for c in checks)
 
 
+class TestACancelledSupersededAttemptDoesNotBlock:
+    """Checks the `cancel-in-progress` interaction, which was recorded as a
+    trap and turns out to be closed by the superseded rule itself.
+
+    `CANCELLED` is in FAILING_STATES, so before this change, adding
+    `concurrency: cancel-in-progress: true` would have made every cancelled
+    run count as a failure against its head — the verifier would have failed
+    pull requests on the strength of the very optimisation meant to speed
+    them up. That was written down as a reason NOT to add concurrency.
+
+    But cancel-in-progress cancels the OLDER run when a newer one starts, so
+    the cancelled row is always the earlier-CREATED one — exactly what the
+    superseded rule discards. The trap is closed as a side effect.
+
+    Recorded as a test rather than a note because the reasoning is only
+    correct while "superseded" means created-order. If that key ever changes
+    back to start time, a queued-then-cancelled run could outrank its
+    replacement and this becomes wrong again.
+    """
+
+    def test_a_cancelled_earlier_run_is_superseded(self):
+        # Arrange
+        rows = [
+            {
+                "name": "tests",
+                "id": 100,
+                "status": "completed",
+                "conclusion": "cancelled",
+                "head_sha": HEAD,
+                "started_at": "2026-08-09T20:30:00Z",
+            },
+            {
+                "name": "tests",
+                "id": 200,
+                "status": "completed",
+                "conclusion": "success",
+                "head_sha": HEAD,
+                "started_at": "2026-08-09T20:31:00Z",
+            },
+        ]
+        # Act
+        checks = _to_checks(rows, HEAD)
+        # Assert
+        assert by_state(checks, "CANCELLED")[0].superseded
+
+    def test_the_replacement_decides_and_it_passed(self):
+        # Arrange
+        rows = [
+            {
+                "name": "tests",
+                "id": 100,
+                "status": "completed",
+                "conclusion": "cancelled",
+                "head_sha": HEAD,
+                "started_at": "2026-08-09T20:30:00Z",
+            },
+            {
+                "name": "tests",
+                "id": 200,
+                "status": "completed",
+                "conclusion": "success",
+                "head_sha": HEAD,
+                "started_at": "2026-08-09T20:31:00Z",
+            },
+        ]
+        # Act
+        checks = _to_checks(rows, HEAD)
+        # Assert
+        assert [c for c in checks if not c.superseded][0].passed
+
+    def test_a_cancelled_run_with_no_replacement_still_blocks(self):
+        """Cancellation is not a pass. Nothing here waves it through."""
+        # Arrange
+        rows = [
+            {
+                "name": "tests",
+                "id": 100,
+                "status": "completed",
+                "conclusion": "cancelled",
+                "head_sha": HEAD,
+                "started_at": "2026-08-09T20:30:00Z",
+            }
+        ]
+        # Act
+        checks = _to_checks(rows, HEAD)
+        # Assert
+        assert not checks[0].passed
+
+
 class TestAStillFailingRetryStillCounts:
     """The fix must not turn a real, repeatable failure into a pass."""
 
