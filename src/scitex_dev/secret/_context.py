@@ -90,7 +90,8 @@ class SecretContext:
     """An app plus the scope whose secrets are wanted.
 
     ``scope`` HAS NO DEFAULT — operator directive 2026-08-04, 「明示的に渡し
-    たいなあと思っています」. Every caller states which scope it means, and a
+    たいなあと思っています」 (I would like it passed explicitly). Every caller
+    states which scope it means, and a
     caller who forgets gets a TypeError at the call site.
 
     An earlier version defaulted to the empty ``Scope()``. That was safe in
