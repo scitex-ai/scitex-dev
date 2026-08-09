@@ -7,6 +7,63 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The audit gate could pass on an error it did not know how to read.** The
+  skip-rules classifier only examined lines whose payload began with `[`.
+  Anything else was dropped into neither bucket, so it could never appear in
+  `non_skipped` — and the guard `if skipped and not non_skipped` then masked
+  the entire failure.
+
+  The lines taking that path are the ones that matter most: the auditor
+  reporting that it could not **run**. Measured in the field — scitex-hub's
+  CI has carried `Error: No module named 'requests'` since 2026-08-05,
+  plainly visible in the job log and invisible to this classifier for four
+  days, while the gate reported success.
+
+  Error-tier unbracketed lines now count. They can never be masked, and that
+  is correct by construction rather than policy: masking is keyed on rule id
+  and these lines carry none, so no `skip_rules` entry can ever match one.
+  An auditor that could not run must not be silenceable.
+
+  The level check is a whitelist (`ERRO`/`ERROR`/`FAIL`/`FAILED`/`FATAL`/
+  `CRIT`/`CRITICAL`). The inverse test would promote any unrecognised
+  `word:` prefix to an error, reddening builds on `note:` or `usage:`.
+
+### ⚠️ Upgrade note — read this if your gate declares `MAX_MASKED_VIOLATIONS`
+
+This release can turn a green gate red, and **the obvious remedy is a trap
+for a specific set of packages.** Which one you are decides what to do:
+
+**If your audit gate has NO masked-violation ceiling** — this is the common
+case; twelve of thirteen scitex repositories are here — then a new error may
+appear saying the auditor could not run. Install the missing dependency. The
+audit then runs, its findings appear as ordinary gradeable output, and you
+are done. Nothing below applies to you.
+
+**If your gate declares `MAX_MASKED_VIOLATIONS`**, installing the dependency
+may surface a backlog your gate has never graded, because the auditor that
+would have found it was silently disabled. Expect a **count**, not a
+one-line fix. Measured on scitex-hub: 102 findings appeared, every one
+already in their `skip_rules` — so all were masked, but masked still counts
+against the ceiling, taking it from 151 to roughly 253.
+
+**Do not resolve that by raising the ceiling.** A ratchet that may only
+decrease is load-bearing; raising it converts a visible red into a silent
+breach, which is the same defect wearing a different number. The workable
+path is to measure first and then pay down:
+
+    # what would appear, by rule
+    grep -oE '\[§[0-9a-b]+\]' <audit-output> | sort | uniq -c | sort -rn
+
+    # then check whether one message dominates — if so it is one
+    # conversion applied N times, landable group by group, and each
+    # group lands the ceiling DOWN rather than up
+
+On hub, 95 of the 102 were the same `§4b` message, which turned "a
+migration campaign" into a single repeatable change. Your ratio may differ;
+the method does not.
+
 ## [0.43.1] - 2026-08-09
 
 **The audit gate stops reading a "could not measure" notice as a violation
