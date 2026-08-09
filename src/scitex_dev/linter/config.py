@@ -180,7 +180,7 @@ def load_config(start_path: str | None = None) -> LinterConfig:
         # _linter_plugin.py)" and then silently rotted as figrecipe grew
         # FM016-FM019, making readers believe those rules were out of scope.
         # (They are not: they carry category="figure" and always promoted.)
-        # `scitex-dev linter rules --json` is the live listing.
+        # `scitex-dev linter list-rules --json` is the live listing.
         #
         # As always, per-rule `per_rule_severity` overrides WIN — the category
         # map is the floor, not the ceiling. `# stx-allow: STX-<ID>` per-line

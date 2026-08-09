@@ -178,15 +178,24 @@ _LAZY_ATTRS: dict[str, str] = {
 }
 
 
-# Editable-install drift warning — fires once per process when the working
-# tree is ahead of/behind the latest tag. Cheap (~1ms cache hit; skipped
-# entirely on non-editable installs). Suppress with SCITEX_DEV_NO_DRIFT_WARN=1.
-try:
-    from ._release.check_editable_drift import emit_if_drift as _emit_drift
-
-    _emit_drift("scitex-dev")
-except Exception:
-    pass
+# The editable-install drift warning used to fire HERE, as an import-time
+# side effect. It now fires from the CLI entry point (`_cli._root.main`)
+# instead — see `_release.check_editable_drift.emit_if_drift`.
+#
+# Why it moved (2026-08-09): importing ANY part of this package, including
+# a leaf subpackage like `scitex_dev.store`, executed the check and pulled
+# `_release.check_editable_drift` into the importer's process. That is
+# invisible while scitex-dev is a developer tool. It stops being invisible
+# the moment leaf packages take `scitex_dev.store` as a RUNTIME dependency:
+# every one of them would import release machinery, and print a
+# developer-facing warning about OUR working tree, inside THEIR runtime.
+#
+# The warning's audience is a human running `scitex-dev ...`, and that is
+# where it now lives. A library import is silent and cheap.
+#
+# Enforced by `tests/scitex_dev/store/test_import_cost.py`, which imports
+# `scitex_dev.store` in a subprocess and asserts the heavy modules are
+# absent from `sys.modules`.
 
 
 def __getattr__(name: str):

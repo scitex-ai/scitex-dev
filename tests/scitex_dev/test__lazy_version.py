@@ -24,7 +24,6 @@ from __future__ import annotations
 import subprocess
 import sys
 
-import pytest
 from pathlib import Path
 
 _SRC = str(Path(__file__).resolve().parents[2] / "src")
@@ -57,25 +56,31 @@ def test_bare_interpreter_does_not_already_have_it():
     assert verdict == "False"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "KNOWN REMAINING PATH, not a flake. Deferring `__version__` removed "
-        "ONE of two eager metadata reads. The other is a CALL at module "
-        "scope: `__init__.py:205` runs `_emit_drift('scitex-dev')`, and the "
-        "metadata read lives inside `emit_if_drift` — `check_editable_drift` "
-        "imports only json/os/shutil/subprocess/sys/time/Path itself, so no "
-        "grep for a module-scope `importlib.metadata` import finds it. "
-        "Deferring that call is a BEHAVIOUR change (the drift warning fires "
-        "once per process by design) and wants its own reasoning, so it is "
-        "not smuggled in here. strict=True on purpose: this flips to a "
-        "FAILURE the day someone fixes the drift call, which is the "
-        "notification we want. A passing assertion would be a lie and a "
-        "deleted one would let the `__version__` fix rot back."
-    ),
-)
 def test_importing_scitex_dev_does_not_load_importlib_metadata():
-    """The END-STATE assertion — currently unmet, deliberately kept."""
+    """The END-STATE assertion — MET as of 2026-08-09, marker retired.
+
+    This carried ``@pytest.mark.xfail(strict=True)`` for the second of two
+    eager metadata reads: `__init__.py` ran ``_emit_drift('scitex-dev')`` at
+    module scope, and the metadata read lived inside ``emit_if_drift``. The
+    marker's reason said, verbatim, that strict was chosen "on purpose: this
+    flips to a FAILURE the day someone fixes the drift call, which is the
+    notification we want."
+
+    That is exactly what happened. The drift warning now fires from the CLI
+    entry point instead of at import, so importing the package no longer
+    loads ``importlib.metadata``, the assertion started passing, and strict
+    xfail turned the pass into a red build — on CI, across all three Python
+    versions, having been green on develop the commit before.
+
+    The marker is therefore RETIRED rather than relaxed: an xfail kept past
+    the fix it was waiting for would report a solved problem as unsolved
+    forever. The assertion below is unchanged and now guards the end state
+    going forward — if anything re-introduces an import-time metadata read,
+    this goes red on its own, with no marker to reinterpret.
+
+    Do NOT re-add the xfail to make this pass. A failure here means the
+    regression came back.
+    """
     # Arrange
     body = "import sys, scitex_dev; print('importlib.metadata' in sys.modules)"
     # Act

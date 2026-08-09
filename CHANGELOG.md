@@ -7,6 +7,159 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.43.1] - 2026-08-09
+
+**The audit gate stops reading a "could not measure" notice as a violation
+of the code.** If you are on 0.38.1 and blocked by PS-169 or PS-224, come
+straight here rather than to 0.43.0 — see the upgrade note below.
+
+### Fixed
+
+- **`testing.audit_all_for_package` counted warn-tier NOTICES as violations.**
+  The classifier stripped the level word (`ERRO: ` / `WARN: `) only to *reach*
+  the rule bracket and then never read it, so a notice and a finding were
+  indistinguishable. Because the mask guard is `if skipped and not
+  non_skipped`, a SINGLE unmatched notice discarded an entire skip-rule mask
+  and failed a green tree.
+
+  Measured by scitex-hub on the real failing run: 205 violation lines
+  classified, 151 masked, **1 non-skipped** — the `[§10w] COULD NOT MEASURE
+  RELIABLY … No verdict` line, alone.
+
+  That is UNKNOWN collapsed into the failure pole. `§10`, `§10w`, `TALLY` and
+  `defer` now never count as violations, and severity is read rather than
+  discarded.
+
+  `NON_ATTRIBUTABLE_RULES` in `_cli/audit/_diff.py` already knew these lines
+  describe the machine rather than the diff; this consumer simply never
+  consulted it.
+
+- **`[defer]` — the same defect, reported 2026-07-21 and fixed at the source
+  this time.** It had been worked around downstream by adding `"defer"` to a
+  package's `skip_rules`, with the comment *"remove when scitex-dev excludes
+  notice lines from classification"*. The workaround held, so the defect
+  survived nineteen days and returned as `§10w`. Masking a could-not-measure
+  notice suppresses the one signal saying the measurement is untrustworthy,
+  so consumers should NOT carry these in `skip_rules`.
+
+### Upgrade note — if you are pinned below 0.43.0
+
+Do not use 0.43.0 as an intermediate step. The two pins are broken in
+opposite ways:
+
+| | 0.38.1 | 0.43.0 | 0.43.1 |
+|---|---|---|---|
+| PS-169 on a new hosted line | ratchets W→**E** | flat W | flat W |
+| PS-224 on `ubuntu-latest` | **rejects** | accepts | accepts |
+| §10w notice in the gate | — | **fails a clean tree** | reported, not fatal |
+
+Jump straight to 0.43.1.
+
+### Known, not fixed here
+
+The **§10 import-budget threshold** itself. In-SIF measurement (scitex-hpc)
+shows a first-launch penalty that exceeds the fixed 100ms bound on every
+interpreter — cold 136/168/193ms against warm 43-50ms — and that the cost is
+the *containerised interpreter*, not the node: same machine, host python
+cold 39ms / warm 18ms versus SIF cold 193ms / warm 46ms. A bound sampled
+once, on a freshly started container, will trip on any host running a SIF.
+That is a threshold-design question and gets its own change.
+
+An earlier reading attributed this to CI-node load; that was **refuted** by
+control measurement (loaded node 18ms, idle node 21ms) and is recorded as
+refuted rather than dropped.
+
+## [0.43.0] - 2026-08-05
+
+**A release that stops two rules from blocking the work they were meant to
+protect, and gives the host registry a way to be corrected.**
+
+The CI-runner rules were written under a "never use GitHub-hosted runners"
+mandate. The operator superseded that on 2026-08-05 — Spartan comes out of CI,
+hosted runners are a permitted fallback — and the rules had not caught up. Two
+of them were failing compliant work.
+
+### Fixed
+
+- **PS-169 no longer blocks the migration it exists to inform (#512).** The
+  rule shipped at `W` but escalated any violation NEW relative to the git
+  baseline to `E`. Under the new directive that is inverted: a repo running on
+  `ubuntu-latest` for months stayed at `W` (permitted), while a repo MOVING a
+  job off Spartan introduced a new violation and got blocked. Measured on
+  scitex-hub's PR #561, where it fired at `[E]` and blocked a PR whose fix
+  commit was titled "run the pack publish on the self-hosted pool". Every PR
+  in this migration is new-violation-shaped by definition.
+
+  The ratchet is removed, with no promote-to-`E` path left behind. Detection is
+  unchanged — hosted usage is still reported, because "why is this repo's CI
+  slow?" is a real question — but it is advisory and never fails a build. The
+  message, rule text and slug all said "forbidden without exception"; a rule
+  reporting at `W` while its text forbids teaches the reader the opposite of
+  what the gate does. `ci.yml.tmpl` carried the same claim and renders into
+  every repo, so a re-apply would have re-asserted the retired policy over a
+  per-repo fix.
+
+- **PS-224 accepts GitHub-provided destinations (#492, first shipped here).**
+  It landed on `develop` after `v0.42.0` was cut, so every repo installing
+  scitex-dev unpinned kept getting the old behaviour. Consequence measured by
+  scitex-hpc: their nightly `release-ci` failed four consecutive nights
+  (08-01..08-04), all four from this one rule — 14 violations, every one a
+  bare `[ubuntu-latest]`.
+
+  GitHub serves its own images, so such a job cannot exhibit the failure
+  PS-224 exists to catch: a destination no machine serves is not rejected, it
+  is QUEUED FOREVER. Those jobs were flagged only as a side effect of the
+  "unserved" arithmetic — harmless while hosted runners were forbidden, a false
+  positive at `E` the moment they were permitted. Self-hosted destinations are
+  still checked, at `E`, with no ratchet.
+
+- **PS-215 described a failure that cannot happen.** It told readers "a user
+  who runs this exact command gets a resolver error". `pip` does not refuse an
+  undeclared extra — it warns and EXITS 0 with the base package installed. The
+  docstring distinguished a loud case from a quiet one, and there is no loud
+  case: both exit 0. The user sees the remedy SUCCEED, hits the original
+  failure again, and has no reason to connect them. That is what makes the rule
+  worth having — not that the remedy errors, but that it cannot.
+
+### Added
+
+- **`HostRecord.aliases` — re-key a host without orphaning the old name
+  (#514).** Host names are on-disk KEYS (cron entries, JobSpecs, sync configs,
+  other packages' registry rows, card scopes); rewriting one silently orphans
+  every reference, and the orphan renders as "nothing to do" rather than as an
+  error.
+
+  The motivating case: the fleet's NAS numbering is GENERATIONAL — `nas-01` /
+  `nas-02` / `nas-03` ascend as machines are REPLACED — and the bare name `nas`
+  follows whatever is current. It is a MOVING ALIAS: when a `nas-04` arrives,
+  every config keyed on it addresses different hardware, with nothing logged.
+  A moving alias belongs in `aliases`, never in `name` — it is a way to REACH
+  a host, not a way to IDENTIFY one.
+
+  Canonical keys resolve first and exhaustively, so an alias can never capture
+  another host's canonical name. An alias claimed by two hosts raises rather
+  than picking one. Malformed alias lists fail loudly instead of degrading to
+  empty, since a silently-empty list is exactly the orphan this prevents.
+
+- **The host registry refuses an ambiguous write (#513).**
+  `get_hosts_yaml_path` resolves through `Path.home()`, which inside an agent
+  container is `/home/agent` — so a write from a container landed in a private
+  copy no host-side reader opens, and every layer reported success. Measured:
+  `sac host add` did this, and `sac host validate` then reported "ok, 2
+  peer(s)" about the shadow.
+
+  It survived because the two files are byte-identical — every CONTENT check
+  agrees, and only IDENTITY distinguishes them. Rather than detecting
+  containers (which needs a reliable signal and a hardcoded username, both of
+  which rot), the write path counts visible registries and REFUSES when more
+  than one exists. Reads are unchanged: a reader answering with what it can see
+  is defensible, a writer guessing is not.
+
+  Consequence, stated plainly because it is intended: no containerized agent
+  can write the registry by the default path. The refusal names the route —
+  run it on the bare host, where only one registry is visible and the same rule
+  permits it.
+
 ## [0.42.0] - 2026-08-04
 
 **A release about saying which thing you mean.** Every entry is a place where

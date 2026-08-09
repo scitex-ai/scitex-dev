@@ -28,8 +28,17 @@ scitex-dev ci runner register <repo-dir> --yes
 Rules:
 
 - Runner selection: Actions Variable `CI_RUNS_ON`, default
-  `["self-hosted","Linux","X64","scitex-ci"]`. NEVER `ubuntu-latest`
-  (PS-169 audit ERROR).
+  `["self-hosted","Linux","X64","scitex-ci"]`. Prefer hardware we own where
+  CI turnaround matters; `ubuntu-latest` is ALLOWED (free for public repos,
+  just slower) and is reported by PS-169 at **W — advisory, never blocking**.
+  Operator directive 2026-08-05 superseded the 2026-07-14 self-hosted-only
+  mandate; do NOT cite PS-169 as an ERROR, which this line did until now and
+  which led two peer agents to misdiagnose a blocked migration.
+- The runner rule that DOES block is **PS-224 (E)**: a **self-hosted** label
+  set no registered machine serves. Such a job is not slow, it is
+  undeliverable — GitHub queues an unmatchable job forever instead of
+  rejecting it. Label sets made entirely of GitHub-provided images are out of
+  scope (GitHub serves them).
 - Do NOT hand-write per-repo CI job bodies (the retired consolidated
   `pr-ci.yml`/`release-ci.yml` pair and the in-SIF `ci.yml.template` are
   gone); `apply` deletes superseded files, including `newb-docs*`.

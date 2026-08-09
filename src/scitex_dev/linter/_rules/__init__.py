@@ -16,7 +16,7 @@ Rules that talk about a specific package's API live in that package's
 - `P001-P005`   → figrecipe
 - `P006-P009`   → figrecipe (style-override kwargs)
 - `FM0xx`       → figrecipe (figure/millimetre + figure-doctrine; the family
-  grows, so read the live set from `scitex-dev linter rules --json` rather
+  grows, so read the live set from `scitex-dev linter list-rules --json` rather
   than trusting an id range written down here)
 - `FIG001`      → figrecipe
 
