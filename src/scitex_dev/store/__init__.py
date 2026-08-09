@@ -82,6 +82,7 @@ from ._errors import (
 )
 from ._guards import ANY_REVISION, NEW_RECORD
 from ._hlc import HLC, HybridLogicalClock
+from ._host import host_store, socket_dsn
 from ._merge import MergeConflict, MergeOutcome, merge_field
 from ._oplog import OpEntry, OpKind, assert_contiguous
 from ._policy import (
@@ -135,10 +136,12 @@ __all__ = [
     "apply_entry",
     "assert_contiguous",
     "discover_stores",
+    "host_store",
     "merge_field",
     "outstanding",
     "pull",
     "replay",
+    "socket_dsn",
     "sync",
 ]
 
