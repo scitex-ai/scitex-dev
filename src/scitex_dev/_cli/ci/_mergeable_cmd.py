@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # File: src/scitex_dev/_cli/ci/_mergeable_cmd.py
-"""``scitex-dev ci mergeable`` — a merge verdict a script can gate on.
+"""``scitex-dev ci verify`` — a merge verdict a script can gate on.
 
 Exit codes are the interface; the printed text is for the human who has to
 fix it::
@@ -32,11 +32,16 @@ def register_ci_commands(main_group: click.Group) -> None:
     def ci_group() -> None:
         """Commands that answer questions about CI state."""
 
+    # `verify`, not `mergeable`: the CLI audit rejects an adjective as a verb,
+    # and it is right to. Every other leaf in this CLI reads noun-verb, and
+    # `ci mergeable 521` parses as a claim ("this is mergeable") rather than
+    # an instruction — which is the opposite of what the command does, since
+    # its whole job is to REFUSE that claim when it cannot be substantiated.
     @ci_group.command(
-        "mergeable",
+        "verify",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Is PR actually mergeable? Per check, pinned to the current head.",
+            summary="Verify PR is actually mergeable, per check, on the current head.",
             description=(
                 "Reads PER-CHECK state and compares every check run's commit "
                 "against the pull request's CURRENT head, so a green "
@@ -50,11 +55,11 @@ def register_ci_commands(main_group: click.Group) -> None:
             ),
             examples=(
                 Example(
-                    "{prog} ci mergeable 521 --repo scitex-ai/scitex-dev",
+                    "{prog} ci verify 521 --repo scitex-ai/scitex-dev",
                     "Verdict for one pull request.",
                 ),
                 Example(
-                    "{prog} ci mergeable 521 --repo scitex-ai/scitex-dev --json",
+                    "{prog} ci verify 521 --repo scitex-ai/scitex-dev --json",
                     "Machine-readable, for a gating script.",
                 ),
             ),
@@ -73,7 +78,7 @@ def register_ci_commands(main_group: click.Group) -> None:
         default=False,
         help="Emit the full verdict as JSON.",
     )
-    def mergeable(pr: str, repo: str, as_json: bool) -> None:
+    def verify(pr: str, repo: str, as_json: bool) -> None:
         """Decide whether ``--repo``'s pull request ``PR`` may be merged."""
         from ...ci import readiness
 
