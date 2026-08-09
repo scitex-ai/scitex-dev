@@ -4,19 +4,26 @@
 
 The measured failure
 --------------------
-scitex-cards found **13 directory trees** on one host named::
+scitex-cards found directory trees on one host named::
 
     .../proj/scitex-cards/postgresql:/scitex_cards@127.0.0.1:5432/runtime/todo.db
 
-One per agent. Each is a real SQLite file. They are what
+Each is a real SQLite file that nothing reads. They are what
 ``Path("postgresql://scitex_cards@127.0.0.1:5432/...")`` does when something
 ``mkdir``s it relative to the process CWD: the DSN is not rejected, it is
 accepted as a relative path and materialised as directories.
 
-Three separate sites made this exact mistake in a single day. That is
-enough evidence to stop calling it carelessness. A ``str`` locator will be
-passed to ``Path()`` eventually, because a string that happens to describe
-a location is indistinguishable from a path to every API that takes one.
+**Two of them, not thirteen.** The first report said 13; scitex-db caught
+that it was one directory counted through thirteen symlinks, and
+scitex-cards corrected it within the hour. The accurate number is recorded
+here deliberately — an inflated one invites the next reader to check, find
+two, and discount the whole finding.
+
+Two is enough, because the argument was never the count. It is the SPREAD:
+three separate sites made the same ``Path(dsn)`` mistake within a single
+day. A ``str`` locator will reach ``Path()`` eventually, since a string
+that happens to describe a location is indistinguishable from a path to
+every API that takes one.
 
 The fix is a type, not a convention
 -----------------------------------
@@ -119,10 +126,11 @@ class PostgresDsn:
             "...).\n"
             "\n"
             "This is a MEASURED failure, not a hypothetical: doing it "
-            "produced 13 directory trees named "
-            "'postgresql:/<user>@<host>:<port>/runtime/todo.db' on one host, "
-            "each a real SQLite file that nothing reads, created relative to "
-            "whatever the process CWD happened to be.\n"
+            "produced directory trees named "
+            "'postgresql:/<user>@<host>:<port>/runtime/todo.db' on a live "
+            "host, each a real SQLite file that nothing reads, created "
+            "relative to whatever the process CWD happened to be. Two of "
+            "them, from three separate call sites in one day.\n"
             "\n"
             "If you want the connection string, ask for it by name: "
             "`target.dsn`. If you wanted a file, this store is not "

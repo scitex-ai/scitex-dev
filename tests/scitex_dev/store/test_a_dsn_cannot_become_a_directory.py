@@ -2,17 +2,22 @@
 # -*- coding: utf-8 -*-
 """A Postgres DSN must never be usable as a filesystem path.
 
-The measured failure, reported by scitex-cards: **13 directory trees** on
-one host named ``postgresql:/<user>@<host>:<port>/runtime/todo.db``, one per
-agent, each a real SQLite file that nothing reads. They are what
-``Path("postgresql://...")`` produces when something ``mkdir``s it relative
-to the process CWD — the DSN is not rejected, it is accepted as a relative
-path.
+The measured failure, reported by scitex-cards: directory trees on a live
+host named ``postgresql:/<user>@<host>:<port>/runtime/todo.db``, each a real
+SQLite file that nothing reads. They are what ``Path("postgresql://...")``
+produces when something ``mkdir``s it relative to the process CWD — the DSN
+is not rejected, it is accepted as a relative path.
 
-Three separate sites made this mistake in a single day. That is enough to
-stop treating it as carelessness: a ``str`` locator WILL be passed to
-``Path()``, because a string that describes a location is indistinguishable
-from a path to every API that takes one.
+**Two of them, not the thirteen first reported** — scitex-db caught that the
+original count walked one directory through thirteen symlinks. The accurate
+number is used here on purpose: an inflated one invites the next reader to
+check, find two, and discount the finding.
+
+The argument was never the count. It is the SPREAD: three separate sites
+made the same mistake in a single day, which is enough to stop treating it
+as carelessness. A ``str`` locator WILL be passed to ``Path()``, because a
+string that describes a location is indistinguishable from a path to every
+API that takes one.
 
 So the guard is a TYPE, and these tests assert the misuse raises rather
 than that a convention is documented.
@@ -101,13 +106,31 @@ def test_passing_a_dsn_locator_to_open_raises(pg_target):
 def test_the_path_error_names_the_measured_incident(path_error):
     """The message must teach, not just refuse. Constitution §2."""
     # Arrange
-    expected = "13 directory trees"
+    expected = "runtime/todo.db"
 
     # Act
     message = path_error
 
     # Assert
     assert expected in message
+
+
+def test_the_path_error_does_not_cite_the_retracted_count(path_error):
+    """The inflated 13 must not survive anywhere a reader will trust it.
+
+    scitex-db caught that the original count walked one directory through
+    thirteen symlinks. A refuted number left in a permanent error message
+    is worse than no number: the next reader checks, finds two, and stops
+    believing the rest of the message.
+    """
+    # Arrange
+    retracted = "13 directory trees"
+
+    # Act
+    message = path_error
+
+    # Assert
+    assert retracted not in message
 
 
 def test_the_path_error_points_at_the_named_accessor(path_error):

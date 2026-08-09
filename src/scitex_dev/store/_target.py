@@ -12,7 +12,7 @@ The locator is TYPED, not a string
 ``target.locator`` is a :class:`~._locator.SqlitePath` or a
 :class:`~._locator.PostgresDsn`, never a bare ``str``. A DSN passed to any
 filesystem API raises instead of being materialised as directories named
-after the database — see :mod:`._locator` for the 13 measured instances of
+after the database — see :mod:`._locator` for the measured instances of
 that happening in production.
 
 ``StoreTarget`` itself is likewise not path-like: it defines no
