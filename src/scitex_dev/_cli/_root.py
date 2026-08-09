@@ -495,3 +495,7 @@ register_list_python_apis_command(main)
 from .gate import register_gate_command
 
 register_gate_command(main)
+
+from .ci import register_ci_commands
+
+register_ci_commands(main)
