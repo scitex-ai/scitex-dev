@@ -82,6 +82,27 @@ class PostgresDialect(Dialect):
     def column_type(self, kind: FieldKind) -> str:
         return _TYPES[kind]
 
+    def columns_sql(self, table: str) -> str:
+        """Existing column names from `information_schema`.
+
+        Returns zero rows for a table that does not exist, matching the
+        SQLite dialect's contract — the caller reads that as "nothing to
+        migrate".
+
+        `to_regclass` is deliberately NOT used: it resolves through the
+        search_path and would report a same-named table in another schema as
+        this one. `information_schema.columns` filtered on `table_name` has
+        the same exposure in principle, so this stays consistent with how the
+        rest of this dialect addresses tables — unqualified, in whatever
+        schema the connection lands. If the store ever takes a schema
+        qualifier, this query and `quote` change together.
+        """
+        escaped = table.replace("'", "''")
+        return (
+            "SELECT column_name FROM information_schema.columns "
+            f"WHERE table_name = '{escaped}'"
+        )
+
     def upsert_sql(self, table: str, columns: Sequence[str], key: str) -> str:
         """``INSERT ... ON CONFLICT (key) DO UPDATE``."""
         column_list = ", ".join(self.quote(c) for c in columns)

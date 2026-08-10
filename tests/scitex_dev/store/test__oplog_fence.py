@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from scitex_dev.store._errors import SupersededFenceError
+from scitex_dev.store._errors import StoreError, SupersededFenceError
 from scitex_dev.store._hlc import HLC
 from scitex_dev.store._oplog import (
     FENCE_UNKNOWN,
@@ -26,6 +26,7 @@ from scitex_dev.store._oplog import (
     OpKind,
     assert_not_superseded,
 )
+from scitex_dev.store._replication import replay
 
 
 def _entry(seq: int, *, fence: int = FENCE_UNKNOWN, origin: str = "node-a") -> OpEntry:
@@ -214,23 +215,15 @@ def test_an_entry_defaults_to_unfenced():
     assert fence == FENCE_UNKNOWN
 
 
-def test_a_fence_does_not_survive_a_round_trip_yet(local):
-    """PINS A KNOWN GAP: the fence is in-memory only, and that is deliberate.
+def test_a_fence_survives_a_round_trip(local):
+    """The fence PERSISTS — this replaces the boundary test that pinned the gap.
 
-    `Store._store_op` writes the seven columns of `_OPLOG_COLUMNS`, and
-    `fence` is not among them. A fence set on an entry is therefore DROPPED
-    on write and reads back as FENCE_UNKNOWN.
-
-    This test exists because a field that silently fails to persist is a
-    trap: every signature accepts it, nothing rejects it, and the loss shows
-    up as "the fence was never set" rather than as an error. Asserting the
-    CURRENT behaviour converts a hidden trap into a stated boundary — and it
-    FAILS the moment persistence is added, which is exactly when someone
-    should be forced to come back and delete it.
-
-    Adding the column is a migration: `CREATE TABLE IF NOT EXISTS` will not
-    add it to stores that already exist. That migration lands together with
-    the replay wiring, not before it.
+    Its predecessor, `test_a_fence_does_not_survive_a_round_trip_yet`,
+    asserted the opposite on purpose: the field existed but `_store_op` did
+    not write it, and a field that silently fails to persist is a trap rather
+    than a feature. That test was written to FAIL the moment persistence
+    landed, forcing whoever added it back here. It did exactly that, and this
+    is the replacement.
     """
     # Arrange
     entry = OpEntry(
@@ -248,7 +241,71 @@ def test_a_fence_does_not_survive_a_round_trip_yet(local):
     read_back = local.changes_since(local.node, 0)[0]
 
     # Assert
-    assert read_back.fence == FENCE_UNKNOWN
+    assert read_back.fence == 3
+
+
+def test_a_store_starts_with_no_fence_for_an_unknown_peer(local):
+    """An unheard-of peer is unfenced, not fenced at some arbitrary value."""
+    # Arrange
+    source = "never-seen"
+
+    # Act
+    fence = local.fence(source)
+
+    # Assert
+    assert fence == FENCE_UNKNOWN
+
+
+def test_a_recorded_fence_is_read_back(local):
+    """set_fence / fence round-trip through the cursor table."""
+    # Arrange
+    local.set_fence("peer", 4)
+
+    # Act
+    fence = local.fence("peer")
+
+    # Assert
+    assert fence == 4
+
+
+def test_lowering_a_fence_is_refused(local):
+    """Lowering re-admits the writer the fence was raised to exclude."""
+    # Arrange
+    local.set_fence("peer", 4)
+
+    # Act
+    error = None
+    try:
+        local.set_fence("peer", 3)
+    except StoreError as exc:
+        error = exc
+
+    # Assert
+    assert error is not None
+
+
+def test_recording_a_fence_leaves_the_cursor_untouched(local):
+    """The two share a table; they must not overwrite one another."""
+    # Arrange
+    local.set_cursor("peer", 7)
+
+    # Act
+    local.set_fence("peer", 2)
+
+    # Assert
+    assert local.cursor("peer") == 7
+
+
+def test_advancing_the_cursor_leaves_the_fence_untouched(local):
+    """The same invariant from the other direction."""
+    # Arrange
+    local.set_fence("peer", 2)
+
+    # Act
+    local.set_cursor("peer", 7)
+
+    # Assert
+    assert local.fence("peer") == 2
 
 
 def test_a_negative_fence_is_refused_at_construction():
@@ -268,6 +325,112 @@ def test_a_negative_fence_is_refused_at_construction():
     # Assert
     with pytest.raises(ValueError):
         OpEntry(**kwargs)
+
+
+# -- END TO END through replay(), which is the claim that matters ------------
+#
+# Everything above tests the pure function and the persistence separately.
+# Neither proves the two are CONNECTED. A guard that is implemented, stored
+# and never called is the failure this whole card has been about, so the
+# acceptance test is the INVERSION run through the real entry point.
+
+
+def _remote_entry(seq: int, *, fence: int, origin: str = "peer") -> OpEntry:
+    """An op as it would arrive from a peer."""
+    return OpEntry(
+        origin=origin,
+        seq=seq,
+        record=f"card-{seq}",
+        op=OpKind.UPSERT,
+        payload={"id": f"card-{seq}", "status": "open"},
+        hlc=HLC(wall_us=seq, logical=0, node=origin),
+        fence=fence,
+    )
+
+
+def test_replay_rejects_a_batch_from_a_superseded_writer(local):
+    """THE ACCEPTANCE TEST: a demoted peer's ops do not get applied.
+
+    This is the one that would have failed before the wiring, and the reason
+    the pure-function tests were not enough on their own.
+    """
+    # Arrange
+    local.set_fence("peer", 5)
+
+    # Act
+    error = None
+    try:
+        replay(local, "peer", [_remote_entry(1, fence=2)])
+    except SupersededFenceError as exc:
+        error = exc
+
+    # Assert
+    assert error is not None
+
+
+def test_replay_applies_a_batch_from_the_current_writer(local):
+    """The control pole: the wiring must not reject everything."""
+    # Arrange
+    local.set_fence("peer", 5)
+
+    # Act
+    result = replay(local, "peer", [_remote_entry(1, fence=5)])
+
+    # Assert
+    assert result.applied == 1
+
+
+def test_replay_adopts_the_fence_it_accepted(local):
+    """Accepting under a higher fence must RAISE the bar for later batches.
+
+    Without this the check compares against 0 forever and can never fire —
+    implemented, called, and still useless.
+    """
+    # Arrange
+    local.set_fence("peer", 1)
+
+    # Act
+    replay(local, "peer", [_remote_entry(1, fence=4)])
+
+    # Assert
+    assert local.fence("peer") == 4
+
+
+def test_a_later_batch_below_the_adopted_fence_is_rejected(local):
+    """The sequence the fence exists for, played out in order.
+
+    A peer writes under fence 4, is demoted, and its stale process sends more
+    ops under fence 2. Those ops are contiguous and well-clocked; only the
+    fence stops them.
+    """
+    # Arrange
+    replay(local, "peer", [_remote_entry(1, fence=4)])
+
+    # Act
+    error = None
+    try:
+        replay(local, "peer", [_remote_entry(2, fence=2)])
+    except SupersededFenceError as exc:
+        error = exc
+
+    # Assert
+    assert error is not None
+
+
+def test_an_unfenced_peer_still_replays(local):
+    """Nothing that worked before the fence existed may stop working.
+
+    Every op in the fleet today carries FENCE_UNKNOWN, so if this regressed
+    the feature would break all replication the moment it shipped.
+    """
+    # Arrange
+    entries = [_remote_entry(1, fence=FENCE_UNKNOWN)]
+
+    # Act
+    result = replay(local, "peer", entries)
+
+    # Assert
+    assert result.applied == 1
 
 
 # EOF

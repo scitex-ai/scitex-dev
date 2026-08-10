@@ -48,13 +48,23 @@ from ._guards import (
 from ._hlc import HLC, HybridLogicalClock
 from ._merge import MergeConflict
 from ._oplog import OpEntry, OpKind
+from ._peer_state import PeerState
 from ._policy import FieldRole, Schema, WriterPolicy
 from ._row import Row
 from ._target import StoreTarget
 
 __all__ = ["ANY_REVISION", "NEW_RECORD", "PutResult", "Store"]
 
-_OPLOG_COLUMNS = ("origin", "seq", "record", "op", "payload", "hlc", "actor")
+_OPLOG_COLUMNS = (
+    "origin",
+    "seq",
+    "record",
+    "op",
+    "payload",
+    "hlc",
+    "actor",
+    "fence",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +83,7 @@ class PutResult:
     conflicts: tuple[MergeConflict, ...] = ()
 
 
-class Store:
+class Store(PeerState):
     """An open store: one schema, one backend, one node identity."""
 
     def __init__(
@@ -105,6 +115,7 @@ class Store:
         self._connection = self.dialect.connect(target)
         for statement in self.dialect.create_sql(schema):
             self._connection.execute(statement)
+        self._apply_additive_migrations(schema)
 
     # -- lifecycle --------------------------------------------------------
     def close(self) -> None:
@@ -251,72 +262,11 @@ class Store:
                 return None
             return self._revision(record)
 
-    # -- oplog surface ----------------------------------------------------
-    def changes_since(
-        self, origin: str, seq: int, *, limit: int = 1000
-    ) -> list[OpEntry]:
-        """Ops from ``origin`` after ``seq``, ordered and contiguous.
-
-        What a peer calls to pull. Returns a prefix starting at ``seq + 1``;
-        :func:`~._replication.replay` verifies that before applying any of
-        it.
-        """
-        with self._lock:
-            table = self.dialect.quote(self.dialect.oplog_table(self.schema))
-            sql = (
-                f"SELECT * FROM {table} WHERE "
-                f"{self.dialect.quote('origin')} = {self.dialect.placeholder(0)} "
-                f"AND {self.dialect.quote('seq')} > {self.dialect.placeholder(1)} "
-                f"ORDER BY {self.dialect.quote('seq')} ASC LIMIT {int(limit)}"
-            )
-            found = self._connection.execute(sql, (origin, seq)).fetchall()
-            return [OpEntry.from_row(record) for record in found]
-
-    def origins(self) -> dict[str, int]:
-        """Every origin in the log, mapped to its highest sequence."""
-        with self._lock:
-            table = self.dialect.quote(self.dialect.oplog_table(self.schema))
-            sql = (
-                f"SELECT {self.dialect.quote('origin')} AS origin, "
-                f"MAX({self.dialect.quote('seq')}) AS max_seq FROM {table} "
-                f"GROUP BY {self.dialect.quote('origin')}"
-            )
-            return {
-                record["origin"]: int(record["max_seq"])
-                for record in self._connection.execute(sql).fetchall()
-            }
-
-    def cursor(self, source: str) -> int:
-        """The last sequence applied from ``source``; 0 when never applied."""
-        with self._lock:
-            table = self.dialect.quote(self.dialect.cursor_table(self.schema))
-            sql = (
-                f"SELECT {self.dialect.quote('seq')} AS seq FROM {table} "
-                f"WHERE {self.dialect.quote('source')} = "
-                f"{self.dialect.placeholder(0)}"
-            )
-            found = self._connection.execute(sql, (source,)).fetchone()
-            return int(found["seq"]) if found is not None else 0
-
-    def set_cursor(self, source: str, seq: int) -> None:
-        """Advance the replay cursor. Never moves it backwards."""
-        with self._lock:
-            existing = self.cursor(source)
-            if seq < existing:
-                raise StoreError(
-                    f"Refusing to move the replay cursor for {source!r} "
-                    f"backwards from {existing} to {seq}. Rewinding re-applies "
-                    "ops already applied, dragging field timestamps backwards. "
-                    "For a genuine re-sync, rebuild from the log instead."
-                )
-            table = self.dialect.cursor_table(self.schema)
-            sql = self.dialect.upsert_sql(table, ["source", "seq"], "source")
-            self._connection.execute(sql, (source, seq))
-
-    def next_seq(self) -> int:
-        """The sequence this node's next op will carry."""
-        with self._lock:
-            return self.origins().get(self.node, 0) + 1
+    # -- oplog surface -----------------------------------------------------
+    # `changes_since`, `origins`, `next_seq`, `cursor`/`set_cursor` and
+    # `fence`/`set_fence` live in `_peer_state.PeerState`. They are all
+    # "what this node knows about OTHER nodes" and touch only the oplog and
+    # cursor tables, never the rows table's merge policies.
 
     def apply_remote(self, entry: OpEntry) -> PutResult:
         """Apply one op that arrived from a peer.
@@ -370,6 +320,7 @@ class Store:
                 entry.payload_json(),
                 entry.hlc.encode(),
                 entry.actor,
+                entry.fence,
             ),
         )
 
