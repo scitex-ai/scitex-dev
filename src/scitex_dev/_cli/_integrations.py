@@ -10,7 +10,6 @@ DOMAIN — what the tool IS, mounted at top level:
 
 * ``mcp``     — MCP server lifecycle.
 * ``creds``   — credential distribution.
-* ``cardsync``— measure drift between the fleet's card stores (read-only).
 * ``service`` — keep a declared ``kind='service'`` daemon alive
                 (systemd --user or respawn fallback).
 * ``host``    — the SciTeX-wide host registry (where is host X, and
@@ -40,7 +39,6 @@ def register_integration_commands(main: click.Group, dev: click.Group) -> None:
     level, which is the state this migration exists to leave.
     """
     from ._mcp_cmds import register_mcp_commands
-    from .cardsync import register_cardsync_commands
     from .creds import register_creds_commands
     from .cron import register_cron_commands
     from ._hooks_cli import register_hooks_commands
@@ -48,7 +46,6 @@ def register_integration_commands(main: click.Group, dev: click.Group) -> None:
     from ._hosts import register_host_commands
 
     register_mcp_commands(main)
-    register_cardsync_commands(main)
     register_creds_commands(main)
     register_service_commands(main)
     register_host_commands(main)
