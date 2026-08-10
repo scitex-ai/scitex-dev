@@ -135,18 +135,20 @@ instead of two that disagree.
 The operator asked what the socket's weaknesses were. The honest answer
 retired the decision:
 
-> ソケットでやると自由度が減る … やっぱり55432の方で進めてもらっても
-> いいですか すなわちファイル書き込み権限とかだとやっぱりややこしい気が
-> して acl とかやりにくいのかな
+> A socket gives us less freedom. Can we go with 55432 after all? File
+> write permissions get complicated, and ACLs are awkward that way.
 >
-> 外部ユーザーが scitex.ai にある TCP につなぐとか いろんなユーザー権限の
-> エージェントが繋ぐとか 特に a2a で繋がってる外部のエージェントとかが
-> もしかしたら参加するかもしれない
+> External users connecting to the TCP endpoint on scitex.ai, agents at
+> all sorts of different privilege levels connecting — especially external
+> agents joining over A2A.
+>
+> — the operator, 2026-08-10 (rendered in English; the original was spoken
+>   Japanese, which by standing rule does not appear on public surfaces)
 
 **A UNIX socket cannot express WHO.** Its entire access-control vocabulary
 is "can this process open this path" — one bit, carrying no identity beyond
 uid. The requirement is per-agent, per-project, per-collaborator ACL plus
-recorded authorship ("誰が書いたか"). The filesystem is the wrong layer for
+recorded authorship ("who wrote this"). The filesystem is the wrong layer for
 that question; Postgres roles are the right one.
 
 Decision 3 said hosts never connect to each other's Postgres, and that
@@ -164,7 +166,8 @@ narrower question than the system was going to ask.
 
 - **55432, never 5432.** Unchanged, and for the unchanged reason below.
 - **External connections are permitted** — not merely localhost.
-- **Keys/TLS are mandatory.** Operator-confirmed: 「もちろん鍵は必須です」.
+- **Keys/TLS are mandatory.** Operator-confirmed, 2026-08-10: "of course keys
+  are required."
 - **`scram-sha-256`. Never `trust`.**
 - **Per-human and per-agent roles**, not one shared superuser.
 - **Row-level ACL enforced IN THE DATABASE**, not in client code — a check
@@ -203,8 +206,12 @@ its blast radius grows.
 
 Raised by the operator, 2026-08-10:
 
-> 「コンテナの外にデータベースの実態をおかないと、コンテナを壊したときに
->   データが復旧できなくなるので、そういった状態は検知してエラーを出す」
+> Unless the database itself lives outside the container, the data cannot be
+> recovered when the container is destroyed — so detect that state and raise
+> an error.
+>
+> — the operator, 2026-08-10 (rendered in English; the original was spoken
+>   Japanese, which by standing rule does not appear on public surfaces)
 
 He was right that it was missing. Decision 2 *implied* durable storage and
 `_host.py` carried a comment asserting PGDATA is bind-mounted outside any
@@ -267,6 +274,67 @@ exists to prevent.
 > load-bearing one calls `host_store()` and asserts the refusal, so it fails
 > if a future transport change drops the call.
 > See card `dev-adr0006-decision7-reverse-to-tcp-55432-with-acl-20260810`.
+
+### 9. MULTI-WRITER per record — concurrent writers are the designed-for case
+
+Added 2026-08-10. This ADR was silent on its concurrency model, and the
+silence was not free: **two complete implementations were built against it,
+each reading it a different way**, before anyone noticed they disagreed.
+
+- `feat/store-oplog-replay` assumed SINGLE-writer-per-record — "no conflicts
+  to detect, no Lamport or vector clocks to keep" — and raises
+  `SingleWriterViolationError` when two origins touch one record.
+- What shipped on `develop` assumes MULTI-writer: ops carry only changed
+  fields, and `_policy.py` / `_merge.py` resolve per field (LWW, MAX,
+  element-keyed APPEND, UNION) ordered by hybrid logical clock.
+
+One design's normal case is the other's raised error. That is not a feature
+gap that could be closed by porting; it is a fork.
+
+#### The decision
+
+**Multi-writer.** Concurrent writers to one record are expected and are
+resolved per FIELD, never per row.
+
+#### Why — the operator's reason, which is the load-bearing one
+
+> Multi-writer is better — we don't know how busy it's going to get.
+>
+> — the operator, 2026-08-10 (rendered in English; the original was spoken
+>   Japanese, which by standing rule does not appear on public surfaces)
+
+Single-writer-per-record is not merely a simpler model; it is a **bet on
+topology and load**. It buys its simplicity by assuming a property nothing
+enforces. The fleet already has agents, a board, HTTP handlers and — after
+Decision 7 — external TCP clients all writing the same records, and the
+operator is explicitly unwilling to bet on how contended that becomes.
+
+The decisive property is the FAILURE MODE when the bet is wrong. A
+single-writer store meeting a second writer does not degrade; under
+`(origin, seq)` causal ordering it either raises or silently picks a winner,
+and "silently picks a winner" is the lost update this ADR already spent a
+card on. Multi-writer costs an HLC and a merge policy per field, permanently,
+and in exchange has no wrong-assumption state to enter.
+
+#### What is retained from the rejected design
+
+**Fencing.** `SupersededFenceError` — an op authored under a fence that has
+since been superseded, so a DEMOTED writer's ops cannot replicate as
+legitimate. This hazard is orthogonal to the conflict model: field-level
+merge does not care whether the writer was still entitled to write. It ports
+cleanly precisely because it does not rest on the single-writer assumption.
+
+**Not retained: intent-based dedup** (`has_intent`). Under this model,
+changed-fields-only UPSERT and element-keyed APPEND are idempotent by
+construction, so a client retry converges without an idempotency key.
+Recorded as a deliberate omission rather than an oversight — if a case
+appears where retry is NOT idempotent, that case reopens this line.
+
+#### The lesson this decision exists to prevent repeating
+
+An ADR that omits its concurrency model does not read as incomplete. It reads
+as finished, and two competent readers will fill the gap differently and
+build. **State the model, not just the mechanism.**
 
 ## Consequences
 
