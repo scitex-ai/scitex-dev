@@ -36,7 +36,7 @@ def _entry(seq: int, *, fence: int = FENCE_UNKNOWN, origin: str = "node-a") -> O
         record="card-1",
         op=OpKind.UPSERT,
         payload={"status": "open"},
-        hlc=HLC(wall=1, counter=0, node=origin),
+        hlc=HLC(wall_us=1, logical=0, node=origin),
         fence=fence,
     )
 
@@ -204,7 +204,7 @@ def test_an_entry_defaults_to_unfenced():
         record="card-1",
         op=OpKind.UPSERT,
         payload={},
-        hlc=HLC(wall=1, counter=0, node="node-a"),
+        hlc=HLC(wall_us=1, logical=0, node="node-a"),
     )
 
     # Act
@@ -223,7 +223,7 @@ def test_a_negative_fence_is_refused_at_construction():
         record="card-1",
         op=OpKind.UPSERT,
         payload={},
-        hlc=HLC(wall=1, counter=0, node="node-a"),
+        hlc=HLC(wall_us=1, logical=0, node="node-a"),
         fence=-1,
     )
 
