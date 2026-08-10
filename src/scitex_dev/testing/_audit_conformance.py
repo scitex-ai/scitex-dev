@@ -89,6 +89,30 @@ _NON_VIOLATION_RULES: "frozenset[str]" = frozenset(
 #: this module used to strip it only to reach the bracket and then ignore it.
 _NON_VIOLATION_LEVELS: "frozenset[str]" = frozenset({"WARN", "INFO", "SUCC", "NOTE"})
 
+#: Level words that ARE failures. Needed separately from the non-violation
+#: set because an UNBRACKETED line has no rule id to fall back on, so "not a
+#: known warn word" is too weak a test — a line prefixed with any random
+#: `word:` would qualify. Here the level must be positively recognised.
+_ERROR_LEVELS: "frozenset[str]" = frozenset(
+    {"ERRO", "ERROR", "FAIL", "FAILED", "FATAL", "CRIT", "CRITICAL"}
+)
+
+
+def _is_error_tier(level: str) -> bool:
+    """Is this level word an error, positively identified?
+
+    Used only for lines with NO rule bracket, where there is no rule id to
+    reason about and the level word is the entire signal.
+
+    Deliberately a whitelist. The inverse test — "not in
+    ``_NON_VIOLATION_LEVELS``" — would promote any unrecognised `word:`
+    prefix to an error, so a line like ``note: skipping`` or a stray
+    ``usage:`` would fail the gate. Given this branch exists to make a
+    silent pass become a red build, being wrong in that direction produces
+    unexplainable failures, which is how a gate gets disabled wholesale.
+    """
+    return level.strip().upper() in _ERROR_LEVELS
+
 
 def _is_gate_violation(level: str, payload: str) -> bool:
     """Does this reported line actually fail the gate?
@@ -268,6 +292,29 @@ def audit_all_for_package(
             level = head[0].strip().upper() if has_level else ""
             payload = head[1].lstrip() if has_level else stripped
             if not (payload.startswith("[") or payload.startswith("[E]")):
+                # AN ERROR WITHOUT A RULE ID STILL COUNTS, and it is the one
+                # kind of finding that can never be masked.
+                #
+                # This line used to be a bare `continue`, which dropped such
+                # lines into NEITHER bucket. They then could not appear in
+                # `non_skipped`, so the `if skipped and not non_skipped` guard
+                # below masked the whole failure — a gate passing on the
+                # strength of an error it did not know how to read.
+                #
+                # The lines that hit this path are the ones that matter most:
+                # the auditor reporting it could not RUN. Measured in the wild
+                # — scitex-hub's CI has carried
+                #     Error: No module named 'requests'
+                # since 2026-08-05, visible in the log and invisible to this
+                # classifier for four days.
+                #
+                # Masking is keyed on rule id, so a line carrying no rule id
+                # cannot be matched by any skip_rules entry. That is correct
+                # by design: an auditor that could not run must not be
+                # maskable. It also means this branch can only ever ADD to
+                # `non_skipped`, never to `skipped`.
+                if _is_error_tier(level):
+                    non_skipped.append(line)
                 continue
             if not _is_gate_violation(level, payload):
                 continue

@@ -118,6 +118,61 @@ class Dialect(ABC):
         """Name of the per-source replay-cursor table."""
         return f"{schema.name}_cursor"
 
+    # -- additive migration -----------------------------------------------
+    #
+    # `create_sql` uses CREATE TABLE IF NOT EXISTS, which is correct for a
+    # store that does not exist yet and INERT for one that does. So a column
+    # added to a table definition reaches NEW stores only; every existing
+    # store keeps the old shape, and the first INSERT naming the new column
+    # fails there. A schema change that works on a fresh checkout and breaks
+    # every deployed store is the worst shape available, because it passes
+    # every test written against a temp directory.
+    #
+    # These two methods close that gap for the ADDITIVE case, which is the
+    # only case this store needs: a new nullable/defaulted column. Dropping
+    # or retyping a column is deliberately NOT supported — it is destructive
+    # and belongs in a reviewed one-off, not in a path that runs on every
+    # open.
+
+    @abstractmethod
+    def columns_sql(self, table: str) -> str:
+        """A SELECT returning one row per existing column of ``table``.
+
+        The first column of each row must be the column NAME. Used to decide
+        whether an additive migration is needed, so it must not raise on a
+        table that does not exist — return no rows instead.
+        """
+
+    def add_column_sql(self, table: str, column: str, coltype: str, default: str) -> str:
+        """DDL adding one column. Only ever called when it is absent.
+
+        No ``IF NOT EXISTS``: the caller has already established absence by
+        reading :meth:`columns_sql`, and a silent no-op here would hide a
+        disagreement between that read and reality rather than surface it.
+        """
+        return (
+            f"ALTER TABLE {self.quote(table)} ADD COLUMN "
+            f"{self.quote(column)} {coltype} NOT NULL DEFAULT {default}"
+        )
+
+    def additive_columns(self, schema: Schema) -> list[tuple[str, str, str, str]]:
+        """``(table, column, type, default)`` for every column added since v1.
+
+        Each entry is applied only where missing. Append here when adding a
+        column to :meth:`create_sql`; the two must agree, or a fresh store and
+        a migrated one end up with different shapes — which is the divergence
+        this whole mechanism exists to prevent.
+        """
+        integer = self.column_type(FieldKind.INTEGER)
+        return [
+            # The oplog fence: the authority an op was written under.
+            # See _errors.SupersededFenceError.
+            (self.oplog_table(schema), "fence", integer, "0"),
+            # The highest fence accepted from a peer, alongside its cursor —
+            # both are "what we know about that peer", so they share a table.
+            (self.cursor_table(schema), "fence", integer, "0"),
+        ]
+
     def create_sql(self, schema: Schema) -> list[str]:
         """Every DDL statement needed for ``schema``, in execution order.
 
@@ -155,10 +210,12 @@ class Dialect(ABC):
             f"{self.quote('payload')} {text} NOT NULL, "
             f"{self.quote('hlc')} {text} NOT NULL, "
             f"{self.quote('actor')} {text} NOT NULL, "
+            f"{self.quote('fence')} {integer} NOT NULL DEFAULT 0, "
             f"PRIMARY KEY ({self.quote('origin')}, {self.quote('seq')}))",
             f"CREATE TABLE IF NOT EXISTS {self.quote(cursor)} ("
             f"{self.quote('source')} {text} PRIMARY KEY, "
-            f"{self.quote('seq')} {integer} NOT NULL)",
+            f"{self.quote('seq')} {integer} NOT NULL, "
+            f"{self.quote('fence')} {integer} NOT NULL DEFAULT 0)",
             f"CREATE INDEX IF NOT EXISTS {self.quote(oplog + '_record_idx')} "
             f"ON {self.quote(oplog)} ({self.quote('record')})",
             f"CREATE INDEX IF NOT EXISTS {self.quote(rows + '_hidden_idx')} "

@@ -7,6 +7,156 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-08-10
+
+**A release in two halves, joined by one idea: refuse to answer when you
+cannot.** The store learns to reject writes it cannot justify — an entitlement
+fence on the oplog, a compare-and-set that can no longer be opted out of by
+accident, and two guards that catch a store configured to lose its data. On the
+other side, three more checks stop reporting "fine" for runs in which they
+measured nothing. That was 0.41.0's theme as well, and the recurrence is the
+point: an exit code, a log classifier and an empty API answer each looked like
+their own small bug, and all three were the same mistake.
+
+### Added
+
+- **The oplog FENCE — "was this writer still entitled?" (#538, #539).**
+  `Store.put` takes a three-valued `expected_revision`: `NEW_RECORD`, an int,
+  or `ANY_REVISION`. The third is the opt-out, it had ZERO production call
+  sites, and nothing enforced that. `store/README.md` told the reader to run
+  `rg ANY_REVISION` to audit it by hand, which makes the guarantee depend on
+  someone remembering to look. It is now a test that fails, shipped with the
+  additive migration the fence needs. This is sequencing for ADR-0006
+  Decision 7, which opens TCP 55432 to external clients: a lock nobody can
+  bypass has to exist *before* there are clients who could bypass it.
+
+- **`kind` accepts the INTENT spellings `daemon` / `periodic` (#542).** The
+  three existing kinds mixed two axes. `service` names an intent and already
+  spans two mechanisms (a systemd unit, or the respawn loop used where
+  `systemd --user` is absent), while `timer` and `cron` are the *same* intent
+  with the scheduler welded into the type name. The new spellings normalise on
+  the way in, with no provider changes, so nothing has to migrate to benefit.
+
+### Performance
+
+- **Bulk store writes share one transaction — ~8.7x (#541).** Both dialects
+  connect in autocommit, which is right for a single interactive write and
+  wrong for bulk work: one logical op costs three statements (oplog insert,
+  row upsert, cursor advance) and therefore three commits. Adopting the real
+  3,712-card board took 87.7s, which is what surfaced it. Measured at both
+  scales because they could have had opposite signs — 3,712-op adoption
+  18.59 → 2.06 ms/op (9.0x), and 60 replays of 5 ops 8.99 → 1.04 ms/op
+  (8.65x).
+
+### Fixed
+
+- **`ci verify` reported "the pull request is NOT ready to merge" when it had
+  simply not been able to run.** `EXIT_NOT_READY` was `2`, and **Click exits 2
+  on a usage error** — before any of our code runs. So an installed
+  scitex-dev predating the `ci verify` subcommand answered
+  `No such command 'verify'` with exit 2, and the gating hook rendered that
+  as a confident verdict about a pull request that was green on 7/7 checks.
+
+  Exit codes are now `0` ready / `10` not ready / `11` cannot determine,
+  leaving `1` and `2` to the framework. The collision is enforced by
+  `assert_no_domain_code_is_framework_reserved()`, which runs **at import**
+  in every process that imports the module — including the subprocess a
+  gating hook shells out to.
+
+  The constitution already forbade this in as many words (§2), and the rule
+  was walked past by someone who had read it, inside the change that fixed
+  two sibling instances of the same defect. That is why the check executes
+  rather than advises: a rule that must be remembered is forgotten exactly
+  when it matters.
+
+  `EXIT_USAGE` was also declared as `1`, which was wrong — Click uses `2`.
+  Mislabelling someone else's exit code is how `2` came to look free.
+
+- **A dead attempt counted forever, so no re-run could ever clear it.** One
+  head commit can carry several runs of a check name — a manual re-run, or a
+  push and the pull request opened from it. Every row counted, so an attempt
+  that died from infrastructure poisoned the verdict permanently. A verifier
+  that cannot be un-failed by a successful re-run is broken precisely where
+  re-runs exist.
+
+  Only the most recently **created** attempt per name decides readiness, which
+  is what branch protection uses. **Created, not started:** a queued run can
+  start later than a run created after it, and ordering by start time
+  produced a green verdict on a pull request GitHub was holding at
+  `BLOCKED`. Superseded attempts are still reported, never dropped, so an
+  intermittent check stays visible instead of being laundered into a pass by
+  one lucky retry.
+
+- **The verdict printed a SHA that the merge command rejects.** `render()`
+  abbreviated the head, and `--match-head-commit` refuses anything but the
+  full 40 characters, so the documented two-step handed the reader a value
+  the second step would not accept. The pin is the whole safety mechanism,
+  and a pin that errors is a pin people stop passing. The verdict now prints
+  the full head and emits the ready-to-run pinned merge command.
+
+- **The audit gate could pass on an error it did not know how to read.** The
+  skip-rules classifier only examined lines whose payload began with `[`.
+  Anything else was dropped into neither bucket, so it could never appear in
+  `non_skipped` — and the guard `if skipped and not non_skipped` then masked
+  the entire failure.
+
+  The lines taking that path are the ones that matter most: the auditor
+  reporting that it could not **run**. Measured in the field — scitex-hub's
+  CI has carried `Error: No module named 'requests'` since 2026-08-05,
+  plainly visible in the job log and invisible to this classifier for four
+  days, while the gate reported success.
+
+  Error-tier unbracketed lines now count. They can never be masked, and that
+  is correct by construction rather than policy: masking is keyed on rule id
+  and these lines carry none, so no `skip_rules` entry can ever match one.
+  An auditor that could not run must not be silenceable.
+
+  The level check is a whitelist (`ERRO`/`ERROR`/`FAIL`/`FAILED`/`FATAL`/
+  `CRIT`/`CRITICAL`). The inverse test would promote any unrecognised
+  `word:` prefix to an error, reddening builds on `note:` or `usage:`.
+
+### Changed
+
+- `ci/_mergeable.py` split into `_exit_codes`, `_check_run`, `_readiness` and
+  `_gh`, with `_mergeable` remaining the orchestrator. **No public name
+  moves.** The exit-code vocabulary is what a hook or release script needs
+  *without* `subprocess` and the GitHub decision tree, and that coupling is
+  part of why the collision above sat unread at the top of a large module.
+
+### ⚠️ Upgrade note — read this if your gate declares `MAX_MASKED_VIOLATIONS`
+
+This release can turn a green gate red, and **the obvious remedy is a trap
+for a specific set of packages.** Which one you are decides what to do:
+
+**If your audit gate has NO masked-violation ceiling** — this is the common
+case; twelve of thirteen scitex repositories are here — then a new error may
+appear saying the auditor could not run. Install the missing dependency. The
+audit then runs, its findings appear as ordinary gradeable output, and you
+are done. Nothing below applies to you.
+
+**If your gate declares `MAX_MASKED_VIOLATIONS`**, installing the dependency
+may surface a backlog your gate has never graded, because the auditor that
+would have found it was silently disabled. Expect a **count**, not a
+one-line fix. Measured on scitex-hub: 102 findings appeared, every one
+already in their `skip_rules` — so all were masked, but masked still counts
+against the ceiling, taking it from 151 to roughly 253.
+
+**Do not resolve that by raising the ceiling.** A ratchet that may only
+decrease is load-bearing; raising it converts a visible red into a silent
+breach, which is the same defect wearing a different number. The workable
+path is to measure first and then pay down:
+
+    # what would appear, by rule
+    grep -oE '\[§[0-9a-b]+\]' <audit-output> | sort | uniq -c | sort -rn
+
+    # then check whether one message dominates — if so it is one
+    # conversion applied N times, landable group by group, and each
+    # group lands the ceiling DOWN rather than up
+
+On hub, 95 of the 102 were the same `§4b` message, which turned "a
+migration campaign" into a single repeatable change. Your ratio may differ;
+the method does not.
+
 ## [0.43.1] - 2026-08-09
 
 **The audit gate stops reading a "could not measure" notice as a violation

@@ -13,8 +13,7 @@ must either:
    * the ecosystem default (``EXCEPTION_SECRETS_DEFAULT`` —
      ``CLAUDE_CODE_CREDENTIALS_JSON``, ``GH_TOKEN``, ``CODECOV_TOKEN``,
      ``GHCR_PAT``, ``GITHUB_TOKEN``, ``NPM_TOKEN``, ``PYPI_API_TOKEN``,
-     the GitHub-Actions debug toggles, ``CLA_PERSONAL_ACCESS_TOKEN``),
-     and
+     ``GH_PERSONAL_ACCESS_TOKEN``, the GitHub-Actions debug toggles), and
    * per-package extras declared in the audited package's
      ``pyproject.toml`` under
      ``[tool.scitex_dev.audit] ps168_secret_exceptions``. The package
@@ -66,13 +65,22 @@ EXCEPTION_SECRETS_DEFAULT: frozenset[str] = frozenset(
         # Tool-pinned (gh CLI, GitHub Actions itself).
         "GH_TOKEN",
         "GITHUB_TOKEN",
-        # Personal Access Token in the gh-CLI convention — single
-        # cross-cutting PAT used by org-wide workflows (e.g.
-        # contributor-assistant when configured under the GH_ namespace
-        # rather than the older CLA_ name). The ``GITHUB_`` prefix is
-        # reserved by GitHub Actions on the secret-name surface, so
-        # ``GH_PERSONAL_ACCESS_TOKEN`` is the canonical substitute when
-        # operators want a clearly-namespaced shared PAT.
+        # The SECRET name the org-wide CLA workflow actually passes. Verified
+        # 2026-08-10 in scitex-ai/.github/.github/workflows/cla.yml:178:
+        #
+        #     env:
+        #       PERSONAL_ACCESS_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+        #
+        # NOTE THE TWO NAMES, because conflating them is the easy mistake and
+        # it sent one reporter to the wrong repository:
+        #
+        #     GH_PERSONAL_ACCESS_TOKEN   the SECRET   <- what PS-168 inspects
+        #     PERSONAL_ACCESS_TOKEN      the ENV VAR  <- what the action reads
+        #
+        # PS-168 inspects `secrets.<NAME>` references, so this entry is the
+        # one that matters here. The action never reads a variable by this
+        # name and does not need to. ``GITHUB_`` is reserved by GitHub Actions
+        # on the secret-name surface, so ``GH_`` is the canonical namespace.
         "GH_PERSONAL_ACCESS_TOKEN",
         # Third-party-pinned service tokens.
         "CODECOV_TOKEN",
@@ -82,9 +90,29 @@ EXCEPTION_SECRETS_DEFAULT: frozenset[str] = frozenset(
         # GitHub Actions runner-debug toggles.
         "ACTIONS_RUNNER_DEBUG",
         "ACTIONS_STEP_DEBUG",
-        # contributor-assistant action's PAT (per-action convention,
-        # shared across repos that opt into the CLA gate).
-        "CLA_PERSONAL_ACCESS_TOKEN",
+        # REMOVED 2026-08-10: "CLA_PERSONAL_ACCESS_TOKEN".
+        #
+        # It was exempt as "the contributor-assistant action's PAT". No repo
+        # holds a secret by that name, so `secrets.CLA_PERSONAL_ACCESS_TOKEN`
+        # interpolates to EMPTY and the action treats '' as absent
+        # (`isPersonalAccessTokenPresent`). Exempting it therefore made the
+        # BROKEN configuration lint-clean.
+        #
+        # Measured by figrecipe, two branches of one repo graded backwards:
+        #
+        #   secrets.CLA_PERSONAL_ACCESS_TOKEN  -> PS-168 PASSED, gate broken
+        #   secrets.PERSONAL_ACCESS_TOKEN      -> PS-168 FAILED, gate working
+        #
+        # An exemption that rewards the wrong answer is worse than a missing
+        # one: a repo "fixing" a PS-168 finding by renaming to CLA_ silenced
+        # the lint and broke its CLA gate in a single move, with no signal.
+        # And the breakage is DEFERRED — the allowlist short-circuits before
+        # the PAT is needed, so an empty PAT costs nothing until the first
+        # OUTSIDE contributor, who has no context to debug it.
+        #
+        # Removing it turns PS-168 red wherever that name is still used. That
+        # is the point: those are exactly the repos whose CLA gate is already
+        # broken, and the lint failure is their only discovery mechanism.
     }
 )
 

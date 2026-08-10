@@ -30,6 +30,7 @@ record, which in the fleet's first consumer is routine.
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterator, Mapping, Sequence
 
@@ -48,13 +49,23 @@ from ._guards import (
 from ._hlc import HLC, HybridLogicalClock
 from ._merge import MergeConflict
 from ._oplog import OpEntry, OpKind
+from ._peer_state import PeerState
 from ._policy import FieldRole, Schema, WriterPolicy
 from ._row import Row
 from ._target import StoreTarget
 
 __all__ = ["ANY_REVISION", "NEW_RECORD", "PutResult", "Store"]
 
-_OPLOG_COLUMNS = ("origin", "seq", "record", "op", "payload", "hlc", "actor")
+_OPLOG_COLUMNS = (
+    "origin",
+    "seq",
+    "record",
+    "op",
+    "payload",
+    "hlc",
+    "actor",
+    "fence",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +84,7 @@ class PutResult:
     conflicts: tuple[MergeConflict, ...] = ()
 
 
-class Store:
+class Store(PeerState):
     """An open store: one schema, one backend, one node identity."""
 
     def __init__(
@@ -102,15 +113,75 @@ class Store:
         self.dialect = dialect or get_dialect(target.backend)
         self.codec = RowCodec(schema, self.dialect)
         self._lock = threading.RLock()
+        self._batch_depth = 0
         self._connection = self.dialect.connect(target)
         for statement in self.dialect.create_sql(schema):
             self._connection.execute(statement)
+        self._apply_additive_migrations(schema)
 
     # -- lifecycle --------------------------------------------------------
     def close(self) -> None:
         """Close the underlying connection."""
         with self._lock:
             self._connection.close()
+
+    @contextmanager
+    def batch(self) -> "Iterator[Store]":
+        """Group many writes into ONE transaction instead of one each.
+
+        Both dialects connect in autocommit, which is the right default for
+        interactive single writes and the wrong one for bulk work: a single
+        logical op here costs three statements (oplog insert, row upsert,
+        cursor advance) and therefore three commits, each a durable write.
+
+        Measured twice, because one large batch and many small ones could
+        plausibly have had opposite signs. They do not.
+
+            3,712-op adoption      18.59 -> 2.06 ms/op      9.0x
+            60 replays of 5 ops     8.99 -> 1.04 ms/op      8.65x
+
+        The second run alternated the two variants three times, because the
+        host was under load 9.3 and a sequential A-then-B comparison had
+        already produced a misleading result in the opposite direction. Run
+        medians were 1.69/4.88/2.70 against 0.31/1.32/0.24 — noisy, but with
+        no overlap between the two sets, which is what licenses the claim.
+
+        READ THE RATIO AS DIRECTIONAL, NOT PORTABLE. Both were taken on a
+        FUSE-backed filesystem where an fsync is dearer than on local disk,
+        so this is near a best case. What generalises is the SHAPE: cost is
+        per COMMIT rather than per row, so it does not shrink as the data
+        does, and it is paid again on every replay during catch-up.
+
+        Nesting is a no-op rather than an error: `install_genesis` batches and
+        calls `replay`, which batches too. A second BEGIN would raise, and
+        making the caller track whether someone above already opened one is
+        exactly the bookkeeping this is meant to remove.
+
+        On any exception the transaction is rolled back, so a failed batch
+        applies NOTHING. See :func:`~._replication.replay` for what that
+        means for cursor resumability — it is a deliberate change, and a
+        safer one.
+        """
+        with self._lock:
+            if self._batch_depth:
+                self._batch_depth += 1
+                try:
+                    yield self
+                finally:
+                    self._batch_depth -= 1
+                return
+
+            self._connection.execute("BEGIN")
+            self._batch_depth = 1
+            try:
+                yield self
+            except BaseException:
+                self._connection.execute("ROLLBACK")
+                raise
+            else:
+                self._connection.execute("COMMIT")
+            finally:
+                self._batch_depth = 0
 
     def __enter__(self) -> "Store":
         return self
@@ -251,72 +322,11 @@ class Store:
                 return None
             return self._revision(record)
 
-    # -- oplog surface ----------------------------------------------------
-    def changes_since(
-        self, origin: str, seq: int, *, limit: int = 1000
-    ) -> list[OpEntry]:
-        """Ops from ``origin`` after ``seq``, ordered and contiguous.
-
-        What a peer calls to pull. Returns a prefix starting at ``seq + 1``;
-        :func:`~._replication.replay` verifies that before applying any of
-        it.
-        """
-        with self._lock:
-            table = self.dialect.quote(self.dialect.oplog_table(self.schema))
-            sql = (
-                f"SELECT * FROM {table} WHERE "
-                f"{self.dialect.quote('origin')} = {self.dialect.placeholder(0)} "
-                f"AND {self.dialect.quote('seq')} > {self.dialect.placeholder(1)} "
-                f"ORDER BY {self.dialect.quote('seq')} ASC LIMIT {int(limit)}"
-            )
-            found = self._connection.execute(sql, (origin, seq)).fetchall()
-            return [OpEntry.from_row(record) for record in found]
-
-    def origins(self) -> dict[str, int]:
-        """Every origin in the log, mapped to its highest sequence."""
-        with self._lock:
-            table = self.dialect.quote(self.dialect.oplog_table(self.schema))
-            sql = (
-                f"SELECT {self.dialect.quote('origin')} AS origin, "
-                f"MAX({self.dialect.quote('seq')}) AS max_seq FROM {table} "
-                f"GROUP BY {self.dialect.quote('origin')}"
-            )
-            return {
-                record["origin"]: int(record["max_seq"])
-                for record in self._connection.execute(sql).fetchall()
-            }
-
-    def cursor(self, source: str) -> int:
-        """The last sequence applied from ``source``; 0 when never applied."""
-        with self._lock:
-            table = self.dialect.quote(self.dialect.cursor_table(self.schema))
-            sql = (
-                f"SELECT {self.dialect.quote('seq')} AS seq FROM {table} "
-                f"WHERE {self.dialect.quote('source')} = "
-                f"{self.dialect.placeholder(0)}"
-            )
-            found = self._connection.execute(sql, (source,)).fetchone()
-            return int(found["seq"]) if found is not None else 0
-
-    def set_cursor(self, source: str, seq: int) -> None:
-        """Advance the replay cursor. Never moves it backwards."""
-        with self._lock:
-            existing = self.cursor(source)
-            if seq < existing:
-                raise StoreError(
-                    f"Refusing to move the replay cursor for {source!r} "
-                    f"backwards from {existing} to {seq}. Rewinding re-applies "
-                    "ops already applied, dragging field timestamps backwards. "
-                    "For a genuine re-sync, rebuild from the log instead."
-                )
-            table = self.dialect.cursor_table(self.schema)
-            sql = self.dialect.upsert_sql(table, ["source", "seq"], "source")
-            self._connection.execute(sql, (source, seq))
-
-    def next_seq(self) -> int:
-        """The sequence this node's next op will carry."""
-        with self._lock:
-            return self.origins().get(self.node, 0) + 1
+    # -- oplog surface -----------------------------------------------------
+    # `changes_since`, `origins`, `next_seq`, `cursor`/`set_cursor` and
+    # `fence`/`set_fence` live in `_peer_state.PeerState`. They are all
+    # "what this node knows about OTHER nodes" and touch only the oplog and
+    # cursor tables, never the rows table's merge policies.
 
     def apply_remote(self, entry: OpEntry) -> PutResult:
         """Apply one op that arrived from a peer.
@@ -370,6 +380,7 @@ class Store:
                 entry.payload_json(),
                 entry.hlc.encode(),
                 entry.actor,
+                entry.fence,
             ),
         )
 
