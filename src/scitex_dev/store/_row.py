@@ -71,7 +71,8 @@ class Row:
         schema: Schema,
         values: Mapping[str, Any],
         *,
-        writer: str,
+        owner: str,
+        origin: str,
         hlc: HLC,
         seq: "int | None" = None,
         field_hlc: "Mapping[str, HLC] | None" = None,
@@ -81,6 +82,13 @@ class Row:
         The hide flag is read from ``values`` when the schema declares one,
         so callers never pass ``hidden`` separately and the two can never
         disagree.
+
+        ``owner`` and ``origin`` are separate arguments because they answer
+        different questions — who the record BELONGS to, and which node
+        ACCEPTED the op that last touched it. This constructor previously
+        took a single ``writer`` and passed it as a field of that name,
+        which does not exist on the dataclass: every call raised TypeError.
+        Nothing called it, so nothing caught it.
         """
         missing_identity = [
             name for name in schema.identity_fields if values.get(name) is None
@@ -119,7 +127,8 @@ class Row:
         return cls(
             key=tuple(values[name] for name in schema.identity_fields),
             values=dict(values),
-            writer=writer,
+            owner=owner,
+            origin=origin,
             hlc=hlc,
             hidden=hidden,
             seq=seq,
@@ -152,7 +161,8 @@ class Row:
         return Row(
             key=self.key,
             values=merged,
-            writer=self.writer,
+            owner=self.owner,
+            origin=self.origin,
             hlc=self.hlc,
             hidden=self.hidden,
             seq=self.seq,

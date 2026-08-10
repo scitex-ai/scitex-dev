@@ -14,6 +14,7 @@ only discovers the damage when rows are already gone.
 from __future__ import annotations
 
 __all__ = [
+    "AdoptionRefusedError",
     "ClockDriftError",
     "DialectUnavailableError",
     "FieldPolicyError",
@@ -46,6 +47,22 @@ class FieldPolicyError(SchemaError):
 
 class StoreTargetError(StoreError):
     """A store target is unusable — bad locator, unknown backend."""
+
+
+class AdoptionRefusedError(StoreError):
+    """Bringing an existing dataset under the primitive would merge two of them.
+
+    Adoption mints a GENESIS log: one op per pre-existing record, describing
+    a history the primitive did not witness. Installing that log into a store
+    that already holds rows does not replace them and cannot fail loudly —
+    the ops are well-formed, so field-level merge folds two unrelated
+    datasets together on recency and reports success.
+
+    The distinction the store cannot make for itself is WHY those rows are
+    there. A store seeded by replay from a peer already holds the data and
+    must not adopt; a genuinely fresh store must. Both look identical from
+    inside, so the caller is asked rather than guessed at.
+    """
 
 
 class DialectUnavailableError(StoreError):

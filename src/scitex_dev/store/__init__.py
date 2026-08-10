@@ -66,9 +66,17 @@ silently. See :mod:`._policy` and :mod:`._guards`.
 
 from __future__ import annotations
 
+from ._adopt import (
+    GENESIS_ACTOR,
+    build_genesis,
+    genesis_origin,
+    install_genesis,
+    verify_adoption,
+)
 from ._apply import apply_entry
 from ._discovery import DiscoveredStore, StoreStatus, discover_stores
 from ._errors import (
+    AdoptionRefusedError,
     ClockDriftError,
     DialectUnavailableError,
     FieldPolicyError,
@@ -101,6 +109,7 @@ from ._target import Backend, StoreTarget
 
 __all__ = [
     "ANY_REVISION",
+    "AdoptionRefusedError",
     "Backend",
     "ClockDriftError",
     "DialectUnavailableError",
@@ -109,6 +118,7 @@ __all__ = [
     "FieldPolicy",
     "FieldPolicyError",
     "FieldRole",
+    "GENESIS_ACTOR",
     "HLC",
     "HybridLogicalClock",
     "MergeConflict",
@@ -135,14 +145,18 @@ __all__ = [
     "WriterPolicy",
     "apply_entry",
     "assert_contiguous",
+    "build_genesis",
     "discover_stores",
+    "genesis_origin",
     "host_store",
+    "install_genesis",
     "merge_field",
     "outstanding",
     "pull",
     "replay",
     "socket_dsn",
     "sync",
+    "verify_adoption",
 ]
 
 # EOF
