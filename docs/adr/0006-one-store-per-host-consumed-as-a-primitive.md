@@ -243,18 +243,29 @@ Postgres elsewhere is left alone, because checking OUR filesystem would say
 nothing about ITS durability — the exact vantage-point error this decision
 exists to prevent.
 
-> **Implementation debt created by the Decision 7 reversal, 2026-08-10.**
-> `require_durable_pgdata()` is currently wired to the SOCKET branch of
-> `host_store()`, because when it was written the socket WAS the local
-> instance. Decision 7 now makes TCP on 55432 the default, so as the code
-> stands the guard would stop firing for the default path — a durability
-> protection silently disarmed by an unrelated decision, which is precisely
-> the class of failure this ADR keeps finding.
+> **RESOLVED 2026-08-10 (PR #534).** This note previously warned that
+> `require_durable_pgdata()` was wired to the SOCKET branch of `host_store()`
+> and would stop firing once TCP became the default. **That warning was
+> wrong**, and it is corrected here rather than deleted, because the reason it
+> was wrong is the useful part.
 >
-> The trigger must move from "is this the socket branch" to "is this the
-> instance this host manages". Until that lands, the guard is narrower than
-> this decision claims. Recorded here rather than left as a surprise for
-> whoever flips the default.
+> Reading the code found the call already on the FALLTHROUGH branch — "no
+> explicit DSN, so this is the instance we manage" — before the return.
+> Changing that branch's DSN from socket to TCP never removed the call. The
+> guard was structurally safe the whole time.
+>
+> The real exposure was one level down and easy to miss: **the guard's input
+> was named after a transport.** `require_durable_pgdata(socket_dir=...)` cost
+> nothing while PGDATA and the socket dir were the same path, but once TCP is
+> the default, `socket_dir` is precisely the parameter a later cleanup drops —
+> taking the durability check's argument with it. The parameter is now
+> `pgdata_dir`, which is what it always meant: PGDATA is where the data lives,
+> the socket was one way to reach it.
+>
+> **A guard whose input is named after a transport disappears when the
+> transport does.** Two tests pin the invariant rather than a comment — the
+> load-bearing one calls `host_store()` and asserts the refusal, so it fails
+> if a future transport change drops the call.
 > See card `dev-adr0006-decision7-reverse-to-tcp-55432-with-acl-20260810`.
 
 ## Consequences
