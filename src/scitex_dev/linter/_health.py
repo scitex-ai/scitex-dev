@@ -146,9 +146,13 @@ def _maybe_emit_l1() -> None:
         "[scitex-dev linter] no IO/PA category rules "
         "registered — scitex-io plugin is NOT installed in this venv. "
         "All `pd.read_*` / `np.load/save` / `pickle.dump/load` / "
-        "`df.to_*` / `open()` checks (STX-IO001-014, STX-PA001-005) are "
-        "SILENTLY skipped. Run `pip install scitex-io` to enable. Set "
-        "SCITEX_DEV_LINTER_QUIET=1 to suppress this notice."
+        "`df.to_*` / `open()` checks (STX-IO001-014, STX-PA001-005) DID "
+        "NOT RUN, so this verdict says nothing about them. These rules "
+        "apply to EVERY project type — `project-type: research` only "
+        "escalates them warning→error, it does not scope them — so their "
+        "absence is a gap, not a design choice. Run `pip install "
+        "scitex-io` to enable. Set SCITEX_DEV_LINTER_QUIET=1 to suppress "
+        "this notice."
     )
 
 
