@@ -123,29 +123,81 @@ consistent.
 Anything deriving a filesystem location from the store target is the defect,
 not a workaround for it. `PostgresDsn.__fspath__` raises for this reason.
 
-### 7. Connect over a UNIX SOCKET; no TCP port by default
-Because Decision 3 means hosts never connect to each other's Postgres —
-they exchange oplogs at the application layer — each instance is only ever
-reached from its own host. A TCP port is therefore unnecessary.
+### 7. Connect over **TCP on 55432** with mandatory keys and a real ACL
 
-    ~/.scitex/pg/              PGDATA — the real data, bind-mounted OUTSIDE
-                               the container so rebuilding it destroys nothing
-    ~/.scitex/pg/.s.PGSQL      socket — no port
+**This decision was REVERSED on 2026-08-10.** It previously read "connect
+over a UNIX socket; no TCP port by default". The reversal and its cause are
+recorded here rather than in a second ADR, so a reader finds one answer
+instead of two that disagree.
 
-Three properties follow, and the third is the one that matters most: port
-collisions become impossible; there is no ambiguity about which Postgres an
-address refers to; and the instance is **not exposed to the network at all**,
-so it cannot be reached accidentally from off-host.
+#### What changed, and why
 
-That ambiguity was live on 2026-08-09: `127.0.0.1:5432` on scitex-compute-04
-looked like a local server and was in fact a tunnel to the operator's laptop.
-Nothing about the address said so.
+The operator asked what the socket's weaknesses were. The honest answer
+retired the decision:
 
-**When TCP is genuinely wanted** (a GUI client, debugging), it is opt-in,
-bound to `127.0.0.1` only, and uses **55432** — never 5432. 5432 buys only
-the ability to omit the port from a connection string, and costs a collision
-with any system Postgres. It confers no auto-start benefit: that comes from
-the service manager, not the port number.
+> ソケットでやると自由度が減る … やっぱり55432の方で進めてもらっても
+> いいですか すなわちファイル書き込み権限とかだとやっぱりややこしい気が
+> して acl とかやりにくいのかな
+>
+> 外部ユーザーが scitex.ai にある TCP につなぐとか いろんなユーザー権限の
+> エージェントが繋ぐとか 特に a2a で繋がってる外部のエージェントとかが
+> もしかしたら参加するかもしれない
+
+**A UNIX socket cannot express WHO.** Its entire access-control vocabulary
+is "can this process open this path" — one bit, carrying no identity beyond
+uid. The requirement is per-agent, per-project, per-collaborator ACL plus
+recorded authorship ("誰が書いたか"). The filesystem is the wrong layer for
+that question; Postgres roles are the right one.
+
+Decision 3 said hosts never connect to each other's Postgres, and that
+still holds for HOST-TO-HOST replication. But it never covered the clients
+the operator actually intends: external users, agents at differing
+privilege levels, and A2A peers that may join. Those are not hosts
+replicating; they are clients authenticating. The old text answered a
+narrower question than the system was going to ask.
+
+#### The decision
+
+    postgresql://…@<host>:55432/scitex   TCP, TLS, per-identity role
+    ~/.scitex/pg/                        PGDATA — bind-mounted OUTSIDE the
+                                         container (Decision 8 ENFORCES this)
+
+- **55432, never 5432.** Unchanged, and for the unchanged reason below.
+- **External connections are permitted** — not merely localhost.
+- **Keys/TLS are mandatory.** Operator-confirmed: 「もちろん鍵は必須です」.
+- **`scram-sha-256`. Never `trust`.**
+- **Per-human and per-agent roles**, not one shared superuser.
+- **Row-level ACL enforced IN THE DATABASE**, not in client code — a check
+  that lives in the client is absent for every client that skips it.
+- **Authorship as a column**, so "who wrote this" is queryable rather than
+  reconstructed from logs.
+
+Permitting external access is not the same as open access, and the
+difference is the whole security posture. Reachability must never by itself
+confer write permission.
+
+#### What survives from the old decision
+
+The reasoning that produced the socket recommendation was not wrong, and it
+is retained: **5432 is refused.** On 2026-08-09, `127.0.0.1:5432` on
+scitex-compute-04 looked like a local server and was in fact a tunnel to
+the operator's laptop; nothing about the address said so. 5432 buys only
+the ability to omit a port from a connection string, and costs a collision
+with any system Postgres — and, as measured, the ability of an address to
+lie about what it reaches. Pinning to 55432 keeps that protection without
+the socket.
+
+#### Sequencing constraint this imposes
+
+Concurrency control today is an `fcntl.flock` on a host-local file. **A
+remote TCP writer holds no descriptor on this host and is not serialized by
+it at all.**
+
+Therefore compare-and-set inside the database is a **precondition of opening
+the port**, not a follow-up to it. Opening TCP first would take a
+lost-update defect that currently requires two local writers and hand it to
+every external client — multiplying a silent failure at exactly the moment
+its blast radius grows.
 
 ### 8. PGDATA lives OUTSIDE the container, and the store ENFORCES it
 
@@ -184,10 +236,26 @@ without blocking: "cannot determine" is not "unsafe", and a guard that
 fails every host with an unusual `/proc` would itself be the outage. This
 is the same three-valued discipline the rest of this ADR runs on.
 
-**It guards only the socket branch.** An explicit `SCITEX_STORE_DSN` may
-name a Postgres elsewhere whose storage this process cannot observe, so
-checking OUR filesystem would say nothing about ITS durability — the exact
-vantage-point error this decision exists to prevent.
+**It guards the instance THIS HOST MANAGES, whatever the transport.** The
+principle is observability, not socket-versus-TCP: check durability exactly
+when this process can actually see the storage in question. A DSN naming a
+Postgres elsewhere is left alone, because checking OUR filesystem would say
+nothing about ITS durability — the exact vantage-point error this decision
+exists to prevent.
+
+> **Implementation debt created by the Decision 7 reversal, 2026-08-10.**
+> `require_durable_pgdata()` is currently wired to the SOCKET branch of
+> `host_store()`, because when it was written the socket WAS the local
+> instance. Decision 7 now makes TCP on 55432 the default, so as the code
+> stands the guard would stop firing for the default path — a durability
+> protection silently disarmed by an unrelated decision, which is precisely
+> the class of failure this ADR keeps finding.
+>
+> The trigger must move from "is this the socket branch" to "is this the
+> instance this host manages". Until that lands, the guard is narrower than
+> this decision claims. Recorded here rather than left as a surprise for
+> whoever flips the default.
+> See card `dev-adr0006-decision7-reverse-to-tcp-55432-with-acl-20260810`.
 
 ## Consequences
 
