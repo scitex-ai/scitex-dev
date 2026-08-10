@@ -31,6 +31,7 @@ import subprocess
 import click
 
 from . import (
+    _branch_gc,
     _ci_watch,
     _cred_distribute,
     _quota_keepalive,
@@ -81,6 +82,15 @@ def _run_body(name: str, *, only: str | None, dry_run: bool) -> int:
         # (no roots discoverable, etc.) so a clean log distinguishes
         # "ran, removed N, refused M" from "couldn't run at all".
         return 1 if _worktree_gc.run_once(dry_run=dry_run).error is not None else 0
+
+    if name == "branch-gc":
+        # Config-gated (DEFAULT OFF) branch hygiene. Exit non-zero ONLY
+        # when the WHOLE pass failed to run — a repo that is merely off,
+        # aborted, or unreadable is reported in the log and does not fail
+        # the cron loop, matching the worktree-gc branch's policy. The
+        # `--dry-run` flag forces report-only even for armed repos so an
+        # operator can preview a pass by hand.
+        return 1 if _branch_gc.run_once(dry_run=dry_run).failed else 0
 
     if name == "task-harvest":
         # Best-effort classification + audit log of the shared

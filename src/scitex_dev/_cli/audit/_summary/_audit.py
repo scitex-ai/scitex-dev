@@ -39,6 +39,7 @@ import click
 import yaml
 
 from . import CATALOG, FLAT_KEEPERS
+from ._skills_group_location import resolve_skills_group
 
 # §5/§1b banned bare leaves at any depth.
 BANNED_LEAVES = {"version", "completion"}
@@ -902,9 +903,10 @@ def _check_introspection(
     # §1a — `<pkg> skills {list, get, install}` group required when the
     # package ships a `_skills/` directory. Lets users introspect and
     # install the bundled skills without having to discover scitex-dev.
+    # Accepted at `dev skills` OR top level — see resolve_skills_group.
     if _package_ships_skills(package):
-        skills = cmd.commands.get("skills")
-        if skills is None or not isinstance(skills, click.Group):
+        skills, where = resolve_skills_group(cmd)
+        if skills is None:
             out.append(
                 Violation(
                     package,
@@ -919,7 +921,7 @@ def _check_introspection(
                 if verb not in skills.commands:
                     out.append(
                         Violation(
-                            f"{package} skills",
+                            f"{package} {where}",
                             "§1a",
                             f"missing required '{verb}' subcommand under 'skills'",
                         )

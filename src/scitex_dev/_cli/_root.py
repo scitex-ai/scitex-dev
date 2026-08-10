@@ -110,6 +110,18 @@ def main(
     ctx.ensure_object(dict)
     ctx.obj["json"] = as_json
 
+    # Editable-install drift warning — fires once per process, ~1ms, and is
+    # skipped on non-editable installs. Suppress with
+    # SCITEX_DEV_NO_DRIFT_WARN=1. It lives at this CLI entry rather than in
+    # the package __init__ so a library import stays silent and cheap; see
+    # the note in scitex_dev/__init__.py for what that cost us.
+    try:
+        from .._release.check_editable_drift import emit_if_drift
+
+        emit_if_drift("scitex-dev")
+    except Exception:
+        pass
+
     if version:
         if as_json:
             import json as _json
@@ -402,9 +414,18 @@ def _docs_search(query, scope, max_results, as_json):
         max_results=max_results,
     )
 
-from .skills._manage import register_skills_commands
+# -------------------------------------------------------------------
+# dev — the canonical §13 self-maintenance group (step 2 of
+# scitex-dev-unified-dev-command-group-architecture-20260718). Step 1
+# created the group and its `secret` verb; this mounts scitex-dev's OWN
+# self-maintenance surfaces — skills here, cron and hooks via
+# register_integration_commands below. Mounted EARLY so the integration
+# registrars have a group to receive.
+# -------------------------------------------------------------------
 
-register_skills_commands(main)
+from ._dev_group import install_dev_aliases, register_dev_group
+
+dev_group = register_dev_group(main)
 
 from ._completion import register_completion_command
 
@@ -436,7 +457,12 @@ deprecated_alias(
 
 from ._integrations import register_integration_commands
 
-register_integration_commands(main)
+register_integration_commands(main, dev_group)
+
+# Every moved command is now mounted on `dev`, so the Phase W aliases can
+# point at real commands. install_dev_aliases raises if one is missing —
+# an alias to nothing is indistinguishable from a clean migration.
+install_dev_aliases(main, dev_group)
 
 # -------------------------------------------------------------------
 # ci runner — self-hosted GitHub Actions runner lifecycle
@@ -481,3 +507,7 @@ register_list_python_apis_command(main)
 from .gate import register_gate_command
 
 register_gate_command(main)
+
+from .ci import register_ci_commands
+
+register_ci_commands(main)

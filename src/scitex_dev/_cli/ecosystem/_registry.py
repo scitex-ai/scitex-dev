@@ -28,11 +28,10 @@ from ._cmds import (
     _gui,
     _install_cross_package_gate,
     _install_gate,
-    _jobs_cron,
-    _jobs_systemd,
     _list,
     _pr,
     _up,
+    _prune_branches,
     _prune_merged,
     _regen_umbrella,
     _run,
@@ -114,18 +113,21 @@ def register_ecosystem_commands(main_group):
     _sync.register(ecosystem)
     _system_deps.register(ecosystem)
     _prune_merged.register(ecosystem)
+    _prune_branches.register(ecosystem)
     _pr.register(ecosystem)
     _branch_protection.register(ecosystem)
     _ci_template.register(ecosystem)
     _regen_umbrella.register(ecosystem)
 
-    # Federated scheduled-job aggregation (scitex_dev.jobs entry-points).
-    # `ecosystem systemd` handles BOTH long-running services
-    # (kind="service") and periodic timers (kind="timer") since the
-    # service|timer|cron taxonomy refactor; the prior `ecosystem
-    # daemon` subcommand was removed as a duplicate surface.
-    _jobs_cron.register(ecosystem)
-    _jobs_systemd.register(ecosystem)
+    # Federated scheduled-job aggregation (scitex_dev.jobs entry-points),
+    # mounted under `ecosystem dev` per §13 with Phase W aliases left at
+    # `ecosystem cron` / `ecosystem systemd`. `ecosystem dev systemd`
+    # handles BOTH long-running services (kind="service") and periodic
+    # timers (kind="timer") since the service|timer|cron taxonomy
+    # refactor; the prior `daemon` subcommand was removed as a duplicate.
+    from .._dev_group import register_ecosystem_dev_group
+
+    register_ecosystem_dev_group(ecosystem)
 
     # Headline ecosystem-up one-shot. Post-2026-06-14 redesign: writes
     # the ONE collective `scitex-dev-ecosystem.service` (supervisor

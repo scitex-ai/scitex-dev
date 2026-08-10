@@ -48,6 +48,10 @@ dependencies = [
     "click>=8.0.0",
     "pyyaml>=6.0",
     'tomli>=2.0; python_version < "3.11"',
+    # Promoted from the retired per-feature extras (see the block above): each
+    # is imported by a code path that always runs when its verb is invoked, so
+    # gating it behind an extra only moved the failure from install time to
+    # call time.
     "fastmcp>=2.0.0",
     "newb>=0.3.0",
     "scitex-ssh>=1.1.0",
@@ -55,6 +59,32 @@ dependencies = [
     "Pillow>=9.2.0",
     "tomlkit>=0.12.0",
     "textual>=0.50.0",
+    # HARD dependency, not optional: _cli/audit/_project/_check_extras_all_closure.py
+    # imports it at MODULE level, and _rules/__init__.py imports that module
+    # unconditionally — so it is on the eager path of `import scitex_dev._cli`.
+    # Undeclared until 2026-08-05 because pip/setuptools environments almost
+    # always have it transitively; a clean `uv` venv does not, which is why it
+    # only ever failed in CI.
+    "packaging>=21.0",
+    # SECOND INSTANCE OF THE DEFECT DIRECTLY ABOVE, found 2026-08-10 by
+    # scitex-hub reporting that `scitex-dev[cli-audit]` provisions nothing.
+    # It does not, but that extra was empty on purpose (its contents became
+    # core). The real defect was this: `rich` was imported in EIGHT modules
+    # and declared in NO dependency — not base, not any of the ten extras.
+    #
+    # Two of those imports are MODULE level and would fail at import:
+    #     _cli/ecosystem/_dashboard/_render.py   from rich.table import Table
+    #     _cli/ecosystem/_dashboard/_tui.py      from rich.text import Text
+    #
+    # The other six are function-local, which looks like optional-dependency
+    # handling and is NOT: there is no `try/except ImportError` anywhere in
+    # the tree. Deferring an import only moves the crash from load time to
+    # call time. `rich` is required by every path that reaches it.
+    #
+    # Same reason it went unnoticed as `packaging` did — it arrives
+    # transitively in most environments, so it is present exactly where
+    # developers look and absent where CI runs.
+    "rich>=13.0.0",
 ]
 
 [project.optional-dependencies]

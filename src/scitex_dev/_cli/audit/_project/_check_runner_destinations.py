@@ -171,6 +171,39 @@ from . import _workflow_exposure as _wx
 
 _RULE = "PS-224"
 
+#: GitHub-HOSTED images — a property of the PLATFORM, not machines we own, so
+#: deliberately NOT registry entries: a host record would claim we operate
+#: them. GitHub serves these on demand, always, so a job naming one can never
+#: sit unmatched — the entire failure this rule exists to catch.
+#:
+#: Constitution §4 changed under a rule that was correct when written: hosted
+#: is now the DEFAULT for public repos, so every COMPLIANT workflow named a
+#: destination the registry did not know and PS-224 errored on compliance.
+#: scitex-cards wrote EIGHT per-job exemptions to silence it (2026-08-02);
+#: the operator ruled to fix the rule rather than accept them.
+#:
+#: A LITERAL SET, never a `ubuntu-*` prefix match: a typo'd `ubuntu-latests`
+#: must still fail. A fuzzy match would forgive the mistake this is for.
+GITHUB_HOSTED_LABELS: frozenset[str] = frozenset(
+    {
+        "ubuntu-latest", "ubuntu-24.04", "ubuntu-22.04",
+        "ubuntu-24.04-arm", "ubuntu-22.04-arm",
+        "windows-latest", "windows-2025", "windows-2022",
+        "macos-latest", "macos-15", "macos-14", "macos-13",
+    }
+)
+
+
+def _is_github_hosted(wanted: frozenset[str]) -> bool:
+    """True when *wanted* is a hosted image and nothing else.
+
+    `runs-on: ubuntu-latest` is the whole destination. A hosted label COMBINED
+    with others (`[ubuntu-latest, self-hosted]`) is not hosted and is not
+    accepted here — that combination matches no runner at all, which is
+    precisely the unmatchable case this rule must keep reporting.
+    """
+    return len(wanted) == 1 and next(iter(wanted)) in GITHUB_HOSTED_LABELS
+
 #: Co-located rule definition, merged by `_registry` on the same terms as
 #: LOGS_PATH_RULES / CONFIG_LAYOUT_RULES. Severity lives HERE, in the tuple —
 #: `_registry._SEVERITY_OVERRIDES` is a silent no-op for a co-located rule.
@@ -216,59 +249,18 @@ RUNNER_DESTINATION_RULES: list[tuple[str, str, str, str, str]] = [
 ]
 
 
-#: Separator between a workflow path and a job id in an exemption SITE KEY —
-#: `.github/workflows/test.yml::test`. Findings are per-JOB, so a bare path
-#: would OVER-EXEMPT: one file routinely holds a job that must stay hosted
-#: AND a job already migrated. Human-writable and greppable on purpose.
-_SITE_SEP = "::"
-
-#: PS-224 findings are per-JOB, not per-line, so both the emitted site and
-#: any `audit.exemptions` entry pin line 0 (same contract as PS-222).
-_NO_LINE = 0
-
-
-def _site(rel: str, job_id: str | None = None) -> str:
-    """Site key for a finding: ``path`` or ``path::job-id``.
-
-    This exact string is BOTH the finding's reported location AND what an
-    ``audit.exemptions`` entry's ``path`` must spell, so the instruction a
-    user reads is the instruction that works.
-    """
-    return rel if job_id is None else f"{rel}{_SITE_SEP}{job_id}"
-
-
-def _exempt_hint(site: str) -> str:
-    """The copy-pasteable exemption recipe for one site (reason MANDATORY)."""
-    return (
-        " If this job genuinely cannot run on any registered machine, exempt "
-        "THIS JOB (never the whole file) in `.scitex/dev/config.yaml` under "
-        f"`audit: exemptions: PS-224:` with `path: {site}`, `line: 0` and a "
-        "`reason:` saying why — the reason is mandatory (constitution §2), "
-        "and a blank one exempts nothing."
-    )
-
-
-def _union_destinations(
-    floor: list[tuple[str, frozenset[str]]],
-    user_state: list[tuple[str, frozenset[str]]],
-) -> list[tuple[str, frozenset[str]]]:
-    """FLOOR ∪ user-state, order-stable and de-duplicated.
-
-    The shipped seed comes FIRST (it is the floor), then any user-state
-    destination the floor does not already carry. A destination present in
-    both — the common case, since the user file is usually a copy of the
-    seed — appears exactly ONCE, so the "Registered destinations:" line the
-    error prints does not list it twice.
-    """
-    out: list[tuple[str, frozenset[str]]] = []
-    seen: set[tuple[str, frozenset[str]]] = set()
-    for host, labels in (*floor, *user_state):
-        key = (host, labels)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append((host, labels))
-    return out
+#: Site keys, the exemption recipe, and the floor∪user-state union live in
+#: `_runner_destination_sites` (512-line budget). Re-exported here because the
+#: site-key spelling `.github/workflows/test.yml::test` is a PUBLISHED
+#: contract — it is what an `audit.exemptions` entry must spell — and tests
+#: plus callers import these names from this module.
+from ._runner_destination_sites import (  # noqa: E402,F401
+    _NO_LINE,
+    _SITE_SEP,
+    _exempt_hint,
+    _site,
+    _union_destinations,
+)
 
 
 def check_ps224_runner_destinations(
@@ -489,6 +481,12 @@ def check_ps224_runner_destinations(
             # rule as `HostRecord.serves`: a runner serves the job when its
             # label set contains every requested label.
             wanted = frozenset(labels)
+            # GitHub-hosted images are served by the platform, always, so they
+            # cannot produce the unmatchable job this rule reports. Checked
+            # BEFORE the registry so a hosted destination never depends on
+            # local state — see GITHUB_HOSTED_LABELS.
+            if _is_github_hosted(wanted):
+                continue
             if any(wanted <= served for _host, served in destinations):
                 continue
 

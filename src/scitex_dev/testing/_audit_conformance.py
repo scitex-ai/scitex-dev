@@ -65,6 +65,84 @@ def warn_on_guessed_path(cwd: Path | None = None, stream=None) -> str:
     return text
 
 
+#: Rule ids that describe THE MEASUREMENT or the REPORT rather than the code,
+#: so they can never be a violation of it. Mirrors
+#: :data:`scitex_dev._cli.audit._diff.NON_ATTRIBUTABLE_RULES`, which already
+#: knew this and which this module did not consult.
+#:
+#: `§10w` is the import-budget auditor saying COULD NOT MEASURE RELIABLY — a
+#: deliberate warn-tier "no verdict". Counting it as a violation collapses
+#: UNKNOWN into the failure pole, which is the exact three-valued-signal
+#: error the constitution names. Measured 2026-08-09 on scitex-hub: one such
+#: notice discarded a 151-line skip mask and reddened a green tree.
+#:
+#: `defer` is the `[defer] ... N finding(s) suppressed` NOTICE — arithmetic
+#: about the report, not a finding in it. Reported 2026-07-21 and worked
+#: around downstream by adding "defer" to a package's skip_rules, which is
+#: precisely why the defect survived to reappear as `§10w` nineteen days
+#: later. Both belong here.
+_NON_VIOLATION_RULES: "frozenset[str]" = frozenset(
+    {"§10", "§10w", "TALLY", "defer"}
+)
+
+#: Level words that are NOT failures. The auditors already print severity;
+#: this module used to strip it only to reach the bracket and then ignore it.
+_NON_VIOLATION_LEVELS: "frozenset[str]" = frozenset({"WARN", "INFO", "SUCC", "NOTE"})
+
+#: Level words that ARE failures. Needed separately from the non-violation
+#: set because an UNBRACKETED line has no rule id to fall back on, so "not a
+#: known warn word" is too weak a test — a line prefixed with any random
+#: `word:` would qualify. Here the level must be positively recognised.
+_ERROR_LEVELS: "frozenset[str]" = frozenset(
+    {"ERRO", "ERROR", "FAIL", "FAILED", "FATAL", "CRIT", "CRITICAL"}
+)
+
+
+def _is_error_tier(level: str) -> bool:
+    """Is this level word an error, positively identified?
+
+    Used only for lines with NO rule bracket, where there is no rule id to
+    reason about and the level word is the entire signal.
+
+    Deliberately a whitelist. The inverse test — "not in
+    ``_NON_VIOLATION_LEVELS``" — would promote any unrecognised `word:`
+    prefix to an error, so a line like ``note: skipping`` or a stray
+    ``usage:`` would fail the gate. Given this branch exists to make a
+    silent pass become a red build, being wrong in that direction produces
+    unexplainable failures, which is how a gate gets disabled wholesale.
+    """
+    return level.strip().upper() in _ERROR_LEVELS
+
+
+def _is_gate_violation(level: str, payload: str) -> bool:
+    """Does this reported line actually fail the gate?
+
+    Three kinds of bracketed line reach the classifier and only one is a
+    violation:
+
+    * ``ERRO: [PS-204 §2 ...]``  — a finding. Counts.
+    * ``WARN: [§10w ...]``       — a NOTICE about the measurement. Does not.
+    * ``[defer] ... N finding(s) suppressed`` — arithmetic. Does not.
+
+    The previous implementation counted all three, so a single warn-tier
+    notice discarded an entire skip-rule mask (the guard is
+    ``if skipped and not non_skipped``) and turned a green tree red.
+
+    That defect was reported on 2026-07-21 for the ``[defer]`` notice and
+    worked around downstream by adding "defer" to a package's skip_rules —
+    which is why it survived to reappear as ``§10w`` nineteen days later.
+    Masking a could-not-measure notice suppresses the one signal saying the
+    measurement is untrustworthy, so the fix belongs here, not in any
+    consumer's skip list.
+    """
+    if level in _NON_VIOLATION_LEVELS:
+        return False
+    return not any(
+        payload.startswith(f"[{rule} ") or payload.startswith(f"[{rule}]")
+        for rule in _NON_VIOLATION_RULES
+    )
+
+
 def audit_all_for_package(
     distribution: str,
     *,
@@ -210,10 +288,35 @@ def audit_all_for_package(
             # `WARN: `) — strip a trailing-colon word before the bracket
             # check so the rule id is reachable.
             head = stripped.split(":", 1)
-            payload = (
-                head[1].lstrip() if len(head) == 2 and head[0].isalpha() else stripped
-            )
+            has_level = len(head) == 2 and head[0].isalpha()
+            level = head[0].strip().upper() if has_level else ""
+            payload = head[1].lstrip() if has_level else stripped
             if not (payload.startswith("[") or payload.startswith("[E]")):
+                # AN ERROR WITHOUT A RULE ID STILL COUNTS, and it is the one
+                # kind of finding that can never be masked.
+                #
+                # This line used to be a bare `continue`, which dropped such
+                # lines into NEITHER bucket. They then could not appear in
+                # `non_skipped`, so the `if skipped and not non_skipped` guard
+                # below masked the whole failure — a gate passing on the
+                # strength of an error it did not know how to read.
+                #
+                # The lines that hit this path are the ones that matter most:
+                # the auditor reporting it could not RUN. Measured in the wild
+                # — scitex-hub's CI has carried
+                #     Error: No module named 'requests'
+                # since 2026-08-05, visible in the log and invisible to this
+                # classifier for four days.
+                #
+                # Masking is keyed on rule id, so a line carrying no rule id
+                # cannot be matched by any skip_rules entry. That is correct
+                # by design: an auditor that could not run must not be
+                # maskable. It also means this branch can only ever ADD to
+                # `non_skipped`, never to `skipped`.
+                if _is_error_tier(level):
+                    non_skipped.append(line)
+                continue
+            if not _is_gate_violation(level, payload):
                 continue
             matched = [r for r in skip_rules if f"[{r} " in line or f"[{r}]" in line]
             if matched:

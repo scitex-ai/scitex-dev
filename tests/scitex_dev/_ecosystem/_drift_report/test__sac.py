@@ -203,3 +203,109 @@ def test_collect_sac_rows_absent_binary_reports_not_on_path():
     rows, note = collect_sac_rows(which=which)
     # Assert
     assert rows is None and note == "unavailable (sac not on PATH)"
+
+
+# ── the empty-but-successful case ────────────────────────────────────────────
+#
+# Measured 2026-08-10 in an agent container:
+#
+#     command -v sac      -> /opt/venv-sac/bin/sac   (PRESENT)
+#     sac versions --json -> []
+#     echo $?             -> 0                        (SUCCESS)
+#
+# The old guard tested "is sac absent". The condition that actually occurs is
+# "sac is present and answers nothing", and both rendered the same dash for all
+# 72 packages. These tests pin the distinction so a refactor cannot restore it.
+
+
+def _runner_returning_empty_list(argv):
+    """`sac` present, exits 0, prints an empty list — the measured condition."""
+    return (0, "[]", "")
+
+
+def test_collect_sac_rows_zero_rows_returns_no_rows():
+    """`[]` with exit 0 must report NO DATA, not an empty in-sync answer."""
+    # Arrange
+    runner = _runner_returning_empty_list
+
+    # Act
+    rows, _note = collect_sac_rows(runner=runner)
+
+    # Assert — None so downstream marks the layer unavailable, not collected.
+    assert rows is None
+
+
+def test_collect_sac_rows_zero_rows_names_that_case_in_the_note():
+    """The note must say which no-data condition this was, not stay blank."""
+    # Arrange
+    runner = _runner_returning_empty_list
+
+    # Act
+    _rows, note = collect_sac_rows(runner=runner)
+
+    # Assert
+    assert "zero rows" in note
+
+
+def test_collect_sac_rows_zero_rows_is_distinguishable_from_absent_sac():
+    """The two no-data modes must not collapse into one indistinguishable note."""
+    # Arrange
+    def empty_runner(argv):
+        return (0, "[]", "")
+
+    def which_absent(name):
+        return None
+
+    # Act
+    _, note_empty = collect_sac_rows(runner=empty_runner)
+    _, note_absent = collect_sac_rows(which=which_absent)
+
+    # Assert
+    assert note_empty != note_absent
+
+
+def test_collect_sac_rows_empty_envelope_also_reports_zero_rows():
+    """`{"versions": []}` is the same no-data condition as a bare `[]`."""
+    # Arrange
+    def runner(argv):
+        return (0, json.dumps({"versions": []}), "")
+
+    # Act
+    rows, note = collect_sac_rows(runner=runner)
+
+    # Assert
+    assert rows is None and "zero rows" in note
+
+
+def _runner_returning_fixture_rows(argv):
+    """The control case: `sac` answers with real rows."""
+    return (0, json.dumps(FIXTURE_ROWS), "")
+
+
+def test_collect_sac_rows_nonempty_still_returns_the_rows():
+    """The control pole: the fix must not pass by returning None always.
+
+    Without this, "every no-data condition returns None" could be satisfied
+    by a function that returns None unconditionally — the same blindness
+    wearing the fix's clothes.
+    """
+    # Arrange
+    runner = _runner_returning_fixture_rows
+
+    # Act
+    rows, _note = collect_sac_rows(runner=runner)
+
+    # Assert
+    assert rows == FIXTURE_ROWS
+
+
+def test_collect_sac_rows_nonempty_leaves_the_note_blank():
+    """A real collection carries no reason string — there is nothing to explain."""
+    # Arrange
+    runner = _runner_returning_fixture_rows
+
+    # Act
+    _rows, note = collect_sac_rows(runner=runner)
+
+    # Assert
+    assert note == ""

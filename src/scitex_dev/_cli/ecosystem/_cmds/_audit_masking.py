@@ -20,12 +20,15 @@ from ...audit._config._skip_rules import SkipRule
 
 INVENTORY_HEADER = "=== MASKED INVENTORY (audit.skip-rules) ==="
 
-# A line that CLAIMS to be a finding by carrying an auditor level prefix.
-# Deliberately NOT a finding test — `is_violation_line` is that. This only
-# separates "prose the auditor printed as framing" from "something that
-# presented itself as a finding and could not be read", so the second can
-# be reported as UNKNOWN instead of vanishing.
-_LEVEL_PREFIX_RE = re.compile(r"^(ERRO|WARN|INFO|SUCC):\s")
+# A bracketed token carrying a RULE ID — the thing that makes a finding
+# attributable to a rule, and therefore decidable as masked or unmasked.
+#
+# The discriminator is "contains a digit or §": every rule id in the corpus
+# does (`PS-103`, `STX-IO001`, `§10w`, `SK-401`), and the severity markers
+# that share the bracket syntax do not (`[E]`, `[W]`). That is a structural
+# test, not a list of known prefixes, so a new rule family needs no edit
+# here.
+_RULE_ID_RE = re.compile(r"\[[^\]]*(?:\d|§)[^\]]*\]")
 
 
 def is_violation_line(line: str) -> bool:
@@ -75,9 +78,18 @@ class MaskReport:
     unmasked: list[str]
     #: the declared skips, carried so the inventory can print rationales.
     skip_rules: tuple[SkipRule, ...]
-    #: lines that CLAIM to be findings (level prefix) but that the classifier
-    #: could not read. UNKNOWN — neither masked nor cleanly unmasked. Carried
-    #: so a summary can say so instead of implying zero.
+    #: finding-shaped lines carrying no rule id, so they cannot be attributed
+    #: to a rule and cannot be shown to be covered by a declared skip.
+    #: UNKNOWN — neither masked nor cleanly unmasked.
+    #:
+    #: The membership test was originally "carries a level prefix", which
+    #: measured the wrong thing: scitex-logging prefixes EVERY console line
+    #: with a level, so banners and headlines qualified. Measured 2026-08-05
+    #: on this repo's own captured audit output — 17 unreadable of 42
+    #: inspected, and all 17 were framing (`INFO: auditing <path>`, `SUCC: no
+    #: skills violations`, the per-auditor headlines). Zero true positives.
+    #: A signal that is ~100% false positive cannot gate anything, and
+    #: printing it next to a clean verdict trains readers to ignore it.
     unreadable: list[str] = field(default_factory=list)
     #: how many non-blank lines were examined. The DENOMINATOR: "0 unmasked
     #: error(s)" means nothing without it, and an inspected count of 0 makes
@@ -104,6 +116,22 @@ class MaskReport:
         """
         return sum(1 for line in self.unmasked if is_error_line(line))
 
+    def is_answerable(self) -> bool:
+        """False when a line claimed to be a finding and could not be read.
+
+        Named to match :meth:`SurfaceCoverage.is_answerable` in
+        ``_cli/audit/_summary/_coverage.py`` — same question ("is a verdict
+        licensed at all?"), same refusal, so both are greppable under one
+        name. They are deliberately NOT the same object: that one counts
+        command paths a walker inspected, this one counts output lines a
+        classifier read. Sharing the type would couple two unrelated
+        denominators; sharing the name is the part that has to be shared.
+
+        ``unreadable`` is the only input. ``unmasked`` findings are read
+        just fine — they are an ANSWER (red), not the absence of one.
+        """
+        return not self.unreadable
+
     @property
     def fully_masked(self) -> bool:
         """True iff every finding was masked and at least one was.
@@ -112,8 +140,15 @@ class MaskReport:
         with no parseable finding lines (a crashed auditor, a warn-only
         run) would be swallowed simply because the repo declared SOME
         skip rules. That is a real visibility bug, not a deferral.
+
+        UNREADABLE lines defeat the claim outright. This property is what
+        downgrades a failing package to green in ``_audit_all.py``, and it
+        asserts "everything that failed was declared" — which is exactly
+        the sentence you cannot say about a line nobody could parse. The
+        line may have been an undeclared ERROR; masked and unreadable are
+        different answers, and only one of them licenses the downgrade.
         """
-        return bool(self.masked) and not self.unmasked
+        return bool(self.masked) and not self.unmasked and self.is_answerable()
 
 
 def classify_output(text: str, skip_rules) -> MaskReport:
@@ -127,11 +162,20 @@ def classify_output(text: str, skip_rules) -> MaskReport:
     whatever survived this filter. Two inputs, one verdict, and no way for
     either side to notice the disagreement.
 
-    A line that LOOKS like a finding (carries a level prefix) but that the
-    classifier cannot read is now kept in ``unreadable`` — an UNKNOWN, not
-    a silent zero. Genuine non-findings (banners, blank lines, prose that
-    never claimed to be a finding) are still skipped, and are counted only
-    in ``inspected``.
+    A finding-shaped line (payload starts with ``[``) that carries no rule
+    id is kept in ``unreadable`` — an UNKNOWN, not a silent zero. It cannot
+    be attributed to a rule, so it cannot be shown to be masked. Genuine
+    non-findings (banners, headlines, blank lines, prose that never claimed
+    to be a finding) are skipped and counted only in ``inspected``.
+
+    THE THREE BUCKETS ARE ORDERED BY HOW MUCH IS KNOWN::
+
+        masked      attributable, and the rule is declared    -> suppressed
+        unmasked    attributable, no declared rule            -> red
+        unreadable  finding-shaped, NOT attributable          -> unknown
+
+    ``unmasked`` is deliberately the default for anything attributable: a
+    finding nobody deferred stays red without needing a rule to say so.
     """
     rules = tuple(skip_rules)
     masked: dict[str, list[str]] = {r.rule: [] for r in rules}
@@ -144,17 +188,21 @@ def classify_output(text: str, skip_rules) -> MaskReport:
             continue
         inspected += 1
         if not is_violation_line(line):
-            # Not a violation the classifier can read. If it CLAIMS to be a
-            # finding by carrying a level prefix, that is an unknown worth
-            # surfacing; anything else is framing.
-            if _LEVEL_PREFIX_RE.match(stripped):
-                unreadable.append(stripped)
+            # Framing: banners, headlines, per-audit progress. Counted in
+            # `inspected` and nowhere else.
             continue
         hit = next((r.rule for r in rules if line_matches_rule(line, r.rule)), None)
         if hit is not None:
             masked[hit].append(stripped)
-        else:
+        elif _RULE_ID_RE.search(stripped):
+            # Finding-shaped, attributable, matched no declared skip. A
+            # clean ANSWER: red.
             unmasked.append(line)
+        else:
+            # Finding-shaped but carrying no rule id, so it cannot be
+            # attributed and therefore cannot be shown to be covered by a
+            # declared skip. The genuine UNKNOWN.
+            unreadable.append(stripped)
     return MaskReport(
         masked={k: v for k, v in masked.items() if v},
         unmasked=unmasked,

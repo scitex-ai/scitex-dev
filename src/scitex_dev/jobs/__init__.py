@@ -99,13 +99,13 @@ _logger = logging.getLogger(__name__)
 #: Entry-point group downstream packages register their job providers in.
 ENTRY_POINT_GROUP = "scitex_dev.jobs"
 
-#: Valid ``JobSpec.kind`` values. See module docstring for semantics.
-ALLOWED_KINDS: frozenset[str] = frozenset({"service", "timer", "cron"})
-
-#: Valid ``JobSpec.restart_policy`` values. Used by ``kind="service"``
-#: only; ignored (and required to be ``"no"``) by ``timer`` / ``cron``.
-ALLOWED_RESTART_POLICIES: frozenset[str] = frozenset(
-    {"no", "on-failure", "on-abnormal", "on-abort", "on-watchdog", "always"}
+from ._kinds import (  # noqa: E402 - re-exported for every existing caller
+    ACCEPTED_KINDS,
+    ALLOWED_KINDS,
+    ALLOWED_RESTART_POLICIES,
+    INTENT_KINDS,
+    INTENT_TO_KIND,
+    canonical_kind,
 )
 
 
@@ -196,10 +196,26 @@ class JobSpec:
     venv: str | None = None
 
     def __post_init__(self) -> None:
+        # Normalise the INTENT spellings BEFORE validating, so the rest of
+        # this class — and every consumer downstream — only ever sees the
+        # stored vocabulary. Frozen dataclass, hence object.__setattr__.
+        canonical = canonical_kind(self.kind, self.schedule)
+        if canonical != self.kind:
+            object.__setattr__(self, "kind", canonical)
         # Run the validator at construction time so a malformed leaf
         # crashes EARLY — never let a silently-broken unit reach the
         # systemd installer (or worse, a running host).
         self.validate()
+
+    @property
+    def intent(self) -> str:
+        """What this job DOES, independent of scheduler: daemon | periodic.
+
+        DERIVED from ``kind``, never stored beside it. New code can read the
+        intent-level vocabulary without any provider migrating, and there is
+        no second field that could drift out of agreement with the first.
+        """
+        return "daemon" if self.kind == "service" else "periodic"
 
     # ----------------------------------------------------------------- #
     # Validation                                                        #
@@ -224,7 +240,10 @@ class JobSpec:
         if self.kind not in ALLOWED_KINDS:
             raise ValueError(
                 f"JobSpec({self.name!r}).kind={self.kind!r} not in "
-                f"{sorted(ALLOWED_KINDS)}"
+                f"{sorted(ACCEPTED_KINDS)}. The intent spellings "
+                f"{sorted(INTENT_KINDS)} are accepted too and normalise to "
+                f"{INTENT_TO_KIND} — 'periodic' picks cron when 'schedule' "
+                f"is set and a systemd timer when it is not."
             )
         if self.restart_policy not in ALLOWED_RESTART_POLICIES:
             raise ValueError(
@@ -446,10 +465,14 @@ def jobs_of_kind(kind: str, **kwargs) -> list[JobSpec]:
 
 
 __all__ = [
-    "JobSpec",
-    "ENTRY_POINT_GROUP",
+    "ACCEPTED_KINDS",
     "ALLOWED_KINDS",
     "ALLOWED_RESTART_POLICIES",
+    "ENTRY_POINT_GROUP",
+    "INTENT_KINDS",
+    "INTENT_TO_KIND",
+    "JobSpec",
+    "canonical_kind",
     "discover_jobs",
     "jobs_of_kind",
 ]

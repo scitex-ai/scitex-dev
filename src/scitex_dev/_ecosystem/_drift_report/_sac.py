@@ -108,13 +108,29 @@ def collect_sac_rows(
 ) -> tuple[list[dict] | None, str]:
     """Shell out to ``sac versions --json`` and parse it — fail-open.
 
-    Returns ``(rows, note)``. ``rows`` is ``None`` on ANY failure and
-    ``note`` carries the reason string surfaced in the report:
+    Returns ``(rows, note)``. ``rows`` is ``None`` whenever the layer
+    produced NO DATA — for any reason — and ``note`` carries which reason
+    it was:
 
     * ``sac`` not on PATH,
     * nonzero exit / unknown verb → ``"unavailable (sac versions --json
       not present)"``,
-    * unparseable output.
+    * unparseable output,
+    * **parsed fine and contained zero rows.**
+
+    That last case is the one this function used to get wrong. ``sac`` is
+    PRESENT, exits 0, and prints ``[]`` (measured 2026-08-10 in this very
+    container). An empty list is not ``None``, so it was returned as a
+    successful collection with an empty ``note``, and every ``img`` /
+    ``overlay`` cell rendered ``-``. A dash reads as "nothing to report",
+    which is visually identical to "checked, in sync" — so the report
+    presented eight columns while two of them had never answered anything,
+    for all 72 packages.
+
+    The guard was written for "sac is absent". The condition that actually
+    occurs is "sac is present and answers nothing", and the two produced
+    IDENTICAL output. Zero rows now returns ``None`` with a note naming
+    that specific case, so the layer reports UNKNOWN rather than agreement.
 
     The argv is list-form (never ``shell=True``). When a ``runner`` is
     injected the PATH probe is skipped (tests own the outcome).
@@ -133,6 +149,15 @@ def collect_sac_rows(
     rows = parse_sac_output(out)
     if rows is None:
         return None, "unavailable (sac versions --json output not parseable)"
+    if not rows:
+        # Present, exit 0, and empty. NOT a successful collection — see the
+        # docstring. Returning [] here is what made two layers render as
+        # agreement for every package.
+        return None, (
+            "unavailable (sac versions --json returned zero rows — "
+            "sac is present and exited 0, so this is 'no container data', "
+            "not 'in sync')"
+        )
     return rows, ""
 
 

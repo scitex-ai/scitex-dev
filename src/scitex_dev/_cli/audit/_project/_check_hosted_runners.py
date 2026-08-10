@@ -1,20 +1,50 @@
 # -*- coding: utf-8 -*-
-"""PS-169 — GitHub-hosted runners are forbidden (operator mandate 2026-07-14).
+"""PS-169 — GitHub-hosted runners are SLOWER (advisory; hosted is allowed).
 
-Operator mandate (2026-07-14):
+SUPERSEDED MANDATE — read this before re-tightening the rule
+------------------------------------------------------------
+This rule was born as an absolute prohibition. The operator mandate of
+2026-07-14 read:
 
     「PR用のテストとgithub側のランナーというのは本当にもう一切使わないでください」
     — never use GitHub-hosted runners, at all, including PR tests.
-    「もし使っているパッケージがあれば…リンター、フックでエラーにしてください。
-      強制です、例外なしです」
-    — any package still using one must be a hard ERROR. Mandatory, no exceptions.
+    「…リンター、フックでエラーにしてください。強制です、例外なしです」
+    — a hard ERROR. Mandatory, no exceptions.
 
-Every SciTeX job runs on the self-hosted `scitex-ci` runners. If the
-self-hosted pool cannot run something, we fix the pool — falling back to a
-GitHub-hosted runner is forbidden. This rule is the ONLY enforcement that
-exists: blocking hosted runners at the org level is an Enterprise Cloud
-policy and the `scitex-ai` org is on the Free plan, so there is no backstop
-behind this check.
+That mandate is **SUPERSEDED by the operator directive of 2026-08-05**:
+
+    「スパルタンのCIは全面的にやめましょう」   — take Spartan OUT of CI entirely.
+    「CIのルールを緩めないといけなかったです」  — the CI rules had to be relaxed.
+    「しかもスパルタンよりも scitex-compute 使うべきです」
+                                              — prefer scitex-compute to Spartan.
+
+The new position is a PREFERENCE, not a prohibition: run CI on fast hardware
+we own where that matters, and treat GitHub-hosted runners as a legitimate
+fallback — free for public repositories, which most of ours are, just slower.
+
+So this rule no longer forbids anything. It reports, at W, that a job is on a
+hosted runner and is therefore slower than our own hardware. That is useful
+information; it is not a violation, and it must never fail a build.
+
+Why the ratchet was REMOVED (the important part)
+------------------------------------------------
+The rule previously shipped at W but escalated a violation that was NEW
+relative to the git baseline to E. Under the 2026-08-05 directive that
+mechanism is exactly inverted:
+
+* a repo that has run on `ubuntu-latest` for months stays at W — permitted;
+* a repo MOVING a job off Spartan onto hosted introduces a NEW violation,
+  ratchets to E, and **the compliant PR is the one that gets blocked**.
+
+Not theoretical. Measured on scitex-hub's PR #561, where this rule fired as
+``[E] [PS-169 §1 hosted-runner-forbidden] … job `publish` runs on
+GitHub-hosted runner `ubuntu-latest``` and blocked the PR — a PR whose fix
+commit was titled "run the pack publish on the self-hosted pool". Every PR in
+the current migration is new-violation-shaped by definition, so every one of
+them would have hit this.
+
+A gate that permits the accumulated mess and blocks its correction is worse
+than no gate. The ratchet is gone; PS-169 is now a flat, unconditional W.
 
 This is a **reland** of the check that shipped on the closed PR #344
 (`ci/ps169-forbid-hosted-runners`), rewritten fresh against current
@@ -49,21 +79,33 @@ exactly how the violation hides. So the check follows ``matrix.*`` /
 labels, and flags a job only when a concrete effective label is a
 GitHub-hosted image (``ubuntu-*`` / ``macos-*`` / ``windows-*``).
 
-Severity: WARN + baseline-ratchet (bake-in)
--------------------------------------------
-Per this fleet's convention, a new rule bakes in as **W** (warn,
-non-blocking) and is promoted to **E** (error) once the fleet is confirmed
-clean. So this check ships at W in ``_registry`` and additionally
-new-vs-baseline-ratchets: a violation genuinely NEW relative to the git
-baseline (default ``develop``) is escalated to E (blocking the change that
-introduced it), while a pre-existing violation stays at the rule default W
-(reported, non-blocking) so an already-red repo is not newly wedged the
-moment the rule lands. When no baseline resolves (no ``.git`` / shallow
-clone), everything stays at W — see
-``_new_vs_baseline.escalate_new_violations``.
+Severity: flat W, no ratchet, no promotion path
+-----------------------------------------------
+The rule ships at **W** in ``_extra_rules`` and stays there for every
+finding, new or pre-existing. W never affects the exit code
+(``_audit.py``: ``exit_code = 1 if n_errors > 0 else 0``), which is the
+intent — hosted is permitted, so nothing here may block a merge.
 
-OPERATOR MANDATE — this rule is intended for promotion to ``error`` (flip
-``_HOSTED_SEVERITY`` below to ``"E"``) once the fleet is confirmed clean.
+There is deliberately **no promote-to-E path**. If a future directive
+re-prohibits hosted runners, that is a new decision and it should be written
+as one, not inherited from a TODO left behind by the superseded 2026-07-14
+mandate.
+
+What still relies on this check
+--------------------------------
+Whether a job is on a hosted runner remains a fact worth reporting: it drives
+the "why is this repo's CI slow?" question, and the fleet's migration
+inventory reads these findings. Detection is unchanged — only the
+consequence is.
+
+Not to be confused with PS-224
+-------------------------------
+PS-224 (``_check_runner_destinations``) is the rule with teeth, and it is
+about a different failure: a job whose labels NO machine serves is not slow,
+it is UNDELIVERABLE — GitHub queues it forever rather than rejecting it. That
+rule stays at E, and it already accepts GitHub-provided images (they are
+served by GitHub, so they cannot queue forever). The two rules therefore
+agree: a hosted destination is legal, merely slower.
 """
 
 from __future__ import annotations
@@ -75,7 +117,10 @@ from typing import Any
 
 import yaml
 
-from ._new_vs_baseline import DEFAULT_BASELINE_REF, escalate_new_violations
+# `escalate_new_violations` is deliberately NOT imported any more — see
+# `check_ps169_hosted_runners`. Only the baseline-ref default is kept, so the
+# public signature is unchanged for existing callers.
+from ._new_vs_baseline import DEFAULT_BASELINE_REF
 
 #: Runner-image prefixes GitHub hosts. Any concrete label matching these is a
 #: violation — covers `ubuntu-latest`, `ubuntu-24.04`, `macos-14`,
@@ -272,9 +317,8 @@ def _collect_ps169_violations(repo: Path, violation_cls: type) -> list:
                             "PS-169",
                             rel,
                             f"GitHub-hosted runner `{candidate}` (file does not "
-                            "parse as YAML; scanned literally). Use the "
-                            "self-hosted pool: `runs-on: [self-hosted, Linux, "
-                            "X64, scitex-ci]`.",
+                            "parse as YAML; scanned literally) — ALLOWED, but "
+                            "slower than hardware we own. Advisory only (W).",
                         )
                     )
             continue
@@ -298,13 +342,14 @@ def _collect_ps169_violations(repo: Path, violation_cls: type) -> list:
                         "PS-169",
                         rel,
                         f"job `{job_id}` runs on GitHub-hosted runner "
-                        f"`{label}`{via} — forbidden without exception "
-                        "(operator mandate 2026-07-14). Use the self-hosted "
-                        "pool: `runs-on: ${{ fromJSON(vars.CI_RUNS_ON || "
-                        "'[\"self-hosted\",\"Linux\",\"X64\",\"scitex-ci\"]') "
-                        "}}` or `runs-on: [self-hosted, Linux, X64, "
-                        "scitex-ci]`. If the pool cannot run this job, fix the "
-                        "pool — never fall back to a hosted runner.",
+                        f"`{label}`{via} — ALLOWED, but slower than hardware "
+                        "we own. Hosted runners are free for public "
+                        "repositories, so this is a legitimate choice where "
+                        "turnaround does not matter. Where it does, target a "
+                        "machine we own: `runs-on: ${{ fromJSON(vars."
+                        "CI_RUNS_ON || '[\"self-hosted\",\"Linux\",\"X64\","
+                        "\"scitex-ci\"]') }}`. Advisory only (W) — this never "
+                        "fails a build.",
                     )
                 )
     return found
@@ -334,18 +379,13 @@ def check_ps169_hosted_runners(
         reference ratchets to "E"; a pre-existing one stays at the rule
         default "W".
     """
-    found = _collect_ps169_violations(repo, violation_cls)
-    if not found:
-        return
-
-    escalate_new_violations(
-        repo,
-        found,
-        ("PS-169",),
-        lambda base_repo: _collect_ps169_violations(base_repo, violation_cls),
-        baseline_ref=baseline_ref,
-    )
-    out.extend(found)
+    # NO baseline escalation. Every finding stays at the rule default W.
+    # The ratchet was removed on 2026-08-05: it left a long-standing
+    # `ubuntu-latest` at W (permitted) while escalating a job newly MOVED onto
+    # hosted to E — blocking the very PR that complies with the directive to
+    # take CI off Spartan. `baseline_ref` is retained in the signature for
+    # call-site compatibility and is deliberately unused.
+    out.extend(_collect_ps169_violations(repo, violation_cls))
 
 
 # EOF

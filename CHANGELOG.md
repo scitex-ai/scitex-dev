@@ -7,6 +7,465 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-08-10
+
+**Three checks learn to say what they did not check.** 0.44.0 fixed gates
+that reported "fine" for runs in which they measured nothing; this release
+is the same idea turned on the REPORTING side. A verdict now declares which
+rule corpus produced it, a skipped-category notice stops describing itself
+as silent, and a rule that was winning on measurement while losing on
+argument now states the hazard it actually guards.
+
+All three came out of one evening's exchange with scitex-db and scitex-hub,
+who between them found: a container grading against a corpus that predates
+the rule being tested, and a print-ban whose stated reason a competent
+maintainer could beat.
+
+### Added
+
+- **A verdict states which rule corpus produced it.** `describe_corpus()` /
+  `corpus_provenance()` in `linter/_health.py`, and it is UNCONDITIONAL —
+  `describe_skips()` returns `[]` when nothing was skipped, so a run that
+  skips nothing said nothing about which corpus graded it, and that silence
+  was indistinguishable from a current, complete run.
+
+  Measured: scitex-db's container carried scitex-dev 0.28.0, in which
+  PS-220 does not exist at all (controls present, so genuine absence). Their
+  local audits had been reporting clean for a rule that was not there. A
+  rule that is ABSENT cannot fire at any severity — the most complete way
+  for a check to be unable to fail.
+
+  The module PATH ships beside the version, because the version is metadata
+  and metadata lies: a stale wheel, an orphaned `.dist-info` and a SIF baked
+  months ago all report a version that outlived the code beside them.
+  AMBIGUITY IS REPORTED, NOT RESOLVED — two `.dist-info` dirs make the
+  version a coin toss, so the line says AMBIGUOUS and lists both rather than
+  picking one (measured on this repo's own container: `['0.38.0','0.43.1']`
+  on the night 0.44.0 shipped).
+
+### Fixed
+
+- **PS-220 named the detector, not the hazard.** The finding said the call
+  "prints human prose … this is a message". Prose is how the rule DETECTS
+  the problem; it is not the problem, and on that framing the rule loses to
+  anyone whose function legitimately renders a table for a human.
+
+  The hazard is that LIBRARY CODE WRITES UNCONDITIONALLY TO STDOUT: a caller
+  who imports the module cannot silence, redirect or capture it — no flag,
+  no handler, no level. `log.info(...)` keeps the output for everyone who
+  wants it and hands control to the caller. Behaviour is unchanged; same
+  calls flagged, same calls spared.
+
+  Worth stating because the weak framing had consequences: it lost an
+  argument to scitex-db, who then supplied this reason against their own
+  position and converted. A rule whose stated reason can be beaten is one
+  people route around — the same "gets ignored" failure as too-low a
+  severity, arriving by a different door. PS-220 defaults to `W`, so do not
+  make it louder without also making it answerable.
+
+- **The IO/PA notice called itself silent, and implied its gap was by
+  design.** It said the checks "are SILENTLY skipped" while BEING the
+  disclosure that they were skipped. And it never said whether the absence
+  was a gap or a design choice — so "io/path is a research concern, this is
+  a tooling package, therefore not applicable" was the comfortable and
+  WRONG inference. `linter/_project_type.py` gates `project-type` to drive a
+  category-severity FLIP (io/path warning→error for research); it scopes
+  SEVERITY, not APPLICABILITY. The rules are meant to run everywhere. The
+  notice now says so, and says the verdict covers nothing about them.
+
+  This notice printed accurately on every affected run for eleven days and
+  nobody acted. A present, correct, unactioned disclosure is not fixed by
+  making it louder; it is fixed by making it decidable.
+
+## [0.44.0] - 2026-08-10
+
+**A release in two halves, joined by one idea: refuse to answer when you
+cannot.** The store learns to reject writes it cannot justify — an entitlement
+fence on the oplog, a compare-and-set that can no longer be opted out of by
+accident, and two guards that catch a store configured to lose its data. On the
+other side, three more checks stop reporting "fine" for runs in which they
+measured nothing. That was 0.41.0's theme as well, and the recurrence is the
+point: an exit code, a log classifier and an empty API answer each looked like
+their own small bug, and all three were the same mistake.
+
+### Added
+
+- **The oplog FENCE — "was this writer still entitled?" (#538, #539).**
+  `Store.put` takes a three-valued `expected_revision`: `NEW_RECORD`, an int,
+  or `ANY_REVISION`. The third is the opt-out, it had ZERO production call
+  sites, and nothing enforced that. `store/README.md` told the reader to run
+  `rg ANY_REVISION` to audit it by hand, which makes the guarantee depend on
+  someone remembering to look. It is now a test that fails, shipped with the
+  additive migration the fence needs. This is sequencing for ADR-0006
+  Decision 7, which opens TCP 55432 to external clients: a lock nobody can
+  bypass has to exist *before* there are clients who could bypass it.
+
+- **`kind` accepts the INTENT spellings `daemon` / `periodic` (#542).** The
+  three existing kinds mixed two axes. `service` names an intent and already
+  spans two mechanisms (a systemd unit, or the respawn loop used where
+  `systemd --user` is absent), while `timer` and `cron` are the *same* intent
+  with the scheduler welded into the type name. The new spellings normalise on
+  the way in, with no provider changes, so nothing has to migrate to benefit.
+
+### Performance
+
+- **Bulk store writes share one transaction — ~8.7x (#541).** Both dialects
+  connect in autocommit, which is right for a single interactive write and
+  wrong for bulk work: one logical op costs three statements (oplog insert,
+  row upsert, cursor advance) and therefore three commits. Adopting the real
+  3,712-card board took 87.7s, which is what surfaced it. Measured at both
+  scales because they could have had opposite signs — 3,712-op adoption
+  18.59 → 2.06 ms/op (9.0x), and 60 replays of 5 ops 8.99 → 1.04 ms/op
+  (8.65x).
+
+### Fixed
+
+- **`ci verify` reported "the pull request is NOT ready to merge" when it had
+  simply not been able to run.** `EXIT_NOT_READY` was `2`, and **Click exits 2
+  on a usage error** — before any of our code runs. So an installed
+  scitex-dev predating the `ci verify` subcommand answered
+  `No such command 'verify'` with exit 2, and the gating hook rendered that
+  as a confident verdict about a pull request that was green on 7/7 checks.
+
+  Exit codes are now `0` ready / `10` not ready / `11` cannot determine,
+  leaving `1` and `2` to the framework. The collision is enforced by
+  `assert_no_domain_code_is_framework_reserved()`, which runs **at import**
+  in every process that imports the module — including the subprocess a
+  gating hook shells out to.
+
+  The constitution already forbade this in as many words (§2), and the rule
+  was walked past by someone who had read it, inside the change that fixed
+  two sibling instances of the same defect. That is why the check executes
+  rather than advises: a rule that must be remembered is forgotten exactly
+  when it matters.
+
+  `EXIT_USAGE` was also declared as `1`, which was wrong — Click uses `2`.
+  Mislabelling someone else's exit code is how `2` came to look free.
+
+- **A dead attempt counted forever, so no re-run could ever clear it.** One
+  head commit can carry several runs of a check name — a manual re-run, or a
+  push and the pull request opened from it. Every row counted, so an attempt
+  that died from infrastructure poisoned the verdict permanently. A verifier
+  that cannot be un-failed by a successful re-run is broken precisely where
+  re-runs exist.
+
+  Only the most recently **created** attempt per name decides readiness, which
+  is what branch protection uses. **Created, not started:** a queued run can
+  start later than a run created after it, and ordering by start time
+  produced a green verdict on a pull request GitHub was holding at
+  `BLOCKED`. Superseded attempts are still reported, never dropped, so an
+  intermittent check stays visible instead of being laundered into a pass by
+  one lucky retry.
+
+- **The verdict printed a SHA that the merge command rejects.** `render()`
+  abbreviated the head, and `--match-head-commit` refuses anything but the
+  full 40 characters, so the documented two-step handed the reader a value
+  the second step would not accept. The pin is the whole safety mechanism,
+  and a pin that errors is a pin people stop passing. The verdict now prints
+  the full head and emits the ready-to-run pinned merge command.
+
+- **The audit gate could pass on an error it did not know how to read.** The
+  skip-rules classifier only examined lines whose payload began with `[`.
+  Anything else was dropped into neither bucket, so it could never appear in
+  `non_skipped` — and the guard `if skipped and not non_skipped` then masked
+  the entire failure.
+
+  The lines taking that path are the ones that matter most: the auditor
+  reporting that it could not **run**. Measured in the field — scitex-hub's
+  CI has carried `Error: No module named 'requests'` since 2026-08-05,
+  plainly visible in the job log and invisible to this classifier for four
+  days, while the gate reported success.
+
+  Error-tier unbracketed lines now count. They can never be masked, and that
+  is correct by construction rather than policy: masking is keyed on rule id
+  and these lines carry none, so no `skip_rules` entry can ever match one.
+  An auditor that could not run must not be silenceable.
+
+  The level check is a whitelist (`ERRO`/`ERROR`/`FAIL`/`FAILED`/`FATAL`/
+  `CRIT`/`CRITICAL`). The inverse test would promote any unrecognised
+  `word:` prefix to an error, reddening builds on `note:` or `usage:`.
+
+### Changed
+
+- `ci/_mergeable.py` split into `_exit_codes`, `_check_run`, `_readiness` and
+  `_gh`, with `_mergeable` remaining the orchestrator. **No public name
+  moves.** The exit-code vocabulary is what a hook or release script needs
+  *without* `subprocess` and the GitHub decision tree, and that coupling is
+  part of why the collision above sat unread at the top of a large module.
+
+### ⚠️ Upgrade note — read this if your gate declares `MAX_MASKED_VIOLATIONS`
+
+This release can turn a green gate red, and **the obvious remedy is a trap
+for a specific set of packages.** Which one you are decides what to do:
+
+**If your audit gate has NO masked-violation ceiling** — this is the common
+case; twelve of thirteen scitex repositories are here — then a new error may
+appear saying the auditor could not run. Install the missing dependency. The
+audit then runs, its findings appear as ordinary gradeable output, and you
+are done. Nothing below applies to you.
+
+**If your gate declares `MAX_MASKED_VIOLATIONS`**, installing the dependency
+may surface a backlog your gate has never graded, because the auditor that
+would have found it was silently disabled. Expect a **count**, not a
+one-line fix. Measured on scitex-hub: 102 findings appeared, every one
+already in their `skip_rules` — so all were masked, but masked still counts
+against the ceiling, taking it from 151 to roughly 253.
+
+**Do not resolve that by raising the ceiling.** A ratchet that may only
+decrease is load-bearing; raising it converts a visible red into a silent
+breach, which is the same defect wearing a different number. The workable
+path is to measure first and then pay down:
+
+    # what would appear, by rule
+    grep -oE '\[§[0-9a-b]+\]' <audit-output> | sort | uniq -c | sort -rn
+
+    # then check whether one message dominates — if so it is one
+    # conversion applied N times, landable group by group, and each
+    # group lands the ceiling DOWN rather than up
+
+On hub, 95 of the 102 were the same `§4b` message, which turned "a
+migration campaign" into a single repeatable change. Your ratio may differ;
+the method does not.
+
+## [0.43.1] - 2026-08-09
+
+**The audit gate stops reading a "could not measure" notice as a violation
+of the code.** If you are on 0.38.1 and blocked by PS-169 or PS-224, come
+straight here rather than to 0.43.0 — see the upgrade note below.
+
+### Fixed
+
+- **`testing.audit_all_for_package` counted warn-tier NOTICES as violations.**
+  The classifier stripped the level word (`ERRO: ` / `WARN: `) only to *reach*
+  the rule bracket and then never read it, so a notice and a finding were
+  indistinguishable. Because the mask guard is `if skipped and not
+  non_skipped`, a SINGLE unmatched notice discarded an entire skip-rule mask
+  and failed a green tree.
+
+  Measured by scitex-hub on the real failing run: 205 violation lines
+  classified, 151 masked, **1 non-skipped** — the `[§10w] COULD NOT MEASURE
+  RELIABLY … No verdict` line, alone.
+
+  That is UNKNOWN collapsed into the failure pole. `§10`, `§10w`, `TALLY` and
+  `defer` now never count as violations, and severity is read rather than
+  discarded.
+
+  `NON_ATTRIBUTABLE_RULES` in `_cli/audit/_diff.py` already knew these lines
+  describe the machine rather than the diff; this consumer simply never
+  consulted it.
+
+- **`[defer]` — the same defect, reported 2026-07-21 and fixed at the source
+  this time.** It had been worked around downstream by adding `"defer"` to a
+  package's `skip_rules`, with the comment *"remove when scitex-dev excludes
+  notice lines from classification"*. The workaround held, so the defect
+  survived nineteen days and returned as `§10w`. Masking a could-not-measure
+  notice suppresses the one signal saying the measurement is untrustworthy,
+  so consumers should NOT carry these in `skip_rules`.
+
+### Upgrade note — if you are pinned below 0.43.0
+
+Do not use 0.43.0 as an intermediate step. The two pins are broken in
+opposite ways:
+
+| | 0.38.1 | 0.43.0 | 0.43.1 |
+|---|---|---|---|
+| PS-169 on a new hosted line | ratchets W→**E** | flat W | flat W |
+| PS-224 on `ubuntu-latest` | **rejects** | accepts | accepts |
+| §10w notice in the gate | — | **fails a clean tree** | reported, not fatal |
+
+Jump straight to 0.43.1.
+
+### Known, not fixed here
+
+The **§10 import-budget threshold** itself. In-SIF measurement (scitex-hpc)
+shows a first-launch penalty that exceeds the fixed 100ms bound on every
+interpreter — cold 136/168/193ms against warm 43-50ms — and that the cost is
+the *containerised interpreter*, not the node: same machine, host python
+cold 39ms / warm 18ms versus SIF cold 193ms / warm 46ms. A bound sampled
+once, on a freshly started container, will trip on any host running a SIF.
+That is a threshold-design question and gets its own change.
+
+An earlier reading attributed this to CI-node load; that was **refuted** by
+control measurement (loaded node 18ms, idle node 21ms) and is recorded as
+refuted rather than dropped.
+
+## [0.43.0] - 2026-08-05
+
+**A release that stops two rules from blocking the work they were meant to
+protect, and gives the host registry a way to be corrected.**
+
+The CI-runner rules were written under a "never use GitHub-hosted runners"
+mandate. The operator superseded that on 2026-08-05 — Spartan comes out of CI,
+hosted runners are a permitted fallback — and the rules had not caught up. Two
+of them were failing compliant work.
+
+### Fixed
+
+- **PS-169 no longer blocks the migration it exists to inform (#512).** The
+  rule shipped at `W` but escalated any violation NEW relative to the git
+  baseline to `E`. Under the new directive that is inverted: a repo running on
+  `ubuntu-latest` for months stayed at `W` (permitted), while a repo MOVING a
+  job off Spartan introduced a new violation and got blocked. Measured on
+  scitex-hub's PR #561, where it fired at `[E]` and blocked a PR whose fix
+  commit was titled "run the pack publish on the self-hosted pool". Every PR
+  in this migration is new-violation-shaped by definition.
+
+  The ratchet is removed, with no promote-to-`E` path left behind. Detection is
+  unchanged — hosted usage is still reported, because "why is this repo's CI
+  slow?" is a real question — but it is advisory and never fails a build. The
+  message, rule text and slug all said "forbidden without exception"; a rule
+  reporting at `W` while its text forbids teaches the reader the opposite of
+  what the gate does. `ci.yml.tmpl` carried the same claim and renders into
+  every repo, so a re-apply would have re-asserted the retired policy over a
+  per-repo fix.
+
+- **PS-224 accepts GitHub-provided destinations (#492, first shipped here).**
+  It landed on `develop` after `v0.42.0` was cut, so every repo installing
+  scitex-dev unpinned kept getting the old behaviour. Consequence measured by
+  scitex-hpc: their nightly `release-ci` failed four consecutive nights
+  (08-01..08-04), all four from this one rule — 14 violations, every one a
+  bare `[ubuntu-latest]`.
+
+  GitHub serves its own images, so such a job cannot exhibit the failure
+  PS-224 exists to catch: a destination no machine serves is not rejected, it
+  is QUEUED FOREVER. Those jobs were flagged only as a side effect of the
+  "unserved" arithmetic — harmless while hosted runners were forbidden, a false
+  positive at `E` the moment they were permitted. Self-hosted destinations are
+  still checked, at `E`, with no ratchet.
+
+- **PS-215 described a failure that cannot happen.** It told readers "a user
+  who runs this exact command gets a resolver error". `pip` does not refuse an
+  undeclared extra — it warns and EXITS 0 with the base package installed. The
+  docstring distinguished a loud case from a quiet one, and there is no loud
+  case: both exit 0. The user sees the remedy SUCCEED, hits the original
+  failure again, and has no reason to connect them. That is what makes the rule
+  worth having — not that the remedy errors, but that it cannot.
+
+### Added
+
+- **`HostRecord.aliases` — re-key a host without orphaning the old name
+  (#514).** Host names are on-disk KEYS (cron entries, JobSpecs, sync configs,
+  other packages' registry rows, card scopes); rewriting one silently orphans
+  every reference, and the orphan renders as "nothing to do" rather than as an
+  error.
+
+  The motivating case: the fleet's NAS numbering is GENERATIONAL — `nas-01` /
+  `nas-02` / `nas-03` ascend as machines are REPLACED — and the bare name `nas`
+  follows whatever is current. It is a MOVING ALIAS: when a `nas-04` arrives,
+  every config keyed on it addresses different hardware, with nothing logged.
+  A moving alias belongs in `aliases`, never in `name` — it is a way to REACH
+  a host, not a way to IDENTIFY one.
+
+  Canonical keys resolve first and exhaustively, so an alias can never capture
+  another host's canonical name. An alias claimed by two hosts raises rather
+  than picking one. Malformed alias lists fail loudly instead of degrading to
+  empty, since a silently-empty list is exactly the orphan this prevents.
+
+- **The host registry refuses an ambiguous write (#513).**
+  `get_hosts_yaml_path` resolves through `Path.home()`, which inside an agent
+  container is `/home/agent` — so a write from a container landed in a private
+  copy no host-side reader opens, and every layer reported success. Measured:
+  `sac host add` did this, and `sac host validate` then reported "ok, 2
+  peer(s)" about the shadow.
+
+  It survived because the two files are byte-identical — every CONTENT check
+  agrees, and only IDENTITY distinguishes them. Rather than detecting
+  containers (which needs a reliable signal and a hardcoded username, both of
+  which rot), the write path counts visible registries and REFUSES when more
+  than one exists. Reads are unchanged: a reader answering with what it can see
+  is defensible, a writer guessing is not.
+
+  Consequence, stated plainly because it is intended: no containerized agent
+  can write the registry by the default path. The refusal names the route —
+  run it on the bare host, where only one registry is visible and the same rule
+  permits it.
+
+## [0.42.0] - 2026-08-04
+
+**A release about saying which thing you mean.** Every entry is a place where
+something was inferred — a scope, an owner, a location — and the fix was to make
+the caller state it, so that forgetting fails loudly instead of resolving to
+whatever was nearest.
+
+### Added
+- **The scope and identity contract every SciTeX app conforms to (#499).**
+  `scitex_dev.scope` ships five frozen dataclasses — `Principal`, `Project`,
+  `Member`, `Scope`, `AppSpec` — that Django, Gitea, the CLI and every leaf
+  conform to, rather than each restating. Authority is decided by who ENFORCES,
+  not who stores: Gitea owns repo/visibility/human-ACL because it is what blocks
+  a `git clone`; scitex-dev owns the shape and the agent-as-principal concept
+  because nothing else defines them; anything in Django is a projection.
+
+  Agents are first-class principals, with one rule doing the work of three:
+  `effective_role(agent) = min(granted, owner's role on the same project)`. An
+  agent can be revoked alone; creating one gains nothing, so agents are not a
+  privilege-escalation path; and revoking the OWNER revokes their agents,
+  because the ceiling drops with them — no cascade to remember, no orphaned
+  agent still holding access after the person is gone.
+
+  `AppSpec` carries TWO independent axes, `data_lives_at` and `view`. Collapsing
+  them cannot express two of the five shipped apps: a Scholar library is not
+  rebuilt per manuscript, and Storage files belong to a person while projects
+  refer to them.
+
+- **The leaf-facing credential primitive (#500).** `resolve(name, ctx=...)` is
+  what a leaf calls at runtime, and `register_secret_group(dev, pkg=...)` gives
+  any leaf the SAME `dev secret` CLI — the same code, not a copy, because a copy
+  is what drifts and drift in a convention is invisible until someone counts
+  adoption and concludes the convention never existed.
+
+  The store is the SSOT; the environment is the injection channel, since a
+  container or CI job has no private key. **The environment is consulted only
+  for owner-less contexts**, and that limit is load-bearing: `os.environ` is
+  process-wide while a Django worker serves many users from one process, so
+  honouring an env override for a per-user secret would hand user A's value to
+  user B's request and look like a successful lookup on both.
+
+- **`<pkg> dev` — the canonical §13 self-maintenance group (#495).** scitex-dev
+  now obeys the rule it ships. `cron`, `hooks` and `skills` moved under `dev`;
+  the `scitex_dev.jobs` aggregators moved under `ecosystem dev`. Every old
+  spelling keeps working through a Phase W warn-forward alias.
+
+### Changed
+- **`SecretContext.scope` has no default (#501).** Every caller states which
+  scope it means; forgetting is a `TypeError` at the call site. The previous
+  default was the empty `Scope()` — safe in that it never guessed a user, but it
+  still let the most dangerous call construct successfully: a request handler
+  that forgot to pass the requesting user got a valid object pointed at the
+  standalone store, read real data, and returned. `Scope.standalone()` and
+  `Scope.everything()` are named constructors so the no-owner cases read as
+  declarations rather than as omissions; neither looks the current user up.
+
+### Fixed
+- **A group alias swallowed `--help` (#495).** Click's help option fires during
+  PARSING, so `scitex-dev skills self-explain --help` printed the alias's own
+  two-line help and dropped `self-explain` with no error, while the same command
+  WITHOUT `--help` forwarded correctly. Discovery through the old name — exactly
+  what a user reaches for after a rename — was the only broken part.
+- **§1a and §13 could not both be satisfied (#495).** §1a required `skills` at
+  top level; §13 requires it under `dev`. scitex-dev, which owns both rules, was
+  the first package caught in the fork and every adopter reaches it next. §1a now
+  accepts either location, preferring `dev`; a Phase W alias still does not
+  satisfy it, because an alias forwards and does not host the verbs.
+- **Two builders registered a `dev` group on main (#495).** Click's
+  `add_command` is a dict assignment, so the later silently replaced the earlier
+  and everything mounted on it: `dev` held `secret` alone, with cron/hooks/skills
+  gone and no error anywhere.
+- **A latent `AttributeError` on the credential failure path (#500).**
+  `SecretUnavailable` interpolated `ctx.pkg`, a field that stopped existing at a
+  rename. It sat on the failure path, so it would have replaced a clear "secret
+  not found" with a crash the first time a secret was genuinely missing.
+
+### Testing
+- Three tests asserted on `CliRunner.result.output`, which MIXES stderr, while
+  invoking commands that now warn there via a Phase W alias. They passed locally
+  and failed on every CI leg. The local green depended on test ORDER plus a
+  leftover marker file under `${XDG_RUNTIME_DIR:-/tmp}` suppressing a
+  once-per-session warning — so re-running locally reinforced the illusion. They
+  now read `.stdout`, the stream the contract actually names. 34 more instances
+  of the same shape remain across the suite, latent until something writes to
+  stderr on their path.
+
 ## [0.41.0] - 2026-07-31
 
 **A release about checks that could not tell "passed" from "never ran".** Nearly

@@ -87,11 +87,17 @@ from ._registry import (
     resolve,
 )
 
+# Writes resolve through `._write_target`, NOT through `get_hosts_yaml_path`.
+# The read path may legitimately answer with whatever this process can see;
+# a write must refuse when it cannot tell which registry the fleet reads.
+from ._write_target import candidate_hosts_yamls, resolve_hosts_yaml_for_write
+
 __all__ = [
     "HOST_KINDS",
     "HostRecord",
     "HostRegistryError",
     "UnknownHostError",
+    "candidate_hosts_yamls",
     "create_default_hosts_yaml",
     "find_runner_host",
     "get_hosts_yaml_path",
@@ -99,6 +105,7 @@ __all__ = [
     "list_runner_destinations",
     "packaged_default_runner_destinations",
     "resolve",
+    "resolve_hosts_yaml_for_write",
 ]
 
 # EOF
