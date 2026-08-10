@@ -147,6 +147,48 @@ the ability to omit the port from a connection string, and costs a collision
 with any system Postgres. It confers no auto-start benefit: that comes from
 the service manager, not the port number.
 
+### 8. PGDATA lives OUTSIDE the container, and the store ENFORCES it
+
+Raised by the operator, 2026-08-10:
+
+> 「コンテナの外にデータベースの実態をおかないと、コンテナを壊したときに
+>   データが復旧できなくなるので、そういった状態は検知してエラーを出す」
+
+He was right that it was missing. Decision 2 *implied* durable storage and
+`_host.py` carried a comment asserting PGDATA is bind-mounted outside any
+container — but nothing verified it. **A comment states an intention and
+cannot notice when the intention fails.**
+
+The failure is specific and silent. `$HOME` is `/home/agent` inside these
+containers while the durable bind lives under the host's home, so
+`~/.scitex/pg` can resolve container-local. The store then comes up, works
+perfectly, accepts every write, and loses all of it at the next image
+rebuild — with no error at any point. Nothing in normal operation
+distinguishes it from a correct deployment.
+
+So `require_durable_pgdata()` runs on the socket branch of `host_store()`,
+reads `/proc/self/mountinfo`, and **raises** when PGDATA lands on a
+filesystem that does not survive a rebuild (`overlay`, `overlayfs`,
+`fuse-overlayfs`, `tmpfs`). Measured on scitex-compute-04:
+
+    /home/ywatanabe   ext4                  <- host bind, survives
+    /                 fuse.fuse-overlayfs   <- container-local, does not
+
+**It raises rather than warns.** A warning is what the four days of
+undetected Telegram silence were made of — every check available was
+advisory and every one reported healthy. A store that cannot keep what it
+accepts must not accept it.
+
+**It abstains when it cannot tell.** An unreadable mount table returns
+without blocking: "cannot determine" is not "unsafe", and a guard that
+fails every host with an unusual `/proc` would itself be the outage. This
+is the same three-valued discipline the rest of this ADR runs on.
+
+**It guards only the socket branch.** An explicit `SCITEX_STORE_DSN` may
+name a Postgres elsewhere whose storage this process cannot observe, so
+checking OUR filesystem would say nothing about ITS durability — the exact
+vantage-point error this decision exists to prevent.
+
 ## Consequences
 
 **The completeness bar changes.** It is not "can the primitive store cards"
