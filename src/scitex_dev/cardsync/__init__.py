@@ -23,8 +23,19 @@ else is I/O.
 
 from __future__ import annotations
 
+from ._apply import CardStore, ReconcileReport, reconcile
 from ._decide import Side, Verdict, decide
+from ._pg import PgCardStore, ReadOnlyStoreError
 
-__all__ = ["Side", "Verdict", "decide"]
+__all__ = [
+    "CardStore",
+    "PgCardStore",
+    "ReadOnlyStoreError",
+    "ReconcileReport",
+    "Side",
+    "Verdict",
+    "decide",
+    "reconcile",
+]
 
 # EOF
