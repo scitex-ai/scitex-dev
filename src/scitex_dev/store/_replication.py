@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from typing import Iterable, Sequence
 
 from ._merge import MergeConflict
-from ._oplog import OpEntry, assert_contiguous
+from ._oplog import OpEntry, assert_contiguous, assert_not_superseded
 from ._store import Store
 
 __all__ = ["ReplayResult", "pull", "replay", "sync"]
@@ -91,6 +91,11 @@ def replay(store: Store, source: str, entries: Sequence[OpEntry]) -> ReplayResul
     cursor_before = store.cursor(source)
     ordered = list(entries)
     assert_contiguous(ordered, cursor=cursor_before, source=source)
+    # Contiguity proves nothing was MISSED. The fence proves the writer was
+    # still ENTITLED — a demoted or partitioned peer that keeps running emits
+    # ops that pass every other check here. Both run BEFORE anything is
+    # applied, so a bad batch is rejected whole rather than half-applied.
+    assert_not_superseded(ordered, fence=store.fence(source), source=source)
 
     conflicts: list[MergeConflict] = []
     applied = 0
@@ -100,6 +105,11 @@ def replay(store: Store, source: str, entries: Sequence[OpEntry]) -> ReplayResul
         conflicts.extend(result.conflicts)
         cursor = entry.seq
         store.set_cursor(source, cursor)
+        # Adopt the authority we just accepted under, so a LATER batch
+        # carrying an older fence is rejected. Without this the check above
+        # only ever compares against 0 and can never fire.
+        if entry.fence > store.fence(source):
+            store.set_fence(source, entry.fence)
         applied += 1
 
     return ReplayResult(
