@@ -311,11 +311,29 @@ def render_report(matrix: DriftMatrix) -> str:
     matrix — it is the loudest signal in the report and must not depend
     on a reader scanning the whole per-layer table to notice it (see
     ``_package_watch`` module docstring, 2026-07-12 incident).
+
+    A BLIND-LAYER banner prints next, for the same reason. When layers 5/6
+    collected nothing, the ``img`` / ``overlay`` columns render ``-`` for
+    every package, and a dash is indistinguishable from "checked, in sync".
+    Stating it once above the grid turns 72 silently-empty cells into a
+    question a reader actually asks. The trailing "layers not fully
+    collected" line stays, but a footnote under a full-looking table is
+    read after the conclusion has already formed.
     """
     lines: list[str] = []
     banner = render_package_drift_banner(list(matrix.package_drift_warnings))
     if banner:
         lines.append(banner)
+        lines.append("")
+    if not matrix.sac_available:
+        lines.append(
+            "!! BLIND LAYERS: base-image (img) and agent-overlay (overlay) "
+            "collected NO data for ANY package."
+        )
+        lines.append(
+            f"   Their cells below are '-' meaning UNKNOWN, not in-sync. "
+            f"Reason: {matrix.sac_note or 'sac unavailable'}"
+        )
         lines.append("")
     lines.extend(
         [
