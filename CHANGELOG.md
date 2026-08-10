@@ -7,6 +7,117 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-08-10
+
+**Three checks learn to say what they did not check.** 0.44.0 fixed gates
+that reported "fine" for runs in which they measured nothing; this release
+is the same idea turned on the REPORTING side. A verdict now declares which
+rule corpus produced it, a skipped-category notice stops describing itself
+as silent, and a rule that was winning on measurement while losing on
+argument now states the hazard it actually guards.
+
+All three came out of one evening's exchange with scitex-db and scitex-hub,
+who between them found: a container grading against a corpus that predates
+the rule being tested, and a print-ban whose stated reason a competent
+maintainer could beat.
+
+### Added
+
+- **A verdict states which rule corpus produced it.** `describe_corpus()` /
+  `corpus_provenance()` in `linter/_health.py`, and it is UNCONDITIONAL —
+  `describe_skips()` returns `[]` when nothing was skipped, so a run that
+  skips nothing said nothing about which corpus graded it, and that silence
+  was indistinguishable from a current, complete run.
+
+  Measured: scitex-db's container carried scitex-dev 0.28.0, in which
+  PS-220 does not exist at all (controls present, so genuine absence). Their
+  local audits had been reporting clean for a rule that was not there. A
+  rule that is ABSENT cannot fire at any severity — the most complete way
+  for a check to be unable to fail.
+
+  The module PATH ships beside the version, because the version is metadata
+  and metadata lies: a stale wheel, an orphaned `.dist-info` and a SIF baked
+  months ago all report a version that outlived the code beside them.
+  AMBIGUITY IS REPORTED, NOT RESOLVED — two `.dist-info` dirs make the
+  version a coin toss, so the line says AMBIGUOUS and lists both rather than
+  picking one (measured on this repo's own container: `['0.38.0','0.43.1']`
+  on the night 0.44.0 shipped).
+
+### Fixed
+
+- **PS-220 named the detector, not the hazard.** The finding said the call
+  "prints human prose … this is a message". Prose is how the rule DETECTS
+  the problem; it is not the problem, and on that framing the rule loses to
+  anyone whose function legitimately renders a table for a human.
+
+  The hazard is that LIBRARY CODE WRITES UNCONDITIONALLY TO STDOUT: a caller
+  who imports the module cannot silence, redirect or capture it — no flag,
+  no handler, no level. `log.info(...)` keeps the output for everyone who
+  wants it and hands control to the caller. Behaviour is unchanged; same
+  calls flagged, same calls spared.
+
+  Worth stating because the weak framing had consequences: it lost an
+  argument to scitex-db, who then supplied this reason against their own
+  position and converted. A rule whose stated reason can be beaten is one
+  people route around — the same "gets ignored" failure as too-low a
+  severity, arriving by a different door. PS-220 defaults to `W`, so do not
+  make it louder without also making it answerable.
+
+- **The IO/PA notice called itself silent, and implied its gap was by
+  design.** It said the checks "are SILENTLY skipped" while BEING the
+  disclosure that they were skipped. And it never said whether the absence
+  was a gap or a design choice — so "io/path is a research concern, this is
+  a tooling package, therefore not applicable" was the comfortable and
+  WRONG inference. `linter/_project_type.py` gates `project-type` to drive a
+  category-severity FLIP (io/path warning→error for research); it scopes
+  SEVERITY, not APPLICABILITY. The rules are meant to run everywhere. The
+  notice now says so, and says the verdict covers nothing about them.
+
+  This notice printed accurately on every affected run for eleven days and
+  nobody acted. A present, correct, unactioned disclosure is not fixed by
+  making it louder; it is fixed by making it decidable.
+
+## [0.44.0] - 2026-08-10
+
+**A release in two halves, joined by one idea: refuse to answer when you
+cannot.** The store learns to reject writes it cannot justify — an entitlement
+fence on the oplog, a compare-and-set that can no longer be opted out of by
+accident, and two guards that catch a store configured to lose its data. On the
+other side, three more checks stop reporting "fine" for runs in which they
+measured nothing. That was 0.41.0's theme as well, and the recurrence is the
+point: an exit code, a log classifier and an empty API answer each looked like
+their own small bug, and all three were the same mistake.
+
+### Added
+
+- **The oplog FENCE — "was this writer still entitled?" (#538, #539).**
+  `Store.put` takes a three-valued `expected_revision`: `NEW_RECORD`, an int,
+  or `ANY_REVISION`. The third is the opt-out, it had ZERO production call
+  sites, and nothing enforced that. `store/README.md` told the reader to run
+  `rg ANY_REVISION` to audit it by hand, which makes the guarantee depend on
+  someone remembering to look. It is now a test that fails, shipped with the
+  additive migration the fence needs. This is sequencing for ADR-0006
+  Decision 7, which opens TCP 55432 to external clients: a lock nobody can
+  bypass has to exist *before* there are clients who could bypass it.
+
+- **`kind` accepts the INTENT spellings `daemon` / `periodic` (#542).** The
+  three existing kinds mixed two axes. `service` names an intent and already
+  spans two mechanisms (a systemd unit, or the respawn loop used where
+  `systemd --user` is absent), while `timer` and `cron` are the *same* intent
+  with the scheduler welded into the type name. The new spellings normalise on
+  the way in, with no provider changes, so nothing has to migrate to benefit.
+
+### Performance
+
+- **Bulk store writes share one transaction — ~8.7x (#541).** Both dialects
+  connect in autocommit, which is right for a single interactive write and
+  wrong for bulk work: one logical op costs three statements (oplog insert,
+  row upsert, cursor advance) and therefore three commits. Adopting the real
+  3,712-card board took 87.7s, which is what surfaced it. Measured at both
+  scales because they could have had opposite signs — 3,712-op adoption
+  18.59 → 2.06 ms/op (9.0x), and 60 replays of 5 ops 8.99 → 1.04 ms/op
+  (8.65x).
+
 ### Fixed
 
 - **`ci verify` reported "the pull request is NOT ready to merge" when it had

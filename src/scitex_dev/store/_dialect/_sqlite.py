@@ -88,6 +88,22 @@ class SQLiteDialect(Dialect):
     def column_type(self, kind: FieldKind) -> str:
         return _TYPES[kind]
 
+    def columns_sql(self, table: str) -> str:
+        """Existing column names, via the `pragma_table_info` table-function.
+
+        The table-function form is used rather than `PRAGMA table_info(x)`
+        because it is an ordinary SELECT: it composes, and it returns ZERO
+        ROWS for a table that does not exist instead of erroring. The caller
+        reads that as "nothing to migrate", which is the correct reading —
+        `create_sql` will have just created it with the current shape.
+
+        The name is a literal here rather than a bound parameter: SQLite does
+        not accept a placeholder in that position. It is `quote`d, and every
+        caller passes a name this dialect generated, never user input.
+        """
+        escaped = table.replace("'", "''")
+        return f"SELECT name FROM pragma_table_info('{escaped}')"
+
     def upsert_sql(self, table: str, columns: Sequence[str], key: str) -> str:
         """``INSERT ... ON CONFLICT(key) DO UPDATE`` (SQLite >= 3.24)."""
         column_list = ", ".join(self.quote(c) for c in columns)

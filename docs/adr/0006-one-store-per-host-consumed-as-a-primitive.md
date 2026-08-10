@@ -123,29 +123,218 @@ consistent.
 Anything deriving a filesystem location from the store target is the defect,
 not a workaround for it. `PostgresDsn.__fspath__` raises for this reason.
 
-### 7. Connect over a UNIX SOCKET; no TCP port by default
-Because Decision 3 means hosts never connect to each other's Postgres —
-they exchange oplogs at the application layer — each instance is only ever
-reached from its own host. A TCP port is therefore unnecessary.
+### 7. Connect over **TCP on 55432** with mandatory keys and a real ACL
 
-    ~/.scitex/pg/              PGDATA — the real data, bind-mounted OUTSIDE
-                               the container so rebuilding it destroys nothing
-    ~/.scitex/pg/.s.PGSQL      socket — no port
+**This decision was REVERSED on 2026-08-10.** It previously read "connect
+over a UNIX socket; no TCP port by default". The reversal and its cause are
+recorded here rather than in a second ADR, so a reader finds one answer
+instead of two that disagree.
 
-Three properties follow, and the third is the one that matters most: port
-collisions become impossible; there is no ambiguity about which Postgres an
-address refers to; and the instance is **not exposed to the network at all**,
-so it cannot be reached accidentally from off-host.
+#### What changed, and why
 
-That ambiguity was live on 2026-08-09: `127.0.0.1:5432` on scitex-compute-04
-looked like a local server and was in fact a tunnel to the operator's laptop.
-Nothing about the address said so.
+The operator asked what the socket's weaknesses were. The honest answer
+retired the decision:
 
-**When TCP is genuinely wanted** (a GUI client, debugging), it is opt-in,
-bound to `127.0.0.1` only, and uses **55432** — never 5432. 5432 buys only
-the ability to omit the port from a connection string, and costs a collision
-with any system Postgres. It confers no auto-start benefit: that comes from
-the service manager, not the port number.
+> A socket gives us less freedom. Can we go with 55432 after all? File
+> write permissions get complicated, and ACLs are awkward that way.
+>
+> External users connecting to the TCP endpoint on scitex.ai, agents at
+> all sorts of different privilege levels connecting — especially external
+> agents joining over A2A.
+>
+> — the operator, 2026-08-10 (rendered in English; the original was spoken
+>   Japanese, which by standing rule does not appear on public surfaces)
+
+**A UNIX socket cannot express WHO.** Its entire access-control vocabulary
+is "can this process open this path" — one bit, carrying no identity beyond
+uid. The requirement is per-agent, per-project, per-collaborator ACL plus
+recorded authorship ("who wrote this"). The filesystem is the wrong layer for
+that question; Postgres roles are the right one.
+
+Decision 3 said hosts never connect to each other's Postgres, and that
+still holds for HOST-TO-HOST replication. But it never covered the clients
+the operator actually intends: external users, agents at differing
+privilege levels, and A2A peers that may join. Those are not hosts
+replicating; they are clients authenticating. The old text answered a
+narrower question than the system was going to ask.
+
+#### The decision
+
+    postgresql://…@<host>:55432/scitex   TCP, TLS, per-identity role
+    ~/.scitex/pg/                        PGDATA — bind-mounted OUTSIDE the
+                                         container (Decision 8 ENFORCES this)
+
+- **55432, never 5432.** Unchanged, and for the unchanged reason below.
+- **External connections are permitted** — not merely localhost.
+- **Keys/TLS are mandatory.** Operator-confirmed, 2026-08-10: "of course keys
+  are required."
+- **`scram-sha-256`. Never `trust`.**
+- **Per-human and per-agent roles**, not one shared superuser.
+- **Row-level ACL enforced IN THE DATABASE**, not in client code — a check
+  that lives in the client is absent for every client that skips it.
+- **Authorship as a column**, so "who wrote this" is queryable rather than
+  reconstructed from logs.
+
+Permitting external access is not the same as open access, and the
+difference is the whole security posture. Reachability must never by itself
+confer write permission.
+
+#### What survives from the old decision
+
+The reasoning that produced the socket recommendation was not wrong, and it
+is retained: **5432 is refused.** On 2026-08-09, `127.0.0.1:5432` on
+scitex-compute-04 looked like a local server and was in fact a tunnel to
+the operator's laptop; nothing about the address said so. 5432 buys only
+the ability to omit a port from a connection string, and costs a collision
+with any system Postgres — and, as measured, the ability of an address to
+lie about what it reaches. Pinning to 55432 keeps that protection without
+the socket.
+
+#### Sequencing constraint this imposes
+
+Concurrency control today is an `fcntl.flock` on a host-local file. **A
+remote TCP writer holds no descriptor on this host and is not serialized by
+it at all.**
+
+Therefore compare-and-set inside the database is a **precondition of opening
+the port**, not a follow-up to it. Opening TCP first would take a
+lost-update defect that currently requires two local writers and hand it to
+every external client — multiplying a silent failure at exactly the moment
+its blast radius grows.
+
+### 8. PGDATA lives OUTSIDE the container, and the store ENFORCES it
+
+Raised by the operator, 2026-08-10:
+
+> Unless the database itself lives outside the container, the data cannot be
+> recovered when the container is destroyed — so detect that state and raise
+> an error.
+>
+> — the operator, 2026-08-10 (rendered in English; the original was spoken
+>   Japanese, which by standing rule does not appear on public surfaces)
+
+He was right that it was missing. Decision 2 *implied* durable storage and
+`_host.py` carried a comment asserting PGDATA is bind-mounted outside any
+container — but nothing verified it. **A comment states an intention and
+cannot notice when the intention fails.**
+
+The failure is specific and silent. `$HOME` is `/home/agent` inside these
+containers while the durable bind lives under the host's home, so
+`~/.scitex/pg` can resolve container-local. The store then comes up, works
+perfectly, accepts every write, and loses all of it at the next image
+rebuild — with no error at any point. Nothing in normal operation
+distinguishes it from a correct deployment.
+
+So `require_durable_pgdata()` runs on the socket branch of `host_store()`,
+reads `/proc/self/mountinfo`, and **raises** when PGDATA lands on a
+filesystem that does not survive a rebuild (`overlay`, `overlayfs`,
+`fuse-overlayfs`, `tmpfs`). Measured on scitex-compute-04:
+
+    /home/ywatanabe   ext4                  <- host bind, survives
+    /                 fuse.fuse-overlayfs   <- container-local, does not
+
+**It raises rather than warns.** A warning is what the four days of
+undetected Telegram silence were made of — every check available was
+advisory and every one reported healthy. A store that cannot keep what it
+accepts must not accept it.
+
+**It abstains when it cannot tell.** An unreadable mount table returns
+without blocking: "cannot determine" is not "unsafe", and a guard that
+fails every host with an unusual `/proc` would itself be the outage. This
+is the same three-valued discipline the rest of this ADR runs on.
+
+**It guards the instance THIS HOST MANAGES, whatever the transport.** The
+principle is observability, not socket-versus-TCP: check durability exactly
+when this process can actually see the storage in question. A DSN naming a
+Postgres elsewhere is left alone, because checking OUR filesystem would say
+nothing about ITS durability — the exact vantage-point error this decision
+exists to prevent.
+
+> **RESOLVED 2026-08-10 (PR #534).** This note previously warned that
+> `require_durable_pgdata()` was wired to the SOCKET branch of `host_store()`
+> and would stop firing once TCP became the default. **That warning was
+> wrong**, and it is corrected here rather than deleted, because the reason it
+> was wrong is the useful part.
+>
+> Reading the code found the call already on the FALLTHROUGH branch — "no
+> explicit DSN, so this is the instance we manage" — before the return.
+> Changing that branch's DSN from socket to TCP never removed the call. The
+> guard was structurally safe the whole time.
+>
+> The real exposure was one level down and easy to miss: **the guard's input
+> was named after a transport.** `require_durable_pgdata(socket_dir=...)` cost
+> nothing while PGDATA and the socket dir were the same path, but once TCP is
+> the default, `socket_dir` is precisely the parameter a later cleanup drops —
+> taking the durability check's argument with it. The parameter is now
+> `pgdata_dir`, which is what it always meant: PGDATA is where the data lives,
+> the socket was one way to reach it.
+>
+> **A guard whose input is named after a transport disappears when the
+> transport does.** Two tests pin the invariant rather than a comment — the
+> load-bearing one calls `host_store()` and asserts the refusal, so it fails
+> if a future transport change drops the call.
+> See card `dev-adr0006-decision7-reverse-to-tcp-55432-with-acl-20260810`.
+
+### 9. MULTI-WRITER per record — concurrent writers are the designed-for case
+
+Added 2026-08-10. This ADR was silent on its concurrency model, and the
+silence was not free: **two complete implementations were built against it,
+each reading it a different way**, before anyone noticed they disagreed.
+
+- `feat/store-oplog-replay` assumed SINGLE-writer-per-record — "no conflicts
+  to detect, no Lamport or vector clocks to keep" — and raises
+  `SingleWriterViolationError` when two origins touch one record.
+- What shipped on `develop` assumes MULTI-writer: ops carry only changed
+  fields, and `_policy.py` / `_merge.py` resolve per field (LWW, MAX,
+  element-keyed APPEND, UNION) ordered by hybrid logical clock.
+
+One design's normal case is the other's raised error. That is not a feature
+gap that could be closed by porting; it is a fork.
+
+#### The decision
+
+**Multi-writer.** Concurrent writers to one record are expected and are
+resolved per FIELD, never per row.
+
+#### Why — the operator's reason, which is the load-bearing one
+
+> Multi-writer is better — we don't know how busy it's going to get.
+>
+> — the operator, 2026-08-10 (rendered in English; the original was spoken
+>   Japanese, which by standing rule does not appear on public surfaces)
+
+Single-writer-per-record is not merely a simpler model; it is a **bet on
+topology and load**. It buys its simplicity by assuming a property nothing
+enforces. The fleet already has agents, a board, HTTP handlers and — after
+Decision 7 — external TCP clients all writing the same records, and the
+operator is explicitly unwilling to bet on how contended that becomes.
+
+The decisive property is the FAILURE MODE when the bet is wrong. A
+single-writer store meeting a second writer does not degrade; under
+`(origin, seq)` causal ordering it either raises or silently picks a winner,
+and "silently picks a winner" is the lost update this ADR already spent a
+card on. Multi-writer costs an HLC and a merge policy per field, permanently,
+and in exchange has no wrong-assumption state to enter.
+
+#### What is retained from the rejected design
+
+**Fencing.** `SupersededFenceError` — an op authored under a fence that has
+since been superseded, so a DEMOTED writer's ops cannot replicate as
+legitimate. This hazard is orthogonal to the conflict model: field-level
+merge does not care whether the writer was still entitled to write. It ports
+cleanly precisely because it does not rest on the single-writer assumption.
+
+**Not retained: intent-based dedup** (`has_intent`). Under this model,
+changed-fields-only UPSERT and element-keyed APPEND are idempotent by
+construction, so a client retry converges without an idempotency key.
+Recorded as a deliberate omission rather than an oversight — if a case
+appears where retry is NOT idempotent, that case reopens this line.
+
+#### The lesson this decision exists to prevent repeating
+
+An ADR that omits its concurrency model does not read as incomplete. It reads
+as finished, and two competent readers will fill the gap differently and
+build. **State the model, not just the mechanism.**
 
 ## Consequences
 

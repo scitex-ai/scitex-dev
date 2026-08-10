@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from typing import Iterable, Sequence
 
 from ._merge import MergeConflict
-from ._oplog import OpEntry, assert_contiguous
+from ._oplog import OpEntry, assert_contiguous, assert_not_superseded
 from ._store import Store
 
 __all__ = ["ReplayResult", "pull", "replay", "sync"]
@@ -81,9 +81,25 @@ def replay(store: Store, source: str, entries: Sequence[OpEntry]) -> ReplayResul
 
     Verifies contiguity against the store's cursor BEFORE applying
     anything, so a bad batch is rejected whole rather than half-applied.
-    Advances the cursor per entry, so an interruption mid-batch leaves a
-    cursor that correctly describes what was applied and the next pull
-    resumes exactly there.
+
+    ATOMIC PER BATCH. The whole replay runs inside one
+    :meth:`~._store.Store.batch` transaction: it either applies completely
+    and advances the cursor, or applies nothing and leaves the cursor where
+    it was. This REPLACED per-entry commits, and the change is deliberate on
+    two counts.
+
+    Correctness: a crash mid-batch used to leave a partially-applied batch
+    behind a cursor describing it. That was consistent, but it made "what is
+    applied" a function of when the process died. Now it is a function of
+    what succeeded. The next pull re-requests from the unchanged cursor and
+    re-applies the whole batch, which is safe because an op folds to the same
+    state however many times it is applied.
+
+    Cost: the old shape paid one commit per statement, three per op.
+    Measured at both scales, since they could have differed in sign —
+    8.99 -> 1.04 ms/op over sixty five-op replays, and 18.59 -> 2.06 ms/op
+    adopting the real 3,712-card board. Small batches are the common case
+    here, so the first number is the one that matters for catch-up.
 
     Raises :class:`~._errors.OplogGapError` if the batch does not start at
     ``cursor + 1``, has an internal hole, or mixes origins.
@@ -91,16 +107,27 @@ def replay(store: Store, source: str, entries: Sequence[OpEntry]) -> ReplayResul
     cursor_before = store.cursor(source)
     ordered = list(entries)
     assert_contiguous(ordered, cursor=cursor_before, source=source)
+    # Contiguity proves nothing was MISSED. The fence proves the writer was
+    # still ENTITLED — a demoted or partitioned peer that keeps running emits
+    # ops that pass every other check here. Both run BEFORE anything is
+    # applied, so a bad batch is rejected whole rather than half-applied.
+    assert_not_superseded(ordered, fence=store.fence(source), source=source)
 
     conflicts: list[MergeConflict] = []
     applied = 0
     cursor = cursor_before
-    for entry in ordered:
-        result = store.apply_remote(entry)
-        conflicts.extend(result.conflicts)
-        cursor = entry.seq
-        store.set_cursor(source, cursor)
-        applied += 1
+    with store.batch():
+        for entry in ordered:
+            result = store.apply_remote(entry)
+            conflicts.extend(result.conflicts)
+            cursor = entry.seq
+            store.set_cursor(source, cursor)
+            # Adopt the authority we just accepted under, so a LATER batch
+            # carrying an older fence is rejected. Without this the check
+            # above only ever compares against 0 and can never fire.
+            if entry.fence > store.fence(source):
+                store.set_fence(source, entry.fence)
+            applied += 1
 
     return ReplayResult(
         source=source,

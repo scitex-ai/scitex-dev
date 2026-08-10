@@ -14,6 +14,7 @@ only discovers the damage when rows are already gone.
 from __future__ import annotations
 
 __all__ = [
+    "AdoptionRefusedError",
     "ClockDriftError",
     "DialectUnavailableError",
     "FieldPolicyError",
@@ -23,6 +24,7 @@ __all__ = [
     "SchemaError",
     "StoreError",
     "StoreTargetError",
+    "SupersededFenceError",
     "WriterConflictError",
 ]
 
@@ -45,6 +47,22 @@ class FieldPolicyError(SchemaError):
 
 class StoreTargetError(StoreError):
     """A store target is unusable — bad locator, unknown backend."""
+
+
+class AdoptionRefusedError(StoreError):
+    """Bringing an existing dataset under the primitive would merge two of them.
+
+    Adoption mints a GENESIS log: one op per pre-existing record, describing
+    a history the primitive did not witness. Installing that log into a store
+    that already holds rows does not replace them and cannot fail loudly —
+    the ops are well-formed, so field-level merge folds two unrelated
+    datasets together on recency and reports success.
+
+    The distinction the store cannot make for itself is WHY those rows are
+    there. A store seeded by replay from a peer already holds the data and
+    must not adopt; a genuinely fresh store must. Both look identical from
+    inside, so the caller is asked rather than guessed at.
+    """
 
 
 class DialectUnavailableError(StoreError):
@@ -122,6 +140,36 @@ class OplogGapError(StoreError):
 
     Recovery is to re-request the batch starting at ``cursor + 1``, not
     to lower the assertion.
+    """
+
+
+class SupersededFenceError(StoreError):
+    """An op was authored under a fence lower than one already accepted.
+
+    A FENCE is a monotone integer an origin writes under. It answers a
+    question neither the cursor nor the HLC can: **was this writer still
+    entitled to write?**
+
+    Contiguity proves nothing was MISSED. Ordering proves what came FIRST.
+    Neither notices a writer that was demoted, partitioned away, or
+    replaced, kept running, and is still emitting well-formed ops with
+    correct sequence numbers and honest clocks. Those ops are valid by
+    every other test in this layer, and applying them silently resurrects
+    state from a node that is no longer authoritative.
+
+    Under Decision 9 (multi-writer) this hazard is if anything sharper
+    than it was under the rejected single-writer model. Field-level merge
+    resolves WHO WROTE LAST; it has no opinion on WHO WAS ALLOWED TO. A
+    demoted writer's field simply wins on recency.
+
+    The fence therefore lives in the log as a COLUMN of each op, not as a
+    value held beside it: an op must carry the authority it was written
+    under, or that authority does not survive replication to the node
+    that has to judge it.
+
+    Recovery is to stop the superseded writer, not to lower the fence. If
+    the fence itself is wrong, correct it at the source and re-issue —
+    never by accepting an op that failed this check.
     """
 
 # EOF

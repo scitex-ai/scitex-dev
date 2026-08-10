@@ -52,10 +52,46 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping, Sequence
 
-from ._errors import OplogGapError
+from ._errors import OplogGapError, SupersededFenceError
 from ._hlc import HLC
 
-__all__ = ["OpEntry", "OpKind", "assert_contiguous"]
+__all__ = [
+    "FENCE_UNKNOWN",
+    "OpEntry",
+    "OpKind",
+    "assert_contiguous",
+    "assert_not_superseded",
+]
+
+#: The fence of an origin we have never accepted a fenced op from. Every
+#: real fence is >= 1, so an unfenced op can never make a live op look
+#: stale, and an origin that has never been fenced is not retroactively
+#: judged by a fence it never had.
+FENCE_UNKNOWN = 0
+
+
+def _optional_fence(row: Any) -> int:
+    """Read ``fence`` from a row that may predate the column.
+
+    `OpEntry.from_row` is annotated `Mapping[str, Any]`, but the object it
+    actually receives from the SQLite dialect is a `sqlite3.Row` — which
+    supports `__getitem__` and `keys()` and has NO `.get()`. Reaching for
+    the Mapping API the annotation promises raises AttributeError at
+    runtime; measured here across 25 tests.
+
+    So this reads through the intersection both types genuinely support,
+    and treats a missing column as `FENCE_UNKNOWN` rather than an error:
+    oplog tables written before the fence column exist, and refusing to
+    read them would turn an additive change into a migration.
+    """
+    try:
+        keys = row.keys()
+    except AttributeError:  # a plain Mapping without keys() is still fine
+        keys = row
+    if "fence" not in keys:
+        return FENCE_UNKNOWN
+    value = row["fence"]
+    return FENCE_UNKNOWN if value is None else int(value)
 
 
 class OpKind(str, Enum):
@@ -88,8 +124,28 @@ class OpEntry:
     payload: Mapping[str, Any]
     hlc: HLC
     actor: str = ""
+    #: The authority this op was written under — see
+    #: :class:`~._errors.SupersededFenceError`. It is a FIELD of the entry
+    #: rather than state held beside the log, because an op must carry its
+    #: authority to the node that has to judge it. Defaults to
+    #: :data:`FENCE_UNKNOWN` so existing unfenced callers keep working;
+    #: once an origin issues a real fence, its unfenced ops are stale by
+    #: construction, which is the intended behaviour.
+    #:
+    #: PERSISTED since #539: ``fence`` is one of ``_OPLOG_COLUMNS`` and is
+    #: carried by the additive migration in
+    #: :meth:`~._peer_state.PeerState._apply_additive_migrations`, so it
+    #: survives a round trip on stores that predate the column too.
+    fence: int = FENCE_UNKNOWN
 
     def __post_init__(self) -> None:
+        if self.fence < FENCE_UNKNOWN:
+            raise ValueError(
+                f"OpEntry.fence must be >= {FENCE_UNKNOWN}, got {self.fence!r}. "
+                f"{FENCE_UNKNOWN} means 'unfenced'; a negative fence would sort "
+                "below it and make an op look older than one written under no "
+                "authority at all."
+            )
         if self.seq < 1:
             raise ValueError(
                 f"OpEntry.seq must start at 1, got {self.seq!r}. Sequence 0 is "
@@ -127,11 +183,71 @@ class OpEntry:
             payload=json.loads(row["payload"]),
             hlc=HLC.decode(row["hlc"]),
             actor=row["actor"] or "",
+            fence=_optional_fence(row),
         )
 
     def describe(self) -> str:
         """One-line human form for logs and error messages."""
         return f"{self.origin}#{self.seq} {self.op.value} {self.record}"
+
+
+def assert_not_superseded(
+    entries: Sequence[OpEntry], *, fence: int, source: str
+) -> None:
+    """Verify no entry was authored under a superseded fence.
+
+    A sibling of :func:`assert_contiguous`, and a plain function for the
+    same reason: it can be tested on its own, and no code path can apply a
+    batch without going through it.
+
+    ``fence`` is the highest fence already accepted from ``source``. An
+    entry carrying a LOWER fence was written by an authority that has since
+    been superseded — a demoted, partitioned or replaced writer that kept
+    running. Such an op is well-formed by every other test in this layer:
+    its sequence is contiguous, its clock is honest, its payload is valid.
+    Only the fence can reject it.
+
+    :data:`FENCE_UNKNOWN` entries are accepted while ``fence`` is also
+    :data:`FENCE_UNKNOWN`, so an origin that has never been fenced is not
+    judged by an authority it never had. Once a real fence has been
+    accepted from an origin, that origin's unfenced ops ARE stale, and are
+    rejected — the transition is the point at which fencing starts to bite.
+
+    Raises :class:`~._errors.SupersededFenceError` naming the offending
+    entry, both fences, and the remedy.
+
+    **NOT YET WIRED INTO REPLAY.** Enforcing this across batches needs the
+    highest-accepted fence PERSISTED per origin (a ``Store.fence`` /
+    ``set_fence`` pair plus a schema column), which does not exist yet. Until
+    that lands this function is callable and tested but nothing in the
+    replication path invokes it, so it protects nothing — stated here rather
+    than left for a reader to assume otherwise. Tracked on card
+    ``scitex-dev-store-oplog-directed-replay-20260809``.
+    """
+    if not entries:
+        return
+
+    for entry in entries:
+        if entry.fence >= fence:
+            continue
+        authored = (
+            "no fence at all" if entry.fence == FENCE_UNKNOWN
+            else f"fence {entry.fence}"
+        )
+        raise SupersededFenceError(
+            f"{source}: {entry.describe()} was authored under {authored}, but "
+            f"fence {fence} has already been accepted from this origin. The "
+            "writer that produced this op is no longer the authority for it — "
+            "it was most likely demoted, partitioned away, or replaced, and "
+            "kept running.\n"
+            "This op is valid by every other check: its sequence is "
+            "contiguous, its clock is honest, its payload parses. Field-level "
+            "merge would resolve it on RECENCY and let it win, because merge "
+            "has no opinion on who was ENTITLED to write.\n"
+            f"Remedy: stop the writer still emitting fence {entry.fence} for "
+            f"{source}. If fence {fence} is itself wrong, correct it at the "
+            "source and re-issue — never by accepting this op."
+        )
 
 
 def assert_contiguous(entries: Sequence[OpEntry], *, cursor: int, source: str) -> None:
