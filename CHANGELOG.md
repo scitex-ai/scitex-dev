@@ -7,6 +7,47 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-08-10
+
+**A release in two halves, joined by one idea: refuse to answer when you
+cannot.** The store learns to reject writes it cannot justify — an entitlement
+fence on the oplog, a compare-and-set that can no longer be opted out of by
+accident, and two guards that catch a store configured to lose its data. On the
+other side, three more checks stop reporting "fine" for runs in which they
+measured nothing. That was 0.41.0's theme as well, and the recurrence is the
+point: an exit code, a log classifier and an empty API answer each looked like
+their own small bug, and all three were the same mistake.
+
+### Added
+
+- **The oplog FENCE — "was this writer still entitled?" (#538, #539).**
+  `Store.put` takes a three-valued `expected_revision`: `NEW_RECORD`, an int,
+  or `ANY_REVISION`. The third is the opt-out, it had ZERO production call
+  sites, and nothing enforced that. `store/README.md` told the reader to run
+  `rg ANY_REVISION` to audit it by hand, which makes the guarantee depend on
+  someone remembering to look. It is now a test that fails, shipped with the
+  additive migration the fence needs. This is sequencing for ADR-0006
+  Decision 7, which opens TCP 55432 to external clients: a lock nobody can
+  bypass has to exist *before* there are clients who could bypass it.
+
+- **`kind` accepts the INTENT spellings `daemon` / `periodic` (#542).** The
+  three existing kinds mixed two axes. `service` names an intent and already
+  spans two mechanisms (a systemd unit, or the respawn loop used where
+  `systemd --user` is absent), while `timer` and `cron` are the *same* intent
+  with the scheduler welded into the type name. The new spellings normalise on
+  the way in, with no provider changes, so nothing has to migrate to benefit.
+
+### Performance
+
+- **Bulk store writes share one transaction — ~8.7x (#541).** Both dialects
+  connect in autocommit, which is right for a single interactive write and
+  wrong for bulk work: one logical op costs three statements (oplog insert,
+  row upsert, cursor advance) and therefore three commits. Adopting the real
+  3,712-card board took 87.7s, which is what surfaced it. Measured at both
+  scales because they could have had opposite signs — 3,712-op adoption
+  18.59 → 2.06 ms/op (9.0x), and 60 replays of 5 ops 8.99 → 1.04 ms/op
+  (8.65x).
+
 ### Fixed
 
 - **`ci verify` reported "the pull request is NOT ready to merge" when it had
