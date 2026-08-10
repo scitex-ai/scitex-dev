@@ -7,6 +7,76 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-08-10
+
+**Three checks learn to say what they did not check.** 0.44.0 fixed gates
+that reported "fine" for runs in which they measured nothing; this release
+is the same idea turned on the REPORTING side. A verdict now declares which
+rule corpus produced it, a skipped-category notice stops describing itself
+as silent, and a rule that was winning on measurement while losing on
+argument now states the hazard it actually guards.
+
+All three came out of one evening's exchange with scitex-db and scitex-hub,
+who between them found: a container grading against a corpus that predates
+the rule being tested, and a print-ban whose stated reason a competent
+maintainer could beat.
+
+### Added
+
+- **A verdict states which rule corpus produced it.** `describe_corpus()` /
+  `corpus_provenance()` in `linter/_health.py`, and it is UNCONDITIONAL —
+  `describe_skips()` returns `[]` when nothing was skipped, so a run that
+  skips nothing said nothing about which corpus graded it, and that silence
+  was indistinguishable from a current, complete run.
+
+  Measured: scitex-db's container carried scitex-dev 0.28.0, in which
+  PS-220 does not exist at all (controls present, so genuine absence). Their
+  local audits had been reporting clean for a rule that was not there. A
+  rule that is ABSENT cannot fire at any severity — the most complete way
+  for a check to be unable to fail.
+
+  The module PATH ships beside the version, because the version is metadata
+  and metadata lies: a stale wheel, an orphaned `.dist-info` and a SIF baked
+  months ago all report a version that outlived the code beside them.
+  AMBIGUITY IS REPORTED, NOT RESOLVED — two `.dist-info` dirs make the
+  version a coin toss, so the line says AMBIGUOUS and lists both rather than
+  picking one (measured on this repo's own container: `['0.38.0','0.43.1']`
+  on the night 0.44.0 shipped).
+
+### Fixed
+
+- **PS-220 named the detector, not the hazard.** The finding said the call
+  "prints human prose … this is a message". Prose is how the rule DETECTS
+  the problem; it is not the problem, and on that framing the rule loses to
+  anyone whose function legitimately renders a table for a human.
+
+  The hazard is that LIBRARY CODE WRITES UNCONDITIONALLY TO STDOUT: a caller
+  who imports the module cannot silence, redirect or capture it — no flag,
+  no handler, no level. `log.info(...)` keeps the output for everyone who
+  wants it and hands control to the caller. Behaviour is unchanged; same
+  calls flagged, same calls spared.
+
+  Worth stating because the weak framing had consequences: it lost an
+  argument to scitex-db, who then supplied this reason against their own
+  position and converted. A rule whose stated reason can be beaten is one
+  people route around — the same "gets ignored" failure as too-low a
+  severity, arriving by a different door. PS-220 defaults to `W`, so do not
+  make it louder without also making it answerable.
+
+- **The IO/PA notice called itself silent, and implied its gap was by
+  design.** It said the checks "are SILENTLY skipped" while BEING the
+  disclosure that they were skipped. And it never said whether the absence
+  was a gap or a design choice — so "io/path is a research concern, this is
+  a tooling package, therefore not applicable" was the comfortable and
+  WRONG inference. `linter/_project_type.py` gates `project-type` to drive a
+  category-severity FLIP (io/path warning→error for research); it scopes
+  SEVERITY, not APPLICABILITY. The rules are meant to run everywhere. The
+  notice now says so, and says the verdict covers nothing about them.
+
+  This notice printed accurately on every affected run for eleven days and
+  nobody acted. A present, correct, unactioned disclosure is not fixed by
+  making it louder; it is fixed by making it decidable.
+
 ## [0.44.0] - 2026-08-10
 
 **A release in two halves, joined by one idea: refuse to answer when you
