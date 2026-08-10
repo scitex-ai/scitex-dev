@@ -30,6 +30,7 @@ record, which in the fleet's first consumer is routine.
 from __future__ import annotations
 
 import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Iterator, Mapping, Sequence
 
@@ -112,6 +113,7 @@ class Store(PeerState):
         self.dialect = dialect or get_dialect(target.backend)
         self.codec = RowCodec(schema, self.dialect)
         self._lock = threading.RLock()
+        self._batch_depth = 0
         self._connection = self.dialect.connect(target)
         for statement in self.dialect.create_sql(schema):
             self._connection.execute(statement)
@@ -122,6 +124,64 @@ class Store(PeerState):
         """Close the underlying connection."""
         with self._lock:
             self._connection.close()
+
+    @contextmanager
+    def batch(self) -> "Iterator[Store]":
+        """Group many writes into ONE transaction instead of one each.
+
+        Both dialects connect in autocommit, which is the right default for
+        interactive single writes and the wrong one for bulk work: a single
+        logical op here costs three statements (oplog insert, row upsert,
+        cursor advance) and therefore three commits, each a durable write.
+
+        Measured twice, because one large batch and many small ones could
+        plausibly have had opposite signs. They do not.
+
+            3,712-op adoption      18.59 -> 2.06 ms/op      9.0x
+            60 replays of 5 ops     8.99 -> 1.04 ms/op      8.65x
+
+        The second run alternated the two variants three times, because the
+        host was under load 9.3 and a sequential A-then-B comparison had
+        already produced a misleading result in the opposite direction. Run
+        medians were 1.69/4.88/2.70 against 0.31/1.32/0.24 — noisy, but with
+        no overlap between the two sets, which is what licenses the claim.
+
+        READ THE RATIO AS DIRECTIONAL, NOT PORTABLE. Both were taken on a
+        FUSE-backed filesystem where an fsync is dearer than on local disk,
+        so this is near a best case. What generalises is the SHAPE: cost is
+        per COMMIT rather than per row, so it does not shrink as the data
+        does, and it is paid again on every replay during catch-up.
+
+        Nesting is a no-op rather than an error: `install_genesis` batches and
+        calls `replay`, which batches too. A second BEGIN would raise, and
+        making the caller track whether someone above already opened one is
+        exactly the bookkeeping this is meant to remove.
+
+        On any exception the transaction is rolled back, so a failed batch
+        applies NOTHING. See :func:`~._replication.replay` for what that
+        means for cursor resumability — it is a deliberate change, and a
+        safer one.
+        """
+        with self._lock:
+            if self._batch_depth:
+                self._batch_depth += 1
+                try:
+                    yield self
+                finally:
+                    self._batch_depth -= 1
+                return
+
+            self._connection.execute("BEGIN")
+            self._batch_depth = 1
+            try:
+                yield self
+            except BaseException:
+                self._connection.execute("ROLLBACK")
+                raise
+            else:
+                self._connection.execute("COMMIT")
+            finally:
+                self._batch_depth = 0
 
     def __enter__(self) -> "Store":
         return self
