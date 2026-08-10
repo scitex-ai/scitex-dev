@@ -131,8 +131,19 @@ def _fstype_of(path: Path) -> "str | None":
     return best_type
 
 
-def require_durable_pgdata(socket_dir: "Path | str | None" = None) -> None:
+def require_durable_pgdata(pgdata_dir: "Path | str | None" = None) -> None:
     """Refuse a store whose PGDATA would not survive a container rebuild.
+
+    The parameter is ``pgdata_dir``, NOT ``socket_dir``, and the difference
+    is deliberate (ADR-0006 Decision 7, reversed 2026-08-10). This guard was
+    written when the socket directory and PGDATA were the same path, so
+    naming it after the socket cost nothing. Decision 7 makes TCP on 55432
+    the default and separates the two concepts: PGDATA is where the data
+    lives, the socket is one way to reach it, and a transport change must not
+    be able to take the durability check with it.
+
+    A guard whose input is named after a transport is a guard that disappears
+    when the transport does — silently, and with nothing failing to say so.
 
     WHY THIS RAISES RATHER THAN WARNS. Until 2026-08-10 the module said, in
     a comment, that ``DEFAULT_SOCKET_DIR`` is "bind-mounted OUTSIDE any
@@ -155,7 +166,7 @@ def require_durable_pgdata(socket_dir: "Path | str | None" = None) -> None:
     "unsafe", and blocking every host whose mount table is unreadable would
     make the guard the outage.
     """
-    directory = Path(socket_dir) if socket_dir is not None else DEFAULT_SOCKET_DIR
+    directory = Path(pgdata_dir) if pgdata_dir is not None else DEFAULT_SOCKET_DIR
     resolved = directory.expanduser()
     fstype = _fstype_of(resolved)
     if fstype is None or fstype not in _EPHEMERAL_FSTYPES:
@@ -254,11 +265,21 @@ def host_store(
             "\n"
             f"For a socket connection the shape is: {socket_dsn()}"
         )
-    # Only the socket branch is guarded. An explicit SCITEX_STORE_DSN may
-    # legitimately point at a Postgres elsewhere whose storage this process
-    # cannot see, so checking OUR filesystem would say nothing about ITS
-    # durability — and a check that cannot observe the thing it judges is
-    # exactly the shape being fixed here.
+    # THE INSTANCE THIS HOST MANAGES is guarded — not "the socket branch".
+    # The criterion is OBSERVABILITY, not transport: check durability exactly
+    # when this process can see the storage it is judging. An explicit
+    # SCITEX_STORE_DSN may point at a Postgres elsewhere whose storage this
+    # process cannot see, so checking OUR filesystem would say nothing about
+    # ITS durability — a check that cannot observe the thing it judges is the
+    # shape being fixed here.
+    #
+    # WORDED THIS WAY DELIBERATELY (ADR-0006 Decision 7, reversed 2026-08-10).
+    # This guard was written when the socket WAS the local instance, so
+    # "socket branch" and "instance we manage" were the same set. Decision 7
+    # makes TCP on 55432 the default and splits them. The guard belongs to the
+    # SECOND set. Whoever changes the DSN this branch returns must keep the
+    # call: a durability guard silently disarmed by an unrelated transport
+    # decision is the exact failure this ADR keeps cataloguing.
     require_durable_pgdata(socket_dir)
     return StoreTarget.postgres(
         socket_dsn(database=database, socket_dir=socket_dir),
