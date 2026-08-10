@@ -131,6 +131,16 @@ class OpEntry:
     #: :data:`FENCE_UNKNOWN` so existing unfenced callers keep working;
     #: once an origin issues a real fence, its unfenced ops are stale by
     #: construction, which is the intended behaviour.
+    #:
+    #: **NOT PERSISTED YET.** ``Store._store_op`` writes the seven columns of
+    #: ``_OPLOG_COLUMNS``, and ``fence`` is not among them — so a fence set on
+    #: an entry is IN-MEMORY ONLY and reads back as :data:`FENCE_UNKNOWN`
+    #: after a round trip. Adding the column is a schema MIGRATION
+    #: (``CREATE TABLE IF NOT EXISTS`` will not add it to stores that already
+    #: exist), and it is the same migration the replay wiring needs, so the
+    #: two land together rather than half of each. Pinned by
+    #: ``test_a_fence_does_not_survive_a_round_trip_yet`` so this boundary
+    #: cannot move in either direction without a test saying so.
     fence: int = FENCE_UNKNOWN
 
     def __post_init__(self) -> None:

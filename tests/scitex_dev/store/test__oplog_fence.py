@@ -214,6 +214,43 @@ def test_an_entry_defaults_to_unfenced():
     assert fence == FENCE_UNKNOWN
 
 
+def test_a_fence_does_not_survive_a_round_trip_yet(local):
+    """PINS A KNOWN GAP: the fence is in-memory only, and that is deliberate.
+
+    `Store._store_op` writes the seven columns of `_OPLOG_COLUMNS`, and
+    `fence` is not among them. A fence set on an entry is therefore DROPPED
+    on write and reads back as FENCE_UNKNOWN.
+
+    This test exists because a field that silently fails to persist is a
+    trap: every signature accepts it, nothing rejects it, and the loss shows
+    up as "the fence was never set" rather than as an error. Asserting the
+    CURRENT behaviour converts a hidden trap into a stated boundary — and it
+    FAILS the moment persistence is added, which is exactly when someone
+    should be forced to come back and delete it.
+
+    Adding the column is a migration: `CREATE TABLE IF NOT EXISTS` will not
+    add it to stores that already exist. That migration lands together with
+    the replay wiring, not before it.
+    """
+    # Arrange
+    entry = OpEntry(
+        origin=local.node,
+        seq=1,
+        record="card-1",
+        op=OpKind.UPSERT,
+        payload={"id": "card-1", "status": "open"},
+        hlc=HLC(wall_us=1, logical=0, node=local.node),
+        fence=3,
+    )
+    local._store_op(entry)
+
+    # Act
+    read_back = local.changes_since(local.node, 0)[0]
+
+    # Assert
+    assert read_back.fence == FENCE_UNKNOWN
+
+
 def test_a_negative_fence_is_refused_at_construction():
     """A negative fence would sort below "no authority at all"."""
     # Arrange
