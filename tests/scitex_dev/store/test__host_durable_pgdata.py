@@ -198,4 +198,48 @@ class TestTheDiscriminatorItself:
         assert not same_as_root
 
 
+class TestTheGuardSurvivesATransportChange:
+    """ADR-0006 Decision 7 was REVERSED on 2026-08-10: TCP on 55432 becomes
+    the default instead of the UNIX socket.
+
+    This guard was wired to the socket branch of `host_store()` because, when
+    it was written, the socket WAS the instance this host manages. The
+    reversal separates those two ideas, and a durability check that rides on
+    a transport disappears when the transport does — with nothing failing to
+    announce it.
+
+    These tests pin the INVARIANT rather than the current wiring, so the
+    protection is not quietly lost by whoever flips the default.
+    """
+
+    def test_the_parameter_is_not_named_after_a_transport(self):
+        """`pgdata_dir`, not `socket_dir` — PGDATA is where the data lives;
+        the socket is one way to reach it."""
+        # Arrange
+        import inspect
+
+        # Act
+        params = list(
+            inspect.signature(require_durable_pgdata).parameters
+        )
+        # Assert
+        assert params == ["pgdata_dir"]
+
+    @needs_ephemeral
+    def test_host_store_refuses_an_ephemeral_pgdata(self):
+        """The guard must fire through `host_store()`, not merely exist.
+
+        This is the test that fails if a future transport change drops the
+        call — which is the whole point of writing it.
+        """
+        # Arrange
+        from scitex_dev.store._host import host_store
+
+        target = EPHEMERAL / "scitex-pg"
+        # Act / raises is the assertion
+        with pytest.raises(StoreTargetError):
+            # Assert
+            host_store(pkg="scitex_dev", socket_dir=target)
+
+
 # EOF
