@@ -17,8 +17,8 @@ Three failures on 2026-08-09, all of them a green that meant nothing:
 
 Each is the same shape — a signal that looks like a verdict about the
 current code and is not. This module answers the question in a form that
-cannot be misread, and :func:`readiness` exits non-zero so a script can
-gate on it instead of a human squinting at a summary line.
+cannot be misread, and :func:`readiness` returns a verdict whose exit code a
+script can gate on instead of a human squinting at a summary line.
 
 What it refuses to do
 ---------------------
@@ -38,18 +38,39 @@ the bug. Both are wrong, so neither is returned.
 **Never reports "never ran" as "failed".** They need different fixes: a
 failure means read the log, an absent run means find out why CI did not
 trigger. Collapsing them sends the reader to the wrong place.
+
+Layout
+------
+This module is the orchestrator. The pieces live next to it so that a
+caller needing only one of them does not import the rest:
+
+    _exit_codes.py   the exit-code vocabulary + its import-time guard
+    _check_run.py    one check run and what its state means
+    _readiness.py    the verdict dataclass, its validator and renderers
+    _gh.py           the only place that shells out
 """
 
 from __future__ import annotations
 
-import json
-import subprocess
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Final, Sequence
+from dataclasses import replace
+from typing import Sequence
+
+from ._check_run import CheckRun
+from ._exit_codes import (
+    EXIT_NOT_READY,
+    EXIT_READY,
+    EXIT_UNKNOWN,
+    EXIT_USAGE,
+    FRAMEWORK_RESERVED_EXIT_CODES,
+    ExitCode,
+)
+from ._gh import gh_json
+from ._readiness import MergeReadiness, Readiness
 
 __all__ = [
     "CheckRun",
+    "ExitCode",
+    "FRAMEWORK_RESERVED_EXIT_CODES",
     "MergeReadiness",
     "Readiness",
     "EXIT_READY",
@@ -58,190 +79,6 @@ __all__ = [
     "EXIT_USAGE",
     "readiness",
 ]
-
-#: Exit codes. Declared, documented, and distinct — a caller must be able to
-#: tell "no" from "I could not tell", because those warrant different
-#: actions. 0/1 keep their conventional meanings; the domain answers get
-#: their own codes rather than overloading a generic failure.
-EXIT_READY: Final[int] = 0
-EXIT_USAGE: Final[int] = 1
-EXIT_NOT_READY: Final[int] = 2
-EXIT_UNKNOWN: Final[int] = 3
-
-#: States GitHub reports for a check that has not finished. Treated as
-#: NOT READY rather than unknown: the answer is knowable, it just is not
-#: known YET, and merging now would merge on an unfinished gate.
-_PENDING_STATES: Final[frozenset[str]] = frozenset(
-    {"QUEUED", "IN_PROGRESS", "PENDING", "WAITING", "REQUESTED", "ACTION_REQUIRED"}
-)
-
-#: States that mean the check ran and did not pass.
-_FAILING_STATES: Final[frozenset[str]] = frozenset(
-    {"FAILURE", "TIMED_OUT", "CANCELLED", "STALE", "STARTUP_FAILURE", "ERROR"}
-)
-
-#: A skipped check RAN in the sense that CI reached it and decided not to
-#: execute it. That is legitimate (a conditional job), which is exactly why
-#: it must never be folded into the pass total: "skipped" and "passed" are
-#: different facts and only one of them is evidence the code works.
-_SKIPPED_STATES: Final[frozenset[str]] = frozenset({"SKIPPED", "NEUTRAL"})
-
-
-class Readiness(str, Enum):
-    """The three-valued answer. Never collapsed."""
-
-    #: Every check that ran belongs to the current head and passed.
-    READY = "ready"
-    #: A definite no, with at least one reason naming a specific check.
-    NOT_READY = "not-ready"
-    #: The question could not be answered. NOT a synonym for "no".
-    CANNOT_DETERMINE = "cannot-determine"
-
-
-@dataclass(frozen=True, slots=True)
-class CheckRun:
-    """One check, and whether it describes the commit we care about."""
-
-    name: str
-    state: str
-    #: The commit this run actually executed against. ``None`` when the API
-    #: did not report one — which is itself a reason to distrust the run.
-    head_sha: "str | None"
-    #: True when ``head_sha`` differs from the PR's current head. A stale
-    #: run's verdict is about different code.
-    stale: bool
-    #: False only when the check is absent for this head — distinct from
-    #: having run and failed.
-    ran: bool
-
-    @property
-    def passed(self) -> bool:
-        return self.ran and not self.stale and self.state.upper() == "SUCCESS"
-
-    @property
-    def pending(self) -> bool:
-        return self.state.upper() in _PENDING_STATES
-
-    @property
-    def failed(self) -> bool:
-        return self.state.upper() in _FAILING_STATES
-
-    @property
-    def skipped(self) -> bool:
-        return self.state.upper() in _SKIPPED_STATES
-
-    def describe(self) -> str:
-        """One line, naming what is wrong and which commit it refers to."""
-        if not self.ran:
-            return f"{self.name}: NEVER RAN on this head"
-        if self.stale:
-            short = (self.head_sha or "?")[:7]
-            return (
-                f"{self.name}: {self.state} but ran on {short}, "
-                "NOT the current head — inherited verdict, describes other code"
-            )
-        if self.pending:
-            return f"{self.name}: {self.state} — still running, not a verdict yet"
-        if self.failed:
-            return f"{self.name}: {self.state}"
-        if self.skipped:
-            return f"{self.name}: {self.state} — did not execute (not a pass)"
-        return f"{self.name}: {self.state}"
-
-
-@dataclass(frozen=True, slots=True)
-class MergeReadiness:
-    """The same shape every time, whatever the answer.
-
-    A caller never has to guess which field exists on this call. Validated
-    where it is built, so a malformed verdict fails here rather than three
-    layers downstream in whatever decided to merge.
-    """
-
-    readiness: Readiness
-    #: Fully qualified — ``owner/repo#N``. A bare number is ambiguous across
-    #: this fleet's repositories and has already been misread once.
-    pr: str
-    head_sha: "str | None"
-    reasons: tuple[str, ...] = field(default_factory=tuple)
-    checks: tuple[CheckRun, ...] = field(default_factory=tuple)
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.readiness, Readiness):
-            raise ValueError(
-                f"readiness must be a Readiness, got {type(self.readiness).__name__}. "
-                "A bare string or bool here is how 'could not tell' becomes 'yes'."
-            )
-        if "#" not in self.pr:
-            raise ValueError(
-                f"pr must be fully qualified as 'owner/repo#N', got {self.pr!r}. "
-                "Two repositories in this fleet had a #521 on the same day; a "
-                "bare number identified the wrong pull request."
-            )
-        if self.readiness is not Readiness.READY and not self.reasons:
-            raise ValueError(
-                f"readiness={self.readiness.value} with no reasons. A refusal "
-                "that does not state what is wrong is unactionable — the "
-                "caller cannot fix what it is not told."
-            )
-
-    @property
-    def exit_code(self) -> int:
-        return {
-            Readiness.READY: EXIT_READY,
-            Readiness.NOT_READY: EXIT_NOT_READY,
-            Readiness.CANNOT_DETERMINE: EXIT_UNKNOWN,
-        }[self.readiness]
-
-    def render(self) -> str:
-        """Human-readable, one line per problem."""
-        short = (self.head_sha or "unknown")[:7]
-        lines = [f"{self.readiness.value}: {self.pr} @ {short}"]
-        lines.extend(f"  - {reason}" for reason in self.reasons)
-        return "\n".join(lines)
-
-    def to_dict(self) -> dict:
-        return {
-            "readiness": self.readiness.value,
-            "pr": self.pr,
-            "head_sha": self.head_sha,
-            "reasons": list(self.reasons),
-            "checks": [
-                {
-                    "name": c.name,
-                    "state": c.state,
-                    "head_sha": c.head_sha,
-                    "stale": c.stale,
-                    "ran": c.ran,
-                }
-                for c in self.checks
-            ],
-        }
-
-
-def _gh_json(args: Sequence[str], timeout: int = 60) -> "tuple[object | None, str | None]":
-    """Run a gh command returning JSON. ``(value, error)`` — never raises.
-
-    An unreachable API is a legitimate CANNOT_DETERMINE input, so the
-    failure is returned as data rather than thrown; a traceback here would
-    be indistinguishable from a real verdict to a shell caller.
-    """
-    try:
-        completed = subprocess.run(
-            list(args), capture_output=True, text=True, timeout=timeout
-        )
-    except FileNotFoundError:
-        return None, "gh is not installed or not on PATH"
-    except subprocess.TimeoutExpired:
-        return None, f"gh timed out after {timeout}s: {' '.join(args)}"
-    if completed.returncode != 0:
-        detail = (completed.stderr or completed.stdout or "").strip().splitlines()
-        first = detail[0] if detail else f"exit {completed.returncode}"
-        return None, f"gh failed: {first}"
-    try:
-        return json.loads(completed.stdout or "null"), None
-    except json.JSONDecodeError as exc:
-        return None, f"gh returned unparseable JSON: {exc}"
 
 
 def readiness(pr: str, repo: str) -> MergeReadiness:
@@ -254,7 +91,7 @@ def readiness(pr: str, repo: str) -> MergeReadiness:
     """
     qualified = f"{repo}#{pr}"
 
-    view, error = _gh_json(
+    view, error = gh_json(
         [
             "gh", "pr", "view", str(pr), "--repo", repo,
             "--json", "headRefOid,mergeable,mergeStateStatus,state",
@@ -295,7 +132,7 @@ def readiness(pr: str, repo: str) -> MergeReadiness:
             reasons=("closed without merging",),
         )
 
-    runs, error = _gh_json(
+    runs, error = gh_json(
         ["gh", "api", f"repos/{repo}/commits/{head}/check-runs", "--paginate"]
     )
     if error is not None or not isinstance(runs, dict):
@@ -303,7 +140,10 @@ def readiness(pr: str, repo: str) -> MergeReadiness:
             readiness=Readiness.CANNOT_DETERMINE,
             pr=qualified,
             head_sha=head,
-            reasons=(f"cannot read check runs for {head[:7]}: {error or 'unexpected response'}",),
+            reasons=(
+                f"cannot read check runs for {head[:7]}: "
+                f"{error or 'unexpected response'}",
+            ),
         )
 
     checks = _to_checks(runs.get("check_runs") or [], head)
@@ -311,8 +151,40 @@ def readiness(pr: str, repo: str) -> MergeReadiness:
 
 
 def _to_checks(raw: Sequence[dict], head: str) -> tuple[CheckRun, ...]:
-    """Normalise API rows, resolving each run's state and its commit."""
-    out: list[CheckRun] = []
+    """Normalise API rows, marking superseded attempts of the same check.
+
+    A single head can carry SEVERAL runs of one check name — a manual
+    re-run, or two workflow runs triggered for identical code (a push and
+    the pull request opened from it both match, which is routine here).
+
+    Only the latest attempt per name decides readiness. Measured 2026-08-09:
+    py3.12 died mid-step and a second run of the same commit passed.
+    Counting every row let the dead attempt poison the verdict forever — no
+    re-run could clear it, which is useless exactly when re-runs matter.
+
+    LATEST MEANS MOST RECENTLY CREATED (check-run id), NOT MOST RECENTLY
+    STARTED, and the difference is not academic. In the incident above:
+
+        id=93297989333  FAILURE  started 20:33:21   <- created LATER
+        id=93297831878  SUCCESS  started 20:44:06   <- created EARLIER,
+                                                       queued, ran later
+
+    The passing run belonged to an earlier-created workflow that sat in the
+    queue. Ordering by ``started_at`` picks it and calls the check green;
+    GitHub's branch protection picks the other one and reports BLOCKED.
+
+    Ordering by start time was this function's first implementation, and it
+    was wrong for the reason that matters: **a verifier must model the gate
+    that actually decides the merge, not a more sensible gate of its own
+    invention.** Being more permissive than branch protection is how a tool
+    tells you to merge something the platform will refuse — or worse, waves
+    through a failure the platform was right to hold.
+
+    The superseded attempts are NOT discarded. They are marked and reported,
+    so a genuinely intermittent check stays visible instead of being quietly
+    laundered into a pass by one lucky retry.
+    """
+    parsed: list[tuple[tuple, CheckRun]] = []
     for row in raw:
         status = str(row.get("status") or "").upper()
         conclusion = row.get("conclusion")
@@ -320,15 +192,43 @@ def _to_checks(raw: Sequence[dict], head: str) -> tuple[CheckRun, ...]:
         # keeps "still running" distinct from any verdict.
         state = str(conclusion or status or "UNKNOWN").upper()
         run_sha = row.get("head_sha")
-        out.append(
-            CheckRun(
-                name=str(row.get("name") or "<unnamed>"),
-                state=state,
-                head_sha=run_sha,
-                stale=bool(run_sha) and run_sha != head,
-                ran=True,
+        # Creation order first — check-run ids are monotonic, and that is
+        # what branch protection uses. Timestamps only break ties for rows
+        # with no usable id; a row we cannot place sorts first so it never
+        # displaces one we can.
+        try:
+            created_rank = int(row.get("id"))
+        except (TypeError, ValueError):
+            created_rank = -1
+        ordering = (
+            created_rank,
+            str(row.get("started_at") or ""),
+            str(row.get("completed_at") or ""),
+        )
+        parsed.append(
+            (
+                ordering,
+                CheckRun(
+                    name=str(row.get("name") or "<unnamed>"),
+                    state=state,
+                    head_sha=run_sha,
+                    stale=bool(run_sha) and run_sha != head,
+                    ran=True,
+                ),
             )
         )
+
+    latest: dict[str, tuple] = {}
+    for ordering, check in parsed:
+        current = latest.get(check.name)
+        if current is None or ordering > current[0]:
+            latest[check.name] = (ordering, check)
+
+    out: list[CheckRun] = []
+    for ordering, check in parsed:
+        winner = latest[check.name]
+        is_winner = winner[0] == ordering and winner[1] is check
+        out.append(check if is_winner else replace(check, superseded=True))
     return tuple(out)
 
 
@@ -352,23 +252,35 @@ def _decide(
             checks=checks,
         )
 
-    stale = [c for c in checks if c.stale]
-    failed = [c for c in checks if not c.stale and c.failed]
-    pending = [c for c in checks if not c.stale and c.pending]
-    skipped = [c for c in checks if not c.stale and c.skipped]
+    # Superseded attempts describe a run that a later run of the same check
+    # has replaced. They are reported below, never counted.
+    current = [c for c in checks if not c.superseded]
+    superseded = [c for c in checks if c.superseded]
+
+    stale = [c for c in current if c.stale]
+    failed = [c for c in current if not c.stale and c.failed]
+    pending = [c for c in current if not c.stale and c.pending]
+    skipped = [c for c in current if not c.stale and c.skipped]
 
     reasons.extend(c.describe() for c in stale)
     reasons.extend(c.describe() for c in failed)
     reasons.extend(c.describe() for c in pending)
+
+    # Surfaced even on a READY verdict: a check that needed a second attempt
+    # is a fact the reader should see, not something a lucky retry launders.
+    superseded_notes = [
+        f"(informational) {c.describe()}"
+        for c in superseded
+        if not c.passed
+    ]
 
     merge_state = str(view.get("mergeStateStatus") or "").upper()
     mergeable = str(view.get("mergeable") or "").upper()
 
     if stale or failed or pending:
         if skipped:
-            reasons.extend(
-                f"(informational) {c.describe()}" for c in skipped
-            )
+            reasons.extend(f"(informational) {c.describe()}" for c in skipped)
+        reasons.extend(superseded_notes)
         return MergeReadiness(
             readiness=Readiness.NOT_READY,
             pr=qualified,
@@ -426,6 +338,7 @@ def _decide(
 
     if skipped:
         reasons.extend(f"(informational) {c.describe()}" for c in skipped)
+    reasons.extend(superseded_notes)
 
     return MergeReadiness(
         readiness=Readiness.READY,

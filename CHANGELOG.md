@@ -9,6 +9,50 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **`ci verify` reported "the pull request is NOT ready to merge" when it had
+  simply not been able to run.** `EXIT_NOT_READY` was `2`, and **Click exits 2
+  on a usage error** — before any of our code runs. So an installed
+  scitex-dev predating the `ci verify` subcommand answered
+  `No such command 'verify'` with exit 2, and the gating hook rendered that
+  as a confident verdict about a pull request that was green on 7/7 checks.
+
+  Exit codes are now `0` ready / `10` not ready / `11` cannot determine,
+  leaving `1` and `2` to the framework. The collision is enforced by
+  `assert_no_domain_code_is_framework_reserved()`, which runs **at import**
+  in every process that imports the module — including the subprocess a
+  gating hook shells out to.
+
+  The constitution already forbade this in as many words (§2), and the rule
+  was walked past by someone who had read it, inside the change that fixed
+  two sibling instances of the same defect. That is why the check executes
+  rather than advises: a rule that must be remembered is forgotten exactly
+  when it matters.
+
+  `EXIT_USAGE` was also declared as `1`, which was wrong — Click uses `2`.
+  Mislabelling someone else's exit code is how `2` came to look free.
+
+- **A dead attempt counted forever, so no re-run could ever clear it.** One
+  head commit can carry several runs of a check name — a manual re-run, or a
+  push and the pull request opened from it. Every row counted, so an attempt
+  that died from infrastructure poisoned the verdict permanently. A verifier
+  that cannot be un-failed by a successful re-run is broken precisely where
+  re-runs exist.
+
+  Only the most recently **created** attempt per name decides readiness, which
+  is what branch protection uses. **Created, not started:** a queued run can
+  start later than a run created after it, and ordering by start time
+  produced a green verdict on a pull request GitHub was holding at
+  `BLOCKED`. Superseded attempts are still reported, never dropped, so an
+  intermittent check stays visible instead of being laundered into a pass by
+  one lucky retry.
+
+- **The verdict printed a SHA that the merge command rejects.** `render()`
+  abbreviated the head, and `--match-head-commit` refuses anything but the
+  full 40 characters, so the documented two-step handed the reader a value
+  the second step would not accept. The pin is the whole safety mechanism,
+  and a pin that errors is a pin people stop passing. The verdict now prints
+  the full head and emits the ready-to-run pinned merge command.
+
 - **The audit gate could pass on an error it did not know how to read.** The
   skip-rules classifier only examined lines whose payload began with `[`.
   Anything else was dropped into neither bucket, so it could never appear in
@@ -29,6 +73,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   The level check is a whitelist (`ERRO`/`ERROR`/`FAIL`/`FAILED`/`FATAL`/
   `CRIT`/`CRITICAL`). The inverse test would promote any unrecognised
   `word:` prefix to an error, reddening builds on `note:` or `usage:`.
+
+### Changed
+
+- `ci/_mergeable.py` split into `_exit_codes`, `_check_run`, `_readiness` and
+  `_gh`, with `_mergeable` remaining the orchestrator. **No public name
+  moves.** The exit-code vocabulary is what a hook or release script needs
+  *without* `subprocess` and the GitHub decision tree, and that coupling is
+  part of why the collision above sat unread at the top of a large module.
 
 ### ⚠️ Upgrade note — read this if your gate declares `MAX_MASKED_VIOLATIONS`
 

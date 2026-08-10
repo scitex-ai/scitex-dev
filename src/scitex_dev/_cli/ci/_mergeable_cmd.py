@@ -6,14 +6,23 @@
 Exit codes are the interface; the printed text is for the human who has to
 fix it::
 
-    0  ready              every check on the CURRENT head passed
-    1  usage error
-    2  not ready          at least one named reason, one line each
-    3  cannot determine   the question could not be answered
+     0  ready              every check on the CURRENT head passed
+    10  not ready          at least one named reason, one line each
+    11  cannot determine   the question could not be answered
 
-3 is deliberately distinct from 2. "No" and "I could not tell" call for
+    (1 and 2 are the FRAMEWORK's — generic failure and usage error. Click
+     exits 2 for an unknown subcommand before this file runs.)
+
+11 is deliberately distinct from 10. "No" and "I could not tell" call for
 different actions, and collapsing them is how a tool starts lying: fold
 unknown into no and people disable it, fold it into yes and it ships the bug.
+
+WHY THE DOMAIN CODES START AT 10, measured 2026-08-09: they were 2 and 3.
+A venv holding a scitex-dev older than this command made Click answer
+``No such command 'verify'`` with exit 2 — and the gating hook read that as
+the domain answer, reporting "the pull request is NOT ready to merge" about
+a pull request green on all seven checks. See :mod:`scitex_dev.ci._exit_codes`,
+where the collision is now checked at import rather than warned about.
 """
 
 from __future__ import annotations
@@ -48,10 +57,11 @@ def register_ci_commands(main_group: click.Group) -> None:
                 "inherited from an older commit cannot pass. Never reads the "
                 "rolled-up summary line, which folds SKIPPING rows into the "
                 "pass total and can hide a required check that never ran. "
-                "Exit 0 = ready, 2 = not ready (one line per reason), "
-                "3 = cannot determine, 1 = usage error. --repo is REQUIRED: "
-                "a bare PR number is ambiguous across this fleet's "
-                "repositories and has already identified the wrong one."
+                "Exit 0 = ready, 10 = not ready (one line per reason), "
+                "11 = cannot determine; 1 and 2 stay the framework's generic "
+                "failure and usage error. --repo is REQUIRED: a bare PR "
+                "number is ambiguous across this fleet's repositories and "
+                "has already identified the wrong one."
             ),
             examples=(
                 Example(
