@@ -128,16 +128,19 @@ def register_ecosystem_dev_group(ecosystem: click.Group) -> click.Group:
     command's domain, not per-package housekeeping.
     """
     from .._ecosystem.help_spec import CliHelp, Example, SpecGroup
-    from .ecosystem._cmds import _jobs_cron, _jobs_systemd
+    from .ecosystem._cmds import (
+        _jobs_cron,
+        _jobs_service,
+        _jobs_systemd,
+        _jobs_timer,
+    )
 
     @ecosystem.group(
         "dev",
         invoke_without_command=True,
         cls=SpecGroup,
         help_spec=CliHelp(
-            summary=(
-                "Federated self-maintenance across every installed package."
-            ),
+            summary=("Federated self-maintenance across every installed package."),
             description=(
                 "Aggregates the `scitex_dev.jobs` entry points each package "
                 "publishes, so one command reaches the whole ecosystem's "
@@ -162,6 +165,13 @@ def register_ecosystem_dev_group(ecosystem: click.Group) -> click.Group:
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
 
+    # ONE GROUP PER JobSpec KIND — the taxonomy the model already enforces
+    # (`jobs._kinds.ALLOWED_KINDS` == {"service", "timer", "cron"}). The
+    # `systemd` group that follows is the DEPRECATED mechanism-level alias
+    # these three replace; it is registered last so the kind groups it
+    # forwards to already exist.
+    _jobs_service.register(dev)
+    _jobs_timer.register(dev)
     _jobs_cron.register(dev)
     _jobs_systemd.register(dev)
 
