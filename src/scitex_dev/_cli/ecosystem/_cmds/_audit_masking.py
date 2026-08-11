@@ -212,6 +212,54 @@ def classify_output(text: str, skip_rules) -> MaskReport:
     )
 
 
+#: Prefix stamped on a finding that a declared skip rule has MASKED.
+#:
+#: Chosen to be the same width as the auditor's own `ERRO: ` / `WARN: `
+#: so the findings stay column-aligned when a run mixes both.
+MASKED_PREFIX = "MASK: "
+
+
+def label_masked_lines(text: str, report: MaskReport | None) -> str:
+    """Re-stamp the auditor's own output so MASKED findings say so.
+
+    The sub-auditor prints its findings with its own `ERRO: ` prefix and
+    that text is echoed verbatim. Masking is applied afterwards and shows
+    up only as a COUNT in the inventory, so a masked finding reaches the
+    reader still labelled ERRO — a line that says ERROR while provably
+    unable to fail the gate (only `unmasked` findings drive the exit
+    code; see `MaskReport.unmasked`).
+
+    Reported by scitex-storage 2026-08-11, who read a CI log showing
+    `[PS-221] 25 violation(s) masked` above a still-red run and could not
+    tell from the output whether masking was inert. It was not — the run
+    was red on 29 unrelated unmasked errors — but nothing in the text
+    distinguished "this is why you are red" from "this is inventory".
+
+    Loud is correct: the inventory must never be silent. Loud and
+    MISLABELLED is worse than either, because the reader then has to
+    reconcile an ERRO count that disagrees with the exit code.
+
+    Membership is an exact-line lookup against `report.masked`, which
+    `classify_output` already built — no re-parsing, so the label cannot
+    drift from the classification that drove the exit code. Lines the
+    report does not know are returned untouched.
+    """
+    if report is None or not text:
+        return text
+    masked_lines = {line for hits in report.masked.values() for line in hits}
+    if not masked_lines:
+        return text
+    out = []
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if stripped and stripped in masked_lines:
+            indent = raw[: len(raw) - len(raw.lstrip())]
+            out.append(f"{indent}{MASKED_PREFIX}{stripped}")
+        else:
+            out.append(raw)
+    return "\n".join(out)
+
+
 def render_inventory(report: MaskReport, distribution: str) -> list[str]:
     """Render the always-on masked inventory as a list of output lines.
 
