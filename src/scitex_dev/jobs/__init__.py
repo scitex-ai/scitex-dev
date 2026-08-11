@@ -47,7 +47,7 @@ Contract for downstream packages
                # A long-running dashboard exposed on a fixed port —
                # systemd brings it up on boot and keeps it alive.
                JobSpec(
-                   name="scitex-todo.dashboard",
+                   name="scitex-todo-dashboard",
                    kind="service",
                    schedule="",
                    command="scitex-todo serve --port 8051",
@@ -58,7 +58,7 @@ Contract for downstream packages
                ),
                # A periodic systemd timer — refresh OAuth tokens.
                JobSpec(
-                   name="sac.accounts-refresh",
+                   name="scitex-agent-container-accounts-refresh",
                    kind="timer",
                    schedule="0 */4 * * *",
                    command="sac accounts refresh --all",
@@ -74,17 +74,34 @@ Contract for downstream packages
        [project.entry-points."scitex_dev.jobs"]
        my-package = "my_package._jobs_plugin:provide_jobs"
 
-``scitex-dev ecosystem systemd`` / ``ecosystem cron`` / ``ecosystem up``
-then surface the job automatically.
+``scitex-dev ecosystem service`` / ``ecosystem timer`` / ``ecosystem cron``
+/ ``ecosystem up`` then surface the job automatically. There is ONE CLI
+group per job KIND, not per delivery mechanism; ``ecosystem systemd`` is a
+deprecated alias kept only until 2026-10.
 
 Naming
 ------
-``JobSpec.name`` is the package-prefixed unique id, e.g.
-``"sac.accounts-refresh"``. The prefix keeps names globally unique and
-makes the owning package obvious in ``list`` output. scitex-dev's own
-built-in jobs keep their historical bare slugs (``ci-watch``,
-``quota-keepalive``) for backward compatibility with the existing
-``scitex-dev cron`` CLI.
+``JobSpec.name`` is the canonical id: ``scitex-<pkg>-<name>``, **hyphens
+only**. No dots, no underscores, no uppercase — see
+``_skills/scitex-dev/25_naming-conventions.md`` (operator-decided
+2026-08-11) and the auditor rules PS-226 (shape, **E**) and PS-227
+(package-qualified prefix, **W**) that enforce it.
+
+A dot is not a style preference here: ``jobs/_systemd.py::
+systemd_unit_name`` derives the unit FILENAME from this string verbatim,
+so ``sac.listen`` materialises ``sac.listen.service`` and silently fails
+to adopt the hand-written ``sac-listen.service`` it was meant to be —
+installing a second supervisor instead of reusing the first.
+
+Only the DECLARATION carries the full name. A package CLI accepts the
+local short name from the user and prefixes ``scitex-<pkg>-`` itself, so
+an operator still types ``accounts-refresh``, not the full id.
+
+scitex-dev's own built-in jobs keep their historical bare slugs
+(``ci-watch``, ``quota-keepalive``) for backward compatibility with the
+existing ``scitex-dev cron`` CLI; renaming them is a UNIT MIGRATION
+(stop-old → remove-old → install-new → verify-exactly-one), never an
+in-place edit.
 """
 
 from __future__ import annotations

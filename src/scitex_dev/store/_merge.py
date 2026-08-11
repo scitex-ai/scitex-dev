@@ -163,7 +163,7 @@ def _merge_append(field: str, current: Any, incoming: Any) -> tuple[list[Any], b
 
     Elements are mappings carrying an ``id``. Re-appending the same id is
     idempotent, which is what makes replay safe to repeat. Order is by
-    first appearance, so a replica that saw the elements in a different
+    first appearance, so a node that saw the elements in a different
     order still renders the same list.
     """
     current_list = _as_list(field, current)
