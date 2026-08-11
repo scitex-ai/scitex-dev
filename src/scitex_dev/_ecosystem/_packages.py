@@ -226,7 +226,27 @@ def out_of_sync_pairs(state: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def summarize(state: dict[str, Any]) -> dict[str, Any]:
-    """Return summary stats."""
+    """Return summary stats, INCLUDING the scope they were computed over.
+
+    `total`/`matching`/`needing_sync` count REMOTE (host, pkg) cells only.
+    The `localhost` column that :func:`render_table` renders is reference,
+    not a sync target, and is deliberately excluded here.
+
+    `hosts_in_scope` exists because that exclusion is invisible in the
+    output. Run from a container, where no fleet host is reachable, every
+    row has empty `cells` and the summary reduces to `total: 0,
+    matching: 0, needing_sync: []` — printed directly beneath a table in
+    which 45 of 68 localhost cells carry a drift marker. Each number is
+    correct for the question it answers ("which HOSTS need syncing"), and
+    together they read as an answer to the question the reader asked
+    ("is anything drifted"). Measured 2026-08-11; reported independently
+    by dotfiles and reproduced here.
+
+    A zero with no scope cannot be told from a zero after checking, so the
+    scope ships with the count. Callers that render this MUST NOT print a
+    bare `0/0` when `hosts_in_scope` is 0 — see the observe arm of
+    `ecosystem validate-versions`.
+    """
     total = 0
     matching = 0
     needing = []
@@ -242,7 +262,12 @@ def summarize(state: dict[str, Any]) -> dict[str, Any]:
                 matching += 1
             else:
                 needing.append({"host": host, "pkg": r["pkg"]})
-    return {"total": total, "matching": matching, "needing_sync": needing}
+    return {
+        "total": total,
+        "matching": matching,
+        "needing_sync": needing,
+        "hosts_in_scope": len(state.get("hosts") or []),
+    }
 
 
 def dry_run_commands(
