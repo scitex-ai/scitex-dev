@@ -118,6 +118,13 @@ def run_checks(
     from ._check_extras_all_closure import check_ps221_extras_all_closure
 
     check_ps221_extras_all_closure(repo_root, Violation, violations)
+    # PS-225: extra NAMES restricted to {all, dev, docs}. PS-221 above makes
+    # `[all]` complete; PS-225 removes the per-feature menu that made a
+    # partial pin possible in the first place. Operator ruling 2026-08-02,
+    # after `scitex-cards[mcp]` in container defs cost the fleet its board.
+    from ._check_extras_allowlist import check_ps225_extras_allowlist
+
+    check_ps225_extras_allowlist(repo_root, Violation, violations)
     # PS-222: `.scitex/<pkg-short>/` config-layout convention. Everything
     # directly under a package's local-state root is TRACKED except
     # `runtime/`, the one gitignored subdir; the primary config is always

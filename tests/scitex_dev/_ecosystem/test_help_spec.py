@@ -177,14 +177,40 @@ def test_version_of_renders_dist_version_inline():
     assert first_line == f"scitex-dev (v{version('scitex-dev')}) — Demo summary."
 
 
-def test_missing_dist_raises_package_not_found():
-    # Arrange — no silent fallback: unknown dist must fail loudly
+def test_missing_dist_states_the_non_answer_instead_of_raising():
+    # Arrange — REPLACES test_missing_dist_raises_package_not_found, and the
+    # replacement is deliberate rather than a test bent to fit new code.
+    #
+    # The old rule ("no silent fallback: unknown dist must fail loudly") was
+    # protecting the right thing — never invent a plausible version — but it
+    # spelled "unresolvable" as "crash". `SpecGroup.__init__` renders help
+    # while the `@click.group` decorator is being evaluated, so the raise
+    # landed at IMPORT time: every package adopting help_spec was dead under
+    # `python -m pkg` from a source checkout, which is a normal invocation
+    # on a host that has the repo and not the wheel.
+    #
+    # Reported by scitex-storage and sac 2026-08-11, hit while scheduling
+    # the free-space alarm the compute-04 incident needed.
+    #
+    # What is preserved: no fabricated number (pinned by the next test).
     spec = CliHelp(summary="Demo summary.", version_of="scitex-no-such-dist")
     # Act
-    render_missing = functools.partial(render_help, spec)
+    first_line = render_help(spec).splitlines()[0]
     # Assert
-    with pytest.raises(PackageNotFoundError):
-        render_missing()
+    assert first_line == (
+        "scitex-no-such-dist (version unresolved: no installed "
+        "distribution) — Demo summary."
+    )
+
+
+def test_missing_dist_never_renders_a_plausible_version():
+    # Arrange — the half of the old rule that still holds, kept as its own
+    # assertion so a future edit cannot satisfy the test above with "v0.0.0".
+    spec = CliHelp(summary="Demo summary.", version_of="scitex-no-such-dist")
+    # Act
+    text = render_help(spec)
+    # Assert
+    assert "v0." not in text
 
 
 def test_epilog_sections_render_in_fixed_order():

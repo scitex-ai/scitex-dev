@@ -47,8 +47,11 @@ Example::
      'png': PosixPath('/tmp/icons/my-agent.png')}
 
 ``generate_png`` (and ``save_icon`` with ``"png"`` in ``formats``) needs
-Pillow (``pip install scitex-dev[icons]``); the import is lazy so
-``generate_svg`` alone stays dependency-free.
+Pillow, which ships in the BASE install — the ``[icons]`` extra that
+once gated it is gone (PS-225: extra names are restricted to
+``{all, dev, docs}``). The import is still LAZY, so ``generate_svg``
+alone does not pay Pillow's import cost; that is a startup-time
+property now, not a dependency-set one.
 """
 
 from __future__ import annotations
@@ -77,7 +80,7 @@ def generate_png(name: str, **kwargs) -> bytes:
 
     Thin lazy-import wrapper -- see
     :func:`scitex_dev._icons._png.generate_png` for the full signature
-    and docs. Requires Pillow (``pip install scitex-dev[icons]``).
+    and docs. Requires Pillow, which ships in the base install.
     """
     from ._png import generate_png as _generate_png
 
