@@ -109,6 +109,61 @@ def remove_line(text: str, name: str) -> tuple[str, int]:
     return new, removed
 
 
+#: Prefix that parks a managed line without deleting it. A disabled job
+#: must stay VISIBLE — an operator who cannot see the line they turned off
+#: reinstalls it, which is how a second supervisor appears.
+DISABLED_PREFIX = "#DISABLED "
+
+
+def set_line_enabled(text: str, name: str, enabled: bool) -> tuple[str, int]:
+    """Comment/uncomment the managed line ``name``. Returns ``(text, hits)``.
+
+    ``enabled=False`` prefixes the line with :data:`DISABLED_PREFIX`;
+    ``enabled=True`` strips it. Both are idempotent — re-disabling an
+    already-disabled line changes nothing and still counts as a hit, so a
+    caller never has to ask "was it already off?" before acting.
+
+    Commenting rather than removing is the point: ``uninstall`` deletes,
+    ``disable`` parks. The schedule, command and marker survive verbatim,
+    so ``enable`` restores exactly what was there instead of re-deriving it
+    from a JobSpec that may since have changed.
+    """
+    marker = _line_marker(name)
+    out: list[str] = []
+    hits = 0
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        is_disabled = stripped.startswith(DISABLED_PREFIX)
+        body = stripped[len(DISABLED_PREFIX) :] if is_disabled else line
+        if marker not in body or body.strip() == BLOCK_BEGIN:
+            out.append(line)
+            continue
+        hits += 1
+        out.append(body if enabled else DISABLED_PREFIX + body)
+    new = "\n".join(out)
+    if text.endswith("\n") and new:
+        new += "\n"
+    return new, hits
+
+
+def is_line_enabled(text: str, name: str) -> bool | None:
+    """Is the managed line ``name`` live? ``None`` when it is not present.
+
+    Three states, kept apart deliberately: enabled, disabled, and ABSENT.
+    Collapsing "absent" into "disabled" would let ``list`` report a job as
+    merely paused when it was never installed at all.
+    """
+    marker = _line_marker(name)
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        is_disabled = stripped.startswith(DISABLED_PREFIX)
+        body = stripped[len(DISABLED_PREFIX) :] if is_disabled else line
+        if marker not in body or body.strip() == BLOCK_BEGIN:
+            continue
+        return not is_disabled
+    return None
+
+
 def _drop_empty_block(text: str) -> str:
     lines = text.splitlines()
     out: list[str] = []

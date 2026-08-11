@@ -1,23 +1,37 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""CLI tests for ``scitex-dev ecosystem systemd``.
+"""``ecosystem dev systemd`` — now a DEPRECATED alias over service + timer.
 
-The ``list`` command runs against the real built-ins (all cron-kind, so
-it legitimately reports no systemd jobs). Unit-file writing is exercised
-against a real temp directory through the same builders the install
-command uses — no patching of production internals.
+The group was organised by MECHANISM and fused two JobSpec kinds the
+validator keeps apart. It survives only so the old spelling — which lives
+in crontabs, unit files, scripts and agent prompts across the fleet, none
+of them greppable from here — keeps resolving while it is retired.
+
+Two contracts pinned here, both of them load-bearing:
+
+1. THE EXPIRY IS DATA, NOT PROSE. A sibling auditor rule FAILS once
+   ``remove_after`` passes. A sunset only a human can read is a sunset
+   nobody enforces, so the three keys are asserted literally.
+
+2. THE WARNING NEVER TOUCHES STDOUT. A deprecation notice that corrupts
+   the output of the command it deprecates is worse than silence —
+   measured elsewhere in this repo as a `WARN:` on stdout turning 7 tests
+   red across three unrelated PRs. `systemd list --json` must still parse
+   with the deprecation path fully active.
+
+No mocks (NM001-003): a REAL entry-point provider, a REAL temp $HOME.
 """
 
 from __future__ import annotations
 
+import json
 import os
 
 import pytest
 from click.testing import CliRunner
 
 from scitex_dev._cli import main
-from scitex_dev.jobs import JobSpec
-from scitex_dev.jobs import _systemd as sd
+from scitex_dev._cli.ecosystem._cmds import _jobs_systemd as SD
 
 
 @pytest.fixture
@@ -27,11 +41,6 @@ def runner():
 
 @pytest.fixture
 def temp_home(tmp_path):
-    """Point ``$HOME`` at a temp dir for the duration of the test.
-
-    ``Path.home()`` reads ``$HOME`` on POSIX, so the systemd CLI writes
-    its unit files under the temp tree — real filesystem, no patching.
-    """
     prev = os.environ.get("HOME")
     os.environ["HOME"] = str(tmp_path)
     try:
@@ -43,185 +52,136 @@ def temp_home(tmp_path):
             os.environ["HOME"] = prev
 
 
-def _systemd_job():
-    return JobSpec(
-        name="mockpkg.refresh",
-        schedule="0 */4 * * *",
-        command="mockpkg refresh --all",
-        description="mock systemd job",
-        kind="timer",
-        on_boot_sec="15min",
-        on_unit_active_sec="4h",
-        timeout_sec=120,
-    )
-
-
-def _write_units(job, unit_dir):
-    unit_dir.mkdir(parents=True, exist_ok=True)
-    service = unit_dir / f"{job.name}.service"
-    timer = unit_dir / f"{job.name}.timer"
-    service.write_text(sd.build_service_unit(job), encoding="utf-8")
-    timer.write_text(sd.build_timer_unit(job), encoding="utf-8")
-    return service, timer
-
-
-def test_systemd_list_includes_the_builtin_self_pull_timer(runner):
-    # Arrange
-    # Act
-    result = runner.invoke(main, ["ecosystem", "systemd", "list"])
-    # Assert
-    assert "ecosystem-self-pull" in result.output
-
-
-def test_systemd_write_creates_service_file(tmp_path):
-    # Arrange
-    unit_dir = tmp_path / ".config" / "systemd" / "user"
-    # Act
-    service, _ = _write_units(_systemd_job(), unit_dir)
-    # Assert
-    assert service.exists()
-
-
-def test_systemd_write_creates_timer_file(tmp_path):
-    # Arrange
-    unit_dir = tmp_path / ".config" / "systemd" / "user"
-    # Act
-    _, timer = _write_units(_systemd_job(), unit_dir)
-    # Assert
-    assert timer.exists()
-
-
-def test_systemd_written_timer_is_persistent(tmp_path):
-    # Arrange
-    unit_dir = tmp_path / ".config" / "systemd" / "user"
-    # Act
-    _, timer = _write_units(_systemd_job(), unit_dir)
-    # Assert
-    assert "Persistent=true" in timer.read_text()
-
-
-def test_systemd_written_service_is_oneshot(tmp_path):
-    # Arrange
-    unit_dir = tmp_path / ".config" / "systemd" / "user"
-    # Act
-    service, _ = _write_units(_systemd_job(), unit_dir)
-    # Assert
-    assert "Type=oneshot" in service.read_text()
+_ARGV = ["ecosystem", "dev", "systemd"]
 
 
 # ----------------------------------------------------------------------
-# End-to-end CLI: a REAL entry-point provider (installed_job_provider) +
-# a REAL temp $HOME exercise the actual install/uninstall command paths.
+# Machine-readable expiry.
 # ----------------------------------------------------------------------
 
 
-def test_cli_systemd_list_shows_provider_job(runner, installed_job_provider):
+def test_the_deprecation_records_when_it_was_deprecated():
+    # Arrange — a real value, in code, for the auditor to read.
+    # Act
+    value = SD.DEPRECATION["deprecated"]
+    # Assert
+    assert value == "2026-08"
+
+
+def test_the_deprecation_records_a_removal_deadline():
+    # Arrange — the auditor rule FAILS once this passes. A missing or
+    # decorative value would make the rule unenforceable.
+    # Act
+    value = SD.DEPRECATION["remove_after"]
+    # Assert
+    assert value == "2026-10"
+
+
+def test_the_deprecation_names_both_replacements():
+    # Arrange — one mechanism group split into TWO kind groups, so a
+    # replacement naming only one of them would strand the other half.
+    # Act
+    value = SD.DEPRECATION["replacement"]
+    # Assert
+    assert value == "ecosystem dev service / ecosystem dev timer"
+
+
+def test_the_group_object_carries_the_expiry_for_a_static_auditor(runner):
+    # Arrange — the auditor reads the COMMAND object, not this module's
+    # globals, so the stamp has to survive registration.
+    ecosystem = main.commands["ecosystem"]
+    dev = ecosystem.commands["dev"]
+    # Act
+    stamped = getattr(dev.commands["systemd"], "_deprecation", None)
+    # Assert
+    assert stamped == SD.DEPRECATION
+
+
+# ----------------------------------------------------------------------
+# stdout purity with the deprecation path ACTIVE.
+# ----------------------------------------------------------------------
+
+
+def test_the_deprecation_warning_goes_to_stderr(runner, installed_job_provider):
     # Arrange
     # Act
-    result = runner.invoke(main, ["ecosystem", "systemd", "list"])
+    result = runner.invoke(main, _ARGV + ["list", "--json"])
     # Assert
-    assert "testpkg.sysjob" in result.output
+    assert "DEPRECATED" in result.stderr
 
 
-def test_cli_systemd_install_dry_run_emits_unit(runner, installed_job_provider):
-    # Arrange
+def test_json_stdout_parses_with_the_deprecation_path_active(
+    runner, installed_job_provider
+):
+    # Arrange — THE regression this test exists for. The warning fires
+    # (asserted above) and stdout is still pure JSON.
     # Act
-    result = runner.invoke(main, ["ecosystem", "systemd", "install", "--dry-run"])
+    result = runner.invoke(main, _ARGV + ["list", "--json"])
     # Assert
-    assert "Type=oneshot" in result.output
+    assert isinstance(json.loads(result.stdout), list)
 
 
-def test_cli_systemd_install_without_yes_refuses(runner, installed_job_provider):
-    # Arrange
+def test_the_alias_still_returns_both_kinds(runner, installed_job_provider):
+    # Arrange — deprecated must still WORK, or the migration breaks every
+    # un-greppable caller at once.
     # Act
-    result = runner.invoke(main, ["ecosystem", "systemd", "install"])
+    result = runner.invoke(main, _ARGV + ["list", "--json"])
+    names = {row["name"] for row in json.loads(result.stdout)}
     # Assert
-    assert result.exit_code == 2
+    assert {"testpkg.svc", "testpkg.sysjob"} <= names
 
 
-def test_cli_systemd_install_writes_service(runner, installed_job_provider, temp_home):
-    # Arrange
+def test_the_warning_names_the_replacement(runner, installed_job_provider):
+    # Arrange — a deprecation that does not say what to use instead just
+    # moves the lookup onto the reader.
     # Act
-    runner.invoke(main, ["ecosystem", "systemd", "install", "--yes"])
+    result = runner.invoke(main, _ARGV + ["list"])
     # Assert
-    assert (temp_home / "testpkg.sysjob.service").exists()
+    assert "ecosystem dev service" in result.stderr
 
 
-def test_cli_systemd_install_prints_enable_hint(
+# ----------------------------------------------------------------------
+# Forwarding still writes real units.
+# ----------------------------------------------------------------------
+
+
+def test_the_alias_install_writes_the_timer_unit(
     runner, installed_job_provider, temp_home
 ):
     # Arrange
     # Act
-    result = runner.invoke(main, ["ecosystem", "systemd", "install", "--yes"])
-    # Assert
-    assert "systemctl --user enable --now testpkg.sysjob.timer" in result.output
-
-
-def test_cli_systemd_uninstall_removes_units(runner, installed_job_provider, temp_home):
-    # Arrange
-    runner.invoke(main, ["ecosystem", "systemd", "install", "--yes"])
-    # Act
-    runner.invoke(main, ["ecosystem", "systemd", "uninstall", "--yes"])
-    # Assert
-    assert not (temp_home / "testpkg.sysjob.service").exists()
-
-
-def test_cli_systemd_uninstall_without_yes_refuses(
-    runner, installed_job_provider, temp_home
-):
-    # Arrange
-    runner.invoke(main, ["ecosystem", "systemd", "install", "--yes"])
-    # Act
-    result = runner.invoke(main, ["ecosystem", "systemd", "uninstall"])
-    # Assert
-    assert result.exit_code == 2
-
-
-def test_cli_systemd_uninstall_dry_run_reports_target(
-    runner, installed_job_provider, temp_home
-):
-    # Arrange
-    runner.invoke(main, ["ecosystem", "systemd", "install", "--yes"])
-    # Act
-    result = runner.invoke(main, ["ecosystem", "systemd", "uninstall", "--dry-run"])
-    # Assert
-    assert "would remove" in result.output
-
-
-def test_cli_systemd_list_json_includes_provider_job(runner, installed_job_provider):
-    # Arrange
-    import json
-
-    # Act
-    result = runner.invoke(main, ["ecosystem", "systemd", "list", "--json"])
-    # Assert
-    # `.stdout`, not `.output` — see the note in test__jobs_cron.py: `.output`
-    # mixes stderr, and the old spelling now warns there on its way through the
-    # Phase W alias.
-    assert any(j["name"] == "testpkg.sysjob" for j in json.loads(result.stdout))
-
-
-def test_cli_systemd_install_named_unknown_errors(runner, installed_job_provider):
-    # Arrange
-    # Act
-    result = runner.invoke(
-        main, ["ecosystem", "systemd", "install", "--name", "no.such", "--dry-run"]
-    )
-    # Assert
-    assert result.exit_code != 0
-
-
-def test_cli_systemd_install_named_filters_to_one(
-    runner, installed_job_provider, temp_home
-):
-    # Arrange
-    # Act
-    runner.invoke(
-        main,
-        ["ecosystem", "systemd", "install", "--name", "testpkg.sysjob", "--yes"],
-    )
+    runner.invoke(main, _ARGV + ["install", "--name", "testpkg.sysjob", "--yes"])
     # Assert
     assert (temp_home / "testpkg.sysjob.timer").exists()
+
+
+def test_the_alias_install_dry_run_emits_a_unit(runner, installed_job_provider):
+    # Arrange
+    # Act
+    result = runner.invoke(main, _ARGV + ["install", "--dry-run"])
+    # Assert
+    assert "Type=oneshot" in result.stdout
+
+
+def test_the_alias_install_without_yes_refuses(
+    runner, installed_job_provider, temp_home
+):
+    # Arrange
+    # Act
+    result = runner.invoke(main, _ARGV + ["install"])
+    # Assert
+    assert result.exit_code == 2
+
+
+def test_the_alias_uninstall_removes_the_units(
+    runner, installed_job_provider, temp_home
+):
+    # Arrange
+    runner.invoke(main, _ARGV + ["install", "--name", "testpkg.sysjob", "--yes"])
+    # Act
+    runner.invoke(main, _ARGV + ["uninstall", "--name", "testpkg.sysjob", "--yes"])
+    # Assert
+    assert not (temp_home / "testpkg.sysjob.timer").exists()
 
 
 # EOF

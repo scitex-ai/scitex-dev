@@ -194,6 +194,8 @@ def register(ecosystem) -> None:
         except RuntimeError as exc:
             raise click.ClickException(str(exc)) from exc
 
+    _register_enablement(cron)
+
     @cron.command(
         "exec",
         cls=SpecCommand,
@@ -300,9 +302,7 @@ def _dispatch_federated_job(name: str, *, apply: bool, all_jobs) -> None:
     if name in JOB_SHELL_BODIES:
         import subprocess
 
-        completed = subprocess.run(
-            JOB_SHELL_BODIES[name], shell=True, check=False
-        )
+        completed = subprocess.run(JOB_SHELL_BODIES[name], shell=True, check=False)
         if completed.returncode != 0:
             raise SystemExit(completed.returncode)
         return
@@ -329,6 +329,108 @@ def _dispatch_federated_job(name: str, *, apply: bool, all_jobs) -> None:
     r = subprocess.run(argv, check=False)
     if r.returncode != 0:
         raise SystemExit(r.returncode)
+
+
+def _register_enablement(cron) -> None:
+    """``enable`` / ``disable`` — park a managed line without deleting it.
+
+    ``uninstall`` DELETES; ``disable`` PARKS. The distinction matters
+    because a line an operator cannot see is a line they reinstall, and a
+    reinstalled job beside the original is a second supervisor.
+
+    ``cron`` gets no ``status`` verb: a crontab line has no runtime state
+    to report — it is present-and-live, present-and-parked, or absent, and
+    ``list`` already answers that. Nor ``start``/``stop``/``restart``:
+    there is no process to control, only a line cron reads on its own
+    schedule. Those verbs are ABSENT here rather than present-and-erroring.
+    """
+
+    @cron.command(
+        "enable",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Un-park a disabled managed cron line.",
+            examples=(
+                Example(
+                    "{prog} ecosystem dev cron enable ci-watch --yes",
+                    "Let the line run again.",
+                ),
+            ),
+        ),
+    )
+    @click.argument("name")
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=False,
+        help="Print the crontab that would result; do not write.",
+    )
+    @click.option("-y", "--yes", is_flag=True, default=False, help="Confirm the write.")
+    def cron_enable(name, dry_run, yes):
+        _set_enabled(name, True, dry_run=dry_run, yes=yes)
+
+    @cron.command(
+        "disable",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Park a managed cron line (comment it, keep it visible).",
+            description=(
+                "Prefixes the line with `#DISABLED ` rather than removing "
+                "it, so the schedule, command and marker survive verbatim "
+                "and `enable` restores exactly what was there.",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem dev cron disable ci-watch --yes",
+                    "Stop the line running; keep it on disk.",
+                ),
+            ),
+        ),
+    )
+    @click.argument("name")
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=False,
+        help="Print the crontab that would result; do not write.",
+    )
+    @click.option("-y", "--yes", is_flag=True, default=False, help="Confirm the write.")
+    def cron_disable(name, dry_run, yes):
+        _set_enabled(name, False, dry_run=dry_run, yes=yes)
+
+
+def _set_enabled(name: str, enabled: bool, *, dry_run: bool, yes: bool) -> None:
+    """Flip one managed line's enabled state. Shared by enable/disable."""
+    from ....jobs import _cron_block as cb
+    from ...cron._crontab import read_crontab_state, write_crontab
+
+    verb = "enable" if enabled else "disable"
+    state = read_crontab_state()
+    if not state.readable:
+        # "Could not look" is NOT "found nothing" — reporting a miss here
+        # would tell the operator their job is absent when we never read.
+        raise click.ClickException(
+            f"cannot {verb} {name!r}: crontab is unreadable ({state.reason})"
+        )
+
+    new, hits = cb.set_line_enabled(state.text, name, enabled)
+    if hits == 0:
+        raise click.ClickException(
+            f"no managed cron line named {name!r} — nothing to {verb}. "
+            f"Install it first with `ecosystem dev cron install --name {name}`."
+        )
+
+    if dry_run:
+        click.echo(new, nl=False)
+        return
+    if not yes:
+        click.echo("Refusing to write to crontab without --yes/-y.", err=True)
+        raise SystemExit(2)
+    try:
+        write_crontab(new)
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    click.echo(f"{verb}d managed cron line {name!r}.")
 
 
 def _source_of(name: str) -> str:
