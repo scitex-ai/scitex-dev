@@ -197,6 +197,14 @@ def run_checks(
     from ._check_secret_env_prefix import check_ps168_secret_env_prefix
 
     check_ps168_secret_env_prefix(repo_root, distribution, Violation, violations)
+    # PS-226..PS-229: the fleet-wide JobSpec declaration convention. A job
+    # name is the systemd unit FILENAME, derived verbatim, so a dotted name
+    # silently installs a second unit beside the hand-written one it was
+    # meant to be (`sac.listen.service` vs the live `sac-listen.service`).
+    # Static AST scan of src/<pkg>/**.py; the leaf is never imported.
+    from ._check_job_naming import check_job_naming
+
+    check_job_naming(repo_root, distribution, Violation, violations)
     from ._check_workflow_presence import check_ps165_workflow_presence
     from ._check_readme_badge_labels import check_ps166_readme_badge_labels
 

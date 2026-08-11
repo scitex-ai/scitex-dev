@@ -1,0 +1,233 @@
+# SciTeX StatusCode — the KIND registry.
+#
+# THIS FILE IS THE SOURCE OF TRUTH. `scitex_dev.status` (Python) is DERIVED
+# from it; `tests/scitex_dev/status/test__spec.py` fails when the
+# two drift. TypeScript, Rust and shell implementations read this file too.
+#
+# WHAT A KIND IS
+# --------------
+# `kind` is a discriminated-union tag. It tells a reader HOW TO READ `code`
+# — nothing more. `kind: http, code: 503` means a REAL HTTP 503, not a SciTeX
+# status that happens to resemble one. Native codes are preserved verbatim,
+# always. There is no translation layer and no canonical SciTeX vocabulary
+# sitting above these; borrowing a mature vocabulary is cheaper, lossless and
+# already understood by everyone who will read the value.
+#
+# Each call site DECLARES which kind it borrows — see boundaries.yaml. A
+# boundary may borrow any kind; `grpc/CANCELLED` is a legal thing to say over
+# a Unix socket, because the kind tag says which dictionary to open.
+#
+# `code_domain` is what the validator enforces at CONSTRUCTION time.
+
+spec_version: "1"
+
+kinds:
+
+  # ---------------------------------------------------------------- http ---
+  - kind: http
+    reads: "IANA HTTP status codes"
+    code_type: int
+    code_domain:
+      range: [100, 599]
+      # Enumerated on purpose. A range check alone accepts 999, and a code
+      # nobody defined is a typo wearing a uniform.
+      enum: [
+        100, 101, 102, 103,
+        200, 201, 202, 203, 204, 205, 206, 207, 208, 226,
+        300, 301, 302, 303, 304, 305, 307, 308,
+        400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412,
+        413, 414, 415, 416, 417, 418, 421, 422, 423, 424, 425, 426, 428,
+        429, 431, 451,
+        500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511,
+      ]
+    notes:
+      - "202 Accepted is the shape for 'received, still working'. It is the
+         answer to the 2026-08-11 incident: a client gave up at 30 s while the
+         server worked the request for 5 min 12 s, and reported it as a peer
+         failure. An immediate 202 makes 'accepted' and 'finished' different
+         statements instead of one guess."
+      - "504 already means 'I stopped waiting'. That is the honest sentence
+         for a client-side timeout, and it is why no SciTeX UNKNOWN code was
+         invented alongside it."
+      - "503 SHOULD carry a wait in `message`; 403 is not worth retrying.
+         Retryability is readable from the code within the kind, which is why
+         there is no separate `retryable` field."
+    # M2 applies to these: the message must name a way to ask.
+    requires_probe: [102, 202]
+    # Codes that do NOT report a finished outcome. `final` is DERIVED from
+    # this list — never stored beside the code as an independent field that
+    # could disagree with it. The ledger writes it into the row so that
+    # "accepted and never concluded" is a QUERY rather than an investigation,
+    # and exactly one function computes it.
+    non_final: [100, 101, 102, 103, 202]
+
+  # ------------------------------------------------------------- process ---
+  - kind: process
+    reads: "POSIX process exit status"
+    code_type: int
+    code_domain:
+      range: [0, 255]
+    notes:
+      - "128+N means killed by signal N: 137 = SIGKILL (9), 143 = SIGTERM
+         (15), 130 = SIGINT (2)."
+      - "126 = found but not executable. 127 = command not found — which is
+         the shell's answer, not proof the program is absent."
+      - "ssh exits 255 for its own transport failures, so a 255 from an ssh
+         wrapper is usually about ssh, not about the remote command."
+    # Codes reserved from any SciTeX meaning are declared ONCE, in the
+    # top-level `reserved:` section below — not repeated here. Two lists of
+    # the same thing is the defect this whole spec argues against.
+
+  # ---------------------------------------------------------------- grpc ---
+  - kind: grpc
+    reads: "gRPC canonical status names"
+    code_type: str
+    code_domain:
+      # The 17 canonical names. Numbers are gRPC's own; the NAME is the wire
+      # value here because it survives being read by a human.
+      enum: [
+        OK, CANCELLED, UNKNOWN, INVALID_ARGUMENT, DEADLINE_EXCEEDED,
+        NOT_FOUND, ALREADY_EXISTS, PERMISSION_DENIED, RESOURCE_EXHAUSTED,
+        FAILED_PRECONDITION, ABORTED, OUT_OF_RANGE, UNIMPLEMENTED,
+        INTERNAL, UNAVAILABLE, DATA_LOSS, UNAUTHENTICATED,
+      ]
+    numbers:
+      OK: 0
+      CANCELLED: 1
+      UNKNOWN: 2
+      INVALID_ARGUMENT: 3
+      DEADLINE_EXCEEDED: 4
+      NOT_FOUND: 5
+      ALREADY_EXISTS: 6
+      PERMISSION_DENIED: 7
+      RESOURCE_EXHAUSTED: 8
+      FAILED_PRECONDITION: 9
+      ABORTED: 10
+      OUT_OF_RANGE: 11
+      UNIMPLEMENTED: 12
+      INTERNAL: 13
+      UNAVAILABLE: 14
+      DATA_LOSS: 15
+      UNAUTHENTICATED: 16
+    notes:
+      - "gRPC is the richest general-purpose vocabulary here, and it may be
+         borrowed at a boundary that speaks no gRPC. `grpc/CANCELLED` over a
+         Unix socket is legal and is preferable to minting a SciTeX code."
+      - "gRPC's own UNKNOWN is the code for 'the outcome could not be
+         determined'. It is borrowed, not re-invented."
+
+  # ----------------------------------------------------------------- dns ---
+  - kind: dns
+    reads: "DNS RCODE names (RFC 1035, RFC 6895)"
+    code_type: str
+    code_domain:
+      enum: [
+        NOERROR, FORMERR, SERVFAIL, NXDOMAIN, NOTIMP, REFUSED,
+        YXDOMAIN, YXRRSET, NXRRSET, NOTAUTH, NOTZONE, DSOTYPENI,
+        BADVERS, BADKEY, BADTIME, BADMODE, BADNAME, BADALG,
+        BADTRUNC, BADCOOKIE,
+      ]
+    notes:
+      - "NXDOMAIN means the NAME does not exist — authoritatively. SERVFAIL
+         means the resolver failed, which is a different problem with a
+         different fix. Any vocabulary that folds these together has thrown
+         away the answer."
+
+  # --------------------------------------------------------------- errno ---
+  - kind: errno
+    reads: "POSIX errno NAMES"
+    code_type: str
+    code_domain:
+      source: "POSIX errno names"
+      python_source: "errno.errorcode"
+      rule: >-
+        The NAME is the wire value, never the number. errno NUMBERS are
+        platform-specific — the same integer is a different error on another
+        OS — so a number crossing a host boundary is a value that changes
+        meaning in transit. Names are portable; numbers are local.
+    notes:
+      - "ENOENT is 'this path does not exist'. A binary installed at
+         ~/.env-sac/bin/sac but missing from a non-interactive PATH is NOT
+         ENOENT and NOT NXDOMAIN — it has no native code anywhere, which is
+         why scitex/NOT_RESOLVABLE exists. See scitex-codes.yaml."
+      - "ECONNREFUSED (nothing listening) and ETIMEDOUT (no answer in time)
+         are different facts. The first says the request never landed; the
+         second says nobody knows."
+
+  # -------------------------------------------------------------- scitex ---
+  - kind: scitex
+    reads: "SciTeX codes for conditions with NO native home anywhere"
+    code_type: str
+    code_domain:
+      source: "scitex-codes.yaml"
+      rule: >-
+        Closed enumeration. A code enters it ONLY when no http, grpc, dns,
+        errno or process vocabulary can express the condition. This list
+        staying short is the design working; a long one means the canonical
+        vocabulary we rejected has grown back under another name.
+
+# ---------------------------------------------------------------------------
+# RESERVED — codes that MUST NOT be given a SciTeX meaning
+# ---------------------------------------------------------------------------
+reserved:
+  - kind: process
+    codes: [1, 2]
+    why: >-
+      They already mean "generic failure" and "usage error" in every CLI
+      framework. argparse and click both exit 2 for an UNKNOWN SUBCOMMAND, so
+      overloading 2 lets a missing or renamed verb impersonate a real value.
+    measured: >-
+      A `may-stop` verb absent from an older install exited 2. That was
+      indistinguishable from a usage error, and a Stop hook failed open on it.
+    rule: >-
+      Never assign a SciTeX meaning to process/1 or process/2. Read a received
+      2 as "this verb may not exist in this install", never as a verdict on
+      the operation you asked for.
+
+# ---------------------------------------------------------------------------
+# The `message` contract — normative. `message` is load-bearing, not decoration.
+# ---------------------------------------------------------------------------
+message:
+  must_answer:
+    - "WHAT TO DO — 'wait 10s and retry', 'fix the PATH', 'nothing'."
+    - "WHAT THE SENDER IS DOING — 'phase=container_creation since 06:15:08Z'."
+    - "HOW TO ASK — a runnable probe: `sac agents list <name>`, GET /agents/<name>."
+
+  # M1 — the NO-INFERRED-CAUSE rule.
+  no_inferred_cause:
+    rule: >-
+      A message states what was MEASURED and what to DO NEXT. It never names a
+      cause it did not observe. Stating an OBSERVED cause is fine ("ENOENT:
+      /etc/foo"); concluding an UNOBSERVED one is forbidden.
+    measured: >-
+      2026-08-11: a transport-failure message printed "THEREFORE the fault is
+      specific to POST /agents" on the strength of two control probes that
+      cannot see that route. A reader acted on it within two minutes and filed
+      a P1 against the wrong component. The route was fine; the client had
+      stopped listening after 30 s while the server worked for 5 min 12 s.
+      Fixed in scitex-agent-container PR #956.
+    # Enforced by the validator. These assert an INFERENCE. Words that report
+    # an OBSERVATION ("because", "due to") are deliberately NOT here — the
+    # rule bans concluding a cause, not stating one you saw.
+    forbidden_markers:
+      - "therefore"
+      - "this means"
+      - "the fault is"
+      - "root cause"
+      - "must be caused by"
+      - "proves that"
+    prescribed_shape:
+      - "OBSERVED: <what was actually measured>"
+      - "RULED OUT: <what the measurement eliminates>"
+      - "NOT ESTABLISHED: <what it does NOT settle, and why>"
+      - "NEXT, to find out rather than guess: <the probe to run>"
+
+  # M2 — a non-final code must say how to ask.
+  requires_probe:
+    rule: >-
+      When a code's native meaning is "received, not finished" (http 102, http
+      202), the message MUST name a way to ask about it — a backtick-quoted
+      command, a URL, or a path. Without one, the reader's only option is to
+      wait and then guess, which is the 30 s / 5 min 12 s incident exactly.
+
+# EOF

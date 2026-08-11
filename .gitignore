@@ -48,3 +48,8 @@ unknown_out/
 .venv
 
 .worktrees/
+
+# The displaced-files trash bin. House rule is that nothing is ever deleted —
+# it is moved to .old/<timestamp>/ instead — so this directory accumulates
+# superseded files by design and must never be committed.
+.old/

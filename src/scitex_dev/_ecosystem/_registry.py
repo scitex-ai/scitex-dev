@@ -4,6 +4,34 @@
 
 """SciTeX ecosystem package registry — *data only*.
 
+SCOPE, STATED FIRST BECAUSE THE NAME IMPLIES OTHERWISE
+------------------------------------------------------
+``ECOSYSTEM`` is a CURATED SCOPE LIST — the packages in scope for
+ecosystem-wide operations. It is **NOT a census of the fleet**, and a
+name like ``ECOSYSTEM`` sitting on "the single dict" reads as one.
+
+Four distributions ship, and federate into scitex-dev's own entry-point
+groups, while absent from here (measured 2026-07-29): ``scitex-storage``,
+``scitex-cards``, ``scitex-linter``, ``scitex-gen``. Entry-point
+discovery reads the INSTALLED ENVIRONMENT, not this dict, so a
+non-member's declaration reaches the same aggregates a member's does —
+one of them reached ``apt-get install`` and detonated a container bake.
+
+So this dict is a valid answer to "what is in scope" and a WRONG answer
+to "what exists". Treating it as the second is the documented cause of
+that incident and of several sweeps that had to be re-run. See
+:func:`scitex_dev._ecosystem._core.get_all_packages` for the full
+consumer-facing warning, and card
+``ecosystem-registry-is-not-a-complete-fleet-enumeration-20260730`` for
+the open question of whether membership should GATE federation (it
+would break the four above, including sac).
+
+No curation criteria are recorded anywhere. Absence therefore does not
+distinguish "deliberately out of scope" from "nobody added it yet" —
+if you add or remove an entry, say why in the commit.
+
+STRUCTURE
+---------
 This module owns the single ``ECOSYSTEM`` dict and the ``PackageInfo``
 schema. It is intentionally pure data so the dependency-aware helpers
 (``get_local_path`` / ``should_skip_audit`` / etc. in ``_core.py``)

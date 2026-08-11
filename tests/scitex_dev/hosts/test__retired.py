@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""A registry serving a RETIRED ssh alias must say so at runtime.
+"""A registry serving a RETIRED ssh alias must say so at runtime — ON STDERR.
 
 `create_default_hosts_yaml` no-ops once the file exists, so a container that
 seeded a bad registry keeps it forever — the only code that would fix it is
@@ -17,13 +17,26 @@ contract, and a registry that suddenly throws would break every caller in
 every already-seeded container at once — precisely the population this
 helps.
 
-No mocks (NM001-003): every test writes a REAL hosts.yaml.
+STDOUT PURITY (measured 2026-08-11, reproduced against this worktree). The
+warning used to PROPAGATE to the root logger, so a consumer that had run
+`logging.basicConfig(stream=sys.stdout)` got it on STDOUT, in the middle of
+`host list --json`, making the payload unparseable. The module now owns its
+own stderr handler and does not propagate; the tests below pin BOTH halves —
+the warning still fires, and stdout stays clean.
+
+No mocks (NM001-003): every test writes a REAL hosts.yaml and, for the
+stdout tests, attaches a REAL root handler exactly as a consumer would.
 One assert per test (STX-TQ007), AAA markers (STX-TQ002).
 """
 
 from __future__ import annotations
 
+import io
+import json
+import logging
 from pathlib import Path
+
+import pytest
 
 from scitex_dev.hosts import list_hosts, resolve
 from scitex_dev.hosts._retired import (
@@ -31,6 +44,47 @@ from scitex_dev.hosts._retired import (
     successor_for,
     warn_if_retired,
 )
+
+_RETIRED_LOGGER = "scitex_dev.hosts._retired"
+
+
+@pytest.fixture
+def retired_logs(caplog):
+    """Capture this module's records despite its deliberate `propagate=False`.
+
+    pytest's `caplog` attaches at the ROOT logger, and the module under test
+    no longer reaches the root — that is the fix, not an accident. A test
+    therefore opts in to the module's own logger, exactly as a consumer that
+    wants the structured records would.
+    """
+    logger = logging.getLogger(_RETIRED_LOGGER)
+    logger.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(logging.WARNING, logger=_RETIRED_LOGGER):
+            yield caplog
+    finally:
+        logger.removeHandler(caplog.handler)
+
+
+@pytest.fixture
+def consumer_routing_logs_to_stdout():
+    """A REAL root handler pointed at a buffer — the measured failure shape.
+
+    This is what `logging.basicConfig(stream=sys.stdout)` installs. Yields
+    the buffer that would have received the leak.
+    """
+    buffer = io.StringIO()
+    handler = logging.StreamHandler(buffer)
+    handler.setFormatter(logging.Formatter("WARN: %(message)s"))
+    root = logging.getLogger()
+    prev_level = root.level
+    root.addHandler(handler)
+    root.setLevel(logging.WARNING)
+    try:
+        yield buffer
+    finally:
+        root.removeHandler(handler)
+        root.setLevel(prev_level)
 
 
 def _registry(tmp_path: Path, ssh_alias: str, name: str = "nas") -> Path:
@@ -66,37 +120,34 @@ def test_a_live_alias_has_no_recorded_retirement():
     assert found is None
 
 
-def test_resolving_a_host_with_a_retired_route_warns(tmp_path, caplog):
+def test_resolving_a_host_with_a_retired_route_warns(tmp_path, retired_logs):
     # Arrange — the frozen-container case, byte for byte.
     path = _registry(tmp_path, "nas")
     # Act
-    with caplog.at_level("WARNING"):
-        resolve("nas", hosts_path=path)
+    resolve("nas", hosts_path=path)
     # Assert
-    assert "RETIRED" in caplog.text
+    assert "RETIRED" in retired_logs.text
 
 
-def test_the_warning_names_the_successor(tmp_path, caplog):
+def test_the_warning_names_the_successor(tmp_path, retired_logs):
     # Arrange — a warning that does not say what to use instead costs the
     # reader the same lookup that produced this bug.
     path = _registry(tmp_path, "nas2", name="nas2")
     # Act
-    with caplog.at_level("WARNING"):
-        resolve("nas2", hosts_path=path)
+    resolve("nas2", hosts_path=path)
     # Assert
-    assert "scitex-nas-02" in caplog.text
+    assert "scitex-nas-02" in retired_logs.text
 
 
-def test_a_healthy_registry_warns_about_nothing(tmp_path, caplog):
+def test_a_healthy_registry_warns_about_nothing(tmp_path, retired_logs):
     # Arrange — SECOND POSITIVE CONTROL. Every test above passes if the
     # code warned unconditionally, which would be noise indistinguishable
     # from signal.
     path = _registry(tmp_path, "scitex-nas-03", name="scitex-nas-03")
     # Act
-    with caplog.at_level("WARNING"):
-        resolve("scitex-nas-03", hosts_path=path)
+    resolve("scitex-nas-03", hosts_path=path)
     # Assert
-    assert caplog.text == ""
+    assert retired_logs.text == ""
 
 
 def test_resolve_still_returns_the_record(tmp_path):
@@ -109,7 +160,7 @@ def test_resolve_still_returns_the_record(tmp_path):
     assert record.ssh_alias == "nas"
 
 
-def test_list_hosts_reports_every_retired_row(tmp_path, caplog):
+def test_list_hosts_reports_every_retired_row(tmp_path, retired_logs):
     # Arrange — a real frozen registry had THREE dead routes, so one row
     # warning is not enough.
     p = tmp_path / "hosts.yaml"
@@ -124,13 +175,12 @@ def test_list_hosts_reports_every_retired_row(tmp_path, caplog):
         encoding="utf-8",
     )
     # Act
-    with caplog.at_level("WARNING"):
-        list_hosts(hosts_path=p)
+    list_hosts(hosts_path=p)
     # Assert
-    assert len([r for r in caplog.records if "RETIRED" in r.message]) == 3
+    assert len([r for r in retired_logs.records if "RETIRED" in r.message]) == 3
 
 
-def test_warning_does_not_depend_on_what_ran_before_it(tmp_path, caplog):
+def test_warning_does_not_depend_on_what_ran_before_it(tmp_path, retired_logs):
     # Arrange — the first implementation kept a module-level set of
     # already-warned (host, alias) pairs so repeated calls stayed quiet.
     # That made the answer depend on interpreter history: three tests here
@@ -139,11 +189,10 @@ def test_warning_does_not_depend_on_what_ran_before_it(tmp_path, caplog):
     # decision the logging system already implements.
     path = _registry(tmp_path, "nas")
     # Act
-    with caplog.at_level("WARNING"):
-        resolve("nas", hosts_path=path)
-        resolve("nas", hosts_path=path)
+    resolve("nas", hosts_path=path)
+    resolve("nas", hosts_path=path)
     # Assert
-    assert len([r for r in caplog.records if "RETIRED" in r.message]) == 2
+    assert len([r for r in retired_logs.records if "RETIRED" in r.message]) == 2
 
 
 def test_the_message_is_returned_so_it_can_be_asserted_without_logs():
@@ -154,6 +203,62 @@ def test_the_message_is_returned_so_it_can_be_asserted_without_logs():
     message = warn_if_retired("some-host", alias)
     # Assert
     assert message is not None and "RETIRED" in message
+
+
+# ----------------------------------------------------------------------
+# STDOUT PURITY — the measured cross-package breakage.
+# ----------------------------------------------------------------------
+
+
+def test_the_warning_never_reaches_a_consumers_stdout_handler(
+    tmp_path, consumer_routing_logs_to_stdout
+):
+    # Arrange — a consumer that ran logging.basicConfig(stream=sys.stdout),
+    # which is what turned `sac host list --json` into unparseable output.
+    path = _registry(tmp_path, "nas")
+    # Act
+    resolve("nas", hosts_path=path)
+    # Assert
+    assert consumer_routing_logs_to_stdout.getvalue() == ""
+
+
+def test_a_json_payload_still_parses_with_the_warning_path_active(
+    tmp_path, consumer_routing_logs_to_stdout
+):
+    # Arrange — POSITIVE CONTROL FOR THE WHOLE FIX: the registry IS stale
+    # (so the warning path really runs) and the stdout stream carries only
+    # the payload. Asserting an empty buffer alone would pass if the
+    # warning had simply stopped firing.
+    path = _registry(tmp_path, "nas")
+    records = list_hosts(hosts_path=path)
+    payload = consumer_routing_logs_to_stdout
+    # Act
+    payload.write(json.dumps({"hosts": [r.name for r in records]}))
+    # Assert
+    assert json.loads(payload.getvalue()) == {"hosts": ["nas"]}
+
+
+def test_the_warning_still_fires_while_stdout_stays_clean(
+    tmp_path, retired_logs, consumer_routing_logs_to_stdout
+):
+    # Arrange — the OTHER half of the control above: silence on stdout must
+    # come from routing, not from the check having been switched off.
+    path = _registry(tmp_path, "nas")
+    # Act
+    resolve("nas", hosts_path=path)
+    # Assert
+    assert "RETIRED" in retired_logs.text
+
+
+def test_the_module_does_not_propagate_to_root():
+    # Arrange — the invariant the two tests above depend on, asserted
+    # directly so a future refactor that re-enables propagation fails HERE
+    # with an obvious message rather than in a distant JSON consumer.
+    logger = logging.getLogger(_RETIRED_LOGGER)
+    # Act
+    propagates = logger.propagate
+    # Assert
+    assert propagates is False
 
 
 # EOF

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scitex.ai/spec/status/1/exchange-record.schema.json",
+  "title": "SciTeX exchange ledger record, spec_version 1",
+  "description": "One row per A->B exchange. Every exchange yields the same shape, so 'what happened to request X' is a lookup rather than an investigation. STORAGE IS NORMATIVE: this record is a record kind in scitex_dev.store (ADR-0006), never a hand-rolled file. That gives per-host storage, oplog directed replay between hosts, HLC ordering and no delete verb — so an exchange opened on the laptop is answerable from compute-04, and the ack and the completion are both still readable afterwards.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["exchange_id", "initiator", "responder", "operation", "opened_at", "kind", "code", "message", "updated_at", "final"],
+
+  "properties": {
+    "exchange_id": {
+      "description": "Identity. Issued by B on receipt, returned in the immediate ack before any work is done, and quoted by A in every follow-up. Time-ordered as text, attributable to the issuing host, unique without coordination.",
+      "type": "string",
+      "pattern": "^xch_[0-9]{8}T[0-9]{6}Z_[A-Za-z0-9][A-Za-z0-9._-]*_[0-9a-f]{6}$"
+    },
+
+    "initiator": {"type": "string", "minLength": 1, "description": "A, as host/service."},
+    "responder": {"type": "string", "minLength": 1, "description": "B, as host/service."},
+    "operation": {"type": "string", "minLength": 1, "description": "e.g. agent.spawn."},
+
+    "opened_at": {"type": "string", "minLength": 1, "description": "UTC ISO-8601. When B issued the id."},
+    "updated_at": {"type": "string", "minLength": 1, "description": "UTC ISO-8601. When the latest status was written. Merges by MAX."},
+
+    "kind": {"enum": ["http", "process", "grpc", "dns", "errno", "scitex"], "description": "Latest StatusCode.kind."},
+    "code": {"type": ["integer", "string"], "description": "Latest StatusCode.code, verbatim."},
+    "message": {"type": "string", "minLength": 1, "description": "Latest StatusCode.message."},
+
+    "final": {
+      "type": "boolean",
+      "description": "Is the latest status terminal? A 202 is NOT final. This is the field that makes an unanswered exchange FINDABLE: `final = false` with an old `updated_at` is the query for work that was accepted and never concluded — the state that was invisible on 2026-08-11 and had to be reconstructed by hand."
+    }
+  }
+}

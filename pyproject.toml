@@ -223,6 +223,15 @@ scitex_dev = [
     "_sphinx_html/**/*",
     "_sphinx_html/**/.[!.]*",
     "_ecosystem/ci_template/templates/*.tmpl",
+    # ADR-0007: the language-independent status spec is the SOURCE OF TRUTH and
+    # the Python is derived from it, so it must SHIP. A repo-root spec/ would
+    # not travel in the wheel, and an installed consumer would then need a
+    # second copy — two copies of an SSoT being the defect the rule exists to
+    # prevent. The validator raises rather than degrading if these are absent:
+    # an empty table validates nothing, so every malformed value would pass.
+    "status/spec/*.md",
+    "status/spec/*.yaml",
+    "status/spec/schema/*.json",
 ]
 
 [tool.hatch.build.targets.wheel.force-include]

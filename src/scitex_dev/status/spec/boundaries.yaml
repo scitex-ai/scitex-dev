@@ -1,0 +1,133 @@
+# WHICH KIND EACH BOUNDARY BORROWS.
+#
+# Operator, 2026-08-11: "sac でも場所によってどれを使うか決めれば良い。ここは
+# http 型を借りる、ここは process を借りる" — decide per place which one you
+# borrow: here we borrow the http type, here we borrow process.
+#
+# This is the whole coordination cost of the design. Not one universal
+# vocabulary everyone must agree to before shipping — a DOCUMENTED CHOICE per
+# boundary, written down so a caller knows which dictionary to open.
+#
+# THIS FILE IS THE SOURCE OF TRUTH for the boundaries listed. It is a
+# DECLARATION, not an inventory: a boundary absent from this file has not
+# declared yet, which is a gap to close, not permission to improvise. Each
+# package appends its own boundaries; scitex-dev does not own other packages'
+# choices, only the registry they are written into.
+#
+# HOW TO CHOOSE
+#   Answering a request over HTTP?          -> http
+#   Reporting a process's exit?             -> process
+#   Reporting name resolution?              -> dns
+#   Reporting a syscall / filesystem fault? -> errno
+#   Need a rich word at a non-HTTP boundary -> grpc (borrowing is legal
+#                                              wherever the kind tag travels)
+#   None of the above can say it?           -> scitex, and justify it in
+#                                              scitex-codes.yaml
+
+spec_version: "1"
+
+boundaries:
+
+  # -- scitex-agent-container ---------------------------------------------
+
+  - boundary: "sac listen: POST /agents (spawn)"
+    package: scitex-agent-container
+    borrows: http
+    ack: 202
+    why: >-
+      A real HTTP route. Spawning takes minutes, so the immediate answer is
+      202 Accepted with the exchange id, and completion is a separate,
+      later fact. This is the boundary the 2026-08-11 incident crossed.
+
+  - boundary: "sac listen: POST /v1/host_exec"
+    package: scitex-agent-container
+    borrows: http
+    ack: 202
+    nested: process
+    why: >-
+      The ROUTE is http; the COMMAND's outcome is a process exit status.
+      Two boundaries, two kinds — the http code answers "did the request
+      land", the process code answers "what did the command do". Folding
+      them is how an exit 127 gets reported as an HTTP 200.
+
+  - boundary: "sac agents start / stop / restart (CLI)"
+    package: scitex-agent-container
+    borrows: process
+    why: "A CLI's outcome IS its exit status. process/1 and /2 are reserved."
+
+  - boundary: "sac host probe (multi-hop ssh)"
+    package: scitex-agent-container
+    borrows: process
+    why: >-
+      ssh reports through exit status, and 255 is ssh's own transport
+      failure rather than the remote command's result. Borrowing `process`
+      keeps that distinction visible instead of flattening it to "failed".
+
+  - boundary: "a2a sidecar: send / reply"
+    package: scitex-agent-container
+    borrows: http
+    ack: 202
+    why: >-
+      The sidecar is an HTTP service. The ack is what makes delivery
+      OBSERVED rather than assumed — see the ledger section of
+      status-codes.md.
+
+  - boundary: "agent binary / verb resolution"
+    package: scitex-agent-container
+    borrows: scitex
+    codes: [NOT_RESOLVABLE]
+    why: >-
+      "Installed but not on this PATH" has no native code. See
+      scitex-codes.yaml.
+
+  - boundary: "registry lookup of a non-running agent"
+    package: scitex-agent-container
+    borrows: scitex
+    codes: [AGENT_UNAVAILABLE]
+    why: "There is no request to answer, so there is no response code to borrow."
+
+  # -- scitex-cards --------------------------------------------------------
+
+  - boundary: "board HTTP API (cards, DMs, notifications)"
+    package: scitex-cards
+    borrows: http
+    why: "A real HTTP API. 409 for an optimistic-lock loss, 404 for an unknown card."
+
+  - boundary: "store put with expected_revision"
+    package: scitex-cards
+    borrows: http
+    code_hint: 409
+    why: >-
+      A lost optimistic-lock race is a conflict in the ordinary sense.
+      `message` must say what to do — re-read, re-apply intent to the NEW
+      value, and send a DIFFERENT request. Re-sending the same one loses
+      the same race again.
+
+  - boundary: "notification delivery to an agent inbox"
+    package: scitex-cards
+    borrows: http
+    ack: 202
+    why: >-
+      Enqueue and delivery are different facts. 202 says enqueued; the
+      ledger says whether it was delivered. Treating the first as the second
+      is what left five operator DMs undelivered on 2026-07-29.
+
+  # -- scitex-dev ----------------------------------------------------------
+
+  - boundary: "scitex_dev.store: open / read / write"
+    package: scitex-dev
+    borrows: errno
+    why: >-
+      Filesystem and socket faults reach this layer as syscall errors.
+      ENOENT, EACCES and ECONNREFUSED are the honest words and each names a
+      different fix.
+
+  - boundary: "host / peer name resolution"
+    package: scitex-dev
+    borrows: dns
+    why: >-
+      NXDOMAIN (the name does not exist) and SERVFAIL (the resolver failed)
+      are different problems. Any status that folds them has discarded the
+      answer.
+
+# EOF
