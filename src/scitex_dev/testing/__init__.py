@@ -2,6 +2,9 @@
 
 Public re-exports:
 - `audit_all_for_package` — assert `audit-all <pkg>` exits 0.
+- `classify_audit_outcome` — grade a run PASS / FAIL / UNKNOWN. Exported
+  because "the audit could not run" is a verdict other tooling needs to be
+  able to ASK FOR, not a private detail of one assertion's wording.
 
 Each ecosystem package drops a one-liner test that calls this helper
 so the package's local pytest run includes the same audit gates that
@@ -15,5 +18,19 @@ shape.
 from __future__ import annotations
 
 from ._audit_conformance import audit_all_for_package
+from ._audit_outcome import (
+    VERDICT_FAIL,
+    VERDICT_PASS,
+    VERDICT_UNKNOWN,
+    classify_audit_outcome,
+    could_not_run_evidence,
+)
 
-__all__ = ["audit_all_for_package"]
+__all__ = [
+    "VERDICT_FAIL",
+    "VERDICT_PASS",
+    "VERDICT_UNKNOWN",
+    "audit_all_for_package",
+    "classify_audit_outcome",
+    "could_not_run_evidence",
+]
