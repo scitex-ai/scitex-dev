@@ -34,7 +34,7 @@ The source of truth
 ``spec/`` is language-independent and normative: ``kinds.yaml``,
 ``scitex-codes.yaml``, ``boundaries.yaml``, ``schema/*.json``, and the
 specification itself in ``status-codes.md``. This Python is DERIVED from those
-files and ``tests/scitex_dev/status/test_spec_conformance.py`` fails when it
+files and ``tests/scitex_dev/status/test__spec.py`` fails when it
 drifts. See ADR-0007.
 
 Import cost
@@ -74,9 +74,9 @@ from ._kinds import (
     requires_probe,
     validate_code,
     validate_kind,
-    validate_message,
 )
 from ._ledger import LEDGER_TABLE, ledger_record, ledger_schema
+from ._message import forbidden_markers, names_a_probe, validate_message
 from ._spec import (
     SPEC_DIR,
     SPEC_VERSION,
@@ -106,6 +106,7 @@ __all__ = [
     "StatusError",
     "UnknownCodeError",
     "UnknownKindError",
+    "forbidden_markers",
     "is_exchange_id",
     "kinds",
     "ledger_record",
@@ -114,6 +115,7 @@ __all__ = [
     "load_kinds",
     "load_schema",
     "load_scitex_codes",
+    "names_a_probe",
     "new_exchange_id",
     "requires_probe",
     "spec_path",

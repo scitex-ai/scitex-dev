@@ -11,21 +11,20 @@ spec is the source of truth and this file is a reader of it. The one
 exception is ``errno``, whose valid names come from the PLATFORM's own
 ``errno`` table rather than a list in the YAML: a hand-typed list of a hundred
 errno names is a list with a typo in it, and the platform already knows.
+
+The ``message`` rules live next door in :mod:`._message`. They read the same
+spec file, but they answer a different question — "is this hint honest and
+actionable" rather than "is this code real within its kind" — and keeping them
+apart is what lets each have a test file that mirrors it.
 """
 
 from __future__ import annotations
 
 import errno as _errno
-import re
 from functools import lru_cache
 from typing import Any
 
-from ._errors import (
-    InferredCauseError,
-    MissingProbeError,
-    UnknownCodeError,
-    UnknownKindError,
-)
+from ._errors import UnknownCodeError, UnknownKindError
 from ._spec import load_kinds, load_scitex_codes
 
 __all__ = [
@@ -40,7 +39,6 @@ __all__ = [
     "requires_probe",
     "validate_code",
     "validate_kind",
-    "validate_message",
 ]
 
 KIND_HTTP = "http"
@@ -61,9 +59,6 @@ KIND_SCITEX = "scitex"
 #: they are not rejected. They are reserved from being *assigned* a meaning.
 RESERVED_PROCESS_CODES = (1, 2)
 
-#: A probe named in a message: a backtick-quoted command, a URL, or a path.
-_PROBE = re.compile(r"`[^`]+`|https?://\S+|(?<![\w.])/[\w./-]+")
-
 
 @lru_cache(maxsize=None)
 def _registry() -> dict[str, dict[str, Any]]:
@@ -75,13 +70,6 @@ def _registry() -> dict[str, dict[str, Any]]:
 def _scitex_codes() -> frozenset[str]:
     """The closed enumeration of ``kind="scitex"`` codes."""
     return frozenset(entry["code"] for entry in load_scitex_codes()["codes"])
-
-
-@lru_cache(maxsize=None)
-def _forbidden_markers() -> tuple[str, ...]:
-    """Phrases that assert an INFERENCE rather than report an observation."""
-    rules = load_kinds()["message"]["no_inferred_cause"]
-    return tuple(marker.lower() for marker in rules["forbidden_markers"])
 
 
 def kinds() -> tuple[str, ...]:
@@ -187,47 +175,6 @@ def validate_code(kind: str, code: Any) -> None:
 def requires_probe(kind: str, code: Any) -> bool:
     """Does this code's native meaning mean "received, not finished"?"""
     return code in validate_kind(kind).get("requires_probe", ())
-
-
-def validate_message(kind: str, code: Any, message: Any) -> None:
-    """Enforce the two message rules, or raise.
-
-    M1 (no inferred cause) and M2 (a non-final code must say how to ask).
-    Both are spec-sourced; see ``spec/kinds.yaml`` and ``status-codes.md``.
-    """
-    if not isinstance(message, str) or not message.strip():
-        raise ValueError(
-            "message must be a non-empty string. It is a HINT and it is "
-            "load-bearing: it declares what the sender is doing, and it "
-            "hands the receiver the means to verify and to ask. An empty "
-            "message leaves the receiver with a bare code and a guess."
-        )
-
-    lowered = message.lower()
-    for marker in _forbidden_markers():
-        if marker in lowered:
-            raise InferredCauseError(
-                f"message contains {marker!r}, which asserts a CAUSE rather "
-                f"than reporting a MEASUREMENT (rule M1). Stating a cause "
-                f"you OBSERVED is fine; concluding one you did not is not. "
-                f"Measured 2026-08-11: 'THEREFORE the fault is specific to "
-                f"POST /agents' was printed from control probes that cannot "
-                f"see that route, and a reader filed a P1 against the wrong "
-                f"component within two minutes. Use the shape from PR #956: "
-                f"OBSERVED / RULED OUT / NOT ESTABLISHED / NEXT, to find out "
-                f"rather than guess."
-            )
-
-    if requires_probe(kind, code) and not _PROBE.search(message):
-        raise MissingProbeError(
-            f"{kind}/{code} means 'received, still working', so message "
-            f"MUST name a way to ask about it (rule M2) — a backtick-quoted "
-            f"command, a URL, or a path. Without one the reader can only "
-            f"wait and then guess, which is the 2026-08-11 incident exactly: "
-            f"a client gave up at 30 s while the server worked the request "
-            f"for 5 min 12 s. e.g. 'accepted as <exchange-id>; poll "
-            f"`sac agents list <name>`'."
-        )
 
 
 # EOF

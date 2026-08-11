@@ -1,7 +1,7 @@
 # SciTeX StatusCode — the KIND registry.
 #
 # THIS FILE IS THE SOURCE OF TRUTH. `scitex_dev.status` (Python) is DERIVED
-# from it; `tests/scitex_dev/status/test_spec_conformance.py` fails when the
+# from it; `tests/scitex_dev/status/test__spec.py` fails when the
 # two drift. TypeScript, Rust and shell implementations read this file too.
 #
 # WHAT A KIND IS

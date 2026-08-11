@@ -11,7 +11,7 @@ sense that `scitex_dev.store` is the one implementation of ADR-0006: leaves
 consume the primitive, they do not re-implement it to a documented spec.
 
 When this document and an implementation disagree, this document is right.
-That is enforced, not asserted — `tests/scitex_dev/status/test_spec_conformance.py`
+That is enforced, not asserted — `tests/scitex_dev/status/test__spec.py`
 parses these files and fails when the Python drifts.
 
 MUST / MUST NOT / SHOULD / MAY are RFC 2119.

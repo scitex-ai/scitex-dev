@@ -32,8 +32,8 @@ from ._kinds import (
     KIND_PROCESS,
     validate_code,
     validate_kind,
-    validate_message,
 )
+from ._message import validate_message
 
 __all__ = ["StatusCode"]
 
