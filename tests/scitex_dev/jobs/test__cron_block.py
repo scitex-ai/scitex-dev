@@ -141,4 +141,111 @@ def test_remove_last_line_collapses_block():
     assert cb.BLOCK_BEGIN not in new
 
 
+# ----------------------------------------------------------------------
+# enable / disable — PARK a line, do not delete it.
+#
+# `uninstall` deletes; `disable` parks. The distinction is operational,
+# not cosmetic: a line an operator cannot see is a line they reinstall,
+# and a reinstalled job beside the original is a second supervisor.
+# ----------------------------------------------------------------------
+
+
+def test_disable_comments_the_named_line_out():
+    # Arrange
+    seeded = cb.upsert_block("", _jobs())
+    # Act
+    new, _ = cb.set_line_enabled(seeded, "a.one", False)
+    # Assert
+    assert cb.DISABLED_PREFIX + "*/5 * * * * run one" in new
+
+
+def test_disable_keeps_the_line_visible():
+    # Arrange — parking must not lose the schedule/command/marker, or
+    # `enable` cannot restore what was actually there.
+    seeded = cb.upsert_block("", _jobs())
+    # Act
+    new, _ = cb.set_line_enabled(seeded, "a.one", False)
+    # Assert
+    assert "a.one" in new
+
+
+def test_disable_leaves_the_other_line_alone():
+    # Arrange — POSITIVE CONTROL: a disable that parked everything would
+    # pass every assertion above.
+    seeded = cb.upsert_block("", _jobs())
+    # Act
+    new, _ = cb.set_line_enabled(seeded, "a.one", False)
+    # Assert
+    assert "\n0 * * * * run two" in new
+
+
+def test_disable_reports_how_many_lines_it_touched():
+    # Arrange
+    seeded = cb.upsert_block("", _jobs())
+    # Act
+    _, hits = cb.set_line_enabled(seeded, "a.one", False)
+    # Assert
+    assert hits == 1
+
+
+def test_disable_reports_zero_for_an_unknown_name():
+    # Arrange — the CLI turns 0 into an error naming the job; silently
+    # succeeding would tell the operator a job was parked when it was not.
+    seeded = cb.upsert_block("", _jobs())
+    # Act
+    _, hits = cb.set_line_enabled(seeded, "nope.nope", False)
+    # Assert
+    assert hits == 0
+
+
+def test_enable_restores_the_line_verbatim():
+    # Arrange — round-trip: the restored text must equal the original, not
+    # a re-derivation from a JobSpec that may have changed since.
+    seeded = cb.upsert_block("", _jobs())
+    parked, _ = cb.set_line_enabled(seeded, "a.one", False)
+    # Act
+    revived, _ = cb.set_line_enabled(parked, "a.one", True)
+    # Assert
+    assert revived == seeded
+
+
+def test_disable_is_idempotent():
+    # Arrange — re-parking an already-parked line must not stack prefixes.
+    seeded = cb.upsert_block("", _jobs())
+    once, _ = cb.set_line_enabled(seeded, "a.one", False)
+    # Act
+    twice, _ = cb.set_line_enabled(once, "a.one", False)
+    # Assert
+    assert twice == once
+
+
+def test_a_live_line_reports_enabled():
+    # Arrange
+    seeded = cb.upsert_block("", _jobs())
+    # Act
+    state = cb.is_line_enabled(seeded, "a.one")
+    # Assert
+    assert state is True
+
+
+def test_a_parked_line_reports_disabled():
+    # Arrange
+    seeded = cb.upsert_block("", _jobs())
+    parked, _ = cb.set_line_enabled(seeded, "a.one", False)
+    # Act
+    state = cb.is_line_enabled(parked, "a.one")
+    # Assert
+    assert state is False
+
+
+def test_an_absent_line_is_neither_enabled_nor_disabled():
+    # Arrange — three states kept apart. Collapsing "absent" into
+    # "disabled" would report a never-installed job as merely paused.
+    seeded = cb.upsert_block("", _jobs())
+    # Act
+    state = cb.is_line_enabled(seeded, "nope.nope")
+    # Assert
+    assert state is None
+
+
 # EOF
