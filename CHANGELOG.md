@@ -7,6 +7,105 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-08-11
+
+**Six reports that were literally true and read as their opposite.** 0.44.0
+and 0.45.0 fixed gates that said "fine" about runs in which they measured
+nothing. This release is the same theme at full extent: a summary counting
+a different population than the table above it, an `ERRO` on a finding that
+cannot fail the gate, a rule firing on 426 things it was never aimed at, a
+registry serving routes decommissioned four days earlier, and a version
+string that killed a CLI at import while its own docstring promised render
+time.
+
+Every one was found by a peer measuring something, and several by peers
+correcting me. scitex-storage, dotfiles and sac between them supplied the
+measurements for all six.
+
+### Fixed
+
+- **PS-221 exempts the `dev`/`docs` TOOLING class (#554).** Not a new
+  exception — a clause of the operator directive PS-221 implements and had
+  dropped, which PS-217 quotes verbatim in its own finding text. The
+  reductio is the rule's own prescribed remedy: closing them under `all`
+  puts pytest and sphinx into every `pip install pkg[all]`.
+
+  Measured fleet-wide before changing anything: of 113 packages with extras
+  plus an `[all]` group, 49 had findings — **426 of 449 came from
+  `dev`/`docs`, 23 from real feature extras.** A blocking `E` rule that was
+  95% noise, gating the umbrella release. `scitex-io` 26 -> 0,
+  `scitex-stats` 14 -> 1, `gPAC` 9 -> 6: scoped, not disabled.
+
+- **The drift summary states its own scope (#555).** `validate-versions`
+  printed `0/0 cells up-to-date` under a table with 45 of 68 rows marked
+  drifted. Both numbers were right for the questions they answered — the
+  summary counts REMOTE host cells, the `localhost` column is reference —
+  but printed together they read as an answer to the question the reader
+  asked. `summarize()` now carries `hosts_in_scope`, and the observe arm
+  refuses to print a bare `0/0`.
+
+  The exit code already knew (it requires `total > 0`), so every script
+  wrapping this was fine and only humans were misled — which is why it
+  survived.
+
+- **A MASKED finding no longer prints as `ERRO` (#556).** The sub-auditor's
+  output is echoed verbatim before masking is consulted, so a finding
+  silenced by a declared skip still arrived labelled ERROR while being
+  provably unable to fail the gate. The label now comes from the same
+  `report.masked` that drives the exit code, so the two cannot disagree.
+
+- **The host registry no longer serves RETIRED ssh routes (#557).** #551
+  corrected the packaged seed; this reaches the registries already frozen
+  on disk, which the seeder never rewrites. Measured in a live container: a
+  month-old `hosts.yaml` with three dead routes and four missing compute
+  hosts.
+
+  A retired-NAME deny-list may be packaged where a route table may not: a
+  retirement is monotonic, so the list can only ever be INCOMPLETE, never
+  WRONG. Successors are read from the retirement log, not inferred —
+  `nas -> scitex-nas-03` is exactly the pair a naming pattern gets wrong.
+
+- **A version string no longer kills a source-checkout CLI (#559).**
+  `render_help` raised `PackageNotFoundError` for a distribution with no
+  metadata — and did it from `SpecGroup.__init__`, while the
+  `@click.group` decorator was being evaluated. So the CLI did not degrade,
+  it failed to IMPORT: `python -m <pkg> <anything>` was dead for every
+  package adopting help_spec whenever run from a tree.
+
+  The no-fallback rule is KEPT — no fabricated version, pinned by its own
+  test. What changed is that "unresolvable" stopped being spelled "crash":
+  the version has three states, and the middle one now says so out loud.
+  The docstring had promised render time all along; the implementation
+  exceeded it.
+
+  Cost: it blocked the free-space alarm the 2026-08-09 compute-04 incident
+  needed (364 MB free on 393 GB, nothing reported it) for two days.
+
+### Added
+
+- **PS-225 — extra names restricted to `{all, dev, docs}` (#491).** An
+  operator ruling from 2026-08-02 that had been unmergeable for nine days,
+  red on 17 remedy strings telling users to install extras the same branch
+  deletes. Severity `W` during rollout per ADR-0005.
+
+  The remedy strings were not merely misworded: every retired extra's
+  backing package now lives in `[project.dependencies]`, so they offered to
+  add capabilities that are already unconditional. They now name a broken
+  install, which is what an absent core dependency actually means.
+
+### Performance
+
+- **The drift check's origin lookups run in parallel (#558).**
+  `git ls-remote` per package, serially over 68 packages — ~170 seconds,
+  paid even with zero hosts in scope. The `ThreadPoolExecutor` was already
+  in the same function for the remote fanout and the origin loop never used
+  it. ~15x faster.
+
+  This is why two agents independently reported the command as "emits
+  nothing" on 2026-08-11: neither had waited. Speed is the honest fix; a
+  progress bar on a needlessly serial loop only makes the wait easier to
+  sit through.
+
 ## [0.46.0] - 2026-08-11
 
 **Two things that told the truth about themselves and were wrong anyway.**
