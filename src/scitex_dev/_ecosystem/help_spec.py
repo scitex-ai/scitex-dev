@@ -22,7 +22,10 @@ Validation (fails at import, not at runtime):
   (``scitex plt``).
 * Leaf commands (:class:`SpecCommand`) declare at least one example.
 * ``version_of`` resolves through ``importlib.metadata`` at render
-  time; a missing distribution raises loudly (no silent fallback).
+  time. A distribution with no metadata — the normal case when running
+  from a source checkout — renders a STATED non-answer rather than a
+  fabricated number, and never blocks import. See
+  :func:`render_help`.
 
 Every spec-built command carries ``cmd._help_spec`` so the CLI auditor
 (slice 4, rule 4b) can verify spec-built help statically.
@@ -57,6 +60,7 @@ Usage::
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _dist_version
 from typing import Mapping, Sequence
 
@@ -166,18 +170,62 @@ class CliHelp:
                 )
 
 
+#: Rendered in place of a version when the distribution has no metadata.
+#:
+#: NOT a fallback version. The original rule — "a missing distribution
+#: raises loudly; pyproject.toml is the single source of truth, never a
+#: hardcoded fallback string" — is right and is kept: no plausible-looking
+#: number is ever invented here. What was wrong was the assumption that
+#: "unresolvable" and "must crash" are the same thing.
+#:
+#: The version has THREE states: resolved, unresolvable-because-not-
+#: installed, and error. Collapsing the middle one into a crash is the same
+#: class of mistake as collapsing it into a fake "0.0.0" — both replace a
+#: state the system genuinely has with a state it does not. This string is
+#: that third state, said out loud.
+_VERSION_UNRESOLVED = "version unresolved: no installed distribution"
+
+
+def _version_label(dist: str) -> str:
+    """``vX.Y.Z``, or a stated non-answer when the dist has no metadata."""
+    try:
+        return f"v{_dist_version(dist)}"
+    except PackageNotFoundError:
+        return _VERSION_UNRESOLVED
+
+
 def render_help(spec: CliHelp) -> str:
     """Render the help body: summary line + description paragraphs.
 
     With ``version_of`` set, the summary line is the doctrine-canonical
-    ``<dist> (vX.Y.Z) — <summary>`` — the version resolved via
-    ``importlib.metadata`` at render time. A missing distribution raises
-    ``importlib.metadata.PackageNotFoundError`` loudly: pyproject.toml
-    is the single source of truth, never a hardcoded fallback string.
+    ``<dist> (vX.Y.Z) — <summary>``, the version resolved via
+    ``importlib.metadata``.
+
+    A distribution with NO metadata renders
+    ``(version unresolved: no installed distribution)`` rather than
+    raising. Running from a source checkout — ``PYTHONPATH=…/src python -m
+    pkg`` on a host that has the repo but not the wheel — is a normal,
+    supported invocation, and it is exactly the case with no metadata to
+    find.
+
+    This used to raise, and the raise landed at IMPORT time rather than the
+    render time the docstring claimed: ``SpecGroup.__init__`` calls this
+    while the ``@click.group`` decorator is still being evaluated, so the
+    CLI did not degrade, it FAILED TO LOAD. ``python -m <pkg> <anything>``
+    was dead for every package that adopts this module and is ever invoked
+    from a tree. Reported by scitex-storage and sac 2026-08-11, found while
+    trying to schedule the free-space alarm that the 2026-08-09 compute-04
+    incident needed — blocked, for two days, by a version string in a help
+    header.
+
+    The consuming package's own guard could not help: scitex_storage
+    already catches ``PackageNotFoundError`` and falls back to
+    ``0.0.0+local``, but this raised first, in another package, fifteen
+    frames up.
     """
     if spec.version_of:
         first_line = (
-            f"{spec.version_of} (v{_dist_version(spec.version_of)}) — "
+            f"{spec.version_of} ({_version_label(spec.version_of)}) — "
             f"{spec.summary}"
         )
     else:
