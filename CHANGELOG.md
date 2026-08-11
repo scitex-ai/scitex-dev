@@ -7,6 +7,73 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-08-11
+
+**Two things that told the truth about themselves and were wrong anyway.**
+A rule whose remediation text prescribed a config stanza the rule never
+read, and a host registry that answered "how do I reach this machine" with
+names ssh had stopped accepting four days earlier. Both are the same shape
+as 0.44.0/0.45.0's theme — an answer that is confidently formatted and
+does not correspond to anything — moved from REPORTING onto ADVICE and
+ROUTE DATA.
+
+Both were reported by peers who did the measuring: scitex-storage on both
+counts.
+
+### Fixed
+
+- **PS-221 now honours the `audit.exemptions` stanza its own advice
+  prescribes (#531).** The rule's text sent readers to write
+
+      audit:
+        exemptions:
+          PS-221:
+            - path: pyproject.toml
+              line: <n>
+              reason: "..."
+
+  ...and PS-221 never consulted it. The mechanism was implemented,
+  documented, carried a mandatory reason and was already wired into four
+  other rules; this checker simply was not one of them. scitex-storage
+  wrote the documented config, watched it silence nothing, and had to
+  establish by experiment that the prescribed path was inert.
+
+  That is worse than no advice. Advice that does not remediate costs the
+  reader the work of following it PLUS the work of discovering it was
+  never going to help — and it looks, to the next reader of the config,
+  exactly like a handled exemption.
+
+  The exemption pins to the offending REQUIREMENT'S LINE, not the file.
+  Every PS-221 finding lives in `pyproject.toml`, so a `line: 0` entry
+  would silence all of them at once — rule granularity wearing a per-site
+  costume, which is the blanket shape `skip-rules` already offers and
+  precisely what a per-site mechanism exists to avoid. A site the parser
+  cannot pin returns the sentinel and stays VISIBLE: "cannot locate"
+  must not degrade into "matches".
+
+- **The shipped host registry served RETIRED ssh routes (#551).** The
+  packaged seed hard-coded `ssh_alias: nas` / `nas1` / `nas2`, all three
+  decommissioned on 2026-08-07 — they resolve to nothing by design,
+  printing their successor and exiting 255. So for four days
+  `scitex_dev.hosts`, the registry other packages resolve THROUGH instead
+  of inventing their own host config, handed out routes that could not
+  connect. A discovery SSoT with stale route data is worse than no
+  registry, because consumers trust it.
+
+  The successors are read from the retirement mechanism, not inferred:
+  the stub logs `old=X new=Y` on every hit, and the top entry is
+  `nas -> scitex-nas-03`, which is exactly the pair a naming pattern
+  gets wrong. Still live at the time of the fix — scitex-orochi's
+  five-minute liveness probe accounted for 1074 of the recorded hits.
+
+  The old names survive as `aliases`, not as routes. `ssh_alias` is the
+  ROUTE and had to change; `aliases` are LOOKUP KEYS, and a caller
+  passing `nas` is using the name the fleet used until four days ago.
+  Deleting them would have converted a stale-route bug into a resolution
+  failure for every such caller. `HostRecord.aliases` was built for this
+  case in #514 — the capability had shipped and the seed data was never
+  migrated onto it.
+
 ## [0.45.0] - 2026-08-10
 
 **Three checks learn to say what they did not check.** 0.44.0 fixed gates
