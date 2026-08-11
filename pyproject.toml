@@ -24,12 +24,41 @@ keywords = ["scitex", "developer-tools", "documentation", "llm-friendly", "mcp"]
 # avoids dragging `claude-agent-sdk` (newb's heavy transitive) into every
 # scitex-* leaf that pins scitex-dev. Install via `pip install
 # scitex-dev[skills]` when you need self-explain.
+# PS-225 / ADR-0005: extra NAMES are restricted to {all, dev, docs}, so every
+# runtime capability lives here in core. There are exactly two installs —
+# `pip install scitex-dev` (this list) and `pip install scitex-dev[all]`
+# (this list plus the toolchain). Nothing in between, because a per-feature
+# menu is what let container definitions pin `scitex-cards[mcp]` and lose
+# psycopg fleet-wide on 2026-08-02.
+#
+# What moved here, and what it powers:
+#   fastmcp        — the MCP server surface (was [mcp])
+#   newb           — `scitex-dev skills self-explain` (was [skills])
+#   scitex-ssh     — the scholar-library-sync cron job's `scitex-ssh sync`
+#   scitex-scholar — that job's `library dedupe` / `library db build`
+#                    (both were [sync]; CLI-invoked at cron runtime, so a
+#                    missing script failed in a job log nobody was reading)
+#   Pillow         — `_icons.generate_png` / `icons generate` PNG output
+#                    (was [icons]; `generate_svg` is pure stdlib)
+#   tomlkit        — `ecosystem audit-umbrella --write` (was [umbrella-regen])
+#   textual        — the TUI dashboard (was [tui])
 dependencies = [
     "scitex-config>=0.3.0",
     "scitex-logging>=0.1.0",
     "click>=8.0.0",
     "pyyaml>=6.0",
     'tomli>=2.0; python_version < "3.11"',
+    # Promoted from the retired per-feature extras (see the block above): each
+    # is imported by a code path that always runs when its verb is invoked, so
+    # gating it behind an extra only moved the failure from install time to
+    # call time.
+    "fastmcp>=2.0.0",
+    "newb>=0.3.0",
+    "scitex-ssh>=1.1.0",
+    "scitex-scholar>=1.4.3",
+    "Pillow>=9.2.0",
+    "tomlkit>=0.12.0",
+    "textual>=0.50.0",
     # HARD dependency, not optional: _cli/audit/_project/_check_extras_all_closure.py
     # imports it at MODULE level, and _rules/__init__.py imports that module
     # unconditionally — so it is on the eager path of `import scitex_dev._cli`.
@@ -59,28 +88,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# `cli` retained as a no-op alias for backward compat with users who wrote
-# `pip install scitex-dev[cli]` before the click→core move (2026-06-10).
-# Click now lives in `[project.dependencies]`; this extra adds nothing.
-cli = []
-mcp = ["fastmcp>=2.0.0"]
-# `skills` powers `scitex-dev skills self-explain` (and `render_markdown`).
-# Lazy-imported inside _cli/skills/_self_explain.py with an install hint
-# referencing this extra name (PS-213 LAZY-EXTRA-PATTERN-OK).
-skills = ["newb>=0.3.0"]
-# `sync` powers the scholar-library-sync managed cron job, whose shell line
-# calls the `scitex-ssh sync` console script (sync_dir primitive, first
-# shipped in scitex-ssh 1.1.0) and `scitex-scholar library dedupe` /
-# `library db build` (dedupe first shipped in scitex-scholar 1.4.3).
-# CLI-invoked at cron runtime, not imported — a missing script fails
-# loudly in the job log with this extra as the hint.
-sync = ["scitex-ssh>=1.1.0", "scitex-scholar>=1.4.3"]
-# `icons` powers `scitex_dev._icons.generate_png` / `save_icon(...,
-# formats=(..., "png"))` and the `scitex-dev icons generate` CLI's PNG
-# output. Lazy-imported inside `_icons/__init__.py` (PS-213
-# LAZY-EXTRA-PATTERN-OK) -- `generate_svg` alone (pure stdlib) never
-# requires this extra.
-icons = ["Pillow>=9.2.0"]
+# `cli` and `cli-audit` were empty no-op aliases kept for back-compat. They
+# are DELETED rather than kept: `pip install scitex-dev[cli-audit]` installed
+# nothing while reading like it enabled a capability, and that pin appeared 33
+# times in this repo's own documentation — the reader believed they had
+# complied. PS-214 has been reporting both all along, into a `--new-only`
+# gate where a pre-existing finding is invisible by construction.
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
@@ -116,14 +129,6 @@ dev = [
     # works. If the meta-audit test must hard-fail (not skip) when the CLI
     # is absent, gate it explicitly rather than via this circular pin.
 ]
-# `cli-audit` was originally (click, pyyaml) — both are core now. Kept as
-# an empty no-op alias for backward compat.
-cli-audit = []
-# Optional extra for `scitex-dev ecosystem audit-umbrella --write` —
-# tomlkit preserves comments + whitespace when regenerating the
-# scitex-python umbrella's pyproject.toml [all] aggregator.
-umbrella-regen = ["tomlkit>=0.12.0"]
-tui = ["textual>=0.50.0"]
 docs = [
     "sphinx>=7.0",
     "sphinx-rtd-theme>=2.0",
@@ -132,13 +137,8 @@ docs = [
     "sphinx-autodoc-typehints>=1.25",
 ]
 all = [
-    "scitex-dev[mcp]",
-    "scitex-dev[skills]",
-    "scitex-dev[sync]",
     "scitex-dev[dev]",
     "scitex-dev[docs]",
-    "scitex-dev[umbrella-regen]",
-    "scitex-dev[tui]",
 ]
 
 [project.scripts]

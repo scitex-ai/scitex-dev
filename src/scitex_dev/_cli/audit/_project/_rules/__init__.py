@@ -322,6 +322,16 @@ from .._check_extras_all_closure import (  # noqa: E402
 for _c, _sec, _msg, _sev, _slug in _ALL_CLOSURE_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
+# PS-225 — extra NAMES restricted to {all, dev, docs} (co-located rule,
+# merged on the same terms as ALL_CLOSURE_RULES). Severity W lives in the
+# tuple for the rollout; see the module docstring and ADR-0005.
+from .._check_extras_allowlist import (  # noqa: E402
+    EXTRAS_ALLOWLIST_RULES as _EXTRAS_ALLOWLIST_RULES,
+)
+
+for _c, _sec, _msg, _sev, _slug in _EXTRAS_ALLOWLIST_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
 # PS-222 — `.scitex/<pkg-short>/` config-layout convention (co-located rule,
 # merged on the same terms as ALL_CLOSURE_RULES / PRINT_FORBIDDEN_RULES).
 # Severity W lives in the tuple, NOT in `_SEVERITY_OVERRIDES` — see the note
