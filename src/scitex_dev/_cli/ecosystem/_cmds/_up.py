@@ -30,7 +30,7 @@ Dropped from the previous design (per PR-1 scope)
 -------------------------------------------------
 
 * No per-leaf ``.service`` / ``.timer`` writes.
-* No ``scitex-dev-ecosystem-reconcile.service`` master oneshot — the
+* No ``scitex-dev-ecosystem-reconcile.service`` controller oneshot — the
   supervisor IS the runtime. JobSpec changes propagate via
   ``systemctl --user reload scitex-dev-ecosystem.service`` →
   ``ExecReload=/bin/kill -HUP $MAINPID`` → supervisor SIGHUP handler.
