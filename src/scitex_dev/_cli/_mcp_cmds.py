@@ -68,8 +68,12 @@ def register_mcp_commands(main: click.Group) -> click.Group:
             from .._mcp._server import mcp as mcp_server
         except ImportError as e:
             raise click.ClickException(
-                f"Failed to import MCP server. "
-                f"Install fastmcp: pip install scitex-dev[mcp]\n{e}"
+                f"Failed to import the MCP server. `fastmcp` is a BASE "
+                f"dependency of scitex-dev, so a correct install always has "
+                f"it — this means the environment is broken or partial, not "
+                f"that a feature is missing. Reinstall into this "
+                f"interpreter: `python -m pip install --force-reinstall "
+                f"scitex-dev`.\n{e}"
             ) from e
 
         click.echo("Starting scitex-dev MCP server...")
@@ -92,7 +96,14 @@ def register_mcp_commands(main: click.Group) -> click.Group:
             click.echo(f"  [OK] fastmcp {fastmcp.__version__}")
         except ImportError:
             click.echo("  [!!] fastmcp not installed")
-            click.echo("    Install with: pip install scitex-dev[mcp]")
+            click.echo(
+                "    fastmcp is a BASE dependency — its absence means a "
+                "broken or partial install, not a missing feature."
+            )
+            click.echo(
+                "    Reinstall: python -m pip install --force-reinstall "
+                "scitex-dev"
+            )
             return
 
         try:
@@ -179,7 +190,7 @@ def register_mcp_commands(main: click.Group) -> click.Group:
             click.echo(
                 json.dumps(
                     {
-                        "install": "pip install scitex-dev[mcp]",
+                        "install": "pip install scitex-dev",
                         "mcp_servers": {
                             "scitex-dev": {
                                 "command": "scitex-dev",
@@ -195,9 +206,9 @@ def register_mcp_commands(main: click.Group) -> click.Group:
                 )
             )
             return
-        click.echo("Install scitex-dev with MCP support:")
+        click.echo("Install scitex-dev (MCP support is in the base install):")
         click.echo()
-        click.echo("  pip install scitex-dev[mcp]")
+        click.echo("  pip install scitex-dev")
         click.echo()
         click.echo("Add to your MCP client configuration:")
         click.echo()
@@ -235,7 +246,10 @@ def register_mcp_commands(main: click.Group) -> click.Group:
             from .._mcp._server import mcp as mcp_server
         except ImportError as e:
             raise click.ClickException(
-                f"fastmcp not installed. Install with: pip install scitex-dev[mcp]\n{e}"
+                f"fastmcp not installed. It is a BASE dependency of "
+                f"scitex-dev, so this is a broken or partial install rather "
+                f"than a missing feature. Reinstall into this interpreter: "
+                f"`python -m pip install --force-reinstall scitex-dev`.\n{e}"
             ) from e
 
         from .._ecosystem._mcp import get_tools_sync

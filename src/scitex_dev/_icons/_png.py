@@ -38,8 +38,10 @@ def _require_pillow():
         from PIL import Image, ImageDraw, ImageFont
     except ImportError as exc:  # pragma: no cover - exercised via extras test
         raise ImportError(
-            "generate_png() requires Pillow. Install with "
-            "`pip install scitex-dev[icons]`."
+            "generate_png() requires Pillow, which is a BASE dependency of "
+            "scitex-dev — its absence means a broken or partial install, "
+            "not a missing feature. Reinstall into this interpreter: "
+            "`python -m pip install --force-reinstall scitex-dev`."
         ) from exc
     return Image, ImageDraw, ImageFont
 

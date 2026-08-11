@@ -86,8 +86,11 @@ def register(main_group):
             run_server(transport=transport)
         except ImportError:
             click.echo(
-                "fastmcp is required for MCP server. "
-                "Install with: pip install 'scitex-dev[mcp]'",
+                "fastmcp is required for the MCP server and is a BASE "
+                "dependency of scitex-dev, so its absence means a broken "
+                "or partial install rather than a missing feature. "
+                "Reinstall into this interpreter: "
+                "python -m pip install --force-reinstall scitex-dev",
                 err=True,
             )
             sys.exit(1)
@@ -233,7 +236,11 @@ def register(main_group):
         if all_ok:
             click.echo("All checks passed!")
         else:
-            click.echo("Some checks failed. Run 'pip install scitex-dev[mcp]' to fix.")
+            click.echo(
+                "Some checks failed. The MCP dependencies ship in the base "
+                "install, so reinstall rather than adding an extra: "
+                "python -m pip install --force-reinstall scitex-dev"
+            )
         sys.exit(0 if all_ok else 1)
 
     @mcp_group.command(
