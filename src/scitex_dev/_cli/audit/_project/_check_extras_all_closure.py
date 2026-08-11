@@ -113,12 +113,51 @@ def _canon(spec: str) -> str | None:
         return None
 
 
+#: TOOLING extras, exempt from `[all]`-closure as a CLASS.
+#:
+#: This is not a new exception — it is a clause of the operator directive
+#: PS-221 implements, which this rule dropped. PS-217 quotes the directive
+#: in full in its own finding text:
+#:
+#:     "extras should be ALL-OR-NOTHING (one `[all]` extra, no fine-grained
+#:      per-feature menu; `dev`/`docs` extras are exempt from the
+#:      all-or-nothing shape but still must not be empty)"
+#:
+#: So one rule stated the carve-out while the rule ENFORCING the shape
+#: ignored it, and nothing cross-checked the two.
+#:
+#: The reductio is the remedy PS-221 itself prescribes. Closing `dev`/`docs`
+#: under `all` means `all = ["mypkg[dev,docs]"]`, which puts pytest,
+#: pytest-cov and sphinx into every `pip install mypkg[all]`. A user typing
+#: `[all]` is asking for all FEATURES, not for the maintainer's toolchain.
+#: A rule whose own prescribed fix produces an outcome nobody wants is
+#: mis-scoped, not merely inconvenient.
+#:
+#: MEASURED fleet-wide 2026-08-11, before changing anything: of 113 packages
+#: carrying extras plus an `[all]` group, 49 had PS-221 findings — 426 of
+#: those 449 findings came from `dev`/`docs` and only 23 from real feature
+#: extras. The rule was 95% noise, at severity `E`, gating the umbrella
+#: release. Reported by scitex-storage, whose own package showed 24 of 25.
+#:
+#: `dev`/`docs` still must not be EMPTY — that is PS-217's job and it is
+#: unaffected here. This exempts them from CLOSURE only.
+_TOOLING_EXTRAS = frozenset({"dev", "docs"})
+
+
 def _public_groups(od: dict) -> dict[str, list]:
-    """Public (non-underscore, non-`all`) extra groups with list values."""
+    """Public FEATURE extra groups with list values.
+
+    Excludes `_`-prefixed names, `all` itself, and the `dev`/`docs` tooling
+    class (see :data:`_TOOLING_EXTRAS` for why the last of those is a
+    directive clause rather than a new exception).
+    """
     return {
         name: grp
         for name, grp in od.items()
-        if isinstance(grp, list) and not name.startswith("_") and name != "all"
+        if isinstance(grp, list)
+        and not name.startswith("_")
+        and name != "all"
+        and name not in _TOOLING_EXTRAS
     }
 
 
