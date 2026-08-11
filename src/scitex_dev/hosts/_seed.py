@@ -27,7 +27,7 @@ from __future__ import annotations
 
 # Real host data from the operator's environment — names match the
 # established convention already referenced across scitex-dev's own
-# skills/docs (ywata-note-win, spartan, nas/nas1/nas2, mba).
+# skills/docs (ywata-note-win, spartan, scitex-nas-01/02/03, mba).
 _DEFAULT_HOSTS_YAML = """\
 # SciTeX host registry — the shared port other scitex-* packages (sac,
 # scitex-hub, scitex-storage, ...) resolve through instead of inventing
@@ -95,17 +95,45 @@ hosts:
     runner_labels:
       - [self-hosted, Linux, X64, spartan-cpu]
       - [self-hosted, Linux, X64, spartan-cpu, scitex-ci]
-  nas:
+  # RENAMED 2026-08-07. The old aliases `nas` / `nas1` / `nas2` are RETIRED:
+  # they resolve to nothing on purpose, printing the successor name and
+  # exiting 255. Serving them from here made this registry hand out routes
+  # that were decommissioned four days earlier — an SSoT for discovery whose
+  # route data is stale is worse than no registry, because consumers trust it.
+  #
+  # Reported by scitex-storage 2026-08-11 with the consumption measured, from
+  # ~/.ssh/retired-alias-hits.log:
+  #     1074  old=nas   new=scitex-nas-03   (scitex-orochi host-liveness-probe,
+  #                                          5-minute timer, still firing)
+  #       83  old=nas2  new=scitex-nas-02   (sac push-hub-cred)
+  #        4  old=nas1  new=scitex-nas-01
+  #
+  # The successors are NOT inferred. The retirement stub records `old=X new=Y`
+  # on every hit, so the mapping below is read from the mechanism that owns
+  # it rather than guessed from the naming pattern — which matters because
+  # `nas` -> `scitex-nas-03` is exactly the pair a pattern would get wrong.
+  #
+  # The old names stay as `aliases:` DELIBERATELY, and the split is the whole
+  # point: `ssh_alias` is the ROUTE (must be a name ssh can still reach —
+  # that is the bug being fixed), `aliases` are LOOKUP KEYS (names a caller
+  # may still pass to `resolve()`). A caller asking for `nas` is not wrong,
+  # it is using the name the fleet used until four days ago; it should get
+  # the successor record, not a KeyError. Dropping them would convert a
+  # stale-route bug into a resolution failure for every such caller.
+  scitex-nas-01:
     kind: storage
-    ssh_alias: nas
+    ssh_alias: scitex-nas-01
+    aliases: [nas1, nas-01]
     scitex_root: "~/.scitex"
-  nas1:
+  scitex-nas-02:
     kind: storage
-    ssh_alias: nas1
+    ssh_alias: scitex-nas-02
+    aliases: [nas2, nas-02]
     scitex_root: "~/.scitex"
-  nas2:
+  scitex-nas-03:
     kind: storage
-    ssh_alias: nas2
+    ssh_alias: scitex-nas-03
+    aliases: [nas, nas3, nas-03]
     scitex_root: "~/.scitex"
   mba:
     kind: workstation

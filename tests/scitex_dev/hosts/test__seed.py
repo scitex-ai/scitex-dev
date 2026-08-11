@@ -35,7 +35,45 @@ _SPARTAN_DESTINATIONS = [
     ),
 ]
 
-_REGISTERED_HOSTS = ["mba", "nas", "nas1", "nas2", "spartan", "ywata-note-win"]
+_REGISTERED_HOSTS = [
+    "mba",
+    "scitex-nas-01",
+    "scitex-nas-02",
+    "scitex-nas-03",
+    "spartan",
+    "ywata-note-win",
+]
+
+#: The ssh aliases RETIRED on 2026-08-07. Each resolves to nothing on
+#: purpose: the stub prints its successor and exits 255. Recorded in
+#: ~/.ssh/retired-alias-hits.log, which is also where the successor names
+#: below come from — they are read from the retirement mechanism, not
+#: inferred from the naming pattern (`nas` -> `scitex-nas-03` is exactly
+#: the pair a pattern would get wrong).
+_RETIRED_SSH_ALIASES = {"nas", "nas1", "nas2", "nas3", "nas-01", "nas-02", "nas-03"}
+
+
+def _seed_hosts() -> dict:
+    """The seed's parsed `hosts:` mapping."""
+    return (yaml.safe_load(_DEFAULT_HOSTS_YAML) or {})["hosts"]
+
+
+def _seed_ssh_routes() -> set:
+    """Every `ssh_alias` the seed hands out as a ROUTE (nulls dropped)."""
+    return {
+        (record or {}).get("ssh_alias")
+        for record in _seed_hosts().values()
+        if (record or {}).get("ssh_alias")
+    }
+
+
+def _seed_lookup_names() -> set:
+    """Every name `resolve()` accepts — host keys PLUS their aliases."""
+    names = set()
+    for name, record in _seed_hosts().items():
+        names.add(name)
+        names.update((record or {}).get("aliases") or [])
+    return names
 
 
 def test_seed_yaml_still_parses_as_a_mapping():
@@ -54,6 +92,64 @@ def test_seed_yaml_still_declares_every_registered_host():
     parsed = yaml.safe_load(seed)
     # Assert
     assert sorted(parsed["hosts"]) == _REGISTERED_HOSTS
+
+
+def test_seed_hands_out_no_retired_ssh_route():
+    # Arrange — reported by scitex-storage 2026-08-11: the seed served
+    # `nas`/`nas1`/`nas2` for four days after they were retired, so this
+    # registry was answering "how do I reach that host" with a name ssh
+    # refuses. A discovery SSoT with a dead route is worse than no
+    # registry, because consumers trust it.
+    retired = _RETIRED_SSH_ALIASES
+    # Act
+    routes = _seed_ssh_routes()
+    # Assert
+    assert routes & retired == set()
+
+
+def test_retired_route_would_be_caught_by_that_check():
+    # Arrange — positive control. The assertion above passes both when the
+    # seed is clean and when `_RETIRED_SSH_ALIASES` is empty or the route
+    # extraction silently returns nothing, so on its own it cannot
+    # distinguish "clean" from "did not look".
+    routes = _seed_ssh_routes() | {"nas"}
+    # Act
+    caught = routes & _RETIRED_SSH_ALIASES
+    # Assert
+    assert caught == {"nas"}
+
+
+def test_retired_names_still_resolve_as_lookup_aliases():
+    # Arrange — the fix corrects the ROUTE, it does not delete the NAME. A
+    # caller passing `nas` is using the name the fleet used until four days
+    # ago and must still land on the successor record; turning a stale-route
+    # bug into a KeyError would just move the breakage.
+    retired = _RETIRED_SSH_ALIASES
+    # Act
+    lookup_names = _seed_lookup_names()
+    # Assert
+    assert retired <= lookup_names
+
+
+def test_each_retired_alias_points_at_its_recorded_successor():
+    # Arrange — the successors as the retirement stub itself logged them.
+    recorded = {
+        "nas": "scitex-nas-03",
+        "nas3": "scitex-nas-03",
+        "nas-03": "scitex-nas-03",
+        "nas1": "scitex-nas-01",
+        "nas-01": "scitex-nas-01",
+        "nas2": "scitex-nas-02",
+        "nas-02": "scitex-nas-02",
+    }
+    # Act
+    found = {
+        alias: name
+        for name, record in _seed_hosts().items()
+        for alias in (record or {}).get("aliases") or []
+    }
+    # Assert
+    assert found == recorded
 
 
 def test_packaged_floor_is_exactly_spartans_two_label_sets():
