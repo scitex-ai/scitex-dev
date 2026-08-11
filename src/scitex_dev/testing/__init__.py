@@ -1,10 +1,13 @@
 """Pytest helpers for downstream SciTeX packages.
 
 Public re-exports:
+
 - `audit_all_for_package` — assert `audit-all <pkg>` exits 0.
-- `classify_audit_outcome` — grade a run PASS / FAIL / UNKNOWN. Exported
-  because "the audit could not run" is a verdict other tooling needs to be
-  able to ASK FOR, not a private detail of one assertion's wording.
+- `classify_audit_outcome` — grade a run PASS / FAIL / UNKNOWN.
+
+`classify_audit_outcome` is public because "the audit could not run" is a
+verdict other tooling needs to be able to ASK FOR, not a private detail of
+one assertion's wording.
 
 Each ecosystem package drops a one-liner test that calls this helper
 so the package's local pytest run includes the same audit gates that
