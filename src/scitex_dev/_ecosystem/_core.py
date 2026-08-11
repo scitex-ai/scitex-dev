@@ -36,7 +36,44 @@ def get_local_path(package: str) -> Optional[Path]:
 
 
 def get_all_packages() -> List[str]:
-    """Get list of all ecosystem package names."""
+    """Registered ecosystem package names — a CURATED SCOPE, not a census.
+
+    NOT A COMPLETE ENUMERATION OF THE FLEET. This returns exactly the
+    packages someone added to ``ECOSYSTEM``. Distributions can exist,
+    ship, and FEDERATE INTO SCITEX-DEV'S OWN ENTRY-POINT GROUPS while
+    absent from it — measured 2026-07-29, four of them: scitex-storage,
+    scitex-cards, scitex-linter, scitex-gen.
+
+    Do not use this as a DENOMINATOR for "the fleet". It answers "which
+    packages are in scope for ecosystem-wide operations", which is a
+    different question and a smaller set.
+
+    The cost of the other reading is on record. scitex-storage is not a
+    member, declares a `system_deps` entry point, and entry-point
+    discovery reads the INSTALLED ENVIRONMENT rather than this dict — so
+    its `fclones` declaration reached `apt-get install` and detonated a
+    container bake that nothing here could have predicted. Anyone
+    auditing "who declares system deps" from this function would have
+    answered 4 when the answer was 5.
+
+    Two enumeration sources exist and they have OPPOSITE blind spots:
+
+        entry points  ->  only what is INSTALLED in the calling env
+        ECOSYSTEM     ->  only what was DECLARED a member
+
+    Neither is complete, and reaching for the more official-looking one
+    is what produced the miss. For a real census use `gh repo list
+    scitex-ai`, or enumerate entry points from the environment you
+    actually care about.
+
+    Nothing records WHY a given package is in or out — there are no
+    written curation criteria — so absence from this dict does not
+    distinguish "deliberately out of scope" from "nobody added it yet".
+    Whether membership should GATE federation is open
+    (ecosystem-registry-is-not-a-complete-fleet-enumeration-20260730);
+    it would break the four distributions above, including sac, so it is
+    not a change to make casually.
+    """
     return list(ECOSYSTEM.keys())
 
 
