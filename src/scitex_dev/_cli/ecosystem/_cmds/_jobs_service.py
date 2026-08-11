@@ -140,28 +140,49 @@ def _add_lifecycle(group) -> None:
         ("restart", "Restart the service unit now."),
     ):
 
-        def _make(verb=verb):
+        def _make(verb=verb, blurb=blurb):
             @group.command(
                 verb,
                 cls=SpecCommand,
                 help_spec=CliHelp(
                     summary=f"{blurb} (systemctl --user {verb}).",
                     description=(
-                        "Refuses with exit 3 and a named reason on a host "
-                        "with no `systemd --user` manager, so 'impossible "
+                        "MUTATING: needs --yes/-y. `restart` bounces a live "
+                        "supervised daemon, so it must not happen because a "
+                        "name was typed one word off. --dry-run prints the "
+                        "systemctl command and works on ANY host. "
+                        "Refuses with exit 3 and a named reason where no "
+                        "`systemd --user` manager exists, so 'impossible "
                         "here' is distinguishable from 'tried and failed'.",
                     ),
                     examples=(
                         Example(
-                            f"{{prog}} ecosystem dev service {verb} sac.listen",
+                            f"{{prog}} ecosystem dev service {verb} sac.listen --dry-run",
+                            "Show the systemctl command; change nothing.",
+                        ),
+                        Example(
+                            f"{{prog}} ecosystem dev service {verb} sac.listen --yes",
                             f"{verb.capitalize()} one declared daemon.",
                         ),
                     ),
                 ),
             )
             @click.argument("name")
-            def _cmd(name, verb=verb):
-                U.do_systemctl(_KIND, verb, name)
+            @click.option(
+                "--dry-run",
+                is_flag=True,
+                default=False,
+                help="Print the systemctl command; do not run it.",
+            )
+            @click.option(
+                "-y",
+                "--yes",
+                is_flag=True,
+                default=False,
+                help="Confirm. Required when not --dry-run.",
+            )
+            def _cmd(name, dry_run, yes, verb=verb):
+                U.do_systemctl(_KIND, verb, name, dry_run=dry_run, yes=yes)
 
             return _cmd
 

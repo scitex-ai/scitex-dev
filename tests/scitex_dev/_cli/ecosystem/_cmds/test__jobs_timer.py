@@ -164,6 +164,32 @@ def test_enable_refuses_with_the_unsupported_exit_code(
     assert result.exit_code == S.EXIT_UNSUPPORTED_HOST
 
 
+def test_enable_dry_run_prints_the_command_with_the_now_flag(
+    runner, installed_job_provider, no_systemctl_on_path
+):
+    # Arrange — CLI doctrine §2 pairs every mutating verb with --dry-run.
+    # `--now` is what makes enable also START the timer, so a preview that
+    # omitted it would understate what the command does.
+    # Act
+    result = runner.invoke(main, _ARGV + ["enable", "testpkg.sysjob", "--dry-run"])
+    # Assert
+    assert result.stdout.strip() == (
+        "systemctl --user enable --now testpkg.sysjob.timer"
+    )
+
+
+def test_disable_dry_run_does_not_touch_the_fleets_sole_refresher(
+    runner, installed_job_provider, no_systemctl_on_path
+):
+    # Arrange — `disable sac.accounts-refresh` stops the fleet's SOLE OAuth
+    # refresher and every account expires within one access-token lifetime.
+    # A preview must therefore be genuinely inert AND exit 0.
+    # Act
+    result = runner.invoke(main, _ARGV + ["disable", "testpkg.sysjob", "--dry-run"])
+    # Assert
+    assert result.exit_code == 0
+
+
 def test_the_refusal_points_at_cron_as_the_universal_mechanism(
     runner, installed_job_provider, no_systemctl_on_path
 ):

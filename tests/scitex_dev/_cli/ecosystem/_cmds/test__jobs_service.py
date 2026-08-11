@@ -177,6 +177,28 @@ def test_the_refusal_keeps_stdout_empty(
     assert result.stdout == ""
 
 
+def test_start_dry_run_prints_the_command_on_a_host_without_systemd(
+    runner, installed_job_provider, no_systemctl_on_path
+):
+    # Arrange — CLI doctrine §2 pairs every mutating verb with --dry-run.
+    # The preview must survive the host check, or an operator on a NAS
+    # cannot even see what the command would be.
+    # Act
+    result = runner.invoke(main, _ARGV + ["start", "testpkg.svc", "--dry-run"])
+    # Assert
+    assert result.stdout.strip() == ("systemctl --user start testpkg.svc.service")
+
+
+def test_start_dry_run_does_not_refuse(
+    runner, installed_job_provider, no_systemctl_on_path
+):
+    # Arrange — a preview that exits non-zero is not a preview.
+    # Act
+    result = runner.invoke(main, _ARGV + ["start", "testpkg.svc", "--dry-run"])
+    # Assert
+    assert result.exit_code == 0
+
+
 def test_dry_run_install_still_works_without_systemd(
     runner, installed_job_provider, no_systemctl_on_path
 ):

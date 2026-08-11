@@ -297,22 +297,53 @@ def _systemctl_show(kind: str, job) -> str | None:
 
 
 def do_systemctl(
-    kind: str, verb: str, name: str, *, extra: tuple[str, ...] = ()
+    kind: str,
+    verb: str,
+    name: str,
+    *,
+    dry_run: bool = False,
+    yes: bool = False,
+    extra: tuple[str, ...] = (),
 ) -> None:
     """Run one ``systemctl --user <verb> <unit>``, refusing where impossible.
 
-    The refusal comes FIRST, so a host with no user manager exits
-    ``EXIT_UNSUPPORTED_HOST`` with a named reason rather than surfacing a
-    raw ``command not found`` that reads like a transient error.
+    ``dry_run`` / ``yes`` are the CLI-doctrine §2 pair every MUTATING verb
+    carries, and they earn their place here rather than being ceremony:
+    ``restart sac.listen`` bounces a live supervised daemon, and ``disable
+    sac.accounts-refresh`` stops the fleet's sole OAuth refresher. Neither
+    should happen because a name was typed one word off.
+
+    Order of the three guards is deliberate:
+
+    1. ``dry_run`` FIRST — a preview must work on a host that cannot run
+       the verb at all, or an operator on a NAS cannot even see what the
+       command would be.
+    2. host capability — exits :data:`EXIT_UNSUPPORTED_HOST` with a named
+       reason, so "impossible here" never reads as a transient failure.
+    3. ``yes`` — the confirmation, refused with exit 2 like every other
+       mutating verb in this repo.
 
     ``extra`` carries flags that belong to the verb rather than the unit
     (``--now`` for ``enable``/``disable``), keeping the argv assembly in
     one place instead of two near-identical copies per kind group.
     """
     job = jobs_for(kind, name)[0]
-    require_supervision(kind, verb, probe_supervision())
     unit = enable_target(kind, job)
     argv = ["systemctl", "--user", verb, *extra, unit]
+
+    if dry_run:
+        click.echo(" ".join(argv))
+        return
+
+    require_supervision(kind, verb, probe_supervision())
+
+    if not yes:
+        click.echo(
+            f"Refusing to {verb} {unit} without --yes/-y (preview it with --dry-run).",
+            err=True,
+        )
+        raise SystemExit(2)
+
     click.echo(f"$ {' '.join(argv)}", err=True)
     try:
         proc = subprocess.run(argv, timeout=120, check=False)

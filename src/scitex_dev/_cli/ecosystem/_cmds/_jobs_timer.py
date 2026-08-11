@@ -135,20 +135,41 @@ def _add_enablement(group) -> None:
         help_spec=CliHelp(
             summary="Enable and start the `<name>.timer` unit.",
             description=(
-                "`systemctl --user enable --now <name>.timer`. Refuses with "
-                "exit 3 and a named reason where no user manager exists.",
+                "`systemctl --user enable --now <name>.timer`. MUTATING: "
+                "needs --yes/-y; --dry-run prints the command and works on "
+                "ANY host. Refuses with exit 3 and a named reason where no "
+                "user manager exists.",
             ),
             examples=(
                 Example(
-                    "{prog} ecosystem dev timer enable sac.accounts-refresh",
+                    "{prog} ecosystem dev timer enable sac.accounts-refresh --dry-run",
+                    "Show the systemctl command; change nothing.",
+                ),
+                Example(
+                    "{prog} ecosystem dev timer enable sac.accounts-refresh --yes",
                     "Start firing on the declared cadence.",
                 ),
             ),
         ),
     )
     @click.argument("name")
-    def _enable(name):
-        U.do_systemctl(_KIND, "enable", name, extra=("--now",))
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=False,
+        help="Print the systemctl command; do not run it.",
+    )
+    @click.option(
+        "-y",
+        "--yes",
+        is_flag=True,
+        default=False,
+        help="Confirm. Required when not --dry-run.",
+    )
+    def _enable(name, dry_run, yes):
+        U.do_systemctl(
+            _KIND, "enable", name, dry_run=dry_run, yes=yes, extra=("--now",)
+        )
 
     @group.command(
         "disable",
@@ -158,19 +179,42 @@ def _add_enablement(group) -> None:
             description=(
                 "`systemctl --user disable --now <name>.timer`. The unit "
                 "FILE stays on disk — this stops the timer firing, it does "
-                "not uninstall it. Use `uninstall` for that.",
+                "not uninstall it. Use `uninstall` for that. "
+                "MUTATING: needs --yes/-y. That guard is load-bearing here "
+                "— disabling `sac.accounts-refresh` stops the fleet's SOLE "
+                "OAuth refresher, and every account expires within one "
+                "access-token lifetime.",
             ),
             examples=(
                 Example(
-                    "{prog} ecosystem dev timer disable sac.accounts-refresh",
+                    "{prog} ecosystem dev timer disable sac.accounts-refresh --dry-run",
+                    "Show the systemctl command; change nothing.",
+                ),
+                Example(
+                    "{prog} ecosystem dev timer disable sac.accounts-refresh --yes",
                     "Stop firing; keep the unit installed.",
                 ),
             ),
         ),
     )
     @click.argument("name")
-    def _disable(name):
-        U.do_systemctl(_KIND, "disable", name, extra=("--now",))
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        default=False,
+        help="Print the systemctl command; do not run it.",
+    )
+    @click.option(
+        "-y",
+        "--yes",
+        is_flag=True,
+        default=False,
+        help="Confirm. Required when not --dry-run.",
+    )
+    def _disable(name, dry_run, yes):
+        U.do_systemctl(
+            _KIND, "disable", name, dry_run=dry_run, yes=yes, extra=("--now",)
+        )
 
 
 def _add_install(group) -> None:
