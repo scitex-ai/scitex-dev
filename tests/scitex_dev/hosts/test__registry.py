@@ -465,10 +465,29 @@ def test_default_seed_includes_operator_known_hosts(tmp_path):
     assert {r.name for r in records} == {
         "ywata-note-win",
         "spartan",
-        "nas",
-        "nas1",
-        "nas2",
+        "scitex-nas-01",
+        "scitex-nas-02",
+        "scitex-nas-03",
         "mba",
+    }
+
+
+def test_seeded_storage_hosts_still_resolve_under_their_old_names(tmp_path):
+    # Arrange — the NAS hosts were re-keyed on 2026-08-07 and the seed
+    # carried the retired routes for four days (scitex-storage, 2026-08-11).
+    # Correcting the route must not orphan callers still passing the old
+    # name, so each retired alias resolves to its recorded successor.
+    target = tmp_path / "hosts.yaml"
+    # Act
+    resolved = {
+        old: resolve(old, hosts_path=target).name
+        for old in ("nas", "nas1", "nas2")
+    }
+    # Assert
+    assert resolved == {
+        "nas": "scitex-nas-03",
+        "nas1": "scitex-nas-01",
+        "nas2": "scitex-nas-02",
     }
 
 
