@@ -50,6 +50,7 @@ interfaces:
 - [22_figure-prep-pointer.md](22_figure-prep-pointer.md) — Pointer: figure-prep playbook lives in figrecipe; ecosystem no-synthetic-data policy lives in scientific umbrella
 - [23_drift-report.md](23_drift-report.md) — `ecosystem drift-report`: the unified per-package × per-layer version-drift matrix (all 8 layers), exit 1 on drift, federated 6h timer
 - [24_host-registry.md](24_host-registry.md) — `scitex_dev.hosts`: the SciTeX-wide "where is host X, and what's its ~/.scitex root?" port (`resolve`, `list_hosts`), `~/.scitex/dev/hosts.yaml`, `scitex-dev host list/show/resolve`
+- [25_naming-conventions.md](25_naming-conventions.md) — the fleet's one-pair-per-domain naming table (primary/replica, controller/worker, node/origin, service/timer/cron) and the synonyms each one replaces
 
 ### Architecture (30–39)
 - [30_agentic-test-overview.md](30_agentic-test-overview.md) — Four-layer testing model + shared newbie-docker substrate

@@ -1,6 +1,8 @@
 ---
-name: scitex-naming-conventions
-description: Fleet-wide role/name pair table — primary/replica, controller/worker, node/origin, service/timer/cron — decided by the operator 2026-08-11; use these words, not their synonyms
+description: |
+  [TOPIC] Fleet naming conventions
+  [DETAILS] One role/name pair per domain — primary/replica, controller/worker, node/origin, service/timer/cron — decided by the operator 2026-08-11, with the banned synonym for each. Use these words in code, cards, docs and messages, not their synonyms.
+tags: [scitex-dev-naming-conventions]
 ---
 
 # SciTeX naming conventions (operator-decided, 2026-08-11)
