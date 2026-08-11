@@ -268,6 +268,7 @@ def register(ecosystem):
         from ._audit_masking import (
             classify_output,
             json_payload,
+            label_masked_lines,
             render_inventory,
             render_summary,
             resolve_skip_rules,
@@ -362,8 +363,14 @@ def register(ecosystem):
 
         multi = len(pkgs) > 1
 
-        def _emit_pkg(name: str, res: dict) -> None:
-            """Print one package's captured audit output in audit order."""
+        def _emit_pkg(name: str, res: dict, report=None) -> None:
+            """Print one package's captured audit output in audit order.
+
+            MASKED findings are re-stamped `MASK: ` on the way out. Without
+            it a masked finding reaches the reader still labelled `ERRO`
+            while being provably unable to fail the gate, so the printed
+            error count contradicts the exit code.
+            """
             if as_json:
                 return
             if multi:
@@ -373,7 +380,7 @@ def register(ecosystem):
                 header = f"\n=== {name} :: {a} ===" if multi else f"\n=== {a} ==="
                 click.echo(header, err=True)
                 if r.get("stdout"):
-                    click.echo(r["stdout"])
+                    click.echo(label_masked_lines(r["stdout"], report))
                 if r.get("stderr"):
                     click.echo(r["stderr"], err=True)
 
@@ -396,7 +403,7 @@ def register(ecosystem):
                 name, rc, res, rep = _run_one(d)
                 all_results[name] = res
                 mask_reports[name] = rep
-                _emit_pkg(name, res)
+                _emit_pkg(name, res, rep)
                 _emit_mask(name, rep)
                 if rc != 0:
                     overall_exit = 1
@@ -410,7 +417,7 @@ def register(ecosystem):
                     mask_reports[name] = rep
                     rc_by_pkg[name] = rc
             for d in pkgs:
-                _emit_pkg(d, all_results[d])
+                _emit_pkg(d, all_results[d], mask_reports[d])
                 _emit_mask(d, mask_reports[d])
                 if rc_by_pkg[d] != 0:
                     overall_exit = 1
