@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""Grade one `audit-all` run as PASS / FAIL / UNKNOWN, and say so in words.
+
+THREE ANSWERS, NOT TWO. A gate can say three things and they are not
+interchangeable:
+
+  * ``PASS``     — the audit ran and found nothing.
+  * ``FAIL``     — the audit ran and FOUND VIOLATIONS.
+  * ``UNKNOWN``  — the audit COULD NOT RUN, so it found nothing and also
+                   established nothing.
+
+For most of its life :mod:`scitex_dev.testing._audit_conformance` said one
+sentence for the last two — *"audit-all reported violations for <pkg>"*.
+That sentence is FALSE for UNKNOWN, and falsely SPECIFIC in a way that costs
+real time: it sends the reader hunting for a lint violation that does not
+exist, while the actual cause (a missing dependency, an auditor that crashed
+on import) sits unread further down a several-hundred-line dump. Measured
+2026-08-11 on scitex-dev PR #567 — a DOC-ONLY diff whose gate said
+"reported violations" and took a full CI-log dive to attribute.
+
+Collapsing UNKNOWN into the failure pole is the same three-valued-signal
+error the constitution names, and the same one ``§10w`` (import-budget
+"could not measure") and ``MaskReport.unreadable`` already fixed one layer
+down. This module is that fix at the pytest-gate layer.
+
+UNKNOWN STILL FAILS. "Could not run" must never be green — that is
+green-by-absence. What changes is only what the message CLAIMS.
+
+Deliberately free of the `_cli` tree (and therefore of click): this module
+is reached from every ecosystem package's test suite, so its import cost and
+its dependency surface are everyone's.
+"""
+
+from __future__ import annotations
+
+import re
+
+
+#: The three answers a gate can give. ``UNKNOWN`` is a FAILING verdict — it
+#: is separated from ``FAIL`` to fix what the message SAYS, never to let a
+#: broken auditor report success.
+VERDICT_PASS = "pass"
+VERDICT_FAIL = "fail"
+VERDICT_UNKNOWN = "unknown"
+
+#: scitex-logging colours its console output, so every membership test below
+#: runs on de-escaped text. Without this a ``\x1b[33m``-prefixed line has no
+#: parseable level word and slips past the notice guard.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+#: A bracketed token carrying a RULE ID — mirrors
+#: ``_cli.ecosystem._cmds._audit_masking._RULE_ID_RE``. The discriminator is
+#: "contains a digit or §": every rule id in the corpus does (``PS-103``,
+#: ``STX-IO001``, ``§10w``, ``SK-401``) and the bare severity markers
+#: (``[E]``, ``[W]``) do not.
+_RULE_ID_RE = re.compile(r"\[[^\]]*(?:\d|§)[^\]]*\]")
+
+#: Substrings meaning THE AUDIT DID NOT RUN — an environment/plumbing
+#: failure, not a finding about the code under audit.
+#:
+#: ``Error: No module named 'requests'`` is the measured instance:
+#: scitex-hub's CI carried it from 2026-08-05 and it reached every reader
+#: through a message that said "reported violations".
+_COULD_NOT_RUN_MARKERS: tuple[str, ...] = (
+    "no module named",
+    "modulenotfounderror",
+    "importerror",
+    "traceback (most recent call last)",
+    "failed to launch",
+    "command not found",
+    "no such file or directory",
+)
+
+#: Words marking a line as a NOTICE rather than the thing that stopped the
+#: run. A degraded-but-running auditor announces itself exactly this way, and
+#: it is common: scitex-dev's own audit output opens with
+#:
+#:     [scitex-dev linter] WARNING: failed to load plugin 'io':
+#:     ModuleNotFoundError: No module named 'scitex_io._linter'
+#:
+#: on EVERY invocation, clean runs included (verified 2026-08-11 against
+#: `ecosystem audit-skills scitex-dev`). Treating that as could-not-run would
+#: relabel every genuine violation report as UNKNOWN — the same collapse as
+#: before, pointed the other way.
+_NOTICE_TOKENS: tuple[str, ...] = (
+    "WARN",
+    "WARNING",
+    "INFO",
+    "NOTE",
+    "NOTICE",
+    "DEBUG",
+    "SUCC",
+)
+
+
+def _looks_like_a_notice(prefix: str) -> bool:
+    """Is the text LEADING UP TO a could-not-run marker a warn/info notice?
+
+    Only the prefix is examined, deliberately. Searching the whole line would
+    let a crash whose message happens to contain "note" or "warning" disguise
+    itself; searching the prefix asks the narrower and correct question —
+    *how did the emitter label this line before it said the scary thing?*
+    """
+    upper = prefix.upper()
+    return any(re.search(rf"\b{token}\b", upper) for token in _NOTICE_TOKENS)
+
+
+def _is_finding_line(line: str) -> bool:
+    """Is this an auditor FINDING — a rule id at the START of the payload?
+
+    The rule id must LEAD the payload, not merely appear somewhere on the
+    line. Measured while writing this module: the launch-failure line
+
+        error: audit-cli on scitex-io failed to launch: [Errno 2] ...
+
+    carries a trailing ``[Errno 2]``, which satisfies "contains a bracketed
+    token with a digit" exactly as well as ``[SK-401]`` does. A whole-line
+    search therefore classified the clearest could-not-run signal in the
+    codebase as a finding — the very collapse this module removes, restored
+    by a lazy regex. Position is what separates a rule id from a bracketed
+    aside.
+    """
+    stripped = _ANSI_RE.sub("", line).lstrip()
+    head = stripped.split(":", 1)
+    has_level = len(head) == 2 and head[0].isalpha()
+    payload = head[1].lstrip() if has_level else stripped
+    return payload.startswith("[") and bool(_RULE_ID_RE.search(payload))
+
+
+def could_not_run_evidence(output: str) -> list[str]:
+    """Lines showing the audit COULD NOT RUN, in the order they appeared.
+
+    An empty list means "nothing in this output says the audit was prevented
+    from running" — which, paired with a non-zero exit, licenses FAIL.
+
+    Two filters keep this from crying wolf:
+
+    * A line carrying a RULE ID is an attributable FINDING, whatever words it
+      contains. An auditor is entitled to report
+      ``[STX-NET001] ... requests.get(...)`` without that being a crash.
+    * A line whose text BEFORE the marker labels it a warning/info notice is a
+      degraded-but-running announcement. See :data:`_NOTICE_TOKENS`.
+    """
+    hits: list[str] = []
+    for raw in output.splitlines():
+        line = _ANSI_RE.sub("", raw).strip()
+        if not line:
+            continue
+        lowered = line.lower()
+        at = min(
+            (
+                lowered.find(marker)
+                for marker in _COULD_NOT_RUN_MARKERS
+                if marker in lowered
+            ),
+            default=-1,
+        )
+        if at < 0:
+            continue
+        if _is_finding_line(line):
+            continue
+        if _looks_like_a_notice(line[:at]):
+            continue
+        hits.append(line)
+    return hits
+
+
+def finding_lines(output: str) -> list[str]:
+    """The auditor's own finding lines — the ones that drive a FAIL.
+
+    Used to build a DIGEST at the top of the failure message. The full
+    stdout+stderr is still printed underneath; this exists because the
+    interesting five lines were arriving buried in several hundred, which is
+    how a warn-tier finding stayed unread while the reader chased an error
+    that the summary line said did not exist.
+    """
+    return [
+        _ANSI_RE.sub("", raw).strip()
+        for raw in output.splitlines()
+        if _is_finding_line(raw)
+    ]
+
+
+def classify_audit_outcome(returncode: int, output: str) -> tuple[str, list[str]]:
+    """Grade one `audit-all` run. Returns ``(verdict, evidence)``.
+
+    ``evidence`` is the could-not-run lines for :data:`VERDICT_UNKNOWN`, the
+    finding digest for :data:`VERDICT_FAIL`, and empty for
+    :data:`VERDICT_PASS`.
+
+    The rule:
+
+    * exit 0 -> PASS.
+    * exit != 0 AND the output says it could not run -> UNKNOWN.
+    * exit 2 -> UNKNOWN even with no marker. Exit 2 is `audit-all` declining
+      to grade (usage error, unreadable skip-rule config) or a sub-auditor
+      reporting "could not locate the tree" — by construction "I did not
+      grade", never "I graded and found something".
+    * anything else non-zero -> FAIL.
+
+    UNKNOWN is still a FAILING verdict for the caller. It changes the claim,
+    not the colour.
+    """
+    if returncode == 0:
+        return VERDICT_PASS, []
+    evidence = could_not_run_evidence(output)
+    if evidence:
+        return VERDICT_UNKNOWN, evidence
+    if returncode == 2:
+        return VERDICT_UNKNOWN, []
+    return VERDICT_FAIL, finding_lines(output)
+
+
+def _digest(lines: list[str], limit: int = 12) -> str:
+    """Render at most ``limit`` evidence lines, saying how many were elided."""
+    body = "\n".join(f"    {line}" for line in lines[:limit])
+    if len(lines) > limit:
+        body += f"\n    ... (+{len(lines) - limit} more)"
+    return body
+
+
+def unknown_message(
+    distribution: str,
+    cmd: str,
+    returncode: int,
+    evidence: list[str],
+    tail: str,
+) -> str:
+    """The UNKNOWN report — says COULD NOT RUN and quotes the underlying error."""
+    quoted = (
+        _digest(evidence)
+        if evidence
+        else "    (none quoted — exit=2 is `audit-all` declining to grade;\n"
+        "     see the usage/config error in the output below)"
+    )
+    return (
+        f"audit-all COULD NOT RUN for {distribution!r} — UNKNOWN, not a "
+        f"violation report (exit={returncode}).\n"
+        "  The audit was PREVENTED from grading, so it neither found "
+        "violations nor established that there are none.\n"
+        "  Do NOT go looking for a lint violation: fix the environment / "
+        "dependency / launch failure quoted here, then re-run.\n"
+        f"  underlying error(s):\n{quoted}\n"
+        f"  $ {cmd}\n{tail}"
+    )
+
+
+def violations_message(
+    distribution: str,
+    cmd: str,
+    returncode: int,
+    findings: list[str],
+    tail: str,
+) -> str:
+    """The FAIL report — says WHICH findings drove it, up front."""
+    if findings:
+        digest = (
+            f"  {len(findings)} finding line(s) drove the failure:\n"
+            f"{_digest(findings)}\n"
+            "  note: some sub-auditors (audit-skills, audit-project) exit "
+            "NON-ZERO on WARN-tier findings,\n"
+            "        so a `summary: ... 0 unmasked error(s)` line can "
+            "legitimately accompany exit=1.\n"
+            "        Read the findings above, not the error count.\n"
+        )
+    else:
+        digest = (
+            "  No rule-attributable finding line appears in the output, yet "
+            "the audit exited non-zero and\n"
+            "  did not report being unable to run. Read the full output below "
+            "— this shape is itself a defect\n"
+            "  in whichever sub-auditor produced it.\n"
+        )
+    return (
+        f"audit-all reported violations for {distribution!r} "
+        f"(exit={returncode}).\n"
+        f"{digest}"
+        f"  $ {cmd}\n{tail}"
+    )
+
+
+__all__ = [
+    "VERDICT_FAIL",
+    "VERDICT_PASS",
+    "VERDICT_UNKNOWN",
+    "classify_audit_outcome",
+    "could_not_run_evidence",
+    "finding_lines",
+    "unknown_message",
+    "violations_message",
+]
+
+# EOF

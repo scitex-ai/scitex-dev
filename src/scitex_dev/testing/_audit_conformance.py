@@ -12,6 +12,31 @@ Subprocess invocation, not in-process, because:
   - Each sub-auditor isolates stdio (some packages close fd 1 on import).
     Re-entering them in-process from pytest would interact badly with
     pytest's own capture machinery.
+
+THREE ANSWERS, NOT TWO
+----------------------
+A gate can say three things and they are not interchangeable:
+
+  * ``PASS``     — the audit ran and found nothing.
+  * ``FAIL``     — the audit ran and FOUND VIOLATIONS.
+  * ``UNKNOWN``  — the audit COULD NOT RUN, so it found nothing and
+                   also established nothing.
+
+For most of this module's life the failure message said one sentence for
+the last two: *"audit-all reported violations for <pkg>"*. That sentence
+is FALSE for UNKNOWN, and falsely SPECIFIC in a way that costs real time —
+it sends the reader hunting for a lint violation that does not exist while
+the actual cause (a missing dependency, an auditor that crashed on import)
+sits unread further down a several-hundred-line dump. Collapsing UNKNOWN
+into the failure pole is the same three-valued-signal error the constitution
+names, and the same one ``§10w`` and ``MaskReport.unreadable`` already fixed
+one layer down.
+
+UNKNOWN still FAILS the test. "Could not run" must never be green — that is
+green-by-absence. What changes is only what the message CLAIMS. The grading
+itself lives in :mod:`scitex_dev.testing._audit_outcome`
+(:func:`classify_audit_outcome`), which reads the outcome off the process's
+own output rather than assuming exit-non-zero means "found something".
 """
 
 from __future__ import annotations
@@ -22,6 +47,17 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+from ._audit_outcome import (
+    VERDICT_FAIL,
+    VERDICT_PASS,
+    VERDICT_UNKNOWN,
+    classify_audit_outcome,
+    could_not_run_evidence,
+    finding_lines,
+    unknown_message,
+    violations_message,
+)
 
 
 SKIP_ENV_VAR = "SCITEX_DEV_SKIP_AUDIT"
@@ -81,9 +117,7 @@ def warn_on_guessed_path(cwd: Path | None = None, stream=None) -> str:
 #: around downstream by adding "defer" to a package's skip_rules, which is
 #: precisely why the defect survived to reappear as `§10w` nineteen days
 #: later. Both belong here.
-_NON_VIOLATION_RULES: "frozenset[str]" = frozenset(
-    {"§10", "§10w", "TALLY", "defer"}
-)
+_NON_VIOLATION_RULES: "frozenset[str]" = frozenset({"§10", "§10w", "TALLY", "defer"})
 
 #: Level words that are NOT failures. The auditors already print severity;
 #: this module used to strip it only to reach the bracket and then ignore it.
@@ -248,6 +282,12 @@ def audit_all_for_package(
         If the subprocess returns non-zero. The full stdout + stderr
         are included in the message so the failing rule is visible in
         the test report without re-running the audit by hand.
+
+        The message states WHICH of the two failing verdicts applies —
+        see :mod:`scitex_dev.testing._audit_outcome`. ``FAIL`` opens with
+        "reported violations" and digests the finding lines; ``UNKNOWN``
+        opens with "COULD NOT RUN" and quotes the underlying error. Both
+        fail the test; only one of them means "go read the rule corpus".
     """
     if path is None:
         # Before the skip check: a caller who bypasses the audit still
@@ -265,14 +305,48 @@ def audit_all_for_package(
     argv = [bin_path, "ecosystem", "audit-all", distribution]
     if path is not None:
         argv += ["--path", str(path)]
-    proc = subprocess.run(
-        argv,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        env={**os.environ, "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1"},
-    )
-    if proc.returncode != 0 and skip_rules:
+    cmd = shlex.join(argv)
+    try:
+        proc = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env={**os.environ, "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1"},
+        )
+    except subprocess.TimeoutExpired as exc:
+        # A wedged auditor is the purest COULD-NOT-RUN there is: nothing
+        # was graded. Previously this propagated as a raw TimeoutExpired,
+        # which reads in a CI log like a test infrastructure problem
+        # rather than a gate saying it has no verdict.
+        raise AssertionError(
+            unknown_message(
+                distribution,
+                cmd,
+                -1,
+                [f"subprocess timed out after {timeout}s (no verdict was reached)"],
+                _output_tail(_decode(exc.stdout), _decode(exc.stderr)),
+            )
+        ) from exc
+    except OSError as exc:
+        # The `scitex-dev` console script is absent / not executable. The
+        # generated gate's `shutil.which` guard skips before reaching here,
+        # but hand-written call sites exist and must not read as "violations".
+        raise AssertionError(
+            unknown_message(distribution, cmd, -1, [f"could not launch: {exc}"], "")
+        ) from exc
+
+    combined = proc.stdout + "\n" + proc.stderr
+    # Establish COULD-NOT-RUN before masking gets a chance to swallow it.
+    # `skip_rules` is keyed on rule ids, so a crash line carrying none can
+    # never be *matched* by a rule — but it could still land in NEITHER
+    # bucket below (a bare `Traceback (most recent call last):` has no
+    # level word, so `_is_error_tier` rejects it), and the
+    # `if skipped and not non_skipped` guard would then mask the whole
+    # failure. An auditor that could not run must never be maskable.
+    crash_evidence = could_not_run_evidence(combined)
+
+    if proc.returncode != 0 and skip_rules and not crash_evidence:
         # Re-classify: if every contributing violation in stdout is on
         # the caller's allow-list, treat as clean. Auditors print rule
         # lines in two shapes:
@@ -281,7 +355,7 @@ def audit_all_for_package(
         # Match by rule id alone — the surrounding marker is incidental.
         skipped: list[str] = []
         non_skipped: list[str] = []
-        for line in (proc.stdout + "\n" + proc.stderr).splitlines():
+        for line in combined.splitlines():
             stripped = line.lstrip()
             # Accept any line whose first bracketed token contains a rule id.
             # Current auditors prefix with a coloured level word (`ERRO: `,
@@ -344,24 +418,46 @@ def audit_all_for_package(
                 stacklevel=2,
             )
             return
-    if proc.returncode != 0:
-        # Reproduce the ACTUAL argv (including any --path) so the printed
-        # command re-runs the same audit against the same tree. A hand-
-        # written command string would silently drop --path and send the
-        # reader off to reproduce against a different checkout.
-        cmd = shlex.join(argv)
-        msg = (
-            f"audit-all reported violations for {distribution!r} "
-            f"(exit={proc.returncode}).\n"
-            f"  $ {cmd}\n\n"
-            f"--- stdout ---\n{proc.stdout}\n"
-            f"--- stderr ---\n{proc.stderr}"
+    if proc.returncode == 0:
+        return
+
+    # `cmd` reproduces the ACTUAL argv (including any --path) so the printed
+    # command re-runs the same audit against the same tree. A hand-written
+    # command string would silently drop --path and send the reader off to
+    # reproduce against a different checkout.
+    tail = _output_tail(proc.stdout, proc.stderr)
+    verdict, evidence = classify_audit_outcome(proc.returncode, combined)
+    if verdict == VERDICT_UNKNOWN:
+        raise AssertionError(
+            unknown_message(distribution, cmd, proc.returncode, evidence, tail)
         )
-        raise AssertionError(msg)
+    raise AssertionError(
+        violations_message(distribution, cmd, proc.returncode, evidence, tail)
+    )
+
+
+def _decode(stream: "str | bytes | None") -> str:
+    """`TimeoutExpired` carries bytes or str depending on `text=`; take either."""
+    if stream is None:
+        return ""
+    if isinstance(stream, bytes):
+        return stream.decode("utf-8", "replace")
+    return stream
+
+
+def _output_tail(stdout: str, stderr: str) -> str:
+    """The verbatim stdout/stderr block appended to every failure message."""
+    return f"\n--- stdout ---\n{stdout}\n--- stderr ---\n{stderr}"
 
 
 __all__ = [
+    "VERDICT_FAIL",
+    "VERDICT_PASS",
+    "VERDICT_UNKNOWN",
     "audit_all_for_package",
+    "classify_audit_outcome",
+    "could_not_run_evidence",
+    "finding_lines",
     "guessed_path_warning",
     "warn_on_guessed_path",
 ]
