@@ -170,7 +170,27 @@ def register(ecosystem):
                 click.echo(result["table"])
                 summ = result["summary"]
                 click.echo()
-                click.echo(f"{summ['matching']}/{summ['total']} cells up-to-date")
+                if summ["total"] == 0:
+                    # NEVER print a bare `0/0 cells up-to-date`. It sits
+                    # under a table whose localhost column may carry dozens
+                    # of drift markers, and it reads as "nothing drifted"
+                    # when it means "nothing was compared". Same number,
+                    # opposite conclusion — the exit code below already
+                    # knows the difference (it requires total > 0), so this
+                    # only makes the printed line agree with it.
+                    click.echo(
+                        f"NO CELLS COMPARED — {summ['hosts_in_scope']} remote "
+                        f"host(s) in scope, so this run says NOTHING about "
+                        f"drift. The `localhost` column above is reference "
+                        f"only and is not counted. Name reachable hosts with "
+                        f"--host, or run from a machine that can reach the "
+                        f"fleet."
+                    )
+                else:
+                    click.echo(
+                        f"{summ['matching']}/{summ['total']} cells up-to-date "
+                        f"across {summ['hosts_in_scope']} host(s)"
+                    )
                 if summ["needing_sync"]:
                     click.echo("needing sync:")
                     for n in summ["needing_sync"]:
