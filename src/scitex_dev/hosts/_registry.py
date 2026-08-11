@@ -272,14 +272,24 @@ def create_default_hosts_yaml(hosts_path: str | Path | None = None) -> Path:
 def list_hosts(*, hosts_path: str | Path | None = None) -> list[HostRecord]:
     """Return every registered host, sorted by name.
 
+    Warns (never raises) for any row routing through a RETIRED ssh alias —
+    see :mod:`scitex_dev.hosts._retired`. A registry frozen by the seeder
+    before those names died still serves them, and only a runtime check
+    reaches such a file.
+
     Parameters
     ----------
     hosts_path : str | Path | None
         Explicit override for the ``hosts.yaml`` location (see
         :func:`get_hosts_yaml_path` for the full precedence chain).
     """
+    from ._retired import warn_if_retired
+
     records, _path = _load_registry(hosts_path)
-    return [records[name] for name in sorted(records)]
+    out = [records[name] for name in sorted(records)]
+    for record in out:
+        warn_if_retired(record.name, record.ssh_alias)
+    return out
 
 
 def list_runner_destinations(
@@ -339,11 +349,16 @@ def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:
     HostRegistryError
         If ``hosts.yaml`` itself is malformed.
     """
+    from ._retired import warn_if_retired
+
     records, path = _load_registry(hosts_path)
     try:
-        return records[name]
+        record = records[name]
     except KeyError:
         pass
+    else:
+        warn_if_retired(record.name, record.ssh_alias)
+        return record
 
     # Fall back to ALIASES — a former or alternate spelling must keep
     # resolving, which is the whole reason the field exists. Canonical keys
@@ -351,6 +366,7 @@ def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:
     # canonical key can never be captured by another record's alias list.
     by_alias = [rec for rec in records.values() if name in rec.aliases]
     if len(by_alias) == 1:
+        warn_if_retired(by_alias[0].name, by_alias[0].ssh_alias)
         return by_alias[0]
     if by_alias:
         claimants = ", ".join(sorted(rec.name for rec in by_alias))
