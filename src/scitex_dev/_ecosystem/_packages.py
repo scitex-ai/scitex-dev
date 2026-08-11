@@ -133,18 +133,44 @@ def collect_state(
         if p.local_path and (pkg_filter is None or p.name in pkg_filter)
     ]
 
-    rows = []
-    for pkg in pkgs:
-        path = Path(pkg.local_path).expanduser()
-        rows.append(
-            {
-                "pkg": pkg.name,
-                "dir": path.name,
-                "origin": origin_fn(path),
-                "localhost": local_fn(path),
-                "cells": {},
-            }
-        )
+    # Origin SHAs in PARALLEL. `_origin_sha` shells `git ls-remote origin`,
+    # a network round-trip per package with a 15s timeout; done serially over
+    # ~68 packages that is the ENTIRE cost of this command — measured
+    # 2026-08-11 at ~170 seconds, and it is paid even when zero hosts are in
+    # scope, because it has nothing to do with the remote fanout below.
+    #
+    # That duration is not merely slow, it is MISLEADING: the report buffers
+    # and prints at the end, so ~170s of silence is indistinguishable from a
+    # hang. Two agents independently reported this command as "emits
+    # nothing" on 2026-08-11 — both had simply not waited. Making it fast is
+    # the honest fix; a progress bar on a needlessly serial loop would only
+    # make the wait easier to sit through.
+    #
+    # Same worker cap as the remote fanout. These are independent read-only
+    # queries against different repositories, so ordering carries no meaning
+    # and `rows` is reassembled in the input order regardless.
+    rows: list[dict[str, Any]] = [
+        {
+            "pkg": pkg.name,
+            "dir": Path(pkg.local_path).expanduser().name,
+            "origin": None,
+            "localhost": None,
+            "cells": {},
+        }
+        for pkg in pkgs
+    ]
+    if pkgs:
+        paths = [Path(p.local_path).expanduser() for p in pkgs]
+
+        def _shas(idx: int) -> tuple[int, Any, Any]:
+            path = paths[idx]
+            return idx, origin_fn(path), local_fn(path)
+
+        with ThreadPoolExecutor(max_workers=min(16, len(pkgs))) as ex:
+            for fut in as_completed([ex.submit(_shas, i) for i in range(len(pkgs))]):
+                idx, origin, localhost = fut.result()
+                rows[idx]["origin"] = origin
+                rows[idx]["localhost"] = localhost
 
     # Parallel remote SHA collection: (host, pkg) tuples
     pairs: list[tuple[HostConfig, dict[str, Any]]] = []
