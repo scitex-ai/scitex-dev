@@ -16,8 +16,8 @@ from click.testing import CliRunner
 
 from scitex_dev._cli import main
 from scitex_dev._ecosystem_jobs._provider import JOB_SHELL_BODIES, provide_jobs
-from scitex_dev._host_config import JOURNALD_PERSISTENT
-from scitex_dev._host_config import provide as provide_journald
+from scitex_dev._host_config import AUDITD_PROCESS_KILL, JOURNALD_PERSISTENT
+from scitex_dev._host_config import provide as provide_declarations
 from scitex_dev._host_config_apply import (
     apply_specs,
     backup_path_for,
@@ -29,6 +29,7 @@ from scitex_dev.host_config import (
     STATE_DRIFT,
     STATE_NOT_APPLICABLE,
     STATE_OK,
+    STATE_PRECONDITION_UNMET,
     HostConfigSpec,
     directives_of,
     discover_host_config,
@@ -57,6 +58,11 @@ def _converged(tmp_path, **over) -> HostConfigSpec:
 
 def _target(tmp_path, spec: HostConfigSpec):
     return tmp_path / spec.path.lstrip("/")
+
+
+def _by_name(name: str) -> HostConfigSpec:
+    """One of scitex-dev's own declarations, by name rather than index."""
+    return next(s for s in provide_declarations() if s.name == name)
 
 
 # --------------------------------------------------------------------- #
@@ -455,15 +461,15 @@ def test_backup_path_is_timestamped_and_sortable(tmp_path):
 def test_scitex_dev_declares_persistent_journald():
     # Arrange
     # Act
-    specs = provide_journald()
+    specs = provide_declarations()
     # Assert
-    assert [s.name for s in specs] == ["journald.persistent"]
+    assert "journald.persistent" in [s.name for s in specs]
 
 
 def test_journald_declaration_targets_a_drop_in_not_the_distro_file():
     # Arrange
     # Act
-    spec = provide_journald()[0]
+    spec = _by_name("journald.persistent")
     # Assert
     assert spec.path == "/etc/systemd/journald.conf.d/99-scitex-persistent.conf"
 
@@ -471,7 +477,7 @@ def test_journald_declaration_targets_a_drop_in_not_the_distro_file():
 def test_journald_declaration_requires_root():
     # Arrange
     # Act
-    spec = provide_journald()[0]
+    spec = _by_name("journald.persistent")
     # Assert
     assert spec.requires_root is True
 
@@ -516,7 +522,7 @@ def test_journald_declaration_verifies_by_observation_not_by_config():
     """Reading back the file you wrote proves nothing; --list-boots does."""
     # Arrange
     # Act
-    spec = provide_journald()[0]
+    spec = _by_name("journald.persistent")
     # Assert
     assert spec.verify_command == "journalctl --list-boots"
 
@@ -524,7 +530,7 @@ def test_journald_declaration_verifies_by_observation_not_by_config():
 def test_journald_declaration_reloads_the_daemon():
     # Arrange
     # Act
-    spec = provide_journald()[0]
+    spec = _by_name("journald.persistent")
     # Assert
     assert spec.apply_command == "systemctl restart systemd-journald"
 
@@ -544,6 +550,188 @@ def test_journald_declaration_warns_against_hand_editing():
     body = JOURNALD_PERSISTENT
     # Assert
     assert "Managed by scitex-dev" in body
+
+
+# --------------------------------------------------------------------- #
+# requires_command -- a file no daemon reads must not report `ok`        #
+# --------------------------------------------------------------------- #
+def test_precondition_unmet_when_the_required_command_is_missing(tmp_path):
+    # Arrange
+    spec = _spec(requires_command="a-binary-that-does-not-exist")
+    # Act
+    status = evaluate(spec, root=str(tmp_path))
+    # Assert
+    assert status.state == STATE_PRECONDITION_UNMET
+
+
+def test_precondition_detail_names_the_missing_command(tmp_path):
+    # Arrange
+    spec = _spec(requires_command="a-binary-that-does-not-exist")
+    # Act
+    status = evaluate(spec, root=str(tmp_path))
+    # Assert
+    assert "a-binary-that-does-not-exist" in status.detail
+
+
+def test_precondition_satisfied_by_a_command_that_exists(tmp_path):
+    # Arrange
+    spec = _spec(requires_command="sh")
+    # Act
+    status = evaluate(spec, root=str(tmp_path))
+    # Assert
+    assert status.state == STATE_ABSENT
+
+
+def test_apply_refuses_to_write_when_the_precondition_is_unmet(tmp_path):
+    """A correct-looking file nothing reads would answer `ok` forever."""
+    # Arrange
+    spec = _spec(requires_command="a-binary-that-does-not-exist")
+    # Act
+    apply_specs([spec], root=str(tmp_path))
+    # Assert
+    assert not _target(tmp_path, spec).exists()
+
+
+def test_apply_reports_an_unmet_precondition_as_blocked(tmp_path):
+    # Arrange
+    spec = _spec(requires_command="a-binary-that-does-not-exist")
+    # Act
+    records = apply_specs([spec], root=str(tmp_path))
+    # Assert
+    assert records[0]["action"] == "blocked"
+
+
+def test_force_does_not_override_an_unmet_precondition(tmp_path):
+    """--force repairs drift; it cannot conjure the daemon that reads the file."""
+    # Arrange
+    spec = _spec(requires_command="a-binary-that-does-not-exist")
+    # Act
+    apply_specs([spec], root=str(tmp_path), force=True)
+    # Assert
+    assert not _target(tmp_path, spec).exists()
+
+
+# --------------------------------------------------------------------- #
+# scitex-dev's own declaration: auditd process-kill attribution          #
+# --------------------------------------------------------------------- #
+def test_scitex_dev_declares_the_auditd_ruleset():
+    # Arrange
+    # Act
+    names = [s.name for s in provide_declarations()]
+    # Assert
+    assert "auditd.process-kill" in names
+
+
+def test_auditd_declaration_is_gated_on_auditd_being_installed():
+    """Without auditctl the file is inert; that must be reportable, not hidden."""
+    # Arrange
+    # Act
+    spec = _by_name("auditd.process-kill")
+    # Assert
+    assert spec.requires_command == "auditctl"
+
+
+def test_auditd_rules_audit_the_kill_syscall():
+    """`kill` is a shell BUILTIN, so `kill -9` emits no execve at all."""
+    # Arrange
+    # Act
+    body = AUDITD_PROCESS_KILL
+    # Assert
+    assert "-S kill,tkill,tgkill" in body
+
+
+def test_auditd_rules_cover_sigkill():
+    # Arrange
+    # Act
+    body = AUDITD_PROCESS_KILL
+    # Assert
+    assert "-F a1=9" in body
+
+
+def test_auditd_rules_cover_sigterm():
+    # Arrange
+    # Act
+    body = AUDITD_PROCESS_KILL
+    # Assert
+    assert "-F a1=15" in body
+
+
+def test_auditd_rules_audit_tmux_execve():
+    """`tmux kill-server` acts from inside the server; only the client's
+    execve carries the human's loginuid."""
+    # Arrange
+    # Act
+    body = AUDITD_PROCESS_KILL
+    # Assert
+    assert "-F exe=/usr/bin/tmux" in body
+
+
+def test_auditd_rules_audit_pkill_execve():
+    # Arrange
+    # Act
+    body = AUDITD_PROCESS_KILL
+    # Assert
+    assert "-F exe=/usr/bin/pkill" in body
+
+
+def test_auditd_rules_scope_to_real_login_sessions():
+    # Arrange
+    # Act
+    body = AUDITD_PROCESS_KILL
+    # Assert
+    assert body.count("-F auid>=1000") == 6
+
+
+def test_auditd_rules_use_numeric_unset_for_old_auditctl():
+    """The friendlier `auid!=unset` alias is rejected by older auditctl."""
+    # Arrange
+    # Act
+    body = AUDITD_PROCESS_KILL
+    # Assert
+    assert "-F auid!=unset" not in body
+
+
+def test_auditd_rules_never_flush_existing_policy():
+    """A `-D` in a drop-in would silently wipe every other package's rules."""
+    # Arrange
+    # Act
+    lines = [ln.strip() for ln in AUDITD_PROCESS_KILL.splitlines()]
+    # Assert
+    assert "-D" not in lines
+
+
+def test_auditd_declaration_verifies_against_the_kernel_not_the_file():
+    """Reading the file back proves it was written, not that it took."""
+    # Arrange
+    # Act
+    spec = _by_name("auditd.process-kill")
+    # Assert
+    assert spec.verify_command == "auditctl -l"
+
+
+def test_auditd_declaration_loads_rules_without_restarting_the_daemon():
+    # Arrange
+    # Act
+    spec = _by_name("auditd.process-kill")
+    # Assert
+    assert spec.apply_command == "augenrules --load"
+
+
+def test_auditd_rules_stay_readable_so_check_works_unprivileged():
+    """0640 would make the honest unprivileged check report false drift."""
+    # Arrange
+    # Act
+    spec = _by_name("auditd.process-kill")
+    # Assert
+    assert spec.mode == "0644"
+
+
+def test_auditd_declaration_points_at_the_incident_card_not_a_retelling():
+    # Arrange
+    # Act
+    body = AUDITD_PROCESS_KILL
+    # Assert
+    assert "hostconfig-federation-journald" in body
 
 
 # --------------------------------------------------------------------- #

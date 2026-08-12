@@ -58,6 +58,7 @@ root) applies the declaration automatically.
 from __future__ import annotations
 
 import logging
+import shutil
 import socket
 import sys
 from dataclasses import dataclass
@@ -76,6 +77,7 @@ STATE_OK = "ok"
 STATE_ABSENT = "absent"
 STATE_DRIFT = "drift"
 STATE_NOT_APPLICABLE = "not_applicable"
+STATE_PRECONDITION_UNMET = "precondition_unmet"
 
 
 @dataclass(frozen=True)
@@ -131,6 +133,19 @@ class HostConfigSpec:
         Whether writing ``path`` needs root. Defaults to ``True``
         (anything under ``/etc`` does). CHECKING never needs root --
         that asymmetry is why the periodic job can run unprivileged.
+    requires_command
+        A binary that must exist for this file to MEAN anything, e.g.
+        ``"auditctl"`` for a file under ``/etc/audit/rules.d/``. When
+        it is absent the spec evaluates to ``precondition_unmet`` and
+        ``apply`` refuses to write.
+
+        This exists because the alternative is worse than useless.
+        Dropping a rules file onto a host whose daemon is not installed
+        produces a file that is present, correct, and read by nothing --
+        and every subsequent ``check`` would report ``ok``. That is a
+        guard which cannot detect the thing it was installed for, while
+        reporting that it can. ``None`` (the default) means the file
+        stands on its own.
     """
 
     name: str
@@ -143,6 +158,7 @@ class HostConfigSpec:
     apply_command: str | None = None
     verify_command: str | None = None
     requires_root: bool = True
+    requires_command: str | None = None
 
     def __post_init__(self) -> None:
         # Fail EARLY at construction, exactly like SystemDepSpec and
@@ -331,10 +347,15 @@ def evaluate(
     Pure observation -- never writes, never needs root, so the periodic
     job can run unprivileged and still be honest about what it sees.
 
-    Four outcomes, and the split between the middle two is the whole
-    point of this module:
+    Five outcomes, and the split between ``absent`` and ``drift`` is
+    the whole point of this module:
 
     * ``not_applicable`` -- ``spec.hosts`` excludes this host.
+    * ``precondition_unmet`` -- ``spec.requires_command`` is not on
+      PATH, so writing the file would produce something no daemon
+      reads. Reported, never written: a correct-looking file that
+      nothing consumes is worse than a missing one, because it reports
+      ``ok`` forever afterwards.
     * ``ok`` -- file present, content byte-identical, mode as declared.
       A second run of a converged host reports this for everything;
       that IS the "second run is a no-op and says so" contract.
@@ -355,6 +376,14 @@ def evaluate(
             spec,
             STATE_NOT_APPLICABLE,
             f"declared for {', '.join(spec.hosts)}; this host is {hostname}",
+        )
+
+    if spec.requires_command and shutil.which(spec.requires_command) is None:
+        return HostConfigStatus(
+            spec,
+            STATE_PRECONDITION_UNMET,
+            f"{spec.requires_command!r} is not installed, so {spec.path} "
+            f"would be read by nothing",
         )
 
     target = Path(root) / spec.path.lstrip("/")
@@ -395,6 +424,7 @@ __all__ = [
     "STATE_ABSENT",
     "STATE_DRIFT",
     "STATE_NOT_APPLICABLE",
+    "STATE_PRECONDITION_UNMET",
     "discover_host_config",
     "evaluate",
     "directives_of",

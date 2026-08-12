@@ -35,6 +35,7 @@ from .host_config import (
     STATE_DRIFT,
     STATE_NOT_APPLICABLE,
     STATE_OK,
+    STATE_PRECONDITION_UNMET,
     HostConfigSpec,
     evaluate,
 )
@@ -82,6 +83,9 @@ def apply_specs(
 
     * ``unchanged``   -- already as declared (the idempotent no-op)
     * ``skipped``     -- ``not_applicable`` on this host
+    * ``blocked``     -- ``requires_command`` is missing, so the file
+                         would be read by nothing; NOT written, not
+                         even under ``--force``
     * ``created``     -- the file was absent and has been written
     * ``drift``       -- differs, and was DELIBERATELY NOT touched
     * ``repaired``    -- differed and was overwritten under ``--force``
@@ -102,6 +106,16 @@ def apply_specs(
 
         if status.state == STATE_NOT_APPLICABLE:
             records.append(_rec(spec, status.state, "skipped", status.detail))
+            continue
+
+        if status.state == STATE_PRECONDITION_UNMET:
+            # Deliberately NOT written, even under --force. Writing it
+            # would create a file that looks right, is read by nothing,
+            # and reports `ok` on every subsequent check -- a guard that
+            # cannot detect what it was installed for while claiming it
+            # can. `blocked` keeps it visible until the precondition is
+            # actually satisfied.
+            records.append(_rec(spec, status.state, "blocked", status.detail))
             continue
 
         if status.state == STATE_OK:

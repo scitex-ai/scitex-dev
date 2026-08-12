@@ -56,12 +56,15 @@ def _render_records(records) -> int:
         "reloaded": "cyan",
         "drift": "red",
         "reload-failed": "red",
+        "blocked": "yellow",
     }
     pending = 0
     for rec in records:
         action = rec["action"]
         color = colors.get(action, "yellow")
-        if action in ("drift", "reload-failed") or action.startswith("would-"):
+        if action in ("drift", "reload-failed", "blocked") or action.startswith(
+            "would-"
+        ):
             pending += 1
         console.print(
             f"[{color}]{action:<14}[/{color}] "
