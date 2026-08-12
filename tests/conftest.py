@@ -40,10 +40,32 @@ def _ensure_subprocess_coverage_shim() -> None:
     """
     purelib = Path(sysconfig.get_paths()["purelib"])
     pth = purelib / "_scitex_dev_subprocess_coverage.pth"
+    # ORDER MATTERS, AND SO DOES THE GUARD. The previous shim read
+    # `import os, coverage` on its FIRST line, so every Python process in the
+    # environment imported coverage at interpreter startup — and where
+    # coverage was absent, `site` printed a ModuleNotFoundError traceback to
+    # stderr and carried on. Measured across the fleet 2026-08-12: four
+    # tracebacks before any real output, on every interpreter start, because
+    # scitex-container ships an identical file.
+    #
+    # The cost is not the noise. It is that a channel RESERVED FOR PROBLEMS
+    # was filled with a permanent non-problem, so everyone learned to skim
+    # stderr — which is where the next real error appears. Fail-loud inverted
+    # by accident.
+    #
+    # Checking the env var FIRST also means a non-test process imports
+    # nothing at all, rather than paying for a coverage import it will never
+    # use. A `.pth` runs before anything can catch it, so it must be the
+    # cheapest and quietest thing in the process.
     shim = (
-        "import os, coverage\n"
+        "import os\n"
         "if os.environ.get('COVERAGE_PROCESS_START'):\n"
-        "    coverage.process_startup()\n"
+        "    try:\n"
+        "        import coverage\n"
+        "    except ImportError:\n"
+        "        pass\n"
+        "    else:\n"
+        "        coverage.process_startup()\n"
     )
     try:
         if not pth.exists() or pth.read_text() != shim:
