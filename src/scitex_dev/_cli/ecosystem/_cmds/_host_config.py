@@ -144,21 +144,44 @@ def register(ecosystem):
         is_flag=True,
         help="Skip the audit-log append (for ad-hoc inspection).",
     )
+    @click.option(
+        "--verify",
+        is_flag=True,
+        help="Also run each spec's verify_command and report what the host "
+        "SAYS. These are observations, NOT compliance verdicts: a config "
+        "can be correct while the running system legitimately differs "
+        "(a requested DHCP address that was not granted). They never "
+        "change a verdict.",
+    )
     @click.pass_context
-    def host_config_check(ctx, provider, as_json, no_log):
+    def host_config_check(ctx, provider, as_json, no_log, verify):
         import json as _json
 
-        from ...._host_config_apply import apply_specs, write_audit
+        from ...._host_config_apply import apply_specs, observe_specs, write_audit
 
         specs = _select(provider)
         records = apply_specs(specs, dry_run=True, run_apply_commands=False)
+        observations = observe_specs(specs) if verify else []
         if not no_log:
-            write_audit(records, mode="check")
+            write_audit(records + observations, mode="check")
 
         if as_json:
-            click.echo(_json.dumps(records, indent=2))
+            click.echo(
+                _json.dumps(
+                    {"verdicts": records, "observations": observations}
+                    if verify
+                    else records,
+                    indent=2,
+                )
+            )
         else:
             pending = _render_records(records)
+            for obs in observations:
+                # Printed under its own heading so an observation can
+                # never be skimmed as a verdict.
+                click.echo(f"observed       {obs['name']}  {obs['detail']}")
+                for line in (obs["output"] or "(no output)").splitlines():
+                    click.echo(f"                 {line}")
             if not records:
                 ctx.exit(0)
             if pending:

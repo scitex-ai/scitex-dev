@@ -243,6 +243,35 @@ def _builtin_host_config() -> list[HostConfigSpec]:
     return provide()
 
 
+def _conflicting_claim(
+    spec: HostConfigSpec, existing
+) -> HostConfigSpec | None:
+    """Return the already-accepted spec that FIGHTS ``spec``, if any.
+
+    Two declarations of the same ``path`` only conflict when they can
+    both land on the SAME host. Per-host declarations that share a path
+    but name disjoint ``hosts`` are the opposite of a conflict -- they
+    are how a fleet expresses "this file, different content per
+    machine" (a requested DHCP address, a hostname, a per-host mount).
+
+    The earlier version of this check keyed on ``path`` alone and so
+    dropped every per-host declaration after the first, keeping only the
+    alphabetically-first host's copy and logging a warning nothing
+    surfaces. Nine declarations in, one survivor, no error: exactly the
+    silent loss this federation exists to prevent, committed by the
+    guard meant to prevent it.
+
+    An empty ``hosts`` means "every host", so it overlaps with
+    everything -- including another empty one.
+    """
+    for other in existing:
+        if not spec.hosts or not other.hosts:
+            return other
+        if set(spec.hosts) & set(other.hosts):
+            return other
+    return None
+
+
 def discover_host_config(
     *,
     extra_providers: list[Callable[[], list[HostConfigSpec]]] | None = None,
@@ -281,7 +310,7 @@ def discover_host_config(
         providers.extend(extra_providers)
 
     by_name: dict[str, HostConfigSpec] = {}
-    by_path: dict[str, str] = {}
+    by_path: dict[str, list[HostConfigSpec]] = {}
     for provider in providers:
         try:
             specs = provider()
@@ -306,18 +335,19 @@ def discover_host_config(
                     spec.name,
                 )
                 continue
-            if spec.path in by_path:
+            rival = _conflicting_claim(spec, by_path.get(spec.path, ()))
+            if rival is not None:
                 _logger.warning(
-                    "Host config %r targets %s, already claimed by %r -- "
-                    "two declarations for one file will fight; ignoring the "
-                    "second (first provider wins)",
+                    "Host config %r targets %s on a host %r also claims -- "
+                    "two declarations for one file on one host will fight; "
+                    "ignoring the second (first provider wins)",
                     spec.name,
                     spec.path,
-                    by_path[spec.path],
+                    rival.name,
                 )
                 continue
             by_name[spec.name] = spec
-            by_path[spec.path] = spec.name
+            by_path.setdefault(spec.path, []).append(spec)
 
     return [by_name[name] for name in sorted(by_name)]
 

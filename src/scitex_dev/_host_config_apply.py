@@ -194,6 +194,77 @@ def apply_specs(
     return records
 
 
+def observe_specs(
+    specs: list[HostConfigSpec],
+    *,
+    root: str = "/",
+    hostname: str | None = None,
+    timeout_sec: int = 30,
+) -> list[dict]:
+    """Run each spec's ``verify_command`` and return what the host SAID.
+
+    THESE ARE NOT COMPLIANCE VERDICTS, and keeping the two apart is the
+    whole reason this is a separate function rather than another branch
+    inside :func:`apply_specs`.
+
+    ``ok`` / ``absent`` / ``drift`` answer ONE question: does the file on
+    disk match the declaration? That is a statement about configuration,
+    and it is fully decidable. ``verify_command`` answers a different
+    one: did the configuration actually take effect in the running
+    system? Those can legitimately disagree forever. A host that
+    REQUESTS an address via DHCP Option 50 and is granted a different
+    one has a perfectly correct config file -- ``ok`` -- and an
+    interface that does not match it. Reporting that as ``drift`` would
+    accuse the configuration of a fault it does not have, and would
+    train everyone to ignore drift.
+
+    So an observation carries ``action="observed"``, its own exit code,
+    and the command's output. It never changes a verdict and never
+    enters the pending count. The caller decides what the difference
+    means; a fleet-wide reconciler can store it as ACTUAL state beside
+    the DESIRED state the declaration holds.
+
+    A spec with no ``verify_command`` yields nothing -- silence here
+    means "this declaration offers no observation", which is why the
+    field's absence is worth noticing when reviewing a new spec.
+    """
+    records: list[dict] = []
+    for spec in specs:
+        if not spec.verify_command:
+            continue
+        status = evaluate(spec, root=root, hostname=hostname)
+        if status.state in (STATE_NOT_APPLICABLE, STATE_PRECONDITION_UNMET):
+            # Running `auditctl -l` on a host with no auditd produces a
+            # shell error that reads like a finding. Skip it: the
+            # precondition record already says the real thing.
+            continue
+        try:
+            proc = subprocess.run(
+                spec.verify_command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=timeout_sec,
+            )
+            output = (proc.stdout or proc.stderr or "").strip()
+            rc = proc.returncode
+        except subprocess.TimeoutExpired:
+            output = f"timed out after {timeout_sec}s"
+            rc = None
+        records.append(
+            {
+                "name": spec.name,
+                "path": spec.path,
+                "state": "observation",
+                "action": "observed",
+                "detail": f"$ {spec.verify_command} -> exit {rc}",
+                "exit_code": rc,
+                "output": output,
+            }
+        )
+    return records
+
+
 def _queue(commands: list[str], command: str | None) -> None:
     """Remember ``command`` once, preserving declaration order."""
     if command and command not in commands:
@@ -246,6 +317,7 @@ __all__ = [
     "AUDIT_LOG",
     "BACKUP_SUFFIX",
     "apply_specs",
+    "observe_specs",
     "backup_path_for",
     "needs_root",
     "write_audit",

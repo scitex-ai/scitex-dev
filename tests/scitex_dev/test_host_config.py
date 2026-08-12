@@ -22,6 +22,7 @@ from scitex_dev._host_config_apply import (
     apply_specs,
     backup_path_for,
     needs_root,
+    observe_specs,
     write_audit,
 )
 from scitex_dev.host_config import (
@@ -134,6 +135,63 @@ def test_discover_dedups_by_name_first_provider_wins():
     )
     # Assert
     assert [s.purpose for s in specs] == ["from-first"]
+
+
+def test_per_host_declarations_may_share_one_path():
+    """A fleet address map is nine specs, one path, disjoint hosts.
+
+    Keying the collision guard on path ALONE dropped eight of the nine
+    and logged a warning nothing surfaces -- the silent loss this
+    federation exists to prevent, committed by the guard meant to
+    prevent it.
+    """
+    # Arrange
+    def provide():
+        return [
+            _spec(name=f"dhcp.{h}", path="/etc/netplan/99-scitex.yaml",
+                  content=f"addr {h}\n", hosts=(h,))
+            for h in ("compute-01", "compute-02", "compute-03", "compute-04")
+        ]
+
+    # Act
+    specs = discover_host_config(
+        include_entry_points=False, extra_providers=[provide]
+    )
+    # Assert
+    assert len(specs) == 4
+
+
+def test_same_path_still_conflicts_when_two_specs_share_a_host():
+    # Arrange
+    def provide():
+        return [
+            _spec(name="a", path="/etc/x.conf", hosts=("h1", "h2")),
+            _spec(name="b", path="/etc/x.conf", hosts=("h2", "h3")),
+        ]
+
+    # Act
+    specs = discover_host_config(
+        include_entry_points=False, extra_providers=[provide]
+    )
+    # Assert
+    assert [s.name for s in specs] == ["a"]
+
+
+def test_an_all_hosts_spec_conflicts_with_a_per_host_one_on_the_same_path():
+    """Empty `hosts` means everywhere, so it overlaps with everything."""
+    # Arrange
+    def provide():
+        return [
+            _spec(name="everywhere", path="/etc/x.conf"),
+            _spec(name="just-one", path="/etc/x.conf", hosts=("h1",)),
+        ]
+
+    # Act
+    specs = discover_host_config(
+        include_entry_points=False, extra_providers=[provide]
+    )
+    # Assert
+    assert [s.name for s in specs] == ["everywhere"]
 
 
 def test_discover_refuses_two_declarations_of_the_same_path():
@@ -410,6 +468,71 @@ def test_needs_root_is_false_once_converged(tmp_path):
     result = needs_root(preview, [spec])
     # Assert
     assert result is False
+
+
+# --------------------------------------------------------------------- #
+# observe_specs -- what the host SAYS, never a compliance verdict        #
+# --------------------------------------------------------------------- #
+def test_observation_records_the_command_output(tmp_path):
+    # Arrange
+    spec = _converged(tmp_path, verify_command="echo 192.168.11.187")
+    # Act
+    records = observe_specs([spec], root=str(tmp_path))
+    # Assert
+    assert records[0]["output"] == "192.168.11.187"
+
+
+def test_observation_is_labelled_as_an_observation_not_a_verdict(tmp_path):
+    # Arrange
+    spec = _converged(tmp_path, verify_command="echo hi")
+    # Act
+    records = observe_specs([spec], root=str(tmp_path))
+    # Assert
+    assert records[0]["action"] == "observed"
+
+
+def test_a_disagreeing_observation_leaves_the_verdict_ok(tmp_path):
+    """A requested DHCP address that was not granted is `ok` + a difference.
+
+    Reporting it as drift would accuse a correct config file of a fault
+    it does not have, and would train everyone to ignore drift.
+    """
+    # Arrange
+    spec = _converged(tmp_path, verify_command="echo 192.168.11.187")
+    # Act
+    verdicts = apply_specs([spec], root=str(tmp_path), run_apply_commands=False)
+    # Assert
+    assert verdicts[0]["action"] == "unchanged"
+
+
+def test_observation_reports_a_nonzero_exit_without_failing(tmp_path):
+    # Arrange
+    spec = _converged(tmp_path, verify_command="exit 3")
+    # Act
+    records = observe_specs([spec], root=str(tmp_path))
+    # Assert
+    assert records[0]["exit_code"] == 3
+
+
+def test_no_verify_command_yields_no_observation(tmp_path):
+    # Arrange
+    spec = _converged(tmp_path)
+    # Act
+    records = observe_specs([spec], root=str(tmp_path))
+    # Assert
+    assert records == []
+
+
+def test_no_observation_when_the_precondition_is_unmet(tmp_path):
+    """`auditctl -l` on a host with no auditd is a shell error, not a finding."""
+    # Arrange
+    spec = _spec(
+        requires_command="a-binary-that-does-not-exist", verify_command="echo x"
+    )
+    # Act
+    records = observe_specs([spec], root=str(tmp_path))
+    # Assert
+    assert records == []
 
 
 # --------------------------------------------------------------------- #
