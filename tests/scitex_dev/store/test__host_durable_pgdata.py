@@ -73,6 +73,45 @@ def _a_durable_directory() -> "Path | None":
 
 DURABLE = _a_durable_directory()
 
+
+def _a_mount_nested_under_another() -> "tuple[Path, str] | None":
+    """A mount point that sits UNDER another mount, with its recorded fstype.
+
+    Reads `/proc/self/mountinfo` directly rather than asking the module under
+    test, so the expected value comes from the kernel and not from the
+    function whose behaviour is being checked.
+
+    Returns None where the host has no nested mount — then "longest match
+    wins" has nothing to discriminate and is not observable here.
+    """
+    try:
+        raw = Path("/proc/self/mountinfo").read_text().splitlines()
+    except OSError:
+        return None
+    seen: dict[Path, str] = {}
+    for line in raw:
+        parts = line.split(" - ")
+        if len(parts) != 2:
+            continue
+        fields, rest = parts[0].split(), parts[1].split()
+        if len(fields) < 5 or not rest:
+            continue
+        seen.setdefault(Path(fields[4]), rest[0])
+    for point, fstype in sorted(seen.items(), key=lambda kv: -len(kv[0].parts)):
+        if point != Path("/") and any(
+            other != point and other in point.parents for other in seen
+        ):
+            return point, fstype
+    return None
+
+
+NESTED_MOUNT = _a_mount_nested_under_another()
+
+needs_nested_mount = pytest.mark.skipif(
+    NESTED_MOUNT is None,
+    reason="no nested mount on this host — longest-match is not observable",
+)
+
 needs_ephemeral = pytest.mark.skipif(
     _fstype_of(EPHEMERAL) not in _EPHEMERAL_FSTYPES,
     reason="/dev/shm is not an ephemeral filesystem on this host",
@@ -187,15 +226,34 @@ class TestTheDiscriminatorItself:
         # Assert
         assert listed
 
+    @needs_nested_mount
     def test_the_longest_matching_mount_wins(self):
-        """`/home/x` must beat `/` for a path under it, or every path on a
-        bind would report the container root's filesystem."""
+        """A path under a nested mount reports THAT mount, not the root's.
+
+        WRITTEN WRONG THE FIRST TIME, and the way it was wrong is the exact
+        defect this whole module exists to catch. The original asserted:
+
+            assert _fstype_of(Path.home()) != _fstype_of(Path("/"))
+
+        which is true on scitex-compute-04 -- `$HOME` is an ext4 bind and `/`
+        is overlayfs -- and FALSE on a CI runner, where home and root are the
+        same filesystem. It encoded a property of ONE MACHINE as a universal
+        truth, and it broke develop for everyone the moment it ran anywhere
+        else.
+
+        A test that asserts an environment coincidence is not testing the
+        code; it is testing the machine. So this now builds its own evidence
+        from the mount table instead: find any mount point nested under
+        another, and require the longest one to win. Where no nested mount
+        exists there is nothing to discriminate and the property is simply
+        not observable -- which is a skip, not a failure.
+        """
         # Arrange
-        home = Path.home()
+        path, recorded_fstype = NESTED_MOUNT
         # Act
-        same_as_root = _fstype_of(home) == _fstype_of(Path("/"))
+        resolved = _fstype_of(path)
         # Assert
-        assert not same_as_root
+        assert resolved == recorded_fstype
 
 
 class TestTheGuardSurvivesATransportChange:
