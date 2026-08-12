@@ -23,6 +23,7 @@ and fail in CI).
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 import textwrap
@@ -312,15 +313,35 @@ def _run_ordering_arm(stdlib_first: bool) -> str:
                 print("REC", name, msg)
         """
     )
+    child_env = {
+        "PYTHONPATH": _SRC,
+        "PATH": "/usr/bin:/bin",
+        "SCITEX_DEV_LINTER_QUIET": "1",
+    }
+    # The minimal env above is deliberate — this arm is about IMPORT ORDERING,
+    # so everything that could reorder or silence imports is stated, not
+    # inherited. `LD_LIBRARY_PATH` is not one of those things: it is what the
+    # DYNAMIC LOADER needs to start `sys.executable` at all, before a single
+    # line of the script runs.
+    #
+    # Dropping it was invisible until 2026-08-12. Spartan's interpreter found
+    # its libpython on the default loader path; setup-python's 3.11 and 3.13
+    # builds on the scitex-compute nodes live under the tool cache and link
+    # against `libpython3.X.so.1.0` beside them, reachable only through
+    # `LD_LIBRARY_PATH` — which the job sets and this call then threw away.
+    # Every arm died with rc=127, `error while loading shared libraries`,
+    # and nine tests per interpreter reported on an experiment that never ran.
+    #
+    # Passed through only when the parent has it, so the env stays minimal
+    # where nothing needs it.
+    _loader_path = os.environ.get("LD_LIBRARY_PATH")
+    if _loader_path:
+        child_env["LD_LIBRARY_PATH"] = _loader_path
     result = subprocess.run(
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
-        env={
-            "PYTHONPATH": _SRC,
-            "PATH": "/usr/bin:/bin",
-            "SCITEX_DEV_LINTER_QUIET": "1",
-        },
+        env=child_env,
     )
     if result.returncode != 0:
         return f"SUBPROCESS_FAILED rc={result.returncode}\n{result.stderr}"
