@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scitex.ai/spec/status/1/report.schema.json",
+  "title": "SciTeX doctor report, spec_version 1",
+  "description": "A package's checks rolled up into one verdict. FOUR KEYS, and the rolled-up `ok` is three-valued exactly as a check's is. WHAT AN UNKNOWN MEANS FOR THE ROLLUP IS THE CALLER'S DECISION and is NOT carried here: `refuse` (an unknown blocks — never act on a host you could not inspect), `propagate` (the rollup is itself unknown) and `tolerate` (an unknown does not block) are all legal, so a reader MUST NOT infer from a top-level `ok: true` that every check was answered. `summary` is where that is visible: it NAMES every unknown check, under every policy. See verdicts.yaml.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["package", "ok", "checks", "summary"],
+
+  "properties": {
+    "package": {
+      "description": "Which package this doctor speaks for.",
+      "type": "string",
+      "minLength": 1
+    },
+
+    "ok": {
+      "description": "The rolled-up verdict, three-valued. A known failure anywhere makes this false under every policy. null appears only under the `propagate` policy, and means the rollup itself could not be established.",
+      "type": ["boolean", "null"]
+    },
+
+    "checks": {
+      "description": "The individual answers, in the order they were asked.",
+      "type": "array",
+      "items": {"$ref": "https://scitex.ai/spec/status/1/check.schema.json"}
+    },
+
+    "summary": {
+      "description": "Counts, then the names of the failing checks, then the names of the UNKNOWN ones. The unknowns are named under every policy — a tolerated unknown is still an unknown, and an aggregate that answers `ok` without saying what it could not see has lied by omission.",
+      "type": "string",
+      "minLength": 1
+    },
+
+    "unknown_policy": {
+      "not": {},
+      "description": "FORBIDDEN on the wire. It is a property of the CALLER's decision rather than of the observation, and adding a fifth key would make every existing reader of this four-key record wrong about a shape that was not the problem. Read the unknowns from `summary`."
+    }
+  }
+}
