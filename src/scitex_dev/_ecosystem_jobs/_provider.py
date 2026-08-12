@@ -58,6 +58,7 @@ JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
     "ecosystem-self-pull": ("dev", "timer-ecosystem-self-pull"),
     "drift-report": ("dev", "timer-drift-report"),
     "local-state-audit": ("dev", "timer-local-state-audit"),
+    "host-config-check": ("dev", "timer-host-config-check"),
 }
 
 #: Pure shell bodies for the jobs whose body is not a Python entry point —
@@ -82,6 +83,15 @@ JOB_SHELL_BODIES: dict[str, str] = {
     "local-state-audit": (
         "date -u +'== local-state-audit %Y-%m-%dT%H:%MZ =='; "
         "scitex-dev ecosystem audit-local-state || true"
+    ),
+    # OBSERVE-only by construction: `host-config check` never writes, and
+    # it needs no privileges (the managed files under /etc are
+    # world-readable), so the unprivileged periodic job can report drift
+    # honestly. Converging is `host-config apply`, a deliberate root act
+    # — a timer must never quietly rewrite a host's /etc.
+    "host-config-check": (
+        "date -u +'== host-config-check %Y-%m-%dT%H:%MZ =='; "
+        "scitex-dev ecosystem host-config check || true"
     ),
 }
 
@@ -160,6 +170,22 @@ def _local_state_audit_command() -> str:
     line.
     """
     return _exec_command("local-state-audit")
+
+
+def _host_config_check_command() -> str:
+    """Command installed for the ``host-config-check`` timer.
+
+    Runs the read-only ``ecosystem host-config check`` pass (see
+    ``JOB_SHELL_BODIES``): compares every ``scitex_dev.host_config``
+    declaration against this host and appends the per-spec verdict to the
+    runtime log AND to ``~/.scitex/dev/runtime/logs/host-config.log``.
+    ``|| true`` keeps the OBSERVATION unit successful when it FINDS drift
+    (mirrors ``drift-report`` / ``local-state-audit``) — `check` exits 1
+    on drift by design, which is right for a human at a prompt and wrong
+    for a timer, where a permanently-red unit trains the operator to
+    ignore it.
+    """
+    return _exec_command("host-config-check")
 
 
 def _pr_expire_command() -> str:
@@ -261,6 +287,37 @@ def provide_jobs() -> list[JobSpec]:
                 "PostToolUse hook reads this log. See "
                 "_ecosystem_jobs._provider._local_state_audit_command and "
                 "_skills/general/01_ecosystem/12_local-state-resolution.md."
+            ),
+            on_boot_sec="5min",
+            on_unit_active_sec="6h",
+        ),
+        JobSpec(
+            name="host-config-check",
+            kind="timer",
+            schedule="",
+            command=_host_config_check_command(),
+            description=(
+                "Declared HOST-state observer. Runs `scitex-dev ecosystem "
+                "host-config check` on a Persistent timer (OnBootSec "
+                "catch-up + every 6h) and appends a per-spec verdict "
+                "(ok / absent / drift) to "
+                "~/.scitex/dev/runtime/logs/timer-host-config-check.log and "
+                "to the federation's own audit trail at "
+                "~/.scitex/dev/runtime/logs/host-config.log. Aggregates "
+                "every leaf's `scitex_dev.host_config` provider — the same "
+                "entry-point federation as `scitex_dev.jobs` and "
+                "`scitex_dev.system_deps`, applied to host-level state "
+                "(journald persistence, sysctl drop-ins) that used to be "
+                "configured by hand with sudo and therefore left no record "
+                "of what was set or why (operator ruling 2026-08-12). "
+                "UNPRIVILEGED and READ-ONLY: `check` never writes, so the "
+                "timer reports drift rather than converging it — "
+                "`host-config apply` is the deliberate root act. The "
+                "OnBootSec catch-up is the load-bearing one: a reboot is "
+                "exactly when host config is most likely to have been lost. "
+                "`|| true` so finding drift is data, not a unit failure. "
+                "See _ecosystem_jobs._provider._host_config_check_command "
+                "and scitex_dev.host_config."
             ),
             on_boot_sec="5min",
             on_unit_active_sec="6h",

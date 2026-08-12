@@ -7,7 +7,131 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-08-12
+
+**A declaration that resolves to something.** `scitex_dev.store` shipped in
+0.47.0 with an oplog, a hybrid logical clock, per-origin cursors, field-level
+HLC merge and a `MergeRule` enum — and zero callers, because the federation
+layer that lets a leaf DECLARE a store was never on a branch. Two downstream
+packages had already shipped their half of the contract against it: sac's
+`[project.entry-points."scitex_dev.store.plugins"]` and scitex-cards' mirror
+of it both resolved to a provider that RAISED `ModuleNotFoundError`. A
+declaration that exists, passes inspection, and does nothing is worse than an
+absent one, because it reads as done.
+
 ### Added
+
+- **`scitex_dev.store` federation — leaves declare semantics, scitex-dev owns
+  the machinery (#594).** The parent package now re-exports `StorePlugin`,
+  `StorePluginProvider`, `discover_store_plugins`, `plugin_for`,
+  `resolve_target` and `ENTRY_POINT_GROUP`. A leaf registers a provider
+  (`() -> list[StorePlugin]`) under the entry-point group
+  `scitex_dev.store.plugins`; `discover_store_plugins()` aggregates them,
+  deduped by store name, first-wins.
+
+  **Two strings are the pinned public contract** — the import path
+  `scitex_dev.store` and the group name `scitex_dev.store.plugins` — and both
+  are asserted by test (`tests/scitex_dev/store/test__exports.py`,
+  `federation/test__discover.py`). Renaming either orphans every installed
+  leaf SILENTLY: discovery finds nothing and reports an empty federation,
+  which is indistinguishable from "no leaf has adopted the store yet".
+
+  A leaf declares only the part it alone can know — which of ITS fields are
+  immutable, last-writer-wins or append-only — because a merge rule guessed
+  by scitex-dev would lose data without raising. It does NOT resolve its own
+  store target: `resolve_target()` does that centrally, because per-consumer
+  resolution is what let one host reach two Postgres instances that both
+  answered to one `store_uuid` on 2026-08-11.
+
+  `store/federation/` is shaped like `scitex_dev.gate` — `_spec` /
+  `_discover` / `_builtin` / `_resolve` behind a pure re-export façade — so
+  the three federations are one thing to learn. It carries both of `gate`'s
+  seams, `include_entry_points` and `include_builtins`, which
+  `scitex_dev.jobs` lacks: without them a test can only assert
+  set-membership, because any installed leaf leaks into the result and makes
+  it depend on the environment.
+
+  scitex-dev registers its OWN store through an INTERNAL provider, never an
+  entry point. It is a leaf of this federation, not a privileged parent, and
+  a package that registered in a group it also reads would have discovery
+  load scitex-dev's metadata to find scitex-dev.
+
+- **An empty federation says WHY it is empty.** An installed-but-unregistered
+  leaf and a typo'd store name produce the same empty result, so
+  `plugin_for()` distinguishes them in prose rather than returning `None`
+  twice. Every failure of 2026-08-11 was a truthful empty answer about the
+  wrong thing.
+
+- **Store identity, divergence detection and a Postgres/SQLite dialect
+  split** (`store/_identity.py`, `_identity_state.py`, `_divergence.py`,
+  `_dialect/`). The identity layer is what makes "two instances answering to
+  one `store_uuid`" detectable instead of silently merged.
+
+### Fixed
+
+- **`rm -rf ""` is a silent success, so the CI scratch path is guarded with
+  `:?` (#586).** An unset or empty scratch variable expanded to a bare `rm
+  -rf` that removed nothing and exited 0 — a cleanup step that could not
+  fail, and therefore could not report that it had never run.
+
+## [0.48.0] - 2026-08-12
+
+Published from the develop→main promotion (#574) without a CHANGELOG entry;
+this section is written after the fact from the tag range `v0.47.0..v0.48.0`,
+because the release contained two BREAKING changes for downstream consumers
+and shipping them unannounced is what made them expensive.
+
+### Changed (breaking for downstream consumers)
+
+- **One CLI group per JobSpec KIND, not per mechanism (#566).** `ecosystem
+  dev {service,timer} <verb>` replaces the previous per-mechanism surface.
+  The name argument is MIXED by design — `install`/`uninstall` take
+  `--name X`, while `status`/`enable`/`disable`/`start`/`stop`/`restart`/
+  `exec` take a POSITIONAL name — so any caller emitting `--name`
+  unconditionally now dies with `Error: No such option '--name'` (exit 2).
+  Measured downstream: nine sac commands, and the reason sac holds a
+  `scitex-dev<0.48` ceiling.
+
+- **PS-226..PS-229 — the fleet-wide JobSpec declaration convention (#565).**
+  PS-226 `job-name-not-hyphenated` does not exist in 0.47.0 at all (0
+  occurrences in the 0.47.0 wheel, 6 files in 0.48.0). A new `E`-severity
+  rule lands as an unmasked error in every downstream `audit-all` gate the
+  moment the dependency floats, which is a release-note-worthy event even
+  when the rule is right.
+
+### Added
+
+- **`sac-control-plane` is a registered runner destination — the label was
+  real, nothing declared it.** The shipped seed gains `scitex-compute-04`
+  (`kind: compute`) with the effective label set its one runner carries:
+  `[self-hosted, Linux, X64, scitex-org-cpu, sac-control-plane]`, measured
+  2026-08-12 from the org Actions API and from that machine's own
+  `~/actions-runner-org/.runner`.
+
+  sac's CI feedback rail pinned a `verdict` job to `sac-control-plane` and
+  PS-224 refused it. The rule was right. sac's ADR-0024 had assumed the
+  self-hosted runners execute on the host running the control plane; they are
+  four runners on four machines, and only `scitex-04-org-cpu-01` shares one
+  with `sac listen` (`127.0.0.1:7878`) and the card store
+  (`127.0.0.1:55432`). Both bind loopback, so on the other three that job
+  calls a different machine's daemon and writes to a different postgres —
+  delivered to nobody, recorded nowhere, and green either way. The pin is
+  necessary while those services are loopback-only.
+
+  Registered rather than exempted, deliberately. A PS-224 exemption was
+  considered and rejected: the single existing one in the ecosystem rests on
+  a security argument, and an exemption granted because a rule is
+  inconvenient is how an audit stops meaning anything.
+
+  What the entry records, in comments, because the registry schema has no
+  field for a destination's MEANING: `sac-control-plane` is a CO-LOCATION
+  claim, not a capability tier, and anything pinned to it is exactly as
+  available as that one machine — it does not fail over, and PS-224 will
+  still pass it, because the gate validates served-ness and not capacity.
+  Registering the runner's EFFECTIVE set also makes the broader
+  `scitex-org-cpu` destination legal; its three sibling machines
+  (`scitex-01/02/03-org-cpu-01`) are not registered yet, so that destination
+  is legal on the strength of one entry and under-reports the pool by three.
 
 - **A check verdict is THREE-valued, and `unknown` has to say why (ADR-0010).**
   `scitex_dev.status` gains `Verdict` / `Check` / `rollup` beside `StatusCode`.

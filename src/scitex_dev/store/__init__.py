@@ -75,6 +75,7 @@ from ._adopt import (
 )
 from ._apply import apply_entry
 from ._discovery import DiscoveredStore, StoreStatus, discover_stores
+from ._divergence import DivergenceReport, ForkPoint, detect_divergence
 from ._errors import (
     AdoptionRefusedError,
     ClockDriftError,
@@ -84,15 +85,34 @@ from ._errors import (
     RecordNotFoundError,
     RevisionMismatchError,
     SchemaError,
+    StoreDivergedError,
     StoreError,
+    StoreIdentityMismatchError,
+    StoreIdentityUnknownError,
     StoreTargetError,
+    SupersededFenceError,
     WriterConflictError,
 )
+from .federation import (
+    ENTRY_POINT_GROUP,
+    StorePlugin,
+    StorePluginProvider,
+    discover_store_plugins,
+    plugin_for,
+    resolve_target,
+)
 from ._guards import ANY_REVISION, NEW_RECORD
+from ._identity import (
+    IdentityVerdict,
+    StoreIdentity,
+    UNKNOWN_SYSTEM,
+    assert_same_store,
+    compare_identity,
+)
 from ._hlc import HLC, HybridLogicalClock
 from ._host import host_store, socket_dsn
 from ._merge import MergeConflict, MergeOutcome, merge_field
-from ._oplog import OpEntry, OpKind, assert_contiguous
+from ._oplog import OpEntry, OpKind, assert_contiguous, assert_not_superseded
 from ._policy import (
     FieldKind,
     FieldPolicy,
@@ -114,13 +134,17 @@ __all__ = [
     "ClockDriftError",
     "DialectUnavailableError",
     "DiscoveredStore",
+    "DivergenceReport",
+    "ENTRY_POINT_GROUP",
     "FieldKind",
     "FieldPolicy",
     "FieldPolicyError",
     "FieldRole",
+    "ForkPoint",
     "GENESIS_ACTOR",
     "HLC",
     "HybridLogicalClock",
+    "IdentityVerdict",
     "MergeConflict",
     "MergeOutcome",
     "MergeRule",
@@ -137,23 +161,38 @@ __all__ = [
     "Schema",
     "SchemaError",
     "Store",
+    "StoreDivergedError",
     "StoreError",
+    "StoreIdentity",
+    "StoreIdentityMismatchError",
+    "StoreIdentityUnknownError",
+    "StorePlugin",
+    "StorePluginProvider",
     "StoreStatus",
     "StoreTarget",
     "StoreTargetError",
+    "SupersededFenceError",
+    "UNKNOWN_SYSTEM",
     "WriterConflictError",
     "WriterPolicy",
     "apply_entry",
     "assert_contiguous",
+    "assert_not_superseded",
+    "assert_same_store",
     "build_genesis",
+    "compare_identity",
+    "detect_divergence",
+    "discover_store_plugins",
     "discover_stores",
     "genesis_origin",
     "host_store",
     "install_genesis",
     "merge_field",
     "outstanding",
+    "plugin_for",
     "pull",
     "replay",
+    "resolve_target",
     "socket_dsn",
     "sync",
     "verify_adoption",
