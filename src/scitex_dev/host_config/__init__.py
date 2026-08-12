@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# File: src/scitex_dev/host_config.py
+# File: src/scitex_dev/host_config/__init__.py
 """Federated HOST-LEVEL configuration declaration for the SciTeX ecosystem.
 
 Every scitex leaf declares the *host* state it needs -- a journald
@@ -256,7 +256,7 @@ def _builtin_host_config() -> list[HostConfigSpec]:
     The ``scitex_dev.host_config`` entry-point group is therefore
     reserved for DOWNSTREAM packages.
     """
-    from ._host_config import provide
+    from ._declarations import provide
 
     return provide()
 
