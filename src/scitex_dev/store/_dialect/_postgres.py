@@ -117,6 +117,50 @@ class PostgresDialect(Dialect):
             f"ON CONFLICT ({self.quote(key)}) DO UPDATE SET {updates}"
         )
 
+    def system_identifier(self, connection: Any, target: StoreTarget) -> tuple:
+        """The CLUSTER's ``system_identifier``, from ``pg_control_system()``.
+
+        Postgres mints this at ``initdb`` and it identifies the INSTALLATION,
+        not the database, the connection or the address. Two DSNs reaching
+        one cluster — a socket and a TCP port, a tunnel and a direct
+        connection — return the same value, which is the property that makes
+        it usable: it distinguishes instances without reporting a fork every
+        time somebody connects by a different route.
+
+        It also survives what a stored uuid does not. A ``pg_dump`` restored
+        into a second cluster carries the store's own tables verbatim,
+        ``store_uuid`` included, and reports a DIFFERENT system identifier —
+        which is the 2026-08-11 case, and the one this exists to name.
+
+        Returns UNKNOWN with the driver's own message when the role may not
+        read it. ``pg_control_system()`` is superuser-only by default and
+        the fleet's roles are not superusers, so this branch is the EXPECTED
+        one on an ungranted cluster, not an exotic failure. The remedy —
+        ``GRANT EXECUTE ON FUNCTION pg_control_system() TO <role>``, or
+        ``pg_monitor`` membership — is carried in the identity error rather
+        than here, where the caller would not see it.
+        """
+        from .._identity import UNKNOWN_SYSTEM
+
+        try:
+            found = connection.execute(
+                "SELECT system_identifier::text AS sid FROM pg_control_system()"
+            ).fetchone()
+        except Exception as exc:
+            # The failed statement aborts the surrounding transaction on
+            # Postgres; roll back so an identity probe cannot poison the
+            # caller's connection. Autocommit makes this a no-op, but this
+            # dialect must not assume the connection it was handed is one.
+            try:
+                connection.rollback()
+            except Exception:  # pragma: no cover - best effort cleanup
+                pass
+            return (UNKNOWN_SYSTEM, f"pg_control_system() unreadable: {exc}")
+        if found is None:  # pragma: no cover - the function returns one row
+            return (UNKNOWN_SYSTEM, "pg_control_system() returned no row")
+        value = found["sid"] if hasattr(found, "keys") else found[0]
+        return (f"pg:{value}", "pg_control_system()")
+
     def to_db_bool(self, value: bool) -> Any:
         return bool(value)
 

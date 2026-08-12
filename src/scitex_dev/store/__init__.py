@@ -75,6 +75,7 @@ from ._adopt import (
 )
 from ._apply import apply_entry
 from ._discovery import DiscoveredStore, StoreStatus, discover_stores
+from ._divergence import DivergenceReport, ForkPoint, detect_divergence
 from ._errors import (
     AdoptionRefusedError,
     ClockDriftError,
@@ -84,11 +85,29 @@ from ._errors import (
     RecordNotFoundError,
     RevisionMismatchError,
     SchemaError,
+    StoreDivergedError,
     StoreError,
+    StoreIdentityMismatchError,
+    StoreIdentityUnknownError,
     StoreTargetError,
     WriterConflictError,
 )
+from ._federation import (
+    ENTRY_POINT_GROUP,
+    StorePlugin,
+    StorePluginProvider,
+    discover_store_plugins,
+    plugin_for,
+    resolve_target,
+)
 from ._guards import ANY_REVISION, NEW_RECORD
+from ._identity import (
+    IdentityVerdict,
+    StoreIdentity,
+    UNKNOWN_SYSTEM,
+    assert_same_store,
+    compare_identity,
+)
 from ._hlc import HLC, HybridLogicalClock
 from ._host import host_store, socket_dsn
 from ._merge import MergeConflict, MergeOutcome, merge_field

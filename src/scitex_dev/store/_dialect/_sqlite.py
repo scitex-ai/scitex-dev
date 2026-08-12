@@ -118,6 +118,35 @@ class SQLiteDialect(Dialect):
             f"ON CONFLICT({self.quote(key)}) DO UPDATE SET {updates}"
         )
 
+    def system_identifier(self, connection: Any, target: StoreTarget) -> tuple:
+        """The file's ``device:inode`` — SQLite's only honest instance id.
+
+        SQLite has no notion of a cluster or an installation, so there is
+        nothing inside the database to ask. The filesystem, however, does
+        distinguish a file from a copy of it: ``cp store.db store.db.bak``
+        produces a new inode, and that is exactly the fork this needs to
+        catch. Two processes opening the SAME path through different mounts
+        also agree, since ``st_dev`` identifies the filesystem rather than
+        the mount point.
+
+        A hardlink to the same file reads as the same instance, which is
+        correct: it IS the same bytes, not a copy.
+
+        Returns UNKNOWN when the file cannot be stat'ed. That is the honest
+        answer and it makes the identity check refuse to certify, rather
+        than certifying from a value it could not read.
+        """
+        from .._identity import UNKNOWN_SYSTEM
+
+        path = target.path
+        if path is None:  # pragma: no cover - guarded by get_dialect pairing
+            return (UNKNOWN_SYSTEM, "target is not file-backed")
+        try:
+            status = Path(path).stat()
+        except OSError as exc:
+            return (UNKNOWN_SYSTEM, f"cannot stat {path}: {exc}")
+        return (f"sqlite:{status.st_dev}:{status.st_ino}", "file device/inode")
+
     def to_db_bool(self, value: bool) -> Any:
         return 1 if value else 0
 
