@@ -447,13 +447,13 @@ def test_resolve_auto_seeds_writes_file_to_disk(tmp_path):
     assert target.is_file()
 
 
-def test_list_hosts_auto_seeds_default_six_hosts(tmp_path):
+def test_list_hosts_auto_seeds_default_seven_hosts(tmp_path):
     # Arrange
     target = tmp_path / "hosts.yaml"
     # Act
     records = list_hosts(hosts_path=target)
     # Assert
-    assert len(records) == 6
+    assert len(records) == 7
 
 
 def test_default_seed_includes_operator_known_hosts(tmp_path):
@@ -465,6 +465,7 @@ def test_default_seed_includes_operator_known_hosts(tmp_path):
     assert {r.name for r in records} == {
         "ywata-note-win",
         "spartan",
+        "scitex-compute-04",
         "scitex-nas-01",
         "scitex-nas-02",
         "scitex-nas-03",
