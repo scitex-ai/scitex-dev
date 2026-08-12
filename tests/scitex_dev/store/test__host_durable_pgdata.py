@@ -47,6 +47,7 @@ import pytest
 from scitex_dev.store._errors import StoreTargetError
 from scitex_dev.store._host import (
     _EPHEMERAL_FSTYPES,
+    _fstype_from_mountinfo,
     _fstype_of,
     require_durable_pgdata,
 )
@@ -54,6 +55,20 @@ from scitex_dev.store._host import (
 #: A real ephemeral filesystem to test the refusal against. `/dev/shm` is
 #: tmpfs on Linux — an actual ephemeral mount, not a simulated one.
 EPHEMERAL = Path("/dev/shm")
+
+#: Two lines in the exact shape of `/proc/self/mountinfo`, transcribed from
+#: the compute-04 measurement quoted in the module docstring: a container
+#: root on an overlay, with a durable host bind mounted UNDER it.
+#:
+#: This is the situation the guard exists for, and it is stated here rather
+#: than looked up on whatever machine happens to run the suite, because a
+#: host without a nested mount cannot express it at all.
+_NESTED_MOUNTINFO = (
+    "722 605 0:71 / / rw,nosuid,nodev,noatime unbindable"
+    " - fuse.fuse-overlayfs fuse-overlayfs rw,user_id=1000\n"
+    "801 722 252:0 /home/ywatanabe /home/ywatanabe rw,relatime"
+    " - ext4 /dev/mapper/ubuntu--vg-ubuntu--lv rw\n"
+)
 
 
 def _a_durable_directory() -> "Path | None":
@@ -189,13 +204,44 @@ class TestTheDiscriminatorItself:
 
     def test_the_longest_matching_mount_wins(self):
         """`/home/x` must beat `/` for a path under it, or every path on a
-        bind would report the container root's filesystem."""
+        bind would report the container root's filesystem — and the guard
+        would refuse the one location that IS durable.
+
+        Asked of a CONSTRUCTED table rather than of this machine's. Until
+        2026-08-12 this compared `Path.home()` against `/` on the live host,
+        which asserts the rule only where $HOME is a separate mount. On the
+        scitex-compute runners $HOME shares the root ext4 filesystem, the
+        two answers agreed, and the test failed while the rule was correct.
+        """
         # Arrange
-        home = Path.home()
+        under_the_bind = Path("/home/ywatanabe/.scitex/pg")
         # Act
-        same_as_root = _fstype_of(home) == _fstype_of(Path("/"))
+        fstype = _fstype_from_mountinfo(_NESTED_MOUNTINFO, under_the_bind)
         # Assert
-        assert not same_as_root
+        assert fstype == "ext4"
+
+    def test_a_path_outside_the_bind_reports_the_root_filesystem(self):
+        """The other half of the same rule: longest-match must still PREFER
+        `/` for a path the bind does not cover. Without this, "always return
+        ext4" would satisfy the test above."""
+        # Arrange
+        outside_the_bind = Path("/var/lib/postgresql")
+        # Act
+        fstype = _fstype_from_mountinfo(_NESTED_MOUNTINFO, outside_the_bind)
+        # Assert
+        assert fstype == "fuse.fuse-overlayfs"
+
+    def test_a_sibling_of_the_bind_is_not_mistaken_for_it(self):
+        """`/home/ywatanabe2` shares a string prefix with `/home/ywatanabe`
+        and shares no mount with it. Prefix matching on the raw string would
+        report the bind's durable ext4 for a path that is on the overlay —
+        the guard's one job, wrong in the unsafe direction."""
+        # Arrange
+        prefix_lookalike = Path("/home/ywatanabe2/pg")
+        # Act
+        fstype = _fstype_from_mountinfo(_NESTED_MOUNTINFO, prefix_lookalike)
+        # Assert
+        assert fstype == "fuse.fuse-overlayfs"
 
 
 class TestTheGuardSurvivesATransportChange:

@@ -437,7 +437,52 @@ def test_restore_of_a_missing_archive_reports_not_found(store, tmp_path):
 
 # ------------------------------------------------------------------- sync
 
-def test_sync_commits_a_new_store(store):
+@pytest.fixture()
+def hermetic_git(tmp_path):
+    """A git that HAS an identity and reads no configuration from this box.
+
+    ``sync()`` makes a real commit, and git refuses to commit without an
+    author. Until 2026-08-12 these tests took whatever identity the machine
+    offered — ``~/.gitconfig``, or ``$GIT_AUTHOR_EMAIL`` exported by the
+    shell — and there are three ways for that to end. Green on the author's
+    box and on the Spartan runners. ``Author identity unknown`` the moment
+    CI moved to the scitex-compute nodes, where nothing sets one and the
+    hostname carries no domain, so git cannot even guess. And, worst,
+    green for the WRONG REASON on a host that merely happens to guess
+    successfully — which is why the failure reached CI unseen.
+
+    Who signs a commit in a throwaway ``tmp_path`` repository is not what
+    any of these tests assert, so the test STATES an identity instead of
+    borrowing one. Supplied the same way as the GNUPGHOME above: real
+    environment variables that git really reads, restored on teardown.
+
+    ``GIT_CONFIG_GLOBAL``/``GIT_CONFIG_SYSTEM`` are pointed at a file that
+    does not exist — git's documented way to spell "no config file" — so
+    the reverse leak is closed too: an ambient ``commit.gpgsign`` wanting
+    the operator's real key cannot reach into a throwaway store either.
+    """
+    absent = tmp_path / "no-such.gitconfig"
+    supplied = {
+        "GIT_CONFIG_GLOBAL": str(absent),
+        "GIT_CONFIG_SYSTEM": str(absent),
+        "GIT_AUTHOR_NAME": "SciTeX Test",
+        "GIT_AUTHOR_EMAIL": "test@example.invalid",
+        "GIT_COMMITTER_NAME": "SciTeX Test",
+        "GIT_COMMITTER_EMAIL": "test@example.invalid",
+    }
+    saved = {key: os.environ.get(key) for key in supplied}
+    os.environ.update(supplied)
+    try:
+        yield
+    finally:
+        for key, previous in saved.items():
+            if previous is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = previous
+
+
+def test_sync_commits_a_new_store(store, hermetic_git):
     # Arrange
     store.generate("s/one")
     # Act
@@ -446,7 +491,7 @@ def test_sync_commits_a_new_store(store):
     assert result.code == OK
 
 
-def test_sync_creates_a_git_repository(store):
+def test_sync_creates_a_git_repository(store, hermetic_git):
     # Arrange
     store.generate("s/two")
     # Act
@@ -455,7 +500,7 @@ def test_sync_creates_a_git_repository(store):
     assert (store.root / ".git").is_dir()
 
 
-def test_second_sync_reports_nothing_to_do(store):
+def test_second_sync_reports_nothing_to_do(store, hermetic_git):
     """POSITIVE CONTROL pairing: the first sync did commit something."""
     # Arrange
     store.generate("s/three")
