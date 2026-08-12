@@ -157,7 +157,7 @@ def register(ecosystem):
     def host_config_check(ctx, provider, as_json, no_log, verify):
         import json as _json
 
-        from ...._host_config_apply import apply_specs, observe_specs, write_audit
+        from ....host_config._apply import apply_specs, observe_specs, write_audit
 
         specs = _select(provider)
         records = apply_specs(specs, dry_run=True, run_apply_commands=False)
@@ -231,7 +231,7 @@ def register(ecosystem):
         import json as _json
         import os
 
-        from ...._host_config_apply import apply_specs, needs_root, write_audit
+        from ....host_config._apply import apply_specs, needs_root, write_audit
 
         specs = _select(provider)
         dry_run = not yes
