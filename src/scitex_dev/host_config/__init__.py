@@ -65,6 +65,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from ._volatility import volatile_reason
+
 _logger = logging.getLogger(__name__)
 
 #: Entry-point group every leaf registers its host-config provider under.
@@ -399,11 +401,11 @@ def evaluate(
     the whole point of this module:
 
     * ``not_applicable`` -- ``spec.hosts`` excludes this host.
-    * ``precondition_unmet`` -- ``spec.requires_command`` is not on
-      PATH, so writing the file would produce something no daemon
-      reads. Reported, never written: a correct-looking file that
-      nothing consumes is worse than a missing one, because it reports
-      ``ok`` forever afterwards.
+    * ``precondition_unmet`` -- the file could not do its job: either
+      ``spec.requires_command`` is off PATH (no daemon would read it),
+      or its filesystem is RAM-backed so a reboot erases it (see
+      ``._volatility``). Reported, never written -- a file nothing
+      reads, or that vanishes each boot, would report ``ok`` forever.
     * ``ok`` -- file present, content byte-identical, mode as declared.
       A second run of a converged host reports this for everything;
       that IS the "second run is a no-op and says so" contract.
@@ -433,6 +435,13 @@ def evaluate(
             f"{spec.requires_command!r} is not installed, so {spec.path} "
             f"would be read by nothing",
         )
+
+    # Real host only: under a synthetic ``root`` the evaluation is
+    # hypothetical, and pytest's tmp_path is often tmpfs itself.
+    if root == "/":
+        volatile = volatile_reason(spec.path)
+        if volatile:
+            return HostConfigStatus(spec, STATE_PRECONDITION_UNMET, volatile)
 
     target = Path(root) / spec.path.lstrip("/")
     if not target.exists():

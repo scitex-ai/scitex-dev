@@ -139,7 +139,7 @@ def provide() -> list[HostConfigSpec]:
     # package root would extend the `host_*` prefix cluster PS-108
     # already reports here, and push the flat-file count past PS-108b's
     # threshold.
-    from .hosts._dhcp import provide_dhcp_specs
+    from ..hosts._dhcp import provide_dhcp_specs
 
     return [
         HostConfigSpec(
