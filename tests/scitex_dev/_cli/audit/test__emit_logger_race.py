@@ -32,6 +32,7 @@ import pytest
 
 import scitex_dev
 import scitex_dev._cli.audit._emit as emit_mod
+from tests._child_env import with_loader_path
 
 # The `src/` dir holding the scitex_dev package UNDER TEST, so the
 # subprocess arms import the same tree this process imported — not
@@ -316,11 +317,17 @@ def _run_ordering_arm(stdlib_first: bool) -> str:
         [sys.executable, "-c", script],
         capture_output=True,
         text=True,
-        env={
-            "PYTHONPATH": _SRC,
-            "PATH": "/usr/bin:/bin",
-            "SCITEX_DEV_LINTER_QUIET": "1",
-        },
+        # The minimal env is deliberate — this arm is about IMPORT ORDERING,
+        # so anything that could reorder or silence an import is stated
+        # rather than inherited. The loader path is not one of those things;
+        # see tests/_child_env.py for why it must come through anyway.
+        env=with_loader_path(
+            {
+                "PYTHONPATH": _SRC,
+                "PATH": "/usr/bin:/bin",
+                "SCITEX_DEV_LINTER_QUIET": "1",
+            }
+        ),
     )
     if result.returncode != 0:
         return f"SUBPROCESS_FAILED rc={result.returncode}\n{result.stderr}"

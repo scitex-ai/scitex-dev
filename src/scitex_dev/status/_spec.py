@@ -29,6 +29,7 @@ __all__ = [
     "load_kinds",
     "load_schema",
     "load_scitex_codes",
+    "load_verdicts",
     "spec_path",
 ]
 
@@ -90,6 +91,12 @@ def load_scitex_codes() -> dict[str, Any]:
 def load_boundaries() -> dict[str, Any]:
     """Which kind each declared call boundary borrows."""
     return _load_yaml("boundaries.yaml")
+
+
+@lru_cache(maxsize=None)
+def load_verdicts() -> dict[str, Any]:
+    """The closed three-valued verdict set, its check rules and its rollup policies."""
+    return _load_yaml("verdicts.yaml")
 
 
 @lru_cache(maxsize=None)

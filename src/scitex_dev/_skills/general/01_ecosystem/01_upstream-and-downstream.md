@@ -44,7 +44,7 @@ These manage or orchestrate the cascade and the development workflow. They are *
 | Package | Role |
 |---|---|
 | **scitex-dev** | Ecosystem-wide developer tooling, cross-repo management, skills quality harness, release automation. *Manages* the cascade (CI, tests, packaging). |
-| **scitex-orochi** | Multi-agent orchestration (head / master / telegrammer roles). Drives development workflows. |
+| **scitex-orochi** | Multi-agent orchestration (head / controller / telegrammer roles). Drives development workflows. |
 | **scitex-agent-container** | Container images & configuration for SciTeX agents. Infrastructure for scitex-orochi. |
 | **scitex-container** | General container layer for SciTeX services. Infrastructure host. |
 

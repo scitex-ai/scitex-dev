@@ -27,6 +27,7 @@ import subprocess
 from pathlib import Path
 
 from scitex_dev._hooks import pre_push_sh_path
+from tests._child_env import with_loader_path
 
 
 # ---------------------------------------------------------------------- #
@@ -132,11 +133,15 @@ class TestPrePushPythonFallback:
             ).stdout.strip()
             if real and Path(real).exists():
                 (sterile / bin_name).symlink_to(real)
-        env = {
-            "PATH": str(sterile),
-            "HOME": str(tmp_path),
-            "LC_ALL": "C",
-        }
+        # Sterile by design — the omissions above ARE the experiment. The
+        # loader path is not one of them; see tests/_child_env.py.
+        env = with_loader_path(
+            {
+                "PATH": str(sterile),
+                "HOME": str(tmp_path),
+                "LC_ALL": "C",
+            }
+        )
         # Act
         proc = subprocess.run(
             ["bash", pre_push_sh_path()],
@@ -192,12 +197,18 @@ class TestPrePushPythonFallback:
         wrapper = sterile / "python3"
         wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
         wrapper.chmod(0o755)
-        env = {
-            "PATH": str(sterile),
-            "HOME": str(tmp_path),
-            "LC_ALL": "C",
-            "SCITEX_DEV_PREPUSH_TIMEOUT": "60",
-        }
+        # The `python3` wrapper above execs `sys.executable`, so the child
+        # is a real interpreter and needs the loader path to start at all
+        # — without it tier 2 cannot be reached and the probe reports a
+        # tier choice that was never made. See tests/_child_env.py.
+        env = with_loader_path(
+            {
+                "PATH": str(sterile),
+                "HOME": str(tmp_path),
+                "LC_ALL": "C",
+                "SCITEX_DEV_PREPUSH_TIMEOUT": "60",
+            }
+        )
         # Act
         proc = subprocess.run(
             ["bash", pre_push_sh_path()],
@@ -273,12 +284,15 @@ class TestPrePushAuditRcPropagation:
             "exit 2\n"
         )
         stub.chmod(0o755)
-        env = {
-            "PATH": str(sterile),
-            "HOME": str(tmp_path),
-            "LC_ALL": "C",
-            "SCITEX_DEV_PREPUSH_TIMEOUT": "10",
-        }
+        # Sterile by design; the loader path is exempt (tests/_child_env.py).
+        env = with_loader_path(
+            {
+                "PATH": str(sterile),
+                "HOME": str(tmp_path),
+                "LC_ALL": "C",
+                "SCITEX_DEV_PREPUSH_TIMEOUT": "10",
+            }
+        )
         # Act
         proc = subprocess.run(
             ["bash", pre_push_sh_path()],
@@ -395,12 +409,15 @@ class TestPrePushStep4RoutesThroughWrapper:
             "exit 1\n"
         )
         stub.chmod(0o755)
-        env = {
-            "PATH": str(sterile),
-            "HOME": str(tmp_path),
-            "LC_ALL": "C",
-            "SCITEX_DEV_PREPUSH_TIMEOUT": "10",
-        }
+        # Sterile by design; the loader path is exempt (tests/_child_env.py).
+        env = with_loader_path(
+            {
+                "PATH": str(sterile),
+                "HOME": str(tmp_path),
+                "LC_ALL": "C",
+                "SCITEX_DEV_PREPUSH_TIMEOUT": "10",
+            }
+        )
         # Act
         proc = subprocess.run(
             ["bash", pre_push_sh_path()],

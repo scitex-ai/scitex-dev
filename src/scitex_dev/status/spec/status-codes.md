@@ -4,6 +4,9 @@
 **Owner:** scitex-dev, as protocol primitive provider
 **Normative artefacts:** `kinds.yaml`, `scitex-codes.yaml`, `boundaries.yaml`, `schema/*.json`
 **Governing decision:** ADR-0007
+**Companion spec:** `verdicts.yaml` (ADR-0010) — the three-valued verdict of a
+CHECK, which is a different question from the status of an EXCHANGE and is
+specified separately. See §8.
 
 This document is **language-independent and is the source of truth.** The
 Python package `scitex_dev.status` is a DERIVED implementation, in the same
@@ -358,6 +361,14 @@ Recorded so the next reader does not helpfully add it back:
   `kind == "process" and code == 0`, ...). Two fields that can disagree will
   eventually disagree, and then a reader has to guess which to trust. An
   implementation MAY expose a derived accessor; it MUST NOT serialise one.
+
+  **This rule is about a `StatusCode`, and does NOT forbid a CHECK's stored
+  verdict** (`verdicts.yaml`, ADR-0010). That verdict is not derivable, because
+  the same code means different verdicts depending on the question asked:
+  `http 403` answering *"am I allowed to do this?"* is a definite `not-ok`,
+  while the same 403 answering *"may this agent relocate?"*, returned by a
+  daemon that has never heard of the endpoint, is `unknown`. A check therefore
+  STORES its verdict and MAY carry the native code beside it in `cause`.
 - **No large error taxonomy.** `scitex-codes.yaml` has an admission test
   precisely so it stays short.
 
