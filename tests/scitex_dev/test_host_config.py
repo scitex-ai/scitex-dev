@@ -523,6 +523,47 @@ def test_no_verify_command_yields_no_observation(tmp_path):
     assert records == []
 
 
+def test_a_root_only_verifier_is_reported_as_not_observed(tmp_path):
+    """A permission error in an observation column reads like a finding."""
+    # Arrange
+    spec = _converged(
+        tmp_path, verify_command="echo should-not-run", verify_requires_root=True
+    )
+    # Act
+    records = observe_specs([spec], root=str(tmp_path))
+    # Assert
+    assert records[0]["action"] == "not-observed"
+
+
+def test_a_root_only_verifier_does_not_run_unprivileged(tmp_path):
+    # Arrange
+    spec = _converged(
+        tmp_path, verify_command="echo should-not-run", verify_requires_root=True
+    )
+    # Act
+    records = observe_specs([spec], root=str(tmp_path))
+    # Assert
+    assert records[0]["output"] == ""
+
+
+def test_auditd_verifier_declares_that_it_needs_root():
+    """auditctl -l needs CAP_AUDIT_CONTROL; there is no unprivileged form."""
+    # Arrange
+    # Act
+    spec = _by_name("auditd.process-kill")
+    # Assert
+    assert spec.verify_requires_root is True
+
+
+def test_journald_verifier_works_unprivileged():
+    """journalctl --list-boots is readable by the adm group; keep it that way."""
+    # Arrange
+    # Act
+    spec = _by_name("journald.persistent")
+    # Assert
+    assert spec.verify_requires_root is False
+
+
 def test_no_observation_when_the_precondition_is_unmet(tmp_path):
     """`auditctl -l` on a host with no auditd is a shell error, not a finding."""
     # Arrange

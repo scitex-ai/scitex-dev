@@ -184,6 +184,14 @@ def provide() -> list[HostConfigSpec]:
             # written -- `auditctl -l` proves the kernel accepted it,
             # which is the thing that has to be true.
             verify_command="auditctl -l",
+            # `auditctl -l` reads the kernel's audit rules and needs
+            # CAP_AUDIT_CONTROL. There is no unprivileged equivalent --
+            # reading the rules FILE back would only prove the file was
+            # written, which is the tautology verify_command exists to
+            # avoid. So the unprivileged timer reports `not-observed`
+            # with the reason rather than a permission error that reads
+            # like the ruleset having vanished.
+            verify_requires_root=True,
             requires_root=True,
             # Without auditd, this file is read by nothing. Declaring the
             # precondition makes the gap REPORTABLE rather than papering

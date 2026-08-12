@@ -238,6 +238,30 @@ def observe_specs(
             # shell error that reads like a finding. Skip it: the
             # precondition record already says the real thing.
             continue
+        if spec.verify_requires_root and _euid() != 0:
+            # Same reasoning, different cause. `auditctl -l` needs
+            # CAP_AUDIT_CONTROL; run as a normal user it returns a
+            # permission error, and a permission error sitting in an
+            # observation column is indistinguishable at a glance from
+            # the audit rules having gone missing. Say plainly that the
+            # observation was NOT taken -- an unmeasured fact must not
+            # be dressed up as a measured one.
+            records.append(
+                {
+                    "name": spec.name,
+                    "path": spec.path,
+                    "state": "observation",
+                    "action": "not-observed",
+                    "detail": (
+                        f"`{spec.verify_command}` needs root; this check "
+                        f"runs unprivileged by design. Re-run as root to "
+                        f"observe."
+                    ),
+                    "exit_code": None,
+                    "output": "",
+                }
+            )
+            continue
         try:
             proc = subprocess.run(
                 spec.verify_command,
@@ -263,6 +287,11 @@ def observe_specs(
             }
         )
     return records
+
+
+def _euid() -> int:
+    """Effective uid, or 0 where the platform has no concept of one."""
+    return os.geteuid() if hasattr(os, "geteuid") else 0
 
 
 def _queue(commands: list[str], command: str | None) -> None:
