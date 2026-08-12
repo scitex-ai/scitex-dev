@@ -385,7 +385,15 @@ class SciTeXChecker(
     def _add(self, rule: Rule | None, line: int, col: int, source_line: str) -> None:
         if rule is None:
             return
-        if rule.requires and rule.requires not in self._available:
+        # `_available` is a dict {package: bool}, so membership (`not in`)
+        # tests KEYS and is always False for a declared package — the
+        # computed availability was discarded and the gate NEVER fired.
+        # Measured 2026-08-09: in a venv without scitex, STX-S001
+        # (requires="scitex") still reported as an ERROR, and because this
+        # branch was never taken, `record_rule_skip` never ran either — so
+        # the "NOT ALL RULES RAN" summary claimed completeness it did not
+        # have. Read the VALUE.
+        if rule.requires and not self._available.get(rule.requires, False):
             # Pillar-0 fail-loud (#TBD): tally the silent-skip so the
             # health module can emit an L2 stderr summary the first
             # time the count goes non-zero. Without this the
