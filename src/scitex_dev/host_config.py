@@ -129,6 +129,23 @@ class HostConfigSpec:
         For journald persistence that is ``journalctl --list-boots``
         (more than one boot listed = the journal demonstrably survived
         a reboot). ``None`` when no observation is available.
+
+        PICK A COMMAND A NORMAL USER CAN RUN. The periodic check is
+        unprivileged by design, and a verifier that needs privileges it
+        does not have returns a permission error that reads exactly like
+        a finding. ``ip -4 -o addr show`` is readable by anyone;
+        ``networkctl cat <iface>`` is not, because netplan's generated
+        units are 0640 root:systemd-network. When no unprivileged
+        equivalent exists, say so with ``verify_requires_root`` rather
+        than shipping a command that always fails.
+    verify_requires_root
+        Whether ``verify_command`` needs root to produce a real answer
+        -- ``auditctl -l`` reads the kernel's audit rules and needs
+        CAP_AUDIT_CONTROL, so an unprivileged run reports a permission
+        error rather than the ruleset. When set and the caller is not
+        root, the observation is reported as ``not-observed`` with the
+        reason, instead of running the command and recording a failure
+        that looks like a finding. Defaults to ``False``.
     requires_root
         Whether writing ``path`` needs root. Defaults to ``True``
         (anything under ``/etc`` does). CHECKING never needs root --
@@ -157,6 +174,7 @@ class HostConfigSpec:
     mode: str = "0644"
     apply_command: str | None = None
     verify_command: str | None = None
+    verify_requires_root: bool = False
     requires_root: bool = True
     requires_command: str | None = None
 
