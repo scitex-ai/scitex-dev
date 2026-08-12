@@ -60,6 +60,10 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
             "validate-sync",
             "prune-merged",
             "ci-template",
+            # Declared HOST state (journald persistence, sysctl drop-ins
+            # ...) federated from every leaf's `scitex_dev.host_config`
+            # provider. `check` is unprivileged; `apply` needs root.
+            "host-config",
         ],
     ),
     (
