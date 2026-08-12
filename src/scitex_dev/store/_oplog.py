@@ -216,13 +216,20 @@ def assert_not_superseded(
     Raises :class:`~._errors.SupersededFenceError` naming the offending
     entry, both fences, and the remedy.
 
-    **NOT YET WIRED INTO REPLAY.** Enforcing this across batches needs the
-    highest-accepted fence PERSISTED per origin (a ``Store.fence`` /
-    ``set_fence`` pair plus a schema column), which does not exist yet. Until
-    that lands this function is callable and tested but nothing in the
-    replication path invokes it, so it protects nothing — stated here rather
-    than left for a reader to assume otherwise. Tracked on card
-    ``scitex-dev-store-oplog-directed-replay-20260809``.
+    WIRED INTO REPLAY since the ``Store.fence`` / ``set_fence`` pair landed.
+    :func:`~._replication.replay` calls this before applying anything.
+
+    This paragraph previously read "**NOT YET WIRED INTO REPLAY** … nothing
+    in the replication path invokes it, so it protects nothing", and it went
+    on saying so after the wiring landed. That is recorded rather than
+    quietly deleted, because the stale line was not merely untidy: it was the
+    one place a reader would look to find out whether the fence was live, and
+    it told them the mechanism was inert while it was in fact irreversibly
+    evicting origins. A comment that describes a guard as switched off is
+    read as permission to stop reasoning about it.
+
+    The fence a batch is judged AGAINST is local state, never taken from the
+    batch. See ADR-0011 and the comment in :func:`~._replication.replay`.
     """
     if not entries:
         return
