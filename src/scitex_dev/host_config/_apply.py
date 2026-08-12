@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# File: src/scitex_dev/_host_config_apply.py
+# File: src/scitex_dev/host_config/_apply.py
 """Idempotent applier + audit trail for the ``scitex_dev.host_config`` federation.
 
 Separated from ``scitex_dev.host_config`` (which stays pure: declare and
@@ -30,7 +30,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .host_config import (
+from . import (
     STATE_ABSENT,
     STATE_DRIFT,
     STATE_NOT_APPLICABLE,

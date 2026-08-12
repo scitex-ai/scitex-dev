@@ -145,7 +145,7 @@ def register(ecosystem):
     def host_config_check(ctx, provider, as_json, no_log):
         import json as _json
 
-        from ...._host_config_apply import apply_specs, write_audit
+        from ....host_config._apply import apply_specs, write_audit
 
         specs = _select(provider)
         records = apply_specs(specs, dry_run=True, run_apply_commands=False)
@@ -199,16 +199,26 @@ def register(ecosystem):
         help="Also overwrite DRIFTED files (backs the current file up first).",
     )
     @click.option("--yes", "-y", "yes", is_flag=True, help="Actually write (root).")
+    @click.option(
+        "--dry-run",
+        "dry_run_flag",
+        is_flag=True,
+        help="Force a preview even alongside --yes. This verb already "
+        "previews by default; the flag makes that explicit and always "
+        "wins, so it can only ever make the run more conservative.",
+    )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON.")
     @click.pass_context
-    def host_config_apply(ctx, provider, force, yes, as_json):
+    def host_config_apply(ctx, provider, force, yes, dry_run_flag, as_json):
         import json as _json
         import os
 
-        from ...._host_config_apply import apply_specs, needs_root, write_audit
+        from ....host_config._apply import apply_specs, needs_root, write_audit
 
         specs = _select(provider)
-        dry_run = not yes
+        # An explicit --dry-run WINS over --yes: between "you asked to write"
+        # and "you asked not to", the non-destructive reading is the safe one.
+        dry_run = dry_run_flag or not yes
 
         if not dry_run and hasattr(os, "geteuid") and os.geteuid() != 0:
             preview = apply_specs(

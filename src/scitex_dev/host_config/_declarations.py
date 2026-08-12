@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# File: src/scitex_dev/_host_config.py
+# File: src/scitex_dev/host_config/_declarations.py
 """scitex-dev's own HOST-LEVEL configuration declarations.
 
 Registered under the same ``scitex_dev.host_config`` entry-point
@@ -36,7 +36,7 @@ JOURNALD_PERSISTENT = """\
 # someone decides which side is right.
 #
 # Declared by HostConfigSpec "journald.persistent" in
-# scitex_dev/_host_config.py. To change this file, change that
+# scitex_dev/host_config/_declarations.py. To change this file, change that
 # declaration and let the job apply it.
 #
 # WHY: 2026-08-11 16:07:58 JST, a shared tmux server died and took 11

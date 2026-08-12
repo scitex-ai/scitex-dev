@@ -16,9 +16,9 @@ from click.testing import CliRunner
 
 from scitex_dev._cli import main
 from scitex_dev._ecosystem_jobs._provider import JOB_SHELL_BODIES, provide_jobs
-from scitex_dev._host_config import JOURNALD_PERSISTENT
-from scitex_dev._host_config import provide as provide_journald
-from scitex_dev._host_config_apply import (
+from scitex_dev.host_config._declarations import JOURNALD_PERSISTENT
+from scitex_dev.host_config._declarations import provide as provide_journald
+from scitex_dev.host_config._apply import (
     apply_specs,
     backup_path_for,
     needs_root,
