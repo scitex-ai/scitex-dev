@@ -7,6 +7,46 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **A check verdict is THREE-valued, and `unknown` has to say why (ADR-0010).**
+  `scitex_dev.status` gains `Verdict` / `Check` / `rollup` beside `StatusCode`.
+  The fleet's shared doctor shape — `{package, ok, checks: [{name, ok, detail,
+  hint}], summary}` — carried a BOOLEAN `ok`, so "I could not find out" had to
+  be filed as either "fine" or "broken", and both are false.
+
+  Measured 2026-08-11: nine relocation probes were refused `http 403` by hosts
+  running a daemon too old to have the endpoint. That 403 is real and it is not
+  an answer to the question asked. Read as `not-ok` it grounds nine healthy
+  agents; read as `ok` it moves an agent onto a host nobody inspected. The same
+  day the card-store doctor could not open its store and reported `ok: false`
+  on two checks whose questions it never got as far as asking.
+
+  `unknown` must carry a reason and a way to find out, enforced at BOTH doors —
+  `Check.unknown(name, reason, hint)` takes them positionally, and
+  `__post_init__` refuses a blank one, so the dataclass constructor cannot get
+  around the classmethod. A rule enforced in one place holds until someone uses
+  the other door.
+
+  The rollup policy is REQUIRED with no default: `refuse` (never act on a host
+  you could not inspect), `propagate` (this report cannot say the whole is
+  healthy) or `tolerate` (may I proceed?). A default here would be the same
+  collapse a boolean is, moved one level up and made harder to find. Under
+  every policy the summary NAMES the unknown checks.
+
+  The wire form is unchanged: the verdict rides in the existing `ok` field as
+  `true` / `false` / `null`, so the four-key report and four-field check record
+  every existing reader parses keep working, and there is no second field that
+  can disagree. `Verdict.from_ok` refuses truthy stand-ins — `bool(x)` is the
+  one line that has eaten the third state everywhere it was lost.
+
+  The idea was not missing: `versioning.Currency`, `store.StoreStatus`,
+  `testing._audit_outcome`, `hygiene.Landed` and `_cli._doctor`'s
+  `Literal["ok", "fail", "skip"]` are five separate three-valued verdicts,
+  none readable to the others. This adds the one leaves publish. Nothing is
+  migrated by this change; convergence is per-consumer, as ADR-0007's boundary
+  declarations are.
+
 ## [0.47.0] - 2026-08-11
 
 **Six reports that were literally true and read as their opposite.** 0.44.0

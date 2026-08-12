@@ -15,11 +15,14 @@ from the context that would explain it.
 from __future__ import annotations
 
 __all__ = [
+    "CheckError",
     "InferredCauseError",
     "MissingProbeError",
     "StatusError",
     "UnknownCodeError",
     "UnknownKindError",
+    "UnknownPolicyError",
+    "UnknownVerdictError",
 ]
 
 
@@ -77,6 +80,37 @@ class MissingProbeError(StatusError):
     the 30 s / 5 min 12 s incident exactly.
 
     Name a probe in ``message``: a backtick-quoted command, a URL, or a path.
+    """
+
+
+class UnknownVerdictError(StatusError):
+    """A verdict value is not one of the three in ``spec/verdicts.yaml``.
+
+    Refused rather than defaulted, and refused rather than decayed. A reader
+    that meets a verdict it does not implement must say so; quietly folding it
+    into ``ok`` or ``not-ok`` is the exact collapse the three-valued verdict
+    exists to prevent, performed by the code that was supposed to prevent it.
+    """
+
+
+class CheckError(StatusError):
+    """A :class:`~._check.Check` is missing something its verdict requires.
+
+    ``unknown`` without a reason is barely better than the boolean it
+    replaced: the reader still has to guess, and now has a third word for
+    guessing. ``not-ok`` without a hint is the constitution's half-written
+    error. Both are refused at construction, where the context that would
+    explain them still exists.
+    """
+
+
+class UnknownPolicyError(StatusError):
+    """A rollup was asked for a policy that does not exist.
+
+    What an unknown MEANS for an aggregate is the caller's decision — refuse,
+    propagate, or tolerate — and there is no default, because a default policy
+    is the same collapse as a boolean verdict, moved one level up and made
+    invisible.
     """
 
 
