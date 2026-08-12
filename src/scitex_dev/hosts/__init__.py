@@ -60,6 +60,33 @@ destination nothing served. The PS-224 audit rule turns that into a
 pre-merge ERROR — see
 ``_cli/audit/_project/_check_runner_destinations.py``.
 
+Connectivity — where a host IS, not just where its files are
+-------------------------------------------------------------
+Each record also carries a :class:`~._connectivity.HostConnectivity`: the
+OBSERVED LAN address, the DHCP RESERVATION (a separate fact — leases go
+unrenewed), the off-LAN ``net`` route, the MAC, the ssh host-key
+fingerprint, the identity-file PATH, and ``last_seen``. Every field is
+optional, so a registry written before this existed parses unchanged.
+
+Four things consume it, and each answers a question a config file cannot:
+
+* :func:`render_ssh_config` — generate ``<name>`` (LAN) and ``<name>-net``
+  (off-LAN) stanzas into a marked managed block. Never deletes an entry for
+  being unreachable; ages ``last_seen`` instead.
+* :func:`check_matrix` — probe the N*(N-1) ORDERED pairs per transport and
+  report the DENOMINATOR, so a sweep that mostly did not run cannot read as
+  a pass.
+* :func:`check_ssh_config` — ask ``ssh -G`` what actually wins, and whether
+  the key a stanza NAMES exists. This is the fault that took the mesh down
+  on 2026-08-13.
+* :func:`corroborate` — MAC, host-key continuity and a live hostname probe.
+  All three must agree before an address may be rewritten; anything less is
+  ``insufficient``, never a pass.
+
+**No private key material is ever stored, transmitted, or accepted** — only
+public facts (addresses, MACs, fingerprints, paths). The parser refuses a
+PEM header or a secret-shaped field name outright.
+
 Backed by ``~/.scitex/dev/hosts.yaml`` (a DATA/STATE store — see
 ``01_ecosystem/12_local-state-resolution.md`` — resolved via
 ``local_state.user_path()`` so it is never project-shadowed), seeded
@@ -73,6 +100,31 @@ separate follow-up work in each of those packages.
 
 from __future__ import annotations
 
+from ._connectivity import (
+    NET_SUFFIX,
+    TRANSPORTS,
+    HostConnectivity,
+    NetRoute,
+    net_name,
+)
+from ._corroborate import (
+    REQUIRED_SIGNALS,
+    VERDICT_CONFLICT,
+    VERDICT_CORROBORATED,
+    VERDICT_INSUFFICIENT,
+    Corroboration,
+    Signal,
+    corroborate,
+)
+from ._effective import (
+    AliasCheck,
+    Finding,
+    SshConfigReport,
+    check_ssh_config,
+    effective_config,
+    parse_ssh_g,
+)
+from ._probe import MatrixResult, PairProbe, check_matrix, local_host_name
 from ._registry import (
     HOST_KINDS,
     HostRecord,
@@ -86,6 +138,15 @@ from ._registry import (
     packaged_default_runner_destinations,
     resolve,
 )
+from ._run import CommandResult, run_command
+from ._ssh_config import (
+    BEGIN_MARKER,
+    END_MARKER,
+    ManagedWrite,
+    default_managed_path,
+    render_ssh_config,
+    write_managed,
+)
 
 # Writes resolve through `._write_target`, NOT through `get_hosts_yaml_path`.
 # The read path may legitimately answer with whatever this process can see;
@@ -93,19 +154,49 @@ from ._registry import (
 from ._write_target import candidate_hosts_yamls, resolve_hosts_yaml_for_write
 
 __all__ = [
+    "BEGIN_MARKER",
+    "END_MARKER",
     "HOST_KINDS",
+    "NET_SUFFIX",
+    "REQUIRED_SIGNALS",
+    "TRANSPORTS",
+    "VERDICT_CONFLICT",
+    "VERDICT_CORROBORATED",
+    "VERDICT_INSUFFICIENT",
+    "AliasCheck",
+    "CommandResult",
+    "Corroboration",
+    "Finding",
+    "HostConnectivity",
     "HostRecord",
     "HostRegistryError",
+    "ManagedWrite",
+    "MatrixResult",
+    "NetRoute",
+    "PairProbe",
+    "Signal",
+    "SshConfigReport",
     "UnknownHostError",
     "candidate_hosts_yamls",
+    "check_matrix",
+    "check_ssh_config",
+    "corroborate",
     "create_default_hosts_yaml",
+    "default_managed_path",
+    "effective_config",
     "find_runner_host",
     "get_hosts_yaml_path",
     "list_hosts",
     "list_runner_destinations",
+    "local_host_name",
+    "net_name",
     "packaged_default_runner_destinations",
+    "parse_ssh_g",
+    "render_ssh_config",
     "resolve",
     "resolve_hosts_yaml_for_write",
+    "run_command",
+    "write_managed",
 ]
 
 # EOF

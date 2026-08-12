@@ -84,6 +84,39 @@ _DEFAULT_HOSTS_YAML = """\
 # co-location is a correctness requirement you cannot. Read that entry's
 # comment before pinning anything to it — the cost is that the job becomes
 # exactly as available as one machine.
+#
+# ---------------------------------------------------------------------------
+# CONNECTIVITY (added 2026-08-13). Optional on every record; absent means
+# "not recorded", never "none".
+#
+# lan       : the address the machine was OBSERVED answering at.
+# reserved  : the address the router RESERVES for it. A SEPARATE FIELD from
+#             `lan` on purpose — measured 2026-08-13, three compute hosts are
+#             reserved at one address and answering at another because the
+#             leases have not renewed. Both facts are true; collapsing them
+#             would force the registry to lie about one of them.
+# net       : the route that LEAVES the LAN (Cloudflare / reverse SSH).
+#             Rendered ONLY under `<name>-net`. THE BARE NAME IS THE LAN
+#             ROUTE AND NEVER CARRIES A BASTION (operator ruling 2026-08-13);
+#             there is deliberately no field on the LAN side that could hold
+#             one.
+# mac / host_key_fingerprint / reported_hostname
+#           : the three CORROBORATION signals. All three must agree before
+#             `scitex-dev host corroborate` will permit an address rewrite.
+#             `host_key_fingerprint` is the strongest — a machine that moves
+#             keeps its host key — and is the field most worth filling in.
+#             PUBLIC fingerprints only; private key material is refused by the
+#             parser and must never appear in this file.
+# last_seen : when the address was last observed. This is HOW AN ENTRY AGES.
+#             An unreachable host is NEVER deleted (operator rule:
+#             unreachable != delete); `last_seen` simply stops advancing.
+#
+# EVERY ADDRESS BELOW IS DATED. Route data in a packaged wheel goes stale —
+# that is why `_retired.py` exists — and `create_default_hosts_yaml` only ever
+# writes this when the file is ABSENT, so a seeded address can outlive its
+# truth by months. `last_seen` is the mitigation: the claim carries the date
+# it was measured, and `scitex-dev host validate-matrix` / `corroborate` are how
+# you find out it has expired.
 
 hosts:
   ywata-note-win:
@@ -104,10 +137,54 @@ hosts:
     runner_labels:
       - [self-hosted, Linux, X64, spartan-cpu]
       - [self-hosted, Linux, X64, spartan-cpu, scitex-ci]
+  # The three compute hosts the entry below notes were "not registered here
+  # yet" — registered 2026-08-13 with their measured addresses. Deliberately
+  # WITHOUT `runner_labels`: their runners were not measured on that pass, and
+  # a destination invented here would widen PS-224's floor on the strength of
+  # a guess. `scitex-org-cpu` is already legal via scitex-compute-04.
+  scitex-compute-01:
+    kind: compute
+    ssh_alias: scitex-compute-01
+    scitex_root: "~/.scitex"
+    lan: 192.168.11.94
+    reserved: 192.168.11.171
+    mac: 70:85:c2:3a:a9:42
+    last_seen: 2026-08-13
+    # THE 2026-08-13 MESH FAULT LIVED HERE, and it was not an address problem.
+    # This machine's own ssh stanza named `~/.ssh/id_rsa`, which does not
+    # exist on it, so ssh offered NO key at all and the far end answered
+    # `Permission denied` — while its `id_mesh` key was ALREADY authorised
+    # there. Nothing in the error named the missing file. That is what
+    # `scitex-dev host validate-ssh-config` now detects mechanically.
+  scitex-compute-02:
+    kind: compute
+    ssh_alias: scitex-compute-02
+    scitex_root: "~/.scitex"
+    lan: 192.168.11.6
+    reserved: 192.168.11.172
+    mac: 70:85:c2:63:da:f9
+    last_seen: 2026-08-13
+  scitex-compute-03:
+    kind: compute
+    ssh_alias: scitex-compute-03
+    scitex_root: "~/.scitex"
+    lan: 192.168.11.126
+    reserved: 192.168.11.173
+    mac: 6c:92:bf:64:db:ca
+    last_seen: 2026-08-13
+    # The MAC above is the ACTIVE NIC, enp35s0f0 (10GbE). enp39s0 is down.
+    # Which NIC the MAC belongs to matters for the corroboration check: the
+    # address is held by the interface that is up, so recording the idle
+    # one would read as a mismatch on a machine that is perfectly fine.
   scitex-compute-04:
     kind: compute
     ssh_alias: scitex-compute-04
     scitex_root: "~/.scitex"
+    lan: 192.168.11.164
+    last_seen: 2026-08-13
+    # No MAC and no reservation recorded for this one. That is why
+    # `corroborate` reports `insufficient` here rather than a pass: two of
+    # the three signals have nothing to compare against.
     # Measured 2026-08-12, from BOTH ends: the live GitHub Actions API (org
     # `scitex-ai`) for the labels, and `~/actions-runner-org/.runner` ON the
     # machine for which machine the runner is. One runner:
@@ -174,16 +251,49 @@ hosts:
     ssh_alias: scitex-nas-01
     aliases: [nas1, nas-01]
     scitex_root: "~/.scitex"
+    lan: 192.168.11.131
+    mac: 24:5E:BE:00:CA:30
+    reported_hostname: WATANAS1
+    last_seen: 2026-08-13
+    # Formerly 192.168.11.161, now DEAD. Kept as prose rather than a schema
+    # field because it is exactly what SETTLED the rewrite: ssh reported
+    # "This host key is known by the following other names/addresses: ...
+    # 192.168.11.161", i.e. the same machine readdressed rather than a
+    # different box now answering. Recording `host_key_fingerprint` here
+    # would make that comparison mechanical instead of a human reading a
+    # warning — it is the single highest-value field still missing.
   scitex-nas-02:
     kind: storage
     ssh_alias: scitex-nas-02
     aliases: [nas2, nas-02]
     scitex_root: "~/.scitex"
+    lan: 192.168.11.156
+    reserved: 192.168.11.132
+    reported_hostname: WATANAS2
+    last_seen: 2026-08-13
+    # The .132 reservation exists and is UNUSED — the machine answers at
+    # .156. This is the clearest instance of why `reserved` and `lan` are
+    # two fields: one address is intended, a different one is real.
   scitex-nas-03:
     kind: storage
     ssh_alias: scitex-nas-03
     aliases: [nas, nas3, nas-03]
     scitex_root: "~/.scitex"
+    lan: 192.168.11.133
+    mac: 6C:1F:F7:40:50:11
+    reported_hostname: DXP480TPLUS-994
+    last_seen: 2026-08-13
+    # Formerly 192.168.11.21, now dead.
+    #
+    # The ONE host with an off-LAN route. It is written here under `net:`,
+    # which means the generator emits it under `scitex-nas-03-net` and under
+    # NO other name. The bare `scitex-nas-03` keeps the LAN address above.
+    # Attaching the bastion to the bare name is the specific misconfiguration
+    # that produced the 2026-08-13 incident, and the schema now makes it
+    # unexpressible rather than merely discouraged.
+    net:
+      transport: cloudflared
+      hostname: bastion.scitex.ai
   mba:
     kind: workstation
     ssh_alias: mba

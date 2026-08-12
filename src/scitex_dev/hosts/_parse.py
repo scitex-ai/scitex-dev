@@ -18,6 +18,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from .._core.errors import ErrorCode
+from ._connectivity import (
+    HostConnectivity,
+    NetRoute,
+    normalize_fingerprint,
+    normalize_mac,
+    reject_key_material,
+)
 from ._registry import (
     HOST_KINDS,
     HostRecord,
@@ -25,6 +32,13 @@ from ._registry import (
     create_default_hosts_yaml,
     get_hosts_yaml_path,
 )
+
+#: Keys recognised inside a host's ``net:`` block. A CLOSED set, unlike the
+#: host record itself: ``net:`` is brand new, so nothing in the wild has
+#: extras to preserve, and a typo'd key there (``proxycommand`` for
+#: ``proxy_command``) would silently render a stanza with no proxy — a name
+#: that resolves and cannot connect.
+_NET_KEYS = frozenset({"transport", "hostname", "port", "jump", "proxy_command"})
 
 def _load_yaml(path: Path) -> dict:
     import yaml
@@ -137,6 +151,111 @@ def _parse_aliases(name: str, raw, *, hosts_path: Path) -> tuple[str, ...]:
     return tuple(out)
 
 
+def _parse_net_route(name: str, raw, *, hosts_path: Path) -> NetRoute | None:
+    """Parse a host's ``net:`` block — the route that LEAVES the LAN.
+
+    Absent yields ``None``, which is the common case: most machines are
+    LAN-only and have no off-LAN name at all.
+
+    An UNKNOWN key raises. That is stricter than the rest of this file
+    deliberately — see :data:`_NET_KEYS`. It is also the enforcement point
+    for the naming rule's negative half: there is no way to express a
+    bastion route anywhere except inside ``net:``, so a bare ``Host <name>``
+    stanza structurally cannot acquire one.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise HostRegistryError(
+            f"{hosts_path}: host {name!r}: `net` must be a mapping "
+            f"(transport/hostname/port/jump/proxy_command), got "
+            f"{type(raw).__name__}",
+            code=ErrorCode.VALIDATION,
+            remediation=(
+                "Write it as e.g.\n"
+                "  net:\n"
+                "    transport: cloudflared\n"
+                "    hostname: bastion.scitex.ai"
+            ),
+        )
+    reject_key_material(name, raw, where="`net`")
+    unknown = sorted(set(map(str, raw)) - _NET_KEYS)
+    if unknown:
+        raise HostRegistryError(
+            f"{hosts_path}: host {name!r}: unknown key(s) in `net`: "
+            f"{', '.join(unknown)}",
+            code=ErrorCode.VALIDATION,
+            remediation=(
+                f"Valid keys: {', '.join(sorted(_NET_KEYS))}. A typo here "
+                "renders a stanza with no proxy — a name that resolves and "
+                "cannot connect — so it is rejected rather than ignored."
+            ),
+        )
+    transport = raw.get("transport")
+    if not transport:
+        raise HostRegistryError(
+            f"{hosts_path}: host {name!r}: `net` is missing `transport`",
+            code=ErrorCode.VALIDATION,
+            remediation="Add e.g. `transport: cloudflared` to the `net` block.",
+        )
+    port = raw.get("port")
+    if port is not None and not isinstance(port, int):
+        raise HostRegistryError(
+            f"{hosts_path}: host {name!r}: `net.port` must be an integer, got "
+            f"{port!r}",
+            code=ErrorCode.VALIDATION,
+        )
+    try:
+        return NetRoute(
+            transport=str(transport).strip(),
+            hostname=_opt_str(raw.get("hostname")),
+            port=port,
+            jump=_opt_str(raw.get("jump")),
+            proxy_command=_opt_str(raw.get("proxy_command")),
+        )
+    except HostRegistryError as exc:
+        raise HostRegistryError(
+            f"{hosts_path}: host {name!r}: {exc.message}",
+            code=exc.error_code,
+            remediation=exc.remediation,
+        ) from exc
+
+
+def _opt_str(value) -> str | None:
+    """``None`` for absent/blank, otherwise the stripped string."""
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _parse_connectivity(name: str, data, *, hosts_path: Path) -> HostConnectivity:
+    """Read the connectivity fields off a host entry.
+
+    Every field is optional and read from the host record's TOP level (not a
+    nested block) except ``net:``, so a pre-existing entry parses to an empty
+    :class:`HostConnectivity` and means exactly what it always meant.
+
+    ``lan`` and ``reserved`` are read into SEPARATE fields and neither is
+    allowed to stand in for the other. Measured 2026-08-13: three compute
+    hosts are reserved at one address and answering at another because the
+    leases have not renewed. Defaulting one from the other would manufacture
+    a fact nobody observed.
+    """
+    reject_key_material(name, data, where="the host record")
+    return HostConnectivity(
+        lan=_opt_str(data.get("lan")),
+        reserved=_opt_str(data.get("reserved")),
+        net=_parse_net_route(name, data.get("net"), hosts_path=hosts_path),
+        mac=normalize_mac(name, data.get("mac")),
+        host_key_fingerprint=normalize_fingerprint(data.get("host_key_fingerprint")),
+        reported_hostname=_opt_str(data.get("reported_hostname")),
+        ssh_user=_opt_str(data.get("ssh_user")),
+        identity_file=_opt_str(data.get("identity_file")),
+        last_seen=_opt_str(data.get("last_seen")),
+    )
+
+
 def _parse_host_record(name: str, data, *, hosts_path: Path) -> HostRecord:
     if not isinstance(data, dict):
         raise HostRegistryError(
@@ -168,6 +287,7 @@ def _parse_host_record(name: str, data, *, hosts_path: Path) -> HostRecord:
                 name, data.get("runner_labels"), hosts_path=hosts_path
             ),
             aliases=_parse_aliases(name, data.get("aliases"), hosts_path=hosts_path),
+            connectivity=_parse_connectivity(name, data, hosts_path=hosts_path),
         )
     except HostRegistryError as exc:
         # Re-raise with the source file attached for a fully actionable

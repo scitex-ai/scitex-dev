@@ -403,6 +403,20 @@ def test_to_dict_round_trips_all_fields():
         # producer is too old to know about aliases". See
         # test__registry_aliases.py for the populated form.
         "aliases": [],
+        # And once more for connectivity: present-and-all-null for a host with
+        # nothing recorded, never omitted. See test__connectivity.py for the
+        # populated form.
+        "connectivity": {
+            "lan": None,
+            "reserved": None,
+            "net": None,
+            "mac": None,
+            "host_key_fingerprint": None,
+            "reported_hostname": None,
+            "ssh_user": None,
+            "identity_file": None,
+            "last_seen": None,
+        },
     }
 
 
@@ -447,13 +461,14 @@ def test_resolve_auto_seeds_writes_file_to_disk(tmp_path):
     assert target.is_file()
 
 
-def test_list_hosts_auto_seeds_default_seven_hosts(tmp_path):
-    # Arrange
+def test_list_hosts_auto_seeds_default_ten_hosts(tmp_path):
+    # Arrange — seven until 2026-08-13, when scitex-compute-01/02/03 were
+    # registered with their measured addresses.
     target = tmp_path / "hosts.yaml"
     # Act
     records = list_hosts(hosts_path=target)
     # Assert
-    assert len(records) == 7
+    assert len(records) == 10
 
 
 def test_default_seed_includes_operator_known_hosts(tmp_path):
@@ -465,6 +480,9 @@ def test_default_seed_includes_operator_known_hosts(tmp_path):
     assert {r.name for r in records} == {
         "ywata-note-win",
         "spartan",
+        "scitex-compute-01",
+        "scitex-compute-02",
+        "scitex-compute-03",
         "scitex-compute-04",
         "scitex-nas-01",
         "scitex-nas-02",

@@ -49,8 +49,16 @@ _SPARTAN_DESTINATIONS = [
 #: (by host name): scitex-compute-04 precedes spartan.
 _SEED_DESTINATIONS = [_CONTROL_PLANE_DESTINATION, *_SPARTAN_DESTINATIONS]
 
+#: scitex-compute-01/02/03 joined 2026-08-13. The seed's scitex-compute-04
+#: entry had noted since 2026-08-12 that their machines were "not registered
+#: here yet", so the registry under-reported the `scitex-org-cpu` pool by
+#: three. They are registered WITHOUT `runner_labels` — their runners were
+#: not measured on that pass, and PS-224's floor must not grow on a guess.
 _REGISTERED_HOSTS = [
     "mba",
+    "scitex-compute-01",
+    "scitex-compute-02",
+    "scitex-compute-03",
     "scitex-compute-04",
     "scitex-nas-01",
     "scitex-nas-02",
@@ -195,6 +203,80 @@ def test_seed_label_sets_are_per_runner_not_a_flattened_union():
     found = packaged_default_runner_destinations()
     # Assert
     assert len(found) == 3
+
+
+def test_adding_three_compute_hosts_did_not_widen_the_runner_floor():
+    """New machines, no invented destinations.
+
+    scitex-compute-01/02/03 were registered for their ADDRESSES. Handing
+    them `runner_labels` nobody measured would widen PS-224's floor on the
+    strength of a guess, and the floor's whole value is that it carries only
+    REAL measured destinations.
+    """
+    # Arrange
+    expected = _SEED_DESTINATIONS
+    # Act
+    found = packaged_default_runner_destinations()
+    # Assert
+    assert found == expected
+
+
+def test_the_seed_carries_no_private_key_material():
+    """The seed reaches every host in the fleet; a secret here is disclosed
+    to all of them at once and cannot be recalled."""
+    # Arrange
+    seed = _DEFAULT_HOSTS_YAML
+    # Act
+    markers = [m for m in ("-----BEGIN", "PRIVATE KEY") if m in seed]
+    # Assert
+    assert markers == []
+
+
+def test_no_bare_name_in_the_seed_carries_an_off_lan_route():
+    """The operator's 2026-08-13 naming rule, checked against the shipped data.
+
+    A `net:` block is legal; what must never happen is a route that leaves
+    the LAN being reachable under the bare canonical name. The generator
+    guarantees that structurally, and this pins the DATA side: nothing in
+    the seed puts routing keys anywhere but inside `net:`.
+    """
+    # Arrange
+    routing_keys = {"jump", "proxy_command", "proxycommand", "proxyjump", "bastion"}
+    # Act
+    stray = {
+        name
+        for name, record in _seed_hosts().items()
+        if routing_keys & set(record or {})
+    }
+    # Assert
+    assert stray == set()
+
+
+def test_every_seeded_address_is_dated():
+    """Route data in a wheel goes stale (see `_retired.py`). `last_seen` is
+    the mitigation: an address ships with the date it was measured."""
+    # Arrange
+    # Act
+    undated = {
+        name
+        for name, record in _seed_hosts().items()
+        if (record or {}).get("lan") and not (record or {}).get("last_seen")
+    }
+    # Assert
+    assert undated == set()
+
+
+def test_the_unrenewed_leases_are_recorded_as_two_separate_facts():
+    """Measured 2026-08-13. Collapsing these would erase a live fact."""
+    # Arrange
+    hosts = _seed_hosts()
+    # Act
+    compute_01 = hosts["scitex-compute-01"]
+    # Assert
+    assert (compute_01["lan"], compute_01["reserved"]) == (
+        "192.168.11.94",
+        "192.168.11.171",
+    )
 
 
 def test_control_plane_label_travels_with_the_rest_of_its_runners_set():

@@ -37,6 +37,11 @@ from typing import Iterable
 
 from .._core.errors import ErrorCode, ScitexError
 
+# Connectivity state (address / route / identity facts). Imported at module
+# level because `HostRecord` needs the type for a field default; `._connectivity`
+# imports back from here only INSIDE functions, so the cycle never closes.
+from ._connectivity import NET_SUFFIX, HostConnectivity, NetRoute, net_name
+
 # The shipped default seed + its runner destinations live in `._seed`
 # (extracted so this engine module stays focused and under the file-size
 # limit). `_DEFAULT_HOSTS_YAML` is re-imported because
@@ -46,14 +51,18 @@ from ._seed import _DEFAULT_HOSTS_YAML, packaged_default_runner_destinations
 
 __all__ = [
     "HOST_KINDS",
+    "NET_SUFFIX",
+    "HostConnectivity",
     "HostRecord",
     "HostRegistryError",
+    "NetRoute",
     "UnknownHostError",
     "create_default_hosts_yaml",
     "find_runner_host",
     "get_hosts_yaml_path",
     "list_hosts",
     "list_runner_destinations",
+    "net_name",
     "packaged_default_runner_destinations",
     "resolve",
 ]
@@ -178,6 +187,17 @@ class HostRecord:
         dispatch rule, and modelling it per-runner (rather than as one
         flat per-machine union) is what keeps the check exact: a union
         would green-light a combination that no single runner offers.
+    connectivity : HostConnectivity
+        HOW to reach this machine, and how fresh that knowledge is —
+        observed LAN address, DHCP reservation, off-LAN route, MAC, ssh
+        host-key fingerprint, identity file, ``last_seen``. Defaults to an
+        all-empty :class:`~._connectivity.HostConnectivity`, so every
+        ``hosts.yaml`` written before this field existed keeps parsing and
+        keeps meaning exactly what it meant.
+
+        The default is an EMPTY RECORD rather than ``None`` so callers never
+        branch on presence to read a field; ``connectivity.is_empty()`` is
+        the explicit question when the distinction matters.
     """
 
     name: str
@@ -186,6 +206,17 @@ class HostRecord:
     scitex_root: str
     runner_labels: tuple[frozenset[str], ...] = ()
     aliases: tuple[str, ...] = ()
+    connectivity: HostConnectivity = HostConnectivity()
+
+    @property
+    def net_alias(self) -> str | None:
+        """``<name>-net`` when an off-LAN route exists, else ``None``.
+
+        ``None`` is the honest answer for a LAN-only machine: there is no
+        off-LAN name to hand anyone, and inventing one would produce an
+        alias that resolves in a config file and connects to nothing.
+        """
+        return net_name(self.name) if self.connectivity.net else None
 
     def serves(self, labels: Iterable[str]) -> bool:
         """True iff one of this host's runners carries every label in ``labels``.
@@ -228,6 +259,11 @@ class HostRecord:
             "scitex_root": self.scitex_root,
             "runner_labels": [sorted(s) for s in self.runner_labels],
             "aliases": list(self.aliases),
+            # Always emitted, all-null for a host with nothing recorded, so a
+            # consumer never has to tell "no connectivity" from "producer too
+            # old to know about connectivity" — the same reason `aliases` is
+            # serialized as `[]` rather than omitted.
+            "connectivity": self.connectivity.to_dict(),
         }
 
 

@@ -7,6 +7,90 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **The host registry now records HOW to reach a machine, not only where its
+  files are.** `HostRecord` carries a `HostConnectivity`: the OBSERVED `lan`
+  address, the DHCP `reserved` address, the off-LAN `net` route, `mac`,
+  `host_key_fingerprint`, `reported_hostname`, `ssh_user`, `identity_file`
+  and `last_seen`. Every field is optional, so an existing `hosts.yaml`
+  parses unchanged and yields an all-empty record; `to_dict()` always emits
+  the `connectivity` key (present-and-null) so a consumer never has to date
+  the producer.
+
+  **`reserved` and `lan` are two fields on purpose.** Measured 2026-08-13:
+  three compute hosts are reserved at one address and answering at another
+  because their leases have not renewed. Both statements are true, and a
+  registry with one address field must lie about one of them.
+
+  **No private key material.** Only public facts are state — an address, a
+  MAC, a host-key FINGERPRINT, the PATH of an identity file. The parser
+  refuses a value carrying a PEM header and refuses a field named as though
+  it holds a secret. This file is read by every host in the fleet.
+
+- **`render_ssh_config()` + `scitex-dev host generate-ssh-config`.** Two names per
+  host: the BARE canonical name is the LAN route, `<name>-net` is the route
+  that leaves the LAN. That operator ruling (2026-08-13) is enforced
+  STRUCTURALLY — the LAN side has no `jump`/`proxy_command` field to hold a
+  bastion, and a bastion can only be expressed inside `net:`, which the
+  generator emits under `-net` and nowhere else. A bastion on a bare name
+  produced the 2026-08-13 mesh incident; it is now unexpressible.
+
+  Idempotent (no timestamp in the header, so `changed` is a real signal),
+  writes only between its BEGIN/END markers, and REFUSES when it finds one
+  marker without its partner rather than guessing a region's extent.
+  **It never deletes an entry because a host is unreachable** — operator
+  rule, unreachable != delete; `last_seen` ages instead and is rendered into
+  the stanza comment.
+
+- **`check_matrix()` + `scitex-dev host validate-matrix` — the denominator is
+  part of the result.** A mesh is N*(N-1) ORDERED pairs per transport, and
+  A->B succeeding says nothing about B->A. `MatrixResult` carries `expected`,
+  `attempted`, and every skip with its reason; `verdict == "pass"` requires
+  BOTH that nothing failed AND that the sweep was complete. A bare pass count
+  cannot be distinguished from "and thirty were never attempted".
+
+- **`check_ssh_config()` + `scitex-dev host validate-ssh-config` — declared vs what
+  ssh actually obeys.** Two faults a config file cannot reveal:
+
+  *An `Include` above the block silently wins.* ssh takes the FIRST value it
+  obtains for each keyword. Measured 2026-08-13: `~/.ssh/config` line 1 was
+  `Include conf.d/*/*.conf`, so the file people read was not the file ssh
+  obeyed. Reproduced as a test against a real `ssh -G`.
+
+  *A stanza naming a key that is not there.* THE real mesh failure of that
+  day: scitex-compute-01's stanza named `~/.ssh/id_rsa`, absent on that
+  machine, so ssh offered NO key and the far end said `Permission denied`
+  while `id_mesh` was already authorised there.
+
+  Classifying a DECLARED key by subtracting ssh's default set is wrong, and
+  wrong exactly on that case — `~/.ssh/id_rsa` is itself a default. The
+  working discriminator is REPLACEMENT (measured, OpenSSH 9.6: a stanza
+  declaring one IdentityFile makes `ssh -G` report 1 line, not 7), tested as
+  inequality against the config-free set from `ssh -G -F /dev/null`. When
+  that baseline cannot be read the report says so and cannot return `pass`.
+
+- **`corroborate()` + `scitex-dev host corroborate` — three signals before an
+  address is rewritten.** MAC vs the neighbour table, ssh host-key continuity
+  (the strongest: a machine that moves keeps its host key, which is what
+  actually settled the 2026-08-13 rewrite), and a live `hostname` readback.
+  All three agreeing permits an automatic rewrite; any disagreement is a
+  `conflict` that is recorded and escalated, never resolved silently — a
+  machine can detect disagreement but cannot decide which source is true.
+  Fewer than three available is `insufficient`, **not** a pass: "no
+  contradiction found" is not corroboration, and `ip`/`arp` are absent inside
+  the agent containers, so that is the ordinary case there.
+
+  Every check verb exits `0` only on `pass`; `incomplete` exits 1 and `fail`
+  exits 2, because a check that could not run must not hand a cron entry the
+  same `0` a healthy fleet does.
+
+- **scitex-compute-01/02/03 registered** with their measured addresses. The
+  scitex-compute-04 entry had noted since 2026-08-12 that their machines were
+  absent, so the registry under-reported the `scitex-org-cpu` pool by three.
+  Deliberately WITHOUT `runner_labels` — their runners were not measured, and
+  PS-224's floor must not grow on a guess.
+
 ## [0.49.0] - 2026-08-12
 
 **A declaration that resolves to something.** `scitex_dev.store` shipped in
