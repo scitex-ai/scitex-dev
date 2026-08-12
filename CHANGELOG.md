@@ -9,6 +9,38 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`sac-control-plane` is a registered runner destination — the label was
+  real, nothing declared it.** The shipped seed gains `scitex-compute-04`
+  (`kind: compute`) with the effective label set its one runner carries:
+  `[self-hosted, Linux, X64, scitex-org-cpu, sac-control-plane]`, measured
+  2026-08-12 from the org Actions API and from that machine's own
+  `~/actions-runner-org/.runner`.
+
+  sac's CI feedback rail pinned a `verdict` job to `sac-control-plane` and
+  PS-224 refused it. The rule was right. sac's ADR-0024 had assumed the
+  self-hosted runners execute on the host running the control plane; they are
+  four runners on four machines, and only `scitex-04-org-cpu-01` shares one
+  with `sac listen` (`127.0.0.1:7878`) and the card store
+  (`127.0.0.1:55432`). Both bind loopback, so on the other three that job
+  calls a different machine's daemon and writes to a different postgres —
+  delivered to nobody, recorded nowhere, and green either way. The pin is
+  necessary while those services are loopback-only.
+
+  Registered rather than exempted, deliberately. A PS-224 exemption was
+  considered and rejected: the single existing one in the ecosystem rests on
+  a security argument, and an exemption granted because a rule is
+  inconvenient is how an audit stops meaning anything.
+
+  What the entry records, in comments, because the registry schema has no
+  field for a destination's MEANING: `sac-control-plane` is a CO-LOCATION
+  claim, not a capability tier, and anything pinned to it is exactly as
+  available as that one machine — it does not fail over, and PS-224 will
+  still pass it, because the gate validates served-ness and not capacity.
+  Registering the runner's EFFECTIVE set also makes the broader
+  `scitex-org-cpu` destination legal; its three sibling machines
+  (`scitex-01/02/03-org-cpu-01`) are not registered yet, so that destination
+  is legal on the strength of one entry and under-reports the pool by three.
+
 - **A check verdict is THREE-valued, and `unknown` has to say why (ADR-0010).**
   `scitex_dev.status` gains `Verdict` / `Check` / `rollup` beside `StatusCode`.
   The fleet's shared doctor shape — `{package, ok, checks: [{name, ok, detail,

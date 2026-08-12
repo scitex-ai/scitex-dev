@@ -27,14 +27,15 @@ from __future__ import annotations
 
 # Real host data from the operator's environment — names match the
 # established convention already referenced across scitex-dev's own
-# skills/docs (ywata-note-win, spartan, scitex-nas-01/02/03, mba).
+# skills/docs (ywata-note-win, spartan, scitex-compute-04,
+# scitex-nas-01/02/03, mba).
 _DEFAULT_HOSTS_YAML = """\
 # SciTeX host registry — the shared port other scitex-* packages (sac,
 # scitex-hub, scitex-storage, ...) resolve through instead of inventing
 # their own host config. See `scitex_dev.hosts` for the Python API and
 # `scitex-dev host --help` for the CLI.
 #
-# kind        : one of workstation, hpc-login, storage
+# kind        : one of workstation, hpc-login, compute, storage
 # ssh_alias   : the ~/.ssh/config Host alias to reach this machine, or
 #               null when the host IS local (no SSH hop needed)
 # scitex_root : that HOST's $SCITEX_DIR (may use ~; expanded on that
@@ -75,6 +76,14 @@ _DEFAULT_HOSTS_YAML = """\
 # capacity. The org reusables in scitex-ai/.github use spartan-cpu.
 # DEFAULT TO `spartan-cpu`; add `scitex-ci` only when a job genuinely needs
 # that specific pool.
+#
+# A SECOND KIND OF LABEL — CO-LOCATION, not capacity. `sac-control-plane`
+# (scitex-compute-04, below) does not name a faster or bigger machine; it
+# names THE machine a job must run ON to reach a loopback-bound service.
+# Narrowing for capacity is a queue-time trade you can undo; narrowing for
+# co-location is a correctness requirement you cannot. Read that entry's
+# comment before pinning anything to it — the cost is that the job becomes
+# exactly as available as one machine.
 
 hosts:
   ywata-note-win:
@@ -95,6 +104,46 @@ hosts:
     runner_labels:
       - [self-hosted, Linux, X64, spartan-cpu]
       - [self-hosted, Linux, X64, spartan-cpu, scitex-ci]
+  scitex-compute-04:
+    kind: compute
+    ssh_alias: scitex-compute-04
+    scitex_root: "~/.scitex"
+    # Measured 2026-08-12, from BOTH ends: the live GitHub Actions API (org
+    # `scitex-ai`) for the labels, and `~/actions-runner-org/.runner` ON the
+    # machine for which machine the runner is. One runner:
+    #   agentName scitex-04-org-cpu-01  (on host `scitex-compute-04`)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu, sac-control-plane]
+    #
+    # WHAT `sac-control-plane` MEANS — the registry has no field for a
+    # destination's MEANING, only its labels, so it is recorded here. The
+    # label is a CO-LOCATION claim, not a capability tier: this is the one
+    # org runner that shares a machine with the sac control plane. Measured
+    # on the bare host the same day, both services bind LOOPBACK:
+    #   sac listen   LISTEN 127.0.0.1:7878
+    #   card store   LISTEN 127.0.0.1:55432   (postgres)
+    # A job that must reach either therefore has to EXECUTE on this machine.
+    # On any other runner `127.0.0.1` is a different machine's daemon and a
+    # different postgres, so the call is delivered to nobody and the write is
+    # recorded nowhere — while the job still reports success. That is why the
+    # pin exists (sac ADR-0024 assumed the runners were co-located; they are
+    # four runners on four machines, and only this one is).
+    #
+    # WHAT IT COSTS — anything pinned to `sac-control-plane` is exactly as
+    # available as this ONE machine. It does not fail over; if the machine is
+    # down the job queues, and PS-224 will still pass it, because this gate
+    # validates SERVED-ness and not capacity. Pin ONLY work that genuinely
+    # needs loopback access to the control plane. The pin becomes unnecessary
+    # the day those services stop binding loopback-only — that is a policy
+    # decision, not something to engineer around.
+    #
+    # NOT THE WHOLE POOL: `scitex-01/02/03-org-cpu-01` also serve
+    # [self-hosted, Linux, X64, scitex-org-cpu] (scitex-01 offline as of the
+    # measurement). Their machines are not registered here yet, so the
+    # `scitex-org-cpu` destination is legal on the strength of this single
+    # entry and UNDER-REPORTS the pool by three. Legality is right; capacity
+    # read off this file would not be.
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu, sac-control-plane]
   # RENAMED 2026-08-07. The old aliases `nas` / `nas1` / `nas2` are RETIRED:
   # they resolve to nothing on purpose, printing the successor name and
   # exiting 255. Serving them from here made this registry hand out routes
