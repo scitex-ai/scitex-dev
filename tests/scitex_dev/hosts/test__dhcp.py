@@ -26,7 +26,7 @@ Arrange/Act/Assert markers (STX-TQ002).
 
 from __future__ import annotations
 
-from scitex_dev._host_config_dhcp import provide_dhcp_specs
+from scitex_dev.hosts._dhcp import provide_dhcp_specs
 from scitex_dev.host_config import (
     STATE_NOT_APPLICABLE,
     STATE_OK,
@@ -44,7 +44,7 @@ _NETWORKD_FLEET = [
 ]
 
 #: The five machines the fleet map names but this module must NOT declare.
-#: Measured 2026-08-12 — see the module docstring in _host_config_dhcp.
+#: Measured 2026-08-12 — see the module docstring in hosts/_dhcp.py.
 _NO_MECHANISM = [
     "ywata-note-win",
     "mba",

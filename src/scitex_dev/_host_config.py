@@ -130,12 +130,16 @@ AUDITD_PROCESS_KILL = """\
 
 def provide() -> list[HostConfigSpec]:
     """Host-level configuration scitex-dev itself requires."""
-    # The DHCP requested-address drop-ins live in their own module: they
-    # are PER-HOST (one spec per machine, each rendering an address held
-    # in the host registry) rather than one fleet-wide file, and that
-    # generation logic plus the measured reason five of the nine fleet
-    # hosts get no spec at all does not fit beside a literal constant.
-    from ._host_config_dhcp import provide_dhcp_specs
+    # The DHCP requested-address drop-ins live in `hosts/` rather than
+    # beside this file, and the placement is deliberate on two counts.
+    # Topically, they RENDER the fleet address map that `hosts` owns --
+    # one spec per machine, each carrying an address the registry
+    # declares -- so they belong with the registry rather than with a
+    # literal constant. Structurally, a fourth `_host_config*.py` at the
+    # package root would extend the `host_*` prefix cluster PS-108
+    # already reports here, and push the flat-file count past PS-108b's
+    # threshold.
+    from .hosts._dhcp import provide_dhcp_specs
 
     return [
         HostConfigSpec(

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# File: src/scitex_dev/_host_config_dhcp.py
+# File: src/scitex_dev/hosts/_dhcp.py
 """Make each fleet machine ASK for its declared LAN address (DHCP opt 50).
 
 The address map itself is NOT here -- it lives in the host registry
@@ -143,8 +143,8 @@ def _drop_in_body(host: str, iface: str, address: str) -> str:
 # someone decides which side is right.
 #
 # Declared by HostConfigSpec "dhcp.requested-address.{host}"
-# in scitex_dev/_host_config_dhcp.py. The ADDRESS is not declared there:
-# it comes from the fleet host registry (scitex_dev.hosts), which is the
+# in scitex_dev/hosts/_dhcp.py. The ADDRESS is not declared there: it
+# comes from the fleet host registry (scitex_dev.hosts), which is the
 # single source of truth. To move this host, change the registry.
 #
 # THIS IS A REQUEST, NOT A RESERVATION. DHCP option 50 asks the server for
@@ -187,7 +187,7 @@ def provide_dhcp_specs() -> list[HostConfigSpec]:
     yields NO spec, deliberately. See the module docstring for the five
     machines in that position and the measured reason for each.
     """
-    from scitex_dev.hosts import packaged_default_requested_addresses
+    from ._seed import packaged_default_requested_addresses
 
     addresses = packaged_default_requested_addresses()
     specs: list[HostConfigSpec] = []
