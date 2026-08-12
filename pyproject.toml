@@ -170,6 +170,27 @@ scitex-dev-ecosystem = "scitex_dev._ecosystem_jobs._provider:provide_jobs"
 # scholar-library-sync managed cron job (scitex-ssh sync wraps rsync).
 scitex-dev = "scitex_dev._system_deps:provide"
 
+# Federated HOST-LEVEL configuration providers live under the entry-point group
+# `scitex_dev.host_config`. Each entry point loads to a callable returning
+# `list[scitex_dev.host_config.HostConfigSpec]`;
+# `scitex_dev.host_config.discover_host_config()` aggregates them (deduped by
+# name, and by target path). Replaces configuring hosts by hand with sudo --
+# an ad-hoc privileged session leaves no record, so months later nobody can
+# tell deliberate configuration from drift (operator ruling 2026-08-12).
+# CHECKING is unprivileged and runs on the `host-config-check` timer; APPLYING
+# needs root and is deliberate: `sudo scitex-dev ecosystem host-config apply
+# --yes`.
+#
+# scitex-dev's OWN declaration (persistent journald) is merged through an
+# INTERNAL provider -- `host_config._builtin_host_config` -- NOT an entry point,
+# exactly as `jobs._builtin_jobs` is. Entry-point metadata lives in the
+# INSTALLED dist-info, so an editable checkout that has not been reinstalled
+# advertises the OLD set; for the declaration that keeps a host's forensic
+# logging alive, that is a silent per-host disappearance. This group is
+# therefore reserved for DOWNSTREAM packages, which register like so:
+#   scitex-agent-container = "scitex_agent_container._host_config:provide"
+[project.entry-points."scitex_dev.host_config"]
+
 # Federated SUBMISSION-GATE check providers live under the entry-point group
 # `scitex_dev.gate.checks`. Each entry point loads to a callable returning
 # `list[scitex_dev.gate.GateCheck]`; `scitex_dev.gate.discover_gate_checks()`
