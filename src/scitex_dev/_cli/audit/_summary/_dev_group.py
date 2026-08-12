@@ -13,14 +13,56 @@ top level. This is the enforcement half of an operator directive: a
 package's user-facing surface is its domain verbs; its self-maintenance
 plumbing belongs under `dev` so `<pkg> --help` reads as the tool, not
 the tool's own housekeeping.
+
+The six names, and the level each one sits at
+---------------------------------------------
+`DEV_SUBCOMMAND_NAMES` lists `daemon` beside `cron` and `systemd`, which
+mixes two levels of abstraction: `daemon` names an INTENT (run
+continuously), while `cron` and `systemd` name MECHANISMS (a crontab, a
+systemd unit). `jobs/_kinds.py` diagnosed and fixed exactly this in the
+job-kind enum one layer down, and the constitution states the rule —
+"Name the INTENT, not the MECHANISM, and keep one level of abstraction
+per axis."
+
+THE DECISION: the six names stay, and the VALUE of
+`DEV_SUBCOMMAND_NAMES` is unchanged (`test__dev_group.py` pins it to the
+historical literal). What is new is that this module now records WHICH
+LEVEL each name sits at, and §13a (`_abstraction_level.py`) reads that
+tiering instead of re-deriving it.
+
+REJECTED — dropping `cron` and `systemd` because they are
+mechanism-level. That is the tidy-looking move and it is wrong twice:
+
+  1. This set is a DETECTOR, not a vocabulary. §13 uses it to answer one
+     question: "is this self-maintenance command sitting at the top
+     level?" A top-level `<pkg> cron install` is precisely the shape the
+     operator directive exists to catch, so removing `cron` here would
+     stop catching it. That trades real §13 coverage for a point about
+     naming, and leaves the fleet's CLIs worse.
+  2. `dev cron` and `dev systemd` are a PUBLISHED contract — the
+     doctrine's fixed-verb block names them, scitex-dev ships
+     `ecosystem dev cron` / `ecosystem dev systemd`, and Phase W aliases
+     already forward the old top-level spellings to them. A published
+     CLI verb is a MIGRATION, not a rename: alias first, remove later.
+     Deleting them from the auditor's vocabulary is the removal half
+     with none of the migration.
+
+And a mechanism word is not wrong on its own. `<pkg> dev cron` meaning
+"manage MY crontab entries" names an ARTEFACT the package owns — the
+same kind of noun as `hooks` (git hooks) or `skills` (skill files).
+What is wrong is offering it as a SIBLING of an intent, because siblings
+read as alternatives and "run continuously" is not an alternative to
+"via crontab". That sibling test — not the word — is what §13a checks.
 """
 
 from __future__ import annotations
 
 import click
 
-# The operator's canonical 6 self-maintenance verbs. Chosen because none
-# is plausibly a package's DOMAIN verb (unlike image/ci/pytest/…), so
+# The operator's canonical 6 self-maintenance verbs, tiered by the level
+# of abstraction each one sits at (see the module docstring for why the
+# SET is unchanged and what the alternative was). Chosen because none is
+# plausibly a package's DOMAIN verb (unlike image/ci/pytest/…), so
 # flagging them at top level yields near-zero false positives.
 #
 # The broader package-maintenance set (image/installation/worktree/ci/
@@ -29,11 +71,39 @@ import click
 # (a container tool's `image`, a CI tool's `ci`), so folding it in now
 # would false-flag them. Start with the unambiguous 6; widen later once
 # per-package allowlists exist.
-DEV_SUBCOMMAND_NAMES = frozenset(
-    {"daemon", "cron", "systemd", "hooks", "skills", "shell"}
+
+#: INTENT level — names what the command is FOR, with no scheduler or
+#: supervisor welded into the word. `jobs/_kinds.py` settled on `daemon`
+#: for exactly this meaning when it split the job-kind enum.
+DEV_INTENT_NAMES = frozenset({"daemon"})
+
+#: MECHANISM level — names HOW something runs. Legitimate as a group
+#: when it means "manage my crontab / my unit files" (an artefact this
+#: package owns); never legitimate as a SIBLING of a `DEV_INTENT_NAMES`
+#: entry. §13a (`_abstraction_level.py`) enforces that sibling test.
+DEV_MECHANISM_NAMES = frozenset({"cron", "systemd"})
+
+#: OBJECT level — a noun naming a thing the package maintains. Not on
+#: the intent/mechanism axis at all, so these never take part in §13a:
+#: `skills` is not another way of doing `daemon`, it is a different
+#: subject.
+DEV_OBJECT_NAMES = frozenset({"hooks", "skills", "shell"})
+
+#: The §13 detector. UNCHANGED in value — the union is exactly the
+#: historical literal {"daemon", "cron", "systemd", "hooks", "skills",
+#: "shell"}, pinned by test. The tiering above is documentation plus the
+#: input to §13a, deliberately not a behaviour change.
+DEV_SUBCOMMAND_NAMES = (
+    DEV_INTENT_NAMES | DEV_MECHANISM_NAMES | DEV_OBJECT_NAMES
 )
 
-__all__ = ["DEV_SUBCOMMAND_NAMES", "check_dev_command_group"]
+__all__ = [
+    "DEV_INTENT_NAMES",
+    "DEV_MECHANISM_NAMES",
+    "DEV_OBJECT_NAMES",
+    "DEV_SUBCOMMAND_NAMES",
+    "check_dev_command_group",
+]
 
 
 def check_dev_command_group(

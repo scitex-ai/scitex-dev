@@ -90,6 +90,16 @@ RULE_SEVERITY: dict[str, str] = {
     # contains the existing drift so only NEW top-level self-maintenance
     # commands break CI.
     "§13": "warn",
+    # §13a — sibling commands must not mix an INTENT name with a
+    # MECHANISM name (`daemon` beside `cron`/`systemd`). WARN, and it
+    # will stay warn longer than its siblings: the remedy is to collapse
+    # two published CLI verbs into one intent plus a `--mechanism` axis,
+    # which is a MIGRATION (Phase W alias first, removal later), not a
+    # rename anyone can land in an afternoon. Promoting to error before
+    # the aliases exist would gate CI on work the rule itself says must
+    # be done slowly. scitex-dev's own `ecosystem dev` is the first
+    # standing finding.
+    "§13a": "warn",
     # PA-304: umbrella imports (scitex.X / import scitex) inside standalone
     # source. Drags umbrella __init__ + lazy re-export setup into every call
     # — measurable on NFS-mounted homes (HPC). Codified 2026-05-06 after the

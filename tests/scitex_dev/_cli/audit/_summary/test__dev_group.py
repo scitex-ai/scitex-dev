@@ -20,8 +20,52 @@ import pytest
 click = pytest.importorskip("click")
 
 from scitex_dev._cli.audit._summary._audit import Violation
-from scitex_dev._cli.audit._summary._dev_group import check_dev_command_group
+from scitex_dev._cli.audit._summary._dev_group import (
+    DEV_INTENT_NAMES,
+    DEV_MECHANISM_NAMES,
+    DEV_OBJECT_NAMES,
+    DEV_SUBCOMMAND_NAMES,
+    check_dev_command_group,
+)
 from scitex_dev._ecosystem.click_compat import deprecated_alias
+
+
+class TestDetectorVocabularyIsUnchanged:
+    """The §13 detector's VALUE must survive being tiered by level.
+
+    `DEV_SUBCOMMAND_NAMES` was split into intent / mechanism / object
+    tiers so §13a can read the levels, and that split is documentation —
+    not a behaviour change. Dropping `cron` / `systemd` because they are
+    mechanism-level was the REJECTED option: this set answers "is a
+    self-maintenance command sitting at the top level?", and a top-level
+    `<pkg> cron install` is exactly what §13 exists to catch.
+    """
+
+    def test_the_detector_is_still_the_operators_six_verbs(self):
+        # Arrange
+        historical = frozenset(
+            {"daemon", "cron", "systemd", "hooks", "skills", "shell"}
+        )
+        # Act
+        current = DEV_SUBCOMMAND_NAMES
+        # Assert
+        assert current == historical
+
+    def test_the_tiers_partition_the_detector(self):
+        # Arrange — a name in no tier would silently leave the detector.
+        tiers = DEV_INTENT_NAMES | DEV_MECHANISM_NAMES | DEV_OBJECT_NAMES
+        # Act
+        union = tiers
+        # Assert
+        assert union == DEV_SUBCOMMAND_NAMES
+
+    def test_the_tiers_do_not_overlap(self):
+        # Arrange
+        tiers = (DEV_INTENT_NAMES, DEV_MECHANISM_NAMES, DEV_OBJECT_NAMES)
+        # Act
+        total = sum(len(t) for t in tiers)
+        # Assert
+        assert total == len(DEV_SUBCOMMAND_NAMES)
 
 
 class TestTopLevelDetection:

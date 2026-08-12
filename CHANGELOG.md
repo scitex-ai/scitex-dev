@@ -7,6 +7,53 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **§13a — one level of abstraction per CLI group (reporting-only).** The
+  job-kind taxonomy fixed a mixed-abstraction defect in the DATA MODEL
+  (`jobs/_kinds.py`: `service` is an intent, `timer`/`cron` are mechanisms for
+  one intent, so the intent vocabulary is `daemon`/`periodic` with the
+  scheduler as a separate axis). The same mistake was still sitting one layer
+  up, in the CLI: sibling command groups list `daemon` beside `cron` and
+  `systemd`.
+
+  The rule is written down (doctrine
+  `general/03_interface/02_cli/20_dev-commands.md` §13a), enforced
+  (`_cli/audit/_summary/_abstraction_level.py`) and listed in the coverage
+  matrix. It flags a group whose **visible** direct children mix an INTENT
+  name with a MECHANISM name from one curated axis, once per offending parent
+  — the defect is the menu, not any one command on it. The diagnostic, stated
+  plainly: *if two sibling names differ only in HOW the thing is done, they
+  are one intent plus a `--mechanism`-shaped axis, not two groups.*
+
+  Deliberately a curated list, **not** a "detect abstraction levels"
+  classifier: nothing can tell an intent from a mechanism by inspecting an
+  English word, and a rule that guesses false-positives on somebody's
+  legitimate domain noun, gets excluded, and then gets deleted. A mechanism
+  word with no intent sibling is never flagged — `<pkg> dev cron` meaning
+  "manage my crontab entries" names an artefact and is a perfectly good group.
+  Hidden commands are not on the menu, which gives Phase W aliases the same
+  escape hatch §12/§13 grant.
+
+  Measured across every auditable CLI in the registry: **one** finding, and it
+  is **scitex-dev's own** `ecosystem dev`, which mounts `service` (intent)
+  beside `timer`/`cron`/`systemd` (mechanisms). Pinned by test rather than
+  hidden — the fix collapses published CLI verbs into `periodic --mechanism`,
+  which is a MIGRATION (Phase W alias first, removal later), not something
+  this reporting-only change may do.
+
+### Changed
+
+- **`DEV_SUBCOMMAND_NAMES` is now tiered by abstraction level, with the same
+  value.** `_dev_group.py` records which of the operator's six verbs are
+  intent (`daemon`), mechanism (`cron`, `systemd`) and object (`hooks`,
+  `skills`, `shell`); §13a reads that tiering instead of re-deriving it, and a
+  test pins the union to the historical literal. Dropping `cron`/`systemd`
+  for being mechanism-level was considered and **rejected**: the set is a
+  §13 *detector*, and a top-level `<pkg> cron install` is exactly the shape
+  §13 exists to catch — and both are published `dev` verbs, so removing them
+  would be a rename of a published contract with no migration.
+
 ## [0.49.0] - 2026-08-12
 
 **A declaration that resolves to something.** `scitex_dev.store` shipped in
