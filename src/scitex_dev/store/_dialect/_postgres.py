@@ -117,6 +117,107 @@ class PostgresDialect(Dialect):
             f"ON CONFLICT ({self.quote(key)}) DO UPDATE SET {updates}"
         )
 
+    def system_identifier(self, connection: Any, target: StoreTarget) -> tuple:
+        """``pg:<cluster system_identifier>/<database>`` — instance AND database.
+
+        Postgres mints the cluster's ``system_identifier`` at ``initdb`` and
+        it identifies the INSTALLATION, not the database, the connection or
+        the address. Two DSNs reaching one cluster — a socket and a TCP port,
+        a tunnel and a direct connection — return the same value, which is
+        the property that makes it usable: it distinguishes instances without
+        reporting a fork every time somebody connects by a different route.
+
+        It also survives what a stored uuid does not. A ``pg_dump`` restored
+        into a second cluster carries the store's own tables verbatim,
+        ``store_uuid`` included, and reports a DIFFERENT system identifier —
+        which is the 2026-08-11 case, and the one this exists to name.
+
+        WHY ``current_database()`` IS PART OF IT
+        ----------------------------------------
+        The cluster id ALONE is too coarse, and the gap is not theoretical:
+        restore that same ``pg_dump`` into a second database on the SAME
+        cluster and both halves report one cluster id and one ``store_uuid``
+        — the uuid because it was copied, the cluster id because it genuinely
+        is one installation. The pair then certifies SAME while the two
+        databases accept writes independently and diverge. That is the
+        original failure with a shorter blast radius, and certifying it would
+        be worse than not checking, because the check would be believed.
+
+        The database name closes it because it is engine-LOCAL: it is asked
+        of the serving system rather than parsed from configuration, and
+        every route into one database returns the same answer.
+
+        WHY NOT THE RESOLVED PATH / DSN
+        -------------------------------
+        Proposed, and declined — it is wrong in the direction that matters.
+        An address is a ROUTE, not an identity: a socket path, a TCP port and
+        an SSH tunnel routinely name the SAME database, so keying on the
+        address reports a fork between two views of one store every time
+        anyone connects differently. A false fork alarm is worse than no
+        alarm, because it trains its readers to ignore it and then the true
+        one goes unread too. ``current_database()`` is the part of "where"
+        that is a NAME rather than a route, which is exactly the part that
+        belongs in an identity.
+
+        Returns UNKNOWN with the driver's own message when the role may not
+        read the cluster id. ``pg_control_system()`` is superuser-only by
+        default and the fleet's roles are not superusers, so this branch is
+        the EXPECTED one on an ungranted cluster, not an exotic failure. The
+        database name is NOT substituted in that case: a database name alone
+        does not distinguish two clusters that both host ``scitex``, and
+        answering with the half we happen to have would certify sameness from
+        a discriminator that cannot support it. The remedy — ``GRANT EXECUTE
+        ON FUNCTION pg_control_system() TO <role>``, or ``pg_monitor``
+        membership — is carried in the identity error rather than here, where
+        the caller would not see it.
+        """
+        from .._identity import UNKNOWN_SYSTEM
+
+        try:
+            found = connection.execute(self.IDENTITY_SQL).fetchone()
+        except Exception as exc:
+            # The failed statement aborts the surrounding transaction on
+            # Postgres; roll back so an identity probe cannot poison the
+            # caller's connection. Autocommit makes this a no-op, but this
+            # dialect must not assume the connection it was handed is one.
+            try:
+                connection.rollback()
+            except Exception:  # pragma: no cover - best effort cleanup
+                pass
+            return (UNKNOWN_SYSTEM, f"pg_control_system() unreadable: {exc}")
+        if found is None:  # pragma: no cover - the function returns one row
+            return (UNKNOWN_SYSTEM, "pg_control_system() returned no row")
+        if hasattr(found, "keys"):
+            value, database = found["sid"], found["db"]
+        else:
+            value, database = found[0], found[1]
+        return (
+            self.format_instance_id(value, database),
+            "pg_control_system() + current_database()",
+        )
+
+    #: The statement behind :meth:`system_identifier`. Named rather than
+    #: inlined so the discriminator's SHAPE is assertable without a live
+    #: cluster: the defect it fixes was a MISSING COLUMN, and a test that
+    #: can only run where Postgres happens to be up would not have caught it
+    #: on the machine where it was written.
+    IDENTITY_SQL: Final[str] = (
+        "SELECT system_identifier::text AS sid, current_database() AS db "
+        "FROM pg_control_system()"
+    )
+
+    @staticmethod
+    def format_instance_id(system_identifier: Any, database: Any) -> str:
+        """Assemble the instance half of a :class:`~.._identity.StoreIdentity`.
+
+        Both parts are required and neither is optional-with-a-default: the
+        cluster id alone cannot separate two databases on one cluster, and
+        the database name alone cannot separate two clusters that both host
+        ``scitex``. A discriminator built from half of this pair certifies
+        sameness it cannot support.
+        """
+        return f"pg:{system_identifier}/{database}"
+
     def to_db_bool(self, value: bool) -> Any:
         return bool(value)
 

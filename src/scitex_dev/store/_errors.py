@@ -22,7 +22,10 @@ __all__ = [
     "RecordNotFoundError",
     "RevisionMismatchError",
     "SchemaError",
+    "StoreDivergedError",
     "StoreError",
+    "StoreIdentityMismatchError",
+    "StoreIdentityUnknownError",
     "StoreTargetError",
     "SupersededFenceError",
     "WriterConflictError",
@@ -140,6 +143,66 @@ class OplogGapError(StoreError):
 
     Recovery is to re-request the batch starting at ``cursor + 1``, not
     to lower the assertion.
+    """
+
+
+class StoreIdentityMismatchError(StoreError):
+    """Two stores that were treated as one turned out not to be.
+
+    Either a FORK — same lineage, two instances, both accepting writes — or
+    two UNRELATED stores someone pointed at the same consumer. See
+    :func:`~._identity.assert_same_store` for which, and why they are one
+    error type with two messages rather than two types: both mean *stop*,
+    and both are raised at the same place.
+
+    THE INCIDENT. On 2026-08-11 ``scitex-compute-04`` reached its own
+    Postgres on ``:55432`` and, through an SSH tunnel presented as
+    ``127.0.0.1:5442``, the NAS's. Both reported ``store_uuid
+    1d55dd6e-3d2a-4c24-a429-a78835ab988f``; 404 cards existed only on the
+    first and 146 only on the second. Three harms followed, and the shape
+    of all three is the same: **every operation reported success.**
+
+      * a peer could not close its own card — it resolved to one store and
+        the writer to the other, and both writes landed;
+      * a card read ``blocked`` on one side and ``cancelled`` on the other,
+        so the board kept offering finished work as runnable;
+      * an inbox notification redelivered in a loop while
+        ``poll_notifications`` returned ``UNSEEN 0`` — a TRUE answer about
+        the wrong store. Acking on the other side cleared it.
+
+    Nothing errored in any of those. That is why this is an exception and
+    not a log line.
+    """
+
+
+class StoreIdentityUnknownError(StoreError):
+    """Sameness could not be established, so it is not being claimed.
+
+    Raised when a store will not name the instance serving it — typically a
+    Postgres role without rights to read the cluster identity. The lineages
+    may match; that is not enough, because a fork matches on lineage too.
+
+    Deliberately a REFUSAL rather than a pass. "Could not verify" reported
+    as "verified" is the exact class of failure the identity pair exists to
+    end, and a check that cannot fail is indistinguishable from no check
+    except that everyone believes it works.
+    """
+
+
+class StoreDivergedError(StoreError):
+    """Two stores minted different histories under one lineage.
+
+    The proof is positive, not inferential: both logs carry an op at the
+    same ``(origin, seq)`` and the two ops DIFFER. Sequence numbers are
+    minted by whoever accepted the write, so one origin cannot legitimately
+    produce two different ops at one sequence — unless it was two writers
+    believing they were one.
+
+    This never rests on absence. "Present here, missing there" is exactly
+    the inference that replaced 2,159 live rows with a 5-row document on
+    2026-07-19/21, and it is not available here: a peer that is merely
+    BEHIND has no op at that sequence to disagree with, so it cannot be
+    reported as diverged. See :func:`~._divergence.detect_divergence`.
     """
 
 
