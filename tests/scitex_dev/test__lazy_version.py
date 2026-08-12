@@ -26,16 +26,24 @@ import sys
 
 from pathlib import Path
 
+from tests._child_env import with_loader_path
+
 _SRC = str(Path(__file__).resolve().parents[2] / "src")
 
 
 def _probe(body: str) -> str:
-    """Run `body` in a fresh interpreter with this worktree on the path."""
+    """Run `body` in a fresh interpreter with this worktree on the path.
+
+    The env is built rather than inherited so an exported `PYTHONPATH` or
+    `PYTHONSTARTUP` cannot pre-import the very module this file is asking
+    about. The loader path is exempt from that reasoning — the child has
+    to START before it can import anything; see tests/_child_env.py.
+    """
     out = subprocess.run(
         [sys.executable, "-c", body],
         capture_output=True,
         text=True,
-        env={"PYTHONPATH": _SRC, "PATH": "/usr/bin:/bin"},
+        env=with_loader_path({"PYTHONPATH": _SRC, "PATH": "/usr/bin:/bin"}),
         timeout=120,
     )
     return out.stdout.strip()

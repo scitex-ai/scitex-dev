@@ -51,13 +51,41 @@ jobs:
       - name: Ensure fd (Rust file finder; audit file discovery requires it)
         # OS-tolerant: use a preinstalled fd/fdfind if present (self-hosted
         # RHEL runners have no apt-get); only fall back to apt on Debian.
+        #
+        # LOOK IN ~/.local/bin BEFORE GIVING UP. Measured 2026-08-12: this step
+        # failed on the self-hosted runner with "sudo: a password is required"
+        # while `fd` was installed the whole time at
+        # /home/ywatanabe/.local/bin/fd. That directory is added to PATH by the
+        # login shell's profile, which a non-interactive Actions step does not
+        # source — so `command -v fd` says absent, the else branch runs, and the
+        # job dies on a package install it never needed.
+        #
+        # The tool was present; only the VANTAGE POINT differed. Probing the
+        # known location costs one test and removes an entire failure class.
+        #
+        # And sudo is not a fallback here: this host reports HAS_SUDO=false, so
+        # both sudo branches are unreachable by construction on the runner they
+        # were written to rescue. They stay for apt-based hosts and are now
+        # guarded, so their absence is reported rather than exploding.
         run: |
+          set -euo pipefail
           if command -v fd >/dev/null; then
             echo "fd present: $(command -v fd)"
+          elif [ -x "$HOME/.local/bin/fd" ]; then
+            echo "fd present but off PATH: $HOME/.local/bin/fd — adding to GITHUB_PATH"
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           elif command -v fdfind >/dev/null; then
-            sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+            mkdir -p "$HOME/.local/bin"
+            ln -sf "$(command -v fdfind)" "$HOME/.local/bin/fd"
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          elif command -v sudo >/dev/null && sudo -n true 2>/dev/null; then
+            sudo apt-get update && sudo apt-get install -y fd-find
+            mkdir -p "$HOME/.local/bin"
+            ln -sf "$(command -v fdfind)" "$HOME/.local/bin/fd"
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           else
-            sudo apt-get update && sudo apt-get install -y fd-find && sudo ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+            echo "::error::fd not found, not at \$HOME/.local/bin/fd, and no passwordless sudo to install it. Install fd on this runner." >&2
+            exit 1
           fi
 
       - name: Fetch develop into a remote-tracking ref for --new-only baseline

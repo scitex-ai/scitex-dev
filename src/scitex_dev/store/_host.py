@@ -84,6 +84,43 @@ _EPHEMERAL_FSTYPES: Final[frozenset[str]] = frozenset(
 )
 
 
+def _fstype_from_mountinfo(table: str, probe: Path) -> "str | None":
+    """Filesystem type covering ``probe``, read out of a mountinfo ``table``.
+
+    Split out of ``_fstype_of`` so the longest-match rule can be exercised
+    against a CONSTRUCTED mount table. Asked of the host's own table, the
+    rule is only testable where the host happens to have a nested mount:
+    on a machine whose ``$HOME`` shares the root filesystem there is
+    nothing to discriminate, and a test written that way reports the
+    machine's layout rather than this function's behaviour (measured
+    2026-08-12, when CI moved from Spartan to the scitex-compute nodes and
+    exactly that test failed while the rule below was perfectly correct).
+
+    Returns None when nothing matches; the caller treats that as "cannot
+    determine" rather than as either verdict.
+    """
+    best_len = -1
+    best_type: "str | None" = None
+    for line in table.splitlines():
+        # ... <mount-point> ... - <fstype> <source> <opts>
+        head, sep, tail = line.partition(" - ")
+        if not sep:
+            continue
+        fields = head.split()
+        rest = tail.split()
+        if len(fields) < 5 or not rest:
+            continue
+        mount_point, fstype = fields[4], rest[0]
+        try:
+            probe.relative_to(mount_point)
+        except ValueError:
+            continue
+        # Longest matching mount point wins: /home/x beats / for /home/x/y.
+        if len(mount_point) > best_len:
+            best_len, best_type = len(mount_point), fstype
+    return best_type
+
+
 def _fstype_of(path: Path) -> "str | None":
     """Filesystem type of the mount covering ``path``, or None if unknown.
 
@@ -109,26 +146,7 @@ def _fstype_of(path: Path) -> "str | None":
     while not probe.exists() and probe != probe.parent:
         probe = probe.parent
 
-    best_len = -1
-    best_type: "str | None" = None
-    for line in raw.splitlines():
-        # ... <mount-point> ... - <fstype> <source> <opts>
-        head, sep, tail = line.partition(" - ")
-        if not sep:
-            continue
-        fields = head.split()
-        rest = tail.split()
-        if len(fields) < 5 or not rest:
-            continue
-        mount_point, fstype = fields[4], rest[0]
-        try:
-            probe.relative_to(mount_point)
-        except ValueError:
-            continue
-        # Longest matching mount point wins: /home/x beats / for /home/x/y.
-        if len(mount_point) > best_len:
-            best_len, best_type = len(mount_point), fstype
-    return best_type
+    return _fstype_from_mountinfo(raw, probe)
 
 
 def require_durable_pgdata(pgdata_dir: "Path | str | None" = None) -> None:

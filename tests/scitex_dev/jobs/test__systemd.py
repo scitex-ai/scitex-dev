@@ -14,6 +14,7 @@ import pytest
 
 from scitex_dev.jobs import JobSpec
 from scitex_dev.jobs import _systemd as sd
+from tests._child_env import with_loader_path
 
 
 def _empty_bindir(tmp_path: Path):
@@ -717,12 +718,17 @@ def _stripped_path_execstart_line(tmp_path_factory):
         """
     )
 
-    env = {
-        "PATH": stripped_path,
-        "HOME": os.environ.get("HOME", str(tmp_path)),
-        "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
-        "LANG": os.environ.get("LANG", "C.UTF-8"),
-    }
+    # `$PATH` is stripped ON PURPOSE — that is the repro. The loader path
+    # is not part of it: without it the child cannot start at all and the
+    # repro measures nothing. See tests/_child_env.py.
+    env = with_loader_path(
+        {
+            "PATH": stripped_path,
+            "HOME": os.environ.get("HOME", str(tmp_path)),
+            "PYTHONPATH": os.environ.get("PYTHONPATH", ""),
+            "LANG": os.environ.get("LANG", "C.UTF-8"),
+        }
+    )
     result = subprocess.run(
         [sys.executable, "-W", "ignore", "-c", program],
         check=True,
