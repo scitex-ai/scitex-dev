@@ -149,9 +149,9 @@ UNPARSED_RULE = "UNPARSED"
 TALLY_RULE = "TALLY"
 
 # Anchored on the message TAIL so a real finding that merely mentions a
-# count ("expected 3 error(s) in fixture") is not swallowed.
+# count ("expected 3 error(s) in fixture") is not swallowed. NOUNS VARY:
 _TALLY_RE = re.compile(
-    r":\s*\d+\s+error\(s\)"
+    r":\s*\d+\s+(?:error|violation|finding)\(s\)"
     r"(?:,\s*\d+\s+warning\(s\))?"
     r"(?:,\s*\d+\s+info)?\s*$"
 )
