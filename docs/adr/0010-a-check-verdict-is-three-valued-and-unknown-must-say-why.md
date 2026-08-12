@@ -36,13 +36,29 @@ one defect.
   reported `ok: false` on two checks — `terminal_state_honest` and
   `no_falsely_blocked` — whose questions it never got as far as asking. The
   detail said "cannot read the task store"; the verdict said "this is broken".
-- **The card-database identity check.** Two databases reported the same uuid
-  with different contents. The only honest answer was `cannot-tell`, and it had
-  to be encoded outside the boolean as a special case, because the type had no
-  room for it.
+- **The auto-merge sweep, and this is the purest form of it.** Its greenness
+  filter dropped QUEUED checks, so *"not yet known"* was silently counted as
+  *"passing"* — and it merged unverified code past branch protection with
+  `--admin`. Found independently in two repositories and now being swept for
+  fleet-wide. Nobody chose to treat unknown as ok; a boolean filter over a
+  three-state world did it for them, in one expression, silently. That is why
+  `Verdict.from_ok` refuses truthy stand-ins rather than coercing them: `bool(x)`
+  is the single line, and it appears in every one of these incidents.
+
+- **The card-database identity check — the same design, reached independently.**
+  Two databases reported the same uuid with different contents, and its author
+  arrived at exactly `matches` / `differs` / `cannot-tell`, with `may_proceed`
+  refusing on **both** non-matching outcomes so that no caller can read "could
+  not tell" as a pass. Verified against two live clusters. It is prior art for
+  this ADR and it is also the argument for it: a correct ternary verdict had to
+  be built by hand, outside the shared boolean, as a special case — because the
+  shared type had no room for it. That check keeps its own implementation; this
+  ADR is about the shape it should not have had to invent alone.
 
 Collapsing *unknown* into one of its neighbours is the most common way this
-fleet ships a wrong answer. Before this ADR the type **required** it.
+fleet ships a wrong answer. Before this ADR the type **required** it — and the
+auto-merge sweep shows it does not take a decision to get it wrong, only a
+boolean.
 
 ## Decision
 
