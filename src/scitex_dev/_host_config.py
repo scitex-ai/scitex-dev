@@ -130,6 +130,13 @@ AUDITD_PROCESS_KILL = """\
 
 def provide() -> list[HostConfigSpec]:
     """Host-level configuration scitex-dev itself requires."""
+    # The DHCP requested-address drop-ins live in their own module: they
+    # are PER-HOST (one spec per machine, each rendering an address held
+    # in the host registry) rather than one fleet-wide file, and that
+    # generation logic plus the measured reason five of the nine fleet
+    # hosts get no spec at all does not fit beside a literal constant.
+    from ._host_config_dhcp import provide_dhcp_specs
+
     return [
         HostConfigSpec(
             name="journald.persistent",
@@ -191,6 +198,7 @@ def provide() -> list[HostConfigSpec]:
             # `ok` forever.
             requires_command="auditctl",
         ),
+        *provide_dhcp_specs(),
     ]
 
 
