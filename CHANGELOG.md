@@ -7,6 +7,50 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.47.1] - 2026-08-12
+
+**Maintenance release on the 0.47 line, carrying one backported change.** It
+exists as a 0.47 patch rather than a 0.48.x because `scitex-agent-container`
+pins `scitex-dev>=0.31.1,<0.48`, and that ceiling is a deadline with three
+named sac-side work items, to be lifted by doing that work rather than by
+widening the specifier — so a 0.48+ release of this change would be unusable
+to the package that needs it. The backport is narrow: `v0.47.0..develop`
+touches no file this change edits.
+
+### Added
+
+- **`sac-control-plane` is a registered runner destination — the label was
+  real, nothing declared it.** The shipped seed gains `scitex-compute-04`
+  (`kind: compute`) with the effective label set its one runner carries:
+  `[self-hosted, Linux, X64, scitex-org-cpu, sac-control-plane]`, measured
+  2026-08-12 from the org Actions API and from that machine's own
+  `~/actions-runner-org/.runner`.
+
+  sac's CI feedback rail pinned a `verdict` job to `sac-control-plane` and
+  PS-224 refused it. The rule was right. sac's ADR-0024 had assumed the
+  self-hosted runners execute on the host running the control plane; they are
+  four runners on four machines, and only `scitex-04-org-cpu-01` shares one
+  with `sac listen` (`127.0.0.1:7878`) and the card store
+  (`127.0.0.1:55432`). Both bind loopback, so on the other three that job
+  calls a different machine's daemon and writes to a different postgres —
+  delivered to nobody, recorded nowhere, and green either way. The pin is
+  necessary while those services are loopback-only.
+
+  Registered rather than exempted, deliberately. A PS-224 exemption was
+  considered and rejected: the single existing one in the ecosystem rests on
+  a security argument, and an exemption granted because a rule is
+  inconvenient is how an audit stops meaning anything.
+
+  What the entry records, in comments, because the registry schema has no
+  field for a destination's MEANING: `sac-control-plane` is a CO-LOCATION
+  claim, not a capability tier, and anything pinned to it is exactly as
+  available as that one machine — it does not fail over, and PS-224 will
+  still pass it, because the gate validates served-ness and not capacity.
+  Registering the runner's EFFECTIVE set also makes the broader
+  `scitex-org-cpu` destination legal; its three sibling machines
+  (`scitex-01/02/03-org-cpu-01`) are not registered yet, so that destination
+  is legal on the strength of one entry and under-reports the pool by three.
+
 ## [0.47.0] - 2026-08-11
 
 **Six reports that were literally true and read as their opposite.** 0.44.0
