@@ -209,11 +209,11 @@ def _check_alias(
 
     effective_hostname = (resolved.get("hostname") or [None])[0]
     identity_files = tuple(resolved.get("identityfile", []))
-    # REPLACEMENT, not subtraction — see the module docstring. Subtracting the
-    # defaults erases `~/.ssh/id_rsa`, which is exactly the file compute-01's
-    # stanza named. When the baseline is unknown (empty) nothing is treated as
-    # declared, and the report says the baseline was unavailable rather than
-    # quietly reporting a clean result.
+    # REPLACEMENT, not subtraction — the reasoning and the measurement are in
+    # `._ssh_g`. Subtracting the defaults erases `~/.ssh/id_rsa`, which is
+    # exactly the file compute-01's stanza named. When the baseline is unknown
+    # (empty) nothing is treated as declared, and the report says the baseline
+    # was unavailable rather than quietly reporting a clean result.
     declared = (
         () if (not builtin or identity_files == builtin) else identity_files
     )
