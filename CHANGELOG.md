@@ -47,6 +47,47 @@ versions follow [Semantic Versioning](https://semver.org/).
   migrated by this change; convergence is per-consumer, as ADR-0007's boundary
   declarations are.
 
+### Fixed
+
+- **The audit gate's first line now names the rules that fired (#593).** pytest's
+  `short test summary info` carries one line per failure, and it is what CI
+  notifications and `gh pr checks` triage are built from. That line read
+
+      AssertionError: audit-all reported violations for 'sac' (exit=1).
+
+  for every rule in the corpus — a CONSTANT, so two unrelated failures were
+  indistinguishable without downloading each job log. The codes were already in
+  the captured output, roughly four screens into the assertion body.
+
+  Measured 2026-08-12 on scitex-agent-container: seventeen PRs red, all showing
+  that one sentence, escalated as a P1 fleet-wide CI outage and given two
+  published root causes before anyone opened a raw log. The real causes were
+  four DIFFERENT rules — `PS-140` twice (different new modules), `PS-207`,
+  `SK-302` — every one PR-local and a one-line fix by its own author.
+  `audit-all` on develop exited 0 throughout. It now reads
+
+      audit-all reported violations for 'scitex-dev' (exit=1): PS-207, SK-302, §1f
+
+  Purely additive: the digest, the warn-tier note and the full stdout/stderr all
+  still follow. Attribution reuses the masking classifier's structural
+  discriminator ("the bracket carries a digit or `§`"), so the legacy
+  `[E] [PS-207 …]` shape yields `PS-207` and not `E`, and a new rule family needs
+  no edit. Codes are sorted and de-duplicated — output order is a thread-pool
+  race, and one rule firing on four modules is one thing to go fix.
+
+- **`summary: … 0 unmasked error(s)` no longer reads as a verdict on a red run
+  (#593).** `audit-skills` fails on ANY finding; `audit-project`'s `--severity`
+  floor is documented as "W/I findings never fail CI on their own". So a
+  W-severity `SK-302` sets the exit code while the summary reports zero errors —
+  measured with ZERO skip-rules declared, so this is not the masking defect and
+  the count is not wrong. What was wrong is that the line reads as the verdict.
+  `render_summary` now takes the package's own exit code and, in the one shape
+  where the numbers alone mislead, says `— but this run EXITED 1: … This line is
+  a TALLY, not the verdict`. `exit_code` is required and keyword-only for the
+  same reason `inspected` is: a dropped argument silently restores the
+  misleading line. The exit-code SEMANTICS are untouched — the asymmetry is
+  deliberate on both sides and changing it is a separate call.
+
 ## [0.47.0] - 2026-08-11
 
 **Six reports that were literally true and read as their opposite.** 0.44.0

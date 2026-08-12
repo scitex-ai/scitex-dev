@@ -398,11 +398,18 @@ def register(ecosystem):
         # Run packages. When multiple packages run in parallel, collect all
         # results first, then print in the input `pkgs` order so the summary
         # is deterministic regardless of completion order.
+        # PER-PACKAGE exit codes, recorded on BOTH paths. The summary line
+        # below needs each package's own rc to say whether its tally is
+        # accompanied by a red run; `overall_exit` cannot answer that in a
+        # multi-package sweep, and the sequential path used to keep `rc`
+        # only as a loop-local.
+        rc_by_pkg: dict[str, int] = {}
         if jobs <= 1 or not multi:
             for d in pkgs:
                 name, rc, res, rep = _run_one(d)
                 all_results[name] = res
                 mask_reports[name] = rep
+                rc_by_pkg[name] = rc
                 _emit_pkg(name, res, rep)
                 _emit_mask(name, rep)
                 if rc != 0:
@@ -410,7 +417,6 @@ def register(ecosystem):
         else:
             with ThreadPoolExecutor(max_workers=jobs) as ex:
                 futs = {ex.submit(_run_one, d): d for d in pkgs}
-                rc_by_pkg: dict[str, int] = {}
                 for f in as_completed(futs):
                     name, rc, res, rep = f.result()
                     all_results[name] = res
@@ -456,6 +462,7 @@ def register(ecosystem):
                         declared=len(rep.skip_rules),
                         inspected=rep.inspected,
                         unreadable=len(rep.unreadable),
+                        exit_code=rc_by_pkg.get(d, 0),
                     ),
                     err=True,
                 )
