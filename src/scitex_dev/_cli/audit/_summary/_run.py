@@ -76,6 +76,7 @@ def _audit_one(
         _scan_env_vars,
         _walk,
     )
+    from ._abstraction_level import check_cli_abstraction_level
     from ._dev_group import check_dev_command_group
     from ._gui_group import check_gui_command_group
     from ._std_rules import (
@@ -134,6 +135,8 @@ def _audit_one(
     check_gui_command_group(cmd, package, out)
     # §13 — self-maintenance commands must nest under a `dev` group.
     check_dev_command_group(cmd, package, out)
+    # §13a — sibling commands must not mix an intent with a mechanism.
+    check_cli_abstraction_level(cmd, package, out)
     if behavioral:
         _check_behavioral(package, out, cmd, timeout=timeout)
     # REFUSE rather than pass. Zero inspected commands is not a clean CLI, it
