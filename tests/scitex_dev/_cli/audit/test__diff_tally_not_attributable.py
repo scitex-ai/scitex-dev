@@ -103,4 +103,60 @@ def test_a_finding_merely_mentioning_a_count_is_not_treated_as_a_tally():
     assert not any(k.rule == TALLY_RULE for k in keys)
 
 
+def test_a_violation_spelled_roll_up_is_a_tally():
+    """Roll-ups do not agree on a noun, and only `error(s)` was detected.
+
+    Reported by scitex-cards 2026-08-10 with the emitter survey: auditors
+    spell their tally `error(s)` (_project, _django), `violation(s)` (_api,
+    _skills, _ecosystem brand + masking) or `finding(s)` (gui, registry-layout,
+    local-state). Only the first was recognised, so the Python-API roll-up fell
+    through to `_unparsed_key` and was keyed by its WHOLE LINE -- count
+    included.
+
+    THE CONSEQUENCE IS INVERTED, which is why it is worth a test: any PR that
+    CHANGES the count rewrites the key, so the gate reports net-new. It failed
+    scitex-cards #779 for REDUCING violations 410 -> 408. A gate a fix cannot
+    pass is not measuring what it claims to.
+    """
+    # Arrange
+    stdout = "ERRO: scitex-cards: Python API: 408 violation(s)"
+
+    # Act
+    keys = extract_violation_keys(stdout)
+
+    # Assert
+    assert any(k.rule == TALLY_RULE for k in keys)
+
+
+def test_a_finding_spelled_roll_up_is_a_tally():
+    """The third spelling, latent today: `registry-layout` emits at warning
+    level and so has never reached the ERRO fail-open. Covered now rather
+    than after someone promotes it to error and inherits the same defect."""
+    # Arrange
+    stdout = "ERRO: scitex-dev: registry-layout: 3 finding(s)"
+
+    # Act
+    keys = extract_violation_keys(stdout)
+
+    # Assert
+    assert any(k.rule == TALLY_RULE for k in keys)
+
+
+def test_the_tail_anchor_still_guards_the_new_nouns():
+    """Adding nouns must not widen what gets swallowed. Both of these carry a
+    TAIL after the count, so they are findings, not roll-ups -- verified
+    against the real emitter strings scitex-cards surveyed."""
+    # Arrange
+    stdout = (
+        "ERRO: [PS-999] scitex-dev: g.py: 2 finding(s) (1 error)\n"
+        "ERRO: [PS-998] scitex-dev: l.py: 5 finding(s) across 4 package(s)"
+    )
+
+    # Act
+    keys = extract_violation_keys(stdout)
+
+    # Assert
+    assert not any(k.rule == TALLY_RULE for k in keys)
+
+
 # EOF
