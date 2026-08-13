@@ -42,13 +42,23 @@ def _write_repo(root: Path, config_body: str | None) -> Path:
     return repo
 
 
-def _write_fake_scitex_dev(bin_dir: Path, *, failing_line: str | None) -> None:
-    """Stub auditor: `audit-project` prints `failing_line` and exits 1."""
+def _write_fake_scitex_dev(
+    bin_dir: Path, *, failing_line: str | None, warning_line: str | None = None
+) -> None:
+    """Stub auditor: `audit-project` prints `failing_line` and exits 1.
+
+    `warning_line` is printed by `audit-cli`, which still EXITS 0 — the
+    shape that used to veto the skip-rule downgrade: a finding from an
+    audit that passed.
+    """
     body = f"""#!/usr/bin/env python3
 import sys
 argv = sys.argv[1:]
 audit = argv[1] if len(argv) > 1 else ""
 failing_line = {failing_line!r}
+warning_line = {warning_line!r}
+if audit == "audit-cli" and warning_line:
+    sys.stderr.write(warning_line + "\\n")
 if audit == "audit-project" and failing_line:
     sys.stderr.write(failing_line + "\\n")
     sys.exit(1)
@@ -65,11 +75,14 @@ def _run(
     *,
     config_body: str | None,
     failing_line: str | None,
+    warning_line: str | None = None,
     as_json: bool = False,
 ):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(parents=True, exist_ok=True)
-    _write_fake_scitex_dev(bin_dir, failing_line=failing_line)
+    _write_fake_scitex_dev(
+        bin_dir, failing_line=failing_line, warning_line=warning_line
+    )
     repo = _write_repo(tmp_path, config_body)
 
     @click.group()
@@ -274,3 +287,78 @@ def test_json_payload_carries_the_written_rationale(tmp_path):
     )
     # Assert
     assert _json_skip_rules(result)["declared"][0]["reason"] == _RATIONALE
+
+
+# --------------------------------------------------------------------- #
+# 7. A finding from an audit that PASSED must not veto the downgrade     #
+#                                                                        #
+# scitex-ai/scitex-dev#590. Measured on scitex-agent-container: the only #
+# failing audit failed on one declared PS-226, three warnings came from  #
+# audit-cli (exit 0), and audit-all printed the masked inventory AND     #
+# "0 unmasked error(s) ..., 1 masked by skip-rules" AND exited 1.        #
+# --------------------------------------------------------------------- #
+
+
+#: Attributable (so it lands in `unmasked`), WARN-tier, and emitted by an
+#: audit that exits 0 — it therefore provably failed nothing.
+_PASSING_AUDIT_WARNING = "WARN:   [§4b] scitex-io up: command has no CliHelp spec"
+
+
+def test_declared_skip_greens_the_run_despite_a_passing_audit_warning(tmp_path):
+    """The whole job of a skip rule: clear the status, not just the report."""
+    # Arrange
+    cfg = _CONFIG_WITH_RATIONALE
+    # Act
+    result = _run(
+        tmp_path,
+        config_body=cfg,
+        failing_line=_DEFERRED_LINE,
+        warning_line=_PASSING_AUDIT_WARNING,
+    )
+    # Assert
+    assert result.exit_code == 0
+
+
+def test_the_masked_inventory_is_still_printed_on_that_green_run(tmp_path):
+    """Green must never mean quiet — the deferral is still declared debt."""
+    # Arrange
+    cfg = _CONFIG_WITH_RATIONALE
+    # Act
+    result = _run(
+        tmp_path,
+        config_body=cfg,
+        failing_line=_DEFERRED_LINE,
+        warning_line=_PASSING_AUDIT_WARNING,
+    )
+    # Assert
+    assert "MASKED INVENTORY" in result.output
+
+
+def test_the_passing_audits_warning_is_still_reported_on_that_run(tmp_path):
+    """What is REPORTED is unchanged; only the verdict's inputs narrowed."""
+    # Arrange
+    cfg = _CONFIG_WITH_RATIONALE
+    # Act
+    result = _run(
+        tmp_path,
+        config_body=cfg,
+        failing_line=_DEFERRED_LINE,
+        warning_line=_PASSING_AUDIT_WARNING,
+    )
+    # Assert
+    assert _PASSING_AUDIT_WARNING in result.output
+
+
+def test_an_undeclared_finding_still_fails_beside_a_passing_warning(tmp_path):
+    """Control: the narrowing is per-audit, not a blanket amnesty."""
+    # Arrange
+    cfg = _CONFIG_WITH_RATIONALE
+    # Act
+    result = _run(
+        tmp_path,
+        config_body=cfg,
+        failing_line=_UNDECLARED_LINE,
+        warning_line=_PASSING_AUDIT_WARNING,
+    )
+    # Assert
+    assert result.exit_code != 0
