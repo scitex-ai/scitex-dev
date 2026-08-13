@@ -142,11 +142,16 @@ class MaskReport:
         skip rules. That is a real visibility bug, not a deferral.
 
         UNREADABLE lines defeat the claim outright. This property is what
-        downgrades a failing package to green in ``_audit_all.py``, and it
-        asserts "everything that failed was declared" — which is exactly
-        the sentence you cannot say about a line nobody could parse. The
-        line may have been an undeclared ERROR; masked and unreadable are
-        different answers, and only one of them licenses the downgrade.
+        licenses the downgrade of a failing package in ``_audit_all.py``,
+        and it asserts "everything that failed was declared" — which is
+        exactly the sentence you cannot say about a line nobody could
+        parse. The line may have been an undeclared ERROR; masked and
+        unreadable are different answers, and only one of them licenses
+        the downgrade.
+
+        It is asked PER AUDITOR, not of the whole run's concatenated
+        output — see ``_audit_verdict.failing_audits_are_fully_masked``
+        for why the attribution is load-bearing.
         """
         return bool(self.masked) and not self.unmasked and self.is_answerable()
 
