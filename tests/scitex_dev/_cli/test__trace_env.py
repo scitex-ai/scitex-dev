@@ -81,7 +81,7 @@ def test_cli_json_mode_field(cli_var):
         main, ["trace-env-vars", cli_var, "--no-etc", "--no-tmux", "--json"]
     )
     # Assert
-    assert json.loads(result.output)["mode"] == "scan"
+    assert json.loads(result.stdout)["mode"] == "scan"
 
 
 def test_cli_json_variable_name(cli_var):
@@ -92,7 +92,7 @@ def test_cli_json_variable_name(cli_var):
         main, ["trace-env-vars", cli_var, "--no-etc", "--no-tmux", "--json"]
     )
     # Assert
-    assert json.loads(result.output)["variables"][0]["name"] == cli_var
+    assert json.loads(result.stdout)["variables"][0]["name"] == cli_var
 
 
 def test_cli_json_currently_set(cli_var):
@@ -103,7 +103,7 @@ def test_cli_json_currently_set(cli_var):
         main, ["trace-env-vars", cli_var, "--no-etc", "--no-tmux", "--json"]
     )
     # Assert
-    assert json.loads(result.output)["variables"][0]["currently_set"] is True
+    assert json.loads(result.stdout)["variables"][0]["currently_set"] is True
 
 
 def test_cli_quiet_one_line_summary(cli_var):
@@ -114,7 +114,7 @@ def test_cli_quiet_one_line_summary(cli_var):
         main, ["trace-env-vars", cli_var, "--no-etc", "--no-tmux", "-q"]
     )
     # Assert
-    assert result.output.startswith("scan:")
+    assert result.stdout.startswith("scan:")
 
 
 # --------------------------------------------------------------------
@@ -149,7 +149,7 @@ def test_cli_trace_locates_var_injected_at_inner_exec_stage():
         ],
     )
     # Assert
-    assert json.loads(result.output)["trace_hits"], result.output
+    assert json.loads(result.stdout)["trace_hits"], result.output
 
 
 @_NEEDS_STRACE
@@ -171,7 +171,7 @@ def test_cli_trace_splits_command_from_names():
         ],
     )
     # Assert
-    assert [v["name"] for v in json.loads(result.output)["variables"]] == [
+    assert [v["name"] for v in json.loads(result.stdout)["variables"]] == [
         "TRACE_ME_XYZ"
     ]
 
