@@ -135,11 +135,10 @@ def test_connect_returns_rows_addressable_by_name():
     # We execute a trivial query; the row factory decides how the row
     # is returned.  sqlite3.Row and psycopg's dict_row both allow
     # ``row["column_name"]``.
-    cursor = connection.execute("SELECT 1 AS col")
-    row = cursor.fetchone()
-    # This must NOT raise ``TypeError: tuple indices must be integers
-    # or slices, not str`` — that was the original crash.
-    assert "col" in row  # type: ignore[index]
+    row = connection.execute("SELECT 1 AS col").fetchone()
+    # Indexing the row BY NAME is the whole assertion: it raised
+    # ``TypeError: tuple indices must be integers or slices, not str``
+    # before the row factory was set.
     assert row["col"] == 1  # type: ignore[index]
 
 
