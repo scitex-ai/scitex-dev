@@ -7,6 +7,30 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A declared skip rule now clears the exit status, not just the report
+  (#590).** `ecosystem audit-all` masks findings on rules a repo has declared
+  in `.scitex/dev/config.yaml`, prints the masked inventory, and prints a
+  summary line stating how many UNMASKED errors remain. It could print
+  `0 unmasked error(s) ..., 1 masked by skip-rules (1 declared)` and still
+  exit 1 — a gate whose report and whose status disagreed, and a deferral
+  mechanism that did the one thing it exists for only sometimes.
+
+  The downgrade was decided over the run's CONCATENATED output, which
+  destroys attribution: a WARN-tier finding printed by an audit that EXITED 0
+  landed in the same `unmasked` list as a real failure and vetoed the
+  downgrade. Measured on scitex-agent-container — `audit-project` failed on
+  one declared `PS-226`, three warnings came from `audit-cli` (exit 0).
+
+  It is now decided PER AUDIT, against the audits that actually exited
+  non-zero: each is asked "is everything YOU reported masked?". Severity is
+  deliberately not the discriminator — `audit-skills` and `audit-python-apis`
+  exit 1 on WARN-tier findings too, so an error-only predicate would have
+  turned runs those two legitimately failed green. What is REPORTED is
+  unchanged: the inventory, the labels and the summary are still computed
+  over the whole run.
+
 ## [0.49.0] - 2026-08-12
 
 **A declaration that resolves to something.** `scitex_dev.store` shipped in

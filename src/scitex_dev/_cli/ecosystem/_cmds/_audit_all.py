@@ -273,6 +273,7 @@ def register(ecosystem):
             render_summary,
             resolve_skip_rules,
         )
+        from ._audit_verdict import decide_pkg_exit
 
         try:
             skip_rules_by_pkg = resolve_skip_rules(pkgs, explicit_path)
@@ -304,27 +305,27 @@ def register(ecosystem):
             # summary's error/masked counts are measured rather than
             # inferred from a subprocess exit code.
             rules = skip_rules_by_pkg.get(distribution) or []
-            combined = "\n".join(
-                r.pop("_raw", "") or "" for r in results.values()
+            raw_by_audit = {a: (r.pop("_raw", "") or "") for a, r in results.items()}
+            report = classify_output("\n".join(raw_by_audit.values()), rules)
+            # The downgrade is decided against the audits that actually
+            # FAILED, not against the whole run's concatenated output: a
+            # WARN from an audit that exited 0 used to veto it, keeping
+            # the package red beside its own "0 unmasked error(s), 1
+            # masked by skip-rules" summary (#590). `report` is still the
+            # whole run, so the inventory and the summary are unchanged.
+            pkg_exit, warning = decide_pkg_exit(
+                pkg_exit,
+                distribution=distribution,
+                report=report,
+                failing_raw={
+                    a: raw
+                    for a, raw in raw_by_audit.items()
+                    if results[a].get("exit", 0) != 0
+                },
+                skip_rules=rules,
             )
-            report = classify_output(combined, rules)
-            if pkg_exit and report.fully_masked:
-                pkg_exit = 0
-            elif pkg_exit and report.unmasked_count == 0 and not report.is_answerable():
-                # Everything the classifier COULD read was masked, but some
-                # lines could not be read at all — so "fully masked" is
-                # unprovable and the downgrade above was refused. Say so:
-                # a run that stays red for a reason nobody prints is the
-                # same debugging dead-end as one that goes green silently.
-                click.echo(
-                    f"WARN: {distribution}: exit stays NON-ZERO — "
-                    f"{len(report.unreadable)} line(s) claimed to be findings "
-                    "and could not be classified, so they cannot be shown to "
-                    "be covered by a declared skip-rule. First unreadable "
-                    f"line: {report.unreadable[0]!r}. Fix the emitter's line "
-                    "format, or declare the rule if it is a real finding.",
-                    err=True,
-                )
+            if warning:
+                click.echo(warning, err=True)
             return distribution, pkg_exit, results, report
 
         # --new-only orchestration: stage the base ref via worktree-
