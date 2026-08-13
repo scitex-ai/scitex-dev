@@ -49,6 +49,7 @@ class PostgresDialect(Dialect):
             )
         try:
             import psycopg
+            from psycopg.rows import dict_row
         except ImportError:
             raise DialectUnavailableError(
                 "The Postgres backend needs the 'psycopg' driver, which is "
@@ -62,7 +63,13 @@ class PostgresDialect(Dialect):
         try:
             # `.dsn` by name — `str(locator)` renders a credential-free
             # summary precisely so a password cannot reach a log line.
-            connection = psycopg.connect(target.dsn, autocommit=True)
+            # The codec in _codec.py addresses columns by name
+            # (e.g. record["id"]), so a plain tuple from psycopg is a crash.
+            # The SQLite dialect keeps the same contract via sqlite3.Row;
+            # dict_row makes psycopg return a dict keyed by column name.
+            connection = psycopg.connect(
+                target.dsn, autocommit=True, row_factory=dict_row
+            )
         except Exception as exc:
             raise StoreTargetError(
                 f"Cannot connect to Postgres store {target.name!r} at "
