@@ -103,4 +103,63 @@ def test_a_finding_merely_mentioning_a_count_is_not_treated_as_a_tally():
     assert not any(k.rule == TALLY_RULE for k in keys)
 
 
+# THE SECOND WORDING. Each auditor spells its own tally and the noun is
+# not shared: project-structure says `error(s)`, the Python API auditor
+# says `violation(s)`. Recognising only the first reproduced the very
+# defect this module exists to prevent, on a line nobody had thought to
+# check. Measured on scitex-cards 2026-08-13: 141 keys at HEAD against
+# 142 at baseline -- FEWER findings -- reported as "1 net-new".
+_VIOLATIONS_BASE = "ERRO: scitex-cards: Python API: 410 violation(s)"
+_VIOLATIONS_HEAD = "ERRO: scitex-cards: Python API: 409 violation(s)"
+
+
+def test_a_violations_tally_is_recognised_as_a_tally():
+    # Arrange
+    stdout = _VIOLATIONS_HEAD
+
+    # Act
+    keys = extract_violation_keys(stdout)
+
+    # Assert
+    assert any(k.rule == TALLY_RULE for k in keys)
+
+
+def test_a_shrinking_violations_tally_is_not_net_new():
+    # The case that blocked the PR: the count went DOWN and the gate
+    # still called it a new finding.
+    # Arrange
+    head_stdout = _VIOLATIONS_HEAD
+    base_stdout = _VIOLATIONS_BASE
+
+    # Act
+    net_new = compute_net_new(head_stdout, base_stdout)
+
+    # Assert
+    assert net_new == set()
+
+
+def test_a_violations_tally_keys_identically_across_counts():
+    # Arrange
+    head = {k for k in extract_violation_keys(_VIOLATIONS_HEAD) if k.rule == TALLY_RULE}
+
+    # Act
+    base = {k for k in extract_violation_keys(_VIOLATIONS_BASE) if k.rule == TALLY_RULE}
+
+    # Assert
+    assert head == base
+
+
+def test_prose_ending_in_a_violations_count_is_not_a_tally():
+    # CONTROL for the widened noun set: the tail anchor still has to
+    # distinguish a tally from a finding that happens to end in a count.
+    # Arrange
+    stdout = "ERRO: [PS-999] scitex-cards: t.py: fixture declares 2 violation(s)"
+
+    # Act
+    keys = extract_violation_keys(stdout)
+
+    # Assert
+    assert not any(k.rule == TALLY_RULE for k in keys)
+
+
 # EOF
