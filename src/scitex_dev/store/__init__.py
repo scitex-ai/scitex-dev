@@ -112,6 +112,7 @@ from ._identity import (
 from ._hlc import HLC, HybridLogicalClock
 from ._host import host_store, socket_dsn
 from ._merge import MergeConflict, MergeOutcome, merge_field
+from ._notify import Hint, channel_for, decode_hint, encode_hint
 from ._oplog import OpEntry, OpKind, assert_contiguous, assert_not_superseded
 from ._policy import (
     FieldKind,
@@ -122,6 +123,15 @@ from ._policy import (
     Schema,
     WriterPolicy,
 )
+from ._relay import (
+    InMemoryTransport,
+    RelayOutcome,
+    RelayReport,
+    Transport,
+    TransportError,
+    fan_out,
+)
+from ._relay_ssh import SshPsqlTransport, aliases_for, ring_argv
 from ._replication import ReplayResult, outstanding, pull, replay, sync
 from ._row import Row
 from ._store import PutResult, Store
@@ -143,8 +153,10 @@ __all__ = [
     "ForkPoint",
     "GENESIS_ACTOR",
     "HLC",
+    "Hint",
     "HybridLogicalClock",
     "IdentityVerdict",
+    "InMemoryTransport",
     "MergeConflict",
     "MergeOutcome",
     "MergeRule",
@@ -155,11 +167,14 @@ __all__ = [
     "PutResult",
     "RESERVED_COLUMNS",
     "RecordNotFoundError",
+    "RelayOutcome",
+    "RelayReport",
     "ReplayResult",
     "RevisionMismatchError",
     "Row",
     "Schema",
     "SchemaError",
+    "SshPsqlTransport",
     "Store",
     "StoreDivergedError",
     "StoreError",
@@ -172,18 +187,25 @@ __all__ = [
     "StoreTarget",
     "StoreTargetError",
     "SupersededFenceError",
+    "Transport",
+    "TransportError",
     "UNKNOWN_SYSTEM",
     "WriterConflictError",
     "WriterPolicy",
+    "aliases_for",
     "apply_entry",
     "assert_contiguous",
     "assert_not_superseded",
     "assert_same_store",
     "build_genesis",
+    "channel_for",
     "compare_identity",
+    "decode_hint",
     "detect_divergence",
     "discover_store_plugins",
     "discover_stores",
+    "encode_hint",
+    "fan_out",
     "genesis_origin",
     "host_store",
     "install_genesis",
@@ -193,6 +215,7 @@ __all__ = [
     "pull",
     "replay",
     "resolve_target",
+    "ring_argv",
     "socket_dsn",
     "sync",
     "verify_adoption",
