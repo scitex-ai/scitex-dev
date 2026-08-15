@@ -28,6 +28,8 @@ from ._facts import (
     parse_worktree_branches,
 )
 from ._sweep import (
+    DATA_BRANCHES,
+    INTEGRATION_BRANCHES,
     MAX_AGE_DAYS,
     PROTECTED_BRANCHES,
     BranchFacts,
@@ -41,6 +43,8 @@ from ._sweep import (
 
 __all__ = [
     "BRANCH_AGE_FORMAT",
+    "DATA_BRANCHES",
+    "INTEGRATION_BRANCHES",
     "MAX_AGE_DAYS",
     "PROTECTED_BRANCHES",
     "TAG_PREFIX",

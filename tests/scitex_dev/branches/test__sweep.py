@@ -15,6 +15,7 @@ from datetime import date
 import pytest
 
 from scitex_dev.branches import (
+    INTEGRATION_BRANCHES,
     PROTECTED_BRANCHES,
     BranchFacts,
     Verdict,
@@ -54,14 +55,63 @@ def test_a_protected_branch_is_never_dropped_however_old(name: str) -> None:
     assert decision.verdict is Verdict.KEEP_PROTECTED
 
 
-def test_the_protected_set_is_exactly_the_operators_three() -> None:
+def test_the_integration_set_is_exactly_the_operators_three() -> None:
     """A pattern would let this list grow to cover whatever is convenient."""
     # Arrange
     expected = {"main", "develop", "cla"}
     # Act
-    actual = set(PROTECTED_BRANCHES)
+    actual = set(INTEGRATION_BRANCHES)
     # Assert
     assert actual == expected
+
+
+def test_cla_signatures_is_not_dropped_however_stale() -> None:
+    """THE BUG scitex-cards CAUGHT ONE DAY BEFORE IT COULD FIRE.
+
+    `cla-signatures` is DATA the CLA workflow reads, not work. Nobody commits
+    to it between uses, so it is always stale after three days — meaning the
+    sweep would have dropped it in all 72 repositories, EVERY TIME, re-creating
+    the org-wide CLA outage they had just spent the day repairing.
+
+    Exact-name matching is what made it dangerous: `cla` is protected and
+    `cla-signatures` is a different string.
+    """
+    # Arrange
+    facts = _facts(name="cla-signatures", last_commit=date(2020, 1, 1))
+    # Act
+    decision = classify(facts, today=TODAY)
+    # Assert
+    assert decision.verdict is Verdict.KEEP_PROTECTED
+
+
+def test_gh_pages_is_not_dropped_however_stale() -> None:
+    """The same class, found by asking what ELSE is data rather than work.
+
+    Nobody reported this one. A published site is written by CI and never
+    worked on, so it ages exactly like `cla-signatures` and would have been
+    deleted just as silently.
+    """
+    # Arrange
+    facts = _facts(name="gh-pages", last_commit=date(2020, 1, 1))
+    # Act
+    decision = classify(facts, today=TODAY)
+    # Assert
+    assert decision.verdict is Verdict.KEEP_PROTECTED
+
+
+def test_a_branch_merely_starting_with_a_protected_name_is_still_swept() -> None:
+    """The exemption stayed EXACT — the fix is a named set, not a prefix.
+
+    `cla-signatures` is protected because someone decided it is data. A prefix
+    rule would have protected `cla-anything` including real topic branches, and
+    the list would then grow by naming convention rather than by decision.
+    """
+    # Arrange
+    facts = _facts(name="cla-fix-the-bot", last_commit=OLD)
+    # Act
+    decision = classify(facts, today=TODAY)
+    # Assert
+    assert decision.verdict is Verdict.DROP_STALE
 
 
 def test_a_branch_checked_out_in_a_worktree_is_kept() -> None:

@@ -52,13 +52,41 @@ from datetime import date
 from enum import Enum
 from typing import Final, NamedTuple
 
-#: The only permanent exemptions, from the operator's sentence. Everything else
-#: earns its life by being touched.
+#: The INTEGRATION branches, from the operator's sentence. Everything that holds
+#: work earns its life by being touched.
 #:
 #: A LITERAL SET, not a prefix or a pattern: `release/*`-style wildcards were
 #: considered and rejected, because a pattern is how an exemption list quietly
 #: grows to cover whatever someone names conveniently.
-PROTECTED_BRANCHES: Final[frozenset[str]] = frozenset({"main", "develop", "cla"})
+INTEGRATION_BRANCHES: Final[frozenset[str]] = frozenset({"main", "develop", "cla"})
+
+#: Branches that are NOT WORK — data a workflow reads, or a published site.
+#:
+#: THE RULE DOES NOT APPLY TO THESE, AND MATCHING BY AGE WOULD DELETE THEM ALL.
+#: A data branch has no work in progress by construction: nobody commits to it
+#: between uses, so it is ALWAYS stale after three days and the sweep would drop
+#: it every single time, in every repository at once.
+#:
+#: `cla-signatures` is the case that caught this, and it caught it one day
+#: before the damage. scitex-cards measured 2026-08-15 that a MISSING
+#: `cla-signatures` branch had just taken the CLA check red across the org, and
+#: then asked whether this sweep exempts by exact name or by prefix. Exact —
+#: so `cla-signatures` was NOT protected, was created that same day, and would
+#: have been dropped in all 72 repositories once it aged past the window,
+#: re-creating the outage they had just finished repairing.
+#:
+#: `gh-pages` is here for the same reason and was not reported by anyone: it is
+#: a published site, written by CI, never "worked on".
+#:
+#: KEPT AS A SEPARATE SET rather than folded into the one above, because the two
+#: answer different questions. An integration branch is protected because it is
+#: where work LANDS; a data branch is protected because it was never work at
+#: all. Anyone adding to this set should be able to say which sentence applies —
+#: and if neither does, the branch is work and the rule governs it.
+DATA_BRANCHES: Final[frozenset[str]] = frozenset({"cla-signatures", "gh-pages"})
+
+#: Everything the sweep must never drop, whatever its age.
+PROTECTED_BRANCHES: Final[frozenset[str]] = INTEGRATION_BRANCHES | DATA_BRANCHES
 
 #: Three days, and the constitution is explicit that the discomfort is the point:
 #: "A limit generous enough to never bite is the gate-that-cannot-fail in another
