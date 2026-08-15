@@ -86,7 +86,37 @@ def decide_pkg_exit(
     for one audit — and, because a run that stays red for a reason
     nobody prints is the same debugging dead-end as one that goes green
     silently, it comes back as a warning to echo rather than as silence.
+
+    A run that inspected ZERO lines is handled FIRST and separately, because
+    it has no verdict to give in either direction. See below.
     """
+    if not report.inspected:
+        # NO VERDICT. `inspected` is the denominator (see MaskReport), and
+        # with a denominator of zero every numerator above is meaningless:
+        # "0 unmasked error(s)" and "2 unmasked error(s)" are equally
+        # unfounded when nothing was read. Neither pole is honest, so the
+        # rule is the one that governs the liveness probe too — the third
+        # value is "did not measure", and it must be SAID, not collapsed.
+        #
+        # Measured 2026-08-15 by scitex-agent-container: the CI SIF's baked
+        # scitex-dev 0.42.0 returned EXIT=1 with "0 unmasked error(s), 0
+        # masked by skip-rules (1 declared); 0 line(s) inspected". It read
+        # nothing, masked nothing, and still failed — a gate returning the
+        # failing pole BY DEFAULT rather than by measurement. It cannot be
+        # said to have an opinion at all.
+        #
+        # This stays NON-ZERO rather than going green on purpose. Turning a
+        # gate that cannot fail into one that cannot fail is the trade this
+        # fleet has already paid for once; the fix for a silent red is a
+        # LOUD red, never a silent green.
+        return (pkg_exit or 1), (
+            f"ERROR: {distribution}: NO VERDICT — the audit inspected 0 "
+            "lines, so it measured nothing and every count below is "
+            "vacuous. This is not a clean result and not a real failure: "
+            "it is a gate that did not run. Check that the auditor "
+            "launched at all, that `--path` names a tree that exists, and "
+            "that the resolved scitex-dev is the version you meant."
+        )
     if not pkg_exit:
         return pkg_exit, None
     if report.is_answerable() and failing_audits_are_fully_masked(
