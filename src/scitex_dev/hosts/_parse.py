@@ -137,6 +137,52 @@ def _parse_aliases(name: str, raw, *, hosts_path: Path) -> tuple[str, ...]:
     return tuple(out)
 
 
+def _parse_requested_address(name: str, raw, *, hosts_path: Path) -> str | None:
+    """Parse a host's ``requested_address:`` — the DHCP address it asks for.
+
+    Absent / ``null`` is the norm and yields ``None`` ("this host has no
+    declared preference"). The VALUE is validated by
+    :class:`HostRecord` itself; this parser only rejects the shapes YAML
+    can produce that a literal address never is.
+
+    The interesting one is an UNQUOTED address. YAML leaves
+    ``192.168.11.174`` a string (three dots is not a number), but a
+    two-octet typo like ``192.168`` parses as a FLOAT, and
+    ``requested_address: 011`` as an int. Coercing those with ``str()``
+    would turn a typo into a plausible-looking address and write it into
+    a DHCP client's config; rejecting the type is how the typo stays
+    visible.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, str):
+        raise HostRegistryError(
+            f"{hosts_path}: host {name!r}: `requested_address` must be a "
+            f"quoted IPv4 string, got {type(raw).__name__} {raw!r}. YAML "
+            "parses a value with fewer than three dots as a NUMBER, so an "
+            "address typed one octet short arrives here as a float rather "
+            "than as the address you meant.",
+            code=ErrorCode.VALIDATION,
+            remediation=(
+                f'Quote it: `requested_address: "192.168.11.174"` for the '
+                f"{name!r} entry."
+            ),
+        )
+    address = raw.strip()
+    if not address:
+        raise HostRegistryError(
+            f"{hosts_path}: host {name!r}: `requested_address` is empty. An "
+            "empty string cannot be told apart from 'no preference', which "
+            "is what omitting the field already says.",
+            code=ErrorCode.VALIDATION,
+            remediation=(
+                f"Either give {name!r} a real address or delete the "
+                "`requested_address:` line."
+            ),
+        )
+    return address
+
+
 def _parse_host_record(name: str, data, *, hosts_path: Path) -> HostRecord:
     if not isinstance(data, dict):
         raise HostRegistryError(
@@ -168,6 +214,9 @@ def _parse_host_record(name: str, data, *, hosts_path: Path) -> HostRecord:
                 name, data.get("runner_labels"), hosts_path=hosts_path
             ),
             aliases=_parse_aliases(name, data.get("aliases"), hosts_path=hosts_path),
+            requested_address=_parse_requested_address(
+                name, data.get("requested_address"), hosts_path=hosts_path
+            ),
         )
     except HostRegistryError as exc:
         # Re-raise with the source file attached for a fully actionable
