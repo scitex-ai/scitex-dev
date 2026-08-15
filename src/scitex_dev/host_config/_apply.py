@@ -35,6 +35,7 @@ from . import (
     STATE_DRIFT,
     STATE_NOT_APPLICABLE,
     STATE_OK,
+    STATE_PRECONDITION_UNMET,
     HostConfigSpec,
     evaluate,
 )
@@ -82,6 +83,9 @@ def apply_specs(
 
     * ``unchanged``   -- already as declared (the idempotent no-op)
     * ``skipped``     -- ``not_applicable`` on this host
+    * ``blocked``     -- ``requires_command`` is missing, so the file
+                         would be read by nothing; NOT written, not
+                         even under ``--force``
     * ``created``     -- the file was absent and has been written
     * ``drift``       -- differs, and was DELIBERATELY NOT touched
     * ``repaired``    -- differed and was overwritten under ``--force``
@@ -102,6 +106,16 @@ def apply_specs(
 
         if status.state == STATE_NOT_APPLICABLE:
             records.append(_rec(spec, status.state, "skipped", status.detail))
+            continue
+
+        if status.state == STATE_PRECONDITION_UNMET:
+            # Deliberately NOT written, even under --force. Writing it
+            # would create a file that looks right, is read by nothing,
+            # and reports `ok` on every subsequent check -- a guard that
+            # cannot detect what it was installed for while claiming it
+            # can. `blocked` keeps it visible until the precondition is
+            # actually satisfied.
+            records.append(_rec(spec, status.state, "blocked", status.detail))
             continue
 
         if status.state == STATE_OK:
@@ -180,6 +194,106 @@ def apply_specs(
     return records
 
 
+def observe_specs(
+    specs: list[HostConfigSpec],
+    *,
+    root: str = "/",
+    hostname: str | None = None,
+    timeout_sec: int = 30,
+) -> list[dict]:
+    """Run each spec's ``verify_command`` and return what the host SAID.
+
+    THESE ARE NOT COMPLIANCE VERDICTS, and keeping the two apart is the
+    whole reason this is a separate function rather than another branch
+    inside :func:`apply_specs`.
+
+    ``ok`` / ``absent`` / ``drift`` answer ONE question: does the file on
+    disk match the declaration? That is a statement about configuration,
+    and it is fully decidable. ``verify_command`` answers a different
+    one: did the configuration actually take effect in the running
+    system? Those can legitimately disagree forever. A host that
+    REQUESTS an address via DHCP Option 50 and is granted a different
+    one has a perfectly correct config file -- ``ok`` -- and an
+    interface that does not match it. Reporting that as ``drift`` would
+    accuse the configuration of a fault it does not have, and would
+    train everyone to ignore drift.
+
+    So an observation carries ``action="observed"``, its own exit code,
+    and the command's output. It never changes a verdict and never
+    enters the pending count. The caller decides what the difference
+    means; a fleet-wide reconciler can store it as ACTUAL state beside
+    the DESIRED state the declaration holds.
+
+    A spec with no ``verify_command`` yields nothing -- silence here
+    means "this declaration offers no observation", which is why the
+    field's absence is worth noticing when reviewing a new spec.
+    """
+    records: list[dict] = []
+    for spec in specs:
+        if not spec.verify_command:
+            continue
+        status = evaluate(spec, root=root, hostname=hostname)
+        if status.state in (STATE_NOT_APPLICABLE, STATE_PRECONDITION_UNMET):
+            # Running `auditctl -l` on a host with no auditd produces a
+            # shell error that reads like a finding. Skip it: the
+            # precondition record already says the real thing.
+            continue
+        if spec.verify_requires_root and _euid() != 0:
+            # Same reasoning, different cause. `auditctl -l` needs
+            # CAP_AUDIT_CONTROL; run as a normal user it returns a
+            # permission error, and a permission error sitting in an
+            # observation column is indistinguishable at a glance from
+            # the audit rules having gone missing. Say plainly that the
+            # observation was NOT taken -- an unmeasured fact must not
+            # be dressed up as a measured one.
+            records.append(
+                {
+                    "name": spec.name,
+                    "path": spec.path,
+                    "state": "observation",
+                    "action": "not-observed",
+                    "detail": (
+                        f"`{spec.verify_command}` needs root; this check "
+                        f"runs unprivileged by design. Re-run as root to "
+                        f"observe."
+                    ),
+                    "exit_code": None,
+                    "output": "",
+                }
+            )
+            continue
+        try:
+            proc = subprocess.run(
+                spec.verify_command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=timeout_sec,
+            )
+            output = (proc.stdout or proc.stderr or "").strip()
+            rc = proc.returncode
+        except subprocess.TimeoutExpired:
+            output = f"timed out after {timeout_sec}s"
+            rc = None
+        records.append(
+            {
+                "name": spec.name,
+                "path": spec.path,
+                "state": "observation",
+                "action": "observed",
+                "detail": f"$ {spec.verify_command} -> exit {rc}",
+                "exit_code": rc,
+                "output": output,
+            }
+        )
+    return records
+
+
+def _euid() -> int:
+    """Effective uid, or 0 where the platform has no concept of one."""
+    return os.geteuid() if hasattr(os, "geteuid") else 0
+
+
 def _queue(commands: list[str], command: str | None) -> None:
     """Remember ``command`` once, preserving declaration order."""
     if command and command not in commands:
@@ -232,6 +346,7 @@ __all__ = [
     "AUDIT_LOG",
     "BACKUP_SUFFIX",
     "apply_specs",
+    "observe_specs",
     "backup_path_for",
     "needs_root",
     "write_audit",

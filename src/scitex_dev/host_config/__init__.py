@@ -58,11 +58,14 @@ root) applies the declaration automatically.
 from __future__ import annotations
 
 import logging
+import shutil
 import socket
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+
+from ._volatility import volatile_reason
 
 _logger = logging.getLogger(__name__)
 
@@ -76,6 +79,7 @@ STATE_OK = "ok"
 STATE_ABSENT = "absent"
 STATE_DRIFT = "drift"
 STATE_NOT_APPLICABLE = "not_applicable"
+STATE_PRECONDITION_UNMET = "precondition_unmet"
 
 
 @dataclass(frozen=True)
@@ -127,10 +131,40 @@ class HostConfigSpec:
         For journald persistence that is ``journalctl --list-boots``
         (more than one boot listed = the journal demonstrably survived
         a reboot). ``None`` when no observation is available.
+
+        PICK A COMMAND A NORMAL USER CAN RUN. The periodic check is
+        unprivileged by design, and a verifier that needs privileges it
+        does not have returns a permission error that reads exactly like
+        a finding. ``ip -4 -o addr show`` is readable by anyone;
+        ``networkctl cat <iface>`` is not, because netplan's generated
+        units are 0640 root:systemd-network. When no unprivileged
+        equivalent exists, say so with ``verify_requires_root`` rather
+        than shipping a command that always fails.
+    verify_requires_root
+        Whether ``verify_command`` needs root to produce a real answer
+        -- ``auditctl -l`` reads the kernel's audit rules and needs
+        CAP_AUDIT_CONTROL, so an unprivileged run reports a permission
+        error rather than the ruleset. When set and the caller is not
+        root, the observation is reported as ``not-observed`` with the
+        reason, instead of running the command and recording a failure
+        that looks like a finding. Defaults to ``False``.
     requires_root
         Whether writing ``path`` needs root. Defaults to ``True``
         (anything under ``/etc`` does). CHECKING never needs root --
         that asymmetry is why the periodic job can run unprivileged.
+    requires_command
+        A binary that must exist for this file to MEAN anything, e.g.
+        ``"auditctl"`` for a file under ``/etc/audit/rules.d/``. When
+        it is absent the spec evaluates to ``precondition_unmet`` and
+        ``apply`` refuses to write.
+
+        This exists because the alternative is worse than useless.
+        Dropping a rules file onto a host whose daemon is not installed
+        produces a file that is present, correct, and read by nothing --
+        and every subsequent ``check`` would report ``ok``. That is a
+        guard which cannot detect the thing it was installed for, while
+        reporting that it can. ``None`` (the default) means the file
+        stands on its own.
     """
 
     name: str
@@ -142,7 +176,9 @@ class HostConfigSpec:
     mode: str = "0644"
     apply_command: str | None = None
     verify_command: str | None = None
+    verify_requires_root: bool = False
     requires_root: bool = True
+    requires_command: str | None = None
 
     def __post_init__(self) -> None:
         # Fail EARLY at construction, exactly like SystemDepSpec and
@@ -227,6 +263,35 @@ def _builtin_host_config() -> list[HostConfigSpec]:
     return provide()
 
 
+def _conflicting_claim(
+    spec: HostConfigSpec, existing
+) -> HostConfigSpec | None:
+    """Return the already-accepted spec that FIGHTS ``spec``, if any.
+
+    Two declarations of the same ``path`` only conflict when they can
+    both land on the SAME host. Per-host declarations that share a path
+    but name disjoint ``hosts`` are the opposite of a conflict -- they
+    are how a fleet expresses "this file, different content per
+    machine" (a requested DHCP address, a hostname, a per-host mount).
+
+    The earlier version of this check keyed on ``path`` alone and so
+    dropped every per-host declaration after the first, keeping only the
+    alphabetically-first host's copy and logging a warning nothing
+    surfaces. Nine declarations in, one survivor, no error: exactly the
+    silent loss this federation exists to prevent, committed by the
+    guard meant to prevent it.
+
+    An empty ``hosts`` means "every host", so it overlaps with
+    everything -- including another empty one.
+    """
+    for other in existing:
+        if not spec.hosts or not other.hosts:
+            return other
+        if set(spec.hosts) & set(other.hosts):
+            return other
+    return None
+
+
 def discover_host_config(
     *,
     extra_providers: list[Callable[[], list[HostConfigSpec]]] | None = None,
@@ -265,7 +330,7 @@ def discover_host_config(
         providers.extend(extra_providers)
 
     by_name: dict[str, HostConfigSpec] = {}
-    by_path: dict[str, str] = {}
+    by_path: dict[str, list[HostConfigSpec]] = {}
     for provider in providers:
         try:
             specs = provider()
@@ -290,18 +355,19 @@ def discover_host_config(
                     spec.name,
                 )
                 continue
-            if spec.path in by_path:
+            rival = _conflicting_claim(spec, by_path.get(spec.path, ()))
+            if rival is not None:
                 _logger.warning(
-                    "Host config %r targets %s, already claimed by %r -- "
-                    "two declarations for one file will fight; ignoring the "
-                    "second (first provider wins)",
+                    "Host config %r targets %s on a host %r also claims -- "
+                    "two declarations for one file on one host will fight; "
+                    "ignoring the second (first provider wins)",
                     spec.name,
                     spec.path,
-                    by_path[spec.path],
+                    rival.name,
                 )
                 continue
             by_name[spec.name] = spec
-            by_path[spec.path] = spec.name
+            by_path.setdefault(spec.path, []).append(spec)
 
     return [by_name[name] for name in sorted(by_name)]
 
@@ -331,10 +397,15 @@ def evaluate(
     Pure observation -- never writes, never needs root, so the periodic
     job can run unprivileged and still be honest about what it sees.
 
-    Four outcomes, and the split between the middle two is the whole
-    point of this module:
+    Five outcomes, and the split between ``absent`` and ``drift`` is
+    the whole point of this module:
 
     * ``not_applicable`` -- ``spec.hosts`` excludes this host.
+    * ``precondition_unmet`` -- the file could not do its job: either
+      ``spec.requires_command`` is off PATH (no daemon would read it),
+      or its filesystem is RAM-backed so a reboot erases it (see
+      ``._volatility``). Reported, never written -- a file nothing
+      reads, or that vanishes each boot, would report ``ok`` forever.
     * ``ok`` -- file present, content byte-identical, mode as declared.
       A second run of a converged host reports this for everything;
       that IS the "second run is a no-op and says so" contract.
@@ -356,6 +427,21 @@ def evaluate(
             STATE_NOT_APPLICABLE,
             f"declared for {', '.join(spec.hosts)}; this host is {hostname}",
         )
+
+    if spec.requires_command and shutil.which(spec.requires_command) is None:
+        return HostConfigStatus(
+            spec,
+            STATE_PRECONDITION_UNMET,
+            f"{spec.requires_command!r} is not installed, so {spec.path} "
+            f"would be read by nothing",
+        )
+
+    # Real host only: under a synthetic ``root`` the evaluation is
+    # hypothetical, and pytest's tmp_path is often tmpfs itself.
+    if root == "/":
+        volatile = volatile_reason(spec.path)
+        if volatile:
+            return HostConfigStatus(spec, STATE_PRECONDITION_UNMET, volatile)
 
     target = Path(root) / spec.path.lstrip("/")
     if not target.exists():
@@ -395,6 +481,7 @@ __all__ = [
     "STATE_ABSENT",
     "STATE_DRIFT",
     "STATE_NOT_APPLICABLE",
+    "STATE_PRECONDITION_UNMET",
     "discover_host_config",
     "evaluate",
     "directives_of",

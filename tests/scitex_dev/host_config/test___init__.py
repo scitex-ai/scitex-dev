@@ -130,6 +130,80 @@ def test_discover_dedups_by_name_first_provider_wins():
     assert [s.purpose for s in specs] == ["from-first"]
 
 
+def test_dry_run_overrides_yes_rather_than_the_other_way_round():
+    """The two conflicting must resolve to the NON-writing side.
+
+    A decorative `--dry-run` that `--yes` silently beat would satisfy the
+    CLI convention rule while doing the opposite of what it says — the
+    worst of both, since the flag's presence is what invites trust.
+    """
+    # Arrange
+    runner = CliRunner()
+    # Act
+    result = runner.invoke(
+        main, ["ecosystem", "host-config", "apply", "--yes", "--dry-run"]
+    )
+    # Assert
+    assert "preview" in result.stdout
+
+
+def test_per_host_declarations_may_share_one_path():
+    """A fleet address map is nine specs, one path, disjoint hosts.
+
+    Keying the collision guard on path ALONE dropped eight of the nine
+    and logged a warning nothing surfaces -- the silent loss this
+    federation exists to prevent, committed by the guard meant to
+    prevent it.
+    """
+    # Arrange
+    def provide():
+        return [
+            _spec(name=f"dhcp.{h}", path="/etc/netplan/99-scitex.yaml",
+                  content=f"addr {h}\n", hosts=(h,))
+            for h in ("compute-01", "compute-02", "compute-03", "compute-04")
+        ]
+
+    # Act
+    specs = discover_host_config(
+        include_entry_points=False, extra_providers=[provide]
+    )
+    # Assert
+    assert len(specs) == 4
+
+
+def test_same_path_still_conflicts_when_two_specs_share_a_host():
+    # Arrange
+    def provide():
+        return [
+            _spec(name="a", path="/etc/x.conf", hosts=("h1", "h2")),
+            _spec(name="b", path="/etc/x.conf", hosts=("h2", "h3")),
+        ]
+
+    # Act
+    specs = discover_host_config(
+        include_entry_points=False, extra_providers=[provide]
+    )
+    # Assert
+    assert [s.name for s in specs] == ["a"]
+
+
+def test_an_all_hosts_spec_conflicts_with_a_per_host_one_on_the_same_path():
+    """Empty `hosts` means everywhere, so it overlaps with everything."""
+    # Arrange
+    def provide():
+        return [
+            _spec(name="everywhere", path="/etc/x.conf"),
+            _spec(name="just-one", path="/etc/x.conf", hosts=("h1",)),
+        ]
+
+    # Act
+    specs = discover_host_config(
+        include_entry_points=False, extra_providers=[provide]
+    )
+    # Assert
+    assert [s.name for s in specs] == ["everywhere"]
+
+
 def test_discover_refuses_two_declarations_of_the_same_path():
     """Two providers fighting over one file is the dangerous collision."""
 
@@ -452,18 +526,39 @@ def test_backup_path_is_timestamped_and_sortable(tmp_path):
 # --------------------------------------------------------------------- #
 # scitex-dev's own declaration: persistent journald                      #
 # --------------------------------------------------------------------- #
+def _journald_spec():
+    """The journald declaration, SELECTED BY NAME rather than by position.
+
+    `provide()` returns scitex-dev's whole declaration set, and that set grows:
+    journald, then auditd, then one `dhcp.requested-address.*` per machine. Any
+    test that indexes `[0]` is asserting an ORDERING nobody promised, and it
+    breaks on the next correct addition — which is what happened here when the
+    DHCP declarations landed beside the existing two.
+    """
+    matches = [s for s in provide_journald() if s.name == "journald.persistent"]
+    assert len(matches) == 1, f"expected exactly one journald spec, got {matches}"
+    return matches[0]
+
+
 def test_scitex_dev_declares_persistent_journald():
+    """MEMBERSHIP, not equality — the assertion now matches the test's name.
+
+    This read `== ["journald.persistent"]`, which asserted the ENTIRE
+    federation's contents from a test about one declaration. Adding a correct,
+    unrelated declaration failed it, so the test punished exactly the change it
+    was never about.
+    """
     # Arrange
     # Act
-    specs = provide_journald()
+    names = [s.name for s in provide_journald()]
     # Assert
-    assert [s.name for s in specs] == ["journald.persistent"]
+    assert "journald.persistent" in names
 
 
 def test_journald_declaration_targets_a_drop_in_not_the_distro_file():
     # Arrange
     # Act
-    spec = provide_journald()[0]
+    spec = _journald_spec()
     # Assert
     assert spec.path == "/etc/systemd/journald.conf.d/99-scitex-persistent.conf"
 
@@ -471,7 +566,7 @@ def test_journald_declaration_targets_a_drop_in_not_the_distro_file():
 def test_journald_declaration_requires_root():
     # Arrange
     # Act
-    spec = provide_journald()[0]
+    spec = _journald_spec()
     # Assert
     assert spec.requires_root is True
 
@@ -516,7 +611,7 @@ def test_journald_declaration_verifies_by_observation_not_by_config():
     """Reading back the file you wrote proves nothing; --list-boots does."""
     # Arrange
     # Act
-    spec = provide_journald()[0]
+    spec = _journald_spec()
     # Assert
     assert spec.verify_command == "journalctl --list-boots"
 
@@ -524,7 +619,7 @@ def test_journald_declaration_verifies_by_observation_not_by_config():
 def test_journald_declaration_reloads_the_daemon():
     # Arrange
     # Act
-    spec = provide_journald()[0]
+    spec = _journald_spec()
     # Assert
     assert spec.apply_command == "systemctl restart systemd-journald"
 
