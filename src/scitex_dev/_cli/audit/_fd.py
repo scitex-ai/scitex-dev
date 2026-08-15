@@ -47,9 +47,19 @@ FD_INSTALL_HINT = (
 #: Loud message emitted when `fd` is absent and the audit falls back to the
 #: slower stdlib walk. Announced (not silent) every time, per operator
 #: directive: a missing optional accelerator must be visible.
+#: WORDED AS A CORRECTNESS WARNING, NOT A SPEED ONE, AND THAT IS THE POINT.
+#: The previous text read "falling back to slower stdlib scan; install fd for
+#: speed". Every word of it was true and it named the wrong consequence, so
+#: readers — me included — filed it under performance and moved on. It fired
+#: correctly in CI on 2026-08-15 while the fallback was silently grading a
+#: DIFFERENT SET OF FILES, and nobody connected the two for a day.
 FD_FALLBACK_WARNING = (
-    "fd/fdfind not found on PATH — falling back to slower stdlib scan; "
-    "install fd for speed (`cargo install fd-find`, `brew install fd`, or "
+    "fd/fdfind not found on PATH — falling back to the stdlib scan. This is "
+    "a CORRECTNESS notice, not a speed one: the fallback reproduces fd's "
+    "hidden-path and gitignore filtering by asking git, so if git is also "
+    "unavailable the file set will be WIDER than fd's and the audit may "
+    "grade files that are not in the repository. Install fd to take the "
+    "fast path (`cargo install fd-find`, `brew install fd`, or "
     "`apt install fd-find`)."
 )
 
@@ -88,16 +98,103 @@ def fd_binary() -> str:
     raise FdNotFoundError(FD_INSTALL_HINT)
 
 
+def _is_hidden(path: Path, root: Path) -> bool:
+    """True if any component below ``root`` starts with a dot.
+
+    `fd` is invoked without ``--hidden``, so it skips dotfiles AND descends
+    into no dot-directory (``.git/``, ``.old/``, ``.worktrees/``). The
+    fallback must skip the same set or the two walkers disagree.
+    """
+    try:
+        rel = path.relative_to(root)
+    except ValueError:  # pragma: no cover - defensive
+        return False
+    return any(part.startswith(".") for part in rel.parts)
+
+
+def _gitignored(paths: list[Path], root: Path) -> set[Path]:
+    """Return the subset of ``paths`` that git considers ignored.
+
+    Asks GIT rather than reimplementing gitignore matching. The syntax has
+    precedence rules, negations, directory semantics and nested
+    ``.gitignore`` files; a hand-rolled matcher that is 95% right produces
+    a file set that is subtly different from `fd`'s, which is the exact
+    class of bug this function exists to remove.
+
+    ``--no-index`` IS LOAD-BEARING, and leaving it off cost a debugging
+    round. By default ``git check-ignore`` SUPPRESSES TRACKED FILES — it
+    answers "would git ignore this new file", not "does a rule match this
+    path". `fd` uses neither the index nor git; it applies the ignore rules
+    directly. So a file that is BOTH tracked AND matched by a rule — added
+    before the rule existed, or force-added — is invisible to `fd` and
+    reported "not ignored" by the default check.
+
+    Measured on this repository: ``.gitignore:39:docs/to_claude`` matches 83
+    tracked ``*.py`` files. Without ``--no-index`` those 83 stayed in the
+    fallback's result and out of `fd`'s, which is 83/85ths of the very
+    divergence this function was written to close.
+
+    Returns an EMPTY set when git cannot answer (not installed, not a work
+    tree). That is the honest failure: it means "nothing was shown to be
+    ignored", and the caller announces the reduced fidelity rather than
+    silently claiming a filtered result.
+    """
+    if not paths:
+        return set()
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "check-ignore", "--no-index", "--stdin"],
+            input="\n".join(str(p) for p in paths),
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return set()
+    # 0 = some ignored, 1 = none ignored; 128 = not a work tree / no git.
+    if proc.returncode not in (0, 1):
+        return set()
+    return {Path(line) for line in proc.stdout.splitlines() if line.strip()}
+
+
 def _rglob_find_files(root: Path, *, glob: str) -> list[Path]:
     """Stdlib fallback for :func:`fd_find_files` when `fd` is absent.
 
-    Mirrors the `fd --type f --glob <glob>` result: files only, recursive,
-    absolute paths, sorted. Not gitignore-aware (acceptable for an audit
-    run over a package's own `src/` tree, which has no vendored deps).
+    Mirrors the `fd --type f --glob <glob>` invocation this module uses:
+    files only, recursive, absolute paths, sorted — AND, since 2026-08-15,
+    the same two exclusions `fd` applies by default, hidden paths and
+    gitignored paths.
+
+    IT DID NOT ALWAYS DO THAT, and the old docstring's parenthetical —
+    "Not gitignore-aware (acceptable for an audit run over a package's own
+    `src/` tree, which has no vendored deps)" — is why. That judgement was
+    made on the SPEED axis, when the only question was how fast the walk
+    ran. It became a CORRECTNESS claim the moment two environments
+    disagreed about which files exist, because `fd` ships on developer
+    machines and not on GitHub runners.
+
+    Measured that day on this repository, both walkers, one root:
+
+        repo root:  fd=1142   rglob=1227   -> 85 files only CI ever saw
+        tests/   :  fd=498    rglob=498    -> no difference
+
+    The 85 were `.old/` archives and vendored doc examples: files not in
+    the repository, graded in CI and invisible locally. scitex-agent-
+    container measured the downstream effect independently — 19-23 lines
+    inspected in CI against 15 locally on the SAME COMMIT, every pair.
+
+    So the fallback was designed to degrade to SLOWER and actually degraded
+    to DIFFERENT. This function's contract is now equality with `fd`, not
+    approximation of it, and a test asserts exactly that.
     """
     if not root.is_dir():
         return []
-    return sorted(p.resolve() for p in root.rglob(glob) if p.is_file())
+    candidates = [
+        p.resolve()
+        for p in root.rglob(glob)
+        if p.is_file() and not _is_hidden(p, root)
+    ]
+    ignored = _gitignored(candidates, root)
+    return sorted(p for p in candidates if p not in ignored)
 
 
 def fd_find_files(
