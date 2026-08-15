@@ -10,6 +10,15 @@ rule reviewable without running the destructive half.
 
 from __future__ import annotations
 
+from ._facts import (
+    BRANCH_AGE_FORMAT,
+    UNKNOWN_PR,
+    PrState,
+    build_facts,
+    parse_branch_ages,
+    parse_pr_states,
+    parse_worktree_branches,
+)
 from ._sweep import (
     MAX_AGE_DAYS,
     PROTECTED_BRANCHES,
@@ -23,13 +32,20 @@ from ._sweep import (
 )
 
 __all__ = [
+    "BRANCH_AGE_FORMAT",
     "MAX_AGE_DAYS",
     "PROTECTED_BRANCHES",
+    "UNKNOWN_PR",
     "BranchFacts",
     "Decision",
+    "PrState",
     "SweepPlan",
     "Verdict",
+    "build_facts",
     "classify",
+    "parse_branch_ages",
+    "parse_pr_states",
+    "parse_worktree_branches",
     "plan_sweep",
     "render_plan",
 ]
