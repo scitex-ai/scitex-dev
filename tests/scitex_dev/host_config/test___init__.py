@@ -130,6 +130,80 @@ def test_discover_dedups_by_name_first_provider_wins():
     assert [s.purpose for s in specs] == ["from-first"]
 
 
+def test_dry_run_overrides_yes_rather_than_the_other_way_round():
+    """The two conflicting must resolve to the NON-writing side.
+
+    A decorative `--dry-run` that `--yes` silently beat would satisfy the
+    CLI convention rule while doing the opposite of what it says — the
+    worst of both, since the flag's presence is what invites trust.
+    """
+    # Arrange
+    runner = CliRunner()
+    # Act
+    result = runner.invoke(
+        main, ["ecosystem", "host-config", "apply", "--yes", "--dry-run"]
+    )
+    # Assert
+    assert "preview" in result.stdout
+
+
+def test_per_host_declarations_may_share_one_path():
+    """A fleet address map is nine specs, one path, disjoint hosts.
+
+    Keying the collision guard on path ALONE dropped eight of the nine
+    and logged a warning nothing surfaces -- the silent loss this
+    federation exists to prevent, committed by the guard meant to
+    prevent it.
+    """
+    # Arrange
+    def provide():
+        return [
+            _spec(name=f"dhcp.{h}", path="/etc/netplan/99-scitex.yaml",
+                  content=f"addr {h}\n", hosts=(h,))
+            for h in ("compute-01", "compute-02", "compute-03", "compute-04")
+        ]
+
+    # Act
+    specs = discover_host_config(
+        include_entry_points=False, extra_providers=[provide]
+    )
+    # Assert
+    assert len(specs) == 4
+
+
+def test_same_path_still_conflicts_when_two_specs_share_a_host():
+    # Arrange
+    def provide():
+        return [
+            _spec(name="a", path="/etc/x.conf", hosts=("h1", "h2")),
+            _spec(name="b", path="/etc/x.conf", hosts=("h2", "h3")),
+        ]
+
+    # Act
+    specs = discover_host_config(
+        include_entry_points=False, extra_providers=[provide]
+    )
+    # Assert
+    assert [s.name for s in specs] == ["a"]
+
+
+def test_an_all_hosts_spec_conflicts_with_a_per_host_one_on_the_same_path():
+    """Empty `hosts` means everywhere, so it overlaps with everything."""
+    # Arrange
+    def provide():
+        return [
+            _spec(name="everywhere", path="/etc/x.conf"),
+            _spec(name="just-one", path="/etc/x.conf", hosts=("h1",)),
+        ]
+
+    # Act
+    specs = discover_host_config(
+        include_entry_points=False, extra_providers=[provide]
+    )
+    # Assert
+    assert [s.name for s in specs] == ["everywhere"]
+
+
 def test_discover_refuses_two_declarations_of_the_same_path():
     """Two providers fighting over one file is the dangerous collision."""
 

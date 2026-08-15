@@ -210,6 +210,10 @@ def register(ecosystem):
             ),
             examples=(
                 Example("{prog} ecosystem host-config apply", "Preview."),
+                Example(
+                    "{prog} ecosystem host-config apply --yes --dry-run",
+                    "Rehearse: --dry-run overrides --yes and writes nothing.",
+                ),
                 Example("sudo {prog} ecosystem host-config apply --yes", "Execute."),
                 Example(
                     "sudo {prog} ecosystem host-config apply --yes --force",
@@ -225,16 +229,30 @@ def register(ecosystem):
         help="Also overwrite DRIFTED files (backs the current file up first).",
     )
     @click.option("--yes", "-y", "yes", is_flag=True, help="Actually write (root).")
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help=(
+            "Force a preview even with --yes. This verb already previews by "
+            "default, so the flag exists to make that intent EXPLICIT and "
+            "un-overridable in a script, where --yes may arrive from a "
+            "variable that is empty by accident rather than by decision."
+        ),
+    )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON.")
     @click.pass_context
-    def host_config_apply(ctx, provider, force, yes, as_json):
+    def host_config_apply(ctx, provider, force, yes, dry_run, as_json):
         import json as _json
         import os
 
         from ....host_config._apply import apply_specs, needs_root, write_audit
 
         specs = _select(provider)
-        dry_run = not yes
+        # Default is already preview; --dry-run additionally OVERRIDES --yes.
+        # The two conflicting resolves to the non-writing side on purpose: a
+        # caller who said both asked for a rehearsal and a commit in the same
+        # breath, and only one of those is safe to guess at.
+        dry_run = dry_run or not yes
 
         if not dry_run and hasattr(os, "geteuid") and os.geteuid() != 0:
             preview = apply_specs(
