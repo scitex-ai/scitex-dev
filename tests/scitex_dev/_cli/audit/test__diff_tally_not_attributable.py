@@ -162,4 +162,67 @@ def test_prose_ending_in_a_violations_count_is_not_a_tally():
     assert not any(k.rule == TALLY_RULE for k in keys)
 
 
+# `_TALLY_COUNT` admits FOUR nouns -- error, warning, violation, finding --
+# and until now only two of them were tested. An untested alternative in a
+# gate's regex is the §2 shape in miniature: the branch is claimed, nobody
+# has ever seen it fire, and a typo in it would present as "this auditor's
+# tallies block every PR" long after the edit that caused it.
+#
+# Found while retiring PR #577, which proposed the same widening against the
+# OLD location of this regex (it has since moved to `_diff_keys.py`) and was
+# superseded by #607. Its code change was redundant; this coverage was not.
+_FINDINGS_BASE = "ERRO: scitex-hpc: CLI conventions: 26 finding(s)"
+_FINDINGS_HEAD = "ERRO: scitex-hpc: CLI conventions: 25 finding(s)"
+
+
+def test_a_findings_tally_is_recognised_as_a_tally():
+    # Arrange
+    stdout = _FINDINGS_HEAD
+
+    # Act
+    keys = extract_violation_keys(stdout)
+
+    # Assert
+    assert any(k.rule == TALLY_RULE for k in keys)
+
+
+def test_a_shrinking_findings_tally_is_not_net_new():
+    # The whole point of the noun set: a SHRINKING count must not block.
+    # Arrange
+    head_stdout = _FINDINGS_HEAD
+    base_stdout = _FINDINGS_BASE
+
+    # Act
+    net_new = compute_net_new(head_stdout, base_stdout)
+
+    # Assert
+    assert net_new == set()
+
+
+def test_a_warnings_tally_is_recognised_as_a_tally():
+    # The fourth noun, and the one most likely to appear alone: sub-auditors
+    # that exit non-zero on WARN-tier findings print exactly this shape.
+    # Arrange
+    stdout = "ERRO: scitex-dev: CLI conventions: 5 warning(s)"
+
+    # Act
+    keys = extract_violation_keys(stdout)
+
+    # Assert
+    assert any(k.rule == TALLY_RULE for k in keys)
+
+
+def test_prose_ending_in_a_findings_count_is_not_a_tally():
+    # CONTROL for the two nouns added above -- without it, a regex that
+    # matched every line ending in a count would satisfy all three.
+    # Arrange
+    stdout = "ERRO: [PS-999] scitex-hpc: t.py: fixture declares 2 finding(s)"
+
+    # Act
+    keys = extract_violation_keys(stdout)
+
+    # Assert
+    assert not any(k.rule == TALLY_RULE for k in keys)
+
+
 # EOF
