@@ -248,10 +248,18 @@ def _install_shim(shim_dir: Path, log: Path) -> Path:
 
     The shim is a posix shell script that writes one argv per line so
     the tests can introspect what flags actually got passed.
+
+    It ALSO echoes one framing line to stdout, because every real auditor
+    does (`INFO: <pkg>: auditing <path>`) and the dispatcher now refuses to
+    issue a verdict over zero inspected lines. A shim that printed nothing
+    made these tests assert that SILENCE MEANS PASS — the exact behaviour
+    measured on the CI SIF's baked 0.42.0, which returned a verdict having
+    read nothing. The argv log is unaffected; it was never stdout.
     """
     script = shim_dir / "scitex-dev"
     script.write_text(
-        f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\nexit 0\n",
+        f"#!/bin/sh\nprintf '%s\\n' \"$*\" >> {log}\n"
+        "echo 'INFO: shim: auditing (no findings)'\nexit 0\n",
         encoding="utf-8",
     )
     script.chmod(script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -294,7 +302,13 @@ def _argvs_by_auditor(log: Path) -> dict[str, list[str]]:
 
 
 def test_audit_all_with_path_exits_zero(runner, tmp_path):
-    """The shim returns 0 for every audit; the dispatcher must exit 0."""
+    """The shim returns 0 for every audit AND prints framing, so the
+    dispatcher has something to have inspected; it must exit 0.
+
+    Both halves are load-bearing now. Exit 0 over zero inspected lines is
+    no longer a pass — it is NO VERDICT — so this asserts a clean run, not
+    merely a quiet one.
+    """
     # Arrange
     repo = tmp_path / "wt"
     repo.mkdir()

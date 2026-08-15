@@ -8,6 +8,8 @@ broken decorators, and missing options without exercising any side effects.
 
 from __future__ import annotations
 
+import json
+
 import click
 import pytest
 from click.testing import CliRunner
@@ -74,15 +76,35 @@ def test_ci_runner_register_help_declares_ci_template_alias() -> None:
     assert "ci-template" in result.output
 
 
-def test_ci_runner_register_default_matches_canonical_self_hosted_labels() -> None:
+def test_ci_runner_register_default_names_the_os_and_arch() -> None:
+    """The default must carry the labels GitHub AUTO-ASSIGNS, not just ours.
+
+    REPLACES a literal-equality pin (`assert actual == '["self-hosted",
+    "Linux","X64","scitex-ci"]'`). That test asserted that today's value equals
+    today's value: it could only ever fail on a deliberate edit, and it dutifully
+    passed for the three days in which `scitex-ci` had no online carrier at org
+    scope. It also had to be edited by the very change that FIXED the defect,
+    which is the signature of a pin that measures nothing.
+
+    What survives is the half that is a real invariant: a runner's EFFECTIVE
+    label set includes `self-hosted` / `Linux` / `X64`, so a default naming only
+    the custom label would fail to match a workflow written in the fleet idiom.
+
+    Whether the custom label is SERVED is checked against the host registry in
+    `test__runs_on_default.py`, which is the question this test used to look
+    like it was asking.
+    """
     # Arrange
     from scitex_dev.ci.runner._register import CI_RUNS_ON_DEFAULT
 
-    expected = '["self-hosted","Linux","X64","scitex-ci"]'
+    auto_assigned = {"self-hosted", "Linux", "X64"}
     # Act
-    actual = CI_RUNS_ON_DEFAULT
+    labels = set(json.loads(CI_RUNS_ON_DEFAULT))
     # Assert
-    assert actual == expected
+    assert auto_assigned <= labels, (
+        f"CI_RUNS_ON default {sorted(labels)} omits {sorted(auto_assigned - labels)}; "
+        "a job naming those would then read as unserved on our own runners"
+    )
 
 
 def test_preflight_required_label_picks_non_builtin() -> None:

@@ -58,6 +58,45 @@ import click
 _FINDING_SHAPED = re.compile(r"^(?P<level>ERRO|WARN|INFO):\s+\[")
 
 
+def drop_masked_lines(combined: str, report) -> str:
+    """Remove lines a declared ``audit.skip-rules`` entry already masked.
+
+    WHY THIS EXISTS. `--new-only` used to diff RAW sub-auditor output, so
+    `skip-rules` masked correctly in a strict local run and masked NOTHING on
+    the path CI actually takes. A maintainer configured it, verified the mask
+    locally, shipped, and the rule kept firing in CI while the config file
+    said it was handled — a suppression that cannot suppress, failing in the
+    direction that wastes the most time. Reported by scitex-cards 2026-08-10.
+
+    MASKING THE HEAD SIDE ALONE IS SUFFICIENT AND SAFE, which is the
+    non-obvious part. The base side runs its own audit in a worktree and its
+    output is unmasked, so the diff is deliberately asymmetric::
+
+        masked in BOTH      absent from HEAD, present in BASE  -> not net-new
+        masked, NEW in HEAD absent from HEAD                   -> not net-new
+        unmasked, NEW       unaffected                         -> net-new
+
+    No false net-new can be introduced by removing lines from HEAD only: a
+    line that is gone from HEAD can never be counted as newly appearing there.
+
+    The alternative — making `skip-rules` REFUSE loudly under `--new-only` —
+    was rejected: it breaks every repo with a working config today in order to
+    fix a defect whose only effect was being too permissive.
+
+    ``report`` is a ``MaskReport``; ``report.masked`` maps rule -> matched
+    lines. Passing one with nothing masked (or ``None``) returns ``combined``
+    unchanged, so the zero-skip-rules case costs nothing.
+    """
+    masked = {
+        line for hits in (getattr(report, "masked", None) or {}).values() for line in hits
+    }
+    if not masked:
+        return combined
+    return "\n".join(
+        line for line in combined.splitlines() if line.strip() not in masked
+    )
+
+
 def unparsed_finding_lines(text: str, roots: tuple[str, ...]) -> set[str]:
     """Finding-shaped lines that produce NO violation key, path-normalised.
 

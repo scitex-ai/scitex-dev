@@ -336,17 +336,26 @@ def register(ecosystem):
         if new_only and not as_json:
             from pathlib import Path as _Path
 
-            from ._audit_all_new_only import run_new_only_and_exit
+            from ._audit_all_new_only import drop_masked_lines, run_new_only_and_exit
 
             head_path = _Path(explicit_path).expanduser() if explicit_path else _Path.cwd()
             distribution = pkgs[0]
             # Run audit-all against HEAD first; reuse the existing
             # dispatch path so behaviour matches strict mode 1:1.
-            _, _head_exit, head_results, _ = _run_one(distribution)
+            # KEEP THE MASK REPORT. This branch used to discard it (`..., _`)
+            # and rebuild the text from raw stdout/stderr, so `audit.skip-rules`
+            # masked correctly in a strict local run and masked NOTHING in CI —
+            # which is the flag repo quality workflows actually pass. A
+            # maintainer configured it, watched the mask apply locally, shipped,
+            # and the rule kept firing while the config claimed it was handled.
+            # A SUPPRESSION THAT CANNOT SUPPRESS, lying in the direction that
+            # wastes the most time (reported by scitex-cards, 2026-08-10).
+            _, _head_exit, head_results, _head_report = _run_one(distribution)
             head_combined = "\n".join(
                 (res.get("stdout") or "") + "\n" + (res.get("stderr") or "")
                 for res in head_results.values()
             )
+            head_combined = drop_masked_lines(head_combined, _head_report)
             # Never returns — the comparison owns the exit status.
             run_new_only_and_exit(
                 head_path=head_path,
@@ -399,11 +408,18 @@ def register(ecosystem):
         # Run packages. When multiple packages run in parallel, collect all
         # results first, then print in the input `pkgs` order so the summary
         # is deterministic regardless of completion order.
+        # PER-PACKAGE exit codes, recorded on BOTH paths. The summary line
+        # below needs each package's own rc to say whether its tally is
+        # accompanied by a red run; `overall_exit` cannot answer that in a
+        # multi-package sweep, and the sequential path used to keep `rc`
+        # only as a loop-local.
+        rc_by_pkg: dict[str, int] = {}
         if jobs <= 1 or not multi:
             for d in pkgs:
                 name, rc, res, rep = _run_one(d)
                 all_results[name] = res
                 mask_reports[name] = rep
+                rc_by_pkg[name] = rc
                 _emit_pkg(name, res, rep)
                 _emit_mask(name, rep)
                 if rc != 0:
@@ -411,7 +427,6 @@ def register(ecosystem):
         else:
             with ThreadPoolExecutor(max_workers=jobs) as ex:
                 futs = {ex.submit(_run_one, d): d for d in pkgs}
-                rc_by_pkg: dict[str, int] = {}
                 for f in as_completed(futs):
                     name, rc, res, rep = f.result()
                     all_results[name] = res
@@ -457,6 +472,7 @@ def register(ecosystem):
                         declared=len(rep.skip_rules),
                         inspected=rep.inspected,
                         unreadable=len(rep.unreadable),
+                        exit_code=rc_by_pkg.get(d, 0),
                     ),
                     err=True,
                 )

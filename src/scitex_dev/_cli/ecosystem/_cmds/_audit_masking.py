@@ -302,6 +302,7 @@ def render_summary(
     declared: int,
     inspected: int,
     unreadable: int,
+    exit_code: int,
     unmasked_total: int | None = None,
 ) -> str:
     """One summary line stating BOTH numbers — AND its denominator.
@@ -311,18 +312,30 @@ def render_summary(
     Warning-level findings are reported separately from errors rather
     than folded into the error count — only errors drive the exit code.
 
-    ``inspected`` and ``unreadable`` are REQUIRED and keyword-only, with no
-    defaults, on purpose. Every other parameter here is a NUMERATOR; before
-    this change the function took four counts and still could not say what
-    it had looked at, so "0 unmasked error(s)" read identically whether the
-    classifier had read two hundred lines or none. Making them required
-    turns the omission into a TypeError at the call site — the only form of
-    this rule that survives an author who is tired, which is precisely when
-    a denominator gets dropped.
+    ``inspected``, ``unreadable`` and ``exit_code`` are REQUIRED and
+    keyword-only, with no defaults, on purpose. Every other parameter here
+    is a NUMERATOR; before this change the function took four counts and
+    still could not say what it had looked at, so "0 unmasked error(s)" read
+    identically whether the classifier had read two hundred lines or none.
+    Making them required turns the omission into a TypeError at the call
+    site — the only form of this rule that survives an author who is tired,
+    which is precisely when a denominator gets dropped.
 
     ``unreadable`` is the three-valued part: lines that claimed to be
     findings and could not be classified are neither errors nor clean. They
     are reported explicitly rather than collapsing into the zero.
+
+    ``exit_code`` is here because THIS LINE IS A TALLY AND READS AS A
+    VERDICT. Sub-auditors disagree, deliberately, about what fails a run:
+    ``audit-project`` takes a ``--severity`` floor documented as "W/I
+    findings never fail CI on their own", while ``audit-skills`` has no
+    floor at all and fails on ANY finding. So a warn-tier ``SK-302`` sets
+    the exit code while this line says zero errors — measured on 0.47.0
+    with ZERO skip-rules declared (scitex-dev#593), which is how a reader
+    ends up hunting for an error that genuinely does not exist. The tally
+    is not wrong; it just is not the verdict, and now it says so instead of
+    leaving the reader to infer it. The exit-code SEMANTICS are untouched —
+    the asymmetry is deliberate on both sides and stays.
     """
     line = f"summary: {distribution}: {unmasked_errors} unmasked error(s)"
     if unmasked_total is not None and unmasked_total > unmasked_errors:
@@ -333,6 +346,17 @@ def render_summary(
         line += (
             f", {unreadable} UNREADABLE (claimed to be findings, could not "
             f"be classified — NOT counted as clean)"
+        )
+    if exit_code and not unmasked_errors:
+        # The one shape where the numbers alone mislead: red run, zero
+        # errors. Stated only here, because when the error count is
+        # non-zero this line already explains the exit, and a caveat
+        # printed on every run is a caveat nobody reads.
+        line += (
+            f" — but this run EXITED {exit_code}: the count above is ERRORS "
+            "only, and audit-skills has no severity floor (it fails on ANY "
+            "finding). This line is a TALLY, not the verdict — read the "
+            "findings above it."
         )
     return line
 

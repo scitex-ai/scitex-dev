@@ -30,6 +30,7 @@ record.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,7 +43,11 @@ from .._core.errors import ErrorCode, ScitexError
 # limit). `_DEFAULT_HOSTS_YAML` is re-imported because
 # `create_default_hosts_yaml` writes it on first use;
 # `packaged_default_runner_destinations` is re-exported for PS-224's floor.
-from ._seed import _DEFAULT_HOSTS_YAML, packaged_default_runner_destinations
+from ._seed import (
+    _DEFAULT_HOSTS_YAML,
+    packaged_default_requested_addresses,
+    packaged_default_runner_destinations,
+)
 
 __all__ = [
     "HOST_KINDS",
@@ -53,7 +58,9 @@ __all__ = [
     "find_runner_host",
     "get_hosts_yaml_path",
     "list_hosts",
+    "list_requested_addresses",
     "list_runner_destinations",
+    "packaged_default_requested_addresses",
     "packaged_default_runner_destinations",
     "resolve",
 ]
@@ -178,6 +185,33 @@ class HostRecord:
         dispatch rule, and modelling it per-runner (rather than as one
         flat per-machine union) is what keeps the check exact: a union
         would green-light a combination that no single runner offers.
+    requested_address : str | None
+        The LAN address this machine should ASK its DHCP server for
+        (DHCP option 50, "Requested IP Address"). ``None`` (the default)
+        means the fleet expresses no preference for this host.
+
+        THIS FIELD IS DESIRED STATE, AND ITS NAME IS THE WARNING. It is
+        a request, not a reservation: the DHCP server may ignore it, and
+        WILL ignore it when the address is already leased to something
+        else. So it yields "usually this address", never "always", and a
+        consumer that treats it as the host's address is wrong. The
+        address a host currently HOLDS is a different fact, obtained by
+        observing the host (``ip -4 -o addr show``), and is deliberately
+        NOT stored here — a declaration that gets rewritten to match
+        reality has stopped being a declaration.
+
+        The gap between the two is therefore the PERMANENT, EXPECTED
+        condition of this system, not an error state. Reporting it is
+        the job of ``scitex-dev ecosystem host-config check``, which
+        compares declared against observed; see
+        :mod:`scitex_dev._host_config` for the per-host mechanism (and
+        for the five fleet hosts that have no mechanism at all).
+
+        Why declare it here rather than reserve it on the router: a
+        router-side reservation table lives in the router's GUI, so
+        replacing the router discards it and the topology has to be
+        rediscovered by hand. Declared here, the map is code — it
+        survives the swap, and it is reviewable.
     """
 
     name: str
@@ -186,6 +220,7 @@ class HostRecord:
     scitex_root: str
     runner_labels: tuple[frozenset[str], ...] = ()
     aliases: tuple[str, ...] = ()
+    requested_address: str | None = None
 
     def serves(self, labels: Iterable[str]) -> bool:
         """True iff one of this host's runners carries every label in ``labels``.
@@ -207,6 +242,22 @@ class HostRecord:
                 f"(must be one of: {', '.join(sorted(HOST_KINDS))})",
                 code=ErrorCode.VALIDATION,
             )
+        if self.requested_address is not None:
+            # Validate at CONSTRUCTION, like `kind`, because this value is
+            # rendered verbatim into a file that a DHCP client parses. A
+            # typo'd address does not fail loudly at apply time -- the
+            # client rejects the directive and silently keeps whatever
+            # lease it had, which looks exactly like "the server ignored
+            # our request". Catching it here keeps those two apart.
+            try:
+                ipaddress.IPv4Address(self.requested_address)
+            except ValueError as exc:
+                raise HostRegistryError(
+                    f"host {self.name!r}: `requested_address` must be a "
+                    f"literal IPv4 address, got {self.requested_address!r} "
+                    f"({exc})",
+                    code=ErrorCode.VALIDATION,
+                ) from exc
 
     @property
     def scitex_root_path(self) -> Path:
@@ -228,6 +279,7 @@ class HostRecord:
             "scitex_root": self.scitex_root,
             "runner_labels": [sorted(s) for s in self.runner_labels],
             "aliases": list(self.aliases),
+            "requested_address": self.requested_address,
         }
 
 
@@ -293,27 +345,91 @@ def list_hosts(*, hosts_path: str | Path | None = None) -> list[HostRecord]:
 
 
 def list_runner_destinations(
-    *, hosts_path: str | Path | None = None
+    *, hosts_path: str | Path | None = None, include_packaged_floor: bool = True
 ) -> list[tuple[str, frozenset[str]]]:
     """Return every LEGAL CI runner destination the registry knows.
 
     One ``(host_name, label_set)`` pair per registered runner, sorted by
     host name. Hosts with no ``runner_labels`` contribute nothing.
 
-    An EMPTY result means the registry records no runner destinations at
-    all — the registry gap, not a fleet of illegal workflows. Callers
-    (notably the PS-224 audit rule) must distinguish the two: reporting
-    every workflow as illegal because the registry was never populated
-    would be a fleet-wide red for the wrong reason.
+    THE PACKAGED SEED IS A FLOOR, UNIONED IN BY DEFAULT. The user-state
+    ``hosts.yaml`` is mutable per host and edited live, so it goes stale
+    without any signal: this machine's copy was written 2026-08-05 and
+    still recorded only Spartan on 2026-08-15, by which time the whole
+    compute fleet was serving CI. A local file that is merely OLD must not
+    be able to un-declare a runner the package knows exists, so the shipped
+    seed is added rather than consulted as a fallback.
+
+    That this was a REAL divergence and not a hypothetical one is the
+    reason for the default: on 2026-08-15 this function answered ``None``
+    for a destination four online machines were serving, while the PS-224
+    audit rule — which already unioned the floor itself — answered
+    correctly. ONE QUESTION MUST NOT HAVE TWO ANSWERS DEPENDING ON WHICH
+    ENTRY POINT A CALLER HAPPENS TO REACH FOR.
+
+    Pass ``include_packaged_floor=False`` for the narrower question "what
+    does THIS FILE declare" — auditing the file itself, or reporting drift
+    between it and the seed. It is the wrong default for "can this job be
+    picked up", which is what every other caller is asking.
+
+    An EMPTY result means NO runner destinations are known from either
+    source — the registry gap, not a fleet of illegal workflows. Callers
+    must distinguish the two: reporting every workflow as illegal because
+    the registry was never populated would be a fleet-wide red for the
+    wrong reason.
     """
     out: list[tuple[str, frozenset[str]]] = []
     for host in list_hosts(hosts_path=hosts_path):
         out.extend((host.name, labels) for labels in host.runner_labels)
+    if include_packaged_floor:
+        seen = set(out)
+        out.extend(
+            pair for pair in packaged_default_runner_destinations() if pair not in seen
+        )
     return out
 
 
+def list_requested_addresses(
+    *, hosts_path: str | Path | None = None
+) -> dict[str, str]:
+    """Return the fleet's DESIRED LAN address map, ``{host name: IPv4}``.
+
+    One entry per registered host that declares a
+    :attr:`HostRecord.requested_address`; hosts with no preference
+    contribute nothing.
+
+    The shipped :func:`packaged_default_requested_addresses` map is the
+    BASE and the on-disk registry OVERRIDES it per host — a MERGE, not an
+    either/or, and the distinction matters.
+    ``create_default_hosts_yaml`` only writes when the file is MISSING, so
+    every host that already had a ``hosts.yaml`` before this field existed
+    carries a copy with no addresses in it. Returning only what that file
+    declares would let a stale local copy silently erase the fleet map on
+    exactly the hosts that have been around longest — the per-host
+    disappearance this map exists to survive. Taking only the packaged map
+    would be the opposite failure: an address could never be corrected
+    without a release.
+
+    A host that has been re-keyed answers under its CANONICAL name here,
+    not its aliases — the map is keyed for lookup, and emitting one
+    address under several spellings would read as a collision.
+
+    THE VALUES ARE REQUESTS, NOT FACTS. See
+    :attr:`HostRecord.requested_address`: this is what each machine should
+    ASK for, never what it currently holds.
+    """
+    merged = packaged_default_requested_addresses()
+    for host in list_hosts(hosts_path=hosts_path):
+        if host.requested_address:
+            merged[host.name] = host.requested_address
+    return merged
+
+
 def find_runner_host(
-    labels: Iterable[str], *, hosts_path: str | Path | None = None
+    labels: Iterable[str],
+    *,
+    hosts_path: str | Path | None = None,
+    include_packaged_floor: bool = True,
 ) -> HostRecord | None:
     """Return the first registered machine that serves ``labels``, else ``None``.
 
@@ -322,12 +438,43 @@ def find_runner_host(
     :meth:`HostRecord.serves`). ``None`` means no registered machine can
     ever pick this job up: the job is not merely slow, it is undeliverable
     and will sit queued forever.
+
+    The packaged seed is unioned in by default, for the reason given on
+    :func:`list_runner_destinations` — a stale local file must not be able
+    to report a live destination as undeliverable.
+
+    ``None`` IS STILL NOT A LIVENESS ANSWER. This function reports whether
+    a destination is DECLARED, never whether the machine is up: on
+    2026-08-15 every Spartan runner was offline and ``spartan-cpu``
+    resolved here perfectly well, while 57 jobs queued forever against it.
+    Registration and availability are different questions and this registry
+    only holds the first.
     """
     wanted = frozenset(labels)
     for host in list_hosts(hosts_path=hosts_path):
         if host.serves(wanted):
             return host
+    if not include_packaged_floor:
+        return None
+    for name, declared in packaged_default_runner_destinations():
+        if wanted <= declared:
+            return _seed_record(name)
     return None
+
+
+def _seed_record(name: str) -> HostRecord | None:
+    """Return the packaged seed's record for ``name``, or ``None``.
+
+    Used only when a destination matched the FLOOR rather than user state,
+    so the caller still gets a ``HostRecord`` and not a bare name.
+    """
+    import yaml
+
+    raw_hosts = (yaml.safe_load(_DEFAULT_HOSTS_YAML) or {}).get("hosts") or {}
+    data = raw_hosts.get(name)
+    if data is None:
+        return None
+    return _parse_host_record(name, data, hosts_path=Path("<packaged seed>"))
 
 
 def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:

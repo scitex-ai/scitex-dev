@@ -403,6 +403,14 @@ def test_to_dict_round_trips_all_fields():
         # producer is too old to know about aliases". See
         # test__registry_aliases.py for the populated form.
         "aliases": [],
+        # A host with no declared DHCP preference serializes an explicit
+        # None rather than omitting the key, for the same reason as the two
+        # above: a consumer must never have to tell "this host asks for no
+        # particular address" apart from "this producer predates the
+        # field". See test__requested_address.py for the populated form —
+        # and note the value is a REQUEST, never the address the machine
+        # currently holds.
+        "requested_address": None,
     }
 
 
@@ -447,13 +455,13 @@ def test_resolve_auto_seeds_writes_file_to_disk(tmp_path):
     assert target.is_file()
 
 
-def test_list_hosts_auto_seeds_default_seven_hosts(tmp_path):
+def test_list_hosts_auto_seeds_the_whole_declared_fleet(tmp_path):
     # Arrange
     target = tmp_path / "hosts.yaml"
     # Act
     records = list_hosts(hosts_path=target)
     # Assert
-    assert len(records) == 7
+    assert len(records) == 10
 
 
 def test_default_seed_includes_operator_known_hosts(tmp_path):
@@ -465,6 +473,13 @@ def test_default_seed_includes_operator_known_hosts(tmp_path):
     assert {r.name for r in records} == {
         "ywata-note-win",
         "spartan",
+        # The compute fleet. `scitex-compute-04` was registered alone on
+        # 2026-08-12; its siblings followed on 2026-08-15, after a morning in
+        # which they were the ONLY runners still online and this registry did
+        # not know they existed.
+        "scitex-compute-01",
+        "scitex-compute-02",
+        "scitex-compute-03",
         "scitex-compute-04",
         "scitex-nas-01",
         "scitex-nas-02",

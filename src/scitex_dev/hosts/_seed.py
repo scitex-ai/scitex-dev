@@ -85,11 +85,28 @@ _DEFAULT_HOSTS_YAML = """\
 # comment before pinning anything to it — the cost is that the job becomes
 # exactly as available as one machine.
 
+# requested_address : the LAN address this machine should ASK its DHCP
+#               server for (option 50). A REQUEST, NOT A RESERVATION: the
+#               server may ignore it, and will ignore it if the address is
+#               already leased elsewhere, so it means "usually this
+#               address" and never "always". The address a host currently
+#               HOLDS is a different fact and is deliberately not recorded
+#               here — observe it with `ip -4 -o addr show`, and expect the
+#               two to disagree sometimes. That gap is the normal condition
+#               of the system, not a fault.
+#
+#               The FLEET-WIDE map lives in package code as
+#               `FLEET_REQUESTED_ADDRESSES` (below) and covers hosts this
+#               seed does not yet list; a `requested_address:` here
+#               OVERRIDES it for that host. Quote the value — YAML parses a
+#               value with fewer than three dots as a number.
+
 hosts:
   ywata-note-win:
     kind: workstation
     ssh_alias: null
     scitex_root: "~/.scitex"
+    requested_address: "192.168.11.101"
   spartan:
     kind: hpc-login
     ssh_alias: spartan
@@ -136,14 +153,66 @@ hosts:
     # the day those services stop binding loopback-only — that is a policy
     # decision, not something to engineer around.
     #
-    # NOT THE WHOLE POOL: `scitex-01/02/03-org-cpu-01` also serve
-    # [self-hosted, Linux, X64, scitex-org-cpu] (scitex-01 offline as of the
-    # measurement). Their machines are not registered here yet, so the
-    # `scitex-org-cpu` destination is legal on the strength of this single
-    # entry and UNDER-REPORTS the pool by three. Legality is right; capacity
-    # read off this file would not be.
+    # THE POOL IS NOW COMPLETE — the three siblings below were added
+    # 2026-08-15. This comment used to end "UNDER-REPORTS the pool by three",
+    # and that under-report was not free: it meant a reader of this file could
+    # see `scitex-org-cpu` as legal while believing exactly one machine served
+    # it, at a moment when it was the ONLY pool still online.
     runner_labels:
       - [self-hosted, Linux, X64, scitex-org-cpu, sac-control-plane]
+    # `scitex-04-dotfiles-01`, registered to `ywatanabe1989/.dotfiles`, is a
+    # SECOND runner on this same machine. It is recorded because this field is
+    # one entry PER RUNNER, and omitting a repo-scoped runner would make a
+    # workflow that legitimately names `dotfiles-ci` read as unserved.
+      - [self-hosted, Linux, X64, dotfiles-ci, scitex-local-cpu]
+  scitex-compute-01:
+    kind: compute
+    ssh_alias: scitex-compute-01
+    scitex_root: "~/.scitex"
+    # Measured 2026-08-15 from BOTH ends, the same discipline as
+    # scitex-compute-04 above: `~/actions-runner*/.runner` ON the machine for
+    # WHICH runner lives WHERE, and the GitHub Actions API for the labels.
+    # Neither half is inferred from the naming pattern — `scitex-01-*` living
+    # on `scitex-compute-01` is exactly the kind of correspondence that is
+    # usually true and occasionally not.
+    #   agentName scitex-01-org-cpu-01  (org scitex-ai)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
+    #   agentName scitex-01-cpu-01      (repo scitex-ai/scitex-agent-container)
+    #     -> [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
+    #
+    # THAT SECOND ENTRY IS WHY SCOPE BELONGS IN THIS FILE'S REASONING. On
+    # 2026-08-15 every ORG runner carrying `scitex-ci` was offline, and it was
+    # briefly reported fleet-wide that the label was dead. It was not: this
+    # repo-scoped runner carried it and was online. A destination's liveness is
+    # a question about a SCOPE, not about a label.
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
+      - [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
+  scitex-compute-02:
+    kind: compute
+    ssh_alias: scitex-compute-02
+    scitex_root: "~/.scitex"
+    # Measured 2026-08-15. `~/actions-runner*/.runner` also records
+    # `scitex-02-cpu-01` (repo scitex-ai/scitex-agent-container) on this
+    # machine, but that runner is NOT in the repo's registered runner list, so
+    # its label set is unknown and it is deliberately NOT recorded. A leftover
+    # config file on disk is not a registered destination, and inventing a
+    # label set for it from its sibling's would be exactly the pattern-guess
+    # this file refuses elsewhere.
+    #   agentName scitex-02-org-cpu-01  (org scitex-ai)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
+  scitex-compute-03:
+    kind: compute
+    ssh_alias: scitex-compute-03
+    scitex_root: "~/.scitex"
+    # Measured 2026-08-15. Same caveat as scitex-compute-02 about the
+    # unregistered `scitex-03-cpu-01` config on disk.
+    #   agentName scitex-03-org-cpu-01  (org scitex-ai)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
   # RENAMED 2026-08-07. The old aliases `nas` / `nas1` / `nas2` are RETIRED:
   # they resolve to nothing on purpose, printing the successor name and
   # exiting 255. Serving them from here made this registry hand out routes
@@ -188,7 +257,89 @@ hosts:
     kind: workstation
     ssh_alias: mba
     scitex_root: "~/.scitex"
+    requested_address: "192.168.11.102"
 """
+
+
+#: The fleet's DESIRED LAN address map -- what each machine should ASK its
+#: DHCP server for (option 50, "Requested IP Address"), keyed by canonical
+#: host name.
+#:
+#: WHY THIS IS A REQUEST AND NOT A RESERVATION
+#: -------------------------------------------
+#: The obvious way to pin these addresses is a reservation table in the
+#: router's web UI. The operator ruled that out on 2026-08-12 for a reason
+#: that is about durability rather than taste: config that lives only in a
+#: router is lost the day the router is replaced, and the fleet then has to
+#: rediscover its own topology by hand. Declared here it is code -- it
+#: survives the swap, it diffs, and it can be reviewed.
+#:
+#: The cost of that choice is honest and permanent: option 50 is a REQUEST.
+#: The server may ignore it, and WILL ignore it when the address is already
+#: leased to another device. So this map yields "usually this address",
+#: never "always", and every consumer must treat a mismatch between this
+#: and the observed address as an expected condition rather than a fault.
+#:
+#: THE LAST OCTET ENCODES THE ROLE, and the scheme is a REPAIR of the
+#: operator's original 10N/30N/70N idea: 30N and 70N exceed the 255 ceiling
+#: of an octet, so storage moved to 13N and compute to 17N, which keeps his
+#: 1/3/7 identifying digit. Approved 2026-08-12.
+#:
+#:     1NN  workstation (laptops)
+#:     13N  storage (NAS)
+#:     17N  compute
+#:
+#: DECLARING AN ADDRESS DOES NOT MEAN THE HOST CAN ASK FOR IT. Only four of
+#: these nine machines run a DHCP client with a supported requested-address
+#: knob; the other five are declared here because the map is the fleet's
+#: record of INTENT, and intent that is only written down for the hosts
+#: that happen to be configurable is not a map. See
+#: :mod:`scitex_dev._host_config` for the per-host mechanism, and for the
+#: measured reason each of the other five has none.
+#:
+#: Verified free on 2026-08-12 by a TCP-connect + ARP sweep of
+#: 192.168.11.0/24 from scitex-compute-04: all nine unoccupied, and all nine
+#: inside the span of addresses the router is observably leasing today
+#: (.5 through .188), so none of them sits outside the pool.
+FLEET_REQUESTED_ADDRESSES: dict[str, str] = {
+    # 1NN -- workstations
+    "ywata-note-win": "192.168.11.101",
+    "mba": "192.168.11.102",
+    # 13N -- storage
+    "scitex-nas-01": "192.168.11.131",
+    "scitex-nas-02": "192.168.11.132",
+    "scitex-nas-03": "192.168.11.133",
+    # 17N -- compute
+    "scitex-compute-01": "192.168.11.171",
+    "scitex-compute-02": "192.168.11.172",
+    "scitex-compute-03": "192.168.11.173",
+    "scitex-compute-04": "192.168.11.174",
+}
+
+
+def packaged_default_requested_addresses() -> dict[str, str]:
+    """The DESIRED address map from scitex-dev's SHIPPED declaration.
+
+    Returns a copy of :data:`FLEET_REQUESTED_ADDRESSES` -- a fresh dict per
+    call, so a caller that mutates the result cannot rewrite the fleet's
+    declaration for the rest of the process.
+
+    Read from PACKAGE CODE rather than from any on-disk ``hosts.yaml``,
+    for the same reason :func:`packaged_default_runner_destinations`
+    exists: ``create_default_hosts_yaml`` only writes when the file is
+    MISSING, so every host that already had a registry before this field
+    existed holds a copy with no addresses in it. A host that read its
+    local file and found nothing would conclude the fleet has no address
+    map -- a silent, per-host disappearance of exactly the record that is
+    supposed to survive a router swap.
+
+    Keyed by CANONICAL host name. Several of these machines report a
+    different ``socket.gethostname()`` than the name they are registered
+    under (the NAS boxes answer ``WATANAS1`` / ``WATANAS2`` /
+    ``DXP480TPLUS-994``, and the MacBook ``MacBookAir.lan``), so do NOT
+    look up this map by the local hostname on those hosts.
+    """
+    return dict(FLEET_REQUESTED_ADDRESSES)
 
 
 def packaged_default_runner_destinations() -> list[tuple[str, frozenset[str]]]:

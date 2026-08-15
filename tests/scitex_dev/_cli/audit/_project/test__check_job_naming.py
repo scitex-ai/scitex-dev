@@ -114,6 +114,100 @@ def _detail_for(out: list, code: str) -> str:
 
 
 # --------------------------------------------------------------------- #
+# PS-232 — the scan that graded nothing                                  #
+# --------------------------------------------------------------------- #
+
+
+def _claims_to_be_a_distribution(tmp_path: Path) -> Path:
+    """A repo that SAYS it is a Python distribution but has no ``src/``.
+
+    The distinction PS-232 turns on. A directory with no ``pyproject.toml``
+    is simply not a distribution, and a JobSpec scan does not apply to it —
+    that case stays silent, which is what
+    ``test_a_repo_with_no_src_package_is_clean`` pins.
+    """
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-agent-container"\n', encoding="utf-8"
+    )
+    return tmp_path
+
+
+def test_a_repo_that_is_not_a_distribution_stays_silent(tmp_path):
+    """The half PS-232 must NOT claim, kept adjacent to the half it does.
+
+    "The check must never be the thing that breaks the audit" is the right
+    rule for a directory that never promised to be a package. PS-232 is
+    about a repo that promised and could not deliver.
+    """
+    # Arrange
+    repo = tmp_path  # no pyproject.toml
+    # Act
+    out = _run(repo, DISTRIBUTION)
+    # Assert
+    assert out == []
+
+
+def test_an_unresolvable_source_package_reports_ps232(tmp_path):
+    """THE DEFECT. This used to be a bare `return`.
+
+    Zero files examined, zero findings appended, and a clean summary line
+    downstream — indistinguishable from "scanned the package, found nothing
+    wrong". scitex-agent-container hit the consequence from outside on
+    2026-08-15: PS-226 fired on their tree locally and reported nothing in
+    CI, which is the WRONG DIRECTION for the file-set divergence we had
+    just root-caused, because CI walks a superset.
+    """
+    # Arrange
+    repo = _claims_to_be_a_distribution(tmp_path)  # pyproject, but no src/
+    # Act
+    out = _run(repo, DISTRIBUTION)
+    # Assert
+    assert "PS-232" in _codes(out)
+
+
+def test_ps232_says_it_graded_nothing_rather_than_naming_a_violation(tmp_path):
+    """A reader must tell "did not run" from "found a problem" AT A GLANCE.
+
+    The two demand opposite responses — fix your code, versus fix your
+    invocation — so a message that blurs them sends people to the wrong
+    file.
+    """
+    # Arrange
+    repo = _claims_to_be_a_distribution(tmp_path)
+    # Act
+    detail = _detail_for(_run(repo, DISTRIBUTION), "PS-232")
+    # Assert
+    assert "examined 0 files" in detail
+
+
+def test_ps232_names_the_distribution_it_could_not_resolve(tmp_path):
+    """An alarm nobody can act on is one people learn to skip."""
+    # Arrange
+    repo = _claims_to_be_a_distribution(tmp_path)
+    # Act
+    detail = _detail_for(_run(repo, DISTRIBUTION), "PS-232")
+    # Assert
+    assert DISTRIBUTION in detail
+
+
+def test_a_resolvable_package_does_not_report_ps232(tmp_path):
+    """POSITIVE CONTROL, and the one that fails if the predicate inverts.
+
+    A rule that fired on every repository would satisfy all three tests
+    above and redden the whole fleet. Measured before shipping at E: 22 of
+    23 packages under ~/proj resolve, and the one that does not is a
+    directory-name-vs-distribution-name artefact of the probe rather than
+    a real package.
+    """
+    # Arrange
+    repo = _make_repo(tmp_path, DISTRIBUTION, "x = 1\n")
+    # Act
+    out = _run(repo, DISTRIBUTION)
+    # Assert
+    assert "PS-232" not in _codes(out)
+
+
+# --------------------------------------------------------------------- #
 # PS-226 — charset                                                      #
 # --------------------------------------------------------------------- #
 

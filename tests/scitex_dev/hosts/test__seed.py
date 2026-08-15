@@ -45,12 +45,53 @@ _SPARTAN_DESTINATIONS = [
     ),
 ]
 
+#: The rest of the compute pool, measured 2026-08-15 from `.runner` on each
+#: machine (which runner is WHERE) plus the Actions API (its labels). Until
+#: that day the seed carried scitex-compute-04 alone, with a comment admitting
+#: it "UNDER-REPORTS the pool by three" — written while those three were the
+#: only CI machines still online.
+_COMPUTE_POOL_DESTINATIONS = [
+    (
+        "scitex-compute-01",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-org-cpu"}),
+    ),
+    (
+        "scitex-compute-01",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-local-cpu"}),
+    ),
+    (
+        "scitex-compute-02",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-org-cpu"}),
+    ),
+    (
+        "scitex-compute-03",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-org-cpu"}),
+    ),
+]
+
+#: scitex-compute-04's SECOND runner, registered to `ywatanabe1989/.dotfiles`.
+#: Recorded because this field is one entry PER RUNNER: omitting a repo-scoped
+#: runner makes a workflow that legitimately names `dotfiles-ci` read as
+#: unserved.
+_DOTFILES_DESTINATION = (
+    "scitex-compute-04",
+    frozenset({"self-hosted", "Linux", "X64", "dotfiles-ci", "scitex-local-cpu"}),
+)
+
 #: The whole floor, in `packaged_default_runner_destinations`' sort order
-#: (by host name): scitex-compute-04 precedes spartan.
-_SEED_DESTINATIONS = [_CONTROL_PLANE_DESTINATION, *_SPARTAN_DESTINATIONS]
+#: (by host name): the compute pool precedes spartan.
+_SEED_DESTINATIONS = [
+    *_COMPUTE_POOL_DESTINATIONS,
+    _CONTROL_PLANE_DESTINATION,
+    _DOTFILES_DESTINATION,
+    *_SPARTAN_DESTINATIONS,
+]
 
 _REGISTERED_HOSTS = [
     "mba",
+    "scitex-compute-01",
+    "scitex-compute-02",
+    "scitex-compute-03",
     "scitex-compute-04",
     "scitex-nas-01",
     "scitex-nas-02",
@@ -167,7 +208,7 @@ def test_each_retired_alias_points_at_its_recorded_successor():
     assert found == recorded
 
 
-def test_packaged_floor_is_exactly_the_three_measured_label_sets():
+def test_packaged_floor_is_exactly_the_measured_label_sets():
     # Arrange — this list IS PS-224's floor; if a comment edit emptied it,
     # every workflow in the fleet would go unvalidated.
     expected = _SEED_DESTINATIONS
@@ -189,12 +230,13 @@ def test_packaged_floor_is_never_empty():
 
 def test_seed_label_sets_are_per_runner_not_a_flattened_union():
     # Arrange — a flattened union would green-light a combination no single
-    # runner offers, and such a job queues forever.
+    # runner offers, and such a job queues forever. Eight runners across five
+    # machines as of 2026-08-15; a flatten would collapse them to five.
     pass
     # Act
     found = packaged_default_runner_destinations()
     # Assert
-    assert len(found) == 3
+    assert len(found) == 8
 
 
 def test_control_plane_label_travels_with_the_rest_of_its_runners_set():
