@@ -50,6 +50,7 @@ interfaces:
 - [22_figure-prep-pointer.md](22_figure-prep-pointer.md) — Pointer: figure-prep playbook lives in figrecipe; ecosystem no-synthetic-data policy lives in scientific umbrella
 - [23_drift-report.md](23_drift-report.md) — `ecosystem drift-report`: the unified per-package × per-layer version-drift matrix (all 8 layers), exit 1 on drift, federated 6h timer
 - [24_host-registry.md](24_host-registry.md) — `scitex_dev.hosts`: the SciTeX-wide "where is host X, and what's its ~/.scitex root?" port (`resolve`, `list_hosts`), `~/.scitex/dev/hosts.yaml`, `scitex-dev host list/show/resolve`
+- [26_host-connectivity.md](26_host-connectivity.md) — the other half: HOW to reach a host and whether that is still true. `HostConnectivity` (observed `lan` vs DHCP `reserved`, off-LAN `net` route, MAC, ssh host-key fingerprint, `last_seen`), the `<name>` / `<name>-net` naming rule, ssh-config generation into a managed block, ordered-pair reachability with its denominator, declared-vs-`ssh -G` drift, and three-signal address corroboration; `scitex-dev host generate-ssh-config/validate-matrix/validate-ssh-config/corroborate`
 - [25_naming-conventions.md](25_naming-conventions.md) — the fleet's one-pair-per-domain naming table (primary/replica, controller/worker, node/origin, service/timer/cron) and the synonyms each one replaces
 
 ### Architecture (30–39)

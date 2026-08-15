@@ -84,6 +84,39 @@ _DEFAULT_HOSTS_YAML = """\
 # co-location is a correctness requirement you cannot. Read that entry's
 # comment before pinning anything to it — the cost is that the job becomes
 # exactly as available as one machine.
+#
+# ---------------------------------------------------------------------------
+# CONNECTIVITY (added 2026-08-13). Optional on every record; absent means
+# "not recorded", never "none".
+#
+# lan       : the address the machine was OBSERVED answering at.
+# reserved  : the address the router RESERVES for it. A SEPARATE FIELD from
+#             `lan` on purpose — measured 2026-08-13, three compute hosts are
+#             reserved at one address and answering at another because the
+#             leases have not renewed. Both facts are true; collapsing them
+#             would force the registry to lie about one of them.
+# net       : the route that LEAVES the LAN (Cloudflare / reverse SSH).
+#             Rendered ONLY under `<name>-net`. THE BARE NAME IS THE LAN
+#             ROUTE AND NEVER CARRIES A BASTION (operator ruling 2026-08-13);
+#             there is deliberately no field on the LAN side that could hold
+#             one.
+# mac / host_key_fingerprint / reported_hostname
+#           : the three CORROBORATION signals. All three must agree before
+#             `scitex-dev host corroborate` will permit an address rewrite.
+#             `host_key_fingerprint` is the strongest — a machine that moves
+#             keeps its host key — and is the field most worth filling in.
+#             PUBLIC fingerprints only; private key material is refused by the
+#             parser and must never appear in this file.
+# last_seen : when the address was last observed. This is HOW AN ENTRY AGES.
+#             An unreachable host is NEVER deleted (operator rule:
+#             unreachable != delete); `last_seen` simply stops advancing.
+#
+# EVERY ADDRESS BELOW IS DATED. Route data in a packaged wheel goes stale —
+# that is why `_retired.py` exists — and `create_default_hosts_yaml` only ever
+# writes this when the file is ABSENT, so a seeded address can outlive its
+# truth by months. `last_seen` is the mitigation: the claim carries the date
+# it was measured, and `scitex-dev host validate-matrix` / `corroborate` are how
+# you find out it has expired.
 
 hosts:
   ywata-note-win:
@@ -104,10 +137,88 @@ hosts:
     runner_labels:
       - [self-hosted, Linux, X64, spartan-cpu]
       - [self-hosted, Linux, X64, spartan-cpu, scitex-ci]
+  # The three compute hosts the entry below notes were "not registered here
+  # yet" — registered 2026-08-13 with their measured addresses. Deliberately
+  # WITHOUT `runner_labels`: their runners were not measured on that pass, and
+  # a destination invented here would widen PS-224's floor on the strength of
+  # a guess. `scitex-org-cpu` is already legal via scitex-compute-04.
+  scitex-compute-01:
+    kind: compute
+    ssh_alias: scitex-compute-01
+    scitex_root: "~/.scitex"
+    lan: 192.168.11.94
+    reserved: 192.168.11.171
+    mac: 70:85:c2:3a:a9:42
+    last_seen: 2026-08-13
+    # THE 2026-08-13 MESH FAULT LIVED HERE, and it was not an address problem.
+    # This machine's own ssh stanza named `~/.ssh/id_rsa`, which does not
+    # exist on it, so ssh offered NO key at all and the far end answered
+    # `Permission denied` — while its `id_mesh` key was ALREADY authorised
+    # there. Nothing in the error named the missing file. That is what
+    # `scitex-dev host validate-ssh-config` now detects mechanically.
+    #
+    # Measured 2026-08-15 from BOTH ends: `~/actions-runner*/.runner` ON the
+    # machine for which runner lives WHERE, and the GitHub Actions API for the
+    # labels. Neither half is inferred from the naming pattern — `scitex-01-*`
+    # living on `scitex-compute-01` is exactly the kind of correspondence that
+    # is usually true and occasionally not.
+    #   agentName scitex-01-org-cpu-01  (org scitex-ai)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
+    #   agentName scitex-01-cpu-01      (repo scitex-ai/scitex-agent-container)
+    #     -> [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
+    #
+    # THAT SECOND ENTRY IS WHY SCOPE BELONGS IN THIS FILE'S REASONING. On
+    # 2026-08-15 every ORG runner carrying `scitex-ci` was offline, and it was
+    # briefly reported fleet-wide that the label was dead. It was not: this
+    # repo-scoped runner carried it and was online. A destination's liveness is
+    # a question about a SCOPE, not about a label.
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
+      - [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
+  scitex-compute-02:
+    kind: compute
+    ssh_alias: scitex-compute-02
+    scitex_root: "~/.scitex"
+    lan: 192.168.11.6
+    reserved: 192.168.11.172
+    mac: 70:85:c2:63:da:f9
+    last_seen: 2026-08-13
+    # Measured 2026-08-15. `~/actions-runner*/.runner` also records
+    # `scitex-02-cpu-01` (repo scitex-ai/scitex-agent-container) on this
+    # machine, but that runner is NOT in the repo's registered runner list, so
+    # its label set is unknown and it is deliberately NOT recorded. A leftover
+    # config file on disk is not a registered destination, and inventing a
+    # label set for it from its sibling's would be exactly the pattern-guess
+    # this file refuses elsewhere.
+    #   agentName scitex-02-org-cpu-01  (org scitex-ai)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
+  scitex-compute-03:
+    kind: compute
+    ssh_alias: scitex-compute-03
+    scitex_root: "~/.scitex"
+    lan: 192.168.11.126
+    reserved: 192.168.11.173
+    mac: 6c:92:bf:64:db:ca
+    last_seen: 2026-08-13
+    # Measured 2026-08-15. Same caveat as scitex-compute-02 about the
+    # unregistered `scitex-03-cpu-01` config on disk.
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
+    # The MAC above is the ACTIVE NIC, enp35s0f0 (10GbE). enp39s0 is down.
+    # Which NIC the MAC belongs to matters for the corroboration check: the
+    # address is held by the interface that is up, so recording the idle
+    # one would read as a mismatch on a machine that is perfectly fine.
   scitex-compute-04:
     kind: compute
     ssh_alias: scitex-compute-04
     scitex_root: "~/.scitex"
+    lan: 192.168.11.164
+    last_seen: 2026-08-13
+    # No MAC and no reservation recorded for this one. That is why
+    # `corroborate` reports `insufficient` here rather than a pass: two of
+    # the three signals have nothing to compare against.
     # Measured 2026-08-12, from BOTH ends: the live GitHub Actions API (org
     # `scitex-ai`) for the labels, and `~/actions-runner-org/.runner` ON the
     # machine for which machine the runner is. One runner:
@@ -148,54 +259,6 @@ hosts:
     # one entry PER RUNNER, and omitting a repo-scoped runner would make a
     # workflow that legitimately names `dotfiles-ci` read as unserved.
       - [self-hosted, Linux, X64, dotfiles-ci, scitex-local-cpu]
-  scitex-compute-01:
-    kind: compute
-    ssh_alias: scitex-compute-01
-    scitex_root: "~/.scitex"
-    # Measured 2026-08-15 from BOTH ends, the same discipline as
-    # scitex-compute-04 above: `~/actions-runner*/.runner` ON the machine for
-    # WHICH runner lives WHERE, and the GitHub Actions API for the labels.
-    # Neither half is inferred from the naming pattern — `scitex-01-*` living
-    # on `scitex-compute-01` is exactly the kind of correspondence that is
-    # usually true and occasionally not.
-    #   agentName scitex-01-org-cpu-01  (org scitex-ai)
-    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
-    #   agentName scitex-01-cpu-01      (repo scitex-ai/scitex-agent-container)
-    #     -> [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
-    #
-    # THAT SECOND ENTRY IS WHY SCOPE BELONGS IN THIS FILE'S REASONING. On
-    # 2026-08-15 every ORG runner carrying `scitex-ci` was offline, and it was
-    # briefly reported fleet-wide that the label was dead. It was not: this
-    # repo-scoped runner carried it and was online. A destination's liveness is
-    # a question about a SCOPE, not about a label.
-    runner_labels:
-      - [self-hosted, Linux, X64, scitex-org-cpu]
-      - [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
-  scitex-compute-02:
-    kind: compute
-    ssh_alias: scitex-compute-02
-    scitex_root: "~/.scitex"
-    # Measured 2026-08-15. `~/actions-runner*/.runner` also records
-    # `scitex-02-cpu-01` (repo scitex-ai/scitex-agent-container) on this
-    # machine, but that runner is NOT in the repo's registered runner list, so
-    # its label set is unknown and it is deliberately NOT recorded. A leftover
-    # config file on disk is not a registered destination, and inventing a
-    # label set for it from its sibling's would be exactly the pattern-guess
-    # this file refuses elsewhere.
-    #   agentName scitex-02-org-cpu-01  (org scitex-ai)
-    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
-    runner_labels:
-      - [self-hosted, Linux, X64, scitex-org-cpu]
-  scitex-compute-03:
-    kind: compute
-    ssh_alias: scitex-compute-03
-    scitex_root: "~/.scitex"
-    # Measured 2026-08-15. Same caveat as scitex-compute-02 about the
-    # unregistered `scitex-03-cpu-01` config on disk.
-    #   agentName scitex-03-org-cpu-01  (org scitex-ai)
-    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
-    runner_labels:
-      - [self-hosted, Linux, X64, scitex-org-cpu]
   # RENAMED 2026-08-07. The old aliases `nas` / `nas1` / `nas2` are RETIRED:
   # they resolve to nothing on purpose, printing the successor name and
   # exiting 255. Serving them from here made this registry hand out routes
@@ -226,16 +289,49 @@ hosts:
     ssh_alias: scitex-nas-01
     aliases: [nas1, nas-01]
     scitex_root: "~/.scitex"
+    lan: 192.168.11.131
+    mac: 24:5E:BE:00:CA:30
+    reported_hostname: WATANAS1
+    last_seen: 2026-08-13
+    # Formerly 192.168.11.161, now DEAD. Kept as prose rather than a schema
+    # field because it is exactly what SETTLED the rewrite: ssh reported
+    # "This host key is known by the following other names/addresses: ...
+    # 192.168.11.161", i.e. the same machine readdressed rather than a
+    # different box now answering. Recording `host_key_fingerprint` here
+    # would make that comparison mechanical instead of a human reading a
+    # warning — it is the single highest-value field still missing.
   scitex-nas-02:
     kind: storage
     ssh_alias: scitex-nas-02
     aliases: [nas2, nas-02]
     scitex_root: "~/.scitex"
+    lan: 192.168.11.156
+    reserved: 192.168.11.132
+    reported_hostname: WATANAS2
+    last_seen: 2026-08-13
+    # The .132 reservation exists and is UNUSED — the machine answers at
+    # .156. This is the clearest instance of why `reserved` and `lan` are
+    # two fields: one address is intended, a different one is real.
   scitex-nas-03:
     kind: storage
     ssh_alias: scitex-nas-03
     aliases: [nas, nas3, nas-03]
     scitex_root: "~/.scitex"
+    lan: 192.168.11.133
+    mac: 6C:1F:F7:40:50:11
+    reported_hostname: DXP480TPLUS-994
+    last_seen: 2026-08-13
+    # Formerly 192.168.11.21, now dead.
+    #
+    # The ONE host with an off-LAN route. It is written here under `net:`,
+    # which means the generator emits it under `scitex-nas-03-net` and under
+    # NO other name. The bare `scitex-nas-03` keeps the LAN address above.
+    # Attaching the bastion to the bare name is the specific misconfiguration
+    # that produced the 2026-08-13 incident, and the schema now makes it
+    # unexpressible rather than merely discouraged.
+    net:
+      transport: cloudflared
+      hostname: bastion.scitex.ai
   mba:
     kind: workstation
     ssh_alias: mba

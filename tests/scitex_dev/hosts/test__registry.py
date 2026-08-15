@@ -403,6 +403,20 @@ def test_to_dict_round_trips_all_fields():
         # producer is too old to know about aliases". See
         # test__registry_aliases.py for the populated form.
         "aliases": [],
+        # And once more for connectivity: present-and-all-null for a host with
+        # nothing recorded, never omitted. See test__connectivity.py for the
+        # populated form.
+        "connectivity": {
+            "lan": None,
+            "reserved": None,
+            "net": None,
+            "mac": None,
+            "host_key_fingerprint": None,
+            "reported_hostname": None,
+            "ssh_user": None,
+            "identity_file": None,
+            "last_seen": None,
+        },
     }
 
 

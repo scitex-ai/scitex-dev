@@ -46,6 +46,10 @@ Config path resolution:
 | `trace-env-vars` | Trace where env var(s) are defined/injected (static scan + strace) | — |
 | `registry-normalize` | Fix PS-181 `~/.scitex/<pkg>/` registry-layout drift for ONE package (dry-run by default) | — |
 | `host list / show / resolve` | SciTeX-wide host registry — where is host X, and what's its `~/.scitex` root? | [24_host-registry.md](24_host-registry.md) |
+| `host generate-ssh-config` | Generate ssh stanzas from the registry: `<name>` (LAN) and `<name>-net` (off-LAN), into a marked managed block | [26_host-connectivity.md](26_host-connectivity.md) |
+| `host validate-matrix` | Probe every ORDERED host pair per transport and report the denominator, not a bare pass count | [26_host-connectivity.md](26_host-connectivity.md) |
+| `host validate-ssh-config` | Compare the registry against what `ssh -G` actually resolves, and whether the key a stanza names exists | [26_host-connectivity.md](26_host-connectivity.md) |
+| `host corroborate` | MAC + ssh host-key continuity + live hostname; all three must agree before an address is rewritten | [26_host-connectivity.md](26_host-connectivity.md) |
 
 `trace-env-vars` is a diagnostic "silver bullet" for _where does this
 env var come from?_ Two modes, both with word-boundary matching (`FOO`
