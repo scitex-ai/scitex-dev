@@ -27,7 +27,10 @@ def register(parent: click.Group) -> click.Command:
     """Mount ``hooks`` on the ``ecosystem dev`` group."""
 
     @parent.command(
-        "hooks",
+        # `list-hooks`, not `hooks`: §1 rejects a bare-noun leaf token, because
+        # `ecosystem dev hooks` gives the reader no way to tell listing from
+        # installing or running them. The rule's own remedy is `<verb>-hooks`.
+        "list-hooks",
         cls=SpecCommand,
         help_spec=CliHelp(
             summary="Every package's declared agent guardrail rules.",
@@ -35,20 +38,20 @@ def register(parent: click.Group) -> click.Command:
                 "Aggregates the `scitex_dev.hooks` entry points each package "
                 "publishes, so one command shows the whole fleet's guardrail "
                 "policy -- each rule with the reason it exists -- rather than "
-                "one package's. Distinct from `scitex-dev dev hooks rules`, "
+                "one package's. Distinct from `scitex-dev dev hooks list-rules`, "
                 "which is scitex-dev's OWN declarations as a leaf."
             ),
             examples=(
                 Example(
-                    "{prog} ecosystem dev hooks",
+                    "{prog} ecosystem dev list-hooks",
                     "List every package's declared rules.",
                 ),
                 Example(
-                    "{prog} ecosystem dev hooks --json",
+                    "{prog} ecosystem dev list-hooks --json",
                     "Machine-readable output.",
                 ),
                 Example(
-                    "{prog} ecosystem dev hooks --provider scitex-agent-container",
+                    "{prog} ecosystem dev list-hooks --provider scitex-agent-container",
                     "Only one package's rules.",
                 ),
             ),

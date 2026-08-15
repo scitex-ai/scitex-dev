@@ -22,7 +22,7 @@ Subcommands
     Report install status per hook: ok / drift / stale / missing.
 ``scitex-dev hooks show-path <name>``
     Print the absolute filesystem path of the bundled hook ``<name>``.
-``scitex-dev dev hooks rules``
+``scitex-dev dev hooks list-rules``
     List the agent guardrail rules scitex-dev DECLARES (id, rule, reason),
     read from the ``scitex_dev.hooks`` federation. Distinct from the verbs
     above, which install script FILES: ``rules`` reports the declared
@@ -99,9 +99,9 @@ def register_hooks_commands(main) -> None:
     register_pre_push(hooks_group)
 
     # scitex-dev mounts the shared registrar exactly as any leaf does, and
-    # scopes it to its OWN declarations: `<pkg> dev hooks rules` means this
+    # scopes it to its OWN declarations: `<pkg> dev hooks list-rules` means this
     # package's guardrails. The fleet-wide aggregate is a different command,
-    # `scitex-dev ecosystem dev hooks`.
+    # `scitex-dev ecosystem dev list-hooks`.
     from ...hooks.cli import register_hook_rules_command
 
     register_hook_rules_command(hooks_group, provider="scitex-dev")

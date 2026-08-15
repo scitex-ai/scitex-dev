@@ -118,7 +118,7 @@ class HookRule:
         computed from ``__file__``. That needs no new field, but it bakes the
         building machine's filesystem into the declaration: two hosts would
         print different corpora for identical code, and
-        ``dev hooks rules --json`` -- which the auditor and the operator both
+        ``dev hooks list-rules --json`` -- which the auditor and the operator both
         read -- would stop being comparable across machines.
     script
         Package-relative path to the shell binding, or ``None`` when the rule

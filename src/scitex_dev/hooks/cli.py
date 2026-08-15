@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # File: src/scitex_dev/hooks/cli.py
-"""The ``<pkg> dev hooks rules …`` command, mountable by ANY leaf package.
+"""The ``<pkg> dev hooks list-rules …`` command, mountable by ANY leaf package.
 
 PUBLIC on purpose, like :mod:`scitex_dev.secret.cli`. §13 says every package
 mounts its self-maintenance surfaces under one ``dev`` group; this module is
@@ -21,9 +21,9 @@ reimplementing it::
     register_hook_rules_command(hooks, provider="scitex-agent-container")
 
 ``provider`` scopes the listing to the mounting package's OWN declarations,
-which is what ``<pkg> dev hooks rules`` means: this package's upkeep, as a
+which is what ``<pkg> dev hooks list-rules`` means: this package's upkeep, as a
 leaf. The fleet-wide aggregate is a different command --
-``scitex-dev ecosystem dev hooks`` -- and lives in the ecosystem group.
+``scitex-dev ecosystem dev list-hooks`` -- and lives in the ecosystem group.
 
 scitex-dev consumes this registrar exactly as a leaf would rather than
 keeping a private copy, so that scitex-dev's copy is not the only one that
@@ -86,9 +86,19 @@ def register_hook_rules_command(
     parent: click.Group,
     *,
     provider: str | None = None,
-    name: str = "rules",
+    name: str = "list-rules",
 ) -> click.Command:
-    """Mount the ``rules`` leaf on *parent* (a package's ``dev hooks`` group).
+    """Mount the ``list-rules`` leaf on *parent* (a package's ``dev hooks`` group).
+
+    NAMED WITH ITS VERB, not `rules`. §1 rejects a leaf token that is a bare
+    noun — `dev hooks rules` reads as though `hooks` were transitive over
+    `rules`, and the reader cannot tell whether it lists, edits or applies
+    them. The remedy the rule offers is `<verb>-rules`, and listing is what
+    this does.
+
+    Caught by the audit gate on this branch rather than in review, which is
+    the gate working: the name was wrong from the first commit and no human
+    reading it noticed.
 
     ``provider`` scopes the listing to one package's declarations; ``None``
     lists everything discovered, which is what the ecosystem aggregate wants.
@@ -109,13 +119,13 @@ def register_hook_rules_command(
                 "drift from them."
             ),
             examples=(
-                Example("{prog} dev hooks rules", "List declared rules."),
+                Example("{prog} dev hooks list-rules", "List declared rules."),
                 Example(
-                    "{prog} dev hooks rules --json",
+                    "{prog} dev hooks list-rules --json",
                     "Machine-readable output.",
                 ),
                 Example(
-                    "{prog} dev hooks rules --event pre-tool-use",
+                    "{prog} dev hooks list-rules --event pre-tool-use",
                     "Only rules attaching to PreToolUse.",
                 ),
             ),
