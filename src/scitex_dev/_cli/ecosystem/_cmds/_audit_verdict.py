@@ -12,6 +12,7 @@ blob loses the attribution, and the downgrade needs it — see
 
 from __future__ import annotations
 
+from ._audit_exit_policy import failing_audit_is_explained
 from ._audit_masking import classify_output
 
 
@@ -59,8 +60,8 @@ def failing_audits_are_fully_masked(raw_by_audit, skip_rules) -> bool:
     if not raw_by_audit:
         return False
     return all(
-        classify_output(raw, skip_rules).fully_masked
-        for raw in raw_by_audit.values()
+        failing_audit_is_explained(name, classify_output(raw, skip_rules))
+        for name, raw in raw_by_audit.items()
     )
 
 
