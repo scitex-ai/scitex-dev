@@ -156,6 +156,25 @@ hosts:
     # `Permission denied` — while its `id_mesh` key was ALREADY authorised
     # there. Nothing in the error named the missing file. That is what
     # `scitex-dev host validate-ssh-config` now detects mechanically.
+    #
+    # Measured 2026-08-15 from BOTH ends: `~/actions-runner*/.runner` ON the
+    # machine for which runner lives WHERE, and the GitHub Actions API for the
+    # labels. Neither half is inferred from the naming pattern — `scitex-01-*`
+    # living on `scitex-compute-01` is exactly the kind of correspondence that
+    # is usually true and occasionally not.
+    #   agentName scitex-01-org-cpu-01  (org scitex-ai)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
+    #   agentName scitex-01-cpu-01      (repo scitex-ai/scitex-agent-container)
+    #     -> [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
+    #
+    # THAT SECOND ENTRY IS WHY SCOPE BELONGS IN THIS FILE'S REASONING. On
+    # 2026-08-15 every ORG runner carrying `scitex-ci` was offline, and it was
+    # briefly reported fleet-wide that the label was dead. It was not: this
+    # repo-scoped runner carried it and was online. A destination's liveness is
+    # a question about a SCOPE, not about a label.
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
+      - [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
   scitex-compute-02:
     kind: compute
     ssh_alias: scitex-compute-02
@@ -164,6 +183,17 @@ hosts:
     reserved: 192.168.11.172
     mac: 70:85:c2:63:da:f9
     last_seen: 2026-08-13
+    # Measured 2026-08-15. `~/actions-runner*/.runner` also records
+    # `scitex-02-cpu-01` (repo scitex-ai/scitex-agent-container) on this
+    # machine, but that runner is NOT in the repo's registered runner list, so
+    # its label set is unknown and it is deliberately NOT recorded. A leftover
+    # config file on disk is not a registered destination, and inventing a
+    # label set for it from its sibling's would be exactly the pattern-guess
+    # this file refuses elsewhere.
+    #   agentName scitex-02-org-cpu-01  (org scitex-ai)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
   scitex-compute-03:
     kind: compute
     ssh_alias: scitex-compute-03
@@ -172,6 +202,10 @@ hosts:
     reserved: 192.168.11.173
     mac: 6c:92:bf:64:db:ca
     last_seen: 2026-08-13
+    # Measured 2026-08-15. Same caveat as scitex-compute-02 about the
+    # unregistered `scitex-03-cpu-01` config on disk.
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
     # The MAC above is the ACTIVE NIC, enp35s0f0 (10GbE). enp39s0 is down.
     # Which NIC the MAC belongs to matters for the corroboration check: the
     # address is held by the interface that is up, so recording the idle
@@ -225,54 +259,6 @@ hosts:
     # one entry PER RUNNER, and omitting a repo-scoped runner would make a
     # workflow that legitimately names `dotfiles-ci` read as unserved.
       - [self-hosted, Linux, X64, dotfiles-ci, scitex-local-cpu]
-  scitex-compute-01:
-    kind: compute
-    ssh_alias: scitex-compute-01
-    scitex_root: "~/.scitex"
-    # Measured 2026-08-15 from BOTH ends, the same discipline as
-    # scitex-compute-04 above: `~/actions-runner*/.runner` ON the machine for
-    # WHICH runner lives WHERE, and the GitHub Actions API for the labels.
-    # Neither half is inferred from the naming pattern — `scitex-01-*` living
-    # on `scitex-compute-01` is exactly the kind of correspondence that is
-    # usually true and occasionally not.
-    #   agentName scitex-01-org-cpu-01  (org scitex-ai)
-    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
-    #   agentName scitex-01-cpu-01      (repo scitex-ai/scitex-agent-container)
-    #     -> [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
-    #
-    # THAT SECOND ENTRY IS WHY SCOPE BELONGS IN THIS FILE'S REASONING. On
-    # 2026-08-15 every ORG runner carrying `scitex-ci` was offline, and it was
-    # briefly reported fleet-wide that the label was dead. It was not: this
-    # repo-scoped runner carried it and was online. A destination's liveness is
-    # a question about a SCOPE, not about a label.
-    runner_labels:
-      - [self-hosted, Linux, X64, scitex-org-cpu]
-      - [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
-  scitex-compute-02:
-    kind: compute
-    ssh_alias: scitex-compute-02
-    scitex_root: "~/.scitex"
-    # Measured 2026-08-15. `~/actions-runner*/.runner` also records
-    # `scitex-02-cpu-01` (repo scitex-ai/scitex-agent-container) on this
-    # machine, but that runner is NOT in the repo's registered runner list, so
-    # its label set is unknown and it is deliberately NOT recorded. A leftover
-    # config file on disk is not a registered destination, and inventing a
-    # label set for it from its sibling's would be exactly the pattern-guess
-    # this file refuses elsewhere.
-    #   agentName scitex-02-org-cpu-01  (org scitex-ai)
-    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
-    runner_labels:
-      - [self-hosted, Linux, X64, scitex-org-cpu]
-  scitex-compute-03:
-    kind: compute
-    ssh_alias: scitex-compute-03
-    scitex_root: "~/.scitex"
-    # Measured 2026-08-15. Same caveat as scitex-compute-02 about the
-    # unregistered `scitex-03-cpu-01` config on disk.
-    #   agentName scitex-03-org-cpu-01  (org scitex-ai)
-    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
-    runner_labels:
-      - [self-hosted, Linux, X64, scitex-org-cpu]
   # RENAMED 2026-08-07. The old aliases `nas` / `nas1` / `nas2` are RETIRED:
   # they resolve to nothing on purpose, printing the successor name and
   # exiting 255. Serving them from here made this registry hand out routes
