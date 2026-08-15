@@ -47,3 +47,57 @@ audit:
   root-whitelist:
     dirs: []
     files: []
+
+  # PS-231 — scitex-dev's OWN four re-implemented workflows.
+  #
+  # Read that twice: the repository DEFINING the no-duplicate-workflows rule is
+  # exempt from it at four sites. The exemptions are here rather than hidden
+  # because the reason is a real sequencing constraint, and because a rule whose
+  # author quietly excuses themselves is worth less than no rule.
+  #
+  # THE CONSTRAINT: under `workflow_call` GitHub renders a check as
+  # `<caller-job-id> / <reusable job name>`, so converting these to org callers
+  # RENAMES the status checks. Measured 2026-08-15 on this repo:
+  #
+  #     develop requires  pytest-matrix-on-ubuntu-py3.11 / .12 / .13, audit
+  #     main    requires  pytest-matrix-on-ubuntu-py3.11 / .12 / .13
+  #
+  # Converting without updating branch protection leaves every PR waiting on
+  # contexts nothing will ever report — the same never-arrives shape as the
+  # queued-runner outage, one layer up. So it is ONE coordinated change, not a
+  # line in this PR.
+  #
+  # These are NOT a grandfather list and must not become one. Each names one
+  # file, states this reason, and is retired by the card below — the operator
+  # rejected new-vs-old ratchets for exactly this rule family
+  # (「昔だろうが今だろうが問題点は問題点」).
+  #
+  # REMOVAL CONDITION — retired by scitex-todo card
+  #   dev-migrate-own-workflows-to-org-callers-and-rename-required-checks-20260815
+  # Deleting these four entries is a STEP of that card.
+  exemptions:
+    PS-231:
+      - path: .github/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml
+        line: 0
+        reason: >-
+          Converting to the org caller renames the required contexts
+          pytest-matrix-on-ubuntu-py3.11/.12/.13 on BOTH develop and main;
+          protection must be updated in the same change. Card
+          dev-migrate-own-workflows-to-org-callers-and-rename-required-checks-20260815.
+      - path: .github/workflows/import-smoke-on-ubuntu-py3-12.yml
+        line: 0
+        reason: >-
+          Migrated together with pytest-matrix so the repo lands on the single
+          canonical caller shape in one reviewable change rather than a
+          half-converted workflow set. Same card.
+      - path: .github/workflows/rtd-sphinx-build-on-ubuntu-latest.yml
+        line: 0
+        reason: >-
+          Same migration. Its check renders as `rtd-sphinx-build / docs-sphinx`
+          after conversion, replacing the current `sphinx`. Same card.
+      - path: .github/workflows/auto-merge-to-develop.yaml
+        line: 0
+        reason: >-
+          Same migration. Auto-merge is the mechanism that lands the migration
+          PR itself, so it is converted LAST, after the others are verified
+          green. Same card.
