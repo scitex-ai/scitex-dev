@@ -56,12 +56,15 @@ def _render_records(records) -> int:
         "reloaded": "cyan",
         "drift": "red",
         "reload-failed": "red",
+        "blocked": "yellow",
     }
     pending = 0
     for rec in records:
         action = rec["action"]
         color = colors.get(action, "yellow")
-        if action in ("drift", "reload-failed") or action.startswith("would-"):
+        if action in ("drift", "reload-failed", "blocked") or action.startswith(
+            "would-"
+        ):
             pending += 1
         console.print(
             f"[{color}]{action:<14}[/{color}] "
@@ -141,21 +144,44 @@ def register(ecosystem):
         is_flag=True,
         help="Skip the audit-log append (for ad-hoc inspection).",
     )
+    @click.option(
+        "--verify",
+        is_flag=True,
+        help="Also run each spec's verify_command and report what the host "
+        "SAYS. These are observations, NOT compliance verdicts: a config "
+        "can be correct while the running system legitimately differs "
+        "(a requested DHCP address that was not granted). They never "
+        "change a verdict.",
+    )
     @click.pass_context
-    def host_config_check(ctx, provider, as_json, no_log):
+    def host_config_check(ctx, provider, as_json, no_log, verify):
         import json as _json
 
-        from ....host_config._apply import apply_specs, write_audit
+        from ....host_config._apply import apply_specs, observe_specs, write_audit
 
         specs = _select(provider)
         records = apply_specs(specs, dry_run=True, run_apply_commands=False)
+        observations = observe_specs(specs) if verify else []
         if not no_log:
-            write_audit(records, mode="check")
+            write_audit(records + observations, mode="check")
 
         if as_json:
-            click.echo(_json.dumps(records, indent=2))
+            click.echo(
+                _json.dumps(
+                    {"verdicts": records, "observations": observations}
+                    if verify
+                    else records,
+                    indent=2,
+                )
+            )
         else:
             pending = _render_records(records)
+            for obs in observations:
+                # Printed under its own heading so an observation can
+                # never be skimmed as a verdict.
+                click.echo(f"observed       {obs['name']}  {obs['detail']}")
+                for line in (obs["output"] or "(no output)").splitlines():
+                    click.echo(f"                 {line}")
             if not records:
                 ctx.exit(0)
             if pending:
@@ -184,6 +210,10 @@ def register(ecosystem):
             ),
             examples=(
                 Example("{prog} ecosystem host-config apply", "Preview."),
+                Example(
+                    "{prog} ecosystem host-config apply --yes --dry-run",
+                    "Rehearse: --dry-run overrides --yes and writes nothing.",
+                ),
                 Example("sudo {prog} ecosystem host-config apply --yes", "Execute."),
                 Example(
                     "sudo {prog} ecosystem host-config apply --yes --force",
@@ -201,24 +231,28 @@ def register(ecosystem):
     @click.option("--yes", "-y", "yes", is_flag=True, help="Actually write (root).")
     @click.option(
         "--dry-run",
-        "dry_run_flag",
         is_flag=True,
-        help="Force a preview even alongside --yes. This verb already "
-        "previews by default; the flag makes that explicit and always "
-        "wins, so it can only ever make the run more conservative.",
+        help=(
+            "Force a preview even with --yes. This verb already previews by "
+            "default, so the flag exists to make that intent EXPLICIT and "
+            "un-overridable in a script, where --yes may arrive from a "
+            "variable that is empty by accident rather than by decision."
+        ),
     )
     @click.option("--json", "as_json", is_flag=True, help="Emit structured JSON.")
     @click.pass_context
-    def host_config_apply(ctx, provider, force, yes, dry_run_flag, as_json):
+    def host_config_apply(ctx, provider, force, yes, dry_run, as_json):
         import json as _json
         import os
 
         from ....host_config._apply import apply_specs, needs_root, write_audit
 
         specs = _select(provider)
-        # An explicit --dry-run WINS over --yes: between "you asked to write"
-        # and "you asked not to", the non-destructive reading is the safe one.
-        dry_run = dry_run_flag or not yes
+        # Default is already preview; --dry-run additionally OVERRIDES --yes.
+        # The two conflicting resolves to the non-writing side on purpose: a
+        # caller who said both asked for a rehearsal and a commit in the same
+        # breath, and only one of those is safe to guess at.
+        dry_run = dry_run or not yes
 
         if not dry_run and hasattr(os, "geteuid") and os.geteuid() != 0:
             preview = apply_specs(
@@ -235,7 +269,31 @@ def register(ecosystem):
                 ctx.exit(1)
 
         records = apply_specs(specs, dry_run=dry_run, force=force)
-        write_audit(records, mode="apply-dry-run" if dry_run else "apply")
+        # A PREVIEW MUST NOT DIE ON ITS OWN TELEMETRY. `write_audit` appends
+        # to ~/.scitex/dev/runtime/logs/host-config.log, and on 2026-08-15 a
+        # CI runner whose log directory was not writable turned that into a
+        # PermissionError that aborted the command BEFORE it printed
+        # anything — so `--dry-run` produced an empty stdout and a traceback
+        # instead of the preview the user asked for. The record is secondary;
+        # the preview is the result.
+        #
+        # The split is by RISK, not by convenience. A dry run changed nothing,
+        # so an unrecorded dry run costs a log line: warn loudly and carry on.
+        # A REAL apply changed the host, and an unrecorded change is exactly
+        # the "converged or never ran?" ambiguity this log exists to prevent —
+        # so that one is still allowed to fail loudly.
+        try:
+            write_audit(records, mode="apply-dry-run" if dry_run else "apply")
+        except OSError as exc:
+            if not dry_run:
+                raise
+            click.echo(
+                f"WARN: the host changed nothing (preview) but the audit log "
+                f"could not be written: {exc}. The preview below is complete "
+                f"and unaffected; fix the log path before running --yes, "
+                f"because a REAL apply that cannot be recorded is refused.",
+                err=True,
+            )
 
         if as_json:
             click.echo(_json.dumps(records, indent=2))
