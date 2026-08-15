@@ -461,9 +461,8 @@ def test_resolve_auto_seeds_writes_file_to_disk(tmp_path):
     assert target.is_file()
 
 
-def test_list_hosts_auto_seeds_default_ten_hosts(tmp_path):
-    # Arrange — seven until 2026-08-13, when scitex-compute-01/02/03 were
-    # registered with their measured addresses.
+def test_list_hosts_auto_seeds_the_whole_declared_fleet(tmp_path):
+    # Arrange
     target = tmp_path / "hosts.yaml"
     # Act
     records = list_hosts(hosts_path=target)
@@ -480,6 +479,10 @@ def test_default_seed_includes_operator_known_hosts(tmp_path):
     assert {r.name for r in records} == {
         "ywata-note-win",
         "spartan",
+        # The compute fleet. `scitex-compute-04` was registered alone on
+        # 2026-08-12; its siblings followed on 2026-08-15, after a morning in
+        # which they were the ONLY runners still online and this registry did
+        # not know they existed.
         "scitex-compute-01",
         "scitex-compute-02",
         "scitex-compute-03",

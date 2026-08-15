@@ -64,6 +64,12 @@ Rules:
   reason — in the normal output, not behind a flag.
 - **The summary states both numbers**: unmasked errors *and* masked
   count. "0 errors" while 150 are masked is a lie of omission.
+- **The summary is a tally, not the verdict.** `audit-skills` fails on
+  *any* finding; `audit-project`'s `--severity` floor is documented
+  error-only. So a W-severity `SK-302` sets the exit code while the count
+  reads zero errors. When that happens the line now says so outright
+  (`— but this run EXITED 1 …`) instead of leaving the reader to infer
+  it. Read the findings, not the error count.
 - The exit code is still driven by *unmasked* findings. Declaring one
   deferral never blanket-silences anything else.
 - A declared rule matching zero violations is reported as removable —

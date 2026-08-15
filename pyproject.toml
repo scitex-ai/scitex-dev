@@ -85,6 +85,20 @@ dependencies = [
     # transitively in most environments, so it is present exactly where
     # developers look and absent where CI runs.
     "rich>=13.0.0",
+    # THIRD INSTANCE OF THE DEFECT DIRECTLY ABOVE, found 2026-08-13 while
+    # moving scitex-agent-container's state onto the store. Measured on
+    # scitex-compute-04: `scitex_dev.store` imports fine and psycopg reports
+    # MISSING — so the host carries the Postgres backend and cannot open one.
+    # PostgresDialect.connect imports psycopg lazily and raises a clear
+    # DialectUnavailableError when it is absent, which is why this never
+    # showed up as a crash and never showed up at import time either: the
+    # only way to see it is to open a Postgres store, and nothing did until
+    # ADR-0006 made Postgres the fleet's store.
+    # That ADR is also why this belongs in core rather than an extra. The
+    # comment block above this dependency list records what a per-feature
+    # menu already cost us — pinning `scitex-cards[mcp]` lost psycopg
+    # fleet-wide on 2026-08-02. It has been undeclared ever since.
+    "psycopg[binary]>=3.1",
 ]
 
 [project.optional-dependencies]

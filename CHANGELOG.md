@@ -7,89 +7,29 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
+### Fixed
 
-- **The host registry now records HOW to reach a machine, not only where its
-  files are.** `HostRecord` carries a `HostConnectivity`: the OBSERVED `lan`
-  address, the DHCP `reserved` address, the off-LAN `net` route, `mac`,
-  `host_key_fingerprint`, `reported_hostname`, `ssh_user`, `identity_file`
-  and `last_seen`. Every field is optional, so an existing `hosts.yaml`
-  parses unchanged and yields an all-empty record; `to_dict()` always emits
-  the `connectivity` key (present-and-null) so a consumer never has to date
-  the producer.
+- **A declared skip rule now clears the exit status, not just the report
+  (#590).** `ecosystem audit-all` masks findings on rules a repo has declared
+  in `.scitex/dev/config.yaml`, prints the masked inventory, and prints a
+  summary line stating how many UNMASKED errors remain. It could print
+  `0 unmasked error(s) ..., 1 masked by skip-rules (1 declared)` and still
+  exit 1 — a gate whose report and whose status disagreed, and a deferral
+  mechanism that did the one thing it exists for only sometimes.
 
-  **`reserved` and `lan` are two fields on purpose.** Measured 2026-08-13:
-  three compute hosts are reserved at one address and answering at another
-  because their leases have not renewed. Both statements are true, and a
-  registry with one address field must lie about one of them.
+  The downgrade was decided over the run's CONCATENATED output, which
+  destroys attribution: a WARN-tier finding printed by an audit that EXITED 0
+  landed in the same `unmasked` list as a real failure and vetoed the
+  downgrade. Measured on scitex-agent-container — `audit-project` failed on
+  one declared `PS-226`, three warnings came from `audit-cli` (exit 0).
 
-  **No private key material.** Only public facts are state — an address, a
-  MAC, a host-key FINGERPRINT, the PATH of an identity file. The parser
-  refuses a value carrying a PEM header and refuses a field named as though
-  it holds a secret. This file is read by every host in the fleet.
-
-- **`render_ssh_config()` + `scitex-dev host generate-ssh-config`.** Two names per
-  host: the BARE canonical name is the LAN route, `<name>-net` is the route
-  that leaves the LAN. That operator ruling (2026-08-13) is enforced
-  STRUCTURALLY — the LAN side has no `jump`/`proxy_command` field to hold a
-  bastion, and a bastion can only be expressed inside `net:`, which the
-  generator emits under `-net` and nowhere else. A bastion on a bare name
-  produced the 2026-08-13 mesh incident; it is now unexpressible.
-
-  Idempotent (no timestamp in the header, so `changed` is a real signal),
-  writes only between its BEGIN/END markers, and REFUSES when it finds one
-  marker without its partner rather than guessing a region's extent.
-  **It never deletes an entry because a host is unreachable** — operator
-  rule, unreachable != delete; `last_seen` ages instead and is rendered into
-  the stanza comment.
-
-- **`check_matrix()` + `scitex-dev host validate-matrix` — the denominator is
-  part of the result.** A mesh is N*(N-1) ORDERED pairs per transport, and
-  A->B succeeding says nothing about B->A. `MatrixResult` carries `expected`,
-  `attempted`, and every skip with its reason; `verdict == "pass"` requires
-  BOTH that nothing failed AND that the sweep was complete. A bare pass count
-  cannot be distinguished from "and thirty were never attempted".
-
-- **`check_ssh_config()` + `scitex-dev host validate-ssh-config` — declared vs what
-  ssh actually obeys.** Two faults a config file cannot reveal:
-
-  *An `Include` above the block silently wins.* ssh takes the FIRST value it
-  obtains for each keyword. Measured 2026-08-13: `~/.ssh/config` line 1 was
-  `Include conf.d/*/*.conf`, so the file people read was not the file ssh
-  obeyed. Reproduced as a test against a real `ssh -G`.
-
-  *A stanza naming a key that is not there.* THE real mesh failure of that
-  day: scitex-compute-01's stanza named `~/.ssh/id_rsa`, absent on that
-  machine, so ssh offered NO key and the far end said `Permission denied`
-  while `id_mesh` was already authorised there.
-
-  Classifying a DECLARED key by subtracting ssh's default set is wrong, and
-  wrong exactly on that case — `~/.ssh/id_rsa` is itself a default. The
-  working discriminator is REPLACEMENT (measured, OpenSSH 9.6: a stanza
-  declaring one IdentityFile makes `ssh -G` report 1 line, not 7), tested as
-  inequality against the config-free set from `ssh -G -F /dev/null`. When
-  that baseline cannot be read the report says so and cannot return `pass`.
-
-- **`corroborate()` + `scitex-dev host corroborate` — three signals before an
-  address is rewritten.** MAC vs the neighbour table, ssh host-key continuity
-  (the strongest: a machine that moves keeps its host key, which is what
-  actually settled the 2026-08-13 rewrite), and a live `hostname` readback.
-  All three agreeing permits an automatic rewrite; any disagreement is a
-  `conflict` that is recorded and escalated, never resolved silently — a
-  machine can detect disagreement but cannot decide which source is true.
-  Fewer than three available is `insufficient`, **not** a pass: "no
-  contradiction found" is not corroboration, and `ip`/`arp` are absent inside
-  the agent containers, so that is the ordinary case there.
-
-  Every check verb exits `0` only on `pass`; `incomplete` exits 1 and `fail`
-  exits 2, because a check that could not run must not hand a cron entry the
-  same `0` a healthy fleet does.
-
-- **scitex-compute-01/02/03 registered** with their measured addresses. The
-  scitex-compute-04 entry had noted since 2026-08-12 that their machines were
-  absent, so the registry under-reported the `scitex-org-cpu` pool by three.
-  Deliberately WITHOUT `runner_labels` — their runners were not measured, and
-  PS-224's floor must not grow on a guess.
+  It is now decided PER AUDIT, against the audits that actually exited
+  non-zero: each is asked "is everything YOU reported masked?". Severity is
+  deliberately not the discriminator — `audit-skills` and `audit-python-apis`
+  exit 1 on WARN-tier findings too, so an error-only predicate would have
+  turned runs those two legitimately failed green. What is REPORTED is
+  unchanged: the inventory, the labels and the summary are still computed
+  over the whole run.
 
 ## [0.49.0] - 2026-08-12
 
@@ -254,6 +194,47 @@ and shipping them unannounced is what made them expensive.
   none readable to the others. This adds the one leaves publish. Nothing is
   migrated by this change; convergence is per-consumer, as ADR-0007's boundary
   declarations are.
+
+### Fixed
+
+- **The audit gate's first line now names the rules that fired (#593).** pytest's
+  `short test summary info` carries one line per failure, and it is what CI
+  notifications and `gh pr checks` triage are built from. That line read
+
+      AssertionError: audit-all reported violations for 'sac' (exit=1).
+
+  for every rule in the corpus — a CONSTANT, so two unrelated failures were
+  indistinguishable without downloading each job log. The codes were already in
+  the captured output, roughly four screens into the assertion body.
+
+  Measured 2026-08-12 on scitex-agent-container: seventeen PRs red, all showing
+  that one sentence, escalated as a P1 fleet-wide CI outage and given two
+  published root causes before anyone opened a raw log. The real causes were
+  four DIFFERENT rules — `PS-140` twice (different new modules), `PS-207`,
+  `SK-302` — every one PR-local and a one-line fix by its own author.
+  `audit-all` on develop exited 0 throughout. It now reads
+
+      audit-all reported violations for 'scitex-dev' (exit=1): PS-207, SK-302, §1f
+
+  Purely additive: the digest, the warn-tier note and the full stdout/stderr all
+  still follow. Attribution reuses the masking classifier's structural
+  discriminator ("the bracket carries a digit or `§`"), so the legacy
+  `[E] [PS-207 …]` shape yields `PS-207` and not `E`, and a new rule family needs
+  no edit. Codes are sorted and de-duplicated — output order is a thread-pool
+  race, and one rule firing on four modules is one thing to go fix.
+
+- **`summary: … 0 unmasked error(s)` no longer reads as a verdict on a red run
+  (#593).** `audit-skills` fails on ANY finding; `audit-project`'s `--severity`
+  floor is documented as "W/I findings never fail CI on their own". So a
+  W-severity `SK-302` sets the exit code while the summary reports zero errors —
+  measured with ZERO skip-rules declared, so this is not the masking defect and
+  the count is not wrong. What was wrong is that the line reads as the verdict.
+  `render_summary` now takes the package's own exit code and, in the one shape
+  where the numbers alone mislead, says `— but this run EXITED 1: … This line is
+  a TALLY, not the verdict`. `exit_code` is required and keyword-only for the
+  same reason `inspected` is: a dropped argument silently restores the
+  misleading line. The exit-code SEMANTICS are untouched — the asymmetry is
+  deliberate on both sides and changing it is a separate call.
 
 ## [0.47.0] - 2026-08-11
 
