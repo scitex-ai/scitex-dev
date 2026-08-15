@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Verification Controls — when the control itself licenses nothing
-  [DETAILS] The failure modes of the checks prescribed by the claim-type rules: controls that are vacuous (cannot fail), inert (present but disarmed), mispositioned (never reach what is under test), or sampled wrong (one Bash call is one sample). Plus degrade branches where a hard failure hides and the symmetric relabel trap when repairing one, the status words (`skipped`, `masked`, `0`) that fuse a failed measurement into a clean one, and why a commissioned finding must land as a card. Also the two species that survive every control: an instrument aimed at the right system but pointed at the wrong MOMENT (a stale log generation, `tail -1` as a guess about ordering), and a TRUE answer to a question you did not realise you were asking (two stories predicting the same numbers, separable only by an experiment nobody ran). Use before trusting a green, a control, or a summary line.
+  [DETAILS] The failure modes of the checks prescribed by the claim-type rules: controls that are vacuous (cannot fail), inert (present but disarmed), mispositioned (never reach what is under test), or sampled wrong (one Bash call is one sample). Plus degrade branches where a hard failure hides and the symmetric relabel trap when repairing one, the status words (`skipped`, `masked`, `0`) that fuse a failed measurement into a clean one, and why a commissioned finding must land as a card. Also the two species that survive every control: an instrument aimed at the right system but pointed at the wrong MOMENT (a stale log generation, `tail -1` as a guess about ordering), and a TRUE answer to a question you did not realise you were asking (two stories predicting the same numbers, separable only by an experiment nobody ran). And why verification fires on BLAST RADIUS rather than on confidence — a durable artifact (card, commit message, PR body) is a delayed action and deserves the check you would apply before acting. Use before trusting a green, a control, or a summary line — and before writing a factual claim into anything someone will quote.
 tags: [scitex-general-quality-verification-controls]
 ---
 
@@ -167,3 +167,41 @@ never run.
 - Corollary for peers: the person best placed to ask it is usually **not** the
   one who took the measurement. In the recorded case the operator asked it on
   the agent's behalf, and that is the only reason it surfaced.
+
+## 13. An assertion is free; only an action gets checked
+
+The rules above tell you to verify. This is about *when you actually do* — and
+the honest answer is: when something depends on it.
+
+§7 already records an instance ("a week of such proofs is void", asserted
+without enumerating, census found **0**). This section is the rule extracted
+from that one and the one below, because two instances of a claim that was
+never checked *because nothing forced it* is a pattern rather than a slip.
+
+Measured 2026-08-15 (scitex-dev, on itself): I grepped `ecosystem --help` for a
+command the constitution names, did not find it, and wrote "THAT VERB DOES NOT
+EXIST" into a card and a PR commit message. It exists — as a **deprecated alias,
+hidden from `--help`**, which is exactly the listing I searched. An absence in a
+*filtered view* read as an absence in reality.
+
+That claim sat unchallenged for an hour across two artifacts. It was verified
+only when the next step became **editing the fleet constitution** — and it did
+not survive first contact.
+
+- **Assertions are cheap, so they are not checked.** A wrong sentence in a card
+  costs nothing today; it costs whoever quotes it next week. The cost is real
+  and it is deferred, which is precisely why the check does not fire.
+- **The trigger that works is the blast radius, not the confidence.** "I am
+  about to change a shared thing" reliably produces a verification. "I am fairly
+  sure" reliably does not.
+- So: **before writing a claim into a durable artifact — a card, a commit
+  message, a PR body, a skill — apply the check you would apply before acting
+  on it.** Those artifacts ARE the action, delayed.
+- Corollary for reviewers: a confident factual claim in prose has usually had
+  *less* scrutiny than the code beside it, because the code had to run.
+
+Note the shape: `--help` is a filtered listing, and every filtered listing is a
+`require_match` waiting to happen (§11). Deprecated, hidden, and plugin-provided
+entries are invisible to it by design. Ask the thing itself — `<cmd> --help`
+exits 0 for a command that exists — rather than asking an index that was built
+to omit things.
