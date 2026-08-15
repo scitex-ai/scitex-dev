@@ -110,6 +110,18 @@ def main(
     ctx.ensure_object(dict)
     ctx.obj["json"] = as_json
 
+    # Editable-install drift warning — fires once per process, ~1ms, and is
+    # skipped on non-editable installs. Suppress with
+    # SCITEX_DEV_NO_DRIFT_WARN=1. It lives at this CLI entry rather than in
+    # the package __init__ so a library import stays silent and cheap; see
+    # the note in scitex_dev/__init__.py for what that cost us.
+    try:
+        from .._release.check_editable_drift import emit_if_drift
+
+        emit_if_drift("scitex-dev")
+    except Exception:
+        pass
+
     if version:
         if as_json:
             import json as _json
@@ -495,3 +507,7 @@ register_list_python_apis_command(main)
 from .gate import register_gate_command
 
 register_gate_command(main)
+
+from .ci import register_ci_commands
+
+register_ci_commands(main)

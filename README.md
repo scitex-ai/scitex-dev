@@ -41,18 +41,24 @@
 
 ## Installation
 
+There are exactly two installs. The CLI, the MCP server, icon rendering
+and skills all ship in the base install — there is no per-feature menu to
+assemble, and nothing to forget to add.
+
 ```bash
+# Everything you need to USE scitex-dev:
 pip install scitex-dev
 
-# With CLI support:
-pip install scitex-dev[cli]
-
-# With MCP server:
-pip install scitex-dev[mcp]
-
-# Everything:
+# Plus the maintainer toolchain (pytest, sphinx, ...) — for working ON it:
 pip install scitex-dev[all]
 ```
+
+`[all]` adds development and documentation tooling on top of the base
+install; it does not unlock features. Extra names are restricted to
+`{all, dev, docs}` by PS-225, because a per-feature extra is something
+somebody eventually pins — and a pin naming an extra that does not exist
+installs anyway, warns into a log nobody reads, and silently omits the
+capability.
 
 ### Configuration
 

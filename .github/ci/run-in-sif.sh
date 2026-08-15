@@ -31,7 +31,20 @@ export LC_ALL=C.UTF-8 LANG=C.UTF-8
 # install target both need a working, writable tmp. Node-local /tmp is writable
 # + ephemeral and per-version-isolated so concurrent matrix legs don't collide.
 export TMPDIR="/tmp/ci-scitex_dev-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}-$V"
-rm -rf "$TMPDIR"
+# `${TMPDIR:?}` AND NOT `$TMPDIR`.
+#
+# The line above cannot produce an empty value TODAY — the `/tmp/…` prefix is a
+# literal. The guard pins that. scitex-agent-container's wrappers started from
+# this exact shape and later moved the name into a helper function in another
+# file, at which point "always non-empty" stopped being visible from the
+# deletion site; nothing there would have noticed.
+#
+# And `rm -rf ""` IS NOT A SAFE NO-OP. Measured, GNU coreutils 9.4: `-f` treats
+# the empty operand as a nonexistent file, so it exits 0 SILENTLY — `set -euo
+# pipefail` catches nothing, and the script CONTINUES with TMPDIR="". Every
+# later use is then a path off the filesystem root: `"$TMPDIR/site"` is `/site`.
+# The empty value is dangerous precisely because it is quiet.
+rm -rf "${TMPDIR:?ci scratch path is empty — refusing to rm -rf it}"
 mkdir -p "$TMPDIR/site" "$TMPDIR/uv-cache"
 
 # The HPC compute-node $HOME is READ-ONLY inside the container, so uv/pip cannot

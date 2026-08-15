@@ -11,12 +11,18 @@ See ``general/05_development/04_skills-self-explain.md`` for the concept.
 Lazy-import discipline (PS-213 LAZY-EXTRA-PATTERN-OK)
 ----------------------------------------------------
 ``newb`` lives in the ``[skills]`` optional-dependencies group (NOT core)
-so that bare ``pip install scitex-dev`` does not pull in
-``claude-agent-sdk`` (newb's heavy transitive). Every reference to newb
-in this module goes through :func:`_require_newb`, which fails with a
-clear ``pip install "scitex-dev[skills]"`` hint when the extra is
-missing. Module-level ``render_markdown`` is still importable from older
-callers via ``__getattr__`` (PEP 562) so the public symbol survives.
+so the import stays lazy. The ``[skills]`` extra that once gated it is
+gone: PS-225 restricts extra names to ``{all, dev, docs}``, so ``newb``
+moved into ``[project.dependencies]`` and every install now carries it —
+INCLUDING its heavy ``claude-agent-sdk`` transitive, which the old extra
+existed to keep out of a bare install. That trade was made deliberately
+when the per-feature menu was retired; it is recorded here because the
+lazy import alone no longer implies the dependency is optional.
+
+Every reference to newb still goes through :func:`_require_newb`, which
+now reports a BROKEN INSTALL rather than a missing extra. Module-level
+``render_markdown`` is still importable from older callers via
+``__getattr__`` (PEP 562) so the public symbol survives.
 """
 
 from __future__ import annotations
@@ -39,9 +45,10 @@ def _require_newb():
         import newb as _newb
     except ImportError as exc:  # pragma: no cover — tested with monkeypatched sys.modules
         raise SystemExit(
-            "scitex-dev: `skills self-explain` requires the optional "
-            "`[skills]` extra (provides `newb`). Install with:\n"
-            '    pip install "scitex-dev[skills]"'
+            "scitex-dev: `skills self-explain` requires `newb`, which is a "
+            "BASE dependency — so this is a broken or partial install, not "
+            "a missing extra. Reinstall into this interpreter:\n"
+            "    python -m pip install --force-reinstall scitex-dev"
         ) from exc
     return _newb
 

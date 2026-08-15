@@ -160,7 +160,10 @@ def audit_frontmatter(root: Path | str) -> int:
 
     if yaml is None:
         click.echo(
-            "pyyaml not installed. Install with: pip install 'scitex-dev[cli-audit]'",
+            "pyyaml not installed. It is a BASE dependency of scitex-dev, "
+            "so this is a broken or partial install rather than a missing "
+            "feature. Reinstall into this interpreter: "
+            "`python -m pip install --force-reinstall scitex-dev`",
             err=True,
         )
         return 2

@@ -81,7 +81,8 @@ how `[mcp]` came to exist.
 
 The operator named the real requirement when he asked for the discipline
 rather than the mechanism — *「docs あるなら新しいエクストラ作ろ、ってならな
-ければ良いです」*. The worry is not where `dev` lives; it is that the existence
+ければ良いです」*, i.e. it is fine as long as nobody concludes "there are docs,
+so let's make a new extra". The worry is not where `dev` lives; it is that the existence
 of a per-feature extra teaches the next person that adding one is normal.
 
 **On the heavy-optional objection, which I raised and which does not

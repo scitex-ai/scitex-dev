@@ -5,7 +5,8 @@
 Public, reusable entry point for any SciTeX package that wants to refuse to
 run (or warn) when its own install is stale or broken (operator directive
 2026-07-21: a latest-version check must fire on invocation, at ERROR
-severity by default — "普通は warning ですが、私たちはエラーを選びます").
+severity by default — 「普通は warning ですが、私たちはエラーを選びます」,
+normally this would be a warning, but we choose error).
 
 Consumers wire it fail-open at their entry points::
 

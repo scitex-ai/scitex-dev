@@ -9,6 +9,14 @@ import click
 from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 
+# IMPORTED, NOT RE-SPELLED. Until 2026-08-15 this module carried its own
+# literal `'["self-hosted","scitex-ci"]'` while `_register` used
+# `'["self-hosted","Linux","X64","scitex-ci"]'` — two "sanctioned defaults"
+# for one Actions Variable, differing in whether they name the OS and arch.
+# Both were written to be the same value and drifted because nothing made
+# them the same value. One definition cannot disagree with itself.
+from ._register import CI_RUNS_ON_DEFAULT
+
 
 def register(group: click.Group) -> None:
     @group.command(
@@ -26,7 +34,7 @@ def register(group: click.Group) -> None:
                 Example("{prog} ci runner use github", "Route CI to ubuntu-latest."),
                 Example(
                     "{prog} ci runner use self-hosted",
-                    "Route CI back to the scitex-ci runner.",
+                    "Route CI back to the org self-hosted pool.",
                 ),
             ),
         ),
@@ -41,7 +49,7 @@ def register(group: click.Group) -> None:
             value = '"ubuntu-latest"'
             label = "hosted"
         else:
-            value = '["self-hosted","scitex-ci"]'
+            value = CI_RUNS_ON_DEFAULT
             label = "self-hosted"
 
         result = subprocess.run(

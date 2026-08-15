@@ -146,9 +146,13 @@ def _maybe_emit_l1() -> None:
         "[scitex-dev linter] no IO/PA category rules "
         "registered — scitex-io plugin is NOT installed in this venv. "
         "All `pd.read_*` / `np.load/save` / `pickle.dump/load` / "
-        "`df.to_*` / `open()` checks (STX-IO001-014, STX-PA001-005) are "
-        "SILENTLY skipped. Run `pip install scitex-io` to enable. Set "
-        "SCITEX_DEV_LINTER_QUIET=1 to suppress this notice."
+        "`df.to_*` / `open()` checks (STX-IO001-014, STX-PA001-005) DID "
+        "NOT RUN, so this verdict says nothing about them. These rules "
+        "apply to EVERY project type — `project-type: research` only "
+        "escalates them warning→error, it does not scope them — so their "
+        "absence is a gap, not a design choice. Run `pip install "
+        "scitex-io` to enable. Set SCITEX_DEV_LINTER_QUIET=1 to suppress "
+        "this notice."
     )
 
 
@@ -266,6 +270,100 @@ def describe_skips(records: list[dict] | None = None) -> list[str]:
             what = f"requires=`{rec['requires']}`"
         lines.append(f"  - {what}: {rec['reason']}. Fix: {rec['remedy']}")
     return lines
+
+
+def corpus_provenance() -> dict:
+    """Which rule corpus is grading this run: version, path, ambiguity.
+
+    A verdict is only as current as the corpus that produced it, and a
+    corpus that predates a rule cannot fail on it. Measured 2026-08-10:
+    scitex-db's container carried scitex-dev 0.28.0, in which PS-220 does
+    not exist at all — so their local audits had been reporting clean for
+    a rule that was not there, and they found it only by accident while
+    investigating something else. A rule that is ABSENT cannot fire at any
+    severity; that is the most complete way for a check to be unable to
+    fail.
+
+    ``ambiguous`` is the case that makes ``version`` untrustworthy rather
+    than merely old: when two ``.dist-info`` directories in one
+    environment both claim the distribution, the reported version is a
+    coin toss between them. Measured the same evening on scitex-dev's own
+    container — ``['0.38.0', '0.43.1']`` on the night 0.44.0 was released.
+    Reporting a single version there would be stating one of two answers
+    as fact.
+
+    RELATIONSHIP TO THE CURRENCY GATE, because these must not drift.
+    :mod:`scitex_dev.staleness` already detects the same ambiguity in
+    ``_integrity_violation`` and reports it — but only as a side effect of
+    ``ensure_current``, which WARNS OR RAISES. That is a gate, not a
+    query: it speaks when something is wrong and is silent otherwise, so
+    nothing there can answer "which corpus graded this verdict?" on a
+    healthy run. This function is that missing query, and it is
+    deliberately unconditional.
+
+    If the two ever disagree, the gate is authoritative on whether the
+    install is BROKEN and this is authoritative on what was IMPORTED.
+    Better still would be for the gate to consume this query rather than
+    scan a second time; that is a follow-up, not a reason to keep the
+    verdict silent about its own provenance in the meantime.
+    """
+    import importlib.metadata as _md
+
+    versions = sorted(
+        d.version
+        for d in _md.distributions()
+        if (d.metadata["Name"] or "").lower() == "scitex-dev"
+    )
+    try:
+        import scitex_dev as _pkg
+
+        path = getattr(_pkg, "__file__", None)
+    except Exception:  # pragma: no cover - import of self cannot realistically fail
+        path = None
+    return {
+        "versions": versions,
+        "version": versions[0] if len(versions) == 1 else None,
+        "ambiguous": len(versions) > 1,
+        "module_path": path,
+    }
+
+
+def describe_corpus(prov: dict | None = None) -> list[str]:
+    """Render :func:`corpus_provenance` as verdict lines. NEVER empty.
+
+    Unconditional on purpose, and that is the whole point of it.
+    :func:`describe_skips` returns ``[]`` when nothing was skipped, so a
+    run that skips nothing says nothing about which corpus graded it — and
+    silence there is indistinguishable from a current, complete run. The
+    provenance line makes a stale corpus visibly stale instead of quietly
+    lenient.
+
+    The module PATH is included beside the version because the version is
+    metadata and metadata lies: a stale wheel, an orphaned ``.dist-info``
+    and a SIF baked months ago all report a version that outlived the code
+    beside them. The path says what actually got imported.
+    """
+    if prov is None:
+        prov = corpus_provenance()
+    where = prov.get("module_path") or "unknown path"
+    if prov.get("ambiguous"):
+        claimed = ", ".join(prov["versions"])
+        return [
+            f"RULE CORPUS: version AMBIGUOUS — {len(prov['versions'])} "
+            f"distributions claim scitex-dev in this environment "
+            f"({claimed}). This verdict cannot state which rule corpus "
+            f"produced it. Imported from: {where}",
+            "  Fix: pip install -U --force-reinstall scitex-dev, then "
+            "re-check the count — --force-reinstall removes only the one "
+            "installation pip currently resolves, so it does not sweep "
+            "duplicates in a single pass.",
+        ]
+    if not prov.get("versions"):
+        return [
+            "RULE CORPUS: version UNKNOWN — no installed distribution "
+            f"claims scitex-dev. Imported from: {where}",
+        ]
+    return [f"RULE CORPUS: scitex-dev {prov['version']} ({where})"]
 
 
 def health_snapshot() -> dict:

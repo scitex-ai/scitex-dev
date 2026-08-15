@@ -142,11 +142,16 @@ class MaskReport:
         skip rules. That is a real visibility bug, not a deferral.
 
         UNREADABLE lines defeat the claim outright. This property is what
-        downgrades a failing package to green in ``_audit_all.py``, and it
-        asserts "everything that failed was declared" — which is exactly
-        the sentence you cannot say about a line nobody could parse. The
-        line may have been an undeclared ERROR; masked and unreadable are
-        different answers, and only one of them licenses the downgrade.
+        licenses the downgrade of a failing package in ``_audit_all.py``,
+        and it asserts "everything that failed was declared" — which is
+        exactly the sentence you cannot say about a line nobody could
+        parse. The line may have been an undeclared ERROR; masked and
+        unreadable are different answers, and only one of them licenses
+        the downgrade.
+
+        It is asked PER AUDITOR, not of the whole run's concatenated
+        output — see ``_audit_verdict.failing_audits_are_fully_masked``
+        for why the attribution is load-bearing.
         """
         return bool(self.masked) and not self.unmasked and self.is_answerable()
 
@@ -212,6 +217,54 @@ def classify_output(text: str, skip_rules) -> MaskReport:
     )
 
 
+#: Prefix stamped on a finding that a declared skip rule has MASKED.
+#:
+#: Chosen to be the same width as the auditor's own `ERRO: ` / `WARN: `
+#: so the findings stay column-aligned when a run mixes both.
+MASKED_PREFIX = "MASK: "
+
+
+def label_masked_lines(text: str, report: MaskReport | None) -> str:
+    """Re-stamp the auditor's own output so MASKED findings say so.
+
+    The sub-auditor prints its findings with its own `ERRO: ` prefix and
+    that text is echoed verbatim. Masking is applied afterwards and shows
+    up only as a COUNT in the inventory, so a masked finding reaches the
+    reader still labelled ERRO — a line that says ERROR while provably
+    unable to fail the gate (only `unmasked` findings drive the exit
+    code; see `MaskReport.unmasked`).
+
+    Reported by scitex-storage 2026-08-11, who read a CI log showing
+    `[PS-221] 25 violation(s) masked` above a still-red run and could not
+    tell from the output whether masking was inert. It was not — the run
+    was red on 29 unrelated unmasked errors — but nothing in the text
+    distinguished "this is why you are red" from "this is inventory".
+
+    Loud is correct: the inventory must never be silent. Loud and
+    MISLABELLED is worse than either, because the reader then has to
+    reconcile an ERRO count that disagrees with the exit code.
+
+    Membership is an exact-line lookup against `report.masked`, which
+    `classify_output` already built — no re-parsing, so the label cannot
+    drift from the classification that drove the exit code. Lines the
+    report does not know are returned untouched.
+    """
+    if report is None or not text:
+        return text
+    masked_lines = {line for hits in report.masked.values() for line in hits}
+    if not masked_lines:
+        return text
+    out = []
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if stripped and stripped in masked_lines:
+            indent = raw[: len(raw) - len(raw.lstrip())]
+            out.append(f"{indent}{MASKED_PREFIX}{stripped}")
+        else:
+            out.append(raw)
+    return "\n".join(out)
+
+
 def render_inventory(report: MaskReport, distribution: str) -> list[str]:
     """Render the always-on masked inventory as a list of output lines.
 
@@ -249,6 +302,7 @@ def render_summary(
     declared: int,
     inspected: int,
     unreadable: int,
+    exit_code: int,
     unmasked_total: int | None = None,
 ) -> str:
     """One summary line stating BOTH numbers — AND its denominator.
@@ -258,18 +312,30 @@ def render_summary(
     Warning-level findings are reported separately from errors rather
     than folded into the error count — only errors drive the exit code.
 
-    ``inspected`` and ``unreadable`` are REQUIRED and keyword-only, with no
-    defaults, on purpose. Every other parameter here is a NUMERATOR; before
-    this change the function took four counts and still could not say what
-    it had looked at, so "0 unmasked error(s)" read identically whether the
-    classifier had read two hundred lines or none. Making them required
-    turns the omission into a TypeError at the call site — the only form of
-    this rule that survives an author who is tired, which is precisely when
-    a denominator gets dropped.
+    ``inspected``, ``unreadable`` and ``exit_code`` are REQUIRED and
+    keyword-only, with no defaults, on purpose. Every other parameter here
+    is a NUMERATOR; before this change the function took four counts and
+    still could not say what it had looked at, so "0 unmasked error(s)" read
+    identically whether the classifier had read two hundred lines or none.
+    Making them required turns the omission into a TypeError at the call
+    site — the only form of this rule that survives an author who is tired,
+    which is precisely when a denominator gets dropped.
 
     ``unreadable`` is the three-valued part: lines that claimed to be
     findings and could not be classified are neither errors nor clean. They
     are reported explicitly rather than collapsing into the zero.
+
+    ``exit_code`` is here because THIS LINE IS A TALLY AND READS AS A
+    VERDICT. Sub-auditors disagree, deliberately, about what fails a run:
+    ``audit-project`` takes a ``--severity`` floor documented as "W/I
+    findings never fail CI on their own", while ``audit-skills`` has no
+    floor at all and fails on ANY finding. So a warn-tier ``SK-302`` sets
+    the exit code while this line says zero errors — measured on 0.47.0
+    with ZERO skip-rules declared (scitex-dev#593), which is how a reader
+    ends up hunting for an error that genuinely does not exist. The tally
+    is not wrong; it just is not the verdict, and now it says so instead of
+    leaving the reader to infer it. The exit-code SEMANTICS are untouched —
+    the asymmetry is deliberate on both sides and stays.
     """
     line = f"summary: {distribution}: {unmasked_errors} unmasked error(s)"
     if unmasked_total is not None and unmasked_total > unmasked_errors:
@@ -280,6 +346,17 @@ def render_summary(
         line += (
             f", {unreadable} UNREADABLE (claimed to be findings, could not "
             f"be classified — NOT counted as clean)"
+        )
+    if exit_code and not unmasked_errors:
+        # The one shape where the numbers alone mislead: red run, zero
+        # errors. Stated only here, because when the error count is
+        # non-zero this line already explains the exit, and a caveat
+        # printed on every run is a caveat nobody reads.
+        line += (
+            f" — but this run EXITED {exit_code}: the count above is ERRORS "
+            "only, and audit-skills has no severity floor (it fails on ANY "
+            "finding). This line is a TALLY, not the verdict — read the "
+            "findings above it."
         )
     return line
 

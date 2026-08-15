@@ -358,9 +358,12 @@ def check_ps224_runner_destinations(
         if floor_destinations is None
         else list(floor_destinations)
     )
-    destinations = _union_destinations(
-        floor, list_runner_destinations(hosts_path=hosts_path)
+    # Floor ∪ user-state is composed HERE, so the reader must NOT union the
+    # shipped seed in as well — that would make the gap branch unreachable.
+    user_state = list_runner_destinations(
+        hosts_path=hosts_path, include_packaged_floor=False
     )
+    destinations = _union_destinations(floor, user_state)
     if not destinations:
         # Only reachable when the shipped seed AND the user-state registry
         # BOTH carry no destinations — a code regression, not a deployment

@@ -322,6 +322,16 @@ from .._check_extras_all_closure import (  # noqa: E402
 for _c, _sec, _msg, _sev, _slug in _ALL_CLOSURE_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
+# PS-225 — extra NAMES restricted to {all, dev, docs} (co-located rule,
+# merged on the same terms as ALL_CLOSURE_RULES). Severity W lives in the
+# tuple for the rollout; see the module docstring and ADR-0005.
+from .._check_extras_allowlist import (  # noqa: E402
+    EXTRAS_ALLOWLIST_RULES as _EXTRAS_ALLOWLIST_RULES,
+)
+
+for _c, _sec, _msg, _sev, _slug in _EXTRAS_ALLOWLIST_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
 # PS-222 — `.scitex/<pkg-short>/` config-layout convention (co-located rule,
 # merged on the same terms as ALL_CLOSURE_RULES / PRINT_FORBIDDEN_RULES).
 # Severity W lives in the tuple, NOT in `_SEVERITY_OVERRIDES` — see the note
@@ -354,6 +364,33 @@ from .._check_runner_destinations import (  # noqa: E402
 )
 
 for _c, _sec, _msg, _sev, _slug in _RUNNER_DESTINATION_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
+# PS-226..PS-229 — the fleet-wide JobSpec declaration convention (co-located
+# rule set, merged on the same terms as RUNNER_DESTINATION_RULES). Severities
+# live in the tuples, NOT in `_SEVERITY_OVERRIDES` — see the note beside
+# `_patch`: an override for a co-located rule is a silent no-op, and PS-226's
+# whole purpose is to FAIL, so its E must not be routed through a table that
+# would drop it.
+from .._check_job_naming import JOB_NAMING_RULES as _JOB_NAMING_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in _JOB_NAMING_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
+# PS-230 — retired role vocabulary in package PROSE (co-located rule set,
+# merged on the same terms as JOB_NAMING_RULES). PS-226..229 above make job
+# NAMES and KINDS mechanical; PS-230 closes the other half of the same
+# operator decision — the WORDS — which the naming skill itself flagged as
+# "convention until an auditor rule exists". Severity W lives in the tuple,
+# NOT in `_SEVERITY_OVERRIDES`: an override for a co-located rule is a
+# silent no-op (see the note beside `_patch`).
+from .._check_naming_vocabulary import (  # noqa: E402
+    NAMING_VOCABULARY_RULES as _NAMING_VOCABULARY_RULES,
+)
+
+for _c, _sec, _msg, _sev, _slug in _NAMING_VOCABULARY_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
 

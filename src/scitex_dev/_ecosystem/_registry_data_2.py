@@ -264,14 +264,19 @@ ECOSYSTEM_PART_2 = {
         "import_name": "scitex_tex",
         "category": "library",
     },
-    "scitex-todo": {
-        "local_path": "~/proj/scitex-todo",
-        "pypi_name": "scitex-todo",
-        # Repo renamed + transferred: ywatanabe1989/scitex-todo ->
-        # scitex-ai/scitex-cards (gh api full_name, verified
-        # 2026-07-21). PyPI name and import name are unchanged.
+    # Keyed on the CURRENT distribution. The repo was renamed
+    # ywatanabe1989/scitex-todo -> scitex-ai/scitex-cards (operator
+    # directive 2026-07-15/16); ``scitex-todo`` remains PUBLISHED as a
+    # legacy alias and ``scitex_todo`` ships inside this distribution as
+    # a deprecated re-export shim, so the old names are alive, not dead.
+    # Measured 2026-08-11: PyPI scitex-cards 0.35.1 and scitex-todo
+    # 0.35.1 uploaded two seconds apart — they release in lockstep.
+    # The entry tracks the name the package calls itself.
+    "scitex-cards": {
+        "local_path": "~/proj/scitex-cards",
+        "pypi_name": "scitex-cards",
         "github_repo": "scitex-ai/scitex-cards",
-        "import_name": "scitex_todo",
+        "import_name": "scitex_cards",
         "category": "library",
     },
     "scitex-web": {
@@ -279,6 +284,20 @@ ECOSYSTEM_PART_2 = {
         "pypi_name": "scitex-web",
         "github_repo": "scitex-ai/scitex-web",
         "import_name": "scitex_web",
+        "category": "library",
+    },
+    # Added 2026-08-11 on the operator's ruling. This is the package
+    # from the finding: it was OUTSIDE the registry yet federated into
+    # ``scitex_dev.system_deps``, its ``fclones`` declaration reached
+    # ``apt-get install``, and the sac :scitex layer bake on Spartan
+    # detonated. Nothing that enumerated the fleet from ECOSYSTEM could
+    # have predicted that, because entry-point discovery reads the
+    # INSTALLED ENVIRONMENT, not this dict.
+    "scitex-storage": {
+        "local_path": "~/proj/scitex-storage",
+        "pypi_name": "scitex-storage",
+        "github_repo": "scitex-ai/scitex-storage",
+        "import_name": "scitex_storage",
         "category": "library",
     },
 }

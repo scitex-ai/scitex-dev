@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scitex.ai/spec/status/1/status-code.schema.json",
+  "title": "SciTeX StatusCode, spec_version 1",
+  "description": "Three fields. `kind` is a discriminated-union tag saying HOW TO READ `code`; `code` is the NATIVE code within that kind, preserved verbatim with no translation; `message` is a HINT that declares what the sender is doing and hands the receiver the means to verify and to ask. NOTE: this schema is a FLOOR. Three rules cannot be expressed in JSON Schema and are enforced by the validator instead: (1) `code` must be in the declared kind's enumerated domain, sourced from kinds.yaml; (2) `message` must contain no inferred-cause marker (rule M1); (3) for codes marked requires_probe (http 102, http 202) `message` must name a runnable probe (rule M2). A document that passes this schema may still be refused at construction. See status-codes.md sec.7.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "code", "message"],
+
+  "properties": {
+    "kind": {
+      "description": "Which status system `code` is borrowed from. NOT a SciTeX vocabulary — a tag saying which dictionary to open. Each call boundary declares the kind it borrows; see boundaries.yaml.",
+      "enum": ["http", "process", "grpc", "dns", "errno", "scitex"]
+    },
+
+    "code": {
+      "description": "The native code, verbatim. `http`/`process` carry an integer; `grpc`/`dns`/`errno`/`scitex` carry a string. errno carries the NAME, never the number, because errno numbers are platform-specific and would change meaning in transit.",
+      "type": ["integer", "string"]
+    },
+
+    "message": {
+      "description": "A hint, not an assertion. Answers: what to DO, what the sender IS doing, and HOW TO ASK. Verification belongs to the receiver and this field hands over the instrument.",
+      "type": "string",
+      "minLength": 1
+    },
+
+    "ok": {
+      "not": {},
+      "description": "FORBIDDEN. Derive it (`kind == 'http' and 200 <= code < 300`, `kind == 'process' and code == 0`, ...). Two fields that can disagree will eventually disagree, and a reader then has to guess which one to trust."
+    },
+
+    "retryable": {
+      "not": {},
+      "description": "FORBIDDEN. Readable from the code within the declared kind (503 yes, 403 no), and `message` carries the useful version ('retry in 10s, or poll `...`'), which is strictly more actionable than a boolean."
+    }
+  },
+
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"enum": ["http", "process"]}}, "required": ["kind"]},
+      "then": {"properties": {"code": {"type": "integer"}}},
+      "else": {"properties": {"code": {"type": "string", "minLength": 1}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "http"}}, "required": ["kind"]},
+      "then": {"properties": {"code": {"minimum": 100, "maximum": 599}}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "process"}}, "required": ["kind"]},
+      "then": {"properties": {"code": {"minimum": 0, "maximum": 255}}}
+    }
+  ]
+}

@@ -113,12 +113,51 @@ def _canon(spec: str) -> str | None:
         return None
 
 
+#: TOOLING extras, exempt from `[all]`-closure as a CLASS.
+#:
+#: This is not a new exception — it is a clause of the operator directive
+#: PS-221 implements, which this rule dropped. PS-217 quotes the directive
+#: in full in its own finding text:
+#:
+#:     "extras should be ALL-OR-NOTHING (one `[all]` extra, no fine-grained
+#:      per-feature menu; `dev`/`docs` extras are exempt from the
+#:      all-or-nothing shape but still must not be empty)"
+#:
+#: So one rule stated the carve-out while the rule ENFORCING the shape
+#: ignored it, and nothing cross-checked the two.
+#:
+#: The reductio is the remedy PS-221 itself prescribes. Closing `dev`/`docs`
+#: under `all` means `all = ["mypkg[dev,docs]"]`, which puts pytest,
+#: pytest-cov and sphinx into every `pip install mypkg[all]`. A user typing
+#: `[all]` is asking for all FEATURES, not for the maintainer's toolchain.
+#: A rule whose own prescribed fix produces an outcome nobody wants is
+#: mis-scoped, not merely inconvenient.
+#:
+#: MEASURED fleet-wide 2026-08-11, before changing anything: of 113 packages
+#: carrying extras plus an `[all]` group, 49 had PS-221 findings — 426 of
+#: those 449 findings came from `dev`/`docs` and only 23 from real feature
+#: extras. The rule was 95% noise, at severity `E`, gating the umbrella
+#: release. Reported by scitex-storage, whose own package showed 24 of 25.
+#:
+#: `dev`/`docs` still must not be EMPTY — that is PS-217's job and it is
+#: unaffected here. This exempts them from CLOSURE only.
+_TOOLING_EXTRAS = frozenset({"dev", "docs"})
+
+
 def _public_groups(od: dict) -> dict[str, list]:
-    """Public (non-underscore, non-`all`) extra groups with list values."""
+    """Public FEATURE extra groups with list values.
+
+    Excludes `_`-prefixed names, `all` itself, and the `dev`/`docs` tooling
+    class (see :data:`_TOOLING_EXTRAS` for why the last of those is a
+    directive clause rather than a new exception).
+    """
     return {
         name: grp
         for name, grp in od.items()
-        if isinstance(grp, list) and not name.startswith("_") and name != "all"
+        if isinstance(grp, list)
+        and not name.startswith("_")
+        and name != "all"
+        and name not in _TOOLING_EXTRAS
     }
 
 
@@ -154,12 +193,70 @@ def _all_closure_names(
     return names
 
 
+#: Sentinel for the whole-file arm (no `all` group at all). Matches PS-222's
+#: `_NO_LINE`; the exemption config uses `line: 0` for it.
+_NO_LINE = 0
+
+
+def _requirement_line(repo: Path, extra: str, req: str) -> int:
+    """1-based line of `req` inside the `[extra]` list in pyproject.toml.
+
+    WHY A LINE AT ALL, when every PS-221 violation is "in pyproject.toml":
+    because `Config.exemption_for` matches on `(rule, path, line)` EXACTLY,
+    so a whole-file exemption at `line: 0` would silence EVERY PS-221
+    finding in the package at once. That is rule-granularity wearing a
+    per-site costume — the same blanket shape `skip_rules` already offers,
+    and precisely what a per-site mechanism exists to avoid.
+
+    Reported 2026-08-10 by scitex-storage, who declined to reach for the
+    rule-wide skip because it would have masked scitex-io's PRE-EXISTING
+    PS-221 debt behind their own deliberate licence decision. They were
+    right, and this function is what makes the narrow option exist.
+
+    Returns `_NO_LINE` when the requirement cannot be located, which fails
+    CLOSED: an exemption written against 0 will not match a real
+    requirement, so a site we cannot pin stays visible rather than being
+    silenced by a guess.
+    """
+    try:
+        raw = (repo / "pyproject.toml").read_text(encoding="utf-8")
+    except OSError:  # pragma: no cover - unreadable file already handled
+        return _NO_LINE
+    in_block = False
+    header = f"{extra} = ["
+    for idx, text in enumerate(raw.splitlines(), start=1):
+        stripped = text.strip()
+        if not in_block:
+            if stripped.startswith(header) or stripped == f"{extra} = [":
+                in_block = True
+                # single-line form: `extra = ["a", "b"]`
+                if req in text:
+                    return idx
+            continue
+        if stripped.startswith("]"):
+            return _NO_LINE
+        if req in text:
+            return idx
+    return _NO_LINE
+
+
 def check_ps221_extras_all_closure(
     repo: Path,
     violation_cls: type,
     out: list,
 ) -> None:
     """Append PS-221 violations for public extras not closed under `[all]`.
+
+    Honours `audit.exemptions` per site, like PS-220/222 already do. Until
+    2026-08-10 this rule's own remediation text told readers to write an
+    `audit: exemptions: PS-221:` stanza that the rule NEVER CONSULTED —
+    the mechanism was implemented, documented, and wired into four other
+    checks, and simply absent here. scitex-storage wrote the documented
+    config, watched it silence nothing, and reported it.
+
+    That is remediation advice which does not remediate: it costs the
+    reader more than silence would, because they act on it and then have
+    to discover by experiment that the documented path is inert.
 
     Parameters
     ----------
@@ -170,6 +267,37 @@ def check_ps221_extras_all_closure(
     out : list
         Violations are appended in place (project-auditor convention).
     """
+    config = None
+    try:
+        from .._config import load_config
+
+        config = load_config(repo)
+    except Exception:  # pragma: no cover - config is optional
+        config = None
+
+    if config is not None:
+        from ._exemption_config_errors import report_exemption_config_errors
+
+        # A REJECTED exemption (blank reason) must be reported, not swallowed.
+        # Otherwise an author writes one, sees the finding persist, and has no
+        # way to tell "my entry was refused" from "my entry does not match" —
+        # which is the failure this whole card is about, one level down.
+        report_exemption_config_errors(
+            repo,
+            config,
+            "PS-221",
+            lambda where, detail: out.append(
+                violation_cls("PS-221", where, detail)
+            ),
+        )
+
+    exemption_for = getattr(config, "exemption_for", None)
+
+    def _exempt(line: int) -> bool:
+        if exemption_for is None:
+            return False
+        return bool(exemption_for("PS-221", "pyproject.toml", line))
+
     meta = _parse_pyproject(repo)
     if meta is None:
         return
@@ -192,6 +320,8 @@ def check_ps221_extras_all_closure(
 
     all_group = od.get("all")
     if not isinstance(all_group, list):
+        if _exempt(_NO_LINE):
+            return
         out.append(
             violation_cls(
                 "PS-221",
@@ -225,6 +355,10 @@ def check_ps221_extras_all_closure(
             if proj_name is not None and canon == proj_name:
                 continue
             if canon not in all_names:
+                # Per-SITE: pinned to the requirement's own line, so an
+                # exemption covers THIS requirement and no other.
+                if _exempt(_requirement_line(repo, name, req)):
+                    continue
                 out.append(
                     violation_cls(
                         "PS-221",

@@ -17,6 +17,7 @@ guard that used to be inlined into each line are OWNED BY THE VERB — see
 ``scitex_dev.jobs._logsink`` (the shared, package-generic helper) and the
 ``cron exec`` dispatcher in ``run.py`` that applies it. Operator
 directive 2026-07-19: 「mkdir とか redirect は cron verb 側が持つべきでは？」
+— shouldn't the mkdir and the redirect be owned by the cron verb?
 
 WHERE THE LOGS GO
 -----------------
@@ -44,7 +45,8 @@ reduce to ``scitex-dev cron exec <name>`` in the crontab.
 Generated shell text uses ``$HOME``, never ``~``: ``~`` is expanded only
 by an interactive shell in command position, and cron's ``/bin/sh -c``
 context does not reliably expand it (operator directive 2026-07-19:
-「~ が解決されないならば $HOME を使って」).
+「~ が解決されないならば $HOME を使って」 — if ``~`` is not resolved,
+use ``$HOME``).
 """
 
 from __future__ import annotations
@@ -129,6 +131,24 @@ def _worktree_gc_command() -> str:
     place), so the cleanup loop's load will fall over time.
     """
     return exec_command("worktree-gc")
+
+
+def _branch_gc_command() -> str:
+    """The shell line installed for the ``branch-gc`` cron job.
+
+    Schedule rationale: daily at 04:00, off the crowded 0-minute tick. A
+    sweep is cheap (one ``for-each-ref`` plus a bounded set of per-branch
+    git reads), and the default age floor is 30 days with a hard floor of
+    14 — so nothing is gained by running it more often than daily and a
+    slower cadence would only widen the window in which a landed branch
+    sits around.
+
+    The body is ``_branch_gc.run_once``. Installing this job does NOT arm
+    it: every repo stays DEFAULT OFF until ``cleanup.branches.enabled:
+    true`` appears in both ``<repo>/.scitex/dev/config.yaml`` and
+    ``$HOME/.scitex/dev/config.yaml``.
+    """
+    return exec_command("branch-gc")
 
 
 def _quota_keepalive_command() -> str:

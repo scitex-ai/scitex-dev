@@ -118,6 +118,13 @@ def run_checks(
     from ._check_extras_all_closure import check_ps221_extras_all_closure
 
     check_ps221_extras_all_closure(repo_root, Violation, violations)
+    # PS-225: extra NAMES restricted to {all, dev, docs}. PS-221 above makes
+    # `[all]` complete; PS-225 removes the per-feature menu that made a
+    # partial pin possible in the first place. Operator ruling 2026-08-02,
+    # after `scitex-cards[mcp]` in container defs cost the fleet its board.
+    from ._check_extras_allowlist import check_ps225_extras_allowlist
+
+    check_ps225_extras_allowlist(repo_root, Violation, violations)
     # PS-222: `.scitex/<pkg-short>/` config-layout convention. Everything
     # directly under a package's local-state root is TRACKED except
     # `runtime/`, the one gitignored subdir; the primary config is always
@@ -190,6 +197,23 @@ def run_checks(
     from ._check_secret_env_prefix import check_ps168_secret_env_prefix
 
     check_ps168_secret_env_prefix(repo_root, distribution, Violation, violations)
+    # PS-226..PS-229: the fleet-wide JobSpec declaration convention. A job
+    # name is the systemd unit FILENAME, derived verbatim, so a dotted name
+    # silently installs a second unit beside the hand-written one it was
+    # meant to be (`sac.listen.service` vs the live `sac-listen.service`).
+    # Static AST scan of src/<pkg>/**.py; the leaf is never imported.
+    from ._check_job_naming import check_job_naming
+
+    check_job_naming(repo_root, distribution, Violation, violations)
+    # PS-230: retired role vocabulary in package PROSE. The same operator
+    # decision as PS-226..229, applied to the words instead of the job ids —
+    # credentials `primary/replica`, roles `controller/worker`, DB replication
+    # `node/origin`. Scope is docstrings, comments and `src/**/*.md` only;
+    # code is never graded, because a sweep cannot tell a live contract
+    # (`master_host`, `--master`) from a stale word. W on landing.
+    from ._check_naming_vocabulary import check_ps230_naming_vocabulary
+
+    check_ps230_naming_vocabulary(repo_root, Violation, violations)
     from ._check_workflow_presence import check_ps165_workflow_presence
     from ._check_readme_badge_labels import check_ps166_readme_badge_labels
 

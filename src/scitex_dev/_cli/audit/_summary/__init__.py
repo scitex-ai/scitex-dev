@@ -316,8 +316,11 @@ def audit_cli(
         import click
 
         click.echo(
-            "scitex-dev[cli-audit] is not installed or data is missing. "
-            "Install with: pip install 'scitex-dev[cli-audit]'",
+            "audit-summary data is missing. Its dependencies are part of "
+            "the BASE scitex-dev install, so this is a broken or partial "
+            "environment rather than a missing feature. Reinstall into "
+            "this interpreter: "
+            "`python -m pip install --force-reinstall scitex-dev`",
             err=True,
         )
         return 2

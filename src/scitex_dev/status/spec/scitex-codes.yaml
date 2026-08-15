@@ -1,0 +1,72 @@
+# kind="scitex" — codes for conditions with NO native home anywhere.
+#
+# THIS FILE IS THE SOURCE OF TRUTH and it is a CLOSED enumeration. The
+# validator refuses a scitex code that is not listed here, at construction.
+#
+# ADMISSION TEST — all four must hold, and the entry must record the answers:
+#   1. No `http`, `grpc`, `dns`, `errno` or `process` code expresses it.
+#      Borrowing is always preferred: a borrowed word is already understood,
+#      already documented, and does not have to be agreed with anyone.
+#   2. The condition is one a RECEIVER must act on differently. If the reader
+#      would do the same thing under a borrowed code, use the borrowed code.
+#   3. It is not a restatement of `message`. Free text carries specifics;
+#      a code exists to be branched on.
+#   4. It is not a SciTeX rewording of a native code. `scitex/UNAVAILABLE`
+#      is `http/503` with extra steps, and `scitex/DEADLINE_EXCEEDED` is
+#      `http/504` or `grpc/DEADLINE_EXCEEDED`. Both are refused.
+#
+# THIS LIST STAYING SHORT IS THE DESIGN WORKING. A long one means the
+# canonical SciTeX vocabulary that ADR-0007 rejected has grown back under a
+# different name. Adding a member requires an ADR amendment.
+#
+# Codes are APPEND-ONLY. Retiring one means marking it `deprecated:` with a
+# successor, never removing it — logs outlive code.
+
+spec_version: "1"
+
+codes:
+
+  - code: NOT_RESOLVABLE
+    means: >-
+      The thing EXISTS and is REACHABLE, but the name or path used does not
+      resolve to it. The fix is to the lookup, not to the thing.
+    admission:
+      no_native_home: >-
+        errno/ENOENT says the path does not exist. dns/NXDOMAIN says the name
+        does not exist. process/127 is the shell reporting its own lookup
+        failure. None of them can say "it is installed and working, and this
+        PATH does not see it" — the thing is present and the resolver is
+        wrong, and no native vocabulary has that word.
+      different_action: >-
+        NOT_RESOLVABLE sends the reader to fix an environment. ENOENT and
+        NXDOMAIN send the reader to install or create something. Confusing
+        them costs a reinstall of software that was never missing.
+    measured: >-
+      2026-08-11: a report stated "compute-04 has no sac CLI" on the evidence
+      of a `command -v` miss plus three guessed paths. sac was installed at
+      ~/.env-sac/bin/sac and working the entire time; the non-interactive
+      shell's PATH did not include it.
+    rule: >-
+      A negative result from a SINGLE resolver licenses NOT_RESOLVABLE, never
+      an absence claim. `command -v X` returning non-zero is NOT_RESOLVABLE.
+      To report absence you must have looked where the thing would be.
+
+  - code: AGENT_UNAVAILABLE
+    means: >-
+      A SciTeX agent is registered but is not running or not answering, at a
+      boundary that is not an HTTP request.
+    admission:
+      no_native_home: >-
+        http/503 is the right word when there IS an HTTP request to answer.
+        This is the case where there is not one — a supervisor consulting a
+        registry, an A2A peer with no listening sidecar, a scheduler deciding
+        where to place work. There is no request, so there is no response
+        code to borrow.
+      different_action: >-
+        The reader's move is to start or re-place the agent, not to retry a
+        request that was never made.
+    note: >-
+      If you are answering an HTTP request, use http/503 and put the wait in
+      `message`. This code is for the no-request case only.
+
+# EOF

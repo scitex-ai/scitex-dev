@@ -455,13 +455,13 @@ def test_resolve_auto_seeds_writes_file_to_disk(tmp_path):
     assert target.is_file()
 
 
-def test_list_hosts_auto_seeds_default_six_hosts(tmp_path):
+def test_list_hosts_auto_seeds_the_whole_declared_fleet(tmp_path):
     # Arrange
     target = tmp_path / "hosts.yaml"
     # Act
     records = list_hosts(hosts_path=target)
     # Assert
-    assert len(records) == 6
+    assert len(records) == 10
 
 
 def test_default_seed_includes_operator_known_hosts(tmp_path):
@@ -473,10 +473,37 @@ def test_default_seed_includes_operator_known_hosts(tmp_path):
     assert {r.name for r in records} == {
         "ywata-note-win",
         "spartan",
-        "nas",
-        "nas1",
-        "nas2",
+        # The compute fleet. `scitex-compute-04` was registered alone on
+        # 2026-08-12; its siblings followed on 2026-08-15, after a morning in
+        # which they were the ONLY runners still online and this registry did
+        # not know they existed.
+        "scitex-compute-01",
+        "scitex-compute-02",
+        "scitex-compute-03",
+        "scitex-compute-04",
+        "scitex-nas-01",
+        "scitex-nas-02",
+        "scitex-nas-03",
         "mba",
+    }
+
+
+def test_seeded_storage_hosts_still_resolve_under_their_old_names(tmp_path):
+    # Arrange — the NAS hosts were re-keyed on 2026-08-07 and the seed
+    # carried the retired routes for four days (scitex-storage, 2026-08-11).
+    # Correcting the route must not orphan callers still passing the old
+    # name, so each retired alias resolves to its recorded successor.
+    target = tmp_path / "hosts.yaml"
+    # Act
+    resolved = {
+        old: resolve(old, hosts_path=target).name
+        for old in ("nas", "nas1", "nas2")
+    }
+    # Assert
+    assert resolved == {
+        "nas": "scitex-nas-03",
+        "nas1": "scitex-nas-01",
+        "nas2": "scitex-nas-02",
     }
 
 

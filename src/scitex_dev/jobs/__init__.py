@@ -47,7 +47,7 @@ Contract for downstream packages
                # A long-running dashboard exposed on a fixed port —
                # systemd brings it up on boot and keeps it alive.
                JobSpec(
-                   name="scitex-todo.dashboard",
+                   name="scitex-todo-dashboard",
                    kind="service",
                    schedule="",
                    command="scitex-todo serve --port 8051",
@@ -58,7 +58,7 @@ Contract for downstream packages
                ),
                # A periodic systemd timer — refresh OAuth tokens.
                JobSpec(
-                   name="sac.accounts-refresh",
+                   name="scitex-agent-container-accounts-refresh",
                    kind="timer",
                    schedule="0 */4 * * *",
                    command="sac accounts refresh --all",
@@ -74,17 +74,34 @@ Contract for downstream packages
        [project.entry-points."scitex_dev.jobs"]
        my-package = "my_package._jobs_plugin:provide_jobs"
 
-``scitex-dev ecosystem systemd`` / ``ecosystem cron`` / ``ecosystem up``
-then surface the job automatically.
+``scitex-dev ecosystem service`` / ``ecosystem timer`` / ``ecosystem cron``
+/ ``ecosystem up`` then surface the job automatically. There is ONE CLI
+group per job KIND, not per delivery mechanism; ``ecosystem systemd`` is a
+deprecated alias kept only until 2026-10.
 
 Naming
 ------
-``JobSpec.name`` is the package-prefixed unique id, e.g.
-``"sac.accounts-refresh"``. The prefix keeps names globally unique and
-makes the owning package obvious in ``list`` output. scitex-dev's own
-built-in jobs keep their historical bare slugs (``ci-watch``,
-``quota-keepalive``) for backward compatibility with the existing
-``scitex-dev cron`` CLI.
+``JobSpec.name`` is the canonical id: ``scitex-<pkg>-<name>``, **hyphens
+only**. No dots, no underscores, no uppercase — see
+``_skills/scitex-dev/25_naming-conventions.md`` (operator-decided
+2026-08-11) and the auditor rules PS-226 (shape, **E**) and PS-227
+(package-qualified prefix, **W**) that enforce it.
+
+A dot is not a style preference here: ``jobs/_systemd.py::
+systemd_unit_name`` derives the unit FILENAME from this string verbatim,
+so ``sac.listen`` materialises ``sac.listen.service`` and silently fails
+to adopt the hand-written ``sac-listen.service`` it was meant to be —
+installing a second supervisor instead of reusing the first.
+
+Only the DECLARATION carries the full name. A package CLI accepts the
+local short name from the user and prefixes ``scitex-<pkg>-`` itself, so
+an operator still types ``accounts-refresh``, not the full id.
+
+scitex-dev's own built-in jobs keep their historical bare slugs
+(``ci-watch``, ``quota-keepalive``) for backward compatibility with the
+existing ``scitex-dev cron`` CLI; renaming them is a UNIT MIGRATION
+(stop-old → remove-old → install-new → verify-exactly-one), never an
+in-place edit.
 """
 
 from __future__ import annotations
@@ -99,13 +116,13 @@ _logger = logging.getLogger(__name__)
 #: Entry-point group downstream packages register their job providers in.
 ENTRY_POINT_GROUP = "scitex_dev.jobs"
 
-#: Valid ``JobSpec.kind`` values. See module docstring for semantics.
-ALLOWED_KINDS: frozenset[str] = frozenset({"service", "timer", "cron"})
-
-#: Valid ``JobSpec.restart_policy`` values. Used by ``kind="service"``
-#: only; ignored (and required to be ``"no"``) by ``timer`` / ``cron``.
-ALLOWED_RESTART_POLICIES: frozenset[str] = frozenset(
-    {"no", "on-failure", "on-abnormal", "on-abort", "on-watchdog", "always"}
+from ._kinds import (  # noqa: E402 - re-exported for every existing caller
+    ACCEPTED_KINDS,
+    ALLOWED_KINDS,
+    ALLOWED_RESTART_POLICIES,
+    INTENT_KINDS,
+    INTENT_TO_KIND,
+    canonical_kind,
 )
 
 
@@ -196,10 +213,26 @@ class JobSpec:
     venv: str | None = None
 
     def __post_init__(self) -> None:
+        # Normalise the INTENT spellings BEFORE validating, so the rest of
+        # this class — and every consumer downstream — only ever sees the
+        # stored vocabulary. Frozen dataclass, hence object.__setattr__.
+        canonical = canonical_kind(self.kind, self.schedule)
+        if canonical != self.kind:
+            object.__setattr__(self, "kind", canonical)
         # Run the validator at construction time so a malformed leaf
         # crashes EARLY — never let a silently-broken unit reach the
         # systemd installer (or worse, a running host).
         self.validate()
+
+    @property
+    def intent(self) -> str:
+        """What this job DOES, independent of scheduler: daemon | periodic.
+
+        DERIVED from ``kind``, never stored beside it. New code can read the
+        intent-level vocabulary without any provider migrating, and there is
+        no second field that could drift out of agreement with the first.
+        """
+        return "daemon" if self.kind == "service" else "periodic"
 
     # ----------------------------------------------------------------- #
     # Validation                                                        #
@@ -224,7 +257,10 @@ class JobSpec:
         if self.kind not in ALLOWED_KINDS:
             raise ValueError(
                 f"JobSpec({self.name!r}).kind={self.kind!r} not in "
-                f"{sorted(ALLOWED_KINDS)}"
+                f"{sorted(ACCEPTED_KINDS)}. The intent spellings "
+                f"{sorted(INTENT_KINDS)} are accepted too and normalise to "
+                f"{INTENT_TO_KIND} — 'periodic' picks cron when 'schedule' "
+                f"is set and a systemd timer when it is not."
             )
         if self.restart_policy not in ALLOWED_RESTART_POLICIES:
             raise ValueError(
@@ -446,10 +482,14 @@ def jobs_of_kind(kind: str, **kwargs) -> list[JobSpec]:
 
 
 __all__ = [
-    "JobSpec",
-    "ENTRY_POINT_GROUP",
+    "ACCEPTED_KINDS",
     "ALLOWED_KINDS",
     "ALLOWED_RESTART_POLICIES",
+    "ENTRY_POINT_GROUP",
+    "INTENT_KINDS",
+    "INTENT_TO_KIND",
+    "JobSpec",
+    "canonical_kind",
     "discover_jobs",
     "jobs_of_kind",
 ]

@@ -324,33 +324,68 @@ def create_default_hosts_yaml(hosts_path: str | Path | None = None) -> Path:
 def list_hosts(*, hosts_path: str | Path | None = None) -> list[HostRecord]:
     """Return every registered host, sorted by name.
 
+    Warns (never raises) for any row routing through a RETIRED ssh alias —
+    see :mod:`scitex_dev.hosts._retired`. A registry frozen by the seeder
+    before those names died still serves them, and only a runtime check
+    reaches such a file.
+
     Parameters
     ----------
     hosts_path : str | Path | None
         Explicit override for the ``hosts.yaml`` location (see
         :func:`get_hosts_yaml_path` for the full precedence chain).
     """
+    from ._retired import warn_if_retired
+
     records, _path = _load_registry(hosts_path)
-    return [records[name] for name in sorted(records)]
+    out = [records[name] for name in sorted(records)]
+    for record in out:
+        warn_if_retired(record.name, record.ssh_alias)
+    return out
 
 
 def list_runner_destinations(
-    *, hosts_path: str | Path | None = None
+    *, hosts_path: str | Path | None = None, include_packaged_floor: bool = True
 ) -> list[tuple[str, frozenset[str]]]:
     """Return every LEGAL CI runner destination the registry knows.
 
     One ``(host_name, label_set)`` pair per registered runner, sorted by
     host name. Hosts with no ``runner_labels`` contribute nothing.
 
-    An EMPTY result means the registry records no runner destinations at
-    all — the registry gap, not a fleet of illegal workflows. Callers
-    (notably the PS-224 audit rule) must distinguish the two: reporting
-    every workflow as illegal because the registry was never populated
-    would be a fleet-wide red for the wrong reason.
+    THE PACKAGED SEED IS A FLOOR, UNIONED IN BY DEFAULT. The user-state
+    ``hosts.yaml`` is mutable per host and edited live, so it goes stale
+    without any signal: this machine's copy was written 2026-08-05 and
+    still recorded only Spartan on 2026-08-15, by which time the whole
+    compute fleet was serving CI. A local file that is merely OLD must not
+    be able to un-declare a runner the package knows exists, so the shipped
+    seed is added rather than consulted as a fallback.
+
+    That this was a REAL divergence and not a hypothetical one is the
+    reason for the default: on 2026-08-15 this function answered ``None``
+    for a destination four online machines were serving, while the PS-224
+    audit rule — which already unioned the floor itself — answered
+    correctly. ONE QUESTION MUST NOT HAVE TWO ANSWERS DEPENDING ON WHICH
+    ENTRY POINT A CALLER HAPPENS TO REACH FOR.
+
+    Pass ``include_packaged_floor=False`` for the narrower question "what
+    does THIS FILE declare" — auditing the file itself, or reporting drift
+    between it and the seed. It is the wrong default for "can this job be
+    picked up", which is what every other caller is asking.
+
+    An EMPTY result means NO runner destinations are known from either
+    source — the registry gap, not a fleet of illegal workflows. Callers
+    must distinguish the two: reporting every workflow as illegal because
+    the registry was never populated would be a fleet-wide red for the
+    wrong reason.
     """
     out: list[tuple[str, frozenset[str]]] = []
     for host in list_hosts(hosts_path=hosts_path):
         out.extend((host.name, labels) for labels in host.runner_labels)
+    if include_packaged_floor:
+        seen = set(out)
+        out.extend(
+            pair for pair in packaged_default_runner_destinations() if pair not in seen
+        )
     return out
 
 
@@ -391,7 +426,10 @@ def list_requested_addresses(
 
 
 def find_runner_host(
-    labels: Iterable[str], *, hosts_path: str | Path | None = None
+    labels: Iterable[str],
+    *,
+    hosts_path: str | Path | None = None,
+    include_packaged_floor: bool = True,
 ) -> HostRecord | None:
     """Return the first registered machine that serves ``labels``, else ``None``.
 
@@ -400,12 +438,43 @@ def find_runner_host(
     :meth:`HostRecord.serves`). ``None`` means no registered machine can
     ever pick this job up: the job is not merely slow, it is undeliverable
     and will sit queued forever.
+
+    The packaged seed is unioned in by default, for the reason given on
+    :func:`list_runner_destinations` — a stale local file must not be able
+    to report a live destination as undeliverable.
+
+    ``None`` IS STILL NOT A LIVENESS ANSWER. This function reports whether
+    a destination is DECLARED, never whether the machine is up: on
+    2026-08-15 every Spartan runner was offline and ``spartan-cpu``
+    resolved here perfectly well, while 57 jobs queued forever against it.
+    Registration and availability are different questions and this registry
+    only holds the first.
     """
     wanted = frozenset(labels)
     for host in list_hosts(hosts_path=hosts_path):
         if host.serves(wanted):
             return host
+    if not include_packaged_floor:
+        return None
+    for name, declared in packaged_default_runner_destinations():
+        if wanted <= declared:
+            return _seed_record(name)
     return None
+
+
+def _seed_record(name: str) -> HostRecord | None:
+    """Return the packaged seed's record for ``name``, or ``None``.
+
+    Used only when a destination matched the FLOOR rather than user state,
+    so the caller still gets a ``HostRecord`` and not a bare name.
+    """
+    import yaml
+
+    raw_hosts = (yaml.safe_load(_DEFAULT_HOSTS_YAML) or {}).get("hosts") or {}
+    data = raw_hosts.get(name)
+    if data is None:
+        return None
+    return _parse_host_record(name, data, hosts_path=Path("<packaged seed>"))
 
 
 def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:
@@ -427,11 +496,16 @@ def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:
     HostRegistryError
         If ``hosts.yaml`` itself is malformed.
     """
+    from ._retired import warn_if_retired
+
     records, path = _load_registry(hosts_path)
     try:
-        return records[name]
+        record = records[name]
     except KeyError:
         pass
+    else:
+        warn_if_retired(record.name, record.ssh_alias)
+        return record
 
     # Fall back to ALIASES — a former or alternate spelling must keep
     # resolving, which is the whole reason the field exists. Canonical keys
@@ -439,6 +513,7 @@ def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:
     # canonical key can never be captured by another record's alias list.
     by_alias = [rec for rec in records.values() if name in rec.aliases]
     if len(by_alias) == 1:
+        warn_if_retired(by_alias[0].name, by_alias[0].ssh_alias)
         return by_alias[0]
     if by_alias:
         claimants = ", ".join(sorted(rec.name for rec in by_alias))
