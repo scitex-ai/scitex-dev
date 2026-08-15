@@ -269,7 +269,31 @@ def register(ecosystem):
                 ctx.exit(1)
 
         records = apply_specs(specs, dry_run=dry_run, force=force)
-        write_audit(records, mode="apply-dry-run" if dry_run else "apply")
+        # A PREVIEW MUST NOT DIE ON ITS OWN TELEMETRY. `write_audit` appends
+        # to ~/.scitex/dev/runtime/logs/host-config.log, and on 2026-08-15 a
+        # CI runner whose log directory was not writable turned that into a
+        # PermissionError that aborted the command BEFORE it printed
+        # anything — so `--dry-run` produced an empty stdout and a traceback
+        # instead of the preview the user asked for. The record is secondary;
+        # the preview is the result.
+        #
+        # The split is by RISK, not by convenience. A dry run changed nothing,
+        # so an unrecorded dry run costs a log line: warn loudly and carry on.
+        # A REAL apply changed the host, and an unrecorded change is exactly
+        # the "converged or never ran?" ambiguity this log exists to prevent —
+        # so that one is still allowed to fail loudly.
+        try:
+            write_audit(records, mode="apply-dry-run" if dry_run else "apply")
+        except OSError as exc:
+            if not dry_run:
+                raise
+            click.echo(
+                f"WARN: the host changed nothing (preview) but the audit log "
+                f"could not be written: {exc}. The preview below is complete "
+                f"and unaffected; fix the log path before running --yes, "
+                f"because a REAL apply that cannot be recorded is refused.",
+                err=True,
+            )
 
         if as_json:
             click.echo(_json.dumps(records, indent=2))

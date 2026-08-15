@@ -45,6 +45,24 @@ from . import (
 #: "what did the fleet do to this host" finds it in one place.
 AUDIT_LOG = Path.home() / ".scitex" / "dev" / "runtime" / "logs" / "host-config.log"
 
+#: Env override for :func:`audit_log_path`. Operationally useful (a host whose
+#: home is read-only can still keep a trail) and it is what makes the failure
+#: mode TESTABLE with real bytes instead of a patched internal.
+AUDIT_LOG_ENV = "SCITEX_DEV_HOST_CONFIG_LOG"
+
+
+def audit_log_path() -> Path:
+    """Resolve the audit log AT CALL TIME, honouring :data:`AUDIT_LOG_ENV`.
+
+    ``AUDIT_LOG`` is computed at IMPORT time, which quietly made this path
+    unconfigurable and untestable: nothing a caller or a test does after the
+    module loads can move it. That is why the only way to exercise an
+    unwritable log was to patch a production internal — and a test that
+    rewrites production internals is not testing production.
+    """
+    override = os.environ.get(AUDIT_LOG_ENV)
+    return Path(override) if override else AUDIT_LOG
+
 #: Suffix for the copy taken before ``--force`` overwrites a drifted file.
 BACKUP_SUFFIX = ".scitex-bak"
 
@@ -328,7 +346,7 @@ def write_audit(records: list[dict], *, mode: str, log_path: Path | None = None)
     already correct" is exactly the record that lets a future reader
     distinguish a converged host from a job that never ran.
     """
-    path = log_path or AUDIT_LOG
+    path = log_path or audit_log_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     host = os.uname().nodename
