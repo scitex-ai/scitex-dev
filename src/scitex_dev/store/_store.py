@@ -47,6 +47,7 @@ from ._guards import (
     record_key_from,
 )
 from ._hlc import HLC, HybridLogicalClock
+from ._identity_state import IdentityState
 from ._merge import MergeConflict
 from ._oplog import OpEntry, OpKind
 from ._peer_state import PeerState
@@ -84,8 +85,15 @@ class PutResult:
     conflicts: tuple[MergeConflict, ...] = ()
 
 
-class Store(PeerState):
-    """An open store: one schema, one backend, one node identity."""
+class Store(PeerState, IdentityState):
+    """An open store: one schema, one backend, one node identity.
+
+    Two identities, and they answer different questions. ``node`` is who is
+    WRITING — the oplog's origin and the HLC's tie-breaker. :attr:`identity`
+    (from :class:`~._identity_state.IdentityState`) is which STORE this is —
+    its lineage and the instance serving it. Several nodes share one store's
+    identity; one node reaching two stores is the 2026-08-11 failure.
+    """
 
     def __init__(
         self,

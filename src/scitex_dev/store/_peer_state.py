@@ -65,7 +65,11 @@ class PeerState:
         """
         for table, column, coltype, default in self.dialect.additive_columns(schema):
             existing = {
-                str(row[0])
+                # SQLite's PRAGMA says `name`; Postgres's information_schema
+                # says `column_name` — neither column name is portable across
+                # dialects, so take the first value via its key (precedent:
+                # system_identifier).
+                str(row[list(row.keys())[0]])
                 for row in self._connection.execute(
                     self.dialect.columns_sql(table)
                 ).fetchall()

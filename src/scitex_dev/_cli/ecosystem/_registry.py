@@ -26,6 +26,7 @@ from ._cmds import (
     _drift_report,
     _git,
     _gui,
+    _host_config,
     _install_cross_package_gate,
     _install_gate,
     _list,
@@ -112,6 +113,7 @@ def register_ecosystem_commands(main_group):
     _sync_status.register(ecosystem)
     _sync.register(ecosystem)
     _system_deps.register(ecosystem)
+    _host_config.register(ecosystem)
     _prune_merged.register(ecosystem)
     _prune_branches.register(ecosystem)
     _pr.register(ecosystem)

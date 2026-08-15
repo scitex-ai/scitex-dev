@@ -110,7 +110,16 @@ def test_cli_system_deps_list_json_emits_an_array():
     # Act
     result = runner.invoke(main, ["ecosystem", "system-deps", "list", "--json"])
     # Assert
-    assert result.output.strip().startswith("[")
+        # result.stdout, NEVER result.output. From click 8.2 `output` is an
+    # independent stream that MIXES stdout and stderr in write order, so any
+    # library WARNING lands ahead of the payload and json.loads chokes on it.
+    # Measured on the self-hosted runner 2026-08-13: the editable-drift check
+    # printed "WARN: editable scitex-dev: HEAD is 1 commit(s) behind its
+    # remote" to stderr, and it took the v0.49.1 release red on py3.12 while
+    # 3.11 and 3.13 passed — the difference was only which checkout the runner
+    # happened to have. The drift line is CORRECT and correctly on stderr;
+    # asserting on the merged stream is what was wrong.
+    assert result.stdout.strip().startswith("[")
 
 
 def test_cli_system_deps_default_table_exits_zero():
@@ -213,4 +222,4 @@ def test_cli_validate_superset_json_reports_a_red_verdict(tmp_path):
         ],
     )
     # Assert
-    assert json.loads(result.output)["verdict"] == "red"
+    assert json.loads(result.stdout)["verdict"] == "red"

@@ -214,22 +214,26 @@ def assert_not_superseded(
     rejected — the transition is the point at which fencing starts to bite.
 
     Raises :class:`~._errors.SupersededFenceError` naming the offending
-    entry, both fences, and the remedy.
+    entry, both fences, and the remedy. The class is re-exported from
+    ``scitex_dev.store``, so a caller can catch it by name — a fence nobody
+    can catch is a crash, not a guard.
 
-    WIRED INTO REPLAY since the ``Store.fence`` / ``set_fence`` pair landed.
-    :func:`~._replication.replay` calls this before applying anything.
+    **WIRED INTO REPLAY.** :func:`~._replication.replay` calls this at the
+    top of every batch, beside :func:`assert_contiguous` and before anything
+    is applied, so a batch carrying a superseded op is rejected WHOLE rather
+    than half-written. The persistence it needs — the highest fence accepted
+    per origin — is the ``Store.fence`` / ``Store.set_fence`` pair, and
+    replay adopts the fence of each entry it accepts, which is what lets a
+    LATER batch carrying an older fence be rejected. Without that adoption
+    step the check would only ever compare against 0 and could never fire.
 
-    This paragraph previously read "**NOT YET WIRED INTO REPLAY** … nothing
-    in the replication path invokes it, so it protects nothing", and it went
-    on saying so after the wiring landed. That is recorded rather than
-    quietly deleted, because the stale line was not merely untidy: it was the
-    one place a reader would look to find out whether the fence was live, and
-    it told them the mechanism was inert while it was in fact irreversibly
-    evicting origins. A comment that describes a guard as switched off is
-    read as permission to stop reasoning about it.
-
-    The fence a batch is judged AGAINST is local state, never taken from the
-    batch. See ADR-0011 and the comment in :func:`~._replication.replay`.
+    This paragraph previously said the opposite. It read "NOT YET WIRED INTO
+    REPLAY ... nothing in the replication path invokes it, so it protects
+    nothing" — written when that was true, and left behind when the wiring
+    landed. It is recorded rather than quietly deleted because a docstring
+    disclaiming a guard that IS running is the more dangerous of the two
+    errors: a reader who trusts it concludes the fence is inert and looks
+    elsewhere for the cause of a rejected batch.
     """
     if not entries:
         return

@@ -72,6 +72,16 @@ OPLOG_COLUMNS: Final[tuple[str, ...]] = (
 #: Per-source replay cursors: the last sequence number applied from a peer.
 CURSOR_COLUMNS: Final[tuple[str, ...]] = ("source", "seq")
 
+#: The store's own identity row(s): a key/value pair table holding the
+#: LINEAGE half of :class:`~.._identity.StoreIdentity`. The INSTANCE half is
+#: deliberately NOT stored here — a value kept inside the database is copied
+#: with the database, which is precisely why a ``store_uuid`` alone cannot
+#: detect a fork of itself.
+IDENTITY_COLUMNS: Final[tuple[str, ...]] = ("key", "value")
+
+#: The row key under which the lineage uuid lives.
+STORE_UUID_KEY: Final[str] = "store_uuid"
+
 
 class Dialect(ABC):
     """What one backend does differently. Stateless; safe to share."""
@@ -101,6 +111,24 @@ class Dialect(ABC):
     def upsert_sql(self, table: str, columns: Sequence[str], key: str) -> str:
         """An INSERT that overwrites on primary-key conflict."""
 
+    def insert_ignore_sql(
+        self, table: str, columns: Sequence[str], key: str
+    ) -> str:
+        """An INSERT that does NOTHING on primary-key conflict.
+
+        Both backends spell this the same way, so it is concrete here rather
+        than abstract. It exists for write-once facts — the store's lineage
+        uuid — where an upsert would be actively wrong: two processes
+        opening a fresh store at the same moment would each overwrite the
+        other and walk away believing different lineages for one database.
+        """
+        column_list = ", ".join(self.quote(c) for c in columns)
+        return (
+            f"INSERT INTO {self.quote(table)} ({column_list}) "
+            f"VALUES ({self.placeholders(len(columns))}) "
+            f"ON CONFLICT ({self.quote(key)}) DO NOTHING"
+        )
+
     # -- shared DDL -------------------------------------------------------
     def placeholders(self, count: int) -> str:
         """A comma-separated placeholder list for ``count`` values."""
@@ -117,6 +145,32 @@ class Dialect(ABC):
     def cursor_table(self, schema: Schema) -> str:
         """Name of the per-source replay-cursor table."""
         return f"{schema.name}_cursor"
+
+    def identity_table(self, schema: Schema) -> str:
+        """Name of the store's own identity key/value table."""
+        return f"{schema.name}_identity"
+
+    # -- instance identity -------------------------------------------------
+    def system_identifier(self, connection: Any, target: StoreTarget) -> tuple:
+        """``(identifier, source)`` naming the INSTANCE serving ``connection``.
+
+        The contract, and it is the whole reason this is a dialect method
+        rather than a stored column: **the answer must come from the serving
+        system, not from the store's own rows.** Anything read back out of
+        the database was copied along with the database, so it identifies
+        the ancestor equally well for every fork — which is exactly the
+        failure :mod:`~.._identity` exists to end.
+
+        Returns :data:`~.._identity.UNKNOWN_SYSTEM` plus a human-readable
+        reason when the system will not say. It never fabricates a
+        discriminator and never falls back to the connection string: an
+        address is a route, not an identity, and a socket path and a TCP
+        port routinely name one instance. Inventing a difference there would
+        report a fork between two views of one store, every time.
+        """
+        from .._identity import UNKNOWN_SYSTEM
+
+        return (UNKNOWN_SYSTEM, f"{self.backend.value} dialect states none")
 
     # -- additive migration -----------------------------------------------
     #
@@ -216,6 +270,13 @@ class Dialect(ABC):
             f"{self.quote('source')} {text} PRIMARY KEY, "
             f"{self.quote('seq')} {integer} NOT NULL, "
             f"{self.quote('fence')} {integer} NOT NULL DEFAULT 0)",
+            # The lineage half of the store's identity. A separate table
+            # rather than a column on an existing one: it is per-STORE, not
+            # per-row and not per-peer, and hanging a store-wide fact off a
+            # row table makes it ambiguous which row carries the real answer.
+            f"CREATE TABLE IF NOT EXISTS {self.quote(self.identity_table(schema))} ("
+            f"{self.quote('key')} {text} PRIMARY KEY, "
+            f"{self.quote('value')} {text} NOT NULL)",
             f"CREATE INDEX IF NOT EXISTS {self.quote(oplog + '_record_idx')} "
             f"ON {self.quote(oplog)} ({self.quote('record')})",
             f"CREATE INDEX IF NOT EXISTS {self.quote(rows + '_hidden_idx')} "
