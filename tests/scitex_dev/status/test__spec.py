@@ -24,11 +24,14 @@ from scitex_dev.status import (
     KIND_SCITEX,
     RESERVED_PROCESS_CODES,
     SPEC_VERSION,
+    UnknownPolicy,
+    Verdict,
     kinds,
     load_boundaries,
     load_kinds,
     load_schema,
     load_scitex_codes,
+    load_verdicts,
 )
 
 _CONSTANTS = {KIND_HTTP, KIND_PROCESS, KIND_GRPC, KIND_DNS, KIND_ERRNO, KIND_SCITEX}
@@ -230,6 +233,94 @@ def test_the_http_kind_requires_a_probe_for_an_accepted_202():
     triggers = http["requires_probe"]
     # Assert
     assert 202 in triggers
+
+
+# -- the check verdict is spec-sourced too ------------------------------------
+
+
+def _declared_verdicts():
+    """The verdict names the spec declares."""
+    return {entry["verdict"] for entry in load_verdicts()["verdicts"]}
+
+
+def test_the_python_verdict_enum_matches_the_spec_verdict_set():
+    """A verdict with no spec entry is an answer nobody else can read."""
+    # Arrange
+    declared = _declared_verdicts()
+    # Act
+    exposed = {member.value for member in Verdict}
+    # Assert
+    assert exposed == declared
+
+
+def test_the_spec_declares_the_expected_three_verdicts():
+    """Pinned so that a FOURTH answer is a deliberate, reviewed act."""
+    # Arrange
+    expected = {"ok", "not-ok", "unknown"}
+    # Act
+    declared = _declared_verdicts()
+    # Assert
+    assert declared == expected
+
+
+def test_the_python_rollup_policies_match_the_spec():
+    """A policy the spec does not declare is one no other reader can interpret."""
+    # Arrange
+    declared = {entry["policy"] for entry in load_verdicts()["unknown_policies"]}
+    # Act
+    exposed = {member.value for member in UnknownPolicy}
+    # Assert
+    assert exposed == declared
+
+
+def test_the_verdict_spec_declares_the_implemented_spec_version():
+    """Four spec files at different versions is a split source of truth."""
+    # Arrange
+    document = load_verdicts()
+    # Act
+    version = document["spec_version"]
+    # Assert
+    assert version == SPEC_VERSION
+
+
+def test_the_check_schema_makes_the_ok_field_three_valued():
+    """A JSON consumer and a Python consumer must accept the same third state."""
+    # Arrange
+    schema = load_schema("check.schema.json")
+    # Act
+    accepted = set(schema["properties"]["ok"]["type"])
+    # Assert
+    assert accepted == {"boolean", "null"}
+
+
+def test_the_check_schema_forbids_a_separate_verdict_field():
+    """The verdict travels in `ok`; a second field is one that can disagree."""
+    # Arrange
+    schema = load_schema("check.schema.json")
+    # Act
+    rule = schema["properties"]["verdict"]["not"]
+    # Assert
+    assert rule == {}
+
+
+def test_the_report_schema_makes_the_rolled_up_ok_three_valued():
+    """A propagating rollup publishes null, so the schema must accept it."""
+    # Arrange
+    schema = load_schema("report.schema.json")
+    # Act
+    accepted = set(schema["properties"]["ok"]["type"])
+    # Assert
+    assert accepted == {"boolean", "null"}
+
+
+def test_the_report_schema_requires_exactly_the_four_published_keys():
+    """The four-key record is what existing doctors publish and readers parse."""
+    # Arrange
+    schema = load_schema("report.schema.json")
+    # Act
+    required = set(schema["required"])
+    # Assert
+    assert required == {"package", "ok", "checks", "summary"}
 
 
 # EOF

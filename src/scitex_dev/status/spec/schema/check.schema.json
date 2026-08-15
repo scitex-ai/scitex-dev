@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scitex.ai/spec/status/1/check.schema.json",
+  "title": "SciTeX check record, spec_version 1",
+  "description": "One named question and its verdict. THE VERDICT IS THREE-VALUED AND TRAVELS IN `ok` AS true / false / null. `null` means UNKNOWN — the checker could not find out — and is NOT a missing field and NOT a synonym for either neighbour. It rides in the existing `ok` field rather than in a separate `verdict`/`status` key so that every reader of the four-field record keeps working, and so that there are never two fields that can disagree about the same answer. NOTE: this schema is a FLOOR. Rules it cannot express are enforced by the validator instead: (1) an `unknown` MUST carry a non-empty `detail` saying WHY it is unknown and a non-empty `hint` saying HOW TO FIND OUT; (2) a `not-ok` MUST carry a non-empty `hint` saying what to DO; (3) `detail` and `hint` must contain no inferred-cause marker (rule M1, applied to checks as C5). A document that passes this schema may still be refused at construction. See verdicts.yaml.",
+
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "ok", "detail"],
+
+  "properties": {
+    "name": {
+      "description": "The question, named. Stable across runs, so a reader can follow one check over time and a summary can name it.",
+      "type": "string",
+      "minLength": 1
+    },
+
+    "ok": {
+      "description": "The verdict. true = asked and the answer is good; false = asked and the answer is bad; null = UNKNOWN, the checker could not find out. Do not coerce: `bool(x)` maps null onto false-ish in a way that reads as a definite answer in some languages and as a missing field in others, and both readings destroy the third state.",
+      "type": ["boolean", "null"]
+    },
+
+    "detail": {
+      "description": "WHAT WAS OBSERVED. For an `unknown` this is the REASON it could not be determined, and it is the whole difference between a three-valued verdict and a boolean with an extra name.",
+      "type": "string",
+      "minLength": 1
+    },
+
+    "hint": {
+      "description": "WHAT TO DO next; for an `unknown`, HOW TO FIND OUT. Required (non-null) by the validator when `ok` is false or null. An error that only states what broke is half-written.",
+      "type": ["string", "null"]
+    },
+
+    "cause": {
+      "description": "OPTIONAL. The native StatusCode behind this verdict, verbatim — http 403, http 504, errno ETIMEDOUT, process 255, grpc UNKNOWN. Omitted entirely when absent, which is why the common record is exactly four fields. Borrowing the native code keeps the specific fact that the verdict alone would discard.",
+      "$ref": "https://scitex.ai/spec/status/1/status-code.schema.json"
+    },
+
+    "verdict": {
+      "not": {},
+      "description": "FORBIDDEN. The verdict already travels in `ok` as true/false/null. A second field saying the same thing is a second field that can disagree — the same rule that forbids a stored `ok` beside a StatusCode, applied here."
+    },
+
+    "status": {
+      "not": {},
+      "description": "FORBIDDEN, same reason as `verdict`. This is the key a reader adds when they have not noticed that `ok` is three-valued."
+    }
+  }
+}

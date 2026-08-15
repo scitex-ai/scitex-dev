@@ -29,6 +29,31 @@ Each call boundary DECLARES which kind it borrows — see
 ``spec/boundaries.yaml``. That per-boundary declaration is the entire
 coordination cost of the design.
 
+The other half: a CHECK's verdict
+---------------------------------
+A ``StatusCode`` reports what HAPPENED at a boundary. A :class:`Verdict`
+answers a QUESTION a checker asked, and it has THREE values because a boolean
+forces "I could not find out" to be filed as either "fine" or "broken"::
+
+    from scitex_dev.status import Check, UnknownPolicy, rollup
+
+    checks = [
+        Check.ok("store_canonical", "PostgreSQL store, 3469 cards, writable"),
+        Check.unknown(
+            "may_relocate",
+            "compute-04 refused the probe with http 403; its daemon predates "
+            "the endpoint, so the answer is not about permission",
+            "upgrade the remote daemon, then re-run `sac relocate --check`",
+            cause=StatusCode(kind="http", code=403, message="..."),
+        ),
+    ]
+    rollup("relocation", checks, unknown_policy=UnknownPolicy.REFUSE)
+
+``unknown`` must carry WHY (:meth:`Check.unknown` takes it positionally and
+``__post_init__`` refuses a blank one), and the rollup policy is required with
+no default — never move an agent onto a host you could not inspect, but do let
+a dashboard tile proceed. See ``spec/verdicts.yaml`` and ADR-0010.
+
 The source of truth
 -------------------
 ``spec/`` is language-independent and normative: ``kinds.yaml``,
@@ -54,12 +79,16 @@ will. Thin gets adopted; thick gets bypassed.
 
 from __future__ import annotations
 
+from ._check import Check
 from ._errors import (
+    CheckError,
     InferredCauseError,
     MissingProbeError,
     StatusError,
     UnknownCodeError,
     UnknownKindError,
+    UnknownPolicyError,
+    UnknownVerdictError,
 )
 from ._exchange import EXCHANGE_ID_PATTERN, is_exchange_id, new_exchange_id
 from ._kinds import (
@@ -77,6 +106,7 @@ from ._kinds import (
 )
 from ._ledger import LEDGER_TABLE, ledger_record, ledger_schema
 from ._message import forbidden_markers, names_a_probe, validate_message
+from ._rollup import Report, UnknownPolicy, rollup
 from ._spec import (
     SPEC_DIR,
     SPEC_VERSION,
@@ -84,12 +114,16 @@ from ._spec import (
     load_kinds,
     load_schema,
     load_scitex_codes,
+    load_verdicts,
     spec_path,
 )
 from ._status_code import StatusCode
+from ._verdict import Verdict, verdicts
 
 __all__ = [
     "EXCHANGE_ID_PATTERN",
+    "Check",
+    "CheckError",
     "InferredCauseError",
     "KIND_DNS",
     "KIND_ERRNO",
@@ -100,12 +134,17 @@ __all__ = [
     "LEDGER_TABLE",
     "MissingProbeError",
     "RESERVED_PROCESS_CODES",
+    "Report",
     "SPEC_DIR",
     "SPEC_VERSION",
     "StatusCode",
     "StatusError",
     "UnknownCodeError",
     "UnknownKindError",
+    "UnknownPolicy",
+    "UnknownPolicyError",
+    "UnknownVerdictError",
+    "Verdict",
     "forbidden_markers",
     "is_exchange_id",
     "kinds",
@@ -115,13 +154,16 @@ __all__ = [
     "load_kinds",
     "load_schema",
     "load_scitex_codes",
+    "load_verdicts",
     "names_a_probe",
     "new_exchange_id",
     "requires_probe",
+    "rollup",
     "spec_path",
     "validate_code",
     "validate_kind",
     "validate_message",
+    "verdicts",
 ]
 
 # EOF

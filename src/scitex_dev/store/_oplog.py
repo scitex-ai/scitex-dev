@@ -214,15 +214,26 @@ def assert_not_superseded(
     rejected — the transition is the point at which fencing starts to bite.
 
     Raises :class:`~._errors.SupersededFenceError` naming the offending
-    entry, both fences, and the remedy.
+    entry, both fences, and the remedy. The class is re-exported from
+    ``scitex_dev.store``, so a caller can catch it by name — a fence nobody
+    can catch is a crash, not a guard.
 
-    **NOT YET WIRED INTO REPLAY.** Enforcing this across batches needs the
-    highest-accepted fence PERSISTED per origin (a ``Store.fence`` /
-    ``set_fence`` pair plus a schema column), which does not exist yet. Until
-    that lands this function is callable and tested but nothing in the
-    replication path invokes it, so it protects nothing — stated here rather
-    than left for a reader to assume otherwise. Tracked on card
-    ``scitex-dev-store-oplog-directed-replay-20260809``.
+    **WIRED INTO REPLAY.** :func:`~._replication.replay` calls this at the
+    top of every batch, beside :func:`assert_contiguous` and before anything
+    is applied, so a batch carrying a superseded op is rejected WHOLE rather
+    than half-written. The persistence it needs — the highest fence accepted
+    per origin — is the ``Store.fence`` / ``Store.set_fence`` pair, and
+    replay adopts the fence of each entry it accepts, which is what lets a
+    LATER batch carrying an older fence be rejected. Without that adoption
+    step the check would only ever compare against 0 and could never fire.
+
+    This paragraph previously said the opposite. It read "NOT YET WIRED INTO
+    REPLAY ... nothing in the replication path invokes it, so it protects
+    nothing" — written when that was true, and left behind when the wiring
+    landed. It is recorded rather than quietly deleted because a docstring
+    disclaiming a guard that IS running is the more dangerous of the two
+    errors: a reader who trusts it concludes the fence is inert and looks
+    elsewhere for the cause of a rejected batch.
     """
     if not entries:
         return

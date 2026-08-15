@@ -1,0 +1,180 @@
+# SciTeX CHECK VERDICT — the three answers a check may give.
+#
+# THIS FILE IS THE SOURCE OF TRUTH. `scitex_dev.status` (Python) is DERIVED
+# from it; `tests/scitex_dev/status/test__spec.py` fails when the two drift.
+# TypeScript, Rust and shell implementations read this file too.
+#
+# WHAT THIS IS, AND WHAT IT IS NOT
+# --------------------------------
+# A StatusCode reports what HAPPENED at a boundary — one exchange, one native
+# code, borrowed verbatim. A VERDICT answers a QUESTION a checker asked: "is
+# the store canonical?", "may this agent relocate onto that host?". The two
+# compose: a verdict may carry the StatusCode that produced it, and usually
+# should, because the native code is the specific fact and the verdict is the
+# decision taken from it.
+#
+# WHY THREE
+# ---------
+# Two is the defect. A boolean forces "I could not find out" to be recorded as
+# either "fine" or "broken", and both are false. Measured in this fleet:
+#
+#   * 2026-08-11 — nine relocation probes were refused `http 403` by hosts
+#     running a daemon too old to have the endpoint. The 403 is a real 403 and
+#     it is NOT an answer to the question asked, which was "may this agent
+#     relocate?". Recorded as not-ok it grounds nine healthy agents; recorded
+#     as ok it moves an agent onto a host nobody inspected.
+#   * 2026-08-11 — the card-store doctor could not read its own store and
+#     reported `ok: false` on two checks whose questions it never got to ask.
+#
+# NOTHING HERE IS DERIVED FROM A CODE, AND THAT IS THE POINT
+# ----------------------------------------------------------
+# status-codes.md sec.8 forbids a STORED `ok` on a StatusCode, because that `ok`
+# is derivable from the code and two fields that can disagree eventually will.
+# A verdict is not that field and cannot be derived, because THE SAME CODE
+# MEANS DIFFERENT VERDICTS DEPENDING ON THE QUESTION ASKED. `http 403` answering
+# "am I allowed to do this?" is a definite not-ok. The same 403 answering "may
+# this agent relocate?", returned by a daemon that has never heard of the
+# endpoint, is unknown. Deriving one from the other is precisely the collapse
+# this file exists to prevent.
+
+spec_version: "1"
+
+verdicts:
+
+  # ------------------------------------------------------------------ ok ---
+  - verdict: ok
+    means: >-
+      The checker asked its question, got an answer, and the answer is the
+      good one. Positive evidence — never the absence of bad evidence.
+    rule: >-
+      A check that could not obtain its evidence MUST NOT report ok. "Nothing
+      went wrong" and "I did not look" are different sentences and only the
+      first one is this verdict.
+
+  # -------------------------------------------------------------- not-ok ---
+  - verdict: not-ok
+    means: >-
+      The checker asked its question, got an answer, and the answer is the bad
+      one. Positive evidence of a problem, and therefore ACTIONABLE.
+    rule: >-
+      Requires a `hint` naming what to do about it. An error that only states
+      what broke is half-written.
+
+  # ------------------------------------------------------------- unknown ---
+  - verdict: unknown
+    means: >-
+      The checker could not find out. The host was unreachable, the deadline
+      elapsed, permission was refused, the remote is too old to have the
+      endpoint, the store would not open. NOT a synonym for either neighbour.
+    rule: >-
+      Requires a `detail` saying WHY it is unknown and a `hint` naming how to
+      find out. An unknown that carries neither is barely better than the
+      boolean it replaced: the reader still has to guess, and now has a third
+      word for guessing.
+    never: >-
+      unknown is NEVER a default and NEVER a fallback. It is a MEASURED
+      outcome — the checker tried and could not tell. A checker that has not
+      run yet has no verdict at all, which is a different thing from unknown
+      and is represented by the absence of the check, not by this value.
+    borrow: >-
+      Where a native code exists for the failure to find out, carry it in
+      `cause` rather than paraphrasing it: `http 504` ("I stopped waiting"),
+      `http 403`, `errno ETIMEDOUT` / `EACCES` / `EHOSTUNREACH`, `process 255`
+      (ssh transport), `grpc UNKNOWN`, `dns SERVFAIL`. Borrowing is lossless
+      and the reader already speaks those. See kinds.yaml.
+
+# ---------------------------------------------------------------------------
+# THE CHECK — one named question, one verdict, and the words that go with it
+# ---------------------------------------------------------------------------
+check:
+  fields:
+    name: "The question, named. Stable across runs so a reader can follow one check over time."
+    verdict: "One of the three above. No default."
+    detail: "WHAT WAS OBSERVED. For unknown, WHY it could not be determined."
+    hint: "WHAT TO DO next. For unknown, HOW TO FIND OUT."
+    cause: "Optional StatusCode — the native code behind this verdict, verbatim."
+
+  # Enforced at CONSTRUCTION and raising, exactly as StatusCode is
+  # (status-codes.md sec.7). A malformed verdict must fail where it is built,
+  # not in the aggregate three layers later where the check that produced it is
+  # no longer identifiable.
+  rules:
+    - id: C1
+      rule: "`name` is a non-empty string. An anonymous check cannot be followed across runs or named in a summary."
+    - id: C2
+      rule: "`verdict` is one of the three. It is REFUSED if absent — there is no default verdict, because every default is a guess wearing a type."
+    - id: C3
+      rule: "`detail` is non-empty for every verdict. A check that says nothing about what it observed cannot be checked by its reader."
+    - id: C4
+      rule: "`hint` is non-empty when the verdict is not-ok (what to DO) or unknown (how to FIND OUT). It is optional for ok."
+    # C5 is GUIDANCE, not a validator rule, and the difference was measured.
+    - id: C5
+      rule: >-
+        `detail` and `hint` SHOULD obey M1 — state what was measured, do not
+        conclude a cause you did not observe (see kinds.yaml
+        `message.no_inferred_cause`).
+      enforced: false
+      why_not: >-
+        An earlier draft enforced M1's marker list here and was tried against
+        the first real consumer. It REFUSED a correct check: scitex-cards'
+        `backend_mode` states that cards are on postgres and the inbox is on
+        yaml, then says writes "therefore land in different engines" — a
+        deduction from two facts the check itself supplies, in prose recording
+        a dated measurement. The marker list is a heuristic tuned for SHORT
+        status messages; a check's `detail` is long and explanatory by design,
+        so its false-positive rate is materially higher.
+      instead: >-
+        The structural protection is the VERDICT, not a word list. A checker
+        that could not establish something reports `unknown` and says why —
+        which is a stronger statement than any phrasing rule, because it
+        changes what the reader is allowed to do next. A rule that refuses the
+        first honest adopter gets the whole type bypassed, and thin gets
+        adopted while thick gets bypassed.
+
+# ---------------------------------------------------------------------------
+# THE ROLLUP — N checks into one verdict, and the caller says what unknown means
+# ---------------------------------------------------------------------------
+rollup:
+  precedence: >-
+    A known failure always wins. If any check is not-ok the rollup is not-ok,
+    under every policy: a definite problem is not made less definite by an
+    unknown standing next to it.
+  unknown_is_the_callers_decision: >-
+    What an unknown MEANS for the whole depends on what the whole is for, and
+    the type must not decide that. Relocation must refuse — never move an agent
+    onto a host you could not inspect. A dashboard tile may proceed. Baking
+    either into the type makes the other one wrong.
+  policy_is_required: >-
+    The policy is a REQUIRED argument with no default. A default policy is the
+    same collapse as a boolean verdict, moved one level up and made invisible.
+  never_silent: >-
+    Whatever the policy, the rollup RECORDS every unknown check by name. A
+    tolerated unknown is still an unknown, and an aggregate that answers "ok"
+    without saying what it could not see has lied by omission.
+
+unknown_policies:
+
+  - policy: refuse
+    means: "An unknown blocks. The rollup is not-ok."
+    use_when: >-
+      The decision is an irreversible action taken on the strength of the
+      checks — relocating an agent, promoting a release, deleting a source.
+      Never act on a host you could not inspect.
+
+  - policy: propagate
+    means: "An unknown is contagious. The rollup is unknown."
+    use_when: >-
+      The rollup is itself a REPORT that something else will decide from. This
+      is the honest default for a doctor: "I cannot tell you the whole is
+      healthy" is exactly what happened, and flattening it here would discard
+      the distinction one layer before the reader who needs it.
+
+  - policy: tolerate
+    means: "An unknown does not block. The rollup is ok, and names the unknowns."
+    use_when: >-
+      The question is "may I proceed?" rather than "is everything known?" — a
+      dashboard tile, an advisory banner, an optional pre-flight whose failure
+      mode is a retry. It is NOT licence to hide them: the unknown checks are
+      still listed and still counted in the summary.
+
+# EOF

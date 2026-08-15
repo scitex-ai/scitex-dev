@@ -5,8 +5,18 @@
 """Tests for local editable install (uv-first installer + upgrade preflight).
 
 Style note: like the sibling ``test__local.py``, these avoid injected
-subprocess runners. The uv-vs-pip branch is driven by ``$PATH`` (empty
-PATH => no uv discoverable), saved and restored around each check.
+subprocess runners. The uv-vs-pip branch is driven by ``$PATH``, saved and
+restored around each check: an EMPTY ``$PATH`` makes uv undiscoverable, and
+a ``$PATH`` holding one real (inert) ``uv`` executable makes it
+discoverable. Both directions are supplied by the test.
+
+BOTH directions, because until 2026-08-12 only the pip direction supplied
+its own environment. The uv tests asserted the uv branch while doing
+nothing to produce a uv — they passed on the author's machine and on the
+Spartan runners because uv happened to be installed there, and they failed
+the moment CI moved to the scitex-compute nodes, where it is not. A test
+that only passes where a tool happens to be installed is measuring the
+machine, not the branch.
 """
 
 from __future__ import annotations
@@ -39,6 +49,37 @@ class _NoUvPath:
         return False
 
 
+class _OnlyUvOnPath:
+    """Context manager: a ``$PATH`` containing exactly one real ``uv``.
+
+    The mirror image of ``_NoUvPath``, and the reason no mock is needed:
+    the branch under test is selected by ``shutil.which("uv")``, whose
+    entire question is "is there an executable file named ``uv`` on
+    ``$PATH``". So the test writes one. It is a real executable on a real
+    ``$PATH``, and the code under test only ever ASKS whether it exists —
+    command construction never runs it.
+
+    ``$PATH`` is replaced rather than prepended so the result does not
+    change on a machine that also has a real uv installed elsewhere.
+    """
+
+    def __init__(self, directory: Path):
+        self._dir = directory
+
+    def __enter__(self):
+        self._dir.mkdir(parents=True, exist_ok=True)
+        stub = self._dir / "uv"
+        stub.write_text("#!/bin/sh\nexit 0\n")
+        stub.chmod(0o755)
+        self._saved = os.environ.get("PATH", "")
+        os.environ["PATH"] = str(self._dir)
+        return self
+
+    def __exit__(self, *exc):
+        os.environ["PATH"] = self._saved
+        return False
+
+
 @pytest.fixture
 def one_pkg_config(tmp_path):
     """A DevConfig with a single package whose local_path exists."""
@@ -60,11 +101,12 @@ def one_pkg_config(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_install_cmd_uv_branch_builds_uv_editable_command():
+def test_install_cmd_uv_branch_builds_uv_editable_command(tmp_path):
     # Arrange
     path = Path("/tmp/pkg")
     # Act
-    cmd = _install_cmd(path)
+    with _OnlyUvOnPath(tmp_path / "bin"):
+        cmd = _install_cmd(path)
     # Assert
     assert cmd == [
         "uv", "pip", "install", "--python", sys.executable, "-e", "/tmp/pkg", "-q"
@@ -86,11 +128,12 @@ def test_install_cmd_without_uv_builds_pip_editable_command():
 # ---------------------------------------------------------------------------
 
 
-def test_upgrade_cmds_uv_branch_updates_uv_then_pip():
+def test_upgrade_cmds_uv_branch_updates_uv_then_pip(tmp_path):
     # Arrange
     expected_pip = ["uv", "pip", "install", "--python", sys.executable, "--upgrade", "pip"]
     # Act
-    cmds = _upgrade_installer_cmds()
+    with _OnlyUvOnPath(tmp_path / "bin"):
+        cmds = _upgrade_installer_cmds()
     # Assert
     assert cmds == [["uv", "self", "update"], expected_pip]
 

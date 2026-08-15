@@ -7,6 +7,235 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A declared skip rule now clears the exit status, not just the report
+  (#590).** `ecosystem audit-all` masks findings on rules a repo has declared
+  in `.scitex/dev/config.yaml`, prints the masked inventory, and prints a
+  summary line stating how many UNMASKED errors remain. It could print
+  `0 unmasked error(s) ..., 1 masked by skip-rules (1 declared)` and still
+  exit 1 — a gate whose report and whose status disagreed, and a deferral
+  mechanism that did the one thing it exists for only sometimes.
+
+  The downgrade was decided over the run's CONCATENATED output, which
+  destroys attribution: a WARN-tier finding printed by an audit that EXITED 0
+  landed in the same `unmasked` list as a real failure and vetoed the
+  downgrade. Measured on scitex-agent-container — `audit-project` failed on
+  one declared `PS-226`, three warnings came from `audit-cli` (exit 0).
+
+  It is now decided PER AUDIT, against the audits that actually exited
+  non-zero: each is asked "is everything YOU reported masked?". Severity is
+  deliberately not the discriminator — `audit-skills` and `audit-python-apis`
+  exit 1 on WARN-tier findings too, so an error-only predicate would have
+  turned runs those two legitimately failed green. What is REPORTED is
+  unchanged: the inventory, the labels and the summary are still computed
+  over the whole run.
+
+## [0.49.0] - 2026-08-12
+
+**A declaration that resolves to something.** `scitex_dev.store` shipped in
+0.47.0 with an oplog, a hybrid logical clock, per-origin cursors, field-level
+HLC merge and a `MergeRule` enum — and zero callers, because the federation
+layer that lets a leaf DECLARE a store was never on a branch. Two downstream
+packages had already shipped their half of the contract against it: sac's
+`[project.entry-points."scitex_dev.store.plugins"]` and scitex-cards' mirror
+of it both resolved to a provider that RAISED `ModuleNotFoundError`. A
+declaration that exists, passes inspection, and does nothing is worse than an
+absent one, because it reads as done.
+
+### Added
+
+- **`scitex_dev.store` federation — leaves declare semantics, scitex-dev owns
+  the machinery (#594).** The parent package now re-exports `StorePlugin`,
+  `StorePluginProvider`, `discover_store_plugins`, `plugin_for`,
+  `resolve_target` and `ENTRY_POINT_GROUP`. A leaf registers a provider
+  (`() -> list[StorePlugin]`) under the entry-point group
+  `scitex_dev.store.plugins`; `discover_store_plugins()` aggregates them,
+  deduped by store name, first-wins.
+
+  **Two strings are the pinned public contract** — the import path
+  `scitex_dev.store` and the group name `scitex_dev.store.plugins` — and both
+  are asserted by test (`tests/scitex_dev/store/test__exports.py`,
+  `federation/test__discover.py`). Renaming either orphans every installed
+  leaf SILENTLY: discovery finds nothing and reports an empty federation,
+  which is indistinguishable from "no leaf has adopted the store yet".
+
+  A leaf declares only the part it alone can know — which of ITS fields are
+  immutable, last-writer-wins or append-only — because a merge rule guessed
+  by scitex-dev would lose data without raising. It does NOT resolve its own
+  store target: `resolve_target()` does that centrally, because per-consumer
+  resolution is what let one host reach two Postgres instances that both
+  answered to one `store_uuid` on 2026-08-11.
+
+  `store/federation/` is shaped like `scitex_dev.gate` — `_spec` /
+  `_discover` / `_builtin` / `_resolve` behind a pure re-export façade — so
+  the three federations are one thing to learn. It carries both of `gate`'s
+  seams, `include_entry_points` and `include_builtins`, which
+  `scitex_dev.jobs` lacks: without them a test can only assert
+  set-membership, because any installed leaf leaks into the result and makes
+  it depend on the environment.
+
+  scitex-dev registers its OWN store through an INTERNAL provider, never an
+  entry point. It is a leaf of this federation, not a privileged parent, and
+  a package that registered in a group it also reads would have discovery
+  load scitex-dev's metadata to find scitex-dev.
+
+- **An empty federation says WHY it is empty.** An installed-but-unregistered
+  leaf and a typo'd store name produce the same empty result, so
+  `plugin_for()` distinguishes them in prose rather than returning `None`
+  twice. Every failure of 2026-08-11 was a truthful empty answer about the
+  wrong thing.
+
+- **Store identity, divergence detection and a Postgres/SQLite dialect
+  split** (`store/_identity.py`, `_identity_state.py`, `_divergence.py`,
+  `_dialect/`). The identity layer is what makes "two instances answering to
+  one `store_uuid`" detectable instead of silently merged.
+
+### Fixed
+
+- **`rm -rf ""` is a silent success, so the CI scratch path is guarded with
+  `:?` (#586).** An unset or empty scratch variable expanded to a bare `rm
+  -rf` that removed nothing and exited 0 — a cleanup step that could not
+  fail, and therefore could not report that it had never run.
+
+## [0.48.0] - 2026-08-12
+
+Published from the develop→main promotion (#574) without a CHANGELOG entry;
+this section is written after the fact from the tag range `v0.47.0..v0.48.0`,
+because the release contained two BREAKING changes for downstream consumers
+and shipping them unannounced is what made them expensive.
+
+### Changed (breaking for downstream consumers)
+
+- **One CLI group per JobSpec KIND, not per mechanism (#566).** `ecosystem
+  dev {service,timer} <verb>` replaces the previous per-mechanism surface.
+  The name argument is MIXED by design — `install`/`uninstall` take
+  `--name X`, while `status`/`enable`/`disable`/`start`/`stop`/`restart`/
+  `exec` take a POSITIONAL name — so any caller emitting `--name`
+  unconditionally now dies with `Error: No such option '--name'` (exit 2).
+  Measured downstream: nine sac commands, and the reason sac holds a
+  `scitex-dev<0.48` ceiling.
+
+- **PS-226..PS-229 — the fleet-wide JobSpec declaration convention (#565).**
+  PS-226 `job-name-not-hyphenated` does not exist in 0.47.0 at all (0
+  occurrences in the 0.47.0 wheel, 6 files in 0.48.0). A new `E`-severity
+  rule lands as an unmasked error in every downstream `audit-all` gate the
+  moment the dependency floats, which is a release-note-worthy event even
+  when the rule is right.
+
+### Added
+
+- **`sac-control-plane` is a registered runner destination — the label was
+  real, nothing declared it.** The shipped seed gains `scitex-compute-04`
+  (`kind: compute`) with the effective label set its one runner carries:
+  `[self-hosted, Linux, X64, scitex-org-cpu, sac-control-plane]`, measured
+  2026-08-12 from the org Actions API and from that machine's own
+  `~/actions-runner-org/.runner`.
+
+  sac's CI feedback rail pinned a `verdict` job to `sac-control-plane` and
+  PS-224 refused it. The rule was right. sac's ADR-0024 had assumed the
+  self-hosted runners execute on the host running the control plane; they are
+  four runners on four machines, and only `scitex-04-org-cpu-01` shares one
+  with `sac listen` (`127.0.0.1:7878`) and the card store
+  (`127.0.0.1:55432`). Both bind loopback, so on the other three that job
+  calls a different machine's daemon and writes to a different postgres —
+  delivered to nobody, recorded nowhere, and green either way. The pin is
+  necessary while those services are loopback-only.
+
+  Registered rather than exempted, deliberately. A PS-224 exemption was
+  considered and rejected: the single existing one in the ecosystem rests on
+  a security argument, and an exemption granted because a rule is
+  inconvenient is how an audit stops meaning anything.
+
+  What the entry records, in comments, because the registry schema has no
+  field for a destination's MEANING: `sac-control-plane` is a CO-LOCATION
+  claim, not a capability tier, and anything pinned to it is exactly as
+  available as that one machine — it does not fail over, and PS-224 will
+  still pass it, because the gate validates served-ness and not capacity.
+  Registering the runner's EFFECTIVE set also makes the broader
+  `scitex-org-cpu` destination legal; its three sibling machines
+  (`scitex-01/02/03-org-cpu-01`) are not registered yet, so that destination
+  is legal on the strength of one entry and under-reports the pool by three.
+
+- **A check verdict is THREE-valued, and `unknown` has to say why (ADR-0010).**
+  `scitex_dev.status` gains `Verdict` / `Check` / `rollup` beside `StatusCode`.
+  The fleet's shared doctor shape — `{package, ok, checks: [{name, ok, detail,
+  hint}], summary}` — carried a BOOLEAN `ok`, so "I could not find out" had to
+  be filed as either "fine" or "broken", and both are false.
+
+  Measured 2026-08-11: nine relocation probes were refused `http 403` by hosts
+  running a daemon too old to have the endpoint. That 403 is real and it is not
+  an answer to the question asked. Read as `not-ok` it grounds nine healthy
+  agents; read as `ok` it moves an agent onto a host nobody inspected. The same
+  day the card-store doctor could not open its store and reported `ok: false`
+  on two checks whose questions it never got as far as asking.
+
+  `unknown` must carry a reason and a way to find out, enforced at BOTH doors —
+  `Check.unknown(name, reason, hint)` takes them positionally, and
+  `__post_init__` refuses a blank one, so the dataclass constructor cannot get
+  around the classmethod. A rule enforced in one place holds until someone uses
+  the other door.
+
+  The rollup policy is REQUIRED with no default: `refuse` (never act on a host
+  you could not inspect), `propagate` (this report cannot say the whole is
+  healthy) or `tolerate` (may I proceed?). A default here would be the same
+  collapse a boolean is, moved one level up and made harder to find. Under
+  every policy the summary NAMES the unknown checks.
+
+  The wire form is unchanged: the verdict rides in the existing `ok` field as
+  `true` / `false` / `null`, so the four-key report and four-field check record
+  every existing reader parses keep working, and there is no second field that
+  can disagree. `Verdict.from_ok` refuses truthy stand-ins — `bool(x)` is the
+  one line that has eaten the third state everywhere it was lost.
+
+  The idea was not missing: `versioning.Currency`, `store.StoreStatus`,
+  `testing._audit_outcome`, `hygiene.Landed` and `_cli._doctor`'s
+  `Literal["ok", "fail", "skip"]` are five separate three-valued verdicts,
+  none readable to the others. This adds the one leaves publish. Nothing is
+  migrated by this change; convergence is per-consumer, as ADR-0007's boundary
+  declarations are.
+
+### Fixed
+
+- **The audit gate's first line now names the rules that fired (#593).** pytest's
+  `short test summary info` carries one line per failure, and it is what CI
+  notifications and `gh pr checks` triage are built from. That line read
+
+      AssertionError: audit-all reported violations for 'sac' (exit=1).
+
+  for every rule in the corpus — a CONSTANT, so two unrelated failures were
+  indistinguishable without downloading each job log. The codes were already in
+  the captured output, roughly four screens into the assertion body.
+
+  Measured 2026-08-12 on scitex-agent-container: seventeen PRs red, all showing
+  that one sentence, escalated as a P1 fleet-wide CI outage and given two
+  published root causes before anyone opened a raw log. The real causes were
+  four DIFFERENT rules — `PS-140` twice (different new modules), `PS-207`,
+  `SK-302` — every one PR-local and a one-line fix by its own author.
+  `audit-all` on develop exited 0 throughout. It now reads
+
+      audit-all reported violations for 'scitex-dev' (exit=1): PS-207, SK-302, §1f
+
+  Purely additive: the digest, the warn-tier note and the full stdout/stderr all
+  still follow. Attribution reuses the masking classifier's structural
+  discriminator ("the bracket carries a digit or `§`"), so the legacy
+  `[E] [PS-207 …]` shape yields `PS-207` and not `E`, and a new rule family needs
+  no edit. Codes are sorted and de-duplicated — output order is a thread-pool
+  race, and one rule firing on four modules is one thing to go fix.
+
+- **`summary: … 0 unmasked error(s)` no longer reads as a verdict on a red run
+  (#593).** `audit-skills` fails on ANY finding; `audit-project`'s `--severity`
+  floor is documented as "W/I findings never fail CI on their own". So a
+  W-severity `SK-302` sets the exit code while the summary reports zero errors —
+  measured with ZERO skip-rules declared, so this is not the masking defect and
+  the count is not wrong. What was wrong is that the line reads as the verdict.
+  `render_summary` now takes the package's own exit code and, in the one shape
+  where the numbers alone mislead, says `— but this run EXITED 1: … This line is
+  a TALLY, not the verdict`. `exit_code` is required and keyword-only for the
+  same reason `inspected` is: a dropped argument silently restores the
+  misleading line. The exit-code SEMANTICS are untouched — the asymmetry is
+  deliberate on both sides and changing it is a separate call.
+
 ## [0.47.0] - 2026-08-11
 
 **Six reports that were literally true and read as their opposite.** 0.44.0
