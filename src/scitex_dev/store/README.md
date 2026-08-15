@@ -40,7 +40,41 @@ absent from another store."**
 | `_guards.py` | record keys, the optimistic lock, ownership checks |
 | `_store.py` | `Store` — the write door and the read door |
 | `_replication.py` | `replay`, `pull`, `sync`, `outstanding` |
+| `_identity.py` | `StoreIdentity` — "you are me" vs "you descend from me" |
+| `_identity_state.py` | the `Store.identity` plumbing: mint the lineage, ask the instance |
+| `_divergence.py` | `detect_divergence` — a fork PROVEN from the logs, never from absence |
+| `federation/` | leaves declare a store; scitex-dev owns the machinery |
 | `_dialect/` | SQLite (default) and Postgres (advanced) |
+
+## How a leaf adopts a store
+
+A leaf declares WHAT it stores and how its fields merge; it never resolves
+WHERE the store is. Register a provider under the entry-point group
+`scitex_dev.store.plugins`:
+
+```toml
+[project.entry-points."scitex_dev.store.plugins"]
+scitex-cards = "scitex_cards._store_plugin:provide"
+```
+
+```python
+from scitex_dev.store import StorePlugin, Schema, WriterPolicy
+
+def provide() -> list[StorePlugin]:
+    return [StorePlugin(name="cards", pkg="cards", schema=Schema.build(...),
+                        writer_policy=WriterPolicy.MULTI_WRITER,
+                        provider="scitex-cards")]
+```
+
+`discover_store_plugins()` aggregates every installed declaration and
+`resolve_target(plugin)` says where it lives. Resolution is centralised
+because per-consumer resolution is exactly what let one host reach two
+Postgres instances that both answered to one `store_uuid` on 2026-08-11 —
+404 cards on one, 146 on the other, every operation reporting success.
+
+scitex-dev is a leaf here too: its own store (the status exchange ledger)
+is merged through an INTERNAL provider, never an entry point, so discovery
+never walks this package's metadata to find this package.
 
 ## Two places with no default, on purpose
 

@@ -51,7 +51,11 @@ ls -l dist
 # --- writable scratch (compute-node HOME is RO inside the container) ---
 TMPDIR="/tmp/publish-scitex_dev-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}-$V"
 export TMPDIR
-rm -rf "$TMPDIR"
+# `${TMPDIR:?}` — see run-in-sif.sh for the reasoning and the measurement.
+# Short version: `rm -rf ""` exits 0 SILENTLY on GNU coreutils, so an empty name
+# would delete nothing, fail nothing, and leave the rest of the script
+# addressing paths off the filesystem root. `:?` aborts instead.
+rm -rf "${TMPDIR:?publish scratch path is empty — refusing to rm -rf it}"
 mkdir -p "$TMPDIR/site" "$TMPDIR/uv-cache"
 export UV_CACHE_DIR="$TMPDIR/uv-cache"
 export XDG_CACHE_HOME="$TMPDIR"

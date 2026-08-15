@@ -24,10 +24,36 @@ from ..._ecosystem.ci_template import (
 from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from . import config
 
-#: The one sanctioned CI_RUNS_ON default — self-hosted only, NEVER
-#: ubuntu-latest (PS-169). Must match the default documented in
-#: ``ci_template/templates/ci.yml.tmpl``.
-CI_RUNS_ON_DEFAULT = '["self-hosted","Linux","X64","scitex-ci"]'
+#: The one sanctioned CI_RUNS_ON default, and the ONLY definition of it —
+#: ``_use.py`` imports this rather than carrying a second literal.
+#:
+#: THIS IS A MEASUREMENT WITH AN EXPIRY DATE, NOT A CONSTANT. Re-read it
+#: against the live pool before trusting it::
+#:
+#:     gh api /orgs/scitex-ai/actions/runners \
+#:       --jq '.runners[] | "\(.name)\t\(.status)\t\([.labels[].name]|join(","))"'
+#:
+#: It said ``scitex-ci`` until 2026-08-15, when that label was measured to be
+#: carried by exactly four ORG runners, ALL FOUR OFFLINE since 2026-08-12.
+#: GitHub does not reject a job whose labels nothing serves — it QUEUES IT
+#: FOREVER — so this default was pointing new repos at a destination that
+#: could never pick their work up. It was correct on the day it was written;
+#: nothing re-checked it, and nothing could, because a label census is not the
+#: kind of fact a test can pin without the network.
+#:
+#: `scitex-ci` is NOT dead everywhere, and the distinction cost a retraction:
+#: at REPO scope, ``scitex-01-cpu-01`` on scitex-agent-container carries it and
+#: is online. A destination's liveness is a question about a SCOPE.
+#:
+#: ALSO REMOVED HERE: the old note "self-hosted only, NEVER ubuntu-latest
+#: (PS-169)". That mandate was repealed by the operator on 2026-07-31 ("hosted
+#: is the DEFAULT CHOICE for new work ... not a blanket policy") and again in
+#: the constitution on 2026-08-05. It is the third place today where a repealed
+#: rule was still being enforced in code — a stale rule in a gate does not sit
+#: quietly, it blocks the repair. Hosted is a legitimate target; this verb
+#: simply exists to point a repo at hardware we own, which is a different
+#: question from whether hardware is mandatory.
+CI_RUNS_ON_DEFAULT = '["self-hosted","Linux","X64","scitex-org-cpu"]'
 
 
 def register(group: click.Group) -> None:
