@@ -27,14 +27,15 @@ from __future__ import annotations
 
 # Real host data from the operator's environment — names match the
 # established convention already referenced across scitex-dev's own
-# skills/docs (ywata-note-win, spartan, scitex-nas-01/02/03, mba).
+# skills/docs (ywata-note-win, spartan, scitex-compute-04,
+# scitex-nas-01/02/03, mba).
 _DEFAULT_HOSTS_YAML = """\
 # SciTeX host registry — the shared port other scitex-* packages (sac,
 # scitex-hub, scitex-storage, ...) resolve through instead of inventing
 # their own host config. See `scitex_dev.hosts` for the Python API and
 # `scitex-dev host --help` for the CLI.
 #
-# kind        : one of workstation, hpc-login, storage
+# kind        : one of workstation, hpc-login, compute, storage
 # ssh_alias   : the ~/.ssh/config Host alias to reach this machine, or
 #               null when the host IS local (no SSH hop needed)
 # scitex_root : that HOST's $SCITEX_DIR (may use ~; expanded on that
@@ -75,6 +76,14 @@ _DEFAULT_HOSTS_YAML = """\
 # capacity. The org reusables in scitex-ai/.github use spartan-cpu.
 # DEFAULT TO `spartan-cpu`; add `scitex-ci` only when a job genuinely needs
 # that specific pool.
+#
+# A SECOND KIND OF LABEL — CO-LOCATION, not capacity. `sac-control-plane`
+# (scitex-compute-04, below) does not name a faster or bigger machine; it
+# names THE machine a job must run ON to reach a loopback-bound service.
+# Narrowing for capacity is a queue-time trade you can undo; narrowing for
+# co-location is a correctness requirement you cannot. Read that entry's
+# comment before pinning anything to it — the cost is that the job becomes
+# exactly as available as one machine.
 
 hosts:
   ywata-note-win:
@@ -95,6 +104,98 @@ hosts:
     runner_labels:
       - [self-hosted, Linux, X64, spartan-cpu]
       - [self-hosted, Linux, X64, spartan-cpu, scitex-ci]
+  scitex-compute-04:
+    kind: compute
+    ssh_alias: scitex-compute-04
+    scitex_root: "~/.scitex"
+    # Measured 2026-08-12, from BOTH ends: the live GitHub Actions API (org
+    # `scitex-ai`) for the labels, and `~/actions-runner-org/.runner` ON the
+    # machine for which machine the runner is. One runner:
+    #   agentName scitex-04-org-cpu-01  (on host `scitex-compute-04`)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu, sac-control-plane]
+    #
+    # WHAT `sac-control-plane` MEANS — the registry has no field for a
+    # destination's MEANING, only its labels, so it is recorded here. The
+    # label is a CO-LOCATION claim, not a capability tier: this is the one
+    # org runner that shares a machine with the sac control plane. Measured
+    # on the bare host the same day, both services bind LOOPBACK:
+    #   sac listen   LISTEN 127.0.0.1:7878
+    #   card store   LISTEN 127.0.0.1:55432   (postgres)
+    # A job that must reach either therefore has to EXECUTE on this machine.
+    # On any other runner `127.0.0.1` is a different machine's daemon and a
+    # different postgres, so the call is delivered to nobody and the write is
+    # recorded nowhere — while the job still reports success. That is why the
+    # pin exists (sac ADR-0024 assumed the runners were co-located; they are
+    # four runners on four machines, and only this one is).
+    #
+    # WHAT IT COSTS — anything pinned to `sac-control-plane` is exactly as
+    # available as this ONE machine. It does not fail over; if the machine is
+    # down the job queues, and PS-224 will still pass it, because this gate
+    # validates SERVED-ness and not capacity. Pin ONLY work that genuinely
+    # needs loopback access to the control plane. The pin becomes unnecessary
+    # the day those services stop binding loopback-only — that is a policy
+    # decision, not something to engineer around.
+    #
+    # THE POOL IS NOW COMPLETE — the three siblings below were added
+    # 2026-08-15. This comment used to end "UNDER-REPORTS the pool by three",
+    # and that under-report was not free: it meant a reader of this file could
+    # see `scitex-org-cpu` as legal while believing exactly one machine served
+    # it, at a moment when it was the ONLY pool still online.
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu, sac-control-plane]
+    # `scitex-04-dotfiles-01`, registered to `ywatanabe1989/.dotfiles`, is a
+    # SECOND runner on this same machine. It is recorded because this field is
+    # one entry PER RUNNER, and omitting a repo-scoped runner would make a
+    # workflow that legitimately names `dotfiles-ci` read as unserved.
+      - [self-hosted, Linux, X64, dotfiles-ci, scitex-local-cpu]
+  scitex-compute-01:
+    kind: compute
+    ssh_alias: scitex-compute-01
+    scitex_root: "~/.scitex"
+    # Measured 2026-08-15 from BOTH ends, the same discipline as
+    # scitex-compute-04 above: `~/actions-runner*/.runner` ON the machine for
+    # WHICH runner lives WHERE, and the GitHub Actions API for the labels.
+    # Neither half is inferred from the naming pattern — `scitex-01-*` living
+    # on `scitex-compute-01` is exactly the kind of correspondence that is
+    # usually true and occasionally not.
+    #   agentName scitex-01-org-cpu-01  (org scitex-ai)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
+    #   agentName scitex-01-cpu-01      (repo scitex-ai/scitex-agent-container)
+    #     -> [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
+    #
+    # THAT SECOND ENTRY IS WHY SCOPE BELONGS IN THIS FILE'S REASONING. On
+    # 2026-08-15 every ORG runner carrying `scitex-ci` was offline, and it was
+    # briefly reported fleet-wide that the label was dead. It was not: this
+    # repo-scoped runner carried it and was online. A destination's liveness is
+    # a question about a SCOPE, not about a label.
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
+      - [self-hosted, Linux, X64, scitex-ci, scitex-local-cpu]
+  scitex-compute-02:
+    kind: compute
+    ssh_alias: scitex-compute-02
+    scitex_root: "~/.scitex"
+    # Measured 2026-08-15. `~/actions-runner*/.runner` also records
+    # `scitex-02-cpu-01` (repo scitex-ai/scitex-agent-container) on this
+    # machine, but that runner is NOT in the repo's registered runner list, so
+    # its label set is unknown and it is deliberately NOT recorded. A leftover
+    # config file on disk is not a registered destination, and inventing a
+    # label set for it from its sibling's would be exactly the pattern-guess
+    # this file refuses elsewhere.
+    #   agentName scitex-02-org-cpu-01  (org scitex-ai)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
+  scitex-compute-03:
+    kind: compute
+    ssh_alias: scitex-compute-03
+    scitex_root: "~/.scitex"
+    # Measured 2026-08-15. Same caveat as scitex-compute-02 about the
+    # unregistered `scitex-03-cpu-01` config on disk.
+    #   agentName scitex-03-org-cpu-01  (org scitex-ai)
+    #     -> [self-hosted, Linux, X64, scitex-org-cpu]
+    runner_labels:
+      - [self-hosted, Linux, X64, scitex-org-cpu]
   # RENAMED 2026-08-07. The old aliases `nas` / `nas1` / `nas2` are RETIRED:
   # they resolve to nothing on purpose, printing the successor name and
   # exiting 255. Serving them from here made this registry hand out routes

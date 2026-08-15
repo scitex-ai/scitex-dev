@@ -142,6 +142,7 @@ def test_the_summary_states_its_denominator():
         declared=0,
         inspected=40,
         unreadable=0,
+        exit_code=0,
     )
     # Assert
     assert "40 line(s) inspected" in line
@@ -157,6 +158,7 @@ def test_the_summary_names_unreadable_lines_when_present():
         declared=0,
         inspected=40,
         unreadable=3,
+        exit_code=1,
     )
     # Assert
     assert "3 UNREADABLE" in line
@@ -172,6 +174,7 @@ def test_the_summary_says_unreadable_lines_are_not_clean():
         declared=0,
         inspected=40,
         unreadable=3,
+        exit_code=1,
     )
     # Assert
     assert "NOT counted as clean" in line
@@ -187,6 +190,7 @@ def test_the_summary_omits_the_unreadable_clause_when_there_are_none():
         declared=0,
         inspected=40,
         unreadable=0,
+        exit_code=0,
     )
     # Assert
     assert "UNREADABLE" not in line
@@ -197,6 +201,147 @@ def test_a_summary_cannot_be_rendered_without_its_denominator():
     # denominator is a TypeError at the call site, not a habit to remember.
     call = lambda: render_summary(  # noqa: E731
         "scitex-dev", unmasked_errors=0, masked=0, declared=0
+    )
+    # Act
+    raised = pytest.raises(TypeError)
+    # Assert
+    with raised:
+        call()
+
+
+# --------------------------------------------------------------------- #
+# The tally is not the verdict (scitex-dev#593)                          #
+# --------------------------------------------------------------------- #
+#
+# `audit-skills` fails on ANY finding; `audit-project` takes a `--severity`
+# floor documented as "W/I findings never fail CI on their own". So a
+# W-severity `SK-302` sets the exit code while this line reports zero
+# errors. Measured on 0.47.0 with ZERO skip-rules declared, so it is not
+# the masking defect above:
+#
+#     WARN:   [SK-302 §3 leaf-not-linked-from-skill-md] ...
+#     summary: sac: 0 unmasked error(s) (+4 warning/info finding(s)), ...
+#     exit=1
+#
+# The count is CORRECT. What was wrong is that the line reads as a verdict
+# and is not one. The exit-code semantics are deliberate on both sides and
+# are NOT touched here — only what the line claims about itself.
+
+
+def test_a_red_run_with_no_errors_says_it_exited_non_zero():
+    # Arrange — the exact measured shape: warn-tier findings, zero errors.
+    # Act
+    line = render_summary(
+        "scitex-agent-container",
+        unmasked_errors=0,
+        unmasked_total=4,
+        masked=0,
+        declared=0,
+        inspected=42,
+        unreadable=0,
+        exit_code=1,
+    )
+    # Assert
+    assert "EXITED 1" in line
+
+
+def test_a_red_run_with_no_errors_says_it_is_not_the_verdict():
+    # Arrange
+    # Act
+    line = render_summary(
+        "scitex-agent-container",
+        unmasked_errors=0,
+        unmasked_total=4,
+        masked=0,
+        declared=0,
+        inspected=42,
+        unreadable=0,
+        exit_code=1,
+    )
+    # Assert
+    assert "TALLY, not the verdict" in line
+
+
+def test_a_red_run_with_no_errors_names_the_auditor_that_has_no_floor():
+    """Naming audit-skills is what turns 'confusing' into 'go look there'."""
+    # Arrange
+    # Act
+    line = render_summary(
+        "scitex-agent-container",
+        unmasked_errors=0,
+        unmasked_total=4,
+        masked=0,
+        declared=0,
+        inspected=42,
+        unreadable=0,
+        exit_code=1,
+    )
+    # Assert
+    assert "audit-skills" in line
+
+
+def test_a_green_run_is_not_given_the_caveat():
+    """A caveat printed on every run is a caveat nobody reads."""
+    # Arrange
+    # Act
+    line = render_summary(
+        "scitex-dev",
+        unmasked_errors=0,
+        masked=0,
+        declared=0,
+        inspected=42,
+        unreadable=0,
+        exit_code=0,
+    )
+    # Assert
+    assert "TALLY" not in line
+
+
+def test_a_red_run_that_already_counted_errors_is_not_given_the_caveat():
+    """With a non-zero error count the line already explains the exit."""
+    # Arrange
+    # Act
+    line = render_summary(
+        "scitex-dev",
+        unmasked_errors=3,
+        masked=0,
+        declared=0,
+        inspected=42,
+        unreadable=0,
+        exit_code=1,
+    )
+    # Assert
+    assert "TALLY" not in line
+
+
+def test_the_counts_are_left_exactly_as_they_were():
+    """Display fix only — the tally itself was never wrong."""
+    # Arrange
+    # Act
+    line = render_summary(
+        "scitex-agent-container",
+        unmasked_errors=0,
+        unmasked_total=4,
+        masked=0,
+        declared=0,
+        inspected=42,
+        unreadable=0,
+        exit_code=1,
+    )
+    # Assert
+    assert "0 unmasked error(s) (+4 warning/info finding(s))" in line
+
+
+def test_a_summary_cannot_be_rendered_without_saying_how_the_run_ended():
+    # Arrange — same tired-author enforcement as the denominator above: a
+    # dropped exit_code silently restores the line that reads as a verdict.
+    call = lambda: render_summary(  # noqa: E731
+        "scitex-dev",
+        unmasked_errors=0,
+        masked=0,
+        declared=0,
+        inspected=40,
+        unreadable=0,
     )
     # Act
     raised = pytest.raises(TypeError)

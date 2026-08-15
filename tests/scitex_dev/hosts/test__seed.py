@@ -24,6 +24,16 @@ import yaml
 from scitex_dev.hosts import packaged_default_runner_destinations
 from scitex_dev.hosts._seed import _DEFAULT_HOSTS_YAML
 
+#: scitex-compute-04's single runner, measured 2026-08-12 from the GitHub
+#: Actions API plus that machine's own `~/actions-runner-org/.runner`.
+#: `sac-control-plane` is a CO-LOCATION label — see the seed's entry.
+_CONTROL_PLANE_DESTINATION = (
+    "scitex-compute-04",
+    frozenset(
+        {"self-hosted", "Linux", "X64", "scitex-org-cpu", "sac-control-plane"}
+    ),
+)
+
 #: spartan's two live runner label sets, measured 2026-07-24 from the
 #: GitHub Actions API. `spartan-cpu` is on every runner; `scitex-ci` only on
 #: the pooled subset — see the seed's own CHOOSING LABELS comment.
@@ -35,8 +45,54 @@ _SPARTAN_DESTINATIONS = [
     ),
 ]
 
+#: The rest of the compute pool, measured 2026-08-15 from `.runner` on each
+#: machine (which runner is WHERE) plus the Actions API (its labels). Until
+#: that day the seed carried scitex-compute-04 alone, with a comment admitting
+#: it "UNDER-REPORTS the pool by three" — written while those three were the
+#: only CI machines still online.
+_COMPUTE_POOL_DESTINATIONS = [
+    (
+        "scitex-compute-01",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-org-cpu"}),
+    ),
+    (
+        "scitex-compute-01",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-local-cpu"}),
+    ),
+    (
+        "scitex-compute-02",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-org-cpu"}),
+    ),
+    (
+        "scitex-compute-03",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-org-cpu"}),
+    ),
+]
+
+#: scitex-compute-04's SECOND runner, registered to `ywatanabe1989/.dotfiles`.
+#: Recorded because this field is one entry PER RUNNER: omitting a repo-scoped
+#: runner makes a workflow that legitimately names `dotfiles-ci` read as
+#: unserved.
+_DOTFILES_DESTINATION = (
+    "scitex-compute-04",
+    frozenset({"self-hosted", "Linux", "X64", "dotfiles-ci", "scitex-local-cpu"}),
+)
+
+#: The whole floor, in `packaged_default_runner_destinations`' sort order
+#: (by host name): the compute pool precedes spartan.
+_SEED_DESTINATIONS = [
+    *_COMPUTE_POOL_DESTINATIONS,
+    _CONTROL_PLANE_DESTINATION,
+    _DOTFILES_DESTINATION,
+    *_SPARTAN_DESTINATIONS,
+]
+
 _REGISTERED_HOSTS = [
     "mba",
+    "scitex-compute-01",
+    "scitex-compute-02",
+    "scitex-compute-03",
+    "scitex-compute-04",
     "scitex-nas-01",
     "scitex-nas-02",
     "scitex-nas-03",
@@ -152,10 +208,10 @@ def test_each_retired_alias_points_at_its_recorded_successor():
     assert found == recorded
 
 
-def test_packaged_floor_is_exactly_spartans_two_label_sets():
+def test_packaged_floor_is_exactly_the_measured_label_sets():
     # Arrange — this list IS PS-224's floor; if a comment edit emptied it,
     # every workflow in the fleet would go unvalidated.
-    expected = _SPARTAN_DESTINATIONS
+    expected = _SEED_DESTINATIONS
     # Act
     found = packaged_default_runner_destinations()
     # Assert
@@ -174,12 +230,29 @@ def test_packaged_floor_is_never_empty():
 
 def test_seed_label_sets_are_per_runner_not_a_flattened_union():
     # Arrange — a flattened union would green-light a combination no single
-    # runner offers, and such a job queues forever.
+    # runner offers, and such a job queues forever. Eight runners across five
+    # machines as of 2026-08-15; a flatten would collapse them to five.
     pass
     # Act
     found = packaged_default_runner_destinations()
     # Assert
-    assert len(found) == 2
+    assert len(found) == 8
+
+
+def test_control_plane_label_travels_with_the_rest_of_its_runners_set():
+    # Arrange — the seed's own rule: record the EFFECTIVE set the Actions API
+    # reports, not just the `--labels` half. Registering `sac-control-plane`
+    # ALONE would make every job that also names `Linux`/`X64` — i.e. every
+    # job written in the fleet idiom — look unserved on this machine.
+    expected = _CONTROL_PLANE_DESTINATION
+    # Act
+    found = [
+        pair
+        for pair in packaged_default_runner_destinations()
+        if "sac-control-plane" in pair[1]
+    ]
+    # Assert
+    assert found == [expected]
 
 
 # EOF

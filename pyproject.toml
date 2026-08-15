@@ -85,6 +85,20 @@ dependencies = [
     # transitively in most environments, so it is present exactly where
     # developers look and absent where CI runs.
     "rich>=13.0.0",
+    # THIRD INSTANCE OF THE DEFECT DIRECTLY ABOVE, found 2026-08-13 while
+    # moving scitex-agent-container's state onto the store. Measured on
+    # scitex-compute-04: `scitex_dev.store` imports fine and psycopg reports
+    # MISSING — so the host carries the Postgres backend and cannot open one.
+    # PostgresDialect.connect imports psycopg lazily and raises a clear
+    # DialectUnavailableError when it is absent, which is why this never
+    # showed up as a crash and never showed up at import time either: the
+    # only way to see it is to open a Postgres store, and nothing did until
+    # ADR-0006 made Postgres the fleet's store.
+    # That ADR is also why this belongs in core rather than an extra. The
+    # comment block above this dependency list records what a per-feature
+    # menu already cost us — pinning `scitex-cards[mcp]` lost psycopg
+    # fleet-wide on 2026-08-02. It has been undeclared ever since.
+    "psycopg[binary]>=3.1",
 ]
 
 [project.optional-dependencies]
@@ -189,6 +203,27 @@ scitex-dev-ecosystem = "scitex_dev._ecosystem_jobs._provider:provide_jobs"
 # scholar-library-sync managed cron job (scitex-ssh sync wraps rsync).
 scitex-dev = "scitex_dev._system_deps:provide"
 
+# Federated HOST-LEVEL configuration providers live under the entry-point group
+# `scitex_dev.host_config`. Each entry point loads to a callable returning
+# `list[scitex_dev.host_config.HostConfigSpec]`;
+# `scitex_dev.host_config.discover_host_config()` aggregates them (deduped by
+# name, and by target path). Replaces configuring hosts by hand with sudo --
+# an ad-hoc privileged session leaves no record, so months later nobody can
+# tell deliberate configuration from drift (operator ruling 2026-08-12).
+# CHECKING is unprivileged and runs on the `host-config-check` timer; APPLYING
+# needs root and is deliberate: `sudo scitex-dev ecosystem host-config apply
+# --yes`.
+#
+# scitex-dev's OWN declaration (persistent journald) is merged through an
+# INTERNAL provider -- `host_config._builtin_host_config` -- NOT an entry point,
+# exactly as `jobs._builtin_jobs` is. Entry-point metadata lives in the
+# INSTALLED dist-info, so an editable checkout that has not been reinstalled
+# advertises the OLD set; for the declaration that keeps a host's forensic
+# logging alive, that is a silent per-host disappearance. This group is
+# therefore reserved for DOWNSTREAM packages, which register like so:
+#   scitex-agent-container = "scitex_agent_container._host_config:provide"
+[project.entry-points."scitex_dev.host_config"]
+
 # Federated SUBMISSION-GATE check providers live under the entry-point group
 # `scitex_dev.gate.checks`. Each entry point loads to a callable returning
 # `list[scitex_dev.gate.GateCheck]`; `scitex_dev.gate.discover_gate_checks()`
@@ -216,6 +251,24 @@ scitex-dev = "scitex_dev._system_deps:provide"
 #   claude-code-telegrammer  = "claude_code_telegrammer._hook_rules:provide"
 [project.entry-points."scitex_dev.hooks"]
 scitex-dev = "scitex_dev._hook_rules:provide"
+
+# Federated STORE providers live under the entry-point group
+# `scitex_dev.store.plugins`. Each entry point loads to a callable returning
+# `list[scitex_dev.store.StorePlugin]`;
+# `scitex_dev.store.discover_store_plugins()` aggregates them (deduped by
+# store name, first-wins). A leaf declares the part only it can know — which
+# of ITS fields are immutable, last-writer-wins, append-only — because a
+# merge rule guessed by scitex-dev would lose data without raising. It does
+# NOT resolve its own store target; `scitex_dev.store.resolve_target()` does
+# that, centrally, because per-consumer resolution is what let one host reach
+# two Postgres instances that both answered to one store_uuid on 2026-08-11.
+#
+# scitex-dev ships its own store (the status exchange ledger) via an INTERNAL
+# provider — always merged, never an entry point, so it cannot be lost to a
+# missing .dist-info or double-counted by a leaf that vendored it. It
+# therefore declares no provider here; this group is for downstream leaves:
+#   scitex-agent-container = "scitex_agent_container._store_plugin:provide"
+#   scitex-cards           = "scitex_cards._store_plugin:provide"
 
 [project.urls]
 Homepage = "https://github.com/scitex-ai/scitex-dev"

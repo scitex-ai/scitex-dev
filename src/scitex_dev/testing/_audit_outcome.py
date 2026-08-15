@@ -27,6 +27,14 @@ down. This module is that fix at the pytest-gate layer.
 UNKNOWN STILL FAILS. "Could not run" must never be green — that is
 green-by-absence. What changes is only what the message CLAIMS.
 
+AND THE FAILING CLAIM HAS TO NAME A RULE. Saying FAIL rather than UNKNOWN
+fixed the wrong-KIND-of-failure problem; it left every FAIL reading
+identically, because the first line — the only line pytest's short summary
+shows — was a constant. Seventeen unrelated red PRs then looked like one
+outage (scitex-dev#593, measured 2026-08-12). :func:`headline_codes` puts
+the rule ids that are ALREADY in the captured output onto that first line.
+Nothing is removed: the digest and the full stdout/stderr still follow.
+
 Deliberately free of the `_cli` tree (and therefore of click): this module
 is reached from every ecosystem package's test suite, so its import cost and
 its dependency surface are everyone's.
@@ -182,6 +190,57 @@ def finding_lines(output: str) -> list[str]:
     ]
 
 
+def rule_code(line: str) -> str | None:
+    """The rule id one finding line is attributable to, e.g. ``PS-207``.
+
+    The first WORD inside the first bracketed token that carries a rule id.
+    Both emitted shapes land on the same answer::
+
+        WARN:   [SK-302 §3 leaf-not-linked-from-skill-md] ...  -> "SK-302"
+        ERRO:   [E] [PS-207 §2 empty-test-dir] ...             -> "PS-207"
+
+    The legacy `[E]` marker is stepped over rather than special-cased: it
+    carries neither a digit nor a ``§``, so :data:`_RULE_ID_RE` does not
+    match it. That is the same structural discriminator the masking
+    classifier uses, so a new rule FAMILY needs no edit here — as opposed to
+    a list of known prefixes, which is a second place to forget.
+
+    ``None`` when the line is not a finding, or is one whose bracket carries
+    no rule id. A finding nobody can attribute is exactly what
+    ``MaskReport.unreadable`` calls UNKNOWN, and it must not be rendered as
+    though it named a rule.
+    """
+    stripped = _ANSI_RE.sub("", line).lstrip()
+    head = stripped.split(":", 1)
+    has_level = len(head) == 2 and head[0].isalpha()
+    payload = head[1].lstrip() if has_level else stripped
+    if not payload.startswith("["):
+        return None
+    match = _RULE_ID_RE.search(payload)
+    if match is None:
+        return None
+    words = match.group(0)[1:-1].split()
+    return words[0] if words else None
+
+
+def rule_codes(findings: list[str]) -> list[str]:
+    """The DISTINCT rule ids across ``findings``, sorted, de-duplicated.
+
+    SORTED, not first-seen. The entire use for this list is comparing one
+    failing run against another at a glance — "are these seventeen red PRs
+    the same failure?" — and that comparison only works if two runs that
+    tripped the same rules produce the same string. First-seen order does
+    not survive: `audit-all` fans its sub-auditors out across a thread pool,
+    and a rule's position in the output is a race, not a fact about the
+    code.
+
+    De-duplicated for the same reason: ``PS-140`` firing on four modules is
+    ONE thing to go fix, and a headline that says it four times crowds out
+    the second rule.
+    """
+    return sorted({code for code in map(rule_code, findings) if code})
+
+
 def classify_audit_outcome(returncode: int, output: str) -> tuple[str, list[str]]:
     """Grade one `audit-all` run. Returns ``(verdict, evidence)``.
 
@@ -246,6 +305,46 @@ def unknown_message(
     )
 
 
+#: How many rule codes fit on the headline before it stops being scannable.
+#: pytest's short summary is ONE line and terminals truncate it, so the
+#: budget is real. Six codes is ~50 characters — measured against a run that
+#: produced exactly six.
+_MAX_HEADLINE_CODES = 6
+
+
+def headline_codes(findings: list[str]) -> str:
+    """The `: PS-207, SK-302` suffix for the failure message's FIRST line.
+
+    THE FIRST LINE IS THE WHOLE PRODUCT HERE. pytest's `short test summary
+    info` — and every CI notification and `gh pr checks` triage built on it —
+    shows that line and nothing else. Without the codes it is a constant
+    string: identical for every rule in the corpus, so unrelated failures are
+    indistinguishable without downloading each job log.
+
+    Measured 2026-08-12 on scitex-agent-container (scitex-dev#593). Seventeen
+    PRs were red, all showing that one sentence, and were escalated as a P1
+    fleet-wide CI outage. They were four DIFFERENT rules — ``PS-140`` twice
+    for different new modules, ``PS-207``, ``SK-302`` — every one of them
+    PR-local and a one-line fix by its own author. There was no outage:
+    ``audit-all`` on develop exited 0 throughout. Two wrong root causes were
+    published before anyone opened a raw log.
+
+    Over-long lists are truncated rather than dropped: knowing SIX rules
+    fired and being shown six of them beats being shown none.
+    """
+    codes = rule_codes(findings)
+    if not codes:
+        # Say the words rather than emit a bare `(exit=1)`. An empty suffix
+        # is indistinguishable from the old rule-agnostic headline, and this
+        # case is not "no information" — it is the specific, reportable
+        # shape the `else` digest below explains.
+        return ": (no rule-attributable finding line — see below)"
+    shown = ", ".join(codes[:_MAX_HEADLINE_CODES])
+    if len(codes) > _MAX_HEADLINE_CODES:
+        shown += f" (+{len(codes) - _MAX_HEADLINE_CODES} more)"
+    return f": {shown}"
+
+
 def violations_message(
     distribution: str,
     cmd: str,
@@ -253,7 +352,7 @@ def violations_message(
     findings: list[str],
     tail: str,
 ) -> str:
-    """The FAIL report — says WHICH findings drove it, up front."""
+    """The FAIL report — names the RULES on line one, then digests the findings."""
     if findings:
         digest = (
             f"  {len(findings)} finding line(s) drove the failure:\n"
@@ -274,7 +373,7 @@ def violations_message(
         )
     return (
         f"audit-all reported violations for {distribution!r} "
-        f"(exit={returncode}).\n"
+        f"(exit={returncode}){headline_codes(findings)}\n"
         f"{digest}"
         f"  $ {cmd}\n{tail}"
     )
@@ -287,6 +386,9 @@ __all__ = [
     "classify_audit_outcome",
     "could_not_run_evidence",
     "finding_lines",
+    "headline_codes",
+    "rule_code",
+    "rule_codes",
     "unknown_message",
     "violations_message",
 ]
