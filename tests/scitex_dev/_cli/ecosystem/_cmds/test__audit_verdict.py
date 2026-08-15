@@ -68,11 +68,20 @@ def test_an_undeclared_warning_from_the_failing_audit_defeats_it():
     `audit-skills` and `audit-python-apis` return `0 if not violations
     else 1` — they fail on WARN-tier findings too. So "all unmasked
     findings are warnings" would license downgrading a run those two
-    legitimately failed. Each audit is asked the strict question instead:
-    is EVERYTHING you reported masked?
+    legitimately failed.
+
+    THE AUDITOR IN THIS TEST CHANGED, AND THE DOCSTRING ABOVE IS WHY.
+    That reasoning is exactly right and it is about ANY_FINDING auditors.
+    It was applied to `audit-project` only because the predicate could not
+    tell auditors apart, so it had to be conservative for all of them.
+    Now each declares its policy (`_audit_exit_policy`), so the strict
+    question is asked of the auditors it is true for — and this test asks
+    it of one of them. `audit-project` gets the opposite answer on the
+    SAME output, which is the point, and is pinned in
+    `test__audit_exit_policy.py`.
     """
     # Arrange
-    failing = {"audit-project": f"{_MASKED}\n{_PASSING_WARN}"}
+    failing = {"audit-skills": f"{_MASKED}\n{_PASSING_WARN}"}
     # Act
     result = failing_audits_are_fully_masked(failing, [_DEFERRED])
     # Assert
