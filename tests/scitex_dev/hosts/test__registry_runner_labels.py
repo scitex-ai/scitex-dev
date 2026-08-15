@@ -214,11 +214,18 @@ def test_empty_request_is_never_served(tmp_path):
 # -------- list_runner_destinations / find_runner_host ----------------------
 
 
+# These three ask what THIS FILE declares, so they opt out of the packaged
+# floor. The floor is unioned in by default (2026-08-15) because a stale local
+# registry was reporting live destinations as undeliverable — see
+# `test__runner_destination_floor.py`. Reading the file alone is still a real
+# question; it is just no longer the default one.
+
+
 def test_list_runner_destinations_returns_one_pair_per_runner(tmp_path):
     # Arrange
     p = _write(tmp_path, _SPARTAN_TWO_RUNNERS)
     # Act
-    destinations = list_runner_destinations(hosts_path=p)
+    destinations = list_runner_destinations(hosts_path=p, include_packaged_floor=False)
     # Assert
     assert len(destinations) == 2
 
@@ -227,7 +234,7 @@ def test_list_runner_destinations_names_the_owning_host(tmp_path):
     # Arrange
     p = _write(tmp_path, _SPARTAN_TWO_RUNNERS)
     # Act
-    destinations = list_runner_destinations(hosts_path=p)
+    destinations = list_runner_destinations(hosts_path=p, include_packaged_floor=False)
     # Assert
     assert {host for host, _labels in destinations} == {"spartan"}
 
@@ -237,7 +244,7 @@ def test_list_runner_destinations_empty_when_no_machine_hosts_a_runner(tmp_path)
     # workflow is illegal".
     p = _write(tmp_path, _NO_RUNNERS)
     # Act
-    destinations = list_runner_destinations(hosts_path=p)
+    destinations = list_runner_destinations(hosts_path=p, include_packaged_floor=False)
     # Assert
     assert destinations == []
 
