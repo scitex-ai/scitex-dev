@@ -21,6 +21,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from ._gate_skip_scope import find_full_path_skips
+
 try:
     import tomllib  # 3.11+
 except ImportError:  # pragma: no cover
@@ -333,5 +335,25 @@ def check_ps140_integration_gate(
                 + f"install-cross-package-gate {distribution} --force "
                 + "(hand-written cases below the closing sentinel are "
                 + "preserved).",
+            )
+        )
+
+    # A gate can also be perfectly IN SYNC and still unable to fail, so this
+    # is checked regardless of drift — the two defects are independent and
+    # measuring one told us nothing about the other. Measured 2026-08-16: all
+    # 19 deployed gates were in this state, including this repo's.
+    for skip in find_full_path_skips(test_file.read_text(errors="replace")):
+        out.append(
+            violation_cls(
+                "PS-140",
+                f"{test_file}:{skip.line}",
+                f"gate skips on the FULL path (`importorskip({skip.argument})`), "
+                "so a renamed submodule raises ModuleNotFoundError, is SKIPPED, "
+                "and reports green — the exact failure this gate exists to "
+                "catch. Skip on the ROOT and hard-import the full path: "
+                "`pytest.importorskip(name.split('.')[0])` then "
+                "`importlib.import_module(name)`. Root-skip keeps the "
+                "legitimate case (peer genuinely absent from this CI) while "
+                "restoring the loud failure the docstring promises.",
             )
         )
