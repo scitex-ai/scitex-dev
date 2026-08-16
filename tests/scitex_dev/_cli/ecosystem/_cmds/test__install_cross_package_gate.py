@@ -30,6 +30,7 @@ from scitex_dev._cli.ecosystem._cmds._gate_sentinel import (
     split_at_sentinel,
 )
 from scitex_dev._cli.ecosystem._cmds._install_cross_package_gate import (
+    DEFAULT_GATE_TAIL,
     render_cross_package_gate,
 )
 
@@ -203,6 +204,33 @@ def test_absent_tail_yields_the_default_body():
     has_default_test = "def test_cross_package_import_resolves" in source
     # Assert
     assert has_default_test
+
+
+def test_the_default_tail_hard_imports_rather_than_skipping():
+    """A gate that skips on the FULL path cannot fail for its own purpose.
+
+    Measured 2026-08-16 by dry-running the regenerator before a pilot sweep:
+    ALL 19 deployed gates — this repo's included — call
+    `pytest.importorskip(module_name)` on the full dotted path. That skips on
+    any ImportError, and a renamed submodule raises ModuleNotFoundError, an
+    ImportError subclass. So the rename SKIPS and control never reaches the
+    hard import on the next line. The deployed docstring claims that case
+    "FAILS loudly"; it cannot.
+
+    Root-level skip stays legitimate — a peer genuinely absent from a leaf
+    repo's CI should not fail that repo. Absent-peer and broken-path are
+    different states, and the deployed shape collapses them.
+
+    This test pins only what THIS renderer emits. Fixing the 19 deployed
+    tails is tracked separately: regeneration preserves them byte-identically,
+    so a sweep does not touch the broken assertion.
+    """
+    # Arrange
+    tail = DEFAULT_GATE_TAIL
+    # Act
+    skips_on_missing = "importorskip" in tail
+    # Assert
+    assert not skips_on_missing
 
 
 def test_split_of_a_rendered_gate_round_trips():
