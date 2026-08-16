@@ -24,6 +24,11 @@ from __future__ import annotations
 
 import ast
 
+from scitex_dev._cli.ecosystem._cmds._gate_sentinel import (
+    BEGIN_SENTINEL,
+    END_SENTINEL,
+    split_at_sentinel,
+)
 from scitex_dev._cli.ecosystem._cmds._install_cross_package_gate import (
     render_cross_package_gate,
 )
@@ -124,6 +129,96 @@ def test_gate_names_the_command_that_regenerates_it():
     names_real_verb = "install-cross-package-gate" in source
     # Assert
     assert names_real_verb
+
+
+def test_rendered_gate_opens_the_generated_region():
+    """Without a BEGIN marker there is no delimited generated region."""
+    # Arrange
+    source = _render()
+    # Act
+    opens = BEGIN_SENTINEL in source
+    # Assert
+    assert opens
+
+
+def test_rendered_gate_closes_the_generated_region():
+    """The closing marker is where user territory starts.
+
+    The renderer emitted NEITHER sentinel until 2026-08-16 while the
+    deployed population carried both and invited hand-written cases below
+    the second one. Regenerating therefore did not merely fail to preserve
+    a tail -- it deleted the only defined home for one.
+    """
+    # Arrange
+    source = _render()
+    # Act
+    closes = END_SENTINEL in source
+    # Assert
+    assert closes
+
+
+def test_a_supplied_tail_is_preserved_byte_identically():
+    """The whole point: regeneration hands back the bytes it found."""
+    # Arrange
+    tail = END_SENTINEL + "\n\n\ndef test_hand_written():\n    assert True\n"
+    # Act
+    source = render_cross_package_gate(DIST, IMPORTS, tail=tail)
+    # Assert
+    assert source.endswith(tail)
+
+
+def test_preserved_tail_keeps_a_deliberately_strengthened_assertion():
+    """scitex-io strengthened its assertion in place; do not revert it.
+
+    Its gate asserts `mod.__name__ == module_name` rather than the
+    template's `mod is not None`. A regenerator that owned the region
+    below the sentinel would silently undo that -- a downgrade reported
+    as a successful refresh.
+    """
+    # Arrange
+    strengthened = (
+        END_SENTINEL + "\n\n\ndef test_x(m):\n    assert m.__name__ == m\n"
+    )
+    # Act
+    source = render_cross_package_gate(DIST, IMPORTS, tail=strengthened)
+    # Assert
+    assert "m.__name__ == m" in source
+
+
+def test_regenerated_list_is_still_ast_readable_with_a_tail():
+    """Preserving a tail must not break what the auditor parses."""
+    # Arrange
+    tail = END_SENTINEL + "\n\n\ndef test_hand_written():\n    assert True\n"
+    # Act
+    source = render_cross_package_gate(DIST, IMPORTS, tail=tail)
+    # Assert
+    assert _declared_imports(source) == sorted(IMPORTS)
+
+
+def test_absent_tail_yields_the_default_body():
+    """None means 'no existing file', not 'an empty user region'."""
+    # Arrange
+    source = render_cross_package_gate(DIST, IMPORTS, tail=None)
+    # Act
+    has_default_test = "def test_cross_package_import_resolves" in source
+    # Assert
+    assert has_default_test
+
+
+def test_split_of_a_rendered_gate_round_trips():
+    """What this renderer writes, the splitter must be able to read back.
+
+    Generator and preserver agreeing is the property that makes repeated
+    regeneration safe; if they disagree on where the boundary is, the
+    second run eats what the first one wrote.
+    """
+    # Arrange
+    tail = END_SENTINEL + "\n\n\ndef test_hand_written():\n    assert True\n"
+    rendered = render_cross_package_gate(DIST, IMPORTS, tail=tail)
+    # Act
+    split = split_at_sentinel(rendered)
+    # Assert
+    assert split.tail == tail
 
 
 # EOF
