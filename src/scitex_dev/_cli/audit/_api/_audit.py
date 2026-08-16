@@ -134,7 +134,15 @@ def audit_api(
     violations = _audit_init(init_path, distribution)
     violations.extend(_audit_umbrella_imports(init_path, distribution, import_name))
     violations.extend(_audit_playwright_capture(init_path, distribution, import_name))
-    violations.extend(_audit_no_mocks(init_path, distribution, import_name))
+    # PA-306 scans tests/ + examples/ + scripts/, which live in the source
+    # checkout and NOT in an installed wheel. Same reason TQ is given
+    # repo_root below, and the same bug: without it, an importable target
+    # resolves init_path into site-packages, repo_root collapses to
+    # site-packages itself, and the scan walks a FOREIGN tests/ directory —
+    # reporting another distribution's files as this one's verdict.
+    violations.extend(
+        _audit_no_mocks(init_path, distribution, import_name, repo_root=repo_root)
+    )
     # TQ scans the repo's tests/ tree — which lives in the source checkout,
     # NOT the installed wheel. Pass the resolved repo_root (--path target) so
     # it does not fall back to the import-resolved init_path (site-packages),
