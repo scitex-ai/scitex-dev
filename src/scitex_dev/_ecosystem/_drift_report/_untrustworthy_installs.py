@@ -89,12 +89,29 @@ class UntrustworthyInstallWarning:
         )
 
 
+def default_scan_packages() -> tuple[str, ...]:
+    """Every registered ecosystem package — the honest default scope.
+
+    Was ``CRITICAL_PACKAGES``: three hand-picked names against a registry of
+    seventy. That is not a curation decision, it is a coverage gap wearing
+    one, and it DECAYS SILENTLY — one of the three was scitex-todo, which is
+    being retired, taking the default scope to two with no code change and no
+    notification.
+
+    Widening is safe precisely because of the contract below: a package that
+    is not installed is never reported (absence is not a lie), so scanning
+    seventy names yields findings only for the installs that actually exist
+    in this interpreter and are actually lying.
+    """
+    return tuple(ECOSYSTEM.keys())
+
+
 def check_untrustworthy_installs(
-    packages: tuple[str, ...] = CRITICAL_PACKAGES,
+    packages: tuple[str, ...] | None = None,
     *,
     probe_fn: Callable[[str], object] = probe_install,
 ) -> list[UntrustworthyInstallWarning]:
-    """Which critical packages have a version string we CANNOT BELIEVE?
+    """Which installed packages have a version string we CANNOT BELIEVE?
 
     Runs BEFORE any version comparison, because a comparison against a fossilised
     ``.dist-info`` is not a weak signal — it is a WRONG one, in either direction:
@@ -109,7 +126,14 @@ def check_untrustworthy_installs(
     reporting an absent package as an orphaned .dist-info would send the reader
     hunting for a directory that does not exist — a confidently wrong hint, which
     is the very disease being treated.)
+
+    ``packages=None`` means EVERY registered package, not a hand-picked few —
+    see :func:`default_scan_packages` for why the old three-name default was a
+    coverage gap rather than a curation decision. Pass an explicit tuple only
+    to narrow deliberately.
     """
+    if packages is None:
+        packages = default_scan_packages()
     out: list[UntrustworthyInstallWarning] = []
     for pkg in packages:
         pypi_name = (ECOSYSTEM.get(pkg, {}) or {}).get("pypi_name", pkg)
