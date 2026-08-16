@@ -44,7 +44,11 @@ __all__ = [
 ]
 
 
-def _collect_violations(distribution: str, canonical_dir: Path) -> list[Violation]:
+def _collect_violations(
+    distribution: str,
+    canonical_dir: Path,
+    inspected: "set[Path] | None" = None,
+) -> list[Violation]:
     """Run all per-file rules on a fully-discovered `_skills/<dist>/` dir."""
     violations: list[Violation] = []
     skill_md = canonical_dir / "SKILL.md"
@@ -69,6 +73,12 @@ def _collect_violations(distribution: str, canonical_dir: Path) -> list[Violatio
     for leaf in sorted(canonical_dir.iterdir()):
         if not leaf.is_file() or leaf.suffix != ".md" or leaf.name == "SKILL.md":
             continue
+        # The DENOMINATOR, filled in place like `violations`. Recorded HERE —
+        # past the skip — so it counts leaves actually CHECKED rather than
+        # directory entries encountered. Counting the latter would make an
+        # empty run of a directory full of non-skill files look like coverage.
+        if inspected is not None:
+            inspected.add(leaf)
         _check_header_footer(leaf, violations)
         _check_frontmatter(leaf, violations, is_skill_md=False)
         _check_leaf_size(leaf, violations)
@@ -190,11 +200,19 @@ def audit_skills(
             via=resolved_via,
         )
     violations: list[Violation] = []
+    # The DENOMINATOR. Without it "no skills violations" reads identically
+    # whether forty leaves were checked or the directory was empty — and the
+    # empty case renders as the clean case. Same treatment the CLI auditor has
+    # had since 2026-07-29 (`_summary/_coverage.py`) and the API auditor
+    # gained in #654; this was the last leg reporting a verdict with no scope.
+    inspected: set[Path] = set()
 
     canonical_dir = _check_layout(skills_dir, distribution, violations)
 
     if canonical_dir is not None:
-        violations.extend(_collect_violations(distribution, canonical_dir))
+        violations.extend(
+            _collect_violations(distribution, canonical_dir, inspected)
+        )
 
         # --fix: apply auto-fixable rules and re-collect.
         if fix:
@@ -203,9 +221,16 @@ def audit_skills(
                 click.echo(f"fixed {path_str}: {', '.join(sorted(codes))}")
             # Re-run checks after fixes.
             violations = []
+            # RESET the denominator with the violations. The re-collect is a
+            # second full pass, so keeping the first pass's leaves would double
+            # every count on a --fix run — a denominator that grows because the
+            # tool ran twice is worse than none, since it reads as more coverage.
+            inspected.clear()
             canonical_dir2 = _check_layout(skills_dir, distribution, violations)
             if canonical_dir2 is not None:
-                violations.extend(_collect_violations(distribution, canonical_dir2))
+                violations.extend(
+                    _collect_violations(distribution, canonical_dir2, inspected)
+                )
 
     if rules:
         violations = [v for v in violations if v.rule in rules]
@@ -242,7 +267,29 @@ def audit_skills(
     from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
     if not violations:
-        _emit("success", f"{distribution}: no skills violations")
+        # REFUSE rather than pass when nothing was checked. Zero leaves is not
+        # a clean skills tree, it is an unanswered question, and it renders
+        # exactly like a package with forty conforming leaves. Same condition
+        # as `SurfaceCoverage.is_answerable` and the API auditor's guard, so
+        # the three legs cannot disagree about what licenses a verdict.
+        if not inspected:
+            _emit(
+                "error",
+                f"{distribution}: not-auditable: the skills walker inspected 0 "
+                "leaves, so no verdict is possible (is the skills directory "
+                "empty, or did layout resolution pick the wrong tree?)",
+                err=True,
+            )
+            return 1
+        # WITH ITS ROOT, not only its count. A count alone cannot be checked by
+        # a reader: #654 measured a scan reporting a plausible 311 files from
+        # site-packages while claiming the checkout, and only the root made
+        # that visible.
+        _emit(
+            "success",
+            f"{distribution}: no skills violations "
+            f"({len(inspected)} leaf/leaves inspected under {canonical_dir})",
+        )
         emit_disclaimer()
         return 0
 
