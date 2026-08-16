@@ -30,6 +30,7 @@ record.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -42,7 +43,11 @@ from .._core.errors import ErrorCode, ScitexError
 # limit). `_DEFAULT_HOSTS_YAML` is re-imported because
 # `create_default_hosts_yaml` writes it on first use;
 # `packaged_default_runner_destinations` is re-exported for PS-224's floor.
-from ._seed import _DEFAULT_HOSTS_YAML, packaged_default_runner_destinations
+from ._seed import (
+    _DEFAULT_HOSTS_YAML,
+    packaged_default_requested_addresses,
+    packaged_default_runner_destinations,
+)
 
 __all__ = [
     "HOST_KINDS",
@@ -53,7 +58,9 @@ __all__ = [
     "find_runner_host",
     "get_hosts_yaml_path",
     "list_hosts",
+    "list_requested_addresses",
     "list_runner_destinations",
+    "packaged_default_requested_addresses",
     "packaged_default_runner_destinations",
     "resolve",
 ]
@@ -134,7 +141,27 @@ class HostRecord:
         One of :data:`HOST_KINDS`.
     ssh_alias : str | None
         The ``~/.ssh/config`` ``Host`` alias to reach this machine, or
-        ``None`` when the host is local / needs no SSH hop.
+        ``None`` when NO ALIAS IS RECORDED.
+
+        ``None`` DOES NOT MEAN "this host is local". It used to, and that
+        was a defect: **locality is not a property of a host, it is a
+        RELATION between a host and whoever is asking.** A shared registry
+        cannot store a relation in a field, because the field is written
+        from one vantage point and read from many.
+
+        Measured 2026-08-12: this registry was authored on the laptop,
+        where ``ywata-note-win: ssh_alias: null`` correctly meant local.
+        Read on scitex-compute-04 the same line asserts that the laptop IS
+        this machine. Nothing about the file changed — only the reader did.
+        A consumer inferring "no SSH hop needed" from it would run locally,
+        silently, because "local" is a legitimate answer that raises
+        nothing.
+
+        Ask :func:`is_local` instead; it compares against the running
+        host's own name at read time. Same discipline as
+        ``scitex_dev.store``'s node identity, which comes from
+        ``pg_control_system().system_identifier`` precisely so a COPIED
+        file cannot lie about which machine it is on.
     scitex_root : str
         The raw (possibly ``~``-prefixed) path to this host's
         ``$SCITEX_DIR``. Use :attr:`scitex_root_path` for the expanded
@@ -178,6 +205,33 @@ class HostRecord:
         dispatch rule, and modelling it per-runner (rather than as one
         flat per-machine union) is what keeps the check exact: a union
         would green-light a combination that no single runner offers.
+    requested_address : str | None
+        The LAN address this machine should ASK its DHCP server for
+        (DHCP option 50, "Requested IP Address"). ``None`` (the default)
+        means the fleet expresses no preference for this host.
+
+        THIS FIELD IS DESIRED STATE, AND ITS NAME IS THE WARNING. It is
+        a request, not a reservation: the DHCP server may ignore it, and
+        WILL ignore it when the address is already leased to something
+        else. So it yields "usually this address", never "always", and a
+        consumer that treats it as the host's address is wrong. The
+        address a host currently HOLDS is a different fact, obtained by
+        observing the host (``ip -4 -o addr show``), and is deliberately
+        NOT stored here — a declaration that gets rewritten to match
+        reality has stopped being a declaration.
+
+        The gap between the two is therefore the PERMANENT, EXPECTED
+        condition of this system, not an error state. Reporting it is
+        the job of ``scitex-dev ecosystem host-config check``, which
+        compares declared against observed; see
+        :mod:`scitex_dev._host_config` for the per-host mechanism (and
+        for the five fleet hosts that have no mechanism at all).
+
+        Why declare it here rather than reserve it on the router: a
+        router-side reservation table lives in the router's GUI, so
+        replacing the router discards it and the topology has to be
+        rediscovered by hand. Declared here, the map is code — it
+        survives the swap, and it is reviewable.
     """
 
     name: str
@@ -186,6 +240,7 @@ class HostRecord:
     scitex_root: str
     runner_labels: tuple[frozenset[str], ...] = ()
     aliases: tuple[str, ...] = ()
+    requested_address: str | None = None
 
     def serves(self, labels: Iterable[str]) -> bool:
         """True iff one of this host's runners carries every label in ``labels``.
@@ -207,6 +262,22 @@ class HostRecord:
                 f"(must be one of: {', '.join(sorted(HOST_KINDS))})",
                 code=ErrorCode.VALIDATION,
             )
+        if self.requested_address is not None:
+            # Validate at CONSTRUCTION, like `kind`, because this value is
+            # rendered verbatim into a file that a DHCP client parses. A
+            # typo'd address does not fail loudly at apply time -- the
+            # client rejects the directive and silently keeps whatever
+            # lease it had, which looks exactly like "the server ignored
+            # our request". Catching it here keeps those two apart.
+            try:
+                ipaddress.IPv4Address(self.requested_address)
+            except ValueError as exc:
+                raise HostRegistryError(
+                    f"host {self.name!r}: `requested_address` must be a "
+                    f"literal IPv4 address, got {self.requested_address!r} "
+                    f"({exc})",
+                    code=ErrorCode.VALIDATION,
+                ) from exc
 
     @property
     def scitex_root_path(self) -> Path:
@@ -228,6 +299,7 @@ class HostRecord:
             "scitex_root": self.scitex_root,
             "runner_labels": [sorted(s) for s in self.runner_labels],
             "aliases": list(self.aliases),
+            "requested_address": self.requested_address,
         }
 
 
@@ -337,6 +409,42 @@ def list_runner_destinations(
     return out
 
 
+def list_requested_addresses(
+    *, hosts_path: str | Path | None = None
+) -> dict[str, str]:
+    """Return the fleet's DESIRED LAN address map, ``{host name: IPv4}``.
+
+    One entry per registered host that declares a
+    :attr:`HostRecord.requested_address`; hosts with no preference
+    contribute nothing.
+
+    The shipped :func:`packaged_default_requested_addresses` map is the
+    BASE and the on-disk registry OVERRIDES it per host — a MERGE, not an
+    either/or, and the distinction matters.
+    ``create_default_hosts_yaml`` only writes when the file is MISSING, so
+    every host that already had a ``hosts.yaml`` before this field existed
+    carries a copy with no addresses in it. Returning only what that file
+    declares would let a stale local copy silently erase the fleet map on
+    exactly the hosts that have been around longest — the per-host
+    disappearance this map exists to survive. Taking only the packaged map
+    would be the opposite failure: an address could never be corrected
+    without a release.
+
+    A host that has been re-keyed answers under its CANONICAL name here,
+    not its aliases — the map is keyed for lookup, and emitting one
+    address under several spellings would read as a collision.
+
+    THE VALUES ARE REQUESTS, NOT FACTS. See
+    :attr:`HostRecord.requested_address`: this is what each machine should
+    ASK for, never what it currently holds.
+    """
+    merged = packaged_default_requested_addresses()
+    for host in list_hosts(hosts_path=hosts_path):
+        if host.requested_address:
+            merged[host.name] = host.requested_address
+    return merged
+
+
 def find_runner_host(
     labels: Iterable[str],
     *,
@@ -444,6 +552,31 @@ def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:
 
 
 # Re-exported so existing imports (`from ._registry import _load_registry`)
+def is_local(record: "HostRecord | str") -> bool:
+    """Whether ``record`` names the machine this process is running on.
+
+    COMPUTED, never declared. The registry is shared across hosts, so no
+    field in it can answer this: a stored value is written from one vantage
+    point and read from many, and locality is a relation between the host
+    and the reader rather than a property of the host.
+
+    That is not hypothetical. Until 2026-08-12 ``ssh_alias: null`` was
+    documented as meaning "this host is local". The file was authored on
+    ``ywata-note-win``, where that was true, and is read on
+    ``scitex-compute-04``, where it asserts that the laptop is this machine.
+
+    Compares the host's canonical short name against this machine's, both
+    reduced to the part before the first dot so a FQDN and a short name
+    agree. Accepts a name directly so a caller holding only a string does
+    not have to resolve a record to ask.
+    """
+    import socket
+
+    name = record if isinstance(record, str) else record.name
+    here = socket.gethostname()
+    return name.split(".", 1)[0].casefold() == here.split(".", 1)[0].casefold()
+
+
 # keep resolving after the split. Imported at the BOTTOM, after `HostRecord`
 # is defined, because `._parse` imports it back — a top-of-file import would
 # close the cycle.

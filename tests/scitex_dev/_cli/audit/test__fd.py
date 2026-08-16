@@ -168,14 +168,24 @@ def test_fd_find_files_warns_loudly_on_fallback(path_without_fd, tmp_path):
     del path_without_fd  # fixture strips fd dirs for the duration of this test
     (tmp_path / "a.py").write_text("x = 1\n")
     # Act
-    ctx = pytest.warns(RuntimeWarning, match="falling back to slower stdlib")
+    ctx = pytest.warns(RuntimeWarning, match="falling back to the stdlib scan")
     # Assert
     with ctx:
         fd_find_files(tmp_path, glob="*.py")
 
 
-def test_fd_fallback_warning_message_advises_install(path_without_fd, tmp_path):
-    """The fallback warning text advises installing fd for speed."""
+def test_the_fallback_warning_is_framed_as_correctness_not_speed(
+    path_without_fd, tmp_path
+):
+    """THE WORDING IS THE FEATURE, so it gets a test.
+
+    The old text read "falling back to slower stdlib scan; install fd for
+    speed". Every word true; the consequence named was wrong. It fired
+    correctly in CI on 2026-08-15 while the fallback was grading a
+    different set of files, and every reader — me included — filed it
+    under performance. A warning that misdescribes its own consequence is
+    worse than silence, because it is actively read and dismissed.
+    """
     # Arrange
     del path_without_fd  # fixture strips fd dirs for the duration of this test
     (tmp_path / "a.py").write_text("x = 1\n")
@@ -184,7 +194,27 @@ def test_fd_fallback_warning_message_advises_install(path_without_fd, tmp_path):
         fd_find_files(tmp_path, glob="*.py")
     message = str(caught[0].message) if caught else ""
     # Act
-    advises_install = "install fd for speed" in message
+    frames_as_correctness = "CORRECTNESS" in message
+    # Assert
+    assert frames_as_correctness
+
+
+def test_fd_fallback_warning_message_advises_install(path_without_fd, tmp_path):
+    """The fallback warning still tells the reader how to install fd.
+
+    Reframing the warning from speed to correctness must not cost the
+    actionable half: an alarm nobody can act on is one people learn to
+    skip, which is how the old one died.
+    """
+    # Arrange
+    del path_without_fd  # fixture strips fd dirs for the duration of this test
+    (tmp_path / "a.py").write_text("x = 1\n")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        fd_find_files(tmp_path, glob="*.py")
+    message = str(caught[0].message) if caught else ""
+    # Act
+    advises_install = "apt install fd-find" in message
     # Assert
     assert advises_install
 

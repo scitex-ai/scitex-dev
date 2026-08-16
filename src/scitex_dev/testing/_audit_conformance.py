@@ -285,9 +285,21 @@ def audit_all_for_package(
 
         The message states WHICH of the two failing verdicts applies —
         see :mod:`scitex_dev.testing._audit_outcome`. ``FAIL`` opens with
-        "reported violations" and digests the finding lines; ``UNKNOWN``
-        opens with "COULD NOT RUN" and quotes the underlying error. Both
-        fail the test; only one of them means "go read the rule corpus".
+        "reported violations", NAMES THE RULE CODES THAT FIRED, and then
+        digests the finding lines; ``UNKNOWN`` opens with "COULD NOT RUN"
+        and quotes the underlying error. Both fail the test; only one of
+        them means "go read the rule corpus".
+
+        The codes are on the FIRST line because that is the only line
+        pytest's ``short test summary info`` carries, and it is what CI
+        notifications and ``gh pr checks`` triage are built from::
+
+            audit-all reported violations for 'sac' (exit=1): PS-140, SK-302
+
+        Without them that sentence is a constant, so unrelated failures are
+        indistinguishable without opening each job log — which is how
+        seventeen PRs failing four different PR-local rules were escalated
+        as one fleet-wide outage (scitex-dev#593).
     """
     if path is None:
         # Before the skip check: a caller who bypasses the audit still

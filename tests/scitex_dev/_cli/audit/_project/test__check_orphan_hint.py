@@ -112,7 +112,7 @@ def test_orphan_hinter_warns_loudly_without_fd(path_without_fd, tmp_path):
     del path_without_fd  # fixture strips fd dirs for the duration of this test
     repo, src_pkg = _make_project(tmp_path)
     # Act
-    ctx = pytest.warns(RuntimeWarning, match="falling back to slower stdlib")
+    ctx = pytest.warns(RuntimeWarning, match="falling back to the stdlib scan")
     # Assert
     with ctx:
         build_orphan_hinter(src_pkg, repo)
