@@ -157,6 +157,24 @@ def register(ecosystem):
         else:
             mode = "observe"
 
+        # CAN WE BELIEVE THE VERSION STRINGS AT ALL? Runs BEFORE the comparison,
+        # because a comparison against a fossilised `.dist-info` is not a weak
+        # signal but a WRONG one, in either direction: it cries "stale" at a
+        # current install and blesses a stale one.
+        #
+        # `_untrustworthy_installs` has answered this question correctly since
+        # 2026-07-12 and THIS COMMAND HAS NEVER CALLED IT — a check with no
+        # consumer, which is the defect the module was written to prevent,
+        # occurring one layer above it. Widening its scope (#653, 3 -> 70
+        # packages) moved nothing for anyone running `validate-versions`
+        # precisely because of this missing call.
+        from ...._ecosystem._drift_report import (
+            check_untrustworthy_installs,
+            render_untrustworthy_install_banner,
+        )
+
+        untrustworthy = check_untrustworthy_installs()
+
         result = packages_audit(
             mode=mode, hosts=host_list, packages=pkg_list, unsafe=unsafe
         )
@@ -164,8 +182,20 @@ def register(ecosystem):
         if as_json:
             # Drop the rendered table from JSON; "state" is the structured form.
             payload = {k: v for k, v in result.items() if k != "table"}
+            # Machine consumers get the SAME prior question the humans get.
+            # Emitting it only on the human path would leave every scripted
+            # reader comparing versions it has no reason to trust, with
+            # nothing in the payload saying so.
+            payload["untrustworthy_installs"] = [w.to_dict() for w in untrustworthy]
             click.echo(json.dumps(payload, indent=2, default=str))
         else:
+            # BEFORE the table, not after. A reader who has already read a
+            # version matrix has formed conclusions; the caveat has to arrive
+            # first to prevent them, not afterwards to retract them.
+            banner = render_untrustworthy_install_banner(untrustworthy)
+            if banner:
+                click.echo(banner)
+                click.echo()
             if mode == "observe":
                 click.echo(result["table"])
                 summ = result["summary"]
