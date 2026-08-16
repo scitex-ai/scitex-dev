@@ -400,3 +400,23 @@ def test_banner_carries_the_actual_repair_command():
     banner = _repair_banner()
     # Assert
     assert "--no-deps" in banner
+
+
+def test_banner_names_the_interpreter_it_judged():
+    """"in this interpreter" is unrecoverable to a reader.
+
+    A verdict about /opt/venv-sac says nothing to someone who believes it
+    describes their checkout's venv, and the old wording gave them no way to
+    tell. Measured 2026-08-16: reporting a venv by BASENAME cost two agents a
+    round trip when the same name existed at two paths.
+
+    Same principle as the auditors' `N file(s) inspected under <root>` — the
+    scope clause must name the fact the reader cannot otherwise recover.
+    """
+    # Arrange
+    import sys
+
+    # Act
+    banner = _repair_banner()
+    # Assert
+    assert sys.executable in banner
