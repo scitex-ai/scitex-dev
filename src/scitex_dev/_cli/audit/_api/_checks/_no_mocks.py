@@ -20,19 +20,44 @@ from ._model import (
 
 
 def _audit_no_mocks(
-    init_path: Path, distribution: str, import_name: str
+    init_path: Path,
+    distribution: str,
+    import_name: str,
+    *,
+    repo_root: Path | None = None,
 ) -> list[Violation]:
     """PA-306 — flag any mock-library import, symbol, or fixture
     parameter anywhere in the repo (src/, tests/, examples/, dev
     scripts). The no-mock rule is intentionally exception-free.
+
+    `repo_root` is the resolved `--path` target and MUST be passed when the
+    caller knows it. Without it this check derives the root from
+    ``init_path``, and when the target package is IMPORTABLE by the auditing
+    interpreter that path points into site-packages — where the derivation
+    below collapses ``repo_root`` to site-packages ITSELF. Since
+    ``site-packages/tests`` generally exists (belonging to some unrelated
+    distribution), the check then walks a FOREIGN tree and reports the result
+    as this distribution's verdict: not a silent zero but a wrong answer
+    wearing the right label.
+
+    Measured 2026-08-16 — one package reported PA-306 = 0 from an interpreter
+    that had it installed as a wheel, and 298 from the same commit read as a
+    source checkout. Two other packages were unaffected purely because that
+    interpreter could not import them. The predicate is INSTALLED-vs-NOT in
+    the auditing interpreter, not wheel-vs-editable.
+
+    This is the same defect `_audit_test_quality` was given `repo_root` for in
+    #435 ("would report a silent 0"); the sibling check one line away in
+    `_audit.py` was left behind. A partial fix of a known bug class.
     """
     out: list[Violation] = []
     pkg_root = init_path.parent  # <repo>/src/<pkg>/
     # Try to locate the repo root so tests/ and examples/ are also scanned.
     # init_path layout is conventionally `<repo>/src/<pkg>/__init__.py`,
     # but a couple of packages keep the source flat at `<repo>/<pkg>/`.
-    src_parent = pkg_root.parent
-    repo_root = src_parent.parent if src_parent.name == "src" else src_parent
+    if repo_root is None:
+        src_parent = pkg_root.parent
+        repo_root = src_parent.parent if src_parent.name == "src" else src_parent
     scan_roots: list[Path] = [pkg_root]
     for extra in ("tests", "examples", "scripts"):
         candidate = repo_root / extra
