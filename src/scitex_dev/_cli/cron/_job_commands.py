@@ -184,7 +184,7 @@ def _task_harvest_command() -> str:
     day keeps consumption-rate pressure on the board without spamming
     agent inboxes. Body lives in ``_task_harvest.run_once``; the
     operator-facing PROTOCOL lives in
-    ``scitex_todo._skills.scitex-todo.40_task-harvest``.
+    ``scitex_cards._skills.scitex-cards.40_task-harvest``.
     """
     return exec_command("task-harvest")
 

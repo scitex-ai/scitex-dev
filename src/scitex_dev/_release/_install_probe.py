@@ -70,8 +70,8 @@ DISK.
 is what ``features`` does, because ``hasattr`` reads ``sys.modules`` and therefore
 interrogates the code the process is ACTUALLY RUNNING::
 
-    p = probe_install("scitex-todo", features={
-        "post_migration_enum": "scitex_todo._model:VALID_BLOCKERS",
+    p = probe_install("scitex-cards", features={
+        "post_migration_enum": "scitex_cards._model:VALID_BLOCKERS",
     })
     if not p.features["post_migration_enum"]:
         # THIS PROCESS runs pre-migration code, whatever the disk says.
@@ -89,7 +89,7 @@ bug would be self-parody. Symbol probing is exact.
 
 DESIGN
 ------
-Vendored deliberately, not imported from scitex-todo. scitex-dev owns the
+Vendored deliberately, not imported from scitex-cards. scitex-dev owns the
 ecosystem conventions and must not take a dependency on a leaf package that
 consumes them — the arrow points the wrong way, and scitex packages stay
 independent by standing directive. The logic is ~150 lines; the coupling would
@@ -242,8 +242,8 @@ def probe_install(
     code I think I shipped actually here?" **without trusting any version at
     all**, and it is the only check a fossilised dist-info cannot defeat::
 
-        probe_install("scitex-todo", features={
-            "v088": "scitex_todo._install_probe:probe_install",
+        probe_install("scitex-cards", features={
+            "v088": "scitex_cards._install_probe:probe_install",
         })
 
     Never raises.

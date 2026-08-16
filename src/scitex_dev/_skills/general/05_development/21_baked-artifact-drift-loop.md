@@ -56,12 +56,12 @@ actuator); `scitex-hpc` owns the HPC build recipe.
 3. **Rebuild REMOTELY** — `sac image build --remote hpc:spartan`. A local
    rebuild OOMs the host (part of the 2026-07-08 incident); Spartan is
    the executor. The build MUST accept **exact target versions**
-   (`--target-versions scitex-todo==0.7.46`), never re-resolve `>=`
+   (`--target-versions scitex-cards==<TARGET>`), never re-resolve `>=`
    floors — otherwise the rebuild re-introduces the same build-time
    nondeterminism that caused the drift.
 4. **Verify (fail loud)** — post-build, assert *inside* the SIF that the
-   baked version equals the target (`python -c "import scitex_todo as m;
-   assert m.__version__=='0.7.46'"`). Never swap an unverified image.
+   baked version equals the target (`python -c "import scitex_cards as m;
+   assert m.__version__=='<TARGET>'"`). Never swap an unverified image.
    Emit a machine-readable baked manifest (resolved versions + SIF
    digest + build UTC timestamp + source `.def` commit) so the monitor
    can diff what actually shipped.
