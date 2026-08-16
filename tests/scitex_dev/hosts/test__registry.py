@@ -403,6 +403,14 @@ def test_to_dict_round_trips_all_fields():
         # producer is too old to know about aliases". See
         # test__registry_aliases.py for the populated form.
         "aliases": [],
+        # A host with no declared DHCP preference serializes an explicit
+        # None rather than omitting the key, for the same reason as the two
+        # above: a consumer must never have to tell "this host asks for no
+        # particular address" apart from "this producer predates the
+        # field". See test__requested_address.py for the populated form —
+        # and note the value is a REQUEST, never the address the machine
+        # currently holds.
+        "requested_address": None,
     }
 
 

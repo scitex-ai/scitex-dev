@@ -164,6 +164,15 @@ JOB_NAMING_RULES: list[tuple[str, str, str, str, str]] = [
         "E",
         "job-kind-not-accepted",
     ),
+    (
+        "PS-232",
+        "§1",
+        "the JobSpec scan could not resolve the source package, so it "
+        "graded NOTHING — this is not a clean result, it is a rule that "
+        "did not run",
+        "W",
+        "job-scan-found-no-source-package",
+    ),
 ]
 
 
@@ -252,6 +261,50 @@ def check_job_naming(
 
     src_pkg = _src_pkg_dir(repo, distribution)
     if src_pkg is None:
+        # PS-232 — SAY SO. This used to be a bare `return`, and a bare
+        # return here is indistinguishable at every downstream layer from
+        # "scanned the package, found nothing wrong": zero files examined,
+        # zero findings appended, a clean summary line.
+        #
+        # scitex-agent-container hit the consequence from outside on
+        # 2026-08-15: PS-226 fired on their tree locally and reported
+        # nothing in CI, which is the WRONG DIRECTION for the file-set
+        # divergence we had just root-caused, because CI walks a superset.
+        # A rule that grades nothing explains that asymmetry.
+        #
+        # TWO DISTINCT SITUATIONS, AND ONLY ONE IS A DEFECT:
+        #   - no `pyproject.toml`  -> this is not a Python distribution, so
+        #     a JobSpec scan does not APPLY. Silence is correct, and the
+        #     surrounding test section is right that "the check must never
+        #     be the thing that breaks the audit".
+        #   - `pyproject.toml` present -> the repo CLAIMS to be a
+        #     distribution and the scan still could not find its source.
+        #     That is a rule that failed to run, and it must say so.
+        #
+        # Severity W, not E, and the reason is a limit on my own evidence
+        # rather than caution for its own sake. I measured 22 of 23
+        # packages under ~/proj resolving — but I selected that population
+        # BY the presence of pyproject.toml, which biases it toward exactly
+        # the repos that resolve. A flat-layout distribution elsewhere in
+        # the fleet could resolve to None legitimately, and E would redden
+        # it on the strength of a sample that could not have contained it.
+        # W still breaks the SILENCE, which is the actual defect: the run
+        # now says it graded nothing instead of implying it found nothing.
+        # Promote to E once the population has been measured without that
+        # filter.
+        if (repo / "pyproject.toml").exists():
+            out.append(
+                violation_cls(
+                    "PS-232",
+                    str(repo),
+                    f"could not resolve the source package for "
+                    f"{distribution!r} under {repo}; the JobSpec scan "
+                    "examined 0 files and reported 0 violations, which is "
+                    "NOT a pass. Check that the distribution name matches "
+                    "the package directory and that --path names the tree "
+                    "you meant.",
+                )
+            )
         return
 
     accepted = _accepted_kinds()

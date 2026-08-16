@@ -112,6 +112,22 @@ ECOSYSTEM_PART_1 = {
         "import_name": "scitex_ssh",
         "category": "library",
     },
+    # Sits beside scitex-ssh because it is the OTHER transport to the same
+    # machines: ssh reaches them over LAN/bastion, vpn over the overlay.
+    # It existed as a repo, on PyPI-shaped metadata, with CI workflows and an
+    # installed console script for some time WITHOUT being registered here,
+    # so `scitex-dev ecosystem list | grep scitex-vpn` returned nothing and
+    # every ecosystem-wide sweep silently skipped it. A package absent from
+    # this table is not merely unlisted, it is UNAUDITED - which is the worst
+    # of both states, because the sweep still reports success over the
+    # packages it did look at.
+    "scitex-vpn": {
+        "local_path": "~/proj/scitex-vpn",
+        "pypi_name": "scitex-vpn",
+        "github_repo": "scitex-ai/scitex-vpn",
+        "import_name": "scitex_vpn",
+        "category": "library",
+    },
     "scitex-ui": {
         "local_path": "~/proj/scitex-ui",
         "pypi_name": "scitex-ui",
