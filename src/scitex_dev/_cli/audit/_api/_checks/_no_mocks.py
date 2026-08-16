@@ -59,6 +59,27 @@ def _audit_no_mocks(
     if repo_root is None:
         src_parent = pkg_root.parent
         repo_root = src_parent.parent if src_parent.name == "src" else src_parent
+    else:
+        # RE-ROOT THE PACKAGE SOURCE TOO, not just tests/examples/scripts.
+        #
+        # #652 routed the auxiliary roots through `repo_root` and left this
+        # one deriving from `init_path` — which points into site-packages
+        # whenever the target is importable. The result was a scan spanning
+        # TWO TREES: the INSTALLED package source plus the CHECKOUT's tests.
+        #
+        # Measured 2026-08-16 on scitex-hpc (installed as a wheel at 0.8.1
+        # while its checkout is 0.9.0):
+        #     init_path=installed + repo_root=checkout -> 69 files
+        #                                                 53 checkout, 16 site-packages
+        #     init_path=checkout  + repo_root=checkout -> 115 files, all checkout
+        # So a violation in the checkout's `src/` was invisible, and one in
+        # the installed copy was reported as though it were the checkout's.
+        # Both halves matter: the first misses real findings, the second
+        # attributes a stale artifact's contents to the tree under test.
+        for candidate in (repo_root / "src" / import_name, repo_root / import_name):
+            if (candidate / "__init__.py").is_file():
+                pkg_root = candidate
+                break
     scan_roots: list[Path] = [pkg_root]
     for extra in ("tests", "examples", "scripts"):
         candidate = repo_root / extra
