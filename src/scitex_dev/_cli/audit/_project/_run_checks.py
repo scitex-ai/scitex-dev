@@ -194,6 +194,17 @@ def run_checks(
     from ._check_runner_destinations import check_ps224_runner_destinations
 
     check_ps224_runner_destinations(repo_root, Violation, violations)
+    # PS-231: a leaf workflow that RE-IMPLEMENTS a reusable workflow the org
+    # already provides. Operator ruling 2026-08-15: "we must stop allowing
+    # duplicate workflows written in leaf packages" — hence a rule, not a
+    # sweep. A copy silently opts OUT of fixes made org-side: the `scitex-ci`
+    # runner-label defect was fixed in the org workflow that morning and all
+    # 53 copies across 15 repos kept it. Callers and reusable DEFINITIONS
+    # (`on: workflow_call`) are never flagged; a genuinely leaf-specific
+    # variant takes a reasoned per-path `audit.exemptions` entry.
+    from ._check_workflow_duplication import check_ps231_workflow_duplication
+
+    check_ps231_workflow_duplication(repo_root, Violation, violations)
     from ._check_secret_env_prefix import check_ps168_secret_env_prefix
 
     check_ps168_secret_env_prefix(repo_root, distribution, Violation, violations)
