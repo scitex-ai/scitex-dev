@@ -1,13 +1,59 @@
 ---
 description: |
   [TOPIC] Ecosystem Runtime-State-DB Layout — where package DBs live on disk
-  [DETAILS] Every scitex-* package's runtime-state DB lives at `<proj-root>/.scitex/<pkg-short>/runtime/<pkg-short>.db`, with an optional `<subdir>/<unit>.db` sub-pool for sharded / per-unit DBs. Rationale: `runtime/` is THE layer you redirect off shared/GPFS filesystems (high-cardinality writes must not squat a shared inode quota); `.db` is scitex-io's only recognized DB suffix; on HPC the shard subdir can symlink to node-local scratch. Two adopting exemplars (scitex-session, scitex-clew). A specialization of 12's `runtime_path()` layer; born from the punim0264 GPFS inode-exhaustion incident (neurovista ADR-0022).
+  [DETAILS] Governs REGENERABLE LOCAL state only — durable shared state lives in per-host PostgreSQL on 55432 (constitution §3); see §0 before applying this. Every scitex-* package's runtime-state DB lives at `<proj-root>/.scitex/<pkg-short>/runtime/<pkg-short>.db`, with an optional `<subdir>/<unit>.db` sub-pool for sharded / per-unit DBs. Rationale: `runtime/` is THE layer you redirect off shared/GPFS filesystems (high-cardinality writes must not squat a shared inode quota); `.db` is scitex-io's only recognized DB suffix; on HPC the shard subdir can symlink to node-local scratch. Two adopting exemplars (scitex-session, scitex-clew). A specialization of 12's `runtime_path()` layer; born from the punim0264 GPFS inode-exhaustion incident (neurovista ADR-0022). Does NOT specify cross-store row identity (UUID) or per-table merge rules — both belong to the shared-state side and are unsettled.
 tags: [scitex-general-ecosystem-runtime-state-db-layout]
 ---
 
 # Runtime-State-DB Layout — where package DBs live on disk
 
 `06_dot_scitex_directory.md` puts every package's regenerable state under `<pkg-short>/runtime/`; `12_local-state-resolution.md` resolves that path via `runtime_path()`. This leaf pins the one remaining degree of freedom: **what a package's SQLite DB is named and where inside `runtime/` it sits** — so every DB-backed package lays out the same way and the whole `runtime/` subtree stays a single redirectable unit.
+
+Read §0 first: this governs regenerable LOCAL state. Durable shared state goes to per-host PostgreSQL on 55432, never SQLite.
+
+## 0. WHICH STATE THIS GOVERNS — read this before applying anything below
+
+This leaf governs **REGENERABLE LOCAL state only**. It does not govern durable
+shared state, and applying it there is the failure it now warns about.
+
+| kind of state | where it lives | governed by |
+|---|---|---|
+| regenerable, local, high-churn (caches, shards, per-unit logs) | `runtime/<pkg-short>.db`, SQLite | **this leaf** |
+| durable shared state (the board, cards, inboxes, agent registries) | per-host **PostgreSQL on 55432**, synchronized across hosts | the constitution, §3 |
+| design / specs | git | the constitution, §3 |
+
+The operator's ruling, 2026-08-14: 「spec は設計書、状態は db (55432 postgres;
+each host, synchronization across hosts)」 — and the constitution is explicit
+that the Postgres rule **extends this leaf rather than replacing it**:
+`runtime/` stays for regenerable local state only. So both are live, and the
+question a reader must answer first is *which kind of state am I holding*.
+
+**Why this section was added (2026-08-16).** It was not here, and the omission
+was load-bearing. The operator asked whether the fleet should move to one
+Postgres or keep per-host stores, and the honest answer turned out to be
+neither-globally: per-host is right for high-churn runtime state — the
+punim0264 GPFS inode-exhaustion incident in §2a is still true and is still the
+reason — while one store is right for the shared board, where volume is low
+and silent divergence is the actual harm. Collapsing everything to one side
+discards one of those two reasons. A spec that describes only one class, and
+does not say it is only one class, invites exactly that collapse.
+
+**Two things this leaf does NOT specify, and must not be read as settling.**
+Both belong to the Postgres/shared-state side and were, as of 2026-08-16,
+specified nowhere:
+
+- **Row identity across stores.** Sequential per-store ids collide on merge.
+  Measured by scitex-agent-container: consolidating 217 rows silently lost 94,
+  because the same number meant different things in different stores. Shared
+  state needs UUIDs, and the cost of changing that only rises with row count.
+- **Merge rules per table.** Append-only threads (comments) union; mutable
+  fields take the newest write; deletes need tombstones or they resurrect on
+  the next merge. "Each host + synchronization" was written as though the
+  second half existed; it did not.
+
+Neither is settled here because neither is a *layout* question. They are
+recorded so the next reader does not mistake this leaf's silence for a ruling
+that none is needed.
 
 ## 1. The convention
 
