@@ -273,6 +273,14 @@ and shipping them unannounced is what made them expensive.
   day the card-store doctor could not open its store and reported `ok: false`
   on two checks whose questions it never got as far as asking.
 
+  The purest form of it: an auto-merge sweep whose greenness filter dropped
+  QUEUED checks counted "not yet known" as "passing" and merged unverified code
+  past branch protection with `--admin`, in two repositories independently.
+  Nobody decided that unknown was ok — a boolean filter over a three-state world
+  did it for them, in one expression. It does not take a decision to get this
+  wrong, only a boolean, which is why `Verdict.from_ok` refuses truthy
+  stand-ins rather than coercing them.
+
   `unknown` must carry a reason and a way to find out, enforced at BOTH doors —
   `Check.unknown(name, reason, hint)` takes them positionally, and
   `__post_init__` refuses a blank one, so the dataclass constructor cannot get
