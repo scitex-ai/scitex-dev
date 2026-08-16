@@ -300,6 +300,22 @@ ECOSYSTEM_PART_2 = {
         "import_name": "scitex_storage",
         "category": "library",
     },
+    # Added 2026-08-16. scitex-vpn shipped a conformant tree — skills,
+    # MCP, CLI, tests mirror — while being absent from this dict, and
+    # the absence is not passive. `ecosystem install-audit-gate
+    # scitex-vpn` refuses outright with "not in ECOSYSTEM", so the
+    # package could not install the very gate that would have graded
+    # it; `bulk`, `validate-versions`, `drift-report` and
+    # `audit-summary` skipped it silently. Its sibling scitex-ssh has
+    # been registered all along, which is why the gap read as a vpn
+    # defect rather than a registry one.
+    "scitex-vpn": {
+        "local_path": "~/proj/scitex-vpn",
+        "pypi_name": "scitex-vpn",
+        "github_repo": "scitex-ai/scitex-vpn",
+        "import_name": "scitex_vpn",
+        "category": "library",
+    },
 }
 
 
