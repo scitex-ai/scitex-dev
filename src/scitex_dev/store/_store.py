@@ -344,11 +344,35 @@ class Store(PeerState, IdentityState):
         identical state. Called by :func:`~._replication.replay`, which is
         where the contiguity assertion lives; calling this directly skips
         that check.
+
+        ENFORCES THE WRITER POLICY, which it previously did not. Under
+        ``SINGLE_WRITER`` the local path refuses a write to a record the
+        actor does not own (:meth:`put`, :meth:`handover`, :meth:`hide`),
+        and this path let exactly that write in through replication instead.
+        A rule the front door enforces and the back door does not is not a
+        rule; it is a detour.
+
+        DELIBERATELY DOES NOT CHECK THE REVISION, and that is not the same
+        omission. ``expected_revision`` is a compare-and-swap for a caller
+        who READ a value and wants to write it back. A replayed op is
+        history that already happened somewhere else — it has no local
+        revision to have raced against, and rejecting it because the local
+        row moved on would break replay precisely when both sides wrote,
+        which is the only time replay matters. Concurrent edits are resolved
+        by per-field HLC merge (:mod:`._merge`), which is the mechanism for
+        that job. See ADR-0011.
         """
         with self._lock:
+            current = self._read(entry.record, include_hidden=True)
+            if self.writer_policy is WriterPolicy.SINGLE_WRITER and current:
+                check_owner(
+                    self.schema,
+                    entry.record,
+                    current,
+                    entry.actor or entry.origin,
+                )
             self.clock.observe(entry.hlc)
             self._store_op(entry)
-            current = self._read(entry.record, include_hidden=True)
             return self._materialise(entry, current, persist_op=False)
 
     # -- internals --------------------------------------------------------
@@ -367,6 +391,13 @@ class Store(PeerState, IdentityState):
             payload=dict(payload),
             hlc=self.clock.now(),
             actor=actor or self.actor,
+            # Write under the authority we currently hold, not under none.
+            # Every local op used to carry FENCE_UNKNOWN, which made fencing
+            # a suicide pact: the moment any fence rose for this node, this
+            # node's own ops fell below it and every peer rejected them. It
+            # is 0 until somebody promotes us, so unfenced fleets behave
+            # exactly as before.
+            fence=self.fence(self.node),
         )
         self._store_op(entry)
         return entry
