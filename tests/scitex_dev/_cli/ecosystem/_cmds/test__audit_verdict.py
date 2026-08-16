@@ -68,11 +68,20 @@ def test_an_undeclared_warning_from_the_failing_audit_defeats_it():
     `audit-skills` and `audit-python-apis` return `0 if not violations
     else 1` — they fail on WARN-tier findings too. So "all unmasked
     findings are warnings" would license downgrading a run those two
-    legitimately failed. Each audit is asked the strict question instead:
-    is EVERYTHING you reported masked?
+    legitimately failed.
+
+    THE AUDITOR IN THIS TEST CHANGED, AND THE DOCSTRING ABOVE IS WHY.
+    That reasoning is exactly right and it is about ANY_FINDING auditors.
+    It was applied to `audit-project` only because the predicate could not
+    tell auditors apart, so it had to be conservative for all of them.
+    Now each declares its policy (`_audit_exit_policy`), so the strict
+    question is asked of the auditors it is true for — and this test asks
+    it of one of them. `audit-project` gets the opposite answer on the
+    SAME output, which is the point, and is pinned in
+    `test__audit_exit_policy.py`.
     """
     # Arrange
-    failing = {"audit-project": f"{_MASKED}\n{_PASSING_WARN}"}
+    failing = {"audit-skills": f"{_MASKED}\n{_PASSING_WARN}"}
     # Act
     result = failing_audits_are_fully_masked(failing, [_DEFERRED])
     # Assert
@@ -168,10 +177,93 @@ def test_the_withheld_downgrade_says_why_instead_of_staying_silent():
 
 
 def test_an_already_green_package_is_returned_untouched():
-    """The verdict never reddens; it only ever removes a red it can explain."""
+    """A green package that MEASURED something is returned untouched.
+
+    The verdict removes a red it can explain and otherwise leaves the exit
+    code alone. The single exception is a run that inspected nothing, which
+    has no verdict to leave alone — see the NO VERDICT tests below.
+    """
     # Arrange
     combined = _PASSING_WARN
     # Act
     verdict = _decide(combined, {}, pkg_exit=0)
     # Assert
     assert verdict == (0, None)
+
+
+# --------------------------------------------------------------------- #
+# NO VERDICT: a run that inspected zero lines                            #
+# --------------------------------------------------------------------- #
+
+
+def test_a_run_that_inspected_nothing_gets_no_verdict_not_a_pass():
+    """THE DANGEROUS DIRECTION. Zero lines read, exit 0 — green by default.
+
+    `inspected` is the denominator. With a denominator of zero, "0 unmasked
+    error(s)" is not a clean bill of health; it is arithmetic on nothing.
+    """
+    # Arrange
+    combined = ""
+    # Act
+    exit_code, _warning = _decide(combined, {}, pkg_exit=0)
+    # Assert
+    assert exit_code != 0
+
+
+def test_a_run_that_inspected_nothing_stays_red_rather_than_going_green():
+    """The other pole, and it must NOT be traded away.
+
+    Measured 2026-08-15 on the CI SIF's baked scitex-dev 0.42.0: EXIT=1 with
+    "0 unmasked error(s), 0 masked by skip-rules (1 declared); 0 line(s)
+    inspected". The fix for a gate that fails having read nothing is to make
+    it SAY so — not to make it pass, which would turn a gate that cannot
+    discriminate into one that cannot fail.
+    """
+    # Arrange
+    combined = ""
+    # Act
+    exit_code, _warning = _decide(combined, {"audit-project": _MASKED})
+    # Assert
+    assert exit_code == 1
+
+
+def test_the_no_verdict_case_names_itself_rather_than_reporting_a_finding():
+    """A reader must be able to tell "did not run" from "found a problem"."""
+    # Arrange
+    combined = ""
+    # Act
+    _exit_code, warning = _decide(combined, {})
+    # Assert
+    assert "NO VERDICT" in (warning or "")
+
+
+def test_the_no_verdict_message_says_what_to_check():
+    """An alarm nobody can act on is an alarm people learn to skip."""
+    # Arrange
+    combined = ""
+    # Act
+    _exit_code, warning = _decide(combined, {})
+    # Assert
+    assert "--path" in (warning or "")
+
+
+def test_a_run_that_inspected_something_is_not_flagged_no_verdict():
+    """POSITIVE CONTROL. A guard that fired on every run would satisfy every
+    test above while telling the reader nothing — and would redden the whole
+    fleet. This is the test that fails if the predicate is inverted."""
+    # Arrange
+    combined = _PASSING_WARN
+    # Act
+    _exit_code, warning = _decide(combined, {}, pkg_exit=0)
+    # Assert
+    assert "NO VERDICT" not in (warning or "")
+
+
+def test_the_sanctioned_downgrade_still_works_when_lines_were_inspected():
+    """REGRESSION CONTROL: the #590 downgrade must survive the new guard."""
+    # Arrange
+    combined = _MASKED
+    # Act
+    exit_code, _warning = _decide(combined, {"audit-project": _MASKED})
+    # Assert
+    assert exit_code == 0

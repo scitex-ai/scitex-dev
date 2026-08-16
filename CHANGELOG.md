@@ -7,7 +7,110 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-08-16
+
+> **This release moves the rule corpus.** `_fd.py` changes which files every
+> rule sees, and PS-224's checker, the job-naming check, and the masking and
+> verdict layer all changed with it. For an audit gate the corpus *is* the
+> definition of passing, so a repo can go from green to red on this upgrade
+> with no diff of its own — scitex-hub measured exactly that on 2026-07-28,
+> when an identical tree audited green and then red across a release.
+>
+> Consumers of the org `quality-audit` reusable are therefore **pinned to
+> `==0.49.3`** (scitex-ai/.github#36) and will not pick this up automatically.
+> Bump that pin deliberately, as a reviewable change, rather than inheriting a
+> new corpus from someone else's release timing.
+
+### Added
+
+- **`scitex_dev.measure.require_match` — an unmatched read is an unanswered
+  question, not an empty answer (#626).** Raises on no-match, and *also* on
+  multiple-match-without-`identity`: `tail -1`/`head -1` are not selections,
+  they are guesses about ordering, and a log holding two generations answers
+  both confidently and wrongly. `identity=` narrows to the right instance (a
+  date, a run id, a pid). Built from thirteen measured instances across three
+  packages in one day — a `gh api` 404 body defeating an emptiness test (76
+  repositories recorded as having a variable when 8 had none), `command -v`
+  under a PATH without `/sbin` reading an installed binary as absent, a regex
+  that could not cross the "i" in "warnings". Documents what it cannot catch:
+  a true answer to a question you did not realise you were asking.
+
+- **Runner liveness probe — registry membership is not liveness (#619).**
+  `classify_label` answers SERVED / UNSERVED / UNKNOWN by superset match
+  against *online* runners and names the carriers, so a "served" answer is
+  checkable. UNKNOWN does not block: an unreachable API is a broken
+  instrument, not an outage. Measured 2026-08-15: 49 repositories pinned
+  `spartan-cpu`, 80 workflow references fell back to `scitex-ci`, every org
+  runner carrying either label was offline — and PS-224 reported nothing,
+  correctly, because both labels *are* in the registry.
+
+- **CI coverage classifier — a green PR is not a checked PR (#624).**
+  `classify_pr_coverage` returns COVERED / UNCOVERED / UNKNOWN and names the
+  required checks that never reported. Green means "nothing required FAILED",
+  not "everything required REPORTED", and GitHub renders those identically:
+  a PR based on a topic branch matches no `pull_request: branches:` filter,
+  so nothing runs and nothing is red. Keeps "unreachable base" as its own
+  field — retargeting a PR and diagnosing a workflow that failed to start are
+  opposite investigations.
+
+- **Declared auditor exit policies (#625).** The sub-auditors do not share
+  one, and the downgrade logic was guessing. Read from source, not docstrings:
+  `audit-project`/`audit-django` are ERRORS_ONLY, `audit-skills`/
+  `audit-python-apis` are ANY_FINDING, `audit-cli` is WARN_ONLY (it never
+  exits non-zero). `failing_audit_is_explained` asks each failing auditor the
+  question its own policy makes meaningful — identical output, opposite
+  answers for `audit-project` and `audit-skills`, which one shared question
+  cannot express. An auditor with no declared policy is not downgradeable:
+  an undeclared policy is an unasked question.
+
+- **PS-232 — a JobSpec scan that graded nothing now says so (#623).**
+  `check_job_naming` opened with a bare `return` when the source package could
+  not be resolved: zero files examined, zero violations reported, and
+  indistinguishable downstream from "scanned it, all clean". Scoped to repos
+  that *claim* to be distributions (a `pyproject.toml` present), so a
+  directory that never promised to be a package stays silent.
+
+- **Hosts can request an address, and the sweep is honest that asking is all
+  it does (#591).**
+
 ### Fixed
+
+- **A run that inspected ZERO lines has no verdict, and now says so (#620).**
+  `MaskReport.inspected` is the denominator — "0 unmasked error(s)" means
+  nothing without it — and `decide_pkg_exit` never read it, so a run that read
+  nothing still returned a pole, whichever one the dispatcher happened to hand
+  it. Measured on the CI SIF's baked `scitex-dev` 0.42.0: `EXIT=1` with
+  "0 unmasked error(s), 0 masked by skip-rules (1 declared); 0 line(s)
+  inspected" — it inspected nothing, masked nothing, and still failed, which
+  is a gate returning the failing pole by default rather than by measurement.
+  Now non-zero with a named NO VERDICT message saying it is neither a clean
+  result nor a real failure, and what to check. It stays RED rather than going
+  green on purpose: the fix for a silent red is a loud red, never a silent
+  green. Also closes the more dangerous direction the old code allowed without
+  comment — `pkg_exit == 0` with zero lines read returned a clean bill of
+  health from an instrument that never took a reading.
+
+- **`Path.exists()` does not swallow errors, and calling an unstattable
+  target ABSENT is dangerous (#622).** `evaluate()` called it outside its
+  try/except; `_ignore_error` has never covered EACCES, so a spec under a
+  root-only directory raised and aborted the whole `host-config apply` CLI
+  before it printed anything. ABSENT is the state `apply` CREATES — the old
+  behaviour would have called a root-owned file missing and then written it.
+  Now DRIFT. It failed on exactly one runner, the only machine with `auditd`
+  installed and `/etc/audit` at `drwxr-x--- root:root`, which is why it read
+  as a flaky per-leg failure for hours; the discriminator is the spec's
+  `requires_command` precondition, inert wherever auditd is absent.
+
+- **The two file walkers must return the same set (#621).** `fd_find_files`
+  shells `fd` when present and falls back to a stdlib walk when absent — and
+  `fd` ships on developer machines but not everywhere, so the two paths split
+  along an environment boundary. Measured: 1142 files against 1227 on one
+  tree. The fallback now applies fd's own exclusions (hidden paths,
+  gitignored paths) by asking git, with `--no-index` — `check-ignore`
+  suppresses TRACKED files by default, which accounted for 83 of the 85.
+  Equality is now asserted by test. The fallback warning was reworded from a
+  speed notice to a correctness one: it was true and named the wrong
+  consequence.
 
 - **A declared skip rule now clears the exit status, not just the report
   (#590).** `ecosystem audit-all` masks findings on rules a repo has declared
