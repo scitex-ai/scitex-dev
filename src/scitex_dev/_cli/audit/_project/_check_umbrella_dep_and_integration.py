@@ -297,7 +297,8 @@ def check_ps140_integration_gate(
                     f"source has {len(expected)} cross-package import(s) "
                     f"(e.g. {sorted(expected)[:3]}) but no "
                     "`tests/integration/test_cross_package_imports.py` "
-                    "runtime gate."
+                    "runtime gate. Install it with: scitex-dev ecosystem "
+                    f"install-cross-package-gate {distribution}"
                 ),
             )
         )
@@ -320,6 +321,17 @@ def check_ps140_integration_gate(
             violation_cls(
                 "PS-140",
                 str(test_file),
-                "; ".join(msg_parts) + ". Regenerate the gate.",
+                # NAME THE VERB. This read "Regenerate the gate." and nothing
+                # else, while the deployed files credited a command that has
+                # never existed (`ecosystem write-integration-tests`). A
+                # reader who followed either had nothing to run, and 17 gates
+                # sat frozen because the only documented way out was a dead
+                # end. §2: an error that only states what broke is
+                # half-written — say what to do about it.
+                "; ".join(msg_parts)
+                + ". Regenerate with: scitex-dev ecosystem "
+                + f"install-cross-package-gate {distribution} --force "
+                + "(hand-written cases below the closing sentinel are "
+                + "preserved).",
             )
         )

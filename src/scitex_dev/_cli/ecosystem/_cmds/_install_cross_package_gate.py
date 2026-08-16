@@ -306,6 +306,33 @@ def register(ecosystem):
             click.echo(f"  - {name}", err=True)
 
         if dry_run:
+            # SAY WHAT WOULD BE PRESERVED, not only what would be written.
+            # Reported by scitex-hpc 2026-08-16 while agreeing to pilot the
+            # 17-gate sweep: the way to prove the FIXED installer is the one
+            # actually running is to dry-run it against a file with a known
+            # hand-written tail and see it name those lines. Without this
+            # line the dry-run of the new code is byte-indistinguishable from
+            # the dry-run of the OLD destructive code — it simply never
+            # mentions preserving anything, which reads identically to "this
+            # file has no tail". A stale editable install would therefore
+            # pass the very check meant to detect it.
+            #
+            # This is the §4 "merged is not live" trap with a specific
+            # mechanism: the dist-info survives the source vanishing, so
+            # version checks stay green while the import is broken (hpc
+            # measured 20 days of exactly that in its own venv).
+            if split.has_sentinel:
+                click.echo(
+                    f"# would PRESERVE {len(split.tail.splitlines())} line(s) "
+                    f"below '{END_SENTINEL}' verbatim",
+                    err=True,
+                )
+            elif existing is not None:
+                click.echo(
+                    "# would REPLACE everything below the generated list "
+                    "(no sentinel present to delimit a hand-written region)",
+                    err=True,
+                )
             click.echo(f"# would write: {target}")
             click.echo(content)
             if not init.exists():
