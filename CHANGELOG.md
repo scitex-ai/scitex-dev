@@ -7,6 +7,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-08-16
+
+> **This release moves the rule corpus.** `_fd.py` changes which files every
+> rule sees, and PS-224's checker, the job-naming check, and the masking and
+> verdict layer all changed with it. For an audit gate the corpus *is* the
+> definition of passing, so a repo can go from green to red on this upgrade
+> with no diff of its own — scitex-hub measured exactly that on 2026-07-28,
+> when an identical tree audited green and then red across a release.
+>
+> Consumers of the org `quality-audit` reusable are therefore **pinned to
+> `==0.49.3`** (scitex-ai/.github#36) and will not pick this up automatically.
+> Bump that pin deliberately, as a reviewable change, rather than inheriting a
+> new corpus from someone else's release timing.
+
 ### Added
 
 - **`scitex_dev.measure.require_match` — an unmatched read is an unanswered
