@@ -140,8 +140,21 @@ def audit_api(
     # resolves init_path into site-packages, repo_root collapses to
     # site-packages itself, and the scan walks a FOREIGN tests/ directory —
     # reporting another distribution's files as this one's verdict.
+    # The DENOMINATOR, filled in place like `violations`. Without it
+    # "no Python API violations" reads identically whether this auditor read
+    # four hundred files or none — and #652 proved the zero case is reachable
+    # in practice, not hypothetically: a discovery bug had this walk landing
+    # in site-packages, so the verdict was computed from another
+    # distribution's files and looked exactly like a clean run.
+    inspected: set[Path] = set()
     violations.extend(
-        _audit_no_mocks(init_path, distribution, import_name, repo_root=repo_root)
+        _audit_no_mocks(
+            init_path,
+            distribution,
+            import_name,
+            repo_root=repo_root,
+            inspected=inspected,
+        )
     )
     # TQ scans the repo's tests/ tree — which lives in the source checkout,
     # NOT the installed wheel. Pass the resolved repo_root (--path target) so
@@ -226,7 +239,36 @@ def audit_api(
     from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
 
     if not violations:
-        _emit("success", f"{distribution}: no Python API violations")
+        # REFUSE rather than pass when nothing was read. Zero files inspected
+        # is not a clean API surface, it is an unanswered question — and it
+        # renders exactly like a package with four hundred conforming files.
+        # Mirrors `_summary/_run.py`'s not-auditable refusal and
+        # `SurfaceCoverage.is_answerable`; the same condition, so the two
+        # auditors cannot disagree about what a verdict requires.
+        if not inspected:
+            _emit(
+                "error",
+                f"{distribution}: not-auditable: the API walker inspected 0 "
+                "files, so no verdict is possible (is the resolved repo root "
+                "pointing at an installed package rather than a checkout?)",
+                err=True,
+            )
+            return 1
+        # The ROOT, not only the COUNT. A count alone is not enough, and this
+        # is measured rather than assumed: replaying #652's failure shape (an
+        # importable target, no repo_root) inspected 311 files and reported
+        # zero violations. Not an empty scan — a PLAUSIBLE one, of the wrong
+        # tree, in site-packages. "311 file(s) inspected" would have been
+        # believed; "311 file(s) under /opt/venv-.../site-packages" is
+        # self-refuting to anyone who knows which package they asked about.
+        # A denominator that cannot say WHERE only catches the zero case, and
+        # the zero case was never the one that bit us.
+        scanned_root = repo_root or init_path.parent
+        _emit(
+            "success",
+            f"{distribution}: no Python API violations "
+            f"({len(inspected)} file(s) inspected under {scanned_root})",
+        )
         emit_disclaimer()
         return 0
 

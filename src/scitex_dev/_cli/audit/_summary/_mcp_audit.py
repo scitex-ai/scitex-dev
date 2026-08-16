@@ -319,7 +319,7 @@ def run_audit_mcp(
                 f"{package}: not an MCP standalone (umbrella or protocol-server) — skipped",
             )
         else:
-            _emit_human(package, status, violations)
+            _emit_human(package, status, violations, category="MCP tool")
     if status.startswith("not-auditable"):
         return 2
     return 1 if _max_severity(violations) == "error" else 0
@@ -402,7 +402,7 @@ def run_audit_mcp_all(
         if not output_json:
             # Don't spam the human report with one line per non-MCP package.
             if status not in ("no-mcp-server", "skip-not-standalone"):
-                _emit_human(name, status, violations)
+                _emit_human(name, status, violations, category="MCP tool")
 
         if _max_severity(violations) == "error" or status.startswith("not-auditable"):
             any_error = True

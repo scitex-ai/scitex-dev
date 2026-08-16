@@ -25,6 +25,7 @@ def _audit_no_mocks(
     import_name: str,
     *,
     repo_root: Path | None = None,
+    inspected: "set[Path] | None" = None,
 ) -> list[Violation]:
     """PA-306 — flag any mock-library import, symbol, or fixture
     parameter anywhere in the repo (src/, tests/, examples/, dev
@@ -64,7 +65,13 @@ def _audit_no_mocks(
         if candidate.is_dir() and candidate not in scan_roots:
             scan_roots.append(candidate)
 
-    seen: set[Path] = set()
+    # `seen` doubles as this auditor's DENOMINATOR. It is filled in place when
+    # the caller passes a set, the same way `out` accumulates violations — so
+    # a verdict can state how many files it actually read instead of leaving a
+    # reader unable to tell a clean tree from a tree nothing reached. This is
+    # the widest walk in the API auditor (package + tests + examples +
+    # scripts); the other checks read subsets of it.
+    seen: set[Path] = set() if inspected is None else inspected
     rel_anchor = repo_root if repo_root != pkg_root else pkg_root.parent
     for root in scan_roots:
         for py_file in sorted(root.rglob("*.py")):
