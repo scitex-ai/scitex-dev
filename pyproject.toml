@@ -234,6 +234,24 @@ scitex-dev = "scitex_dev._system_deps:provide"
 #   scitex-clew    = "scitex_clew._gate_plugin:provide"
 #   scitex-dataset = "scitex_dataset._gate_plugin:provide"
 
+# Federated AGENT GUARDRAIL declarations live under the entry-point group
+# `scitex_dev.hooks`. Each entry point loads to a callable returning
+# `list[scitex_dev.hooks.HookRule]`; `scitex_dev.hooks.discover_hooks()`
+# aggregates them (deduped by rule id). `<pkg> dev hooks rules` lists one
+# package's; `scitex-dev ecosystem dev hooks` lists the fleet's.
+#
+# NOTE the deliberate contrast with the `jobs` and `gate.checks` groups above:
+# those merge scitex-dev's own declarations through an INTERNAL provider,
+# special-casing the aggregator into its own corpus. This group does NOT.
+# scitex-dev registers below exactly like any leaf, per the operator's
+# requirement that it be treated as a leaf package so the federation is not
+# self-recursive. `system_deps` is the precedent being followed.
+# Downstream leaves register like so:
+#   scitex-agent-container   = "scitex_agent_container._hook_rules:provide"
+#   claude-code-telegrammer  = "claude_code_telegrammer._hook_rules:provide"
+[project.entry-points."scitex_dev.hooks"]
+scitex-dev = "scitex_dev._hook_rules:provide"
+
 # Federated STORE providers live under the entry-point group
 # `scitex_dev.store.plugins`. Each entry point loads to a callable returning
 # `list[scitex_dev.store.StorePlugin]`;

@@ -408,6 +408,18 @@ from .._check_naming_vocabulary import (  # noqa: E402
 for _c, _sec, _msg, _sev, _slug in _NAMING_VOCABULARY_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
+# hook-bypass: line-limit
+# PS-HOOK-010..012 — agent guardrails must be DECLARED through the
+# `scitex_dev.hooks` federation, not left implicit in shell (co-located rule
+# set, merged on the same terms as the sets above). Severities live in the
+# tuples, NOT in `_SEVERITY_OVERRIDES`: an override for a co-located rule is a
+# silent no-op (see the note beside `_patch`), and PS-HOOK-011's whole purpose
+# is to FAIL, so its E must not be routed through a table that would drop it.
+from .._check_hook_rules import HOOK_RULES_RULES as _HOOK_RULES_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in _HOOK_RULES_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
 
 # hook-bypass: line-limit
 # ---------------------------------------------------------------------------

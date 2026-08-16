@@ -143,6 +143,16 @@ def run_checks(
     from ._check_logs_path import check_ps223_logs_path
 
     check_ps223_logs_path(repo_root, Violation, violations)
+    # PS-HOOK-010/011/012: agent guardrails must be DECLARED through the
+    # `scitex_dev.hooks` federation rather than left implicit in shell.
+    # -010 (W) a package ships agent-hook scripts but declares nothing;
+    # -011 (E) a HookRule binds script/predicate to a path that is not there,
+    #          i.e. a declared gate that cannot fire;
+    # -012 (W) a HookRule's `reason` is a placeholder saying nothing.
+    # Static AST scan; git-hook trees (`_hooks/`, `.githooks/`) are spared.
+    from ._check_hook_rules import check_hook_rules
+
+    check_hook_rules(repo_root, Violation, violations)
     # PS-218/PS-219: CLI-normalization conformance (items 4-5). Health-check
     # verb standardizes on `doctor` (`health` is a deprecated alias); version
     # standardizes on the `--version`/`-V` flag (not a `version` subcommand).

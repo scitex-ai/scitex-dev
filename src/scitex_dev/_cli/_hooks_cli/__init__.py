@@ -22,6 +22,11 @@ Subcommands
     Report install status per hook: ok / drift / stale / missing.
 ``scitex-dev hooks show-path <name>``
     Print the absolute filesystem path of the bundled hook ``<name>``.
+``scitex-dev dev hooks list-rules``
+    List the agent guardrail rules scitex-dev DECLARES (id, rule, reason),
+    read from the ``scitex_dev.hooks`` federation. Distinct from the verbs
+    above, which install script FILES: ``rules`` reports the declared
+    POLICY, which is the thing an auditor and a human reviewer can check.
 ``scitex-dev hooks enable-pre-push --target <project>``
     Install the canonical ``pre-push`` gate (audit-all + diff-scoped
     ruff/import-smoke/testmon) AND wire ``git config core.hooksPath
@@ -37,6 +42,11 @@ Module map
 - :mod:`_install`   — ``install`` and ``update`` leaves
 - :mod:`_inspect`   — ``list`` and ``show-path`` leaves (+ alias)
 - :mod:`_pre_push`  — ``enable-pre-push`` (symlink + ``core.hooksPath``)
+- ``rules`` is NOT local: it is mounted from
+  :func:`scitex_dev.hooks.cli.register_hook_rules_command`, the same public
+  registrar every leaf package mounts, so scitex-dev consumes the shared
+  surface as a leaf rather than keeping a private copy that would be the
+  only one ever fixed.
 """
 
 from __future__ import annotations
@@ -87,6 +97,14 @@ def register_hooks_commands(main) -> None:
     register_install(hooks_group)
     register_inspect(hooks_group)
     register_pre_push(hooks_group)
+
+    # scitex-dev mounts the shared registrar exactly as any leaf does, and
+    # scopes it to its OWN declarations: `<pkg> dev hooks list-rules` means this
+    # package's guardrails. The fleet-wide aggregate is a different command,
+    # `scitex-dev ecosystem dev list-hooks`.
+    from ...hooks.cli import register_hook_rules_command
+
+    register_hook_rules_command(hooks_group, provider="scitex-dev")
 
 
 __all__ = ["KNOWN_HOOKS", "register_hooks_commands"]
