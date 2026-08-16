@@ -102,6 +102,23 @@ result carrying an actionable hint.
 **Unverifiable is never reported as honest.** If the probe cannot POSITIVELY
 confirm that the metadata matches the code, ``trustworthy`` is False. "I could
 not check" must never render as "it is fine" — that conflation is the whole bug.
+
+**Scope: THIS interpreter only.** This module resolves through
+``importlib.metadata`` and import success, so every answer it gives is about
+the environment it is running in. That is deliberate and it is the more
+robust question — "does the code load?" beats any inspection of install
+metadata.
+
+It does mean this module CANNOT answer for a venv it is not running in, and
+that question is real: "which installs on this host are lying?" needs to walk
+twelve venvs, which one process cannot import.
+``_ecosystem._install_kind.describe_install`` covers that case by reading
+``.pth`` files from an arbitrary site-packages path without importing
+anything.
+
+The two are split by SCOPE, not duplicated. Folding them was proposed on
+2026-08-16 and withdrawn after measurement showed it would delete the
+cross-venv capability — see that module's docstring for the measurement.
 """
 
 from __future__ import annotations

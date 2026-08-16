@@ -47,6 +47,34 @@ invites "this number is meaningless". So the states stay separate:
 and an EDITABLE whose path is gone is reported with ``target_exists=False``,
 because that environment is already broken even though it answers questions
 politely.
+
+DO NOT FOLD THIS INTO ``_release._install_probe``
+--------------------------------------------------
+They look like duplicates — both answer "how is this package installed?" —
+and merging them is the obvious tidy. It would DELETE a capability, with a
+green suite and a clean diff.
+
+    _install_probe   answers for THIS interpreter. It resolves through
+                     ``importlib.metadata`` and import success, which is the
+                     more robust question (does the code actually load?) and
+                     is why it stays the default everywhere.
+    _install_kind    answers for ANY site-packages directory BY PATH. It
+                     reads ``.pth`` files and never imports, so it can
+                     inspect venvs the calling process is not running in.
+
+You cannot import twelve venvs from one process, and the fleet-wide question
+— "which installs ON THIS HOST are lying?" — needs exactly that. Verified
+2026-08-16 from a process not running in the target venv::
+
+    describe_install("scitex-agent-container",
+                     Path(".../sac-imgbuild-venv/lib/python3.12/site-packages"),
+                     version_of=...)
+    -> EDITABLE, target_exists=False, is_broken=True
+
+`_install_probe` cannot produce that row for a foreign venv at all.
+
+The split is by SCOPE, not by duplication. Recorded here because the fold was
+proposed on this package's own card and withdrawn only after measurement.
 """
 
 from __future__ import annotations
