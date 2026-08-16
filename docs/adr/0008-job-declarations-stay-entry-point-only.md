@@ -1,6 +1,8 @@
 # ADR-0008 — Job declarations stay entry-point-only; CRUD verbs act on code and on overlay, never on a second registry
 
-**Status:** Proposed (2026-08-12) — awaiting operator ruling
+**Status:** Accepted (2026-08-16) — operator ruling recorded below.
+Proposed 2026-08-12; the ruling arrived on 2026-08-16 and is written here
+because for four days "the correct form" was a decision nobody could cite.
 **Owner:** scitex-dev, as owner of `JobSpec` and the `scitex_dev.jobs` entry-point group
 **Consumers today:** scitex-agent-container, scitex-cards, scitex-dev's own `_ecosystem_jobs` provider
 **Supersedes:** nothing. **Related:** ADR-0004 (unified JobSpec), ADR-0006 (one store per host)
@@ -81,6 +83,31 @@ synchronised between per-host instances, the table carries `origin_node`,
 `row_uuid`, `revision`, `updated_at` and `deleted_at` **from creation**;
 retrofitting them is a rewrite. Conflict resolution is per field class and never a
 wall clock, and blind `ON CONFLICT DO UPDATE` is prohibited.
+
+## Ruling
+
+Recorded 2026-08-16. The operator referred to this ADR as settled and asked
+that the packages be brought into line with it:
+
+> periodical なジョブの正しい形を決めたじゃないですか？それに合わせて欲しい
+> んです。
+
+The decision above is therefore **Accepted** as written. Nothing in the
+decision text changed; only its status.
+
+**Why this section exists at all.** Between 2026-08-12 and 2026-08-16 the
+ruling had been made in conversation and this header still read *awaiting
+operator ruling*. An agent asked to "follow the standard" could grep the
+repo and find a document that disclaims its own authority — so the answer
+to "what is the correct form?" was unciteable even though it had been
+decided. That is the same defect this ADR legislates against one level up:
+a declaration whose authority lives somewhere the tooling cannot read is
+not a declaration. A standard that cannot be cited cannot be enforced, and
+an ADR left Proposed after its ruling is exactly that.
+
+Consequently: **the ruling belongs in the file, not only in the thread.**
+Any future ADR that is decided verbally should be flipped in the same
+session, with the decider and date, before the conformance work starts.
 
 ## Consequences
 
