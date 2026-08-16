@@ -23,12 +23,12 @@ CROSS_PACKAGE_IMPORTS = [
     "scitex",
     "scitex._mcp_tools",
     "scitex_cards",
+    "scitex_cards._paths",
+    "scitex_cards._store",
     "scitex_config",
     "scitex_config._ecosystem",
     "scitex_events",
     "scitex_logging",
-    "scitex_todo._paths",
-    "scitex_todo._store",
 ]
 # ===== END AUTO-GENERATED =====
 
