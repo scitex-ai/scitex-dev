@@ -141,7 +141,27 @@ class HostRecord:
         One of :data:`HOST_KINDS`.
     ssh_alias : str | None
         The ``~/.ssh/config`` ``Host`` alias to reach this machine, or
-        ``None`` when the host is local / needs no SSH hop.
+        ``None`` when NO ALIAS IS RECORDED.
+
+        ``None`` DOES NOT MEAN "this host is local". It used to, and that
+        was a defect: **locality is not a property of a host, it is a
+        RELATION between a host and whoever is asking.** A shared registry
+        cannot store a relation in a field, because the field is written
+        from one vantage point and read from many.
+
+        Measured 2026-08-12: this registry was authored on the laptop,
+        where ``ywata-note-win: ssh_alias: null`` correctly meant local.
+        Read on scitex-compute-04 the same line asserts that the laptop IS
+        this machine. Nothing about the file changed — only the reader did.
+        A consumer inferring "no SSH hop needed" from it would run locally,
+        silently, because "local" is a legitimate answer that raises
+        nothing.
+
+        Ask :func:`is_local` instead; it compares against the running
+        host's own name at read time. Same discipline as
+        ``scitex_dev.store``'s node identity, which comes from
+        ``pg_control_system().system_identifier`` precisely so a COPIED
+        file cannot lie about which machine it is on.
     scitex_root : str
         The raw (possibly ``~``-prefixed) path to this host's
         ``$SCITEX_DIR``. Use :attr:`scitex_root_path` for the expanded
@@ -532,6 +552,31 @@ def resolve(name: str, *, hosts_path: str | Path | None = None) -> HostRecord:
 
 
 # Re-exported so existing imports (`from ._registry import _load_registry`)
+def is_local(record: "HostRecord | str") -> bool:
+    """Whether ``record`` names the machine this process is running on.
+
+    COMPUTED, never declared. The registry is shared across hosts, so no
+    field in it can answer this: a stored value is written from one vantage
+    point and read from many, and locality is a relation between the host
+    and the reader rather than a property of the host.
+
+    That is not hypothetical. Until 2026-08-12 ``ssh_alias: null`` was
+    documented as meaning "this host is local". The file was authored on
+    ``ywata-note-win``, where that was true, and is read on
+    ``scitex-compute-04``, where it asserts that the laptop is this machine.
+
+    Compares the host's canonical short name against this machine's, both
+    reduced to the part before the first dot so a FQDN and a short name
+    agree. Accepts a name directly so a caller holding only a string does
+    not have to resolve a record to ask.
+    """
+    import socket
+
+    name = record if isinstance(record, str) else record.name
+    here = socket.gethostname()
+    return name.split(".", 1)[0].casefold() == here.split(".", 1)[0].casefold()
+
+
 # keep resolving after the split. Imported at the BOTTOM, after `HostRecord`
 # is defined, because `._parse` imports it back — a top-of-file import would
 # close the cycle.
