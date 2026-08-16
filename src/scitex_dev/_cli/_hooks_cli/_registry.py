@@ -45,6 +45,16 @@ KNOWN_HOOKS: dict[str, tuple[str, str]] = {
         _hooks.pre_push_sh_path(),
         ".githooks/pre-push",
     ),
+    # The merge gate: refuses `gh pr merge` unless `scitex-dev ci verify`
+    # returns READY. Registered here so `hooks install` deploys it like any
+    # other canonical hook -- the ORIGINAL copy of this script was an
+    # untracked file in one container and was lost outright (2026-08-16),
+    # which is why it now ships from the package AND deploys by symlink
+    # rather than by someone remembering to copy it.
+    "require_mergeable_verdict": (
+        _hooks.require_mergeable_verdict_sh_path(),
+        "docs/to_claude/hooks/pre-tool-use/require_mergeable_verdict.sh",
+    ),
 }
 
 

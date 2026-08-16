@@ -66,9 +66,43 @@ def pre_push_sh_path() -> str:
     return str(pathlib.Path(HOOK_DIR) / "pre-push.sh")
 
 
+def require_mergeable_verdict_sh_path() -> str:
+    """Return the absolute path of the canonical merge-gate hook.
+
+    A pre-tool-use hook that refuses ``gh pr merge`` unless
+    ``scitex-dev ci verify`` returns a READY verdict. The operator asked for
+    this as a HOOK rather than a prompt (2026-08-09): 「プロンプトとか弱い
+    よ? hook とかで強制でしょ?」
+
+    IT LIVES HERE BECAUSE THE FIRST COPY DID NOT. It was originally written
+    as an UNTRACKED file in one container's dotfiles checkout, and on
+    2026-08-16 it was found GONE -- no git object, no diff, no reflog.
+    Measured the same hour: ``scitex-dev ci verify``, the checker it calls,
+    was alive and unchanged, because it ships inside this distribution.
+
+        shipped in the package   -> survived a container rebuild
+        distributed by file-copy -> lost, silently
+
+    "Silently" is load-bearing: a missing gate does not raise, the guarded
+    command simply proceeds, and seven pull requests merged through the gap
+    before anyone looked. This is the same fanned-out-copy class named in
+    this module's docstring -- the 2026-06-12 ripple-wm case was ten copies
+    that DRIFTED; this was one copy that VANISHED. Same cure.
+
+    Shipping it here also removes a version-skew hazard: hook and checker
+    are released together, so they can no longer disagree about the exit
+    codes in :mod:`scitex_dev.ci._exit_codes`. That disagreement is not
+    hypothetical -- on 2026-08-09 it made a GREEN pull request report as
+    NOT ready to merge, because exit 2 is Click's usage error and was being
+    read as a domain verdict.
+    """
+    return str(pathlib.Path(HOOK_DIR) / "require_mergeable_verdict.sh")
+
+
 __all__ = [
     "HOOK_DIR",
     "run_lint_sh_path",
     "run_testmon_sh_path",
     "pre_push_sh_path",
+    "require_mergeable_verdict_sh_path",
 ]

@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Verification Controls — when the control itself licenses nothing
-  [DETAILS] The failure modes of the checks prescribed by the claim-type rules: controls that are vacuous (cannot fail), inert (present but disarmed), mispositioned (never reach what is under test), or sampled wrong (one Bash call is one sample). Plus degrade branches where a hard failure hides and the symmetric relabel trap when repairing one, the status words (`skipped`, `masked`, `0`) that fuse a failed measurement into a clean one, and why a commissioned finding must land as a card. Use before trusting a green, a control, or a summary line.
+  [DETAILS] The failure modes of the checks prescribed by the claim-type rules: controls that are vacuous (cannot fail), inert (present but disarmed), mispositioned (never reach what is under test), or sampled wrong (one Bash call is one sample). Plus degrade branches where a hard failure hides and the symmetric relabel trap when repairing one, the status words (`skipped`, `masked`, `0`) that fuse a failed measurement into a clean one, and why a commissioned finding must land as a card. Also the two species that survive every control: an instrument aimed at the right system but pointed at the wrong MOMENT (a stale log generation, `tail -1` as a guess about ordering), and a TRUE answer to a question you did not realise you were asking (two stories predicting the same numbers, separable only by an experiment nobody ran). And why verification fires on BLAST RADIUS rather than on confidence — a durable artifact (card, commit message, PR body) is a delayed action and deserves the check you would apply before acting. Use before trusting a green, a control, or a summary line — and before writing a factual claim into anything someone will quote.
 tags: [scitex-general-quality-verification-controls]
 ---
 
@@ -116,3 +116,92 @@ interrupts you, a report waits, so it is the easiest kind to shelve. Measured:
 scitex-dev's own agent reported the cron read defect hours before a peer nearly
 escalated a false fleet outage on it. This needs a mechanism, not resolve —
 commissioned findings go into scitex-cards as cards, not a session transcript.
+
+## 11. Aimed at the right system, pointed at the wrong moment
+
+§7 covers a control that is *mispositioned* — it never reaches what is under
+test. This is that failure in the **time** axis, and it survives every check
+above.
+
+Measured 2026-08-15 (scitex-hpc): `tail -1` of a log's engine-init lines
+returned the **previous generation's** config. Nothing was empty. Nothing
+errored. The line was real, correctly formatted, correctly parsed — and
+belonged to a process that had already been replaced. It nearly produced a
+filed finding that was the exact **opposite** of the truth, backed by a real
+measurement.
+
+The same day, in scitex-dev: `tail -2 | head -1` returned pytest's `-- Docs:`
+footer as a verdict, and a hand-written `--format` string had its fields
+reversed so the parse yielded zero rows and reported a clean sweep.
+
+- **Positional extraction is a guess about format; content matching is a
+  question about meaning.** `tail -1` / `head -1` are not selections — they are
+  assumptions about ordering, and a log holding two generations answers both
+  confidently and wrongly.
+- **A control proves the instrument works. It cannot prove the instrument is
+  aimed at your system** — and "which system" includes **which moment**. The
+  formulation's author had it bite him again an hour after stating it.
+- When several lines can match, assert an **identity**: a date, a run id, a pid.
+  Narrow, never pick by position.
+- Mechanical barrier: `scitex_dev.measure.require_match` raises on no-match
+  *and* on multiple-match-without-identity, so both halves fail at the point of
+  measurement rather than three steps downstream.
+
+## 12. A true answer to a question you did not realise you were asking
+
+The hardest species, because every rule above passes. The measurement is real,
+correctly taken, correctly parsed. The **shape** is misread.
+
+Measured 2026-08-15 (scitex-agent-container): reasoning output came back at
+6797 chars at cap 2048, 13830 at 4096, 26449 at 8192 — read as "xhigh expands
+to consume any budget". It is 3.3 chars per token at *every* cap, which is the
+signature of **truncation at the budget**, not of expansion. Both stories
+predict identical numbers, so only a larger budget separates them, and it was
+never run.
+
+- No helper catches this. `require_match` cannot; a positive control cannot;
+  a second reader of the same series usually cannot.
+- The only reliable move is to ask, **before** interpreting any series: *what
+  else would produce these same numbers?* If two stories predict the same data,
+  you have not measured — you have chosen.
+- Corollary for peers: the person best placed to ask it is usually **not** the
+  one who took the measurement. In the recorded case the operator asked it on
+  the agent's behalf, and that is the only reason it surfaced.
+
+## 13. An assertion is free; only an action gets checked
+
+The rules above tell you to verify. This is about *when you actually do* — and
+the honest answer is: when something depends on it.
+
+§7 already records an instance ("a week of such proofs is void", asserted
+without enumerating, census found **0**). This section is the rule extracted
+from that one and the one below, because two instances of a claim that was
+never checked *because nothing forced it* is a pattern rather than a slip.
+
+Measured 2026-08-15 (scitex-dev, on itself): I grepped `ecosystem --help` for a
+command the constitution names, did not find it, and wrote "THAT VERB DOES NOT
+EXIST" into a card and a PR commit message. It exists — as a **deprecated alias,
+hidden from `--help`**, which is exactly the listing I searched. An absence in a
+*filtered view* read as an absence in reality.
+
+That claim sat unchallenged for an hour across two artifacts. It was verified
+only when the next step became **editing the fleet constitution** — and it did
+not survive first contact.
+
+- **Assertions are cheap, so they are not checked.** A wrong sentence in a card
+  costs nothing today; it costs whoever quotes it next week. The cost is real
+  and it is deferred, which is precisely why the check does not fire.
+- **The trigger that works is the blast radius, not the confidence.** "I am
+  about to change a shared thing" reliably produces a verification. "I am fairly
+  sure" reliably does not.
+- So: **before writing a claim into a durable artifact — a card, a commit
+  message, a PR body, a skill — apply the check you would apply before acting
+  on it.** Those artifacts ARE the action, delayed.
+- Corollary for reviewers: a confident factual claim in prose has usually had
+  *less* scrutiny than the code beside it, because the code had to run.
+
+Note the shape: `--help` is a filtered listing, and every filtered listing is a
+`require_match` waiting to happen (§11). Deprecated, hidden, and plugin-provided
+entries are invisible to it by design. Ask the thing itself — `<cmd> --help`
+exits 0 for a command that exists — rather than asking an index that was built
+to omit things.
