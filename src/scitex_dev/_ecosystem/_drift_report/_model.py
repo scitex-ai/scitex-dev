@@ -105,8 +105,33 @@ class PackageDrift:
         return [c.layer for c in self.cells if c.drift]
 
     @property
+    def is_judgeable(self) -> bool:
+        """Whether there is a BASELINE to compare the layers against.
+
+        ``reference_version`` is the SSoT (pyproject @ develop). When it is
+        None — a setuptools-scm package with no static version, an
+        unreadable checkout — every cell has nothing to disagree WITH, so
+        no cell is marked drift, so the row looks clean.
+
+        Measured 2026-08-15 on scitex-dev itself, while this report was
+        being used to gate a release: ``SSoT=???``, four of seven layers
+        blind, pypi 0.49.3 against github 0.49.1, and the summary read
+        "1/1 packages consistent; 0 drifting", exit 0.
+        """
+        return self.reference_version is not None
+
+    @property
     def consistent(self) -> bool:
-        return not self.drifting_layers
+        """True only when a baseline EXISTS and nothing disagrees with it.
+
+        Without the first half this is TRUE BY VACUITY, which is the same
+        defect as a gate reporting a clean result having inspected zero
+        lines (scitex-ai/scitex-dev#620). The module already draws this
+        distinction for untrustworthy installs -- "I cannot tell what you
+        are running" INVALIDATES the comparison rather than passing it --
+        and this is that rule applied to the reference value itself.
+        """
+        return self.is_judgeable and not self.drifting_layers
 
     def cell(self, layer: str) -> LayerCell | None:
         for c in self.cells:
@@ -154,7 +179,23 @@ class DriftMatrix:
 
     @property
     def drifting(self) -> list[PackageDrift]:
-        return [p for p in self.packages if not p.consistent]
+        """Packages KNOWN to disagree with their baseline.
+
+        Excludes unjudgeable rows on purpose: "this layer is behind" and
+        "there was nothing to compare against" are different findings with
+        different fixes, and folding the second into the first would send a
+        reader hunting for a version mismatch that was never measured.
+        """
+        return [p for p in self.packages if p.is_judgeable and not p.consistent]
+
+    @property
+    def unjudgeable(self) -> list[PackageDrift]:
+        """Packages with NO baseline — neither consistent nor drifting.
+
+        The third value. A count that hides these reports health it never
+        established.
+        """
+        return [p for p in self.packages if not p.is_judgeable]
 
     @property
     def consistent_packages(self) -> list[PackageDrift]:
@@ -166,8 +207,14 @@ class DriftMatrix:
         # running is at least as serious as knowing you are behind, and a report
         # that exits clean while a package's version string is a fossil is
         # exactly the false all-clear this check exists to prevent.
+        #
+        # An UNJUDGEABLE package counts for the same reason, one step
+        # earlier: a row with no baseline has not been shown to be in sync,
+        # and exiting 0 on it is a clean bill of health from a comparison
+        # that never happened.
         return (
             bool(self.drifting)
+            or bool(self.unjudgeable)
             or bool(self.package_drift_warnings)
             or bool(self.untrustworthy_installs)
         )
