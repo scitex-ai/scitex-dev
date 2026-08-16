@@ -343,17 +343,33 @@ def check_ps140_integration_gate(
     # measuring one told us nothing about the other. Measured 2026-08-16: all
     # 19 deployed gates were in this state, including this repo's.
     for skip in find_full_path_skips(test_file.read_text(errors="replace")):
+        if skip.determined:
+            what = (
+                f"gate skips on the FULL path (`importorskip({skip.argument})`), "
+                "so a renamed submodule raises ModuleNotFoundError, is SKIPPED, "
+                "and reports green — the exact failure this gate exists to catch"
+            )
+        else:
+            # Reported rather than passed over. A rule that cannot classify
+            # must say so: staying silent here is the permissive pole, and
+            # three gates (scitex-logging, figrecipe, scitex-notification)
+            # were reported clean by exactly that silence while skipping on
+            # the full path through a local alias.
+            what = (
+                f"cannot determine what `importorskip({skip.argument})` "
+                "receives, so it cannot be shown to skip on the ROOT. If it "
+                "carries a full dotted path, a rename is silently skipped"
+            )
         out.append(
             violation_cls(
                 "PS-140",
                 f"{test_file}:{skip.line}",
-                f"gate skips on the FULL path (`importorskip({skip.argument})`), "
-                "so a renamed submodule raises ModuleNotFoundError, is SKIPPED, "
-                "and reports green — the exact failure this gate exists to "
-                "catch. Skip on the ROOT and hard-import the full path: "
-                "`pytest.importorskip(name.split('.')[0])` then "
-                "`importlib.import_module(name)`. Root-skip keeps the "
-                "legitimate case (peer genuinely absent from this CI) while "
-                "restoring the loud failure the docstring promises.",
+                what
+                + ". Fix: `pytest.importorskip(name.split('.')[0])` then "
+                "`importlib.import_module(name)` — skip on the ROOT, "
+                "hard-import the FULL path. Do NOT simply drop the skip: a "
+                "blanket hard import breaks a lean install where the peer is "
+                "legitimately absent (optional extra, or a marker-gated "
+                "dependency). Worked example: scitex-ai/scitex-hpc#88.",
             )
         )
