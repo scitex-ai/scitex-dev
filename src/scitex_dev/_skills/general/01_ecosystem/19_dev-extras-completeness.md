@@ -17,8 +17,25 @@ The boundary is **whose feature is being tested**:
 | Tested feature lives in… | `[dev]` does | Tests do |
 |---|---|---|
 | **This package's own `src/`** (e.g. `scitex-notebook`'s MCP server uses `fastmcp`) | Pull the optional 3rd-party dep in so a fresh `pip install -e .[dev]` runs the full suite. **Do NOT** `importorskip`. | Run unconditionally — the feature is yours; commit to testing it. |
-| **A sibling `scitex-*` package** (cross-cascade integration test) | Leave the sibling out. Listing it pulls in heavy transitive deps, can shadow editable installs ([03_interface/03_mcp/09 lesson 4](../03_interface/03_mcp/09_lessons-and-pitfalls.md)), and re-introduces lockstep coupling. | `pytest.importorskip("scitex_<sibling>")` — exists when the sibling is around, skips cleanly when not. |
+| **A sibling `scitex-*` package that is an OPTIONAL peer** (cross-cascade integration test) | Leave the sibling out. Listing it pulls in heavy transitive deps, can shadow editable installs ([03_interface/03_mcp/09 lesson 4](../03_interface/03_mcp/09_lessons-and-pitfalls.md)), and re-introduces lockstep coupling. | `pytest.importorskip("scitex_<sibling>")` — exists when the sibling is around, skips cleanly when not. |
+| **A sibling `scitex-*` package that is a DECLARED RUNTIME DEPENDENCY** (it is in `[project].dependencies`) | Nothing to add — `pip install -e .` already installs it. | Import it **unconditionally**. Do **NOT** `importorskip`: if a declared dependency is missing, the install is BROKEN and the suite must go RED. A skip converts a broken install into a green run. |
 | **A 3rd-party dep this package merely *integrates with*** (e.g. matplotlib plot test) | Pragmatic — include if every CI matrix entry has it; skip if some dimensions deliberately exclude it. | Match the `[dev]` choice. |
+
+**Two axes, not one.** The first axis is *whose feature is being tested*
+(own `src/` vs sibling). The second, added 2026-08-16, is *declared vs
+optional* — and it only bites inside the sibling row, which is why it went
+unnoticed. "Sibling" was read as a synonym for "optional peer", but a
+sibling can be a hard entry in `[project].dependencies`; `scitex-hpc`
+declares `scitex-config` and `scitex-ssh` exactly that way. For those,
+`importorskip` is wrong in the most expensive direction: the module is
+absent only when the install is broken, and the skip reports that as green.
+
+The test to apply is not "is it a sibling?" but **"if this import fails, is
+the package still usable?"** No → import unconditionally and let the suite
+go red. Yes → `importorskip`. *(Raised by scitex-hpc, card
+`importorskip-gates-go-green-when-their-subject-is-absent-20260803`, which
+correctly conceded the sibling-vs-own half of its own argument and kept the
+half that survives.)*
 
 **Symmetric pyproject pattern.** When a package has an optional feature
 extra `[X]` (e.g. `[mcp]`) AND the test suite covers that feature, the

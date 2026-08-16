@@ -78,8 +78,11 @@ test bug; **LOW** cosmetic. Full cookbook (~18 patterns): triage table in
 
 Leaf packages (scitex-io, scitex-stats, etc.) MUST NOT import the
 `scitex` umbrella in their tests — only in `scripts/` or `examples/`.
-Cross-**scitex**-package imports use `pytest.importorskip` so a clean
-sibling-less venv still collects.
+Cross-**scitex**-package imports to an OPTIONAL peer use
+`pytest.importorskip` so a clean sibling-less venv still collects. A
+sibling listed in `[project].dependencies` is NOT optional — import it
+unconditionally, because its absence means a broken install and the suite
+must go red rather than skip.
 
 > Optional 3rd-party deps that power *this* package's own feature
 > (e.g. `fastmcp` for a package's own MCP server) follow the opposite
