@@ -30,6 +30,7 @@ from ._cmds import (
     _install_cross_package_gate,
     _install_gate,
     _list,
+    _list_exemptions,
     _pr,
     _up,
     _prune_branches,
@@ -109,6 +110,7 @@ def register_ecosystem_commands(main_group):
     _clean.register(ecosystem)
     _install_gate.register(ecosystem)
     _install_cross_package_gate.register(ecosystem)
+    _list_exemptions.register(ecosystem)
     _test_remote.register(ecosystem)
     _sync_status.register(ecosystem)
     _sync.register(ecosystem)
