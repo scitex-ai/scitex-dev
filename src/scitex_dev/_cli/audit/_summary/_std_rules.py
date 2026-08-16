@@ -10,7 +10,9 @@ module so the legacy-oversized engine does not grow further:
        ``.scitex/dev/cli-audit-dict.yaml`` (each entry needs a ``# why``
        comment; entries lacking one are themselves warned about).
 - §4b  help not built from spec (WARN) — every command should construct
-       help via ``CliHelp`` (``scitex_dev.ecosystem.help_spec``); the
+       help via ``CliHelp`` (``from scitex_dev.ecosystem import CliHelp``
+       — NOT ``scitex_dev.ecosystem.help_spec``, which is not importable:
+       ``scitex_dev.ecosystem`` is a module, not a package); the
        ``_help_spec`` attribute set by ``SpecCommand`` / ``SpecGroup`` is
        the static evidence. Subsumes the ``_has_example`` sniff for
        spec-built commands (spec validation already guarantees examples).
@@ -248,6 +250,27 @@ def check_spec_built_help(cmd: click.BaseCommand, full: str, out: list) -> None:
     ``SpecCommand`` / ``SpecGroup`` set ``cmd._help_spec``; its absence
     means free-form help text, which drifts (missing examples, ad-hoc
     exit-code shapes). WARN-only.
+
+    THE REMEDIATION NAMES AN IMPORT, SO THE IMPORT MUST RESOLVE. It used to
+    read ``scitex_dev.ecosystem.help_spec``, which raises::
+
+        ModuleNotFoundError: No module named 'scitex_dev.ecosystem.help_spec';
+        'scitex_dev.ecosystem' is not a package
+
+    ``scitex_dev.ecosystem`` is a MODULE — it re-exports 22 names including
+    ``CliHelp``, but has no ``__path__``, so nothing can be addressed
+    beneath it. The private module is ``scitex_dev._ecosystem.help_spec``,
+    and the public re-export exists precisely so nobody needs it.
+
+    Reported by scitex-ui 2026-08-15 and confirmed here. The cost was not
+    cosmetic: they copied the hint onto a card on 2026-07-29, ran the
+    import, read ``ModuleNotFoundError`` as "help_spec is not public API
+    yet", and DEFERRED THE WORK FOR TWO WEEKS. ``CliHelp`` was public the
+    whole time, including in the 0.42.0 their container runs.
+
+    A wrong name in a hint does not merely fail to help — it fails in the
+    direction that makes the status quo look correct, which is the one
+    direction nobody re-checks.
     """
     from ._audit import Violation
 
@@ -258,7 +281,8 @@ def check_spec_built_help(cmd: click.BaseCommand, full: str, out: list) -> None:
             full,
             "§4b",
             "help is free-form text — construct via CliHelp "
-            "(scitex_dev.ecosystem.help_spec)",
+            "(from scitex_dev.ecosystem import CliHelp, SpecCommand, "
+            "SpecGroup, Example)",
         )
     )
 

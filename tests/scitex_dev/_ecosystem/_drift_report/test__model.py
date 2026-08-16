@@ -253,3 +253,79 @@ def test_kind_na_constant_distinct_from_version_and_sha():
     distinct = len(kinds)
     # Assert
     assert distinct == 3
+
+
+# --------------------------------------------------------------------- #
+# NO BASELINE, NO VERDICT                                                #
+# --------------------------------------------------------------------- #
+
+
+def test_a_package_without_a_reference_version_is_not_judgeable():
+    """Measured 2026-08-15 on scitex-dev, while this report was being used
+    to gate a release: SSoT `???`, four of seven layers blind, pypi 0.49.3
+    against github 0.49.1 -- and "1/1 packages consistent; 0 drifting"."""
+    # Arrange
+    row = PackageDrift("a", None, None, ())
+    # Act
+    judgeable = row.is_judgeable
+    # Assert
+    assert judgeable is False
+
+
+def test_a_package_without_a_reference_version_is_not_consistent():
+    """Without a baseline, no cell can disagree, so `not drifting_layers`
+    is TRUE BY VACUITY. Same defect as a gate reporting clean having
+    inspected zero lines (#620)."""
+    # Arrange
+    row = PackageDrift("a", None, None, ())
+    # Act
+    consistent = row.consistent
+    # Assert
+    assert consistent is False
+
+
+def test_an_unjudgeable_package_is_not_counted_as_drifting():
+    """"This layer is behind" and "there was nothing to compare against"
+    have different fixes. Folding the second into the first sends a reader
+    hunting a version mismatch that was never measured."""
+    # Arrange
+    matrix = DriftMatrix(packages=(PackageDrift("a", None, None, ()),))
+    # Act
+    drifting = matrix.drifting
+    # Assert
+    assert drifting == []
+
+
+def test_an_unjudgeable_package_appears_in_its_own_bucket():
+    # Arrange
+    matrix = DriftMatrix(packages=(PackageDrift("a", None, None, ()),))
+    # Act
+    unjudgeable = [p.pkg for p in matrix.unjudgeable]
+    # Assert
+    assert unjudgeable == ["a"]
+
+
+def test_an_unjudgeable_package_makes_the_run_non_clean():
+    """Exit 0 on a row with no baseline is a clean bill of health from a
+    comparison that never happened."""
+    # Arrange
+    matrix = DriftMatrix(packages=(PackageDrift("a", None, None, ()),))
+    # Act
+    has_drift = matrix.has_drift
+    # Assert
+    assert has_drift is True
+
+
+def test_a_judgeable_package_with_no_disagreement_is_still_consistent():
+    """POSITIVE CONTROL. A predicate that called everything unjudgeable
+    would satisfy every test above while making the report useless -- the
+    gate that cannot pass, mirror of the gate that cannot fail."""
+    # Arrange
+    row = PackageDrift(
+        "a", "1.0.0", None, (LayerCell("pypi", "1.0.0", KIND_VERSION, False, ""),)
+    )
+    matrix = DriftMatrix(packages=(row,))
+    # Act
+    state = (row.consistent, matrix.has_drift, [p.pkg for p in matrix.unjudgeable])
+    # Assert
+    assert state == (True, False, [])
