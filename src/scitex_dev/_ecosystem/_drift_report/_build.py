@@ -348,10 +348,25 @@ def render_report(matrix: DriftMatrix) -> str:
     total = len(matrix.packages)
     consistent = len(matrix.consistent_packages)
     drifting = matrix.drifting
-    lines.append(
+    unjudgeable = matrix.unjudgeable
+    # THE COUNT CARRIES THE THIRD VALUE, not just the banner above it.
+    # Measured 2026-08-15: this line read "1/1 packages consistent; 0
+    # drifting" for a package whose SSoT was `???` -- and a reader skips
+    # banners, which is what banners are for.
+    summary = (
         f"summary: {consistent}/{total} packages consistent; "
         f"{len(drifting)} drifting"
     )
+    if unjudgeable:
+        summary += f"; {len(unjudgeable)} NOT JUDGEABLE (no SSoT to compare against)"
+    lines.append(summary)
+    if unjudgeable:
+        lines.append(
+            "  NOT JUDGEABLE is neither consistent nor drifting: no reference "
+            "version could be read, so no layer could disagree with one. This "
+            "is not a clean result -- it is a comparison that did not happen: "
+            + ", ".join(p.pkg for p in unjudgeable)
+        )
 
     if drifting:
         lines.append("")

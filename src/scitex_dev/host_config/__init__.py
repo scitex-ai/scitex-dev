@@ -58,11 +58,14 @@ root) applies the declaration automatically.
 from __future__ import annotations
 
 import logging
+import shutil
 import socket
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+
+from ._volatility import volatile_reason
 
 _logger = logging.getLogger(__name__)
 
@@ -72,10 +75,6 @@ ENTRY_POINT_GROUP = "scitex_dev.host_config"
 #: Per-item outcomes of :func:`evaluate`. See the docstring there --
 #: ``drift`` is deliberately distinct from ``absent`` because the two
 #: warrant opposite responses (converge vs report-and-leave-alone).
-STATE_OK = "ok"
-STATE_ABSENT = "absent"
-STATE_DRIFT = "drift"
-STATE_NOT_APPLICABLE = "not_applicable"
 
 
 @dataclass(frozen=True)
@@ -127,10 +126,40 @@ class HostConfigSpec:
         For journald persistence that is ``journalctl --list-boots``
         (more than one boot listed = the journal demonstrably survived
         a reboot). ``None`` when no observation is available.
+
+        PICK A COMMAND A NORMAL USER CAN RUN. The periodic check is
+        unprivileged by design, and a verifier that needs privileges it
+        does not have returns a permission error that reads exactly like
+        a finding. ``ip -4 -o addr show`` is readable by anyone;
+        ``networkctl cat <iface>`` is not, because netplan's generated
+        units are 0640 root:systemd-network. When no unprivileged
+        equivalent exists, say so with ``verify_requires_root`` rather
+        than shipping a command that always fails.
+    verify_requires_root
+        Whether ``verify_command`` needs root to produce a real answer
+        -- ``auditctl -l`` reads the kernel's audit rules and needs
+        CAP_AUDIT_CONTROL, so an unprivileged run reports a permission
+        error rather than the ruleset. When set and the caller is not
+        root, the observation is reported as ``not-observed`` with the
+        reason, instead of running the command and recording a failure
+        that looks like a finding. Defaults to ``False``.
     requires_root
         Whether writing ``path`` needs root. Defaults to ``True``
         (anything under ``/etc`` does). CHECKING never needs root --
         that asymmetry is why the periodic job can run unprivileged.
+    requires_command
+        A binary that must exist for this file to MEAN anything, e.g.
+        ``"auditctl"`` for a file under ``/etc/audit/rules.d/``. When
+        it is absent the spec evaluates to ``precondition_unmet`` and
+        ``apply`` refuses to write.
+
+        This exists because the alternative is worse than useless.
+        Dropping a rules file onto a host whose daemon is not installed
+        produces a file that is present, correct, and read by nothing --
+        and every subsequent ``check`` would report ``ok``. That is a
+        guard which cannot detect the thing it was installed for, while
+        reporting that it can. ``None`` (the default) means the file
+        stands on its own.
     """
 
     name: str
@@ -142,7 +171,9 @@ class HostConfigSpec:
     mode: str = "0644"
     apply_command: str | None = None
     verify_command: str | None = None
+    verify_requires_root: bool = False
     requires_root: bool = True
+    requires_command: str | None = None
 
     def __post_init__(self) -> None:
         # Fail EARLY at construction, exactly like SystemDepSpec and
@@ -227,6 +258,35 @@ def _builtin_host_config() -> list[HostConfigSpec]:
     return provide()
 
 
+def _conflicting_claim(
+    spec: HostConfigSpec, existing
+) -> HostConfigSpec | None:
+    """Return the already-accepted spec that FIGHTS ``spec``, if any.
+
+    Two declarations of the same ``path`` only conflict when they can
+    both land on the SAME host. Per-host declarations that share a path
+    but name disjoint ``hosts`` are the opposite of a conflict -- they
+    are how a fleet expresses "this file, different content per
+    machine" (a requested DHCP address, a hostname, a per-host mount).
+
+    The earlier version of this check keyed on ``path`` alone and so
+    dropped every per-host declaration after the first, keeping only the
+    alphabetically-first host's copy and logging a warning nothing
+    surfaces. Nine declarations in, one survivor, no error: exactly the
+    silent loss this federation exists to prevent, committed by the
+    guard meant to prevent it.
+
+    An empty ``hosts`` means "every host", so it overlaps with
+    everything -- including another empty one.
+    """
+    for other in existing:
+        if not spec.hosts or not other.hosts:
+            return other
+        if set(spec.hosts) & set(other.hosts):
+            return other
+    return None
+
+
 def discover_host_config(
     *,
     extra_providers: list[Callable[[], list[HostConfigSpec]]] | None = None,
@@ -265,7 +325,7 @@ def discover_host_config(
         providers.extend(extra_providers)
 
     by_name: dict[str, HostConfigSpec] = {}
-    by_path: dict[str, str] = {}
+    by_path: dict[str, list[HostConfigSpec]] = {}
     for provider in providers:
         try:
             specs = provider()
@@ -290,133 +350,50 @@ def discover_host_config(
                     spec.name,
                 )
                 continue
-            if spec.path in by_path:
+            rival = _conflicting_claim(spec, by_path.get(spec.path, ()))
+            if rival is not None:
                 _logger.warning(
-                    "Host config %r targets %s, already claimed by %r -- "
-                    "two declarations for one file will fight; ignoring the "
-                    "second (first provider wins)",
+                    "Host config %r targets %s on a host %r also claims -- "
+                    "two declarations for one file on one host will fight; "
+                    "ignoring the second (first provider wins)",
                     spec.name,
                     spec.path,
-                    by_path[spec.path],
+                    rival.name,
                 )
                 continue
             by_name[spec.name] = spec
-            by_path[spec.path] = spec.name
+            by_path.setdefault(spec.path, []).append(spec)
 
     return [by_name[name] for name in sorted(by_name)]
 
 
-@dataclass(frozen=True)
-class HostConfigStatus:
-    """The result of comparing one ``HostConfigSpec`` against a host."""
 
-    spec: HostConfigSpec
-    state: str
-    detail: str
-
-    @property
-    def needs_apply(self) -> bool:
-        """Whether ``--apply`` would (be allowed to) change anything."""
-        return self.state in (STATE_ABSENT, STATE_DRIFT)
-
-
-def evaluate(
-    spec: HostConfigSpec,
-    *,
-    root: str = "/",
-    hostname: str | None = None,
-) -> HostConfigStatus:
-    """Compare ``spec`` against the live host WITHOUT changing anything.
-
-    Pure observation -- never writes, never needs root, so the periodic
-    job can run unprivileged and still be honest about what it sees.
-
-    Four outcomes, and the split between the middle two is the whole
-    point of this module:
-
-    * ``not_applicable`` -- ``spec.hosts`` excludes this host.
-    * ``ok`` -- file present, content byte-identical, mode as declared.
-      A second run of a converged host reports this for everything;
-      that IS the "second run is a no-op and says so" contract.
-    * ``absent`` -- no file. Converging this is safe: nothing is being
-      overwritten, so ``--apply`` creates it.
-    * ``drift`` -- the file exists but differs. SOMEONE OR SOMETHING
-      CHANGED IT. This is never silently corrected: it is reported, and
-      overwriting it takes an explicit ``--force`` (which backs the old
-      file up first). Quietly re-converging drift would destroy both
-      the evidence and the reason it happened.
-
-    ``root`` prefixes ``spec.path`` so tests can evaluate against a
-    tmp_path instead of the real ``/etc``.
-    """
-    hostname = hostname if hostname is not None else socket.gethostname()
-    if not spec.applies_to(hostname):
-        return HostConfigStatus(
-            spec,
-            STATE_NOT_APPLICABLE,
-            f"declared for {', '.join(spec.hosts)}; this host is {hostname}",
-        )
-
-    target = Path(root) / spec.path.lstrip("/")
-    if not target.exists():
-        return HostConfigStatus(spec, STATE_ABSENT, f"{spec.path} does not exist")
-
-    try:
-        actual = target.read_text(encoding="utf-8")
-    except OSError as exc:
-        # Unreadable is NOT "ok" and NOT "absent" -- we genuinely do not
-        # know, and a success-shaped answer here would be the classic
-        # "the check never ran" failure. Report it as drift so it stays
-        # visible and never gets auto-overwritten.
-        return HostConfigStatus(spec, STATE_DRIFT, f"{spec.path} unreadable: {exc}")
-
-    actual_mode = oct(target.stat().st_mode & 0o777)[2:].zfill(4)
-    want_mode = spec.mode.zfill(4)
-    if actual != spec.content:
-        return HostConfigStatus(
-            spec,
-            STATE_DRIFT,
-            f"{spec.path} content differs from the declaration",
-        )
-    if actual_mode != want_mode:
-        return HostConfigStatus(
-            spec,
-            STATE_DRIFT,
-            f"{spec.path} mode is {actual_mode}, declared {want_mode}",
-        )
-    return HostConfigStatus(spec, STATE_OK, f"{spec.path} matches the declaration")
-
+# --------------------------------------------------------------------- #
+# Public surface. Evaluation lives in `_evaluate` and the state          #
+# vocabulary in `_states`; both are re-exported here so every existing   #
+# `from scitex_dev.host_config import ...` keeps working unchanged.      #
+# --------------------------------------------------------------------- #
+from ._evaluate import HostConfigStatus, directives_of, evaluate  # noqa: E402
+from ._states import (  # noqa: E402
+    STATE_ABSENT,
+    STATE_DRIFT,
+    STATE_NOT_APPLICABLE,
+    STATE_OK,
+    STATE_PRECONDITION_UNMET,
+)
 
 __all__ = [
+    "ENTRY_POINT_GROUP",
     "HostConfigSpec",
     "HostConfigStatus",
-    "ENTRY_POINT_GROUP",
-    "STATE_OK",
     "STATE_ABSENT",
     "STATE_DRIFT",
     "STATE_NOT_APPLICABLE",
+    "STATE_OK",
+    "STATE_PRECONDITION_UNMET",
+    "directives_of",
     "discover_host_config",
     "evaluate",
-    "directives_of",
 ]
-
-
-def directives_of(content: str) -> dict[str, str]:
-    """Parse the EFFECTIVE ``key=value`` settings out of a config body.
-
-    Comments are not settings. Without this, a test asserting "we do not
-    leave ``Storage=auto``" matches the *explanation* of why auto is
-    wrong, sitting in a comment two lines above ``Storage=persistent``
-    -- a false failure that trains people to weaken the assertion. The
-    parser keeps such tests honest by looking only at live directives.
-    """
-    out: dict[str, str] = {}
-    for raw in content.splitlines():
-        line = raw.strip()
-        if not line or line.startswith(("#", ";", "[")) or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        out[key.strip()] = value.strip()
-    return out
 
 # EOF

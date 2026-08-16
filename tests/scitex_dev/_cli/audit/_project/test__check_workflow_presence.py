@@ -32,7 +32,11 @@ _BASELINE_FILES = (
     "pytest-matrix-on-ubuntu-py3-12.yml",
     "import-smoke-on-ubuntu-py3-12.yml",
     "pypi-publish-on-tag.yml",
-    "scitex-dev-quality-audit-on-push.yml",
+    # NEUTRAL, not `scitex-dev-quality-audit-*`. The old fixture encoded a
+    # pattern that ZERO packages in the fleet satisfied, so this suite was
+    # green against a requirement nothing met — the fixture agreed with the
+    # checker and both disagreed with reality.
+    "quality-audit-on-push.yml",
     "sync-main-to-release-tag-on-push.yml",
 )
 

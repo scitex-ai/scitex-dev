@@ -61,10 +61,33 @@ _BASELINE_REQUIREMENTS: list[tuple[str, re.Pattern[str], str]] = [
         re.compile(r"^pypi-publish-.*\.ya?ml$"),
         "PyPI publish on tag (`pypi-publish-*-on-tag.yml`)",
     ),
+    # NEUTRAL NAME, NOT A PACKAGE NAME. The pattern used to demand
+    # `scitex-dev-(quality-audit|audit-all)-*`, which NOTHING matched: a census
+    # of the ecosystem found EIGHT packages shipping a quality-audit workflow
+    # and ZERO satisfying the rule, across three competing spellings —
+    #
+    #     quality-audit-on-ubuntu-latest.yml            scitex-app, scitex-writer
+    #     quality-audit.yml                             scitex-org-github
+    #     <something>-quality-audit-on-ubuntu-latest.yml scitex-ssh, scitex-hub,
+    #                                                    scitex-todo, scitex-cards
+    #
+    # so the rule warned every package while the reference implementations
+    # violated it. A rule nobody satisfies is not a standard, it is noise that
+    # trains readers to skip the whole check.
+    #
+    # WHY NEUTRAL RATHER THAN PER-PACKAGE, which is the tempting fix: a package
+    # name in the filename is copied wrong the first time someone clones a
+    # workflow. Measured — scitex-cloud ships
+    # `scitex-hub-quality-audit-on-ubuntu-latest.yml`, named after a DIFFERENT
+    # package, because it was copied from scitex-hub. The filename now lies
+    # about which repo it belongs to, and nothing catches it because the name
+    # is decoration. Inside `<repo>/.github/workflows/` the repo is already
+    # unambiguous; repeating it can only ever be redundant or wrong.
+    # (Operator, 2026-08-16: 「少なくともパッケージネームではありえない」.)
     (
         "quality-audit",
-        re.compile(r"^scitex-dev-(quality-audit|audit-all)-.*\.ya?ml$"),
-        "scitex-dev quality audit (`scitex-dev-quality-audit-on-*.yml`)",
+        re.compile(r"^(quality-audit|audit-all)([-.].*)?\.ya?ml$"),
+        "quality audit (`quality-audit-on-*.yml`)",
     ),
     (
         "sync-main",
