@@ -351,10 +351,14 @@ class TestRule4bFiresOnFreeFormHelp:
         out: list[Violation] = []
         # Act
         _walk(root, [], out, root_display="demo")
-        # Assert — exact remediation string from the spec.
+        # Assert — the remediation must name an import that RESOLVES.
+        # It used to say `scitex_dev.ecosystem.help_spec`, which raises
+        # ModuleNotFoundError; scitex-ui read that as "not public yet" and
+        # deferred a migration for two weeks. `test__std_rules_4b_hint.py`
+        # executes the import so this string cannot rot again.
         assert any(
             v.rule == "§4b"
-            and "construct via CliHelp (scitex_dev.ecosystem.help_spec)" in v.message
+            and "from scitex_dev.ecosystem import CliHelp" in v.message
             for v in out
         )
 
