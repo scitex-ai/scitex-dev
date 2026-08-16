@@ -161,6 +161,7 @@ def build_drift_matrix(
     sac_note: str = "",
     package_drift_warnings: "tuple[PackageDriftWarning, ...]" = (),
     untrustworthy_installs: "tuple[UntrustworthyInstallWarning, ...]" = (),
+    tag_notes: "dict[str, str] | None" = None,
 ) -> DriftMatrix:
     """Fold plain per-package inputs into a :class:`DriftMatrix`.
 
@@ -207,9 +208,20 @@ def build_drift_matrix(
             LayerCell(LAYER_PYPI, pypi_versions.get(pkg), KIND_VERSION, drift, note)
         )
 
-        # Layer 2 — GitHub: latest release tag (what `main` shipped).
+        # Layer 2 — newest version tag reachable from `origin/main`.
+        #
+        # "Reachable from" is load-bearing and used to be silently wrong: this
+        # was `git describe` on local HEAD while the comment claimed GitHub,
+        # so a tag cut on main and never merged back was walked straight past
+        # (scitex-cards read 0.38.0 where origin/main was 0.41.0, in a clone
+        # fetched that day holding both newer tags). ``tag_notes`` carries the
+        # "a newer tag exists that this ref cannot see" fact, which is a
+        # statement about branch topology, not about the version.
         tag = tag_versions.get(pkg)
         drift, note = _classify_version(tag, reference)
+        extra = (tag_notes or {}).get(pkg, "")
+        if extra:
+            note = f"{note}; {extra}" if note else extra
         cells.append(LayerCell(LAYER_GITHUB, tag, KIND_VERSION, drift, note))
 
         # Layers 3/4 (+ 8-sha) — per-host develop checkout sha vs origin.
@@ -337,8 +349,13 @@ def render_report(matrix: DriftMatrix) -> str:
         lines.append("")
     lines.extend(
         [
+            # The header names the REFS actually read. It previously said
+            # "@ local develop" while the value came from the working tree on
+            # whatever branch was checked out -- a remote authority in the
+            # label, a local artifact in the value.
             "SciTeX ecosystem drift report "
-            "(SSoT = pyproject.toml @ local develop; * = drift vs SSoT)",
+            "(SSoT = pyproject.toml @ develop; github = newest tag reachable "
+            "from origin/main; * = drift vs SSoT)",
             "",
             render_matrix(matrix),
             "",
@@ -366,6 +383,21 @@ def render_report(matrix: DriftMatrix) -> str:
             "version could be read, so no layer could disagree with one. This "
             "is not a clean result -- it is a comparison that did not happen: "
             + ", ".join(p.pkg for p in unjudgeable)
+        )
+        # SAY WHICH DIRECTION IS GOOD. This count ROSE when the reference
+        # columns started reading the refs their labels name instead of
+        # substituting the working tree / local HEAD, because an absent ref
+        # now refuses instead of guessing. A totals-only reader sees a
+        # number moving the alarming way and infers the tool degraded -- the
+        # same mistake as reading "3 failed units" as rot when they failed
+        # four minutes ago. A report that does not say which direction is
+        # good makes its own honest result look like a regression.
+        lines.append(
+            "  A HIGHER count here is the intended effect of reading refs "
+            "explicitly: where `develop` / `origin/main` cannot be resolved, "
+            "the reference REFUSES rather than falling back to the working "
+            "tree or to local HEAD. Previously those rows carried a "
+            "substituted number and were graded as if it were the reference."
         )
 
     if drifting:

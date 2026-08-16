@@ -48,9 +48,21 @@ def collect_drift_matrix(
     exists alongside the 8-layer matrix).
     """
     from ..._core.config import load_config
-    from ..._release.versions import _normalize_version, list_versions
+    from ..._release.versions import (
+        _normalize_version,
+        get_local_path,
+        list_versions,
+    )
     from .._core import ECOSYSTEM, get_all_packages
     from .._packages import packages_audit
+    from ._refs import (
+        DEVELOP_REFS,
+        MAIN_REFS,
+        latest_tag_at_ref,
+        newest_tag_in_clone,
+        unreachable_tag_note,
+        version_at_ref,
+    )
 
     if config is None:
         config = load_config()
@@ -68,15 +80,42 @@ def collect_drift_matrix(
     def _local(pkg: str, key: str) -> str | None:
         return (lv.get(pkg, {}).get("local", {}) or {}).get(key)
 
-    reference_versions = {p: _local(p, "pyproject_toml") for p in pkg_list}
     installed_versions = {p: _local(p, "installed") for p in pkg_list}
     pypi_versions = {
         p: (lv.get(p, {}).get("remote", {}) or {}).get("pypi") for p in pkg_list
     }
+
+    # THE TWO REFERENCE COLUMNS READ THE REFS THEIR LABELS NAME.
+    #
+    # Both used to name a remote authority and compute a local artifact, and
+    # both were wrong in the same direction on the 2026-08-16 fleet baseline:
+    # the SSoT column read the WORKING TREE (any branch, uncommitted edits
+    # included -- 15 of 84 surveyed checkouts were off their default branch
+    # and 24 were dirty), and the github column ran `git describe` on local
+    # HEAD. Neither ever touched the ref it advertised. They are the columns
+    # every other column is compared AGAINST, so the error propagated to
+    # every verdict in the row.
+    #
+    # `_refs` REFUSES rather than falling back to something closer to hand: a
+    # missing ref yields None, which this report already renders honestly as
+    # NOT JUDGEABLE ("a comparison that did not happen"). A silent
+    # substitution would render as a verdict instead, which is the defect.
+    paths = {p: get_local_path(p) for p in pkg_list}
+    ref_readings = {p: version_at_ref(paths[p], DEVELOP_REFS) for p in pkg_list}
+    reference_versions = {p: ref_readings[p].value for p in pkg_list}
+
+    tag_readings = {p: latest_tag_at_ref(paths[p], MAIN_REFS) for p in pkg_list}
     tag_versions = {
-        p: _normalize_version((lv.get(p, {}).get("git", {}) or {}).get("latest_tag"))
+        p: _normalize_version(tag_readings[p].value) for p in pkg_list
+    }
+    # "Nothing newer was released" and "something newer was released on a ref
+    # this one cannot reach" are different facts that used to render as the
+    # same number.
+    tag_notes = {
+        p: unreachable_tag_note(tag_readings[p], newest_tag_in_clone(paths[p]))
         for p in pkg_list
     }
+    tag_notes = {p: note for p, note in tag_notes.items() if note}
     pypi_names = {
         p: (ECOSYSTEM.get(p, {}) or {}).get("pypi_name", p) for p in pkg_list
     }
@@ -111,6 +150,7 @@ def collect_drift_matrix(
         installed_versions=installed_versions,
         pypi_versions=pypi_versions,
         tag_versions=tag_versions,
+        tag_notes=tag_notes,
         sha_rows=sha_rows,
         pypi_names=pypi_names,
         sac_rows=sac_rows,
