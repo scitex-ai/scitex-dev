@@ -81,17 +81,26 @@ def evaluate(
             f"declared for {', '.join(spec.hosts)}; this host is {hostname}",
         )
 
-    if spec.requires_command and shutil.which(spec.requires_command) is None:
-        return HostConfigStatus(
-            spec,
-            STATE_PRECONDITION_UNMET,
-            f"{spec.requires_command!r} is not installed, so {spec.path} "
-            f"would be read by nothing",
-        )
-
     # Real host only: under a synthetic ``root`` the evaluation is
     # hypothetical, and pytest's tmp_path is often tmpfs itself.
+    #
+    # BOTH checks below are facts about the MACHINE, not about the tree
+    # being graded, so both belong behind this guard. `requires_command`
+    # used to sit outside it: `shutil.which` reads the real PATH whatever
+    # ``root`` says, so a spec written into a tmp_path was judged by
+    # whichever host happened to run the test. That reddened develop at
+    # 08092b69 on the one CI leg scheduled onto a runner without
+    # `networkctl`, and presented as a py3.13 failure because the three
+    # matrix legs land on three different machines.
     if root == "/":
+        if spec.requires_command and shutil.which(spec.requires_command) is None:
+            return HostConfigStatus(
+                spec,
+                STATE_PRECONDITION_UNMET,
+                f"{spec.requires_command!r} is not installed, so {spec.path} "
+                f"would be read by nothing",
+            )
+
         volatile = volatile_reason(spec.path)
         if volatile:
             return HostConfigStatus(spec, STATE_PRECONDITION_UNMET, volatile)
