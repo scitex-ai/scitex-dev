@@ -786,7 +786,7 @@ def test_host_config_check_is_a_declared_ecosystem_job():
     # Act
     names = [j.name for j in jobs]
     # Assert
-    assert "host-config-check" in names
+    assert "scitex-dev-host-config-check" in names
 
 
 def test_host_config_check_catches_up_after_a_boot():
@@ -794,7 +794,7 @@ def test_host_config_check_catches_up_after_a_boot():
     # Arrange
     jobs = provide_jobs()
     # Act
-    job = next(j for j in jobs if j.name == "host-config-check")
+    job = next(j for j in jobs if j.name == "scitex-dev-host-config-check")
     # Assert
     assert job.on_boot_sec == "5min"
 
@@ -802,7 +802,7 @@ def test_host_config_check_catches_up_after_a_boot():
 def test_host_config_check_job_runs_the_check_verb():
     # Arrange
     # Act
-    body = JOB_SHELL_BODIES["host-config-check"]
+    body = JOB_SHELL_BODIES["scitex-dev-host-config-check"]
     # Assert
     assert "host-config check" in body
 
@@ -811,7 +811,7 @@ def test_host_config_check_job_never_applies():
     """The timer has no root and wants none -- it reports, never converges."""
     # Arrange
     # Act
-    body = JOB_SHELL_BODIES["host-config-check"]
+    body = JOB_SHELL_BODIES["scitex-dev-host-config-check"]
     # Assert
     assert "apply" not in body
 

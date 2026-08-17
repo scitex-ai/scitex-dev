@@ -53,12 +53,12 @@ from scitex_dev.jobs import JobSpec
 # ``JOB_LOG_TARGETS`` maps each job to ``(package, slug)``; the slug keeps
 # the pre-existing log basename so operator greps / dashboards keep working.
 JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
-    "deploy-freshness": ("dev", "cron-deploy-freshness"),
-    "pr-expire": ("dev", "cron-pr-expire"),
-    "ecosystem-self-pull": ("dev", "timer-ecosystem-self-pull"),
-    "drift-report": ("dev", "timer-drift-report"),
-    "local-state-audit": ("dev", "timer-local-state-audit"),
-    "host-config-check": ("dev", "timer-host-config-check"),
+    "scitex-dev-deploy-freshness": ("dev", "cron-deploy-freshness"),
+    "scitex-dev-pr-expire": ("dev", "cron-pr-expire"),
+    "scitex-dev-ecosystem-self-pull": ("dev", "timer-ecosystem-self-pull"),
+    "scitex-dev-drift-report": ("dev", "timer-drift-report"),
+    "scitex-dev-local-state-audit": ("dev", "timer-local-state-audit"),
+    "scitex-dev-host-config-check": ("dev", "timer-host-config-check"),
     "scitex-dev-venv-refresh": ("dev", "timer-venv-refresh"),
 }
 
@@ -70,18 +70,18 @@ JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
 #: jobs keeps a drift FINDING from marking the unit failed (drift is data
 #: recorded in the log, not a unit failure — skill §4).
 JOB_SHELL_BODIES: dict[str, str] = {
-    "pr-expire": (
+    "scitex-dev-pr-expire": (
         "date -u +'== pr-expire %Y-%m-%dT%H:%MZ =='; "
         # flip to --apply after fleet-wide dry-run validation — constitution
         # §2, do not auto-mass-close 12 repos on first fire.
         "scitex-dev ecosystem pr expire --all --days 3 --dry-run || true"
     ),
-    "ecosystem-self-pull": "scitex-dev ecosystem sync --yes",
-    "drift-report": (
+    "scitex-dev-ecosystem-self-pull": "scitex-dev ecosystem sync --yes",
+    "scitex-dev-drift-report": (
         "date -u +'== drift-report %Y-%m-%dT%H:%MZ =='; "
         "scitex-dev ecosystem drift-report || true"
     ),
-    "local-state-audit": (
+    "scitex-dev-local-state-audit": (
         "date -u +'== local-state-audit %Y-%m-%dT%H:%MZ =='; "
         "scitex-dev ecosystem audit-local-state || true"
     ),
@@ -124,7 +124,7 @@ JOB_SHELL_BODIES: dict[str, str] = {
     # world-readable), so the unprivileged periodic job can report drift
     # honestly. Converging is `host-config apply`, a deliberate root act
     # — a timer must never quietly rewrite a host's /etc.
-    "host-config-check": (
+    "scitex-dev-host-config-check": (
         "date -u +'== host-config-check %Y-%m-%dT%H:%MZ =='; "
         "scitex-dev ecosystem host-config check || true"
     ),
@@ -166,7 +166,7 @@ def _deploy_freshness_command() -> str:
     reported). Output lands in
     ``$HOME/.scitex/dev/runtime/logs/cron-deploy-freshness.log``.
     """
-    return _exec_command("deploy-freshness", extra="--apply")
+    return _exec_command("scitex-dev-deploy-freshness", extra="--apply")
 
 
 def _self_pull_command() -> str:
@@ -177,7 +177,7 @@ def _self_pull_command() -> str:
     ``origin/develop`` and skips anything dirty / off-develop / diverged,
     so live or un-pushed work is never clobbered.
     """
-    return _exec_command("ecosystem-self-pull")
+    return _exec_command("scitex-dev-ecosystem-self-pull")
 
 
 def _drift_report_command() -> str:
@@ -190,7 +190,7 @@ def _drift_report_command() -> str:
     failure — so a chronically-drifting fleet never trains the operator to
     ignore a permanently-failed timer (skill §4).
     """
-    return _exec_command("drift-report")
+    return _exec_command("scitex-dev-drift-report")
 
 
 def _local_state_audit_command() -> str:
@@ -204,7 +204,7 @@ def _local_state_audit_command() -> str:
     ``check_state_drift.sh`` PostToolUse hook reads this log's last summary
     line.
     """
-    return _exec_command("local-state-audit")
+    return _exec_command("scitex-dev-local-state-audit")
 
 
 def _venv_refresh_command() -> str:
@@ -224,7 +224,7 @@ def _host_config_check_command() -> str:
     for a timer, where a permanently-red unit trains the operator to
     ignore it.
     """
-    return _exec_command("host-config-check")
+    return _exec_command("scitex-dev-host-config-check")
 
 
 def _pr_expire_command() -> str:
@@ -237,7 +237,7 @@ def _pr_expire_command() -> str:
     (§2) forbids. Flip ``--dry-run`` to ``--apply`` in ``JOB_SHELL_BODIES``
     ONLY after a fleet-wide dry-run has been validated by a human.
     """
-    return _exec_command("pr-expire")
+    return _exec_command("scitex-dev-pr-expire")
 
 
 def provide_jobs() -> list[JobSpec]:
@@ -249,7 +249,7 @@ def provide_jobs() -> list[JobSpec]:
     """
     return [
         JobSpec(
-            name="deploy-freshness",
+            name="scitex-dev-deploy-freshness",
             kind="cron",
             schedule="*/30 * * * *",
             command=_deploy_freshness_command(),
@@ -359,7 +359,7 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="1d",
         ),
         JobSpec(
-            name="host-config-check",
+            name="scitex-dev-host-config-check",
             kind="timer",
             schedule="",
             command=_host_config_check_command(),
@@ -390,7 +390,7 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="6h",
         ),
         JobSpec(
-            name="pr-expire",
+            name="scitex-dev-pr-expire",
             kind="cron",
             schedule="30 3 * * *",
             command=_pr_expire_command(),
