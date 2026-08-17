@@ -380,11 +380,22 @@ def test_replay_applies_a_batch_from_the_current_writer(local):
     assert result.applied == 1
 
 
-def test_replay_adopts_the_fence_it_accepted(local):
-    """Accepting under a higher fence must RAISE the bar for later batches.
+def test_replay_does_not_adopt_the_fence_it_accepted(local):
+    """THE EVICTION REGRESSION. Replay reads the fence; it must not write it.
 
-    Without this the check compares against 0 forever and can never fire —
-    implemented, called, and still useless.
+    This test is the INVERSION of its predecessor,
+    `test_replay_adopts_the_fence_it_accepted`, which asserted
+    `local.fence("peer") == 4` after replaying an entry carrying `fence=4`.
+    That assertion pinned a bug as a requirement.
+
+    Adoption made the fence self-asserting: the batch being authorised
+    carried the authority that authorised it. Since `set_fence` refuses to
+    descend, one accepted batch naming an origin and a large fence excluded
+    that origin PERMANENTLY, with no way back through the public API. No
+    attacker is needed — a genesis log minted with a fence, or any peer
+    relaying ops it received, reaches the same place.
+
+    Data replays transitively; authority does not. See ADR-0011.
     """
     # Arrange
     local.set_fence("peer", 1)
@@ -393,23 +404,45 @@ def test_replay_adopts_the_fence_it_accepted(local):
     replay(local, "peer", [_remote_entry(1, fence=4)])
 
     # Assert
-    assert local.fence("peer") == 4
+    assert local.fence("peer") == 1
 
 
-def test_a_later_batch_below_the_adopted_fence_is_rejected(local):
-    """The sequence the fence exists for, played out in order.
+def test_a_batch_cannot_evict_the_origin_it_names(local):
+    """The whole hazard in one test: an honest peer must survive a big claim.
 
-    A peer writes under fence 4, is demoted, and its stale process sends more
-    ops under fence 2. Those ops are contiguous and well-clocked; only the
-    fence stops them.
+    A batch arrives claiming origin "peer" under a large fence. "peer" then
+    writes normally — every local write carries the fence that node holds,
+    which for an unpromoted node is 0. Before the fix the first batch left
+    fence(peer)=999 and every later op from the real peer was rejected
+    forever.
     """
     # Arrange
-    replay(local, "peer", [_remote_entry(1, fence=4)])
+    replay(local, "peer", [_remote_entry(1, fence=999)])
+
+    # Act
+    result = replay(local, "peer", [_remote_entry(2, fence=FENCE_UNKNOWN)])
+
+    # Assert
+    assert result.applied == 1
+
+
+def test_a_later_batch_below_the_administered_fence_is_rejected(local):
+    """The sequence the fence exists for, played out in order.
+
+    A peer is promoted to fence 4 by something that authenticated it, is
+    demoted, and its stale process sends more ops under fence 2. Those ops
+    are contiguous and well-clocked; only the fence stops them.
+
+    The promotion is now an explicit `set_fence` rather than a side effect of
+    the first batch — which is the only change, and the point.
+    """
+    # Arrange
+    local.set_fence("peer", 4)
 
     # Act
     error = None
     try:
-        replay(local, "peer", [_remote_entry(2, fence=2)])
+        replay(local, "peer", [_remote_entry(1, fence=2)])
     except SupersededFenceError as exc:
         error = exc
 
@@ -431,6 +464,99 @@ def test_an_unfenced_peer_still_replays(local):
 
     # Assert
     assert result.applied == 1
+
+
+# -- a node writes under the authority it HOLDS -------------------------------
+#
+# The other half of the fix. Judging peers by a fence while stamping your own
+# ops with "no authority at all" is a suicide pact: the first real promotion
+# anywhere makes every honest node's own writes fail their peers' checks.
+
+
+def test_a_local_write_carries_the_nodes_own_fence(local):
+    """A promoted node's ops must claim the promotion."""
+    # Arrange
+    local.set_fence(local.node, 3)
+
+    # Act
+    result = local.put({"id": "c1", "status": "open"}, expected_revision=None)
+
+    # Assert
+    assert result.op.fence == 3
+
+
+def test_a_local_write_is_unfenced_until_the_node_is_promoted(local):
+    """The default must not change for a fleet that never fences."""
+    # Arrange
+    # (nothing — a fresh store has been promoted by nobody)
+
+    # Act
+    result = local.put({"id": "c1", "status": "open"}, expected_revision=None)
+
+    # Assert
+    assert result.op.fence == FENCE_UNKNOWN
+
+
+# -- the way back down --------------------------------------------------------
+#
+# `set_fence` refuses to descend, which is right for the replication path and
+# wrong as an absolute: a fence recorded in error excludes a healthy host, and
+# before `rescind_fence` the only remedy was hand-editing the cursor table.
+
+
+def test_a_fence_can_be_rescinded(local):
+    """The recovery that did not exist."""
+    # Arrange
+    local.set_fence("peer", 9)
+
+    # Act
+    local.rescind_fence("peer", 0, reason="recorded from an unauthenticated batch")
+
+    # Assert
+    assert local.fence("peer") == 0
+
+
+def test_rescinding_readmits_the_evicted_origin(local):
+    """Recovery is judged by the peer replicating again, not by an integer."""
+    # Arrange
+    local.set_fence("peer", 9)
+    local.rescind_fence("peer", 0, reason="recorded in error")
+
+    # Act
+    result = replay(local, "peer", [_remote_entry(1, fence=FENCE_UNKNOWN)])
+
+    # Assert
+    assert result.applied == 1
+
+
+def test_rescinding_without_a_reason_is_refused(local):
+    """Re-admitting an excluded writer must state its justification in code."""
+    # Arrange
+    local.set_fence("peer", 9)
+
+    # Act
+    error = None
+    try:
+        local.rescind_fence("peer", 0, reason="   ")
+    except StoreError as exc:
+        error = exc
+
+    # Assert
+    assert error is not None
+
+
+def test_rescinding_leaves_the_cursor_untouched(local):
+    """The fence and the cursor share a row; lowering one must not reset the
+    other, or recovery would silently re-request applied ops."""
+    # Arrange
+    local.set_cursor("peer", 7)
+    local.set_fence("peer", 9)
+
+    # Act
+    local.rescind_fence("peer", 0, reason="recorded in error")
+
+    # Assert
+    assert local.cursor("peer") == 7
 
 
 # EOF

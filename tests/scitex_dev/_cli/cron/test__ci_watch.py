@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from scitex_dev._cli.cron import _ci_watch
+from scitex_dev._cli.cron import _ci_watch, _ci_watch_cards
 
 
 class _FakeCompletedProcess:
@@ -565,13 +565,25 @@ def test_create_todo_returns_false_when_api_missing():
         head_sha="abcd1234ef567890abcdef00000000000000bbbb",
     )
 
-    # Act — pass todo_api=None and rely on _resolve_todo_api short-circuit.
-    # In CI sandboxes without scitex-todo installed (or whenever the
-    # import path raises) the production helper degrades to no-op.
-    # We replace the module-level resolver with one that returns None
-    # so the test does not depend on the test runner's installed deps.
-    saved_resolve = _ci_watch._resolve_todo_api
-    _ci_watch._resolve_todo_api = lambda store_path=None: None  # type: ignore[assignment]
+    # Act — pass todo_api=None and rely on the _resolve_todo_api short-circuit.
+    # In sandboxes without scitex-cards installed (or whenever the import
+    # path raises) the production helper degrades to no-op. We replace the
+    # resolver with one returning None so the test does not depend on the
+    # runner's installed deps.
+    #
+    # PATCH `_ci_watch_cards`, NOT `_ci_watch`. `_create_todo_if_new` was
+    # extracted into `_ci_watch_cards` for the 512-line limit and resolves
+    # `_resolve_todo_api` from ITS OWN module globals; `_ci_watch` merely
+    # re-exports the name. Rebinding the re-export leaves the callee looking
+    # at the original, so the real resolver ran, found scitex-cards genuinely
+    # installed on this host, and attempted a LIVE add_task — the test failed
+    # by doing the thing it was written to prove does not happen.
+    #
+    # Generalises past this file: after any extract-and-re-export refactor,
+    # a monkey-patched module global must be patched WHERE THE CALLER LOOKS
+    # IT UP, which is no longer where the caller is imported from.
+    saved_resolve = _ci_watch_cards._resolve_todo_api
+    _ci_watch_cards._resolve_todo_api = lambda store_path=None: None  # type: ignore[assignment]
     try:
         created = _ci_watch._create_todo_if_new(
             agent="proj-scitex-stats",
@@ -580,7 +592,7 @@ def test_create_todo_returns_false_when_api_missing():
             todo_api=None,
         )
     finally:
-        _ci_watch._resolve_todo_api = saved_resolve  # type: ignore[assignment]
+        _ci_watch_cards._resolve_todo_api = saved_resolve  # type: ignore[assignment]
 
     # Assert
     assert created is False

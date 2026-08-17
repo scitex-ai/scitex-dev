@@ -103,6 +103,10 @@ def replay(store: Store, source: str, entries: Sequence[OpEntry]) -> ReplayResul
 
     Raises :class:`~._errors.OplogGapError` if the batch does not start at
     ``cursor + 1``, has an internal hole, or mixes origins.
+
+    READS THE FENCE, NEVER WRITES IT. A batch can be rejected by the fence
+    and can never raise it — see the comment in the loop, and
+    :meth:`~._peer_state.PeerState.set_fence` for the verb that does.
     """
     cursor_before = store.cursor(source)
     ordered = list(entries)
@@ -122,11 +126,25 @@ def replay(store: Store, source: str, entries: Sequence[OpEntry]) -> ReplayResul
             conflicts.extend(result.conflicts)
             cursor = entry.seq
             store.set_cursor(source, cursor)
-            # Adopt the authority we just accepted under, so a LATER batch
-            # carrying an older fence is rejected. Without this the check
-            # above only ever compares against 0 and can never fire.
-            if entry.fence > store.fence(source):
-                store.set_fence(source, entry.fence)
+            # DELIBERATELY NOT: `store.set_fence(source, entry.fence)`.
+            #
+            # Replay READS the fence to judge a batch and never WRITES it.
+            # The earlier shape adopted `entry.fence` whenever it exceeded the
+            # local one, which let the data being authorised carry its own
+            # authority — and `set_fence` refuses to descend, so the adoption
+            # was permanent. One batch claiming any origin and a large fence
+            # therefore evicted that origin forever: every genuine op it went
+            # on to write carried a lower fence and failed the check above,
+            # with no way back through the public API.
+            #
+            # DATA REPLAYS TRANSITIVELY; AUTHORITY DOES NOT. Relaying a third
+            # party's ops is a deliberate feature (see `pull`), and it is safe
+            # because contiguity and field-level merge bound what a relayed op
+            # can do. Neither bounds a fence, because a fence is not merged —
+            # it is believed. So a fence moves only through an explicit
+            # `set_fence()` / `rescind_fence()` call made by something that
+            # authenticated the peer, never as a side effect of accepting
+            # rows from it.
             applied += 1
 
     return ReplayResult(

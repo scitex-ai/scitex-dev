@@ -129,6 +129,7 @@ def register_ecosystem_dev_group(ecosystem: click.Group) -> click.Group:
     """
     from .._ecosystem.help_spec import CliHelp, Example, SpecGroup
     from .ecosystem._cmds import (
+        _hooks,
         _jobs_cron,
         _jobs_service,
         _jobs_systemd,
@@ -174,6 +175,10 @@ def register_ecosystem_dev_group(ecosystem: click.Group) -> click.Group:
     _jobs_timer.register(dev)
     _jobs_cron.register(dev)
     _jobs_systemd.register(dev)
+
+    # The guardrail half of the federation, aggregating `scitex_dev.hooks`
+    # the way the groups above aggregate `scitex_dev.jobs`.
+    _hooks.register(dev)
 
     for name in _ECOSYSTEM_MOVED:
         command = dev.commands.get(name)

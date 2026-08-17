@@ -30,6 +30,7 @@ from scitex_dev._ecosystem._drift_report._package_watch import (
 )
 from scitex_dev._ecosystem._drift_report._untrustworthy_installs import (
     check_untrustworthy_installs,
+    default_scan_packages,
     render_untrustworthy_install_banner,
 )
 from scitex_dev._release._install_probe import (
@@ -45,6 +46,64 @@ def _probe(**kw) -> InstallProbe:
     base = dict(dist="scitex-todo", kind=KIND_WHEEL, honest=True)
     base.update(kw)
     return InstallProbe(**base)  # type: ignore[arg-type]
+
+
+# --------------------------------------------------------------------------
+# The scope: the default scan must cover packages nobody hand-picked.
+# --------------------------------------------------------------------------
+
+
+def _only_this_one_lies(target: str):
+    """A probe reader where exactly ONE package is untrustworthy.
+
+    The positive control for scope. Without a planted liar the scan returns
+    zero whether it inspects 3 packages or 70, so a green proves only that
+    the loop ran — the same "instrument that never returned a known answer"
+    this module exists to prevent elsewhere.
+    """
+
+    def probe_fn(name: str) -> InstallProbe:
+        if name == target:
+            return _probe(
+                dist=name,
+                kind=KIND_ORPHANED,
+                metadata_version="9.9.9",
+                code_version=None,
+                honest=False,
+            )
+        return _probe(dist=name, kind=KIND_ABSENT, honest=True)
+
+    return probe_fn
+
+
+def test_the_default_scan_reports_a_package_outside_the_hand_picked_three():
+    """scitex-plt is not in CRITICAL_PACKAGES; a lie there must still surface.
+
+    The old default inspected three names against a registry of seventy, so a
+    fossilised install anywhere else was invisible — and the banner said
+    nothing about scope, making silence indistinguishable from coverage.
+    """
+    # Arrange
+    probe_fn = _only_this_one_lies("scitex-plt")
+    # Act
+    warnings = check_untrustworthy_installs(probe_fn=probe_fn)
+    # Assert
+    assert [w.package for w in warnings] == ["scitex-plt"]
+
+
+def test_the_default_scan_is_the_whole_registry_not_a_short_list():
+    # Arrange
+    expected = len(default_scan_packages())
+    # Act
+    seen: list[str] = []
+
+    def probe_fn(name: str) -> InstallProbe:
+        seen.append(name)
+        return _probe(dist=name, kind=KIND_ABSENT, honest=True)
+
+    check_untrustworthy_installs(probe_fn=probe_fn)
+    # Assert
+    assert len(seen) == expected
 
 
 # --------------------------------------------------------------------------
@@ -341,3 +400,23 @@ def test_banner_carries_the_actual_repair_command():
     banner = _repair_banner()
     # Assert
     assert "--no-deps" in banner
+
+
+def test_banner_names_the_interpreter_it_judged():
+    """"in this interpreter" is unrecoverable to a reader.
+
+    A verdict about /opt/venv-sac says nothing to someone who believes it
+    describes their checkout's venv, and the old wording gave them no way to
+    tell. Measured 2026-08-16: reporting a venv by BASENAME cost two agents a
+    round trip when the same name existed at two paths.
+
+    Same principle as the auditors' `N file(s) inspected under <root>` — the
+    scope clause must name the fact the reader cannot otherwise recover.
+    """
+    # Arrange
+    import sys
+
+    # Act
+    banner = _repair_banner()
+    # Assert
+    assert sys.executable in banner

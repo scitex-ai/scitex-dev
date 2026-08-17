@@ -9,12 +9,110 @@ Bypass (exceptions / temporal remedy):
 Use when remediating pre-existing violations or developing
 without the audit corpus available locally. CI for release
 branches MUST NOT set this — drift goes silent.
+
+WHY THIS FILE VALIDATES ITS OWN ANCHOR
+--------------------------------------
+Until 2026-08-16 this gate derived the audited tree as
+``Path(__file__).resolve().parents[2]`` and audited whatever that
+produced. A long comment explained the wrong-tree hazard in detail and
+nothing enforced it — the same "a comment is not a mechanism" shape
+found twice elsewhere in this package the same day.
+
+The failure mode is the worst one an auditor can have, and
+scitex-cards measured it: `git mv` this file and the derived root
+silently moves, the scan finds ZERO files, and the gate PASSES. A
+fleet-wide "all green" then reads identically to a fleet-wide
+"all blind".
+
+Measured across the 18 repos that run this audit from pytest, exactly
+ONE package defended it (scitex-agent-container, whose
+``_verified_repo_root`` + containment assert are the shape copied
+here). scitex-dev — which owns the auditor — did not. This closes that.
+
+The two halves are complementary, not alternatives:
+  * the identity anchor makes a redirected scan FAIL
+  * the auditors' "N file(s) inspected under <root>" line makes a
+    redirected scan SAY it inspected nothing under a surprising root
+Neither alone does both.
 """
 
 import shutil
+import tomllib
 from pathlib import Path
 
 import pytest
+
+#: The distribution this gate is allowed to audit. A tree whose
+#: pyproject declares anything else is the WRONG TREE, however
+#: plausible its path looks.
+_DISTRIBUTION = "scitex-dev"
+
+#: <root>/tests/develop/test_audit.py -> parents[2] is the checkout.
+#: Positional and therefore fragile, which is exactly why the value is
+#: validated below rather than trusted.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _verified_repo_root() -> Path:
+    """Return the checkout THIS FILE lives in, or fail loudly.
+
+    A validator, not a formality. If the positional anchor stops
+    pointing at scitex-dev's root — a moved test file, a changed
+    layout — we must NOT fall back to a guess and audit some other
+    tree. Falling back is the defect; refusing is the fix.
+    """
+    pyproject = _REPO_ROOT / "pyproject.toml"
+    if not pyproject.is_file():
+        pytest.fail(
+            f"cannot locate the checkout under test: no pyproject.toml at "
+            f"{pyproject}. This gate refuses to fall back to a "
+            f"~/proj/{_DISTRIBUTION} guess — that would audit a tree "
+            f"unrelated to the commit under test. Fix the _REPO_ROOT "
+            f"anchor in {__file__}."
+        )
+    declared = (tomllib.loads(pyproject.read_text()).get("project") or {}).get(
+        "name"
+    )
+    if declared != _DISTRIBUTION:
+        pytest.fail(
+            f"wrong tree: {_REPO_ROOT} declares project.name={declared!r}, "
+            f"expected {_DISTRIBUTION!r}. Auditing it would grade a "
+            f"different package and report the result as this one's."
+        )
+    return _REPO_ROOT
+
+
+def test_the_repo_root_contains_this_test_file():
+    """IDENTITY ANCHOR — the control that makes the audit's root meaningful.
+
+    Without this, a moved test file redirects the scan somewhere that
+    contains no source, the audit finds nothing to complain about, and
+    the gate reports success while inspecting nothing.
+    """
+    # Arrange
+    this_file = Path(__file__).resolve()
+    # Act
+    repo_root = _verified_repo_root()
+    # Assert
+    assert this_file.is_relative_to(repo_root), (
+        f"the gate would audit {repo_root}, which does NOT contain the test "
+        f"file {this_file} — a wrong-tree audit, the exact defect this "
+        f"module exists to prevent."
+    )
+
+
+def test_the_verified_root_declares_this_distribution():
+    """The anchor pointing somewhere REAL is not the same as it pointing
+    somewhere CORRECT — a sibling checkout would satisfy the containment
+    check for a differently-named package."""
+    # Arrange
+    root = _verified_repo_root()
+    # Act
+    declared = (
+        tomllib.loads((root / "pyproject.toml").read_text()).get("project") or {}
+    ).get("name")
+    # Assert
+    assert declared == _DISTRIBUTION
 
 
 # audit-all fans out to 6 sub-auditor subprocesses (audit-cli,
@@ -24,24 +122,31 @@ import pytest
 # [tool.pytest.ini_options] `timeout` default even when the audit itself
 # is completely clean. Override per-test rather than raise the global
 # cap for every other (fast) test.
-@pytest.mark.timeout(600)
-def test_audit_all_clean():
-    # Arrange
-    # Act
-    # Assert
+@pytest.fixture
+def audit_available():
+    """Skip when the auditor is absent, so the GATE body carries exactly
+    one exit condition. Keeping the skip here rather than inline is what
+    lets the test assert once — and a test with two ways out is a test
+    whose failure line does not tell you which one fired."""
     if shutil.which("scitex-dev") is None:
         pytest.skip(
             "scitex-dev not installed — add `scitex-dev[cli-audit]` "
             "to [project.optional-dependencies.dev]"
         )
+
+
+@pytest.mark.timeout(600)
+def test_audit_all_clean(audit_available):
+    """The gate proper. Its root is now VALIDATED rather than assumed.
+
+    The tree it grades is no longer whatever `parents[2]` happened to
+    produce — `_verified_repo_root` refuses instead of guessing.
+    """
+    # Arrange
     from scitex_dev.testing import audit_all_for_package
 
-    # Anchor the audit on THIS checkout (the tree pytest is running against),
-    # threaded through as `--path`. Without it, audit-all falls back to a
-    # resolve-by-name `~/proj/<pkg>` development guess; on the shared
-    # self-hosted (Spartan pooled) runner that guess resolves the operator's
-    # `/home/ywatanabe/proj/scitex-dev` develop checkout — a DIFFERENT tree
-    # and commit than the one under test — so the gate graded stale source
-    # (the resolved-tree banner from PR #392 surfaced exactly this). The file
-    # lives at <root>/tests/develop/test_audit.py, so parents[2] is the root.
-    audit_all_for_package('scitex-dev', path=Path(__file__).resolve().parents[2])
+    repo_root = _verified_repo_root()
+    # Act
+    result = audit_all_for_package(_DISTRIBUTION, path=repo_root)
+    # Assert
+    assert result is None

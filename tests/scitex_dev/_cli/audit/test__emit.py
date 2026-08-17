@@ -10,11 +10,21 @@ cycle.
 These tests read the emitted format strings from source rather than
 provoking each auditor into a failing state, which would require six
 package fixtures. The string IS the contract here.
+
+EXCEPT FOR audit-cli, which is asserted on BEHAVIOUR instead. Its renderer
+now takes the category as a required argument (because `_mcp_audit.py`
+reuses it and was inheriting "CLI convention" from a default, printing that
+noun for a population it had not audited). So no literal ": CLI conventions: "
+exists in any source file to grep for — a source check would report the
+property missing while the behaviour is correct. That auditor is cheap to
+provoke, needing one `Violation` rather than a package fixture, so the
+stronger assertion is also the affordable one here.
 """
 
 from __future__ import annotations
 
 import inspect
+import logging
 
 import pytest
 
@@ -55,13 +65,47 @@ def test_python_api_failure_headline_names_its_category():
     assert expected in src
 
 
-def test_cli_failure_headline_names_its_category():
-    """audit-cli names 'CLI conventions' on the failure line."""
-    # Arrange
-    import scitex_dev._cli.audit._summary._run as run_mod
+def test_cli_failure_headline_names_its_category(caplog):
+    """audit-cli names 'CLI conventions' on the failure line.
 
-    expected = ": CLI conventions: "
+    Asserts the RENDERED line, not the module source. The other cases in
+    this file grep `inspect.getsource` for a literal, which worked while
+    each auditor hardcoded its own noun. `_emit_human` now takes the noun
+    as a required argument, so no literal ": CLI conventions: " exists in
+    any source file to find — and a source check would have reported this
+    property missing while the behaviour was correct.
+
+    That is the same substring-versus-behaviour trap this rule exists to
+    catch elsewhere: a scan keyed on the presence of a STRING reads the
+    absence of the string as the absence of the property.
+    """
+    # Arrange
+    from scitex_dev._cli.audit._summary._run import _emit_human
+    from scitex_dev._cli.audit._summary._audit import Violation
+
+    violations = [Violation("scitex-dev", "§10", "import budget blown")]
     # Act
-    src = inspect.getsource(run_mod)
+    with caplog.at_level(logging.INFO):
+        _emit_human(
+            "scitex-dev", "warn", violations, category="CLI convention"
+        )
     # Assert
-    assert expected in src
+    assert any(": CLI conventions: " in r.getMessage() for r in caplog.records)
+
+
+def test_the_renderer_refuses_to_guess_which_auditor_it_speaks_for():
+    """Omitting `category` is a TypeError, not a borrowed noun.
+
+    The MCP auditor reused this renderer and inherited "CLI convention"
+    from a default, printing another leg's verdict for a population it had
+    not audited (measured 2026-08-16). Making the argument required turns
+    that class of mistake into a failure at the call site.
+    """
+    # Arrange
+    from scitex_dev._cli.audit._summary._run import _emit_human
+
+    # Act
+    caught = pytest.raises(TypeError)
+    # Assert
+    with caught:
+        _emit_human("scitex-dev", "ok", [])

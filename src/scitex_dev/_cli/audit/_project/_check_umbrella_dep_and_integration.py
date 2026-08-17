@@ -21,6 +21,8 @@ import re
 import subprocess
 from pathlib import Path
 
+from ._gate_skip_scope import find_full_path_skips
+
 try:
     import tomllib  # 3.11+
 except ImportError:  # pragma: no cover
@@ -297,7 +299,8 @@ def check_ps140_integration_gate(
                     f"source has {len(expected)} cross-package import(s) "
                     f"(e.g. {sorted(expected)[:3]}) but no "
                     "`tests/integration/test_cross_package_imports.py` "
-                    "runtime gate."
+                    "runtime gate. Install it with: scitex-dev ecosystem "
+                    f"install-cross-package-gate {distribution}"
                 ),
             )
         )
@@ -320,6 +323,53 @@ def check_ps140_integration_gate(
             violation_cls(
                 "PS-140",
                 str(test_file),
-                "; ".join(msg_parts) + ". Regenerate the gate.",
+                # NAME THE VERB. This read "Regenerate the gate." and nothing
+                # else, while the deployed files credited a command that has
+                # never existed (`ecosystem write-integration-tests`). A
+                # reader who followed either had nothing to run, and 17 gates
+                # sat frozen because the only documented way out was a dead
+                # end. §2: an error that only states what broke is
+                # half-written — say what to do about it.
+                "; ".join(msg_parts)
+                + ". Regenerate with: scitex-dev ecosystem "
+                + f"install-cross-package-gate {distribution} --force "
+                + "(hand-written cases below the closing sentinel are "
+                + "preserved).",
+            )
+        )
+
+    # A gate can also be perfectly IN SYNC and still unable to fail, so this
+    # is checked regardless of drift — the two defects are independent and
+    # measuring one told us nothing about the other. Measured 2026-08-16: all
+    # 19 deployed gates were in this state, including this repo's.
+    for skip in find_full_path_skips(test_file.read_text(errors="replace")):
+        if skip.determined:
+            what = (
+                f"gate skips on the FULL path (`importorskip({skip.argument})`), "
+                "so a renamed submodule raises ModuleNotFoundError, is SKIPPED, "
+                "and reports green — the exact failure this gate exists to catch"
+            )
+        else:
+            # Reported rather than passed over. A rule that cannot classify
+            # must say so: staying silent here is the permissive pole, and
+            # three gates (scitex-logging, figrecipe, scitex-notification)
+            # were reported clean by exactly that silence while skipping on
+            # the full path through a local alias.
+            what = (
+                f"cannot determine what `importorskip({skip.argument})` "
+                "receives, so it cannot be shown to skip on the ROOT. If it "
+                "carries a full dotted path, a rename is silently skipped"
+            )
+        out.append(
+            violation_cls(
+                "PS-140",
+                f"{test_file}:{skip.line}",
+                what
+                + ". Fix: `pytest.importorskip(name.split('.')[0])` then "
+                "`importlib.import_module(name)` — skip on the ROOT, "
+                "hard-import the FULL path. Do NOT simply drop the skip: a "
+                "blanket hard import breaks a lean install where the peer is "
+                "legitimately absent (optional extra, or a marker-gated "
+                "dependency). Worked example: scitex-ai/scitex-hpc#88.",
             )
         )

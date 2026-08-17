@@ -351,4 +351,47 @@ def test_ps140_still_flags_genuinely_missing_peer_from_suffixed_worktree(tmp_pat
         "scitex_logging" in v.detail for v in out
     )
 
+
+def test_ps140_drift_finding_names_a_runnable_verb(tmp_path):
+    """The remedy must be a command, not an instruction to find one.
+
+    This finding read "Regenerate the gate." and named nothing, while the
+    deployed files credited `ecosystem write-integration-tests`, which has
+    never existed. Between the two, 17 gates went unmaintained: the only
+    documented way out was a dead end, so following the instructions
+    correctly got you nowhere. Section 2 -- an error that only states what
+    broke is half-written.
+    """
+    # Arrange -- a gate that omits a real peer, so the drift branch fires.
+    repo = tmp_path / "scitex-baz"
+    src = repo / "src" / "scitex_baz"
+    src.mkdir(parents=True)
+    _write(repo / "pyproject.toml", '[project]\nname = "scitex-baz"\n')
+    _write(src / "__init__.py", "")
+    _write(src / "_core.py", "from scitex_config import load\n")
+    gate = repo / "tests" / "integration" / "test_cross_package_imports.py"
+    _write(gate, "CROSS_PACKAGE_IMPORTS = [\n]\n")
+    out: list = []
+    # Act
+    check_ps140_integration_gate(repo, "scitex-baz", _StubViolation, out)
+    # Assert
+    assert any("install-cross-package-gate scitex-baz" in v.detail for v in out)
+
+
+def test_ps140_missing_gate_finding_names_a_runnable_verb(tmp_path):
+    """The other PS-140 branch was equally silent about what to run."""
+    # Arrange -- cross-package imports present, gate file absent entirely.
+    repo = tmp_path / "scitex-qux"
+    src = repo / "src" / "scitex_qux"
+    src.mkdir(parents=True)
+    _write(repo / "pyproject.toml", '[project]\nname = "scitex-qux"\n')
+    _write(src / "__init__.py", "")
+    _write(src / "_core.py", "from scitex_config import load\n")
+    out: list = []
+    # Act
+    check_ps140_integration_gate(repo, "scitex-qux", _StubViolation, out)
+    # Assert
+    assert any("install-cross-package-gate scitex-qux" in v.detail for v in out)
+
+
 # EOF

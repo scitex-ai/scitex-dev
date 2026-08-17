@@ -97,6 +97,29 @@ def test_a_known_failure_outranks_an_unknown_under_propagate():
     assert report.verdict is Verdict.NOT_OK
 
 
+def test_a_queued_check_does_not_count_as_a_pass():
+    """The auto-merge sweep's exact failure, made executable.
+
+    Its greenness filter dropped QUEUED checks, so "not yet known" was counted
+    as "passing" and it merged unverified code past branch protection with
+    `--admin` — in two repositories independently. A queued check is `unknown`,
+    and under REFUSE it blocks.
+    """
+    # Arrange
+    checks = [
+        Check.ok("lint", "passed in 41s"),
+        Check.unknown(
+            "pytest-matrix",
+            "queued; the run has no conclusion yet, so nothing has been verified",
+            "re-read `gh pr checks` once the run settles",
+        ),
+    ]
+    # Act
+    report = rollup("automerge", checks, unknown_policy=UnknownPolicy.REFUSE)
+    # Assert
+    assert report.verdict is Verdict.NOT_OK
+
+
 def test_all_passing_checks_roll_up_to_ok_under_refuse():
     """REFUSE blocks on unknowns, not on everything — the strict policy still passes."""
     # Arrange

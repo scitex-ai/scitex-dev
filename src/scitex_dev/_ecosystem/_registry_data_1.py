@@ -112,6 +112,22 @@ ECOSYSTEM_PART_1 = {
         "import_name": "scitex_ssh",
         "category": "library",
     },
+    # Sits beside scitex-ssh because it is the OTHER transport to the same
+    # machines: ssh reaches them over LAN/bastion, vpn over the overlay.
+    # It existed as a repo, on PyPI-shaped metadata, with CI workflows and an
+    # installed console script for some time WITHOUT being registered here,
+    # so `scitex-dev ecosystem list | grep scitex-vpn` returned nothing and
+    # every ecosystem-wide sweep silently skipped it. A package absent from
+    # this table is not merely unlisted, it is UNAUDITED - which is the worst
+    # of both states, because the sweep still reports success over the
+    # packages it did look at.
+    "scitex-vpn": {
+        "local_path": "~/proj/scitex-vpn",
+        "pypi_name": "scitex-vpn",
+        "github_repo": "scitex-ai/scitex-vpn",
+        "import_name": "scitex_vpn",
+        "category": "library",
+    },
     "scitex-ui": {
         "local_path": "~/proj/scitex-ui",
         "pypi_name": "scitex-ui",
@@ -258,6 +274,15 @@ ECOSYSTEM_PART_1 = {
         "github_repo": "scitex-ai/scitex-orochi",
         "import_name": "scitex_orochi",
         "category": "library",
+        # Retired by the operator 2026-08-16 (Telegram, unprompted):
+        # 「サイテクスオロチはもう使わない」 — we will not use scitex-orochi
+        # any more. Archived rather than deleted, per the scitex-audit row
+        # above: the repo and the published distribution still exist, and
+        # deleting the row would blind ecosystem sweeps to something that
+        # is still out there.
+        #
+        # This is a USAGE decision, not a yank. Nothing installed breaks.
+        "archived": True,
     },
     "scitex-str": {
         "local_path": "~/proj/scitex-str",

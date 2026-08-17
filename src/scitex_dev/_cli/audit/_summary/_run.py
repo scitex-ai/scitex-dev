@@ -30,6 +30,13 @@ from ._severity import (
     severity_counts,
     severity_of,
 )
+from ._report import (
+    _emit_baseline_suppressed,
+    _emit_baseline_written,
+    _emit_human,
+    _emit_json,
+    _violation_to_dict,
+)
 from ._severity import filter_violations as _filter_violations
 from ._severity import max_severity as _max_severity
 
@@ -39,6 +46,12 @@ __all__ = [
     "run_audit",
     "run_audit_all",
 ]
+
+# Verdict RENDERING lives in `_report.py` (imported above and re-exported
+# here, so `from ._run import _emit_human` in `_mcp_audit.py` is unchanged).
+# It moved when `_emit_human` gained a required `category`: the noun used to
+# be hardcoded "CLI convention", and the MCP auditor reusing this renderer
+# printed that noun for a population it had not audited.
 
 # Rule severity, per-severity tallies and --rule/--exclude/--severity
 # filtering live in `_severity.py` (imported above and re-exported here,
@@ -149,122 +162,6 @@ def _audit_one(
     return ("ok" if not out else "warn"), out
 
 
-def _violation_to_dict(v) -> dict:
-    """One violation as a JSON record — severity as its OWN named field.
-
-    The machine path never mislabelled warnings as errors (it carried no
-    severity at all, and `status` is a coarse "ok"/"warn"), so no consumer
-    was ever told 6 warnings were errors. But it also gave a consumer no
-    way to tell the bands apart without re-implementing `RULE_SEVERITY`.
-    Emitting `severity` closes that: the human and machine renderers now
-    read the SAME per-violation severity from `severity_of`.
-    """
-    return {
-        "command": v.command,
-        "rule": v.rule,
-        "message": v.message,
-        "severity": severity_of(v),
-    }
-
-
-def _emit_human(
-    package: str, status: str, violations: list, coverage=None
-) -> None:
-    if status == "skip-mcp":
-        click.echo(
-            f"info  {package}: MCP / protocol server — skipped (use audit-mcp-tools when available)"
-        )
-        return
-    from .._emit import emit as _emit
-
-    if status == "not-found":
-        # No console script is a legitimate state for utility packages
-        # (types, base/core libraries, etc.) — audit-cli can't enforce
-        # a CLI convention on a package that has no CLI. Surface as info.
-        _emit("info", f"{package}: no console script — skipped")
-        return
-    if status.startswith("not-auditable"):
-        _emit("error", f"{package}: CLI conventions: {status}", err=True)
-        return
-    from ...._audit_disclaimer import emit_disclaimer, emit_skill_hints
-
-    if status == "ok":
-        # WITH ITS DENOMINATOR. "no violations" alone read identically whether
-        # forty commands were inspected or zero, which is the whole defect:
-        # a clean verdict was indistinguishable from a run that never happened.
-        from ._coverage import describe_or_unknown
-
-        _emit(
-            "success",
-            f"{package}: no CLI convention violations "
-            f"({describe_or_unknown(coverage)})",
-        )
-        emit_disclaimer()
-        return
-    sev = _max_severity(violations)
-    # The HEADLINE level tracks the run's worst finding (so a red run is
-    # visibly red, and so the line clears the audit logger's WARNING
-    # default). The COUNTS are per-severity, and each finding below is
-    # emitted at ITS OWN severity.
-    #
-    # This used to be one level for everything: `sev` labelled the
-    # headline noun AND every finding line. Measured on CI (PR #447), a
-    # single §10 breach relabelled six standing §12/§13 warn-tier
-    # findings as `ERRO:` and printed "7 error(s)" for 1 error and 6
-    # warnings. That is not only a wrong noun — `_audit_masking.
-    # is_error_line` reads severity off this very `ERRO:` prefix, so the
-    # collapse propagated into audit-all's "N unmasked error(s)" tally,
-    # defeating a downstream counter that was already correct. And a
-    # narrow timing breach read as a broad structural break, which cost
-    # real diagnosis time.
-    #
-    # Category-named failure line — mirrors the clean line's
-    # "no CLI convention violations". See the note in _project/_audit.py.
-    headline_level = "error" if sev == "error" else "warning"
-    _emit(
-        headline_level,
-        f"{package}: CLI conventions: {format_severity_counts(violations)}",
-    )
-    for v in violations:
-        _emit(EMIT_LEVEL[severity_of(v)], f"  [{v.rule}] {v.command}: {v.message}")
-    emit_disclaimer()
-    emit_skill_hints()
-
-
-def _emit_json(records: list[dict], registry_provenance: str) -> None:
-    import json as _json
-
-    payload = {
-        "registry_source": registry_provenance,
-        "results": records,
-    }
-    click.echo(_json.dumps(payload, indent=2))
-
-
-# --------------------------------------------------------------------- #
-# Baseline ratchet helpers                                                #
-# --------------------------------------------------------------------- #
-
-
-def _emit_baseline_suppressed(n_suppressed: int, bl_path: Path) -> None:
-    from .._emit import emit as _emit
-
-    _emit(
-        "info",
-        f"baseline: {n_suppressed} previously-recorded violation(s) "
-        f"suppressed ({bl_path})",
-    )
-
-
-def _emit_baseline_written(n_written: int, bl_path: Path) -> None:
-    from .._emit import emit as _emit
-
-    _emit(
-        "info",
-        f"baseline written: {bl_path} ({n_written} fingerprint(s) recorded "
-        f"— future runs fail/warn only on NEW violations)",
-    )
-
 
 def run_audit(
     package: str,
@@ -338,7 +235,7 @@ def run_audit(
             rec["baseline_suppressed"] = len(suppressed)
         _emit_json([rec], registry_provenance or "single-package mode")
     else:
-        _emit_human(package, status, violations, coverage)
+        _emit_human(package, status, violations, coverage, category="CLI convention")
         if suppressed:
             _emit_baseline_suppressed(len(suppressed), bl_path)
     if write_requested:
@@ -458,7 +355,7 @@ def run_audit_all(
         if not violations and status == "warn":
             status = "ok"
         if not output_json:
-            _emit_human(name, status, violations, coverage)
+            _emit_human(name, status, violations, coverage, category="CLI convention")
             if suppressed:
                 _emit_baseline_suppressed(len(suppressed), bl_path)
         if _max_severity(violations) == "error" or status.startswith("not-auditable"):

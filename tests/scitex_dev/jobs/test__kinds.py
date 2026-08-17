@@ -70,13 +70,33 @@ def test_periodic_without_a_schedule_maps_to_timer():
     assert got == expected
 
 
-def test_periodic_with_a_schedule_maps_to_cron():
-    # Arrange
+def test_periodic_with_a_schedule_is_refused_as_ambiguous():
+    # Arrange -- a schedule does NOT identify the scheduler: a systemd timer
+    # may carry one as an OnCalendar fallback, and live sac declarations do.
     schedule = "*/5 * * * *"
     # Act
-    got = canonical_kind("periodic", schedule)
+    err = _error_from(lambda: canonical_kind("periodic", schedule))
     # Assert
-    assert got == "cron"
+    assert isinstance(err, ValueError)
+
+
+def test_the_refusal_names_both_explicit_kinds_so_the_fix_is_obvious():
+    # Arrange -- an error that says "ambiguous" without saying what to write
+    # instead leaves the declarer guessing between the two candidates.
+    schedule = "*/5 * * * *"
+    # Act
+    err = _error_from(lambda: canonical_kind("periodic", schedule))
+    # Assert
+    assert "'cron'" in str(err) and "'timer'" in str(err)
+
+
+def test_a_jobspec_cannot_smuggle_the_ambiguous_pair_past_construction():
+    # Arrange -- the guard must hold at the dataclass, not only in the helper,
+    # because providers construct JobSpecs and never call canonical_kind.
+    # Act
+    err = _error_from(lambda: _spec(kind="periodic", schedule="*/5 * * * *"))
+    # Assert
+    assert isinstance(err, ValueError)
 
 
 def test_a_stored_kind_passes_through_unchanged():
@@ -116,13 +136,24 @@ def test_a_periodic_spec_stores_kind_timer():
     assert stored == "timer"
 
 
-def test_a_periodic_spec_with_a_schedule_stores_kind_cron():
-    # Arrange
-    spec = _spec(kind="periodic", schedule="*/5 * * * *")
+def test_the_explicit_cron_escape_from_the_refusal_works():
+    # Arrange -- the refusal tells the declarer to say 'cron' or 'timer'. An
+    # error naming a remedy nobody tested is how a fix instruction goes stale.
+    spec = _spec(kind="cron", schedule="*/5 * * * *")
     # Act
     stored = spec.kind
     # Assert
     assert stored == "cron"
+
+
+def test_the_explicit_timer_escape_from_the_refusal_works():
+    # Arrange -- the case that made the inference unsound: a systemd timer
+    # legally carrying a schedule, as seven live sac declarations do.
+    spec = _spec(kind="timer", schedule="*/5 * * * *")
+    # Act
+    stored = spec.kind
+    # Assert
+    assert stored == "timer"
 
 
 def test_intent_reads_daemon_for_a_service():

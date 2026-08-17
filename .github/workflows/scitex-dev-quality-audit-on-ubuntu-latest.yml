@@ -88,19 +88,43 @@ jobs:
             exit 1
           fi
 
-      - name: Fetch develop into a remote-tracking ref for --new-only baseline
-        # Fetch into refs/remotes/origin/develop (NOT the local develop
-        # branch): on the push:[develop] trigger HEAD already IS develop, so
-        # `git fetch origin develop:develop` dies with "refusing to fetch
-        # into branch ... checked out". The remote-tracking ref is always
-        # writable and `--since origin/develop` resolves it for the
-        # worktree-staged diff on both push and pull_request events.
-        run: git fetch origin develop
-
       - name: Install package + audit tooling (own editable checkout)
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
       - name: Run scitex-dev ecosystem audit-all (self-audit, own code)
-        run: scitex-dev ecosystem audit-all scitex-dev --new-only --since origin/develop --no-version-check
+        # NO --new-only AND NO --no-version-check, deliberately.
+        #
+        # This gate ran `--new-only --since origin/develop --no-version-check`
+        # until 2026-08-16. Both flags are named in the constitution §2 as the
+        # worked example of a gate that cannot fail: that configuration
+        # "reported green in 27 seconds" while the same command run by hand in
+        # the same checkout "reported 1817 violations".
+        #
+        # What each one cost:
+        #   --new-only          reports only violations newer than the base
+        #                       ref, so anything already broken is
+        #                       grandfathered permanently and invisibly. It is
+        #                       how scitex-cards' PS-140 gate sat at 3-of-7
+        #                       coverage under a REQUIRED, green check.
+        #   --no-version-check  silences "is the rule corpus current?", so a
+        #                       repo can be audited by a version that never
+        #                       heard of the rules its config was written
+        #                       against, and nothing says so.
+        #
+        # Removing them is free HERE and that is why this repo went first:
+        # the unflagged audit already reports `0 unmasked error(s)`, and
+        # tests/develop/test_audit.py has always run the full audit and
+        # required it clean. So the flags were protecting nothing in this
+        # repo while modelling the wrong thing for the 20 others that copied
+        # this shape. Measured 2026-08-16: 21 of 24 fleet audit gates carry
+        # --no-version-check, 9 carry both.
+        #
+        # If this gate ever goes red with a real backlog, do NOT restore a
+        # flag. Exempt per file with a written reason in
+        # `.scitex/dev/config.yaml` — reviewable, greppable, individually
+        # retirable, and visible fleet-wide via `ecosystem list-exemptions`.
+        # An exemption is a decision someone made and signed; --new-only is a
+        # decision nobody made about violations nobody enumerated.
+        run: scitex-dev ecosystem audit-all scitex-dev

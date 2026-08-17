@@ -30,6 +30,7 @@ from ._cmds import (
     _install_cross_package_gate,
     _install_gate,
     _list,
+    _list_exemptions,
     _pr,
     _up,
     _prune_branches,
@@ -95,7 +96,9 @@ def register_ecosystem_commands(main_group):
 
     # Per-area command modules. Order is stylistic. The dashboard
     # surfaces moved to the canonical `gui` group (§12); their Phase W
-    # aliases are registered from `_cli/gui/` once both groups exist.
+    # aliases carried remove_in="0.34" and were removed in 0.50, so
+    # `ecosystem dashboard` and `ecosystem start-dashboard` no longer
+    # resolve at all — use `gui` and `gui open`.
     _list.register(ecosystem)
     _versions.register(ecosystem)
     _drift_report.register(ecosystem)
@@ -109,6 +112,7 @@ def register_ecosystem_commands(main_group):
     _clean.register(ecosystem)
     _install_gate.register(ecosystem)
     _install_cross_package_gate.register(ecosystem)
+    _list_exemptions.register(ecosystem)
     _test_remote.register(ecosystem)
     _sync_status.register(ecosystem)
     _sync.register(ecosystem)

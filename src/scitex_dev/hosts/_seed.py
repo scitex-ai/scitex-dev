@@ -104,7 +104,27 @@ _DEFAULT_HOSTS_YAML = """\
 hosts:
   ywata-note-win:
     kind: workstation
-    ssh_alias: null
+    # MEASURED 2026-08-15 from scitex-compute-04, BOTH directions, BatchMode
+    # (key-based, no prompt, no agent forwarding):
+    #     compute-04 -> ywata-note-win   `hostname` -> ywata-note-win
+    #     ywata-note-win -> compute-04   `hostname` -> scitex-compute-04
+    #
+    # It read `null` until then, and `null` is the legend's "the host IS
+    # local" — true when this file was authored ON the laptop, and an
+    # assertion that THE LAPTOP IS THIS MACHINE everywhere else. Locality is a
+    # relation between a host and whoever is asking, so a shared registry
+    # cannot hold it in a field (dotfiles' report; PR #580 redefines the
+    # absent value as "no alias recorded"). Recording the MEASURED alias makes
+    # this host's answer correct under either reading, which is why it does
+    # not wait for that change.
+    #
+    # It is load-bearing now: the cross-host doorbell relay
+    # (`scitex_dev.store._relay_ssh`) rings each peer over ssh, and the
+    # operator's stated acceptance test for push-driven sync is DM delivery
+    # between this laptop and compute-04, both ways. A peer with no alias is
+    # not reachable, and the relay REFUSES such a peer rather than skipping
+    # it — so an unrecorded alias here is a loud failure, not a silent one.
+    ssh_alias: ywata-note-win
     scitex_root: "~/.scitex"
     requested_address: "192.168.11.101"
   spartan:

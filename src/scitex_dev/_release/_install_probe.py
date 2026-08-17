@@ -70,8 +70,8 @@ DISK.
 is what ``features`` does, because ``hasattr`` reads ``sys.modules`` and therefore
 interrogates the code the process is ACTUALLY RUNNING::
 
-    p = probe_install("scitex-todo", features={
-        "post_migration_enum": "scitex_todo._model:VALID_BLOCKERS",
+    p = probe_install("scitex-cards", features={
+        "post_migration_enum": "scitex_cards._model:VALID_BLOCKERS",
     })
     if not p.features["post_migration_enum"]:
         # THIS PROCESS runs pre-migration code, whatever the disk says.
@@ -89,7 +89,7 @@ bug would be self-parody. Symbol probing is exact.
 
 DESIGN
 ------
-Vendored deliberately, not imported from scitex-todo. scitex-dev owns the
+Vendored deliberately, not imported from scitex-cards. scitex-dev owns the
 ecosystem conventions and must not take a dependency on a leaf package that
 consumes them — the arrow points the wrong way, and scitex packages stay
 independent by standing directive. The logic is ~150 lines; the coupling would
@@ -102,6 +102,23 @@ result carrying an actionable hint.
 **Unverifiable is never reported as honest.** If the probe cannot POSITIVELY
 confirm that the metadata matches the code, ``trustworthy`` is False. "I could
 not check" must never render as "it is fine" — that conflation is the whole bug.
+
+**Scope: THIS interpreter only.** This module resolves through
+``importlib.metadata`` and import success, so every answer it gives is about
+the environment it is running in. That is deliberate and it is the more
+robust question — "does the code load?" beats any inspection of install
+metadata.
+
+It does mean this module CANNOT answer for a venv it is not running in, and
+that question is real: "which installs on this host are lying?" needs to walk
+twelve venvs, which one process cannot import.
+``_ecosystem._install_kind.describe_install`` covers that case by reading
+``.pth`` files from an arbitrary site-packages path without importing
+anything.
+
+The two are split by SCOPE, not duplicated. Folding them was proposed on
+2026-08-16 and withdrawn after measurement showed it would delete the
+cross-venv capability — see that module's docstring for the measurement.
 """
 
 from __future__ import annotations
@@ -242,8 +259,8 @@ def probe_install(
     code I think I shipped actually here?" **without trusting any version at
     all**, and it is the only check a fossilised dist-info cannot defeat::
 
-        probe_install("scitex-todo", features={
-            "v088": "scitex_todo._install_probe:probe_install",
+        probe_install("scitex-cards", features={
+            "v088": "scitex_cards._install_probe:probe_install",
         })
 
     Never raises.

@@ -225,14 +225,26 @@ class SupersededFenceError(StoreError):
     resolves WHO WROTE LAST; it has no opinion on WHO WAS ALLOWED TO. A
     demoted writer's field simply wins on recency.
 
-    The fence therefore lives in the log as a COLUMN of each op, not as a
-    value held beside it: an op must carry the authority it was written
-    under, or that authority does not survive replication to the node
-    that has to judge it.
+    The fence therefore lives in the log as a COLUMN of each op: an op must
+    carry the authority it was written under, or that authority does not
+    survive replication to the node that has to judge it.
+
+    THAT IS TRUE OF JUDGING AN OP AND FALSE OF LEARNING THE CURRENT FENCE,
+    and conflating the two was a live eviction bug. An op carries its own
+    fence so a receiver can COMPARE it against authority the receiver
+    already holds. It must never be the SOURCE of that authority. Replay
+    used to adopt any higher fence off the incoming entry, and
+    :meth:`~._peer_state.PeerState.set_fence` refuses to descend, so a
+    single batch naming any origin and any large number excluded that origin
+    permanently — no attacker required, an over-eager genesis fence would do
+    it. The rule that came out of it: **data replays transitively, authority
+    does not.** See ADR-0011.
 
     Recovery is to stop the superseded writer, not to lower the fence. If
-    the fence itself is wrong, correct it at the source and re-issue —
-    never by accepting an op that failed this check.
+    the fence itself is wrong, correct it at the source and re-issue. Where
+    the local fence is the thing that is wrong, lower it deliberately with
+    :meth:`~._peer_state.PeerState.rescind_fence` — never by accepting an op
+    that failed this check.
     """
 
 # EOF

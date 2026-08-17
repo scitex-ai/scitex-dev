@@ -66,7 +66,7 @@ git -C ~/proj/<pkg> branch -vv | head -5
 Verify each tracked branch's upstream points at `origin/<branch>`,
 not a stale fork or local mirror. A misconfigured upstream
 (`scitex/develop` localhost-Gitea instead of `origin/develop`)
-produces phantom `↑N` / `↓N` counts and breaks `ecosystem dashboard`.
+produces phantom `↑N` / `↓N` counts and breaks `gui`.
 Fix with:
 
 ```bash

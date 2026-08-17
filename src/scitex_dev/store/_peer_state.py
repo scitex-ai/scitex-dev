@@ -172,6 +172,18 @@ class PeerState:
         lowering a fence RE-ADMITS the writer it was raised to exclude. If a
         demoted node's own ops could lower it, the fence would defend against
         precisely nothing.
+
+        AN ADMINISTRATIVE VERB, NOT A REPLICATION ONE. Nothing on the data
+        path calls this. :func:`~._replication.replay` reads the fence to
+        judge a batch and never writes it, because a fence adopted from the
+        batch it authorises is not a check — it is an instruction from
+        whoever sent the batch. Call this from something that authenticated
+        the peer and knows the promotion is real.
+
+        The way back down is :meth:`rescind_fence`, which exists because the
+        alternative to a supported reversal is an operator editing the cursor
+        table by hand — the exact class of repair this primitive was written
+        to make unnecessary.
         """
         with self._lock:
             existing = self.fence(source)
@@ -181,16 +193,60 @@ class PeerState:
                     f"{existing} to {fence}. A fence only ever rises; "
                     "lowering it re-admits the writer it was raised to "
                     "exclude, which is the whole failure it exists to "
-                    "prevent. If the higher fence was recorded in error, "
-                    "correct it at the source and re-issue."
+                    "prevent.\n"
+                    "If the higher fence was recorded in error — which is "
+                    "recoverable, and used to require hand-editing the "
+                    "cursor table — use rescind_fence(source, fence, "
+                    "reason=...) instead. It performs exactly this lowering "
+                    "and makes the caller say why."
                 )
             if fence == existing:
                 return
-            table = self.dialect.cursor_table(self.schema)
-            sql = self.dialect.upsert_sql(
-                table, ["source", "seq", "fence"], "source"
+            self._write_fence(source, fence)
+
+    def rescind_fence(self, source: str, fence: int, *, reason: str) -> None:
+        """LOWER a fence that was recorded in error. The only way down.
+
+        :meth:`set_fence` refuses to descend, and that refusal is right for
+        the replication path: a fence that a peer's own traffic could lower
+        would defend against nothing. But "the fence only rises" as an
+        ABSOLUTE makes a mistaken fence permanent, and a mistaken fence
+        excludes a healthy host from the fleet's view of itself. Before this
+        verb existed the only remedy was raw SQL against the cursor table,
+        which is precisely the repair this package exists to remove.
+
+        ``reason`` is required and must be non-empty. It is NOT persisted —
+        there is nowhere in this schema to persist it, and inventing a column
+        to hold a string nobody reads would be worse than the honesty of
+        saying so. It is required because it makes the call site state its
+        justification in code, where review and ``rg rescind_fence`` can both
+        find it. That is the same reason :data:`~._guards.ANY_REVISION` is a
+        named sentinel rather than a boolean.
+
+        Raises :class:`~._errors.StoreError` for an empty reason or a
+        negative fence.
+        """
+        if not reason or not reason.strip():
+            raise StoreError(
+                f"rescind_fence({source!r}, {fence}) needs a reason. Lowering "
+                "a fence re-admits a writer that something previously judged "
+                "unentitled, so the justification belongs beside the call "
+                "rather than in the memory of whoever ran it."
             )
-            self._connection.execute(sql, (source, self.cursor(source), fence))
+        if fence < FENCE_UNKNOWN:
+            raise StoreError(
+                f"rescind_fence({source!r}, {fence}) is negative. "
+                f"{FENCE_UNKNOWN} means 'unfenced' and is the floor; there is "
+                "nothing below it to rescind to."
+            )
+        with self._lock:
+            self._write_fence(source, fence)
+
+    def _write_fence(self, source: str, fence: int) -> None:
+        """Persist a fence, preserving the cursor that shares its row."""
+        table = self.dialect.cursor_table(self.schema)
+        sql = self.dialect.upsert_sql(table, ["source", "seq", "fence"], "source")
+        self._connection.execute(sql, (source, self.cursor(source), fence))
 
 
 # EOF

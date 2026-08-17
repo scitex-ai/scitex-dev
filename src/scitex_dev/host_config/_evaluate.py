@@ -43,6 +43,61 @@ class HostConfigStatus:
         return self.state in (STATE_ABSENT, STATE_DRIFT)
 
 
+def _machine_facts(spec) -> HostConfigStatus | None:
+    """Every check that reads THIS MACHINE, and the only place they may live.
+
+    Returns a ``precondition_unmet`` status if some fact about the running
+    host means ``spec.path`` could not do its job, else ``None``.
+
+    WHY THIS IS A FUNCTION AND NOT A COMMENT. The invariant — a
+    machine-reading check must run only when ``root == "/"``, because under
+    a synthetic root the subject is a TREE and no machine is being asked
+    about — used to be enforced by a comment above an ``if``. That is how
+    it was violated: the author wrote the rationale ("Real host only: under
+    a synthetic ``root`` the evaluation is hypothetical") and placed it TEN
+    LINES BELOW a ``shutil.which`` call that broke it. `shutil.which` reads
+    the real PATH whatever ``root`` says, so a spec written into a tmp_path
+    was graded by whichever host ran the test. develop went red at 08092b69
+    on the one CI leg scheduled onto a runner without ``networkctl``, and
+    presented as a py3.13 failure because the three matrix legs land on
+    three different machines.
+
+    A comment is read after the code is written; it cannot refuse. So the
+    invariant is now structural in two ways:
+
+      * this function is the SOLE caller of ``shutil.which`` and
+        ``volatile_reason`` in this module, and
+      * ``evaluate`` calls it exactly once, inside the ``root == "/"``
+        guard.
+
+    Adding a new machine-fact HERE is the easy path and is correct by
+    construction. Adding one anywhere else now requires importing
+    ``shutil`` (or ``._volatility``) at a second site in a module that
+    imports neither for any other purpose — which reads as an obviously
+    misplaced import in review, rather than as a plausible early return.
+
+    ORDER IS PART OF THE CONTRACT: ``requires_command`` is reported before
+    volatility. A spec whose command is missing AND whose filesystem is
+    RAM-backed reports the missing command, because that is the fact the
+    operator acts on first. ``tests/scitex_dev/host_config/test__evaluate.py``
+    pins both this precedence and the root-seam behaviour; the revert
+    experiment there is what proves the pair still discriminates.
+    """
+    if spec.requires_command and shutil.which(spec.requires_command) is None:
+        return HostConfigStatus(
+            spec,
+            STATE_PRECONDITION_UNMET,
+            f"{spec.requires_command!r} is not installed, so {spec.path} "
+            f"would be read by nothing",
+        )
+
+    volatile = volatile_reason(spec.path)
+    if volatile:
+        return HostConfigStatus(spec, STATE_PRECONDITION_UNMET, volatile)
+
+    return None
+
+
 def evaluate(
     spec,
     *,
@@ -81,20 +136,16 @@ def evaluate(
             f"declared for {', '.join(spec.hosts)}; this host is {hostname}",
         )
 
-    if spec.requires_command and shutil.which(spec.requires_command) is None:
-        return HostConfigStatus(
-            spec,
-            STATE_PRECONDITION_UNMET,
-            f"{spec.requires_command!r} is not installed, so {spec.path} "
-            f"would be read by nothing",
-        )
-
     # Real host only: under a synthetic ``root`` the evaluation is
     # hypothetical, and pytest's tmp_path is often tmpfs itself.
+    #
+    # ONE call, ONE guard. Every machine-reading check lives inside
+    # ``_machine_facts`` — see its docstring for why that is a signature
+    # and not a comment.
     if root == "/":
-        volatile = volatile_reason(spec.path)
-        if volatile:
-            return HostConfigStatus(spec, STATE_PRECONDITION_UNMET, volatile)
+        unmet = _machine_facts(spec)
+        if unmet is not None:
+            return unmet
 
     target = Path(root) / spec.path.lstrip("/")
     try:

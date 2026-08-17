@@ -5,7 +5,7 @@ the shared ``~/.scitex/todo/tasks.yaml`` board.
 
 This module is the body the materialised ``scitex-dev cron exec
 task-harvest`` line invokes. The PROTOCOL the body implements lives in
-``scitex_todo._skills.scitex-todo.40_task-harvest`` (the skill the
+``scitex_cards._skills.scitex-cards.40_task-harvest`` (the skill the
 operator commissioned in TG msgs 332 + 335 and scitex-todo PR #72):
 
   Phase 1 — re-check every ``status: blocked`` task. If its blocker
@@ -55,7 +55,7 @@ This runs unattended from cron. It must never crash the cron loop:
 Seams (per PA-306 / STX-NM)
 ----------------------------
 ``tasks_path`` (path-or-None — ``None`` triggers the standard
-scitex-todo resolution chain) and ``now`` (a ``Callable[[], float]``
+scitex-cards resolution chain) and ``now`` (a ``Callable[[], float]``
 returning epoch seconds) are keyword arguments so tests pass real
 fakes — no monkeypatching of ``time`` or filesystem.
 """

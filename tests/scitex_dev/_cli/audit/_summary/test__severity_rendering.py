@@ -86,7 +86,7 @@ def _render(caplog, violations):
     """
     caplog.clear()
     with caplog.at_level(logging.INFO):
-        _emit_human(_PKG, "warn", violations)
+        _emit_human(_PKG, "warn", violations, category="CLI convention")
     return [(r.levelno, r.getMessage()) for r in caplog.records]
 
 

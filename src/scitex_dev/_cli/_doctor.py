@@ -75,10 +75,13 @@ def check_venv() -> dict:
 def check_scitex_packages() -> list[dict]:
     from importlib.metadata import PackageNotFoundError, version as pkg_version
 
+    # NOTE: hardcoded, and it duplicates the ECOSYSTEM registry — which is
+    # why archiving scitex-orochi there did not reach here. Four names out
+    # of ~70; deriving this from ECOSYSTEM (skipping archived) is the real
+    # fix and is deliberately not folded into this change.
     packages = [
         "scitex",
         "scitex-dev",
-        "scitex-orochi",
         "scitex-agent-container",
     ]
     results = []
@@ -95,10 +98,13 @@ def check_pypi_versions() -> list[dict]:
     """Compare installed scitex packages against PyPI latest."""
     from importlib.metadata import PackageNotFoundError, version as pkg_version
 
+    # NOTE: hardcoded, and it duplicates the ECOSYSTEM registry — which is
+    # why archiving scitex-orochi there did not reach here. Four names out
+    # of ~70; deriving this from ECOSYSTEM (skipping archived) is the real
+    # fix and is deliberately not folded into this change.
     packages = [
         "scitex",
         "scitex-dev",
-        "scitex-orochi",
         "scitex-agent-container",
     ]
     results = []
@@ -155,28 +161,6 @@ def check_env_vars() -> list[dict]:
     else:
         results.append(_result("SCITEX_DIR", "fail", "not set"))
 
-    # Orochi vars (only if scitex-orochi installed)
-    try:
-        from importlib.metadata import version as pkg_version
-
-        pkg_version("scitex-orochi")
-        orochi_installed = True
-    except Exception:
-        orochi_installed = False
-
-    if orochi_installed:
-        for var in [
-            "SCITEX_OROCHI_HOST",
-            "SCITEX_OROCHI_PORT",
-            "SCITEX_OROCHI_TOKEN",
-        ]:
-            val = os.environ.get(var)
-            if val:
-                # Mask token values
-                display = "***" if "TOKEN" in var else val
-                results.append(_result(var, "ok", display))
-            else:
-                results.append(_result(var, "skip", "not set"))
 
     # MCP toggles
     mcp_vars = [k for k in os.environ if k.startswith("SCITEX_MCP_USE_")]
@@ -215,38 +199,6 @@ def check_mcp_server() -> list[dict]:
         results.append(_result("MCP server tools", "fail", str(exc)))
 
     return results
-
-
-def check_orochi_connectivity() -> dict:
-    try:
-        from importlib.metadata import version as pkg_version
-
-        pkg_version("scitex-orochi")
-    except Exception:
-        return _result("Orochi connectivity", "skip", "scitex-orochi not installed")
-
-    host = os.environ.get("SCITEX_OROCHI_HOST", "localhost")
-    port = os.environ.get("SCITEX_OROCHI_PORT", "8765")
-
-    try:
-        import asyncio
-        import websockets  # noqa: F401
-
-        async def _probe():
-            uri = f"ws://{host}:{port}"
-            async with websockets.connect(uri, open_timeout=3):
-                return True
-
-        asyncio.run(_probe())
-        return _result("Orochi connectivity", "ok", f"ws://{host}:{port}")
-    except ImportError:
-        return _result("Orochi connectivity", "skip", "websockets not installed")
-    except Exception as exc:
-        return _result(
-            "Orochi connectivity",
-            "fail",
-            f"ws://{host}:{port} -- {exc}",
-        )
 
 
 def check_agent_container() -> list[dict]:
@@ -315,9 +267,8 @@ def register_doctor_command(main_group):
             description=(
                 "Checks Python version, active venv, installed scitex-* "
                 "package versions against PyPI, relevant environment "
-                "variables, the MCP server, Orochi connectivity, and "
-                "agent-container screen sessions. Exits 1 if any check "
-                "fails.",
+                "variables, the MCP server, and agent-container screen "
+                "sessions. Exits 1 if any check fails.",
             ),
             examples=(
                 Example("{prog} doctor", "Human-readable diagnostic report."),
@@ -395,16 +346,6 @@ def register_doctor_command(main_group):
                 _echo_result(r)
 
         if not as_json:
-            click.echo()
-
-        # -- Orochi Connectivity --
-        if not as_json:
-            click.secho("Orochi Connectivity", bold=True)
-
-        r = check_orochi_connectivity()
-        results.append(r)
-        if not as_json:
-            _echo_result(r)
             click.echo()
 
         # -- Agent Container --

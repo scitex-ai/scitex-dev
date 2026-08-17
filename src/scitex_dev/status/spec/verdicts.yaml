@@ -25,6 +25,12 @@
 #     as ok it moves an agent onto a host nobody inspected.
 #   * 2026-08-11 — the card-store doctor could not read its own store and
 #     reported `ok: false` on two checks whose questions it never got to ask.
+#   * An auto-merge sweep's greenness filter dropped QUEUED checks, so "not yet
+#     known" was counted as "passing" and it merged unverified code past branch
+#     protection with `--admin`. Found in two repositories independently. Nobody
+#     DECIDED that unknown was ok — a boolean filter over a three-state world
+#     did it for them, in one expression, silently. It does not take a decision
+#     to get this wrong, only a boolean.
 #
 # NOTHING HERE IS DERIVED FROM A CODE, AND THAT IS THE POINT
 # ----------------------------------------------------------

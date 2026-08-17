@@ -134,7 +134,7 @@ def _register_show(host: click.Group) -> None:
     )
     def _show(name: str, as_json: bool, hosts_file: str | None) -> None:
         from .._core.errors import ScitexError
-        from ..hosts import resolve
+        from ..hosts import is_local, resolve
 
         try:
             record = resolve(name, hosts_path=hosts_file)
@@ -147,7 +147,13 @@ def _register_show(host: click.Group) -> None:
             return
         click.echo(f"name:        {record.name}")
         click.echo(f"kind:        {record.kind}")
-        click.echo(f"ssh_alias:   {record.ssh_alias or '(local — no SSH hop)'}")
+        # NOT "(local — no SSH hop)". That printed a topology claim derived
+        # from an ABSENT value, and it was false for `ywata-note-win` on
+        # every machine except the laptop the registry was authored on.
+        # An empty field means the alias was not recorded; locality is a
+        # separate question, answered below by comparing against this host.
+        click.echo(f"ssh_alias:   {record.ssh_alias or '(no alias recorded)'}")
+        click.echo(f"local:       {'yes' if is_local(record) else 'no'}")
         click.echo(f"scitex_root: {record.scitex_root}")
 
 

@@ -255,4 +255,42 @@ def test_control_plane_label_travels_with_the_rest_of_its_runners_set():
     assert found == [expected]
 
 
+def test_the_operators_laptop_records_a_reachable_ssh_alias():
+    """MEASURED 2026-08-15 from compute-04, both directions, BatchMode.
+
+    It read `null` until then. `null` is the legend's "the host IS local" —
+    true when the file was authored ON the laptop, and an assertion that THE
+    LAPTOP IS THIS MACHINE when read anywhere else.
+
+    Pinned by test because it is load-bearing rather than cosmetic: the
+    cross-host doorbell relay rings each peer over ssh, and the operator's
+    stated acceptance test for push-driven sync is DM delivery between this
+    laptop and compute-04, both ways. A peer with no alias cannot be
+    enumerated at all.
+    """
+    # Arrange
+    hosts = _seed_hosts()
+    # Act
+    alias = hosts["ywata-note-win"]["ssh_alias"]
+    # Assert
+    assert alias == "ywata-note-win"
+
+
+def test_no_seeded_host_claims_to_be_local():
+    """LOCALITY IS NOT A PROPERTY OF A HOST — it is a relation to the asker.
+
+    A shared registry is read from many machines, so any host recording the
+    "I am local" value asserts something false on every other machine. This is
+    the general form of the laptop's defect (dotfiles' report), and it fails
+    silently: "local, no SSH hop needed" is a legitimate answer that raises
+    nothing and simply runs the work in the wrong place.
+    """
+    # Arrange
+    hosts = _seed_hosts()
+    # Act
+    aliasless = sorted(n for n, rec in hosts.items() if rec.get("ssh_alias") is None)
+    # Assert
+    assert aliasless == []
+
+
 # EOF

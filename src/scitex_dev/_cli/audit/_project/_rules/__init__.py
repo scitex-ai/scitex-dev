@@ -379,6 +379,21 @@ for _c, _sec, _msg, _sev, _slug in _JOB_NAMING_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
 # hook-bypass: line-limit
+# PS-231 — a leaf workflow that RE-IMPLEMENTS an org-provided reusable one
+# (co-located rule set, same terms as RUNNER_DESTINATION_RULES). Severity E
+# lives in the tuple, NOT in `_SEVERITY_OVERRIDES`: an override for a
+# co-located rule is a silent no-op, and this rule ships at E precisely so it
+# CAN fail a build. The operator settled the shape on PS-224 —
+# 「昔だろうが今だろうが問題点は問題点」 (no grandfathering) and
+# 「全て赤でいいと思います」 (a fleet-wide red is the intended start).
+from .._check_workflow_duplication import (  # noqa: E402
+    WORKFLOW_DUPLICATION_RULES as _WORKFLOW_DUPLICATION_RULES,
+)
+
+for _c, _sec, _msg, _sev, _slug in _WORKFLOW_DUPLICATION_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
 # PS-230 — retired role vocabulary in package PROSE (co-located rule set,
 # merged on the same terms as JOB_NAMING_RULES). PS-226..229 above make job
 # NAMES and KINDS mechanical; PS-230 closes the other half of the same
@@ -391,6 +406,18 @@ from .._check_naming_vocabulary import (  # noqa: E402
 )
 
 for _c, _sec, _msg, _sev, _slug in _NAMING_VOCABULARY_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# hook-bypass: line-limit
+# PS-HOOK-010..012 — agent guardrails must be DECLARED through the
+# `scitex_dev.hooks` federation, not left implicit in shell (co-located rule
+# set, merged on the same terms as the sets above). Severities live in the
+# tuples, NOT in `_SEVERITY_OVERRIDES`: an override for a co-located rule is a
+# silent no-op (see the note beside `_patch`), and PS-HOOK-011's whole purpose
+# is to FAIL, so its E must not be routed through a table that would drop it.
+from .._check_hook_rules import HOOK_RULES_RULES as _HOOK_RULES_RULES  # noqa: E402
+
+for _c, _sec, _msg, _sev, _slug in _HOOK_RULES_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
 
