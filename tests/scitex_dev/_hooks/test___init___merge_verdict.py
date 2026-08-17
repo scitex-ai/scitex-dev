@@ -22,6 +22,7 @@ import json
 import os
 import stat
 import subprocess
+import sys
 
 import pytest
 
@@ -62,6 +63,17 @@ def _run_hook(tmp_path, command: str, verdict_exit, payload: str | None = None):
     # Deliberately NOT inheriting the real PATH's scitex-dev: the stub must be
     # the only one, or the test grades the installed tool instead of the stub.
     env["PATH"] = f"{bin_dir}:/usr/bin:/bin"
+    # ...but the hook parses its payload with `${SCITEX_DEV_PYTHON:-python3}`,
+    # and the PATH above only finds one if the interpreter happens to live in
+    # /usr/bin or /bin. It does on an ordinary box and does NOT inside the CI
+    # SIF, where every one of these tests then fell into the "could not read
+    # tool_input.command" branch and asserted against the wrong path — green
+    # locally, red in the release pipeline, for a reason having nothing to do
+    # with the gate's logic.
+    #
+    # Pin the interpreter the hook already lets callers pin. This tests the
+    # GATE, not the ambient location of python3.
+    env["SCITEX_DEV_PYTHON"] = sys.executable
 
     return subprocess.run(
         ["bash", require_mergeable_verdict_sh_path()],
