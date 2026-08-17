@@ -69,21 +69,18 @@ def register(main: click.Group) -> click.Group:
         if ctx.invoked_subcommand is None:
             click.echo(ctx.get_help())
 
-    from . import _aliases, _export, _lifecycle, _list, _terminal
+    from . import _export, _lifecycle, _list, _terminal
 
     _lifecycle.register(gui)
     _list.register(gui)
     _terminal.register(gui)
     _export.register(gui)
-    _aliases.register_in_group(gui)
 
-    # Phase W back-compat for the two legacy `ecosystem` entry points.
-    # Resolved off `main` so the caller does not have to thread the
-    # ecosystem group through; a CLI built without it simply skips them.
-    ecosystem = main.commands.get("ecosystem")
-    if isinstance(ecosystem, click.Group):
-        _aliases.register_on_ecosystem(ecosystem, gui)
-
+    # The Phase W back-compat aliases (`gui start`, `ecosystem dashboard`,
+    # `ecosystem start-dashboard`) declared remove_in="0.34" and are gone as
+    # of 0.50 — sixteen minor versions past their own deadline. A ladder
+    # whose last rung is never climbed is not a migration, it is a permanent
+    # second spelling, which is exactly what the ladder existed to avoid.
     return gui
 
 
