@@ -76,7 +76,30 @@ _TRANSLATED_FIELDS = frozenset({"kind", "schedule", "on_unit_active_sec"})
 #: JobSpec fields a ``kind="timer"`` spec cannot legally set in the first
 #: place (``JobSpec._validate_timer`` rejects them), so there is nothing
 #: for the lowering to lose.
-_INAPPLICABLE_TO_TIMER = frozenset({"restart_policy", "watchdog_sec"})
+#:
+#: The stop/lifecycle fields belong here for the same reason and NOT in
+#: ``_LOSS_DETECTED_FIELDS``: they describe how a LONG-RUNNING PROCESS is
+#: signalled, reloaded and prevented from restarting. A timer fires a
+#: oneshot that exits on its own, so there is no daemon to send SIGINT to
+#: and no restart to prevent — the lowering is not dropping a guarantee, the
+#: guarantee was never expressible on this kind.
+#:
+#: If a future `kind="timer"` is allowed to carry one of these, it MUST move
+#: to ``_LOSS_DETECTED_FIELDS`` instead, because silently lowering a declared
+#: stop signal to a crontab line would drop it without a word — which is the
+#: original bug this whole module exists to prevent.
+_INAPPLICABLE_TO_TIMER = frozenset(
+    {
+        "restart_policy",
+        "watchdog_sec",
+        "kill_signal",
+        "kill_mode",
+        "timeout_stop_sec",
+        "exec_reload",
+        "exec_stop",
+        "restart_prevent_exit_status",
+    }
+)
 
 #: Fields :func:`lowering_losses` inspects and reports on.
 _LOSS_DETECTED_FIELDS = frozenset({"timeout_sec", "on_boot_sec", "venv"})
