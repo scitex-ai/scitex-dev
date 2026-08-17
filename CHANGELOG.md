@@ -82,10 +82,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - **The real-host invariant is a signature, not a comment (#665).**
+- **`scitex-orochi` is archived in the ecosystem registry (#668).** Retired
+  by the operator 2026-08-16 (「サイテクスオロチはもう使わない」); the
+  registry did not know, so every brand-wide sweep still enumerated it.
+  `archived: True` — the existing field every auditor already honours —
+  rather than deleting the row: the repo and the published distribution
+  still exist, and deleting would blind sweeps to something still out
+  there. Archiving is not yanking.
 
 ### Removed
 
 - **The Phase W dashboard aliases (#667)** — see the note above.
+- **`doctor`'s Orochi connectivity check (#668).** A probe of a
+  decommissioned system: a check whose failure means nothing.
 
 ### Docs
 
