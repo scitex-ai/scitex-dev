@@ -211,6 +211,16 @@ class JobSpec:
     restart_policy: str = "no"
     watchdog_sec: int | None = None
     venv: str | None = None
+    # Stop/lifecycle semantics for kind="service". Rationale for each lives
+    # beside its emission in `_systemd.py::build_service_unit` — omitting
+    # them is not cosmetic: systemd's default stop is SIGTERM then SIGKILL,
+    # so a daemon wanting SIGINT gets a hard kill and recovers as if crashed.
+    kill_signal: str | None = None
+    kill_mode: str | None = None
+    timeout_stop_sec: int | None = None
+    exec_reload: str | None = None
+    exec_stop: str | None = None
+    restart_prevent_exit_status: str | None = None
 
     def __post_init__(self) -> None:
         # Normalise the INTENT spellings BEFORE validating, so the rest of
