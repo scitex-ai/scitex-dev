@@ -1049,7 +1049,7 @@ def test_provider_deploy_freshness_invokes_ecosystem_cron_exec():
     job = next(j for j in _provider.provide_jobs() if j.name == "scitex-dev-deploy-freshness")
     # Assert — federated cron jobs invoke `ecosystem cron exec`, NOT
     # the legacy per-package `scitex-dev cron exec`.
-    assert "ecosystem cron exec deploy-freshness" in job.command
+    assert "ecosystem cron exec scitex-dev-deploy-freshness" in job.command
 
 
 def test_provider_deploy_freshness_passes_apply_in_production_line():
