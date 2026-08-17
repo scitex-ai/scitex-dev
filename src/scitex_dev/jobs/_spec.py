@@ -16,6 +16,7 @@ from ._kinds import (
     ACCEPTED_KINDS,
     ALLOWED_KINDS,
     ALLOWED_RESTART_POLICIES,
+    ALLOWED_SERVICE_TYPES,
     INTENT_KINDS,
     INTENT_TO_KIND,
     canonical_kind,
@@ -97,6 +98,50 @@ class JobSpec:
         Defaults to ``None``, which keeps the historical behavior
         (resolve via the supervisor's own interpreter / PATH) for
         every existing JobSpec — fully backward compatible.
+    service_type
+        systemd ``Type=`` for ``kind="service"`` only. ``None`` (the
+        default) keeps the historical behaviour, where the renderer
+        picks ``notify`` if ``watchdog_sec`` is set and ``simple``
+        otherwise. Set it when the daemon's real contract differs —
+        ``Type=exec`` (systemd waits for exec, not just fork) or
+        ``Type=forking``. MUST be ``None`` for ``timer`` (always
+        ``oneshot``) and ``cron`` (no unit at all).
+
+        Setting it to anything but ``"notify"`` alongside
+        ``watchdog_sec`` is a contradiction and is REFUSED: the
+        watchdog protocol only exists under ``Type=notify``, so the
+        pair would emit a ``WatchdogSec`` that can never be satisfied
+        and restart the daemon on every interval.
+    remain_after_exit
+        systemd ``RemainAfterExit=``. ``None`` keeps the historical
+        ``no`` for timer-triggered oneshots. Set ``True`` for a unit
+        whose *effect* outlives its process (a mount, a one-time
+        setup step) so ``systemctl is-active`` answers usefully
+        instead of reporting ``inactive`` the moment it succeeds.
+        MUST be ``None`` for ``cron``.
+    working_directory
+        systemd ``WorkingDirectory=``. When ``None`` the directory is
+        still derived from ``venv`` exactly as before (the venv's
+        parent, i.e. the package root). Set it when the unit must run
+        somewhere else — an explicit value WINS over the derived one,
+        because a unit that names its own directory is stating a
+        requirement, not a preference. MUST be ``None`` for ``cron``.
+    environment
+        Extra ``Environment=`` lines, each a ``"KEY=value"`` string.
+        Emitted AFTER the venv-derived ``VIRTUAL_ENV=``, so a leaf can
+        deliberately override it (systemd takes the last assignment of
+        a repeated key). Defaults to empty, which emits nothing. A
+        tuple rather than a list because JobSpec is frozen. MUST be
+        empty for ``cron``.
+    environment_file
+        systemd ``EnvironmentFile=``. The field whose absence was most
+        expensive: a unit's ``EnvironmentFile=`` is frequently the only
+        on-disk record of where its secrets and configuration come
+        from, so adopting such a unit through a renderer that cannot
+        express it does not merely lose a line — it starts the daemon
+        with an empty environment while still reporting ``active``.
+        Prefix the path with ``-`` for systemd's "ignore if missing"
+        semantics. MUST be ``None`` for ``cron``.
     """
 
     name: str
@@ -121,6 +166,16 @@ class JobSpec:
     exec_reload: str | None = None
     exec_stop: str | None = None
     restart_prevent_exit_status: str | None = None
+    # Unit-body fields. Until these existed the renderer DECIDED each of
+    # them itself, so a hand-written unit that disagreed could not be
+    # adopted without silently changing meaning. Every one defaults to
+    # "unset", and unset renders exactly as before — see the
+    # byte-identical tests in `tests/scitex_dev/jobs/test__systemd.py`.
+    service_type: str | None = None
+    remain_after_exit: bool | None = None
+    working_directory: str | None = None
+    environment: tuple[str, ...] = ()
+    environment_file: str | None = None
 
     def __post_init__(self) -> None:
         # Normalise the INTENT spellings BEFORE validating, so the rest of
@@ -204,6 +259,34 @@ class JobSpec:
                 f"services use Restart= for keepalive, not a timer). "
                 f"Got: {self.on_unit_active_sec!r}"
             )
+        if (
+            self.service_type is not None
+            and self.service_type not in ALLOWED_SERVICE_TYPES
+        ):
+            raise ValueError(
+                f"JobSpec({self.name!r}, kind='service').service_type="
+                f"{self.service_type!r} not in "
+                f"{sorted(ALLOWED_SERVICE_TYPES)}"
+            )
+        if self.watchdog_sec is not None and self.service_type not in (
+            None,
+            "notify",
+        ):
+            # The watchdog protocol EXISTS ONLY under Type=notify: the
+            # daemon proves liveness with sd_notify(WATCHDOG=1), which a
+            # non-notify unit has no channel to send. Emitting both would
+            # produce a WatchdogSec that can never be satisfied, so systemd
+            # would kill and restart the daemon every interval forever.
+            # Refuse the pair rather than silently dropping either half —
+            # dropping the watchdog hides a requested guard, and forcing
+            # notify breaks a daemon that never sends READY=1.
+            raise ValueError(
+                f"JobSpec({self.name!r}, kind='service') sets watchdog_sec="
+                f"{self.watchdog_sec!r} with service_type="
+                f"{self.service_type!r}. WatchdogSec only works under "
+                f"Type=notify. Either set service_type='notify' (and send "
+                f"sd_notify(WATCHDOG=1) pings), or drop watchdog_sec."
+            )
         if self.watchdog_sec is not None and self.watchdog_sec <= 0:
             # A non-positive interval is meaningless and, worse, would
             # produce a WatchdogSec=0s that systemd treats as "disabled"
@@ -239,6 +322,15 @@ class JobSpec:
                 f"JobSpec({self.name!r}, kind='timer').watchdog_sec "
                 f"must be None (WatchdogSec guards long-running services, "
                 f"not oneshot timer bodies). Got: {self.watchdog_sec!r}"
+            )
+        if self.service_type is not None:
+            # A timer's body IS a oneshot — that is what "run this, then
+            # stop" means. Letting a leaf name a different Type= here would
+            # produce a unit the timer cannot drive correctly.
+            raise ValueError(
+                f"JobSpec({self.name!r}, kind='timer').service_type must be "
+                f"None (a timer-triggered unit is always Type=oneshot). "
+                f"Got: {self.service_type!r}"
             )
 
     def _validate_cron(self) -> None:
@@ -282,4 +374,21 @@ class JobSpec:
                 f"must be None (systemd-only field). Got: "
                 f"{self.watchdog_sec!r}"
             )
+        # The unit-body fields describe a systemd unit. A cron job has no
+        # unit, so a set value here would be silently dropped at render
+        # time — the exact silent-misconfiguration trap the rest of this
+        # validator exists to prevent.
+        for field, value, empty in (
+            ("service_type", self.service_type, None),
+            ("remain_after_exit", self.remain_after_exit, None),
+            ("working_directory", self.working_directory, None),
+            ("environment", self.environment, ()),
+            ("environment_file", self.environment_file, None),
+        ):
+            if value != empty:
+                raise ValueError(
+                    f"JobSpec({self.name!r}, kind='cron').{field} must be "
+                    f"{empty!r} (systemd-only field; cron lines are inert "
+                    f"text in a crontab). Got: {value!r}"
+                )
 

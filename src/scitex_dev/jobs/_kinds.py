@@ -79,6 +79,20 @@ ALLOWED_RESTART_POLICIES: frozenset[str] = frozenset(
     {"no", "on-failure", "on-abnormal", "on-abort", "on-watchdog", "always"}
 )
 
+#: Valid ``JobSpec.service_type`` values — systemd's ``Type=`` vocabulary.
+#: Used by the ``service`` kind only; ``timer`` jobs are always
+#: ``Type=oneshot`` (that is what a timer-triggered unit IS) and ``cron``
+#: has no systemd unit at all.
+#:
+#: Listed because the renderer previously CHOSE the type itself, picking
+#: ``simple`` or ``notify`` from whether a watchdog was requested. A
+#: hand-written unit declaring anything else — ``scitex-cards-pg`` declares
+#: ``Type=exec`` — could not be adopted without silently becoming
+#: ``Type=simple``, which changes when systemd considers the unit started.
+ALLOWED_SERVICE_TYPES: frozenset[str] = frozenset(
+    {"simple", "exec", "forking", "oneshot", "dbus", "notify", "idle"}
+)
+
 
 def canonical_kind(kind: str, schedule: str) -> str:
     """Map an INTENT spelling onto its stored kind. Identity otherwise.
