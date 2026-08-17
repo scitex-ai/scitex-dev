@@ -102,7 +102,9 @@ _INAPPLICABLE_TO_TIMER = frozenset(
 )
 
 #: Fields :func:`lowering_losses` inspects and reports on.
-_LOSS_DETECTED_FIELDS = frozenset({"timeout_sec", "on_boot_sec", "venv"})
+_LOSS_DETECTED_FIELDS = frozenset(
+    {"timeout_sec", "on_boot_sec", "venv", "on_calendar"}
+)
 
 
 @dataclass(frozen=True)
@@ -204,6 +206,28 @@ def lowering_losses(job: JobSpec) -> tuple[DroppedProperty, ...]:
         return ()
 
     losses: list[DroppedProperty] = []
+
+    if job.on_calendar:
+        losses.append(
+            DroppedProperty(
+                field="on_calendar",
+                declared=job.on_calendar,
+                consequence=(
+                    "a crontab line carries no timezone — it fires in the "
+                    "cron daemon's own TZ. An OnCalendar naming a zone "
+                    "(`*-*-* 04:30:00 Asia/Tokyo`) would silently become "
+                    "04:30 in whatever zone the host happens to run, which "
+                    "is a DIFFERENT time on every host that disagrees, and "
+                    "moves twice a year wherever DST applies"
+                ),
+                remedy=(
+                    "keep the job as kind='timer' so systemd honours the "
+                    "zone, or restate the schedule as a plain 5-field cron "
+                    "expression in `schedule` and accept host-local time "
+                    "explicitly rather than by accident"
+                ),
+            )
+        )
 
     if job.timeout_sec is not None:
         losses.append(

@@ -806,6 +806,116 @@ def test_stripped_path_execstart_first_token_exists_on_disk(
     )
 
 
+# ---------------------------------------------------------------------------
+# OnCalendar — the wall-clock schedule, and the loud discard when it is absent
+# ---------------------------------------------------------------------------
+
+
+def _calendar_job():
+    return JobSpec(
+        name="p-timer",
+        kind="timer",
+        schedule="",
+        command="x",
+        description="d",
+        on_calendar="*-*-* 04:30:00 Asia/Tokyo",
+    )
+
+
+def _anchored_job():
+    """A cron expression naming a TIME (04:30) rather than a period."""
+    return JobSpec(
+        name="p-timer",
+        kind="timer",
+        schedule="30 4 * * *",
+        command="x",
+        description="d",
+    )
+
+
+def test_timer_unit_emits_on_calendar_when_declared():
+    # Arrange
+    job = _calendar_job()
+    # Act
+    text = sd.build_timer_unit(job)
+    # Assert
+    assert "OnCalendar=*-*-* 04:30:00 Asia/Tokyo" in text
+
+
+def test_timer_unit_omits_interval_when_on_calendar_is_used():
+    """Emitting both would let systemd fire on whichever came first —
+    which is neither of the two schedules the author declared.
+    """
+    # Arrange
+    job = _calendar_job()
+    # Act
+    text = sd.build_timer_unit(job)
+    # Assert
+    assert "OnUnitActiveSec" not in text
+
+
+def test_timer_unit_omits_on_boot_sec_when_on_calendar_is_used():
+    # Arrange
+    job = _calendar_job()
+    # Act
+    text = sd.build_timer_unit(job)
+    # Assert
+    assert "OnBootSec" not in text
+
+
+def test_anchored_cron_still_renders_the_derived_interval():
+    """The rendering is UNCHANGED — four live jobs depend on this cadence,
+    and silently changing them would be the same sin in reverse.
+    """
+    # Arrange
+    job = _anchored_job()
+    # Act
+    text = sd.build_timer_unit(job)
+    # Assert
+    assert "OnUnitActiveSec=1d" in text
+
+
+def test_anchored_cron_warns_that_the_wall_clock_anchor_is_discarded(caplog):
+    """What changes is that the transformation announces itself."""
+    # Arrange
+    job = _anchored_job()
+    # Act
+    with caplog.at_level("WARNING"):
+        sd.build_timer_unit(job)
+    # Assert
+    assert "wall-clock anchor" in caplog.text
+
+
+def test_anchored_cron_warning_names_the_discarded_fields(caplog):
+    """Naming minute=30/hour=4 is what lets a reader see WHICH anchor went."""
+    # Arrange
+    job = _anchored_job()
+    # Act
+    with caplog.at_level("WARNING"):
+        sd.build_timer_unit(job)
+    # Assert
+    assert "minute=30, hour=4" in caplog.text
+
+
+def test_interval_cron_expression_does_not_warn(caplog):
+    """`*/15 * * * *` genuinely means every 15 minutes and loses nothing.
+
+    Warning here too would train every reader to ignore the warning that
+    does matter.
+    """
+    # Arrange
+    job = JobSpec(
+        name="p-timer",
+        kind="timer",
+        schedule="*/15 * * * *",
+        command="x",
+        description="d",
+    )
+    # Act
+    with caplog.at_level("WARNING"):
+        sd.build_timer_unit(job)
+    # Assert
+    assert "wall-clock anchor" not in caplog.text
 
 
 # ---------------------------------------------------------------------------
