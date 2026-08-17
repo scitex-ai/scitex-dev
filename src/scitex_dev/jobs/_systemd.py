@@ -100,14 +100,38 @@ def _on_boot_sec_to_seconds(value: str) -> int:
     return n or 0
 
 
-def _interpreter_bindir() -> Path:
+def _interpreter_bindir(executable: str | None = None) -> Path:
     """Return ``Path(sys.executable).parent`` — the bin/ holding sibling
     console scripts for the interpreter currently running this process.
 
-    Indirection exists so tests can monkeypatch it without having to
-    relocate the real interpreter.
+    NOT ``.resolve()``d, and that is the whole point. A venv's
+    ``bin/python`` is a SYMLINK to the interpreter it was built from,
+    which lives outside the venv and has no console scripts beside it::
+
+        ~/.venv/bin/python
+          -> ~/.local/share/uv/python/cpython-3.12-.../bin/python3.12
+
+    Resolving therefore walks OUT of the venv and lands in a directory
+    that structurally cannot hold ``scitex-dev``. Measured on
+    scitex-compute-04 2026-08-17: raw parent contained the binary,
+    resolved parent did not, so rule 1 missed and the supervisor unit
+    was written ``ExecStart=/usr/bin/env scitex-dev`` — the exact
+    status=127 flap this function exists to prevent. uv builds every
+    venv this way, and uv is now the mandated installer, so the
+    resolved form is wrong on essentially every host.
+
+    Resolving buys nothing in the non-venv case either: when
+    ``bin/python`` is a real file (or a symlink inside the same dir),
+    the resolved and unresolved parents are identical. The two differ
+    ONLY when resolving leaves the venv, which is exactly when the
+    resolved answer is wrong. So there is no second probe — dropping
+    ``.resolve()`` is the whole fix.
+
+    ``executable`` defaults to :data:`sys.executable` and exists so a
+    test can point at a REAL venv-shaped tree it built on disk —
+    symlink and all — instead of rewriting this module's globals.
     """
-    return Path(sys.executable).resolve().parent
+    return Path(executable or sys.executable).parent
 
 
 def resolve_execstart(
@@ -185,7 +209,9 @@ def resolve_execstart(
             return shlex.join([str(pinned), *tail])
 
     # 1. Interpreter sibling-bin probe — most reliable for console
-    #    scripts installed alongside the running interpreter.
+    #    scripts installed alongside the running interpreter. Probed
+    #    UNRESOLVED (the venv's own bin/, where the console scripts
+    #    live) — see _interpreter_bindir for why resolving breaks this.
     try:
         candidate = interpreter_bindir() / head
     except Exception:  # pragma: no cover — defensive only
