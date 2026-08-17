@@ -228,7 +228,7 @@ def provide_jobs() -> list[JobSpec]:
             ),
         ),
         JobSpec(
-            name="ecosystem-self-pull",
+            name="scitex-dev-ecosystem-self-pull",
             kind="timer",
             schedule="",
             command=_self_pull_command(),
@@ -247,7 +247,7 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="2min",
         ),
         JobSpec(
-            name="drift-report",
+            name="scitex-dev-drift-report",
             kind="timer",
             schedule="",
             command=_drift_report_command(),
@@ -269,7 +269,7 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="6h",
         ),
         JobSpec(
-            name="local-state-audit",
+            name="scitex-dev-local-state-audit",
             kind="timer",
             schedule="",
             command=_local_state_audit_command(),
