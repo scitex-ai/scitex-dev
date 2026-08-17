@@ -1,7 +1,7 @@
 """Textual TUI for the ecosystem dashboard.
 
 Brings htop-style live filtering + key navigation to
-`scitex-dev ecosystem dashboard tui`. The data layer
+`scitex-dev gui start-tui`. The data layer
 (`gather_ecosystem_state`) and rendering helpers
 (`_cell`, `_column_header`) are shared with the Rich one-shot
 view in `_render.py` so there's only one source of truth for
