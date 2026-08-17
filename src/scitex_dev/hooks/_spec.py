@@ -101,7 +101,18 @@ class HookRule:
         enforced on both a shell surface and an MCP surface lists BOTH here --
         that is what makes it one rule with two consumers.
     provider
-        The declaring package (e.g. ``"scitex-agent-container"``).
+        The declaring package as a DISTRIBUTION name (e.g.
+        ``"scitex-agent-container"``). A provider may leave this empty:
+        discovery stamps it from the entry point's own distribution, exactly
+        as it already does for ``owner_module`` below.
+
+        It defaults to empty rather than being required BECAUSE it is a value
+        discovery already knows. Making a leaf repeat it buys nothing and
+        costs the one thing a repeated identity always costs — the chance to
+        get it wrong. A plausible-but-incorrect ``provider`` does not raise;
+        it misattributes the rule in every dedup and ownership path
+        downstream, which is strictly worse than the TypeError that requiring
+        it produced.
     owner_module
         The IMPORT anchor ``script`` and ``predicate`` resolve against (e.g.
         ``"scitex_agent_container"``). A provider may leave this empty:
@@ -159,7 +170,7 @@ class HookRule:
     event: str
     severity: str
     matches: tuple[str, ...]
-    provider: str
+    provider: str = ""
     owner_module: str = ""
     script: str | None = None
     predicate: str | None = None
@@ -215,10 +226,20 @@ class HookRule:
                     f"HookRule({self.id!r}).matches entries must be non-empty "
                     f"surface names; got {surface!r}"
                 )
-        if not isinstance(self.provider, str) or not self.provider.strip():
+        # EMPTY is legal at construction and means "discovery will stamp it"
+        # (see the field docs). What stays illegal is a provider that is
+        # present but not a string, or whitespace pretending to be a name —
+        # those are declarations, and a wrong declaration misattributes the
+        # rule silently, which is worse than the TypeError that requiring the
+        # field produced. Leaf packages that construct HookRule directly do
+        # not have to repeat an identity `_make_ep_provider` already knows.
+        if not isinstance(self.provider, str) or (
+            self.provider and not self.provider.strip()
+        ):
             raise ValueError(
-                f"HookRule({self.id!r}).provider must name the declaring "
-                f"package; got {self.provider!r}"
+                f"HookRule({self.id!r}).provider must be the declaring "
+                f"package's DISTRIBUTION name, or empty to let discovery "
+                f"stamp it from the entry point; got {self.provider!r}"
             )
         if self.script is None and self.check is None and not self.implemented_in:
             raise ValueError(
