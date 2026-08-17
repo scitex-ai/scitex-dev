@@ -7,6 +7,105 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-08-17
+
+> **This release adds two audit rules and removes three CLI verbs.** A repo
+> can go from green to red on this upgrade with no diff of its own, for the
+> same reason 0.50.0 could: PS-231 (a leaf workflow that re-implements an
+> org-provided reusable) and PS-140 (an import gate that skips on the full
+> path, so a rename is silently skipped) both fire on code that was passing
+> yesterday. Measured on three packages: scitex-writer 6 of its 7 total
+> errors are PS-231, figrecipe 5 of 6, scitex-cards 8.
+>
+> Consumers of the org `quality-audit` reusable remain **pinned to
+> `==0.49.3`** and will not pick this up automatically. Bump that pin
+> deliberately.
+>
+> **Removed CLI verbs:** `ecosystem dashboard`, `ecosystem start-dashboard`
+> and `gui start` no longer resolve. They were Phase W aliases declaring
+> `remove_in="0.34"` and this package is at 0.50. Use `gui`, `gui open` and
+> `gui watch`.
+
+### Added
+
+- **PS-231 — a leaf workflow that RE-IMPLEMENTS an org-provided one (#615).**
+  A local copy does not track fixes made to the org workflow: the
+  `scitex-ci` runner-label defect was fixed org-side on 2026-08-15 and every
+  copy kept it. Names the caller form and the exemption path.
+- **PS-140 — a gate that skips on the full path cannot catch a rename
+  (#647).** `importorskip(full.dotted.path)` turns a renamed submodule into
+  a SKIP that reports green — the exact failure the gate exists to catch.
+- **Fleet-wide exemption census, and `list-exemptions` (#642, #645).** Every
+  exception, plus how much of the fleet could not be read — an exception
+  nobody can see is one that never gets retired.
+- **Process currency — ask whether a RUNNING process predates the code it
+  claims to run (#659), and say when a version number describes a different
+  moment than the code (#651).** Merged is not live; fresh on disk is not
+  fresh in memory.
+- **Federated agent guardrails, written down (#592).**
+- **`scitex-vpn` registered as a leaf (#633).**
+- **The cross-package gate dates itself, and has tests (#640).**
+
+### Fixed
+
+- **This repo's own audit gate could not fail (#650)**, and **the gate that
+  grades every package could not tell which tree it graded (#662)**.
+- **PA-306 walked a FOREIGN `tests/` tree and called it your verdict
+  (#652).**
+- **The untrustworthy-install check inspected 3 of 70 packages (#653)**; the
+  banner now names the interpreter (#657).
+- **`validate-versions` never asked whether it could believe the versions
+  (#656).**
+- **`drift-report` read the ref the label names, in both reference columns
+  (#661).**
+- **A fence must never arrive on the data it authorises (#584).**
+- **Regenerating a gate must not eat what a human wrote in it (#644)**, and
+  everything below the sentinel is preserved byte-identically (#641).
+- **`kind="periodic"` with a `schedule` is refused rather than guessed
+  (#666).** A schedule does not identify the scheduler — a systemd timer may
+  carry one as an OnCalendar fallback, and seven live sac declarations do.
+  Guessing silently moved such a job from systemd to crontab.
+- **Locality is computed from this machine, not declared in the file
+  (#580)**; the laptop's MEASURED ssh alias is recorded (#616).
+- **A synthetic root must not be judged by the machine running the test
+  (#660).**
+- **The merge gate ships with the tool — the file-copy version was lost,
+  silently (#634).**
+- **The quality-audit workflow name is neutral, not a package name (#638);**
+  the generated gate stops tripping STX-TQ007 (#636) and says it will be
+  overwritten (#637).
+- **A verdict names its own subject and says what it read (#654, #655).**
+- **`scitex_todo` import name retired from cron (#643).**
+- **`audit` names the verb, and a dry-run proves which code is running
+  (#646).**
+
+### Changed
+
+- **The real-host invariant is a signature, not a comment (#665).**
+- **`scitex-orochi` is archived in the ecosystem registry (#668).** Retired
+  by the operator 2026-08-16 (「サイテクスオロチはもう使わない」); the
+  registry did not know, so every brand-wide sweep still enumerated it.
+  `archived: True` — the existing field every auditor already honours —
+  rather than deleting the row: the repo and the published distribution
+  still exist, and deleting would blind sweeps to something still out
+  there. Archiving is not yanking.
+
+### Removed
+
+- **The Phase W dashboard aliases (#667)** — see the note above.
+- **`doctor`'s Orochi connectivity check (#668).** A probe of a
+  decommissioned system: a check whose failure means nothing.
+
+### Docs
+
+- **ADR-0008 records the ruling, so the standard can be cited (#663).**
+- **The §13 federation paragraph described a capability that does not exist
+  (#664).**
+- **A sibling that is a DECLARED dependency must not be `importorskip`'d
+  (#639);** why `_install_kind` and `_install_probe` must not be merged
+  (#658); which class of state the runtime-state-DB layout governs (#648);
+  SQLite is eradicated, so the `.db` layout is marked historical (#649).
+
 ## [0.50.0] - 2026-08-16
 
 > **This release moves the rule corpus.** `_fd.py` changes which files every
