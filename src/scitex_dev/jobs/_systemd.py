@@ -26,6 +26,7 @@ under ``~/.config/systemd/user/``.
 
 from __future__ import annotations
 
+import logging
 import os
 import shlex
 import shutil
@@ -40,6 +41,8 @@ DEFAULT_ON_UNIT_ACTIVE_SEC = "1h"
 
 # Documentation URL stamped into generated units (operator breadcrumb).
 _DOC_URL = "https://github.com/scitex-ai/scitex-dev"
+
+_logger = logging.getLogger(__name__)
 
 
 def derive_on_unit_active_sec(schedule: str) -> str:
@@ -334,6 +337,54 @@ def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
     return "\n".join(lines)
 
 
+def _warn_if_anchor_discarded(job: _jobs.JobSpec, on_active: str) -> None:
+    """Say out loud when a wall-clock anchor is being thrown away.
+
+    A cron expression like ``30 4 * * *`` names a TIME (04:30 daily). Derived
+    into ``OnUnitActiveSec=1d`` it becomes a PERIOD measured from whenever the
+    timer last activated, so a host that booted at 15:00 runs its 04:30 job at
+    ~15:20 — in the working day the 04:30 was chosen to avoid.
+
+    Nothing about that failure is observable. The unit exists, reports
+    ``active (waiting)``, shows a plausible next-elapse and fires at roughly
+    the right frequency. It surfaces months later as "why is that report
+    late", if at all.
+
+    So the derivation stays (four of sac's live jobs already depend on the
+    current cadence, and silently changing them would be the same sin in the
+    other direction) — but it stops being SILENT. Requested by sac
+    2026-08-17: *"make the discard loud ... that converts a silent
+    transformation into a visible one without implementing anything, and it
+    would have surfaced this years earlier than either of us did."*
+
+    Only ANCHORED expressions warn. ``*/15 * * * *`` genuinely means "every 15
+    minutes" and loses nothing as an interval; ``30 4 * * *`` does. Warning on
+    both would train everyone to ignore it.
+    """
+    fields = (job.schedule or "").split()
+    if len(fields) != 5:
+        return
+    minute, hour = fields[0], fields[1]
+    anchored = [
+        f"{label}={value}"
+        for label, value in (("minute", minute), ("hour", hour))
+        if value != "*" and not value.startswith("*/")
+    ]
+    if not anchored:
+        return
+    _logger.warning(
+        "%s: schedule=%r names a wall-clock anchor (%s) that a systemd "
+        "INTERVAL cannot express, so it is being discarded: the unit will "
+        "run every %s measured from its last activation, NOT at that time. "
+        "Set `on_calendar` (e.g. on_calendar='*-*-* 04:30:00 Asia/Tokyo') "
+        "to keep the anchor.",
+        job.name,
+        job.schedule,
+        ", ".join(anchored),
+        on_active,
+    )
+
+
 def build_timer_unit(job: _jobs.JobSpec) -> str:
     """Return the ``.timer`` unit text for ``job`` (Persistent=true).
 
@@ -347,16 +398,48 @@ def build_timer_unit(job: _jobs.JobSpec) -> str:
             f"build_timer_unit({job.name!r}): only kind='timer' has a timer; "
             f"got kind={job.kind!r}"
         )
-    on_boot = job.on_boot_sec or DEFAULT_ON_BOOT_SEC
-    on_active = job.on_unit_active_sec or derive_on_unit_active_sec(job.schedule)
     lines = [
         "[Unit]",
         f"Description=Timer for {job.name}",
         f"Documentation={_DOC_URL}",
         "",
         "[Timer]",
-        f"OnBootSec={on_boot}",
-        f"OnUnitActiveSec={on_active}",
+    ]
+
+    # WALL-CLOCK vs INTERVAL is a difference of KIND, not of precision, and
+    # until now only one of the two could be expressed.
+    #
+    # `OnCalendar=*-*-* 06:40:00 Asia/Tokyo` fires at 06:40 local time, every
+    # day, forever. `OnUnitActiveSec=1d` fires 24h after the last run — so it
+    # walks against the clock as runs are delayed, and carries no timezone at
+    # all. Rendering the first as the second does not degrade a schedule; it
+    # substitutes a different one, and the substitution is INVISIBLE: the
+    # unit exists, reports `active (waiting)`, shows a plausible next-elapse
+    # and fires about daily. It surfaces only as "why does the 06:40 report
+    # now arrive at 03:00".
+    #
+    # Found 2026-08-17 by dotfiles, who refused a name-level assurance that
+    # their units were adoptable and checked the BODY. `dotfiles-drift-check`
+    # is exactly this case.
+    #
+    # HISTORICAL NOTE, because it is the reason this went unnoticed: JobSpec's
+    # own docs described `schedule` as "an optional OnCalendar fallback for
+    # kind='timer'" while this renderer only ever averaged it into an
+    # interval. Seven of sac's production jobs were declared against the
+    # documented behaviour. The docstring is corrected alongside this.
+    if job.on_calendar:
+        lines.append(f"OnCalendar={job.on_calendar}")
+    else:
+        on_boot = job.on_boot_sec or DEFAULT_ON_BOOT_SEC
+        on_active = job.on_unit_active_sec or derive_on_unit_active_sec(job.schedule)
+        _warn_if_anchor_discarded(job, on_active)
+        lines.append(f"OnBootSec={on_boot}")
+        lines.append(f"OnUnitActiveSec={on_active}")
+
+    lines += [
+        # Persistent=true is what makes a missed wall-clock run catch up after
+        # a reboot or a suspended laptop, so it matters MORE for OnCalendar
+        # than for intervals, not less.
         "Persistent=true",
         f"Unit={job.name}.service",
         "",

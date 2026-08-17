@@ -220,11 +220,12 @@ def test_jobspec_service_raises_when_on_unit_active_sec_is_set():
         )
 
 
-def test_jobspec_timer_raises_when_neither_cadence_field_is_set():
+def test_jobspec_timer_raises_when_no_cadence_field_at_all_is_set():
+    """A timer with none of the three ways to say WHEN is rejected."""
     # Arrange
     # Act
     # Assert
-    with pytest.raises(ValueError, match="needs either on_unit_active_sec or a schedule"):
+    with pytest.raises(ValueError, match="needs one of on_calendar"):
         JobSpec(
             name="p.timer",
             kind="timer",
@@ -232,6 +233,28 @@ def test_jobspec_timer_raises_when_neither_cadence_field_is_set():
             command="x",
             description="d",
         )
+
+
+def test_jobspec_timer_accepts_on_calendar_as_its_only_cadence():
+    """`on_calendar` alone satisfies a timer — it IS a schedule.
+
+    Wall-clock is the third way to say when, alongside an interval
+    (`on_unit_active_sec`) and a cron expression derived into one
+    (`schedule`). Before `on_calendar` existed, a job that wanted 04:30
+    daily had to declare an interval and lose the anchor.
+    """
+    # Arrange
+    # Act
+    job = JobSpec(
+        name="p-timer",
+        kind="timer",
+        schedule="",
+        command="x",
+        description="d",
+        on_calendar="*-*-* 04:30:00 Asia/Tokyo",
+    )
+    # Assert
+    assert job.on_calendar == "*-*-* 04:30:00 Asia/Tokyo"
 
 
 def test_jobspec_timer_accepts_cron_schedule_without_explicit_cadence():
