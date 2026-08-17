@@ -184,6 +184,7 @@ def install_all(
     dry_run: bool = False,
     venv: str = "per-package",
     upgrade: bool = False,
+    no_deps: bool = False,
     on_progress: Callable[[int, int, str, str, str], None] | None = None,
 ) -> dict[str, tuple[int, str]]:
     """Install every selected package, with **uv** when it is available.
@@ -196,6 +197,27 @@ def install_all(
              can move numpy/torch under a package nobody was editing. The
              periodic refresh job turns it on, because currency is the whole
              point there; an interactive install should not surprise anyone.
+
+    no_deps: pass ``--no-deps``. THIS IS THE OTHER HALF OF ``upgrade`` ON A
+             SHARED VENV, and it was found the hard way.
+
+             MEASURED 2026-08-17 on /home/ywatanabe/.venv: a `-U` editable
+             pass over 22 ecosystem checkouts reported ``ok=22 fail=0`` and
+             left scitex-dev, scitex-cards and figrecipe resolving to
+             site-packages WHEELS rather than their checkouts. A control
+             disproved the obvious culprit — ``uv pip install -U -e <path>``
+             on one package keeps the editable, with and without ``-U``. The
+             mechanism is ORDER: a LATER package that depends on scitex-dev
+             has that dependency re-resolved under ``-U``, and the PyPI wheel
+             replaces the editable installed earlier in the same sweep.
+
+             So on a shared venv the correct shape is TWO passes: one that
+             may resolve (currency), then one with ``--no-deps`` that cannot
+             (re-assert every checkout as editable). A single pass cannot be
+             both, and the single-pass result LOOKS successful — the
+             installer's own count was 22/22 while three were wrong. Verify a
+             shared venv with a functional probe (does each package resolve
+             under its checkout?), never with the installer's exit count.
 
     venv: ``per-package`` (default) → for each package, ensure
                             ``<local>/.venv/`` exists (create with the
@@ -217,7 +239,7 @@ def install_all(
     results: dict[str, tuple[int, str]] = {}
     extras_suffix = f"[{extras}]" if extras else ""
 
-    def _installer_args(target_py: str, *, upgrade: bool) -> list[str]:
+    def _installer_args(target_py: str, *, upgrade: bool, no_deps: bool) -> list[str]:
         """Build the install argv: uv when present, pip as the fallback.
 
         BOTH forms are pinned to ``target_py``. uv's ``--python`` and pip's
@@ -238,7 +260,11 @@ def install_all(
             if os.path.isfile(uv) and os.access(uv, os.X_OK)
             else [target_py, "-m", "pip", "install"]
         )
-        return base + ["--upgrade"] if upgrade else base
+        if upgrade:
+            base = base + ["--upgrade"]
+        if no_deps:
+            base = base + ["--no-deps"]
+        return base
 
     def _ensure_venv(local: Path) -> Path | None:
         """Return path to the venv's python, creating ``<local>/.venv/`` if absent.
@@ -314,7 +340,7 @@ def install_all(
             # is 3.9 and cannot see >=3.10 wheels on PyPI).
             target_py = sys.executable
 
-        install_args = _installer_args(target_py, upgrade=upgrade)
+        install_args = _installer_args(target_py, upgrade=upgrade, no_deps=no_deps)
         cmd = (
             install_args + ["-e", target]
             if source == "editable"

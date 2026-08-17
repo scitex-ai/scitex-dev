@@ -105,10 +105,19 @@ JOB_SHELL_BODIES: dict[str, str] = {
     # installed, so a MISSING dependency declaration is invisible in it by
     # construction; `--venv per-package` (the default, and what CI uses) is
     # the only thing that can see that class of defect.
+    # TWO PASSES, and the second is not optional. Pass 1 may re-resolve, so
+    # a later package's dependency on a sibling can replace that sibling's
+    # editable install with a PyPI wheel; pass 2 (--no-deps) cannot resolve
+    # anything, so it re-asserts every checkout as editable and nothing it
+    # touches can clobber a peer. Measured 2026-08-17: pass 1 alone reported
+    # ok=22 fail=0 and left three packages resolving to site-packages.
     "scitex-dev-venv-refresh": (
         "date -u +'== venv-refresh %Y-%m-%dT%H:%MZ =='; "
         "scitex-dev ecosystem install --source editable --extras all "
-        "--venv current --upgrade --yes || true"
+        "--venv current --upgrade --yes || true; "
+        "echo '-- re-asserting editables (--no-deps) --'; "
+        "scitex-dev ecosystem install --source editable "
+        "--venv current --no-deps --yes || true"
     ),
     # OBSERVE-only by construction: `host-config check` never writes, and
     # it needs no privileges (the managed files under /etc are
