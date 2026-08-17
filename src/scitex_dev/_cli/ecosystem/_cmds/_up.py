@@ -94,9 +94,13 @@ class UpResult:
 
     cron_jobs_installed: int = 0
     timer_jobs_lowered_to_cron: int = 0
-    #: Timer jobs whose declared properties cron cannot honour and that
-    #: were lowered anyway under ``--allow-lossy-timer-lowering``. Non-
-    #: zero means the deployed artifact is WEAKER than the registry says.
+    #: Timer jobs whose declared properties cron cannot honour.
+    #:
+    #: Under ``--allow-lossy-timer-lowering`` these were lowered ANYWAY, so
+    #: non-zero means the deployed artifact is WEAKER than the registry says.
+    #: WITHOUT the flag the reconcile ABORTS, and this field still carries
+    #: the count — it is the reason for the abort, and a caller reading
+    #: ``0`` there would conclude the opposite of the truth.
     timer_jobs_degraded: int = 0
     supervisor_unit_written: bool = False
     supervisor_unit_enabled: bool = False
@@ -272,7 +276,14 @@ def run_up(
             on_degrade=log,
         )
     except TimerLoweringError as exc:
-        return UpResult(error=str(exc))
+        # Carry the count OUT of the abort path. `degraded_n` was computed
+        # above and used to be discarded here, so a programmatic caller
+        # reading `result.timer_jobs_degraded` on an abort saw 0 — "no jobs
+        # were degraded" — about the run that refused to install ANYTHING
+        # precisely because jobs were degraded. Zero-subjects and
+        # zero-problems rendered identically on the one path where they
+        # mean opposite things.
+        return UpResult(error=str(exc), timer_jobs_degraded=degraded_n)
 
     cron_installed = _install_cron_block(cron_jobs=cron_merged, yes=yes, echo=log)
 

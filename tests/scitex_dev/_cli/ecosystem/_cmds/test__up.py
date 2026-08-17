@@ -72,6 +72,34 @@ def _cron_provider():
     ]
 
 
+def _degraded_timer_provider():
+    """Two timers cron cannot honour — `timeout_sec` has no cron equivalent.
+
+    Without ``--allow-lossy-timer-lowering`` this ABORTS the reconcile,
+    which is the path the tests below interrogate.
+    """
+    return [
+        JobSpec(
+            name="mock.bounded-a",
+            kind="timer",
+            schedule="*/15 * * * *",
+            command="mock refresh-a",
+            description="mock refresh a",
+            on_unit_active_sec="15min",
+            timeout_sec=300,
+        ),
+        JobSpec(
+            name="mock.bounded-b",
+            kind="timer",
+            schedule="*/30 * * * *",
+            command="mock refresh-b",
+            description="mock refresh b",
+            on_unit_active_sec="30min",
+            timeout_sec=600,
+        ),
+    ]
+
+
 # --------------------------------------------------------------------------- #
 # UpResult defaults                                                            #
 # --------------------------------------------------------------------------- #
@@ -205,6 +233,79 @@ def test_run_up_reports_zero_lowered_for_pure_cron_kind(tmp_path):
     )
     # Assert
     assert result.timer_jobs_lowered_to_cron == 0
+
+
+# --------------------------------------------------------------------------- #
+# run_up — the ABORT path must carry OUT the count that caused it              #
+#                                                                              #
+# `degraded_n` is computed before the lowering is attempted, and the abort      #
+# branch used to discard it: `return UpResult(error=str(exc))`. Every other     #
+# field then took its default, so a programmatic caller reading                #
+# `result.timer_jobs_degraded` on an abort saw 0 — "no jobs were degraded" —    #
+# about the one run that refused to install ANYTHING precisely because jobs     #
+# were degraded. Zero-subjects and zero-problems rendered identically on the    #
+# single path where they mean opposite things, and a before/after comparison    #
+# taken from that field would have reported "0 degraded" for a run that         #
+# installed nothing. Reported by scitex-agent-container, 2026-08-17, while      #
+# measuring 9 -> 0 through this orchestrator rather than by reading the code.   #
+# --------------------------------------------------------------------------- #
+
+
+def test_run_up_abort_carries_the_degraded_count(tmp_path):
+    # Arrange — two timers cron cannot honour; no opt-in flag, so it aborts.
+    # Act
+    result = _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=_degraded_timer_provider,
+    )
+    # Assert — the count that caused the abort survives the abort.
+    assert result.timer_jobs_degraded == 2
+
+
+def test_run_up_abort_sets_an_error(tmp_path):
+    # Arrange
+    # Act
+    result = _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=_degraded_timer_provider,
+    )
+    # Assert — the abort is still an abort; the count does not soften it.
+    assert result.error is not None
+
+
+def test_run_up_abort_does_not_report_degraded_as_zero(tmp_path):
+    # Arrange — the specific false reading this regression exists to kill.
+    # Act
+    result = _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=_degraded_timer_provider,
+    )
+    # Assert
+    assert result.timer_jobs_degraded != 0
+
+
+def test_run_up_clean_timer_reports_zero_degraded(tmp_path):
+    # Arrange — the control: a lossless timer must still read 0, so the
+    # assertion above cannot pass merely because the field is always set.
+    # Act
+    result = _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=_timer_provider,
+    )
+    # Assert
+    assert result.timer_jobs_degraded == 0
 
 
 # --------------------------------------------------------------------------- #
