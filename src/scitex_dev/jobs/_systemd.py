@@ -324,8 +324,42 @@ def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
         # level. Keeps a runaway restart loop from melting CPU on a
         # broken leaf.
         lines.append("RestartSec=5s")
+    if job.restart_prevent_exit_status:
+        # A process that says "do not retry" must be believed.
+        #
+        # MEASURED 2026-08-17 on compute-02: `gh-runner.service` printed
+        # "Runner listener exit with terminated error, stop the service, no
+        # retry needed", exited, and systemd restarted it — 32,071 times over
+        # two days, ~1.5s CPU each, while reporting ActiveState=active. The
+        # unit had `Restart=` and no exit-status exclusion, so an explicit
+        # do-not-retry contract had nowhere to be expressed.
+        #
+        # A GENERATED unit that cannot express it would loop identically, so
+        # this is a prerequisite for adopting any hand-written unit that
+        # already has it — not a nicety.
+        lines.append(f"RestartPreventExitStatus={job.restart_prevent_exit_status}")
     if job.timeout_sec is not None:
         lines.append(f"TimeoutStartSec={job.timeout_sec}s")
+
+    # STOP SEMANTICS. Omitting these is not a cosmetic loss: systemd's default
+    # stop is SIGTERM then SIGKILL at 90s, so a daemon that wants SIGINT gets
+    # a hard kill and recovers as if it had crashed.
+    #
+    # sac measured the live case: `scitex-cards-pg` declares
+    # Type=exec/ExecReload/KillSignal=SIGINT/KillMode=mixed/
+    # TimeoutStopSec=120. Adopting it through a renderer that drops those
+    # gives CRASH RECOVERY ON EVERY STOP of the store the whole fleet writes
+    # to — and the adopted unit still reports `active`, so nothing surfaces.
+    if job.kill_signal:
+        lines.append(f"KillSignal={job.kill_signal}")
+    if job.kill_mode:
+        lines.append(f"KillMode={job.kill_mode}")
+    if job.timeout_stop_sec is not None:
+        lines.append(f"TimeoutStopSec={job.timeout_stop_sec}s")
+    if job.exec_reload:
+        lines.append(f"ExecReload={job.exec_reload}")
+    if job.exec_stop:
+        lines.append(f"ExecStop={job.exec_stop}")
     lines.extend(
         [
             "",

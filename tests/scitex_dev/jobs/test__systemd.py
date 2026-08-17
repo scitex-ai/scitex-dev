@@ -918,4 +918,105 @@ def test_interval_cron_expression_does_not_warn(caplog):
     assert "wall-clock anchor" not in caplog.text
 
 
+# ---------------------------------------------------------------------------
+# Stop semantics — omitting these turns a clean stop into crash recovery
+# ---------------------------------------------------------------------------
+
+
+def _pg_like_job():
+    """The shape sac measured on `scitex-cards-pg`, the fleet's card store."""
+    return JobSpec(
+        name="scitex-cards-pg",
+        kind="service",
+        schedule="",
+        command="postgres -D /var/lib/pg",
+        description="fleet card store",
+        restart_policy="always",
+        kill_signal="SIGINT",
+        kill_mode="mixed",
+        timeout_stop_sec=120,
+        exec_reload="/bin/kill -HUP $MAINPID",
+    )
+
+
+def test_service_unit_emits_kill_signal():
+    """systemd defaults to SIGTERM; a daemon wanting SIGINT must say so."""
+    # Arrange
+    job = _pg_like_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "KillSignal=SIGINT" in text
+
+
+def test_service_unit_emits_kill_mode():
+    # Arrange
+    job = _pg_like_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "KillMode=mixed" in text
+
+
+def test_service_unit_emits_timeout_stop_sec():
+    """Default SIGKILL at 90s is what makes a slow clean shutdown a crash."""
+    # Arrange
+    job = _pg_like_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "TimeoutStopSec=120s" in text
+
+
+def test_service_unit_emits_exec_reload():
+    # Arrange
+    job = _pg_like_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "ExecReload=/bin/kill -HUP $MAINPID" in text
+
+
+def test_service_unit_emits_restart_prevent_exit_status():
+    """A process saying "no retry needed" must be believed.
+
+    gh-runner on compute-02 printed exactly that and was restarted 32,071
+    times over two days, because the unit had no way to express it.
+    """
+    # Arrange
+    job = JobSpec(
+        name="scitex-dev-runner",
+        kind="service",
+        schedule="",
+        command="run.sh",
+        description="d",
+        restart_policy="always",
+        restart_prevent_exit_status="2",
+    )
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "RestartPreventExitStatus=2" in text
+
+
+def test_service_unit_omits_stop_semantics_when_undeclared():
+    """Existing units must render byte-identically — this adds no defaults."""
+    # Arrange
+    job = _service_job(restart_policy="no")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert not any(
+        key in text
+        for key in (
+            "KillSignal",
+            "KillMode",
+            "TimeoutStopSec",
+            "ExecReload",
+            "ExecStop",
+            "RestartPreventExitStatus",
+        )
+    )
+
+
 # EOF

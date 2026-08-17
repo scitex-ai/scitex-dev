@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import sys
+
 import click
 
 from ._baseline import (
@@ -57,6 +59,50 @@ __all__ = [
 # filtering live in `_severity.py` (imported above and re-exported here,
 # so `from ._run import RULE_SEVERITY` and the `_audit.py` PEP 562
 # forwarder are unchanged).
+
+
+def _no_entry_point_reason(package: str) -> str:
+    """Explain a `not-auditable` that the resolver left unattributed.
+
+    The resolver records a reason for every failure it can SEE -- a load
+    exception, an object that is neither click nor argparse. It records
+    nothing for the commonest case of all: no ``console_scripts`` entry point
+    by that name, which it treats as an early return. The caller then printed
+    ``not-auditable: unknown``.
+
+    ``unknown`` is the least actionable string available and it hid a
+    completely different fact. Measured 2026-08-17 on scitex-agent-container:
+    the package declares a ``scitex-agent-container`` console script and
+    audits cleanly at 0.48.0 and 0.51.0, yet an auditor resolved out of an
+    UNRELATED package's venv reported ``not-auditable: unknown`` as an ERROR
+    and took that repo's develop red. The subject was never at fault -- the
+    grading interpreter simply did not have it installed.
+
+    So this names the interpreter. "Not installed HERE" and "this CLI is
+    malformed" demand opposite actions from the reader, and `unknown` let
+    neither be chosen. Similar entry-point names are listed because the other
+    realistic cause is a console script whose name differs from the
+    distribution name, which is then visible at a glance.
+    """
+    try:
+        import importlib.metadata as im
+
+        try:
+            eps = im.entry_points(group="console_scripts")
+        except TypeError:  # pragma: no cover - Python < 3.10 shape
+            eps = im.entry_points().get("console_scripts", [])
+        stem = package.split("-")[0]
+        near = sorted({n for n in (getattr(e, "name", "") for e in eps) if stem in n})
+    except Exception:  # pragma: no cover - metadata backend variance
+        near = []
+    reason = (
+        f"no console_scripts entry point named {package!r} in {sys.executable} "
+        f"-- the package is very likely not installed in the interpreter "
+        f"running this audit, which says nothing about its CLI"
+    )
+    if near:
+        reason += f" (similar names present: {', '.join(near[:6])})"
+    return reason
 
 
 def _audit_one(
@@ -114,7 +160,7 @@ def _audit_one(
         last_err = getattr(_resolve_entry_point, "_last_err", None)
         if hasattr(_resolve_entry_point, "_last_err"):
             delattr(_resolve_entry_point, "_last_err")
-        return f"not-auditable: {last_err or 'unknown'}", []
+        return f"not-auditable: {last_err or _no_entry_point_reason(package)}", []
 
     out: list = []
     # The DENOMINATOR, accumulated alongside `out` so a verdict can state how
