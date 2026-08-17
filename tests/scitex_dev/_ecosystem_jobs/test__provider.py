@@ -96,7 +96,7 @@ def test_provider_registers_the_pr_expire_cron():
     # Arrange
     cron_names = {job.name for job in provide_jobs() if job.kind == "cron"}
     # Act
-    registered = "pr-expire" in cron_names
+    registered = "scitex-dev-pr-expire" in cron_names
     # Assert
     assert registered
 

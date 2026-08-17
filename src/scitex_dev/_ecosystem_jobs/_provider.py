@@ -210,7 +210,7 @@ def provide_jobs() -> list[JobSpec]:
     """
     return [
         JobSpec(
-            name="deploy-freshness",
+            name="scitex-dev-deploy-freshness",
             kind="cron",
             schedule="*/30 * * * *",
             command=_deploy_freshness_command(),
@@ -292,7 +292,7 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="6h",
         ),
         JobSpec(
-            name="host-config-check",
+            name="scitex-dev-host-config-check",
             kind="timer",
             schedule="",
             command=_host_config_check_command(),
@@ -323,7 +323,7 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="6h",
         ),
         JobSpec(
-            name="pr-expire",
+            name="scitex-dev-pr-expire",
             kind="cron",
             schedule="30 3 * * *",
             command=_pr_expire_command(),
