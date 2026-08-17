@@ -34,7 +34,9 @@ from .. import jobs as _jobs
 from ._resolve import (  # noqa: F401 - re-exported for existing callers
     DEFAULT_ON_BOOT_SEC,
     DEFAULT_ON_UNIT_ACTIVE_SEC,
+    _interpreter_bindir,
     _on_boot_sec_to_seconds,
+    _safe_int,
     derive_on_unit_active_sec,
     resolve_execstart,
 )
