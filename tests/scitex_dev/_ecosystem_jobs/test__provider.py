@@ -19,7 +19,7 @@ def test_provider_registers_the_self_pull_timer():
     # Arrange
     timer_names = {job.name for job in provide_jobs() if job.kind == "timer"}
     # Act
-    registered = "ecosystem-self-pull" in timer_names
+    registered = "scitex-dev-ecosystem-self-pull" in timer_names
     # Assert
     assert registered
 
@@ -29,7 +29,7 @@ def test_self_pull_command_is_the_bare_exec_verb():
     # Arrange
     by_name = {job.name: job for job in provide_jobs()}
     # Act
-    command = by_name["ecosystem-self-pull"].command
+    command = by_name["scitex-dev-ecosystem-self-pull"].command
     # Assert
     assert command == "scitex-dev ecosystem cron exec ecosystem-self-pull"
 
@@ -57,7 +57,7 @@ def test_provider_registers_the_drift_report_timer():
     # Arrange
     timer_names = {job.name for job in provide_jobs() if job.kind == "timer"}
     # Act
-    registered = "drift-report" in timer_names
+    registered = "scitex-dev-drift-report" in timer_names
     # Assert
     assert registered
 
@@ -76,7 +76,7 @@ def test_drift_report_command_is_the_bare_exec_verb():
     # Arrange
     by_name = {job.name: job for job in provide_jobs()}
     # Act
-    command = by_name["drift-report"].command
+    command = by_name["scitex-dev-drift-report"].command
     # Assert
     assert command == "scitex-dev ecosystem cron exec drift-report"
 
@@ -86,7 +86,7 @@ def test_drift_report_timer_cadence_is_conservative_six_hours():
     # Arrange
     by_name = {job.name: job for job in provide_jobs()}
     # Act
-    cadence = by_name["drift-report"].on_unit_active_sec
+    cadence = by_name["scitex-dev-drift-report"].on_unit_active_sec
     # Assert
     assert cadence == "6h"
 
