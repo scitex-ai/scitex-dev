@@ -77,15 +77,59 @@ def _build_oneshot_service_unit(job: _jobs.JobSpec) -> str:
         f"ExecStart={resolve_execstart(job.command, venv=job.venv)}",
         "StandardOutput=journal",
         "StandardError=journal",
-        "RemainAfterExit=no",
+        _remain_after_exit_line(job),
     ]
-    if job.venv:
-        lines.append(f"WorkingDirectory={Path(job.venv).parent}")
-        lines.append(f"Environment=VIRTUAL_ENV={job.venv}")
+    lines.extend(_environment_lines(job))
     if job.timeout_sec is not None:
         lines.append(f"TimeoutStartSec={job.timeout_sec}s")
     lines.append("")
     return "\n".join(lines)
+
+
+def _remain_after_exit_line(job: _jobs.JobSpec) -> str:
+    """``RemainAfterExit=`` — historically hardcoded to ``no``.
+
+    A unit whose EFFECT outlives its process (a mount, a one-time setup
+    step) needs ``yes``, or ``systemctl is-active`` reports ``inactive``
+    the instant it succeeds. Unset still renders ``no``, so existing
+    units stay byte-identical.
+    """
+    if job.remain_after_exit is None:
+        return "RemainAfterExit=no"
+    return f"RemainAfterExit={'yes' if job.remain_after_exit else 'no'}"
+
+
+def _environment_lines(job: _jobs.JobSpec) -> list[str]:
+    """``WorkingDirectory=`` / ``Environment=`` / ``EnvironmentFile=``.
+
+    Shared by both unit builders, because a daemon and a timer body need
+    the same three answers and had the same two gaps.
+
+    Historically these could ONLY be derived from ``venv``, which made a
+    hand-written unit unadoptable whenever it disagreed. An
+    ``EnvironmentFile=`` is frequently the only on-disk record of where a
+    daemon's configuration comes from, so dropping it does not lose a
+    line — it starts the daemon with an empty environment while the unit
+    still reports ``active``.
+
+    Order matters: the venv-derived ``VIRTUAL_ENV=`` is emitted first and
+    explicit entries follow, because systemd takes the LAST assignment of
+    a repeated key, so a leaf that means to override it can.
+    """
+    lines: list[str] = []
+    # An explicit directory WINS over the venv-derived one: a unit naming
+    # its own directory is stating a requirement, not a preference.
+    working_directory = job.working_directory
+    if working_directory is None and job.venv:
+        working_directory = str(Path(job.venv).parent)
+    if working_directory:
+        lines.append(f"WorkingDirectory={working_directory}")
+    if job.venv:
+        lines.append(f"Environment=VIRTUAL_ENV={job.venv}")
+    if job.environment_file:
+        lines.append(f"EnvironmentFile={job.environment_file}")
+    lines.extend(f"Environment={entry}" for entry in job.environment)
+    return lines
 
 
 def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
@@ -121,19 +165,27 @@ def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
         "Wants=network-online.target",
         "",
         "[Service]",
-        # Type=notify ONLY when a watchdog is requested — a Type=notify
-        # unit whose ExecStart never calls sd_notify(READY=1) would sit
-        # in "activating" until TimeoutStartSec and fail, so we must NOT
-        # flip to notify for daemons that don't opt in.
-        "Type=notify" if use_watchdog else "Type=simple",
+        # An explicitly declared Type= wins: the leaf knows its own
+        # startup contract, and a unit that says Type=exec means it.
+        # Otherwise fall back to the historical choice — Type=notify ONLY
+        # when a watchdog is requested, because a Type=notify unit whose
+        # ExecStart never calls sd_notify(READY=1) would sit in
+        # "activating" until TimeoutStartSec and fail. (The contradictory
+        # pair — a watchdog with a non-notify type — is refused in
+        # JobSpec.validate, not silently reconciled here.)
+        f"Type={job.service_type}"
+        if job.service_type
+        else ("Type=notify" if use_watchdog else "Type=simple"),
     ]
     if job.on_boot_sec:
         seconds = _on_boot_sec_to_seconds(job.on_boot_sec)
         if seconds > 0:
             lines.append(f"ExecStartPre=/bin/sleep {seconds}")
-    if job.venv:
-        lines.append(f"WorkingDirectory={Path(job.venv).parent}")
-        lines.append(f"Environment=VIRTUAL_ENV={job.venv}")
+    lines.extend(_environment_lines(job))
+    if job.remain_after_exit is not None:
+        # Absent for a long-running service historically, so this stays
+        # fully omitted unless the leaf asks for it.
+        lines.append(_remain_after_exit_line(job))
     lines.extend(
         [
             f"ExecStart={resolve_execstart(job.command, venv=job.venv)}",
