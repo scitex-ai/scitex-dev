@@ -274,6 +274,15 @@ ECOSYSTEM_PART_1 = {
         "github_repo": "scitex-ai/scitex-orochi",
         "import_name": "scitex_orochi",
         "category": "library",
+        # Retired by the operator 2026-08-16 (Telegram, unprompted):
+        # 「サイテクスオロチはもう使わない」 — we will not use scitex-orochi
+        # any more. Archived rather than deleted, per the scitex-audit row
+        # above: the repo and the published distribution still exist, and
+        # deleting the row would blind ecosystem sweeps to something that
+        # is still out there.
+        #
+        # This is a USAGE decision, not a yank. Nothing installed breaks.
+        "archived": True,
     },
     "scitex-str": {
         "local_path": "~/proj/scitex-str",
