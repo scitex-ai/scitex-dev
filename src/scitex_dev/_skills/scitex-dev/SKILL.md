@@ -51,6 +51,7 @@ interfaces:
 - [23_drift-report.md](23_drift-report.md) — `ecosystem drift-report`: the unified per-package × per-layer version-drift matrix (all 8 layers), exit 1 on drift, federated 6h timer
 - [24_host-registry.md](24_host-registry.md) — `scitex_dev.hosts`: the SciTeX-wide "where is host X, and what's its ~/.scitex root?" port (`resolve`, `list_hosts`), `~/.scitex/dev/hosts.yaml`, `scitex-dev host list/show/resolve`
 - [25_naming-conventions.md](25_naming-conventions.md) — the fleet's one-pair-per-domain naming table (primary/replica, controller/worker, node/origin, service/timer/cron) and the synonyms each one replaces
+- [26_state-store-contract.md](26_state-store-contract.md) — the 55432 per-host Postgres contract: what makes a valid store, fleet-global identity vs per-host replica, the derive-never-mint uniqueness rule, ACL on derived ids, tombstone-and-explicit-merge sync, and state-in-db / design-in-git
 
 ### Architecture (30–39)
 - [30_agentic-test-overview.md](30_agentic-test-overview.md) — Four-layer testing model + shared newbie-docker substrate
