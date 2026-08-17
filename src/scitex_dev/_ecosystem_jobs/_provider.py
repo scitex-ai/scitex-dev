@@ -59,6 +59,7 @@ JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
     "scitex-dev-drift-report": ("dev", "timer-drift-report"),
     "scitex-dev-local-state-audit": ("dev", "timer-local-state-audit"),
     "scitex-dev-host-config-check": ("dev", "timer-host-config-check"),
+    "scitex-dev-venv-refresh": ("dev", "timer-venv-refresh"),
 }
 
 #: Pure shell bodies for the jobs whose body is not a Python entry point —
@@ -83,6 +84,40 @@ JOB_SHELL_BODIES: dict[str, str] = {
     "scitex-dev-local-state-audit": (
         "date -u +'== local-state-audit %Y-%m-%dT%H:%MZ =='; "
         "scitex-dev ecosystem audit-local-state || true"
+    ),
+    # The shared dev venv, kept current. `--venv current` means "the
+    # interpreter this job runs under", so the unit's ExecStart decides which
+    # venv is refreshed — the job carries no hardcoded path.
+    #
+    # `-U` is ON here and OFF for interactive `ecosystem install`, on purpose:
+    # currency IS the product of this job, whereas an interactive install
+    # should not silently move a dependency under whatever the caller was
+    # editing.
+    #
+    # `|| true` because a refresh finding — one leaf whose [all] extra does
+    # not resolve — is DATA in the log, not this unit failing. Measured
+    # 2026-08-17: `scitex[all]` pulls 34 of the ecosystem's scitex-* packages,
+    # misses 11 that are checked out, and still pins scitex-orochi (retired)
+    # and scitex-dev==0.28.0 against an actual 0.51.0. A job that goes red on
+    # that is a job someone disables.
+    #
+    # NOT a substitute for per-package venvs. A shared env has every peer
+    # installed, so a MISSING dependency declaration is invisible in it by
+    # construction; `--venv per-package` (the default, and what CI uses) is
+    # the only thing that can see that class of defect.
+    # TWO PASSES, and the second is not optional. Pass 1 may re-resolve, so
+    # a later package's dependency on a sibling can replace that sibling's
+    # editable install with a PyPI wheel; pass 2 (--no-deps) cannot resolve
+    # anything, so it re-asserts every checkout as editable and nothing it
+    # touches can clobber a peer. Measured 2026-08-17: pass 1 alone reported
+    # ok=22 fail=0 and left three packages resolving to site-packages.
+    "scitex-dev-venv-refresh": (
+        "date -u +'== venv-refresh %Y-%m-%dT%H:%MZ =='; "
+        "scitex-dev ecosystem install --source editable --extras all "
+        "--venv current --upgrade --yes || true; "
+        "echo '-- re-asserting editables (--no-deps) --'; "
+        "scitex-dev ecosystem install --source editable "
+        "--venv current --no-deps --yes || true"
     ),
     # OBSERVE-only by construction: `host-config check` never writes, and
     # it needs no privileges (the managed files under /etc are
@@ -170,6 +205,10 @@ def _local_state_audit_command() -> str:
     line.
     """
     return _exec_command("scitex-dev-local-state-audit")
+
+
+def _venv_refresh_command() -> str:
+    return _exec_command("scitex-dev-venv-refresh")
 
 
 def _host_config_check_command() -> str:
@@ -290,6 +329,34 @@ def provide_jobs() -> list[JobSpec]:
             ),
             on_boot_sec="5min",
             on_unit_active_sec="6h",
+        ),
+        JobSpec(
+            name="scitex-dev-venv-refresh",
+            kind="timer",
+            schedule="",
+            command=_venv_refresh_command(),
+            description=(
+                "Keep the shared dev venv current: editable-installs every "
+                "ecosystem package with its [all] extra into the interpreter "
+                "this unit runs under, using uv when present (operator "
+                "ruling 2026-08-17). Pairs with ecosystem-self-pull — that "
+                "job pulls the checkouts, this one makes the pulled code the "
+                "code that RUNS, which is the gap that let a host serve "
+                "scitex-dev 0.48.0 for weeks while its own checkout was on "
+                "0.51.0 (measured 2026-08-17; two agents spent an hour on a "
+                "root cause that was one frozen copy). `-U` is ON here "
+                "because currency is the product; it is OFF for interactive "
+                "`ecosystem install` so a manual run cannot silently move a "
+                "dependency. Daily rather than hourly: [all] pulls torch / "
+                "jax / tensorflow, so a fast cadence is bandwidth and disk, "
+                "not freshness. NOT a substitute for per-package venvs — a "
+                "shared env has every peer installed, so a MISSING dependency "
+                "declaration is invisible in it by construction. `|| true` "
+                "so one leaf's unresolvable extra is a log finding, not a "
+                "failed unit. See _ecosystem._git_ops.install_all."
+            ),
+            on_boot_sec="10min",
+            on_unit_active_sec="1d",
         ),
         JobSpec(
             name="scitex-dev-host-config-check",

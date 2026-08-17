@@ -299,6 +299,29 @@ def register(ecosystem):
         show_default=True,
         help="Shell to wire completions for (used with --with-completions).",
     )
+    @click.option(
+        "-U",
+        "--upgrade",
+        is_flag=True,
+        help=(
+            "Pass --upgrade. OFF by default: on a shared venv this "
+            "re-resolves DEPENDENCIES too, so a refresh can move "
+            "numpy/torch under a package nobody was editing. The periodic "
+            "refresh timer turns it on; an interactive run should not."
+        ),
+    )
+    @click.option(
+        "--no-deps",
+        is_flag=True,
+        help=(
+            "Pass --no-deps. The RE-ASSERT pass for a shared venv: install "
+            "each checkout as editable without letting the resolver touch "
+            "anything else. Run it AFTER an --upgrade pass — that pass can "
+            "replace a sibling's editable install with a PyPI wheel when a "
+            "later package depends on it, and reports success while doing so "
+            "(measured: ok=22 fail=0 with three packages left on wheels)."
+        ),
+    )
     def ecosystem_install(
         source,
         extras,
@@ -310,6 +333,8 @@ def register(ecosystem):
         yes,
         with_completions,
         completion_shell,
+        upgrade,
+        no_deps,
     ):
         from ...._ecosystem._git_ops import install_all, install_completions_all
 
@@ -322,6 +347,8 @@ def register(ecosystem):
             packages=list(package) or None,
             jobs=jobs,
             dry_run=effective_dry_run,
+            upgrade=upgrade,
+            no_deps=no_deps,
             on_progress=None if as_json else _git_progress,
         )
 
