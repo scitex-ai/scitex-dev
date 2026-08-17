@@ -259,8 +259,9 @@ class JobSpec:
                 f"JobSpec({self.name!r}).kind={self.kind!r} not in "
                 f"{sorted(ACCEPTED_KINDS)}. The intent spellings "
                 f"{sorted(INTENT_KINDS)} are accepted too and normalise to "
-                f"{INTENT_TO_KIND} — 'periodic' picks cron when 'schedule' "
-                f"is set and a systemd timer when it is not."
+                f"{INTENT_TO_KIND} — 'periodic' means a systemd timer; with "
+                f"a 'schedule' it is ambiguous and rejected, so say "
+                f"'cron' or 'timer' explicitly."
             )
         if self.restart_policy not in ALLOWED_RESTART_POLICIES:
             raise ValueError(
