@@ -560,11 +560,105 @@ def test_resolve_execstart_skips_sibling_bin_when_missing(tmp_path):
 
 def test_default_interpreter_bindir_is_sys_executable_parent():
     # Arrange
-    expected = Path(sys.executable).resolve().parent
+    expected = Path(sys.executable).parent
     # Act
     bindir = sd._interpreter_bindir()
     # Assert — the production default reads sys.executable's parent.
     assert bindir == expected
+
+
+# ---------------------------------------------------------------------------
+# resolve_execstart — the venv symlink regression (measured, compute-04)
+#
+# A venv's bin/python is a SYMLINK to the interpreter it was built from:
+#
+#   ~/.venv/bin/python
+#     -> ~/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/bin/python3.12
+#
+# _interpreter_bindir() used to .resolve() that, landing in uv's managed
+# CPython bin/ — a directory that structurally CANNOT hold scitex-dev. The
+# sibling-bin probe therefore missed, PATH missed too (systemd-style minimal
+# env), and `ecosystem up` wrote the fleet's SOLE supervisor unit as
+#   ExecStart=/usr/bin/env scitex-dev ecosystem run
+# whose own warning predicted status=127. Measured 2026-08-17: the
+# unresolved parent HELD the binary while the resolved one did not, and the
+# warning named the unresolved dir — i.e. it pointed at the file it had just
+# failed to find. uv builds every venv this way and uv is now the mandated
+# installer, so this missed on essentially every host.
+# ---------------------------------------------------------------------------
+
+
+def _venv_with_symlinked_python(tmp_path: Path, name: str) -> Path:
+    """Build a venv-shaped bin/ whose python is a symlink pointing OUT of
+    it, and whose console script lives IN it — the real uv layout.
+    """
+    real_bin = tmp_path / "managed-cpython" / "bin"
+    real_bin.mkdir(parents=True)
+    real_python = real_bin / "python3.12"
+    real_python.write_text("#!/bin/sh\nexit 0\n")
+    real_python.chmod(0o755)
+
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python").symlink_to(real_python)
+    script = venv_bin / name
+    script.write_text("#!/bin/sh\nexit 0\n")
+    script.chmod(0o755)
+    return venv_bin
+
+
+def test_interpreter_bindir_stays_inside_venv_when_python_is_symlinked(tmp_path):
+    # Arrange — a REAL venv-shaped tree whose python symlinks outward.
+    venv_bin = _venv_with_symlinked_python(tmp_path, "scitex-dev")
+
+    # Act — the production function, reading the real symlink.
+    bindir = sd._interpreter_bindir(str(venv_bin / "python"))
+
+    # Assert — the venv's own bin/, not the managed CPython it points at.
+    assert bindir == venv_bin
+
+
+def test_interpreter_bindir_is_not_the_symlink_target_dir(tmp_path):
+    # Arrange — the target dir is where .resolve() used to land.
+    venv_bin = _venv_with_symlinked_python(tmp_path, "scitex-dev")
+    target_dir = (venv_bin / "python").resolve().parent
+
+    # Act
+    bindir = sd._interpreter_bindir(str(venv_bin / "python"))
+
+    # Assert — that directory holds no console scripts.
+    assert bindir != target_dir
+
+
+def test_resolve_execstart_finds_console_script_in_symlinked_venv(tmp_path):
+    # Arrange — the console script exists ONLY in the venv bin/, and PATH
+    # cannot help (systemd's user PATH is minimal).
+    venv_bin = _venv_with_symlinked_python(tmp_path, "scitex-dev")
+
+    # Act
+    resolved = sd.resolve_execstart(
+        "scitex-dev ecosystem run",
+        which=lambda _n: None,
+        interpreter_bindir=lambda: sd._interpreter_bindir(str(venv_bin / "python")),
+    )
+
+    # Assert — absolutised against the venv, NOT /usr/bin/env.
+    assert resolved == f"{venv_bin / 'scitex-dev'} ecosystem run"
+
+
+def test_resolve_execstart_does_not_fall_back_to_env_in_symlinked_venv(tmp_path):
+    # Arrange — same layout; the fallback would be the status=127 unit.
+    venv_bin = _venv_with_symlinked_python(tmp_path, "scitex-dev")
+
+    # Act
+    resolved = sd.resolve_execstart(
+        "scitex-dev ecosystem run",
+        which=lambda _n: None,
+        interpreter_bindir=lambda: sd._interpreter_bindir(str(venv_bin / "python")),
+    )
+
+    # Assert
+    assert not resolved.startswith("/usr/bin/env")
 
 
 # ---------------------------------------------------------------------------
