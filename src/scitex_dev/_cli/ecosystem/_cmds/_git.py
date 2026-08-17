@@ -299,6 +299,17 @@ def register(ecosystem):
         show_default=True,
         help="Shell to wire completions for (used with --with-completions).",
     )
+    @click.option(
+        "-U",
+        "--upgrade",
+        is_flag=True,
+        help=(
+            "Pass --upgrade. OFF by default: on a shared venv this "
+            "re-resolves DEPENDENCIES too, so a refresh can move "
+            "numpy/torch under a package nobody was editing. The periodic "
+            "refresh timer turns it on; an interactive run should not."
+        ),
+    )
     def ecosystem_install(
         source,
         extras,
@@ -310,6 +321,7 @@ def register(ecosystem):
         yes,
         with_completions,
         completion_shell,
+        upgrade,
     ):
         from ...._ecosystem._git_ops import install_all, install_completions_all
 
@@ -322,6 +334,7 @@ def register(ecosystem):
             packages=list(package) or None,
             jobs=jobs,
             dry_run=effective_dry_run,
+            upgrade=upgrade,
             on_progress=None if as_json else _git_progress,
         )
 

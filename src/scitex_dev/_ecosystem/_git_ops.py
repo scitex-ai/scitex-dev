@@ -6,6 +6,8 @@ fresh machine and keep it in sync with `develop` across every repo.
 
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -181,12 +183,19 @@ def install_all(
     jobs: int = 1,
     dry_run: bool = False,
     venv: str = "per-package",
+    upgrade: bool = False,
     on_progress: Callable[[int, int, str, str, str], None] | None = None,
 ) -> dict[str, tuple[int, str]]:
-    """`pip install` every selected package.
+    """Install every selected package, with **uv** when it is available.
 
-    source: ``editable`` → ``pip install -e <local_path>[extras]``
-            ``pypi``    → ``pip install <pypi_name>[extras]``
+    source: ``editable`` → ``install -e <local_path>[extras]``
+            ``pypi``    → ``install <pypi_name>[extras]``
+
+    upgrade: pass ``--upgrade``. OFF by default, deliberately: on a shared
+             venv ``-U`` re-resolves DEPENDENCIES too, so a routine refresh
+             can move numpy/torch under a package nobody was editing. The
+             periodic refresh job turns it on, because currency is the whole
+             point there; an interactive install should not surprise anyone.
 
     venv: ``per-package`` (default) → for each package, ensure
                             ``<local>/.venv/`` exists (create with the
@@ -207,6 +216,29 @@ def install_all(
     items = _selected_packages(packages)
     results: dict[str, tuple[int, str]] = {}
     extras_suffix = f"[{extras}]" if extras else ""
+
+    def _installer_args(target_py: str, *, upgrade: bool) -> list[str]:
+        """Build the install argv: uv when present, pip as the fallback.
+
+        BOTH forms are pinned to ``target_py``. uv's ``--python`` and pip's
+        ``<py> -m pip`` are the same guarantee — the install lands in the
+        interpreter we chose, never in whichever one PATH happens to serve.
+        That equivalence is the reason the fallback is safe to keep.
+
+        uv is looked up on PATH and then at ``~/.local/bin/uv``, because a
+        systemd unit and a cron line run with a PATH that has neither the
+        login shell's additions nor the venv's ``bin/``. Falling back to pip
+        rather than failing keeps hosts that predate uv working; the
+        operator's ruling (2026-08-17, 「UVを使わないっていうのはありえない
+        です」) is about what we USE, and uv is used wherever it exists.
+        """
+        uv = shutil.which("uv") or os.path.expanduser("~/.local/bin/uv")
+        base = (
+            [uv, "pip", "install", "--python", target_py]
+            if os.path.isfile(uv) and os.access(uv, os.X_OK)
+            else [target_py, "-m", "pip", "install"]
+        )
+        return base + ["--upgrade"] if upgrade else base
 
     def _ensure_venv(local: Path) -> Path | None:
         """Return path to the venv's python, creating ``<local>/.venv/`` if absent.
@@ -265,7 +297,7 @@ def install_all(
             results[name] = (2, f"unknown source: {source}")
             return
 
-        # Pick the python that pip will run under.
+        # Pick the python the install must land in.
         if venv == "per-package" and source == "editable":
             local = Path(info["local_path"]).expanduser()
             py = _ensure_venv(local)
@@ -274,15 +306,20 @@ def install_all(
                 if on_progress:
                     on_progress(idx, total, name, "err", "venv create failed")
                 return
-            pip_args = [str(py), "-m", "pip", "install"]
+            target_py = str(py)
         else:
-            # Use the same Python that's running scitex-dev — bare `pip`
-            # finds the first one on PATH which can be a system Python
-            # with stale metadata (e.g. spartan's /usr/bin/pip is Python
-            # 3.9 and can't see >=3.10 wheels on PyPI).
-            pip_args = [sys.executable, "-m", "pip", "install"]
+            # The same Python that's running scitex-dev — never a bare
+            # `pip`/`uv`, which resolves the first one on PATH and can be a
+            # system Python with stale metadata (e.g. spartan's /usr/bin/pip
+            # is 3.9 and cannot see >=3.10 wheels on PyPI).
+            target_py = sys.executable
 
-        cmd = pip_args + ["-e", target] if source == "editable" else pip_args + [target]
+        install_args = _installer_args(target_py, upgrade=upgrade)
+        cmd = (
+            install_args + ["-e", target]
+            if source == "editable"
+            else install_args + [target]
+        )
         if dry_run:
             results[name] = (0, " ".join(cmd))
             if on_progress:
