@@ -549,4 +549,74 @@ def test_degraded_job_names_lists_only_lossy_timers():
     assert names == ["lossy"]
 
 
+
+
+# --------------------------------------------------------------------------- #
+# on_calendar — a crontab line has no timezone                                  #
+# --------------------------------------------------------------------------- #
+
+
+def _calendar_timer():
+    """A timer whose schedule is anchored to a wall clock IN A ZONE."""
+    return JobSpec(
+        name="p-timer",
+        kind="timer",
+        schedule="",
+        command="c",
+        description="d",
+        on_calendar="*-*-* 04:30:00 Asia/Tokyo",
+    )
+
+
+def test_lowering_reports_on_calendar_as_a_loss():
+    """cron carries no timezone, so the zone is dropped on the way down."""
+    # Arrange
+    job = _calendar_timer()
+    # Act
+    losses = lowering_losses(job)
+    # Assert
+    assert any(loss.field == "on_calendar" for loss in losses)
+
+
+def test_on_calendar_loss_is_blocking():
+    """A dropped GUARANTEE, not a preference.
+
+    The same JobSpec would fire at a different wall-clock time on every
+    host whose TZ differs, and move twice a year wherever DST applies.
+    """
+    # Arrange
+    job = _calendar_timer()
+    # Act
+    loss = next(l for l in lowering_losses(job) if l.field == "on_calendar")
+    # Assert
+    assert loss.blocking
+
+
+def test_on_calendar_loss_names_the_timezone_consequence():
+    """The report has to say WHY, or the operator cannot judge the trade."""
+    # Arrange
+    job = _calendar_timer()
+    # Act
+    loss = next(l for l in lowering_losses(job) if l.field == "on_calendar")
+    # Assert
+    assert "timezone" in loss.consequence
+
+
+def test_timer_without_on_calendar_reports_no_such_loss():
+    """An interval timer loses nothing here — the guard must not cry wolf."""
+    # Arrange
+    job = JobSpec(
+        name="p-timer",
+        kind="timer",
+        schedule="",
+        command="c",
+        description="d",
+        on_unit_active_sec="15min",
+    )
+    # Act
+    losses = lowering_losses(job)
+    # Assert
+    assert not any(loss.field == "on_calendar" for loss in losses)
+
+
 # EOF

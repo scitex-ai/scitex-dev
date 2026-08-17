@@ -26,6 +26,7 @@ under ``~/.config/systemd/user/``.
 
 from __future__ import annotations
 
+import logging
 import os
 import shlex
 import shutil
@@ -40,6 +41,8 @@ DEFAULT_ON_UNIT_ACTIVE_SEC = "1h"
 
 # Documentation URL stamped into generated units (operator breadcrumb).
 _DOC_URL = "https://github.com/scitex-ai/scitex-dev"
+
+_logger = logging.getLogger(__name__)
 
 
 def derive_on_unit_active_sec(schedule: str) -> str:
@@ -100,14 +103,38 @@ def _on_boot_sec_to_seconds(value: str) -> int:
     return n or 0
 
 
-def _interpreter_bindir() -> Path:
+def _interpreter_bindir(executable: str | None = None) -> Path:
     """Return ``Path(sys.executable).parent`` — the bin/ holding sibling
     console scripts for the interpreter currently running this process.
 
-    Indirection exists so tests can monkeypatch it without having to
-    relocate the real interpreter.
+    NOT ``.resolve()``d, and that is the whole point. A venv's
+    ``bin/python`` is a SYMLINK to the interpreter it was built from,
+    which lives outside the venv and has no console scripts beside it::
+
+        ~/.venv/bin/python
+          -> ~/.local/share/uv/python/cpython-3.12-.../bin/python3.12
+
+    Resolving therefore walks OUT of the venv and lands in a directory
+    that structurally cannot hold ``scitex-dev``. Measured on
+    scitex-compute-04 2026-08-17: raw parent contained the binary,
+    resolved parent did not, so rule 1 missed and the supervisor unit
+    was written ``ExecStart=/usr/bin/env scitex-dev`` — the exact
+    status=127 flap this function exists to prevent. uv builds every
+    venv this way, and uv is now the mandated installer, so the
+    resolved form is wrong on essentially every host.
+
+    Resolving buys nothing in the non-venv case either: when
+    ``bin/python`` is a real file (or a symlink inside the same dir),
+    the resolved and unresolved parents are identical. The two differ
+    ONLY when resolving leaves the venv, which is exactly when the
+    resolved answer is wrong. So there is no second probe — dropping
+    ``.resolve()`` is the whole fix.
+
+    ``executable`` defaults to :data:`sys.executable` and exists so a
+    test can point at a REAL venv-shaped tree it built on disk —
+    symlink and all — instead of rewriting this module's globals.
     """
-    return Path(sys.executable).resolve().parent
+    return Path(executable or sys.executable).parent
 
 
 def resolve_execstart(
@@ -185,7 +212,9 @@ def resolve_execstart(
             return shlex.join([str(pinned), *tail])
 
     # 1. Interpreter sibling-bin probe — most reliable for console
-    #    scripts installed alongside the running interpreter.
+    #    scripts installed alongside the running interpreter. Probed
+    #    UNRESOLVED (the venv's own bin/, where the console scripts
+    #    live) — see _interpreter_bindir for why resolving breaks this.
     try:
         candidate = interpreter_bindir() / head
     except Exception:  # pragma: no cover — defensive only
@@ -321,8 +350,42 @@ def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
         # level. Keeps a runaway restart loop from melting CPU on a
         # broken leaf.
         lines.append("RestartSec=5s")
+    if job.restart_prevent_exit_status:
+        # A process that says "do not retry" must be believed.
+        #
+        # MEASURED 2026-08-17 on compute-02: `gh-runner.service` printed
+        # "Runner listener exit with terminated error, stop the service, no
+        # retry needed", exited, and systemd restarted it — 32,071 times over
+        # two days, ~1.5s CPU each, while reporting ActiveState=active. The
+        # unit had `Restart=` and no exit-status exclusion, so an explicit
+        # do-not-retry contract had nowhere to be expressed.
+        #
+        # A GENERATED unit that cannot express it would loop identically, so
+        # this is a prerequisite for adopting any hand-written unit that
+        # already has it — not a nicety.
+        lines.append(f"RestartPreventExitStatus={job.restart_prevent_exit_status}")
     if job.timeout_sec is not None:
         lines.append(f"TimeoutStartSec={job.timeout_sec}s")
+
+    # STOP SEMANTICS. Omitting these is not a cosmetic loss: systemd's default
+    # stop is SIGTERM then SIGKILL at 90s, so a daemon that wants SIGINT gets
+    # a hard kill and recovers as if it had crashed.
+    #
+    # sac measured the live case: `scitex-cards-pg` declares
+    # Type=exec/ExecReload/KillSignal=SIGINT/KillMode=mixed/
+    # TimeoutStopSec=120. Adopting it through a renderer that drops those
+    # gives CRASH RECOVERY ON EVERY STOP of the store the whole fleet writes
+    # to — and the adopted unit still reports `active`, so nothing surfaces.
+    if job.kill_signal:
+        lines.append(f"KillSignal={job.kill_signal}")
+    if job.kill_mode:
+        lines.append(f"KillMode={job.kill_mode}")
+    if job.timeout_stop_sec is not None:
+        lines.append(f"TimeoutStopSec={job.timeout_stop_sec}s")
+    if job.exec_reload:
+        lines.append(f"ExecReload={job.exec_reload}")
+    if job.exec_stop:
+        lines.append(f"ExecStop={job.exec_stop}")
     lines.extend(
         [
             "",
@@ -332,6 +395,54 @@ def _build_long_running_service_unit(job: _jobs.JobSpec) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _warn_if_anchor_discarded(job: _jobs.JobSpec, on_active: str) -> None:
+    """Say out loud when a wall-clock anchor is being thrown away.
+
+    A cron expression like ``30 4 * * *`` names a TIME (04:30 daily). Derived
+    into ``OnUnitActiveSec=1d`` it becomes a PERIOD measured from whenever the
+    timer last activated, so a host that booted at 15:00 runs its 04:30 job at
+    ~15:20 — in the working day the 04:30 was chosen to avoid.
+
+    Nothing about that failure is observable. The unit exists, reports
+    ``active (waiting)``, shows a plausible next-elapse and fires at roughly
+    the right frequency. It surfaces months later as "why is that report
+    late", if at all.
+
+    So the derivation stays (four of sac's live jobs already depend on the
+    current cadence, and silently changing them would be the same sin in the
+    other direction) — but it stops being SILENT. Requested by sac
+    2026-08-17: *"make the discard loud ... that converts a silent
+    transformation into a visible one without implementing anything, and it
+    would have surfaced this years earlier than either of us did."*
+
+    Only ANCHORED expressions warn. ``*/15 * * * *`` genuinely means "every 15
+    minutes" and loses nothing as an interval; ``30 4 * * *`` does. Warning on
+    both would train everyone to ignore it.
+    """
+    fields = (job.schedule or "").split()
+    if len(fields) != 5:
+        return
+    minute, hour = fields[0], fields[1]
+    anchored = [
+        f"{label}={value}"
+        for label, value in (("minute", minute), ("hour", hour))
+        if value != "*" and not value.startswith("*/")
+    ]
+    if not anchored:
+        return
+    _logger.warning(
+        "%s: schedule=%r names a wall-clock anchor (%s) that a systemd "
+        "INTERVAL cannot express, so it is being discarded: the unit will "
+        "run every %s measured from its last activation, NOT at that time. "
+        "Set `on_calendar` (e.g. on_calendar='*-*-* 04:30:00 Asia/Tokyo') "
+        "to keep the anchor.",
+        job.name,
+        job.schedule,
+        ", ".join(anchored),
+        on_active,
+    )
 
 
 def build_timer_unit(job: _jobs.JobSpec) -> str:
@@ -347,16 +458,48 @@ def build_timer_unit(job: _jobs.JobSpec) -> str:
             f"build_timer_unit({job.name!r}): only kind='timer' has a timer; "
             f"got kind={job.kind!r}"
         )
-    on_boot = job.on_boot_sec or DEFAULT_ON_BOOT_SEC
-    on_active = job.on_unit_active_sec or derive_on_unit_active_sec(job.schedule)
     lines = [
         "[Unit]",
         f"Description=Timer for {job.name}",
         f"Documentation={_DOC_URL}",
         "",
         "[Timer]",
-        f"OnBootSec={on_boot}",
-        f"OnUnitActiveSec={on_active}",
+    ]
+
+    # WALL-CLOCK vs INTERVAL is a difference of KIND, not of precision, and
+    # until now only one of the two could be expressed.
+    #
+    # `OnCalendar=*-*-* 06:40:00 Asia/Tokyo` fires at 06:40 local time, every
+    # day, forever. `OnUnitActiveSec=1d` fires 24h after the last run — so it
+    # walks against the clock as runs are delayed, and carries no timezone at
+    # all. Rendering the first as the second does not degrade a schedule; it
+    # substitutes a different one, and the substitution is INVISIBLE: the
+    # unit exists, reports `active (waiting)`, shows a plausible next-elapse
+    # and fires about daily. It surfaces only as "why does the 06:40 report
+    # now arrive at 03:00".
+    #
+    # Found 2026-08-17 by dotfiles, who refused a name-level assurance that
+    # their units were adoptable and checked the BODY. `dotfiles-drift-check`
+    # is exactly this case.
+    #
+    # HISTORICAL NOTE, because it is the reason this went unnoticed: JobSpec's
+    # own docs described `schedule` as "an optional OnCalendar fallback for
+    # kind='timer'" while this renderer only ever averaged it into an
+    # interval. Seven of sac's production jobs were declared against the
+    # documented behaviour. The docstring is corrected alongside this.
+    if job.on_calendar:
+        lines.append(f"OnCalendar={job.on_calendar}")
+    else:
+        on_boot = job.on_boot_sec or DEFAULT_ON_BOOT_SEC
+        on_active = job.on_unit_active_sec or derive_on_unit_active_sec(job.schedule)
+        _warn_if_anchor_discarded(job, on_active)
+        lines.append(f"OnBootSec={on_boot}")
+        lines.append(f"OnUnitActiveSec={on_active}")
+
+    lines += [
+        # Persistent=true is what makes a missed wall-clock run catch up after
+        # a reboot or a suspended laptop, so it matters MORE for OnCalendar
+        # than for intervals, not less.
         "Persistent=true",
         f"Unit={job.name}.service",
         "",

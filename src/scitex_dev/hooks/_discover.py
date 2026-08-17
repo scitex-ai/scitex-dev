@@ -77,21 +77,47 @@ def _anchor_of(ep) -> str:
     return module.split(".", 1)[0] if module else ""
 
 
+def _dist_of(ep) -> str:
+    """Return the DISTRIBUTION name behind ``ep`` (``scitex-agent-container``).
+
+    The sibling of :func:`_anchor_of`, and deliberately a different string:
+    that one yields an importable MODULE (``scitex_agent_container``), this
+    one yields the packaging identity. ``resolve_asset`` needs the module;
+    ownership and dedup need the distribution. Conflating them is the bug
+    this stamping exists to make unreachable.
+
+    ``ep.dist`` is absent on entry points built by hand (tests, in-process
+    registration), so an empty string is a legitimate answer here and the
+    caller must leave the declared value alone rather than blank it.
+    """
+    dist = getattr(ep, "dist", None)
+    return getattr(dist, "name", "") or ""
+
+
 def _make_ep_provider(ep) -> Callable[[], list[HookRule]]:
     """Wrap an entry point into a provider callable returning HookRules.
 
-    Rules come back with ``owner_module`` stamped from the entry point when
-    the provider left it empty, so a leaf never has to repeat its own module
-    name and cannot get it wrong.
+    Rules come back with ``owner_module`` AND ``provider`` stamped from the
+    entry point when the leaf left them empty, so a package never has to
+    repeat its own identity and cannot get it wrong.
+
+    Stamping only fills a BLANK. An explicitly declared value always wins —
+    a leaf that ships rules on behalf of another distribution (a shim, a
+    vendored ruleset) must be able to say so, and discovery cannot tell that
+    case apart from a mistake.
     """
 
     def _provider() -> list[HookRule]:
         get_rules = ep.load()
         anchor = _anchor_of(ep)
+        dist = _dist_of(ep)
         stamped = []
         for rule in get_rules():
-            if isinstance(rule, HookRule) and not rule.owner_module and anchor:
-                rule = replace(rule, owner_module=anchor)
+            if isinstance(rule, HookRule):
+                if not rule.owner_module and anchor:
+                    rule = replace(rule, owner_module=anchor)
+                if not rule.provider and dist:
+                    rule = replace(rule, provider=dist)
             stamped.append(rule)
         return stamped
 

@@ -1028,7 +1028,7 @@ def test_provider_includes_deploy_freshness():
     # Act
     names = {j.name for j in _provider.provide_jobs()}
     # Assert
-    assert "deploy-freshness" in names
+    assert "scitex-dev-deploy-freshness" in names
 
 
 def test_provider_deploy_freshness_is_cron_kind():
@@ -1036,7 +1036,7 @@ def test_provider_deploy_freshness_is_cron_kind():
     from scitex_dev._ecosystem_jobs import _provider
 
     # Act
-    job = next(j for j in _provider.provide_jobs() if j.name == "deploy-freshness")
+    job = next(j for j in _provider.provide_jobs() if j.name == "scitex-dev-deploy-freshness")
     # Assert
     assert job.kind == "cron"
 
@@ -1046,10 +1046,10 @@ def test_provider_deploy_freshness_invokes_ecosystem_cron_exec():
     from scitex_dev._ecosystem_jobs import _provider
 
     # Act
-    job = next(j for j in _provider.provide_jobs() if j.name == "deploy-freshness")
+    job = next(j for j in _provider.provide_jobs() if j.name == "scitex-dev-deploy-freshness")
     # Assert — federated cron jobs invoke `ecosystem cron exec`, NOT
     # the legacy per-package `scitex-dev cron exec`.
-    assert "ecosystem cron exec deploy-freshness" in job.command
+    assert "ecosystem cron exec scitex-dev-deploy-freshness" in job.command
 
 
 def test_provider_deploy_freshness_passes_apply_in_production_line():
@@ -1057,7 +1057,7 @@ def test_provider_deploy_freshness_passes_apply_in_production_line():
     from scitex_dev._ecosystem_jobs import _provider
 
     # Act
-    job = next(j for j in _provider.provide_jobs() if j.name == "deploy-freshness")
+    job = next(j for j in _provider.provide_jobs() if j.name == "scitex-dev-deploy-freshness")
     # Assert — `--apply` is in the materialized line so the cron actually
     # repairs drift; dry-run is the operator's manual interactive mode.
     assert "--apply" in job.command

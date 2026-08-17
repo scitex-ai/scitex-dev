@@ -53,12 +53,13 @@ from scitex_dev.jobs import JobSpec
 # ``JOB_LOG_TARGETS`` maps each job to ``(package, slug)``; the slug keeps
 # the pre-existing log basename so operator greps / dashboards keep working.
 JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
-    "deploy-freshness": ("dev", "cron-deploy-freshness"),
-    "pr-expire": ("dev", "cron-pr-expire"),
-    "ecosystem-self-pull": ("dev", "timer-ecosystem-self-pull"),
-    "drift-report": ("dev", "timer-drift-report"),
-    "local-state-audit": ("dev", "timer-local-state-audit"),
-    "host-config-check": ("dev", "timer-host-config-check"),
+    "scitex-dev-deploy-freshness": ("dev", "cron-deploy-freshness"),
+    "scitex-dev-pr-expire": ("dev", "cron-pr-expire"),
+    "scitex-dev-ecosystem-self-pull": ("dev", "timer-ecosystem-self-pull"),
+    "scitex-dev-drift-report": ("dev", "timer-drift-report"),
+    "scitex-dev-local-state-audit": ("dev", "timer-local-state-audit"),
+    "scitex-dev-host-config-check": ("dev", "timer-host-config-check"),
+    "scitex-dev-venv-refresh": ("dev", "timer-venv-refresh"),
 }
 
 #: Pure shell bodies for the jobs whose body is not a Python entry point —
@@ -69,27 +70,61 @@ JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
 #: jobs keeps a drift FINDING from marking the unit failed (drift is data
 #: recorded in the log, not a unit failure — skill §4).
 JOB_SHELL_BODIES: dict[str, str] = {
-    "pr-expire": (
+    "scitex-dev-pr-expire": (
         "date -u +'== pr-expire %Y-%m-%dT%H:%MZ =='; "
         # flip to --apply after fleet-wide dry-run validation — constitution
         # §2, do not auto-mass-close 12 repos on first fire.
         "scitex-dev ecosystem pr expire --all --days 3 --dry-run || true"
     ),
-    "ecosystem-self-pull": "scitex-dev ecosystem sync --yes",
-    "drift-report": (
+    "scitex-dev-ecosystem-self-pull": "scitex-dev ecosystem sync --yes",
+    "scitex-dev-drift-report": (
         "date -u +'== drift-report %Y-%m-%dT%H:%MZ =='; "
         "scitex-dev ecosystem drift-report || true"
     ),
-    "local-state-audit": (
+    "scitex-dev-local-state-audit": (
         "date -u +'== local-state-audit %Y-%m-%dT%H:%MZ =='; "
         "scitex-dev ecosystem audit-local-state || true"
+    ),
+    # The shared dev venv, kept current. `--venv current` means "the
+    # interpreter this job runs under", so the unit's ExecStart decides which
+    # venv is refreshed — the job carries no hardcoded path.
+    #
+    # `-U` is ON here and OFF for interactive `ecosystem install`, on purpose:
+    # currency IS the product of this job, whereas an interactive install
+    # should not silently move a dependency under whatever the caller was
+    # editing.
+    #
+    # `|| true` because a refresh finding — one leaf whose [all] extra does
+    # not resolve — is DATA in the log, not this unit failing. Measured
+    # 2026-08-17: `scitex[all]` pulls 34 of the ecosystem's scitex-* packages,
+    # misses 11 that are checked out, and still pins scitex-orochi (retired)
+    # and scitex-dev==0.28.0 against an actual 0.51.0. A job that goes red on
+    # that is a job someone disables.
+    #
+    # NOT a substitute for per-package venvs. A shared env has every peer
+    # installed, so a MISSING dependency declaration is invisible in it by
+    # construction; `--venv per-package` (the default, and what CI uses) is
+    # the only thing that can see that class of defect.
+    # TWO PASSES, and the second is not optional. Pass 1 may re-resolve, so
+    # a later package's dependency on a sibling can replace that sibling's
+    # editable install with a PyPI wheel; pass 2 (--no-deps) cannot resolve
+    # anything, so it re-asserts every checkout as editable and nothing it
+    # touches can clobber a peer. Measured 2026-08-17: pass 1 alone reported
+    # ok=22 fail=0 and left three packages resolving to site-packages.
+    "scitex-dev-venv-refresh": (
+        "date -u +'== venv-refresh %Y-%m-%dT%H:%MZ =='; "
+        "scitex-dev ecosystem install --source editable --extras all "
+        "--venv current --upgrade --yes || true; "
+        "echo '-- re-asserting editables (--no-deps) --'; "
+        "scitex-dev ecosystem install --source editable "
+        "--venv current --no-deps --yes || true"
     ),
     # OBSERVE-only by construction: `host-config check` never writes, and
     # it needs no privileges (the managed files under /etc are
     # world-readable), so the unprivileged periodic job can report drift
     # honestly. Converging is `host-config apply`, a deliberate root act
     # — a timer must never quietly rewrite a host's /etc.
-    "host-config-check": (
+    "scitex-dev-host-config-check": (
         "date -u +'== host-config-check %Y-%m-%dT%H:%MZ =='; "
         "scitex-dev ecosystem host-config check || true"
     ),
@@ -131,7 +166,7 @@ def _deploy_freshness_command() -> str:
     reported). Output lands in
     ``$HOME/.scitex/dev/runtime/logs/cron-deploy-freshness.log``.
     """
-    return _exec_command("deploy-freshness", extra="--apply")
+    return _exec_command("scitex-dev-deploy-freshness", extra="--apply")
 
 
 def _self_pull_command() -> str:
@@ -142,7 +177,7 @@ def _self_pull_command() -> str:
     ``origin/develop`` and skips anything dirty / off-develop / diverged,
     so live or un-pushed work is never clobbered.
     """
-    return _exec_command("ecosystem-self-pull")
+    return _exec_command("scitex-dev-ecosystem-self-pull")
 
 
 def _drift_report_command() -> str:
@@ -155,7 +190,7 @@ def _drift_report_command() -> str:
     failure — so a chronically-drifting fleet never trains the operator to
     ignore a permanently-failed timer (skill §4).
     """
-    return _exec_command("drift-report")
+    return _exec_command("scitex-dev-drift-report")
 
 
 def _local_state_audit_command() -> str:
@@ -169,7 +204,11 @@ def _local_state_audit_command() -> str:
     ``check_state_drift.sh`` PostToolUse hook reads this log's last summary
     line.
     """
-    return _exec_command("local-state-audit")
+    return _exec_command("scitex-dev-local-state-audit")
+
+
+def _venv_refresh_command() -> str:
+    return _exec_command("scitex-dev-venv-refresh")
 
 
 def _host_config_check_command() -> str:
@@ -185,7 +224,7 @@ def _host_config_check_command() -> str:
     for a timer, where a permanently-red unit trains the operator to
     ignore it.
     """
-    return _exec_command("host-config-check")
+    return _exec_command("scitex-dev-host-config-check")
 
 
 def _pr_expire_command() -> str:
@@ -198,7 +237,7 @@ def _pr_expire_command() -> str:
     (§2) forbids. Flip ``--dry-run`` to ``--apply`` in ``JOB_SHELL_BODIES``
     ONLY after a fleet-wide dry-run has been validated by a human.
     """
-    return _exec_command("pr-expire")
+    return _exec_command("scitex-dev-pr-expire")
 
 
 def provide_jobs() -> list[JobSpec]:
@@ -210,7 +249,7 @@ def provide_jobs() -> list[JobSpec]:
     """
     return [
         JobSpec(
-            name="deploy-freshness",
+            name="scitex-dev-deploy-freshness",
             kind="cron",
             schedule="*/30 * * * *",
             command=_deploy_freshness_command(),
@@ -228,7 +267,7 @@ def provide_jobs() -> list[JobSpec]:
             ),
         ),
         JobSpec(
-            name="ecosystem-self-pull",
+            name="scitex-dev-ecosystem-self-pull",
             kind="timer",
             schedule="",
             command=_self_pull_command(),
@@ -247,7 +286,7 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="2min",
         ),
         JobSpec(
-            name="drift-report",
+            name="scitex-dev-drift-report",
             kind="timer",
             schedule="",
             command=_drift_report_command(),
@@ -269,7 +308,7 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="6h",
         ),
         JobSpec(
-            name="local-state-audit",
+            name="scitex-dev-local-state-audit",
             kind="timer",
             schedule="",
             command=_local_state_audit_command(),
@@ -292,7 +331,35 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="6h",
         ),
         JobSpec(
-            name="host-config-check",
+            name="scitex-dev-venv-refresh",
+            kind="timer",
+            schedule="",
+            command=_venv_refresh_command(),
+            description=(
+                "Keep the shared dev venv current: editable-installs every "
+                "ecosystem package with its [all] extra into the interpreter "
+                "this unit runs under, using uv when present (operator "
+                "ruling 2026-08-17). Pairs with ecosystem-self-pull — that "
+                "job pulls the checkouts, this one makes the pulled code the "
+                "code that RUNS, which is the gap that let a host serve "
+                "scitex-dev 0.48.0 for weeks while its own checkout was on "
+                "0.51.0 (measured 2026-08-17; two agents spent an hour on a "
+                "root cause that was one frozen copy). `-U` is ON here "
+                "because currency is the product; it is OFF for interactive "
+                "`ecosystem install` so a manual run cannot silently move a "
+                "dependency. Daily rather than hourly: [all] pulls torch / "
+                "jax / tensorflow, so a fast cadence is bandwidth and disk, "
+                "not freshness. NOT a substitute for per-package venvs — a "
+                "shared env has every peer installed, so a MISSING dependency "
+                "declaration is invisible in it by construction. `|| true` "
+                "so one leaf's unresolvable extra is a log finding, not a "
+                "failed unit. See _ecosystem._git_ops.install_all."
+            ),
+            on_boot_sec="10min",
+            on_unit_active_sec="1d",
+        ),
+        JobSpec(
+            name="scitex-dev-host-config-check",
             kind="timer",
             schedule="",
             command=_host_config_check_command(),
@@ -323,7 +390,7 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="6h",
         ),
         JobSpec(
-            name="pr-expire",
+            name="scitex-dev-pr-expire",
             kind="cron",
             schedule="30 3 * * *",
             command=_pr_expire_command(),

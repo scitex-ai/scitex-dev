@@ -286,7 +286,7 @@ def _dispatch_federated_job(name: str, *, apply: bool, all_jobs) -> None:
     Split out of the Click callback so the log-sink wrapper stays a single
     ``with`` block around ONE call (mirrors ``_cli.cron.run._run_body``).
     """
-    if name == "deploy-freshness":
+    if name == "scitex-dev-deploy-freshness":
         from ...._ecosystem_jobs import _deploy_freshness
 
         result = _deploy_freshness.run_once(apply=apply)

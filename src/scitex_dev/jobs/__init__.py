@@ -139,10 +139,13 @@ class JobSpec:
         docstring for what each kind means and which fields apply.
     schedule
         For ``kind="cron"``: a 5-field cron expression. For
-        ``kind="timer"``: optional, used only as a fallback to derive
-        ``OnUnitActiveSec`` when ``on_unit_active_sec`` is omitted. For
-        ``kind="service"``: MUST be the empty string (services aren't
-        scheduled — they run continuously).
+        ``kind="timer"``: derives an ``OnUnitActiveSec`` INTERVAL, averaged
+        from the expression — it is NOT rendered as an ``OnCalendar``, so any
+        wall-clock anchor in it is DISCARDED (loudly, since 2026-08-17). Use
+        ``on_calendar`` to keep the anchor. This entry previously claimed the
+        OnCalendar behaviour; it was never implemented, and live jobs were
+        declared against the wrong sentence. For ``kind="service"``: MUST be
+        the empty string (services run continuously).
     command
         Shell command to execute. Required for every kind.
     description
@@ -211,6 +214,17 @@ class JobSpec:
     restart_policy: str = "no"
     watchdog_sec: int | None = None
     venv: str | None = None
+    on_calendar: str | None = None
+    # Stop/lifecycle semantics for kind="service". Rationale for each lives
+    # beside its emission in `_systemd.py::build_service_unit` — omitting
+    # them is not cosmetic: systemd's default stop is SIGTERM then SIGKILL,
+    # so a daemon wanting SIGINT gets a hard kill and recovers as if crashed.
+    kill_signal: str | None = None
+    kill_mode: str | None = None
+    timeout_stop_sec: int | None = None
+    exec_reload: str | None = None
+    exec_stop: str | None = None
+    restart_prevent_exit_status: str | None = None
 
     def __post_init__(self) -> None:
         # Normalise the INTENT spellings BEFORE validating, so the rest of
@@ -309,11 +323,14 @@ class JobSpec:
         # Accept either an explicit on_unit_active_sec OR a cron-style
         # schedule we can derive from. Rejecting both is the early-
         # crash that catches "I forgot to set the cadence".
-        if not self.on_unit_active_sec and not self.schedule:
+        # `on_calendar` is the THIRD way to say when, and the only one that
+        # names a wall-clock time rather than a period.
+        if not (self.on_unit_active_sec or self.schedule or self.on_calendar):
             raise ValueError(
-                f"JobSpec({self.name!r}, kind='timer') needs either "
-                f"on_unit_active_sec or a schedule (cron expr) to derive "
-                f"the cadence from — both are empty."
+                f"JobSpec({self.name!r}, kind='timer') needs one of "
+                f"on_calendar (wall-clock, '*-*-* 04:30:00 Asia/Tokyo'), "
+                f"on_unit_active_sec (interval), or schedule (cron expr, "
+                f"derived to an interval) — all three are empty."
             )
         if self.restart_policy != "no":
             raise ValueError(

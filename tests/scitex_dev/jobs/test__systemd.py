@@ -560,11 +560,105 @@ def test_resolve_execstart_skips_sibling_bin_when_missing(tmp_path):
 
 def test_default_interpreter_bindir_is_sys_executable_parent():
     # Arrange
-    expected = Path(sys.executable).resolve().parent
+    expected = Path(sys.executable).parent
     # Act
     bindir = sd._interpreter_bindir()
     # Assert — the production default reads sys.executable's parent.
     assert bindir == expected
+
+
+# ---------------------------------------------------------------------------
+# resolve_execstart — the venv symlink regression (measured, compute-04)
+#
+# A venv's bin/python is a SYMLINK to the interpreter it was built from:
+#
+#   ~/.venv/bin/python
+#     -> ~/.local/share/uv/python/cpython-3.12-linux-x86_64-gnu/bin/python3.12
+#
+# _interpreter_bindir() used to .resolve() that, landing in uv's managed
+# CPython bin/ — a directory that structurally CANNOT hold scitex-dev. The
+# sibling-bin probe therefore missed, PATH missed too (systemd-style minimal
+# env), and `ecosystem up` wrote the fleet's SOLE supervisor unit as
+#   ExecStart=/usr/bin/env scitex-dev ecosystem run
+# whose own warning predicted status=127. Measured 2026-08-17: the
+# unresolved parent HELD the binary while the resolved one did not, and the
+# warning named the unresolved dir — i.e. it pointed at the file it had just
+# failed to find. uv builds every venv this way and uv is now the mandated
+# installer, so this missed on essentially every host.
+# ---------------------------------------------------------------------------
+
+
+def _venv_with_symlinked_python(tmp_path: Path, name: str) -> Path:
+    """Build a venv-shaped bin/ whose python is a symlink pointing OUT of
+    it, and whose console script lives IN it — the real uv layout.
+    """
+    real_bin = tmp_path / "managed-cpython" / "bin"
+    real_bin.mkdir(parents=True)
+    real_python = real_bin / "python3.12"
+    real_python.write_text("#!/bin/sh\nexit 0\n")
+    real_python.chmod(0o755)
+
+    venv_bin = tmp_path / "venv" / "bin"
+    venv_bin.mkdir(parents=True)
+    (venv_bin / "python").symlink_to(real_python)
+    script = venv_bin / name
+    script.write_text("#!/bin/sh\nexit 0\n")
+    script.chmod(0o755)
+    return venv_bin
+
+
+def test_interpreter_bindir_stays_inside_venv_when_python_is_symlinked(tmp_path):
+    # Arrange — a REAL venv-shaped tree whose python symlinks outward.
+    venv_bin = _venv_with_symlinked_python(tmp_path, "scitex-dev")
+
+    # Act — the production function, reading the real symlink.
+    bindir = sd._interpreter_bindir(str(venv_bin / "python"))
+
+    # Assert — the venv's own bin/, not the managed CPython it points at.
+    assert bindir == venv_bin
+
+
+def test_interpreter_bindir_is_not_the_symlink_target_dir(tmp_path):
+    # Arrange — the target dir is where .resolve() used to land.
+    venv_bin = _venv_with_symlinked_python(tmp_path, "scitex-dev")
+    target_dir = (venv_bin / "python").resolve().parent
+
+    # Act
+    bindir = sd._interpreter_bindir(str(venv_bin / "python"))
+
+    # Assert — that directory holds no console scripts.
+    assert bindir != target_dir
+
+
+def test_resolve_execstart_finds_console_script_in_symlinked_venv(tmp_path):
+    # Arrange — the console script exists ONLY in the venv bin/, and PATH
+    # cannot help (systemd's user PATH is minimal).
+    venv_bin = _venv_with_symlinked_python(tmp_path, "scitex-dev")
+
+    # Act
+    resolved = sd.resolve_execstart(
+        "scitex-dev ecosystem run",
+        which=lambda _n: None,
+        interpreter_bindir=lambda: sd._interpreter_bindir(str(venv_bin / "python")),
+    )
+
+    # Assert — absolutised against the venv, NOT /usr/bin/env.
+    assert resolved == f"{venv_bin / 'scitex-dev'} ecosystem run"
+
+
+def test_resolve_execstart_does_not_fall_back_to_env_in_symlinked_venv(tmp_path):
+    # Arrange — same layout; the fallback would be the status=127 unit.
+    venv_bin = _venv_with_symlinked_python(tmp_path, "scitex-dev")
+
+    # Act
+    resolved = sd.resolve_execstart(
+        "scitex-dev ecosystem run",
+        which=lambda _n: None,
+        interpreter_bindir=lambda: sd._interpreter_bindir(str(venv_bin / "python")),
+    )
+
+    # Assert
+    assert not resolved.startswith("/usr/bin/env")
 
 
 # ---------------------------------------------------------------------------
@@ -803,6 +897,219 @@ def test_stripped_path_execstart_first_token_exists_on_disk(
     # Assert
     assert Path(first_token).is_file(), (
         f"ExecStart first token {first_token!r} does not exist as a file"
+    )
+
+
+# ---------------------------------------------------------------------------
+# OnCalendar — the wall-clock schedule, and the loud discard when it is absent
+# ---------------------------------------------------------------------------
+
+
+def _calendar_job():
+    return JobSpec(
+        name="p-timer",
+        kind="timer",
+        schedule="",
+        command="x",
+        description="d",
+        on_calendar="*-*-* 04:30:00 Asia/Tokyo",
+    )
+
+
+def _anchored_job():
+    """A cron expression naming a TIME (04:30) rather than a period."""
+    return JobSpec(
+        name="p-timer",
+        kind="timer",
+        schedule="30 4 * * *",
+        command="x",
+        description="d",
+    )
+
+
+def test_timer_unit_emits_on_calendar_when_declared():
+    # Arrange
+    job = _calendar_job()
+    # Act
+    text = sd.build_timer_unit(job)
+    # Assert
+    assert "OnCalendar=*-*-* 04:30:00 Asia/Tokyo" in text
+
+
+def test_timer_unit_omits_interval_when_on_calendar_is_used():
+    """Emitting both would let systemd fire on whichever came first —
+    which is neither of the two schedules the author declared.
+    """
+    # Arrange
+    job = _calendar_job()
+    # Act
+    text = sd.build_timer_unit(job)
+    # Assert
+    assert "OnUnitActiveSec" not in text
+
+
+def test_timer_unit_omits_on_boot_sec_when_on_calendar_is_used():
+    # Arrange
+    job = _calendar_job()
+    # Act
+    text = sd.build_timer_unit(job)
+    # Assert
+    assert "OnBootSec" not in text
+
+
+def test_anchored_cron_still_renders_the_derived_interval():
+    """The rendering is UNCHANGED — four live jobs depend on this cadence,
+    and silently changing them would be the same sin in reverse.
+    """
+    # Arrange
+    job = _anchored_job()
+    # Act
+    text = sd.build_timer_unit(job)
+    # Assert
+    assert "OnUnitActiveSec=1d" in text
+
+
+def test_anchored_cron_warns_that_the_wall_clock_anchor_is_discarded(caplog):
+    """What changes is that the transformation announces itself."""
+    # Arrange
+    job = _anchored_job()
+    # Act
+    with caplog.at_level("WARNING"):
+        sd.build_timer_unit(job)
+    # Assert
+    assert "wall-clock anchor" in caplog.text
+
+
+def test_anchored_cron_warning_names_the_discarded_fields(caplog):
+    """Naming minute=30/hour=4 is what lets a reader see WHICH anchor went."""
+    # Arrange
+    job = _anchored_job()
+    # Act
+    with caplog.at_level("WARNING"):
+        sd.build_timer_unit(job)
+    # Assert
+    assert "minute=30, hour=4" in caplog.text
+
+
+def test_interval_cron_expression_does_not_warn(caplog):
+    """`*/15 * * * *` genuinely means every 15 minutes and loses nothing.
+
+    Warning here too would train every reader to ignore the warning that
+    does matter.
+    """
+    # Arrange
+    job = JobSpec(
+        name="p-timer",
+        kind="timer",
+        schedule="*/15 * * * *",
+        command="x",
+        description="d",
+    )
+    # Act
+    with caplog.at_level("WARNING"):
+        sd.build_timer_unit(job)
+    # Assert
+    assert "wall-clock anchor" not in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Stop semantics — omitting these turns a clean stop into crash recovery
+# ---------------------------------------------------------------------------
+
+
+def _pg_like_job():
+    """The shape sac measured on `scitex-cards-pg`, the fleet's card store."""
+    return JobSpec(
+        name="scitex-cards-pg",
+        kind="service",
+        schedule="",
+        command="postgres -D /var/lib/pg",
+        description="fleet card store",
+        restart_policy="always",
+        kill_signal="SIGINT",
+        kill_mode="mixed",
+        timeout_stop_sec=120,
+        exec_reload="/bin/kill -HUP $MAINPID",
+    )
+
+
+def test_service_unit_emits_kill_signal():
+    """systemd defaults to SIGTERM; a daemon wanting SIGINT must say so."""
+    # Arrange
+    job = _pg_like_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "KillSignal=SIGINT" in text
+
+
+def test_service_unit_emits_kill_mode():
+    # Arrange
+    job = _pg_like_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "KillMode=mixed" in text
+
+
+def test_service_unit_emits_timeout_stop_sec():
+    """Default SIGKILL at 90s is what makes a slow clean shutdown a crash."""
+    # Arrange
+    job = _pg_like_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "TimeoutStopSec=120s" in text
+
+
+def test_service_unit_emits_exec_reload():
+    # Arrange
+    job = _pg_like_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "ExecReload=/bin/kill -HUP $MAINPID" in text
+
+
+def test_service_unit_emits_restart_prevent_exit_status():
+    """A process saying "no retry needed" must be believed.
+
+    gh-runner on compute-02 printed exactly that and was restarted 32,071
+    times over two days, because the unit had no way to express it.
+    """
+    # Arrange
+    job = JobSpec(
+        name="scitex-dev-runner",
+        kind="service",
+        schedule="",
+        command="run.sh",
+        description="d",
+        restart_policy="always",
+        restart_prevent_exit_status="2",
+    )
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "RestartPreventExitStatus=2" in text
+
+
+def test_service_unit_omits_stop_semantics_when_undeclared():
+    """Existing units must render byte-identically — this adds no defaults."""
+    # Arrange
+    job = _service_job(restart_policy="no")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert not any(
+        key in text
+        for key in (
+            "KillSignal",
+            "KillMode",
+            "TimeoutStopSec",
+            "ExecReload",
+            "ExecStop",
+            "RestartPreventExitStatus",
+        )
     )
 
 
