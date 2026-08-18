@@ -7,6 +7,87 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-08-18
+
+> **Three surfaces were telling readers something that was not so, and every
+> one was caught by a peer rather than by this package's own tests.** A gate
+> generator emitting the shape its own rule forbids; a failure headline whose
+> code census was read as the causal list, sending one repo's lead to two
+> teams with "structurally blocked"; and a remedy that instructed a package to
+> delete working behaviour to quiet a warning that gated nothing.
+>
+> **The release matters more than the fixes.** `assert_imports_tree_under_test`
+> and the corrected generator both sat on `develop` where no leaf could install
+> them — leaves pin `scitex-dev>=0.12.2` against PyPI, so the helper was merged
+> and *uninstallable*. Present, correct, and unreachable is worse than absent,
+> because it looks identical to adoption lag from the board.
+
+### Added
+
+- `scitex_dev.testing.assert_imports_tree_under_test` /
+  `make_pytest_configure` — refuse to run tests when the imported package
+  resolves OUTSIDE the tree under test. Contributed by figrecipe after the
+  confound was measured four times in one day across two agents, including a
+  run here reporting **1049 passed** against `site-packages` rather than the
+  worktree just edited. Both authors hit it *after* writing warnings about it,
+  which is why it is a mechanical guard and not a documented practice.
+  Compares fully `resolve()`d paths so editable installs, linked worktrees and
+  `--target` layouts are accepted; refuses only what is provably outside.
+  Opt out with `SCITEX_ALLOW_FOREIGN_IMPORT`, which announces itself loudly on
+  stderr — an opt-out that hides itself is the defect wearing the fix's
+  clothes.
+
+### Fixed
+
+- **`ecosystem write-integration-tests` emitted a gate that cannot PASS.**
+  `DEFAULT_GATE_TAIL` produced a bare `importlib.import_module` with no skip —
+  the exact pole PS-140's own docstring names as the opposite face of the bug
+  it fixes ("a gate that cannot PASS, in place of one that cannot FAIL"). A
+  lean install where a peer is legitimately absent failed. Now emits
+  skip-on-ROOT + hard-import-FULL. Reported by figrecipe (lean install) and,
+  from the opposite pole, by scitex-ui (mutation: a renamed submodule reported
+  green). **Three tests had pinned the bug in**, one of them stating the
+  correct three-valued distinction in its own docstring and then asserting a
+  substring check that collapsed it. Tests now grade against
+  `find_full_path_skips` — the function the audit itself runs.
+- **The audit failure headline listed a census, not a cause.** It named every
+  rule code appearing in findings, so a run failing on two of six read as
+  blocked by all six. Now splits by TIER and carries the count:
+  `PS-140, PS-231 (6 finding line(s)) — also reported at warn/info tier: ...`.
+  Deliberately **not** labelled gating/non-gating: this runs outside the
+  audited process and holds only its stdout and one exit code, so which
+  findings drove the exit is unknowable here — and warn-tier findings *do*
+  gate in some sub-auditors. The note beneath now says so outright.
+- **§12/§13 prescribed a remedy that costs behaviour.** Both offered
+  `deprecated_alias()` unconditionally; it forwards argv and nothing else, so
+  a leaf whose alias accepted options the target lacks silently lost them.
+  Measured on figrecipe: `start-gui --force` (kills the port holder) became a
+  usage error. The caveat now lives in one shared constant used by both rules.
+- **PS-231's conversion advice could brick the repo following it.** Filed P1
+  by scitex-hub, measured independently by hub, scitex-scholar and scitex-app:
+  calling an org reusable renames the published check context, branch
+  protection keeps requiring the old name, and no pull request can fix it. The
+  finding text now says to enumerate required contexts **per protected
+  branch**, admits **the rule cannot check this itself** (the fact lives
+  behind a different API — `audit` is required on figrecipe and not on
+  scitex-app from identical-looking files), and names the third failure mode:
+  a caller that publishes but can never succeed, which shows as an ordinary
+  red.
+- The guard now **speaks when the package cannot be imported at all**, rather
+  than surfacing a bare `ModuleNotFoundError` that names neither the tree
+  under test nor the fact that a guard was running.
+
+### Notes
+
+- PS-231's remedy text had **never once been constructed** in 7115 passing
+  tests, and structurally could not be: scitex-dev *provides* the org
+  workflows, so the rule cannot fire on its own package and its message is
+  exercised only in other repos' CI. Three tests now force construction.
+- The generator fix reaches only files that do not exist yet. Regeneration
+  preserves each gate's tail **byte-identically by design**, so the 19
+  deployed gates keep their old assertion until swept deliberately. Tracked
+  separately; the sweep cannot be done by regeneration.
+
 ## [0.53.0] - 2026-08-18
 
 > **The job renderer can now express what a real unit says.** Four properties
