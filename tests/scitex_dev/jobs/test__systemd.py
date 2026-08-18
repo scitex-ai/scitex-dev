@@ -1113,4 +1113,203 @@ def test_service_unit_omits_stop_semantics_when_undeclared():
     )
 
 
+# --------------------------------------------------------------------- #
+# Unit-body fields: service_type / remain_after_exit /                   #
+# working_directory / environment(_file)                                 #
+#                                                                        #
+# Each was previously DECIDED by the renderer, so a hand-written unit    #
+# that disagreed could not be adopted without silently changing meaning. #
+# --------------------------------------------------------------------- #
+def _timer_body_job(**overrides):
+    """A timer job, whose service body is the oneshot half."""
+    base = dict(
+        name="pkg.t",
+        kind="timer",
+        schedule="",
+        command="run.sh",
+        description="d",
+        on_unit_active_sec="1h",
+    )
+    base.update(overrides)
+    return JobSpec(**base)
+
+
+def test_declared_service_type_is_emitted():
+    """`scitex-cards-pg` declares Type=exec; the renderer must not overrule it."""
+    # Arrange
+    job = _service_job(service_type="exec")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "Type=exec" in text
+
+
+def test_declared_service_type_replaces_the_renderers_own_choice():
+    # Arrange
+    job = _service_job(service_type="exec")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "Type=simple" not in text
+
+
+def test_service_type_defaults_to_simple_without_a_watchdog():
+    # Arrange
+    job = _service_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "Type=simple" in text
+
+
+def test_service_type_defaults_to_notify_with_a_watchdog():
+    # Arrange
+    job = _service_job(watchdog_sec=30)
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "Type=notify" in text
+
+
+def test_watchdog_with_a_non_notify_type_is_refused():
+    """WatchdogSec works only under Type=notify; the pair would restart-storm."""
+    # Arrange
+    kwargs = dict(service_type="exec", watchdog_sec=30)
+    # Act
+    build = lambda: _service_job(**kwargs)  # noqa: E731
+    # Assert — refused at construction, not silently reconciled.
+    with pytest.raises(ValueError, match="WatchdogSec only works under"):
+        build()
+
+
+def test_explicit_working_directory_is_emitted():
+    # Arrange
+    job = _service_job(venv="/opt/pkg/.venv", working_directory="/srv/data")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert — a unit naming its own directory states a requirement.
+    assert "WorkingDirectory=/srv/data" in text
+
+
+def test_explicit_working_directory_suppresses_the_venv_derived_one():
+    # Arrange
+    job = _service_job(venv="/opt/pkg/.venv", working_directory="/srv/data")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "WorkingDirectory=/opt/pkg" not in text
+
+
+def test_venv_export_survives_an_explicit_working_directory():
+    # Arrange
+    job = _service_job(venv="/opt/pkg/.venv", working_directory="/srv/data")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert — the directory and the venv export are separate concerns.
+    assert "Environment=VIRTUAL_ENV=/opt/pkg/.venv" in text
+
+
+def test_environment_file_is_emitted():
+    """Its absence starts the daemon with an empty environment, still 'active'."""
+    # Arrange
+    job = _service_job(environment_file="-/etc/default/sac")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "EnvironmentFile=-/etc/default/sac" in text
+
+
+def test_explicit_environment_entry_is_emitted():
+    # Arrange
+    job = _service_job(environment=("PGPORT=55432",))
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "Environment=PGPORT=55432" in text
+
+
+def test_explicit_environment_follows_the_venv_export():
+    """systemd takes the LAST assignment, so a leaf can override VIRTUAL_ENV."""
+    # Arrange
+    job = _service_job(
+        venv="/opt/pkg/.venv", environment=("VIRTUAL_ENV=/other",)
+    )
+    # Act
+    lines = sd.build_service_unit(job).splitlines()
+    # Assert
+    assert lines.index("Environment=VIRTUAL_ENV=/opt/pkg/.venv") < lines.index(
+        "Environment=VIRTUAL_ENV=/other"
+    )
+
+
+def test_remain_after_exit_true_renders_yes():
+    # Arrange
+    job = _timer_body_job(remain_after_exit=True)
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "RemainAfterExit=yes" in text
+
+
+def test_remain_after_exit_unset_keeps_the_historical_no():
+    # Arrange
+    job = _timer_body_job()
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert "RemainAfterExit=no" in text
+
+
+@pytest.mark.parametrize(
+    "key", ["EnvironmentFile", "RemainAfterExit", "WorkingDirectory"]
+)
+def test_unit_body_field_absent_from_a_service_when_undeclared(key):
+    """The byte-identical guarantee: unset adds nothing to an existing unit."""
+    # Arrange
+    job = _service_job(restart_policy="no")
+    # Act
+    text = sd.build_service_unit(job)
+    # Assert
+    assert key not in text
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("service_type", "exec"),
+        ("remain_after_exit", True),
+        ("working_directory", "/srv"),
+        ("environment", ("A=1",)),
+        ("environment_file", "/etc/x"),
+    ],
+)
+def test_unit_body_field_is_refused_on_cron(field, value):
+    """A cron line has no unit, so a set value would be silently dropped."""
+    # Arrange
+    kwargs = dict(
+        name="pkg.c",
+        kind="cron",
+        schedule="0 4 * * *",
+        command="run.sh",
+        description="d",
+        **{field: value},
+    )
+    # Act
+    build = lambda: JobSpec(**kwargs)  # noqa: E731
+    # Assert
+    with pytest.raises(ValueError, match="systemd-only field"):
+        build()
+
+
+def test_service_type_is_refused_on_a_timer():
+    """A timer-triggered body IS a oneshot; naming another Type= is a bug."""
+    # Arrange
+    kwargs = dict(service_type="exec")
+    # Act
+    build = lambda: _timer_body_job(**kwargs)  # noqa: E731
+    # Assert
+    with pytest.raises(ValueError, match="always Type=oneshot"):
+        build()
+
+
 # EOF

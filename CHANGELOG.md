@@ -7,6 +7,103 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.53.0] - 2026-08-18
+
+> **The job renderer can now express what a real unit says.** Four properties
+> were previously *decided by the renderer* rather than declared by the job,
+> so a hand-written unit that disagreed could not be adopted without silently
+> changing meaning — which is why 123 of 184 fleet units were not
+> verbatim-safe to adopt.
+>
+> The expensive one is `EnvironmentFile=`. It is frequently the only on-disk
+> record of where a daemon's configuration and secrets come from, so a
+> renderer that could not express it did not lose a line — it started the
+> daemon with an **empty environment while the unit still reported
+> `active`**.
+>
+> **Existing jobs are unaffected.** Every new field defaults to unset, and
+> unset renders exactly as before: all 34 discovered jobs render
+> byte-identically against the previous renderer (31210 bytes both sides).
+
+### Added
+
+- `JobSpec.service_type` — systemd `Type=` for `kind="service"`. Previously
+  hardcoded to `simple`, or `notify` when a watchdog was requested, so a
+  daemon declaring `Type=exec` could not be adopted without changing when
+  systemd considers it started.
+- `JobSpec.remain_after_exit` — `RemainAfterExit=`. Previously hardcoded to
+  `no`, so a unit whose *effect* outlives its process reported `inactive`
+  the instant it succeeded.
+- `JobSpec.working_directory` — `WorkingDirectory=`. Previously derivable
+  only from `venv`. An explicit value now wins over the derived one.
+- `JobSpec.environment` / `JobSpec.environment_file` — extra `Environment=`
+  entries and `EnvironmentFile=`. Explicit entries are emitted *after* the
+  venv-derived `VIRTUAL_ENV=`, so a leaf can deliberately override it.
+
+### Changed
+
+- A contradiction is now **refused at construction rather than reconciled**:
+  `watchdog_sec` together with a non-`notify` `service_type` raises, because
+  the watchdog protocol exists only under `Type=notify` and the pair would
+  emit a `WatchdogSec` that can never be satisfied — restarting the daemon
+  every interval. `service_type` is likewise refused on a timer (its body is
+  always a oneshot) and all four on cron.
+- The cron lowering classifies each new field explicitly and **detects** it
+  rather than merely listing it: `working_directory`, `environment` and
+  `environment_file` are blocking losses (each decides what actually runs),
+  `remain_after_exit` is advisory (it shapes `systemctl is-active` only, and
+  nothing reads that for a crontab line).
+- Internal: `JobSpec` moved to `jobs/_spec.py` and cadence/ExecStart
+  resolution to `jobs/_resolve.py`. Both modules re-export their previous
+  names, so no import changes. These were not tidying — `jobs/__init__.py`
+  (516 lines) and `_systemd.py` (564) both exceeded the repo's 512-line
+  limit, so the fields above could not be added to them at all.
+
+### Fixed
+
+- `ecosystem up`'s abort path now carries out the degraded count that caused
+  it, instead of aborting without reporting the number.
+
+## [0.52.0] - 2026-08-18
+
+> **Backfilled.** This entry was written after the fact — 0.52.0 was tagged
+> and published without one, so the release that unblocked several packages
+> had no record of what it contained. Reconstructed from the nine merged
+> pull requests between `v0.51.0` and `v0.52.0`, not from memory.
+>
+> The consequential change for other packages is the hooks `provider` fix:
+> it cleared a `HookRule` `TypeError` that had been failing every branch
+> across the fleet. Downstream CI that resolves `scitex-dev>=0.52.0` picks
+> that up automatically.
+
+### Added
+
+- `JobSpec.on_calendar` — a timer can name a **wall-clock time** with a
+  timezone. Previously `schedule=` was derived to an interval, so any
+  wall-clock anchor in it was discarded; that discard is now **loud**,
+  naming the job, the discarded fields, what it became, and the remedy.
+  Only anchored expressions warn; the existing derivation is unchanged.
+- Service **stop semantics** on `JobSpec`: `kill_signal`, `kill_mode`,
+  `timeout_stop_sec`, `exec_reload`, `exec_stop` and
+  `restart_prevent_exit_status`. systemd's default stop is SIGTERM then
+  SIGKILL, so a daemon wanting SIGINT was hard-killed and recovered as if
+  it had crashed. `RestartPreventExitStatus` lets a process that says
+  "do not retry" be believed.
+- The installer uses **uv**, and a timer keeps the shared dev venv current.
+- Skills documenting the state-store contract, cross-host identity, and
+  worked examples.
+
+### Fixed
+
+- Hook discovery stamps `provider` itself, because discovery already knows
+  it — this is the fix that cleared the fleet-wide `HookRule` `TypeError`.
+- `not-auditable: unknown` now names the interpreter instead of reporting
+  `unknown`, so the cause is actionable.
+- The interpreter `bin/` probe no longer follows the venv symlink, which had
+  resolved out of the venv into the managed toolchain.
+- scitex-dev's own timers and the last three federation job names are
+  **package-qualified**, so a job name states which package owns it.
+
 ## [0.51.0] - 2026-08-17
 
 > **This release adds two audit rules and removes three CLI verbs.** A repo

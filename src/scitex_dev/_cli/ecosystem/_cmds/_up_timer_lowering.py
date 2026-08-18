@@ -88,6 +88,9 @@ _TRANSLATED_FIELDS = frozenset({"kind", "schedule", "on_unit_active_sec"})
 #: to ``_LOSS_DETECTED_FIELDS`` instead, because silently lowering a declared
 #: stop signal to a crontab line would drop it without a word — which is the
 #: original bug this whole module exists to prevent.
+#: ``service_type`` joins them on the same test, not by analogy:
+#: ``_validate_timer`` refuses it outright, because a timer-triggered body
+#: IS a oneshot. Nothing for the lowering to lose.
 _INAPPLICABLE_TO_TIMER = frozenset(
     {
         "restart_policy",
@@ -98,12 +101,31 @@ _INAPPLICABLE_TO_TIMER = frozenset(
         "exec_reload",
         "exec_stop",
         "restart_prevent_exit_status",
+        "service_type",
     }
 )
 
 #: Fields :func:`lowering_losses` inspects and reports on.
+#:
+#: The unit-body fields land HERE rather than above, and the distinction is
+#: the one this module exists to keep honest: a timer may legally declare
+#: them, so lowering to cron genuinely DROPS something the leaf asked for.
+#: ``working_directory``, ``environment`` and ``environment_file`` are
+#: blocking for the same reason ``venv`` is — each decides what the command
+#: actually resolves to and runs against, so losing one silently changes
+#: what executes. ``remain_after_exit`` is advisory: it only shapes what
+#: ``systemctl is-active`` reports, and cron has no unit to report on.
 _LOSS_DETECTED_FIELDS = frozenset(
-    {"timeout_sec", "on_boot_sec", "venv", "on_calendar"}
+    {
+        "timeout_sec",
+        "on_boot_sec",
+        "venv",
+        "on_calendar",
+        "remain_after_exit",
+        "working_directory",
+        "environment",
+        "environment_file",
+    }
 )
 
 
@@ -286,6 +308,83 @@ def lowering_losses(job: JobSpec) -> tuple[DroppedProperty, ...]:
                     "JobSpec.command so the resolution is explicit, or "
                     "keep the job off cron until the timer surface lands"
                 ),
+            )
+        )
+
+    if job.working_directory is not None:
+        losses.append(
+            DroppedProperty(
+                field="working_directory",
+                declared=job.working_directory,
+                consequence=(
+                    "cron runs the command from the crontab owner's home "
+                    "directory, not the declared one, so every relative path "
+                    "in the command resolves somewhere else — silently, and "
+                    "possibly onto real files"
+                ),
+                remedy=(
+                    "make the command absolute, or prefix it with an "
+                    "explicit `cd <dir> && `, so the directory travels with "
+                    "the command instead of with the unit"
+                ),
+            )
+        )
+
+    if job.environment_file is not None:
+        losses.append(
+            DroppedProperty(
+                field="environment_file",
+                declared=job.environment_file,
+                consequence=(
+                    "cron has no EnvironmentFile, so the command runs "
+                    "WITHOUT the configuration and secrets that file "
+                    "carries — usually the only on-disk record of where "
+                    "they come from — and the failure surfaces as wrong "
+                    "behaviour rather than a missing-file error"
+                ),
+                remedy=(
+                    "source the file inside JobSpec.command "
+                    "(`set -a; . <file>; set +a; <cmd>`), or keep the job "
+                    "on the timer surface where the unit can carry it"
+                ),
+            )
+        )
+
+    if job.environment:
+        losses.append(
+            DroppedProperty(
+                field="environment",
+                declared=", ".join(job.environment),
+                consequence=(
+                    "cron does not carry Environment= entries, so the "
+                    "command runs on cron's minimal environment and any "
+                    "variable it depends on is simply absent"
+                ),
+                remedy=(
+                    "inline the assignments into JobSpec.command "
+                    "(`KEY=value <cmd>`), or keep the job on the timer "
+                    "surface"
+                ),
+            )
+        )
+
+    if job.remain_after_exit is not None:
+        losses.append(
+            DroppedProperty(
+                field="remain_after_exit",
+                declared=str(job.remain_after_exit),
+                consequence=(
+                    "cron has no unit whose activeness could be reported, "
+                    "so the declared post-exit state is meaningless there"
+                ),
+                remedy=(
+                    "drop remain_after_exit for the cron surface — it "
+                    "shapes `systemctl is-active` output only, and nothing "
+                    "reads that for a crontab line"
+                ),
+                # Advisory: it changes what STATUS reports, never what runs.
+                # It cannot pile up runs or leave one unbounded.
+                blocking=False,
             )
         )
 
