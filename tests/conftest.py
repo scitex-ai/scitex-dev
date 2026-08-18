@@ -33,6 +33,72 @@ os.environ["COVERAGE_PROCESS_START"] = str(_PROJECT_ROOT / "pyproject.toml")
 os.environ["COVERAGE_FILE"] = str(_PROJECT_ROOT / ".coverage")
 
 
+# ---------------------------------------------------------------------- #
+# Refuse to grade a scitex_dev we are not importing.                      #
+# ---------------------------------------------------------------------- #
+#
+# scitex-dev SHIPS this guard and did not call it, which is the
+# present-correct-and-inert shape this package's own audit rules exist to
+# catch. Dogfooding it here is the first leaf of the fleet sweep, and the
+# one where a false positive costs me rather than someone else.
+#
+# It would have caught a real incident on 2026-08-18: a run in this repo
+# reported **1049 passed** while importing scitex_dev from site-packages
+# instead of the worktree that had just been edited. Nothing in that
+# output said so; only three unrelated failures revealed the wrong
+# vantage point. Had the change been a no-op, the green would have been
+# reported as a clean pass over code it never touched.
+#
+# SAFE IN CI: every workflow installs with `pip install -e .`, so
+# scitex_dev resolves into this checkout's src/ and the guard passes.
+# Verified against .github/workflows before wiring, because a guard that
+# false-positives on a legitimate setup gets switched off, and a guard
+# everyone disables is worse than none.
+#
+# LOCALLY this means `pytest` must run against THIS tree — either an
+# editable install or PYTHONPATH=<repo>/src. That is the point: the
+# alternative is a green describing somebody else's code.
+# THE IMPORT ITSELF IS VULNERABLE TO WHAT IT DETECTS, so it is guarded.
+#
+# Measured while wiring this: pointed at site-packages, the bare import
+# fails with
+#
+#     ImportError: cannot import name 'make_pytest_configure' from
+#     'scitex_dev.testing' (/opt/venv-sac/.../scitex_dev/testing/__init__.py)
+#
+# which correctly BLOCKS the run and names entirely the wrong cause. A
+# reader concludes "bad install, go find the helper" rather than "your
+# interpreter is pointed at a different tree". Right outcome, wrong
+# diagnosis — the exact defect this guard exists to remove, reproduced
+# inside the guard's own installation.
+#
+# It matters more for every OTHER leaf than for this one: leaves pin a
+# FLOOR (figrecipe's is `scitex-dev>=0.12.2`), so any leaf resolving an
+# older scitex-dev sees a missing-symbol error that looks nothing like
+# the dependency-floor problem it actually is.
+try:
+    from scitex_dev.testing import make_pytest_configure
+except ImportError as exc:  # too old, or a different tree entirely
+    import scitex_dev as _resolved
+
+    raise ImportError(
+        "tests cannot verify they are grading the tree under test.\n"
+        f"  tree under test  : {_PROJECT_ROOT}\n"
+        f"  scitex_dev found : {getattr(_resolved, '__file__', '<unknown>')}\n"
+        "`scitex_dev.testing.make_pytest_configure` is missing there. Either "
+        "that install predates it (it landed in 0.54.0) or it is a different "
+        "checkout than this one.\n"
+        "Fix, in order of preference:\n"
+        f"  1. pip install -e {_PROJECT_ROOT}\n"
+        f"  2. PYTHONPATH={_PROJECT_ROOT / 'src'} pytest ...\n"
+        "  3. raise the scitex-dev floor in pyproject.toml — and raise it in "
+        "the SAME commit as this conftest call, or a lean install fails the "
+        "whole suite against a declaration saying the old version is fine."
+    ) from exc
+
+pytest_configure = make_pytest_configure("scitex_dev", _PROJECT_ROOT)
+
+
 def _ensure_subprocess_coverage_shim() -> None:
     """Drop an idempotent ``.pth`` file in site-packages that auto-starts
     coverage in every child Python interpreter via
