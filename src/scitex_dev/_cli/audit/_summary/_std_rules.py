@@ -274,6 +274,22 @@ def check_spec_built_help(cmd: click.BaseCommand, full: str, out: list) -> None:
     """
     from ._audit import Violation
 
+    # THE ATTRIBUTE IS A CONTRACT, NOT A LATCH.
+    #
+    # This is a `getattr`, not an isinstance check, so ANY object hung on
+    # `_help_spec` satisfies it. That duck-typing is deliberate and load-
+    # bearing: it lets a package compose `_SpecRendered` into its own base
+    # (sac's lazy root group needs exactly that, 2026-08-18). It is NOT
+    # permission to assign a placeholder and go green.
+    #
+    # Recorded because sac identified the loophole, could have taken it
+    # silently, and declined — their words: it "would turn a real rule into
+    # a gate that cannot fail". They were right, and nobody would have
+    # found out, because the failure mode of that shortcut IS a pass.
+    #
+    # The next reader will have the same idea and may not have the same
+    # restraint, so the warning lives next to the check rather than in a
+    # conversation neither of us can find in a month.
     if getattr(cmd, "_help_spec", None) is not None:
         return
     out.append(

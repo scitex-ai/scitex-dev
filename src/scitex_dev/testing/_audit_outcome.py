@@ -337,6 +337,8 @@ def unknown_message(
     returncode: int,
     evidence: list[str],
     tail: str,
+    *,
+    audited_by: str | None = None,
 ) -> str:
     """The UNKNOWN report — says COULD NOT RUN and quotes the underlying error."""
     quoted = (
@@ -348,6 +350,7 @@ def unknown_message(
     return (
         f"audit-all COULD NOT RUN for {distribution!r} — UNKNOWN, not a "
         f"violation report (exit={returncode}).\n"
+        f"{_audited_by_line(audited_by)}"
         "  The audit was PREVENTED from grading, so it neither found "
         "violations nor established that there are none.\n"
         "  Do NOT go looking for a lint violation: fix the environment / "
@@ -421,12 +424,28 @@ def headline_codes(findings: list[str]) -> str:
     return f": {lead} — also reported at warn/info tier: {_listed(others)}"
 
 
+
+
+def _audited_by_line(audited_by: str | None) -> str:
+    """The "which ruler measured this" line, or nothing.
+
+    Optional rather than required because call sites outside this
+    package construct these messages too, and a KeyError in a failure
+    formatter would replace a real finding with a traceback.
+    """
+    if not audited_by:
+        return ""
+    return f"  audited by {audited_by}\n"
+
+
 def violations_message(
     distribution: str,
     cmd: str,
     returncode: int,
     findings: list[str],
     tail: str,
+    *,
+    audited_by: str | None = None,
 ) -> str:
     """The FAIL report — names the RULES on line one, then digests the findings."""
     if findings:
@@ -454,6 +473,7 @@ def violations_message(
     return (
         f"audit-all reported violations for {distribution!r} "
         f"(exit={returncode}){headline_codes(findings)}\n"
+        f"{_audited_by_line(audited_by)}"
         f"{digest}"
         f"  $ {cmd}\n{tail}"
     )
