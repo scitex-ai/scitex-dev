@@ -33,7 +33,9 @@ from scitex_dev.testing._audit_outcome import (
     classify_audit_outcome,
     headline_codes,
     rule_code,
+    is_error_tier,
     rule_codes,
+    rule_codes_by_tier,
     violations_message,
 )
 
@@ -179,7 +181,10 @@ class TestHeadlineCodes:
         # Act
         suffix = headline_codes(findings)
         # Assert
-        assert suffix == ": PS-207, SK-302"
+        assert suffix == (
+            ": PS-207 (1 finding line(s)) — also reported at "
+            "warn/info tier: SK-302"
+        )
 
     def test_a_long_list_is_truncated_rather_than_dropped(self):
         """Knowing six of nine fired beats being shown none of them."""
@@ -191,7 +196,9 @@ class TestHeadlineCodes:
         # Act
         suffix = headline_codes(findings)
         # Assert
-        assert suffix.endswith("(+3 more)")
+        assert suffix.endswith(
+            "(+3 more) (all at warn/info tier — see note below)"
+        )
 
     def test_the_truncated_list_spends_its_whole_budget(self):
         """Truncation drops the tail, not the budget: the last code that
@@ -228,7 +235,9 @@ class TestTheFirstLine:
         message = violations_message("sac", "scitex-dev ...", 1, findings, "")
         # Assert
         assert message.splitlines()[0] == (
-            "audit-all reported violations for 'sac' (exit=1): PS-207, SK-302"
+            "audit-all reported violations for 'sac' (exit=1): "
+            "PS-207 (1 finding line(s)) — also reported at warn/info tier: "
+            "SK-302"
         )
 
     def test_two_different_failures_no_longer_read_identically(self):
@@ -265,7 +274,105 @@ class TestTheFirstLine:
         # Act
         first = violations_message("scitex-dev", "cmd", 1, findings, "").splitlines()[0]
         # Assert
-        assert first.endswith("(exit=1): PS-207, SK-302, SK-701, §1f")
+        assert first.endswith(
+            "(exit=1): PS-207 (1 finding line(s)) — also reported at "
+            "warn/info tier: SK-302, SK-701, §1f"
+        )
+
+ERR_PS231_A = "ERRO: [E] [PS-231 §1 reimplements-org-workflow] rtd.yml"
+ERR_PS231_B = "ERRO: [E] [PS-231 §1 reimplements-org-workflow] cla.yml"
+ERR_PS140 = "ERRO: [E] [PS-140 §2 gate-skip-scope] test_cross_package_imports.py"
+WARN_10W = "WARN: [§10w unmeasurable] could not measure this node"
+WARN_12 = "WARN: [§12 legacy-gui] start-gui"
+
+
+class TestTheHeadlineSeparatesTiers:
+    """The headline named every code that APPEARED; readers took it as CAUSAL.
+
+    Reported by figrecipe, 2026-08-18. The line read
+
+        audit-all reported violations for 'figrecipe' (exit=1):
+          PS-140, PS-231, §10w, §12, §13, §4b
+
+    Two of the six produced the non-zero exit. They read it as the causal
+    list, concluded the gate could not go green until a rule they could not
+    influence stopped firing, and told their product lead the repo was
+    structurally blocked — which reached two teams.
+
+    The function had ALREADY been written to prevent a misread of this
+    family (seventeen red PRs escalated as a P1 outage that was four
+    unrelated one-line fixes). It prevented that one and produced this one.
+    """
+
+    def test_the_error_tier_codes_lead_and_the_rest_are_marked_as_also_present(self):
+        # Arrange
+        findings = [ERR_PS231_A, ERR_PS140, WARN_10W, WARN_12]
+        # Act
+        headline = headline_codes(findings)
+        # Assert
+        assert headline == (
+            ": PS-140, PS-231 (2 finding line(s)) — also reported at "
+            "warn/info tier: §10w, §12"
+        )
+
+    def test_the_count_travels_with_the_codes(self):
+        """What let figrecipe reconstruct the causal set, promoted into the line."""
+        # Arrange
+        findings = [ERR_PS231_A, ERR_PS231_B, ERR_PS140, WARN_10W]
+        # Act
+        headline = headline_codes(findings)
+        # Assert
+        assert "(3 finding line(s))" in headline
+
+    def test_the_word_gating_is_never_claimed(self):
+        """We hold stdout and one exit code; WHICH findings gated is not in either.
+
+        This module's own note records sub-auditors that exit NON-ZERO on
+        WARN-tier findings, so `warn tier` does not imply `did not gate`.
+        Labelling the split that way would put a confident answer where an
+        unknown lives — in the message being fixed for exactly that.
+        """
+        # Arrange
+        findings = [ERR_PS140, WARN_10W]
+        # Act
+        headline = headline_codes(findings)
+        # Assert
+        assert "gating" not in headline and "non-gating" not in headline
+
+    def test_a_warn_only_run_says_so_rather_than_leading_with_nothing(self):
+        # Arrange
+        findings = [WARN_10W, WARN_12]
+        # Act
+        headline = headline_codes(findings)
+        # Assert
+        assert headline == ": §10w, §12 (all at warn/info tier — see note below)"
+
+    def test_a_code_seen_at_both_tiers_is_reported_once_as_error(self):
+        # Arrange
+        findings = [ERR_PS140, "WARN: [PS-140 §2 gate-skip-scope] other.py"]
+        # Act
+        errors, others = rule_codes_by_tier(findings)
+        # Assert
+        assert errors == ["PS-140"] and others == []
+
+    def test_both_severity_shapes_are_recognised(self):
+        """`ERRO:` + `[E]`, and the bare `WARN:` prefix, both parse."""
+        # Arrange
+        error_line, warn_line = ERR_PS140, WARN_10W
+        # Act
+        error_shape = is_error_tier(error_line)
+        warn_shape = is_error_tier(warn_line)
+        # Assert
+        assert error_shape and not warn_shape
+
+    def test_colour_codes_do_not_hide_the_tier(self):
+        """scitex-logging colours its output; the tier must survive that."""
+        # Arrange
+        coloured = "\x1b[33mWARN\x1b[0m: [§10w unmeasurable] x"
+        # Act
+        tier = is_error_tier(coloured)
+        # Assert
+        assert not tier
 
 
 # EOF
