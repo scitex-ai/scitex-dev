@@ -68,6 +68,10 @@ def _write_fake_scitex_dev(bin_dir: Path, sleep_map: dict) -> None:
 import sys, time, json
 sleep_map = {sleep_map!r}
 argv = sys.argv[1:]
+# The launcher is now `<python> -m scitex_dev ecosystem audit-<name> <pkg>`,
+# so strip the module-execution prefix before reading the audit name.
+if argv[:2] == ["-m", "scitex_dev"]:
+    argv = argv[2:]
 # argv looks like: ecosystem audit-<name> <pkg> [--json] [--severity X]
 audit = argv[1] if len(argv) > 1 else ""
 delay, code = sleep_map.get(audit, (0.0, 0))
@@ -87,6 +91,7 @@ sys.exit(code)
 def _run_audit_all(args, *, bin_dir: Path, sleep_map=None):
     """Invoke `ecosystem audit-all` with a fake scitex-dev on PATH."""
     _write_fake_scitex_dev(bin_dir, sleep_map or {})
+    script = bin_dir / "scitex-dev"
 
     @click.group()
     def main():
@@ -94,13 +99,33 @@ def _run_audit_all(args, *, bin_dir: Path, sleep_map=None):
 
     register_ecosystem_commands(main)
     runner = CliRunner()
+    # PATH is still shimmed, deliberately: `audit-all` MUST NOT consult it
+    # any more (sac's P1 — one repo's audit resolved through a wrapper into
+    # another repo's venv), and leaving the shim here means an accidental
+    # regression to `shutil.which` keeps these tests green while the
+    # dedicated hostile-PATH test is the one that fails. That is where the
+    # signal belongs.
     env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
-    return runner.invoke(
-        main,
-        ["ecosystem", "audit-all", *args, "--no-version-check"],
-        env=env,
-        catch_exceptions=False,
-    )
+    # The auditor is selected by pointing the INTERPRETER at the stub,
+    # because the launcher is now `sys.executable -m scitex_dev`. Naming it
+    # here rather than smuggling it through the environment is the same
+    # discipline the fix itself enforces.
+    # `_audit_all` imports sys INSIDE the command function, so there is no
+    # module attribute to patch — the local `import sys as _sys` binds the
+    # real module, and patching `sys.executable` therefore reaches it.
+    import sys as _sys
+
+    saved = _sys.executable
+    _sys.executable = str(script)
+    try:
+        return runner.invoke(
+            main,
+            ["ecosystem", "audit-all", *args, "--no-version-check"],
+            env=env,
+            catch_exceptions=False,
+        )
+    finally:
+        _sys.executable = saved
 
 
 @pytest.mark.parametrize("audit", _AUDITS)
