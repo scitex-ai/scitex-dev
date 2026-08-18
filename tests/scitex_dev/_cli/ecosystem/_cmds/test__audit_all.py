@@ -200,3 +200,75 @@ def test_remaining_audits_still_reported_when_one_fails(tmp_path, audit):
     result = _run_audit_all(["scitex-io"], bin_dir=tmp_path, sleep_map=sleep_map)
     # Assert
     assert f"=== {audit} ===" in result.output
+
+
+# --------------------------------------------------------------------------- #
+# The --new-only call site must agree with the callees
+
+
+# --------------------------------------------------------------------------- #
+# The --new-only call site must agree with the callee's signature              #
+#                                                                              #
+# v0.55.0 shipped NameError: name "scitex_dev_bin" is not defined here, and    #
+# took the REQUIRED audit leg down in every repo that resolved it (the audit   #
+# floor is >=0.17.14, a floor and not a pin). The dispatcher's binary lookup   #
+# had been renamed to an argv and ONE of its two uses was updated.             #
+#                                                                              #
+# Nothing executed that line, so nothing failed. These read the call site out  #
+# of the source and bind it against the real signature: cheap, and it catches  #
+# the whole defect class -- any keyword drift between the two, not this name.  #
+# --------------------------------------------------------------------------- #
+
+
+def _new_only_call_keywords():
+    """Keyword names `_audit_all` passes to `run_new_only_and_exit`. Pure."""
+    import ast
+    import pathlib
+
+    from scitex_dev._cli.ecosystem._cmds import _audit_all as mod
+
+    tree = ast.parse(pathlib.Path(mod.__file__).read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        fn = node.func
+        name = fn.attr if isinstance(fn, ast.Attribute) else getattr(fn, "id", None)
+        if name == "run_new_only_and_exit":
+            return [kw.arg for kw in node.keywords if kw.arg is not None]
+    return None
+
+
+def test_the_new_only_call_site_is_present():
+    # Arrange
+    keywords = _new_only_call_keywords()
+    # Act
+    found = keywords is not None
+    # Assert
+    assert found
+
+
+def test_the_new_only_call_site_binds_to_the_signature():
+    # Arrange
+    import inspect
+
+    from scitex_dev._cli.ecosystem._cmds._audit_all_new_only import (
+        run_new_only_and_exit,
+    )
+
+    keywords = _new_only_call_keywords()
+    # Act — bind_partial raises TypeError on an unexpected keyword.
+    bound = inspect.signature(run_new_only_and_exit).bind_partial(
+        **{name: object() for name in keywords}
+    )
+    # Assert
+    assert set(bound.arguments) == set(keywords)
+
+
+def test_the_new_only_call_site_passes_an_argv_not_a_bin():
+    # Arrange — the dispatcher resolves [sys.executable, "-m", "scitex_dev"]
+    # so the audit runs where the console script is absent from PATH.
+    keywords = _new_only_call_keywords()
+    # Act
+    passes_argv = "scitex_dev_argv" in keywords
+    # Assert
+    assert passes_argv
