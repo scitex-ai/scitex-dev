@@ -7,6 +7,58 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-08-18
+
+> **The supervisor owns the clock, and the auditor comes from the environment
+> under test.** Two structural fixes that were merged but unreleased — which,
+> by the operator's standard, means they did not exist: 「ライブでない機能は
+> ないものとカウントします」.
+
+### Added
+
+- **The supervisor runs periodic jobs itself.** Timer- and cron-kind jobs were
+  lowered to user-crontab lines; the operator ruled that out (20+ lines per
+  host does not scale). They are now one-shots started on the supervisor's own
+  tick — which is the real difference from a service child: a service that
+  exits is a fault to restart, a periodic run that exits is a success.
+- **An execution log that records what SHOULD have run.** `started` /
+  `finished` / `start_failed` / `skipped_still_running` / `unschedulable`, one
+  JSON line each, every line naming its host. The last event has no other
+  witness: a job that never started is indistinguishable from a healthy quiet
+  system unless something wrote down that it was supposed to run.
+- `scitex_dev.testing.auditor_identity` — the failure report now names WHICH
+  auditor measured the tree, asked of the launcher rather than of this process,
+  and returning an explicit `UNKNOWN (path) — could not ask: …` rather than a
+  plausible default.
+
+### Fixed
+
+- **The auditor was resolved from shell PATH.** `audit_all_for_package` and
+  `audit-all`'s six-sub-auditor fan-out both used `shutil.which`, so the rule
+  corpus a test graded against was decided by whichever binary was earliest on
+  PATH. Measured by scitex-agent-container: same tree, auditor 0.49.2 reported
+  PS-226 while 0.54.0 reported PS-140/PS-226/PS-231 — and the PATH entry
+  resolved through a wrapper into ANOTHER PACKAGE's venv. Worse than a stale
+  install because it DEFEATS THE OBVIOUS FIX: upgrading the venv under test
+  changes nothing, so the correct experiment disproves a true hypothesis. Both
+  layers now launch via `sys.executable -m scitex_dev`.
+- `--new-only` is **FORBIDDEN** (operator ruling). It capped pre-existing
+  findings to warning, which let a package stop honouring a shared rule without
+  anyone deciding to, while the gate kept reporting green against a smaller
+  rule set than it claimed to enforce.
+- The `0 unmasked error(s)` + `exit=1` note named ONE cause of at least two,
+  and a reader acted on it by proposing to relax the gate for 83 packages.
+
+### Notes
+
+- A pre-push hook test was GREEN BECAUSE THE SUB-AUDITORS COULD NOT LAUNCH
+  under its deliberately sterile PATH. Fixing the resolution made them run, and
+  an ordinary INFO line tripped a loose substring assertion. A test going red
+  because a fix started working.
+- Four test harnesses selected their auditor BY PLANTING A SHIM ON PATH — they
+  depended on the defect. `audit_all_for_package` now takes `launcher=` so a
+  test NAMES its auditor instead of arranging for the environment to answer.
+
 ## [0.54.0] - 2026-08-18
 
 > **Three surfaces were telling readers something that was not so, and every

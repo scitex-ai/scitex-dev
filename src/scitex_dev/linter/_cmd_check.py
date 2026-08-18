@@ -25,6 +25,9 @@ from __future__ import annotations
 
 import json
 import sys
+
+
+from ._forbid_new_only import FORBIDDEN_NEW_ONLY  # noqa: E402
 from pathlib import Path
 
 import click
@@ -202,12 +205,10 @@ def register(main_group):
         is_flag=True,
         default=False,
         help=(
-            "Diff-aware gate (safety pair for the research-mode severity "
-            "promotion): only NEWLY-introduced findings keep their promoted "
-            "error severity; PRE-EXISTING findings (present at --baseline) are "
-            "capped to warning so legacy debt stays visible but never blocks. "
-            "Matching is content-based (rule + normalized line text), so a "
-            "finding survives unrelated line shifts."
+            "FORBIDDEN. Operator ruling 2026-08-18: 「--new-only は禁止です！！！ "
+            "いかなるパッケージも、です。」 Passing this flag now FAILS. It "
+            "capped pre-existing findings to warning, which is how a package "
+            "stops honouring a shared rule without anyone deciding to."
         ),
     )
     @click.option(
@@ -221,6 +222,8 @@ def register(main_group):
         ),
     )
     def validate_files(path, as_json, no_color, severity, category, new_only, baseline):
+        if new_only:
+            raise click.UsageError(FORBIDDEN_NEW_ONLY)
         sys.exit(
             _do_check(
                 path,

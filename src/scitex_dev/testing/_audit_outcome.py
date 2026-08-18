@@ -337,6 +337,8 @@ def unknown_message(
     returncode: int,
     evidence: list[str],
     tail: str,
+    *,
+    audited_by: str | None = None,
 ) -> str:
     """The UNKNOWN report — says COULD NOT RUN and quotes the underlying error."""
     quoted = (
@@ -348,6 +350,7 @@ def unknown_message(
     return (
         f"audit-all COULD NOT RUN for {distribution!r} — UNKNOWN, not a "
         f"violation report (exit={returncode}).\n"
+        f"{_audited_by_line(audited_by)}"
         "  The audit was PREVENTED from grading, so it neither found "
         "violations nor established that there are none.\n"
         "  Do NOT go looking for a lint violation: fix the environment / "
@@ -421,23 +424,55 @@ def headline_codes(findings: list[str]) -> str:
     return f": {lead} — also reported at warn/info tier: {_listed(others)}"
 
 
+
+
+def _audited_by_line(audited_by: str | None) -> str:
+    """The "which ruler measured this" line, or nothing.
+
+    Optional rather than required because call sites outside this
+    package construct these messages too, and a KeyError in a failure
+    formatter would replace a real finding with a traceback.
+    """
+    if not audited_by:
+        return ""
+    return f"  audited by {audited_by}\n"
+
+
 def violations_message(
     distribution: str,
     cmd: str,
     returncode: int,
     findings: list[str],
     tail: str,
+    *,
+    audited_by: str | None = None,
 ) -> str:
     """The FAIL report — names the RULES on line one, then digests the findings."""
     if findings:
         digest = (
             f"  {len(findings)} finding line(s) drove the failure:\n"
             f"{_digest(findings)}\n"
-            "  note: some sub-auditors (audit-skills, audit-project) exit "
-            "NON-ZERO on WARN-tier findings,\n"
-            "        so a `summary: ... 0 unmasked error(s)` line can "
-            "legitimately accompany exit=1.\n"
-            "        Read the findings above, not the error count.\n"
+            "  note: `summary: ... 0 unmasked error(s)` WITH exit=1 is a "
+            "real and common shape.\n"
+            "        It means something OUTSIDE the unmasked-error count "
+            "caused the exit. It does NOT\n"
+            "        identify what. At least two causes produce it, and the "
+            "message cannot tell them apart:\n"
+            "          (a) a sub-auditor (audit-skills, audit-project) "
+            "exiting non-zero on a WARN-tier\n"
+            "              finding, or\n"
+            "          (b) an ERROR-tier finding that is not counted as "
+            "unmasked — e.g.\n"
+            "              `CLI conventions: not-auditable: unknown`, which "
+            "appears when the\n"
+            "              distribution is not installed where the auditor "
+            "can introspect it.\n"
+            "        READ THE FINDINGS ABOVE, NOT THE COUNT, AND NOT THIS "
+            "NOTE. Measured 2026-08-18:\n"
+            "        sac read an earlier version of this note as naming (a) "
+            "and concluded warnings\n"
+            "        gate. Their cause was (b). They nearly relaxed the "
+            "gate for 83 packages on it.\n"
             "        The headline splits codes by TIER, which is what this process can see.\n"
             "        TIER IS NOT GATING: a code listed under `warn/info tier` may still be\n"
             "        what failed the run. Only the sub-auditor that emitted it knows, and\n"
@@ -454,6 +489,7 @@ def violations_message(
     return (
         f"audit-all reported violations for {distribution!r} "
         f"(exit={returncode}){headline_codes(findings)}\n"
+        f"{_audited_by_line(audited_by)}"
         f"{digest}"
         f"  $ {cmd}\n{tail}"
     )
