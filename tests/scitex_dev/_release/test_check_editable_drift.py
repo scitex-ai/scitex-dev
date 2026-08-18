@@ -30,6 +30,7 @@ from pathlib import Path
 from scitex_dev._release.check_editable_drift import (
     EXIT_STALE,
     _compute_drift,
+    _git_state_key,
     _pypi_drift,
     _react_to_drift,
     _resolve_severity,
@@ -103,6 +104,77 @@ def test_ahead_of_tag_level_with_remote_no_warning(tmp_path):
     # Act
     result = _compute_drift(repo)
     # Assert — ahead-of-tag is NOT stale.
+    assert result is None
+
+
+# --- The cache key: it must observe a fast-forward ---------------------------
+#
+# REGRESSION. The key used to be a composite MTIME of
+# max(.git/HEAD, packed-refs, refs/tags/). A fast-forward pull advances
+# refs/heads/<branch> and never touches .git/HEAD — a symref whose CONTENT
+# does not change when the branch moves — so the cache did not invalidate on
+# the single commonest event this check exists to detect. The warning then
+# survived its own prescribed remedy, naming a commit already an ancestor of
+# HEAD, which is indistinguishable from a warning that is stuck on.
+
+
+def _behind_repo_with_upstream(tmp_path: Path) -> Path:
+    """A develop that is two commits behind its pinned origin/develop."""
+    repo = _init_repo(tmp_path)
+    (repo / "f.txt").write_text("v2")
+    _git(repo, "commit", "-aqm", "c2")
+    (repo / "f.txt").write_text("v3")
+    _git(repo, "commit", "-aqm", "c3")
+    ahead_sha = _head(repo)
+    _git(repo, "checkout", "-q", "-B", "develop", "HEAD~2")
+    _set_upstream(repo, ahead_sha)
+    return repo
+
+
+def test_state_key_changes_when_the_branch_fast_forwards(tmp_path):
+    """The regression: the old mtime key returned the SAME value here."""
+    # Arrange
+    repo = _behind_repo_with_upstream(tmp_path)
+    before = _git_state_key(repo)
+    # Act — fast-forward develop onto its upstream, as `pull --ff-only` does.
+    _git(repo, "merge", "-q", "--ff-only", "origin/develop")
+    # Assert
+    assert _git_state_key(repo) != before
+
+
+def test_head_file_is_untouched_by_a_fast_forward(tmp_path):
+    """Why the mtime key failed — the control, not a restatement.
+
+    Pins the mechanism rather than the symptom: if this ever stops holding,
+    the regression above would pass for a reason unrelated to the fix.
+    """
+    # Arrange
+    repo = _behind_repo_with_upstream(tmp_path)
+    before = (repo / ".git" / "HEAD").read_bytes()
+    # Act
+    _git(repo, "merge", "-q", "--ff-only", "origin/develop")
+    # Assert — HEAD is a symref; its content does not move with the branch.
+    assert (repo / ".git" / "HEAD").read_bytes() == before
+
+
+def test_state_key_is_none_outside_a_repo(tmp_path):
+    # Arrange
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    # Act
+    result = _git_state_key(plain)
+    # Assert
+    assert result is None
+
+
+def test_fast_forwarded_checkout_reports_no_drift(tmp_path):
+    """End to end: after the remedy, the warning must be gone."""
+    # Arrange
+    repo = _behind_repo_with_upstream(tmp_path)
+    _git(repo, "merge", "-q", "--ff-only", "origin/develop")
+    # Act
+    result = _compute_drift(repo)
+    # Assert
     assert result is None
 
 
