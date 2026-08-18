@@ -310,8 +310,10 @@ class TestTheHeadlineSeparatesTiers:
         # Act
         headline = headline_codes(findings)
         # Assert
-        assert headline.startswith(": PS-140, PS-231 (")
-        assert "also reported at warn/info tier: §10w, §12" in headline
+        assert headline == (
+            ": PS-140, PS-231 (2 finding line(s)) — also reported at "
+            "warn/info tier: §10w, §12"
+        )
 
     def test_the_count_travels_with_the_codes(self):
         """What let figrecipe reconstruct the causal set, promoted into the line."""
@@ -355,9 +357,11 @@ class TestTheHeadlineSeparatesTiers:
 
     def test_both_severity_shapes_are_recognised(self):
         """`ERRO:` + `[E]`, and the bare `WARN:` prefix, both parse."""
-        # Arrange / Act
-        error_shape = is_error_tier(ERR_PS140)
-        warn_shape = is_error_tier(WARN_10W)
+        # Arrange
+        error_line, warn_line = ERR_PS140, WARN_10W
+        # Act
+        error_shape = is_error_tier(error_line)
+        warn_shape = is_error_tier(warn_line)
         # Assert
         assert error_shape and not warn_shape
 

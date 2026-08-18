@@ -438,6 +438,10 @@ def violations_message(
             "        so a `summary: ... 0 unmasked error(s)` line can "
             "legitimately accompany exit=1.\n"
             "        Read the findings above, not the error count.\n"
+            "        The headline splits codes by TIER, which is what this process can see.\n"
+            "        TIER IS NOT GATING: a code listed under `warn/info tier` may still be\n"
+            "        what failed the run. Only the sub-auditor that emitted it knows, and\n"
+            "        it does not say so in this output.\n"
         )
     else:
         digest = (
