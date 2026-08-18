@@ -42,198 +42,23 @@ from pathlib import Path
 
 _CACHE_DIR = Path.home() / ".cache" / "scitex" / "dev"
 _CACHE_FILE = _CACHE_DIR / "editable-drift.json"
-_GIT = shutil.which("git")
 _ENV_DISABLE = "SCITEX_DEV_NO_DRIFT_WARN"
 # Belt-and-braces: only run the check at most once per N seconds even
 # across cache invalidations, so a `git checkout` flurry doesn't thrash.
 _MIN_INTERVAL_SECONDS = 30
 
 
-def _editable_dir_from_meta(meta) -> Path | None:
-    """Editable source dir from a Distribution's ``direct_url.json`` (PEP 610),
-    or None. Shared with :mod:`scitex_dev.staleness` (path-aware callers pass
-    their own resolved Distribution instead of a global name lookup)."""
-    try:
-        raw = meta.read_text("direct_url.json")
-    except Exception:
-        return None
-    if not raw:
-        return None
-    try:
-        data = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    if not data.get("dir_info", {}).get("editable"):
-        return None
-    url = data.get("url", "")
-    if url.startswith("file://"):
-        return Path(url[len("file://") :])
-    return None
-
-
-def _editable_source_dir(distribution: str) -> Path | None:
-    """Return the editable-install source directory, or None if not editable.
-
-    Reads `<dist-info>/direct_url.json` per PEP 610.
-    """
-    try:
-        from importlib.metadata import distribution as _dist
-    except ImportError:
-        return None
-    try:
-        meta = _dist(distribution)
-    except Exception:
-        return None
-    return _editable_dir_from_meta(meta)
-
-
-def _git_state_mtime(repo: Path) -> float | None:
-    """Composite mtime so the cache invalidates on commit moves AND tag fetches.
-
-    `git fetch --tags` updates `.git/packed-refs` (and/or files under
-    `.git/refs/tags/`) but does NOT touch `.git/HEAD`. Keying the cache
-    only on HEAD's mtime made `git fetch --tags --force` invisible to
-    the next drift check — the cache returned the stale "ahead of v0.X"
-    line until something else (commit, checkout) bumped HEAD.
-
-    Take max(HEAD, packed-refs, refs/tags/) so any of those three
-    bumping invalidates the cache.
-    """
-    git_dir = repo / ".git"
-    if not git_dir.exists():
-        return None
-    candidates: list[float] = []
-    for rel in ("HEAD", "packed-refs"):
-        p = git_dir / rel
-        if p.is_file():
-            try:
-                candidates.append(p.stat().st_mtime)
-            except OSError:
-                pass
-    refs_tags = git_dir / "refs" / "tags"
-    if refs_tags.is_dir():
-        try:
-            candidates.append(refs_tags.stat().st_mtime)
-        except OSError:
-            pass
-    return max(candidates) if candidates else None
-
-
-# Backward-compat alias so any external caller that imports the old name
-# keeps working — our own callsite uses _git_state_mtime now.
-_git_head_mtime = _git_state_mtime
-
-
-def _run_git(repo: Path, *args: str) -> str | None:
-    if _GIT is None:
-        return None
-    try:
-        result = subprocess.run(
-            [_GIT, "-C", str(repo), *args],
-            capture_output=True,
-            text=True,
-            timeout=3,
-            check=False,
-        )
-    except (subprocess.TimeoutExpired, OSError):
-        return None
-    if result.returncode != 0:
-        return None
-    return result.stdout.strip()
-
-
-def _is_completion_context() -> bool:
-    """True when the current process is a Click shell-completion source eval.
-
-    `.bashrc`/`.zshrc` typically embed
-        eval "$(_SCITEX_DEV_COMPLETE=bash_source scitex-dev)"
-    which runs scitex-dev on every shell startup. Emitting the drift line
-    in that path produces an unwanted warning every time the user opens a
-    new shell or types `bash`. The Click env var is a reliable signal.
-    """
-    # Match any `_<PROG>_COMPLETE=...` from `eval "$(_FOO_COMPLETE=bash_source foo)"`
-    # — scitex-dev's drift checker is imported transitively whenever any
-    # downstream tool (scitex-scholar, scitex-io, …) is invoked, including
-    # during their own shell-completion sourcing. Without broad matching,
-    # the drift line ends up in the completion candidate list and bash
-    # treats it as one of the suggestions (symptom: "TAB needed twice").
-    return any(k == "_CLICK_COMPLETE" or k.endswith("_COMPLETE") for k in os.environ)
-
-
-def _upstream_ref(repo: Path) -> str | None:
-    """Resolve the tracking upstream for HEAD (e.g. ``origin/develop``).
-
-    Resolution order:
-      1. The configured upstream via ``@{u}`` (``origin/<branch>``).
-      2. ``origin/<current-branch>`` if such a remote-tracking ref exists.
-      3. ``origin/HEAD``, then ``origin/develop`` / ``origin/main``.
-    Returns None when nothing resolves (→ AXIS 1 stays silent, fail-safe).
-    """
-    ref = _run_git(repo, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
-    if ref:
-        return ref
-    branch = _run_git(repo, "rev-parse", "--abbrev-ref", "HEAD")
-    candidates: list[str] = []
-    if branch and branch != "HEAD":
-        candidates.append(f"origin/{branch}")
-    head_ref = _run_git(repo, "rev-parse", "--abbrev-ref", "origin/HEAD")
-    if head_ref:
-        candidates.append(head_ref)
-    candidates += ["origin/develop", "origin/main"]
-    for cand in candidates:
-        if _run_git(repo, "rev-parse", "--verify", "--quiet", cand) is not None:
-            return cand
-    return None
-
-
-def _behind_upstream(repo: Path) -> int | None:
-    """Commits the tracking upstream has that HEAD lacks (i.e. BEHIND count).
-
-    Returns the behind count, 0 if level/ahead, or None when there is no
-    resolvable upstream (→ stay silent, fail-safe). Uses only the LOCAL
-    remote-tracking ref (as fresh as the last ``git fetch``) — no network.
-    """
-    upstream = _upstream_ref(repo)
-    if not upstream:
-        return None
-    # `--left-right --count A...B` → "<left-only>\t<right-only>":
-    # left = commits in upstream not in HEAD = BEHIND.
-    counts = _run_git(
-        repo, "rev-list", "--left-right", "--count", f"{upstream}...HEAD"
-    )
-    if not counts:
-        return None
-    parts = counts.split()
-    if len(parts) != 2:
-        return None
-    return int(parts[0])
-
-
-def _compute_drift(repo: Path, distribution: str = "scitex-dev") -> str | None:
-    """Editable path — warn ONLY when the checkout is BEHIND its remote.
-
-    "Stale" == a newer scitex-dev is available to pull, i.e. HEAD is behind
-    ``origin/<branch>``. The remedy is CWD-independent + non-destructive:
-    ``git -C <abs-repo-path> pull --ff-only`` — NEVER a bare ``git pull`` or
-    ``--rebase`` (from another CWD those hit the wrong repo / rewrite work).
-
-    Being AHEAD of the latest release tag (unreleased dev commits on
-    ``develop``) is NORMAL and is NOT flagged — that was the reported false
-    positive. Any git error / no upstream / not a repo → None (fail-safe).
-    """
-    try:
-        behind = _behind_upstream(repo)
-        if not behind:
-            return None
-        head = _run_git(repo, "rev-parse", "--short", "HEAD")
-        if not head:
-            return None
-    except (ValueError, OSError):
-        return None
-    return (
-        f"editable {distribution}: HEAD ({head}) is {behind} commit(s) behind "
-        f"its remote — run: git -C {repo} pull --ff-only"
-    )
+from ._drift_git import (  # noqa: F401 - re-exported for existing callers
+    _GIT,
+    _behind_upstream,
+    _compute_drift,
+    _editable_dir_from_meta,
+    _editable_source_dir,
+    _git_state_key,
+    _is_completion_context,
+    _run_git,
+    _upstream_ref,
+)
 
 
 def _installed_version(distribution: str) -> str | None:
@@ -438,14 +263,14 @@ def check(distribution: str = "scitex-dev") -> str | None:
         # Non-editable (wheel) install: warn only when a pre-existing version
         # cache shows the installed version is behind the latest published one.
         return _pypi_drift(distribution)
-    state_mtime = _git_state_mtime(src)
-    if state_mtime is None:
+    state_key = _git_state_key(src)
+    if state_key is None:
         return None
     cache = _read_cache()
     entry = cache.get(distribution, {})
     now = time.time()
     if (
-        entry.get("head_mtime") == state_mtime
+        entry.get("state_key") == state_key
         and now - float(entry.get("checked_at", 0)) < 86400
     ):
         return entry.get("warning")
@@ -454,9 +279,13 @@ def check(distribution: str = "scitex-dev") -> str | None:
         return entry.get("warning")
     warning = _compute_drift(src)
     cache[distribution] = {
-        # Field name kept as 'head_mtime' for backward compat with existing
-        # cache files; semantically it now stores the composite git-state mtime.
-        "head_mtime": state_mtime,
+        # Renamed from 'head_mtime' deliberately rather than reused. The old
+        # key held a float mtime and this holds a sha pair, so an existing
+        # cache file simply misses on the new name and recomputes once —
+        # which is the correct migration. Reusing the name would have made a
+        # stale float compare unequal to a string forever, silently disabling
+        # the cache instead of refreshing it.
+        "state_key": state_key,
         "checked_at": now,
         "warning": warning,
     }
