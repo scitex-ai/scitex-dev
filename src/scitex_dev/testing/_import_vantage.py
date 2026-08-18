@@ -66,7 +66,19 @@ class ForeignImportError(RuntimeError):
     """The package under test resolves outside the tree under test."""
 
 
-def resolve_package_path(package: str) -> Path:
+class PackageNotImportableError(ForeignImportError):
+    """The package under test could not be imported at all.
+
+    A SUBCLASS so every existing ``except ForeignImportError`` keeps
+    working: a caller that wants "the guard refused" does not have to learn
+    a second name, and a caller that wants to distinguish "wrong tree" from
+    "no package" now can.
+    """
+
+
+def resolve_package_path(
+    package: str, *, tree_under_test: str | os.PathLike[str] | None = None
+) -> Path:
     """Where ``package`` actually resolves, fully resolved.
 
     Split out from the assertion so the CONTAINMENT DECISION below is a
@@ -74,8 +86,35 @@ def resolve_package_path(package: str) -> Path:
     this guard is the symlink handling, and separating the two lets it be
     tested against real directories and real links rather than against a
     stand-in for the import system.
+
+    ``tree_under_test`` appears ONLY in the failure message. A bare
+    ``ModuleNotFoundError`` is loud and honest, so it was never a defect —
+    but it says neither WHICH TREE was being checked nor THAT A GUARD WAS
+    RUNNING, and naming what it looked at is this module's entire value.
+    A guard whose own failure does not identify itself reproduces, one
+    level up, the family it exists to catch.
+
+    The original exception is CHAINED, never replaced: the import error is
+    the actual diagnosis (a typo, a missing install, a broken dependency),
+    and this only adds the context it lacks.
     """
-    module = importlib.import_module(package)
+    try:
+        module = importlib.import_module(package)
+    except ImportError as exc:
+        checked = (
+            f"  tree under test : {Path(tree_under_test).resolve()}\n"
+            if tree_under_test is not None
+            else ""
+        )
+        raise PackageNotImportableError(
+            f"the import-vantage guard could not import {package!r}, so it "
+            f"cannot tell which tree the tests would grade.\n"
+            f"{checked}"
+            f"  import error    : {exc}\n"
+            f"This is the guard speaking, not the test suite: nothing has "
+            f"been graded. Install the package (`pip install -e <tree>`) or "
+            f"put it on the path, then re-run."
+        ) from exc
     location = getattr(module, "__file__", None)
     if location is None:
         # A namespace package has no __file__. Use its first path entry
@@ -157,7 +196,10 @@ def assert_imports_tree_under_test(
     """Import ``package`` and raise unless it resolves INSIDE ``root``."""
     return assert_path_inside_tree(
         package,
-        resolve_package_path(package),
+        # `root` is passed here ONLY so a failed import can name the tree it
+        # was checking. This is the composing entry point, so it is the one
+        # place that knows both halves.
+        resolve_package_path(package, tree_under_test=root),
         root,
         env_var=env_var,
         stream=stream,
@@ -199,6 +241,7 @@ def make_pytest_configure(
 __all__ = [
     "DEFAULT_ENV_VAR",
     "ForeignImportError",
+    "PackageNotImportableError",
     "assert_imports_tree_under_test",
     "assert_path_inside_tree",
     "make_pytest_configure",

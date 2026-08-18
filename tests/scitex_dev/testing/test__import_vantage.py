@@ -29,6 +29,7 @@ import pytest
 from scitex_dev.testing import (
     DEFAULT_ENV_VAR,
     ForeignImportError,
+    PackageNotImportableError,
     assert_path_inside_tree,
     make_pytest_configure,
     resolve_package_path,
@@ -285,5 +286,93 @@ def test_the_hook_refuses_when_the_package_is_outside_the_tree(
     # Assert
     with pytest.raises(ForeignImportError):
         hook(config=None)
+
+
+
+# ---------------------------------------------------------------------------
+# A package that cannot be imported AT ALL.
+#
+# The bare ModuleNotFoundError this used to raise was loud and honest, so it
+# was never a defect. But it named neither the tree being checked nor the fact
+# that a guard was running — and naming what it looked at is this module's
+# whole value. A guard whose own failure does not identify itself reproduces,
+# one level up, the family it exists to catch.
+# ---------------------------------------------------------------------------
+
+_ABSENT = "scitex_dev_no_such_package_exists_anywhere"
+
+
+def _import_failure(package: str, root):
+    """Return the raised error, or None if the call unexpectedly succeeded."""
+    try:
+        resolve_package_path(package, tree_under_test=root)
+    except PackageNotImportableError as exc:
+        return exc
+    return None
+
+
+def test_an_unimportable_package_raises_the_guards_own_error(tmp_path):
+    # Arrange
+    root = tmp_path / "repo"
+    root.mkdir()
+    # Act
+    # Assert
+    with pytest.raises(PackageNotImportableError):
+        resolve_package_path(_ABSENT, tree_under_test=root)
+
+
+def test_that_error_is_still_a_foreign_import_error(tmp_path):
+    """A SUBCLASS, so every existing `except ForeignImportError` keeps
+    working — a caller wanting "the guard refused" learns no second name."""
+    # Arrange
+    root = tmp_path / "repo"
+    root.mkdir()
+    # Act
+    error = _import_failure(_ABSENT, root)
+    # Assert
+    assert isinstance(error, ForeignImportError)
+
+
+def test_the_message_names_the_tree_it_was_checking(tmp_path):
+    # Arrange
+    root = tmp_path / "repo"
+    root.mkdir()
+    # Act
+    error = _import_failure(_ABSENT, root)
+    # Assert
+    assert str(root.resolve()) in str(error)
+
+
+def test_the_message_says_a_guard_was_running(tmp_path):
+    # Arrange
+    root = tmp_path / "repo"
+    root.mkdir()
+    # Act
+    error = _import_failure(_ABSENT, root)
+    # Assert
+    assert "guard speaking" in str(error)
+
+
+def test_the_original_import_error_is_chained_not_replaced(tmp_path):
+    """The import error is the actual diagnosis — a typo, a missing install,
+    a broken dependency. This only adds the context it lacked."""
+    # Arrange
+    root = tmp_path / "repo"
+    root.mkdir()
+    # Act
+    error = _import_failure(_ABSENT, root)
+    # Assert
+    assert isinstance(error.__cause__, ImportError)
+
+
+def test_the_tree_is_optional_so_a_bare_caller_still_gets_the_guards_error():
+    """`tree_under_test` appears only in the message, so omitting it must
+    still produce the guard's error rather than a bare ModuleNotFoundError."""
+    # Arrange
+    package = _ABSENT
+    # Act
+    # Assert
+    with pytest.raises(PackageNotImportableError):
+        resolve_package_path(package)
 
 # EOF
