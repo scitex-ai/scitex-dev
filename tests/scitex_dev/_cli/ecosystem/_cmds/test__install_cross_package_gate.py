@@ -29,6 +29,9 @@ from scitex_dev._cli.ecosystem._cmds._gate_sentinel import (
     END_SENTINEL,
     split_at_sentinel,
 )
+from scitex_dev._cli.audit._project._gate_skip_scope import (
+    find_full_path_skips,
+)
 from scitex_dev._cli.ecosystem._cmds._install_cross_package_gate import (
     DEFAULT_GATE_TAIL,
     render_cross_package_gate,
@@ -96,7 +99,7 @@ def test_declared_imports_survive_an_ast_round_trip():
     assert parsed == sorted(IMPORTS)
 
 
-def test_gate_uses_a_hard_import_not_importorskip():
+def test_gate_hard_imports_the_full_dotted_path():
     """A skip would convert a renamed peer module into a green run."""
     # Arrange
     source = _render()
@@ -106,13 +109,65 @@ def test_gate_uses_a_hard_import_not_importorskip():
     assert uses_hard_import
 
 
-def test_gate_never_emits_importorskip():
+def test_gate_skips_on_the_root_and_only_on_the_root():
+    """Graded by PS-140's OWN detector, not by a substring.
+
+    This test previously asserted `"importorskip" not in source`, which
+    banned the root-level skip that PS-140 explicitly calls legitimate.
+    The rule and the generator then disagreed about the correct shape
+    while both were green: the auditor prescribed
+    skip-on-ROOT + hard-import-FULL, and the generator emitted a bare
+    hard import with no skip at all -- the "gate that cannot PASS"
+    pole that PS-140's own docstring names as the opposite face of the
+    same bug. Reported by figrecipe, 2026-08-18, who hit it on a lean
+    install where scitex_pd and scitex_types are legitimately absent.
+
+    A substring cannot express the distinction, because the defect is
+    the ARGUMENT's scope, not the function's presence. So this grades
+    against `find_full_path_skips` -- the same function the audit runs
+    -- for the same reason the import list is computed from the
+    checker's own collector: two implementations of one fact drift.
+    """
     # Arrange
     source = _render()
     # Act
-    skips = "importorskip" in source
+    full_path_skips = find_full_path_skips(source)
     # Assert
-    assert not skips
+    assert full_path_skips == ()
+
+
+def test_the_root_skip_is_actually_present():
+    """The companion to the above: zero findings must not mean zero skips.
+
+    `find_full_path_skips` returns () both for a correctly-rooted skip
+    and for a file with no skip whatsoever. Asserting only the empty
+    result would pass on the very regression this pair exists to catch.
+    """
+    # Arrange
+    source = _render()
+    # Act
+    skips_on_root = "pytest.importorskip(root)" in source
+    # Assert
+    assert skips_on_root
+
+
+def test_the_detector_fires_on_the_shape_we_replaced():
+    """Positive control: the graded assertion above must be falsifiable.
+
+    Without this, a `find_full_path_skips` that silently stopped
+    detecting anything would make every sibling assertion vacuously
+    true -- an empty result answering a question nobody asked.
+    """
+    # Arrange
+    source = _render()
+    regressed = source.replace(
+        '    root = module_name.split(".")[0]\n    pytest.importorskip(root)',
+        "    pytest.importorskip(module_name)",
+    )
+    # Act
+    findings = find_full_path_skips(regressed)
+    # Assert
+    assert regressed != source and len(findings) == 1
 
 
 def test_gate_names_the_command_that_regenerates_it():
@@ -206,7 +261,7 @@ def test_absent_tail_yields_the_default_body():
     assert has_default_test
 
 
-def test_the_default_tail_hard_imports_rather_than_skipping():
+def test_the_default_tail_skips_on_root_and_hard_imports_the_full_path():
     """A gate that skips on the FULL path cannot fail for its own purpose.
 
     Measured 2026-08-16 by dry-running the regenerator before a pilot sweep:
@@ -228,9 +283,10 @@ def test_the_default_tail_hard_imports_rather_than_skipping():
     # Arrange
     tail = DEFAULT_GATE_TAIL
     # Act
-    skips_on_missing = "importorskip" in tail
+    skips_on_the_full_path = find_full_path_skips(_render()) != ()
+    skips_on_the_root = "pytest.importorskip(root)" in tail
     # Assert
-    assert not skips_on_missing
+    assert not skips_on_the_full_path and skips_on_the_root
 
 
 def test_split_of_a_rendered_gate_round_trips():

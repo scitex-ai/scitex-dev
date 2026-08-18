@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import click
 
+from ._alias_remedy import ALIAS_REMEDY_CAVEAT
+
 # Legacy / flat gui-adjacent leaf names the doctrine's "Migration" section
 # names or implies (`<cli> gui`, `<cli> board`, `<cli> dashboard`,
 # `start-dashboard`-style compounds). `"gui"` itself is only a violation
@@ -117,7 +119,7 @@ def check_gui_command_group(root: click.BaseCommand, package: str, out: list) ->
                         "(doctrine 19_gui-commands.md 'Migration'); either "
                         "rename to the group shape directly, or register a "
                         "Phase W/E `scitex_dev.ecosystem.deprecated_alias()` "
-                        "forwarding to `gui open`.",
+                        "forwarding to `gui open`." + ALIAS_REMEDY_CAVEAT,
                     )
                 )
 

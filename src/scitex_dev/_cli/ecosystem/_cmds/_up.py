@@ -229,6 +229,25 @@ def _supports_extra_providers(discover_callable) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _bring_up_supervisor(*, udir, yes, runner, which_fn, log):
+    """Write the supervisor unit and, with ``--yes``, enable it.
+
+    Extracted so BOTH the normal path and the cron-abort path reach it.
+    The supervisor is independent of the crontab: it runs service-kind
+    JobSpecs as children and writes no cron lines, so a crontab that
+    refuses to install is not a reason to leave the daemon down.
+    """
+    supervisor_path = write_supervisor_unit(udir)
+    log(f"supervisor: wrote {supervisor_path}")
+    systemctl_missing = which_fn("systemctl") is None
+    supervisor_enabled = False
+    if yes:
+        supervisor_enabled = _enable_supervisor_unit(
+            systemctl_runner=runner, echo=log
+        )
+    return supervisor_path, supervisor_enabled, systemctl_missing
+
+
 def run_up(
     *,
     yes: bool = False,
@@ -283,17 +302,38 @@ def run_up(
         # precisely because jobs were degraded. Zero-subjects and
         # zero-problems rendered identically on the one path where they
         # mean opposite things.
-        return UpResult(error=str(exc), timer_jobs_degraded=degraded_n)
+        #
+        # THE SUPERVISOR IS STILL BROUGHT UP. This return used to end the
+        # function, coupling two INDEPENDENT artifacts: a crontab block,
+        # and a systemd unit that runs service-kind jobs and installs no
+        # cron lines at all. Measured 2026-08-18: nine cron-bound jobs in
+        # ONE package aborted here, so the supervisor unit was never
+        # written or enabled — and scitex-dev, the package that owns the
+        # fleet's job standard, was resident on ZERO hosts. Refusing to
+        # install a weakened crontab is correct; extending that refusal to
+        # the daemon is not, and it made the whole fleet's supervisor
+        # hostage to one leaf's declarations.
+        _sup_path, sup_enabled, sup_missing = _bring_up_supervisor(
+            udir=udir, yes=yes, runner=runner, which_fn=which_fn, log=log
+        )
+        # Report what actually happened. Returning the supervisor fields as
+        # their defaults would say "unit not written" about a run that just
+        # wrote it — the same disagree-with-reality shape this abort path was
+        # already fixed for once (`timer_jobs_degraded` used to return 0 from
+        # the very abort that degraded jobs caused).
+        return UpResult(
+            error=str(exc),
+            timer_jobs_degraded=degraded_n,
+            supervisor_unit_written=True,
+            supervisor_unit_enabled=sup_enabled,
+            systemctl_missing=sup_missing,
+        )
 
     cron_installed = _install_cron_block(cron_jobs=cron_merged, yes=yes, echo=log)
 
-    supervisor_path = write_supervisor_unit(udir)
-    log(f"supervisor: wrote {supervisor_path}")
-
-    systemctl_missing = which_fn("systemctl") is None
-    supervisor_enabled = False
-    if yes:
-        supervisor_enabled = _enable_supervisor_unit(systemctl_runner=runner, echo=log)
+    _sup_path, supervisor_enabled, systemctl_missing = _bring_up_supervisor(
+        udir=udir, yes=yes, runner=runner, which_fn=which_fn, log=log
+    )
 
     return UpResult(
         cron_jobs_installed=cron_installed,

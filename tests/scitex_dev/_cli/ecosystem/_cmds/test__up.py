@@ -162,6 +162,76 @@ def test_run_up_supervisor_unit_written_flag_true_even_without_yes(tmp_path):
     assert result.supervisor_unit_written is True
 
 
+# --- the cron abort must not keep the daemon down -------------------------
+#
+# REGRESSION. `TimerLoweringError` used to return before the supervisor was
+# written or enabled, so nine cron-bound jobs in ONE package kept the whole
+# fleet's supervisor from ever coming up — measured 2026-08-18: zero
+# scitex-dev timers on any host. The crontab and the supervisor unit are
+# independent artifacts; refusing the first is not a reason to refuse the
+# second.
+
+
+def _degrading_timer():
+    """A timer whose declared timeout cron cannot carry — forces the abort."""
+    return JobSpec(
+        name="pkg.refresh-thing",
+        kind="timer",
+        schedule="",
+        command="true",
+        description="d",
+        on_unit_active_sec="5min",
+        timeout_sec=120,
+    )
+
+
+def test_cron_abort_still_writes_the_supervisor_unit(tmp_path):
+    # Arrange
+    job = _degrading_timer()
+    # Act
+    _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=lambda: [job],
+    )
+    # Assert — the unit file exists despite the cron half refusing.
+    assert (tmp_path / SUPERVISOR_UNIT_NAME).exists()
+
+
+def test_cron_abort_still_reports_the_abort(tmp_path):
+    """The refusal is unchanged — only the daemon stopped being collateral."""
+    # Arrange
+    job = _degrading_timer()
+    # Act
+    result = _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=lambda: [job],
+    )
+    # Assert
+    assert result.error
+
+
+def test_cron_abort_result_says_the_unit_was_written(tmp_path):
+    """The report must match what happened, not return a stale default."""
+    # Arrange
+    job = _degrading_timer()
+    # Act
+    result = _up.run_up(
+        yes=False,
+        systemctl_runner=_ok_systemctl,
+        unit_dir=tmp_path,
+        echo=lambda _: None,
+        discover=lambda: [job],
+    )
+    # Assert
+    assert result.supervisor_unit_written is True
+
+
 def test_run_up_does_not_enable_without_yes(tmp_path):
     # Arrange
     calls: list[list[str]] = []

@@ -59,6 +59,9 @@ interfaces:
 - [30_agentic-test-overview.md](30_agentic-test-overview.md) — Four-layer testing model + shared newbie-docker substrate
 - [31_agentic-test-skills.md](31_agentic-test-skills.md) — Skill trigger-rate testing (Layer 2 for skills)
 - [32_agentic-test-mcp.md](32_agentic-test-mcp.md) — MCP tool-call evaluation (Layer 2+3 for MCP)
+- [33_handyman-delegation.md](33_handyman-delegation.md) — Delegating work to handymen (DRAFT: written from zero completed delegations)
+- [34_handyman-verification.md](34_handyman-verification.md) — Confirming a delegated task is actually being worked (DRAFT)
+- [35_handyman-briefs.md](35_handyman-briefs.md) — Writing the brief itself (DRAFT)
 
 ### Distribution (40–49)
 - [40_distribution.md](40_distribution.md) — Skill cache update mechanics + drift detection
