@@ -313,10 +313,21 @@ def run_up(
         # install a weakened crontab is correct; extending that refusal to
         # the daemon is not, and it made the whole fleet's supervisor
         # hostage to one leaf's declarations.
-        _bring_up_supervisor(
+        _sup_path, sup_enabled, sup_missing = _bring_up_supervisor(
             udir=udir, yes=yes, runner=runner, which_fn=which_fn, log=log
         )
-        return UpResult(error=str(exc), timer_jobs_degraded=degraded_n)
+        # Report what actually happened. Returning the supervisor fields as
+        # their defaults would say "unit not written" about a run that just
+        # wrote it — the same disagree-with-reality shape this abort path was
+        # already fixed for once (`timer_jobs_degraded` used to return 0 from
+        # the very abort that degraded jobs caused).
+        return UpResult(
+            error=str(exc),
+            timer_jobs_degraded=degraded_n,
+            supervisor_unit_written=True,
+            supervisor_unit_enabled=sup_enabled,
+            systemctl_missing=sup_missing,
+        )
 
     cron_installed = _install_cron_block(cron_jobs=cron_merged, yes=yes, echo=log)
 
