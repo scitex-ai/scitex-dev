@@ -344,7 +344,15 @@ def check_ps231_workflow_duplication(
                     "exemption for this path under `audit.exemptions`. A "
                     "local copy does not track fixes made to the org "
                     "workflow: the `scitex-ci` runner-label defect was fixed "
-                    "org-side on 2026-08-15 and every copy kept it."
+                    "org-side on 2026-08-15 and every copy kept it. "
+                    "NOTE, once converted: a caller has no local `runs-on:`, "
+                    "so a hosted-runner allowlist entry for this path may "
+                    "start to look unnecessary. IT IS NOT. The runner choice "
+                    "moved upstream into the reusable; it did not disappear. "
+                    "Do NOT delete such an entry as part of this conversion "
+                    "— on at least one workflow that entry is the security "
+                    "argument, not bookkeeping. Pass `runs_on` explicitly in "
+                    "the caller so the decision stays locally visible."
                 ),
             )
         )
