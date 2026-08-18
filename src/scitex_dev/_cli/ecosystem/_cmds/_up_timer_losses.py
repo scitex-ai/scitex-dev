@@ -22,11 +22,29 @@ deployment could not honour. Measured consequence (2026-07-18):
 ``sac.fleet-reconcile`` accumulated fourteen concurrent instances, the
 oldest 45 minutes old, because nothing bounded a run.
 
+Carried, not merely refused
+---------------------------
+``timeout_sec`` is no longer dropped at all in the ordinary case: the
+lowering materialises it as a ``timeout <N> `` prefix on the cron line
+(:func:`cron_command_for`), so the bound is declared ONCE on the JobSpec
+and each rail expresses it natively — ``TimeoutStartSec=`` on a systemd
+unit, a ``timeout`` prefix on a crontab line. It reverts to a blocking
+loss only for a compound command, where the prefix would bind just the
+first stage.
+
+The tempting alternative — asking each leaf to put ``timeout 120 ...``
+in ``JobSpec.command`` — is WRONG and was nearly shipped. ``resolve_
+execstart`` absolutises only the head token, so that command renders as
+``ExecStart=/usr/bin/timeout 120 sac ...`` with ``sac`` still relative
+under systemd's minimal PATH: exit 127, and the loud unresolvable-head
+warning never fires because the head resolved. Ten working timers would
+have become silent crash-loopers. Caught by sac, 2026-08-19.
+
 Two tiers, both reported, only one blocking:
 
-* **blocking** (``timeout_sec``, ``venv``) — a dropped guarantee. The
-  deployed artifact is genuinely weaker than the registry claims, so
-  the reconcile refuses THAT JOB.
+* **blocking** (``venv``, and ``timeout_sec`` for a compound command) —
+  a dropped guarantee. The deployed artifact is genuinely weaker than
+  the registry claims, so the reconcile refuses THAT JOB.
 * **advisory** (``on_boot_sec``) — a dropped preference. Echoed on
   every run, never blocking. Measured on the live fleet 2026-07-19,
   ALL 10 timer JobSpecs drop something but only 7 drop a guarantee;
@@ -94,6 +112,11 @@ _INAPPLICABLE_TO_TIMER = frozenset(
 #: actually resolves to and runs against, so losing one silently changes
 #: what executes. ``remain_after_exit`` is advisory: it only shapes what
 #: ``systemctl is-active`` reports, and cron has no unit to report on.
+#: ``timeout_sec`` stays here even though the lowering now CARRIES it as a
+#: ``timeout <N> `` prefix: it is still INSPECTED, and it is still lost in
+#: the one case the prefix cannot express (a compound command). Listing it
+#: as translated would claim it always survives, which is the kind of
+#: half-true classification this table exists to prevent.
 _LOSS_DETECTED_FIELDS = frozenset(
     {
         "timeout_sec",
@@ -106,6 +129,56 @@ _LOSS_DETECTED_FIELDS = frozenset(
         "environment_file",
     }
 )
+
+
+#: Shell operators that make a command unsafe to prefix with ``timeout``.
+#:
+#: ``timeout 120 a && b`` runs ``b`` UNBOUNDED — the shell binds ``&&``
+#: after ``timeout`` has already taken its argv. Same for ``;``, ``|``
+#: and redirections. Substitutions (``$(...)``, backticks) are included
+#: because what they expand to is not knowable at render time, so the
+#: wrap cannot be shown to bind the real command.
+_SHELL_OPERATORS = ("&&", "||", "|", ";", "&", ">", "<", "$", "`", "\n")
+
+
+def command_is_wrappable(command: str) -> bool:
+    """True when ``timeout <N> `` can be prefixed without changing meaning.
+
+    Pure. The cron rail materialises :attr:`JobSpec.timeout_sec` as a
+    ``timeout`` prefix, which is faithful for a plain ``argv``-shaped
+    command and a LIE for a compound one: the bound would cover only
+    the first stage while the crontab line still carries the job's name
+    and its declared timeout.
+
+    Deploying a job that looks bounded and is not is strictly worse
+    than refusing it, which is why this returns False rather than
+    trying to be clever with quoting — an ``sh -c`` wrap would work but
+    needs `%`-escaping for crontab and careful requoting, and no job in
+    the fleet needs it today (measured 2026-08-19: 0 of 10).
+    """
+    return not any(op in command for op in _SHELL_OPERATORS)
+
+
+def cron_command_for(job: JobSpec) -> str:
+    """Render ``job``'s command for a cron line, carrying the bound. Pure.
+
+    This is where ``timeout_sec`` survives the trip to cron. It is
+    deliberately NOT done by rewriting ``JobSpec.command`` upstream:
+    ``resolve_execstart`` absolutises only the HEAD token, so a
+    ``timeout 120 sac ...`` command would render the systemd unit as
+    ``/usr/bin/timeout 120 sac ...`` with ``sac`` left relative under
+    systemd's minimal PATH — exit 127, and the loud unresolvable-head
+    warning would not fire because the head resolved fine. Credit to
+    sac for catching that before it shipped (2026-08-19).
+
+    The cron rail has no such hazard: ``build_cron_line`` interpolates
+    the command verbatim and the synthetic cron JobSpec reaches no
+    ``resolve_execstart`` caller, so the prefix binds exactly what it
+    appears to bind.
+    """
+    if job.timeout_sec is None or not command_is_wrappable(job.command):
+        return job.command
+    return f"timeout {job.timeout_sec} {job.command}"
 
 
 @dataclass(frozen=True)
@@ -230,20 +303,24 @@ def lowering_losses(job: JobSpec) -> tuple[DroppedProperty, ...]:
             )
         )
 
-    if job.timeout_sec is not None:
+    if job.timeout_sec is not None and not command_is_wrappable(job.command):
         losses.append(
             DroppedProperty(
                 field="timeout_sec",
                 declared=job.timeout_sec,
                 consequence=(
-                    "a cron line has no timeout; the job would deploy "
-                    "UNBOUNDED, so a run that outlives its own cadence "
-                    "piles up against the next one instead of being killed"
+                    "the lowering normally carries timeout_sec as a "
+                    "`timeout <N> ` prefix on the cron line, but this "
+                    "command contains a shell operator, and `timeout N a "
+                    "&& b` bounds only `a` — so the wrap would deploy a "
+                    "job that LOOKS bounded and is not, which is worse "
+                    "than one honestly reported as unbounded"
                 ),
                 remedy=(
-                    "make the command self-bounding (its own --timeout, or "
-                    "a `timeout` in the JobSpec.command itself), or drop "
-                    "timeout_sec from the JobSpec to state honestly that "
+                    "split the compound command into separate JobSpecs "
+                    "(each then gets its own honest bound), or move the "
+                    "shell logic into a script and point command at that "
+                    "script, or drop timeout_sec to state honestly that "
                     "the run is unbounded"
                 ),
             )

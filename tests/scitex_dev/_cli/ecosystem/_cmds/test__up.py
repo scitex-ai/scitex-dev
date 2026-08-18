@@ -73,9 +73,13 @@ def _cron_provider():
 
 
 def _degraded_timer_provider():
-    """Two timers cron cannot honour — `timeout_sec` has no cron equivalent.
+    """Two timers cron cannot honour — each pins a leaf-owned `venv`.
 
-    Without ``--allow-lossy-timer-lowering`` this ABORTS the reconcile,
+    NOT `timeout_sec`: since 2026-08-19 the lowering CARRIES that as a
+    `timeout <N> ` prefix, so it is no longer a refusal trigger for an
+    ordinary command. `venv` still is — a crontab line cannot select an
+    interpreter. Without ``--allow-lossy-timer-lowering`` each of these
+    is REFUSED INDIVIDUALLY (the block still installs everything else),
     which is the path the tests below interrogate.
     """
     return [
@@ -86,7 +90,7 @@ def _degraded_timer_provider():
             command="mock refresh-a",
             description="mock refresh a",
             on_unit_active_sec="15min",
-            timeout_sec=300,
+            venv="/opt/leaf-a",
         ),
         JobSpec(
             name="mock.bounded-b",
@@ -95,7 +99,7 @@ def _degraded_timer_provider():
             command="mock refresh-b",
             description="mock refresh b",
             on_unit_active_sec="30min",
-            timeout_sec=600,
+            venv="/opt/leaf-b",
         ),
     ]
 
@@ -162,7 +166,7 @@ def test_run_up_supervisor_unit_written_flag_true_even_without_yes(tmp_path):
     assert result.supervisor_unit_written is True
 
 
-# --- the cron abort must not keep the daemon down -------------------------
+# --- a cron refusal must not keep the daemon down -------------------------
 #
 # REGRESSION. `TimerLoweringError` used to return before the supervisor was
 # written or enabled, so nine cron-bound jobs in ONE package kept the whole
@@ -173,7 +177,7 @@ def test_run_up_supervisor_unit_written_flag_true_even_without_yes(tmp_path):
 
 
 def _degrading_timer():
-    """A timer whose declared timeout cron cannot carry — forces the abort."""
+    """A timer pinning a venv cron cannot select — forces the refusal."""
     return JobSpec(
         name="pkg.refresh-thing",
         kind="timer",
@@ -181,11 +185,11 @@ def _degrading_timer():
         command="true",
         description="d",
         on_unit_active_sec="5min",
-        timeout_sec=120,
+        venv="/opt/leaf-c",
     )
 
 
-def test_cron_abort_still_writes_the_supervisor_unit(tmp_path):
+def test_cron_refusal_still_writes_the_supervisor_unit(tmp_path):
     # Arrange
     job = _degrading_timer()
     # Act
@@ -200,7 +204,7 @@ def test_cron_abort_still_writes_the_supervisor_unit(tmp_path):
     assert (tmp_path / SUPERVISOR_UNIT_NAME).exists()
 
 
-def test_cron_abort_still_reports_the_abort(tmp_path):
+def test_cron_refusal_is_still_reported(tmp_path):
     """The refusal is unchanged — only the daemon stopped being collateral."""
     # Arrange
     job = _degrading_timer()
@@ -216,7 +220,7 @@ def test_cron_abort_still_reports_the_abort(tmp_path):
     assert result.error
 
 
-def test_cron_abort_result_says_the_unit_was_written(tmp_path):
+def test_cron_refusal_result_says_the_unit_was_written(tmp_path):
     """The report must match what happened, not return a stale default."""
     # Arrange
     job = _degrading_timer()
@@ -308,10 +312,10 @@ def test_run_up_reports_zero_lowered_for_pure_cron_kind(tmp_path):
 # --------------------------------------------------------------------------- #
 # run_up — the ABORT path must carry OUT the count that caused it              #
 #                                                                              #
-# `degraded_n` is computed before the lowering is attempted, and the abort      #
+# `degraded_n` is computed before the lowering is attempted, and the refusal    #
 # branch used to discard it: `return UpResult(error=str(exc))`. Every other     #
 # field then took its default, so a programmatic caller reading                #
-# `result.timer_jobs_degraded` on an abort saw 0 — "no jobs were degraded" —    #
+# `result.timer_jobs_degraded` on a refusal saw 0 — "no jobs degraded" —        #
 # about the one run that refused to install ANYTHING precisely because jobs     #
 # were degraded. Zero-subjects and zero-problems rendered identically on the    #
 # single path where they mean opposite things, and a before/after comparison    #
@@ -321,8 +325,8 @@ def test_run_up_reports_zero_lowered_for_pure_cron_kind(tmp_path):
 # --------------------------------------------------------------------------- #
 
 
-def test_run_up_abort_carries_the_degraded_count(tmp_path):
-    # Arrange — two timers cron cannot honour; no opt-in flag, so it aborts.
+def test_run_up_refusal_carries_the_degraded_count(tmp_path):
+    # Arrange — two timers cron cannot honour; no opt-in flag, so both are refused.
     # Act
     result = _up.run_up(
         yes=False,
@@ -331,11 +335,11 @@ def test_run_up_abort_carries_the_degraded_count(tmp_path):
         echo=lambda _: None,
         discover=_degraded_timer_provider,
     )
-    # Assert — the count that caused the abort survives the abort.
+    # Assert — the count that caused the refusal survives it.
     assert result.timer_jobs_degraded == 2
 
 
-def test_run_up_abort_sets_an_error(tmp_path):
+def test_run_up_refusal_sets_an_error(tmp_path):
     # Arrange
     # Act
     result = _up.run_up(
@@ -345,11 +349,11 @@ def test_run_up_abort_sets_an_error(tmp_path):
         echo=lambda _: None,
         discover=_degraded_timer_provider,
     )
-    # Assert — the abort is still an abort; the count does not soften it.
+    # Assert — a refusal still fails the run; the count does not soften it.
     assert result.error is not None
 
 
-def test_run_up_abort_does_not_report_degraded_as_zero(tmp_path):
+def test_run_up_refusal_does_not_report_degraded_as_zero(tmp_path):
     # Arrange — the specific false reading this regression exists to kill.
     # Act
     result = _up.run_up(

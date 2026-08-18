@@ -293,10 +293,17 @@ def run_up(
     without patching production internals.
 
     ``allow_lossy_timer_lowering`` opts into deploying timer jobs whose
-    declared properties (``timeout_sec`` …) cron cannot carry. Without
-    it, such a job ABORTS the reconcile with a structured ``error`` on
-    the result rather than quietly installing a weaker artifact under
-    the same name; with it, every degraded job is echoed in full.
+    declared properties (``venv``, or ``timeout_sec`` on a compound
+    command) cron cannot carry. Without it, each such job is REFUSED
+    INDIVIDUALLY — left out of the block, named on the result, and
+    reflected in a structured ``error`` — rather than quietly installing
+    a weaker artifact under the same name; with it, every degraded job
+    is echoed in full and installed anyway.
+
+    ``timeout_sec`` is deliberately NOT in that set for an ordinary
+    command: the lowering carries it as a ``timeout <N> `` prefix, so
+    the bound survives onto the crontab line instead of being traded
+    for a refusal.
     """
     runner = systemctl_runner or _default_systemctl_runner
     udir = unit_dir or _unit_dir()

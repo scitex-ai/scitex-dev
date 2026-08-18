@@ -38,6 +38,8 @@ from ._up_timer_losses import (
     accounted_fields,
     advisory_losses,
     blocking_losses,
+    command_is_wrappable,
+    cron_command_for,
     format_degraded_report,
     format_loss_report,
     jobspec_field_names,
@@ -77,7 +79,7 @@ def timer_to_cron_jobspec(
         name=job.name,
         kind="cron",
         schedule=derive_cron_expr(job),
-        command=job.command,
+        command=cron_command_for(job),
         description=job.description,
     )
 
@@ -215,6 +217,8 @@ __all__ = [
     "advisory_losses",
     "blocking_losses",
     "collect_cron_jobs",
+    "command_is_wrappable",
+    "cron_command_for",
     "degraded_job_names",
     "derive_cron_expr",
     "format_degraded_report",
