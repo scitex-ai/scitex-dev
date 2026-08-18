@@ -282,12 +282,28 @@ def _run_with_path(runner, tmp_path: Path, *cli_args):
     shim_dir = tmp_path / "bin"
     shim_dir.mkdir()
     _install_shim(shim_dir, log)
-    result = runner.invoke(
-        main,
-        ["ecosystem", "audit-all", "--no-version-check", *cli_args],
-        env=_shim_env(shim_dir),
-        catch_exceptions=False,
-    )
+    # The auditor is selected by pointing the INTERPRETER at the shim: the
+    # launcher is `sys.executable -m scitex_dev`, not a PATH lookup (sac's
+    # P1). `_audit_all` imports sys inside the command function, so there is
+    # no module attribute to patch — the local import binds the real module,
+    # and patching `sys.executable` reaches it.
+    #
+    # `_shim_env` still puts the shim on PATH deliberately: if the fan-out
+    # ever regresses to `shutil.which`, these tests keep passing and the
+    # dedicated hostile-PATH test is the one that fails.
+    import sys as _sys
+
+    saved = _sys.executable
+    _sys.executable = str(shim_dir / "scitex-dev")
+    try:
+        result = runner.invoke(
+            main,
+            ["ecosystem", "audit-all", "--no-version-check", *cli_args],
+            env=_shim_env(shim_dir),
+            catch_exceptions=False,
+        )
+    finally:
+        _sys.executable = saved
     return log, result
 
 
@@ -296,6 +312,10 @@ def _argvs_by_auditor(log: Path) -> dict[str, list[str]]:
     out: dict[str, list[str]] = {}
     for ln in log.read_text().splitlines():
         argv = ln.split()
+        # The shim now receives `-m scitex_dev ecosystem audit-<name> ...`;
+        # strip the module-execution prefix before keying on the verb.
+        if argv[:2] == ["-m", "scitex_dev"]:
+            argv = argv[2:]
         if len(argv) >= 2 and argv[0] == "ecosystem":
             out[argv[1]] = argv
     return out

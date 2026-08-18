@@ -54,6 +54,10 @@ def _write_fake_scitex_dev(
     body = f"""#!/usr/bin/env python3
 import sys
 argv = sys.argv[1:]
+# The launcher is now `<python> -m scitex_dev ecosystem audit-<name> <pkg>`,
+# so strip the module-execution prefix before reading the audit name.
+if argv[:2] == ["-m", "scitex_dev"]:
+    argv = argv[2:]
 audit = argv[1] if len(argv) > 1 else ""
 failing_line = {failing_line!r}
 warning_line = {warning_line!r}
@@ -91,6 +95,10 @@ def _run(
 
     register_ecosystem_commands(main)
     runner = CliRunner()
+    # PATH stays shimmed deliberately: `audit-all` must NOT consult it any
+    # more (sac's P1), so leaving it means an accidental regression to
+    # `shutil.which` keeps these green while the dedicated hostile-PATH test
+    # is the one that fails — which is where that signal belongs.
     env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
     argv = [
         "ecosystem",
@@ -102,7 +110,19 @@ def _run(
     ]
     if as_json:
         argv.append("--json")
-    return runner.invoke(main, argv, env=env, catch_exceptions=False)
+    # The auditor is selected by pointing the INTERPRETER at the stub,
+    # because the launcher is `sys.executable -m scitex_dev`. `_audit_all`
+    # imports sys inside the command function, so there is no module
+    # attribute to patch — the local import binds the real module, and
+    # patching `sys.executable` reaches it.
+    import sys as _sys
+
+    saved = _sys.executable
+    _sys.executable = str(bin_dir / "scitex-dev")
+    try:
+        return runner.invoke(main, argv, env=env, catch_exceptions=False)
+    finally:
+        _sys.executable = saved
 
 
 _CONFIG_WITH_RATIONALE = f'audit:\n  skip-rules:\n    PS-139: "{_RATIONALE}"\n'
