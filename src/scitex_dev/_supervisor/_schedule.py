@@ -115,7 +115,13 @@ def _cadence_from_cron(expr: str) -> float | None:
     parts = expr.split()
     if len(parts) != 5:
         return None
-    minute, hour, dom, _month, _dow = parts
+    minute, hour, dom, month, dow = parts
+    # A constrained day-of-week or month is NOT an interval. "0 9 * * 1-5"
+    # fires on weekdays only; calling it "every 86400s" would schedule it on
+    # Saturdays too. Caught by its own test — the first draft read only the
+    # minute and hour fields and silently answered daily.
+    if dow != "*" or month != "*":
+        return None
     if minute.startswith("*/") and hour == "*":
         return float(minute[2:]) * 60.0
     if minute.isdigit() and hour.startswith("*/"):
