@@ -210,62 +210,69 @@ def test_audit_all_for_package_without_path_still_passes_the_distribution(
 # be an orphan with no src file to mirror (PS-204).
 # ---------------------------------------------------------------------------
 
-def test_the_helper_launches_the_interpreter_under_test(monkeypatch, tmp_path) -> None:
-    """Behavioural, not textual.
+def test_the_helper_launches_the_interpreter_under_test(tmp_path):
+    """NO MOCKS (PA-306): a real shim, a real subprocess, a real argv log.
 
-    My first version of this grepped the source for
-    `shutil.which("scitex-dev")` and asserted it absent — and FAILED,
-    because the explanatory comment above the fix quotes the old code.
-    A predicate that matches the ARTIFACT (a string anywhere in the
-    file) rather than the THING (a live call site) is the same defect
-    this whole card is about, committed while writing a test about
-    precision. So: capture the argv actually handed to subprocess.
+    My first version used `monkeypatch` to capture the argv handed to
+    `subprocess.run`. That is forbidden here and the rule is right — the
+    thing worth proving is that a REAL launch reaches the interpreter
+    under test, which a captured call list cannot show.
+
+    Pointing `sys.executable` at a recording shim is not a mock: the
+    helper really forks it, and the log is what the process actually
+    received.
     """
     # Arrange
-    seen: dict = {}
+    from scitex_dev.testing import audit_all_for_package
 
-    class _Proc:
-        returncode = 0
-        stdout = ""
-        stderr = ""
-
-    def _fake_run(argv, **kw):
-        seen["argv"] = argv
-        return _Proc()
-
-    monkeypatch.setattr(conformance.subprocess, "run", _fake_run)
+    log = tmp_path / "argv.log"
+    shim_dir = tmp_path / "bin"
+    shim_dir.mkdir()
+    script = _install_shim(shim_dir, log)
+    saved = sys.executable
+    sys.executable = str(script)
     # Act
-    conformance.audit_all_for_package("scitex-dev", path=tmp_path)
+    try:
+        audit_all_for_package("scitex-dev")
+    finally:
+        sys.executable = saved
     # Assert
-    assert seen["argv"][:3] == [sys.executable, "-m", "scitex_dev"]
+    assert "-m scitex_dev ecosystem audit-all scitex-dev" in log.read_text()
 
 
-def test_the_helper_ignores_a_hostile_binary_on_PATH(monkeypatch, tmp_path) -> None:
-    """PATH must not be consulted at all.
+def test_a_hostile_binary_on_PATH_is_never_launched(tmp_path):
+    """PATH must not be consulted at all — sac's P1, proven by execution.
 
-    Verified end to end as well: with a fake `scitex-dev` planted first
-    on PATH that exits 3 and prints a marker, the real gate runs its
-    full six-sub-auditor sweep (25s) and passes — the impostor is never
-    executed.
+    A hostile `scitex-dev` sits FIRST on PATH and writes a marker if it
+    runs. The recording shim is reached only through `sys.executable`.
+    If the helper ever regresses to `shutil.which`, the marker appears.
     """
     # Arrange
-    seen: dict = {}
+    from scitex_dev.testing import audit_all_for_package
 
-    class _Proc:
-        returncode = 0
-        stdout = ""
-        stderr = ""
+    log = tmp_path / "argv.log"
+    good_dir = tmp_path / "good"
+    good_dir.mkdir()
+    script = _install_shim(good_dir, log)
 
-    monkeypatch.setattr(
-        conformance.shutil, "which", lambda *_a, **_k: "/tmp/hostile/scitex-dev"
-    )
-    monkeypatch.setattr(
-        conformance.subprocess, "run", lambda argv, **kw: (seen.__setitem__("argv", argv), _Proc())[1]
-    )
+    hostile_dir = tmp_path / "hostile"
+    hostile_dir.mkdir()
+    hostile = hostile_dir / "scitex-dev"
+    hostile.write_text(f"#!/bin/sh\nprintf 'HOSTILE\\n' >> {log}\nexit 0\n")
+    hostile.chmod(hostile.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+    saved_path = os.environ["PATH"]
+    saved_exe = sys.executable
+    os.environ["PATH"] = f"{hostile_dir}{os.pathsep}{saved_path}"
+    sys.executable = str(script)
     # Act
-    conformance.audit_all_for_package("scitex-dev", path=tmp_path)
+    try:
+        audit_all_for_package("scitex-dev")
+    finally:
+        os.environ["PATH"] = saved_path
+        sys.executable = saved_exe
     # Assert
-    assert "/tmp/hostile/scitex-dev" not in seen["argv"]
+    assert "HOSTILE" not in log.read_text()
 
 
 def test_the_subauditor_fanout_uses_the_same_interpreter() -> None:
