@@ -31,6 +31,7 @@ from ._audit_outcome import (
 from ._import_vantage import (
     DEFAULT_ENV_VAR,
     ForeignImportError,
+    PackageNotImportableError,
     assert_imports_tree_under_test,
     assert_path_inside_tree,
     make_pytest_configure,
@@ -43,6 +44,7 @@ __all__ = [
     "VERDICT_PASS",
     "VERDICT_UNKNOWN",
     "ForeignImportError",
+    "PackageNotImportableError",
     "assert_imports_tree_under_test",
     "assert_path_inside_tree",
     "audit_all_for_package",
