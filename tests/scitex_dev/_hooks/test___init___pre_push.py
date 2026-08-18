@@ -223,9 +223,26 @@ class TestPrePushPythonFallback:
         # exit code (the tmp repo has no pyproject.toml so audit-all may
         # itself complain), only that the PROBE picked tier 2.
         combined = proc.stdout + proc.stderr
+        # The middle probe used to be a bare `"not importable" not in
+        # combined`, which matched ANY occurrence of that substring.
+        #
+        # It passed for the WRONG REASON. Under this test's sterile PATH
+        # (which deliberately omits `scitex-dev`), the sub-auditors could
+        # not launch at all, so they emitted nothing. Once `audit-all`
+        # started launching them via `sys.executable -m scitex_dev` —
+        # sac's P1 fix, 2026-08-18 — they RUN, and one of their ordinary
+        # INFO lines about the throwaway tmp repo is:
+        #
+        #     INFO: repo: cannot locate __init__.py for 'repo'
+        #           — package not importable, skipped.
+        #
+        # Benign, and nothing to do with the hook's probe. So the assertion
+        # now names the FAILURE it means — the hook's own tier-1 error at
+        # `pre-push.sh`'s `echo_error` — instead of a substring that any
+        # sub-auditor may legitimately print.
         emitted = (
             "python3 -m scitex_dev" in combined,
-            "not importable" not in combined,
+            "scitex-dev not importable" not in combined,
             "Editable install may have drifted" not in combined,
         )
         assert emitted == (True, True, True), (
