@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import click
 
+from ._alias_remedy import ALIAS_REMEDY_CAVEAT
+
 # The operator's canonical 6 self-maintenance verbs. Chosen because none
 # is plausibly a package's DOMAIN verb (unlike image/ci/pytest/…), so
 # flagging them at top level yields near-zero false positives.
@@ -91,7 +93,7 @@ def check_dev_command_group(
                         f"20_dev-commands.md). Either move it under a `dev` "
                         f"group, or register a Phase W/E "
                         f"scitex_dev.ecosystem.deprecated_alias() forwarding "
-                        f"to `dev {name}`.",
+                        f"to `dev {name}`." + ALIAS_REMEDY_CAVEAT,
                     )
                 )
 

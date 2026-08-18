@@ -241,6 +241,58 @@ def rule_codes(findings: list[str]) -> list[str]:
     return sorted({code for code in map(rule_code, findings) if code})
 
 
+def is_error_tier(line: str) -> bool:
+    """Did this finding line come in at ERROR tier rather than WARN/INFO?
+
+    Both emitted shapes are covered::
+
+        ERRO:   [E] [PS-207 §2 empty-test-dir] ...   -> True
+        WARN:   [SK-302 §3 leaf-not-linked] ...      -> False
+
+    NOT A GATING PREDICATE, and the distinction is the whole reason this
+    function is named for the TIER. We run outside the audited process and
+    hold exactly two things: its stdout and one exit code. WHICH findings
+    drove that exit is not in either. Deriving "did not gate" from "warn
+    tier" is refuted by this module's own note below: some sub-auditors
+    (audit-skills, audit-project) exit NON-ZERO on WARN-tier findings.
+
+    Reported by figrecipe, 2026-08-18, who read the headline's code census
+    as the causal list, concluded their gate could not go green until a rule
+    they could not influence stopped firing, and told their product lead the
+    repo was structurally blocked — which reached two teams. They proposed
+    labelling the split `gating` / `non-gating`. That label would be a
+    confident answer to a question this process cannot see, which is the
+    defect being fixed rather than a fix for it. So the split ships, and the
+    word does not.
+    """
+    stripped = _ANSI_RE.sub("", line).lstrip()
+    head = stripped.split(":", 1)
+    if len(head) == 2 and head[0].isalpha():
+        level = head[0].upper()
+        if level.startswith(("ERR", "CRIT", "FATAL")):
+            return True
+        if level.startswith(("WARN", "INFO", "NOTIC", "DEBUG")):
+            return False
+    return "[E]" in stripped
+
+
+def rule_codes_by_tier(findings: list[str]) -> tuple[list[str], list[str]]:
+    """``(error_tier_codes, warn_or_info_only_codes)``, both sorted + distinct.
+
+    A code that appears at BOTH tiers counts as error-tier and is absent from
+    the second list: the point of the split is "what should I go fix first",
+    and a rule with any error-tier finding belongs in that answer once.
+    """
+    error: set[str] = set()
+    other: set[str] = set()
+    for line in findings:
+        code = rule_code(line)
+        if code is None:
+            continue
+        (error if is_error_tier(line) else other).add(code)
+    return sorted(error), sorted(other - error)
+
+
 def classify_audit_outcome(returncode: int, output: str) -> tuple[str, list[str]]:
     """Grade one `audit-all` run. Returns ``(verdict, evidence)``.
 
@@ -312,6 +364,18 @@ def unknown_message(
 _MAX_HEADLINE_CODES = 6
 
 
+def _listed(codes: list[str]) -> str:
+    """Comma-joined, truncated, and SAYING how many it dropped.
+
+    Truncation that does not announce itself turns "six rules fired" into
+    "four rules fired" for every downstream reader of the one-line summary.
+    """
+    shown = ", ".join(codes[:_MAX_HEADLINE_CODES])
+    if len(codes) > _MAX_HEADLINE_CODES:
+        shown += f" (+{len(codes) - _MAX_HEADLINE_CODES} more)"
+    return shown
+
+
 def headline_codes(findings: list[str]) -> str:
     """The `: PS-207, SK-302` suffix for the failure message's FIRST line.
 
@@ -332,17 +396,29 @@ def headline_codes(findings: list[str]) -> str:
     Over-long lists are truncated rather than dropped: knowing SIX rules
     fired and being shown six of them beats being shown none.
     """
-    codes = rule_codes(findings)
-    if not codes:
+    errors, others = rule_codes_by_tier(findings)
+    n_error_lines = sum(1 for line in findings if is_error_tier(line))
+    if not errors and not others:
         # Say the words rather than emit a bare `(exit=1)`. An empty suffix
         # is indistinguishable from the old rule-agnostic headline, and this
         # case is not "no information" — it is the specific, reportable
         # shape the `else` digest below explains.
         return ": (no rule-attributable finding line — see below)"
-    shown = ", ".join(codes[:_MAX_HEADLINE_CODES])
-    if len(codes) > _MAX_HEADLINE_CODES:
-        shown += f" (+{len(codes) - _MAX_HEADLINE_CODES} more)"
-    return f": {shown}"
+    if not errors:
+        # Exit non-zero with nothing at error tier. This is the shape the
+        # digest's note describes, and naming it here stops a reader from
+        # hunting for an error that the summary line correctly says is not
+        # there.
+        return f": {_listed(others)} (all at warn/info tier — see note below)"
+    # The COUNT travels with the codes deliberately. figrecipe reconstructed
+    # the causal set after the fact by noticing that a `summary: 6 unmasked
+    # error(s)` line elsewhere in the output was exactly PS-231x5 + PS-140x1
+    # — the report already held the answer, in a different sentence and a
+    # different unit. Putting both in one line means nobody has to notice.
+    lead = f"{_listed(errors)} ({n_error_lines} finding line(s))"
+    if not others:
+        return f": {lead}"
+    return f": {lead} — also reported at warn/info tier: {_listed(others)}"
 
 
 def violations_message(
@@ -362,6 +438,10 @@ def violations_message(
             "        so a `summary: ... 0 unmasked error(s)` line can "
             "legitimately accompany exit=1.\n"
             "        Read the findings above, not the error count.\n"
+            "        The headline splits codes by TIER, which is what this process can see.\n"
+            "        TIER IS NOT GATING: a code listed under `warn/info tier` may still be\n"
+            "        what failed the run. Only the sub-auditor that emitted it knows, and\n"
+            "        it does not say so in this output.\n"
         )
     else:
         digest = (
@@ -387,8 +467,10 @@ __all__ = [
     "could_not_run_evidence",
     "finding_lines",
     "headline_codes",
+    "is_error_tier",
     "rule_code",
     "rule_codes",
+    "rule_codes_by_tier",
     "unknown_message",
     "violations_message",
 ]

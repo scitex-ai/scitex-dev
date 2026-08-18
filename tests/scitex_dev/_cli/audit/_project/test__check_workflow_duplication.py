@@ -376,5 +376,67 @@ def test_every_declared_org_workflow_is_matched_by_its_own_name(org: str) -> Non
     # Assert
     assert matched == org
 
+def test_the_finding_text_survives_being_constructed(tmp_path: Path) -> None:
+    """The braces in the remedy must reach the reader, not the formatter.
+
+    The message is one implicitly-concatenated literal group in which SOME
+    segments are f-strings. The branch-protection query it now prescribes
+    contains `{owner}`, `{repo}` and `{branch}`, which are literal only for
+    as long as their segments stay un-prefixed. Add an `f` to one of them
+    while editing and the text raises NameError -- but ONLY when the rule
+    actually fires, which is never in this package (scitex-dev PROVIDES the
+    org workflows, so PS-231 cannot fire on it) and always in somebody
+    else's CI.
+
+    Found by hand-constructing the violation after a full-suite green:
+    7115 tests passed without this message ever being built once.
+    """
+    # Arrange
+    repo = _repo(tmp_path, {"cla.yml": _A_COPY})
+    out: list[_Violation] = []
+    # Act
+    check_ps231_workflow_duplication(repo, _Violation, out)
+    # Assert
+    assert "repos/{owner}/{repo}/branches/{branch}/protection" in out[0].detail
+
+
+def test_the_remedy_admits_it_cannot_verify_the_precondition(
+    tmp_path: Path,
+) -> None:
+    """Filed P1 by scitex-hub; measured by hub, scitex-scholar and scitex-app.
+
+    A conversion sweep would brick every repo it touches, and the deciding
+    fact -- which contexts branch protection REQUIRES -- lives behind an API
+    this checker cannot reach. `audit` is required on figrecipe and NOT on
+    scitex-app, from workflow files that look identical, so no reading of
+    `.github/workflows` can tell a reader whether their conversion is safe.
+
+    A remedy that stays silent about that implies a diligence which is not
+    achievable from the evidence the reader has.
+    """
+    # Arrange
+    repo = _repo(tmp_path, {"cla.yml": _A_COPY})
+    out: list[_Violation] = []
+    # Act
+    check_ps231_workflow_duplication(repo, _Violation, out)
+    # Assert
+    assert "CANNOT CHECK IT" in out[0].detail
+
+
+def test_the_remedy_asks_for_every_protected_branch(tmp_path: Path) -> None:
+    """develop and main CAN require different contexts.
+
+    They happen not to in the three repos measured, which is exactly the
+    shape of fact one assumes rather than verifies -- and a reader who
+    checks one branch, finds it clean, and converts, locks the other.
+    """
+    # Arrange
+    repo = _repo(tmp_path, {"cla.yml": _A_COPY})
+    out: list[_Violation] = []
+    # Act
+    check_ps231_workflow_duplication(repo, _Violation, out)
+    # Assert
+    assert "PER PROTECTED" in out[0].detail
+
 
 # EOF
