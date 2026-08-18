@@ -1,3 +1,10 @@
+---
+description: |
+  [TOPIC] Handyman Delegation
+  [DETAILS] DRAFT (2026-08-18) — how to delegate work to handymen, which cost no Anthropic quota. Written from ZERO completed delegations: the rules are failure modes predicted or hit while writing briefs, not lessons from finished work. Covers pre-dispatch checks (the worker's host must have the repo), brief design (mechanical steps, an explicit "I cannot" branch, positive controls, numbers that must match and must not be matched), and tool traps that read as clean zeros. Correct from real outcomes.
+tags: [scitex-dev-handyman-delegation]
+---
+
 # Delegating to handymen
 
 Handymen run a locally-served model, so their work costs no Anthropic quota.
