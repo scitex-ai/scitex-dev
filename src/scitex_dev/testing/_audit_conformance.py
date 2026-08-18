@@ -48,6 +48,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from ._auditor_identity import auditor_identity
 from ._audit_outcome import (
     VERDICT_FAIL,
     VERDICT_PASS,
@@ -345,7 +346,14 @@ def audit_all_for_package(
         # generated gate's `shutil.which` guard skips before reaching here,
         # but hand-written call sites exist and must not read as "violations".
         raise AssertionError(
-            unknown_message(distribution, cmd, -1, [f"could not launch: {exc}"], "")
+            unknown_message(
+                distribution,
+                cmd,
+                -1,
+                [f"could not launch: {exc}"],
+                "",
+                audited_by=auditor_identity(bin_path),
+            )
         ) from exc
 
     combined = proc.stdout + "\n" + proc.stderr
@@ -441,10 +449,24 @@ def audit_all_for_package(
     verdict, evidence = classify_audit_outcome(proc.returncode, combined)
     if verdict == VERDICT_UNKNOWN:
         raise AssertionError(
-            unknown_message(distribution, cmd, proc.returncode, evidence, tail)
+            unknown_message(
+                distribution,
+                cmd,
+                proc.returncode,
+                evidence,
+                tail,
+                audited_by=auditor_identity(bin_path),
+            )
         )
     raise AssertionError(
-        violations_message(distribution, cmd, proc.returncode, evidence, tail)
+        violations_message(
+            distribution,
+            cmd,
+            proc.returncode,
+            evidence,
+            tail,
+            audited_by=auditor_identity(bin_path),
+        )
     )
 
 
