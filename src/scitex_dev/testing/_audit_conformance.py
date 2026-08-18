@@ -46,8 +46,10 @@ import shlex
 import shutil
 import subprocess
 import sys
+from typing import Sequence
 from pathlib import Path
 
+from ._auditor_identity import auditor_identity
 from ._audit_outcome import (
     VERDICT_FAIL,
     VERDICT_PASS,
@@ -183,6 +185,7 @@ def audit_all_for_package(
     path: str | Path | None = None,
     timeout: float = 550.0,
     skip_rules: tuple[str, ...] = (),
+    launcher: Sequence[str] | None = None,
 ) -> None:
     """Run `scitex-dev ecosystem audit-all <distribution>` and assert exit 0.
 
@@ -313,8 +316,46 @@ def audit_all_for_package(
         pytest.skip(
             f"audit-all skipped via {SKIP_ENV_VAR}=1 (unset to re-enable the gate)"
         )
-    bin_path = shutil.which("scitex-dev") or "scitex-dev"
-    argv = [bin_path, "ecosystem", "audit-all", distribution]
+    # RESOLVE THE AUDITOR FROM THE ENVIRONMENT UNDER TEST, NOT FROM PATH.
+    #
+    # This was `shutil.which("scitex-dev")`, which asks the SHELL which
+    # scitex-dev to run. That is a different question from "which rule
+    # corpus does the environment running these tests carry", and the two
+    # answers diverge silently.
+    #
+    # MEASURED by sac on scitex-compute-04, 2026-08-18 — same tree, same
+    # command, only the auditor differing:
+    #
+    #     auditor 0.49.2  (PATH default, a bash wrapper)   PS-226
+    #     auditor 0.54.0  (the venv actually running pytest) PS-140, PS-226, PS-231
+    #     that repo's CI                                     PS-140, PS-226, PS-231
+    #
+    # So the suite RAN under 0.54.0 and GRADED against 0.49.2, five minors
+    # apart, in one run — and the PATH entry resolved through a wrapper into
+    # a DIFFERENT PACKAGE's venv. One repo's test result depended on another
+    # repo's environment.
+    #
+    # WHY IT IS WORSE THAN A STALE INSTALL, and this is sac's finding rather
+    # than mine: IT DEFEATS THE OBVIOUS FIX. An agent who suspects staleness
+    # upgrades the venv they are testing in, sees no change — because the
+    # audit never used that venv — and concludes the version was not the
+    # cause. sac did exactly that: upgraded 0.47.0 to 0.54.0, got an
+    # identical result, and published the disproof of a TRUE hypothesis.
+    # A wrong answer that survives the correct experiment is the expensive
+    # kind.
+    #
+    # `sys.executable -m` binds the auditor to the interpreter running the
+    # tests, so a local run and a CI run grade against the same corpus BY
+    # CONSTRUCTION rather than by anyone remembering to check.
+    #
+    # `launcher` EXISTS FOR TESTS, and it replaces a worse arrangement. The
+    # suite used to name the auditor by planting a shim first on PATH —
+    # which only worked BECAUSE the resolution was PATH-based, i.e. the
+    # tests depended on the defect. Injecting the launcher lets a test say
+    # which auditor it means, out loud, instead of smuggling it in through
+    # the environment.
+    argv = [*(launcher or [sys.executable, "-m", "scitex_dev"]),
+            "ecosystem", "audit-all", distribution]
     if path is not None:
         argv += ["--path", str(path)]
     cmd = shlex.join(argv)
@@ -345,7 +386,14 @@ def audit_all_for_package(
         # generated gate's `shutil.which` guard skips before reaching here,
         # but hand-written call sites exist and must not read as "violations".
         raise AssertionError(
-            unknown_message(distribution, cmd, -1, [f"could not launch: {exc}"], "")
+            unknown_message(
+                distribution,
+                cmd,
+                -1,
+                [f"could not launch: {exc}"],
+                "",
+                audited_by=auditor_identity(argv[:3]),
+            )
         ) from exc
 
     combined = proc.stdout + "\n" + proc.stderr
@@ -441,10 +489,24 @@ def audit_all_for_package(
     verdict, evidence = classify_audit_outcome(proc.returncode, combined)
     if verdict == VERDICT_UNKNOWN:
         raise AssertionError(
-            unknown_message(distribution, cmd, proc.returncode, evidence, tail)
+            unknown_message(
+                distribution,
+                cmd,
+                proc.returncode,
+                evidence,
+                tail,
+                audited_by=auditor_identity(argv[:3]),
+            )
         )
     raise AssertionError(
-        violations_message(distribution, cmd, proc.returncode, evidence, tail)
+        violations_message(
+            distribution,
+            cmd,
+            proc.returncode,
+            evidence,
+            tail,
+            audited_by=auditor_identity(argv[:3]),
+        )
     )
 
 

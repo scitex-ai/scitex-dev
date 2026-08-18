@@ -38,6 +38,26 @@ def no_skip_audit_env():
             os.environ["SCITEX_DEV_SKIP_AUDIT"] = saved
 
 
+
+def _shimmed_launcher(tmp_path: Path) -> list[str]:
+    """The auditor these tests mean, named OUT LOUD.
+
+    These tests used to select their auditor by planting a shim first on
+    PATH — which worked only BECAUSE `audit_all_for_package` resolved
+    through `shutil.which`. That resolution was the defect (sac, P1,
+    2026-08-18: local and CI graded against different rule corpora with
+    no code difference), and removing it necessarily removes the tests'
+    smuggling route too.
+
+    PATH is still shimmed by the fixtures, deliberately: if the helper
+    ever consults it again, these tests keep working and the dedicated
+    hostile-PATH test in `test__auditor_comes_from_the_env_under_test.py`
+    is the one that fails. Naming the launcher here is the honest form —
+    a test should say which binary it means rather than arrange for the
+    environment to answer.
+    """
+    return [str(tmp_path / "bin" / "scitex-dev")]
+
 @contextmanager
 def _scitex_dev_that(tmp_path: Path, *, stdout: str, stderr: str, code: int):
     """Put a real `scitex-dev` first on PATH that prints and exits `code`."""
@@ -82,7 +102,12 @@ def _raised_message(tmp_path, *, stdout="", stderr="", code=1, skip_rules=()) ->
 
     with _scitex_dev_that(tmp_path, stdout=stdout, stderr=stderr, code=code):
         with pytest.raises(AssertionError) as excinfo:
-            audit_all_for_package("scitex-io", path=tmp_path, skip_rules=skip_rules)
+            audit_all_for_package(
+                "scitex-io",
+                path=tmp_path,
+                skip_rules=skip_rules,
+                launcher=_shimmed_launcher(tmp_path),
+            )
     return str(excinfo.value)
 
 
@@ -201,7 +226,9 @@ class TestAGenuineViolationKeepsItsWords:
             tmp_path, stdout="SUCC: no violations", stderr="", code=0
         ):
             try:
-                audit_all_for_package("scitex-io", path=tmp_path)
+                audit_all_for_package(
+                    "scitex-io", path=tmp_path, launcher=_shimmed_launcher(tmp_path)
+                )
             except AssertionError as exc:  # pragma: no cover - regression guard
                 raised = exc
         # Assert

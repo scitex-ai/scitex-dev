@@ -54,6 +54,7 @@ from typing import Callable, Optional
 
 from ..jobs import JobSpec, discover_jobs
 from ._child import ChildProcess
+from ._periodic import PeriodicRunner
 from ._state import (
     SupervisorState,
     default_log_dir,
@@ -107,6 +108,7 @@ class Supervisor:
         tick_interval_sec: float = DEFAULT_TICK_INTERVAL_SEC,
         state_write_interval_sec: float = DEFAULT_STATE_WRITE_INTERVAL_SEC,
         child_grace_sec: float = DEFAULT_CHILD_GRACE_SEC,
+        periodic_runner: Optional[PeriodicRunner] = None,
     ) -> None:
         self._discover = discover
         self._log_dir = log_dir or default_log_dir()
@@ -117,6 +119,8 @@ class Supervisor:
         self._tick_interval = tick_interval_sec
         self._state_write_interval = state_write_interval_sec
         self._child_grace = child_grace_sec
+
+        self._periodic = periodic_runner or PeriodicRunner(clock=clock)
 
         self._children: dict[str, ChildProcess] = {}
         self._started_at: float = 0.0
@@ -147,6 +151,22 @@ class Supervisor:
         """
         all_jobs = self._discover()
         return [j for j in all_jobs if j.kind == "service"]
+
+    def discover_periodic_jobs(self) -> list[JobSpec]:
+        """Return the NON-service JobSpecs — timer- and cron-kind.
+
+        These used to be lowered to user-crontab lines and run by cron,
+        which is the arrangement the operator ruled out: a host acquires
+        one crontab line per job and the whole thing stops scaling. They
+        are now run by this process on its own clock, via
+        :class:`._periodic.PeriodicRunner`.
+
+        Kept as a separate method from ``discover_service_jobs`` rather
+        than one call returning both, because the two populations have
+        genuinely different lifecycles — a service that exits is a fault
+        to be restarted; a periodic run that exits is a success.
+        """
+        return [j for j in self._discover() if j.kind != "service"]
 
     def reconcile(self) -> dict[str, str]:
         """Reconcile children to match the current discovery output.
@@ -234,6 +254,12 @@ class Supervisor:
                 child.start()
                 if child.status == "running":
                     child.mark_restarted()
+        # Periodic jobs run on this same tick rather than on a
+        # separate thread: one clock means the execution log's ordering
+        # is the real ordering, and a scheduling decision can never
+        # interleave with a half-reconciled child registry.
+        self._periodic.tick(self.discover_periodic_jobs())
+
         now = self._clock()
         if now - self._last_state_write >= self._state_write_interval:
             self._write_state()

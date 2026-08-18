@@ -196,7 +196,22 @@ def register(ecosystem):
         ]
 
         sub_env = {**_os.environ, "SCITEX_DEV_NO_AUDIT_DISCLAIMER": "1"}
-        scitex_dev_bin = _shutil.which("scitex-dev") or "scitex-dev"
+        # THE SUB-AUDITORS MUST COME FROM THIS INTERPRETER, NOT FROM PATH.
+        #
+        # This was `_shutil.which("scitex-dev")`, which asks the SHELL which
+        # auditor to run. Measured by sac on scitex-compute-04, 2026-08-18:
+        # the PATH entry resolved through a bash wrapper into a DIFFERENT
+        # PACKAGE's venv, so one repo's audit result depended on another
+        # repo's environment, and the suite ran under 0.54.0 while grading
+        # against 0.49.2 — five minors apart, in a single run.
+        #
+        # Fixing only the OUTER call (the test helper) is not enough and I
+        # shipped that half first: a hostile `scitex-dev` placed first on
+        # PATH was still executed by every one of these six sub-auditors
+        # while the outer command line correctly read
+        # `python -m scitex_dev ...`. The fan-out below is the layer that
+        # actually decides the rule corpus.
+        scitex_dev_argv = [_sys.executable, "-m", "scitex_dev"]
 
         # Per-audit concurrency. 0 = run all audits for a package at once.
         # Each audit is an independent subprocess (no shared state), so the
@@ -209,7 +224,7 @@ def register(ecosystem):
         per_pkg_workers = max(1, min(per_pkg_workers, len(audits)))
 
         def _run_audit(distribution: str, a: str) -> tuple[str, dict]:
-            cmd = [scitex_dev_bin, "ecosystem", a, distribution]
+            cmd = [*scitex_dev_argv, "ecosystem", a, distribution]
             if as_json:
                 cmd.append("--json")
             if a == "audit-cli":

@@ -91,7 +91,10 @@ def register(ecosystem):
             try:
                 proc = subprocess.run(
                     [
-                        "scitex-dev",
+                        # Same interpreter, not PATH — see _audit_all.py.
+                        sys.executable,
+                        "-m",
+                        "scitex_dev",
                         "ecosystem",
                         f"audit-{auditor}",
                         leaf,
