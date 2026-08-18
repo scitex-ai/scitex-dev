@@ -98,10 +98,17 @@ class UpResult:
     #:
     #: Under ``--allow-lossy-timer-lowering`` these were lowered ANYWAY, so
     #: non-zero means the deployed artifact is WEAKER than the registry says.
-    #: WITHOUT the flag the reconcile ABORTS, and this field still carries
-    #: the count — it is the reason for the abort, and a caller reading
-    #: ``0`` there would conclude the opposite of the truth.
+    #: WITHOUT the flag each one is REFUSED individually — see
+    #: ``timer_jobs_refused`` for which, and note that a refused job is
+    #: counted here too: this is "how many declare something cron cannot
+    #: carry", not "how many got installed weakened".
     timer_jobs_degraded: int = 0
+    #: Names of the timer jobs left OUT of the block because cron cannot
+    #: honour what they declare. Non-empty means the run is a partial
+    #: success: everything else installed, these did not, and the exit
+    #: code is non-zero. Names rather than a count — an operator cannot
+    #: fix a JobSpec they cannot identify.
+    timer_jobs_refused: tuple[str, ...] = ()
     supervisor_unit_written: bool = False
     supervisor_unit_enabled: bool = False
     systemctl_missing: bool = False
@@ -208,6 +215,27 @@ def _enable_supervisor_unit(
     )
 
 
+def _refusal_summary(refused: list[TimerLoweringError]) -> str | None:
+    """One line naming every refused job, or ``None`` when none were.
+
+    ``None`` for the empty case rather than ``""``: ``error`` is the
+    field the dispatcher reads to decide the exit code, and an empty
+    string is falsy in a way that works by accident. The count is
+    stated alongside the names so a truncated log still shows whether
+    ONE job or THIRTY were left out.
+    """
+    if not refused:
+        return None
+    names = ", ".join(sorted(exc.job_name for exc in refused))
+    return (
+        f"{len(refused)} timer job(s) NOT installed — cron cannot honour "
+        f"what they declare: {names}. Every other job was installed and "
+        f"the supervisor was brought up; fix these JobSpecs (or pass "
+        f"--allow-lossy-timer-lowering to deploy them weakened, by name) "
+        f"and rerun."
+    )
+
+
 def _supports_extra_providers(discover_callable) -> bool:
     """Detect whether the discover callable accepts ``extra_providers=``.
 
@@ -285,50 +313,27 @@ def run_up(
         else discover()
     )
     # A timer JobSpec declaring a guarantee cron cannot honour must NOT
-    # deploy silently weakened under the same name. Default: refuse the
-    # whole reconcile and say which job/property/surface is at fault.
+    # deploy silently weakened under the same name. The refusal is
+    # PER-JOB: that job is left out of the block and named below, every
+    # other job still installs, and the run still exits non-zero.
+    #
+    # It used to abort the whole reconcile. Measured fleet-wide
+    # 2026-08-19 (0.55.0): one JobSpec with timeout_sec=120 left THREE
+    # hosts with zero cron entries and froze the fourth on nine stale
+    # lines from an older release, because every run aborted before
+    # rewriting the block. Thirty-three well-formed jobs punished for
+    # one malformed one -- and the freeze preserved exactly the drift
+    # the reconcile exists to correct.
     degraded_n = len(degraded_job_names(jobs))
-    try:
-        cron_merged, _cron_native_n, timer_lowered_n = collect_cron_jobs(
-            jobs,
-            allow_lossy=allow_lossy_timer_lowering,
-            on_degrade=log,
-        )
-    except TimerLoweringError as exc:
-        # Carry the count OUT of the abort path. `degraded_n` was computed
-        # above and used to be discarded here, so a programmatic caller
-        # reading `result.timer_jobs_degraded` on an abort saw 0 — "no jobs
-        # were degraded" — about the run that refused to install ANYTHING
-        # precisely because jobs were degraded. Zero-subjects and
-        # zero-problems rendered identically on the one path where they
-        # mean opposite things.
-        #
-        # THE SUPERVISOR IS STILL BROUGHT UP. This return used to end the
-        # function, coupling two INDEPENDENT artifacts: a crontab block,
-        # and a systemd unit that runs service-kind jobs and installs no
-        # cron lines at all. Measured 2026-08-18: nine cron-bound jobs in
-        # ONE package aborted here, so the supervisor unit was never
-        # written or enabled — and scitex-dev, the package that owns the
-        # fleet's job standard, was resident on ZERO hosts. Refusing to
-        # install a weakened crontab is correct; extending that refusal to
-        # the daemon is not, and it made the whole fleet's supervisor
-        # hostage to one leaf's declarations.
-        _sup_path, sup_enabled, sup_missing = _bring_up_supervisor(
-            udir=udir, yes=yes, runner=runner, which_fn=which_fn, log=log
-        )
-        # Report what actually happened. Returning the supervisor fields as
-        # their defaults would say "unit not written" about a run that just
-        # wrote it — the same disagree-with-reality shape this abort path was
-        # already fixed for once (`timer_jobs_degraded` used to return 0 from
-        # the very abort that degraded jobs caused).
-        return UpResult(
-            error=str(exc),
-            timer_jobs_degraded=degraded_n,
-            supervisor_unit_written=True,
-            supervisor_unit_enabled=sup_enabled,
-            systemctl_missing=sup_missing,
-        )
-
+    refused: list[TimerLoweringError] = []
+    cron_merged, _cron_native_n, timer_lowered_n = collect_cron_jobs(
+        jobs,
+        allow_lossy=allow_lossy_timer_lowering,
+        on_degrade=log,
+        on_refuse=refused.append,
+    )
+    for exc in refused:
+        log(f"cron: REFUSED (not installed) {exc}")
     cron_installed = _install_cron_block(cron_jobs=cron_merged, yes=yes, echo=log)
 
     _sup_path, supervisor_enabled, systemctl_missing = _bring_up_supervisor(
@@ -339,9 +344,11 @@ def run_up(
         cron_jobs_installed=cron_installed,
         timer_jobs_lowered_to_cron=timer_lowered_n,
         timer_jobs_degraded=degraded_n,
+        timer_jobs_refused=tuple(exc.job_name for exc in refused),
         supervisor_unit_written=True,
         supervisor_unit_enabled=supervisor_enabled,
         systemctl_missing=systemctl_missing,
+        error=_refusal_summary(refused),
     )
 
 
@@ -422,11 +429,20 @@ def register(ecosystem):
         click.echo(
             f"  (of which timer-lowered):     {result.timer_jobs_lowered_to_cron}"
         )
+        if result.timer_jobs_refused:
+            # Named, not counted, and NOT under an "(of which ...)" label:
+            # these are the jobs missing FROM the number above, so nesting
+            # them under it would read as though they had been installed.
+            click.echo(
+                f"  timer jobs REFUSED, not installed: "
+                f"{len(result.timer_jobs_refused)} — "
+                + ", ".join(result.timer_jobs_refused)
+            )
         if result.timer_jobs_degraded:
             click.echo(
-                f"  (of which DEGRADED):          {result.timer_jobs_degraded} "
-                "— declared guarantees NOT honoured on cron; see the "
-                "per-job reports above"
+                f"  timer jobs declaring the unhonourable: "
+                f"{result.timer_jobs_degraded} "
+                "— see the per-job reports above"
             )
         click.echo(f"  supervisor unit written:      {result.supervisor_unit_written}")
         click.echo(f"  supervisor unit enabled+now:  {result.supervisor_unit_enabled}")

@@ -620,3 +620,103 @@ def test_timer_without_on_calendar_reports_no_such_loss():
 
 
 # EOF
+
+
+# --------------------------------------------------------------------------- #
+# collect_cron_jobs — on_refuse makes the refusal PER-JOB, not per-run         #
+#                                                                              #
+# Measured fleet-wide 2026-08-19: one unlowerable JobSpec left three hosts     #
+# with zero cron entries and froze a fourth on stale lines, because the        #
+# refusal aborted the whole reconcile. These pin the narrowed blast radius.    #
+# --------------------------------------------------------------------------- #
+
+
+def test_on_refuse_suppresses_the_raise():
+    # Arrange
+    jobs = [_timer(on_unit_active_sec="15min", timeout_sec=300)]
+    # Act
+    raised = _capture(lambda: collect_cron_jobs(jobs, on_refuse=lambda _e: None))
+    # Assert
+    assert raised is None
+
+
+def test_on_refuse_receives_the_lowering_error():
+    # Arrange
+    seen: list[TimerLoweringError] = []
+    jobs = [_timer(on_unit_active_sec="15min", timeout_sec=300)]
+    # Act
+    collect_cron_jobs(jobs, on_refuse=seen.append)
+    # Assert
+    assert isinstance(seen[0], TimerLoweringError)
+
+
+def test_on_refuse_names_the_offending_job():
+    # Arrange
+    seen: list[TimerLoweringError] = []
+    jobs = [_timer("bad", on_unit_active_sec="15min", timeout_sec=300)]
+    # Act
+    collect_cron_jobs(jobs, on_refuse=seen.append)
+    # Assert
+    assert seen[0].job_name == "bad"
+
+
+def test_refused_job_is_left_out_of_the_merged_block():
+    # Arrange
+    jobs = [_timer("bad", on_unit_active_sec="15min", timeout_sec=300)]
+    # Act
+    merged, _, _ = collect_cron_jobs(jobs, on_refuse=lambda _e: None)
+    # Assert
+    assert merged == []
+
+
+def test_innocent_timer_survives_a_sibling_refusal():
+    # Arrange
+    jobs = [
+        _timer("bad", on_unit_active_sec="15min", timeout_sec=300),
+        _timer("good", on_unit_active_sec="15min"),
+    ]
+    # Act
+    merged, _, _ = collect_cron_jobs(jobs, on_refuse=lambda _e: None)
+    # Assert
+    assert [j.name for j in merged] == ["good"]
+
+
+def test_cron_native_job_survives_a_timer_refusal():
+    # Arrange
+    native = JobSpec(
+        name="native",
+        kind="cron",
+        schedule="*/5 * * * *",
+        command="/bin/echo native",
+        description="cron native",
+    )
+    jobs = [_timer("bad", on_unit_active_sec="15min", timeout_sec=300), native]
+    # Act
+    merged, _, _ = collect_cron_jobs(jobs, on_refuse=lambda _e: None)
+    # Assert
+    assert [j.name for j in merged] == ["native"]
+
+
+def test_refused_job_is_not_counted_as_lowered():
+    # Arrange
+    jobs = [
+        _timer("bad", on_unit_active_sec="15min", timeout_sec=300),
+        _timer("good", on_unit_active_sec="15min"),
+    ]
+    # Act
+    _, _, lowered = collect_cron_jobs(jobs, on_refuse=lambda _e: None)
+    # Assert
+    assert lowered == 1
+
+
+def test_every_refusal_is_reported_not_just_the_first():
+    # Arrange
+    seen: list[TimerLoweringError] = []
+    jobs = [
+        _timer("bad1", on_unit_active_sec="15min", timeout_sec=300),
+        _timer("bad2", on_unit_active_sec="15min", timeout_sec=300),
+    ]
+    # Act
+    collect_cron_jobs(jobs, on_refuse=seen.append)
+    # Assert
+    assert [e.job_name for e in seen] == ["bad1", "bad2"]
