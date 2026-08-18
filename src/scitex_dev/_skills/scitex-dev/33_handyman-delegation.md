@@ -24,6 +24,51 @@ catching; treat it accordingly and correct it from real outcomes.
 
 ## Before you dispatch
 
+### 0. VERIFY THE DELEGATE'S REPORT CHANNEL ROUND-TRIPS
+
+**This outranks every other rule here.** Not "the agent started". Not "the
+send returned 200". **A → B → A, observed.**
+
+A delegate you cannot hear is not delegation, it is discarding work — and it
+fails silently, looking exactly like a handyman with nothing to say.
+
+The evidence inverts what the rest of this document assumes. Every other rule
+below treats the DELEGATE as the weak link and the brief as the compensation.
+Measured 2026-08-18, a qwen handyman produced this unprompted, four hours
+before any of us wrote a brief:
+
+> "The card store in this project dir is a file literally named
+> `${SCITEX_CARDS_DB}` (unexpanded env placeholder) … any agent resolving a
+> different path would silently fork the board."
+>
+> "CAUTION: I did NOT redirect the store to 'fix' it — pointing it at a fresh
+> target is exactly how the board was destroyed on 2026-07-19. Left to you."
+
+That is: found the defect, found the obvious fix, evaluated the fix against a
+dated prior incident, judged it more dangerous than the bug, declined to act,
+escalated. Better judgement than "do not touch what you were not asked to
+touch" — it is the reasoning *behind* that rule, derived independently.
+
+**Both reports went into the broken store they were about. Nobody read them.
+The escalation was swallowed by its own subject.**
+
+The weak link was not the delegate. It was the channel we never checked.
+
+Three mechanical gaps, all producing the same silence, all present at dispatch:
+
+| gap | effect |
+| --- | --- |
+| telegrammer MCP not wired in (`mcp doctor` shows only sac) | cannot reach the operator at all |
+| config DSN has no password → `fe_sendauth: no password supplied` | Postgres unreachable from inside |
+| `notifyd` not running (no pidfile) | push down, pull only |
+
+This is the constitution's "confirm arrival, not dispatch" applied to the
+delegation loop, and "a check whose failure nothing reads is not a check"
+applied to a REPORT rather than to a gate. Both rules existed. Neither was
+applied to the rail the handymen report on, because we were busy writing rules
+about their prompts.
+
+
 ### The worker's host must have the repo
 
 Measured 2026-08-18: `scitex-compute-03` runs **eight handymen** and has **no
@@ -150,6 +195,95 @@ Do not trust the delegate to know these; state the correct invocation.
 That last row is a genuine conflict: interactive-shell guidance and
 committed-artifact guidance point opposite ways. Both are right in their own
 context and they do not transfer.
+
+---
+
+## Choose the rail before you write the brief
+
+The fleet has **two delivery rails with different guarantees**, and conflating
+them is what makes a lost task feel like a bug. sac, who owns the surface,
+2026-08-18:
+
+| rail | mechanism | guarantee |
+| --- | --- | --- |
+| **turn** | `sac agents send` → keystrokes typed into a tmux pane | **EPHEMERAL.** Dies with the session. No queue, no spool, no ack, no redelivery. |
+| **card** | scitex-cards inbox / notifications | **DURABLE.** Unseen until explicitly confirmed; anything unacked is REDELIVERED on the next poll. |
+
+A turn is not a message in a queue — it is characters in a running process's
+terminal buffer. Kill the session and it is gone in the same sense a
+half-typed shell command is gone. That is not a missing feature; adding
+durability there means building a work queue that does not exist.
+
+**So: if the work must survive a restart, SEND IT AS A CARD, NOT A TURN.**
+A card assigned to a handyman is still there after any number of restarts.
+Use a turn for "do this now, I am watching".
+
+This makes restart-awareness a *tool choice*, not a defensive workaround.
+
+### Announce a restart before you take it
+
+Measured 2026-08-18: eight handymen were restarted while a peer had live work
+dispatched into one of them. The restart was legitimate and directed, and it
+was announced on no channel a delegator reads. Ordering the restarts so the
+mid-task agent went last protected nothing — **a restart destroys an in-flight
+turn regardless of position.**
+
+If you restart agents, say so where delegators will see it.
+
+---
+
+## Verifying that work is actually happening
+
+**Do not trust the monitoring surfaces. Read the raw pane.** Operator,
+2026-08-18: 「監視ツールの出力を盲目的に信用しないで生の tmux のスナップ
+ショットとかを見て判断してください」.
+
+Measured the same night. For one dispatched task, every surface was useless:
+
+```
+sac agents list    status: running, pid: 0, heartbeat: None
+sac agents tail    "No transcript at .../session.jsonl"
+agent_send         404
+```
+
+One command answered it:
+
+```bash
+ssh <host> 'tmux capture-pane -p -S -400 -t tui-<agent>'
+```
+
+```
+✽ Architecting… (27m 14s · ↓ 9.4k tokens)
+  qwen38-27b | ctx:50%
+```
+
+Alive, busy — and working on something else entirely.
+
+### Capture deep, not just the bottom
+
+The operator warned that a short capture can miss it, and that is right here:
+the identifying lines (model, context %, elapsed) are at the BOTTOM, but the
+actual work was hundreds of lines up. `-S -400` at minimum.
+
+### Check the session is older than your dispatch
+
+```bash
+ssh <host> 'tmux list-sessions'
+```
+
+Dispatch was 02:27. `tui-handyman-c03-01` was **created 02:37:50** — ten
+minutes later. The session that received the message no longer existed.
+
+**A restart silently discards a dispatched task and nothing reports it.** The
+send returns success; the registry says `running` (true, of the NEW session);
+no surface distinguishes *queued* from *being worked* from *died with a
+session ten minutes ago*. If the session is younger than your message, your
+message is gone — re-send rather than wait.
+
+### A dispatched task is not an accepted task
+
+Require the ACK, and then confirm the ACK arrived **by pane** — the ACK itself
+can die with the session.
 
 ---
 
