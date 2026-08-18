@@ -10,10 +10,12 @@ no `monkeypatch`.
 
 import os
 import stat
+import sys
 from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
+from scitex_dev.testing import _audit_conformance as conformance
 
 
 @pytest.fixture
@@ -49,6 +51,8 @@ def test_audit_all_for_package_skip_via_env(skip_audit_env):
     from scitex_dev.testing import audit_all_for_package
 
     with pytest.raises(pytest.skip.Exception):  # pytest.skip raises Skipped
+        # No launcher: the skip short-circuits BEFORE any subprocess, so
+        # naming an auditor here would imply this test reaches one.
         audit_all_for_package("scitex-dev")
 
 
@@ -85,6 +89,26 @@ def _install_shim(shim_dir: Path, log: Path) -> Path:
     return script
 
 
+
+def _shimmed_launcher(tmp_path: Path) -> list[str]:
+    """The auditor these tests mean, named OUT LOUD.
+
+    These tests used to select their auditor by planting a shim first on
+    PATH — which worked only BECAUSE `audit_all_for_package` resolved
+    through `shutil.which`. That resolution was the defect (sac, P1,
+    2026-08-18: local and CI graded against different rule corpora with
+    no code difference), and removing it necessarily removes the tests'
+    smuggling route too.
+
+    PATH is still shimmed by the fixtures, deliberately: if the helper
+    ever consults it again, these tests keep working and the dedicated
+    hostile-PATH test in `test__auditor_comes_from_the_env_under_test.py`
+    is the one that fails. Naming the launcher here is the honest form —
+    a test should say which binary it means rather than arrange for the
+    environment to answer.
+    """
+    return [str(tmp_path / "bin" / "scitex-dev")]
+
 @contextmanager
 def _shimmed_scitex_dev(tmp_path: Path):
     """Put a recording `scitex-dev` first on PATH; yield its argv log."""
@@ -116,7 +140,9 @@ def test_audit_all_for_package_threads_path_to_the_subprocess(
     checkout.mkdir()
     # Act
     with _shimmed_scitex_dev(tmp_path) as log:
-        audit_all_for_package("scitex-io", path=checkout)
+        audit_all_for_package(
+            "scitex-io", path=checkout, launcher=_shimmed_launcher(tmp_path)
+        )
     # Assert
     assert f"--path {checkout}" in log.read_text()
 
@@ -130,7 +156,9 @@ def test_audit_all_for_package_accepts_a_string_path(no_skip_audit_env, tmp_path
     checkout.mkdir()
     # Act
     with _shimmed_scitex_dev(tmp_path) as log:
-        audit_all_for_package("scitex-io", path=str(checkout))
+        audit_all_for_package(
+            "scitex-io", path=str(checkout), launcher=_shimmed_launcher(tmp_path)
+        )
     # Assert
     assert f"--path {checkout}" in log.read_text()
 
@@ -144,7 +172,9 @@ def test_audit_all_for_package_without_path_omits_the_flag(
 
     # Act
     with _shimmed_scitex_dev(tmp_path) as log:
-        audit_all_for_package("scitex-io")
+        audit_all_for_package(
+            "scitex-io", launcher=_shimmed_launcher(tmp_path)
+        )
     # Assert
     assert "--path" not in log.read_text()
 
@@ -158,6 +188,113 @@ def test_audit_all_for_package_without_path_still_passes_the_distribution(
 
     # Act
     with _shimmed_scitex_dev(tmp_path) as log:
-        audit_all_for_package("scitex-io")
+        audit_all_for_package(
+            "scitex-io", launcher=_shimmed_launcher(tmp_path)
+        )
     # Assert
     assert log.read_text().strip() == "ecosystem audit-all scitex-io"
+
+
+# ---------------------------------------------------------------------------
+# THE AUDITOR COMES FROM THE INTERPRETER UNDER TEST, NOT FROM PATH.
+#
+# sac's P1, measured on scitex-compute-04 2026-08-18: same tree, same
+# command, auditor 0.49.2 reported PS-226 while auditor 0.54.0 reported
+# PS-140, PS-226, PS-231 — and the interpreter running pytest carried
+# 0.54.0 throughout. The PATH entry resolved through a bash wrapper into
+# a DIFFERENT PACKAGE's venv, so one repo's test result depended on
+# another repo's environment.
+#
+# These live here rather than in a file of their own because the
+# behaviour belongs to `_audit_conformance`; a separate test module would
+# be an orphan with no src file to mirror (PS-204).
+# ---------------------------------------------------------------------------
+
+def test_the_helper_launches_the_interpreter_under_test(monkeypatch, tmp_path) -> None:
+    """Behavioural, not textual.
+
+    My first version of this grepped the source for
+    `shutil.which("scitex-dev")` and asserted it absent — and FAILED,
+    because the explanatory comment above the fix quotes the old code.
+    A predicate that matches the ARTIFACT (a string anywhere in the
+    file) rather than the THING (a live call site) is the same defect
+    this whole card is about, committed while writing a test about
+    precision. So: capture the argv actually handed to subprocess.
+    """
+    # Arrange
+    seen: dict = {}
+
+    class _Proc:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def _fake_run(argv, **kw):
+        seen["argv"] = argv
+        return _Proc()
+
+    monkeypatch.setattr(conformance.subprocess, "run", _fake_run)
+    # Act
+    conformance.audit_all_for_package("scitex-dev", path=tmp_path)
+    # Assert
+    assert seen["argv"][:3] == [sys.executable, "-m", "scitex_dev"]
+
+
+def test_the_helper_ignores_a_hostile_binary_on_PATH(monkeypatch, tmp_path) -> None:
+    """PATH must not be consulted at all.
+
+    Verified end to end as well: with a fake `scitex-dev` planted first
+    on PATH that exits 3 and prints a marker, the real gate runs its
+    full six-sub-auditor sweep (25s) and passes — the impostor is never
+    executed.
+    """
+    # Arrange
+    seen: dict = {}
+
+    class _Proc:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    monkeypatch.setattr(
+        conformance.shutil, "which", lambda *_a, **_k: "/tmp/hostile/scitex-dev"
+    )
+    monkeypatch.setattr(
+        conformance.subprocess, "run", lambda argv, **kw: (seen.__setitem__("argv", argv), _Proc())[1]
+    )
+    # Act
+    conformance.audit_all_for_package("scitex-dev", path=tmp_path)
+    # Assert
+    assert "/tmp/hostile/scitex-dev" not in seen["argv"]
+
+
+def test_the_subauditor_fanout_uses_the_same_interpreter() -> None:
+    """THE LAYER THAT ACTUALLY DECIDES THE RULE CORPUS.
+
+    Fixing only the outer helper leaves every sub-auditor resolving from
+    PATH — which is where sac's measurement came from, and which my own
+    first fix missed while every visible signal said it was done.
+    """
+    # Arrange
+    from scitex_dev._cli.ecosystem._cmds import _audit_all
+
+    # Act
+    builds_from_interpreter = "scitex_dev_argv = [_sys.executable" in Path(
+        _audit_all.__file__
+    ).read_text()
+    # Assert
+    assert builds_from_interpreter
+
+
+def test_the_identity_line_reports_that_launcher() -> None:
+    """Otherwise the report names a version nothing measured with."""
+    # Arrange
+    from scitex_dev.testing._auditor_identity import auditor_identity
+
+    # Act
+    identity = auditor_identity([sys.executable, "-m", "scitex_dev"])
+    # Assert
+    assert "-m scitex_dev" in identity
+
+
+# EOF

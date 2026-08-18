@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import subprocess
 
-def auditor_identity(bin_path: str, *, timeout: float = 10.0) -> str:
+def auditor_identity(
+    launcher: str | list[str], *, timeout: float = 10.0
+) -> str:
     """Which auditor answered — asked of THE BINARY, not of this process.
 
     THE QUESTION THIS EXISTS TO ANSWER, in sac's words (2026-08-18):
@@ -51,19 +53,21 @@ def auditor_identity(bin_path: str, *, timeout: float = 10.0) -> str:
     version string invented here would be indistinguishable from a
     measured one, and this line exists precisely to be trusted.
     """
+    argv = [launcher] if isinstance(launcher, str) else list(launcher)
+    shown = " ".join(argv)
     try:
         proc = subprocess.run(
-            [bin_path, "--version"],
+            [*argv, "--version"],
             capture_output=True,
             text=True,
             timeout=timeout,
         )
     except (OSError, subprocess.SubprocessError) as exc:
-        return f"UNKNOWN ({bin_path}) — could not ask: {type(exc).__name__}"
+        return f"UNKNOWN ({shown}) — could not ask: {type(exc).__name__}"
     reported = (proc.stdout or proc.stderr or "").strip().splitlines()
     if proc.returncode != 0 or not reported:
-        return f"UNKNOWN ({bin_path}) — `--version` exited {proc.returncode}"
-    return f"{reported[0].strip()} ({bin_path})"
+        return f"UNKNOWN ({shown}) — `--version` exited {proc.returncode}"
+    return f"{reported[0].strip()} ({shown})"
 
 
 __all__ = ["auditor_identity"]
