@@ -66,6 +66,7 @@ from ._up_supervisor_unit import (
     build_supervisor_unit_text,
     write_supervisor_unit,
 )
+from ._up_placement import apply_placement
 from ._up_timer_lowering import (
     TimerLoweringError,
     collect_cron_jobs,
@@ -109,6 +110,13 @@ class UpResult:
     #: code is non-zero. Names rather than a count — an operator cannot
     #: fix a JobSpec they cannot identify.
     timer_jobs_refused: tuple[str, ...] = ()
+    #: Jobs discovered but NOT armed here, because placement puts them
+    #: elsewhere. Names, so an operator asking "why is this not running
+    #: on 03" gets an answer instead of a count. Empty is the normal
+    #: case and also the UNSTATED case — the log line distinguishes
+    #: them, since "nobody declared placement" and "everything is placed
+    #: here" produce the same empty list but different fixes.
+    jobs_not_placed_here: tuple[str, ...] = ()
     supervisor_unit_written: bool = False
     supervisor_unit_enabled: bool = False
     systemctl_missing: bool = False
@@ -285,6 +293,8 @@ def run_up(
     echo: Callable[[str], None] | None = None,
     discover: Callable[..., list[JobSpec]] = discover_jobs,
     which: Callable[[str], str | None] | None = None,
+    placement_host: str | None = None,
+    discover_placement_fn: Callable[[], list] | None = None,
 ) -> UpResult:
     """Execute one full reconcile pass. Returns aggregate outcome.
 
@@ -319,6 +329,20 @@ def run_up(
         if _supports_extra_providers(discover)
         else discover()
     )
+    # Placement: WHICH of these belong on THIS host. A JobSpec is a
+    # fleet-wide declaration with no host axis, so without this every
+    # discovered job is a candidate everywhere and "should this run
+    # here" is answered only by the host's own systemd enablement —
+    # invisible state with nothing to compare it against.
+    #
+    # A job nobody has placed is UNSTATED, and UNSTATED ARMS. Absence of
+    # a declaration is "no opinion yet", never "run nothing here":
+    # collapsing those two would disarm every not-yet-declared host the
+    # moment this code ships, making the rollout of the safety feature
+    # the outage it exists to prevent.
+    jobs, placement_excluded = apply_placement(
+        jobs, host=placement_host, log=log, discover_fn=discover_placement_fn
+    )
     # A timer JobSpec declaring a guarantee cron cannot honour must NOT
     # deploy silently weakened under the same name. The refusal is
     # PER-JOB: that job is left out of the block and named below, every
@@ -352,6 +376,7 @@ def run_up(
         timer_jobs_lowered_to_cron=timer_lowered_n,
         timer_jobs_degraded=degraded_n,
         timer_jobs_refused=tuple(exc.job_name for exc in refused),
+        jobs_not_placed_here=tuple(name for name, _ in placement_excluded),
         supervisor_unit_written=True,
         supervisor_unit_enabled=supervisor_enabled,
         systemctl_missing=systemctl_missing,
