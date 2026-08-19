@@ -111,13 +111,51 @@ JOB_SHELL_BODIES: dict[str, str] = {
     # anything, so it re-asserts every checkout as editable and nothing it
     # touches can clobber a peer. Measured 2026-08-17: pass 1 alone reported
     # ok=22 fail=0 and left three packages resolving to site-packages.
+    # TWO POPULATIONS, BOTH REFRESHED, NEITHER ALLOWED TO FAIL QUIETLY.
+    #
+    # This job used to pass `--venv current` for both passes. `current` is the
+    # OPT-IN mode — `install --help` says to use it "only when you
+    # intentionally want every peer installed into the same env" — and it means
+    # "the interpreter this job runs under", so the unit's ExecStart decided
+    # which single venv got refreshed and every OTHER venv on the host was
+    # refreshed by nobody.
+    #
+    # MEASURED on ywata-note-win 2026-08-19: the job had run three times that
+    # day, exit 0 every time, while ~/proj/scitex-agent-container/.venv sat on
+    # scitex-dev 0.49.2.dev103 and ~/.venv on 0.55.0. The operator brought his
+    # own venv current BY HAND (`uv pip install -Ue`, 56 packages moved) and
+    # asked why the automatic update had not. This is why.
+    #
+    # OPERATOR RULE, 2026-08-19, stated as global: "cd ~/proj/xxx && source
+    # .venv/bin/activate && uv pip install -Ue .[all] must be done
+    # periodically; especially when the package updated ... in any place in
+    # any host", and "they must have self-update system turned on in our case
+    # especially for the ones with EDITABLE installation". An editable install
+    # tracks a moving checkout, so its DEPENDENCIES go stale even while the
+    # package itself is current — which is exactly the 56-package gap above.
+    #
+    # `--venv per-package` is the DEFAULT of `ecosystem install` and creates /
+    # refreshes ~/proj/<pkg>/.venv for every package. Pass 3 keeps the shared
+    # runtime venv current too, because agents execute from it.
+    #
+    # NO `|| true` HERE. The observe-jobs use it so a drift FINDING does not
+    # mark the unit failed; this job does not observe, it INSTALLS, and a
+    # failed install is a failure. With `|| true` the unit reported success
+    # three times while refreshing a venv nobody uses — a gate that cannot
+    # fail is not a gate. `set -e` makes the first failing pass stop the job
+    # loudly, which is the whole point of running it.
     "scitex-dev-venv-refresh": (
+        "set -e; "
         "date -u +'== venv-refresh %Y-%m-%dT%H:%MZ =='; "
+        "echo '-- pass 1/3: every ~/proj/<pkg>/.venv, with deps --'; "
         "scitex-dev ecosystem install --source editable --extras all "
-        "--venv current --upgrade --yes || true; "
-        "echo '-- re-asserting editables (--no-deps) --'; "
+        "--venv per-package --upgrade --yes; "
+        "echo '-- pass 2/3: re-asserting editables (--no-deps) --'; "
         "scitex-dev ecosystem install --source editable "
-        "--venv current --no-deps --yes || true"
+        "--venv per-package --no-deps --yes; "
+        "echo '-- pass 3/3: the shared runtime venv agents execute from --'; "
+        "scitex-dev ecosystem install --source editable --extras all "
+        "--venv current --upgrade --yes"
     ),
     # OBSERVE-only by construction: `host-config check` never writes, and
     # it needs no privileges (the managed files under /etc are
