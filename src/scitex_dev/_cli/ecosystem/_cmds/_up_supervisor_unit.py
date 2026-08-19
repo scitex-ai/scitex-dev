@@ -20,7 +20,21 @@ Public surface
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
+
+# The PATH systemd --user gives a unit that declares none. Kept explicit
+# rather than read from os.environ at build time: the unit text must be
+# reproducible on any host, and inheriting the *installing* shell's PATH
+# would bake one operator's ambient environment into a managed file.
+_SYSTEM_PATH_ENTRIES = (
+    "/usr/local/sbin",
+    "/usr/local/bin",
+    "/usr/sbin",
+    "/usr/bin",
+    "/sbin",
+    "/bin",
+)
 
 # The systemd unit filename. ``scitex-dev-ecosystem`` chosen for symmetry
 # with the old (now-deprecated) ``scitex-dev-ecosystem-reconcile.service``
@@ -62,6 +76,27 @@ def build_supervisor_unit_text() -> str:
     from ....jobs._systemd import resolve_execstart
 
     execstart = resolve_execstart("scitex-dev ecosystem run")
+    # Absolutising ExecStart (above) fixes the supervisor's OWN exec and
+    # nothing about its CHILDREN. A periodic job's body is a shell string
+    # that calls `scitex-dev` by BARE NAME, and the children inherit this
+    # unit's environment — so under the bare --user PATH, /bin/sh cannot
+    # resolve the console script and the job exits 127 after ~1s.
+    #
+    # MEASURED 2026-08-19 on all four reachable hosts: every job with a
+    # shell body was failing 100%, and the load-bearing one was
+    # scitex-dev-ecosystem-self-pull at 497/497 over 16.6h — the job that
+    # keeps each host's checkout tracking the repo. Its log held one line,
+    # repeated: `/bin/sh: 1: scitex-dev: not found`. Nothing alarmed,
+    # because a periodic job's exit code is only written to its own ledger.
+    # Jobs whose argv was already absolute (sac's) were green throughout,
+    # which is why this looked like "some jobs are broken" rather than one
+    # environment defect.
+    #
+    # The venv bin is derived from the resolved ExecStart rather than from
+    # sys.prefix: ExecStart is what this unit will actually run, so the two
+    # cannot disagree.
+    bin_dir = str(Path(shlex.split(execstart)[0]).parent)
+    child_path = ":".join((bin_dir, *_SYSTEM_PATH_ENTRIES))
     return (
         "[Unit]\n"
         "Description=SciTeX ecosystem supervisor — manages every "
@@ -73,6 +108,7 @@ def build_supervisor_unit_text() -> str:
         "\n"
         "[Service]\n"
         "Type=simple\n"
+        f"Environment=PATH={child_path}\n"
         f"ExecStart={execstart}\n"
         "ExecReload=/bin/kill -HUP $MAINPID\n"
         "Restart=always\n"

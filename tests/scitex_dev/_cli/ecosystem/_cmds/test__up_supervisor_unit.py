@@ -7,6 +7,9 @@ The unit-text builder is pure (no I/O); the writer hits ``tmp_path``.
 
 from __future__ import annotations
 
+import shlex
+from pathlib import Path
+
 from scitex_dev._cli.ecosystem._cmds._up_supervisor_unit import (
     SUPERVISOR_UNIT_NAME,
     build_supervisor_unit_text,
@@ -134,5 +137,68 @@ def test_write_supervisor_unit_creates_parent(tmp_path):
     # Assert
     assert nested.is_dir()
 
+
+# --------------------------------------------------------------------------- #
+# Environment=PATH — the children's PATH, not the supervisor's own exec        #
+# --------------------------------------------------------------------------- #
+
+
+def test_build_unit_text_declares_a_path_for_its_children():
+    # Arrange — the unit's children inherit its environment, and a periodic
+    # job's body is a shell string calling `scitex-dev` by BARE NAME. With
+    # no Environment=PATH the unit gets systemd's minimal --user PATH, which
+    # excludes the venv, and every such job exits 127 after ~1s.
+    # Act
+    body = build_supervisor_unit_text()
+    # Assert
+    assert "Environment=PATH=" in body
+
+
+def test_unit_path_begins_with_the_directory_execstart_resolved_to():
+    # Arrange — the invariant that actually matters. A PATH that merely
+    # EXISTS does not help: it has to contain the bin directory holding the
+    # console scripts, and the only directory guaranteed to be right is the
+    # one ExecStart itself resolved to. Asserting "PATH is present" would
+    # pass on a PATH that omits the venv — the exact bug this fixes.
+    body = build_supervisor_unit_text()
+    execstart = next(
+        line[len("ExecStart=") :]
+        for line in body.splitlines()
+        if line.startswith("ExecStart=")
+    )
+    path_line = next(
+        line[len("Environment=PATH=") :]
+        for line in body.splitlines()
+        if line.startswith("Environment=PATH=")
+    )
+    # Act
+    first_entry = path_line.split(":")[0]
+    # Assert
+    assert first_entry == str(Path(shlex.split(execstart)[0]).parent)
+
+
+def test_unit_path_retains_the_system_directories():
+    # Arrange — jobs shell out to git / ssh / rsync too, so prepending the
+    # venv must not REPLACE the system PATH.
+    body = build_supervisor_unit_text()
+    path_line = next(
+        line[len("Environment=PATH=") :]
+        for line in body.splitlines()
+        if line.startswith("Environment=PATH=")
+    )
+    # Act
+    entries = path_line.split(":")
+    # Assert
+    assert "/usr/bin" in entries and "/bin" in entries
+
+
+def test_path_is_declared_before_execstart_is_not_required_but_both_present():
+    # Arrange — systemd does not care about ordering within [Service]; this
+    # test exists to state that BOTH lines are emitted, so a future edit that
+    # drops one while keeping the other fails here rather than in production.
+    # Act
+    body = build_supervisor_unit_text()
+    # Assert
+    assert "ExecStart=" in body and "Environment=PATH=" in body
 
 # EOF
