@@ -44,6 +44,18 @@ from ._resolve import (  # noqa: F401 - re-exported for existing callers
 # Documentation URL stamped into generated units (operator breadcrumb).
 _DOC_URL = "https://github.com/scitex-ai/scitex-dev"
 
+# The PATH systemd --user leaves a unit that declares none. Written out
+# rather than read from os.environ, so the generated unit text is identical
+# on every host instead of carrying whatever PATH the installing shell had.
+_SYSTEM_PATH_ENTRIES = (
+    "/usr/local/sbin",
+    "/usr/local/bin",
+    "/usr/sbin",
+    "/usr/bin",
+    "/sbin",
+    "/bin",
+)
+
 _logger = logging.getLogger(__name__)
 
 
@@ -128,6 +140,19 @@ def _environment_lines(job: _jobs.JobSpec) -> list[str]:
         lines.append(f"WorkingDirectory={working_directory}")
     if job.venv:
         lines.append(f"Environment=VIRTUAL_ENV={job.venv}")
+        # VIRTUAL_ENV alone is a HALF-ACTIVATED venv: it tells Python code
+        # where the environment is, and tells /bin/sh nothing. A job body
+        # that calls a console script by BARE NAME then exits 127 under
+        # systemd's deliberately minimal --user PATH, while a sibling job
+        # whose argv is already absolute runs fine — so the failure looks
+        # per-job instead of environmental. Emitting PATH here is what
+        # `activate` would have done, and it precedes job.environment so a
+        # leaf that means to override it still wins (systemd takes the LAST
+        # assignment of a repeated key).
+        lines.append(
+            "Environment=PATH="
+            + ":".join((f"{job.venv}/bin", *_SYSTEM_PATH_ENTRIES))
+        )
     if job.environment_file:
         lines.append(f"EnvironmentFile={job.environment_file}")
     lines.extend(f"Environment={entry}" for entry in job.environment)
