@@ -231,6 +231,23 @@ def test_the_excluded_reason_distinguishes_itself_from_unstated():
 # --------------------------------------------------------------------------- #
 
 
+# These filter to the job names they inject rather than asserting on the
+# whole discovery output. `discover_placement` also loads every INSTALLED
+# `scitex_dev.host_placement` entry point, and scitex-dev registers its
+# own — so an exact-equality assertion here passes only where the package
+# is NOT installed, which is precisely the difference between a local
+# PYTHONPATH run and CI. Measured: these four passed locally and failed on
+# all three matrix legs, because PYTHONPATH does not register entry-point
+# metadata. A test that asserts on global discovery output is coupled to
+# whatever the environment happens to have installed.
+
+
+def _mine(records, *names: str) -> list[str]:
+    """Job names from ``records`` limited to ``names``. Pure."""
+    wanted = set(names)
+    return [r.job for r in records if r.job in wanted]
+
+
 def test_discovery_collects_from_an_extra_provider():
     # Arrange
     def _provider() -> list[PlacementRecord]:
@@ -239,7 +256,7 @@ def test_discovery_collects_from_an_extra_provider():
     # Act
     records = discover_placement(extra_providers=[_provider])
     # Assert
-    assert [r.job for r in records] == ["j"]
+    assert _mine(records, "j") == ["j"]
 
 
 def test_discovery_does_not_dedupe_by_job_name():
@@ -254,7 +271,7 @@ def test_discovery_does_not_dedupe_by_job_name():
     # Act
     records = discover_placement(extra_providers=[_a, _b])
     # Assert
-    assert len(records) == 2
+    assert _mine(records, "j") == ["j", "j"]
 
 
 def test_a_broken_provider_does_not_wedge_discovery():
@@ -268,7 +285,7 @@ def test_a_broken_provider_does_not_wedge_discovery():
     # Act
     records = discover_placement(extra_providers=[_broken, _good])
     # Assert
-    assert [r.job for r in records] == ["survivor"]
+    assert _mine(records, "survivor") == ["survivor"]
 
 
 def test_a_non_record_object_is_skipped():
@@ -279,6 +296,6 @@ def test_a_non_record_object_is_skipped():
     # Act
     records = discover_placement(extra_providers=[_junk])
     # Assert
-    assert records == []
+    assert _mine(records, "not a placement record") == []
 
 # EOF
