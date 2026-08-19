@@ -49,6 +49,7 @@ from __future__ import annotations
 import re
 import subprocess
 import sys as _sys
+from collections.abc import Sequence
 from pathlib import Path
 
 import click
@@ -160,7 +161,7 @@ def run_new_only_and_exit(
     since_ref: str,
     head_combined: str,
     head_exit: int,
-    scitex_dev_bin: str,
+    scitex_dev_argv: Sequence[str],
     sub_env: dict,
 ) -> None:
     """Run the `--new-only` comparison and exit the process with its verdict.
@@ -178,11 +179,16 @@ def run_new_only_and_exit(
     try:
         with worktree_at(head_path, since_ref) as base_path:
             # Spawn audit-all in a child process pointed at the base
-            # worktree, using the SAME scitex-dev binary the dispatcher
+            # worktree, using the SAME scitex-dev the dispatcher
             # resolved so the rule corpus matches across the diff.
+            #
+            # An ARGV, not a binary path: the dispatcher resolves
+            # `[sys.executable, "-m", "scitex_dev"]` so the audit works
+            # where the console script is not on PATH. Splatting it keeps
+            # the two sides of the diff running the same interpreter.
             base_proc = subprocess.run(
                 [
-                    scitex_dev_bin,
+                    *scitex_dev_argv,
                     "ecosystem",
                     "audit-all",
                     distribution,

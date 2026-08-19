@@ -378,7 +378,7 @@ def register(ecosystem):
                 since_ref=since_ref,
                 head_combined=head_combined,
                 head_exit=_head_exit,
-                scitex_dev_bin=scitex_dev_bin,
+                scitex_dev_argv=scitex_dev_argv,
                 sub_env=sub_env,
             )
 
