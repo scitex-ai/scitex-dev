@@ -16,10 +16,11 @@ What this command does
 Per invocation:
 
   1. Discover every ``JobSpec`` via :func:`scitex_dev.jobs.discover_jobs`.
-  2. Materialise / refresh the managed crontab block. The block carries
-     BOTH ``kind="cron"`` jobs (verbatim 5-field expressions) AND
-     ``kind="timer"`` jobs (translated to a 5-field cron expression in
-     :mod:`._up_timer_lowering`).
+  2. RETIRE the managed crontab block — converge it to EMPTY via
+     :func:`._up_cron_retire.retire_cron_block`. Cron is retired for
+     SciTeX periodic jobs (ADR-0012): they run in the supervisor's
+     ``PeriodicRunner``. A non-zero ``cron_lines_removed`` means this
+     host was double-managed until this run.
   3. Write the supervisor unit (:data:`SUPERVISOR_UNIT_NAME`) to
      ``~/.config/systemd/user/``. Idempotent.
   4. With ``--yes``: ``systemctl --user daemon-reload`` +
@@ -294,32 +295,36 @@ def register(ecosystem):
         "up",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Reconcile the SciTeX ecosystem: supervisor unit + cron block.",
+            summary=(
+                "Reconcile the ecosystem: write the supervisor unit, "
+                "retire the cron block."
+            ),
             description=(
                 "Per operator policy 2026-06-14: systemd shows EXACTLY "
                 "one entry — scitex-dev-ecosystem.service — for the "
                 "SciTeX fleet. Per-leaf .service / .timer writes are "
-                "gone; service-kind JobSpecs lower to supervisor "
-                "children, timer-kind lowers to cron lines in the "
-                "managed crontab block. Without --yes: writes the "
-                "supervisor unit (idempotent) and reports what would "
-                "land in the crontab block, but does NOT touch the "
-                "crontab or ask systemctl to do anything. With --yes: "
-                "writes the supervisor unit, installs the crontab "
-                "block, and runs `systemctl --user enable --now "
-                "scitex-dev-ecosystem.service` — whose ExecStart is "
-                "`scitex-dev ecosystem run`, the collective supervisor "
-                "that spawns every kind=service JobSpec as a child "
-                "process.",
+                "gone, and CRON IS RETIRED (ADR-0012): every periodic "
+                "JobSpec runs in the supervisor's PeriodicRunner, so "
+                "this command REMOVES the managed crontab block rather "
+                "than writing one. Lines removed are reported; non-zero "
+                "means the host was double-managed until now. Without "
+                "--yes: writes the supervisor unit (idempotent) and "
+                "reports what WOULD be removed, touching neither the "
+                "crontab nor systemctl. With --yes: writes the unit, "
+                "removes the managed crontab block, and runs `systemctl "
+                "--user enable --now scitex-dev-ecosystem.service`. "
+                "NOTE that `enable --now` does NOT restart an already-"
+                "running supervisor, so a unit change needs an explicit "
+                "`systemctl --user restart`.",
             ),
             examples=(
                 Example(
                     "{prog} ecosystem up",
-                    "Preview: write the unit, report the cron plan.",
+                    "Preview: write the unit, report cron lines that would go.",
                 ),
                 Example(
                     "{prog} ecosystem up --yes",
-                    "Write + install cron + enable/start the supervisor.",
+                    "Write the unit, retire the cron block, enable the supervisor.",
                 ),
             ),
         ),
