@@ -201,7 +201,6 @@ def test_path_is_declared_before_execstart_is_not_required_but_both_present():
     # Assert
     assert "ExecStart=" in body and "Environment=PATH=" in body
 
-# EOF
 
 
 # --------------------------------------------------------------------------- #
@@ -243,3 +242,6 @@ def test_card_identity_declares_the_live_variable_with_its_value():
     body = build_supervisor_unit_text()
     # Assert
     assert "Environment=SCITEX_CARDS_AGENT_ID=scitex-dev" in body
+
+
+# EOF

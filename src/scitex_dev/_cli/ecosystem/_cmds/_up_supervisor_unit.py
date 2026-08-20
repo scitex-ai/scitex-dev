@@ -65,11 +65,26 @@ SUPERVISOR_UNIT_NAME = "scitex-dev-ecosystem.service"
 # an agent that is not present. Card `assignee` still carries who must
 # ACT; this is only `created_by`.
 #
-# NOT set here: SCITEX_CARDS_DB, also unset on that host. The measured
-# failures were identity failures; whether the store path needs
-# declaring is a separate question that has not been measured, and
-# guessing a store path is worse than inheriting the resolver's.
-_CARD_IDENTITY_ENV = "SCITEX_CARDS_AGENT_ID=scitex-dev"
+# DELIBERATELY NOT DECLARED HERE: SCITEX_CARDS_DB.
+#
+# It is absent from this unit's environment too, and a draft of this change
+# added it — on the theory that a missing DSN made the store resolver fall
+# back silently to SQLite. scitex-cards MEASURED that theory and withdrew
+# it: with SCITEX_CARDS_DB unset, the config tier still returns
+# `postgresql://…:55432/scitex_cards`, and the zero-config SQLite default
+# was abolished 2026-08-13 (it now raises StoreTargetNotConfigured).
+# Verified on the DEPLOYED installs, not just a checkout.
+#
+# So the absence is real and the consequence is not. Declaring it would be
+# worse than inert: an env var OVERRIDES the config tier, which would pin
+# one literal DSN into every host's generated unit and take the value away
+# from the layer that is supposed to own it per host.
+#
+# The identity variable below has no such alternative path — nothing
+# supplies a creator when the environment does not — which is why one is
+# declared and the other is not. Absent-in-the-environment was true of
+# both; only one of them explained a measured failure.
+_CHILD_ENV = ("SCITEX_CARDS_AGENT_ID=scitex-dev",)
 
 
 def build_supervisor_unit_text() -> str:
@@ -138,8 +153,8 @@ def build_supervisor_unit_text() -> str:
         "[Service]\n"
         "Type=simple\n"
         f"Environment=PATH={child_path}\n"
-        f"Environment={_CARD_IDENTITY_ENV}\n"
-        f"ExecStart={execstart}\n"
+        + "".join(f"Environment={entry}\n" for entry in _CHILD_ENV)
+        + f"ExecStart={execstart}\n"
         "ExecReload=/bin/kill -HUP $MAINPID\n"
         "Restart=always\n"
         "RestartSec=5s\n"
