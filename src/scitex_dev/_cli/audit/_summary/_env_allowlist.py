@@ -11,10 +11,29 @@ in their own ``pyproject.toml``::
 
 Mirror of :func:`scitex_dev._cli.audit._summary._mcp_parity.is_mcp_parity_exempt`
 — same ``[tool.scitex_dev]`` namespace, same checked-out-tree
-resolution (registry ``local_path`` when present, else walk up from
-the import location). The matching helper lives in its own file
-because ``_audit.py`` is already at 2139 LoC; growing it further is
-deferred to a separate refactor PR.
+resolution via :func:`_audited_repo_root`. The matching helper lives
+in its own file because ``_audit.py`` is already at 2139 LoC; growing
+it further is deferred to a separate refactor PR.
+
+The PRECEDENCE between the import location and the registry is stated
+in ``_audited_repo_root`` and NOWHERE ELSE, deliberately. This file
+used to restate it, the implementation was later reversed, and the
+prose stayed — silently. On 2026-08-20 a peer read that stale
+sentence and reported the mechanism backwards, because a sentence
+cannot fail a test.
+
+The duplication was worse than rot, and this is the part worth
+keeping. The same wrong sentence sat in BOTH the module docstring and
+the function docstring. The peer read it here, wrote the mechanism
+down from it, then read lines 50-80 and met the identical claim
+again — and reported that the second reading CONFIRMED the first.
+Two copies of one sentence are not two sources; consulting the same
+wrong population twice corroborates nothing. So a duplicated
+explanation does not merely risk going stale, it manufactures false
+agreement in the reader who checks it.
+
+Precedence therefore has exactly one place to be wrong, and it is the
+place a reader can execute and a test can fail. (Two already do.)
 
 Use sparingly: each entry shrinks the audit surface for the package,
 so the brand-prefix justification must be real (e.g. operator-facing
@@ -47,15 +66,36 @@ from pathlib import Path
 _PKG_ENV_ALLOWLIST_KEY = "env_allowlist"
 
 
-def read_pkg_env_allowlist(package: str, repo: Path | None = None) -> tuple[str, ...]:
+def read_pkg_env_allowlist(package: str, repo: Path | None) -> tuple[str, ...]:
     """Return the ``env_allowlist`` declared in ``package``'s pyproject.
 
     Reads ``[tool.scitex_dev] env_allowlist`` (a list of prefix strings)
     from the audited package's ``pyproject.toml`` — same
     checked-out-tree discovery as
-    :func:`scitex_dev._cli.audit._summary._mcp_parity.is_mcp_parity_exempt`
-    (registry ``local_path`` when present, else walk up from the
-    import location).
+    :func:`scitex_dev._cli.audit._summary._mcp_parity.is_mcp_parity_exempt`,
+    i.e. :func:`_audited_repo_root`, which is where the precedence
+    between import location and registry is defined (see this module's
+    docstring for why it is not restated here).
+
+    ``repo`` HAS NO DEFAULT, deliberately
+    ------------------------------------
+    It used to default to ``None``, and that default was the bug. A
+    caller who simply forgot it got a silent fallback to a DIFFERENT
+    TREE than the one being audited, and the only symptom was an
+    exemption that would not take effect.
+
+    Measured 2026-08-20: of the four exemption read sites in this
+    package, THREE passed ``repo=`` and one did not. Every one used this
+    same resolver, so the resolver was never the difference — the
+    forgotten argument was. Recording the invariant as "use
+    ``_audited_repo_root``" would have caught nothing, because that was
+    already true at all four sites.
+
+    So the argument is required. Forgetting it now fails at the call
+    instead of resolving somewhere plausible and wrong. Passing ``None``
+    explicitly is still allowed and means "I have no audited tree, use
+    the discovery" — a decision, made visibly, rather than a default
+    nobody chose.
 
     Parameters
     ----------
