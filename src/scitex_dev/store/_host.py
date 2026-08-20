@@ -46,6 +46,7 @@ from ._errors import StoreTargetError
 from ._target import Backend, StoreTarget
 
 __all__ = [
+    "DEFAULT_PGDATA_DIR",
     "DEFAULT_SOCKET_DIR",
     "DEFAULT_TCP_PORT",
     "STORE_DSN_ENV",
@@ -59,13 +60,29 @@ __all__ = [
 #: harder to reason about than either extreme.
 STORE_DSN_ENV: Final[str] = "SCITEX_STORE_DSN"
 
-#: Where the per-host instance keeps PGDATA and its socket. Bind-mounted
-#: OUTSIDE any container, so rebuilding the container destroys no data.
-DEFAULT_SOCKET_DIR: Final[Path] = Path("~/.scitex/pg")
+#: Where the per-host instance keeps PGDATA. Bind-mounted OUTSIDE any
+#: container, so rebuilding the container destroys no data.
+DEFAULT_PGDATA_DIR: Final[Path] = Path("~/.scitex/pg")
 
-#: Used ONLY when someone opts into TCP (a GUI client, debugging). Never
-#: 5432: that buys an omittable port in a connection string and costs a
-#: collision with any system Postgres. It confers no auto-start benefit —
+#: Where that instance puts its UNIX socket — a SUBDIRECTORY of PGDATA,
+#: matching the live `unix_socket_directories` setting.
+#:
+#: These were one constant until 2026-08-20, and the single name was used
+#: for both meanings. The socket is not in PGDATA, it is in PGDATA/run, so
+#: every socket DSN this module built pointed one level too shallow and no
+#: connection through it ever succeeded. Measured on compute-04: the DSN
+#: named `~/.scitex/pg` while the only socket on disk was
+#: `~/.scitex/pg/run/.s.PGSQL.55432`.
+DEFAULT_SOCKET_DIR: Final[Path] = DEFAULT_PGDATA_DIR / "run"
+
+#: The port this instance listens on. NOT only a TCP concern, which is what
+#: the previous comment here claimed: libpq names the socket FILE
+#: `.s.PGSQL.<port>`, so a socket DSN that omits the port looks for
+#: `.s.PGSQL.5432` and misses a server listening on 55432. That omission was
+#: the second of the three faults that kept this path from ever connecting.
+#:
+#: Never 5432: that buys an omittable port in a connection string and costs
+#: a collision with any system Postgres. It confers no auto-start benefit —
 #: that comes from the service manager, not from the port number.
 DEFAULT_TCP_PORT: Final[int] = 55432
 
@@ -164,7 +181,7 @@ def require_durable_pgdata(pgdata_dir: "Path | str | None" = None) -> None:
     when the transport does — silently, and with nothing failing to say so.
 
     WHY THIS RAISES RATHER THAN WARNS. Until 2026-08-10 the module said, in
-    a comment, that ``DEFAULT_SOCKET_DIR`` is "bind-mounted OUTSIDE any
+    a comment, that ``DEFAULT_PGDATA_DIR`` is "bind-mounted OUTSIDE any
     container, so rebuilding the container destroys no data". Nothing
     verified it. The operator caught that in review and was right to: a
     comment states an intention and cannot notice when the intention fails.
@@ -184,7 +201,7 @@ def require_durable_pgdata(pgdata_dir: "Path | str | None" = None) -> None:
     "unsafe", and blocking every host whose mount table is unreadable would
     make the guard the outage.
     """
-    directory = Path(pgdata_dir) if pgdata_dir is not None else DEFAULT_SOCKET_DIR
+    directory = Path(pgdata_dir) if pgdata_dir is not None else DEFAULT_PGDATA_DIR
     resolved = directory.expanduser()
     fstype = _fstype_of(resolved)
     if fstype is None or fstype not in _EPHEMERAL_FSTYPES:
@@ -214,14 +231,41 @@ def socket_dsn(
     *,
     database: str = DEFAULT_DATABASE,
     socket_dir: "Path | str | None" = None,
+    port: int = DEFAULT_TCP_PORT,
+    user: "str | None" = None,
 ) -> str:
     """Build a UNIX-socket DSN for the per-host instance.
 
     libpq spells a socket connection as a ``host=`` query parameter holding a
     DIRECTORY (it appends ``.s.PGSQL.<port>`` itself). The authority section
-    stays empty, which is what makes this a socket rather than a TCP DSN::
+    holds the ROLE, or stays empty, which is what makes this a socket rather
+    than a TCP DSN::
 
-        postgresql:///scitex?host=/home/me/.scitex/pg
+        postgresql://scitex_cards@/scitex?host=/home/me/.scitex/pg/run&port=55432
+
+    THIS PATH HAD NEVER CONNECTED. It is the step-2 fallback, reached only
+    where ``SCITEX_STORE_DSN`` is unset, and every host that works has step 1
+    set — so three separate faults sat here undetected until sac isolated
+    them one at a time on 2026-08-20:
+
+    ======================  ============================  ================
+    DSN as it was built     socket libpq then looked for  result
+    ======================  ============================  ================
+    (original)              ``pg/.s.PGSQL.5432``          no such file
+    directory fixed         ``pg/run/.s.PGSQL.5432``      no such file
+    port fixed              ``pg/.s.PGSQL.55432``         no such file
+    both + user             ``pg/run/.s.PGSQL.55432``     CONNECTED
+    ======================  ============================  ================
+
+    A fallback nobody exercises is not a fallback; it is a branch that has
+    never been asked whether it works. Every host reaching step 2 today would
+    have failed, and the failure would have read as "Postgres is down".
+
+    ``user`` defaults to ``None``, which lets libpq resolve it (``PGUSER``,
+    else the OS user). Passing it explicitly is what the fleet needs when the
+    OS user has no role: without one the server answers ``fe_sendauth: no
+    password supplied``, which names a password problem for what is really a
+    missing role.
 
     The directory is expanded here rather than at connect time so that a
     misconfigured ``~`` fails while the DSN is being built, naming the value,
@@ -237,7 +281,8 @@ def socket_dsn(
             "against the process CWD, so the same configuration would connect "
             "to different sockets depending on where the process was started."
         )
-    return f"postgresql:///{database}?host={resolved}"
+    authority = f"{user}@" if user else ""
+    return f"postgresql://{authority}/{database}?host={resolved}&port={port}"
 
 
 def host_store(
