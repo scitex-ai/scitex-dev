@@ -53,6 +53,33 @@ def provide_placement() -> list[PlacementRecord]:
             job="scitex-dev-deploy-freshness",
             hosts=(_CONTROL_PLANE_HOST,),
         ),
+        # ci-watch polls a FIXED map of repos over the GitHub API. Every
+        # host it runs on asks the same question about the same five
+        # repositories and gets the same answer, so the duplication buys
+        # nothing and is spent from a budget shared with every other
+        # agent in the fleet.
+        #
+        # MEASURED 2026-08-20, during a live exhaustion of that shared
+        # account:
+        #     AGENTS_TO_REPOS         5 repos
+        #     1 gh call per repo      ("last 12 develop-branch runs")
+        #     */10 -> 6 runs/hour
+        #     running on 4 hosts      (226 / 500 / 836 / 1114 executions)
+        #     = 120 calls/hour ~ 2.0/min, against ~72/min unaccounted for
+        # One host cuts that to 30/hour with IDENTICAL coverage: the four
+        # copies are not redundancy, nobody designed them as failover, and
+        # no single host's view reveals that the other three exist.
+        #
+        # Why this is not "stop the job": scitex-agent-container had
+        # already turned their CI verdict ring off fleet-wide, so stopping
+        # this one too would have made CI feedback completely dark — and
+        # ci-result-notify-agents-via-channel records an hour of merging
+        # onto red because nothing said so. Removing duplication keeps the
+        # signal; removing the job trades one outage for another.
+        PlacementRecord(
+            job="ci-watch",
+            hosts=(_CONTROL_PLANE_HOST,),
+        ),
     ]
 
 
