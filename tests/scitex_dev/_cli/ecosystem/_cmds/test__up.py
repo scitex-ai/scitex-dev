@@ -4,8 +4,9 @@
 
 The legacy per-leaf systemd-unit + master-reconcile shape is gone; this
 test file covers the new shape: ONE collective supervisor unit gets
-written, cron-native + lowered-timer entries go to the managed crontab
-block. Real fakes only (PA-306 / STX-NM); ``run_up`` exposes
+written, and the managed crontab block is RETIRED (converged to empty)
+rather than populated -- cron is retired for periodic jobs (ADR-0012).
+Real fakes only (PA-306 / STX-NM); ``run_up`` exposes
 ``discover``, ``systemctl_runner``, ``unit_dir`` + ``echo`` as kwarg
 seams so tests substitute hand-rolled callables.
 """
@@ -375,5 +376,44 @@ def test_systemctl_returns_false_when_binary_missing():
     # Assert
     assert ok is False
 
+
+# --------------------------------------------------------------------------- #
+# --help must describe what the code DOES, not the retired cron behaviour      #
+# --------------------------------------------------------------------------- #
+
+
+def _up_help() -> str:
+    import click
+    from click.testing import CliRunner
+    from scitex_dev._cli.ecosystem import register_ecosystem_commands
+
+    @click.group()
+    def main():
+        pass
+
+    register_ecosystem_commands(main)
+    return CliRunner().invoke(main, ["ecosystem", "up", "--help"]).output
+
+
+def test_up_help_does_not_claim_to_install_a_crontab_block():
+    # Arrange -- the code calls retire_cron_block() and converges the managed
+    # block to EMPTY (ADR-0012). The help text used to say --yes "installs the
+    # crontab block". A retired surface still offered in documentation gets
+    # deployed on, and the operator who does so is behaving correctly: that is
+    # how 29-35 crontab entries landed on four hosts on 2026-08-19.
+    # Act
+    body = _up_help()
+    # Assert
+    assert "installs the crontab" not in body
+
+
+def test_up_help_says_the_cron_block_is_retired():
+    # Arrange -- absence of the wrong claim is not presence of the right one.
+    # A reader deciding whether `up --yes` is safe on a cron-free host needs
+    # the positive statement, not merely the removal of the false one.
+    # Act
+    body = _up_help()
+    # Assert
+    assert "RETIRED" in body or "retire" in body.lower()
 
 # EOF
