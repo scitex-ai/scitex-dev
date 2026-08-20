@@ -1189,6 +1189,7 @@ def _scan_env_vars(
     out: list[Violation],
     *,
     pkg_allowlist: tuple[str, ...] | None = None,
+    repo_root: "Path | None" = None,
 ) -> None:
     """§6a — env vars must use `SCITEX_<PKG>_*`; bare `<PKG>_*` is forbidden.
 
@@ -1218,7 +1219,37 @@ def _scan_env_vars(
     if pkg_allowlist is None:
         from ._env_allowlist import read_pkg_env_allowlist
 
-        pkg_allowlist = read_pkg_env_allowlist(package)
+        # READ THE EXEMPTION FROM THE TREE BEING AUDITED — the one this
+        # run resolved from `--path`/cwd, not one re-derived here.
+        #
+        # Without `repo=` the resolver falls back to `_audited_repo_root`,
+        # which prefers the IMPORT location (`find_spec`) and only then
+        # the registry. That is the right default for its own callers and
+        # it is still not this audit's target: with an editable install
+        # pointing at the MAIN checkout, `find_spec` lands there while the
+        # audit is auditing a linked WORKTREE. Import location and audit
+        # target are the same directory only when you happen to be working
+        # in the main checkout — and the fleet's hooks REQUIRE tracked
+        # edits to happen in a worktree. So the sanctioned workflow was
+        # exactly the one in which a §6a exemption could not be verified
+        # before merge.
+        #
+        # The audit already knows its own target; re-deriving it was the
+        # bug. `_mcp_parity` hit the same class on scitex-orochi #460
+        # (2026-07-22) and gained `_audited_repo_root`; §6a kept deriving
+        # and so kept the defect one step further out.
+        #
+        # MEASURED by scitex-cards, 2026-08-20, on v0.55.0:
+        #   read_pkg_env_allowlist("scitex-cards", repo=<worktree>)
+        #       -> ('PUPPETEER_EXECUTABLE_PATH',)
+        #   read_pkg_env_allowlist("scitex-cards")   # the audit's path
+        #       -> ()
+        # The contributor saw the rule still red with a correct entry in
+        # front of them, and no way to tell "my exemption is wrong" from
+        # "my exemption is unreadable from here". The advice in the
+        # message — "add to allowlist" — was something they had already
+        # done and could not act on again.
+        pkg_allowlist = read_pkg_env_allowlist(package, repo=repo_root)
 
     try:
         dist = im.distribution(package)
