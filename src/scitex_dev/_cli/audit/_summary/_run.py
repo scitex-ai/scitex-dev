@@ -175,7 +175,7 @@ def _audit_one(
     _walk(cmd, [], out, root_display=package, coverage=coverage)
     _check_introspection(cmd, package, out)
     _check_config_help(cmd, package, out)
-    _scan_env_vars(package, out)
+    _scan_env_vars(package, out, repo_root=repo_root)
     _check_startup_speed(package, out)
     if repo_root is None:
         _check_no_interactive_prompts(package, out)

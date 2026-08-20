@@ -526,7 +526,9 @@ class TestAuditedRepoRoot:
         sys.path.insert(0, str(repo / "src"))
         try:
             # Act
-            exempt = is_mcp_parity_exempt("scitex-parityexempt")
+            # repo=None is the POINT of this test: it asserts the discovery
+            # path, so "I have no audited tree" is stated rather than defaulted.
+            exempt = is_mcp_parity_exempt("scitex-parityexempt", repo=None)
         finally:
             sys.path.remove(str(repo / "src"))
             sys.modules.pop("scitex_parityexempt", None)
