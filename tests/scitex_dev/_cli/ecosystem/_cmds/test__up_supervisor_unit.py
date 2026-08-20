@@ -201,4 +201,47 @@ def test_path_is_declared_before_execstart_is_not_required_but_both_present():
     # Assert
     assert "ExecStart=" in body and "Environment=PATH=" in body
 
+
+
+# --------------------------------------------------------------------------- #
+# Environment=SCITEX_CARDS_AGENT_ID — the children's card-store identity       #
+# --------------------------------------------------------------------------- #
+
+
+def test_build_unit_text_declares_a_card_identity_for_its_children():
+    # Arrange -- systemd --user inherits no login shell, so a child job gets
+    # only what this unit declares. MEASURED 2026-08-20 on scitex-compute-04
+    # from the live supervisor's /proc/<pid>/environ: no identity variable of
+    # either spelling. ci-watch filed 0 cards against 351 red-CI detections,
+    # 347 failing `creator unresolved`, and nothing alarmed.
+    # Act
+    body = build_supervisor_unit_text()
+    # Assert
+    assert "Environment=SCITEX_CARDS_AGENT_ID=" in body
+
+
+def test_card_identity_never_declares_the_retired_variable_name():
+    # Arrange -- the invariant a presence check cannot see.
+    # `SCITEX_TODO_AGENT_ID` is RETIRED (constitution S5) and the installed
+    # scitex-cards reads ONLY `SCITEX_CARDS_AGENT_ID` (_store.py: ENV_AGENT).
+    # Declaring the retired spelling would look correct in the unit, resolve
+    # nothing at runtime, and reproduce the silent failure this line ends.
+    # Act
+    body = build_supervisor_unit_text()
+    # Assert
+    assert "SCITEX_TODO_AGENT_ID" not in body
+
+
+def test_card_identity_declares_the_live_variable_with_its_value():
+    # Arrange -- the name alone is not enough; an empty or wrong value
+    # resolves to nothing just as silently. Asserted as a literal rather
+    # than imported from scitex_cards: an optional-dependency import in a
+    # test is how one module takes a whole suite down (measured on the
+    # cards store, 2026-08-20).
+    # Act
+    body = build_supervisor_unit_text()
+    # Assert
+    assert "Environment=SCITEX_CARDS_AGENT_ID=scitex-dev" in body
+
+
 # EOF
