@@ -40,6 +40,7 @@ time it is a property of the test, which is what it actually is.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -277,15 +278,33 @@ class TestTheGuardSurvivesATransportChange:
 
         This is the test that fails if a future transport change drops the
         call — which is the whole point of writing it.
+
+        `SCITEX_STORE_DSN` MUST BE CLEARED HERE. `host_store` returns on the
+        override branch before it ever reaches the guard, so on any host
+        where step 1 is configured this test exercises nothing — and every
+        host that works has it configured (measured 2026-08-20: it is set in
+        the agent containers via FLEET_DEFAULT_ENV, and in the sac-listen
+        unit on five hosts). The test was RED here for exactly that reason,
+        reporting a missing guard when the guard was fine and the
+        environment had routed around it.
+
+        That is the same masking that hid three faults in `socket_dsn` until
+        2026-08-20: step 2 is unreachable wherever step 1 is set, so neither
+        its bugs nor its guards are ever exercised.
         """
         # Arrange
-        from scitex_dev.store._host import host_store
+        from scitex_dev.store._host import STORE_DSN_ENV, host_store
 
         target = EPHEMERAL / "scitex-pg"
+        saved = os.environ.pop(STORE_DSN_ENV, None)
         # Act / raises is the assertion
-        with pytest.raises(StoreTargetError):
-            # Assert
-            host_store(pkg="scitex_dev", socket_dir=target)
+        try:
+            with pytest.raises(StoreTargetError):
+                # Assert
+                host_store(pkg="scitex_dev", socket_dir=target)
+        finally:
+            if saved is not None:
+                os.environ[STORE_DSN_ENV] = saved
 
 
 # EOF
