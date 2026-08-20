@@ -109,8 +109,16 @@ class Supervisor:
         state_write_interval_sec: float = DEFAULT_STATE_WRITE_INTERVAL_SEC,
         child_grace_sec: float = DEFAULT_CHILD_GRACE_SEC,
         periodic_runner: Optional[PeriodicRunner] = None,
+        placement_host: Optional[str] = None,
+        discover_placement_fn: Optional[Callable[[], list]] = None,
     ) -> None:
         self._discover = discover
+        # Placement seams, mirroring the pair `_up.py` already exposes.
+        # Without them the EXCLUDED branch is reachable only by running on
+        # a host the job is not declared for, which no unit test can
+        # arrange — and an unreachable branch is one nobody has seen work.
+        self._discover_placement_fn = discover_placement_fn
+        self._placement_host = placement_host or os.uname().nodename.split(".")[0]
         self._log_dir = log_dir or default_log_dir()
         self._state_path = state_path or default_state_path()
         self._clock = clock
@@ -165,8 +173,60 @@ class Supervisor:
         than one call returning both, because the two populations have
         genuinely different lifecycles — a service that exits is a fault
         to be restarted; a periodic run that exits is a success.
+
+        HOST PLACEMENT IS APPLIED HERE, and it has to be
+        ---------------------------------------------------
+        ``ecosystem up`` also filters by placement, and until 2026-08-20
+        that was the only place it happened. That was correct when ``up``
+        lowered periodic jobs to crontab lines: filtering what it
+        INSTALLED filtered what RAN. ADR-0012 retired cron and moved
+        execution into this process — and the placement filter stayed on
+        the surface that no longer executes anything.
+
+        Measured the day it was found: ``ci-watch`` was declared for one
+        host and running on four, polling the same five repositories from
+        each against a shared GitHub API budget that was exhausting. The
+        declaration was present, correct, honoured by ``up``, and had no
+        effect on the running system.
+
+        A declaration the executor ignores is not a placement mechanism;
+        it is a comment. So the executor asks.
         """
-        return [j for j in self._discover() if j.kind != "service"]
+        jobs = [j for j in self._discover() if j.kind != "service"]
+
+        # Local import: the placement primitives live under ``jobs`` and
+        # pull in entry-point discovery, which is not wanted at module
+        # import time in the supervisor's hot path.
+        from ..jobs._placement import EXCLUDED, PlacementUnresolvable, decide, discover_placement
+
+        discover_records = self._discover_placement_fn or discover_placement
+
+        try:
+            records = discover_records()
+        except PlacementUnresolvable as exc:
+            # Refuse to guess. Arming everything here would silently
+            # restore the four-host duplication this exists to remove,
+            # and arming nothing would take the fleet's periodic work
+            # down. Say so and arm, but say so EVERY tick — a one-shot
+            # warning is how this becomes invisible again.
+            _logger.warning(
+                "placement unresolvable (%s); arming all periodic jobs on this "
+                "host, which may duplicate work on other hosts",
+                exc,
+            )
+            return jobs
+
+        host = self._placement_host
+        armed: list[JobSpec] = []
+        for job in jobs:
+            decision = decide(job.name, records, host=host)
+            if decision.state == EXCLUDED:
+                _logger.debug(
+                    "periodic job %s not armed here: %s", job.name, decision.reason
+                )
+                continue
+            armed.append(job)
+        return armed
 
     def reconcile(self) -> dict[str, str]:
         """Reconcile children to match the current discovery output.
