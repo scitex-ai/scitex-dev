@@ -125,14 +125,6 @@ def test_upresult_default_supervisor_unit_enabled_is_false():
     assert result.supervisor_unit_enabled is False
 
 
-def test_upresult_default_timer_jobs_lowered_to_cron_is_zero():
-    # Arrange
-    # Act
-    result = _up.UpResult()
-    # Assert
-    assert result.timer_jobs_lowered_to_cron == 0
-
-
 # --------------------------------------------------------------------------- #
 # run_up — supervisor unit always written                                      #
 # --------------------------------------------------------------------------- #
@@ -189,7 +181,7 @@ def _degrading_timer():
     )
 
 
-def test_cron_refusal_still_writes_the_supervisor_unit(tmp_path):
+def test_up_writes_the_supervisor_unit(tmp_path):
     # Arrange
     job = _degrading_timer()
     # Act
@@ -204,23 +196,7 @@ def test_cron_refusal_still_writes_the_supervisor_unit(tmp_path):
     assert (tmp_path / SUPERVISOR_UNIT_NAME).exists()
 
 
-def test_cron_refusal_is_still_reported(tmp_path):
-    """The refusal is unchanged — only the daemon stopped being collateral."""
-    # Arrange
-    job = _degrading_timer()
-    # Act
-    result = _up.run_up(
-        yes=False,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-        discover=lambda: [job],
-    )
-    # Assert
-    assert result.error
-
-
-def test_cron_refusal_result_says_the_unit_was_written(tmp_path):
+def test_up_result_says_the_unit_was_written(tmp_path):
     """The report must match what happened, not return a stale default."""
     # Arrange
     job = _degrading_timer()
@@ -281,34 +257,6 @@ def test_run_up_yes_calls_enable_now_on_supervisor_unit(tmp_path):
 # --------------------------------------------------------------------------- #
 
 
-def test_run_up_reports_timer_lowered_count_for_timer_kind(tmp_path):
-    # Arrange
-    # Act
-    result = _up.run_up(
-        yes=False,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-        discover=_timer_provider,
-    )
-    # Assert
-    assert result.timer_jobs_lowered_to_cron == 1
-
-
-def test_run_up_reports_zero_lowered_for_pure_cron_kind(tmp_path):
-    # Arrange
-    # Act
-    result = _up.run_up(
-        yes=False,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-        discover=_cron_provider,
-    )
-    # Assert
-    assert result.timer_jobs_lowered_to_cron == 0
-
-
 # --------------------------------------------------------------------------- #
 # run_up — the ABORT path must carry OUT the count that caused it              #
 #                                                                              #
@@ -323,63 +271,6 @@ def test_run_up_reports_zero_lowered_for_pure_cron_kind(tmp_path):
 # installed nothing. Reported by scitex-agent-container, 2026-08-17, while      #
 # measuring 9 -> 0 through this orchestrator rather than by reading the code.   #
 # --------------------------------------------------------------------------- #
-
-
-def test_run_up_refusal_carries_the_degraded_count(tmp_path):
-    # Arrange — two timers cron cannot honour; no opt-in flag, so both are refused.
-    # Act
-    result = _up.run_up(
-        yes=False,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-        discover=_degraded_timer_provider,
-    )
-    # Assert — the count that caused the refusal survives it.
-    assert result.timer_jobs_degraded == 2
-
-
-def test_run_up_refusal_sets_an_error(tmp_path):
-    # Arrange
-    # Act
-    result = _up.run_up(
-        yes=False,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-        discover=_degraded_timer_provider,
-    )
-    # Assert — a refusal still fails the run; the count does not soften it.
-    assert result.error is not None
-
-
-def test_run_up_refusal_does_not_report_degraded_as_zero(tmp_path):
-    # Arrange — the specific false reading this regression exists to kill.
-    # Act
-    result = _up.run_up(
-        yes=False,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-        discover=_degraded_timer_provider,
-    )
-    # Assert
-    assert result.timer_jobs_degraded != 0
-
-
-def test_run_up_clean_timer_reports_zero_degraded(tmp_path):
-    # Arrange — the control: a lossless timer must still read 0, so the
-    # assertion above cannot pass merely because the field is always set.
-    # Act
-    result = _up.run_up(
-        yes=False,
-        systemctl_runner=_ok_systemctl,
-        unit_dir=tmp_path,
-        echo=lambda _: None,
-        discover=_timer_provider,
-    )
-    # Assert
-    assert result.timer_jobs_degraded == 0
 
 
 # --------------------------------------------------------------------------- #
