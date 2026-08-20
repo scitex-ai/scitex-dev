@@ -66,7 +66,7 @@ from ._mcp_repo_root import (  # noqa: E402  (after regex constants)
 )
 
 
-def is_mcp_parity_exempt(package: str, repo: Path | None = None) -> bool:
+def is_mcp_parity_exempt(package: str, repo: Path | None) -> bool:
     """Return True when `package` declares §6 (MCP-parity) exemption.
 
     pyproject.toml ``[tool.scitex_dev] mcp_parity_exempt = true`` is the
@@ -74,15 +74,32 @@ def is_mcp_parity_exempt(package: str, repo: Path | None = None) -> bool:
     true`` is honored for convention parity. Either form opts the package
     out of the §6 parity/orphan-tool check.
 
+    ``repo`` HAS NO DEFAULT, and neither do the two readers below
+    ---------------------------------------------------------------
+    All four exemption readers in this package share one resolver and one
+    hazard. §6a was broken for exactly one reason — a caller forgot this
+    argument — and got a silent fallback to a DIFFERENT TREE than the one
+    being audited, whose only symptom was an exemption that would not take
+    effect. Measured 2026-08-20: three sites passed it, one did not, and
+    every one of the four already used ``_audited_repo_root``. So the
+    invariant worth enforcing is not "use the resolver" — that was already
+    true where the bug was, and therefore caught nothing — but "be CALLED
+    WITH the audited tree". A required parameter is that invariant enforced
+    by the language rather than remembered.
+
+    These three were correct when §6a was fixed. They are required anyway:
+    what made §6a break was that forgetting was POSSIBLE, and removing that
+    from three of four functions leaves it to resurface at the fourth.
+
     Parameters
     ----------
     package
         ECOSYSTEM key (e.g. ``"figrecipe"``). Used to resolve the local
-        checkout via the registry when `repo` is not given.
+        checkout via the registry when `repo` is None.
     repo
-        Explicit repo root. When provided, the registry lookup is
-        bypassed — used by tests that operate on a synthetic package
-        tree.
+        The audited repo root. Passing ``None`` explicitly still selects
+        discovery, and means "I have no audited tree" — a decision made
+        visibly, rather than a default nobody chose.
     """
     root = repo if repo is not None else _audited_repo_root(package)
     if root is None:
@@ -110,7 +127,7 @@ def is_mcp_parity_exempt(package: str, repo: Path | None = None) -> bool:
     return False
 
 
-def declares_no_mcp(package: str, repo: Path | None = None) -> bool:
+def declares_no_mcp(package: str, repo: Path | None) -> bool:
     """Return True when `package` declares the ``no-mcp`` CAPABILITY.
 
     Reads ``.scitex/dev/config.yaml`` ``audit.capabilities: [no-mcp]`` via the
@@ -132,7 +149,7 @@ def declares_no_mcp(package: str, repo: Path | None = None) -> bool:
     return load_config(root).has_capability("no-mcp")
 
 
-def mcp_tools_allowlist(package: str, repo: Path | None = None) -> set[str] | None:
+def mcp_tools_allowlist(package: str, repo: Path | None) -> set[str] | None:
     """Return the package's declared MCP tool allowlist, or None if absent.
 
     Finer-grained alternative to the all-or-nothing `mcp_parity_exempt`: a

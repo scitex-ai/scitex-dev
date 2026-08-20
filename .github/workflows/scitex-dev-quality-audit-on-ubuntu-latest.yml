@@ -127,4 +127,56 @@ jobs:
         # retirable, and visible fleet-wide via `ecosystem list-exemptions`.
         # An exemption is a decision someone made and signed; --new-only is a
         # decision nobody made about violations nobody enumerated.
+        #
+        # PYTHONFAULTHANDLER: this gate CRASHED on 2026-08-20, on PR #720.
+        # Not a finding -- SIGSEGV, exit 139, and the PR read exactly like a
+        # PR that had failed the audit. A crashed gate and a failed gate are
+        # indistinguishable from the outside, so the first thing it cost was
+        # a wrong diagnosis: the author (me) went looking for what their
+        # change had broken.
+        #
+        # It has never reproduced -- 15 runs on the same machine, on CI's own
+        # merge tree and on develop, all clean -- and the evidence needed to
+        # explain the one real occurrence was thrown away as it happened:
+        # no core (the runner's RLIMIT_CORE is 0), no traceback, and the
+        # step's stdout was block-buffered into a pipe so the buffer died
+        # with the process. What survived was two timestamps, which put the
+        # crash 1.74s into a 15.87s run -- past import, early in the audit.
+        #
+        # The two variables cover the two halves, and one alone is not
+        # enough:
+        #
+        #   PYTHONFAULTHANDLER -> WHERE it died. Prints the C stack and the
+        #                         Python frame to stderr, which is unbuffered
+        #                         and therefore already survives a crash.
+        #   PYTHONUNBUFFERED   -> kept as a cheap correctness measure, but
+        #                         MEASURED NOT TO HELP HERE, see below.
+        #
+        # Why the crashing run logged nothing -- and it is NOT buffering.
+        # I first explained the empty log as block-buffered stdout dying with
+        # the process. Plausible, and I asserted it before checking. Then I
+        # timestamped every output line of a normal run on that same host:
+        #
+        #     17.25s   (first byte of output)
+        #     17.26s   === audit-cli ===
+        #     ...      all 41 lines
+        #     17.45s   (last line)
+        #
+        # `audit-all` prints NOTHING for ~17s and then emits everything in
+        # 0.2s. So a crash at 1.74s produces an empty log whether stdout is
+        # buffered or not. Unbuffering cannot recover progress that was never
+        # written.
+        #
+        # The real gap is that this command has no streaming progress at all.
+        # Making each sub-audit report as it completes is the change that
+        # would tell us which one was in flight -- carded separately, since
+        # it is a behaviour change to the gate every package runs, not a
+        # workflow tweak.
+        #
+        # Both variables cost nothing on a green run, and FAULTHANDLER is the
+        # one doing real work here: stderr is unbuffered, so its frame
+        # survives.
+        env:
+          PYTHONFAULTHANDLER: "1"
+          PYTHONUNBUFFERED: "1"
         run: scitex-dev ecosystem audit-all scitex-dev
