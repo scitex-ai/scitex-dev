@@ -198,6 +198,23 @@ scitex-dev-ecosystem = "scitex_dev._ecosystem_jobs._provider:provide_jobs"
 # container %post. Downstream leaves register like so:
 #   scitex-writer = "scitex_writer._system_deps:provide"
 #   scitex-audio  = "scitex_audio._system_deps:provide"
+# Federated HOST-PLACEMENT providers live under the entry-point group
+# `scitex_dev.host_placement`. Each entry point loads to a callable returning
+# `list[scitex_dev.jobs._placement.PlacementRecord]`;
+# `discover_placement()` aggregates them (NOT deduped — two packages may each
+# place the same job on different hosts, and first-wins would drop one).
+#
+# A JobSpec is fleet-wide with no host axis, so without this every discovered
+# job is a candidate on every host. Records answer "which host ARMS this",
+# by explicit `hosts=[...]`, by `hosts="*"`, or by `groups=[...]`.
+#
+# A job with NO record is UNSTATED and is ARMED. That is not an oversight:
+# absence of a declaration means "no opinion yet", never "run nothing here",
+# and collapsing those two would disarm every not-yet-declared host the day
+# this ships. Declare a job here only when it must NOT run everywhere.
+[project.entry-points."scitex_dev.host_placement"]
+scitex-dev = "scitex_dev._ecosystem_jobs._placement_provider:provide_placement"
+
 [project.entry-points."scitex_dev.system_deps"]
 # scitex-dev's own (first) declaration: rsync, required by the
 # scholar-library-sync managed cron job (scitex-ssh sync wraps rsync).

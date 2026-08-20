@@ -273,3 +273,75 @@ class TestTheSocketDsnCannotBecomeADirectory:
 
 
 # EOF
+
+
+class TestTheSocketDsnActuallyReachesTheServer:
+    """The step-2 DSN had three faults at once and had never connected.
+
+    Reached only where SCITEX_STORE_DSN is unset, and every working host
+    sets it — so nothing exercised this path until sac isolated the faults
+    one at a time on 2026-08-20, on compute-04:
+
+        as built          pg/.s.PGSQL.5432       no such file
+        directory fixed   pg/run/.s.PGSQL.5432   no such file
+        port fixed        pg/.s.PGSQL.55432      no such file
+        both + user       pg/run/.s.PGSQL.55432  CONNECTED
+
+    Each test below pins ONE of the three, so a regression names which.
+    """
+
+    def test_the_socket_directory_is_the_run_subdirectory(self):
+        # Arrange — the socket lives in PGDATA/run, not PGDATA.
+        dsn = socket_dsn()
+        # Act
+        points_at_run = "/pg/run" in dsn
+        # Assert
+        assert points_at_run
+
+    def test_the_port_is_carried(self):
+        # Arrange — libpq names the socket FILE .s.PGSQL.<port>, so a DSN
+        # without the port looks for 5432 and misses a 55432 server.
+        dsn = socket_dsn()
+        # Act
+        carries_port = "port=55432" in dsn
+        # Assert
+        assert carries_port
+
+    def test_a_user_can_be_carried(self):
+        # Arrange — without a role libpq falls back to the OS user and the
+        # server answers "fe_sendauth: no password supplied", which names a
+        # password problem for a missing role.
+        dsn = socket_dsn(user="scitex_cards")
+        # Act
+        carries_user = dsn.startswith("postgresql://scitex_cards@/")
+        # Assert
+        assert carries_user
+
+    def test_the_user_is_omitted_when_not_given(self):
+        # Arrange — omitted, not empty: libpq then resolves PGUSER itself.
+        dsn = socket_dsn()
+        # Act
+        authority = dsn.split("://", 1)[1].split("/", 1)[0]
+        # Assert
+        assert authority == ""
+
+    def test_pgdata_and_socket_dir_are_different_paths(self):
+        # Arrange — one constant meant both until 2026-08-20, which is what
+        # made the DSN point one level too shallow.
+        from scitex_dev.store._host import DEFAULT_PGDATA_DIR, DEFAULT_SOCKET_DIR
+
+        # Act
+        differ = DEFAULT_SOCKET_DIR != DEFAULT_PGDATA_DIR
+        # Assert
+        assert differ
+
+    def test_the_socket_dir_is_under_pgdata(self):
+        # Arrange
+        from scitex_dev.store._host import DEFAULT_PGDATA_DIR, DEFAULT_SOCKET_DIR
+
+        # Act
+        parent = DEFAULT_SOCKET_DIR.parent
+        # Assert
+        assert parent == DEFAULT_PGDATA_DIR
+
+# EOF
