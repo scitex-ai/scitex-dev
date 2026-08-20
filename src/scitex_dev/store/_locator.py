@@ -49,7 +49,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 __all__ = ["PostgresDsn", "SqlitePath", "StoreLocator"]
 
@@ -143,12 +143,43 @@ class PostgresDsn:
         return self.safe()
 
     def safe(self) -> str:
-        """``postgres://<host>:<port>/<database>`` with no credentials."""
+        """A credential-free SUMMARY, marked as one so it is not misread.
+
+        Rendered as ``postgres[host=… db=…]`` rather than as something
+        shaped like a DSN. The previous form was ``postgres://<host>/<db>``,
+        which reads as a connection string a caller might try to use — and
+        for a SOCKET DSN it was also WRONG: libpq puts the socket directory
+        in the ``host=`` QUERY PARAMETER, so ``urlsplit().hostname`` is
+        None and every socket locator rendered as ``postgres://?/scitex``.
+
+        MEASURED CONSEQUENCE, 2026-08-20: sac read ``str(locator)``, saw
+        ``postgres://?/scitex``, and came within one message of reporting
+        that this package's DSN GENERATOR was emitting a broken string. The
+        generator was fine; the mask was lying in a DSN-shaped way. A
+        summary that cannot be told from the thing it summarises will
+        eventually be used as the thing.
+
+        The real connection string is reached BY NAME (``locator.dsn``),
+        which is what the docstring on ``StoreTarget.dsn`` already says.
+        """
         parts = urlsplit(self.dsn)
-        host = parts.hostname or "?"
-        port = f":{parts.port}" if parts.port else ""
+        # Socket DSNs carry the directory in `?host=`; TCP DSNs in the
+        # authority. Check both, so the summary describes what is actually
+        # being connected to rather than only the TCP shape.
+        host = parts.hostname
+        if not host:
+            host = parse_qs(parts.query).get("host", [""])[0]
+        port = parts.port
+        if not port:
+            port = parse_qs(parts.query).get("port", [""])[0] or None
         database = parts.path.lstrip("/") or "?"
-        return f"postgres://{host}{port}/{database}"
+
+        bits = [f"db={database}"]
+        if host:
+            bits.insert(0, f"host={host}")
+        if port:
+            bits.append(f"port={port}")
+        return f"postgres[{' '.join(bits)}]"
 
 
 #: Either kind of locator. Union rather than a base class: the two have
