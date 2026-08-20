@@ -127,4 +127,25 @@ jobs:
         # retirable, and visible fleet-wide via `ecosystem list-exemptions`.
         # An exemption is a decision someone made and signed; --new-only is a
         # decision nobody made about violations nobody enumerated.
+        #
+        # PYTHONFAULTHANDLER: this gate CRASHED on 2026-08-20, on PR #720.
+        # Not a finding -- SIGSEGV, exit 139, and the PR read exactly like a
+        # PR that had failed the audit. A crashed gate and a failed gate are
+        # indistinguishable from the outside, so the first thing it cost was
+        # a wrong diagnosis: the author (me) went looking for what their
+        # change had broken.
+        #
+        # It has never reproduced -- 15 runs on the same machine, on CI's own
+        # merge tree and on develop, all clean -- and the evidence needed to
+        # explain the one real occurrence was thrown away as it happened:
+        # no core (the runner's RLIMIT_CORE is 0), no traceback, and the
+        # step's stdout was block-buffered into a pipe so the buffer died
+        # with the process. What survived was two timestamps, which put the
+        # crash 1.74s into a 15.87s run -- past import, early in the audit.
+        #
+        # This flag costs nothing on a green run and prints a C-level stack
+        # plus the Python frame on a crashing one. Chasing a reproduction has
+        # already cost more than capturing the real one would have.
+        env:
+          PYTHONFAULTHANDLER: "1"
         run: scitex-dev ecosystem audit-all scitex-dev
