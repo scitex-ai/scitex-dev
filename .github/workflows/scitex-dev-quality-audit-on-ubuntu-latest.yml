@@ -149,18 +149,33 @@ jobs:
         #   PYTHONFAULTHANDLER -> WHERE it died. Prints the C stack and the
         #                         Python frame to stderr, which is unbuffered
         #                         and therefore already survives a crash.
-        #   PYTHONUNBUFFERED   -> HOW FAR it got. This is the half that was
-        #                         missing: the progress output goes to stdout,
-        #                         and the crashing run produced NONE of it,
-        #                         because stdout to a pipe is block-buffered
-        #                         and the buffer dies with the process.
+        #   PYTHONUNBUFFERED   -> kept as a cheap correctness measure, but
+        #                         MEASURED NOT TO HELP HERE, see below.
         #
-        # With only the first, the next occurrence yields a frame with no
-        # record of which package or sub-audit was being processed. With both,
-        # the "1.74s in" clue above becomes a line in the log instead of an
-        # inference from two timestamps.
+        # Why the crashing run logged nothing -- and it is NOT buffering.
+        # I first explained the empty log as block-buffered stdout dying with
+        # the process. Plausible, and I asserted it before checking. Then I
+        # timestamped every output line of a normal run on that same host:
         #
-        # Both cost nothing on a green run.
+        #     17.25s   (first byte of output)
+        #     17.26s   === audit-cli ===
+        #     ...      all 41 lines
+        #     17.45s   (last line)
+        #
+        # `audit-all` prints NOTHING for ~17s and then emits everything in
+        # 0.2s. So a crash at 1.74s produces an empty log whether stdout is
+        # buffered or not. Unbuffering cannot recover progress that was never
+        # written.
+        #
+        # The real gap is that this command has no streaming progress at all.
+        # Making each sub-audit report as it completes is the change that
+        # would tell us which one was in flight -- carded separately, since
+        # it is a behaviour change to the gate every package runs, not a
+        # workflow tweak.
+        #
+        # Both variables cost nothing on a green run, and FAULTHANDLER is the
+        # one doing real work here: stderr is unbuffered, so its frame
+        # survives.
         env:
           PYTHONFAULTHANDLER: "1"
           PYTHONUNBUFFERED: "1"
