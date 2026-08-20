@@ -42,6 +42,35 @@ _SYSTEM_PATH_ENTRIES = (
 # Type=simple long-running shape.
 SUPERVISOR_UNIT_NAME = "scitex-dev-ecosystem.service"
 
+# The card-store identity the supervisor's CHILDREN write under.
+#
+# MEASURED 2026-08-20 on scitex-compute-04, reading the live supervisor's
+# /proc/<pid>/environ: SCITEX_CARDS_AGENT_ID and the retired
+# SCITEX_TODO_AGENT_ID were BOTH unset (control: HOME present, 18 vars
+# read, so the read itself worked). `ci-watch` had filed ZERO cards
+# against 351 red-CI detections, 347 of them failing with `creator
+# unresolved` — scitex-cards refuses to guess a creator rather than
+# silently attributing to blank/'unknown'. Nothing alarmed, because a
+# periodic job's exit code reaches only its own ledger.
+#
+# This is the Environment=PATH defect below, one variable over: on
+# 2026-08-19 a bare PATH broke every shell-bodied child 497/497, equally
+# silently. Children inherit THIS unit's environment, so whatever they
+# need must be declared here — systemd --user inherits no login shell.
+#
+# The value names the SOFTWARE that writes, matching the convention
+# already used for automated actors (notifyd). Deliberately not a
+# per-host agent name: this unit is installed on every host while the
+# scitex-dev AGENT runs on one, so a host-derived identity would claim
+# an agent that is not present. Card `assignee` still carries who must
+# ACT; this is only `created_by`.
+#
+# NOT set here: SCITEX_CARDS_DB, also unset on that host. The measured
+# failures were identity failures; whether the store path needs
+# declaring is a separate question that has not been measured, and
+# guessing a store path is worse than inheriting the resolver's.
+_CARD_IDENTITY_ENV = "SCITEX_CARDS_AGENT_ID=scitex-dev"
+
 
 def build_supervisor_unit_text() -> str:
     """Return the supervisor unit text with ``ExecStart=`` absolutised.
@@ -109,6 +138,7 @@ def build_supervisor_unit_text() -> str:
         "[Service]\n"
         "Type=simple\n"
         f"Environment=PATH={child_path}\n"
+        f"Environment={_CARD_IDENTITY_ENV}\n"
         f"ExecStart={execstart}\n"
         "ExecReload=/bin/kill -HUP $MAINPID\n"
         "Restart=always\n"
