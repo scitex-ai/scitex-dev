@@ -428,6 +428,41 @@ def provide_jobs() -> list[JobSpec]:
             on_unit_active_sec="6h",
         ),
         JobSpec(
+            name="scitex-dev-config-drift",
+            kind="timer",
+            schedule="",
+            command=_exec_command("scitex-dev-config-drift"),
+            description=(
+                "Does the file an agent ACTUALLY READS equal what the ref "
+                "says? Governance reaches an agent through three hops and "
+                "can stop silently at any of them: merged (the ref has it), "
+                "pulled (this host's clone has it), deployed (the path the "
+                "agent opens has it). All three were hit by the same five "
+                "lines of constitution text on 2026-08-20, ending with three "
+                "hosts that had pulled and whose agents still read the old "
+                "rule, because their ~/.claude/commands is a real directory "
+                "holding a materialised COPY refreshed only by a deploy that "
+                "had not run. THE THIRD HOP IS WHY THIS EXISTS: it has no "
+                "actor, no failed action and no local symptom — the host "
+                "obeys the older rule correctly — AND it passes a rigorous "
+                "repository-side check. An exact sha256 comparison of the "
+                "clone returned in-sync on four hosts while three served "
+                "stale bytes; the predicate was right and its SUBJECT was "
+                "wrong. So this job hashes the DEPLOYED path against the "
+                "ref, names which hop stopped (PULL_PENDING / "
+                "DEPLOY_PENDING / LIVE_AHEAD), and reports whether a host "
+                "matches by SYMLINK — a host with no deploy step cannot "
+                "fail this check, which is not the same as passing it. "
+                "Unlike the other observe jobs it does NOT swallow every "
+                "non-zero: drift is data, but UNMEASURED fails the unit, "
+                "because the defect being detected is invisibility and a "
+                "blind spot counted as success reproduces it. See "
+                "_ecosystem_jobs._config_drift."
+            ),
+            on_boot_sec="10min",
+            on_unit_active_sec="6h",
+        ),
+        JobSpec(
             name="scitex-dev-pr-expire",
             kind="cron",
             schedule="30 3 * * *",
