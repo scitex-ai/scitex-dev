@@ -294,6 +294,24 @@ def _dispatch_federated_job(name: str, *, apply: bool, all_jobs) -> None:
             raise click.ClickException(result.error)
         return
 
+    if name == "scitex-dev-config-drift":
+        import sys as _sys
+
+        from ...._ecosystem_jobs import _config_drift
+
+        drift = _config_drift.run_once(out=_sys.stdout)
+        # Drift is DATA in the log, so it does not fail the unit (mirrors
+        # drift-report / local-state-audit). UNMEASURED is different: the
+        # defect this job detects IS invisibility, so a host we could not
+        # measure must not read as a quiet success anywhere — including in
+        # the unit's own status.
+        if drift.unmeasured:
+            raise click.ClickException(
+                f"{len(drift.unmeasured)} host/path(s) could not be measured — "
+                "this is NOT a pass; see the log for which and why"
+            )
+        return
+
     # Pure shell-body job (host script / console-script pipeline). The body
     # carries NO mkdir / redirect / rotation — the caller's log sink supplies
     # all three; the child inherits fds 1/2, already redirected at fd level.
