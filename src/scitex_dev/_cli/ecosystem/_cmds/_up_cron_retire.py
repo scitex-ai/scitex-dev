@@ -90,6 +90,23 @@ def retire_cron_block(
         )
         return 0
 
+    # `crontab -` REFUSES input without a trailing newline:
+    #   "new crontab file is missing newline before EOF, can't install."
+    # `strip_block` ends with `.rstrip("\n")`, so its output never has one.
+    #
+    # MEASURED on ywata-note-win 2026-08-20: the retirement failed on the
+    # ONLY host that had a managed block, leaving all 37 lines in place
+    # while every other host reported success — because those hosts had
+    # nothing to write and returned before reaching this call. The bug was
+    # therefore invisible on 4 of 5 hosts, and the one host it broke is the
+    # one the feature exists for.
+    #
+    # Not fixed in `strip_block`: that helper is also used where a trailing
+    # newline would be wrong, and this is the crontab writer's requirement,
+    # so it belongs at the boundary that talks to `crontab`.
+    if not stripped.endswith("\n"):
+        stripped += "\n"
+
     try:
         _crontab.write_crontab(stripped)
     except RuntimeError as exc:
