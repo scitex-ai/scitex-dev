@@ -7,6 +7,87 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.56.1] - 2026-08-20
+
+> **The audit was reading a different tree than the one it said it was
+> auditing** — and the workflow the fleet is *required* to use was the one way
+> the resulting failure could not be diagnosed before merge. Plus the cron
+> retirement could not complete on the one host that still had a block.
+
+### Known issue — please read before assuming it is your change
+
+`ecosystem audit-all` has **crashed once with SIGSEGV (exit 139)**, on CI,
+mid-audit. It is not a finding: the process died. On the PR page a crashed
+gate and a failed gate are the same red, so the natural reading is "my change
+broke the audit". It was not, and it will not be yours either.
+
+**It is confirmed nondeterministic.** The same merge tree was audited twice —
+once crashing, once clean — with the base branch provably static between the
+two runs. It then survived 15 further runs on the machine that crashed
+(CI's merge tree, current develop, and memory-capped variants), never once
+reproducing.
+
+So *"I could not reproduce it"* tells you nothing. It is what everyone gets.
+Cause unknown; C-stack overflow, cgroup OOM, allocation failure and job
+concurrency are each excluded by measurement. If you hit it, please attach the
+`PYTHONFAULTHANDLER` traceback (see below) rather than re-running until green.
+
+### Fixed
+
+- **§6a read its exemption from a different tree than it audited.**
+  `audit-cli` prints `auditing <tree> (via cwd)` and then resolved the
+  package's `env_allowlist` *without passing that tree*, falling back to a
+  resolver that prefers the **import** location — which, with an editable
+  install, is the main checkout while the audit is auditing a worktree.
+  Measured by scitex-cards: the same call returned their declared allowlist
+  when given the worktree and `()` on the audit's own path.
+
+  The contributor had added the entry correctly and §6a stayed red, with no
+  way to tell "my exemption is wrong" from "my exemption is unreadable from
+  here" — and the message's advice was the thing they had already done.
+  **This is the sanctioned workflow**: fleet hooks require tracked edits in a
+  linked worktree, so the only supported way to declare a §6a exemption was
+  the one way it could not be verified before merge.
+
+  Confirmed end-to-end on a real repository after the fix: with the install
+  pointing at the audited tree, their §6a finding went 1 → 0 and §4 went
+  7 → 0 *without a character of their `pyproject.toml` changing*.
+
+- **`repo` is now a required argument at all four exemption readers**
+  (`read_pkg_env_allowlist`, `is_mcp_parity_exempt`, `declares_no_mcp`,
+  `mcp_tools_allowlist`). All four already ran the identical resolver, so
+  "use the audited-repo resolver" was **true at the site where the bug was**
+  and could never have caught it. The condition that can fail is *being called
+  with* the audited tree, and a required parameter makes forgetting impossible
+  rather than merely discouraged. Passing `repo=None` still selects discovery
+  and now states that as a decision.
+
+- **The cron retirement could not write on a host that still had a block.**
+  `crontab -` refuses input without a trailing newline, so retirement failed
+  on the only host it still had work to do on, while hosts with nothing to
+  remove reported success. The has-a-block predicate was also wrong: it
+  compared stripped output to the original, which is equal on hosts that never
+  had a managed block.
+
+### Changed
+
+- The audit job sets `PYTHONFAULTHANDLER=1`, so a crash prints its C-level
+  stack and Python frame to stderr (unbuffered, therefore surviving SIGSEGV).
+  The one real occurrence left no evidence at all: no core (the runner's
+  `RLIMIT_CORE` is 0), no traceback, and no log body — `audit-all` prints
+  nothing for ~17s and then everything at once, so a crash 1.74s in logs
+  nothing regardless of buffering.
+
+### Documentation
+
+- Resolution precedence between the import location and the registry is now
+  stated in `_audited_repo_root` **and nowhere else**. It had been restated in
+  prose in two docstrings, the implementation was later reversed under both,
+  and a reader met the same stale sentence twice and reported the second
+  reading as *confirming* the first. Two copies of a claim are not two
+  sources: a duplicated explanation does not merely risk going stale, it
+  manufactures false agreement in whoever checks it.
+
 ## [0.55.0] - 2026-08-18
 
 > **The supervisor owns the clock, and the auditor comes from the environment
