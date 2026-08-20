@@ -164,4 +164,29 @@ def test_a_host_with_no_managed_block_removes_zero():
     # Assert
     assert removed == 0
 
+
+def test_the_written_text_ends_with_a_newline():
+    """`crontab -` REFUSES input that does not end with a newline.
+
+    MEASURED on ywata-note-win 2026-08-20: the retirement failed on the
+    ONLY host that had a managed block -- "new crontab file is missing
+    newline before EOF, can't install", 37 lines left in place -- while
+    four other hosts reported success, because they had no block and
+    returned before ever reaching the writer.
+
+    The tests above assert on the resulting TEXT and never on what is
+    handed to `crontab`, so an in-memory writer accepts what the real one
+    rejects. This one asserts on the argument.
+    """
+    # Arrange
+    fake = _with_crontab(_FOREIGN + "\n" + _MANAGED + "\n")
+    # Act
+    try:
+        retire_cron_block(yes=True, echo=lambda _s: None)
+        written = fake.writes[-1]
+    finally:
+        _restore(fake)
+    # Assert
+    assert written.endswith("\n")
+
 # EOF
