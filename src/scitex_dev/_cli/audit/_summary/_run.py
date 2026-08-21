@@ -270,10 +270,28 @@ def run_audit(
 
     if not violations and status == "warn":
         status = "ok"
+
+    # WHICH artifact did the findings above describe? Resolved AFTER
+    # `_audit_one` so the audited module is already in sys.modules and this
+    # reports the object the findings were actually made about, not a second
+    # import that could resolve elsewhere. See `_vantage` for the evening
+    # this cost.
+    from ._vantage import (
+        alignment,
+        format_alignment,
+        format_vantage,
+        resolved_vantage,
+    )
+
+    vantage = resolved_vantage(package)
+    tree_alignment = alignment(vantage, repo_root)
+
     if output_json:
         rec = {
             "package": package,
             "status": status,
+            "measured": vantage,
+            "tree_alignment": tree_alignment,
             "severity_counts": severity_counts(violations),
             "violations": [_violation_to_dict(v) for v in violations],
         }
@@ -282,6 +300,12 @@ def run_audit(
         _emit_json([rec], registry_provenance or "single-package mode")
     else:
         _emit_human(package, status, violations, coverage, category="CLI convention")
+        # Printed with the findings, not behind a --verbose: a reader
+        # disputing a finding needs the measured path in the same glance.
+        click.echo(format_vantage(vantage))
+        hybrid = format_alignment(vantage, repo_root)
+        if hybrid:
+            click.echo(hybrid, err=True)
         if suppressed:
             _emit_baseline_suppressed(len(suppressed), bl_path)
     if write_requested:
