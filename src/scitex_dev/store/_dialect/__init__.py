@@ -7,10 +7,25 @@ engine they are on. Everything a backend does differently lives behind
 :class:`Dialect`: parameter style, identifier quoting, type names, upsert
 syntax, and how a connection is opened.
 
-The two backends are not peers. **SQLite is the default** — a single file
-under ``runtime/``, no daemon, right for every store that lives on one
-host. **Postgres is advanced** — reach for it when a store genuinely needs
-concurrent writers from several hosts or does not fit one file.
+The two backends are not peers, and this module previously said so the
+wrong way round. **Postgres is the default for RUNTIME STATE** — the
+per-host instance on 55432, synchronised across hosts. **SQLite is for
+REGENERABLE LOCAL STATE only** — a derived index, a rebuildable cache,
+anything whose loss costs a recompute and nothing else.
+
+The distinction is the fleet rule, not a preference here (constitution §3,
+operator's ruling 2026-08-14): *spec は設計書、状態は db* — design belongs
+to git, state belongs to the database. If losing the file would lose a
+fact nobody else holds, it is state, and it does not go in SQLite.
+
+WHY THIS WORDING WAS WRONG AND WHAT IT COST. Until 2026-08-21 this
+docstring and the sibling READMEs declared "SQLite is the default /
+Postgres is advanced" in four places. Nothing in the code enforced it —
+:func:`get_dialect` takes an explicit backend — so the sentence WAS the
+mechanism: it is what a reader consults when choosing. A fleet survey the
+same day counted 66 of 68 live SQLite tables in one consumer package.
+Whoever chose SQLite there was following this file correctly. A default
+stated only in prose is still a default.
 
 Choosing Postgres when its driver is absent raises
 :class:`~.._errors.DialectUnavailableError`. It does NOT quietly fall back
