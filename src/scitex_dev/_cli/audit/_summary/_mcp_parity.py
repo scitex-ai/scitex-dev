@@ -461,7 +461,14 @@ def _parity_violations(
                 package,
                 "§6",
                 f"{len(orphans)} MCP tools have no matching Python API "
-                f"(sample: {sorted(orphans)[:3]})",
+                f"(sample: {sorted(orphans)[:3]}). This count is NOT one "
+                "uniform task: some tools already have a real sync "
+                "implementation and need only an export, while others have "
+                "no Python API behind them at all and need a public "
+                "signature designed. Do NOT satisfy this by re-exporting "
+                "async MCP wrappers that return JSON strings — that "
+                "publishes a transport shape as a Python API and is worse "
+                "than the gap. See 03_interface/03_mcp/07_python-api-parity.",
             )
         )
     return out

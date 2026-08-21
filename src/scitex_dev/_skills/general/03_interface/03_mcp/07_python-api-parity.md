@@ -68,3 +68,48 @@ A future check (see [08_audit-mcp-tools.md](08_audit-mcp-tools.md)):
 # For every MCP tool in <pkg>:
 #   assert it wraps a public Python API (no orphan MCP-only logic)
 ```
+
+## The orphan count is two different jobs, not one
+
+`§6` reports "N MCP tools have no matching Python API". That single number
+hides two fixes with very different costs, and estimating from the count
+alone will be wrong.
+
+**Case 1 — the API exists, the export is missing.** A real, synchronous
+function already lives in the package; only the public re-export is absent.
+One line.
+
+**Case 2 — there is no Python API at all.** The behaviour exists only inside
+an MCP handler. Closing this means designing a public synchronous signature
+and moving the logic behind it. Hours, and a design decision.
+
+One name can be in both states at once. Measured in scitex-cards, 2026-08-21:
+
+| tool                 | where it lives                          | fix     |
+|----------------------|-----------------------------------------|---------|
+| `health`             | `_health.py` (sync) **and** `_mcp_skills.py` (async) | export |
+| `dm_send`            | `_mcp_skills.py` only, async → JSON str  | design  |
+| `poll_notifications` | `_mcp_skills.py` only, async → JSON str  | design  |
+
+`health` has a genuine sync API *and* an async MCP shape over it, so for that
+name the defect really is a missing export. `dm_send` has nothing behind it.
+
+### Do not satisfy this rule by re-exporting the MCP handlers
+
+The tempting shortcut is to re-export the `_mcp_*` functions and watch the
+count drop. Do not. Those handlers are `async` and return **JSON strings**,
+so the "Python API" you would publish is:
+
+```python
+result = await scitex_cards.dm_send(...)   # -> '{"ok": true, ...}'
+```
+
+That is an MCP transport shape wearing a Python API's name — callers get a
+coroutine and a string to re-parse instead of a value. It is worse than the
+gap it closes, and a rule that can be satisfied by making the API worse is a
+rule being satisfied rather than met.
+
+**Why this is in the rule text rather than the finding alone:** the count
+reads as a burn-down list, and whoever picks it up will size it as one. They
+should know before starting that it is at least two kinds of work — and that
+one of the two has a wrong answer that makes the number go down.
