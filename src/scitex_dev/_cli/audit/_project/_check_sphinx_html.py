@@ -286,11 +286,29 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
                 )
             )
 
-    # PS-128 — `.gitignore` must NOT exclude `src/<pkg>/_sphinx_html/` —
-    # scitex-cloud serves from the bundled in-wheel HTML, which must be
-    # tracked. Symptom: CI fails with hatchling 'Forced include not found'.
+    # PS-128 — `.gitignore` must NOT exclude `src/<pkg>/_sphinx_html/`,
+    # UNLESS the wheel target declares it under artifacts / force-include.
+    # scitex-cloud serves from the bundled in-wheel HTML; tracking the file
+    # was one way to get it there, never the requirement itself.
+    #
+    # The `and not wheel_globs` clause is the whole point. hatchling's
+    # `artifacts` key exists precisely to put VCS-IGNORED files into a
+    # wheel, so "gitignored" and "shipped in the wheel" are not in
+    # conflict — and demanding the file be tracked is demanding that the
+    # build output be committed to the source tree.
+    #
+    # That demand is not merely redundant, it is UNSATISFIABLE alongside
+    # PS-231, whose BLOCKER 2 says a leaf that vendors its build output
+    # back into the package tree cannot be replaced by the build-only org
+    # reusable. So a repo following PS-231 could not satisfy PS-128, and a
+    # repo satisfying PS-128 was permanently exempt from PS-231.
+    #
+    # scitex-cards found the loop and showed their work (2026-08-23). #734
+    # had already taught PS-121 to read the declaration; PS-128 was left
+    # behind, so fixing PS-121 alone just moved the same demand one rule
+    # over. A corpus is only as consistent as its least-updated rule.
     gitignore = repo / ".gitignore"
-    if gitignore.is_file():
+    if gitignore.is_file() and not wheel_globs:
         try:
             gi_text = gitignore.read_text(encoding="utf-8", errors="replace")
         except OSError:

@@ -104,6 +104,24 @@ _VERBS_NEED_NOUN = {
 _VALID_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
+#: Single-token MCP tool names that are a CROSS-PACKAGE STANDARD and are
+#: therefore exempt from the `<verb>_<noun>` requirement below.
+#:
+#: `health` is exposed verbatim by scitex-cards, scitex-agent-container and
+#: claude-code-telegrammer, so it is a name callers can rely on across the
+#: fleet — the value of which comes precisely from its being identical
+#: everywhere. Renaming it per-package to satisfy a naming rule would trade
+#: a real interop guarantee for a lexical one.
+#:
+#: THIS LIST LIVES HERE ON PURPOSE. It was previously recorded only in
+#: scitex-cards' own test file (`_STANDARD_NAMES`), which meant a
+#: cross-package agreement existed in exactly one package and this rule had
+#: no way to know about it — so the rule and the standard contradicted each
+#: other and the package caught between them could satisfy neither.
+#: Reported by scitex-cards 2026-08-23. A convention shared by N packages
+#: belongs to the corpus that audits all N.
+STANDARD_TOOL_NAMES: frozenset[str] = frozenset({"health"})
+
 def _check_tool_naming(
     package: str, tool_names: list[str], out: list[Violation]
 ) -> None:
@@ -138,7 +156,7 @@ def _check_tool_naming(
         # The tool name as visible from the umbrella must start with `<short>_`.
         # Standalone-source names omit it under Convention A (mount adds it);
         # we only check the prefix when the name is already prefixed.
-        if "_" not in raw:
+        if "_" not in raw and raw not in STANDARD_TOOL_NAMES:
             out.append(
                 Violation(
                     f"{package}::{raw}",
