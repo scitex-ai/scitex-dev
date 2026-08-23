@@ -21,13 +21,20 @@ stringified dataclass repr turned into a directory.
 
 Path convention
 ---------------
-SQLite targets follow the fleet's runtime-state-DB layout —
+LEGACY SQLite targets sit at
 ``<proj-root>/.scitex/<pkg-short>/runtime/<pkg-short>.db``, resolved
 through ``scitex_config``'s ``runtime_path()`` rather than a
-``Path.home()`` literal. See the ecosystem skill
+``Path.home()`` literal. That path is described here so existing files
+remain findable; it is NOT a layout to place new state into. See the ecosystem skill
 ``01_ecosystem/13_runtime-state-db-layout.md``: ``runtime/`` is the single
-subtree redirected off shared/GPFS filesystems, and ``.db`` is the only
-suffix scitex-io's load dispatch recognises.
+subtree redirected off shared/GPFS filesystems.
+
+That leaf's ``.db`` NAMING convention is WITHDRAWN (constitution §3,
+2026-08-23 -- a ``.db`` file is SQLite, and runtime state now lives only
+in the per-host PostgreSQL on 55432). The redirect rationale survives and
+is why this resolves through ``runtime_path()``; the storage engine it
+once implied does not. Do not read this docstring as sanctioning a new
+``.db`` file.
 """
 
 from __future__ import annotations
