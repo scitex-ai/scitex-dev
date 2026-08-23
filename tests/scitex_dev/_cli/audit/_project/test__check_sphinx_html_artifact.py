@@ -145,3 +145,56 @@ def test_the_remedy_no_longer_advises_committing_to_a_protected_branch():
     check_sphinx_html(repo, _V, out)
     # Assert
     assert "protected default" in _ps121(out)[0].detail
+
+
+
+# --------------------------------------------------------------------------- #
+# PS-128 must read the wheel declaration too, not only the .gitignore          #
+# --------------------------------------------------------------------------- #
+# Reported by scitex-cards 2026-08-23. #734 taught PS-121 to read the artifacts
+# declaration; PS-128 was left behind, so fixing PS-121 alone just moved the
+# same "commit the build output" demand one rule over -- and that demand is
+# unsatisfiable alongside PS-231's BLOCKER 2, which forbids a leaf from
+# vendoring build output back into the tree.
+
+_GITIGNORES_HTML = "build/\nsrc/pkg/_sphinx_html/\n*.pyc\n"
+
+
+def _ps128(out):
+    return [v for v in out if v.rule == "PS-128"]
+
+
+def test_a_declared_bundle_is_not_a_gitignore_violation():
+    """Gitignored AND shipped is exactly what hatchling `artifacts` is for."""
+    # Arrange
+    import tempfile
+    from pathlib import Path
+
+    repo = _repo_with_sphinx(Path(tempfile.mkdtemp()), _WHEEL_ONLY)
+    (repo / ".gitignore").write_text(_GITIGNORES_HTML)
+    out: list = []
+    # Act
+    check_sphinx_html(repo, _V, out)
+    # Assert
+    assert _ps128(out) == []
+
+
+def test_an_undeclared_bundle_is_still_a_violation():
+    """The control: without the declaration PS-128 must still fire.
+
+    Without this, the fix could have disabled PS-128 outright and the other
+    test would still pass.
+    """
+    # Arrange
+    import tempfile
+    from pathlib import Path
+
+    repo = _repo_with_sphinx(Path(tempfile.mkdtemp()), "")
+    (repo / ".gitignore").write_text(_GITIGNORES_HTML)
+    out: list = []
+    # Act
+    check_sphinx_html(repo, _V, out)
+    # Assert
+    assert len(_ps128(out)) == 1
+
+# EOF

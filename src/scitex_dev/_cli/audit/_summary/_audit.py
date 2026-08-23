@@ -335,6 +335,25 @@ def _verb_token(name: str) -> str:
     return name.lower().split("-")[0]
 
 
+@lru_cache(maxsize=1)
+def _verb_exception_tokens() -> frozenset[str]:
+    """Leaf names / verb tokens the repo has declared are not verbs.
+
+    Read from the layered `.scitex/dev/cli-audit-dict.yaml` via the same
+    loader §1f uses, so a repo declares an exemption ONCE and both rules
+    honour it. Entries without an inline `# why` are still exempt, and the
+    missing comment is itself reported by §1f — deliberately, so a silent
+    opt-out is impossible while a documented one is cheap.
+    """
+    try:
+        from ._std_rules import load_verb_exceptions
+
+        exceptions, _missing_why = load_verb_exceptions()
+        return frozenset(exceptions)
+    except Exception:  # noqa: BLE001 — an unreadable dict must not fail the audit
+        return frozenset()
+
+
 def _group_head_labels(name: str) -> set[str]:
     """Classify a GROUP token by its semantic HEAD (right-headed compound).
 
@@ -576,6 +595,24 @@ def _check_universal_flags(
 
     name = cmd.name or ""
     verb = _verb_token(name)
+
+    # §2's verb inference reads the leaf's FIRST hyphen-delimited token, and
+    # that is right for `<verb>-<object>` leaves (`start-dashboard`). It is
+    # wrong for a leaf whose name is a compound NOUN — `stop-hook` emits the
+    # JSON for Claude Code's Stop hook and mutates nothing, yet `stop` is in
+    # MUTATING_VERBS so the rule demanded `--yes` on a read-only command.
+    #
+    # There is NO reliable structural signal here: `stop-hook` and a genuine
+    # `stop-<thing>` action are identical in shape, so a heuristic that
+    # exempted one would exempt the other and silently drop the confirmation
+    # gate from a real mutating command. Only the author knows which it is,
+    # so the repo declares it — the same escape hatch §1f already provides,
+    # with the same `# why` requirement.
+    #
+    # Reported by scitex-cards 2026-08-23: §1f had this hatch and §2 did not,
+    # which is my inconsistency, not theirs.
+    if name in _verb_exception_tokens() or verb in _verb_exception_tokens():
+        return
 
     if verb in READ_VERBS and "--json" not in flags:
         out.append(
