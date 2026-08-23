@@ -34,15 +34,71 @@ import pytest
 from scitex_dev.store._dialect._postgres import PostgresDialect
 from scitex_dev.store._target import Backend, StoreTarget
 
+#: The conventional fleet Postgres. Every fleet host runs one here — the
+#: same cluster the cards store lives on — so on those machines the live
+#: test SHOULD run and was only skipping because nobody set a variable.
+_FLEET_DSN = "postgresql://scitex_cards@127.0.0.1:55432/sac_probe"
+
+
+def _reachable(host: str, port: int, timeout: float = 0.5) -> bool:
+    """True if a TCP connect succeeds. Never raises."""
+    import socket
+
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _resolve_test_dsn() -> str | None:
+    """The DSN to connect to, or None.
+
+    WHY THIS DISCOVERS RATHER THAN JUST READING THE ENVIRONMENT. This
+    module's live test is the ONLY assertion in the package that the
+    Postgres dialect returns rows addressable BY NAME — the property whose
+    absence is, in its own docstring's words, "a crash". Measured
+    2026-08-23: it had been skipping, because ``SCITEX_STORE_TEST_DSN`` is
+    set nowhere, while a reachable Postgres sat on 127.0.0.1:55432 on the
+    very machine running the suite. The suite was green and that assertion
+    had never executed.
+
+    That is not a missing test. It is a test made unreachable by a variable
+    nobody sets, which is worse: the file argues convincingly that the
+    property is checked.
+
+    The discovery is safe to do silently ONLY because of what the test
+    asserts — ``SELECT 1 AS col`` and a lookup by column name. It touches no
+    table, writes nothing, and gives the same answer against any Postgres,
+    so pointing it at a discovered instance cannot make a wrong verdict
+    right. A test that read real data would have to be told its DSN, never
+    guess it.
+
+    Precedence is explicit over discovered: an operator who names a DSN gets
+    that one.
+    """
+    explicit = os.environ.get("SCITEX_STORE_TEST_DSN")
+    if explicit:
+        return explicit
+    if _reachable("127.0.0.1", 55432):
+        return _FLEET_DSN
+    return None
+
+
 #: Guard for ``test_connect_returns_rows_addressable_by_name``.
 #: Both the driver and a reachable DSN are required; the test is skipped
-#: when either is missing.
-_needs_dsn = os.environ.get("SCITEX_STORE_TEST_DSN")
+#: when either is missing — and the skip now says which, because
+#: "no Postgres anywhere" and "nobody set the variable" are different
+#: facts and only the second one is somebody's fault.
+_needs_dsn = _resolve_test_dsn()
 needs_dsn = pytest.mark.skipif(
     _needs_dsn is None,
     reason=(
-        "SCITEX_STORE_TEST_DSN is not set — no Postgres DSN "
-        "pointing at a reachable instance to connect to"
+        "NO POSTGRES REACHABLE — SCITEX_STORE_TEST_DSN is unset AND nothing "
+        "is listening on 127.0.0.1:55432, so the dialect's row-factory "
+        "contract (rows addressable BY NAME) is UNVERIFIED on this run. "
+        "This is the only assertion in the package that checks it. Set "
+        "SCITEX_STORE_TEST_DSN, or run where the fleet Postgres is up"
     ),
 )
 
