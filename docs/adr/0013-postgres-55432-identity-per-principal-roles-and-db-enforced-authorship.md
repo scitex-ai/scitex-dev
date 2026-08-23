@@ -405,6 +405,53 @@ things.
 
 ---
 
+## 5b. The cross-host reconciler is a principal this design has no place for
+
+Raised by scitex-cards, 2026-08-23, and it is a real gap rather than a detail.
+
+A per-row reconciler exists in `scitex_cards/cardsync/` and is read-only today.
+Its dry run against compute-03, that evening:
+
+    inspected 5945   already_equal 2938
+    would_write_to_a 159   would_write_to_b 2665   unresolved 183
+
+**2,665 of those writes land on ANOTHER HOST'S STORE**, and they are writes to
+cards owned by many different agents. Under §3.1 that is not expressible. It is
+not an agent acting for a user; it is one process writing rows on behalf of
+principals it is not. The two ways to admit it are both bad:
+
+* give it a service role with broad DML across every domain — which makes the
+  row-level ACL of §3.3 decorative, since the busiest writer bypasses it;
+* give it per-card delegated authority — which needs a delegation mechanism
+  that does not exist and would have to be designed before the roles are cut.
+
+So a design that cuts per-principal roles without answering this either breaks
+sync or hands sync a key to everything. **[U]** — I have not designed either
+option and am not proposing one here; the point is that the migration in §4
+cannot be scheduled until somebody has.
+
+MEASURED, and it sharpens §3.0's third axis: `application_name` is **unset on
+every connection** to this store —
+
+    select application_name, count(*) from pg_stat_activity
+      where backend_type = 'client backend' group by 1;
+    -> [('(unset)', 5)]
+
+§3.0 proposes carrying `<host>/<spec>/<run-id>` there as the incarnation axis.
+Today that field is empty fleet-wide, so the axis has **zero adoption**, not
+partial adoption. That is fine for a proposal and must not be read as
+describing something that exists. It also means the reconciler is, right now,
+indistinguishable at the database from any agent — the one writer whose
+identity would matter most is the one with none.
+
+ONE MORE THING WORTH KNOWING BEFORE THE ROLES ARE CUT, measured on this host:
+the syncer the fleet actually runs is `~/.local/bin/scitex-cards-sync-peers.sh`
+→ `scitex-cards-sync.py`, and **neither file is in any git repository**. So the
+process that would need a role under this design is not covered by any audit,
+test or review gate that a role assignment would be reasoned against. That is
+scitex-cards' and sac's to resolve, not this ADR's, but a role model drawn
+around code nobody can see is drawn around a guess.
+
 ## 6. What this ADR does not settle
 
 - **Whether the domain unit and the VPN unit agree.** business argues the VPN
