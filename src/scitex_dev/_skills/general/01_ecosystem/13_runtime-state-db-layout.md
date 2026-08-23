@@ -1,15 +1,28 @@
 ---
 description: |
   [TOPIC] `runtime/` — the redirectable local-state subtree; its `.db` DB-layout convention is WITHDRAWN
-  [DETAILS] WITHDRAWN, not merely superseded-in-part — the constitution (§3 Craft) withdrew the `.db` runtime-state convention outright on 2026-08-23 after the operator ruled 「スクライトは使わない、憲法直しておいてください」, extending the 2026-08-16 ruling 「sqlite は根絶させてください」. A `.db` file IS SQLite. Runtime state has ONE home: per-host PostgreSQL on 55432. What survives is `runtime/` as the single redirectable subtree for regenerable NON-database local state (caches, scratch), and the rule that high-churn writes must not squat a shared inode quota — the punim0264 GPFS inode-exhaustion rationale. A `.db` file under `runtime/` is a violation, not a shard. Read §1 first: it records the withdrawn text so nobody reconstructs it from a dangling citation. What survives is `runtime/` as the redirectable subtree and the rule that high-churn writes must not squat a shared inode quota. See §0 first. The two exemplars this leaf once cited (scitex-session, scitex-clew) adopted the withdrawn convention and now describe legacy state. A specialization of 12's `runtime_path()` layer; born from the punim0264 GPFS inode-exhaustion incident (neurovista ADR-0022). Does NOT specify cross-store row identity (UUID) or per-table merge rules — both belong to the shared-state side and are unsettled.
+  [DETAILS] WITHDRAWN, not merely superseded-in-part — the constitution (§3 Craft) withdrew the `.db` runtime-state convention outright on 2026-08-23 after the operator ruled 「スクライトは使わない、憲法直しておいてください」, extending the 2026-08-16 ruling 「sqlite は根絶させてください」. A `.db` file IS SQLite. Runtime state has ONE home: per-host PostgreSQL on 55432. What survives is `runtime/` as the single redirectable subtree for regenerable NON-database local state (caches, scratch), and the rule that high-churn writes must not squat a shared inode quota — the punim0264 GPFS inode-exhaustion rationale (neurovista ADR-0022). A `.db` file under `runtime/` is a violation, not a shard. Read §1 first: it records the withdrawn text so nobody reconstructs it from a dangling citation; §0 records the earlier eradication ruling this one extends. The two exemplars this leaf once cited (scitex-session, scitex-clew) adopted the withdrawn convention and now describe legacy state. A specialization of 12's `runtime_path()` layer. Does NOT specify cross-store row identity (UUID) or per-table merge rules — both belong to the shared-state side and are unsettled.
 tags: [scitex-general-ecosystem-runtime-state-db-layout]
 ---
 
 # `runtime/` — the redirectable local-state subtree (the DB layout it once specified is WITHDRAWN)
 
-`06_dot_scitex_directory.md` puts every package's regenerable state under `<pkg-short>/runtime/`; `12_local-state-resolution.md` resolves that path via `runtime_path()`. This leaf pins the one remaining degree of freedom: **what a package's SQLite DB is named and where inside `runtime/` it sits** — so every DB-backed package lays out the same way and the whole `runtime/` subtree stays a single redirectable unit.
+**Read §1 first.** This leaf once pinned one degree of freedom — what a package's
+SQLite DB is named and where inside `runtime/` it sits — and **that convention is
+WITHDRAWN.** A `.db` file IS SQLite, and runtime state now has exactly one home:
+the per-host PostgreSQL on 55432.
 
-Read §0 first. As of 2026-08-16 the SQLite half of this leaf is HISTORICAL — the operator ruled eradication. `runtime/` and its off-shared-filesystem rationale survive; the storage engine does not.
+What survives, and all this leaf still governs: `06_dot_scitex_directory.md` puts
+every package's regenerable state under `<pkg-short>/runtime/`,
+`12_local-state-resolution.md` resolves that path via `runtime_path()`, and
+`runtime/` remains the single redirectable subtree for regenerable **non-database**
+local state — caches, scratch, working files — with the rule that high-churn writes
+must not squat a shared inode quota.
+
+§§1-3 are kept as a record of the withdrawn text, so that a reader who meets a
+`.db` file on disk learns why it exists and that it is legacy. They are not
+guidance. §0 records the earlier 2026-08-16 eradication ruling that this
+withdrawal extends.
 
 ## 0. SQLITE IS BEING ERADICATED — read this before applying anything below
 
@@ -114,7 +127,16 @@ literal. The resolver was never the problem; what it resolved to was.
 
 **2a. `runtime/` is THE off-GPFS redirect layer.** `runtime/` is regenerable, gitignored, PathManager-resolvable local state (06 §4b). Because it is *one* subtree resolved through `runtime_path()`, it is also the single layer you redirect off a shared / GPFS filesystem — point `$SCITEX_DIR` (or a package base-redirect env var) at node-local scratch and every DB moves atomically. High-cardinality DB writes MUST NOT land on a shared inode quota. This convention emerged from the **punim0264 GPFS inode-exhaustion incident**: in-repo `.scitex/*/…` DBs squatted a shared 7M-inode fileset and exhausted it.
 
-**2b. WITHDRAWN — `.db` was the interop-safe suffix, and there is now no runtime DB to name.** Kept only because a reader who finds `.db` files on disk deserves to know why they exist and that they are legacy. Do NOT use this to justify a new one; new runtime state goes to PostgreSQL on 55432. The historical rationale follows.** scitex-io's load dispatch registers **only** `.db` (`register_loader(".db", …)` at `scitex_io/_optional_providers.py:173`); scitex-db is itself extension-agnostic, so `.db` is the one suffix that round-trips through `stx.io.load()`, and it matches the existing `pac_db/{hash}.db` precedent. Name every runtime DB `*.db`. (A parallel operator request is wiring `.sqlite` → the same loader in scitex-io, but the **naming convention stays `.db`** — do not adopt `.sqlite` for new DBs.)
+**2b. WITHDRAWN — `.db` was the interop-safe suffix, and there is now no runtime DB to name.** Kept only because a reader who finds `.db` files on disk deserves to know why they exist and that they are legacy. Do NOT use this to justify a new one; new runtime state goes to PostgreSQL on 55432.
+
+*Historical rationale, in the past tense on purpose — the sentences below were once
+instructions and are now a record of why the deployed files look the way they do:*
+scitex-io's load dispatch registered **only** `.db` (`register_loader(".db", …)` at
+`scitex_io/_optional_providers.py:173`); scitex-db is itself extension-agnostic, so
+`.db` was the one suffix that round-tripped through `stx.io.load()`, and it matched
+the existing `pac_db/{hash}.db` precedent. That is why every legacy runtime DB is
+named `*.db`. A parallel operator request was wiring `.sqlite` → the same loader,
+and the convention stayed `.db`; neither suffix is to be used for anything new.
 
 **2c. HISTORICAL (the shard pool it describes is withdrawn). HPC: symlink the shard subdir to node-local scratch.** The node-local-scratch technique survives for regenerable NON-database working files; the merged-DB half does not. On a cluster the shard/unit subdir (`runtime/<subdir>/`) MAY be a symlink → node-local scratch (`$TMPDIR`, `/local/…`); only the merged `<pkg-short>.db` lands on the persistent filesystem. High-churn per-unit writes stay node-local; the durable artifact is the single merged DB.
 
