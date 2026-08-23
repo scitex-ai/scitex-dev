@@ -8,9 +8,42 @@ from `_audit` so existing imports keep resolving.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from ._model import Violation
+
+
+def _conftests_under(repo_root: Path):
+    """Every conftest.py under repo_root, WITHOUT descending dot-directories.
+
+    This was `repo_root.rglob("conftest.py")`, which walks `.git` — and the
+    audit itself creates and destroys linked checkouts while it runs
+    (`audit/_diff_worktree.py` shells out to git for add / remove / prune), so
+    `.git/worktrees` appears and vanishes mid-traversal. A walk that entered
+    `.git` could therefore scandir a directory that had just been pruned:
+
+        FileNotFoundError: [Errno 2] No such file or directory: …/.git/worktrees
+
+    MEASURED 2026-08-23: that killed the v0.56.5 release run's 3.11 leg while
+    3.12 and 3.13 passed on the SAME commit and the SAME host — a race, not a
+    Python-version or host difference. The directory was absent at rest on BOTH
+    runners, which is what shows it is transient rather than a static difference
+    between them; measured on the hosts by scitex-cards, who also refuted the
+    re-run as evidence, since it landed on the other runner and so could not
+    distinguish "transient" from "host-local".
+
+    The old code filtered `__pycache__`, `build`, `dist` and `.tox` AFTER the
+    walk. Filtering results does not stop the traversal, so both the wasted
+    descent and the exposure were still paid. `_fd.py` already states the rule
+    this should have followed: descend into no dot-directory.
+    """
+    for dirpath, dirnames, filenames in os.walk(repo_root):
+        # Prune IN PLACE: this is what stops the descent. A filter applied to
+        # the results cannot, which is exactly how `.git` came to be walked.
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        if "conftest.py" in filenames:
+            yield Path(dirpath) / "conftest.py"
 
 
 def _audit_test_quality(
@@ -42,13 +75,14 @@ def _audit_test_quality(
         repo_root = src_parent.parent if src_parent.name == "src" else src_parent
 
     # Scope: tests/ tree (recursively, all *.py) + every conftest.py
-    # under the repo. Fixtures often live in conftest.py and TQ004/TQ005
+    # under the repo, WITHOUT descending dot-directories (see
+    # _conftests_under). Fixtures often live in conftest.py and TQ004/TQ005
     # apply to them.
     tests_dir = repo_root / "tests"
     candidates: list[Path] = []
     if tests_dir.is_dir():
         candidates.extend(sorted(tests_dir.rglob("*.py")))
-    for conftest in repo_root.rglob("conftest.py"):
+    for conftest in _conftests_under(repo_root):
         # Skip site-packages and venvs.
         parts = conftest.parts
         if any(
