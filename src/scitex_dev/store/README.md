@@ -167,6 +167,9 @@ for result in sync(store, peer_store):
 
 ## Related
 
-- `_skills/general/01_ecosystem/13_runtime-state-db-layout.md` — where a
-  package's `.db` lives and why `runtime/` is the redirectable unit.
+- `_skills/general/01_ecosystem/13_runtime-state-db-layout.md` — why `runtime/`
+  is the redirectable unit. Its `.db` layout is **WITHDRAWN** (constitution §3,
+  2026-08-23): a `.db` file is SQLite, and runtime state lives only in the
+  per-host PostgreSQL on 55432. Read it for why legacy `.db` files exist, not
+  for where to put new state.
 - scitex-cards ADR-0016 — the wipes, the mechanism and the ruling.
