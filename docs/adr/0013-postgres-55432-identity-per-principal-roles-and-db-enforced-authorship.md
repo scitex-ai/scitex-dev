@@ -430,6 +430,26 @@ sync or hands sync a key to everything. **[U]** — I have not designed either
 option and am not proposing one here; the point is that the migration in §4
 cannot be scheduled until somebody has.
 
+AND THE WRITER DOES NOT EXIST YET, which changes the urgency but not the
+conclusion. scitex-cards corrected me on this the same evening: I had written
+that they were "not applying" the reconciler's decisions, which reads as a
+choice. They cannot. `PgCardStore.write()` raises unconditionally —
+
+    ReadOnlyStoreError: "writing cards is not implemented here on purpose. A
+    card spans 28 derived columns plus three child tables, and the projection
+    belongs to scitex-cards. Reconciliation will write through
+    _db_mirror._write_card(conn, card, expected_revision=N), which EXISTS
+    today; update_task refuses expected_revision by design (PR #790 — it is a
+    whole-document read-modify-write)."
+
+So the decision logic is implemented and tested, the report works, and the
+apply path is deliberately unbuilt with its intended wiring named in the
+refusal. **This design is therefore ahead of the implementation rather than
+racing it** — the reconciler's write path can be built to whatever §5b decides,
+instead of a role being retrofitted around a writer already in production. That
+is the only comfortable order these two have ever been in, and it is an
+argument for answering §5b SOON rather than for treating it as less urgent.
+
 MEASURED, and it sharpens §3.0's third axis: `application_name` is **unset on
 every connection** to this store —
 
