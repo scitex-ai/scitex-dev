@@ -497,7 +497,7 @@ def test_create_todo_new_path_calls_add_task_once():
 
     # Act
     created = _ci_watch._create_todo_if_new(
-        agent="proj-scitex-stats",
+        agent="scitex-stats",
         repo="ywatanabe1989/scitex-stats",
         failing_run=failing,
         todo_api=api,
@@ -524,7 +524,7 @@ def test_create_todo_duplicate_path_returns_false_silently():
 
     # Act
     created = _ci_watch._create_todo_if_new(
-        agent="proj-scitex-stats",
+        agent="scitex-stats",
         repo="ywatanabe1989/scitex-stats",
         failing_run=failing,
         todo_api=api,
@@ -550,7 +550,7 @@ def test_create_todo_other_validation_error_reraises():
     # Assert
     with pytest.raises(_FakeTaskValidationError):
         _ci_watch._create_todo_if_new(
-            agent="proj-scitex-stats",
+            agent="scitex-stats",
             repo="ywatanabe1989/scitex-stats",
             failing_run=failing,
             todo_api=api,
@@ -586,7 +586,7 @@ def test_create_todo_returns_false_when_api_missing():
     _ci_watch_cards._resolve_todo_api = lambda store_path=None: None  # type: ignore[assignment]
     try:
         created = _ci_watch._create_todo_if_new(
-            agent="proj-scitex-stats",
+            agent="scitex-stats",
             repo="ywatanabe1989/scitex-stats",
             failing_run=failing,
             todo_api=None,

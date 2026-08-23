@@ -19,12 +19,30 @@ from typing import Mapping
 # Edit this in-place when a new sac agent joins the fleet. Move to a
 # config file when the list grows past ~10 entries (the bash prototype's
 # threshold).
+#
+# THE KEYS ARE sac AGENT NAMES AND MUST RESOLVE IN sac's REGISTRY. They
+# were `proj-scitex-*` until the fleet renamed its agents to the bare
+# form; this map was not migrated with them, so every dispatch went to a
+# name that does not exist. MEASURED 2026-08-23 on compute-04: 140 agents
+# defined, all five bare names present, all five `proj-` forms absent,
+# and exactly one `proj-`-prefixed agent survives fleet-wide
+# (proj-scitex-hub, which is not in this map).
+#
+# The cost was not the failed dispatch. ci-watch kept WORKING -- it found
+# real red CI on scitex-str (ci) and scitex-types (docs) -- and then could
+# not tell anybody, for five days, because the agent it tried to hand the
+# work to had no spec.yaml. sac's own error says it plainly: "If a
+# SCHEDULED JOB is sending here, it is dispatching to a name that does not
+# exist -- fix the job's target list rather than this agent."
+#
+# So: when renaming an agent, grep for its OLD name before considering the
+# rename done. A published name is a contract, and this map is a caller.
 AGENTS_TO_REPOS: Mapping[str, str] = {
-    "proj-scitex-stats": "ywatanabe1989/scitex-stats",
-    "proj-scitex-types": "ywatanabe1989/scitex-types",
-    "proj-scitex-dict": "ywatanabe1989/scitex-dict",
-    "proj-scitex-str": "ywatanabe1989/scitex-str",
-    "proj-scitex-datetime": "ywatanabe1989/scitex-datetime",
+    "scitex-stats": "ywatanabe1989/scitex-stats",
+    "scitex-types": "ywatanabe1989/scitex-types",
+    "scitex-dict": "ywatanabe1989/scitex-dict",
+    "scitex-str": "ywatanabe1989/scitex-str",
+    "scitex-datetime": "ywatanabe1989/scitex-datetime",
 }
 
 # The fix-forward prompt dispatched to the responsible agent. Ported
