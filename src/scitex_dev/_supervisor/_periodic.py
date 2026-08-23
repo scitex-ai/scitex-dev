@@ -73,6 +73,33 @@ def _build_argv(job: JobSpec) -> list[str]:
     return shlex.split(resolve_execstart(job.command, venv=job.venv))
 
 
+#: Consecutive failures before a job is called unhealthy. Three rather
+#: than one: a single failure is noise on jobs that touch the network,
+#: and an alarm that fires on noise is one people learn to ignore.
+UNHEALTHY_AFTER = 3
+
+
+def is_unhealthy(outcome: Mapping[str, Any]) -> bool:
+    """Does this job's tally warrant an alarm?
+
+    Two predicates, not one, because they catch different failures:
+
+    * ``consecutive_failures >= UNHEALTHY_AFTER`` — a job that WAS
+      working and has stopped.
+    * never succeeded at all — a job that has been broken since it was
+      first seen. Measured 2026-08-23 on compute-04: six jobs had
+      100% failure rates spanning three to five days (ci-watch 615/0,
+      scitex-hpc-ci-supervisor-watch 885/0, ...). A consecutive-failure
+      rule alone would have flagged them, but stating "never succeeded"
+      separately is what makes the report actionable — it distinguishes
+      a regression from something that never worked, and those have
+      different owners.
+    """
+    if outcome.get("ok_count", 0) == 0:
+        return outcome.get("fail_count", 0) >= UNHEALTHY_AFTER
+    return outcome.get("consecutive_failures", 0) >= UNHEALTHY_AFTER
+
+
 class PeriodicRunner:
     """Owns the clock for timer/cron-kind jobs.
 
@@ -97,6 +124,15 @@ class PeriodicRunner:
         self._running: dict[str, subprocess.Popen] = {}
         self._started_at: dict[str, float] = {}
         self._reported_unschedulable: set[str] = set()
+        #: Per-job outcome tally, keyed by job name. The execution log
+        #: already holds every record; this is the ROLLUP, because the
+        #: log answers "what happened" only to someone who reads 131k
+        #: lines. Measured 2026-08-23: six jobs had a 100% failure rate
+        #: for up to five days and nothing reported it.
+        self._outcomes: dict[str, dict[str, Any]] = {}
+        #: Jobs already announced as unhealthy, so the alarm fires on the
+        #: TRANSITION rather than on every reap.
+        self._reported_unhealthy: set[str] = set()
 
     # -------------------------------------------------------------- #
 
@@ -158,7 +194,64 @@ class PeriodicRunner:
                     ),
                 )
             )
+            done.extend(self._tally(name, code))
         return done
+
+    def _tally(self, name: str, code: int) -> list[dict[str, Any]]:
+        """Fold one exit into the job's rollup; announce a new failure.
+
+        Returns any alarm record written, so ``reap``'s return value stays
+        the complete list of what this cycle recorded.
+        """
+        out = self._outcomes.setdefault(
+            name,
+            {
+                "ok_count": 0,
+                "fail_count": 0,
+                "consecutive_failures": 0,
+                "last_exit_code": None,
+                "last_ok_at": None,
+                "last_finished_at": None,
+            },
+        )
+        out["last_exit_code"] = code
+        out["last_finished_at"] = self._clock()
+        if code == 0:
+            out["ok_count"] += 1
+            out["consecutive_failures"] = 0
+            out["last_ok_at"] = out["last_finished_at"]
+            # Recovery re-arms the alarm: the NEXT failure run is news
+            # again, otherwise a flapping job is announced once and then
+            # never again.
+            self._reported_unhealthy.discard(name)
+            return []
+        out["fail_count"] += 1
+        out["consecutive_failures"] += 1
+        if not is_unhealthy(out) or name in self._reported_unhealthy:
+            return []
+        self._reported_unhealthy.add(name)
+        return [
+            self.record(
+                "job_unhealthy",
+                job=name,
+                consecutive_failures=out["consecutive_failures"],
+                ok_count=out["ok_count"],
+                fail_count=out["fail_count"],
+                never_succeeded=(out["ok_count"] == 0),
+                last_exit_code=code,
+            )
+        ]
+
+    def health(self) -> list[dict[str, Any]]:
+        """Per-job outcome rollup, newest tallies, sorted by name.
+
+        Written into ``state.json`` so a reader can answer "is anything
+        failing?" without parsing the execution log.
+        """
+        return [
+            {"job": name, "unhealthy": is_unhealthy(out), **out}
+            for name, out in sorted(self._outcomes.items())
+        ]
 
     # -------------------------------------------------------------- #
 

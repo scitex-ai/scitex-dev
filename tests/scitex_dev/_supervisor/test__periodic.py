@@ -262,3 +262,138 @@ class TestTheStagger:
 
 
 # EOF
+
+
+def _run_once(runner_tuple, jobs, code: int) -> list[str]:
+    """Drive one full start -> exit -> reap cycle and return its events.
+
+    The clock is advanced past the cadence so the reaping tick also
+    re-starts the job, which is what the real loop does.
+    """
+    r, clock, spawned = runner_tuple
+    r.tick(jobs)
+    spawned[-1].finish(code)
+    clock["t"] += 601
+    return [x["event"] for x in r.tick(jobs)]
+
+
+def _entry(runner_obj, name: str) -> dict:
+    """The health rollup for one job, by name."""
+    return next(x for x in runner_obj.health() if x["job"] == name)
+
+
+class TestItAnnouncesJobsThatKeepFailing:
+    """The execution log recorded every failure and nobody read it.
+
+    Measured on compute-04 2026-08-23: six jobs at a 100% failure rate
+    for up to five days, unreported. These tests pin the rollup that
+    makes that condition visible.
+    """
+
+    def test_two_failures_are_not_yet_an_alarm(self, runner):
+        # Arrange
+        jobs = [_job("scitex-dev-probe")]
+        # Act
+        _run_once(runner, jobs, 1)
+        events = _run_once(runner, jobs, 1)
+        # Assert — the threshold is real, not decorative
+        assert "job_unhealthy" not in events
+
+    def test_the_third_consecutive_failure_raises_the_alarm(self, runner):
+        # Arrange
+        jobs = [_job("scitex-dev-probe")]
+        _run_once(runner, jobs, 1)
+        _run_once(runner, jobs, 1)
+        # Act
+        events = _run_once(runner, jobs, 1)
+        # Assert
+        assert "job_unhealthy" in events
+
+    def test_the_alarm_fires_once_not_on_every_later_failure(self, runner):
+        # Arrange
+        jobs = [_job("scitex-dev-probe")]
+        for _ in range(3):
+            _run_once(runner, jobs, 1)
+        # Act — three MORE failures after the alarm already fired
+        later = []
+        for _ in range(3):
+            later += _run_once(runner, jobs, 1)
+        # Assert — a repeat every cycle is how an alarm becomes wallpaper
+        assert later.count("job_unhealthy") == 0
+
+    def test_a_job_that_never_succeeded_has_no_successes(self, runner):
+        # Arrange
+        r, _clock, _spawned = runner
+        jobs = [_job("scitex-dev-probe")]
+        for _ in range(3):
+            _run_once(runner, jobs, 1)
+        # Act
+        entry = _entry(r, "scitex-dev-probe")
+        # Assert — zero successes distinguishes "broken since birth"
+        # from "regressed"; both are unhealthy, but different owners
+        assert entry["ok_count"] == 0
+
+    def test_a_job_that_never_succeeded_is_unhealthy(self, runner):
+        # Arrange
+        r, _clock, _spawned = runner
+        jobs = [_job("scitex-dev-probe")]
+        for _ in range(3):
+            _run_once(runner, jobs, 1)
+        # Act
+        entry = _entry(r, "scitex-dev-probe")
+        # Assert
+        assert entry["unhealthy"] is True
+
+    def test_a_success_clears_the_streak_and_rearms_the_alarm(self, runner):
+        # Arrange
+        jobs = [_job("scitex-dev-probe")]
+        for _ in range(3):
+            _run_once(runner, jobs, 1)
+        _run_once(runner, jobs, 0)
+        # Act — it breaks again after having recovered
+        again = []
+        for _ in range(3):
+            again += _run_once(runner, jobs, 1)
+        # Assert — a flapping job must be announced each time it breaks
+        assert again.count("job_unhealthy") == 1
+
+    def test_health_is_empty_before_anything_has_finished(self, runner):
+        # Arrange
+        r, _clock, _spawned = runner
+        # Act
+        report = r.health()
+        # Assert
+        assert report == []
+
+    def test_health_counts_successes_and_failures_per_job(self, runner):
+        # Arrange
+        r, _clock, _spawned = runner
+        jobs = [_job("scitex-dev-probe")]
+        for code in (0, 1, 0):
+            _run_once(runner, jobs, code)
+        # Act
+        entry = _entry(r, "scitex-dev-probe")
+        # Assert
+        assert (entry["ok_count"], entry["fail_count"]) == (2, 1)
+
+    def test_a_success_clears_the_consecutive_failure_count(self, runner):
+        # Arrange
+        r, _clock, _spawned = runner
+        jobs = [_job("scitex-dev-probe")]
+        for code in (0, 1, 0):
+            _run_once(runner, jobs, code)
+        # Act
+        entry = _entry(r, "scitex-dev-probe")
+        # Assert
+        assert entry["consecutive_failures"] == 0
+
+    def test_a_job_that_recovered_is_not_unhealthy(self, runner):
+        # Arrange
+        r, _clock, _spawned = runner
+        jobs = [_job("scitex-dev-probe")]
+        for code in (0, 1, 0):
+            _run_once(runner, jobs, code)
+        # Act
+        entry = _entry(r, "scitex-dev-probe")
+        # Assert
+        assert entry["unhealthy"] is False
