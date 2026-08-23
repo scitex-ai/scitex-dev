@@ -21,6 +21,8 @@ from typing import Callable
 from ._config import GateConfig, load_gate_config
 from ._discover import discover_gate_checks
 from ._spec import Finding, GateCheck
+from ._undetermined import is_undetermined, undetermined_reason
+from ._undetermined import with_undetermined_finding as _with_undetermined_finding
 
 
 @dataclass(frozen=True)
@@ -34,10 +36,24 @@ class CheckOutcome:
     enforced: bool
     findings: tuple[Finding, ...]
     skipped_reason: str = ""
+    #: The check RAN and could not tell. Distinct from `passed is None`,
+    #: which means the runner deliberately did not run it (disabled in
+    #: config, or `requires` not importable). Those are decisions; this is
+    #: a limit on observation, and rendering them the same way misreports
+    #: one of them. `passed` is False alongside it, so `blocked` needs no
+    #: change and a consumer that has never heard of this field still
+    #: blocks.
+    undetermined: bool = False
+    undetermined_reason: str = ""
 
     @property
     def blocked(self) -> bool:
-        """True iff this check both FAILED and is ENFORCED."""
+        """True iff this check FAILED or COULD NOT TELL, and is ENFORCED.
+
+        Unchanged in form: an undetermined result carries ``passed=False``,
+        so it is caught here by construction rather than by a second
+        condition somebody could forget to add.
+        """
         return self.ran and self.passed is False and self.enforced
 
 
@@ -145,7 +161,9 @@ def run_gate(
                 ran=True,
                 passed=bool(result.passed),
                 enforced=enforced,
-                findings=tuple(result.findings),
+                findings=_with_undetermined_finding(check, result),
+                undetermined=is_undetermined(result),
+                undetermined_reason=undetermined_reason(result),
             )
         )
 
@@ -174,6 +192,13 @@ def report_to_dict(report: GateReport) -> dict:
                 "enforced": o.enforced,
                 "blocked": o.blocked,
                 "skipped_reason": o.skipped_reason,
+                # Emitted alongside `passed` rather than folded into it: a
+                # consumer that treats false-as-failed stays correct, and one
+                # that wants to distinguish "failed" from "could not tell"
+                # now can. Folding them would have made every existing JSON
+                # reader silently wrong about which it was looking at.
+                "undetermined": o.undetermined,
+                "undetermined_reason": o.undetermined_reason,
                 "findings": [
                     {
                         "check_id": f.check_id,
