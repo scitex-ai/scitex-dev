@@ -78,6 +78,12 @@ def _build_argv(job: JobSpec) -> list[str]:
 #: and an alarm that fires on noise is one people learn to ignore.
 UNHEALTHY_AFTER = 3
 
+#: How much of a failed job's stderr to keep in its record. Enough for a
+#: traceback's last frames or an alarm block; small enough that a job
+#: failing every 5 minutes cannot bloat the log. The TAIL, not the head:
+#: the reason a process died is at the end of what it printed.
+STDERR_TAIL_BYTES = 4000
+
 
 def is_unhealthy(outcome: Mapping[str, Any]) -> bool:
     """Does this job's tally warrant an alarm?
@@ -133,6 +139,9 @@ class PeriodicRunner:
         #: Jobs already announced as unhealthy, so the alarm fires on the
         #: TRANSITION rather than on every reap.
         self._reported_unhealthy: set[str] = set()
+        #: Open stderr capture files for in-flight one-shots, by job name.
+        #: value is (path, handle) — the handle is ours to close on reap.
+        self._stderr_capture: dict[str, tuple[Path, Any]] = {}
 
     # -------------------------------------------------------------- #
 
@@ -183,17 +192,20 @@ class PeriodicRunner:
                 continue
             del self._running[name]
             started = self._started_at.pop(name, None)
-            done.append(
-                self.record(
-                    "finished",
-                    job=name,
-                    exit_code=code,
-                    ok=(code == 0),
-                    duration_sec=(
-                        None if started is None else self._clock() - started
-                    ),
-                )
-            )
+            tail = self._take_stderr_tail(name)
+            fields: dict[str, Any] = {
+                "job": name,
+                "exit_code": code,
+                "ok": (code == 0),
+                "duration_sec": (
+                    None if started is None else self._clock() - started
+                ),
+            }
+            # Only on failure: a successful job's chatter is noise, and
+            # this log is read by someone asking "what went wrong".
+            if code != 0 and tail:
+                fields["stderr_tail"] = tail
+            done.append(self.record("finished", **fields))
             done.extend(self._tally(name, code))
         return done
 
@@ -293,6 +305,66 @@ class PeriodicRunner:
             out.append(self.record("unschedulable", job=name, reason=why))
         return out
 
+    def _open_stderr_capture(self, name: str) -> tuple[Optional[Path], Any]:
+        """Open a throwaway file to catch this run's stderr.
+
+        Returns (path, handle), or (None, None) if the file cannot be
+        opened — in which case the caller falls back to DEVNULL. Losing
+        the diagnostic is bad; refusing to run the job because we could
+        not open a scratch file would be worse.
+        """
+        try:
+            directory = self._log_path.parent / "stderr"
+            directory.mkdir(parents=True, exist_ok=True)
+            path = directory / f"{name}.stderr"
+            handle = path.open("wb")
+        except OSError:
+            return None, None
+        self._stderr_capture[name] = (path, handle)
+        return path, handle
+
+    def _discard_stderr_capture(self, name: str) -> None:
+        """Close and remove a capture whose child never started."""
+        entry = self._stderr_capture.pop(name, None)
+        if entry is None:
+            return
+        path, handle = entry
+        try:
+            handle.close()
+        except OSError:
+            pass
+        try:
+            path.unlink()
+        except OSError:
+            pass
+
+    def _take_stderr_tail(self, name: str) -> Optional[str]:
+        """Close this job's capture and return the tail of what it wrote.
+
+        Returns None when nothing was captured, so a quiet success adds no
+        key at all rather than an empty string that reads like evidence of
+        having looked.
+        """
+        entry = self._stderr_capture.pop(name, None)
+        if entry is None:
+            return None
+        path, handle = entry
+        try:
+            handle.close()
+        except OSError:
+            pass
+        try:
+            raw = path.read_bytes()[-STDERR_TAIL_BYTES:]
+        except OSError:
+            raw = b""
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        if not raw.strip():
+            return None
+        return raw.decode("utf-8", "replace")
+
     def _start(self, job: JobSpec, *, offset: float) -> dict[str, Any]:
         """Launch one one-shot and record the attempt.
 
@@ -316,14 +388,26 @@ class PeriodicRunner:
                 phase="resolve",
             )
 
+        # stderr was DEVNULL here until 2026-08-23, and that is why a job
+        # could alarm 885 times without anyone hearing it: scitex-hpc's
+        # ci-runners watch printed "CRITICAL supervisor-unregistered" plus
+        # the exact operator command to stderr on every run since 08-20,
+        # and every byte went to /dev/null. Jobs that write their own log
+        # survived that; jobs that just print did not.
+        #
+        # A FILE, not PIPE: this loop polls without reading, so a PIPE
+        # would fill its buffer and wedge the child — turning a diagnostic
+        # into an outage.
+        stderr_path, stderr_handle = self._open_stderr_capture(job.name)
         try:
             proc = self._popen(
                 argv,
                 cwd=job.working_directory or None,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stderr=stderr_handle or subprocess.DEVNULL,
             )
         except Exception as exc:
+            self._discard_stderr_capture(job.name)
             self._last_runs[job.name] = started
             return self.record(
                 "start_failed",
