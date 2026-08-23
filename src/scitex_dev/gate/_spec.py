@@ -81,10 +81,67 @@ class GateResult:
     ``passed`` is the check's intrinsic pass/fail (e.g. dataset's
     ``validate_submission(...)["ok"]``, clew's runs>0 AND all-sourced).
     ``findings`` carry the context/fix_hints regardless of pass/fail.
+
+    ``undetermined`` is the THIRD verdict, and it exists because two
+    verdicts were not enough. A check that ran to completion and learned
+    nothing previously had only two things it could say, and both are
+    wrong:
+
+      * ``passed=True``  — silently green. This is the defect scitex-cards
+        measured on their own release-ancestry detector 2026-08-23: an
+        unresolvable branch was skipped and the gate passed, so a failed
+        fetch, a shallow clone or a typo'd branch name each certified a
+        release. "Absence is not failure" was written into that commit
+        message as a virtue.
+      * ``passed=False`` — indistinguishable from a real failure, which
+        trains readers to discount the check.
+
+    Raising was the only other option, and it lands in the runner's
+    fail-closed crash path: correct to BLOCK, but reported as
+    ``check_crashed``, which sends a reader looking for a bug in the check
+    instead of for the thing that was unavailable.
+
+    AN ABSENT EXPECTATION AND AN UNVERIFIABLE ONE LOOK IDENTICAL TO A
+    PROCESS AND ARE OPPOSITES IN MEANING. ``disable:`` in
+    ``.scitex/dev/config.yaml`` is how a repo DECLARES an expectation does
+    not apply to it; this field is how a check reports it could not tell.
+    The first is a decision, the second is a limit on observation, and a
+    gate that renders them the same way is lying about one of them.
+
+    Construct it through :meth:`cannot_determine`, which sets
+    ``passed=False`` deliberately: any consumer that predates this field
+    and reads only ``passed`` therefore BLOCKS. Fail-closed by
+    construction, not by remembering to update every reader.
     """
 
     passed: bool
     findings: tuple[Finding, ...] = ()
+    undetermined: bool = False
+    undetermined_reason: str = ""
+
+    @classmethod
+    def cannot_determine(
+        cls, reason: str, findings: tuple[Finding, ...] = ()
+    ) -> "GateResult":
+        """The check ran and could not tell. Blocks; says why.
+
+        ``reason`` must name WHAT WAS UNAVAILABLE, not what the check
+        wanted — "origin/develop did not resolve (shallow clone?)" rather
+        than "could not verify ancestry". The reader's next action depends
+        entirely on the first form.
+        """
+        if not reason.strip():
+            raise ValueError(
+                "GateResult.cannot_determine requires a reason naming what "
+                "was unavailable; an unexplained refusal is indistinguishable "
+                "from a bug in the check"
+            )
+        return cls(
+            passed=False,
+            findings=findings,
+            undetermined=True,
+            undetermined_reason=reason,
+        )
 
 
 @dataclass(frozen=True)
