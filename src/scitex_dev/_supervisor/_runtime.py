@@ -422,6 +422,7 @@ class Supervisor:
             written_at=self._clock(),
             scitex_dev_version=_scitex_dev_version(),
             children=[c.snapshot() for c in self._children.values()],
+            periodic=self._periodic.health(),
         )
         write_state_atomically(snap, self._state_path)
 

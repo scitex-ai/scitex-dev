@@ -155,7 +155,7 @@ def register(group: click.Group) -> None:
                     "Run it with output on the terminal.",
                 ),
                 Example(
-                    "{prog} cron exec ci-watch --only proj-scitex-stats --dry-run --no-log",
+                    "{prog} cron exec ci-watch --only scitex-stats --dry-run --no-log",
                     "Preview for one agent, on the terminal.",
                 ),
             ),

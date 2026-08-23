@@ -77,6 +77,51 @@ def _src_pkg_with_html(repo: Path) -> Path | None:
     return None
 
 
+def _wheel_artifact_globs(repo: Path) -> tuple[list[str], list[str]]:
+    """Docs-bundle globs declared for the WHEEL and SDIST build targets.
+
+    Returns ``(wheel_globs, sdist_globs)`` — each the entries mentioning
+    ``_sphinx_html`` under that target's ``artifacts`` / ``force-include``.
+
+    BACKEND SCOPE, STATED RATHER THAN IMPLIED: this reads hatchling's
+    ``[tool.hatch.build.targets.*]`` spelling. setuptools, poetry and pdm
+    express packaged-artifact inclusion differently, so for those backends
+    this returns empty and PS-121 falls back to the source-tree check —
+    i.e. it stays as noisy as it is today rather than becoming quietly
+    permissive. That is the deliberate direction of the error: a false
+    POSITIVE is arguable and visible, a false NEGATIVE is silent.
+    """
+    pyproject = repo / "pyproject.toml"
+    if not pyproject.is_file():
+        return ([], [])
+    try:
+        import tomllib
+
+        data = tomllib.loads(pyproject.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return ([], [])
+
+    targets = (
+        data.get("tool", {})
+        .get("hatch", {})
+        .get("build", {})
+        .get("targets", {})
+    )
+
+    def _globs(name: str) -> list[str]:
+        target = targets.get(name) or {}
+        found: list[str] = []
+        for key in ("artifacts", "force-include", "include"):
+            value = target.get(key)
+            entries = value.keys() if isinstance(value, dict) else (value or [])
+            for entry in entries:
+                if isinstance(entry, str) and "_sphinx_html" in entry:
+                    found.append(entry)
+        return found
+
+    return (_globs("wheel"), _globs("sdist"))
+
+
 def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
     """Append PS-121 / PS-122 violations.
 
@@ -88,18 +133,48 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
     if not _has_sphinx_source(repo):
         return
 
-    if _src_pkg_with_html(repo) is None:
+    wheel_globs, sdist_globs = _wheel_artifact_globs(repo)
+
+    if _src_pkg_with_html(repo) is None and not wheel_globs:
         out.append(
             violation_cls(
                 "PS-121",
                 str(repo / "src"),
                 (
-                    "package has docs/sphinx/conf.py but no "
-                    "src/<pkg>/_sphinx_html/index.html bundled. scitex-cloud "
-                    "serves docs from the in-wheel _sphinx_html/ — without "
-                    "it the package is invisible at "
-                    "https://scitex.ai/apps/docs/. Refresh via the canonical "
-                    "RTD/Sphinx CI workflow or manually."
+                    "package has docs/sphinx/conf.py but the docs bundle "
+                    "reaches neither the source tree nor the wheel: no "
+                    "src/<pkg>/_sphinx_html/index.html, and no _sphinx_html "
+                    "entry under [tool.hatch.build.targets.wheel] "
+                    "artifacts/force-include. scitex-cloud serves docs from "
+                    "the in-wheel _sphinx_html/ — without it the package is "
+                    "invisible at https://scitex.ai/apps/docs/. EITHER build "
+                    "the bundle at release time and declare it on the WHEEL "
+                    "target, OR commit it to the source tree. Do NOT add a CI "
+                    "step that commits the bundle to a protected default "
+                    "branch: that push is rejected, and the usual guards "
+                    "(`|| echo`, continue-on-error) report success anyway."
+                ),
+            )
+        )
+    elif sdist_globs and not wheel_globs:
+        # Measured defect, not a hypothetical: declaring the bundle on the
+        # sdist target alone still produces a wheel with no docs — the wheel
+        # does NOT inherit what the sdist contains. scitex-cards shipped this
+        # exact configuration and their pyproject now carries a comment
+        # recording it. Before this branch existed the state read as
+        # compliant, because *some* target declared the artifact.
+        out.append(
+            violation_cls(
+                "PS-121",
+                str(repo / "pyproject.toml"),
+                (
+                    "_sphinx_html is declared for the SDIST build target but "
+                    f"not the WHEEL target (sdist: {sorted(sdist_globs)}). The "
+                    "wheel does not inherit sdist artifacts, so the published "
+                    "wheel ships no docs and the package is invisible at "
+                    "https://scitex.ai/apps/docs/ despite the declaration "
+                    "looking present. Add the same glob under "
+                    "[tool.hatch.build.targets.wheel]."
                 ),
             )
         )
@@ -211,11 +286,29 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
                 )
             )
 
-    # PS-128 — `.gitignore` must NOT exclude `src/<pkg>/_sphinx_html/` —
-    # scitex-cloud serves from the bundled in-wheel HTML, which must be
-    # tracked. Symptom: CI fails with hatchling 'Forced include not found'.
+    # PS-128 — `.gitignore` must NOT exclude `src/<pkg>/_sphinx_html/`,
+    # UNLESS the wheel target declares it under artifacts / force-include.
+    # scitex-cloud serves from the bundled in-wheel HTML; tracking the file
+    # was one way to get it there, never the requirement itself.
+    #
+    # The `and not wheel_globs` clause is the whole point. hatchling's
+    # `artifacts` key exists precisely to put VCS-IGNORED files into a
+    # wheel, so "gitignored" and "shipped in the wheel" are not in
+    # conflict — and demanding the file be tracked is demanding that the
+    # build output be committed to the source tree.
+    #
+    # That demand is not merely redundant, it is UNSATISFIABLE alongside
+    # PS-231, whose BLOCKER 2 says a leaf that vendors its build output
+    # back into the package tree cannot be replaced by the build-only org
+    # reusable. So a repo following PS-231 could not satisfy PS-128, and a
+    # repo satisfying PS-128 was permanently exempt from PS-231.
+    #
+    # scitex-cards found the loop and showed their work (2026-08-23). #734
+    # had already taught PS-121 to read the declaration; PS-128 was left
+    # behind, so fixing PS-121 alone just moved the same demand one rule
+    # over. A corpus is only as consistent as its least-updated rule.
     gitignore = repo / ".gitignore"
-    if gitignore.is_file():
+    if gitignore.is_file() and not wheel_globs:
         try:
             gi_text = gitignore.read_text(encoding="utf-8", errors="replace")
         except OSError:

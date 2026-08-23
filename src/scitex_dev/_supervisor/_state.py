@@ -122,6 +122,23 @@ class SupervisorState:
     #: log_path, command. ``status`` is one of ``running`` / ``stopped`` /
     #: ``failed`` (circuit-opened) / ``starting``.
     children: list[dict] = field(default_factory=list)
+    #: One dict per periodic job that has completed at least once. Keys:
+    #: job, unhealthy, ok_count, fail_count, consecutive_failures,
+    #: last_exit_code, last_ok_at, last_finished_at.
+    #:
+    #: schema_version deliberately STAYS at 1: this is an additive sibling
+    #: key, and 05_development/12_ci-feedback-decoupled-pollers.md fixes
+    #: that convention. A reader that needs to tell "nothing is failing"
+    #: from "this snapshot cannot say" tests for the KEY's presence, not
+    #: the version — old snapshots omit it entirely, new ones always carry
+    #: it (``dataclasses.asdict``), so presence is the honest discriminator
+    #: and the version stays free to mean a breaking change.
+    #:
+    #: It exists because the execution log already recorded every failure
+    #: and nobody read it: on 2026-08-23 six jobs had failed 100% of runs
+    #: for up to five days, unnoticed, while state.json carried no run
+    #: history at all.
+    periodic: list[dict] = field(default_factory=list)
 
     def to_json(self) -> str:
         """Return a stable JSON serialisation (sorted keys, 2-space indent)."""

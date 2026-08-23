@@ -73,6 +73,39 @@ def _build_argv(job: JobSpec) -> list[str]:
     return shlex.split(resolve_execstart(job.command, venv=job.venv))
 
 
+#: Consecutive failures before a job is called unhealthy. Three rather
+#: than one: a single failure is noise on jobs that touch the network,
+#: and an alarm that fires on noise is one people learn to ignore.
+UNHEALTHY_AFTER = 3
+
+#: How much of a failed job's stderr to keep in its record. Enough for a
+#: traceback's last frames or an alarm block; small enough that a job
+#: failing every 5 minutes cannot bloat the log. The TAIL, not the head:
+#: the reason a process died is at the end of what it printed.
+STDERR_TAIL_BYTES = 4000
+
+
+def is_unhealthy(outcome: Mapping[str, Any]) -> bool:
+    """Does this job's tally warrant an alarm?
+
+    Two predicates, not one, because they catch different failures:
+
+    * ``consecutive_failures >= UNHEALTHY_AFTER`` — a job that WAS
+      working and has stopped.
+    * never succeeded at all — a job that has been broken since it was
+      first seen. Measured 2026-08-23 on compute-04: six jobs had
+      100% failure rates spanning three to five days (ci-watch 615/0,
+      scitex-hpc-ci-supervisor-watch 885/0, ...). A consecutive-failure
+      rule alone would have flagged them, but stating "never succeeded"
+      separately is what makes the report actionable — it distinguishes
+      a regression from something that never worked, and those have
+      different owners.
+    """
+    if outcome.get("ok_count", 0) == 0:
+        return outcome.get("fail_count", 0) >= UNHEALTHY_AFTER
+    return outcome.get("consecutive_failures", 0) >= UNHEALTHY_AFTER
+
+
 class PeriodicRunner:
     """Owns the clock for timer/cron-kind jobs.
 
@@ -97,6 +130,18 @@ class PeriodicRunner:
         self._running: dict[str, subprocess.Popen] = {}
         self._started_at: dict[str, float] = {}
         self._reported_unschedulable: set[str] = set()
+        #: Per-job outcome tally, keyed by job name. The execution log
+        #: already holds every record; this is the ROLLUP, because the
+        #: log answers "what happened" only to someone who reads 131k
+        #: lines. Measured 2026-08-23: six jobs had a 100% failure rate
+        #: for up to five days and nothing reported it.
+        self._outcomes: dict[str, dict[str, Any]] = {}
+        #: Jobs already announced as unhealthy, so the alarm fires on the
+        #: TRANSITION rather than on every reap.
+        self._reported_unhealthy: set[str] = set()
+        #: Open stderr capture files for in-flight one-shots, by job name.
+        #: value is (path, handle) — the handle is ours to close on reap.
+        self._stderr_capture: dict[str, tuple[Path, Any]] = {}
 
     # -------------------------------------------------------------- #
 
@@ -147,18 +192,78 @@ class PeriodicRunner:
                 continue
             del self._running[name]
             started = self._started_at.pop(name, None)
-            done.append(
-                self.record(
-                    "finished",
-                    job=name,
-                    exit_code=code,
-                    ok=(code == 0),
-                    duration_sec=(
-                        None if started is None else self._clock() - started
-                    ),
-                )
-            )
+            tail = self._take_stderr_tail(name)
+            fields: dict[str, Any] = {
+                "job": name,
+                "exit_code": code,
+                "ok": (code == 0),
+                "duration_sec": (
+                    None if started is None else self._clock() - started
+                ),
+            }
+            # Only on failure: a successful job's chatter is noise, and
+            # this log is read by someone asking "what went wrong".
+            if code != 0 and tail:
+                fields["stderr_tail"] = tail
+            done.append(self.record("finished", **fields))
+            done.extend(self._tally(name, code))
         return done
+
+    def _tally(self, name: str, code: int) -> list[dict[str, Any]]:
+        """Fold one exit into the job's rollup; announce a new failure.
+
+        Returns any alarm record written, so ``reap``'s return value stays
+        the complete list of what this cycle recorded.
+        """
+        out = self._outcomes.setdefault(
+            name,
+            {
+                "ok_count": 0,
+                "fail_count": 0,
+                "consecutive_failures": 0,
+                "last_exit_code": None,
+                "last_ok_at": None,
+                "last_finished_at": None,
+            },
+        )
+        out["last_exit_code"] = code
+        out["last_finished_at"] = self._clock()
+        if code == 0:
+            out["ok_count"] += 1
+            out["consecutive_failures"] = 0
+            out["last_ok_at"] = out["last_finished_at"]
+            # Recovery re-arms the alarm: the NEXT failure run is news
+            # again, otherwise a flapping job is announced once and then
+            # never again.
+            self._reported_unhealthy.discard(name)
+            return []
+        out["fail_count"] += 1
+        out["consecutive_failures"] += 1
+        if not is_unhealthy(out) or name in self._reported_unhealthy:
+            return []
+        self._reported_unhealthy.add(name)
+        return [
+            self.record(
+                "job_unhealthy",
+                job=name,
+                consecutive_failures=out["consecutive_failures"],
+                ok_count=out["ok_count"],
+                fail_count=out["fail_count"],
+                never_succeeded=(out["ok_count"] == 0),
+                last_exit_code=code,
+            )
+        ]
+
+    def health(self) -> list[dict[str, Any]]:
+        """Per-job outcome rollup, newest tallies, sorted by name.
+
+        Written into ``state.json`` so a reader can answer "is anything
+        failing?" without parsing the execution log.
+        """
+        return [
+            {"job": name, "unhealthy": is_unhealthy(out), **out}
+            for name, out in sorted(self._outcomes.items())
+        ]
 
     # -------------------------------------------------------------- #
 
@@ -200,6 +305,66 @@ class PeriodicRunner:
             out.append(self.record("unschedulable", job=name, reason=why))
         return out
 
+    def _open_stderr_capture(self, name: str) -> tuple[Optional[Path], Any]:
+        """Open a throwaway file to catch this run's stderr.
+
+        Returns (path, handle), or (None, None) if the file cannot be
+        opened — in which case the caller falls back to DEVNULL. Losing
+        the diagnostic is bad; refusing to run the job because we could
+        not open a scratch file would be worse.
+        """
+        try:
+            directory = self._log_path.parent / "stderr"
+            directory.mkdir(parents=True, exist_ok=True)
+            path = directory / f"{name}.stderr"
+            handle = path.open("wb")
+        except OSError:
+            return None, None
+        self._stderr_capture[name] = (path, handle)
+        return path, handle
+
+    def _discard_stderr_capture(self, name: str) -> None:
+        """Close and remove a capture whose child never started."""
+        entry = self._stderr_capture.pop(name, None)
+        if entry is None:
+            return
+        path, handle = entry
+        try:
+            handle.close()
+        except OSError:
+            pass
+        try:
+            path.unlink()
+        except OSError:
+            pass
+
+    def _take_stderr_tail(self, name: str) -> Optional[str]:
+        """Close this job's capture and return the tail of what it wrote.
+
+        Returns None when nothing was captured, so a quiet success adds no
+        key at all rather than an empty string that reads like evidence of
+        having looked.
+        """
+        entry = self._stderr_capture.pop(name, None)
+        if entry is None:
+            return None
+        path, handle = entry
+        try:
+            handle.close()
+        except OSError:
+            pass
+        try:
+            raw = path.read_bytes()[-STDERR_TAIL_BYTES:]
+        except OSError:
+            raw = b""
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        if not raw.strip():
+            return None
+        return raw.decode("utf-8", "replace")
+
     def _start(self, job: JobSpec, *, offset: float) -> dict[str, Any]:
         """Launch one one-shot and record the attempt.
 
@@ -223,14 +388,26 @@ class PeriodicRunner:
                 phase="resolve",
             )
 
+        # stderr was DEVNULL here until 2026-08-23, and that is why a job
+        # could alarm 885 times without anyone hearing it: scitex-hpc's
+        # ci-runners watch printed "CRITICAL supervisor-unregistered" plus
+        # the exact operator command to stderr on every run since 08-20,
+        # and every byte went to /dev/null. Jobs that write their own log
+        # survived that; jobs that just print did not.
+        #
+        # A FILE, not PIPE: this loop polls without reading, so a PIPE
+        # would fill its buffer and wedge the child — turning a diagnostic
+        # into an outage.
+        stderr_path, stderr_handle = self._open_stderr_capture(job.name)
         try:
             proc = self._popen(
                 argv,
                 cwd=job.working_directory or None,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stderr=stderr_handle or subprocess.DEVNULL,
             )
         except Exception as exc:
+            self._discard_stderr_capture(job.name)
             self._last_runs[job.name] = started
             return self.record(
                 "start_failed",

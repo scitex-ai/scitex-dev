@@ -403,7 +403,6 @@ def check_ps231_workflow_duplication(
             )
         )
 
-
 #: Co-located rule declaration, on the same terms as RUNNER_DESTINATION_RULES.
 #: Severity **E** lives in the tuple, NOT in `_SEVERITY_OVERRIDES` — an
 #: override for a co-located rule is a silent no-op, and a rule that ships at E
@@ -427,7 +426,25 @@ WORKFLOW_DUPLICATION_RULES: list[tuple[str, str, str, str, str]] = [
             "already been fixed in the org workflow that morning. A workflow "
             "that calls the org, or that declares `on: workflow_call`, is "
             "never flagged. Genuine leaf-specific variants take a reasoned "
-            "per-path exemption under `audit.exemptions`."
+            "per-path exemption under `audit.exemptions`. "
+            "BEFORE CONVERTING, check three blockers: (1) required status "
+            "contexts, which the caller RENAMES; (2) a leaf that also "
+            "publishes, since the org reusable is build-only; and (3) "
+            "RUNNER CAPABILITY — the callee runs on the runner YOU name in "
+            "`runs_on`, so a leaf rewritten for a runner that lacks a tool "
+            "cannot simply hand that runner to the org body. Reported by "
+            "scitex-cards 2026-08-23 from a real conversion: the org "
+            "reusable calls `gh` in 9 places while their local copy had "
+            "rewritten every one to `curl` under the comment 'Spartan "
+            "runners have NO gh CLI'. The org body ends those calls in "
+            "`|| true`, so on a runner without `gh` the job REPORTS "
+            "SUCCESS HAVING MERGED NOTHING — harder to catch than (1)'s "
+            "permanent queue, because a red check gets looked at and a "
+            "green one does not. "
+            "AND THE DRIFT ARGUMENT RUNS BOTH WAYS: a local copy cannot "
+            "follow org-side fixes, but it may also HOLD a fix the org "
+            "lacks. Diff them before converting rather than assuming the "
+            "newer copy is the better one."
         ),
         "E",
         "workflow-duplication",

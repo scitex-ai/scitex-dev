@@ -44,7 +44,7 @@ absent from another store."**
 | `_identity_state.py` | the `Store.identity` plumbing: mint the lineage, ask the instance |
 | `_divergence.py` | `detect_divergence` — a fork PROVEN from the logs, never from absence |
 | `federation/` | leaves declare a store; scitex-dev owns the machinery |
-| `_dialect/` | SQLite (default) and Postgres (advanced) |
+| `_dialect/` | Postgres (default for runtime state) and SQLite (regenerable local state only) |
 
 ## How a leaf adopts a store
 
