@@ -472,6 +472,25 @@ test or review gate that a role assignment would be reasoned against. That is
 scitex-cards' and sac's to resolve, not this ADR's, but a role model drawn
 around code nobody can see is drawn around a guess.
 
+MEASURED CONSEQUENCE, 2026-08-23, and it changes what the write path must be.
+Of the 2,179 status conflicts between compute-04 and compute-03, **1,522 (70%)
+are one event**: cards cancelled by the unsigned bulk cancel of 2026-08-19 that
+the other hosts never received. compute-03 still holds them as deferred 1433,
+blocked 42, failed 23, in_progress 19, done 5.
+
+So the reconciler's headline "2,665 rows to push" is not 2,665 units of drift.
+It is one mass cancellation plus ~650 genuine differences, and applying it
+would cancel 1,433 deferred cards and 19 cards an agent believes it is working
+right now, on two hosts — while the report called it convergence.
+
+**The bulk partition is therefore constitutive of a correct merge here, not a
+safety check added to a working one** (scitex-cards' framing, and it is the
+right one). Any apply path must report a mass-cancellation subset separately
+and by name, must refuse a card whose winning side is `cancelled` unless that
+subset is acknowledged in the invocation, and must always surface
+`in_progress -> cancelled` on its own line. A total that conceals which
+1,522 rows it is made of cannot be reviewed, only approved.
+
 ## 6. What this ADR does not settle
 
 - **Whether the domain unit and the VPN unit agree.** business argues the VPN
