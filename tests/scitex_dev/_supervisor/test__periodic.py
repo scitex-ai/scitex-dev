@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from scitex_dev._supervisor._periodic import PeriodicRunner
+from scitex_dev._supervisor._periodic import STDERR_TAIL_BYTES, PeriodicRunner
 from scitex_dev.jobs import JobSpec
 
 
@@ -397,3 +397,108 @@ class TestItAnnouncesJobsThatKeepFailing:
         entry = _entry(r, "scitex-dev-probe")
         # Assert
         assert entry["unhealthy"] is False
+
+
+class _StderrProc:
+    """A Popen stand-in that actually writes to the stderr it is given.
+
+    The plain _FakeProc never touches its stderr handle, so a capture test
+    built on it would pass against a supervisor that still discarded the
+    stream — it would assert nothing.
+    """
+
+    def __init__(self, argv, **kw):
+        self.argv = argv
+        self.pid = 4243
+        self._code = None
+        self._stderr = kw.get("stderr")
+
+    def emit(self, text: str) -> None:
+        self._stderr.write(text.encode("utf-8"))
+        self._stderr.flush()
+
+    def poll(self):
+        return self._code
+
+    def finish(self, code: int = 0) -> None:
+        self._code = code
+
+
+@pytest.fixture
+def stderr_runner(tmp_path: Path):
+    clock = {"t": 1000.0}
+    spawned: list[_StderrProc] = []
+
+    def factory(argv, **kw):
+        proc = _StderrProc(argv, **kw)
+        spawned.append(proc)
+        return proc
+
+    r = PeriodicRunner(
+        log_path=tmp_path / "exec.jsonl",
+        clock=lambda: clock["t"],
+        popen_factory=factory,
+        host="testhost",
+    )
+    return r, clock, spawned
+
+
+def _run_emitting(runner_tuple, jobs, text: str, code: int) -> dict:
+    """One cycle where the child writes ``text`` to stderr and exits."""
+    r, clock, spawned = runner_tuple
+    r.tick(jobs)
+    spawned[-1].emit(text)
+    spawned[-1].finish(code)
+    clock["t"] += 601
+    finished = [x for x in r.tick(jobs) if x["event"] == "finished"]
+    return finished[0]
+
+
+class TestItKeepsWhatAFailedJobPrinted:
+    """stderr was DEVNULL, so a job could alarm 885 times unheard.
+
+    scitex-hpc's ci-runners watch printed CRITICAL supervisor-unregistered
+    plus the exact operator command on every run since 2026-08-20, and the
+    supervisor discarded every byte.
+    """
+
+    def test_a_failed_job_keeps_its_stderr(self, stderr_runner):
+        # Arrange
+        jobs = [_job("scitex-dev-probe")]
+        # Act
+        rec = _run_emitting(stderr_runner, jobs, "CRITICAL supervisor-unregistered", 1)
+        # Assert
+        assert "CRITICAL supervisor-unregistered" in rec["stderr_tail"]
+
+    def test_a_successful_job_records_no_stderr(self, stderr_runner):
+        # Arrange
+        jobs = [_job("scitex-dev-probe")]
+        # Act
+        rec = _run_emitting(stderr_runner, jobs, "chatty but fine", 0)
+        # Assert — success chatter is noise in a log read for failures
+        assert "stderr_tail" not in rec
+
+    def test_a_silent_failure_adds_no_empty_key(self, stderr_runner):
+        # Arrange
+        jobs = [_job("scitex-dev-probe")]
+        # Act
+        rec = _run_emitting(stderr_runner, jobs, "   \n  ", 1)
+        # Assert — an empty string would read as "we looked and found none"
+        assert "stderr_tail" not in rec
+
+    def test_the_tail_is_capped(self, stderr_runner):
+        # Arrange
+        jobs = [_job("scitex-dev-probe")]
+        # Act
+        rec = _run_emitting(stderr_runner, jobs, "x" * (STDERR_TAIL_BYTES * 3), 1)
+        # Assert
+        assert len(rec["stderr_tail"]) <= STDERR_TAIL_BYTES
+
+    def test_the_tail_is_the_end_not_the_start(self, stderr_runner):
+        # Arrange
+        jobs = [_job("scitex-dev-probe")]
+        noisy = ("filler\n" * 2000) + "THE ACTUAL ERROR"
+        # Act
+        rec = _run_emitting(stderr_runner, jobs, noisy, 1)
+        # Assert — why a process died is at the END of what it printed
+        assert "THE ACTUAL ERROR" in rec["stderr_tail"]
