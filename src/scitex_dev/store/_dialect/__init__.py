@@ -42,6 +42,7 @@ survives someone adding a "cleanup" helper later.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from contextlib import AbstractContextManager, nullcontext
 from typing import Any, Final, Iterable, Sequence
 
 from .._errors import DialectUnavailableError
@@ -304,6 +305,41 @@ class Dialect(ABC):
             for name in schema.indexed_fields
         )
         return statements
+
+    # -- concurrency -----------------------------------------------------
+    #
+    # Two Store instances on one host are the NORMAL case (one per agent; the
+    # operator relaunches ~14 at once), and they share nothing in Python —
+    # ``Store._lock`` is per instance. Whatever must be atomic across them has
+    # to be atomic in the DATABASE. These two hooks are how the store asks the
+    # dialect for that. The defaults are SQLite's honest answers: its file
+    # lock already serialises DDL, and it classifies nothing as a unique
+    # violation, so the store re-raises rather than retrying blind.
+
+    def is_unique_violation(self, exc: BaseException) -> bool:
+        """Whether ``exc`` is the driver's unique-constraint rejection.
+
+        The store retries an oplog append when this is True: the
+        ``(origin, seq)`` primary key rejecting a write means another writer
+        on the same node took that seq between our MAX read and our INSERT —
+        a race to re-read, not a fault. Anything else is re-raised untouched.
+        """
+        return False
+
+    def schema_lock(
+        self, connection: Any, schema: Schema
+    ) -> AbstractContextManager[None]:
+        """Serialise ``create_sql`` across concurrent Store constructors.
+
+        ``CREATE TABLE IF NOT EXISTS`` is NOT concurrency-safe on Postgres:
+        two sessions that both see the table absent both create it, and the
+        second collides on the table's implicit row TYPE in ``pg_type``
+        before the name check ever runs (measured 2026-08-24: 7 of 8
+        concurrent constructors failed on ``pg_type_typname_nsp_index``).
+        The additive ``ALTER TABLE ADD COLUMN`` migration races the same way.
+        SQLite's file lock already serialises DDL, so this is a no-op there.
+        """
+        return nullcontext()
 
     def to_db_bool(self, value: bool) -> Any:
         """Render a Python bool for this backend."""

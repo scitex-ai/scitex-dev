@@ -146,6 +146,27 @@ class OplogGapError(StoreError):
     """
 
 
+class SeqAllocationError(StoreError):
+    """Two writers on one node raced for the same oplog sequence and the
+    store could not resolve it within its retry budget.
+
+    Sequence numbers are per ORIGIN, allocated by reading ``MAX(seq)`` and
+    inserting ``MAX + 1``. Two Store instances on one node — the operator
+    relaunching ~14 agents at once is routine — can both read the same MAX;
+    the oplog's ``(origin, seq)`` primary key then rejects the loser. The
+    store retries the loser internally, re-reading a now-higher MAX, so a
+    caller normally never sees this. It is raised only when EVERY retry lost,
+    which means sustained contention well beyond a launch burst.
+
+    RETRY CONTRACT: the failed write was NOT applied and left no partial
+    state, so the caller may simply retry the whole operation. This is never
+    a raw driver exception: before 2026-08-24 the collision escaped as
+    ``psycopg.errors.UniqueViolation`` / ``sqlite3.IntegrityError``, which
+    nothing above the store could recognise or act on (measured: 5 of 8
+    concurrent writers with DISTINCT ids failed this way).
+    """
+
+
 class StoreIdentityMismatchError(StoreError):
     """Two stores that were treated as one turned out not to be.
 
