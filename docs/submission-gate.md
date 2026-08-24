@@ -40,6 +40,11 @@ class Finding:
 class GateResult:
     passed: bool
     findings: tuple[Finding, ...] = ()
+    undetermined: bool = False        # ran, and could not tell
+    undetermined_reason: str = ""     # WHAT WAS UNAVAILABLE
+
+    @classmethod
+    def cannot_determine(cls, reason, findings=()): ...
 
 @dataclass(frozen=True)
 class GateCheck:
@@ -49,6 +54,31 @@ class GateCheck:
     requires: str = ""            # optional extra import-gate; skip-if-absent
     description: str = ""
 ```
+
+### Three verdicts, not two
+
+A check that **ran and could not tell** must say so, via
+`GateResult.cannot_determine("origin/develop did not resolve (shallow clone?)")`.
+Returning `passed=True` there is silently green — measured by scitex-cards on
+2026-08-23, where a release-ancestry detector skipped an unresolvable branch and
+passed, so a failed fetch or a typo'd branch name each certified a release.
+Returning `passed=False` is indistinguishable from a real failure and trains
+readers to discount the check.
+
+The reason must name **what was unavailable**, not what the check wanted:
+"origin/develop did not resolve" tells a reader where to go, "could not verify
+ancestry" does not. It is required; whitespace is rejected.
+
+An undetermined result carries `passed=False`, so it obeys the ordinary
+enforcement rules — it blocks when the check is enforced and warns when it is
+not. What it never does is disappear: it is tagged distinctly at both levels and
+carries a `check_undetermined` finding, separate from `check_crashed` (a bug in
+the check) and from a plain failure (a problem with the subject).
+
+**Do not use it for "this does not apply to my repo."** That is a decision, and
+decisions are declared: disable the check by id in `.scitex/dev/config.yaml`. An
+absent expectation and an unverifiable one look identical to a process and are
+opposites in meaning; keeping them apart is the whole point of the third verdict.
 
 A leaf registers a provider `() -> list[GateCheck]` under the entry-point group
 **`scitex_dev.gate.checks`**:
@@ -97,8 +127,11 @@ scitex-dev gate --stage=pre-submission --list [--json]   # registered checks
 
 - exit **0** = pass or advisory-only failures
 - exit **2** = at least one *enforced* check failed → the hook blocks the submit
-- `--json` emits the full report (per-check `passed`/`enforced`/`blocked` +
-  each `finding.fix_hint`) for the hook to render feedback.
+- `--json` emits the full report (per-check `passed`/`enforced`/`blocked`/
+  `undetermined`/`undetermined_reason` + each `finding.fix_hint`) for the hook
+  to render feedback. `undetermined` is emitted **alongside** `passed` rather
+  than folded into it, so a consumer that treats false-as-failed stays correct
+  while one that wants to distinguish "failed" from "could not tell" can.
 
 ## Wiring (paper side)
 

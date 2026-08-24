@@ -37,7 +37,7 @@ from typing import Any, Iterator, Mapping, Sequence
 from ._apply import apply_entry
 from ._codec import RowCodec
 from ._dialect import Dialect, get_dialect
-from ._errors import RecordNotFoundError, StoreError
+from ._errors import RecordNotFoundError, SeqAllocationError, StoreError
 from ._guards import (
     ANY_REVISION,
     NEW_RECORD,
@@ -56,6 +56,12 @@ from ._row import Row
 from ._target import StoreTarget
 
 __all__ = ["ANY_REVISION", "NEW_RECORD", "PutResult", "Store"]
+
+# How many times _append re-reads MAX(seq) after losing the (origin, seq)
+# race before giving up. Each loss means another writer on this node won an
+# insert in the window between our read and ours, so the next read sees a
+# higher MAX; a burst of ~14 agents settles in a handful of rounds.
+_SEQ_ALLOCATION_ATTEMPTS = 32
 
 _OPLOG_COLUMNS = (
     "origin",
@@ -123,9 +129,14 @@ class Store(PeerState, IdentityState):
         self._lock = threading.RLock()
         self._batch_depth = 0
         self._connection = self.dialect.connect(target)
-        for statement in self.dialect.create_sql(schema):
-            self._connection.execute(statement)
-        self._apply_additive_migrations(schema)
+        # Under the dialect's schema lock: CREATE TABLE IF NOT EXISTS is not
+        # concurrency-safe on Postgres, and neither is the additive ALTER —
+        # see Dialect.schema_lock. Eight agents constructing a Store for one
+        # schema at once is a normal relaunch, not an edge case.
+        with self.dialect.schema_lock(self._connection, schema):
+            for statement in self.dialect.create_sql(schema):
+                self._connection.execute(statement)
+            self._apply_additive_migrations(schema)
 
     # -- lifecycle --------------------------------------------------------
     def close(self) -> None:
@@ -376,14 +387,14 @@ class Store(PeerState, IdentityState):
             return self._materialise(entry, current, persist_op=False)
 
     # -- internals --------------------------------------------------------
-    def _append(
+    def _new_entry(
         self,
         record: str,
         op: OpKind,
         payload: Mapping[str, Any],
         actor: "str | None",
     ) -> OpEntry:
-        entry = OpEntry(
+        return OpEntry(
             origin=self.node,
             seq=self.next_seq(),
             record=record,
@@ -399,8 +410,50 @@ class Store(PeerState, IdentityState):
             # exactly as before.
             fence=self.fence(self.node),
         )
-        self._store_op(entry)
-        return entry
+
+    def _append(
+        self,
+        record: str,
+        op: OpKind,
+        payload: Mapping[str, Any],
+        actor: "str | None",
+    ) -> OpEntry:
+        # seq is allocated by reading MAX(seq) and inserting MAX + 1, and
+        # ``self._lock`` guards only THIS instance — a second Store on the
+        # same node (one per agent; ~14 relaunch together) can read the same
+        # MAX. The (origin, seq) primary key then rejects the loser, which is
+        # exactly the signal to re-read and go again: nothing was written.
+        # Measured before this loop existed: 5 of 8 concurrent writers with
+        # DISTINCT ids died on the PK, as a raw driver exception.
+        #
+        # Inside batch() the connection is mid-transaction, and on Postgres a
+        # rejected INSERT aborts that transaction; a SAVEPOINT scopes the
+        # failure to this one statement so the retry — and the caller's
+        # batch — can continue. Outside a batch the connection is autocommit
+        # and needs none (SAVEPOINT outside a transaction is itself an error).
+        for _attempt in range(_SEQ_ALLOCATION_ATTEMPTS):
+            entry = self._new_entry(record, op, payload, actor)
+            in_batch = self._batch_depth > 0
+            if in_batch:
+                self._connection.execute("SAVEPOINT seq_alloc")
+            try:
+                self._store_op(entry)
+            except Exception as exc:
+                if not self.dialect.is_unique_violation(exc):
+                    raise
+                if in_batch:
+                    self._connection.execute("ROLLBACK TO SAVEPOINT seq_alloc")
+                continue
+            if in_batch:
+                self._connection.execute("RELEASE SAVEPOINT seq_alloc")
+            return entry
+        raise SeqAllocationError(
+            f"Could not allocate an oplog seq for origin {self.node!r} after "
+            f"{_SEQ_ALLOCATION_ATTEMPTS} attempts: every attempt lost the "
+            "(origin, seq) race to another writer on this node. Nothing was "
+            "written; the operation may be retried whole. Sustained loss at "
+            "this rate means far more concurrent writers than a launch burst."
+        )
 
     def _store_op(self, entry: OpEntry) -> None:
         table = self.dialect.quote(self.dialect.oplog_table(self.schema))

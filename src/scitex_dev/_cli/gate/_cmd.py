@@ -132,8 +132,19 @@ def _render_human(report) -> None:
         # (o.blocked, tagged BLOCK); an unenforced failure is advisory and
         # is tagged "warning (non-blocking)" so a per-check line can never
         # disagree with the banner/exit code.
-        if o.blocked:
+        # UNDETERMINED is tagged separately from failed, at both enforcement
+        # levels. The tag tells the reader WHERE TO GO: a failure means fix
+        # the thing being checked, an undetermined result means fix whatever
+        # made checking impossible. Printing the second as the first sends
+        # them to the wrong place and is how a check earns a reputation for
+        # false alarms.
+        undetermined = getattr(o, "undetermined", False)
+        if o.blocked and undetermined:
+            tag = "BLOCK (could not determine)"
+        elif o.blocked:
             tag = "BLOCK"
+        elif undetermined:
+            tag = "could not determine (non-blocking)"
         elif o.passed is False:
             tag = "warning (non-blocking)"
         else:

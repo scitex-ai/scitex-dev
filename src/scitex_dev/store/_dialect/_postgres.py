@@ -17,10 +17,11 @@ peer ever saw one.
 
 from __future__ import annotations
 
-from typing import Any, Final, Sequence
+from contextlib import contextmanager
+from typing import Any, Final, Iterator, Sequence
 
 from .._errors import DialectUnavailableError, StoreTargetError
-from .._policy import FieldKind
+from .._policy import FieldKind, Schema
 from .._target import Backend, StoreTarget
 from . import Dialect
 
@@ -224,6 +225,31 @@ class PostgresDialect(Dialect):
         sameness it cannot support.
         """
         return f"pg:{system_identifier}/{database}"
+
+    # -- concurrency -----------------------------------------------------
+    def is_unique_violation(self, exc: BaseException) -> bool:
+        try:
+            from psycopg.errors import UniqueViolation
+        except ImportError:  # pragma: no cover - connect() already needed psycopg
+            return False
+        return isinstance(exc, UniqueViolation)
+
+    @contextmanager
+    def schema_lock(self, connection: Any, schema: Schema) -> Iterator[None]:
+        """A session-level advisory lock keyed on the schema's oplog name.
+
+        Held only across the DDL in ``Store.__init__`` and released in
+        ``finally``, so a failing statement cannot leave it stuck. Session
+        level (not transaction level) because the connection is autocommit.
+        ``hashtext`` folds the name to the int4 the lock API takes; two
+        schemas colliding on the hash merely serialise each other's DDL.
+        """
+        key = self.oplog_table(schema)
+        connection.execute("SELECT pg_advisory_lock(hashtext(%s))", (key,))
+        try:
+            yield
+        finally:
+            connection.execute("SELECT pg_advisory_unlock(hashtext(%s))", (key,))
 
     def to_db_bool(self, value: bool) -> Any:
         return bool(value)
