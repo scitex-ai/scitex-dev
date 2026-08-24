@@ -147,6 +147,12 @@ class SQLiteDialect(Dialect):
             return (UNKNOWN_SYSTEM, f"cannot stat {path}: {exc}")
         return (f"sqlite:{status.st_dev}:{status.st_ino}", "file device/inode")
 
+    # -- concurrency -----------------------------------------------------
+    def is_unique_violation(self, exc: BaseException) -> bool:
+        return isinstance(exc, sqlite3.IntegrityError) and (
+            "UNIQUE constraint failed" in str(exc)
+        )
+
     def to_db_bool(self, value: bool) -> Any:
         return 1 if value else 0
 
