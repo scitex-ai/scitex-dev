@@ -1,6 +1,19 @@
 # ADR-0006 — One store per host, consumed as a primitive
 
-**Status:** Accepted (operator ruling, 2026-08-09)
+**Status:** SUPERSEDED by ADR-0013 (operator ruling, 2026-08-25)
+
+> **Read ADR-0013 before designing against this document.** The operator
+> reversed the core topology decision on 2026-08-25: the fleet now runs a
+> single writer with read-only replicas and quorum failover, not one writable
+> store per host. Decisions 2 ("PER HOST"), 3 ("NO CENTRAL SERVER") and 4
+> ("no coordinator, no quorum, no primary") below are NO LONGER IN FORCE.
+>
+> Decisions 1 and 5, and the reasoning for PostgreSQL over SQLite, still
+> stand and are restated in ADR-0013.
+>
+> This banner exists because the text below is persuasive and was written to
+> forbid exactly what replaced it. On 2026-08-25 it was read as current,
+> mid-design, and the conflict had to be untangled afterwards.
 **Owner:** scitex-dev, as DB primitive provider
 **Consumers today:** scitex-cards, scitex-agent-container
 **Consumers next:** scitex-writer, figrecipe, scitex-scholar — via scitex-hub
