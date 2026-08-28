@@ -111,6 +111,16 @@ class PostgresDialect(Dialect):
             f"WHERE table_name = '{escaped}'"
         )
 
+    def indexes_sql(self, table: str) -> str:
+        """Existing index names from ``pg_indexes``.
+
+        Returns zero rows for a table that does not exist, matching
+        :meth:`columns_sql`. Same literal-escaping and same unqualified
+        addressing as that method, for the same reasons.
+        """
+        escaped = table.replace("'", "''")
+        return f"SELECT indexname FROM pg_indexes WHERE tablename = '{escaped}'"
+
     def upsert_sql(self, table: str, columns: Sequence[str], key: str) -> str:
         """``INSERT ... ON CONFLICT (key) DO UPDATE``."""
         column_list = ", ".join(self.quote(c) for c in columns)

@@ -293,18 +293,49 @@ class Dialect(ABC):
             f"CREATE TABLE IF NOT EXISTS {self.quote(self.identity_table(schema))} ("
             f"{self.quote('key')} {text} PRIMARY KEY, "
             f"{self.quote('value')} {text} NOT NULL)",
-            f"CREATE INDEX IF NOT EXISTS {self.quote(oplog + '_record_idx')} "
-            f"ON {self.quote(oplog)} ({self.quote('record')})",
-            f"CREATE INDEX IF NOT EXISTS {self.quote(rows + '_hidden_idx')} "
-            f"ON {self.quote(rows)} ({self.quote('_hidden')})",
         ]
         statements.extend(
-            f"CREATE INDEX IF NOT EXISTS "
-            f"{self.quote(f'{rows}_{name}_idx')} ON {self.quote(rows)} "
-            f"({self.quote(name)})"
-            for name in schema.indexed_fields
+            f"CREATE INDEX IF NOT EXISTS {self.quote(index)} "
+            f"ON {self.quote(table)} ({self.quote(column)})"
+            for index, table, column in self.index_specs(schema)
         )
         return statements
+
+    def index_specs(self, schema: Schema) -> list[tuple[str, str, str]]:
+        """``(index, table, column)`` for every index ``create_sql`` builds.
+
+        Factored out so the CREATE and the existence probe in
+        ``Store.__init__`` read from ONE list. The same reasoning as
+        :meth:`additive_columns`: two places that must agree about the shape
+        of a store will eventually disagree if each keeps its own copy, and
+        the failure then looks like a permissions bug rather than a drift.
+        """
+        rows = self.rows_table(schema)
+        oplog = self.oplog_table(schema)
+        specs = [
+            (oplog + "_record_idx", oplog, "record"),
+            (rows + "_hidden_idx", rows, "_hidden"),
+        ]
+        specs.extend((f"{rows}_{name}_idx", rows, name) for name in schema.indexed_fields)
+        return specs
+
+    def schema_tables(self, schema: Schema) -> list[str]:
+        """Every table ``create_sql`` builds, for the same reason as above."""
+        return [
+            self.rows_table(schema),
+            self.oplog_table(schema),
+            self.cursor_table(schema),
+            self.identity_table(schema),
+        ]
+
+    @abstractmethod
+    def indexes_sql(self, table: str) -> str:
+        """A SELECT returning one row per existing INDEX on ``table``.
+
+        The first column of each row must be the index NAME. Like
+        :meth:`columns_sql` it must not raise on a table that does not
+        exist — return no rows instead.
+        """
 
     # -- concurrency -----------------------------------------------------
     #
