@@ -134,8 +134,14 @@ class Store(PeerState, IdentityState):
         # see Dialect.schema_lock. Eight agents constructing a Store for one
         # schema at once is a normal relaunch, not an edge case.
         with self.dialect.schema_lock(self._connection, schema):
-            for statement in self.dialect.create_sql(schema):
-                self._connection.execute(statement)
+            # Only when something is actually absent: the DDL is idempotent by
+            # IF NOT EXISTS but NOT by privilege — PostgreSQL demands table
+            # ownership before that clause short-circuits, which locked every
+            # non-owning role out of stores it had full DML on. See
+            # PeerState._schema_objects_missing.
+            if self._schema_objects_missing(schema):
+                for statement in self.dialect.create_sql(schema):
+                    self._connection.execute(statement)
             self._apply_additive_migrations(schema)
 
     # -- lifecycle --------------------------------------------------------

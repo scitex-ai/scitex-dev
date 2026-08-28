@@ -7,6 +7,42 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.56.7] - 2026-08-28
+
+> **Opening a store demanded the right to CREATE it** — so a role with full
+> read/write on every table of a store could not open that store at all.
+
+### Fixed
+
+- `Store.__init__` now runs `create_sql` only when something it would build is
+  actually absent. Every statement carried `IF NOT EXISTS`, so re-running it on
+  an existing store looked free; on PostgreSQL ownership is checked BEFORE that
+  clause short-circuits, so `CREATE INDEX IF NOT EXISTS` naming an index that
+  already exists still raised `InsufficientPrivilege` for a non-owning role.
+  The DDL that would change nothing was exactly the DDL that refused.
+
+  Measured against a live cluster as a member of a grant role that owns
+  nothing: `SELECT`/`INSERT` OK, `CREATE INDEX IF NOT EXISTS` and
+  `ALTER TABLE ADD COLUMN IF NOT EXISTS` both `must be owner of table ...`.
+
+  Ownership is again a requirement for CREATING a store rather than for using
+  one, which is what the grant model already assumed.
+
+### Added
+
+- `Dialect.indexes_sql` — the index counterpart to `columns_sql`, same
+  contract (first column is the name, no rows for a missing table);
+  `pg_indexes` on PostgreSQL, `sqlite_master` on SQLite.
+- `Dialect.index_specs` / `Dialect.schema_tables` enumerate what `create_sql`
+  builds, and `create_sql` now emits its `CREATE INDEX` statements from that
+  list — one list, two readers, so the probe and the creator cannot drift.
+
+### Notes
+
+The probe is conservative: any missing table or index runs the full
+`create_sql` exactly as before, so it can only remove DDL that would have
+changed nothing.
+
 ## [0.56.1] - 2026-08-20
 
 > **The audit was reading a different tree than the one it said it was
