@@ -104,6 +104,20 @@ class SQLiteDialect(Dialect):
         escaped = table.replace("'", "''")
         return f"SELECT name FROM pragma_table_info('{escaped}')"
 
+    def indexes_sql(self, table: str) -> str:
+        """Existing index names from ``sqlite_master``.
+
+        Returns zero rows for a table that does not exist, matching
+        :meth:`columns_sql`. The name is a literal for the same reason given
+        there: SQLite takes no placeholder in this position, and every caller
+        passes a name this dialect generated.
+        """
+        escaped = table.replace("'", "''")
+        return (
+            "SELECT name FROM sqlite_master "
+            f"WHERE type = 'index' AND tbl_name = '{escaped}'"
+        )
+
     def upsert_sql(self, table: str, columns: Sequence[str], key: str) -> str:
         """``INSERT ... ON CONFLICT(key) DO UPDATE`` (SQLite >= 3.24)."""
         column_list = ", ".join(self.quote(c) for c in columns)

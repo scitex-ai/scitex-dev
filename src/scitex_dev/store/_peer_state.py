@@ -49,6 +49,60 @@ class PeerState:
     _lock: Any
 
     # -- schema migration -------------------------------------------------
+    def _schema_objects_missing(self, schema: Schema) -> bool:
+        """Is anything ``create_sql`` would build not there yet?
+
+        WHY THIS EXISTS. Every statement in ``create_sql`` carries IF NOT
+        EXISTS, so re-running it on an existing store was believed free. On
+        PostgreSQL it is not: ownership is checked BEFORE IF NOT EXISTS
+        short-circuits, so ``CREATE INDEX IF NOT EXISTS`` naming an index that
+        already exists still raises InsufficientPrivilege for a role that does
+        not own the table. A role holding SELECT/INSERT/UPDATE/DELETE on every
+        table of a store therefore could not OPEN that store at all.
+
+        Measured 2026-08-28 against the fleet primary, as a member of the
+        grant role that owns nothing:
+
+            SELECT / INSERT                       OK
+            CREATE INDEX IF NOT EXISTS (exists)   must be owner of table ...
+            ALTER TABLE ADD COLUMN IF NOT EXISTS  must be owner of table ...
+
+        So ownership had become a requirement for USING a store rather than
+        for CREATING one, which is not what the grant model assumes and not
+        what the DDL means.
+
+        Reading before writing is what :meth:`_apply_additive_migrations`
+        already does one method below, and its reasoning transfers verbatim:
+        a swallowed error cannot tell "already present" from "failed for
+        another reason", and this runs on every open.
+
+        Conservative on purpose — ANY missing table or index returns True and
+        the full ``create_sql`` runs, exactly as before. The probe only ever
+        removes DDL that would have changed nothing.
+        """
+        for table in self.dialect.schema_tables(schema):
+            if not self._first_column_values(self.dialect.columns_sql(table)):
+                return True
+        wanted: dict[str, set[str]] = {}
+        for index, table, _column in self.dialect.index_specs(schema):
+            wanted.setdefault(table, set()).add(index)
+        for table, names in wanted.items():
+            if not names <= self._first_column_values(self.dialect.indexes_sql(table)):
+                return True
+        return False
+
+    def _first_column_values(self, sql: str) -> set[str]:
+        """Run ``sql`` and collect the FIRST column of every row.
+
+        SQLite and Postgres disagree on what that column is called in each of
+        these catalogue queries, so it is taken positionally by key — the same
+        trick, and the same precedent, as the column read below.
+        """
+        return {
+            str(row[list(row.keys())[0]])
+            for row in self._connection.execute(sql).fetchall()
+        }
+
     def _apply_additive_migrations(self, schema: Schema) -> None:
         """Add columns that `create_sql` cannot add to an existing store.
 
@@ -64,16 +118,10 @@ class PeerState:
         this runs on every open.
         """
         for table, column, coltype, default in self.dialect.additive_columns(schema):
-            existing = {
-                # SQLite's PRAGMA says `name`; Postgres's information_schema
-                # says `column_name` — neither column name is portable across
-                # dialects, so take the first value via its key (precedent:
-                # system_identifier).
-                str(row[list(row.keys())[0]])
-                for row in self._connection.execute(
-                    self.dialect.columns_sql(table)
-                ).fetchall()
-            }
+            # SQLite's PRAGMA says `name`; Postgres's information_schema
+            # says `column_name` — neither is portable, so the shared helper
+            # takes the first value via its key (precedent: system_identifier).
+            existing = self._first_column_values(self.dialect.columns_sql(table))
             if not existing or column in existing:
                 # No rows at all means create_sql just made the table with
                 # the current shape — nothing to migrate.
