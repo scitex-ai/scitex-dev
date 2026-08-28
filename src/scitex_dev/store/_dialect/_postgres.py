@@ -91,35 +91,49 @@ class PostgresDialect(Dialect):
         return _TYPES[kind]
 
     def columns_sql(self, table: str) -> str:
-        """Existing column names from `information_schema`.
+        """Existing column names from `information_schema`, in THIS schema.
 
         Returns zero rows for a table that does not exist, matching the
         SQLite dialect's contract — the caller reads that as "nothing to
         migrate".
 
-        `to_regclass` is deliberately NOT used: it resolves through the
+        `to_regclass` is deliberately NOT used: it resolves through the whole
         search_path and would report a same-named table in another schema as
-        this one. `information_schema.columns` filtered on `table_name` has
-        the same exposure in principle, so this stays consistent with how the
-        rest of this dialect addresses tables — unqualified, in whatever
-        schema the connection lands. If the store ever takes a schema
-        qualifier, this query and `quote` change together.
+        this one. Filtering on `table_name` ALONE had that same exposure, and
+        0.56.7 shipped with it — the docstring called it "the same exposure in
+        principle" and left it. It is not hypothetical. `information_schema`
+        lists every schema the role can see, so with a store's tables present
+        in `public` and the connection pointed at a fresh schema, the probe in
+        `PeerState._schema_objects_missing` reported them PRESENT, skipped
+        `create_sql`, and the first read then failed:
+
+            psycopg.errors.UndefinedTable:
+                relation "comms_blocks_rows" does not exist
+
+        `current_schema()` is the correct scope because it is where an
+        unqualified `CREATE TABLE` actually lands. Asking "are the objects in
+        the schema I would create them in?" makes the probe and the creator
+        agree; asking "does this name exist anywhere?" does not.
         """
         escaped = table.replace("'", "''")
         return (
             "SELECT column_name FROM information_schema.columns "
-            f"WHERE table_name = '{escaped}'"
+            f"WHERE table_name = '{escaped}' AND table_schema = current_schema()"
         )
 
     def indexes_sql(self, table: str) -> str:
-        """Existing index names from ``pg_indexes``.
+        """Existing index names from ``pg_indexes``, in THIS schema.
 
         Returns zero rows for a table that does not exist, matching
-        :meth:`columns_sql`. Same literal-escaping and same unqualified
-        addressing as that method, for the same reasons.
+        :meth:`columns_sql`, and scoped to `current_schema()` for the same
+        reason — `pg_indexes` spans every schema, so an index of the same name
+        on a same-named table elsewhere would otherwise read as this one's.
         """
         escaped = table.replace("'", "''")
-        return f"SELECT indexname FROM pg_indexes WHERE tablename = '{escaped}'"
+        return (
+            f"SELECT indexname FROM pg_indexes WHERE tablename = '{escaped}' "
+            "AND schemaname = current_schema()"
+        )
 
     def upsert_sql(self, table: str, columns: Sequence[str], key: str) -> str:
         """``INSERT ... ON CONFLICT (key) DO UPDATE``."""
