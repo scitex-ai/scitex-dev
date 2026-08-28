@@ -7,6 +7,45 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.56.8] - 2026-08-28
+
+> **The probe added in 0.56.7 answered about every schema, not this one** — so
+> it could skip creating tables that were not there.
+
+### Fixed
+
+- `PostgresDialect.columns_sql` and `PostgresDialect.indexes_sql` are now
+  scoped to `current_schema()`. They filtered on `table_name` / `tablename`
+  alone, and both catalogues span EVERY schema the role can see. With a
+  store's tables present in one schema and the connection pointed at another,
+  `PeerState._schema_objects_missing` answered PRESENT, `create_sql` was
+  skipped, and the first read failed against tables that were never created
+  here:
+
+      psycopg.errors.UndefinedTable:
+          relation "comms_blocks_rows" does not exist
+
+  `current_schema()` is the right scope because it is where an unqualified
+  `CREATE TABLE` lands — so the probe and the creator now mean the same
+  schema. Measured on one tree against one writable primary, changing only
+  the dialect: without the fix the read raised `UndefinedTable`, with it the
+  store opens and the full store suite is 334 passed, 1 skipped.
+
+### Notes
+
+This corrects a claim 0.56.7 made about itself. Its release note said the
+probe "can only remove DDL that would have changed nothing", and
+`columns_sql`'s docstring named the cross-schema exposure and shipped anyway
+as "the same exposure in principle". It was not hypothetical — it turned every
+open PR in `scitex-agent-container` red the moment those tests ran against a
+real cluster.
+
+The probe's own tests were all SQLite, which is why a PostgreSQL-only defect
+got through. The two tests added here assert on the STATEMENT, so they run
+everywhere rather than only where a cluster happens to be up; a third
+reproduces the end-to-end shape and skips when no cluster can host a
+throwaway schema.
+
 ## [0.56.7] - 2026-08-28
 
 > **Opening a store demanded the right to CREATE it** — so a role with full
