@@ -2,6 +2,9 @@
 # -*- coding: utf-8 -*-
 """Opening a store must not require the right to CREATE it.
 
+Mirrors ``src/scitex_dev/store/_peer_state.py``, which owns the
+``_schema_objects_missing`` probe these tests pin.
+
 Every statement in ``create_sql`` carries IF NOT EXISTS, so re-running it on
 an existing store looked free. On PostgreSQL it is not: ownership is checked
 BEFORE that clause short-circuits, so ``CREATE INDEX IF NOT EXISTS`` naming an
@@ -79,8 +82,10 @@ def schema_with_an_extra_index(card_schema) -> Schema:
 
 
 def test_a_created_store_reports_nothing_missing(store, card_schema) -> None:
-    # Arrange / Act
-    missing = store._schema_objects_missing(card_schema)
+    # Arrange
+    schema = card_schema
+    # Act
+    missing = store._schema_objects_missing(schema)
     # Assert
     assert missing is False
 
@@ -114,8 +119,9 @@ def test_an_index_added_to_the_schema_later_is_reported_missing(
     store, schema_with_an_extra_index
 ) -> None:
     # Arrange — the store predates the new index; the column is already there.
+    schema = schema_with_an_extra_index
     # Act
-    missing = store._schema_objects_missing(schema_with_an_extra_index)
+    missing = store._schema_objects_missing(schema)
     # Assert
     assert missing is True
 
