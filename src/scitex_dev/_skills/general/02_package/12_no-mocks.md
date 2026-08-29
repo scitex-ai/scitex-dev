@@ -65,7 +65,7 @@ as arguments, or the test should run against the real collaborator.
    a hand-rolled fake from the test. This is the canonical pattern.
 2. **Use the real thing.** `tmp_path` for filesystem state. A real
    subprocess against a fixture script you write in `tmp_path`. A local
-   in-process HTTP server. An in-process SQLite for DB-shaped tests.
+   in-process HTTP server. A throwaway Postgres schema for DB-shaped tests.
 3. **Delete the test.** A test that passes only because it `patch`-es
    internals is exercising the mock, not the code. The right answer is
    often to drop it and write an integration test instead, or to delete

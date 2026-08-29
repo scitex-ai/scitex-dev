@@ -8,7 +8,6 @@ per-package local-state shape (see
 
     ~/.scitex/<pkg>/
     ├── config.yaml          # ONE config name (or config/ for multi-file)
-    ├── <shortname>.db        # SQLite mutable registry — informational only
     ├── runtime/              # ephemeral live state (pids, sockets, locks, ...)
     ├── logs/                 # all *.log
     ├── archive/              # superseded data, as archive/<UTC>/ subdirs

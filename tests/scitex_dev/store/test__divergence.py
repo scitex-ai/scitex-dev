@@ -11,9 +11,10 @@ question, so there is nothing to disagree with and nothing is reported.
 
 from __future__ import annotations
 
-import shutil
 
 import pytest
+
+from .conftest import BASE_DSN
 
 from scitex_dev.store import (
     NEW_RECORD,
@@ -26,43 +27,106 @@ from scitex_dev.store import (
 )
 
 
-@pytest.fixture
-def origin(tmp_path, card_schema):
-    """A store with three ops, whose lineage uuid has been minted."""
-    store = Store(
-        StoreTarget.sqlite(tmp_path / "origin.db", pkg="cards"),
+def _dsn(schema_name: str) -> str:
+    return f"{BASE_DSN}?options=-csearch_path%3D{schema_name}"
+
+
+def _open(schema_name: str, card_schema) -> Store:
+    return Store(
+        StoreTarget.postgres(_dsn(schema_name), pkg="cards"),
         card_schema,
         node="node-a",
         writer_policy=WriterPolicy.MULTI_WRITER,
     )
+
+
+@pytest.fixture
+def origin_schema(pg_schemas) -> str:
+    return pg_schemas("origin")
+
+
+@pytest.fixture
+def origin(origin_schema, card_schema):
+    """A store with three ops, whose lineage uuid has been minted."""
+    store = _open(origin_schema, card_schema)
     for index in range(3):
         store.put({"id": f"c{index}", "status": "open"}, expected_revision=NEW_RECORD)
     store.identity  # mint the lineage so the copy below inherits it
-    return store
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 @pytest.fixture
-def copied(origin, tmp_path, card_schema):
-    """A byte-for-byte COPY of ``origin`` — same lineage, new instance."""
+def copied(origin, origin_schema, pg_schemas, card_schema):
+    """A table-for-table COPY of ``origin`` — same lineage, forked writes.
+
+    The old fixture copied a store FILE. The analogue here is copying every
+    table into a fresh schema: the lineage uuid travels with the rows, which
+    is the property these tests turn on, and the two schemas then accept
+    writes independently. Instance-level discrimination needs two DATABASES
+    and is asserted in ``_dialect/test__postgres.py`` instead — see the note
+    in ``test__identity_state``.
+    """
+    psycopg = pytest.importorskip("psycopg")
     origin.close()
-    shutil.copyfile(tmp_path / "origin.db", tmp_path / "copy.db")
-    return Store(
-        StoreTarget.sqlite(tmp_path / "copy.db", pkg="cards"),
-        card_schema,
-        node="node-a",
-        writer_policy=WriterPolicy.MULTI_WRITER,
-    )
+    target_schema = pg_schemas("copy")
+
+    # THE TABLES ARE BUILT BY THE STORE, NOT BY `CREATE TABLE AS`. The obvious
+    # spelling — `CREATE TABLE copy.t AS TABLE origin.t` — copies ROWS and
+    # DROPS EVERY CONSTRAINT, so the copied oplog has no ``(origin, seq)``
+    # primary key and the store's own upsert then dies on
+    # ``InvalidColumnReference: no unique or exclusion constraint matching the
+    # ON CONFLICT specification``. Opening a store first makes the real schema,
+    # constraints included; only then are the rows carried across.
+    _open(target_schema, card_schema).close()
+
+    with psycopg.connect(BASE_DSN, connect_timeout=5, autocommit=True) as conn:
+        tables = [
+            row[0]
+            for row in conn.execute(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = %s ORDER BY table_name",
+                (origin_schema,),
+            ).fetchall()
+        ]
+        for table in tables:
+            columns = [
+                row[0]
+                for row in conn.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = %s AND table_name = %s "
+                    "ORDER BY ordinal_position",
+                    (origin_schema, table),
+                ).fetchall()
+            ]
+            if not columns:
+                continue
+            column_list = ", ".join(f'"{c}"' for c in columns)
+            # The store already wrote its own lineage row when it created the
+            # tables above; the origin's must WIN, because sharing the lineage
+            # is the whole point of a copy.
+            conn.execute(f'TRUNCATE "{target_schema}"."{table}"')
+            conn.execute(
+                f'INSERT INTO "{target_schema}"."{table}" ({column_list}) '
+                f'SELECT {column_list} FROM "{origin_schema}"."{table}"'
+            )
+    store = _open(target_schema, card_schema)
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 @pytest.fixture
-def reopened(origin, tmp_path, card_schema):
+def reopened(origin, origin_schema, card_schema):
     """``origin`` re-opened after the copy was taken."""
-    return Store(
-        StoreTarget.sqlite(tmp_path / "origin.db", pkg="cards"),
-        card_schema,
-        node="node-a",
-        writer_policy=WriterPolicy.MULTI_WRITER,
-    )
+    store = _open(origin_schema, card_schema)
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 def test_a_copy_shares_its_originals_lineage(copied, reopened):
@@ -74,29 +138,30 @@ def test_a_copy_shares_its_originals_lineage(copied, reopened):
     assert report.local_identity.store_uuid == report.remote_identity.store_uuid
 
 
-def test_a_copy_is_a_different_instance(copied, reopened):
-    # Arrange — `cp store.db store.db.bak` produces a new inode, and the
-    # filesystem is the only thing that can tell a file from a copy of it.
+# THREE TESTS THAT USED TO SIT HERE ARE GONE, AND THE REASON IS THE POINT.
+# They asserted that a COPY is a different INSTANCE, and they were true of a
+# store file: `cp store.db store.db.bak` makes a new inode, and the inode was
+# the instance id. The instance id is now `pg:<cluster>/<database>`, so two
+# schemas in ONE database are the same instance — correctly. Keeping the old
+# assertions would have meant asserting a fork where there is none.
+#
+# The behaviour they protected is not lost. That a restored dump in ANOTHER
+# database reads as a different instance is what the database component of the
+# identifier is FOR, and it is asserted directly against the identity SQL in
+# `_dialect/test__postgres.py`, which needs no live cluster. Reproducing it
+# here would need a second DATABASE, and the test role has no `rolcreatedb`
+# (measured 2026-08-29) — a test that skipped on that would be worse than one
+# that is honestly absent.
+
+
+def test_two_schemas_in_one_database_are_the_same_instance(copied, reopened):
+    # Arrange — the negative case, pinned deliberately: an ordinary second
+    # schema must NOT read as a fork, or every store on the host would report
+    # one and the signal would be worthless.
     # Act
     report = detect_divergence(reopened, copied)
     # Assert
-    assert report.identity_verdict is IdentityVerdict.FORK
-
-
-def test_a_copy_is_reported_as_diverged(copied, reopened):
-    # Arrange
-    # Act
-    report = detect_divergence(reopened, copied)
-    # Assert
-    assert report.diverged is True
-
-
-def test_a_copy_is_not_certified_same(copied, reopened):
-    # Arrange
-    # Act
-    report = detect_divergence(reopened, copied)
-    # Assert
-    assert report.certified_same is False
+    assert report.identity_verdict is IdentityVerdict.SAME
 
 
 def test_an_untouched_copy_has_no_fork_point(copied, reopened):

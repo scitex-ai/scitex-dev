@@ -1,52 +1,73 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Tests for the store-side plumbing behind ``Store.identity``.
+"""``Store.identity`` — the lineage is minted, the instance is asked.
 
-The two halves are read from two different places, and that is the whole
-design. ``store_uuid`` comes out of the store's own table, so it TRAVELS
-with the data and every copy agrees on it. ``system_identifier`` is asked
-of the serving system, so it does NOT travel and a copy disagrees with its
-original.
+Everything here runs against a real PostgreSQL schema. The identity has two
+halves and they are established in genuinely different ways, which is the
+whole design:
 
-Reading both from one place would produce a pair that is really one value
-twice, and it would be exactly as blind to a fork as ``store_uuid`` alone —
-which is the state the fleet was in on 2026-08-11.
+* ``store_uuid`` is MINTED once and lives in the store's own table, so it
+  travels with the data. That is what makes it a LINEAGE.
+* ``system_identifier`` is ASKED OF THE SERVING SYSTEM at connect time and is
+  never read back from the rows. A value carried inside the data is copied
+  with the data; a value asked of the machine is not.
 
-Everything here runs against a real SQLite file. The device/inode pair is
-the point: nothing but the filesystem can tell a file from a copy of it.
+TWO TESTS THAT USED TO LIVE HERE ARE GONE, DELIBERATELY. They copied a store
+file byte-for-byte and asserted the copy kept the lineage while getting a new
+instance id, because the instance half was the file's ``device:inode``. There
+is no store file any more. The behaviour they protected — that the instance
+id distinguishes two databases on ONE cluster, which is what a restored dump
+produces — is asserted in ``_dialect/test__postgres.py`` against the
+identifier SQL itself, and that test needs no live cluster. Porting these two
+would have meant creating a second DATABASE, which the test role cannot do
+(``rolcreatedb`` is false, measured 2026-08-29); a test that silently skipped
+on that would be worse than one that is honestly absent.
 """
 
 from __future__ import annotations
-
-import shutil
 
 import pytest
 
 from scitex_dev.store import NEW_RECORD, Store, StoreTarget, WriterPolicy
 
-
-@pytest.fixture
-def opened(tmp_path, card_schema):
-    """A store on disk, holding one record."""
-    store = Store(
-        StoreTarget.sqlite(tmp_path / "one.db", pkg="cards"),
-        card_schema,
-        node="node-a",
-        writer_policy=WriterPolicy.MULTI_WRITER,
-    )
-    store.put({"id": "c0", "status": "open"}, expected_revision=NEW_RECORD)
-    return store
+from .conftest import BASE_DSN
 
 
-@pytest.fixture
-def sibling(tmp_path, card_schema):
-    """A second, independently created store."""
+def _open(schema_name: str, card_schema, node: str) -> Store:
+    dsn = f"{BASE_DSN}?options=-csearch_path%3D{schema_name}"
     return Store(
-        StoreTarget.sqlite(tmp_path / "two.db", pkg="cards"),
+        StoreTarget.postgres(dsn, pkg="cards"),
         card_schema,
-        node="node-b",
+        node=node,
         writer_policy=WriterPolicy.MULTI_WRITER,
     )
+
+
+@pytest.fixture
+def one_schema(pg_schemas) -> str:
+    """A schema of its own, reusable so a store can be reopened on it."""
+    return pg_schemas("one")
+
+
+@pytest.fixture
+def opened(one_schema, card_schema) -> Store:
+    """A store holding one record."""
+    store = _open(one_schema, card_schema, "node-a")
+    store.put({"id": "c0", "status": "open"}, expected_revision=NEW_RECORD)
+    try:
+        yield store
+    finally:
+        store.close()
+
+
+@pytest.fixture
+def sibling(pg_schemas, card_schema) -> Store:
+    """A second, independently created store."""
+    store = _open(pg_schemas("two"), card_schema, "node-b")
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 def test_a_lineage_is_minted_on_first_read(opened):
@@ -67,25 +88,20 @@ def test_the_lineage_is_stable_across_reads(opened):
     assert second == first
 
 
-def test_the_lineage_survives_reopening(opened, tmp_path, card_schema):
+def test_the_lineage_survives_reopening(opened, one_schema, card_schema):
     # Arrange — it lives in the store's own table, which is what makes it
     # the LINEAGE rather than a property of the process.
     minted = opened.identity.store_uuid
     opened.close()
     # Act
-    reopened = Store(
-        StoreTarget.sqlite(tmp_path / "one.db", pkg="cards"),
-        card_schema,
-        node="node-a",
-        writer_policy=WriterPolicy.MULTI_WRITER,
-    )
+    reopened = _open(one_schema, card_schema, "node-a")
     # Assert
     assert reopened.identity.store_uuid == minted
 
 
 def test_two_independent_stores_get_different_lineages(opened, sibling):
     # Arrange — the mint is a plain uuid4, deliberately NOT derived from the
-    # path, the hostname or the time: a derived identity makes two stores on
+    # DSN, the hostname or the time: a derived identity makes two stores on
     # similar-looking hosts collide, and a collision certifies two unrelated
     # stores as one.
     mine = opened.identity.store_uuid
@@ -95,12 +111,13 @@ def test_two_independent_stores_get_different_lineages(opened, sibling):
     assert theirs != mine
 
 
-def test_the_instance_half_names_the_file(opened):
-    # Arrange — SQLite has no cluster to ask, so the filesystem answers.
+def test_the_instance_half_names_the_cluster_and_database(opened):
+    # Arrange — the cluster id alone is too coarse: a dump restored into a
+    # second database on the SAME cluster shares it.
     # Act
     identifier = opened.identity.system_identifier
     # Assert
-    assert identifier.startswith("sqlite:")
+    assert identifier.startswith("pg:")
 
 
 def test_the_instance_half_says_where_it_came_from(opened):
@@ -110,42 +127,7 @@ def test_the_instance_half_says_where_it_came_from(opened):
     # Act
     source = opened.identity.system_source
     # Assert
-    assert source == "file device/inode"
-
-
-def test_a_copy_keeps_the_lineage(opened, tmp_path, card_schema):
-    # Arrange — a uuid stored INSIDE a database cannot detect a fork of that
-    # database, because the fork copies the uuid along with everything else.
-    minted = opened.identity.store_uuid
-    opened.close()
-    shutil.copyfile(tmp_path / "one.db", tmp_path / "copy.db")
-    # Act
-    copied = Store(
-        StoreTarget.sqlite(tmp_path / "copy.db", pkg="cards"),
-        card_schema,
-        node="node-a",
-        writer_policy=WriterPolicy.MULTI_WRITER,
-    )
-    # Assert
-    assert copied.identity.store_uuid == minted
-
-
-def test_a_copy_gets_a_different_instance(opened, tmp_path, card_schema):
-    # Arrange — THE discriminator. `cp store.db store.db.bak` produces a new
-    # inode, and that difference is what turns "same uuid" from a certificate
-    # of sameness into a report of a FORK.
-    mine = opened.identity.system_identifier
-    opened.close()
-    shutil.copyfile(tmp_path / "one.db", tmp_path / "copy.db")
-    # Act
-    copied = Store(
-        StoreTarget.sqlite(tmp_path / "copy.db", pkg="cards"),
-        card_schema,
-        node="node-a",
-        writer_policy=WriterPolicy.MULTI_WRITER,
-    )
-    # Assert
-    assert copied.identity.system_identifier != mine
+    assert source == "pg_control_system() + current_database()"
 
 
 def test_the_identity_reads_back_as_one_line(opened):
@@ -153,6 +135,6 @@ def test_the_identity_reads_back_as_one_line(opened):
     # Act
     line = opened.identity.describe()
     # Assert
-    assert "on instance sqlite:" in line
+    assert "on instance pg:" in line
 
 # EOF

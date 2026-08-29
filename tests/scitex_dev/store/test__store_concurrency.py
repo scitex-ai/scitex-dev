@@ -20,9 +20,9 @@ re-read-and-retry in ``Store._append`` keyed on ``Dialect.is_unique_violation``
 otherwise abort the caller's transaction.
 
 The database-backed tests need a reachable PostgreSQL and SKIP without one:
-a machine with no local cluster is not a broken store (the SQLite dialect
-serialises on its file lock and never showed either defect). Point them at a
-cluster with ``SCITEX_TEST_PG_DSN`` (default ``postgresql://127.0.0.1:55432/scitex``)
+a machine with no reachable cluster cannot exercise them. Point them at a
+cluster with ``SCITEX_TEST_PG_DSN`` (the PRIMARY by default — the per-host
+loopback is a standby and refuses the DDL these tests need)
 plus the usual ``PGUSER`` / ``PGPASSFILE``. Each test creates and drops its
 own schema, so the live fleet store is never touched. The classification
 tests at the bottom need no database and run everywhere.
@@ -39,7 +39,6 @@ from __future__ import annotations
 
 import os
 import socket
-import sqlite3
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Iterator
@@ -60,9 +59,7 @@ from scitex_dev.store import (
 from scitex_dev.store._dialect import get_dialect
 from scitex_dev.store._target import Backend
 
-BASE_DSN = os.environ.get(
-    "SCITEX_TEST_PG_DSN", "postgresql://127.0.0.1:55432/scitex"
-)
+from .conftest import BASE_DSN  # noqa: E402 - the PRIMARY, not the loopback
 THREADS = 8
 NODE = socket.gethostname()
 
@@ -279,19 +276,3 @@ def test_postgres_dialect_does_not_retry_other_errors():
     assert verdict is False
 
 
-def test_sqlite_dialect_recognises_its_unique_violation():
-    # Arrange
-    exc = sqlite3.IntegrityError("UNIQUE constraint failed: conc_seq_oplog.seq")
-    # Act
-    verdict = get_dialect(Backend.SQLITE).is_unique_violation(exc)
-    # Assert
-    assert verdict is True
-
-
-def test_sqlite_dialect_does_not_retry_other_integrity_errors():
-    # Arrange — a NOT NULL violation is a real fault, not a race to re-read.
-    exc = sqlite3.IntegrityError("NOT NULL constraint failed: conc_seq_rows.k")
-    # Act
-    verdict = get_dialect(Backend.SQLITE).is_unique_violation(exc)
-    # Assert
-    assert verdict is False

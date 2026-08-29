@@ -91,7 +91,7 @@ def test_an_explicit_override_resolves_to_postgres(plugin, store_dsn):
 
 
 def test_a_path_in_the_override_is_refused_rather_than_downgraded(plugin, store_dsn):
-    # Arrange — there is deliberately NO SQLite fallback. A host that
+    # Arrange — there is deliberately NO second tier. A host that
     # quietly started writing to a private local file would accept every
     # write, report success, and diverge from the fleet with nothing in any
     # log to say so.

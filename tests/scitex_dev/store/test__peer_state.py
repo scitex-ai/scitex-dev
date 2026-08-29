@@ -26,7 +26,7 @@ index, a dropped table, and an index the schema gained after the store was
 made. That last one is the regression this design could plausibly introduce,
 and it gets a test for exactly that reason.
 
-Everything here runs on SQLite. The defect is PostgreSQL's, but the probe is
+Everything here runs on a real PostgreSQL schema, which is where the probe
 dialect-neutral and its logic is what these tests pin; the privilege
 behaviour itself belongs to the server, not to this package.
 """
@@ -34,6 +34,8 @@ behaviour itself belongs to the server, not to this package.
 from __future__ import annotations
 
 import pytest
+
+from .conftest import BASE_DSN
 
 from scitex_dev.store import (
     FieldKind,
@@ -48,14 +50,25 @@ from scitex_dev.store import (
 
 
 @pytest.fixture
-def store(tmp_path, card_schema) -> Store:
+def probe_schema(pg_schemas) -> str:
+    """The schema ``store`` lives in, so a test can reopen the same store."""
+    return pg_schemas("probe")
+
+
+@pytest.fixture
+def store(probe_schema, card_schema) -> Store:
     """A created store, so every object create_sql builds is present."""
-    return Store(
-        StoreTarget.sqlite(tmp_path / "probe.db", pkg="cards"),
+    dsn = f"{BASE_DSN}?options=-csearch_path%3D{probe_schema}"
+    store = Store(
+        StoreTarget.postgres(dsn, pkg="cards"),
         card_schema,
         node="node-probe",
         writer_policy=WriterPolicy.MULTI_WRITER,
     )
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 @pytest.fixture
@@ -164,7 +177,7 @@ def test_schema_tables_names_every_table_create_sql_builds(store, card_schema) -
 
 
 def test_reopening_recreates_an_index_that_went_missing(
-    tmp_path, card_schema, store
+    probe_schema, card_schema, store
 ) -> None:
     # Arrange
     index, _table, _column = store.dialect.index_specs(card_schema)[0]
@@ -172,7 +185,9 @@ def test_reopening_recreates_an_index_that_went_missing(
     store.close()
     # Act
     reopened = Store(
-        StoreTarget.sqlite(tmp_path / "probe.db", pkg="cards"),
+        StoreTarget.postgres(
+            f"{BASE_DSN}?options=-csearch_path%3D{probe_schema}", pkg="cards"
+        ),
         card_schema,
         node="node-probe",
         writer_policy=WriterPolicy.MULTI_WRITER,

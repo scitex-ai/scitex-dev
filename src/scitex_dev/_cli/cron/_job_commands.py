@@ -264,7 +264,7 @@ def _scholar_library_sync_command() -> str:
       passed, so a Spartan-side mistake cannot propagate back.
     - ``index.db`` + journal/WAL/SHM siblings are EXCLUDED: the index is
       DERIVED state, rebuilt on the destination after each push —
-      shipping a live SQLite file mid-write corrupts it.
+      shipping a live database file mid-write corrupts it.
     - ``ssh spartan mkdir -p`` precedes the rsync because Spartan's
       system rsync predates 3.2.3 (no ``--mkpath``).
     - A failed rsync short-circuits the rebuild (``&&``) so a partial

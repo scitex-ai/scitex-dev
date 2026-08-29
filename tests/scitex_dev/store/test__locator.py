@@ -4,7 +4,7 @@
 
 The measured failure, reported by scitex-cards: directory trees on a live
 host named ``postgresql:/<user>@<host>:<port>/runtime/todo.db``, each a real
-SQLite file that nothing reads. They are what ``Path("postgresql://...")``
+file that nothing reads. They are what ``Path("postgresql://...")``
 produces when something ``mkdir``s it relative to the process CWD — the DSN
 is not rejected, it is accepted as a relative path.
 
@@ -209,18 +209,6 @@ def test_describe_does_not_leak_the_password(pg_target):
     assert secret not in rendered
 
 
-def test_path_is_none_for_a_postgres_target(pg_target):
-    """``None`` means 'not file-backed', and is the safe thing to branch on."""
-    # Arrange
-    target = pg_target
-
-    # Act
-    actual = target.path
-
-    # Assert
-    assert actual is None
-
-
 def test_exists_is_unknown_rather_than_false_for_postgres(pg_target):
     """Three-valued: answering would require connecting, so say so."""
     # Arrange
@@ -231,32 +219,6 @@ def test_exists_is_unknown_rather_than_false_for_postgres(pg_target):
 
     # Assert
     assert actual is None
-
-
-def test_a_sqlite_locator_is_still_path_like(tmp_path):
-    """The asymmetry is the point — a real file must stay usable as one."""
-    # Arrange
-    target = StoreTarget.sqlite(tmp_path / "cards.db", pkg="cards")
-
-    # Act
-    resolved = Path(target.locator)
-
-    # Assert
-    assert resolved == tmp_path / "cards.db"
-
-
-def test_a_sqlite_locator_must_end_in_db(tmp_path):
-    """`.db` is fixed by convention: scitex-io registers only that suffix."""
-    # Arrange
-    bad = tmp_path / "cards.sqlite"
-
-    # Act
-    def act() -> None:
-        StoreTarget.sqlite(bad, pkg="cards")
-
-    # Assert
-    with pytest.raises(ValueError):
-        act()
 
 
 def test_a_dsn_without_a_scheme_is_refused():

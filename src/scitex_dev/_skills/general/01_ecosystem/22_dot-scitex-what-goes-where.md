@@ -36,7 +36,6 @@ Intent: regenerable outputs — things each host / each run writes for itself, n
 | `dashboard.pid`, `*.pid` | PID files for background services |
 | `cache/` | Derived / regenerable data |
 | `workspace/` | Long-lived package-specific scratch (browser profiles, build outputs) |
-| `*.db`, `*.sqlite` | Small embedded DBs (larger ones may relocate with `SCITEX_DIR`) |
 | `export/` | Outputs of `scitex-dev skills export` and similar one-shot generators |
 | `containers/` | Per-package container images (`*.sif`, `*.tar`). Large, per-host, regenerable from the `*.def` source under §4a. Never peer-rsync'd; gitignored under `runtime/`. |
 | `bin/` | Host-specific built wrappers / launcher scripts (e.g. ones that hardcode the resolved overlay path). The **shipped, tracked** wrapper sources live at `<pkg-short>/bin/` under §4a — see the footnote below. |

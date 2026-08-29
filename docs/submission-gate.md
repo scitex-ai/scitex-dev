@@ -18,7 +18,7 @@ provenance and tells the solver exactly what to fix.
   package-agnostic: it never imports scitex-clew / scitex-dataset. The
   pre-submission hook depends on **only** scitex-dev.
 - Each **leaf** owns its *rule* and reads its *own* state from the capsule
-  workdir (clew → `.scitex/clew/**/*.sqlite`, e.g. `db.sqlite` — the leaf
+  workdir (clew → its store on the per-host Postgres — the leaf
   decides its own file/extension; dataset → the bound submission file).
 - **paper** owns the hooks and the submit command.
 
