@@ -8,7 +8,7 @@ scitex-cards found directory trees on one host named::
 
     .../proj/scitex-cards/postgresql:/scitex_cards@127.0.0.1:5432/runtime/todo.db
 
-Each is a real SQLite file that nothing reads. They are what
+Each is a real file that nothing reads. They are what
 ``Path("postgresql://scitex_cards@127.0.0.1:5432/...")`` does when something
 ``mkdir``s it relative to the process CWD: the DSN is not rejected, it is
 accepted as a relative path and materialised as directories.
@@ -32,10 +32,10 @@ The fix is a type, not a convention
 the filesystem API fail loudly, at the call, naming what went wrong —
 rather than silently creating a directory named after a database.
 
-:class:`SqlitePath` is genuinely a path and implements ``__fspath__``
-normally. The asymmetry is the point: the type says which of the two a
-locator is, so the question is answered by the type system instead of by
-whoever is reading the code that day.
+There is exactly one locator type, because there is exactly one storage
+engine: the per-host PostgreSQL on 55432. A store is never file-backed, so
+"is this locator a path?" is not a question the type system has to answer —
+the answer is always no, and ``__fspath__`` says so at the call site.
 
 ``str(PostgresDsn)`` is also deliberately NOT the raw DSN. It renders a
 credential-free summary, so a DSN interpolated into a log line or an error
@@ -47,43 +47,9 @@ something path-shaped either. The real connection string is available as
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Final
 from urllib.parse import parse_qs, urlsplit
 
-__all__ = ["PostgresDsn", "SqlitePath", "StoreLocator"]
-
-#: Suffix for SQLite stores. Fixed by convention, not preference — scitex-io
-#: registers a loader for `.db` only, so any other suffix stops round-tripping
-#: through `stx.io.load()`.
-DB_SUFFIX: Final[str] = ".db"
-
-
-@dataclass(frozen=True, slots=True)
-class SqlitePath:
-    """A SQLite store's location. Genuinely path-like."""
-
-    path: Path
-
-    def __post_init__(self) -> None:
-        if not str(self.path).endswith(DB_SUFFIX):
-            raise ValueError(
-                f"SQLite locator {self.path!s} must end in {DB_SUFFIX!r}. The "
-                "ecosystem runtime-state-DB convention fixes this suffix "
-                "because scitex-io's load dispatch registers only '.db'."
-            )
-
-    def __fspath__(self) -> str:
-        """Path-like, legitimately: this IS a file."""
-        return str(self.path)
-
-    def __str__(self) -> str:
-        return str(self.path)
-
-    @property
-    def parent(self) -> Path:
-        """The directory the store file lives in."""
-        return self.path.parent
+__all__ = ["PostgresDsn", "StoreLocator"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,14 +94,13 @@ class PostgresDsn:
             "This is a MEASURED failure, not a hypothetical: doing it "
             "produced directory trees named "
             "'postgresql:/<user>@<host>:<port>/runtime/todo.db' on a live "
-            "host, each a real SQLite file that nothing reads, created "
-            "relative to whatever the process CWD happened to be. Two of "
-            "them, from three separate call sites in one day.\n"
+            "host, each a real file that nothing reads, created relative to "
+            "whatever the process CWD happened to be. Two of them, from "
+            "three separate call sites in one day.\n"
             "\n"
             "If you want the connection string, ask for it by name: "
-            "`target.dsn`. If you wanted a file, this store is not "
-            "file-backed — check `target.is_file_backed` first, or use "
-            "`target.path`, which is None for Postgres."
+            "`target.dsn`. A store is never file-backed: there is one "
+            "storage engine, the per-host PostgreSQL on 55432."
         )
 
     def __str__(self) -> str:
@@ -182,9 +147,9 @@ class PostgresDsn:
         return f"postgres[{' '.join(bits)}]"
 
 
-#: Either kind of locator. Union rather than a base class: the two have
-#: genuinely different capabilities, and a shared base would invite exactly
-#: the "treat them the same" code this type exists to prevent.
-StoreLocator = SqlitePath | PostgresDsn
+#: A store's location. There is one storage engine, so there is one locator
+#: type. The alias is kept because it names the ROLE rather than the engine,
+#: and every signature that takes a locator reads correctly through it.
+StoreLocator = PostgresDsn
 
 # EOF

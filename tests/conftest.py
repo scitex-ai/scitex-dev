@@ -183,8 +183,8 @@ _STORE_PATH_SUFFIXES: dict[str, str] = {
 
 #: behaviour selectors forced to the local-file backend / disabled rails.
 _STORE_VALUE_SUFFIXES: dict[str, str] = {
-    "STORE_BACKEND": "sqlite",
-    "INBOX_BACKEND": "sqlite",
+    "STORE_BACKEND": "postgres",
+    "INBOX_BACKEND": "postgres",
     "DUAL_WRITE": "0",
     "STORE_GIT_AUTOCOMMIT": "0",
 }

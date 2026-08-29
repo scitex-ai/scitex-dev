@@ -74,7 +74,6 @@ from ._adopt import (
     verify_adoption,
 )
 from ._apply import apply_entry
-from ._discovery import DiscoveredStore, StoreStatus, discover_stores
 from ._divergence import DivergenceReport, ForkPoint, detect_divergence
 from ._errors import (
     AdoptionRefusedError,
@@ -143,7 +142,6 @@ __all__ = [
     "Backend",
     "ClockDriftError",
     "DialectUnavailableError",
-    "DiscoveredStore",
     "DivergenceReport",
     "ENTRY_POINT_GROUP",
     "FieldKind",
@@ -183,7 +181,6 @@ __all__ = [
     "StoreIdentityUnknownError",
     "StorePlugin",
     "StorePluginProvider",
-    "StoreStatus",
     "StoreTarget",
     "StoreTargetError",
     "SupersededFenceError",
@@ -203,7 +200,6 @@ __all__ = [
     "decode_hint",
     "detect_divergence",
     "discover_store_plugins",
-    "discover_stores",
     "encode_hint",
     "fan_out",
     "genesis_origin",

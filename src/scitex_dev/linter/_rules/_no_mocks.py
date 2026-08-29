@@ -68,7 +68,7 @@ NM001 = Rule(
         "with just the methods the test exercises; "
         "(2) run against the real thing — `tmp_path` for filesystem, "
         "a real subprocess against a fixture script, a local fake "
-        "server, an in-process SQLite for DB-shaped tests; "
+        "server, a throwaway Postgres schema for DB-shaped tests; "
         "(3) if neither is feasible, delete the test — a test that "
         "needs mocks to pass is exercising the mock, not the code. "
         "Per-line suppression (`# stx-allow: STX-NM001`) is not "

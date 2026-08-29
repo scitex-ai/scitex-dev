@@ -26,7 +26,8 @@ Every scope carries two parallel trees — one **tracked** (rules / config the t
 
 ### The `runtime/` subdirectory
 
-Every `<pkg-short>/` root **MUST** contain a `runtime/` subdirectory. This is where the package writes everything that is re-creatable from config + source: logs, PID files, cached downloads, temporary workspaces, SQLite databases, dashboard state, etc.
+Every `<pkg-short>/` root **MUST** contain a `runtime/` subdirectory. This is where the package writes everything that is re-creatable from config + source: logs, PID files, cached downloads, temporary workspaces, dashboard state, etc. NOT databases: runtime state
+lives in the per-host PostgreSQL on 55432.
 
 `runtime/` is intentionally ignored by git. Each package ships two seed files and nothing else:
 

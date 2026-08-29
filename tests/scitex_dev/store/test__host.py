@@ -4,7 +4,7 @@
 
 These lock the ADR-0006 decisions that are cheapest to erode later: the
 default engine, the absence of a TCP port, and — the one that matters most —
-that a host with no Postgres gets an ERROR rather than a private SQLite file
+that a host with no Postgres gets an ERROR rather than a private local file
 nobody else can see.
 
 The environment is manipulated through real ``os.environ`` fixtures that
@@ -155,7 +155,7 @@ class TestRelativeSocketDirectoryIsRefused:
 class TestNoSilentFallbackToAPrivateFile:
     """The refusal that keeps a host from quietly writing only to itself.
 
-    A host that fell back to SQLite would accept every write, report success,
+    A host that fell back to a local file would accept every write, report success,
     and reach nobody — the 2026-08-09 failure reproduced by design.
     """
 
@@ -169,16 +169,20 @@ class TestNoSilentFallbackToAPrivateFile:
         with pytest.raises(StoreTargetError):
             host_store(pkg="cards")
 
-    def test_the_refusal_names_the_explicit_sqlite_route(
+    def test_the_refusal_says_a_path_is_never_accepted(
         self, path_override_refusal
     ):
-        """An error that only refuses is half-written."""
+        """An error that only refuses is half-written.
+
+        There is no other route to offer any more, so the refusal has to say
+        that plainly rather than point at one.
+        """
         # Arrange
         message = path_override_refusal
         # Act
-        names_the_route = "StoreTarget.sqlite" in message
+        rules_out_paths = "not accepted here, or anywhere" in message
         # Assert
-        assert names_the_route
+        assert rules_out_paths
 
     def test_the_refusal_shows_the_expected_dsn_shape(self, path_override_refusal):
         # Arrange
@@ -187,16 +191,6 @@ class TestNoSilentFallbackToAPrivateFile:
         shows_the_shape = "postgresql://" in message
         # Assert
         assert shows_the_shape
-
-    def test_sqlite_remains_reachable_when_asked_for_explicitly(self, tmp_path):
-        """Not deprecated — just not what an unconfigured host resolves to."""
-        # Arrange
-        path = tmp_path / "cards.db"
-        # Act
-        target = StoreTarget.sqlite(path, pkg="cards")
-        # Assert
-        assert target.backend is Backend.SQLITE
-
 
 class TestExplicitOverrideWins:
     """An override is honoured outright, including a TCP one."""
@@ -252,25 +246,6 @@ class TestTheSocketDsnCannotBecomeADirectory:
         # Assert
         with pytest.raises(TypeError):
             Path(target.locator)  # type: ignore[arg-type]
-
-    def test_a_socket_target_reports_itself_as_not_file_backed(
-        self, unconfigured_host
-    ):
-        # Arrange
-        target = host_store(pkg="cards")
-        # Act
-        file_backed = target.is_file_backed
-        # Assert
-        assert not file_backed
-
-    def test_a_socket_target_has_no_path(self, unconfigured_host):
-        # Arrange
-        target = host_store(pkg="cards")
-        # Act
-        path = target.path
-        # Assert
-        assert path is None
-
 
 # EOF
 

@@ -66,7 +66,7 @@ class TestEveryDialectImplementsTheWholeContract:
     def test_a_boolean_round_trips_through_the_engine_representation(
         self, dialect
     ):
-        """SQLite has no boolean type; the conversion must be reversible."""
+        """A driver may not have a boolean type; the round-trip must survive."""
         # Arrange
         original = True
         # Act
@@ -105,18 +105,10 @@ class TestQuotingIsAppliedRatherThanAssumed:
 
 
 class TestPlaceholdersAreEngineSpecific:
-    """The two engines genuinely disagree; that is what the layer absorbs."""
+    """Placeholders come from the dialect, never from a caller's string."""
 
-    def test_sqlite_uses_a_positional_question_mark(self):
-        # Arrange
-        sqlite = get_dialect(Backend.SQLITE)
-        # Act
-        rendered = sqlite.placeholder(0)
-        # Assert
-        assert rendered == "?"
-
-    def test_postgres_does_not_use_the_sqlite_placeholder(self):
-        """If these ever agree, the layer is not absorbing anything."""
+    def test_postgres_does_not_use_a_positional_question_mark(self):
+        """The layer exists so no caller has to know which spelling it is."""
         # Arrange
         postgres = get_dialect(Backend.POSTGRES)
         # Act
@@ -133,16 +125,8 @@ class TestPlaceholdersAreEngineSpecific:
         assert rendered.count(",") == count - 1
 
 
-class TestBothEnginesAreRegistered:
+class TestTheEngineIsRegistered:
     """The registry is what makes 'iterate over dialects' meaningful."""
-
-    def test_sqlite_is_registered(self):
-        # Arrange
-        registered = list(iter_dialects())
-        # Act
-        present = Backend.SQLITE in registered
-        # Assert
-        assert present
 
     def test_postgres_is_registered(self):
         # Arrange

@@ -113,7 +113,6 @@ solve: clean-clew                                   # AGENT — Clew-tracked
 	python3 $(ROOT)/scripts/agent/02_build_answers.py
 	python3 $(ROOT)/scripts/agent/03_register_claims.py
 clean-clew:
-	rm -f $(ROOT)/.scitex/clew/db.sqlite
 clean: clean-clew
 	find $(ROOT)/scripts -type d -name "*_out" -prune -exec rm -rf {} +
 	rm -rf $(ROOT)/data/results/*

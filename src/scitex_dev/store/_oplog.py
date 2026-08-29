@@ -73,11 +73,11 @@ FENCE_UNKNOWN = 0
 def _optional_fence(row: Any) -> int:
     """Read ``fence`` from a row that may predate the column.
 
-    `OpEntry.from_row` is annotated `Mapping[str, Any]`, but the object it
-    actually receives from the SQLite dialect is a `sqlite3.Row` — which
-    supports `__getitem__` and `keys()` and has NO `.get()`. Reaching for
-    the Mapping API the annotation promises raises AttributeError at
-    runtime; measured here across 25 tests.
+    `OpEntry.from_row` is annotated `Mapping[str, Any]`, but a driver row
+    object need not be a full Mapping — one that supports `__getitem__` and
+    `keys()` and has NO `.get()` is enough to satisfy every caller and to
+    break this one. Reaching for the Mapping API the annotation promises
+    then raises AttributeError at runtime; measured here across 25 tests.
 
     So this reads through the intersection both types genuinely support,
     and treats a missing column as `FENCE_UNKNOWN` rather than an error:
