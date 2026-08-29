@@ -52,7 +52,10 @@ def origin(origin_schema, card_schema):
     for index in range(3):
         store.put({"id": f"c{index}", "status": "open"}, expected_revision=NEW_RECORD)
     store.identity  # mint the lineage so the copy below inherits it
-    return store
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 @pytest.fixture
@@ -109,13 +112,21 @@ def copied(origin, origin_schema, pg_schemas, card_schema):
                 f'INSERT INTO "{target_schema}"."{table}" ({column_list}) '
                 f'SELECT {column_list} FROM "{origin_schema}"."{table}"'
             )
-    return _open(target_schema, card_schema)
+    store = _open(target_schema, card_schema)
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 @pytest.fixture
 def reopened(origin, origin_schema, card_schema):
     """``origin`` re-opened after the copy was taken."""
-    return _open(origin_schema, card_schema)
+    store = _open(origin_schema, card_schema)
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 def test_a_copy_shares_its_originals_lineage(copied, reopened):

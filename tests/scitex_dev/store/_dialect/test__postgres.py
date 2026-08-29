@@ -31,19 +31,20 @@ import os
 
 import pytest
 
+from scitex_dev.store import host_store
 from scitex_dev.store._dialect._postgres import PostgresDialect
 from scitex_dev.store._target import Backend, StoreTarget
 
-#: The cluster the live-connection test opens. THE PRIMARY BY DEFAULT, and
-#: that is load-bearing: this used to require an opt-in env var that nothing
-#: sets, so the one test here that touches a real server skipped on every
-#: machine and every CI run — indistinguishable from passing. The per-host
-#: loopback is no better, because it is a READ-ONLY STANDBY (measured
-#: 2026-08-29: `pg_is_in_recovery()` is true on every host in this fleet).
-#: Override with SCITEX_STORE_TEST_DSN when pointing at another cluster.
-_dsn = os.environ.get(
-    "SCITEX_STORE_TEST_DSN", "postgresql://scitex-primary:55432/scitex"
-)
+#: The cluster the live-connection test opens — ASKED FOR, never named here.
+#:
+#: This used to be an opt-in env var that nothing set, so the one test in this
+#: file that touches a real server skipped on every machine and every CI run,
+#: which is indistinguishable from passing. Replacing it with a DSN literal
+#: only moved the problem: a test that names its own server is testing a
+#: string, not the resolver the product uses. So it goes through
+#: ``host_store()`` — the single switch, which reads ``SCITEX_STORE_DSN`` and
+#: otherwise falls back to this host's socket.
+_dsn = host_store(pkg="scitex_dev_tests", name="dialect").dsn
 
 
 def test_the_identity_statement_asks_which_cluster():
@@ -197,9 +198,7 @@ def two_schemas():
     psycopg = pytest.importorskip("psycopg")
     # The PRIMARY: the loopback is a standby and refuses CREATE SCHEMA, which
     # turned this probe into a permanent skip.
-    base = os.environ.get(
-        "SCITEX_TEST_PG_DSN", "postgresql://scitex-primary:55432/scitex"
-    )
+    base = host_store(pkg="scitex_dev_tests", name="searchpath").dsn
     tag = uuid.uuid4().hex[:10]
     decoy, target = f"probe_decoy_{tag}", f"probe_target_{tag}"
     unusable = (

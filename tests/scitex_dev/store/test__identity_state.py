@@ -54,13 +54,20 @@ def opened(one_schema, card_schema) -> Store:
     """A store holding one record."""
     store = _open(one_schema, card_schema, "node-a")
     store.put({"id": "c0", "status": "open"}, expected_revision=NEW_RECORD)
-    return store
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 @pytest.fixture
 def sibling(pg_schemas, card_schema) -> Store:
     """A second, independently created store."""
-    return _open(pg_schemas("two"), card_schema, "node-b")
+    store = _open(pg_schemas("two"), card_schema, "node-b")
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 def test_a_lineage_is_minted_on_first_read(opened):

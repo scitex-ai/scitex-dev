@@ -59,12 +59,16 @@ def probe_schema(pg_schemas) -> str:
 def store(probe_schema, card_schema) -> Store:
     """A created store, so every object create_sql builds is present."""
     dsn = f"{BASE_DSN}?options=-csearch_path%3D{probe_schema}"
-    return Store(
+    store = Store(
         StoreTarget.postgres(dsn, pkg="cards"),
         card_schema,
         node="node-probe",
         writer_policy=WriterPolicy.MULTI_WRITER,
     )
+    try:
+        yield store
+    finally:
+        store.close()
 
 
 @pytest.fixture
