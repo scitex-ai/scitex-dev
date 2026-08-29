@@ -30,7 +30,9 @@ Point elsewhere with ``SCITEX_STORE_DSN`` -- the single switch.
 
 from __future__ import annotations
 
+import atexit
 import uuid
+from contextlib import ExitStack
 from typing import Iterator
 
 import pytest
@@ -45,20 +47,23 @@ from scitex_dev.store import (
     Store,
     StoreTarget,
     WriterPolicy,
-    host_store,
 )
+from scitex_dev.store.testing import writable_dsn
 
 #: The cluster the suite builds its throwaway schemas on.
 #:
-#: THIS IS NOT A CONSTANT, AND THAT IS THE POINT. It asks the package's own
-#: resolver, so exactly ONE thing in the world decides which PostgreSQL
-#: anything talks to: ``host_store()``, which reads ``SCITEX_STORE_DSN`` and
-#: otherwise falls back to this host's socket. An earlier revision of this
-#: file hardcoded a DSN literal and two sibling test modules hardcoded their
-#: own -- three copies of one fact, each free to drift from the product. A
-#: test that names its own server is not testing the resolver the product
-#: uses; it is testing a string.
-BASE_DSN = host_store(pkg="scitex_dev_tests", name="probe").dsn
+#: THIS NAMES NO SERVER, AND THAT IS THE POINT. ``writable_dsn()`` tries the
+#: configured store, then this host's, then starts a throwaway cluster — and
+#: it VERIFIES writability rather than assuming it, so a standby is never
+#: mistaken for a usable target. An earlier revision of this file hardcoded a
+#: DSN literal and two sibling modules hardcoded their own: three copies of
+#: one fact, each free to drift from the product.
+#:
+#: The stack is held open for the whole session and closed at exit, because a
+#: throwaway cluster must outlive collection and every test that uses it.
+_STACK = ExitStack()
+atexit.register(_STACK.close)
+BASE_DSN = _STACK.enter_context(writable_dsn())
 
 
 @pytest.fixture
