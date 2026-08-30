@@ -39,7 +39,37 @@ ALLOWED_PREFIXES = ("docs/adr/",)
 #: reader to delete a build directory instead of fixing anything.
 IGNORED_PREFIXES = ("build/", "src/scitex_dev.egg-info/")
 
+#: Files whose meaningful lines are all exclusion rules. A PATTERN naming the
+#: engine is a refusal to accept its files — the same shape as this file naming
+#: what it bans, and the reason that self-exemption exists. Deleting such a
+#: pattern to lower a text count trades a real protection for a cosmetic
+#: number: scitex-ssh had 55 committed database files to remove precisely
+#: because no rule covered them, and they were binary, so `git grep -I` could
+#: not see them either.
+#:
+#: COMMENTS IN THESE FILES ARE STILL PROSE and are still banned. The exemption
+#: is for the rule, not for the file.
+IGNORE_RULE_BASENAMES = frozenset(
+    {
+        ".gitignore",
+        ".dockerignore",
+        ".npmignore",
+        ".prettierignore",
+        ".eslintignore",
+        ".rgignore",
+        ".ignore",
+    }
+)
+
 _NAME = re.compile(r"sqlite", re.IGNORECASE)
+
+
+def _is_ignore_pattern(rel: str, line: str) -> bool:
+    """Whether ``line`` is an exclusion RULE rather than prose about one."""
+    if Path(rel).name not in IGNORE_RULE_BASENAMES:
+        return False
+    stripped = line.strip()
+    return bool(stripped) and not stripped.startswith("#")
 
 
 def _tracked_files() -> list[str]:
@@ -64,8 +94,11 @@ def _offenders() -> list[str]:
         except (OSError, UnicodeDecodeError):  # pragma: no cover - binary/unreadable
             continue
         for number, line in enumerate(text.splitlines(), start=1):
-            if _NAME.search(line):
-                hits.append(f"{rel}:{number}: {line.strip()[:110]}")
+            if not _NAME.search(line):
+                continue
+            if _is_ignore_pattern(rel, line):
+                continue
+            hits.append(f"{rel}:{number}: {line.strip()[:110]}")
     return hits
 
 
@@ -90,6 +123,46 @@ def test_the_tracked_file_list_is_not_empty():
     tracked = _tracked_files()
     # Assert
     assert len(tracked) > 100
+
+
+def test_an_ignore_rule_may_name_what_it_excludes():
+    """A pattern in a `.gitignore` is a refusal, not a mention.
+
+    Deleting one to lower a text count trades a real protection for a
+    cosmetic number — scitex-ssh had 55 committed database files to remove
+    precisely because no rule covered them, and being binary they were
+    invisible to ``git grep -I`` as well.
+    """
+    # Arrange
+    pattern = "**/*.sqlite"
+    # Act
+    exempt = _is_ignore_pattern(".gitignore", pattern)
+    # Assert
+    assert exempt is True
+
+
+def test_a_comment_in_an_ignore_file_is_still_prose():
+    """The exemption is for the RULE, not for the file.
+
+    This is the control that stops the previous test from being a hole:
+    if `.gitignore` were exempt wholesale, prose could hide in it.
+    """
+    # Arrange
+    comment = "# sqlite was retired on 2026-08-29"
+    # Act
+    exempt = _is_ignore_pattern(".gitignore", comment)
+    # Assert
+    assert exempt is False
+
+
+def test_the_exemption_does_not_leak_to_ordinary_files():
+    """A second control: the same pattern text is NOT exempt elsewhere."""
+    # Arrange
+    pattern = "**/*.sqlite"
+    # Act
+    exempt = _is_ignore_pattern("src/scitex_dev/store/_store.py", pattern)
+    # Assert
+    assert exempt is False
 
 
 def test_no_tracked_file_outside_an_adr_names_the_retired_engine():
