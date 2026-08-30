@@ -69,10 +69,10 @@ SUPERVISOR_UNIT_NAME = "scitex-dev-ecosystem.service"
 #
 # It is absent from this unit's environment too, and a draft of this change
 # added it — on the theory that a missing DSN made the store resolver fall
-# back silently to SQLite. scitex-cards MEASURED that theory and withdrew
-# it: with SCITEX_CARDS_DB unset, the config tier still returns
-# `postgresql://…:55432/scitex_cards`, and the zero-config SQLite default
-# was abolished 2026-08-13 (it now raises StoreTargetNotConfigured).
+# back silently to a private local file. scitex-cards MEASURED that theory
+# and withdrew it: with SCITEX_CARDS_DB unset, the config tier still returns
+# `postgresql://…:55432/scitex_cards`, and the zero-config default was
+# abolished 2026-08-13 (it now raises StoreTargetNotConfigured).
 # Verified on the DEPLOYED installs, not just a checkout.
 #
 # So the absence is real and the consequence is not. Declaring it would be

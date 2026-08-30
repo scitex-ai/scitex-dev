@@ -1,37 +1,36 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""The dialect layer — one interface, two backends, no leakage.
+"""The dialect layer — one interface, one backend, no leakage.
 
-Callers of :mod:`scitex_dev.store` never write SQL and never learn which
-engine they are on. Everything a backend does differently lives behind
+Callers of :mod:`scitex_dev.store` never write SQL and never learn how the
+engine is spoken to. Everything engine-specific lives behind
 :class:`Dialect`: parameter style, identifier quoting, type names, upsert
 syntax, and how a connection is opened.
 
-The two backends are not peers, and this module previously said so the
-wrong way round. **Postgres is the default for RUNTIME STATE** — the
-per-host instance on 55432, synchronised across hosts. **SQLite is for
-REGENERABLE LOCAL STATE only** — a derived index, a rebuildable cache,
-anything whose loss costs a recompute and nothing else.
+There is ONE backend: the per-host PostgreSQL on 55432, synchronised across
+hosts. The interface stays an abstraction anyway, because it is what keeps
+SQL out of the callers — not because a second engine is coming.
 
-The distinction is the fleet rule, not a preference here (constitution §3,
-operator's ruling 2026-08-14): *spec は設計書、状態は db* — design belongs
-to git, state belongs to the database. If losing the file would lose a
-fact nobody else holds, it is state, and it does not go in SQLite.
+The rule behind that is the fleet's, not a preference here (constitution
+§3, operator's ruling 2026-08-14): *spec は設計書、状態は db* — design
+belongs to git, state belongs to the database. If losing a file would lose
+a fact nobody else holds, it is state, and state has exactly one home.
 
-WHY THIS WORDING WAS WRONG AND WHAT IT COST. Until 2026-08-21 this
-docstring and the sibling READMEs declared "SQLite is the default /
-Postgres is advanced" in four places. Nothing in the code enforced it —
-:func:`get_dialect` takes an explicit backend — so the sentence WAS the
-mechanism: it is what a reader consults when choosing. A fleet survey the
-same day counted 66 of 68 live SQLite tables in one consumer package.
-Whoever chose SQLite there was following this file correctly. A default
-stated only in prose is still a default.
+WHY THE SECOND BACKEND IS GONE AND WHAT IT COST. Until 2026-08-21 this
+docstring and the sibling READMEs named a file-backed engine as the default
+and Postgres as "advanced", in four places. Nothing in the code enforced
+it — :func:`get_dialect` takes an explicit backend — so the sentence WAS
+the mechanism: it is what a reader consults when choosing. A fleet survey
+the same day counted 66 of 68 live tables in one consumer package sitting
+on the wrong engine. Whoever put them there was following this file
+correctly. A default stated only in prose is still a default; the fix was
+to stop shipping the thing it defaulted to. ADR-0006 keeps the full record.
 
-Choosing Postgres when its driver is absent raises
-:class:`~.._errors.DialectUnavailableError`. It does NOT quietly fall back
-to SQLite: a caller that asked for a shared database and silently received
-a private local file would see every write succeed and none of them reach
-anyone else.
+Running without the Postgres driver raises
+:class:`~.._errors.DialectUnavailableError`. There is nothing to fall back
+to, which is the point: a caller that asked for a shared database and
+silently received a private local file would see every write succeed and
+none of them reach anyone else.
 
 One rule is enforced here rather than documented: **no dialect emits
 DELETE, DROP or TRUNCATE.** Hiding is a flag update. There is a test
@@ -343,9 +342,9 @@ class Dialect(ABC):
     # operator relaunches ~14 at once), and they share nothing in Python —
     # ``Store._lock`` is per instance. Whatever must be atomic across them has
     # to be atomic in the DATABASE. These two hooks are how the store asks the
-    # dialect for that. The defaults are SQLite's honest answers: its file
-    # lock already serialises DDL, and it classifies nothing as a unique
-    # violation, so the store re-raises rather than retrying blind.
+    # dialect for that. The base-class answers below are the conservative
+    # ones — classify nothing, lock nothing — so a dialect that does not
+    # override them re-raises rather than retrying blind.
 
     def is_unique_violation(self, exc: BaseException) -> bool:
         """Whether ``exc`` is the driver's unique-constraint rejection.
@@ -368,7 +367,7 @@ class Dialect(ABC):
         before the name check ever runs (measured 2026-08-24: 7 of 8
         concurrent constructors failed on ``pg_type_typname_nsp_index``).
         The additive ``ALTER TABLE ADD COLUMN`` migration races the same way.
-        SQLite's file lock already serialises DDL, so this is a no-op there.
+        The base implementation is a no-op; the Postgres dialect overrides it.
         """
         return nullcontext()
 
@@ -388,10 +387,6 @@ def get_dialect(backend: "Backend | str") -> Dialect:
     known but its driver is not installed — never a silent substitution.
     """
     resolved = Backend(backend) if not isinstance(backend, Backend) else backend
-    if resolved is Backend.SQLITE:
-        from ._sqlite import SQLiteDialect
-
-        return SQLiteDialect()
     if resolved is Backend.POSTGRES:
         from ._postgres import PostgresDialect
 

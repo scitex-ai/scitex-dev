@@ -121,7 +121,7 @@ No silent failure — a starved capsule is **visible to the operator**.
 
 - Multi-host-connect convention (the mesh) — this is its credential-distribution
   consumer (#3); listen-bearer primary, SSH-fanout fallback.
-- [13_runtime-state-db-layout.md](13_runtime-state-db-layout.md) /
+- [21_dot-scitex-roots-and-resolution.md](21_dot-scitex-roots-and-resolution.md) /
   [12_local-state-resolution.md](12_local-state-resolution.md) — the
   `~/.claude/.credentials{,.meta}.json` files are **user-canonical runtime
   state** written by the replica; same atomic-write / user-scope discipline.

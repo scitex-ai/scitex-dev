@@ -6,14 +6,15 @@ This module answers one question: *which store does this host use?* Per
 ADR-0006, the answer is a single PostgreSQL instance belonging to this host,
 holding every record kind, reached over a UNIX socket rather than a TCP port.
 
-Why Postgres is the default
----------------------------
-The earlier draft made SQLite the default on a zero-setup argument. It was
-reversed for a reason worth keeping in front of whoever reads this next:
-**SQLite has no concept of WHO.** Anyone who can open the file has every
-permission. Postgres has roles, and multi-user identity cannot be retrofitted
-onto a file — it is a foundation or it is absent. Handing a collaborator a
-database file is SHARING, not COLLABORATING.
+Why Postgres, and why only Postgres
+-----------------------------------
+An earlier draft made a file-backed engine the default on a zero-setup
+argument. It was reversed for a reason worth keeping in front of whoever
+reads this next: **a database file has no concept of WHO.** Anyone who can
+open it has every permission. Postgres has roles, and multi-user identity
+cannot be retrofitted onto a file — it is a foundation or it is absent.
+Handing a collaborator a database file is SHARING, not COLLABORATING.
+ADR-0006 records the decision and the alternatives that were rejected.
 
 Why a socket, not a port
 ------------------------
@@ -300,17 +301,17 @@ def host_store(
     1. ``SCITEX_STORE_DSN`` if set — an explicit override wins outright.
     2. Otherwise the per-host Postgres over its UNIX socket.
 
-    **There is deliberately no SQLite fallback.** A fallback here would be the
-    worst possible behaviour: a host whose Postgres is not running would
-    silently start writing to a local file, accept every write, report success,
-    and diverge from the fleet with nothing in any log to say so. That is the
-    2026-08-09 failure mode reproduced by design — a write that succeeds
-    locally while reaching nobody. Refusing to connect is loud, immediate, and
-    fixable; a silent private store is none of those.
+    **There is deliberately no second tier to fall back to.** A fallback
+    here would be the worst possible behaviour: a host whose Postgres is not
+    running would silently start writing to a local file, accept every write,
+    report success, and diverge from the fleet with nothing in any log to say
+    so. That is the 2026-08-09 failure mode reproduced by design — a write
+    that succeeds locally while reaching nobody. Refusing to connect is loud,
+    immediate, and fixable; a silent private store is none of those.
 
-    SQLite remains fully implemented behind the dialect layer and is reachable
-    with an explicit :meth:`StoreTarget.sqlite`. It is simply not what an
-    unconfigured host resolves to.
+    There is nothing else to resolve to, and that is the design rather than
+    an omission: one engine means an unconfigured host has no wrong answer
+    available to it.
     """
     override = os.environ.get(STORE_DSN_ENV)
     if override:
@@ -320,11 +321,10 @@ def host_store(
             f"{STORE_DSN_ENV}={override!r} is not a Postgres DSN. It must "
             "start with 'postgres://' or 'postgresql://'.\n"
             "\n"
-            "If you meant a SQLite file, this variable is not the way to ask "
-            "for one — an unconfigured host resolves to Postgres by design, "
-            "and a path here would be a silent downgrade to a private store. "
-            "Construct it explicitly instead: "
-            "StoreTarget.sqlite(<path>, pkg=...).\n"
+            "A filesystem path is not accepted here, or anywhere: runtime "
+            "state lives in the per-host Postgres on 55432 and nowhere else. "
+            "A path would be a silent downgrade to a private store that "
+            "shares nothing.\n"
             "\n"
             f"For a socket connection the shape is: {socket_dsn()}"
         )

@@ -13,9 +13,8 @@ Two asymmetries are deliberate:
   a diff, a hash or an eyeball comparison does not report a change that is
   only key ordering.
 * Booleans round-trip through the dialect rather than Python's ``bool``.
-  SQLite has no boolean type and stores 0/1; Postgres has a real one.
-  Reading either back through ``from_db_bool`` is what keeps ``hidden``
-  meaning the same thing on both.
+  Reading them back through ``from_db_bool`` is what keeps ``hidden``
+  meaning one thing, whatever the driver hands back.
 """
 
 from __future__ import annotations

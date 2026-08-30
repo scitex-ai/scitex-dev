@@ -131,7 +131,7 @@ a dropped question is indistinguishable from "tried, failed, and hid it".
 - **Minimal mode** (no `libgthread`): stdlib I/O + explicit
   `clew.add_claim(source_file=...)`; claims report `source_verified: True`
   but `chain_verified: False`. Both pass the gate; only full mode gives a
-  chain-verified DAG. `scitex-clew` itself is zero-dep (stdlib + sqlite3),
+  chain-verified DAG. `scitex-clew` stores its chain in the per-host Postgres,
   so minimal mode works on stripped containers.
 
 ## Worked example

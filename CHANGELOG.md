@@ -40,7 +40,7 @@ as "the same exposure in principle". It was not hypothetical — it turned every
 open PR in `scitex-agent-container` red the moment those tests ran against a
 real cluster.
 
-The probe's own tests were all SQLite, which is why a PostgreSQL-only defect
+The probe's own tests never ran on Postgres, which is why a Postgres-only defect
 got through. The two tests added here assert on the STATEMENT, so they run
 everywhere rather than only where a cluster happens to be up; a third
 reproduces the end-to-end shape and skips when no cluster can host a
@@ -71,7 +71,7 @@ throwaway schema.
 
 - `Dialect.indexes_sql` — the index counterpart to `columns_sql`, same
   contract (first column is the name, no rows for a missing table);
-  `pg_indexes` on PostgreSQL, `sqlite_master` on SQLite.
+  `pg_indexes` on PostgreSQL.
 - `Dialect.index_specs` / `Dialect.schema_tables` enumerate what `create_sql`
   builds, and `create_sql` now emits its `CREATE INDEX` statements from that
   list — one list, two readers, so the probe and the creator cannot drift.
@@ -490,7 +490,7 @@ concurrency are each excluded by measurement. If you hit it, please attach the
 - **A sibling that is a DECLARED dependency must not be `importorskip`'d
   (#639);** why `_install_kind` and `_install_probe` must not be merged
   (#658); which class of state the runtime-state-DB layout governs (#648);
-  SQLite is eradicated, so the `.db` layout is marked historical (#649).
+  The embedded engine is eradicated, so the `.db` layout is marked historical (#649).
 
 ## [0.50.0] - 2026-08-16
 
@@ -674,7 +674,7 @@ absent one, because it reads as done.
   twice. Every failure of 2026-08-11 was a truthful empty answer about the
   wrong thing.
 
-- **Store identity, divergence detection and a Postgres/SQLite dialect
+- **Store identity, divergence detection and a dialect
   split** (`store/_identity.py`, `_identity_state.py`, `_divergence.py`,
   `_dialect/`). The identity layer is what makes "two instances answering to
   one `store_uuid`" detectable instead of silently merged.
@@ -2392,7 +2392,7 @@ sections. This entry covers everything merged after the v0.38.1 tag; the
   Removed a dated generated MCP drift-report and duplicated skill-creator
   boilerplate from the surface-choice doc; the TODO backlogs were kept
   (still referenced) pending a considered cleanup.
-- **Config-layout: untracked stray machine state (#375).** `.scitex/clew/db.sqlite`
+- **Config-layout: untracked stray machine state (#375).** a stray `.scitex/clew` database file
   was tracked by accident; it is machine state (the `.gitignore` already
   intended to ignore it), so it is now untracked — dogfooding the config-layout
   convention (config vs. gitignored `runtime/`) before enforcing it fleet-wide.

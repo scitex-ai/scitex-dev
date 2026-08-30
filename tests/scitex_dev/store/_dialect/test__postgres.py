@@ -31,20 +31,20 @@ import os
 
 import pytest
 
+from scitex_dev.store import host_store
 from scitex_dev.store._dialect._postgres import PostgresDialect
 from scitex_dev.store._target import Backend, StoreTarget
 
-#: Guard for ``test_connect_returns_rows_addressable_by_name``.
-#: Both the driver and a reachable DSN are required; the test is skipped
-#: when either is missing.
-_needs_dsn = os.environ.get("SCITEX_STORE_TEST_DSN")
-needs_dsn = pytest.mark.skipif(
-    _needs_dsn is None,
-    reason=(
-        "SCITEX_STORE_TEST_DSN is not set — no Postgres DSN "
-        "pointing at a reachable instance to connect to"
-    ),
-)
+#: The cluster the live-connection test opens — ASKED FOR, never named here.
+#:
+#: This used to be an opt-in env var that nothing set, so the one test in this
+#: file that touches a real server skipped on every machine and every CI run,
+#: which is indistinguishable from passing. Replacing it with a DSN literal
+#: only moved the problem: a test that names its own server is testing a
+#: string, not the resolver the product uses. So it goes through
+#: ``host_store()`` — the single switch, which reads ``SCITEX_STORE_DSN`` and
+#: otherwise falls back to this host's socket.
+_dsn = host_store(pkg="scitex_dev_tests", name="dialect").dsn
 
 
 def test_the_identity_statement_asks_which_cluster():
@@ -105,35 +105,28 @@ def test_two_routes_into_one_database_agree():
     assert socket_route == tunnel_route
 
 
-@needs_dsn
 def test_connect_returns_rows_addressable_by_name():
     """PostgresDialect.connect must return a dict-row connection.
 
     The codec in _codec.py addresses columns by name (record["id"]),
-    so a plain tuple from psycopg is a crash. The SQLite dialect
-    guarantees this via sqlite3.Row; this test verifies the same for
+    so a plain tuple from psycopg is a crash. This test verifies that for
     Postgres.
 
-    Skipped when ``psycopg`` is not installed — the driver is required
-    for this test to run, just as it is for the dialect itself.
-    Also skipped when ``SCITEX_STORE_TEST_DSN`` is not set — the test
-    connects to a real Postgres instance, and neither CI nor a generic
-    developer machine has one reachable.
+    Skipped ONLY when ``psycopg`` is not installed — that is a property of
+    the interpreter, not of the store. An unreachable cluster is a FAILURE:
+    "no database here" is a broken environment, and a suite that turns it
+    into a skip reports the same green as one that checked.
     """
     # Arrange — guard against missing driver, mirroring the dialect's
     # own ImportError → DialectUnavailableError path.
     psycopg = pytest.importorskip("psycopg")
     dialect = PostgresDialect()
-    # skipif above guarantees _needs_dsn is not None here
-    target = StoreTarget.postgres(
-        _needs_dsn,  # type: ignore[arg-type]
-        pkg="_test",
-    )
+    target = StoreTarget.postgres(_dsn, pkg="_test")
     # Act — open the connection
     connection = dialect.connect(target)
     # Assert — a dict-row factory is in effect: column names work.
     # We execute a trivial query; the row factory decides how the row
-    # is returned.  sqlite3.Row and psycopg's dict_row both allow
+    # is returned.  psycopg's dict_row allows
     # ``row["column_name"]``.
     row = connection.execute("SELECT 1 AS col").fetchone()
     # Indexing the row BY NAME is the whole assertion: it raised
@@ -166,7 +159,7 @@ def test_connect_returns_rows_addressable_by_name():
 def test_the_columns_probe_is_scoped_to_the_current_schema():
     # Arrange — a property of the STATEMENT, so this runs everywhere, not
     # only where a cluster happens to be up. That asymmetry is what hid the
-    # defect: the probe's tests were all SQLite.
+    # defect: the probe's tests never ran against Postgres.
     # Act
     sql = PostgresDialect().columns_sql("comms_blocks_rows")
     # Assert
@@ -203,9 +196,9 @@ def two_schemas():
     import uuid
 
     psycopg = pytest.importorskip("psycopg")
-    base = os.environ.get(
-        "SCITEX_TEST_PG_DSN", "postgresql://127.0.0.1:55432/scitex"
-    )
+    # The PRIMARY: the loopback is a standby and refuses CREATE SCHEMA, which
+    # turned this probe into a permanent skip.
+    base = host_store(pkg="scitex_dev_tests", name="searchpath").dsn
     tag = uuid.uuid4().hex[:10]
     decoy, target = f"probe_decoy_{tag}", f"probe_target_{tag}"
     unusable = (

@@ -10,9 +10,9 @@ schema, the same oplog, the same directed replay.
 The driver is optional. ``psycopg`` (v3) is imported inside
 :meth:`PostgresDialect.connect`, and its absence raises
 :class:`~.._errors.DialectUnavailableError` naming the extra to install.
-It never degrades to SQLite: a caller asking for a shared database and
-receiving a private local file would watch every write succeed while no
-peer ever saw one.
+It never degrades to a local file: a caller asking for a shared database
+and receiving a private one would watch every write succeed while no peer
+ever saw one.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ class PostgresDialect(Dialect):
                 "The Postgres backend needs the 'psycopg' driver, which is "
                 "not installed. Install it with `pip install "
                 "'scitex-dev[postgres]'` (or `pip install psycopg[binary]`). "
-                "This is NOT falling back to SQLite: you asked for a shared "
+                "There is nothing to fall back to: you asked for a shared "
                 "database, and a private local file would accept every write "
                 "while no other host ever saw one."
             ) from None
@@ -66,8 +66,8 @@ class PostgresDialect(Dialect):
             # summary precisely so a password cannot reach a log line.
             # The codec in _codec.py addresses columns by name
             # (e.g. record["id"]), so a plain tuple from psycopg is a crash.
-            # The SQLite dialect keeps the same contract via sqlite3.Row;
-            # dict_row makes psycopg return a dict keyed by column name.
+            # dict_row makes psycopg return a dict keyed by column name,
+            # which is the contract every dialect owes the codec.
             connection = psycopg.connect(
                 target.dsn, autocommit=True, row_factory=dict_row
             )
@@ -93,9 +93,8 @@ class PostgresDialect(Dialect):
     def columns_sql(self, table: str) -> str:
         """Existing column names from `information_schema`, in THIS schema.
 
-        Returns zero rows for a table that does not exist, matching the
-        SQLite dialect's contract — the caller reads that as "nothing to
-        migrate".
+        Returns zero rows for a table that does not exist — the caller
+        reads that as "nothing to migrate".
 
         `to_regclass` is deliberately NOT used: it resolves through the whole
         search_path and would report a same-named table in another schema as

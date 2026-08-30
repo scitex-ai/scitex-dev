@@ -11,7 +11,7 @@ tags: [scitex-dev-state-store-contract]
 > design goes in files, under git.**
 
 Operator, 2026-08-14: 「spec は設計書、状態は db (55432 postgres; each
-host, synchronization across hosts)」 — *never SQLite, never JSON
+host, synchronization across hosts)」 — *never a local file, never JSON
 ledgers, never files that happen to exist.* That ruling is in the
 constitution; what did not exist was the **how**. This is the how — the
 contract a leaf implements against, so two leaves do not invent two
@@ -43,7 +43,7 @@ answer where it came from.**
 
 A leaf's state store is valid when all of these hold:
 
-1. **Postgres on 55432**, per host. Not SQLite, JSON, YAML, or files.
+1. **Postgres on 55432**, per host. Not JSON, YAML, or files.
 2. **Every host runs its own.** A read must not require a round-trip to
    another host — local state that depends on remote liveness fails
    exactly when you most need to read it.

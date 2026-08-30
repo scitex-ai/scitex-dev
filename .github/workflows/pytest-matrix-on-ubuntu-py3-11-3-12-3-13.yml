@@ -45,6 +45,23 @@ jobs:
         # Each worker is a separate process, so matplotlib/global state stays
         # isolated per worker — the safe way to parallelise the suite. Serial
         # runs overran the old cap (~28 min); -n auto brings it to minutes.
+        env:
+          # THE STORE SUITE NEEDS A WRITABLE POSTGRES, AND THE ROLE IS THE
+          # WHOLE POINT OF THIS LINE. Without it the store tests failed with
+          # `fe_sendauth: no password supplied` — not a missing credential:
+          # the runner's ~/.pgpass already covers scitex-primary. .pgpass
+          # matches on USER, the DSN named none, so libpq connected as the OS
+          # user `ywatanabe`, for which there is no row. Naming the role picks
+          # up the credential that was there all along, so nothing secret is
+          # stored in this repo.
+          #
+          # It must be the PRIMARY. Every host's own instance on 55432 is a
+          # read-only standby, and CREATE SCHEMA raises there — which is how
+          # this suite used to skip on every machine and report green.
+          #
+          # This is CONFIGURATION setting the one switch, not a second copy of
+          # it: no DSN literal survives anywhere in the source or the tests.
+          SCITEX_STORE_DSN: postgresql://ywatanabe__scitex-dev@scitex-primary:55432/scitex
         run: |
           pytest tests/ -n auto --cov=src/scitex_dev --cov-report=xml --cov-report=term
       - name: Upload coverage to Codecov

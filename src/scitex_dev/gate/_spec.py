@@ -13,9 +13,8 @@ Design (operator-directed, 2026-07-03; card cohort-A submission gate):
   block a submit that lacks real provenance) or ``post-submission``
   (scoring-side; v1 leaves this seam open, scoring stays paper-side).
 - ``run(workdir, config) -> GateResult``: the check locates its own state
-  under ``workdir`` (clew → ``.scitex/clew/**/*.sqlite`` e.g. ``db.sqlite``
-  — the leaf owns its own file/extension; dataset → the bound capsule's
-  submission file) and returns pass/fail + findings. It must not need an
+  (clew → its store on the per-host Postgres; dataset → the bound capsule's
+  submission file under ``workdir``) and returns pass/fail + findings. It must not need an
   API handle to the owning package from scitex-dev's side.
 - ``Finding.fix_hint`` is the actionable string the pre-submission hook
   echoes to the solver on block ("wrap analysis in @stx.session …").

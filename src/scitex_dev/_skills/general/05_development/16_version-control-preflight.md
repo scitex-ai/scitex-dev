@@ -29,7 +29,7 @@ If non-empty, decide per file:
 - **Stash** — transient experiment you'll come back to. Use a named
   stash (`git stash push -m "<reason>" -- <paths>`).
 - **Discard / gitignore** — runtime artefacts (e.g.
-  `.scitex/<pkg-short>/runtime/*.sqlite`, build caches). These
+  `.scitex/<pkg-short>/runtime/` scratch, build caches). These
   belong in `.gitignore`, not in a stash; if you see them dirty
   repeatedly, fix the ignore pattern.
 

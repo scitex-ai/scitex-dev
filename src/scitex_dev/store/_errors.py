@@ -71,9 +71,9 @@ class AdoptionRefusedError(StoreError):
 class DialectUnavailableError(StoreError):
     """A backend was requested whose driver is not installed.
 
-    Deliberately NOT a fallback to SQLite. Silently answering a Postgres
-    request with a local SQLite file would hand the caller a store that
-    looks healthy and shares nothing.
+    Deliberately NOT a fallback to anything. Silently answering a request
+    for the shared database with a private local file would hand the caller
+    a store that looks healthy and shares nothing.
     """
 
 
@@ -161,8 +161,8 @@ class SeqAllocationError(StoreError):
     RETRY CONTRACT: the failed write was NOT applied and left no partial
     state, so the caller may simply retry the whole operation. This is never
     a raw driver exception: before 2026-08-24 the collision escaped as
-    ``psycopg.errors.UniqueViolation`` / ``sqlite3.IntegrityError``, which
-    nothing above the store could recognise or act on (measured: 5 of 8
+    ``psycopg.errors.UniqueViolation``, which nothing above the store
+    could recognise or act on (measured: 5 of 8
     concurrent writers with DISTINCT ids failed this way).
     """
 

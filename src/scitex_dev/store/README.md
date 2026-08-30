@@ -44,7 +44,7 @@ absent from another store."**
 | `_identity_state.py` | the `Store.identity` plumbing: mint the lineage, ask the instance |
 | `_divergence.py` | `detect_divergence` — a fork PROVEN from the logs, never from absence |
 | `federation/` | leaves declare a store; scitex-dev owns the machinery |
-| `_dialect/` | Postgres (default for runtime state) and SQLite (regenerable local state only) |
+| `_dialect/` | Postgres — the one storage engine, per host on 55432 |
 
 ## How a leaf adopts a store
 
@@ -167,6 +167,6 @@ for result in sync(store, peer_store):
 
 ## Related
 
-- `_skills/general/01_ecosystem/13_runtime-state-db-layout.md` — where a
+- `_skills/general/01_ecosystem/21_dot-scitex-roots-and-resolution.md` — where a
   package's `.db` lives and why `runtime/` is the redirectable unit.
 - scitex-cards ADR-0016 — the wipes, the mechanism and the ruling.

@@ -35,8 +35,8 @@ that is the whole point. A value carried inside the data is copied with the
 data; a value asked of the machine is not.
 
 It names the instance DOWN TO THE CONTAINER holding the rows, not merely
-the engine: ``pg:<cluster>/<database>`` for Postgres, ``sqlite:<dev>:<ino>``
-for SQLite. The engine alone is too coarse and the gap is a real one — a
+the engine: ``pg:<cluster>/<database>``. The engine alone would be too
+coarse and the gap is a real one — a
 ``pg_dump`` restored into a second database on the SAME cluster copies the
 ``store_uuid`` and shares the cluster id, so an engine-only pair certifies
 SAME while the two halves diverge. What is added is a NAME asked of the

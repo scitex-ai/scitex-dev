@@ -633,7 +633,7 @@ def test_scholar_library_sync_command_excludes_all_index_db_siblings():
     # Arrange
     # Act
     body = shell_body("scholar-library-sync")
-    # Assert — the index is DERIVED state; shipping a live SQLite file
+    # Assert — the index is DERIVED state; shipping a live database file
     # mid-write corrupts it. All four siblings must be excluded.
     missing = [
         name
