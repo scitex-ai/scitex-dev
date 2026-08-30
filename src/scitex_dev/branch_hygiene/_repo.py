@@ -33,10 +33,11 @@ from typing import Callable
 from ..hygiene._branch_gc_backup import create_backup
 from ..hygiene._branch_gc_model import BranchInfo
 from . import _probe
-from ._decide import decide, decide_remote
+from ._decide import decide, decide_remote, is_policy_refusal
 from ._model import (
     DEFAULT_MAX_AGE_HOURS,
     KEEP_MOVED,
+    KEEP_REMOTE_PROTECTED,
     KEEP_WORKTREE_REFUSED,
     PROTECTED_EXACT,
     WT_REMOVE,
@@ -320,6 +321,19 @@ def sweep_remote(
             verdicts.append(verdict)
             continue
         pushed, detail = _probe.delete_remote_branch(repo, name, remote=remote)
+        if not pushed and is_policy_refusal(detail):
+            # The remote stated a policy. Not a failure of this sweep, and
+            # not something a retry or a force may address.
+            verdicts.append(
+                BranchVerdict(
+                    name=name,
+                    sha=sha,
+                    drop=False,
+                    reason=KEEP_REMOTE_PROTECTED,
+                    error=detail,
+                )
+            )
+            continue
         verdicts.append(
             BranchVerdict(
                 name=name,

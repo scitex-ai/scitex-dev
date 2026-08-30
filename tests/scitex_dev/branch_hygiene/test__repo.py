@@ -120,11 +120,11 @@ def test_the_dry_run_deletes_nothing(repo: Path):
 def test_protected_names_survive_a_real_pass(repo: Path):
     """main / develop / BOTH CLA spellings, at 400 days old.
 
-    `cla` and `cla-signatures` are both here because both are live
-    signature stores in this org, carrying the identical
-    `signatures/cla.json`. A pass that protects one spelling and
-    collects the other is the original near-miss with the names
-    swapped.
+    `cla` and `cla-signatures` are the SAME signature store at two
+    moments of an in-flight rename across 68 repositories. A pass that
+    protects only the destination name collects the source name wherever
+    the rename has not completed — and at least one repository is in
+    exactly that state, because branch protection refused the deletion.
     """
     # Arrange
     # Act
@@ -341,3 +341,21 @@ def test_the_default_window_is_one_day():
 
 
 # EOF
+
+
+def test_a_kept_branch_carrying_a_refusal_is_not_counted_as_a_failure(
+    repo_with_dirty_worktree,
+):
+    """A guard firing is not this sweep failing.
+
+    A KEPT branch can carry error text — a `worktree remove` refusal, a
+    remote's branch-protection refusal — and neither is a fault. Counting
+    them would put a daily job permanently in the red for behaving
+    correctly, which is how a gate gets disabled.
+    """
+    # Arrange
+    repo, _ = repo_with_dirty_worktree
+    # Act
+    result = sweep_repo(repo, execute=True, now=FUTURE_NOW, pr_heads=no_prs)
+    # Assert
+    assert result.failures == ()
