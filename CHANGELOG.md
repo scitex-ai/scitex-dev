@@ -7,6 +7,51 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+> **The store could be read by key or in full, and by nothing in between** —
+> so a package with a filter had to fetch the table and narrow it in Python,
+> which is the point at which it stops using the store and starts building
+> an index of its own.
+
+### Added
+
+- `Store.search(Query)`, `Store.count(Query)` and `Store.tally(field, Query)`
+  — the middle of the read door. A `Query` is an immutable description built
+  from `eq` / `ne` / `gt` / `gte` / `lt` / `lte` / `is_in` / `contains` /
+  `nonempty` / `is_null` / `either`, plus `matching` (full text),
+  `ordered_by`, `limited` and `with_hidden`.
+
+  It names FIELDS, never SQL. Every field is checked against the schema
+  before a statement is built, so a typo raises instead of returning an
+  empty set, and nothing a caller types reaches an identifier position.
+  Values travel as bind parameters.
+
+  Two engine behaviours are pinned rather than inherited: `NULLS LAST` in
+  BOTH directions (Postgres defaults to NULLS FIRST under `DESC`, which
+  would lead "most downloaded" with every row whose count was never
+  recorded), and a record-key tie-break appended to every `ORDER BY`, so
+  `LIMIT`/`OFFSET` paging cannot show one row twice and skip another.
+
+- `Schema.build(..., text_search=(...), text_config="english")` — full-text
+  search, declared once per schema. The GIN expression index the store
+  creates and the match expression the query builds are generated from that
+  single list, because an expression index that differs from its query by
+  one character is silently never used, the planner reports nothing, and the
+  only symptom is that search got slow. Matching uses
+  `websearch_to_tsquery`, which never raises on malformed input — the text
+  came from a person, and `to_tsquery` would turn a half-typed search box
+  into a syntax error.
+
+  `contains()` is real JSON containment (`@>`), not a substring match on the
+  serialised column, so asking whether a modality LIST holds `eeg` is no
+  longer also answered by a description that mentions it.
+
+### Changed
+
+- The read door moved out of `_store.py` into `_read_door.ReadDoor`, a mixin
+  of `Store` alongside `PeerState` and `IdentityState`. No method changed
+  name or behaviour. Reading and writing change for different reasons, and
+  `_store.py` had already outgrown the repository's file-size limit.
+
 ## [0.56.8] - 2026-08-28
 
 > **The probe added in 0.56.7 answered about every schema, not this one** — so

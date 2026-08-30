@@ -178,4 +178,133 @@ def populated(local) -> Store:
         local.put({"id": f"c{index}", "status": "open"}, expected_revision=NEW_RECORD)
     return local
 
+
+# -- the search-surface fixtures ------------------------------------------
+#
+# Shared by `test__query_search.py` and `test__query_text.py`, which split
+# the same catalogue two ways: what the FILTERS do, and what the FULL TEXT
+# does. One set of records, declared once, so the two files cannot drift
+# into disagreeing about what is in the store they are both asserting on.
+
+#: Four records: two sources, one empty readme, one absent download count,
+#: and one that the `catalog` fixture then hides.
+CATALOG_RECORDS = (
+    {
+        "id": "openneuro:ds001",
+        "source": "openneuro",
+        "name": "Alzheimer memory study",
+        "readme": "Resting state recordings of memory impairment.",
+        "n_subjects": 30,
+        "downloads": 500,
+        "modalities": ["mri", "eeg"],
+    },
+    {
+        "id": "openneuro:ds002",
+        "source": "openneuro",
+        "name": "Motor control",
+        "readme": "",
+        "n_subjects": 10,
+        "downloads": 100,
+        "modalities": ["mri"],
+    },
+    {
+        "id": "dandi:000003",
+        "source": "dandi",
+        "name": "Hippocampal spiking",
+        "readme": "Electrophysiology during a memory task.",
+        "n_subjects": 50,
+        "downloads": None,
+        "modalities": ["ephys"],
+    },
+    {
+        "id": "dandi:000004",
+        "source": "dandi",
+        "name": "Retired recording",
+        "readme": "Withdrawn.",
+        "n_subjects": 5,
+        "downloads": 900,
+        "modalities": [],
+    },
+)
+
+
+def _catalog_policy(
+    kind: FieldKind,
+    *,
+    role: FieldRole = FieldRole.DATA,
+    merge: MergeRule = MergeRule.LAST_WRITER_WINS,
+    required: bool = False,
+) -> FieldPolicy:
+    return FieldPolicy(
+        kind=kind, role=role, required=required, merge=merge, indexed=False
+    )
+
+
+def catalog_fields() -> dict:
+    """The catalogue's columns: text, numbers, a JSON list, a hide flag."""
+    return {
+        "id": _catalog_policy(
+            FieldKind.TEXT,
+            role=FieldRole.IDENTITY,
+            merge=MergeRule.IMMUTABLE,
+            required=True,
+        ),
+        "source": _catalog_policy(FieldKind.TEXT),
+        "name": _catalog_policy(FieldKind.TEXT),
+        "readme": _catalog_policy(FieldKind.TEXT),
+        "n_subjects": _catalog_policy(FieldKind.INTEGER),
+        "downloads": _catalog_policy(FieldKind.INTEGER),
+        "modalities": _catalog_policy(FieldKind.JSON),
+        "hidden": _catalog_policy(FieldKind.BOOL, role=FieldRole.HIDE_FLAG),
+    }
+
+
+@pytest.fixture
+def catalog_schema() -> Schema:
+    """The catalogue with three of its columns declared searchable."""
+    return Schema.build(
+        "catalog",
+        catalog_fields(),
+        text_search=("name", "readme", "modalities"),
+    )
+
+
+@pytest.fixture
+def open_store(pg_schemas):
+    """Factory: a store on ``schema``, in a Postgres schema of its own.
+
+    ``key`` names that Postgres schema. Two calls with the same key REOPEN
+    one store — which is how a test asks whether a second open of an
+    existing store behaves — while the default gives each call a fresh one.
+    """
+
+    def _make(schema: Schema, node: str, *, key: "str | None" = None) -> Store:
+        name = pg_schemas(key or f"{node}_{uuid.uuid4().hex[:6]}")
+        return Store(
+            StoreTarget.postgres(
+                f"{BASE_DSN}?options=-csearch_path%3D{name}", pkg="catalog"
+            ),
+            schema,
+            node=node,
+            writer_policy=WriterPolicy.MULTI_WRITER,
+        )
+
+    return _make
+
+
+@pytest.fixture
+def catalog(open_store, catalog_schema) -> Store:
+    """A searchable catalogue holding :data:`CATALOG_RECORDS`, last hidden."""
+    store = open_store(catalog_schema, "catalog")
+    for record in CATALOG_RECORDS:
+        store.put(record, expected_revision=NEW_RECORD)
+    store.hide({"id": "dandi:000004"}, expected_revision=1)
+    return store
+
+
+@pytest.fixture
+def unsearchable(open_store) -> Store:
+    """The same shape with no ``text_search`` declaration."""
+    return open_store(Schema.build("plain", catalog_fields()), "plain")
+
 # EOF

@@ -126,6 +126,52 @@ class Dialect(ABC):
     def upsert_sql(self, table: str, columns: Sequence[str], key: str) -> str:
         """An INSERT that overwrites on primary-key conflict."""
 
+    # -- query fragments --------------------------------------------------
+    #
+    # Concrete-and-raising rather than abstract, on purpose. A dialect can
+    # arrive through the federation entry point (see `.federation`), and
+    # adding an abstract method would stop every such plugin from importing
+    # — a hard failure at construction for a capability it may never use.
+    # Refusing at the moment the capability is ASKED for names the missing
+    # piece and leaves everything else working.
+
+    def text_vector_sql(self, schema: Schema) -> str:
+        """The searchable-text expression over ``schema.text_search``.
+
+        ONE method builds it, and both the index and the query read from
+        this one. They must be character-identical: an expression index
+        that differs from its query by a space is never used, the planner
+        reports nothing, and the only symptom is that search got slow.
+        """
+        raise DialectUnavailableError(
+            f"The {self.backend.value} dialect states no full-text "
+            "expression, so a schema cannot be searched through it."
+        )
+
+    def text_match_sql(self, schema: Schema, placeholder: str) -> str:
+        """A boolean expression: does this row match the bound query text?"""
+        raise DialectUnavailableError(
+            f"The {self.backend.value} dialect states no full-text match "
+            "syntax, so Query.matching(...) cannot be compiled for it."
+        )
+
+    def json_contains_sql(self, column: str, placeholder: str) -> str:
+        """A boolean expression: does this JSON column contain the value?"""
+        raise DialectUnavailableError(
+            f"The {self.backend.value} dialect states no JSON containment "
+            "syntax, so contains(...) cannot be compiled for it."
+        )
+
+    def text_index_specs(self, schema: Schema) -> list[tuple[str, str, str]]:
+        """``(index, table, ddl)`` for every full-text index to build.
+
+        One tuple carries both the NAME the existence probe looks for and
+        the STATEMENT that creates it, so the two cannot name different
+        things — the failure mode :meth:`index_specs` documents, in the one
+        place where the statement is not a uniform ``CREATE INDEX``.
+        """
+        return []
+
     def insert_ignore_sql(
         self, table: str, columns: Sequence[str], key: str
     ) -> str:
@@ -298,6 +344,7 @@ class Dialect(ABC):
             f"ON {self.quote(table)} ({self.quote(column)})"
             for index, table, column in self.index_specs(schema)
         )
+        statements.extend(ddl for _index, _table, ddl in self.text_index_specs(schema))
         return statements
 
     def index_specs(self, schema: Schema) -> list[tuple[str, str, str]]:

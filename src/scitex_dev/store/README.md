@@ -38,7 +38,10 @@ absent from another store."**
 | `_merge.py` | per-field merge; decides what is *presented*, never what exists |
 | `_apply.py` | the fold local writes and replay SHARE |
 | `_guards.py` | record keys, the optimistic lock, ownership checks |
-| `_store.py` | `Store` — the write door and the read door |
+| `_store.py` | `Store` — the write door, the batch, the oplog append |
+| `_read_door.py` | `ReadDoor` — `get` / `rows` / `search` / `count` / `tally` |
+| `_query.py` | `Query`, `eq`/`gte`/`contains`/… — the search vocabulary |
+| `_query_sql.py` | the only place a `Query` becomes SQL |
 | `_replication.py` | `replay`, `pull`, `sync`, `outstanding` |
 | `_identity.py` | `StoreIdentity` — "you are me" vs "you descend from me" |
 | `_identity_state.py` | the `Store.identity` plumbing: mint the lineage, ask the instance |
@@ -164,6 +167,51 @@ from scitex_dev.store import sync
 for result in sync(store, peer_store):
     print(result.describe())
 ```
+
+## Reading by criteria, not only by key
+
+`get` answers about one key and `rows` returns everything. Between them sits
+`search`, which takes an immutable `Query`:
+
+```python
+from scitex_dev.store import Query, contains, eq, gte
+
+hits = store.search(
+    Query()
+    .matching("alzheimer eeg")          # full text, see below
+    .where(eq("source", "openneuro"), gte("n_subjects", 20),
+           contains("modalities", "eeg"))
+    .ordered_by("downloads")            # DESC, NULLS LAST, total order
+    .limited(50)
+)
+total = store.count(...)                # the whole set, ignoring the limit
+per_source = store.tally("source")      # one grouped count
+```
+
+A query names **fields, never SQL**, and every field it names is checked
+against the schema before a statement is built — so a typo raises instead of
+returning nothing, and nothing a caller types reaches an identifier position.
+
+Full text is declared on the schema, once:
+
+```python
+Schema.build("catalog", fields, text_search=("name", "readme", "tasks"))
+```
+
+The store's GIN index and the query's match expression are generated from
+that one list. They have to be character-identical: an expression index that
+differs from its query is silently never used, the planner reports nothing,
+and the only symptom is that search got slow.
+
+The query language is PostgreSQL's `websearch_to_tsquery` — bare words AND,
+`"quoted phrases"` are phrases, `or` disjoins, `-` negates, and malformed
+input matches nothing rather than raising, because the text came from a
+person.
+
+**Why this is here and not in each consumer.** scitex-dataset kept a private
+full-text index of its catalogue — a second storage engine, a second schema,
+a second home for fleet data — because this surface did not exist. Its
+absence is what made the private index look reasonable.
 
 ## Related
 
