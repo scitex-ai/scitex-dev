@@ -64,6 +64,12 @@ needs a new kind declares a `Schema`; it does not open a path.
 Every host runs its own PostgreSQL. SQLite remains implemented behind the
 dialect layer but is NOT recommended and is not the default.
 
+> **Read this together with Decision 3, which was reversed on 2026-08-30.**
+> Every host still runs an instance, so this decision stands as written — but
+> those instances are now READ-ONLY REPLICAS of one writable node on nas-03,
+> not independent stores. "One instance per host" is a statement about where
+> Postgres runs, no longer a claim that each host can be written to.
+
 **This reverses an earlier draft of this ADR, and the operator's argument is
 why.** That draft made SQLite the default on a zero-setup argument. The
 decisive counter, in his words:
@@ -85,33 +91,90 @@ whoever writes the tooling.
 `scitex-writer`, `figrecipe` and `scitex-scholar` should therefore expect
 Postgres, not plan for a SQLite fallback.
 
-### 3. NO CENTRAL SERVER — this is the condition on Decision 2
-"Postgres by default" means **one Postgres per host, synchronised by oplog**.
-It does NOT mean one Postgres that every host connects to.
+### 3. ONE CENTRAL NODE — nas-03 is the writable store for the fleet
 
-This distinction is the whole lesson of 2026-08-09. The fleet ran a single
-Postgres on the operator's laptop; the laptop rebooted; every agent stayed
-alive and lost the board simultaneously. That outage was not caused by
-Postgres — it was caused by centralisation, and choosing Postgres does
-nothing to prevent a repeat.
+**This decision was REVERSED on 2026-08-30.** It previously read "NO CENTRAL
+SERVER — this is the condition on Decision 2", and argued that "Postgres by
+default" must mean one Postgres per host synchronised by oplog, never one
+Postgres that every host connects to. The reversal and its cause are recorded
+here rather than in a second ADR, so a reader finds one answer instead of two
+that disagree — the same treatment Decision 7 received on 2026-08-10.
 
-**Postgres gives multi-CLIENT, not multi-NODE.** One server with many remote
-clients is still one node. Per-host writable Postgres replicas that reconcile
-are *harder* than SQLite, not easier — logical replication plus conflict
-resolution, or an extension. What provides multi-node is the replication
-layer, not the engine.
+#### What changed
 
-### 4. Hosts synchronise by directed replay; nothing is central
-Peers replay each other's ordered oplogs under a `first_seq == cursor + 1`
-assertion. Never set-difference. Conflicts resolve by hybrid logical clock.
-Nothing is ever deleted — hide-flag only.
+The operator ruled, first as a standing principle on 2026-08-25 and again
+explicitly on 2026-08-30:
 
-A severed host keeps accepting reads and writes. No coordinator, no quorum,
-no primary. Losing a peer costs currency, not availability.
+> The centre should always be nas-03. […] nas-03 is the centre; the design has
+> changed.
+>
+> — the operator (rendered in English; the original was spoken Japanese, which
+>   by standing rule does not appear on public surfaces)
 
-Collaboration is therefore **peers syncing**, not shared access to one
-server. Nobody hosts anything for anybody; nobody's laptop is anybody else's
-dependency.
+So the fleet runs **one writable PostgreSQL on nas-03**, and every other host
+carries a read-only replica of that same cluster. Measured 2026-08-30, one
+query against two targets:
+
+    scitex-primary:55432   pg_is_in_recovery()=FALSE   100.64.0.5   sysid 7672112238472680366
+    100.64.0.1:55432       pg_is_in_recovery()=TRUE    100.64.0.1   sysid 7672112238472680366
+
+Identical `system_identifier` — one cluster, streaming replication, one primary.
+`scitex-primary` resolves to 100.64.0.5, which is nas-03.
+
+#### What now answers 2026-08-09, because the incident has not gone away
+
+The superseded text was written against a real outage, and an honest reversal
+has to say what replaces its protection rather than quietly drop the argument.
+The outage: the fleet ran a single Postgres **on the operator's laptop**; the
+laptop rebooted; every agent stayed alive and lost the board simultaneously.
+
+The mitigation is the *choice of host*, which is precisely the operator's
+stated reason for naming nas-03. **nas-03 is the always-on NAS.** Workstations
+get rebooted, closed, and re-imaged; a store on one of them makes fleet
+availability a function of whoever last used that desk. The 2026-08-09 failure
+was not "a central node" in the abstract — it was a central node on a machine
+nobody had agreed to keep running.
+
+That is a narrower claim than the old text made, and it should be read
+narrowly. Centralisation still costs what it always cost: if nas-03 is down or
+unreachable, no agent can write. What changed is that the fleet now accepts
+that cost knowingly, on a host chosen for uptime, instead of paying it by
+accident on a laptop.
+
+**Postgres still gives multi-CLIENT, not multi-NODE**, and that sentence from
+the superseded text remains true — it is simply no longer an argument against
+this design. One server with many remote clients is one node, and the fleet has
+one node by intention.
+
+### 4. Replicas are READ-ONLY, and only `pg_is_in_recovery()` can tell you
+
+**Reversed 2026-08-30 alongside Decision 3.** This previously read "Hosts
+synchronise by directed replay; nothing is central", and promised that "a
+severed host keeps accepting reads and writes. No coordinator, no quorum, no
+primary."
+
+That promise is now false and its inverse is load-bearing: a severed host
+accepts **no writes at all**, because its local node is in recovery. Losing the
+centre costs availability, not merely currency.
+
+**The trap this decision exists to name.** A replica of the same cluster shares
+that cluster's `system_identifier`, and a board copied into it shares the
+lineage uuid. So both halves of the store-identity pin answer *matches* against
+a read-only standby, and an unpinned client cannot tell a stale replica from
+the store it meant to reach. Measured 2026-08-29: identity pinned on both
+halves reported `matches` / `may_proceed=True` against a 36-hour-stale replica.
+
+`pg_is_in_recovery()` is the only field that discriminates — `True` on a
+replica, `False` on the primary. It is a ROLE question, not a lineage question,
+and nothing has to be kept in sync for it to stay true. For freshness rather
+than role, compare `pg_last_xact_replay_timestamp()` against now; never use
+identity for that.
+
+Consequently the store's zero-config default resolves to the central node, not
+to this host's socket, and refuses rather than degrading — see the resolution
+order in `scitex_dev.store.host_store`. A default that lands on a local replica
+does not fail at connect time; it fails on the first write, or serves stale
+reads indefinitely, which is the silent wrong answer this ADR keeps cataloguing.
 
 ### 5. SSoT means one implementation, not one convention
 Leaves consume `scitex_dev.store`. They do not re-implement it to a
