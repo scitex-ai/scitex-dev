@@ -7,6 +7,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.57.0] - 2026-08-30
+
 > **The store could be read by key or in full, and by nothing in between** —
 > so a package with a filter had to fetch the table and narrow it in Python,
 > which is the point at which it stops using the store and starts building
