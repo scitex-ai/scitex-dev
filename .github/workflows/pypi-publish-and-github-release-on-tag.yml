@@ -86,7 +86,6 @@ jobs:
       # runner. So it does not "mirror pytest-matrix exactly", and the comment
       # that said so is why the env below was never copied across.
       - name: Run tests in the reused CI SIF (apptainer exec — deps layered, not on the bare runner)
-        env:
           # WITHOUT THIS THE RELEASE CANNOT PUBLISH. v0.57.0 was tagged, and
           # every test leg failed with 32 errors — `RuntimeError: No writable
           # PostgreSQL is available for tests`, naming all three routes it
