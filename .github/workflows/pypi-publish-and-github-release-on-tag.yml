@@ -86,7 +86,6 @@ jobs:
       # runner. So it does not "mirror pytest-matrix exactly", and the comment
       # that said so is why the env below was never copied across.
       - name: Run tests in the reused CI SIF (apptainer exec — deps layered, not on the bare runner)
-        env:
           # WITHOUT THIS THE RELEASE CANNOT PUBLISH. v0.57.0 was tagged, and
           # every test leg failed with 32 errors — `RuntimeError: No writable
           # PostgreSQL is available for tests`, naming all three routes it
@@ -100,25 +99,76 @@ jobs:
           # green PR gate here proves nothing about the tag pipeline — they are
           # different files running pytest by different routes.
           #
-          # THE ROLE IS THE POINT. Without it the failure is `fe_sendauth: no
-          # password supplied` — not a missing credential: the runner's
-          # ~/.pgpass already covers scitex-primary, but .pgpass matches on
-          # USER, so a DSN naming no role connects as the OS user `ywatanabe`,
-          # for which there is no row.
+          # THE THIRD ROUTE IS NOW AVAILABLE, so no DSN is set here any more.
           #
-          # It must be the PRIMARY. Every host's own instance on 55432 is a
-          # read-only standby where CREATE SCHEMA raises — which is how this
-          # suite used to skip everywhere and report green.
+          # The comment above describes the state that made pointing at the
+          # primary necessary: "no initdb/pg_ctl to start a throwaway cluster".
+          # That is fixed. The ci-cpu image now ships the PostgreSQL server, so
+          # `writable_dsn()` falls through to `ephemeral_cluster_dsn()` — initdb
+          # + pg_ctl on a unix socket in a temp dir, trust auth, torn down at
+          # session end.
           #
-          # A plain `env:` is enough: exec-in-sif.sh passes no --cleanenv, so
-          # apptainer inherits the host environment. Verified on the runner
-          # against the real ci-cpu.sif — the variable arrives inside, $HOME is
-          # the same, and ~/.pgpass is visible there. No APPTAINERENV_ needed.
+          # WHY IT HAD TO CHANGE. On 2026-08-30 this very job failed on tag
+          # v0.58.0, not from a defect but from connection exhaustion on the
+          # shared primary (max_connections=100, ~24 in use at idle):
+          #     FATAL: remaining connection slots are reserved for roles with
+          #            the SUPERUSER attribute
+          #     FATAL: sorry, too many clients already
+          # 9 problems out of 7432 tests, all refusals; build/publish/release
+          # skipped on `needs: test`; the tag produced no artifact and PyPI
+          # stayed on the previous version — the exact outcome the comment above
+          # was written about, arrived at by a different route. Re-running the
+          # failed leg ALONE still reproduced it, so it is not a flake.
           #
-          # This is CONFIGURATION setting the one switch, not a second copy of
-          # it: no DSN literal survives anywhere in the source or the tests.
-          SCITEX_STORE_DSN: postgresql://ywatanabe__scitex-dev@scitex-primary:55432/scitex
-        run: bash .github/ci/exec-in-sif.sh run-in-sif.sh ${{ matrix.python-version }}
+          # And the blast radius was never limited to CI: while this job
+          # saturated the primary, every agent's card write competed for the
+          # same 100 slots. A test suite must not be able to deny service to the
+          # production board, which is why the fix is isolation rather than a
+          # bigger ceiling.
+          #
+          # PREREQUISITE, VERIFIED BEFORE THIS LANDED: every runner in the
+          # `scitex-org-cpu` pool (compute-01..04, the pool CI_RUNS_ON names)
+          # carries the rebuilt image — `initdb (PostgreSQL) 16.15` present in
+          # the new one, absent in the old. Recipe:
+          # src/scitex_dev/ci/runner/containers/ci-cpu.def
+          #
+          # ONE CLUSTER PER LEG, not one per worker. The store conftest binds
+          # `writable_dsn()` at MODULE SCOPE and every xdist worker is a separate
+          # process, so leaving the DSN unset makes each worker start its own
+          # cluster during collection. pytest-matrix measured what that costs on
+          # this pool — up to 36 concurrent initdb+pg_ctl on a 12-core box, which
+          # do not fail but QUEUE until a 120 s guard fires. Same reasoning and
+          # the same fix in both workflows.
+        run: |
+          set -euo pipefail
+          PGBIN=$(dirname "$(ls /usr/lib/postgresql/*/bin/initdb | head -1)")
+          PGDIR=$(mktemp -d "${RUNNER_TEMP:-/tmp}/pgrel-${{ matrix.python-version }}.XXXXXX")
+          cleanup() {
+            "$PGBIN/pg_ctl" -D "$PGDIR/data" -m immediate stop >/dev/null 2>&1 || true
+            rm -rf "$PGDIR"
+          }
+          trap cleanup EXIT
+          "$PGBIN/initdb" -D "$PGDIR/data" -A trust --encoding=UTF8 -U postgres >"$PGDIR/initdb.log" 2>&1
+          "$PGBIN/pg_ctl" -D "$PGDIR/data" -o "-k $PGDIR -h ''" -w -t 60 start >"$PGDIR/start.log" 2>&1 \
+            || { echo "::error::throwaway cluster failed to start"; tail -20 "$PGDIR/start.log"; exit 1; }
+          # Started on the HOST, reached from inside the SIF over its unix
+          # socket. exec-in-sif.sh passes no --cleanenv so the variable is
+          # inherited, and $RUNNER_TEMP lives under $HOME, which apptainer binds
+          # — the same reasoning the removed DSN comment relied on for ~/.pgpass.
+          # If the socket turns out NOT to be reachable inside the container,
+          # that is what this run will show, and the fix is a bind, not a return
+          # to the fleet primary.
+          # SOCKET DIRECTORY IN THE AUTHORITY, PERCENT-ENCODED — NOT `?host=`.
+          # The test harness APPENDS its own query string to whatever this
+          # names (`?options=-csearch_path=<per-test schema>`). A DSN that
+          # already carries `?host=...` then yields TWO `?` and libpq refuses
+          # the whole thing:
+          #     extra key/value separator "=" in URI query parameter: "host"
+          # Encoding the socket dir into the host position leaves the query
+          # string free for the harness, which is the only place it can go.
+          PGHOST_ENC=$(printf '%s' "$PGDIR" | sed 's|/|%2F|g')
+          export SCITEX_STORE_DSN="postgresql://postgres@${PGHOST_ENC}/postgres"
+          bash .github/ci/exec-in-sif.sh run-in-sif.sh ${{ matrix.python-version }}
 
   build:
     needs: test
