@@ -110,17 +110,11 @@ def main(
     ctx.ensure_object(dict)
     ctx.obj["json"] = as_json
 
-    # Editable-install drift warning — fires once per process, ~1ms, and is
-    # skipped on non-editable installs. Suppress with
-    # SCITEX_DEV_NO_DRIFT_WARN=1. It lives at this CLI entry rather than in
-    # the package __init__ so a library import stays silent and cheap; see
-    # the note in scitex_dev/__init__.py for what that cost us.
-    try:
-        from .._release.check_editable_drift import emit_if_drift
-
-        emit_if_drift("scitex-dev")
-    except Exception:
-        pass
+    # NO drift warning here. It is emitted from the single guarded call site
+    # further down; an unguarded `emit_if_drift("scitex-dev")` used to sit at
+    # this point, and because the emitter is warn-ONCE per process the FIRST
+    # call site is the only one that ever speaks — so this one silently took
+    # ownership of the emission and voided both guards below.
 
     if version:
         if as_json:
@@ -151,12 +145,17 @@ def main(
     # internal fault is swallowed so the check can never break the host CLI.
     import os as _os
 
-    # Suppress the drift emission inside a pytest run: this guard fires on
-    # EVERY CLI invocation, so when unrelated tests invoke the `scitex-dev`
-    # CLI it would print a drift line into their captured output whenever the
-    # test checkout is behind its remote — polluting assertions across suites
-    # (seen on the self-hosted runner). Direct unit tests of check() /
-    # emit_if_drift bypass main() and are unaffected.
+    # THE ONLY `emit_if_drift` call site in `main`. Do not add another: the
+    # emitter is warn-once per process, so an earlier call does not
+    # double-print — it takes the emission away from here and voids this
+    # guard without touching a line of it. That is what blocked the 0.57.0
+    # release.
+    #
+    # Suppress the drift emission inside a pytest run: this fires on EVERY CLI
+    # invocation, so unrelated tests that invoke the CLI get a drift line in
+    # their captured output whenever the checkout is behind its remote — and a
+    # release run is that case BY CONSTRUCTION: it builds from a TAG that
+    # `develop` then moves past. Direct unit tests bypass main() and are safe.
     if not _os.environ.get("PYTEST_CURRENT_TEST"):
         from scitex_dev._release.check_editable_drift import emit_if_drift
 
