@@ -9,37 +9,45 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.57.0] - 2026-08-30
 
-> **BREAKING: there is one storage engine.** The SQLite backend is gone —
-> `Backend.SQLITE`, `StoreTarget.sqlite()` and the SQLite dialect are
-> removed, not deprecated. A store now resolves to PostgreSQL or refuses.
+> **BREAKING: there is one storage engine.** The second, file-backed
+> backend is gone — its `Backend` member, its `StoreTarget` constructor and
+> its dialect are removed, not deprecated. `Backend` now has one member. A
+> store resolves to PostgreSQL or refuses.
+>
+> (The retired engine is not named here, and the guard under
+> `tests/develop/` that enforces that will reject this file if it is. The
+> name is allowed only under `docs/adr/`, which is where the record lives:
+> **ADR-0006**.)
 
 ### Removed
 
-- **`Backend.SQLITE` / `StoreTarget.sqlite()` / the SQLite dialect** (#762).
-  The reason is not tidiness: SQLite has no concept of WHO. Anyone who can
-  open the file has every permission, so multi-user identity cannot be
-  retrofitted — it is a foundation or it is absent, and handing a
-  collaborator a database file is SHARING, not COLLABORATING. Keeping the
-  engine reachable kept it CHOSEN: a fleet survey counted 66 of 68 live
-  tables in one consumer sitting on it, by readers following a default
-  stated in prose. The fix was to stop shipping the thing being defaulted
-  to. See ADR-0006.
+- **The file-backed backend: its `Backend` member, `StoreTarget`
+  constructor and dialect** (#762). The reason is not tidiness. A database
+  in a file has no concept of WHO — anyone who can open it holds every
+  permission — so multi-user identity cannot be retrofitted onto it: it is
+  a foundation or it is absent, and handing a collaborator a database file
+  is SHARING, not COLLABORATING.
 
-  A caller that constructed a SQLite target must move to PostgreSQL; there
-  is no shim, because a silent private store is the failure this removes.
+  Keeping it reachable kept it CHOSEN. A fleet survey counted 66 of 68 live
+  tables in one consumer package sitting on it, put there by readers
+  following a default that existed only in prose. A default stated in prose
+  is still a default; the fix was to stop shipping the thing it pointed at.
+
+  There is no shim. A caller that constructed such a target moves to
+  PostgreSQL — a silent private store is the exact failure this removes.
 
 ### Added
 
 - **`scitex_dev.store.testing`** (#762) — `writable_dsn()`,
   `ephemeral_schema()`, `ephemeral_cluster_dsn()`. Removing the second
-  engine removed the affordance a consumer used to test store-touching code
+  engine removed the affordance consumers used to test store-touching code
   (a throwaway file-backed store), and nothing replaced it; three packages
   hit that wall on the same day. This hands out a REAL PostgreSQL — a
-  throwaway schema on a cluster you have, or a whole throwaway cluster via
-  `initdb` — so a test that passes against it passes against the engine that
-  ships. It checks `pg_is_in_recovery()` rather than assuming: a standby
-  accepts the connection and refuses the DDL, which is the shape that makes
-  a suite report green while running nothing.
+  throwaway schema on a cluster you already have, or a whole throwaway
+  cluster started with `initdb` — so a test that passes against it passes
+  against the engine that ships. It checks `pg_is_in_recovery()` rather
+  than assuming: a standby accepts the connection and refuses the DDL,
+  which is the shape that makes a suite report green while running nothing.
 
 ### Fixed
 
