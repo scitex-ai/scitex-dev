@@ -59,6 +59,11 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
             "clone",
             "validate-sync",
             "prune-merged",
+            # The daily two-dimensional sweep: every package on every
+            # host, checkouts to develop plus local and remote branch
+            # collection. Dry-run by default; `prune-branches` remains
+            # the conservative, config-gated, local-only collector.
+            "branch-hygiene",
             "ci-template",
             # Declared HOST state (journald persistence, sysctl drop-ins
             # ...) federated from every leaf's `scitex_dev.host_config`

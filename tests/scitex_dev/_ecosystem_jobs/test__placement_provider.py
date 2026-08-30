@@ -85,4 +85,32 @@ class TestOnlyGenuineSingletonsAreDeclared:
         assert empty == []
 
 
+
+class TestBranchHygieneRemoteIsASingleton:
+    """A REMOTE ref is shared, so its sweep is a singleton like the others.
+
+    N hosts pushing deletes to one origin is N times the API calls for one
+    effect, and the N-1 that lose the race each report a failure for a branch
+    the winner already deleted — noise indistinguishable from the sweep being
+    broken. The LOCAL leg is deliberately absent from the declaration: every
+    host has its own checkouts, so undeclared-arms-everywhere is right there.
+    """
+
+    def test_the_remote_leg_is_placed_on_one_host(self):
+        # Arrange
+        hosts = _hosts_for("scitex-dev-branch-hygiene-remote")
+        # Act
+        count = len(hosts)
+        # Assert
+        assert count == 1
+
+    def test_the_local_leg_is_left_undeclared(self):
+        # Arrange
+        declared = {record.job for record in provide_placement()}
+        # Act
+        stated = "scitex-dev-branch-hygiene" in declared
+        # Assert
+        assert not stated
+
+
 # EOF

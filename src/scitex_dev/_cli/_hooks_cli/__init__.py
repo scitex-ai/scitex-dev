@@ -27,6 +27,13 @@ Subcommands
     read from the ``scitex_dev.hooks`` federation. Distinct from the verbs
     above, which install script FILES: ``rules`` reports the declared
     POLICY, which is the thing an auditor and a human reviewer can check.
+``scitex-dev hooks enable-pre-commit --target <project>``
+    Install the LOCAL-``main``-is-a-mirror guard: a ``pre-commit`` hook
+    that REFUSES a commit whose HEAD is ``main`` or ``master``, AND wires
+    ``core.hooksPath`` so it actually fires. The refusal NAMES THE ROAD
+    (develop -> topic branch -> PR -> release -> pull to local main)
+    rather than only saying no. Does not touch the release path, which
+    tags and pushes and never commits.
 ``scitex-dev hooks enable-pre-push --target <project>``
     Install the canonical ``pre-push`` gate (audit-all + diff-scoped
     ruff/import-smoke/testmon) AND wire ``git config core.hooksPath
@@ -41,7 +48,9 @@ Module map
 - :mod:`_registry`  — ``KNOWN_HOOKS`` + symlink-status helpers
 - :mod:`_install`   — ``install`` and ``update`` leaves
 - :mod:`_inspect`   — ``list`` and ``show-path`` leaves (+ alias)
+- :mod:`_hookspath` — the shared ADDITIVE-then-refuse ``core.hooksPath`` wiring
 - :mod:`_pre_push`  — ``enable-pre-push`` (symlink + ``core.hooksPath``)
+- :mod:`_pre_commit` — ``enable-pre-commit`` (the main-branch commit guard)
 - ``rules`` is NOT local: it is mounted from
   :func:`scitex_dev.hooks.cli.register_hook_rules_command`, the same public
   registrar every leaf package mounts, so scitex-dev consumes the shared
@@ -54,6 +63,7 @@ from __future__ import annotations
 from ..._ecosystem.help_spec import CliHelp, Example, SpecGroup
 from ._inspect import register_inspect
 from ._install import register_install
+from ._pre_commit import register_pre_commit
 from ._pre_push import register_pre_push
 from ._registry import KNOWN_HOOKS
 
@@ -97,6 +107,7 @@ def register_hooks_commands(main) -> None:
     register_install(hooks_group)
     register_inspect(hooks_group)
     register_pre_push(hooks_group)
+    register_pre_commit(hooks_group)
 
     # scitex-dev mounts the shared registrar exactly as any leaf does, and
     # scopes it to its OWN declarations: `<pkg> dev hooks list-rules` means this

@@ -45,6 +45,17 @@ KNOWN_HOOKS: dict[str, tuple[str, str]] = {
         _hooks.pre_push_sh_path(),
         ".githooks/pre-push",
     ),
+    # The LOCAL-`main`-is-a-mirror guard. Same filename-based contract as
+    # `pre_push`: git looks for a file named exactly `pre-commit`, so the
+    # symlink drops the `.sh` the source keeps. Like `pre_push` it is
+    # INERT until `core.hooksPath` points at `.githooks`, which is why it
+    # has its own `enable-pre-commit` leaf rather than relying on plain
+    # `hooks install` — a guard that is installed and never fires is
+    # worse than one that is absent, because the absence is visible.
+    "pre_commit": (
+        _hooks.pre_commit_sh_path(),
+        ".githooks/pre-commit",
+    ),
     # The merge gate: refuses `gh pr merge` unless `scitex-dev ci verify`
     # returns READY. Registered here so `hooks install` deploys it like any
     # other canonical hook -- the ORIGINAL copy of this script was an

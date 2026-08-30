@@ -12,6 +12,11 @@ from scitex_dev._ecosystem_jobs._provider import (
     log_path_for,
     provide_jobs,
 )
+from scitex_dev._supervisor._schedule import cadence_sec, unschedulable
+
+LOCAL_HYGIENE = "scitex-dev-branch-hygiene"
+REMOTE_HYGIENE = "scitex-dev-branch-hygiene-remote"
+ONE_DAY_SEC = 86400.0
 
 
 def test_provider_registers_the_self_pull_timer():
@@ -202,3 +207,99 @@ def test_venv_refresh_upgrades_dependencies_not_only_the_package():
     body = _venv_refresh_body()
     # Assert
     assert "--upgrade" in body and "--extras all" in body
+
+
+# ------------------------------------------------------------------ #
+# BRANCH HYGIENE — SCHEDULED, not merely declared.                    #
+#                                                                     #
+# A JobSpec the supervisor cannot place is invisible: it never runs,  #
+# and "it never ran" looks exactly like "it was never scheduled". So  #
+# these ask the SCHEDULER, not the declaration.                       #
+#                                                                     #
+# The distinction is not academic. `_supervisor._schedule.cadence_sec`#
+# reads `on_unit_active_sec` and `schedule` and does NOT read         #
+# `on_calendar` — so a timer-kind job declaring only a wall-clock     #
+# anchor passes `JobSpec.validate()`, appears in every listing, and   #
+# has no cadence at all. Eight timers on one host have never fired.   #
+# ------------------------------------------------------------------ #
+
+
+def _hygiene(name: str):
+    return next(job for job in provide_jobs() if job.name == name)
+
+
+def test_the_branch_hygiene_local_leg_is_declared():
+    # Arrange
+    names = {job.name for job in provide_jobs()}
+    # Act
+    declared = LOCAL_HYGIENE in names
+    # Assert
+    assert declared
+
+
+def test_the_branch_hygiene_local_leg_runs_daily_on_the_supervisors_clock():
+    # Arrange — the measurement that separates scheduled from declared.
+    spec = _hygiene(LOCAL_HYGIENE)
+    # Act
+    cadence = cadence_sec(spec)
+    # Assert
+    assert cadence == ONE_DAY_SEC
+
+
+def test_the_branch_hygiene_remote_leg_runs_daily_on_the_supervisors_clock():
+    # Arrange
+    spec = _hygiene(REMOTE_HYGIENE)
+    # Act
+    cadence = cadence_sec(spec)
+    # Assert
+    assert cadence == ONE_DAY_SEC
+
+
+def test_no_declared_job_is_unschedulable():
+    # Arrange — the scheduler's own report over the whole roster, so a job
+    # added later with an unreadable cadence fails HERE rather than in a log
+    # nobody reads.
+    specs = provide_jobs()
+    # Act
+    orphans = unschedulable(specs)
+    # Assert
+    assert orphans == []
+
+
+def test_branch_hygiene_ships_without_execute():
+    # Arrange — constitution §2. A measured single manual pass was 251 local
+    # + 155 remote deletions on ONE host; an unattended first fire must not
+    # do that across seven. Flip by adding ` --execute` after a human has
+    # read a fleet-wide dry run.
+    body = JOB_SHELL_BODIES[LOCAL_HYGIENE]
+    # Act
+    arms_it = "--execute" in body
+    # Assert
+    assert not arms_it
+
+
+def test_branch_hygiene_remote_ships_without_execute():
+    # Arrange — the same rule, on the leg with no local bundle to undo it.
+    body = JOB_SHELL_BODIES[REMOTE_HYGIENE]
+    # Act
+    arms_it = "--execute" in body
+    # Assert
+    assert not arms_it
+
+
+def test_branch_hygiene_local_leg_never_touches_the_remote():
+    # Arrange — otherwise every host races every other host on shared refs.
+    body = JOB_SHELL_BODIES[LOCAL_HYGIENE]
+    # Act
+    scoped = "--no-remote" in body
+    # Assert
+    assert scoped
+
+
+def test_branch_hygiene_remote_leg_does_not_also_sweep_local_branches():
+    # Arrange — otherwise the control-plane host sweeps its checkouts twice.
+    body = JOB_SHELL_BODIES[REMOTE_HYGIENE]
+    # Act
+    scoped = "--no-local" in body
+    # Assert
+    assert scoped

@@ -7,6 +7,40 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`scitex-dev ecosystem branch-hygiene`** — the daily two-dimensional branch
+  sweep, over every package in the ECOSYSTEM registry on every host in the host
+  registry. Three legs: put each checkout back on `develop` (a dirty tree is
+  reported and skipped, never stashed and never forced); collect local branches
+  that are not `main` / `master` / `develop` / `cla` / `cla-signatures` by EXACT
+  name (BOTH CLA spellings — they are both live signature stores in this org,
+  carrying the identical `signatures/cla.json`),
+  are not an open PR's head, and either merged into develop or went untouched
+  for 24h; and the same rule against `origin`, run ONCE for the fleet. A
+  worktree holding a finished branch goes with it — cleanly when the tree is
+  clean, with `--force` only when it carries uncommitted work whose FILES are
+  also past the window, and every such discard is named. DRY RUN BY DEFAULT;
+  `--execute` opts in. Decisions live in the new `scitex_dev.branch_hygiene`
+  package.
+- **`scitex-dev-branch-hygiene` and `scitex-dev-branch-hygiene-remote`** — the
+  two daily JobSpecs behind it, running on the supervisor's clock per ADR-0012.
+  The local leg arms everywhere (every host has its own checkouts); the remote
+  leg is placed on the control-plane host, because remote refs are shared. Both
+  ship in REPORT mode, like `pr-expire`.
+- **`scitex-dev dev hooks enable-pre-commit`** — installs the guard that refuses
+  a commit whose HEAD is `main` or `master`, AND wires `core.hooksPath` so it
+  actually fires. Local `main` is a read-only mirror of `origin/main`; the
+  refusal NAMES THE ROAD (develop → topic branch → PR → release → pull) rather
+  than only saying no. The release path tags and pushes and never commits, so
+  it is untouched.
+
+### Changed
+
+- `core.hooksPath` wiring moved into a shared `_hookspath` helper used by both
+  `enable-pre-push` and `enable-pre-commit`, so the two cannot drift apart about
+  what "already set" means. Behaviour is unchanged: additive, then refuse.
+
 ## [0.57.0] - 2026-08-30
 
 > **BREAKING: there is one storage engine.** The second, file-backed
