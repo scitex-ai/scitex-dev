@@ -41,6 +41,39 @@ versions follow [Semantic Versioning](https://semver.org/).
   `enable-pre-push` and `enable-pre-commit`, so the two cannot drift apart about
   what "already set" means. Behaviour is unchanged: additive, then refuse.
 
+### Fixed
+
+- **`audit-mcp-tools §1` no longer fails one package's required check for
+  another package's defect.** The rule grades
+  `scitex/_mcp_tools/<pkg>.py` — a file that ships in the UMBRELLA — and
+  reported the verdict against whichever package was under audit, at
+  error tier. In scitex-io's CI that read `[§1] scitex-io: umbrella bridge
+  scitex/_mcp_tools/io.py uses direct mcp.mount(...)`, a file scitex-io
+  does not contain, does not depend on (the umbrella arrives
+  transitively) and cannot pin.
+
+  The control: scitex-io PR #167 resolved no `scitex==` at all and showed
+  NO §1, from the same repository and the same rule. The finding appeared
+  or vanished purely on whether the umbrella happened to be installed in
+  that job — a fact about the environment, not about the package graded.
+
+  Such a finding is now emitted as **`§1u`**, attributed to `scitex` (the
+  printed line names the owner) and registered **warn**-tier, so it stays
+  fully visible and counted without failing a gate its subject cannot
+  pass. The message says which repository to fix it in and why the
+  audited package cannot. `§1` keeps its error tier for the owner's own
+  run. Warn-tier sibling of an error rule, same construction as `§10w`
+  beside `§10`; `§1u` also joins `NON_ATTRIBUTABLE_RULES`, since a
+  finding that flips with the resolved umbrella cannot be blamed on a
+  diff either.
+
+  Known gap, stated rather than implied: §1 is warn-only in practice
+  today, because `audit-mcp-tools` skips the umbrella outright and would
+  otherwise look for a `scitex/_mcp_tools/scitex.py` that does not exist.
+  Making §1 bite its owner needs the umbrella's audit to sweep its own
+  bridge directory — a separate change, recorded in `_mcp_bridge`'s
+  docstring.
+
 ## [0.57.0] - 2026-08-30
 
 > **BREAKING: there is one storage engine.** The second, file-backed

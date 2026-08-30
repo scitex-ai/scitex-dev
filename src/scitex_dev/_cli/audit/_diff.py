@@ -106,7 +106,17 @@ from ._diff_keys import (  # noqa: F401
 #: describe the machine rather than the diff; a tally is not a finding at
 #: all, it is arithmetic over findings already counted. Both are honestly
 #: reported and neither can be blamed on a change.
-NON_ATTRIBUTABLE_RULES = frozenset({"§10", "§10w", TALLY_RULE})
+#:
+#: §1u is the third member and it arrives by the same argument as §10, one
+#: axis over: it is a defect in `scitex/_mcp_tools/<pkg>.py`, a file that
+#: ships in the UMBRELLA and is absent from the diff, the repository and
+#: the dependency set of the package being graded. Whether it appears at
+#: all depends on which `scitex` the job happened to resolve — measured on
+#: scitex-io, where PR #167 resolved no umbrella and showed no finding
+#: while a sibling PR resolved 2.28.13 and showed one, from identical
+#: source. Net-new keying would hand that coin-flip to whoever pushed.
+#: Reported, never attributed — same contract as the other two.
+NON_ATTRIBUTABLE_RULES = frozenset({"§10", "§10w", "§1u", TALLY_RULE})
 
 
 def is_attributable(key: ViolationKey) -> bool:
