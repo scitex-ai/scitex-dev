@@ -9,6 +9,43 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.57.0] - 2026-08-30
 
+> **BREAKING: there is one storage engine.** The SQLite backend is gone —
+> `Backend.SQLITE`, `StoreTarget.sqlite()` and the SQLite dialect are
+> removed, not deprecated. A store now resolves to PostgreSQL or refuses.
+
+### Removed
+
+- **`Backend.SQLITE` / `StoreTarget.sqlite()` / the SQLite dialect** (#762).
+  The reason is not tidiness: SQLite has no concept of WHO. Anyone who can
+  open the file has every permission, so multi-user identity cannot be
+  retrofitted — it is a foundation or it is absent, and handing a
+  collaborator a database file is SHARING, not COLLABORATING. Keeping the
+  engine reachable kept it CHOSEN: a fleet survey counted 66 of 68 live
+  tables in one consumer sitting on it, by readers following a default
+  stated in prose. The fix was to stop shipping the thing being defaulted
+  to. See ADR-0006.
+
+  A caller that constructed a SQLite target must move to PostgreSQL; there
+  is no shim, because a silent private store is the failure this removes.
+
+### Added
+
+- **`scitex_dev.store.testing`** (#762) — `writable_dsn()`,
+  `ephemeral_schema()`, `ephemeral_cluster_dsn()`. Removing the second
+  engine removed the affordance a consumer used to test store-touching code
+  (a throwaway file-backed store), and nothing replaced it; three packages
+  hit that wall on the same day. This hands out a REAL PostgreSQL — a
+  throwaway schema on a cluster you have, or a whole throwaway cluster via
+  `initdb` — so a test that passes against it passes against the engine that
+  ships. It checks `pg_is_in_recovery()` rather than assuming: a standby
+  accepts the connection and refuses the DDL, which is the shape that makes
+  a suite report green while running nothing.
+
+### Fixed
+
+- The release pipeline had no writable PostgreSQL, so no tag could publish
+  (#765).
+
 > **The store could be read by key or in full, and by nothing in between** —
 > so a package with a filter had to fetch the table and narrow it in Python,
 > which is the point at which it stops using the store and starts building
