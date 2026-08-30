@@ -35,7 +35,15 @@ verified bundle written before any deletion are imported from
 
 from __future__ import annotations
 
-from ._decide import age_hours, classify, decide, decide_remote, is_protected, worktree_plan
+from ._decide import (
+    age_hours,
+    classify,
+    decide,
+    decide_remote,
+    is_policy_refusal,
+    is_protected,
+    worktree_plan,
+)
 from ._model import (
     AMBIGUOUS_REMOTE_NAMES,
     DEFAULT_MAX_AGE_HOURS,
@@ -49,10 +57,12 @@ from ._model import (
     KEEP_PR_UNKNOWN,
     KEEP_PROTECTED,
     KEEP_RECENT,
+    KEEP_REMOTE_PROTECTED,
     KEEP_WORKTREE_BUSY,
     KEEP_WORKTREE_REFUSED,
     KEEP_WORKTREE_UNKNOWN,
     PROTECTED_EXACT,
+    REMOTE_REFUSAL_SIGNS,
     WT_KEEP,
     WT_NONE,
     WT_REMOVE,
@@ -81,10 +91,12 @@ __all__ = [
     "KEEP_PR_UNKNOWN",
     "KEEP_PROTECTED",
     "KEEP_RECENT",
+    "KEEP_REMOTE_PROTECTED",
     "KEEP_WORKTREE_BUSY",
     "KEEP_WORKTREE_REFUSED",
     "KEEP_WORKTREE_UNKNOWN",
     "PROTECTED_EXACT",
+    "REMOTE_REFUSAL_SIGNS",
     "WT_KEEP",
     "WT_NONE",
     "WT_REMOVE",
@@ -103,6 +115,7 @@ __all__ = [
     "exit_code_for",
     "fan_out",
     "fleet_hosts",
+    "is_policy_refusal",
     "is_protected",
     "registry_repos",
     "sweep_local",

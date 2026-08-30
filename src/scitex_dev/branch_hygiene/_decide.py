@@ -51,6 +51,7 @@ from ._model import (
     WT_REMOVE,
     WT_REMOVE_FORCE,
     AMBIGUOUS_REMOTE_NAMES,
+    REMOTE_REFUSAL_SIGNS,
     BranchFacts,
     BranchVerdict,
 )
@@ -190,6 +191,24 @@ def decide(
         worktree_path=facts.worktree_path,
         worktree_action=action,
     )
+
+
+def is_policy_refusal(detail: str) -> bool:
+    """Did the REMOTE refuse this delete on policy grounds? Pure.
+
+    Branch protection, ``allow_deletions: false``, a pre-receive hook.
+    Measured on scitex-hub, where deleting ``cla-signatures`` failed for
+    exactly this reason and failing was CORRECT — that branch holds
+    contributor signatures and is protected deliberately.
+
+    Told apart from a real failure because the two want opposite
+    responses. A network error or a bad refspec is this sweep going
+    wrong and should be looked at; a protected branch is the remote
+    stating policy, permanently. Retrying cannot help and forcing must
+    not be attempted, so it is reported and the pass stays green.
+    """
+    lowered = detail.lower()
+    return any(sign in lowered for sign in REMOTE_REFUSAL_SIGNS)
 
 
 def decide_remote(

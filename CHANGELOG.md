@@ -14,10 +14,13 @@ versions follow [Semantic Versioning](https://semver.org/).
   registry. Three legs: put each checkout back on `develop` (a dirty tree is
   reported and skipped, never stashed and never forced); collect local branches
   that are not `main` / `master` / `develop` / `cla` / `cla-signatures` by EXACT
-  name (BOTH CLA spellings — they are both live signature stores in this org,
-  carrying the identical `signatures/cla.json`),
+  name (BOTH CLA spellings — the same signature store at two moments of an
+  in-flight fleet-wide rename, and the rename does not land everywhere at once),
   are not an open PR's head, and either merged into develop or went untouched
   for 24h; and the same rule against `origin`, run ONCE for the fleet. A
+  A delete the REMOTE refuses on policy grounds — branch protection,
+  `allow_deletions: false` — is reported and never retried or forced, and does
+  not count as a failure: the remote is working correctly. A
   worktree holding a finished branch goes with it — cleanly when the tree is
   clean, with `--force` only when it carries uncommitted work whose FILES are
   also past the window, and every such discard is named. DRY RUN BY DEFAULT;

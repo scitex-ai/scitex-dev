@@ -26,21 +26,29 @@ So the set is EXACT NAMES and nothing else. A glob is not available here
 on purpose: the two failures above were both glob failures, and the cost
 of the first one is unrecoverable.
 
-THE SET NEEDED BOTH SPELLINGS, and a rehearsal is what said so. This
+THE SET NEEDS BOTH SPELLINGS, BECAUSE THE STORE IS BEING RENAMED. This
 module first listed ``cla-signatures`` alone, because that is the name
-the near-miss was reported under. Running the remote leg in dry-run
-against scitex-dev's own origin then proposed deleting ``cla`` — and
-``origin/cla`` here is a signature store too:
+the original near-miss was reported under. Running the remote leg in
+dry-run against scitex-dev's own origin then proposed deleting ``cla``,
+which by then was the signature store — the rename ``cla-signatures`` ->
+``cla`` was in flight across 68 repositories, and the org reusable's
+``branch:`` input has been flipped to ``cla``.
 
-    $ git log -1 origin/cla
-    chore(cla): create the signature store the org CLA workflow requires
-    $ git ls-tree -r --name-only origin/cla
-    signatures/cla.json          # byte-for-byte the same layout as
-                                 # origin/cla-signatures
+So the two names are the SAME store at two moments in a migration, not
+two independently created stores. Both are listed because a fleet-wide
+rename does not land everywhere at once: on scitex-hub the deletion of
+``cla-signatures`` was REFUSED by branch protection, so that name is
+still live there while ``cla`` is live elsewhere. A sweep that protects
+only the destination name collects the source name wherever step 3 has
+not completed, and vice versa.
 
-One org, one CLA workflow, two branch names for the same store. Whichever
-single name you protect, the other repositories lose their signatures —
-which is why the correction is a SECOND EXACT NAME and not a pattern.
+``cla-signatures`` becomes VESTIGIAL as the rename finishes, and it stays
+anyway. A rule that protects a name nobody uses costs nothing; the
+alternative is re-learning this in the one repository that lagged.
+
+The correction is a SECOND EXACT NAME and not a pattern: ``cla*`` covers
+both and also swallows ``claude/*``, which is the third time that glob
+would have been wrong.
 """
 
 from __future__ import annotations
@@ -56,10 +64,13 @@ DEFAULT_MAX_AGE_HOURS = 24.0
 #: module docstring before adding to this — in particular before
 #: converting any entry to a pattern.
 #:
-#: ``cla`` AND ``cla-signatures`` are both here because both are live CLA
-#: signature stores in this org, holding the identical
-#: ``signatures/cla.json``. Removing either name from this set silently
-#: arms the sweep against every repository that uses that spelling.
+#: ``cla`` AND ``cla-signatures`` are the SAME CLA signature store at two
+#: moments of an in-flight fleet-wide rename (``cla-signatures`` ->
+#: ``cla``, 68 repositories). Both are listed because the rename does not
+#: land everywhere at once — at least one repository still carries the
+#: old name because branch protection REFUSED its deletion. Removing
+#: either name silently arms the sweep against every repository sitting
+#: on that side of the migration.
 PROTECTED_EXACT = frozenset(
     {"main", "master", "develop", "cla", "cla-signatures"}
 )
@@ -69,6 +80,28 @@ PROTECTED_EXACT = frozenset(
 #: ``origin`` was measured in the field; ``HEAD`` has the same shape.
 #: These are REPORTED, never retried and never forced.
 AMBIGUOUS_REMOTE_NAMES = frozenset({"origin", "HEAD"})
+
+#: Lowercase fragments that identify a delete the REMOTE refused on
+#: policy grounds — branch protection, ``allow_deletions: false``, a
+#: pre-receive hook. Measured on scitex-hub, where deleting
+#: ``cla-signatures`` failed for exactly this reason and failing was
+#: CORRECT: the branch holds contributor signatures and is protected on
+#: purpose.
+#:
+#: A refusal like this is not this sweep failing. It is the remote
+#: stating a policy, permanently — retrying cannot help, forcing must not
+#: be attempted, and a daily job that goes red on it is a job somebody
+#: disables. So it is a KEEP with its own reason, exactly like an
+#: ambiguous name, and it never reaches the failure count.
+REMOTE_REFUSAL_SIGNS = (
+    "protected branch",
+    "protected branch hook declined",
+    "cannot delete",
+    "deletion of the current branch prohibited",
+    "refusing to delete",
+    "allow_deletions",
+    "pre-receive hook declined",
+)
 
 # --------------------------------------------------------------------- #
 # Keep reasons — why a branch survived this pass.                        #
@@ -112,6 +145,11 @@ KEEP_WORKTREE_REFUSED = "worktree-remove-refused"
 
 #: The name cannot be spelled unambiguously in a delete refspec.
 KEEP_AMBIGUOUS_NAME = "ambiguous-ref-name"
+
+#: The remote refused the delete on policy grounds. Reported, never
+#: retried, never forced — and NOT counted as a failure, because the
+#: remote is working correctly.
+KEEP_REMOTE_PROTECTED = "remote-refused-protected"
 
 #: The ref moved between the read and the write. Never delete what you
 #: measured a moment ago and cannot re-confirm now.
@@ -280,7 +318,16 @@ class RepoResult:
 
     @property
     def failures(self) -> tuple[BranchVerdict, ...]:
-        return tuple(v for v in self.local + self.remote if v.error)
+        """Deletions that were attempted and went wrong.
+
+        A KEPT branch may carry an ``error`` too — the text of a
+        ``worktree remove`` refusal, or of a remote's branch-protection
+        refusal — and neither is this sweep failing. Both are a guard
+        working, recorded so the report can name it. Counting them here
+        would put a daily job permanently in the red for behaving
+        correctly, which is how a gate gets disabled.
+        """
+        return tuple(v for v in self.local + self.remote if v.error and v.drop)
 
     def to_dict(self) -> dict:
         return {
