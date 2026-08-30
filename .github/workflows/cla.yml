@@ -73,7 +73,38 @@ permissions:
 
 jobs:
   call:
-    uses: scitex-ai/.github/.github/workflows/cla.yml@8da375a9771a07cf3f281c5f6fb450ab64dc7c0a # main@2026-08-30
+    uses: scitex-ai/.github/.github/workflows/cla.yml@f5d19f5b7424fcf985137bb6acff54f5d0e11749 # main@2026-08-30
+    #
+    # 2026-08-30 BUMP, AND THE OUTAGE THAT FORCED IT. The signature branch was
+    # renamed `cla-signatures` -> `cla` across 68 repositories. The org
+    # reusable was flipped to match in scitex-ai/.github#44 (f5d19f5b, 09:29Z)
+    # and `cla-signatures` was then DELETED here.
+    #
+    # This caller pins a SHA rather than tracking `@main` — deliberately, for
+    # the reasons in the header above — so it did NOT follow that flip. The
+    # previous pin `8da375a9` still reads `branch: "cla-signatures"`, and from
+    # the moment the branch was deleted EVERY pull request in this repository
+    # failed the CLA check with:
+    #
+    #     Error occurred when creating the signed contributors file:
+    #     Branch cla-signatures not found.
+    #
+    # Measured on PR #777 at 09:48Z, thirteen seconds in, four minutes after
+    # PR #776 had passed the same check on the same day.
+    #
+    # The pin is the safety property working exactly as designed and it is also
+    # what made the rename land as an outage here. That is the cost of pinning,
+    # and it is still the right trade for a `pull_request_target` workflow
+    # holding a PAT — the answer is to bump deliberately, which is this.
+    #
+    # VERIFIED BEFORE BUMPING, because "deliberate" has to mean something:
+    # f5d19f5b's complete diff against 8da375a9 is `branch: "cla-signatures"`
+    # -> `branch: "cla"` plus one trailing newline. Two lines, no permission
+    # change, no new secret, no runner change.
+    #
+    # ANY OTHER REPO THAT PINS A SHA OLDER THAN f5d19f5b IS BROKEN THE SAME WAY
+    # once its `cla-signatures` is deleted. Repos using `@main` picked the flip
+    # up automatically and are unaffected.
     # NON-DEFAULT ON PURPOSE. The reusable defaults to `bot*,ywatanabe1989`;
     # this repo's inline version also allowlisted `LLEmacs`. Taking the default
     # would silently start demanding a CLA signature from an already-allowlisted
