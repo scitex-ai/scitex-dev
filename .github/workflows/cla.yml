@@ -44,14 +44,17 @@ name: CLA Assistant
 #
 # WHAT THIS DOES NOT FIX
 # ----------------------
-# The callee still runs on persistent shared self-hosted runners, so CLA code
-# still executes adjacent to fleet credentials. The real hazard is CREDENTIAL
-# ADJACENCY, not the word "hosted"; the standing fix is a dedicated
-# credential-free ephemeral pool, tracked separately. Narrowing the mapping
-# shrinks the blast radius; it does not remove the adjacency, and neither this
-# file nor the callee shows that adjacency on its own — PS-224 reads one file
-# at a time, so the residual exposure is tracked as a rule gap, not as a
-# property of this workflow.
+# RESOLVED BY THE 2026-08-30 BUMP TO `8da375a9`, and left here because the
+# paragraph it replaces was the accurate description of a real exposure for a
+# month. It read: "The callee still runs on persistent shared self-hosted
+# runners, so CLA code still executes adjacent to fleet credentials." That was
+# true at `ecb0345b`, where both callee jobs hard-coded
+# `runs-on: [self-hosted, Linux, X64, spartan-cpu]` with no input to override.
+# Upstream commit 57e2e772 gave the callee a `runs_on` input defaulting to
+# '["ubuntu-latest"]', so this caller — which passes no runs_on — now lands on
+# a disposable hosted VM and the credential adjacency is gone for this job.
+# The general rule (a dedicated credential-free ephemeral pool for everything
+# else) is still tracked separately.
 
 on:
   issue_comment:
@@ -70,7 +73,7 @@ permissions:
 
 jobs:
   call:
-    uses: scitex-ai/.github/.github/workflows/cla.yml@ecb0345b88823776aad046047288623bd5d24511 # main@2026-07-29
+    uses: scitex-ai/.github/.github/workflows/cla.yml@f5d19f5b7424fcf985137bb6acff54f5d0e11749 # main@2026-08-30
     # NON-DEFAULT ON PURPOSE. The reusable defaults to `bot*,ywatanabe1989`;
     # this repo's inline version also allowlisted `LLEmacs`. Taking the default
     # would silently start demanding a CLA signature from an already-allowlisted

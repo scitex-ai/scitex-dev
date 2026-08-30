@@ -20,6 +20,7 @@ from ._cmds import (
     _audit_per_target,
     _audit_registry_layout,
     _audit_summary,
+    _branch_hygiene,
     _branch_protection,
     _ci_template,
     _clean,
@@ -120,6 +121,7 @@ def register_ecosystem_commands(main_group):
     _host_config.register(ecosystem)
     _prune_merged.register(ecosystem)
     _prune_branches.register(ecosystem)
+    _branch_hygiene.register(ecosystem)
     _pr.register(ecosystem)
     _branch_protection.register(ecosystem)
     _ci_template.register(ecosystem)

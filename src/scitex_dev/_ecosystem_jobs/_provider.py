@@ -60,6 +60,8 @@ JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
     "scitex-dev-local-state-audit": ("dev", "timer-local-state-audit"),
     "scitex-dev-host-config-check": ("dev", "timer-host-config-check"),
     "scitex-dev-venv-refresh": ("dev", "timer-venv-refresh"),
+    "scitex-dev-branch-hygiene": ("dev", "cron-branch-hygiene"),
+    "scitex-dev-branch-hygiene-remote": ("dev", "cron-branch-hygiene-remote"),
 }
 
 #: Pure shell bodies for the jobs whose body is not a Python entry point —
@@ -156,6 +158,35 @@ JOB_SHELL_BODIES: dict[str, str] = {
         "echo '-- pass 3/3: the shared runtime venv agents execute from --'; "
         "scitex-dev ecosystem install --source editable --extras all "
         "--venv current --upgrade --yes"
+    ),
+    # BRANCH HYGIENE — two jobs, one rule, two populations.
+    #
+    # The LOCAL leg runs on EVERY host because every host has its own
+    # checkouts; the REMOTE leg is placed on ONE host (see
+    # `_placement_provider`) because origin has ONE set of refs and a
+    # per-host pass is N times the API calls for one effect — with N-1 of
+    # them reporting a failure for a branch the first pass already
+    # deleted.
+    #
+    # BOTH SHIP IN REPORT MODE, i.e. WITHOUT `--execute`, exactly as
+    # `pr-expire` does and for the same reason: constitution 2 forbids an
+    # unattended first fire that mass-deletes. The measured scale of a
+    # single manual pass on one host was 251 local + 155 remote
+    # deletions; across seven hosts that is not a blast radius anybody
+    # should discover from a log. Flip by adding ` --execute` to the
+    # string below, ONCE a human has read a fleet-wide dry run.
+    #
+    # `|| true` on neither: this job MUTATES, and a failed sweep is a
+    # failure. Its exit codes already distinguish the steady state (a
+    # dirty checkout, a busy worktree, an open PR -> 0) from the thing
+    # worth waking up for (a repository that could not be read -> 2).
+    "scitex-dev-branch-hygiene": (
+        "date -u +'== branch-hygiene %Y-%m-%dT%H:%MZ =='; "
+        "scitex-dev ecosystem branch-hygiene --no-remote"
+    ),
+    "scitex-dev-branch-hygiene-remote": (
+        "date -u +'== branch-hygiene-remote %Y-%m-%dT%H:%MZ =='; "
+        "scitex-dev ecosystem branch-hygiene --no-local --remote"
     ),
     # OBSERVE-only by construction: `host-config check` never writes, and
     # it needs no privileges (the managed files under /etc are
@@ -461,6 +492,55 @@ def provide_jobs() -> list[JobSpec]:
             ),
             on_boot_sec="10min",
             on_unit_active_sec="6h",
+        ),
+        JobSpec(
+            name="scitex-dev-branch-hygiene",
+            kind="cron",
+            schedule="45 4 * * *",
+            command=_exec_command("scitex-dev-branch-hygiene"),
+            timeout_sec=5_400,
+            description=(
+                "Daily branch sweep, LOCAL leg, on every host. Puts each "
+                "registered checkout back on develop (a dirty tree is "
+                "reported and skipped — never stashed, never forced), then "
+                "collects every local branch that is not main / master / "
+                "develop / cla-signatures by EXACT name, is not an open "
+                "PR's head, and either merged into develop or went "
+                "untouched for 24h. A worktree holding a finished branch "
+                "goes with it: `git worktree remove` without --force when "
+                "the tree is clean, with --force only when it carries "
+                "uncommitted work whose FILES are also past the window, "
+                "and every such discard is named in the log. Anything "
+                "unmeasurable is KEPT. A verified bundle is written before "
+                "the first delete. SHIPS IN REPORT MODE (no --execute) — "
+                "see JOB_SHELL_BODIES for the one-word flip and why it is "
+                "not already flipped. Log at "
+                "~/.scitex/dev/runtime/logs/cron-branch-hygiene.log. See "
+                "scitex_dev.branch_hygiene."
+            ),
+        ),
+        JobSpec(
+            name="scitex-dev-branch-hygiene-remote",
+            kind="cron",
+            schedule="15 5 * * *",
+            command=_exec_command("scitex-dev-branch-hygiene-remote"),
+            timeout_sec=5_400,
+            description=(
+                "Daily branch sweep, REMOTE leg, on ONE host. Same rule as "
+                "scitex-dev-branch-hygiene applied to origin's branches, "
+                "plus one extra refusal: a branch literally named `origin` "
+                "or `HEAD` cannot be spelled unambiguously in `git push "
+                "origin --delete <name>`, so it is REPORTED and never "
+                "retried or forced. Placed on the control-plane host by "
+                "_placement_provider because remote refs are SHARED — "
+                "seven hosts sweeping them is seven times the API calls "
+                "for one effect, and six of those passes fail on a branch "
+                "the first already deleted. Runs an hour after the local "
+                "leg so a branch deleted locally is already gone when its "
+                "remote counterpart is judged. SHIPS IN REPORT MODE (no "
+                "--execute). Log at "
+                "~/.scitex/dev/runtime/logs/cron-branch-hygiene-remote.log."
+            ),
         ),
         JobSpec(
             name="scitex-dev-pr-expire",

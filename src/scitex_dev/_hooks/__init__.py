@@ -66,6 +66,27 @@ def pre_push_sh_path() -> str:
     return str(pathlib.Path(HOOK_DIR) / "pre-push.sh")
 
 
+def pre_commit_sh_path() -> str:
+    """Return the absolute filesystem path of the canonical ``pre-commit.sh``.
+
+    The LOCAL-``main``-is-a-mirror guard: it refuses a commit whose HEAD
+    is ``main`` or ``master`` and prints the one road that is allowed
+    (develop -> topic branch -> PR -> release). It exists because a
+    convention was not enough — measured 2026-08-30, ``main`` was ahead
+    of ``develop`` in every repository checked, and three release PRs had
+    been conflicted for weeks because feature PRs had been merged with
+    ``main`` as their base.
+
+    Resolved the same way as :func:`run_lint_sh_path` so nothing
+    string-concatenates ``HOOK_DIR``. Installed (as a symlink named
+    ``pre-commit``, no ``.sh`` suffix — git's hook contract is
+    filename-based) via ``scitex-dev dev hooks enable-pre-commit
+    --target <repo>``, which also wires ``core.hooksPath``: without that
+    second step a script at ``.githooks/pre-commit`` never runs.
+    """
+    return str(pathlib.Path(HOOK_DIR) / "pre-commit.sh")
+
+
 def require_mergeable_verdict_sh_path() -> str:
     """Return the absolute path of the canonical merge-gate hook.
 
@@ -104,5 +125,6 @@ __all__ = [
     "run_lint_sh_path",
     "run_testmon_sh_path",
     "pre_push_sh_path",
+    "pre_commit_sh_path",
     "require_mergeable_verdict_sh_path",
 ]

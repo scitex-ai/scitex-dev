@@ -25,12 +25,23 @@ Both print a notice so the choice is visible in transcripts.
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import click
 
 from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ._hookspath import (
+    CONFIGURED,
+    FAILED,
+    FORCED,
+    HOOKS_DIR,
+    NO_GIT,
+    REFUSED,
+    WIRED,
+    plan_hookspath,
+    read_hookspath,
+    wire_hookspath,
+)
 from ._registry import KNOWN_HOOKS, _install_one, install_symbol
 
 
@@ -117,31 +128,20 @@ def register_pre_push(hooks_group) -> None:
         project = Path(target)
         source, deploy_rel = KNOWN_HOOKS["pre_push"]
 
-        def _current_hookspath() -> str | None:
-            """Read core.hooksPath; None if git is unavailable."""
-            try:
-                return subprocess.run(
-                    ["git", "-C", str(project), "config", "--get", "core.hooksPath"],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                ).stdout.strip()
-            except FileNotFoundError:
-                return None
-
         if dry_run:
             click.echo(f"would install   pre_push  →  {project / deploy_rel}")
-            current = _current_hookspath()
-            if current == ".githooks":
+            current = read_hookspath(project)
+            planned = plan_hookspath(current, force=force)
+            if planned == WIRED:
                 click.echo(
                     "would no-op     core.hooksPath = .githooks (already wired)"
                 )
-            elif not current:
+            elif planned in (CONFIGURED, NO_GIT):
                 click.echo(
                     f"would configure core.hooksPath = .githooks "
                     f"(currently unset; in {project})"
                 )
-            elif force:
+            elif planned == FORCED:
                 click.echo(
                     f"would force     core.hooksPath = .githooks "
                     f"(was {current!r}; --force given)"
@@ -168,9 +168,12 @@ def register_pre_push(hooks_group) -> None:
             )
             raise SystemExit(1)
 
-        # Step 2: wire core.hooksPath — ADDITIVE-then-refuse.
-        current = _current_hookspath()
-        if current is None:
+        # Step 2: wire core.hooksPath — ADDITIVE-then-refuse, in the
+        # shared `_hookspath` helper so this leaf and `enable-pre-commit`
+        # cannot drift apart about what "already set" means.
+        wired, previous, detail = wire_hookspath(project, force=force)
+
+        if wired == NO_GIT:
             click.echo(
                 click.style(
                     "error: `git` binary not found on PATH; cannot wire "
@@ -181,7 +184,7 @@ def register_pre_push(hooks_group) -> None:
             )
             raise SystemExit(1)
 
-        if current == ".githooks":
+        if wired == WIRED:
             click.echo(
                 click.style(
                     "up-to-date  core.hooksPath = .githooks (already wired)",
@@ -190,11 +193,11 @@ def register_pre_push(hooks_group) -> None:
             )
             return
 
-        if current and current != ".githooks" and not force:
+        if wired == REFUSED:
             click.echo(
                 click.style(
                     f"refused    core.hooksPath already set to "
-                    f"{current!r}; refusing to overwrite without --force",
+                    f"{previous!r}; refusing to overwrite without --force",
                     fg="red",
                 ),
                 err=True,
@@ -215,30 +218,23 @@ def register_pre_push(hooks_group) -> None:
             )
             raise SystemExit(1)
 
-        rc = subprocess.run(
-            ["git", "-C", str(project), "config", "core.hooksPath", ".githooks"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if rc.returncode != 0:
+        if wired == FAILED:
             click.echo(
                 click.style(
-                    f"error: `git config core.hooksPath` failed: "
-                    f"{rc.stderr.strip() or rc.stdout.strip()}",
+                    f"error: `git config core.hooksPath` failed: {detail}",
                     fg="red",
                 ),
                 err=True,
             )
-            raise SystemExit(rc.returncode)
+            raise SystemExit(1)
 
-        if current and current != ".githooks":
-            prev_note = f" (forced; was: {current!r})"
+        if wired == FORCED:
+            prev_note = f" (forced; was: {previous!r})"
             verb = click.style("forced    ", fg="yellow")
         else:
             prev_note = " (was: unset — git default)"
             verb = click.style("configured", fg="green")
-        click.echo(f"{verb}  core.hooksPath = .githooks{prev_note}")
+        click.echo(f"{verb}  core.hooksPath = {HOOKS_DIR}{prev_note}")
 
 
 __all__ = ["register_pre_push"]
