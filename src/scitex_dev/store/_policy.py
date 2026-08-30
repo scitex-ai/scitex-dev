@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Final, Mapping
+from typing import Any, Final, Mapping, Sequence
 
 from ._errors import FieldPolicyError, SchemaError
 
@@ -286,6 +286,18 @@ class Schema:
 
     name: str
     fields: Mapping[str, FieldPolicy]
+    #: Fields a full-text query searches, as ONE declaration. The store
+    #: builds its text index from this list and the query compiler builds
+    #: its match expression from the same list, so the two cannot drift —
+    #: an expression index that differs from its query by one character is
+    #: never used, the planner says nothing, and the only symptom is that
+    #: search got slow. Empty means this schema is not full-text searchable
+    #: and asking it to be is an error rather than an empty result.
+    text_search: tuple[str, ...] = ()
+    #: The text-search dictionary those fields are analysed with. ``english``
+    #: stems and drops stopwords; ``simple`` does neither and is the closer
+    #: match for identifiers, part numbers and code.
+    text_config: str = "english"
 
     @classmethod
     def build(
@@ -294,6 +306,8 @@ class Schema:
         fields: Mapping[str, Any],
         *,
         declared_columns: "list[str] | None" = None,
+        text_search: "Sequence[str] | None" = None,
+        text_config: str = "english",
     ) -> "Schema":
         """Validate and construct.
 
@@ -304,6 +318,14 @@ class Schema:
         to write, when it has one. Any column in that list with no policy
         is reported here — the whole point of the exercise, since that is
         the case a per-field constructor cannot catch.
+
+        ``text_search`` names the fields a full-text query searches. It is
+        declared here, once, rather than passed at each call site, because
+        the store's text index and the query's match expression are both
+        generated from it and must be character-identical to each other.
+        Only TEXT and JSON fields qualify: a number has no words in it, and
+        casting one to text so it could be searched would make ``2020``
+        match a subject count as readily as a year.
         """
         if not name or not name.isidentifier():
             raise SchemaError(
@@ -369,7 +391,40 @@ class Schema:
                 "soft-delete markers cannot both define the default view."
             )
 
-        return cls(name=name, fields=dict(resolved))
+        searchable = tuple(text_search or ())
+        unknown_search = [n for n in searchable if n not in resolved]
+        if unknown_search:
+            raise SchemaError(
+                f"Schema {name!r}: text_search names {unknown_search}, which "
+                f"the schema does not declare. Known fields: "
+                f"{sorted(resolved)}."
+            )
+        wrong_kind = [
+            n
+            for n in searchable
+            if resolved[n].kind not in (FieldKind.TEXT, FieldKind.JSON)
+        ]
+        if wrong_kind:
+            raise SchemaError(
+                f"Schema {name!r}: text_search names {wrong_kind}, which are "
+                "neither TEXT nor JSON. Full-text search analyses words; a "
+                "number, a boolean or a blob has none, and casting one to "
+                "text to make it searchable turns every digit into a term."
+            )
+        if not text_config or not text_config.isidentifier():
+            raise SchemaError(
+                f"Schema {name!r}: text_config {text_config!r} must be a "
+                "valid identifier — it names a PostgreSQL text-search "
+                "configuration and is embedded in an index expression. "
+                "'english' and 'simple' are the usual two."
+            )
+
+        return cls(
+            name=name,
+            fields=dict(resolved),
+            text_search=searchable,
+            text_config=text_config,
+        )
 
     # -- derived views ----------------------------------------------------
     @property
