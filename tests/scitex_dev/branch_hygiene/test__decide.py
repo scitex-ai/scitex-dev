@@ -66,6 +66,25 @@ def test_cla_signatures_is_protected_by_exact_name():
     assert verdict.reason == KEEP_PROTECTED
 
 
+def test_bare_cla_is_protected_too():
+    """THE REHEARSAL FINDING'S MIRROR IMAGE, caught by running the remote
+    leg in dry-run against this repository's own origin.
+
+    The near-miss was reported as "`^cla$` misses `cla-signatures`", so
+    the first protected set here listed `cla-signatures` alone — and the
+    rehearsal then proposed deleting `origin/cla`, which in scitex-dev
+    is ALSO a signature store: its tip is "chore(cla): create the
+    signature store the org CLA workflow requires" and its tree is the
+    same `signatures/cla.json`. One org, one CLA workflow, two spellings.
+    """
+    # Arrange
+    branch = facts("cla")
+    # Act
+    verdict = classify(branch, now=NOW)
+    # Assert
+    assert verdict.reason == KEEP_PROTECTED
+
+
 def test_claude_sweep_branches_are_not_protected():
     """THE REPAIR THAT WENT TOO FAR: `cla*` matched `claude/*`, which is
     precisely the garbage the sweep exists to collect."""

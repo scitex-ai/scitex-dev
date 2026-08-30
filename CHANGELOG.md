@@ -13,7 +13,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   sweep, over every package in the ECOSYSTEM registry on every host in the host
   registry. Three legs: put each checkout back on `develop` (a dirty tree is
   reported and skipped, never stashed and never forced); collect local branches
-  that are not `main` / `master` / `develop` / `cla-signatures` by EXACT name,
+  that are not `main` / `master` / `develop` / `cla` / `cla-signatures` by EXACT
+  name (BOTH CLA spellings — they are both live signature stores in this org,
+  carrying the identical `signatures/cla.json`),
   are not an open PR's head, and either merged into develop or went untouched
   for 24h; and the same rule against `origin`, run ONCE for the fleet. A
   worktree holding a finished branch goes with it — cleanly when the tree is

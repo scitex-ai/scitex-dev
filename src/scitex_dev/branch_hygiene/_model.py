@@ -6,13 +6,15 @@ Separated from the decision function (:mod:`._decide`) and from the
 world (:mod:`._probe`) so the RULES can be read — and reviewed — without
 running the half that deletes things.
 
-WHY THE PROTECTED SET IS MATCHED EXACTLY
-----------------------------------------
-``cla-signatures`` is the CLA SIGNATURE STORE, not a topic branch. It
-holds every contributor signature the org has collected. A first draft
-of this rule spelled it ``^cla$``, which does NOT match
-``cla-signatures``: a rehearsal marked the branch for deletion in all 36
-repositories that carry it, which would have erased every signature
+WHY THE PROTECTED SET IS MATCHED EXACTLY, AND WHY IT NAMES TWO CLA BRANCHES
+---------------------------------------------------------------------------
+The CLA SIGNATURE STORE is not a topic branch. It holds every contributor
+signature the org has collected, and it is spelled DIFFERENTLY in
+different repositories.
+
+A first draft of this rule spelled it ``^cla$``, which does NOT match
+``cla-signatures``: a rehearsal marked that branch for deletion in all
+36 repositories that carry it, which would have erased every signature
 fleet-wide.
 
 The obvious repair — ``cla*`` — is worse in the other direction: it
@@ -23,6 +25,22 @@ broad, and both readings looked correct in review.
 So the set is EXACT NAMES and nothing else. A glob is not available here
 on purpose: the two failures above were both glob failures, and the cost
 of the first one is unrecoverable.
+
+THE SET NEEDED BOTH SPELLINGS, and a rehearsal is what said so. This
+module first listed ``cla-signatures`` alone, because that is the name
+the near-miss was reported under. Running the remote leg in dry-run
+against scitex-dev's own origin then proposed deleting ``cla`` — and
+``origin/cla`` here is a signature store too:
+
+    $ git log -1 origin/cla
+    chore(cla): create the signature store the org CLA workflow requires
+    $ git ls-tree -r --name-only origin/cla
+    signatures/cla.json          # byte-for-byte the same layout as
+                                 # origin/cla-signatures
+
+One org, one CLA workflow, two branch names for the same store. Whichever
+single name you protect, the other repositories lose their signatures —
+which is why the correction is a SECOND EXACT NAME and not a pattern.
 """
 
 from __future__ import annotations
@@ -37,7 +55,14 @@ DEFAULT_MAX_AGE_HOURS = 24.0
 #: Never deleted, at any age, on any host, local or remote. Read the
 #: module docstring before adding to this — in particular before
 #: converting any entry to a pattern.
-PROTECTED_EXACT = frozenset({"main", "master", "develop", "cla-signatures"})
+#:
+#: ``cla`` AND ``cla-signatures`` are both here because both are live CLA
+#: signature stores in this org, holding the identical
+#: ``signatures/cla.json``. Removing either name from this set silently
+#: arms the sweep against every repository that uses that spelling.
+PROTECTED_EXACT = frozenset(
+    {"main", "master", "develop", "cla", "cla-signatures"}
+)
 
 #: Refs whose NAME collides with the push refspec grammar, so
 #: ``git push <remote> --delete <name>`` cannot say which one is meant.

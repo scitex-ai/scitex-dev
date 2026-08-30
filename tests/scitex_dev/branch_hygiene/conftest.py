@@ -81,6 +81,7 @@ def build_repo(repo: Path) -> Path:
     (repo / "base.txt").write_text("base\n")
     commit(repo, "base")
     run_git(repo, "branch", "main")
+    run_git(repo, "branch", "cla")
     run_git(repo, "branch", "cla-signatures")
     run_git(repo, "branch", "claude/sweep-1")
 

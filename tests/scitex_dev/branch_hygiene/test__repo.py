@@ -118,12 +118,19 @@ def test_the_dry_run_deletes_nothing(repo: Path):
 
 
 def test_protected_names_survive_a_real_pass(repo: Path):
-    """main / develop / cla-signatures, at 400 days old."""
+    """main / develop / BOTH CLA spellings, at 400 days old.
+
+    `cla` and `cla-signatures` are both here because both are live
+    signature stores in this org, carrying the identical
+    `signatures/cla.json`. A pass that protects one spelling and
+    collects the other is the original near-miss with the names
+    swapped.
+    """
     # Arrange
     # Act
     sweep_local(repo, execute=True, now=FUTURE_NOW, pr_heads=no_prs)
     # Assert
-    assert {"develop", "main", "cla-signatures"} <= {
+    assert {"develop", "main", "cla", "cla-signatures"} <= {
         name for name, _, _ in list_local_rows(repo)[1]
     }
 
