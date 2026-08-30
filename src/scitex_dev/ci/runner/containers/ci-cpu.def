@@ -63,11 +63,45 @@ From: ubuntu:24.04
     # (registry sync fail-loud tests). Their absence failed the sac
     # v0.21.13 release run (8 failed / 3 errors, all FileNotFoundError
     # 'tmux'/'ssh') after the 2026-07-11 ci-cpu rebuild.
+    #
+    # postgresql is the SAME clause again, and it is the one that lets CI stop
+    # touching production. `scitex_dev.store.testing.writable_dsn()` has two
+    # routes: the DSN in $SCITEX_STORE_DSN, else a PRIVATE throwaway cluster via
+    # `ephemeral_cluster_dsn()` — initdb + pg_ctl on a unix socket in a temp dir,
+    # trust auth, torn down after the session. The second route needs the SERVER
+    # package; this image had NEITHER server nor client, so the route could never
+    # be taken and both workflows pinned $SCITEX_STORE_DSN at the LIVE FLEET
+    # PRIMARY instead, running the store suite against the production `scitex`
+    # database in throwaway schemas.
+    #
+    # That is what broke the v0.58.0 release, measured 2026-08-30: the primary
+    # runs max_connections=100 with ~24 in use at idle, and three xdist-parallel
+    # matrix legs exhausted it —
+    #     FATAL: remaining connection slots are reserved for roles with the
+    #            SUPERUSER attribute
+    #     FATAL: sorry, too many clients already
+    # 9 problems out of 7432 tests, every one a connection refusal rather than a
+    # real defect. The blast radius is the whole fleet, not the build: while CI
+    # saturates the primary, every agent's card write competes for the same 100
+    # slots. A test suite must not be able to deny service to the production
+    # board, and the constitution is explicit that tests never create schemas in
+    # production.
+    #
+    # Debian keeps initdb/pg_ctl out of PATH under /usr/lib/postgresql/<ver>/bin;
+    # `store.testing._pg_bin()` already searches there, so no PATH surgery is
+    # needed here.
+    #
+    # ORDERING, AND IT MATTERS: this package must exist in a REBUILT SIF on every
+    # runner BEFORE $SCITEX_STORE_DSN is removed from the workflows. Reverse the
+    # order and `writable_dsn()` finds no configured store and no initdb, and
+    # fails loud on every job. Rebuild with `scitex-container apptainer build
+    # ci-cpu`; the workflow change is a SEPARATE, LATER commit.
     apt-get update
     apt-get install -y --no-install-recommends \
         ca-certificates curl git locales \
         build-essential pkg-config libffi-dev libssl-dev libglib2.0-0 \
-        fd-find ripgrep cron systemd tmux openssh-client
+        fd-find ripgrep cron systemd tmux openssh-client \
+        postgresql
     locale-gen en_US.UTF-8
     # Debian ships fd as fdfind; the audit helper + muscle memory want `fd`.
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
