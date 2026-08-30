@@ -80,6 +80,17 @@ def provide_placement() -> list[PlacementRecord]:
             job="ci-watch",
             hosts=(_CONTROL_PLANE_HOST,),
         ),
+        # A REMOTE ref is shared. Seven hosts sweeping origin is seven
+        # times the API calls for one effect, and the six that lose the
+        # race each report a failure for a branch the winner already
+        # deleted — noise that is indistinguishable from the sweep being
+        # broken. Its sibling `scitex-dev-branch-hygiene` (the LOCAL leg)
+        # is deliberately NOT placed: every host has its own checkouts,
+        # so undeclared-arms-everywhere is exactly right there.
+        PlacementRecord(
+            job="scitex-dev-branch-hygiene-remote",
+            hosts=(_CONTROL_PLANE_HOST,),
+        ),
     ]
 
 
