@@ -45,6 +45,24 @@ ALLOWED_PREFIXES = ("docs/adr/",)
 #: reader to delete a build directory instead of fixing anything.
 IGNORED_PREFIXES = ("build/", "src/scitex_dev.egg-info/")
 
+#: Generated Sphinx output, ignored by PATH SEGMENT rather than prefix because
+#: it lives under the package — `src/<pkg>/_sphinx_html/` — not at the root.
+#:
+#: This is not a courtesy. A doctree pickle embeds Sphinx's intersphinx
+#: inventory, which carries CPython's own documentation URLs, so
+#: `docs.python.org/3/library/sqlite3.html` appears there no matter what this
+#: project writes. Measured across the fleet: scitex-dict and
+#: scitex-notification each hold 491 matches in `environment.pickle`, ALL 491
+#: adjacent to that URL. scitex-dev itself tracks 92 files under these
+#: directories.
+#:
+#: So a guard without this fails on arrival in any repo that ships built docs,
+#: and fails on something no author wrote and no rewrite can remove — a
+#: rebuild re-adds every one. Worse, rebuilding inside a worktree bakes the
+#: BUILD PATH into tracked binaries, so a branch named after the thing being
+#: removed writes it into files `git grep -I` cannot even see.
+IGNORED_PATH_SEGMENTS = ("_sphinx_html/", ".doctrees/")
+
 #: Files whose meaningful lines are all exclusion rules. A PATTERN naming the
 #: engine is a refusal to accept its files — the same shape as this file naming
 #: what it bans, and the reason that self-exemption exists. Deleting such a
@@ -116,6 +134,8 @@ def _offenders() -> list[str]:
     hits: list[str] = []
     for rel in _tracked_files():
         if rel.startswith(ALLOWED_PREFIXES) or rel.startswith(IGNORED_PREFIXES):
+            continue
+        if any(seg in rel for seg in IGNORED_PATH_SEGMENTS):
             continue
         try:
             text = (ROOT / rel).read_text(errors="ignore")
@@ -248,6 +268,30 @@ def test_the_marker_does_not_itself_name_the_engine():
     names_it = _NAME.search(marker)
     # Assert
     assert names_it is None
+
+
+def test_generated_sphinx_output_is_ignored_by_segment_not_prefix():
+    """It lives under the package, so a prefix check would miss it.
+
+    `src/scitex_dict/_sphinx_html/.doctrees/environment.pickle` starts with
+    `src/`, not with any ignorable prefix.
+    """
+    # Arrange
+    rel = "src/scitex_dict/_sphinx_html/.doctrees/environment.pickle"
+    # Act
+    ignored = any(seg in rel for seg in IGNORED_PATH_SEGMENTS)
+    # Assert
+    assert ignored is True
+
+
+def test_an_ordinary_source_path_is_not_ignored():
+    """The control: the segment check must not swallow real source."""
+    # Arrange
+    rel = "src/scitex_dev/store/_store.py"
+    # Act
+    ignored = any(seg in rel for seg in IGNORED_PATH_SEGMENTS)
+    # Assert
+    assert ignored is False
 
 
 def test_no_tracked_file_outside_an_adr_names_the_retired_engine():
