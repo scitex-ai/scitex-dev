@@ -330,8 +330,10 @@ stores both reported 3,707 rows while 7,646 bytes differed.
 
 ## Related
 
-- ADR-0006 — one store per host, consumed as a primitive (D3 no central
-  server; D7 TCP 55432; D9 multi-writer)
+- ADR-0006 — one store per host, consumed as a primitive (D3 ONE CENTRAL NODE
+  on nas-03, reversed 2026-08-30 — this reference previously read "no central
+  server" and cited D3 as live support for that; D4 replicas are read-only and
+  only `pg_is_in_recovery()` discriminates; D7 TCP 55432; D9 multi-writer)
 - ADR-0016 (scitex-cards) — absence is not deletion; the three board wipes of
   2026-07-19/21
 - sac ADR-0024 — card-database auth, two gates, not Postgres on the wire
