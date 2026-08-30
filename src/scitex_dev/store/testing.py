@@ -53,7 +53,7 @@ import uuid
 from pathlib import Path
 from typing import Iterator
 
-from ._host import STORE_DSN_ENV, host_store
+from ._host import STORE_DSN_ENV
 
 __all__ = [
     "ephemeral_cluster_dsn",
@@ -174,9 +174,17 @@ def ephemeral_cluster_dsn() -> Iterator[str]:
 def writable_dsn() -> Iterator[str]:
     """A DSN that is known to accept writes, by whichever route works.
 
-    Prefers whatever the caller already configured; falls back to a private
-    cluster. Raises ``RuntimeError`` if neither is available, naming both
-    routes — the caller turns that into a skip or a failure.
+    Two routes, and **the fleet store is not one of them**: whatever the caller
+    configured in ``SCITEX_STORE_DSN``, else a private throwaway cluster. Raises
+    ``RuntimeError`` if neither is available, naming both with the reason each
+    was MEASURED to fail — the caller turns that into a skip or a failure.
+
+    A third route used to sit between them, resolving this host's own store and
+    using it when writable. It is deliberately gone: the store default now names
+    the central primary, so that route could only ever have handed a test suite
+    the live fleet board. The long comment in the body records the whole shape,
+    because "we deleted a fallback" is the kind of change a later reader
+    reasonably tries to undo.
     """
     tried: list[str] = []
 
@@ -190,16 +198,36 @@ def writable_dsn() -> Iterator[str]:
     else:
         tried.append(f"  {STORE_DSN_ENV} is unset")
 
-    resolved = host_store(pkg="scitex_dev", name="testing").dsn
-    # Only a SECOND route if the override did not already decide it —
-    # host_store returns the override verbatim when one is set, and listing
-    # one DSN twice reads as two independent checks having failed.
-    if resolved != configured:
-        ok, why = _writability(resolved)
-        if ok:
-            yield resolved
-            return
-        tried.append(f"  this host's store {resolved} — {why}")
+    # THERE IS NO SECOND ROUTE ANY MORE, AND DELETING IT IS THE POINT.
+    #
+    # This used to be `host_store(...)`, measured for writability and USED when
+    # writable. That was safe ONLY BY ACCIDENT. host_store's default resolved to
+    # this host's UNIX socket; every host's local node is a READ-ONLY REPLICA of
+    # the one central primary; so the measurement answered "not writable" and the
+    # run fell through to a throwaway cluster. Nothing anywhere declared "a test
+    # must not reach the fleet store" — the topology merely happened to enforce
+    # it, and that unstated accident was load-bearing.
+    #
+    # The commit this one accompanies makes the default resolve to the central
+    # primary, which is correct for every real caller and INVERTS this route:
+    # host_store() then returns the fleet's only WRITABLE node, `_writability`
+    # answers yes, and this function hands the test suite THE PRODUCTION BOARD.
+    # The conftest guard downstream does not catch it — it refuses a read-only
+    # STANDBY, which is exactly the thing that used to save us, so making the
+    # target not-a-standby makes that guard PASS. And the caller doing it is
+    # `conftest.BASE_DSN` at MODULE scope, so `pytest --collect-only` is enough.
+    #
+    # The route also had no legitimate outcome left to lose. When SCITEX_STORE_DSN
+    # is set, host_store returns it verbatim and the old `resolved != configured`
+    # test skipped this branch anyway; when it is unset, the branch can now yield
+    # exactly one thing. A route with a single possible value, and that value
+    # forbidden, is not a fallback — so it is gone rather than guarded.
+    tried.append(
+        "  this host's store — NOT TRIED, deliberately. The store default now "
+        "names the central primary, and a test must never write to the fleet "
+        f"board. Point {STORE_DSN_ENV} at a throwaway cluster to choose a "
+        "specific server."
+    )
 
     try:
         with ephemeral_cluster_dsn() as dsn:

@@ -319,6 +319,46 @@ class TestTheDsnCannotBecomeADirectory:
         with pytest.raises(TypeError):
             Path(target.locator)  # type: ignore[arg-type]
 
+
+class TestTheTestHarnessNeverReachesTheFleetStore:
+    """`writable_dsn()` must never hand a test suite the central primary.
+
+    This asserts the property DIRECTLY rather than leaving it to topology. It
+    used to hold only by accident: `host_store()` resolved to this host's socket,
+    every host's local node is a read-only replica, so the writability check said
+    no. Once the default names the central primary that accident is gone, and the
+    old route would have yielded the live fleet board to any run with
+    SCITEX_STORE_DSN unset.
+    """
+
+    def test_writable_dsn_never_yields_the_central_primary(self, unconfigured_host):
+        # Arrange
+        from scitex_dev.store.testing import writable_dsn
+
+        # Act / Assert
+        try:
+            with writable_dsn() as dsn:
+                assert DEFAULT_CENTRAL_HOST not in dsn
+        except RuntimeError as exc:
+            # No throwaway cluster is available in this environment. That is a
+            # legitimate outcome and still proves the property: the refusal has
+            # to be DELIBERATE and named, not the route merely being absent.
+            assert "NOT TRIED" in str(exc)
+
+    def test_the_testing_helper_does_not_resolve_the_host_store_at_all(self):
+        # Arrange
+        import inspect
+
+        from scitex_dev.store import testing as testing_mod
+
+        # Act
+        source = inspect.getsource(testing_mod.writable_dsn)
+        body = "\n".join(
+            line for line in source.splitlines() if not line.lstrip().startswith("#")
+        )
+        # Assert -- comments explaining the removal are fine; a CALL is not.
+        assert "host_store(" not in body
+
 # EOF
 
 
