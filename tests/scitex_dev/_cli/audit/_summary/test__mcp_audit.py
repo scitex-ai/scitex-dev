@@ -277,21 +277,22 @@ class TestBridgePattern:
         )
         assert len(out) == 1
 
-    def test_hand_wrap_flagged_out_0_rule_1(self):
+    def test_hand_wrap_flagged_out_0_rule_1u_for_a_non_owner(self):
+        """`scitex-audio` does not ship the bridge, so it gets the §1u sibling."""
         # Arrange
-        # Act
-        # Assert
         src = "@mcp.tool()\nasync def audio_speak(text: str) -> str:\n    pass\n"
         # `resolve_mcp_server` injection: force a non-None so §1 enforcement
         # is active regardless of which peer standalones are installed.
         out: list[Violation] = []
+        # Act
         _check_bridge_pattern(
             "scitex-audio",
             out,
             read_bridge_source=lambda pkg: src,
             resolve_mcp_server=lambda pkg: object(),
         )
-        assert out[0].rule == "§1"
+        # Assert
+        assert out[0].rule == "§1u"
 
     def test_hand_wrap_flagged_hand_wrap_in_out_0_message(self):
         # Arrange
@@ -323,19 +324,19 @@ class TestBridgePattern:
         _check_bridge_pattern("scitex-io", out, read_bridge_source=lambda pkg: src)
         assert len(out) == 1
 
-    def test_direct_mount_flagged_out_0_rule_1(self):
-        """`mcp.mount(...)` without `safe_mount` is now drift (§1)."""
+    def test_direct_mount_flagged_out_0_rule_1u_for_a_non_owner(self):
+        """The io bridge ships in the umbrella, so io's run gets §1u, not §1."""
         # Arrange
-        # Act
-        # Assert
         src = (
             "def register_io_tools(mcp):\n"
             "    from scitex_io._mcp.server import mcp as io_mcp\n"
             "    mcp.mount(io_mcp)\n"
         )
         out: list[Violation] = []
+        # Act
         _check_bridge_pattern("scitex-io", out, read_bridge_source=lambda pkg: src)
-        assert out[0].rule == "§1"
+        # Assert
+        assert out[0].rule == "§1u"
 
     def test_direct_mount_flagged_direct_mcp_mount_in_out_0_message(self):
         """`mcp.mount(...)` without `safe_mount` is now drift (§1)."""

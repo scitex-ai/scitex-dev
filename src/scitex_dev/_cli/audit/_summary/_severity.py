@@ -51,6 +51,17 @@ RULE_SEVERITY: dict[str, str] = {
     # migrates via the deprecation ladder; the baseline ratchet keeps
     # the drift from growing.
     "§1f": "warn",
+    # §1u — a §1 umbrella-bridge defect surfaced during SOMEONE ELSE'S
+    # audit. The file (`scitex/_mcp_tools/<pkg>.py`) ships in the umbrella;
+    # the audited package neither contains it nor depends on it, so it
+    # cannot fix it and must not be gated on it. WARN is not leniency
+    # about the defect — the owner is still named and the finding is still
+    # printed and counted — it is the only way to say "not this subject's
+    # gate", because severity is rule-keyed and never per-finding. Same
+    # construction as §10w beside §10. See `_mcp_bridge` for the control
+    # (scitex-io PR #167) that showed the §1 verdict flipping purely on
+    # whether the umbrella happened to be installed in the job.
+    "§1u": "warn",
     "§2": "error",
     "§3": "error",
     "§4": "error",
