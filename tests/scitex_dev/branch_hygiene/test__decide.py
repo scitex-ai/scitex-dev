@@ -31,6 +31,7 @@ from scitex_dev.branch_hygiene import (
     classify,
     decide,
     decide_remote,
+    is_policy_refusal,
     worktree_plan,
 )
 
@@ -67,15 +68,17 @@ def test_cla_signatures_is_protected_by_exact_name():
 
 
 def test_bare_cla_is_protected_too():
-    """THE REHEARSAL FINDING'S MIRROR IMAGE, caught by running the remote
-    leg in dry-run against this repository's own origin.
+    """THE RENAME'S DESTINATION NAME, caught by a dry run against origin.
 
     The near-miss was reported as "`^cla$` misses `cla-signatures`", so
-    the first protected set here listed `cla-signatures` alone — and the
-    rehearsal then proposed deleting `origin/cla`, which in scitex-dev
-    is ALSO a signature store: its tip is "chore(cla): create the
-    signature store the org CLA workflow requires" and its tree is the
-    same `signatures/cla.json`. One org, one CLA workflow, two spellings.
+    the first protected set here listed `cla-signatures` alone. A
+    rehearsal of the remote leg then proposed deleting `origin/cla` —
+    which by then WAS the signature store: the store is being renamed
+    `cla-signatures` -> `cla` across 68 repositories and the org
+    reusable's `branch:` input has been flipped to `cla`.
+
+    Same store, two moments of one migration. Both names are protected
+    because the rename does not land everywhere at once.
     """
     # Arrange
     branch = facts("cla")
@@ -318,6 +321,34 @@ def test_a_remote_branch_named_origin_is_reported_not_pushed():
     verdict = decide_remote(branch, now=NOW)
     # Assert
     assert verdict.reason == KEEP_AMBIGUOUS_NAME
+
+
+def test_a_protected_branch_refusal_is_not_a_failure():
+    """MEASURED ON scitex-hub: deleting `cla-signatures` there failed
+    because the branch carries `allow_deletions: false` — and failing was
+    CORRECT, since it holds contributor signatures.
+
+    The remote stating a policy is not this sweep going wrong. Retrying
+    cannot help and forcing must not be attempted, so it is reported and
+    the pass stays green.
+    """
+    # Arrange
+    stderr = "! [remote rejected] cla-signatures (protected branch hook declined)"
+    # Act
+    refusal = is_policy_refusal(stderr)
+    # Assert
+    assert refusal is True
+
+
+def test_an_ordinary_push_failure_is_still_a_failure():
+    """The discrimination has to cut BOTH ways, or the refusal branch is
+    just a way of never reporting anything."""
+    # Arrange
+    stderr = "fatal: unable to access 'https://github.com/...': Could not resolve host"
+    # Act
+    refusal = is_policy_refusal(stderr)
+    # Assert
+    assert refusal is False
 
 
 def test_a_normal_remote_branch_still_drops():
