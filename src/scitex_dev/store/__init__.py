@@ -58,6 +58,18 @@ Quick start
     )
     store.put({"id": "c1", "status": "open"}, expected_revision=NEW_RECORD)
 
+Reading is by key (:meth:`Store.get`), by everything (:meth:`Store.rows`)
+or by CRITERION::
+
+    from scitex_dev.store import Query, eq
+
+    store.search(Query().where(eq("status", "open")).ordered_by("id"))
+
+A query names fields, never SQL, and a field the schema does not declare
+raises rather than returning nothing. Full text is opt-in per schema —
+``Schema.build(..., text_search=("title", "body"))`` — and the index and the
+match expression are built from that one declaration. See :mod:`._query`.
+
 Note there is no default :class:`FieldPolicy` and no default
 ``expected_revision``. Both omissions are deliberate: a wrong default merge
 rule loses data silently, and an implicit unlocked write loses updates
@@ -122,6 +134,25 @@ from ._policy import (
     Schema,
     WriterPolicy,
 )
+from ._query import (
+    Condition,
+    Either,
+    Op,
+    Order,
+    Query,
+    contains,
+    either,
+    eq,
+    gt,
+    gte,
+    is_in,
+    is_null,
+    lt,
+    lte,
+    ne,
+    nonempty,
+)
+from ._read_door import ReadDoor
 from ._relay import (
     InMemoryTransport,
     RelayOutcome,
@@ -141,9 +172,11 @@ __all__ = [
     "AdoptionRefusedError",
     "Backend",
     "ClockDriftError",
+    "Condition",
     "DialectUnavailableError",
     "DivergenceReport",
     "ENTRY_POINT_GROUP",
+    "Either",
     "FieldKind",
     "FieldPolicy",
     "FieldPolicyError",
@@ -159,11 +192,15 @@ __all__ = [
     "MergeOutcome",
     "MergeRule",
     "NEW_RECORD",
+    "Op",
     "OpEntry",
     "OpKind",
     "OplogGapError",
+    "Order",
     "PutResult",
+    "Query",
     "RESERVED_COLUMNS",
+    "ReadDoor",
     "RecordNotFoundError",
     "RelayOutcome",
     "RelayReport",
@@ -197,15 +234,26 @@ __all__ = [
     "build_genesis",
     "channel_for",
     "compare_identity",
+    "contains",
     "decode_hint",
     "detect_divergence",
     "discover_store_plugins",
+    "either",
     "encode_hint",
+    "eq",
     "fan_out",
     "genesis_origin",
+    "gt",
+    "gte",
     "host_store",
     "install_genesis",
+    "is_in",
+    "is_null",
+    "lt",
+    "lte",
     "merge_field",
+    "ne",
+    "nonempty",
     "outstanding",
     "plugin_for",
     "pull",

@@ -86,6 +86,12 @@ class PeerState:
         wanted: dict[str, set[str]] = {}
         for index, table, _column in self.dialect.index_specs(schema):
             wanted.setdefault(table, set()).add(index)
+        # Full-text indexes are built by their own DDL rather than the
+        # uniform CREATE INDEX above, but they are still objects create_sql
+        # builds — so a store missing one must still be repaired, and a
+        # store that has them must not have create_sql re-run for nothing.
+        for index, table, _ddl in self.dialect.text_index_specs(schema):
+            wanted.setdefault(table, set()).add(index)
         for table, names in wanted.items():
             if not names <= self._first_column_values(self.dialect.indexes_sql(table)):
                 return True

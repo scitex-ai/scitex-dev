@@ -75,13 +75,49 @@ jobs:
         with:
           ref: ${{ steps.ver.outputs.version }}
           fetch-depth: 0
-      # SIF-based self-hosted test run — mirrors pytest-matrix exactly. No
-      # setup-python (the bare Spartan node has no Python tool cache; that step
-      # failed "version not found for this OS"); no apt fd-install (fd is baked
-      # in the SIF). exec-in-sif.sh apptainer-execs the reused ci-cpu.sif and
-      # run-in-sif.sh layers THIS (tagged) checkout + [all,dev] into a writable
-      # target, then runs pytest. fail-loud on a missing SIF/shim.
+      # SIF-based self-hosted test run. No setup-python (the bare Spartan node
+      # has no Python tool cache; that step failed "version not found for this
+      # OS"); no apt fd-install (fd is baked in the SIF). exec-in-sif.sh
+      # apptainer-execs the reused ci-cpu.sif and run-in-sif.sh layers THIS
+      # (tagged) checkout + [all,dev] into a writable target, then runs pytest.
+      # fail-loud on a missing SIF/shim.
+      #
+      # This job runs pytest INSIDE the SIF; pytest-matrix runs it on the bare
+      # runner. So it does not "mirror pytest-matrix exactly", and the comment
+      # that said so is why the env below was never copied across.
       - name: Run tests in the reused CI SIF (apptainer exec — deps layered, not on the bare runner)
+        env:
+          # WITHOUT THIS THE RELEASE CANNOT PUBLISH. v0.57.0 was tagged, and
+          # every test leg failed with 32 errors — `RuntimeError: No writable
+          # PostgreSQL is available for tests`, naming all three routes it
+          # tried: SCITEX_STORE_DSN unset, this host's 55432 unreachable from
+          # the container, and no initdb/pg_ctl to start a throwaway cluster.
+          # build/publish/release then skipped on `needs: test`, so the tag
+          # produced no artifact at all and PyPI stayed on the previous version.
+          #
+          # pytest-matrix has carried this line since the store suite landed.
+          # This workflow never got it, and nothing caught that, because a
+          # green PR gate here proves nothing about the tag pipeline — they are
+          # different files running pytest by different routes.
+          #
+          # THE ROLE IS THE POINT. Without it the failure is `fe_sendauth: no
+          # password supplied` — not a missing credential: the runner's
+          # ~/.pgpass already covers scitex-primary, but .pgpass matches on
+          # USER, so a DSN naming no role connects as the OS user `ywatanabe`,
+          # for which there is no row.
+          #
+          # It must be the PRIMARY. Every host's own instance on 55432 is a
+          # read-only standby where CREATE SCHEMA raises — which is how this
+          # suite used to skip everywhere and report green.
+          #
+          # A plain `env:` is enough: exec-in-sif.sh passes no --cleanenv, so
+          # apptainer inherits the host environment. Verified on the runner
+          # against the real ci-cpu.sif — the variable arrives inside, $HOME is
+          # the same, and ~/.pgpass is visible there. No APPTAINERENV_ needed.
+          #
+          # This is CONFIGURATION setting the one switch, not a second copy of
+          # it: no DSN literal survives anywhere in the source or the tests.
+          SCITEX_STORE_DSN: postgresql://ywatanabe__scitex-dev@scitex-primary:55432/scitex
         run: bash .github/ci/exec-in-sif.sh run-in-sif.sh ${{ matrix.python-version }}
 
   build:

@@ -7,6 +7,98 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.57.0] - 2026-08-30
+
+> **BREAKING: there is one storage engine.** The second, file-backed
+> backend is gone — its `Backend` member, its `StoreTarget` constructor and
+> its dialect are removed, not deprecated. `Backend` now has one member. A
+> store resolves to PostgreSQL or refuses.
+>
+> (The retired engine is not named here, and the guard under
+> `tests/develop/` that enforces that will reject this file if it is. The
+> name is allowed only under `docs/adr/`, which is where the record lives:
+> **ADR-0006**.)
+
+### Removed
+
+- **The file-backed backend: its `Backend` member, `StoreTarget`
+  constructor and dialect** (#762). The reason is not tidiness. A database
+  in a file has no concept of WHO — anyone who can open it holds every
+  permission — so multi-user identity cannot be retrofitted onto it: it is
+  a foundation or it is absent, and handing a collaborator a database file
+  is SHARING, not COLLABORATING.
+
+  Keeping it reachable kept it CHOSEN. A fleet survey counted 66 of 68 live
+  tables in one consumer package sitting on it, put there by readers
+  following a default that existed only in prose. A default stated in prose
+  is still a default; the fix was to stop shipping the thing it pointed at.
+
+  There is no shim. A caller that constructed such a target moves to
+  PostgreSQL — a silent private store is the exact failure this removes.
+
+### Added
+
+- **`scitex_dev.store.testing`** (#762) — `writable_dsn()`,
+  `ephemeral_schema()`, `ephemeral_cluster_dsn()`. Removing the second
+  engine removed the affordance consumers used to test store-touching code
+  (a throwaway file-backed store), and nothing replaced it; three packages
+  hit that wall on the same day. This hands out a REAL PostgreSQL — a
+  throwaway schema on a cluster you already have, or a whole throwaway
+  cluster started with `initdb` — so a test that passes against it passes
+  against the engine that ships. It checks `pg_is_in_recovery()` rather
+  than assuming: a standby accepts the connection and refuses the DDL,
+  which is the shape that makes a suite report green while running nothing.
+
+### Fixed
+
+- The release pipeline had no writable PostgreSQL, so no tag could publish
+  (#765).
+
+> **The store could be read by key or in full, and by nothing in between** —
+> so a package with a filter had to fetch the table and narrow it in Python,
+> which is the point at which it stops using the store and starts building
+> an index of its own.
+
+### Added
+
+- `Store.search(Query)`, `Store.count(Query)` and `Store.tally(field, Query)`
+  — the middle of the read door. A `Query` is an immutable description built
+  from `eq` / `ne` / `gt` / `gte` / `lt` / `lte` / `is_in` / `contains` /
+  `nonempty` / `is_null` / `either`, plus `matching` (full text),
+  `ordered_by`, `limited` and `with_hidden`.
+
+  It names FIELDS, never SQL. Every field is checked against the schema
+  before a statement is built, so a typo raises instead of returning an
+  empty set, and nothing a caller types reaches an identifier position.
+  Values travel as bind parameters.
+
+  Two engine behaviours are pinned rather than inherited: `NULLS LAST` in
+  BOTH directions (Postgres defaults to NULLS FIRST under `DESC`, which
+  would lead "most downloaded" with every row whose count was never
+  recorded), and a record-key tie-break appended to every `ORDER BY`, so
+  `LIMIT`/`OFFSET` paging cannot show one row twice and skip another.
+
+- `Schema.build(..., text_search=(...), text_config="english")` — full-text
+  search, declared once per schema. The GIN expression index the store
+  creates and the match expression the query builds are generated from that
+  single list, because an expression index that differs from its query by
+  one character is silently never used, the planner reports nothing, and the
+  only symptom is that search got slow. Matching uses
+  `websearch_to_tsquery`, which never raises on malformed input — the text
+  came from a person, and `to_tsquery` would turn a half-typed search box
+  into a syntax error.
+
+  `contains()` is real JSON containment (`@>`), not a substring match on the
+  serialised column, so asking whether a modality LIST holds `eeg` is no
+  longer also answered by a description that mentions it.
+
+### Changed
+
+- The read door moved out of `_store.py` into `_read_door.ReadDoor`, a mixin
+  of `Store` alongside `PeerState` and `IdentityState`. No method changed
+  name or behaviour. Reading and writing change for different reasons, and
+  `_store.py` had already outgrown the repository's file-size limit.
+
 ## [0.56.8] - 2026-08-28
 
 > **The probe added in 0.56.7 answered about every schema, not this one** — so

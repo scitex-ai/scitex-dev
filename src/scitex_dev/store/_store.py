@@ -37,7 +37,7 @@ from typing import Any, Iterator, Mapping, Sequence
 from ._apply import apply_entry
 from ._codec import RowCodec
 from ._dialect import Dialect, get_dialect
-from ._errors import RecordNotFoundError, SeqAllocationError, StoreError
+from ._errors import SeqAllocationError, StoreError
 from ._guards import (
     ANY_REVISION,
     NEW_RECORD,
@@ -52,6 +52,7 @@ from ._merge import MergeConflict
 from ._oplog import OpEntry, OpKind
 from ._peer_state import PeerState
 from ._policy import FieldRole, Schema, WriterPolicy
+from ._read_door import ReadDoor
 from ._row import Row
 from ._target import StoreTarget
 
@@ -91,7 +92,7 @@ class PutResult:
     conflicts: tuple[MergeConflict, ...] = ()
 
 
-class Store(PeerState, IdentityState):
+class Store(PeerState, IdentityState, ReadDoor):
     """An open store: one schema, one backend, one node identity.
 
     Two identities, and they answer different questions. ``node`` is who is
@@ -303,49 +304,11 @@ class Store(PeerState, IdentityState):
             return self._materialise(entry, current, owner=to_owner)
 
     # -- read door --------------------------------------------------------
-    def get(
-        self,
-        key: "Mapping[str, Any] | Sequence[Any]",
-        *,
-        include_hidden: bool = False,
-    ) -> "Row | None":
-        """One record, or ``None`` if absent from the chosen view.
-
-        With ``include_hidden=False`` a hidden row reads as ``None``. Use
-        :meth:`is_hidden` when the difference matters.
-        """
-        with self._lock:
-            return self._read(record_key_from(self.schema, key), include_hidden)
-
-    def is_hidden(self, key: "Mapping[str, Any] | Sequence[Any]") -> "bool | None":
-        """Three-valued: ``True`` hidden, ``False`` visible, ``None`` absent."""
-        with self._lock:
-            row = self._read(record_key_from(self.schema, key), include_hidden=True)
-            return None if row is None else row.hidden
-
-    def rows(self, *, include_hidden: bool = False) -> list[Row]:
-        """Every record in the chosen view."""
-        with self._lock:
-            table = self.dialect.quote(self.dialect.rows_table(self.schema))
-            if include_hidden:
-                found = self._connection.execute(f"SELECT * FROM {table}").fetchall()
-            else:
-                sql = (
-                    f"SELECT * FROM {table} WHERE "
-                    f"{self.dialect.quote('_hidden')} = {self.dialect.placeholder(0)}"
-                )
-                found = self._connection.execute(
-                    sql, (self.dialect.to_db_bool(False),)
-                ).fetchall()
-            return [self.codec.row_from_db(record) for record in found]
-
-    def revision(self, key: "Mapping[str, Any] | Sequence[Any]") -> "int | None":
-        """The record's revision, or ``None`` if it does not exist."""
-        with self._lock:
-            record = record_key_from(self.schema, key)
-            if self._read(record, include_hidden=True) is None:
-                return None
-            return self._revision(record)
+    # `get`, `is_hidden`, `rows`, `revision`, `search`, `count`, `tally` and
+    # the single-row SELECTs they share live in `._read_door.ReadDoor`, a
+    # mixin of this class. Reading and writing change for different reasons
+    # — a new filter has nothing to do with optimistic locking — and peer
+    # state and store identity were already lifted out for that reason.
 
     # -- oplog surface -----------------------------------------------------
     # `changes_since`, `origins`, `next_seq`, `cursor`/`set_cursor` and
@@ -512,38 +475,6 @@ class Store(PeerState, IdentityState):
             conflicts=tuple(result.conflicts),
         )
 
-    def _revision(self, record: str) -> int:
-        table = self.dialect.quote(self.dialect.rows_table(self.schema))
-        sql = (
-            f"SELECT {self.dialect.quote('_revision')} AS rev FROM {table} "
-            f"WHERE {self.dialect.quote('_record')} = "
-            f"{self.dialect.placeholder(0)}"
-        )
-        found = self._connection.execute(sql, (record,)).fetchone()
-        return int(found["rev"]) if found is not None else 0
-
-    def _read(self, record: str, include_hidden: bool) -> "Row | None":
-        table = self.dialect.quote(self.dialect.rows_table(self.schema))
-        sql = (
-            f"SELECT * FROM {table} WHERE {self.dialect.quote('_record')} = "
-            f"{self.dialect.placeholder(0)}"
-        )
-        found = self._connection.execute(sql, (record,)).fetchone()
-        if found is None:
-            return None
-        row = self.codec.row_from_db(found)
-        return None if (row.hidden and not include_hidden) else row
-
-    def _require(self, record: str, *, verb: str) -> Row:
-        row = self._read(record, include_hidden=True)
-        if row is None:
-            raise RecordNotFoundError(
-                f"Cannot {verb} record {record!r} in store "
-                f"{self.schema.name!r}: it does not exist. Nothing deleted it "
-                "— this store has no delete — so check the key."
-            )
-        return row
-
     def _set_hidden(
         self,
         key: "Mapping[str, Any] | Sequence[Any]",
@@ -560,9 +491,6 @@ class Store(PeerState, IdentityState):
             op = OpKind.HIDE if hidden else OpKind.UNHIDE
             entry = self._append(record, op, {}, actor)
             return self._materialise(entry, current)
-
-    def __iter__(self) -> Iterator[Row]:
-        return iter(self.rows())
 
     def __repr__(self) -> str:  # pragma: no cover - trivial
         return (
