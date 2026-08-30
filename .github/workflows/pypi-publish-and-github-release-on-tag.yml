@@ -159,7 +159,16 @@ jobs:
           # If the socket turns out NOT to be reachable inside the container,
           # that is what this run will show, and the fix is a bind, not a return
           # to the fleet primary.
-          export SCITEX_STORE_DSN="postgresql://postgres@/postgres?host=$PGDIR"
+          # SOCKET DIRECTORY IN THE AUTHORITY, PERCENT-ENCODED — NOT `?host=`.
+          # The test harness APPENDS its own query string to whatever this
+          # names (`?options=-csearch_path=<per-test schema>`). A DSN that
+          # already carries `?host=...` then yields TWO `?` and libpq refuses
+          # the whole thing:
+          #     extra key/value separator "=" in URI query parameter: "host"
+          # Encoding the socket dir into the host position leaves the query
+          # string free for the harness, which is the only place it can go.
+          PGHOST_ENC=$(printf '%s' "$PGDIR" | sed 's|/|%2F|g')
+          export SCITEX_STORE_DSN="postgresql://postgres@${PGHOST_ENC}/postgres"
           bash .github/ci/exec-in-sif.sh run-in-sif.sh ${{ matrix.python-version }}
 
   build:
