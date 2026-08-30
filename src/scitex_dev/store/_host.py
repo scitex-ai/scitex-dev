@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""The host store — one Postgres per host, reached over a UNIX socket.
+"""The host store — which Postgres this host uses, and how it is reached.
 
-This module answers one question: *which store does this host use?* Per
-ADR-0006, the answer is a single PostgreSQL instance belonging to this host,
-holding every record kind, reached over a UNIX socket rather than a TCP port.
+This module answers one question: *which store does this host use?* The
+answer is a single PostgreSQL instance holding every record kind. As of
+2026-08-30 the DEFAULT instance is the fleet's CENTRAL node, reached over
+TCP on 55432; see :func:`host_store` for the measurement that forced that
+and :data:`DEFAULT_CENTRAL_HOST` for the node.
 
 Why Postgres, and why only Postgres
 -----------------------------------
@@ -16,25 +18,37 @@ cannot be retrofitted onto a file — it is a foundation or it is absent.
 Handing a collaborator a database file is SHARING, not COLLABORATING.
 ADR-0006 records the decision and the alternatives that were rejected.
 
-Why a socket, not a port
-------------------------
-Hosts never connect to each other's Postgres. Replication exchanges oplogs at
-the application layer (see :mod:`._replication`), so each instance is only
-ever reached from its own host and a TCP port buys nothing. Dropping it means
-port collisions cannot happen, an address cannot be ambiguous about which
-Postgres it names, and the instance is not exposed to the network at all.
+Why the socket helper still exists
+---------------------------------
+:func:`socket_dsn` was once the default and is now the LOCAL-INSTANCE form:
+the way to name the Postgres THIS host manages, for the code that manages
+it. It keeps the hard-won details — the socket lives in ``PGDATA/run``, and
+libpq names the socket FILE ``.s.PGSQL.<port>`` so the port is not optional
+even without TCP.
 
-That ambiguity was live on 2026-08-09: ``127.0.0.1:5432`` on one host looked
-like a local server and was in fact an SSH tunnel to a laptop. Nothing about
-the address said so, and when the laptop rebooted every agent on every host
-lost the board at the same instant.
+Never 5432, on either transport. On 2026-08-09 ``127.0.0.1:5432`` on one
+host looked like a local server and was in fact an SSH tunnel to a laptop.
+Nothing about the address said so, and when the laptop rebooted every agent
+on every host lost the board at the same instant. An address must be
+unambiguous about which Postgres it names; 55432 is how this one is.
 
-Why this is NOT a central server
---------------------------------
-"Postgres by default" means one Postgres PER HOST. It does not mean one
-Postgres that every host connects to. Centralisation caused the outage above;
-choosing Postgres prevents no repeat of it. A severed host must keep serving
-reads and writes from its own instance, and reconcile later.
+The fleet DOES run a central writable primary
+---------------------------------------------
+This header used to carry a section titled "Why this is NOT a central
+server", arguing that Postgres-by-default meant one Postgres PER HOST and
+that a severed host must keep serving its own reads and writes. That is not
+the fleet that exists. Measured 2026-08-30, every host's local 55432
+answers ``pg_is_in_recovery() = TRUE`` — it is a streaming REPLICA of one
+writable primary — and the operator's 2026-08-25 ruling
+(「中央はいつもnas03であるべき」, "the centre should ALWAYS be nas-03")
+settles the topology as decided rather than open.
+
+ADR-0006 Decisions 3 and 4 still read "NO CENTRAL SERVER … no coordinator,
+no quorum, NO PRIMARY" and therefore still contradict both the measurement
+and the ruling. Rewriting that ADR is tracked separately on card
+``fleet-runs-a-central-writable-primary-that-adr-0006-forbids-20260830``
+and is deliberately not done here: this module must not keep asserting, in
+its own header, the opposite of what its own code now returns.
 """
 
 from __future__ import annotations
@@ -47,6 +61,7 @@ from ._errors import StoreTargetError
 from ._target import Backend, StoreTarget
 
 __all__ = [
+    "DEFAULT_CENTRAL_HOST",
     "DEFAULT_PGDATA_DIR",
     "DEFAULT_SOCKET_DIR",
     "DEFAULT_TCP_PORT",
@@ -87,8 +102,30 @@ DEFAULT_SOCKET_DIR: Final[Path] = DEFAULT_PGDATA_DIR / "run"
 #: that comes from the service manager, not from the port number.
 DEFAULT_TCP_PORT: Final[int] = 55432
 
-#: The one database every record kind lives in on this host.
+#: The one database every record kind lives in.
 DEFAULT_DATABASE: Final[str] = "scitex"
+
+#: The fleet's ONE WRITABLE Postgres node — the default target of
+#: :func:`host_store` when no override is set.
+#:
+#: A NAME, not an address, on purpose: the address is an overlay IP that the
+#: operator may move, and a DSN that hardcodes one is a DSN that goes stale
+#: silently. The name was verified to resolve on compute-01, compute-04,
+#: nas-02 and inside an agent container.
+#:
+#: WHY A CENTRAL NODE AT ALL, given the "one Postgres per host" story this
+#: module used to tell. Measured 2026-08-30 from a live container, one query
+#: against each target::
+#:
+#:     scitex-primary:55432   pg_is_in_recovery()=FALSE  addr=100.64.0.5
+#:     100.64.0.1:55432       pg_is_in_recovery()=TRUE   addr=100.64.0.1
+#:
+#: Both reported ``system_identifier=7672112238472680366``. An identical
+#: system identifier means ONE cluster with streaming replication, not two
+#: independent instances — so every host's local 55432 is a READ-ONLY
+#: REPLICA of this node, and ``scitex-primary`` is the only node that can
+#: accept a write.
+DEFAULT_CENTRAL_HOST: Final[str] = "scitex-primary"
 
 #: Filesystem types that DO NOT SURVIVE a container rebuild. A store whose
 #: PGDATA sits on one of these accepts every write, reports success, and
@@ -244,10 +281,10 @@ def socket_dsn(
 
         postgresql://scitex_cards@/scitex?host=/home/me/.scitex/pg/run&port=55432
 
-    THIS PATH HAD NEVER CONNECTED. It is the step-2 fallback, reached only
-    where ``SCITEX_STORE_DSN`` is unset, and every host that works has step 1
-    set — so three separate faults sat here undetected until sac isolated
-    them one at a time on 2026-08-20:
+    THIS PATH HAD NEVER CONNECTED. It was the step-2 default until
+    2026-08-30, reached only where ``SCITEX_STORE_DSN`` is unset, and every
+    host that works has step 1 set — so three separate faults sat here
+    undetected until sac isolated them one at a time on 2026-08-20:
 
     ======================  ============================  ================
     DSN as it was built     socket libpq then looked for  result
@@ -286,6 +323,16 @@ def socket_dsn(
     return f"postgresql://{authority}/{database}?host={resolved}&port={port}"
 
 
+def _central_dsn(database: str = DEFAULT_DATABASE) -> str:
+    """Build the TCP DSN for the fleet's one writable node.
+
+    Deliberately carries no role: libpq resolves the user from ``PGUSER``
+    else the OS user, and ``.pgpass`` matches on that user. Naming one here
+    would override a correctly configured host with this module's guess.
+    """
+    return f"postgresql://{DEFAULT_CENTRAL_HOST}:{DEFAULT_TCP_PORT}/{database}"
+
+
 def host_store(
     *,
     pkg: str,
@@ -299,15 +346,45 @@ def host_store(
     place for a wrong answer to hide:
 
     1. ``SCITEX_STORE_DSN`` if set — an explicit override wins outright.
-    2. Otherwise the per-host Postgres over its UNIX socket.
+    2. Otherwise the CENTRAL node, over TCP:
+       ``postgresql://scitex-primary:55432/scitex``.
 
-    **There is deliberately no second tier to fall back to.** A fallback
+    Step 2 was "the per-host Postgres over its UNIX socket" until 2026-08-30.
+    That wording is now FALSE, and it was false in the direction that hurts.
+
+    WHY THE DEFAULT IS THE CENTRAL NODE. There is exactly ONE writable
+    Postgres in this fleet. Measured 2026-08-30 from a live container,
+    ``scitex-primary:55432`` answers ``pg_is_in_recovery() = FALSE`` while
+    every other host's local 55432 answers ``TRUE``, and all of them report
+    the SAME ``system_identifier`` — one cluster, streaming replication, one
+    primary. The operator's 2026-08-25 ruling
+    (「中央はいつもnas03であるべき」, "the centre should ALWAYS be nas-03")
+    makes that topology decided rather than open.
+
+    So the old step 2 handed back a READ-ONLY REPLICA. It did so SILENTLY:
+    nothing failed at resolve time, nothing failed at connect time, and the
+    first sign of trouble was either a write refused deep inside unrelated
+    code or — worse — reads that were merely stale forever.
+
+    **There is still deliberately no second tier to fall back to**, and this
+    change is that rule applied rather than an exception to it. A fallback
     here would be the worst possible behaviour: a host whose Postgres is not
-    running would silently start writing to a local file, accept every write,
-    report success, and diverge from the fleet with nothing in any log to say
-    so. That is the 2026-08-09 failure mode reproduced by design — a write
-    that succeeds locally while reaching nobody. Refusing to connect is loud,
-    immediate, and fixable; a silent private store is none of those.
+    reachable would silently start writing to a local file, accept every
+    write, report success, and diverge from the fleet with nothing in any log
+    to say so. That is the 2026-08-09 failure mode reproduced by design — a
+    write that succeeds locally while reaching nobody. Refusing to connect is
+    loud, immediate, and fixable; a silent private store is none of those.
+
+    A LOCAL REPLICA IS THAT SAME PROHIBITED BEHAVIOUR wearing better clothes.
+    It is a store that cannot keep what it is asked to keep, handed back with
+    no error — a wrong answer that looks exactly like a right one. Refusing
+    to silently degrade is the whole point of the no-fallback rule, so the
+    default must name the node that can actually serve the request.
+
+    Passing ``socket_dir`` explicitly still resolves to the LOCAL instance
+    over its socket. That is for the code that MANAGES the local node
+    (starting it, checking it, replicating from it), which legitimately wants
+    the local instance and not the fleet's centre.
 
     There is nothing else to resolve to, and that is the design rather than
     an omission: one engine means an unconfigured host has no wrong answer
@@ -322,30 +399,66 @@ def host_store(
             "start with 'postgres://' or 'postgresql://'.\n"
             "\n"
             "A filesystem path is not accepted here, or anywhere: runtime "
-            "state lives in the per-host Postgres on 55432 and nowhere else. "
-            "A path would be a silent downgrade to a private store that "
-            "shares nothing.\n"
+            "state lives in Postgres on 55432 and nowhere else. A path would "
+            "be a silent downgrade to a private store that shares nothing.\n"
             "\n"
-            f"For a socket connection the shape is: {socket_dsn()}"
+            f"The default shape is: {_central_dsn()}\n"
+            f"For the LOCAL instance over its socket: {socket_dsn()}"
         )
-    # THE INSTANCE THIS HOST MANAGES is guarded — not "the socket branch".
-    # The criterion is OBSERVABILITY, not transport: check durability exactly
-    # when this process can see the storage it is judging. An explicit
-    # SCITEX_STORE_DSN may point at a Postgres elsewhere whose storage this
-    # process cannot see, so checking OUR filesystem would say nothing about
-    # ITS durability — a check that cannot observe the thing it judges is the
-    # shape being fixed here.
-    #
-    # WORDED THIS WAY DELIBERATELY (ADR-0006 Decision 7, reversed 2026-08-10).
-    # This guard was written when the socket WAS the local instance, so
-    # "socket branch" and "instance we manage" were the same set. Decision 7
-    # makes TCP on 55432 the default and splits them. The guard belongs to the
-    # SECOND set. Whoever changes the DSN this branch returns must keep the
-    # call: a durability guard silently disarmed by an unrelated transport
-    # decision is the exact failure this ADR keeps cataloguing.
-    require_durable_pgdata(socket_dir)
+    if socket_dir is not None:
+        # THE INSTANCE THIS HOST MANAGES is guarded — not "the socket branch".
+        # The criterion is OBSERVABILITY, not transport: check durability
+        # exactly when this process can see the storage it is judging. An
+        # explicit SCITEX_STORE_DSN may point at a Postgres elsewhere whose
+        # storage this process cannot see, so checking OUR filesystem would
+        # say nothing about ITS durability — a check that cannot observe the
+        # thing it judges is the shape that was being fixed here.
+        #
+        # WORDED THIS WAY DELIBERATELY (ADR-0006 Decision 7, reversed
+        # 2026-08-10). This guard was written when the socket WAS the local
+        # instance, so "socket branch" and "instance we manage" were the same
+        # set. Decision 7 makes TCP on 55432 the default and splits them. The
+        # guard belongs to the SECOND set. Whoever changes the DSN this branch
+        # returns must keep the call: a durability guard silently disarmed by
+        # an unrelated transport decision is the exact failure this ADR keeps
+        # cataloguing.
+        #
+        # ---- 2026-08-30, ANSWERING THE PARAGRAPH ABOVE ON ITS OWN TERMS ----
+        # The DSN this function returns BY DEFAULT has now changed, and the
+        # instruction above is honoured rather than dodged: the guard is kept,
+        # and it is kept attached to the set it was declared to belong to —
+        # THE INSTANCE THIS HOST MANAGES. What changed is that the DEFAULT no
+        # longer RESOLVES to that instance, so the two sets, already split
+        # conceptually by Decision 7, are now split in the code as well.
+        #
+        # An explicit `socket_dir` is the caller naming the local instance,
+        # which this process CAN observe — the guard's own criterion is met,
+        # so it runs, exactly as before, and every existing test of it fires
+        # through this branch unchanged.
+        #
+        # The default branch below does NOT call it, and that is the same
+        # criterion applied, not an exemption from it. This process cannot see
+        # `scitex-primary`'s PGDATA, so judging OUR local filesystem would say
+        # nothing whatsoever about the durability of the node we are about to
+        # connect to — a check that cannot observe what it judges, which is
+        # precisely what the paragraph above forbids. Worse, it would raise on
+        # a host running no Postgres at all and block a perfectly valid
+        # central connection: a guard that becomes the outage.
+        #
+        # WHERE THIS GUARD PROBABLY BELONGS, stated and NOT acted on here: in
+        # the code that STARTS and MANAGES the local node, which is the only
+        # code that both owns that PGDATA and can see it. `host_store()` is a
+        # resolver; a resolver checking a filesystem is how the guard ended up
+        # coupled to a transport in the first place. That refactor is out of
+        # scope for this change and must not be smuggled into it.
+        require_durable_pgdata(socket_dir)
+        return StoreTarget.postgres(
+            socket_dsn(database=database, socket_dir=socket_dir),
+            pkg=pkg,
+            name=name,
+        )
     return StoreTarget.postgres(
-        socket_dsn(database=database, socket_dir=socket_dir),
+        _central_dsn(database),
         pkg=pkg,
         name=name,
     )
