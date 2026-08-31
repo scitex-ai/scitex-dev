@@ -25,8 +25,14 @@ Canonical H2 sequence enforced by PS-143:
    (PS-144). Names the pain, then the fix.
 2. **Quick Start** — top-level H2 (NOT nested under Install). A tight ~15-line
    runnable demo with a round-trip assertion so a reader can paste-and-run.
-3. **Installation** — single line `uv pip install "<pkg>[all]"`. Per-module
-   extras (`[hdf5]`, `[parquet]`, ...) live inside a `<details>` block.
+3. **Installation** — single line `uv pip install "<pkg>[all]"`, and that is
+   the whole section. There are **no** per-module extras to list: `all` is
+   the only extra any `scitex-*` package may declare
+   ([01_ecosystem/26_the-only-extra-is-all.md](../01_ecosystem/26_the-only-extra-is-all.md),
+   operator ruling 2026-08-31). *(This used to send `[hdf5]`, `[parquet]`,
+   … into a `<details>` block; a `<details>` of extras that no longer exist
+   is worse than no `<details>` at all.)* Contributor-only install
+   (`--group dev`) belongs in `CONTRIBUTING.md`, not here.
 4. **How it works** *(or `## Architecture` — both accepted by PS-142)* — split
    into `### 1. <step>`, `### 2. <step>` subsections. **One mermaid diagram
    total** (one diagram is enough — don't repeat the same picture in Demo and

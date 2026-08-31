@@ -15,7 +15,7 @@ Run through this list before shipping a package's MCP server. Items marked **(A)
 - [ ] **(A)** Umbrella bridge `scitex/_mcp_tools/<pkg>.py` uses `safe_mount` — no `@mcp.tool()` decorators inside the bridge file (other than the `<pkg>_not_available` fallback).
 - [ ] **(A)** One mount convention per package; not mixing A and B.
 - [ ] **(A)** No double-prefix tool names (`<pkg>_<pkg>_*`).
-- [ ] Bridge ships an `<pkg>_not_available` fallback that returns a clear "install with `pip install scitex[<pkg>]`" message.
+- [ ] Bridge ships an `<pkg>_not_available` fallback that returns a clear "install with `pip install scitex-<pkg>`" message — the leaf directly, or `pip install "scitex[all]"`; never a per-feature extra ([01_ecosystem/26](../../01_ecosystem/26_the-only-extra-is-all.md)).
 - [ ] No imports of vendored copies (`from scitex._<pkg>._...`) in the bridge — must reach into the standalone (`from scitex_<pkg>._mcp_server import mcp`).
 
 ## Tool naming

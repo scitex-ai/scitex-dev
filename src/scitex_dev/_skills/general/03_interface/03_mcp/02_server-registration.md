@@ -38,7 +38,7 @@ def register_<pkg>_tools(mcp) -> None:
     except ImportError:
         @mcp.tool()
         async def <pkg>_not_available() -> str:
-            return "scitex-<pkg> required. Install with: pip install scitex[<pkg>]"
+            return "scitex-<pkg> required. Install with: pip install scitex-<pkg>"
 ```
 
 **Consequences:**
