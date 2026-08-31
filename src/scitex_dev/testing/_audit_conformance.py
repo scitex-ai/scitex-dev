@@ -42,6 +42,7 @@ own output rather than assuming exit-non-zero means "found something".
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -120,6 +121,33 @@ def warn_on_guessed_path(cwd: Path | None = None, stream=None) -> str:
 #: precisely why the defect survived to reappear as `§10w` nineteen days
 #: later. Both belong here.
 _NON_VIOLATION_RULES: "frozenset[str]" = frozenset({"§10", "§10w", "TALLY", "defer"})
+
+#: A sub-auditor's own SUMMARY line, e.g.
+#:     ERRO: scitex-hub: CLI conventions: 3 error(s), 101 warning(s)
+#: Error tier, no rule id, and it RESTATES findings already listed above it
+#: rather than adding one.
+#:
+#: It must not reach `non_skipped`. Reported by scitex-hub 2026-08-23, who
+#: replicated this classifier over a real run: skipped 65, non_skipped 3 —
+#: and all three were tally lines, not one a crash. So 65 correctly-matched
+#: deferrals were overridden by three lines that only counted them, while
+#: the same run's own summary said "0 unmasked error(s), 148 masked by
+#: skip-rules". The two layers disagreed about one run.
+#:
+#: The sharpest part of their report: the summary line says, verbatim,
+#: "This line is a TALLY, not the verdict" — about the very lines this
+#: classifier was gating on.
+#:
+#: The discriminator is shape, not wording: a tally ends in a
+#: `N error(s)` / `M warning(s)` count and carries no rule id. A crash line
+#: ("Error: No module named 'requests'") has neither, so the guard above it
+#: — an auditor that could not run must never be maskable — keeps working.
+_TALLY_COUNT_RE = re.compile(r"\b\d+\s+(?:error|warning|info)\(s\)")
+
+
+def _is_tally_line(payload: str) -> bool:
+    """True for a sub-auditor's own count line, which restates, never adds."""
+    return bool(_TALLY_COUNT_RE.search(payload))
 
 #: Level words that are NOT failures. The auditors already print severity;
 #: this module used to strip it only to reach the bracket and then ignore it.
@@ -447,7 +475,7 @@ def audit_all_for_package(
                 # by design: an auditor that could not run must not be
                 # maskable. It also means this branch can only ever ADD to
                 # `non_skipped`, never to `skipped`.
-                if _is_error_tier(level):
+                if _is_error_tier(level) and not _is_tally_line(payload):
                     non_skipped.append(line)
                 continue
             if not _is_gate_violation(level, payload):
