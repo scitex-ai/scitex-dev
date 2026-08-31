@@ -7,6 +7,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.58.1] - 2026-08-31
+
+> `v0.58.0` was tagged on `main` on 2026-08-30 but never published: its test
+> leg failed on the shared PostgreSQL primary's connection ceiling (fixed
+> below), so `build`/`publish`/`release` skipped on `needs: test` and no
+> wheel, no GitHub Release, and no PyPI upload exist for it — `pypi.org`
+> still serves `0.57.0`. This release carries everything that would have
+> shipped as `0.58.0` plus two more fixes that landed on `develop`
+> afterward, tagged directly on `develop` rather than on a `main` merge
+> commit that does not yet contain them.
+
 ### Added
 
 - **`scitex-dev ecosystem branch-hygiene`** — the daily two-dimensional branch
@@ -34,12 +45,33 @@ versions follow [Semantic Versioning](https://semver.org/).
   refusal NAMES THE ROAD (develop → topic branch → PR → release → pull) rather
   than only saying no. The release path tags and pushes and never commits, so
   it is untouched.
+- **A guard detector now declares itself** with a `abolition-guard: detector`
+  marker instead of the abolition guard exempting its own scanner file by
+  comparing the scanned path against `__file__` — a privilege no detector in
+  another repository could claim. Needed so a downstream package (scitex-io,
+  rule `IO015`, forbidding `sqlite3.connect()`) can register its own
+  self-scan exemption the same way, rather than the guard special-casing
+  every caller by name (#772).
 
 ### Changed
 
 - `core.hooksPath` wiring moved into a shared `_hookspath` helper used by both
   `enable-pre-push` and `enable-pre-commit`, so the two cannot drift apart about
   what "already set" means. Behaviour is unchanged: additive, then refuse.
+- **The test suite no longer runs against the shared production PostgreSQL
+  primary.** A `v0.58.0` release-pipeline run and every agent's card write
+  were competing for the same 100-connection ceiling; the release leg failed
+  with `remaining connection slots are reserved for roles with the SUPERUSER
+  attribute`. CI now starts an ephemeral `initdb`/`pg_ctl` cluster per test
+  leg (the `ci-cpu` image now ships a PostgreSQL server), so a test run can
+  no longer deny service to the production board (#781, #782).
+- The extras surface is documented as exactly `all` — the only permitted
+  extra name — and the leaves that still described a per-feature menu are
+  reconciled to match (#784).
+- CI pin maintenance: the CLA reusable workflow pin was bumped past the
+  signature-branch rename (#779) and again off the self-hosted runner
+  (#773); the SQLite-out guard test and the abolished `newb` workflow were
+  removed from CI, both already gone from what they were checking.
 
 ### Fixed
 
@@ -73,6 +105,55 @@ versions follow [Semantic Versioning](https://semver.org/).
   Making §1 bite its owner needs the umbrella's audit to sweep its own
   bridge directory — a separate change, recorded in `_mcp_bridge`'s
   docstring.
+
+- **A tally line counting errors was itself read as an error, defeating
+  `skip_rules` for every ERROR-tier rule fleet-wide.** The conformance
+  harness classifies a run's output lines by tier and collects the
+  error-tier ones as violations. A summary line like `ERROR: 3 violations`
+  is a TALLY — it reports how many errors were found, it is not one itself
+  — but it named no rule, so no `skip_rules` entry could ever match it, and
+  a report whose individual findings were all skipped still failed the
+  gate on its own count line. Fixed with an explicit tally discriminator
+  (`_TALLY_COUNT_RE` / `_is_tally_line`) applied where the tier
+  classification already runs. Reported by scitex-hub, who hit it on their
+  own report (#744).
+- The conftest walk descended into `.git`, which the audit itself mutates
+  mid-run (`git worktree add`/`remove`/`prune`); a transient
+  `FileNotFoundError` on a pruned `.git/worktrees` could kill a release
+  test leg on one runner while the same commit passed on another.
+  `_conftests_under()` now prunes dot-directories in place during
+  `os.walk`, instead of filtering results after the descent already paid
+  for them (#744).
+- **`sac --version` (and any editable-install currency check) no longer
+  reports a healthy `develop` checkout as STALE forever.** Release tags
+  live on `main`, so a healthy `develop` is permanently "behind" the
+  latest tag — that fact alone used to trigger a `git pull --rebase`
+  remedy that could never close the gap, because a pull only moves HEAD
+  toward its tracking remote. The probe now separates "distance from the
+  latest tag" (annotation only) from "distance from the tracking remote"
+  (the only gap a pull can close) and raises STALE on the second only; the
+  surviving remedy is `git -C <repo> pull --ff-only`, never `--rebase`
+  (#785).
+- **The zero-config default host store resolved to a read-only replica,
+  silently.** `host_store()` built a UNIX-socket DSN for whichever host's
+  local PostgreSQL was reachable; measured live, every host's local
+  `55432` reports `pg_is_in_recovery()=TRUE` and shares one
+  `system_identifier` with `scitex-primary` (100.64.0.5, nas-03), which is
+  `FALSE` — one cluster, streaming replication, and only the primary is
+  writable. Resolving to a replica failed nothing at resolve time or
+  connect time; the first symptom was a write refused far away, or reads
+  that were merely stale forever. The default now resolves to the central
+  primary; the test harness also stops reaching the fleet board (#774).
+- **An ignore rule that names the retired storage engine in order to
+  refuse it is no longer flagged by the abolition guard as a mention of
+  it.** `**/*.sqlite` in a `.gitignore` is a standing refusal to accept
+  those files, not a reference to the engine — but the guard's one
+  exemption (the guard's own scanner file) did not cover it, so a repo
+  adopting the guard had to choose between keeping the ignore rule and
+  passing the scan. Measured cost of getting this backwards: scitex-ssh
+  had 55 committed database files land uncaught because no ignore rule
+  covered them, and being binary they were invisible to `git grep -I` too
+  (#771).
 
 ## [0.57.0] - 2026-08-30
 
