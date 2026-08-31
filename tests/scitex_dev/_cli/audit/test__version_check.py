@@ -49,8 +49,15 @@ def _clear_skip_knobs(env):
     env("SCITEX_DEV_VERSION_CHECK_SILENT", None)
 
 
-def _editable(*, ahead_behind, metadata="0.29.0", latest="0.31.0"):
-    """An editable checkout: judged by CONTENT, never the fossil metadata."""
+def _editable(
+    *, ahead_behind, behind_upstream=None, metadata="0.29.0", latest="0.31.0"
+):
+    """An editable checkout: judged by CONTENT, never the fossil metadata.
+
+    CONTENT is two facts. ``ahead_behind`` is distance from the latest
+    release tag; ``behind_upstream`` is distance from the tracking remote —
+    the only gap a pull closes, and therefore the only one that may warn.
+    """
     return StaticSources(
         install_kind="editable",
         metadata_version=metadata,
@@ -58,6 +65,8 @@ def _editable(*, ahead_behind, metadata="0.29.0", latest="0.31.0"):
         executable="/home/ywatanabe/proj/scitex-dev/.venv/bin/python",
         pypi_latest=latest,
         editable_ahead_behind=ahead_behind,
+        editable_behind_upstream=behind_upstream,
+        editable_repo="/home/ywatanabe/proj/scitex-dev",
     )
 
 
@@ -105,10 +114,14 @@ def test_editable_current_tree_never_suggests_pip_install_u(env):
 
 
 def test_editable_behind_returns_true(env):
-    # Arrange — editable tree BEHIND its latest tag: genuinely stale.
+    # Arrange — the tracking remote HAS 4 commits this tree lacks: genuinely
+    # stale, and a pull genuinely fixes it.
     out = io.StringIO()
     # Act
-    warned = warn_if_stale(stream=out, sources=_editable(ahead_behind=(0, 4)))
+    warned = warn_if_stale(
+        stream=out,
+        sources=_editable(ahead_behind=(0, 4), behind_upstream=4),
+    )
     # Assert
     assert warned is True
 
@@ -117,9 +130,12 @@ def test_editable_behind_remedy_is_git_pull(env):
     # Arrange
     out = io.StringIO()
     # Act
-    warn_if_stale(stream=out, sources=_editable(ahead_behind=(0, 4)))
+    warn_if_stale(
+        stream=out,
+        sources=_editable(ahead_behind=(0, 4), behind_upstream=4),
+    )
     # Assert
-    assert "git pull" in out.getvalue()
+    assert "git -C /home/ywatanabe/proj/scitex-dev pull --ff-only" in out.getvalue()
 
 
 def test_editable_behind_never_suggests_pip_install_u(env):
@@ -127,9 +143,38 @@ def test_editable_behind_never_suggests_pip_install_u(env):
     # a wheel clobber.
     out = io.StringIO()
     # Act
-    warn_if_stale(stream=out, sources=_editable(ahead_behind=(0, 4)))
+    warn_if_stale(
+        stream=out,
+        sources=_editable(ahead_behind=(0, 4), behind_upstream=4),
+    )
     # Assert
     assert "pip install -U" not in out.getvalue()
+
+
+def test_editable_behind_a_tag_on_another_branch_returns_false(env):
+    # Arrange — the operator's 2026-08-31 report: +46/-3 against a tag cut on
+    # `main`, and exactly level with origin/develop. Nothing to pull, so
+    # nothing to say.
+    out = io.StringIO()
+    # Act
+    warned = warn_if_stale(
+        stream=out,
+        sources=_editable(ahead_behind=(46, 3), behind_upstream=0),
+    )
+    # Assert
+    assert warned is False
+
+
+def test_editable_behind_a_tag_on_another_branch_prints_nothing(env):
+    # Arrange
+    out = io.StringIO()
+    # Act
+    warn_if_stale(
+        stream=out,
+        sources=_editable(ahead_behind=(46, 3), behind_upstream=0),
+    )
+    # Assert
+    assert out.getvalue() == ""
 
 
 # --------------------------------------------------------------------------
