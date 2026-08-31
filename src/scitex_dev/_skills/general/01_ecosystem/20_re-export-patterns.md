@@ -103,7 +103,7 @@ try:
 except ImportError as _e:
     raise ImportError(
         "scitex.template requires the 'scitex-template' package. "
-        "Install with: pip install scitex[template]"
+        "Install with: pip install scitex-template"
     ) from _e
 
 _sys.modules[__name__] = _real

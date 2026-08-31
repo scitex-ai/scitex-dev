@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Ecosystem Wide Rules
-  [DETAILS] Cross-package conventions every `scitex-*` repo follows — the 3-layer cascade hierarchy and test scope, dependency hygiene + optional extras + version-pinning rules, the module-vs-standalone-package decision, the `SCITEX_<MODULE_NAME>_*` env-var prefix rule, the umbrella `scitex.<name>` thin-re-export bridge with lazy-import guard, the `<project>/.scitex/<pkg-short>/` + `~/.scitex/<pkg-short>/` local-state layout, AGPL-3.0-only + CLA policy, per-package linter plugins, package categories, the `project-type: research` auditor carve-outs, and the model-serving (scitex-genai) vs model-consumption (sac) HTTP-only boundary. Use when touching any `scitex-*` package or onboarding a research repo to ecosystem standards.
+  [DETAILS] Cross-package conventions every `scitex-*` repo follows — the 3-layer cascade hierarchy and test scope, dependency hygiene + the only-permitted-extra-is-`all` rule + version-pinning rules, the module-vs-standalone-package decision, the `SCITEX_<MODULE_NAME>_*` env-var prefix rule, the umbrella `scitex.<name>` thin-re-export bridge with lazy-import guard, the `<project>/.scitex/<pkg-short>/` + `~/.scitex/<pkg-short>/` local-state layout, AGPL-3.0-only + CLA policy, per-package linter plugins, package categories, the `project-type: research` auditor carve-outs, and the model-serving (scitex-genai) vs model-consumption (sac) HTTP-only boundary. Use when touching any `scitex-*` package or onboarding a research repo to ecosystem standards.
 tags: [scitex-general-ecosystem-index]
 ---
 
@@ -14,9 +14,10 @@ touching any `scitex-*` package. Read before the per-package tiers
 ## Sections
 
 1. [01_upstream-and-downstream.md](01_upstream-and-downstream.md) — 3-layer cascade, test scope, cascade pattern
-2. [02_dependency-and-version-pinning.md](02_dependency-and-version-pinning.md) — Dependency hygiene, optional extras, version-pinning rules
+2. [02_dependency-and-version-pinning.md](02_dependency-and-version-pinning.md) — Dependency hygiene, the single `all` extra, version-pinning rules
+   - [26_the-only-extra-is-all.md](26_the-only-extra-is-all.md) — **the only permitted extra is `all`** (operator ruling 2026-08-31); tell people `pip install "scitex[all]"`; leaves as `scitex-<x>[all]`; `dev`/`docs` in PEP 735 `[dependency-groups]`; three measured facts; the migration cost
    - [18_version-pinning-rules.md](18_version-pinning-rules.md) — full version-pinning rules (bounds, consumer minima bumps, coordinated waves, ecosystem layering)
-   - [19_dev-extras-completeness.md](19_dev-extras-completeness.md) — `[dev]` extras completeness (fastmcp lesson, importorskip boundary, `PS-210`)
+   - [19_dev-extras-completeness.md](19_dev-extras-completeness.md) — `dev` **group** completeness (fastmcp lesson, importorskip boundary, `PS-210` inverts under the new shape)
 3. [03_modules-and-standalone-packages.md](03_modules-and-standalone-packages.md) — Module vs standalone package boundaries
 4. [04_environment-variables.md](04_environment-variables.md) — `SCITEX_<MODULE_NAME>_*` prefix rule; mandates per-package `NN_env-vars.md` leaf
 5. [05_re-export.md](05_re-export.md) — Umbrella `scitex.<name>` thin-re-export pattern + lazy-import guard

@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Ecosystem Dependency And Version Pinning
-  [DETAILS] Dependency hygiene and version-pinning rules across the SciTeX 3-layer cascade — what each package may depend on (upstream only, never downstream), how to declare minima (`>=X.Y` for scitex-* pkgs, exact pin only for security patches), optional-extras pattern (`pip install scitex[plt,stats]`), coordinated release waves so downstream consumers can bump their minima immediately, detection of circular/skipping deps, and the "when you bump, bump consumers' minima" rule. Use when editing any `pyproject.toml`, planning a release wave, or auditing cross-package version drift.
+  [DETAILS] Dependency hygiene and version-pinning rules across the SciTeX 3-layer cascade — what each package may depend on (upstream only, never downstream), how to declare minima (`>=X.Y` for scitex-* pkgs, exact pin only for security patches), the single-extra rule (`pip install "scitex[all]"` — `all` is the ONLY permitted extra, see `26_the-only-extra-is-all.md`; `dev`/`docs` are PEP 735 `[dependency-groups]`), coordinated release waves so downstream consumers can bump their minima immediately, detection of circular/skipping deps, and the "when you bump, bump consumers' minima" rule. Use when editing any `pyproject.toml`, planning a release wave, or auditing cross-package version drift.
 tags: [scitex-general-ecosystem-dependency-and-version-pinning]
 ---
 
@@ -36,14 +36,14 @@ follow below.
 
 ## Dependency Hygiene
 
-Downstream is **standalone**, not **zero-dep**. Third-party runtime deps (numpy, matplotlib, click, …) are allowed; sibling/middle/upstream SciTeX packages are not, except via optional extras.
+Downstream is **standalone**, not **zero-dep**. Third-party runtime deps (numpy, matplotlib, click, …) are allowed; sibling/middle/upstream SciTeX packages are not, except via the `all` extra.
 
 | Dep kind | Downstream | Middle | Upstream |
 |----------|------------|--------|----------|
 | Third-party (numpy, matplotlib, click, …) | ✅ Allowed, **keep minimal** | ✅ Allowed | ✅ Allowed |
 | `scitex-dev` (shared infra) | ✅ Allowed (dev tooling / entry points) | ✅ Allowed | ✅ Allowed |
-| Sibling downstream (e.g. figrecipe → scitex-writer) | ❌ Not at runtime — only via optional extras | ⚠️ Via plugin registry only | ✅ Allowed |
-| Middle (`scitex-io`, `scitex-stats`, …) | ❌ Not at runtime — optional extras only | ✅ Allowed between middle pkgs | ✅ Allowed |
+| Sibling downstream (e.g. figrecipe → scitex-writer) | ❌ Not at runtime — only inside `all` | ⚠️ Via plugin registry only | ✅ Allowed |
+| Middle (`scitex-io`, `scitex-stats`, …) | ❌ Not at runtime — inside `all` only | ✅ Allowed between middle pkgs | ✅ Allowed |
 | Upstream (`scitex` only — Axis 1) | ❌ **Never** | ❌ **Never** | ✅ Self |
 
 **Axis 2 packages out of scope.** `scitex-cloud` (user-facing platform) and `scitex-orochi` / `scitex-agent-container` / `scitex-container` (dev tooling & orchestration) sit outside the library cascade — see [`01_ecosystem/01_upstream-and-downstream.md`](01_upstream-and-downstream.md) Axis 2A/2B. Library packages do **not** depend on them at runtime (the dependency arrow goes the other way: scitex-cloud *hosts* apps that use the library; scitex-orochi *manages* the cascade). When such a dependency does exist (e.g. an app shipped on scitex-cloud), it lives in the **app's** `pyproject.toml`, not the library's.
@@ -51,27 +51,44 @@ Downstream is **standalone**, not **zero-dep**. Third-party runtime deps (numpy,
 ### Minimality checklist (downstream)
 
 - [ ] Every runtime dep is actually imported in `src/`.
-- [ ] No convenience deps that belong in `[dev]` or `[docs]`.
-- [ ] Heavy or rarely-used deps moved to **named extras** (`[imaging]`, `[scientific]`, `[mcp]`, …).
-- [ ] Any SciTeX-ecosystem dep is either `scitex-dev` (infra) or listed under an **optional** extra.
+- [ ] No convenience deps that belong in the `dev` or `docs` **groups**.
+- [ ] Heavy or rarely-used deps moved into the single `all` extra — **never** into a named per-feature extra ([26_the-only-extra-is-all.md](26_the-only-extra-is-all.md)).
+- [ ] Any SciTeX-ecosystem dep is either `scitex-dev` (infra) or listed in `all`.
 - [ ] `pip install <pkg>` in a clean venv produces a working package with no other `scitex-*` installed.
 
-Good example (`figrecipe`): `matplotlib`, `numpy`, `ruamel.yaml`, `scipy`, `click`, `rich` — six tight runtime deps, everything else (Pillow, seaborn, scitex integration) behind extras.
+Good example (`figrecipe`): `matplotlib`, `numpy`, `ruamel.yaml`, `scipy`, `click`, `rich` — six tight runtime deps, everything else (Pillow, seaborn, scitex integration) in `all`.
 
-For `[dev]` extras completeness (the fastmcp lesson — which optional
-deps `[dev]` must install vs `pytest.importorskip`, the symmetric
+For `dev` group completeness (the fastmcp lesson — which optional
+deps `dev` must install vs `pytest.importorskip`, the symmetric
 pyproject pattern, `PS-210`), see
 [19_dev-extras-completeness.md](19_dev-extras-completeness.md).
 
 ## Optional Dependency Pattern
 
-Downstream packages declare upstream features as **optional extras** so they remain standalone.
+Downstream packages declare upstream features as **optional**, in the one
+permitted extra, so they remain standalone.
+
+**The only permitted extra is `all`** — operator ruling 2026-08-31,
+[26_the-only-extra-is-all.md](26_the-only-extra-is-all.md). Per-feature
+extras (`[scitex]`, `[io]`, `[imaging]`, `[mcp]`, …) are wrong by design: a
+user cannot be expected to remember which extra maps to which feature. Tell
+people `pip install "<pkg>[all]"` and stop. Organise `all` with **comments**,
+not with additional extras; `dev` and `docs` are PEP 735
+`[dependency-groups]`, not extras.
 
 ### `pyproject.toml`
 ```toml
 [project.optional-dependencies]
-scitex = ["scitex[io,session]>=2.24.0"]
-all = ["figrecipe[scitex]", "figrecipe[dev]"]
+all = [
+    # --- SciTeX integration --------------------------------------
+    # Extras propagate through a dependency spec, so `[all]` here pulls
+    # each leaf with its own `[all]` (measured — 26 §4.2).
+    "scitex[all]>=2.24.0",
+]
+
+[dependency-groups]              # NOT published to consumers (26 §4.3)
+dev = ["pytest>=7.0", "ruff"]
+docs = ["sphinx>=7.0"]
 ```
 
 ### `_AVAILABLE` flags in code
@@ -89,7 +106,7 @@ def some_feature_requiring_scitex():
     if not _SCITEX_AVAILABLE:
         raise ImportError(
             "This feature requires scitex. "
-            "Install it with: pip install figrecipe[scitex]"
+            'Install it with: pip install "figrecipe[all]"'
         )
 ```
 
@@ -103,9 +120,10 @@ quick rule of thumb), see
 
 - [ ] **Downstream**: third-party runtime deps are minimal, justified, and actually imported.
 - [ ] **Downstream**: `pip install <pkg>` in a clean venv yields a working package with no other `scitex-*` installed.
-- [ ] **Downstream**: tests pass with only `[dev]` extras installed.
-- [ ] **Downstream**: every cross-package SciTeX dep lives under an optional extra (`[scitex]`, `[<feature>]`), never in bare `dependencies`.
-- [ ] **Middle**: middle→middle deps explicit at runtime; middle→downstream lives under `[dev]` (test/integration only).
+- [ ] **Downstream**: tests pass with only the `dev` group installed.
+- [ ] **Downstream**: every cross-package SciTeX dep lives in the `all` extra, never in bare `dependencies` and never in a per-feature extra.
+- [ ] **All layers**: `[project.optional-dependencies]` declares `all` and nothing else; `dev` / `docs` are `[dependency-groups]` ([26](26_the-only-extra-is-all.md)).
+- [ ] **Middle**: middle→middle deps explicit at runtime; middle→downstream lives in the `dev` group (test/integration only).
 - [ ] **All layers**: every dep has a lower bound (`>=X.Y`); no speculative upper bounds.
 - [ ] **All layers**: no `==` exact pins outside security patches (and even then, with a tracking issue and an `<X` cap on the next minor).
 - [ ] **All layers**: any `<X` upper bound has a linked tracking issue and a follow-up to remove it.

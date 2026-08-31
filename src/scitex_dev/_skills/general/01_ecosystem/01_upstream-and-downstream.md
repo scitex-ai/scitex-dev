@@ -81,7 +81,7 @@ A user-facing product that *hosts* SciTeX-built apps. Different direction entire
 | **Owns logic?** | Yes — all app-specific logic lives here | **No** — pure re-export + orchestration (`@stx.session`) |
 | **Test scope** | **Unit tests** — covers all its own behaviour | **Integration only** — verifies the pipeline flows |
 | **May duplicate logic?** | N/A (it is the source of truth) | **Never** — re-expose only |
-| **CI install** | `pip install -e ".[dev]"` — no scitex | Full ecosystem installed |
+| **CI install** | `pip install -e . --group dev` — no scitex | Full ecosystem installed |
 | **Breaking change risk** | Isolated — only its users affected | Cascades across all packages |
 | **Example feature** | `fr.save(fig, "plot.png")` — does the save | `stx.io.save(fig, ...)` — re-exports `fr.save` via plugin registry |
 
@@ -163,12 +163,12 @@ re-exposes only. All interfaces cascade in the same direction.
 ## CI Rules per Layer
 
 ### Downstream CI
-- Install: `pip install -e ".[dev]"` — standalone only.
+- Install: `pip install -e . --group dev` — standalone only. (`dev` is a PEP 735 dependency group, not an extra — [26_the-only-extra-is-all.md](26_the-only-extra-is-all.md); needs uv or pip >= 25.1.)
 - Must NOT require scitex.
 - Tests downstream logic only (unit tests).
 
 ### Middle CI
-- Install: `pip install -e ".[dev]"` + relevant downstream packages.
+- Install: `pip install -e . --group dev` + relevant downstream packages.
 - Integration tests: does the cascade work through the plugin registry?
 - Plus unit tests for its own unique code (type checking, registry, adapters).
 
