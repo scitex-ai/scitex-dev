@@ -101,7 +101,8 @@ def test_not_a_repo_is_none(tmp_path):
 
 
 def test_behind_upstream_is_zero_when_level_with_the_remote(gitflow_repo):
-    # Arrange — develop is fully pushed; the newest tag is on main.
+    # Arrange — develop holds everything origin/develop holds; the newest
+    # tag is on main.
     # Act
     result = editable_behind_upstream(gitflow_repo)
     # Assert
@@ -117,36 +118,13 @@ def test_tag_distance_still_reports_behind_on_that_same_checkout(gitflow_repo):
     assert (ahead, behind) == (3, 2)
 
 
-def test_behind_upstream_counts_commits_only_the_remote_has(tmp_path):
-    # Arrange — a clone that is genuinely 2 commits behind its own remote.
-    origin = tmp_path / "origin.git"
-    subprocess.run(
-        ["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True
-    )
-    author = tmp_path / "author"
-    subprocess.run(
-        ["git", "clone", "-q", str(origin), str(author)],
-        check=True, capture_output=True,
-    )
-    _git(author, "config", "user.email", "t@t")
-    _git(author, "config", "user.name", "t")
-    (author / "f.txt").write_text("base")
-    _git(author, "add", ".")
-    _git(author, "commit", "-qm", "base")
-    _git(author, "push", "-q", "origin", "main")
-
-    follower = tmp_path / "follower"
-    subprocess.run(
-        ["git", "clone", "-q", str(origin), str(follower)],
-        check=True, capture_output=True,
-    )
-    for n in range(2):
-        (author / "f.txt").write_text(f"more{n}")
-        _git(author, "commit", "-aqm", f"more{n}")
-    _git(author, "push", "-q", "origin", "main")
-    _git(follower, "fetch", "-q", "origin")
+def test_behind_upstream_counts_commits_only_the_remote_has(gitflow_repo):
+    # Arrange — rewind develop two commits, so origin/develop genuinely
+    # carries work this tree lacks. This is the case a pull DOES fix, and it
+    # is the one that must keep raising the alarm.
+    _git(gitflow_repo, "reset", "-q", "--hard", "HEAD~2")
     # Act
-    result = editable_behind_upstream(follower)
+    result = editable_behind_upstream(gitflow_repo)
     # Assert
     assert result == 2
 
