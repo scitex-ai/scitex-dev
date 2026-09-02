@@ -64,6 +64,8 @@ __all__ = [
     "DEFAULT_CENTRAL_HOST",
     "DEFAULT_PGDATA_DIR",
     "DEFAULT_SOCKET_DIR",
+    "LEGACY_PGDATA_DIR",
+    "resolve_pgdata_dir",
     "DEFAULT_TCP_PORT",
     "STORE_DSN_ENV",
     "require_durable_pgdata",
@@ -78,7 +80,26 @@ STORE_DSN_ENV: Final[str] = "SCITEX_STORE_DSN"
 
 #: Where the per-host instance keeps PGDATA. Bind-mounted OUTSIDE any
 #: container, so rebuilding the container destroys no data.
-DEFAULT_PGDATA_DIR: Final[Path] = Path("~/.scitex/pg")
+#:
+#: MOVED 2026-09-02 from `~/.scitex/pg` by operator ruling: `~/.scitex/<name>/`
+#: means "state of the package scitex-<name>", and there is no package called
+#: scitex-pg — so that path advertised a package that does not exist. The store
+#: is ecosystem infrastructure, so it belongs under the root package every leaf
+#: depends on. The directory is named for the ROLE (`store`) and not the engine
+#: (`pg`), which is the same vocabulary rule that retired SQLite from the
+#: fleet's names: an engine in a path is a promise that outlives the engine.
+DEFAULT_PGDATA_DIR: Final[Path] = Path("~/.scitex/dev/store")
+
+#: The pre-2026-09-02 location, still READ so a half-moved fleet resolves.
+#:
+#: This is a MIGRATION, not a rename (§3): an on-disk location every host
+#: resolves is a published contract, so the old spelling is aliased first and
+#: removed second. It has a stated END rather than living forever — it is
+#: retired once the convergence job asserts the location, because at that point
+#: a host still carrying the old directory is REPORTED rather than silently
+#: tolerated. Without that end date this would be the compatibility window with
+#: no closing date the constitution names.
+LEGACY_PGDATA_DIR: Final[Path] = Path("~/.scitex/pg")
 
 #: Where that instance puts its UNIX socket — a SUBDIRECTORY of PGDATA,
 #: matching the live `unix_socket_directories` setting.
@@ -90,6 +111,36 @@ DEFAULT_PGDATA_DIR: Final[Path] = Path("~/.scitex/pg")
 #: named `~/.scitex/pg` while the only socket on disk was
 #: `~/.scitex/pg/run/.s.PGSQL.55432`.
 DEFAULT_SOCKET_DIR: Final[Path] = DEFAULT_PGDATA_DIR / "run"
+
+
+def resolve_pgdata_dir() -> Path:
+    """The PGDATA directory this host actually has, new location preferred.
+
+    The fallback is WIRED, not merely declared. A constant naming the old
+    path that nothing reads would be the "present, correct and inert" defect
+    this codebase keeps finding elsewhere -- the migration would then depend
+    on every host having been moved before the release lands, which is the
+    coordination this alias exists to avoid.
+
+    Order, and it is deliberate:
+
+    1. the new location if it EXISTS -- so a moved host never looks back;
+    2. the legacy location if THAT exists -- a not-yet-moved host keeps
+       working, which is what makes the fleet move-able one machine at a
+       time rather than all at once;
+    3. the new location otherwise -- a fresh host with neither present is
+       created in the right place, so the old path cannot be reintroduced
+       by a new machine.
+
+    Note 3 is why this is not simply "prefer whichever exists": on a clean
+    host both branches are absent, and the tie must break toward the future.
+    """
+    new = DEFAULT_PGDATA_DIR.expanduser()
+    if new.exists():
+        return DEFAULT_PGDATA_DIR
+    if LEGACY_PGDATA_DIR.expanduser().exists():
+        return LEGACY_PGDATA_DIR
+    return DEFAULT_PGDATA_DIR
 
 #: The port this instance listens on. NOT only a TCP concern, which is what
 #: the previous comment here claimed: libpq names the socket FILE
@@ -239,7 +290,9 @@ def require_durable_pgdata(pgdata_dir: "Path | str | None" = None) -> None:
     "unsafe", and blocking every host whose mount table is unreadable would
     make the guard the outage.
     """
-    directory = Path(pgdata_dir) if pgdata_dir is not None else DEFAULT_PGDATA_DIR
+    directory = (
+        Path(pgdata_dir) if pgdata_dir is not None else resolve_pgdata_dir()
+    )
     resolved = directory.expanduser()
     fstype = _fstype_of(resolved)
     if fstype is None or fstype not in _EPHEMERAL_FSTYPES:

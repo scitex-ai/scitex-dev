@@ -214,8 +214,13 @@ class TestTheDiscriminatorItself:
         scitex-compute runners $HOME shares the root ext4 filesystem, the
         two answers agreed, and the test failed while the rule was correct.
         """
-        # Arrange
-        under_the_bind = Path("/home/ywatanabe/.scitex/pg")
+        # Arrange — any path UNDER the home bind; the store subdirectory is
+        # incidental to what this asserts. Deliberately NOT derived from
+        # DEFAULT_PGDATA_DIR: that expands against the RUNNING user's home,
+        # which inside an agent container is /home/agent, and the constructed
+        # table above only covers /home/ywatanabe. Deriving it would couple
+        # this test to the vantage point rather than to the rule.
+        under_the_bind = Path("/home/ywatanabe/.scitex/dev/store")
         # Act
         fstype = _fstype_from_mountinfo(_NESTED_MOUNTINFO, under_the_bind)
         # Assert
