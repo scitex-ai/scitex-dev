@@ -215,6 +215,8 @@ absence is what made the private index look reasonable.
 
 ## Related
 
-- `_skills/general/01_ecosystem/21_dot-scitex-roots-and-resolution.md` — where a
-  package's `.db` lives and why `runtime/` is the redirectable unit.
+- `_skills/general/01_ecosystem/21_dot-scitex-roots-and-resolution.md` — the two
+  `.scitex/<pkg-short>/` roots and how a path resolves. Note `runtime/` holds
+  regenerable local state only: state itself lives in PostgreSQL on 55432, and
+  a `.db` file there is a violation rather than a shard.
 - scitex-cards ADR-0016 — the wipes, the mechanism and the ruling.
