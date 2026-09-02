@@ -199,7 +199,7 @@ def _netplan_managed_hosts(
         # point, not a hypothetical.
         raise HostRegistryError(
             f"no `kind: compute` host in the registry at "
-            f"{get_hosts_yaml_path()} ({len(records)} record(s): "
+            f"{get_hosts_yaml_path(hosts_path)} ({len(records)} record(s): "
             f"{', '.join(sorted(r.name for r in records)) or 'none'}), so the "
             f"network floor cannot be scoped.",
             remediation=(
