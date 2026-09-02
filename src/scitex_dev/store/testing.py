@@ -141,15 +141,21 @@ def ephemeral_cluster_dsn() -> Iterator[str]:
         )
 
     root = Path(tempfile.mkdtemp(prefix="scitex-store-test-"))
-    data, sock = root / "data", root / "run"
+    data, sock, log = root / "data", root / "run", root / "postmaster.log"
     sock.mkdir()
     try:
         subprocess.run(
             [initdb, "-D", str(data), "-A", "trust", "--encoding=UTF8", "-U", "postgres"],
             check=True, capture_output=True, text=True, timeout=120,
         )
+        # ``-l`` is REQUIRED, not tidiness. Without it the postmaster pg_ctl
+        # forks inherits this process's captured stdout/stderr pipes and holds
+        # them open for its whole life, so ``capture_output`` blocks reading
+        # them until the timeout even though pg_ctl itself already exited 0.
+        # Observed on the org runners as a 120s TimeoutExpired whose traceback
+        # reads ``Popen: returncode: 0``.
         subprocess.run(
-            [pg_ctl, "-D", str(data), "-o", f"-k {sock} -h ''", "-w",
+            [pg_ctl, "-D", str(data), "-l", str(log), "-o", f"-k {sock} -h ''", "-w",
              "-t", str(int(_START_TIMEOUT_SECONDS)), "start"],
             check=True, capture_output=True, text=True, timeout=120,
         )

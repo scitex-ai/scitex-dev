@@ -34,7 +34,7 @@ dependencies = [
 When you cut `scitex-io 0.4.0` containing a new feature used by `scitex`:
 
 1. In `scitex-io`: bump its own version → `0.4.0`, publish, tag.
-2. In every consumer (middle + upstream + downstream that uses it via `[scitex]` extra):
+2. In every consumer (middle + upstream + downstream that uses it via the `all` extra):
    - Bump its `scitex-io` lower bound to the new minimum that contains the feature.
    - Add a note in the consumer's CHANGELOG linking the feature used.
    - Bump the consumer's own **patch** version (feature now requires newer dep).
@@ -46,14 +46,19 @@ When you cut `scitex-io 0.4.0` containing a new feature used by `scitex`:
 
 ### SciTeX-ecosystem-specific rules
 
-- **Downstream → middle/upstream**: runtime minima live only inside **optional extras** (`[scitex]`). The bare install stays ecosystem-free.
+- **Downstream → middle/upstream**: runtime minima live only inside the **`all` extra** — the only extra that may exist ([26_the-only-extra-is-all.md](26_the-only-extra-is-all.md)). The bare install stays ecosystem-free.
   ```toml
   [project.optional-dependencies]
-  scitex = ["scitex-io>=0.4.0", "scitex[session]>=2.24.0"]
+  all = [
+      # --- SciTeX cascade ------------------------------------------
+      "scitex-io[all]>=0.4.0",
+      "scitex[all]>=2.24.0",
+  ]
   ```
-- **Middle → downstream**: minima go under **test** extras (plugin targets for integration tests), not runtime.
+  *(Amended 2026-08-31 — this used to read `scitex = ["scitex-io>=0.4.0", "scitex[session]>=2.24.0"]`. Both halves changed: the extra is now `all`, and a leaf is listed as `scitex-<x>[all]` so its own optional deps come with it.)*
+- **Middle → downstream**: minima go in the **`dev` dependency-GROUP** (plugin targets for integration tests), not runtime and not an extra.
   ```toml
-  [project.optional-dependencies]
+  [dependency-groups]
   dev = ["scitex-dev", "pytest>=7.0", "figrecipe>=0.13.0"]  # for cascade tests
   ```
 - **Upstream → everything**: minima go under **runtime** deps with matched version ranges.
@@ -64,7 +69,7 @@ When you cut `scitex-io 0.4.0` containing a new feature used by `scitex`:
       "figrecipe>=0.13.0",
   ]
   ```
-- **Coordinated waves**: when multiple ecosystem packages change together, bump them in one wave with matched minima so a fresh `pip install scitex` resolves cleanly.
+- **Coordinated waves**: when multiple ecosystem packages change together, bump them in one wave with matched minima so a fresh `pip install "scitex[all]"` resolves cleanly. `[all]` is what users type, so it is the resolution that has to work.
 - **`scitex-dev ecosystem sync`** (or equivalent) is the canonical tool for fanning minima updates across the ecosystem. Prefer it over hand-editing.
 
 ### Quick rule of thumb

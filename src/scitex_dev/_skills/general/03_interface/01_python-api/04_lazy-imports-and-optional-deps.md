@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Interface Python Api Lazy Imports
-  [DETAILS] Two lazy-import concerns — (1) optional deps via `try_import_optional` so a missing extra never crashes import, and (2) PEP 562 `__getattr__` so heavy required submodules don't slow down `import <pkg>` and CLI startup. Conditional `__all__` rules. The `_LazyModule` class for the umbrella's submodule attribute access. Sentinel pattern for "feature available?" checks.
+  [DETAILS] Two lazy-import concerns — (1) optional deps via `try_import_optional` (always `extra="all"` — per-feature extras are retired) so a missing optional dep never crashes import, and (2) PEP 562 `__getattr__` so heavy required submodules don't slow down `import <pkg>` and CLI startup. Conditional `__all__` rules. The `_LazyModule` class for the umbrella's submodule attribute access. Sentinel pattern for "feature available?" checks.
 tags: [scitex-general-interface-python-api-lazy-imports-and-optional-deps]
 ---
 
@@ -9,7 +9,7 @@ tags: [scitex-general-interface-python-api-lazy-imports-and-optional-deps]
 
 This file covers two related but distinct concerns:
 
-1. **Optional dependencies** (sections below up to "Audit") — handling `pip install pkg[extra]` gates so missing extras don't crash `import pkg`.
+1. **Optional dependencies** (sections below up to "Audit") — handling `pip install "pkg[all]"` gates so a missing optional dep doesn't crash `import pkg`.
 2. **PEP 562 startup-time lazy imports** (final section) — making `import pkg` cheap when all required deps ARE installed but submodules transitively load heavy code.
 
 Both are "lazy imports"; they solve different problems and use different mechanisms. Don't conflate them.
@@ -22,11 +22,14 @@ Use the canonical helper from scitex-dev. **Shipped in `scitex_dev._imports`** (
 # ✅ Canonical pattern
 from scitex_dev import try_import_optional
 
-H5Explorer   = try_import_optional("._h5_explorer",   "H5Explorer",   extra="h5",   pkg="scitex-io")
-ZarrExplorer = try_import_optional("._zarr_explorer", "ZarrExplorer", extra="zarr", pkg="scitex-io")
+# `extra` is ALWAYS "all" — it is the only extra that exists (see below).
+H5Explorer   = try_import_optional("._h5_explorer",   "H5Explorer",   extra="all", pkg="scitex-io")
+ZarrExplorer = try_import_optional("._zarr_explorer", "ZarrExplorer", extra="all", pkg="scitex-io")
 ```
 
-Returns the imported object on success, `None` on `ImportError`. Records `(extra, pkg)` so a use-site error message can render `pip install scitex-io[h5]` without each call site hand-spelling it.
+Returns the imported object on success, `None` on `ImportError`. Records `(extra, pkg)` so a use-site error message can render `pip install scitex-io[all]` without each call site hand-spelling it.
+
+*(Amended 2026-08-31 — these examples used to pass `extra="h5"` / `extra="zarr"`. Per-feature extras are retired; `extra="all"` is the only correct value. The parameter stays because the rendered hint still needs it.)*
 
 The names appear in `__all__` either way (set to `None` if unavailable). User code probes them:
 
@@ -97,11 +100,13 @@ if ssch.SCHOLAR_AVAILABLE:
 
 Use these sparingly — only when the optional dep gates a major feature surface, not a single function.
 
-## What goes in `extras_require`
+## What goes in the `all` extra
 
-- `pyproject.toml` declares optional groups: `[project.optional-dependencies]` → `h5 = ["h5py>=3"]`.
-- `pip install scitex-io[h5]` installs the group.
-- The skill leaf [01_ecosystem/02_dependency-and-version-pinning.md](../../01_ecosystem/02_dependency-and-version-pinning.md) covers extras naming + pinning.
+- `pyproject.toml` declares **exactly one** extra: `[project.optional-dependencies]` → `all = [..., "h5py>=3", ...]`, organised with comments.
+- `pip install "scitex-io[all]"` installs it. That is the only install line a user ever needs, and the only one any error message should print.
+- There is **no** `[h5]`, `[zarr]`, `[parquet]`, … — per-feature extras are retired by operator ruling 2026-08-31. An optional dep is still optional; it just no longer gets its own name.
+- `dev` / `docs` are PEP 735 `[dependency-groups]`, not extras, and never reach consumers.
+- Rule, rationale, the three measured facts and the migration cost: [01_ecosystem/26_the-only-extra-is-all.md](../../01_ecosystem/26_the-only-extra-is-all.md). Pinning: [01_ecosystem/02_dependency-and-version-pinning.md](../../01_ecosystem/02_dependency-and-version-pinning.md).
 
 ## The umbrella's `_LazyModule`
 

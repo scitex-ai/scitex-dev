@@ -12,9 +12,78 @@ What lives here:
   `scitex/_mcp_tools/<short>.py` bridge source.
 - ``_check_bridge_pattern(package, out, *, read_bridge_source=None,
   resolve_mcp_server=None)`` — §1 audit rule.
+- ``BRIDGE_OWNER`` / ``bridge_violation(...)`` — who the finding is ABOUT.
 
 Re-exported from `_mcp_audit` so existing call sites and test imports
 keep working.
+
+WHOSE DEFECT IS A BRIDGE FINDING?
+---------------------------------
+Every file this rule reads is ``scitex/_mcp_tools/<short>.py``, which
+ships in the UMBRELLA distribution — never in the audited package's
+repository. Until 2026-08-30 the finding was nonetheless emitted against
+the audited package, at ``§1``/error, inside that package's REQUIRED
+merge gate. In scitex-io's CI that read:
+
+    [§1] scitex-io: umbrella bridge `scitex/_mcp_tools/io.py` uses
+         direct `mcp.mount(...)`
+
+scitex-io cannot fix that file. It is not in its tree, it does not
+declare the umbrella as a dependency (the umbrella arrives
+transitively), and it cannot pin it.
+
+THE CONTROL THAT PROVES IT IS NOT A PROPERTY OF THE AUDITED PACKAGE:
+scitex-io PR #167 resolved no ``scitex==`` at all and its CI headline
+shows NO §1. Same repository, same rule, same code — the finding appears
+or vanishes purely on whether the umbrella happened to be installed in
+that job. A verdict that flips on an unrelated third party's presence
+is a fact about the environment, not about the package being graded.
+(For completeness: CI resolved ``scitex==2.28.13``, whose
+``_mcp_tools/io.py`` still called raw ``mcp.mount()``. The umbrella
+fixed it in 2.29.0 via ``safe_mount``. So the finding was true about the
+umbrella and stale about io.)
+
+The fix follows the grain the severity registry already has for §10/§10w
+— a rule id is the ONLY carrier of severity, so a finding that must be
+non-gating needs its own id:
+
+* ``§1``  — the audited package OWNS the bridge (it *is* the umbrella).
+            error-tier, gating, as before.
+* ``§1u`` — the bridge belongs to ``scitex`` and someone else's audit
+            merely imported it. Attributed to ``scitex`` (the
+            ``Violation.command`` names the OWNER, so the printed line
+            says whose file it is) and registered warn-tier, so it stays
+            fully visible and reported without failing a gate its
+            subject cannot pass.
+
+WHAT THIS DOES NOT YET GIVE YOU — say it here rather than let a reader
+infer it from the `§1` branch: the owner branch is REACHABLE BUT NOT
+REACHED in production today, so §1 is currently warn-only in practice.
+Two independent reasons, both pre-existing and neither introduced here:
+
+  1. ``_mcp_audit._MCP_AUDIT_SKIP_PACKAGES`` contains ``scitex``, so
+     ``audit-mcp-tools`` returns ``skip-not-standalone`` for the umbrella
+     before any rule runs;
+  2. even without that, ``_short_name("scitex")`` is ``"scitex"``, so the
+     rule would look for ``scitex/_mcp_tools/scitex.py`` — the umbrella's
+     bridges are per-sub-package (``io.py``, ``cloud.py``, …) and no such
+     aggregate file exists.
+
+Making §1 bite its owner therefore needs the umbrella's audit to SWEEP
+its own bridge directory rather than look up one file by the audited
+package's short name. That is a real gap and a separate change; it is not
+closed by moving the blame, and pretending otherwise would trade a
+misattributed gate for an imaginary one. The unit tests in
+`tests/.../test__mcp_bridge.py` prove the owner branch grades correctly
+when it is entered; they do not claim it is entered today.
+
+NOT DONE ON PURPOSE: retargeting the rule at the umbrella's newer
+``_mcp/`` package. From scitex 2.30.2 the umbrella ships NO per-package
+bridge files there at all, so ``_read_bridge_source`` would return None
+for EVERY package permanently — an ecosystem-wide silent disable that
+looks green. `_check_workflow_duplication.py` names that shape: a
+constant that is "a MEASUREMENT WITH AN EXPIRY DATE… a stale set fails
+QUIETLY."
 """
 
 from __future__ import annotations
@@ -122,6 +191,51 @@ _SAFE_MOUNT_CALL = re.compile(r"\bsafe_mount\s*\(")
 _PLAIN_MOUNT_CALL = re.compile(r"\.\s*mount\s*\(")
 
 
+#: The distribution that SHIPS every `scitex/_mcp_tools/<short>.py` file
+#: this rule reads. Not a guess about layout: `_read_bridge_source`
+#: literally imports `scitex._mcp_tools` and reads a sibling of its
+#: `__file__`, so the owner of anything it returns is, by construction,
+#: whatever distribution provides `scitex`.
+BRIDGE_OWNER = "scitex"
+
+#: Warn-tier sibling of §1, for a bridge finding raised during SOMEONE
+#: ELSE'S audit. Same shape as §10w next to §10: severity is rule-keyed,
+#: never per-finding, so "the same defect, but not gating for this
+#: subject" can only be expressed as a second rule id.
+BRIDGE_RULE_OWNED = "§1"
+BRIDGE_RULE_THIRD_PARTY = "§1u"
+
+
+def bridge_violation(package: str, defect: str, *, remedy: str) -> Violation:
+    """One §1 bridge finding, attributed to whoever SHIPS the file.
+
+    ``package`` is the package being AUDITED; the returned violation's
+    ``command`` is the package that OWNS the bridge. Those are the same
+    thing only when the umbrella audits itself — in every other run the
+    audited package is a bystander that imported the umbrella, and
+    naming it as the subject is how a third party's defect ended up
+    inside its required merge gate.
+
+    Returns an error-tier ``§1`` for the owner and a warn-tier ``§1u``
+    for everyone else. The finding is never dropped, filtered or
+    silenced in either case: it prints, it is counted in the warning
+    tally, and it carries the owner's name and the remedy. Only the
+    blame moves.
+    """
+    if package == BRIDGE_OWNER:
+        return Violation(package, BRIDGE_RULE_OWNED, f"{defect} — {remedy}")
+    return Violation(
+        BRIDGE_OWNER,
+        BRIDGE_RULE_THIRD_PARTY,
+        f"{defect} — {remedy}. This file ships in `{BRIDGE_OWNER}`, not in "
+        f"`{package}`; it surfaced here only because `{package}`'s audit "
+        f"imported the installed umbrella. Fix it in the `{BRIDGE_OWNER}` "
+        f"repository — `{package}` cannot: the file is not in its tree and "
+        "it does not depend on the umbrella. Warn-tier for that reason: a "
+        "package must not be gated on a file it does not ship.",
+    )
+
+
 def _check_bridge_pattern(
     package: str,
     out: list[Violation],
@@ -135,6 +249,11 @@ def _check_bridge_pattern(
     cannot `safe_mount` a non-existent server, so hand-wrapping is the
     only available option. The §1 rule only applies when the bridge
     *could* mount but chose not to.
+
+    ``package`` is the package under audit; the finding itself is
+    attributed by :func:`bridge_violation` to whoever ships the bridge —
+    ``§1`` when they are the same, ``§1u`` (warn) against ``scitex``
+    when they are not. See this module's docstring for why.
 
     The optional ``read_bridge_source`` / ``resolve_mcp_server`` callables
     let tests inject fakes without monkey-patching the module.
@@ -159,11 +278,11 @@ def _check_bridge_pattern(
         if resolve_mcp_server(package) is None:
             return
         out.append(
-            Violation(
+            bridge_violation(
                 package,
-                "§1",
                 f"umbrella bridge `scitex/_mcp_tools/{short}.py` "
-                "hand-wraps tools — convert to `safe_mount(mcp, sub_mcp, namespace=…)` "
+                "hand-wraps tools",
+                remedy="convert to `safe_mount(mcp, sub_mcp, namespace=…)` "
                 "(see scitex/_mcp_tools/cloud.py)",
             )
         )
@@ -171,11 +290,11 @@ def _check_bridge_pattern(
 
     if has_plain_mount and not has_safe_mount:
         out.append(
-            Violation(
+            bridge_violation(
                 package,
-                "§1",
                 f"umbrella bridge `scitex/_mcp_tools/{short}.py` "
-                "uses direct `mcp.mount(...)` — replace with `safe_mount(mcp, sub_mcp)` "
-                "from `scitex._mcp_tools._compat` for FastMCP 2.x/3.x portability",
+                "uses direct `mcp.mount(...)`",
+                remedy="replace with `safe_mount(mcp, sub_mcp)` from "
+                "`scitex._mcp_tools._compat` for FastMCP 2.x/3.x portability",
             )
         )

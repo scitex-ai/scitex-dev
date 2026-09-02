@@ -47,13 +47,29 @@ if _clew is not None:
 Silent `X = None` downgrades produce confusing `AttributeError` at
 call-time and hide dep problems.
 
-## 3. `scitex[session]` is the minimal monolith dep
+## 3. Depend on bare `scitex`, not a per-feature extra
+
+*(Amended 2026-08-31. This section used to say "`scitex[session]` is the
+minimal monolith dep" and to point at scitex-python's extras list as
+canonical. The operator ruled that the only permitted extra is `all`
+([26_the-only-extra-is-all.md](26_the-only-extra-is-all.md)), so
+`scitex[session]`, `scitex[sh]`, `scitex[social]` and the other 74
+per-feature extras are being retired. There is no narrower extra to ask
+for.)*
 
 `@stx.session` lives in `scitex-python` itself (not `scitex-core`). If a
-standalone package only needs the session decorator, depend on
-`"scitex[session]>=2.0.0"` — not `"scitex>=2.0.0"`. Same pattern for
-`scitex[sh]`, `scitex[social]`, etc. See
-`~/proj/scitex-python/pyproject.toml` for the canonical extras list.
+standalone package only needs the session decorator, depend on bare
+`"scitex>=2.0.0"`. The two remaining choices are the bare package and
+`"scitex[all]>=2.0.0"` — pick the bare one unless you genuinely need the
+whole cascade.
+
+**Open migration item, owned by scitex-python, not settled here.** The
+`[session]` extra existed so a caller could get the decorator without the
+monolith's full dependency set. Retiring it only works once whatever
+`@stx.session` actually imports sits in scitex-python's `[project]
+dependencies`. Until that is done, bare `scitex` may not be sufficient for
+`@stx.session` on a clean install. Verify against the release you pin
+rather than assuming either way.
 
 ## 4. `scitex-logging` is its own package — prefer direct
 
@@ -124,38 +140,51 @@ Five lessons from the scitex-scholar / scitex-browser extraction (failure-outcom
 
 Read those if you're touching the scholar download / auth pipeline.
 
-## 8. Every module MUST have an extra listing its standalone package
+## 8. Every module MUST appear in `all` as its standalone package
+
+*(Amended 2026-08-31. This section used to require a per-module extra
+`<name> = ["scitex-<name>"]` in addition to `[all]`. Per-module extras are
+retired — `all` is the only extra permitted
+([26_the-only-extra-is-all.md](26_the-only-extra-is-all.md)) — so the rule
+collapses onto `all` alone. The failure it prevents is unchanged, and gets
+worse if ignored: `[all]` is now the only thing anyone types.)*
 
 **Rule.** For every canonical ecosystem package `scitex-<name>` listed in
 `scitex dev ecosystem list --json`, the umbrella's `pyproject.toml` MUST
-define an extra where the standalone package itself appears:
+list the standalone package itself in `all`:
 
 ```toml
 [project.optional-dependencies]
-<name> = ["scitex-<name>"]            # minimum
-# or, if the in-umbrella shim needs base python deps too:
-path    = ["scitex-path", "GitPython", "matplotlib"]
+all = [
+    # --- paths ---------------------------------------------------
+    "scitex-path[all]",              # the standalone, with its own extras
+    # in-umbrella shims may add their own base deps alongside:
+    "GitPython", "matplotlib",
+]
 ```
 
 **Why.** A bare `pip install scitex` gives a thin umbrella with shim
-modules. `pip install scitex[<name>]` must actually install
+modules. `pip install "scitex[all]"` must actually install every
 `scitex-<name>` — otherwise `stx.<name>.foo()` silently falls back to the
 in-umbrella shim instead of the real standalone package. Observed failure
-(2026-04-24 audit): `path = ["GitPython", "matplotlib"]` ships GitPython
-but NOT `scitex-path`, so `stx.path.find_git_root()` runs the umbrella
-shim — a confusingly different codepath from the standalone.
+(2026-04-24 audit): `path = ["GitPython", "matplotlib"]` shipped GitPython
+but NOT `scitex-path`, so `stx.path.find_git_root()` ran the umbrella shim
+— a confusingly different codepath from the standalone. The same omission
+inside `all` produces the same silent wrong codepath, for every user
+instead of the few who typed `[path]`.
 
 **TypeScript-only modules (e.g. `ui`).** Two acceptable patterns:
 
-1. The extra still declares the pypi package so the Python re-export path
-   resolves: `ui = ["scitex-ui"]`.
-2. The extra is intentionally empty AND the umbrella shim raises a clear
-   `ImportError` pointing the user at the standalone TS/JS project.
-   Silent `None` re-exports are NOT acceptable (see §2).
+1. `all` still declares the pypi package so the Python re-export path
+   resolves: `"scitex-ui"` appears in `all`.
+2. The package is deliberately absent from `all` AND the umbrella shim
+   raises a clear `ImportError` pointing the user at the standalone TS/JS
+   project. Silent `None` re-exports are NOT acceptable (see §2).
 
-**`[all]` extra.** Must transitively install every canonical package.
-Easiest: `all = [<every scitex-* pinned>]`. A package missing from both
-its named extra and `[all]` is invisible to users — treat as a bug.
+**`all` completeness — the load-bearing rule.** `all` must transitively
+install every canonical package: `all = [<every scitex-* pinned, each as
+scitex-<x>[all]>]`. A package missing from `all` is invisible to users,
+full stop — there is no second extra it could still be reachable through.
 
 **Probe.** See `09_quality/02_checklist.md` §14.
 
@@ -170,10 +199,10 @@ don't leave them hoping someone re-adds the module.
 
 - [ ] Reverse-direction imports clean: child repo has no `from scitex.<parent>` and parent repo has no `from scitex_<child>` outside the umbrella bridge.
 - [ ] No silent `try: import X\nexcept ImportError: X = None` downgrades — either declare the dep or guard at call site with a clear error message.
-- [ ] If only `@stx.session` is needed, dep is `scitex[session]` — not the full `scitex`.
+- [ ] If only `@stx.session` is needed, dep is bare `scitex>=X` — not `scitex[all]`, and not a per-feature extra ([26](26_the-only-extra-is-all.md); `[session]` is retired).
 - [ ] All ecosystem-wide errors come from `scitex_logging` (not `scitex.logging` from the monolith).
 - [ ] Path injection: child packages take cache/data dirs as constructor args; never reach into a parent's `Config` for them.
 - [ ] All local-state paths resolve through `PathManager`; no hardcoded `Path.home() / ".scitex/..."`.
-- [ ] Every canonical `scitex-<name>` listed by `scitex-dev ecosystem list` has a matching umbrella extra that installs the standalone (`[<name>] = ["scitex-<name>"]`).
-- [ ] `[all]` extra transitively installs every canonical package.
+- [ ] Every canonical `scitex-<name>` listed by `scitex-dev ecosystem list` appears in the umbrella's `all` extra as `scitex-<name>[all]`.
+- [ ] `all` transitively installs every canonical package — and is the ONLY extra declared.
 - [ ] After a split, dead test files that import removed modules are deleted — `pytest` collects clean.

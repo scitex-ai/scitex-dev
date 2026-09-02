@@ -9,6 +9,11 @@ Rules (matching that skill's section numbers):
 
 - §1   server registration  — one `FastMCP` per package, mount-pattern bridge,
                               no double prefix, no hand-wrap.
+- §1u  the SAME bridge defect, seen from a package that does not own the
+                              bridge file. Attributed to `scitex` and WARN-tier,
+                              because the audited package neither ships nor
+                              depends on `scitex/_mcp_tools/<pkg>.py` and so
+                              cannot be gated on it. See `_mcp_bridge`.
 - §2   tool naming          — `<pkg>_<verb>_<noun>` snake_case, no banned
                               shapes / synonyms.
 - §3   required subcommands — `mcp start | doctor | list-tools | show-installation`
@@ -103,6 +108,10 @@ from ._mcp_bridge import (  # noqa: E402
     _read_bridge_source,
     _resolve_mcp_server,
     _SAFE_MOUNT_CALL,  # noqa: F401  -- re-export for test importers
+    BRIDGE_OWNER,  # noqa: F401  -- re-export for test importers
+    BRIDGE_RULE_OWNED,  # noqa: F401  -- re-export for test importers
+    BRIDGE_RULE_THIRD_PARTY,  # noqa: F401  -- re-export for test importers
+    bridge_violation,  # noqa: F401  -- re-export for test importers
 )
 
 

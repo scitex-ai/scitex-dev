@@ -34,13 +34,20 @@ from pathlib import Path
 
 # Reuse — do not rewrite — the correct content-probe we already own.
 from .._release.check_editable_drift import (
+    _behind_upstream,
+)
+from .._release.check_editable_drift import (
     _editable_source_dir as _detect_editable_source_dir,
 )
 from .._release.check_editable_drift import (
     _run_git,
 )
 
-__all__ = ["editable_ahead_behind", "editable_source_dir"]
+__all__ = [
+    "editable_ahead_behind",
+    "editable_behind_upstream",
+    "editable_source_dir",
+]
 
 
 def editable_source_dir(distribution: str) -> Path | None:
@@ -77,6 +84,26 @@ def editable_ahead_behind(repo: Path) -> tuple[int, int] | None:
         return (int(ahead or "0"), int(behind or "0"))
     except ValueError:
         return None
+
+
+def editable_behind_upstream(repo: Path) -> int | None:
+    """Commits the TRACKING REMOTE has that HEAD lacks. ``None`` => UNKNOWN.
+
+    This is the companion fact :func:`editable_ahead_behind` cannot supply,
+    and without it the tag distance is unreadable. ``behind > 0`` against the
+    latest tag means exactly one thing — *the tag is not in HEAD's history* —
+    and that is true both when the branch is out of date AND when the tag was
+    simply cut somewhere else. Release tags ARE cut somewhere else: they live
+    on ``main``, so a ``develop`` checkout is permanently behind one while
+    being exactly level with ``origin/develop``.
+
+    Only this number says whether a pull can do anything about it, because a
+    pull moves HEAD toward ``origin/<branch>`` and nowhere else. It is the
+    axis ``check_editable_drift._compute_drift`` already decided was the
+    honest one; this is a thin pass-through to its probe, not a second
+    implementation.
+    """
+    return _behind_upstream(repo)
 
 
 # EOF

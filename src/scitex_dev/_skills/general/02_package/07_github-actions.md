@@ -1,7 +1,7 @@
 ---
 description: |
   [TOPIC] Github Actions
-  [DETAILS] Canonical GitHub Actions workflows that every SciTeX repo ships — test matrix across supported Python versions, PyPI publish via trusted-publisher OIDC (no API tokens), CLA-bot, reusable workflow patterns, artefact caching, the `pip install -e ".[dev]"` rule, dep-hygiene gotchas (test imports must use the standalone module name not the umbrella shim), and release-gate checks that guard the main branch. Use when creating a new scitex-* repo, auditing CI drift across the ecosystem, or debugging a red workflow.
+  [DETAILS] Canonical GitHub Actions workflows that every SciTeX repo ships — test matrix across supported Python versions, PyPI publish via trusted-publisher OIDC (no API tokens), CLA-bot, reusable workflow patterns, artefact caching, the `pip install -e . --group dev` rule (PEP 735 groups replaced the `[dev]` extra on 2026-08-31 — needs uv or pip >= 25.1), dep-hygiene gotchas (test imports must use the standalone module name not the umbrella shim), and release-gate checks that guard the main branch. Use when creating a new scitex-* repo, auditing CI drift across the ecosystem, or debugging a red workflow.
 tags: [scitex-general-package-github-actions]
 ---
 
@@ -48,19 +48,19 @@ Rules:
   (`"<caller-job-id> / <reusable job name>"`, e.g.
   `pytest-matrix / pytest-matrix-on-ubuntu-py3.12`); `apply` gates on this.
 
-## Test job — install with the `[dev]` extra
+## Test job — install with the `dev` dependency-group
 
 CI runners start clean: no `pytest`, no `pytest-cov`, no `pytest-asyncio`, no project deps. The single canonical install line in every test workflow is:
 
 ```yaml
 - name: Install
-  run: pip install -e ".[dev]"
+  run: pip install -e . --group dev      # needs pip >= 25.1
 ```
 
-The `[dev]` extra in `pyproject.toml` MUST cover everything the test suite imports:
+The `dev` group in `pyproject.toml` MUST cover everything the test suite imports:
 
 ```toml
-[project.optional-dependencies]
+[dependency-groups]              # PEP 735 — NOT published to consumers
 dev = [
     "pytest>=7.0",
     "pytest-cov",
@@ -69,13 +69,26 @@ dev = [
 ]
 ```
 
+*(Amended 2026-08-31. This was `pip install -e ".[dev]"` against a `[dev]`
+**extra**. The operator ruled that the only permitted extra is `all`
+([01_ecosystem/26_the-only-extra-is-all.md](../01_ecosystem/26_the-only-extra-is-all.md)),
+so `dev` and `docs` became PEP 735 dependency groups. The completeness rule
+below is unchanged — only the table it reads and the flag that installs it.)*
+
+**`--group` has a floor, and it is a hard blocker.** It needs `uv`, or
+**pip >= 25.1**. A runner image pinning an older pip fails the install step
+outright; it does not silently fall back to anything. Check the pip version
+in the image before switching a workflow, not after it goes red. The same
+applies to the docs job: `pip install -e . --group docs`.
+
 Common breakage modes:
 
 | Symptom in CI logs | Root cause | Fix |
 |---|---|---|
-| `ModuleNotFoundError: No module named 'pytest'` | bare `pip install -e .` | switch to `pip install -e ".[dev]"` |
-| `PytestUnknownMarkWarning: Unknown pytest.mark.asyncio` then test counted as fail | `pytest-asyncio` missing from `[dev]` | add it |
-| `ModuleNotFoundError: No module named 'click'` while running CLI | runtime dep declared only under `[dev]` | move to `dependencies = [...]` |
+| `ModuleNotFoundError: No module named 'pytest'` | bare `pip install -e .` | switch to `pip install -e . --group dev` |
+| `PytestUnknownMarkWarning: Unknown pytest.mark.asyncio` then test counted as fail | `pytest-asyncio` missing from the `dev` group | add it |
+| `ModuleNotFoundError: No module named 'click'` while running CLI | runtime dep declared only in the `dev` group | move to `dependencies = [...]` |
+| `no such option: --group` | pip < 25.1 in the runner image | pin a newer pip, or use `uv pip install` |
 
 ## Test imports — use the standalone module name, not the umbrella shim
 
@@ -104,16 +117,21 @@ grep -rl "from scitex\.<name>\." tests/ \
 
 ## Downstream-dep hygiene in CI
 
-A standalone `scitex-X` package SHOULD install cleanly without the `scitex` umbrella present (general/01_ecosystem/02 §"Dependency Hygiene"). This is enforced in CI by running the test job in a fresh venv that installs ONLY `pip install -e ".[dev]"` — no `scitex`. If any test imports `scitex.…` (the umbrella) it will fail; that's the intended signal.
+A standalone `scitex-X` package SHOULD install cleanly without the `scitex` umbrella present (general/01_ecosystem/02 §"Dependency Hygiene"). This is enforced in CI by running the test job in a fresh venv that installs ONLY `pip install -e . --group dev` — no `scitex`. If any test imports `scitex.…` (the umbrella) it will fail; that's the intended signal.
 
-When a few legacy code paths still need umbrella access (e.g. the cloner's remote-clone fallback that uses `scitex.git`), declare a separate optional extra:
+When a few legacy code paths still need umbrella access (e.g. the cloner's remote-clone fallback that uses `scitex.git`), put the umbrella in `all` and gate the imports with `try/except ImportError`:
 
 ```toml
 [project.optional-dependencies]
-legacy = ["scitex"]
+all = [
+    # --- legacy umbrella fallbacks (cloner remote-clone) ---------
+    "scitex[all]",
+]
 ```
 
-…and gate the imports with `try/except ImportError`. The default `[dev]` install must NOT pull `[legacy]`; otherwise the dep-hygiene check is meaningless.
+*(Amended 2026-08-31 — this used to prescribe a separate `legacy = ["scitex"]` extra. Per-feature extras are retired ([01_ecosystem/26](../01_ecosystem/26_the-only-extra-is-all.md)); the isolation the rule needs comes from the `dev` group not depending on `all`, not from `legacy` being its own name.)*
+
+The default `dev`-group install must NOT pull `all`; otherwise the dep-hygiene check is meaningless. That is now the whole of the rule, and it is easier to hold: a dependency group and an extra are separate tables, so `dev` cannot pick up `all` by accident.
 
 ## SciTeX-Specific CLA Allowlist
 
@@ -171,6 +189,6 @@ Before tagging `v*`:
 1. CI green on `main` (the test workflow + scitex-quality both passing).
 2. `CHANGELOG.md` updated with the new version section.
 3. Version bumped in `pyproject.toml` AND any `__version__.py`.
-4. Local fresh-venv probe: `pip install -e ".[dev]"` then `pytest` — must mirror what CI sees.
+4. Local fresh-venv probe: `pip install -e . --group dev` then `pytest` — must mirror what CI sees.
 5. `pip install` from a sibling dir without scitex installed (dep-hygiene self-check).
 6. Tag pushed (`git push origin v0.1.0`) — triggers `publish-pypi.yml`.

@@ -81,6 +81,16 @@ class Sources(Protocol):
         """``(ahead, behind)`` of the editable working tree vs its latest
         tag. ``None`` for wheels / no checkout."""
 
+    def editable_behind_upstream(self) -> int | None:
+        """Commits the tracking remote has that HEAD lacks — the ONLY gap a
+        pull closes, and therefore the only one that may be reported STALE.
+        ``None`` for wheels / no upstream."""
+
+    def editable_repo(self) -> str | None:
+        """Absolute path of the editable checkout, so the remedy can be
+        ``git -C <path> pull`` instead of a CWD-dependent bare ``git pull``
+        that would operate on whatever repo the reader happens to be in."""
+
     def release_runs(self) -> list[dict] | None:
         """Recent release-workflow runs, newest first."""
 
@@ -98,6 +108,7 @@ class LiveSources:
         self._cfg = config
         self._probe = None  # cached InstallProbe
         self._pypi: dict | None | object = _UNSET
+        self._editable_src: Path | None | object = _UNSET
 
     # -- install identity (content-verified) -----------------------------
     def _install_probe(self):
@@ -176,15 +187,40 @@ class LiveSources:
             return None
         return [line.strip() for line in out.splitlines() if line.strip()]
 
-    def editable_ahead_behind(self) -> tuple[int, int] | None:
-        if self._install_probe().kind != "editable":
-            return None
-        from ._editable import editable_source_dir, editable_ahead_behind
+    def _editable_dir(self) -> Path | None:
+        """The editable checkout, resolved once. ``None`` for a wheel.
 
-        src = editable_source_dir(self._cfg.dist)
+        Cached because three separate facts below are all about the SAME
+        directory, and re-resolving it per fact would let them disagree.
+        """
+        if self._editable_src is _UNSET:
+            if self._install_probe().kind != "editable":
+                self._editable_src = None
+            else:
+                from ._editable import editable_source_dir
+
+                self._editable_src = editable_source_dir(self._cfg.dist)
+        return self._editable_src  # type: ignore[return-value]
+
+    def editable_ahead_behind(self) -> tuple[int, int] | None:
+        src = self._editable_dir()
         if src is None:
             return None
+        from ._editable import editable_ahead_behind
+
         return editable_ahead_behind(src)
+
+    def editable_behind_upstream(self) -> int | None:
+        src = self._editable_dir()
+        if src is None:
+            return None
+        from ._editable import editable_behind_upstream
+
+        return editable_behind_upstream(src)
+
+    def editable_repo(self) -> str | None:
+        src = self._editable_dir()
+        return str(src) if src is not None else None
 
     def release_runs(self) -> list[dict] | None:
         if not self._cfg.release_workflow:
@@ -258,6 +294,8 @@ class StaticSources:
         pypi_versions=None,
         git_tags=None,
         editable_ahead_behind=None,
+        editable_behind_upstream=None,
+        editable_repo=None,
         release_runs=None,
         daemon_started_at=None,
         installed_at=None,
@@ -271,6 +309,8 @@ class StaticSources:
         self._pypi_versions = pypi_versions
         self._git_tags = git_tags
         self._editable_ahead_behind = editable_ahead_behind
+        self._editable_behind_upstream = editable_behind_upstream
+        self._editable_repo = editable_repo
         self._release_runs = release_runs
         self._daemon_started_at = daemon_started_at
         self._installed_at = installed_at
@@ -301,6 +341,12 @@ class StaticSources:
 
     def editable_ahead_behind(self):
         return self._editable_ahead_behind
+
+    def editable_behind_upstream(self):
+        return self._editable_behind_upstream
+
+    def editable_repo(self):
+        return self._editable_repo
 
     def release_runs(self):
         return list(self._release_runs) if self._release_runs is not None else None

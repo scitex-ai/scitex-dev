@@ -58,6 +58,22 @@ def test_s10w_the_could_not_measure_sibling_is_also_non_attributable():
     assert present is True
 
 
+def test_s1u_the_umbrella_bridge_sibling_is_also_non_attributable():
+    """§1u grades a file that ships in the umbrella, not in the diff.
+
+    Whether it appears at all depends on which `scitex` the job resolved:
+    scitex-io PR #167 resolved none and showed no finding, while a sibling
+    PR resolved 2.28.13 and showed one, from identical source. Net-new
+    keying would hand that coin-flip to whoever pushed.
+    """
+    # Arrange
+    rules = NON_ATTRIBUTABLE_RULES
+    # Act
+    present = "§1u" in rules
+    # Assert
+    assert present is True
+
+
 def test_is_attributable_rejects_a_timing_key():
     # Arrange
     key = ViolationKey(rule="§10", file_line="", message_excerpt="adds 571ms")

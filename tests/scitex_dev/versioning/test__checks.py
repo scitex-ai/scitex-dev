@@ -13,8 +13,14 @@ editable installs.
 
 from __future__ import annotations
 
+import subprocess
+
 from scitex_dev.versioning._checks import build_report, check_install_currency
 from scitex_dev.versioning._config import VersioningConfig
+from scitex_dev.versioning._editable import (
+    editable_ahead_behind,
+    editable_behind_upstream,
+)
 from scitex_dev.versioning._model import Currency
 from scitex_dev.versioning._sources import StaticSources
 
@@ -88,28 +94,146 @@ def test_editable_current_tree_never_emits_pip_install_u():
     assert "pip install -U" not in finding.remedy
 
 
-def test_editable_behind_its_tag_is_stale():
-    # Arrange — working tree is 3 commits behind its latest release tag.
+def test_editable_behind_its_tracking_remote_is_stale():
+    # Arrange — the remote HAS 3 commits this tree lacks: a pull closes it.
     kind = "editable"
     # Act
     finding = check_install_currency(
         kind, dist="scitex-dev", effective="0.30.0", metadata="0.30.0",
-        latest="0.31.0", ahead_behind=(0, 3), python="/v/py",
+        latest="0.31.0", ahead_behind=(0, 3), behind_upstream=3,
+        repo="/home/dev/scitex-dev", python="/v/py",
     )
     # Assert
     assert finding.state is Currency.STALE
 
 
-def test_editable_behind_its_tag_remedy_is_git_pull_not_pip():
+def test_editable_behind_remote_remedy_is_a_pull_that_can_work():
+    # Arrange — `-C <repo>` so it works from any CWD, `--ff-only` so it can
+    # never rewrite the developer's unpushed commits.
+    kind = "editable"
+    # Act
+    finding = check_install_currency(
+        kind, dist="scitex-dev", effective="0.30.0", metadata="0.30.0",
+        latest="0.31.0", ahead_behind=(0, 3), behind_upstream=3,
+        repo="/home/dev/scitex-dev", python="/v/py",
+    )
+    # Assert
+    assert finding.remedy == "git -C /home/dev/scitex-dev pull --ff-only"
+
+
+def test_editable_behind_remote_remedy_is_never_pip_install_u():
     # Arrange
     kind = "editable"
     # Act
     finding = check_install_currency(
         kind, dist="scitex-dev", effective="0.30.0", metadata="0.30.0",
-        latest="0.31.0", ahead_behind=(0, 3), python="/v/py",
+        latest="0.31.0", ahead_behind=(0, 3), behind_upstream=3,
+        repo="/home/dev/scitex-dev", python="/v/py",
     )
     # Assert
-    assert finding.remedy == "git pull"
+    assert "pip install -U" not in finding.remedy
+
+
+def test_editable_behind_remote_remedy_never_rebases():
+    # Arrange — `--rebase` rewrites unpushed work; a WARNING's remedy must
+    # not be able to cost anybody their commits.
+    kind = "editable"
+    # Act
+    finding = check_install_currency(
+        kind, dist="scitex-dev", effective="0.30.0", metadata="0.30.0",
+        latest="0.31.0", ahead_behind=(0, 3), behind_upstream=3,
+        repo="/home/dev/scitex-dev", python="/v/py",
+    )
+    # Assert
+    assert "--rebase" not in finding.remedy
+
+
+# -- editable: behind a tag that is NOT on this branch ----------------------
+# The operator's 2026-08-31 report. sac's `develop` measured +46/-3 against
+# v0.27.0 (a tag on `main`) while sitting exactly level with origin/develop.
+# The check said STALE and printed `git pull --rebase`; git answered "Already
+# up to date" and the identical warning came back, forever.
+
+
+def test_editable_behind_a_tag_on_another_branch_is_not_stale():
+    # Arrange — the operator's exact numbers: ahead 46 / behind 3 of the tag,
+    # and 0 behind its own tracking remote.
+    kind = "editable"
+    # Act
+    finding = check_install_currency(
+        kind, dist="scitex-agent-container", effective="0.27.0+dev",
+        metadata="0.21.21", latest="0.27.0", ahead_behind=(46, 3),
+        behind_upstream=0, repo="/home/dev/sac", python="/v/py",
+    )
+    # Assert
+    assert finding.state is not Currency.STALE
+
+
+def test_editable_behind_a_tag_on_another_branch_emits_no_remedy():
+    # Arrange — a remedy that provably cannot change the finding must not be
+    # printed at all.
+    kind = "editable"
+    # Act
+    finding = check_install_currency(
+        kind, dist="scitex-agent-container", effective="0.27.0+dev",
+        metadata="0.21.21", latest="0.27.0", ahead_behind=(46, 3),
+        behind_upstream=0, repo="/home/dev/sac", python="/v/py",
+    )
+    # Assert
+    assert finding.remedy == ""
+
+
+def test_editable_ahead_of_its_tag_is_not_stale():
+    # Arrange — the normal, healthy state of any development branch.
+    kind = "editable"
+    # Act
+    finding = check_install_currency(
+        kind, dist="scitex-dev", effective="0.31.0+dev", metadata="0.21.21",
+        latest="0.31.0", ahead_behind=(46, 0), behind_upstream=0,
+        repo="/home/dev/scitex-dev", python="/v/py",
+    )
+    # Assert
+    assert finding.state is Currency.FRESH
+
+
+def test_editable_behind_tag_with_no_upstream_is_unknown():
+    # Arrange — behind the tag, and NOTHING can say whether a pull would
+    # bring those commits. UNKNOWN is the honest verdict, not STALE.
+    kind = "editable"
+    # Act
+    finding = check_install_currency(
+        kind, dist="scitex-dev", effective="0.30.0", metadata="0.30.0",
+        latest="0.31.0", ahead_behind=(0, 3), behind_upstream=None,
+        python="/v/py",
+    )
+    # Assert
+    assert finding.state is Currency.UNKNOWN
+
+
+def test_editable_behind_tag_with_no_upstream_emits_no_remedy():
+    # Arrange
+    kind = "editable"
+    # Act
+    finding = check_install_currency(
+        kind, dist="scitex-dev", effective="0.30.0", metadata="0.30.0",
+        latest="0.31.0", ahead_behind=(0, 3), behind_upstream=None,
+        python="/v/py",
+    )
+    # Assert
+    assert finding.remedy == ""
+
+
+def test_editable_records_the_upstream_distance_as_evidence():
+    # Arrange — the fact the verdict turns on must be readable in --json.
+    kind = "editable"
+    # Act
+    finding = check_install_currency(
+        kind, dist="scitex-dev", effective="0.31.0+dev", metadata="0.21.21",
+        latest="0.31.0", ahead_behind=(46, 3), behind_upstream=0,
+        repo="/home/dev/scitex-dev", python="/v/py",
+    )
+    # Assert
+    assert finding.data["behind_upstream"] == 0
 
 
 def test_editable_without_checkout_is_unknown():
@@ -210,6 +334,83 @@ def test_blind_report_is_unknown():
     report = build_report(CFG, sources, now=1.0)
     # Assert
     assert report.state is Currency.UNKNOWN
+
+
+# -- the same verdict, driven by REAL git instead of recorded numbers -------
+
+
+def _verdict_for(repo):
+    """The install-currency verdict for a real editable checkout at ``repo``."""
+    return check_install_currency(
+        "editable",
+        dist="scitex-agent-container",
+        effective="1.0.0+dev",
+        metadata="0.9.0",
+        latest="1.1.0",
+        ahead_behind=editable_ahead_behind(repo),
+        behind_upstream=editable_behind_upstream(repo),
+        repo=str(repo),
+        python="/opt/venv-sac/bin/python3",
+    )
+
+
+def test_real_gitflow_checkout_is_not_stale(gitflow_repo):
+    # Arrange — real repo, real tags, real remote: develop is behind v1.1.0
+    # (cut on main) and exactly level with origin/develop.
+    # Act
+    finding = _verdict_for(gitflow_repo)
+    # Assert
+    assert finding.state is not Currency.STALE
+
+
+def test_real_gitflow_checkout_gets_no_unrunnable_remedy(gitflow_repo):
+    # Arrange — same real checkout as above.
+    # Act
+    finding = _verdict_for(gitflow_repo)
+    # Assert
+    assert finding.remedy == ""
+
+
+def test_a_no_op_pull_leaves_the_checkout_fresh(gitflow_repo):
+    # Arrange — the operator's loop, replayed: pull, then check again. Before
+    # the fix the verdict came back byte-identical after this no-op pull,
+    # which is what proved the remedy could not work.
+    subprocess.run(
+        ["git", "-C", str(gitflow_repo), "pull", "--ff-only"],
+        check=True, capture_output=True,
+    )
+    # Act
+    finding = _verdict_for(gitflow_repo)
+    # Assert — the pull is a no-op here, and the check now agrees it is fine.
+    assert finding.state is Currency.FRESH
+
+
+def test_real_checkout_behind_its_remote_is_still_stale(gitflow_repo):
+    # Arrange — rewind develop one commit so the remote genuinely has work
+    # this tree lacks. This is the case a pull DOES fix, and it must survive.
+    subprocess.run(
+        ["git", "-C", str(gitflow_repo), "reset", "-q", "--hard", "HEAD~1"],
+        check=True, capture_output=True,
+    )
+    # Act
+    finding = _verdict_for(gitflow_repo)
+    # Assert
+    assert finding.state is Currency.STALE
+
+
+def test_real_checkout_behind_its_remote_gets_a_pull_that_works(gitflow_repo):
+    # Arrange
+    subprocess.run(
+        ["git", "-C", str(gitflow_repo), "reset", "-q", "--hard", "HEAD~1"],
+        check=True, capture_output=True,
+    )
+    finding = _verdict_for(gitflow_repo)
+    # Act — run exactly what the finding printed, then re-ask.
+    subprocess.run(finding.remedy.split(), check=True, capture_output=True)
+    after = _verdict_for(gitflow_repo)
+    # Assert — the remedy CLEARED the finding. That is the property the old
+    # `git pull --rebase` could never satisfy.
+    assert after.state is Currency.FRESH
 
 
 # EOF

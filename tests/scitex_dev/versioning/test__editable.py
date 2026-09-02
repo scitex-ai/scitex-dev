@@ -16,7 +16,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from scitex_dev.versioning._editable import editable_ahead_behind
+from scitex_dev.versioning._editable import (
+    editable_ahead_behind,
+    editable_behind_upstream,
+)
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -87,6 +90,51 @@ def test_not_a_repo_is_none(tmp_path):
     plain.mkdir()
     # Act
     result = editable_ahead_behind(plain)
+    # Assert
+    assert result is None
+
+
+# -- the second axis: what the TRACKING REMOTE has that HEAD lacks ----------
+# Distance from a tag cannot tell "my branch is out of date" from "the tag
+# was cut on another branch" — both read as behind > 0. Only this number
+# says whether a pull can do anything, so only this number may raise STALE.
+
+
+def test_behind_upstream_is_zero_when_level_with_the_remote(gitflow_repo):
+    # Arrange — develop holds everything origin/develop holds; the newest
+    # tag is on main.
+    # Act
+    result = editable_behind_upstream(gitflow_repo)
+    # Assert
+    assert result == 0
+
+
+def test_tag_distance_still_reports_behind_on_that_same_checkout(gitflow_repo):
+    # Arrange — the two axes DISAGREE here, which is the whole point: the
+    # tree is behind the tag and current with its remote at the same time.
+    # Act
+    ahead, behind = editable_ahead_behind(gitflow_repo)
+    # Assert
+    assert (ahead, behind) == (3, 2)
+
+
+def test_behind_upstream_counts_commits_only_the_remote_has(gitflow_repo):
+    # Arrange — rewind develop two commits, so origin/develop genuinely
+    # carries work this tree lacks. This is the case a pull DOES fix, and it
+    # is the one that must keep raising the alarm.
+    _git(gitflow_repo, "reset", "-q", "--hard", "HEAD~2")
+    # Act
+    result = editable_behind_upstream(gitflow_repo)
+    # Assert
+    assert result == 2
+
+
+def test_no_upstream_is_none(tmp_path):
+    # Arrange — a repo with commits but no remote at all: no evidence either
+    # way, which must read as UNKNOWN upstream, not as "0 behind".
+    repo = _init_repo(tmp_path)
+    # Act
+    result = editable_behind_upstream(repo)
     # Assert
     assert result is None
 

@@ -23,7 +23,7 @@ shim while the real implementation only exists in the standalone).
 Each umbrella bridge module lives at `src/scitex/<name>/__init__.py` inside the
 `scitex-python` umbrella. The bridge is **thin**: it re-exports from the
 standalone and adds only a lazy-import guard that raises a clear
-`ImportError` when the optional extra isn't installed.
+`ImportError` when the standalone isn't installed.
 
 Prefer explicit re-exports (named imports + `__all__`) over `from X import *`
 so the public surface is grep-able.
@@ -35,9 +35,12 @@ so the public surface is grep-able.
 | Standalone `scitex_<name>` | Implementation, tests, version, API stability | Depend on the umbrella |
 | Umbrella `scitex.<name>` bridge | Thin re-export + `ImportError` guard | Ship implementation; override behaviour |
 
-The umbrella NEVER implements logic. If the extra isn't installed, the bridge
-raises `ImportError` with a pointer to `pip install scitex[<name>]`. This is
-the hard rule; see `01_ecosystem/03_modules-and-standalone-packages.md` §8.
+The umbrella NEVER implements logic. If the standalone isn't installed, the
+bridge raises `ImportError` with a pointer to `pip install "scitex[all]"` —
+or to the leaf directly, `pip install scitex-<name>`. Never a per-feature
+extra: `all` is the only extra that exists
+([26_the-only-extra-is-all.md](26_the-only-extra-is-all.md)). This is the
+hard rule; see `01_ecosystem/03_modules-and-standalone-packages.md` §8.
 
 ## Umbrella = coordinator + namespace ONLY (hard rule)
 
@@ -58,15 +61,31 @@ implementation is factored to its owning standalone, leaving only a thin alias.
   peer FastMCP with brand-prefix + tool renames, skipping optional peers
   gracefully. NO per-package `register_<pkg>_tools` bridge files.
 
-### Optional peers stay OUT of `[all]`/`[dev]`
+### Unreleased peers stay OUT of `all`
 
-For heavy/unreleased owners (e.g. scitex-hub), pin only in the targeted extra
-(`[cloud]`/`[hub]`/…), never `[all]`/`[dev]`: base `import scitex` works
-without it, the bridge raises the install-hint stub on access, and the
-cross-package import test skips it (peer absent in CI → matrix green without
-releasing the heavy owner). **Corollary**: do NOT release the umbrella while
-a targeted extra pins an unreleased owner version — hold the umbrella release
-until the owner ships.
+*(Amended 2026-08-31. This section used to say "pin only in the targeted
+extra (`[cloud]`/`[hub]`/…), never `[all]`/`[dev]`". There is no longer a
+targeted extra to pin into —
+[26_the-only-extra-is-all.md](26_the-only-extra-is-all.md) permits `all`
+and nothing else. The mechanism the old rule leaned on is gone; the hazard
+it guarded against is not.)*
+
+For a heavy or **unreleased** owner (e.g. scitex-hub), simply do not list it
+— not in `dependencies`, not in `all`, and there is nowhere else to put it.
+Base `import scitex` works without it, the bridge raises the install-hint
+stub on access, and the cross-package import test skips it (peer absent in
+CI → matrix green without releasing the heavy owner).
+
+**Corollary, and it hardens under the new rule**: do NOT release the
+umbrella while `all` pins an unreleased owner version. Previously a bad pin
+was quarantined inside an extra almost nobody installed; now it sits in the
+one extra everybody installs, so the same mistake breaks every user rather
+than a few.
+
+**Heaviness alone is not a reason to omit.** The old rule let "heavy" and
+"unreleased" share one escape hatch. Only *unreleased* justifies omission
+now — a released-but-heavy owner belongs in `all`, because `[all]` is the
+only thing anyone types and a package missing from it is invisible.
 
 Source: 2026-05-31 umbrella-thinning campaign (scitex-python #308 + #309,
 scitex-dev 0.16.0, scitex-etc 0.2.0).
@@ -97,8 +116,8 @@ The **library cascade** in [`01_ecosystem/01_upstream-and-downstream.md`](01_ups
 
 - [ ] `scitex.<name>` and `scitex_<name>` have identical `__all__` (release-gate Python check passes).
 - [ ] Bridge file contains no logic — only `from scitex_<name> import …`, optional fallback shims, and `__all__`.
-- [ ] Optional extra `[<name>]` in scitex umbrella's `pyproject.toml` installs `scitex-<name>` (not just transitive third-party deps).
-- [ ] When the standalone isn't installed, importing the bridge raises `ImportError` with a `pip install scitex[<name>]` hint — never silent `None` exports.
+- [ ] The scitex umbrella's `all` extra installs `scitex-<name>` (not just transitive third-party deps) — and lists it as `scitex-<name>[all]`. There is no per-name extra ([26](26_the-only-extra-is-all.md)).
+- [ ] When the standalone isn't installed, importing the bridge raises `ImportError` with a `pip install "scitex[all]"` (or `pip install scitex-<name>`) hint — never a per-feature extra, never silent `None` exports.
 - [ ] New-in-next-release standalone symbols are guarded with `try: from scitex_<name> import X / except ImportError: <minimal shim>` so the umbrella imports cleanly against the pinned PyPI release.
 - [ ] If the package needs deep submodule paths preserved, `sys.modules` aliasing pattern is used instead of named re-exports — and the migration plan to delete the alias is documented.
 - [ ] Tests inside the standalone repo import via `scitex_<name>.…`, never `scitex.<name>.…`.

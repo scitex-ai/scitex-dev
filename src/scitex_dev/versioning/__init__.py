@@ -25,8 +25,14 @@ FOUR NON-NEGOTIABLES (the point of the primitive)
 2. CONTENT-PROBE for editable installs, NEVER version-string-vs-tag. A wheel's
    frozen metadata is a fossil for an editable checkout; comparing it to PyPI
    fires a FALSE STALE whose ``pip install -U`` remedy would CLOBBER the
-   checkout. So editable installs are judged by CONTENT (working tree vs its
-   tag, via ``check_editable_drift``) and never handed a ``pip install -U``.
+   checkout. So editable installs are judged by CONTENT (via
+   ``check_editable_drift``) and never handed a ``pip install -U``. CONTENT
+   is TWO measurements, and only one of them may raise the alarm: distance
+   from the latest release tag merely says the tag is not in HEAD's history
+   (release tags live on ``main``, so a healthy ``develop`` is permanently
+   "behind" one), while distance from the TRACKING REMOTE says whether a
+   pull can close the gap. STALE is decided on the second — otherwise the
+   check prints a remedy that provably cannot change its own finding.
 3. NAME THE BINARY THAT ANSWERED. Every finding's summary carries the package
    ORIGIN and the INTERPRETER, so "0.21.21 is behind 0.21.24" always says
    whose 0.21.21 — the mechanism that let sac find FIVE installs, and that
