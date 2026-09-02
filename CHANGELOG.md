@@ -7,6 +7,45 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.59.0] - 2026-09-02
+
+> `0.58.1` was tagged on `develop` rather than on `main`, so `v0.58.1` was
+> reachable only from `develop` while `main`'s newest tag stayed at `v0.58.0`
+> and `main` sat 48 files behind — even though PyPI was already serving
+> 0.58.1. That is the same shape the 0.58.1 note below describes, recurring
+> one hop later. This release is cut from `main` AFTER promoting `develop`
+> into it, so the tag, the branch and PyPI describe the same tree.
+>
+> The identical drift was found and closed in `scitex-template` the same day
+> (PyPI 0.7.0 against a `v0.6.8` tag on main), which makes it a fleet-wide
+> pattern rather than one repo's accident.
+
+### Added
+
+- **`scitex_dev.store._policy`** — a declared policy for how a field may be
+  merged, so that a value computed across the whole table can say it has no
+  meaningful merge instead of being silently last-write-wins. Pure in-memory:
+  no database import, no connection.
+- **`scitex-dev ecosystem --repair-tail`** (PS-140) — the rule named a fix and
+  the one command a reader would actually run did nothing about it. The repair
+  is now performed rather than described.
+
+### Fixed
+
+- **The audit's own tally line was read as a violation.** A line reporting
+  `ERROR: 3 violations` matched the violation pattern, so the report counted
+  itself.
+
+### Documentation
+
+- **ADR-0013** — Postgres 55432 identity, per-principal roles and DB-enforced
+  authorship, with the two measurements that change what can be claimed: the
+  cross-host reconciler is a principal the role model cannot express, and
+  `application_name` is unset on every connection, so the incarnation axis has
+  zero adoption rather than partial.
+- **ADR-0006** — the ruling that forbids today's topology was still marked
+  Accepted.
+
 ## [0.58.1] - 2026-08-31
 
 > `v0.58.0` was tagged on `main` on 2026-08-30 but never published: its test
