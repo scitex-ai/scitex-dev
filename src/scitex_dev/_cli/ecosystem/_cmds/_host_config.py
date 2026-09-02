@@ -39,14 +39,45 @@ def _select(provider):
     return specs
 
 
-def _render_records(records) -> int:
-    """Print one line per spec; return the count of items needing attention."""
+def is_blocked(action: str) -> bool:
+    """The host CANNOT honour this declaration, so it is not drift.
+
+    `blocked` means a precondition is absent -- e.g. auditctl is not
+    installed, so the rules file would be read by nothing. Counting that as
+    drift makes the process exit non-zero forever on a host that will never
+    install the binary, which is a unit that can never go green. A gate that
+    cannot PASS trains people to ignore it exactly as surely as one that
+    cannot fail, and it costs us the alarm for the rows that ARE actionable.
+
+    Still REPORTED -- it is real and worth seeing. Just not counted as a
+    deviation from a state the host could have reached.
+    """
+    return action in ("blocked",)
+
+
+def is_actionable_drift(action: str) -> bool:
+    """Someone can bring this row into the declared state.
+
+    SINGLE DEFINITION on purpose. The renderer's `pending` count and the
+    command's exit code used to compute this separately -- `action in
+    ("drift", "reload-failed", "blocked") or action.startswith("would-")`
+    against `action != "unchanged" and action != "skipped"` -- which agree
+    today only by coincidence and would drift apart the moment a new action
+    is added.
+    """
+    if is_blocked(action):
+        return False
+    return action not in ("unchanged", "skipped")
+
+
+def _render_records(records) -> tuple[int, int]:
+    """Print one line per spec; return ``(actionable, blocked)`` counts."""
     from rich.console import Console
 
     console = Console()
     if not records:
         console.print("[yellow]No host config declared by any provider.[/yellow]")
-        return 0
+        return 0, 0
 
     colors = {
         "unchanged": "green",
@@ -59,18 +90,19 @@ def _render_records(records) -> int:
         "blocked": "yellow",
     }
     pending = 0
+    blocked = 0
     for rec in records:
         action = rec["action"]
         color = colors.get(action, "yellow")
-        if action in ("drift", "reload-failed", "blocked") or action.startswith(
-            "would-"
-        ):
+        if is_blocked(action):
+            blocked += 1
+        elif is_actionable_drift(action):
             pending += 1
         console.print(
             f"[{color}]{action:<14}[/{color}] "
             f"[bold]{rec['name']}[/bold]  {rec['detail']}"
         )
-    return pending
+    return pending, blocked
 
 
 def register(ecosystem):
@@ -175,7 +207,7 @@ def register(ecosystem):
                 )
             )
         else:
-            pending = _render_records(records)
+            pending, blocked = _render_records(records)
             for obs in observations:
                 # Printed under its own heading so an observation can
                 # never be skimmed as a verdict.
@@ -193,7 +225,17 @@ def register(ecosystem):
                 )
             else:
                 click.echo(f"All {len(records)} spec(s) match the declaration.")
-        ctx.exit(1 if any(r["action"] != "unchanged" and r["action"] != "skipped" for r in records) else 0)
+            if blocked:
+                # Reported, never counted. See is_blocked(): a host that
+                # cannot honour a declaration has not drifted from it, and
+                # exiting non-zero here would make this command fail forever
+                # on a machine that will never install the missing tool.
+                click.echo(
+                    f"{blocked} spec(s) BLOCKED - a precondition is missing on "
+                    f"this host, so they are reported but not counted as "
+                    f"drift. Install the named tool, or retire the spec."
+                )
+        ctx.exit(1 if any(is_actionable_drift(r["action"]) for r in records) else 0)
 
     @host_config.command(
         "apply",
