@@ -386,10 +386,16 @@ class TestTheSocketDsnActuallyReachesTheServer:
     """
 
     def test_the_socket_directory_is_the_run_subdirectory(self):
-        # Arrange — the socket lives in PGDATA/run, not PGDATA.
+        # Arrange — the socket lives in PGDATA/run, not PGDATA. Asserted on
+        # the `/run` SUFFIX rather than on a fragment containing the store
+        # directory's name: this used to read "/pg/run", which encoded the
+        # directory it happened to sit in, so the 2026-09-02 move to
+        # ~/.scitex/dev/store broke a test whose rule had not changed at all.
         dsn = socket_dsn()
+
         # Act
-        points_at_run = "/pg/run" in dsn
+        points_at_run = "/run&" in dsn
+
         # Assert
         assert points_at_run
 
