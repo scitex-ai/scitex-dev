@@ -30,11 +30,18 @@ import pytest
 from scitex_dev.store._host import _holds_a_cluster, resolve_pgdata_dir
 
 
-def _make_cluster(directory: Path) -> Path:
-    """A directory PostgreSQL would recognise: PG_VERSION is the marker."""
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / "PG_VERSION").write_text("18\n", encoding="utf-8")
-    return directory
+def _make_cluster(root: Path) -> Path:
+    """Build the REAL layout: ``<root>/<version>/main/PG_VERSION``.
+
+    Measured on compute-04 — the store root holds a version directory, and
+    PGDATA is `<root>/18/main`. An earlier version of this helper wrote
+    PG_VERSION at the top level, which made every test pass against a shape
+    no host actually has.
+    """
+    pgdata = root / "18" / "main"
+    pgdata.mkdir(parents=True, exist_ok=True)
+    (pgdata / "PG_VERSION").write_text("18\n", encoding="utf-8")
+    return root
 
 
 @pytest.fixture
@@ -97,7 +104,7 @@ class TestTheEmptyDirectoryTrap:
         assert resolved == legacy_dir
 
     def test_a_bare_directory_is_not_a_cluster(self, new_dir):
-        # Arrange
+        # Arrange — a root with no version/main beneath it.
         new_dir.mkdir(parents=True, exist_ok=True)
 
         # Act

@@ -129,8 +129,22 @@ def _holds_a_cluster(directory: Path) -> bool:
     ``PG_VERSION`` is the marker because PostgreSQL itself writes it into
     PGDATA and refuses to start without it -- so it answers "is there a
     cluster here" rather than "did someone make this folder".
+
+    IT IS LOOKED FOR UNDER ``<dir>/<version>/main/``, NOT AT THE TOP.
+    ``DEFAULT_PGDATA_DIR`` is misnamed: it is the store ROOT, and the
+    cluster lives one layout level down. Measured on compute-04 --
+    ``~/.scitex/pg/PG_VERSION`` does not exist while
+    ``~/.scitex/pg/18/main/PG_VERSION`` does, and the replica units set
+    ``DATADIR=~/.scitex/pg/18/main``. A first draft of this checked the top
+    level, found nothing under EITHER path, and so always fell through to
+    the new location -- making the legacy fallback inert, which is the exact
+    defect the fallback exists to avoid.
+
+    The version segment is globbed rather than pinned to ``18`` so a major
+    upgrade does not silently make this answer "no cluster".
     """
-    return (directory.expanduser() / "PG_VERSION").exists()
+    root = directory.expanduser()
+    return any(root.glob("*/main/PG_VERSION"))
 
 
 def resolve_pgdata_dir(
