@@ -140,15 +140,11 @@ from scitex_dev.host_config import HostConfigSpec
 _FLEET_NETPLAN_PATH = "/etc/netplan/99-scitex-fleet.yaml"
 
 _FLEET_NETPLAN_CONTENT = """\
-# Managed by scitex-dev (scitex_dev.hosts._dhcp). Do not edit by hand.
-#
-# Name-independent DHCP floor. Matches every ethernet port by GLOB, so a
-# PCI renumber or a NIC swap cannot make this file match nothing -- the
-# failure that cost compute-01 two hours on 2026-09-02.
-#
-# No address is pinned here. Addresses come from the router's MAC-keyed
-# DHCP reservations; the host registry's `requested_address` is the ledger
-# of those reservations, not a request this machine makes.
+# scitex fleet network floor — written 2026-09-02.
+# Keyed to NOTHING positional: not an interface name (moves when a card is
+# added/removed — this stranded compute-01 today) and not a MAC (moves when the
+# card itself moves to another machine). Any cabled ethernet port gets an
+# address, so hardware changes need no config change at all.
 network:
   version: 2
   ethernets:
@@ -159,10 +155,25 @@ network:
       optional: true
 """
 
-#: Name of the drop-in file inside ``<unit>.network.d/``. The ``50-``
-#: prefix leaves room either side: netplan's own passthrough drop-ins (if
-#: it ever grows one) sort earlier, and a deliberate local override can be
-#: added as ``60-`` without editing a scitex-managed file.
+#: sha256 of :data:`_FLEET_NETPLAN_CONTENT`, pinned so byte-identity with the
+#: DEPLOYED file is a test rather than a hope.
+#:
+#: These are the exact bytes sac hand-applied to all four compute hosts on
+#: 2026-09-02 and reboot-tested on three of them. I could not read the file to
+#: confirm it — it is mode 0600 root and this agent is not root — so identity
+#: was established two other ways instead: the size matches what `ls -la`
+#: reported on compute-04 (466 bytes), and this digest matches the sha256 sac
+#: measured on the deployed file.
+#:
+#: Emitting these bytes VERBATIM means the first `host-config apply` after this
+#: lands is a no-op, which is also the cleanest available proof that the
+#: generated file and the hand-applied one are the same thing. Change the
+#: content and this constant must change with it, deliberately.
+_FLEET_NETPLAN_SHA256 = (
+    "ddbeeca5be302e5f53f52b3bcbf09f529eba398c39cf386772a05cec90bf9be6"
+)
+
+
 def _netplan_managed_hosts(
     *, hosts_path: str | Path | None = None
 ) -> tuple[str, ...]:
