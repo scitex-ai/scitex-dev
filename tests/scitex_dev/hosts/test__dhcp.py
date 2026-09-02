@@ -1,229 +1,213 @@
-"""The DHCP requested-address drop-ins — declared, checkable, and honest.
+#!/usr/bin/env python3
+"""Tests for the fleet network floor (``scitex_dev.hosts._dhcp``).
 
-Three properties are worth pinning, and they are not the obvious ones.
+The design these replace emitted ONE DROP-IN PER HOST, keyed on that host's
+interface NAME. It was wrong for two of four machines on 2026-09-02
+(compute-01 and compute-02 both mapped to ``enp8s0``, which exists on no
+host), and the module's own docstring had predicted why: a renamed
+interface leaves the drop-in byte-correct on disk and applying to nothing.
 
-FIRST, the declaration must not claim a compliance it cannot deliver. Five
-of the nine fleet hosts have no supported requested-address knob (WSL2
-where Windows owns the lease, macOS, two QNAPs whose `/etc` is a ramdisk,
-and a UGREEN NAS whose vendor script rewrites dhclient.conf at boot). For
-those, emitting a spec would produce a file that is present, correct, and
-read by nothing — with every subsequent `check` reporting `ok` forever.
-Silence is the correct output, so silence is tested.
+So the tests below assert the OPPOSITE properties. The old file asserted
+"one spec per host", "each spec targets exactly one host", "the declared
+address comes from the registry" — every one of those is now a defect.
 
-SECOND, the address must come from the registry rather than be repeated
-here. Two copies of an address map is how a host ends up on an address
-nobody declared.
-
-THIRD, `-01` and `-02` genuinely share an interface name, so their specs
-share a PATH while applying to different machines. That is not a
-collision, and `discover_host_config` must not drop one of them — the
-failure mode is one address silently applied to two hosts.
-
-No mocks (NM001-003): the real provider, the real aggregator, the real
-`evaluate` against a tmp_path root. One assert per test (STX-TQ007),
-Arrange/Act/Assert markers (STX-TQ002).
+NO MOCKS. Registry-dependent tests write a real ``hosts.yaml`` into
+``tmp_path`` and pass it in, because the behaviour under test is precisely
+what the module does with a REAL registry that says something particular.
+One assert per test (STX-TQ007).
 """
 
 from __future__ import annotations
 
-from scitex_dev.hosts._dhcp import provide_dhcp_specs
-from scitex_dev.host_config import (
-    STATE_NOT_APPLICABLE,
-    STATE_OK,
-    directives_of,
-    discover_host_config,
-    evaluate,
+import pytest
+import yaml
+
+from scitex_dev.hosts._dhcp import (
+    _FLEET_NETPLAN_CONTENT,
+    _FLEET_NETPLAN_PATH,
+    provide_dhcp_specs,
 )
-from scitex_dev.hosts._seed import FLEET_REQUESTED_ADDRESSES
-
-_NETWORKD_FLEET = [
-    "scitex-compute-01",
-    "scitex-compute-02",
-    "scitex-compute-03",
-    "scitex-compute-04",
-]
-
-#: The five machines the fleet map names but this module must NOT declare.
-#: Measured 2026-08-12 — see the module docstring in hosts/_dhcp.py.
-_NO_MECHANISM = [
-    "ywata-note-win",
-    "mba",
-    "scitex-nas-01",
-    "scitex-nas-02",
-    "scitex-nas-03",
-]
+from scitex_dev.hosts._registry import HostRegistryError
 
 
-def _by_host(specs):
-    return {spec.hosts[0]: spec for spec in specs if spec.hosts}
+def _write_registry(tmp_path, hosts: dict) -> str:
+    path = tmp_path / "hosts.yaml"
+    path.write_text(yaml.safe_dump({"hosts": hosts}), encoding="utf-8")
+    return str(path)
 
 
-def test_one_spec_per_configurable_host():
-    # Arrange
-    expected = len(_NETWORKD_FLEET)
-    # Act
-    specs = provide_dhcp_specs()
-    # Assert
-    assert len(specs) == expected
-
-
-def test_every_configurable_host_is_declared():
-    # Arrange
-    expected = set(_NETWORKD_FLEET)
-    # Act
-    found = set(_by_host(provide_dhcp_specs()))
-    # Assert
-    assert found == expected
-
-
-def test_hosts_without_a_mechanism_get_no_spec():
-    # Arrange — the whole point: a file read by nothing would report `ok`
-    # forever and hide that these machines are not actually pinned.
-    declared = set(_by_host(provide_dhcp_specs()))
-    # Act
-    overreach = declared.intersection(_NO_MECHANISM)
-    # Assert
-    assert not overreach
-
-
-def test_each_spec_targets_exactly_one_host():
-    # Arrange — an empty `hosts` tuple means EVERY host, which would put
-    # one machine's address on all of them.
-    specs = provide_dhcp_specs()
-    # Act
-    widths = {len(spec.hosts) for spec in specs}
-    # Assert
-    assert widths == {1}
-
-
-def test_the_declared_address_comes_from_the_registry():
-    # Arrange
-    specs = _by_host(provide_dhcp_specs())
-    # Act
-    rendered = {
-        host: directives_of(spec.content)["RequestAddress"]
-        for host, spec in specs.items()
-    }
-    # Assert
-    assert all(FLEET_REQUESTED_ADDRESSES[h] == a for h, a in rendered.items())
-
-
-def test_the_request_address_directive_is_live_not_commented():
-    # Arrange — `directives_of` ignores comments, so this proves the value
-    # is a real directive and not part of the explanatory banner.
-    spec = _by_host(provide_dhcp_specs())["scitex-compute-04"]
-    # Act
-    directives = directives_of(spec.content)
-    # Assert
-    assert directives["RequestAddress"] == "192.168.11.174"
-
-
-def test_the_body_states_that_this_is_only_a_request():
-    # Arrange — the honest limit belongs in the file itself: whoever reads
-    # it is debugging why the machine is not on the expected address.
-    spec = _by_host(provide_dhcp_specs())["scitex-compute-04"]
-    # Act
-    body = spec.content
-    # Assert
-    assert "REQUEST, NOT A RESERVATION" in body
-
-
-def test_the_drop_in_sits_beside_the_netplan_unit():
-    # Arrange — netplan rewrites /run on every apply, so the declaration
-    # has to be a drop-in under /etc rather than an edit to its unit.
-    spec = _by_host(provide_dhcp_specs())["scitex-compute-04"]
-    # Act
-    path = spec.path
-    # Assert
-    assert path == (
-        "/etc/systemd/network/10-netplan-enp3s0f0.network.d/"
-        "50-scitex-requested-address.conf"
+@pytest.fixture
+def registry_with_compute(tmp_path) -> str:
+    """A registry shaped like the real fleet: compute plus other kinds."""
+    return _write_registry(
+        tmp_path,
+        {
+            "scitex-compute-01": {"kind": "compute", "scitex_root": "~/.scitex"},
+            "scitex-compute-02": {"kind": "compute", "scitex_root": "~/.scitex"},
+            "scitex-nas-01": {"kind": "storage", "scitex_root": "~/.scitex"},
+            "scitex-laptop-01": {"kind": "workstation", "scitex_root": "~/.scitex"},
+            "spartan": {"kind": "hpc-login", "scitex_root": "~/.scitex"},
+        },
     )
 
 
-def test_every_spec_requires_networkctl():
-    # Arrange — without networkd the file is inert, and `check` would
-    # report ok on a host where the declaration does nothing.
-    specs = provide_dhcp_specs()
-    # Act
-    preconditions = {spec.requires_command for spec in specs}
-    # Assert
-    assert preconditions == {"networkctl"}
+@pytest.fixture
+def registry_without_compute(tmp_path) -> str:
+    """The state MEASURED inside an agent container on 2026-09-02.
 
-
-def test_every_spec_observes_its_own_interface():
-    # Arrange — the interface differs per host, so one shared command
-    # would report the wrong NIC on three of the four.
-    specs = _by_host(provide_dhcp_specs())
-    # Act
-    commands = {h: s.verify_command for h, s in specs.items()}
-    # Assert
-    assert commands["scitex-compute-03"] == "ip -4 -o addr show enp35s0f0"
-
-
-def test_apply_reloads_rather_than_reconfigures():
-    # Arrange — `networkctl reconfigure` re-runs DHCP and would move the
-    # address (and cut the ssh session applying it) on the spot.
-    specs = provide_dhcp_specs()
-    # Act
-    commands = {spec.apply_command for spec in specs}
-    # Assert
-    assert commands == {"networkctl reload"}
-
-
-def test_two_hosts_sharing_an_interface_name_both_survive_discovery():
-    # Arrange — -01 and -02 both run enp8s0, so their specs share a path.
-    # Dropping one would silently apply a single address to two machines.
-    provider = provide_dhcp_specs
-    # Act
-    found = discover_host_config(
-        extra_providers=[provider], include_entry_points=False
+    The container resolves ``~/.scitex/dev/hosts.yaml`` under /home/agent,
+    which is not the host registry: 6 records, zero compute, and still
+    naming the retired `mba` / `ywata-note-win`.
+    """
+    return _write_registry(
+        tmp_path,
+        {
+            "scitex-nas-01": {"kind": "storage", "scitex_root": "~/.scitex"},
+            "spartan": {"kind": "hpc-login", "scitex_root": "~/.scitex"},
+        },
     )
-    # Assert
-    assert len(found) == len(_NETWORKD_FLEET)
 
 
-def test_a_spec_is_not_applicable_on_a_host_it_does_not_target(tmp_path):
-    # Arrange — a compute-04 drop-in must never read as drift on -01.
-    spec = _by_host(provide_dhcp_specs())["scitex-compute-04"]
-    # Act
-    status = evaluate(spec, root=str(tmp_path), hostname="scitex-compute-01")
-    # Assert
-    assert status.state == STATE_NOT_APPLICABLE
+class TestTheFloorHasNoPerHostContent:
+    """The property that makes this design survive an interface rename."""
+
+    def test_exactly_one_spec_is_emitted(self, registry_with_compute):
+        # Arrange
+        path = registry_with_compute
+
+        # Act
+        specs = provide_dhcp_specs(hosts_path=path)
+
+        # Assert — one file for the whole fleet. The old design emitted one
+        # per host, which is what allowed two of them to be wrong.
+        assert len(specs) == 1
+
+    def test_the_content_names_no_interface(self, registry_with_compute):
+        # Arrange
+        path = registry_with_compute
+
+        # Act
+        content = provide_dhcp_specs(hosts_path=path)[0].content
+
+        # Assert — the whole failure mode was a literal interface name in a
+        # config file. `enp` appearing anywhere here would reintroduce it.
+        assert "enp" not in content
+
+    def test_the_content_matches_ethernet_ports_by_glob(
+        self, registry_with_compute
+    ):
+        # Arrange
+        path = registry_with_compute
+
+        # Act
+        parsed = yaml.safe_load(provide_dhcp_specs(hosts_path=path)[0].content)
+
+        # Assert
+        assert parsed["network"]["ethernets"]["fleet-en"]["match"] == {
+            "name": "en*"
+        }
+
+    def test_a_missing_port_does_not_hold_up_boot(self, registry_with_compute):
+        # Arrange
+        path = registry_with_compute
+
+        # Act
+        parsed = yaml.safe_load(provide_dhcp_specs(hosts_path=path)[0].content)
+
+        # Assert — without `optional`, a machine with an unplugged port
+        # waits for it at boot, which is its own way to be unreachable.
+        assert parsed["network"]["ethernets"]["fleet-en"]["optional"] is True
+
+    def test_no_address_is_pinned_in_the_file(self, registry_with_compute):
+        # Arrange
+        path = registry_with_compute
+
+        # Act
+        parsed = yaml.safe_load(provide_dhcp_specs(hosts_path=path)[0].content)
+
+        # Assert — the pin lives in the router's MAC reservation. Pinning
+        # here would require naming a port, which is the fragility removed.
+        assert "addresses" not in parsed["network"]["ethernets"]["fleet-en"]
 
 
-def test_a_converged_host_reports_ok(tmp_path):
-    # Arrange — write the declared file exactly and check it reads back as
-    # converged, so `ok` is reachable rather than theoretical.
-    spec = _by_host(provide_dhcp_specs())["scitex-compute-04"]
-    target = tmp_path / spec.path.lstrip("/")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(spec.content)
-    target.chmod(0o644)
-    # Act
-    status = evaluate(spec, root=str(tmp_path), hostname="scitex-compute-04")
-    # Assert
-    assert status.state == STATE_OK
+class TestTheFloorIsWrittenWhereTheHandAppliedOneLives:
+    """Same path means an idempotent overwrite, not a second floor."""
+
+    def test_the_path_is_the_canonical_netplan_file(
+        self, registry_with_compute
+    ):
+        # Arrange
+        path = registry_with_compute
+
+        # Act
+        spec_path = provide_dhcp_specs(hosts_path=path)[0].path
+
+        # Assert — a DIFFERENT filename would leave two floors on disk and
+        # let sort order decide, which is the trap this design removes.
+        assert spec_path == "/etc/netplan/99-scitex-fleet.yaml"
+
+    def test_the_module_constant_and_the_spec_agree(
+        self, registry_with_compute
+    ):
+        # Arrange
+        path = registry_with_compute
+
+        # Act
+        spec = provide_dhcp_specs(hosts_path=path)[0]
+
+        # Assert
+        assert (spec.path, spec.content) == (
+            _FLEET_NETPLAN_PATH,
+            _FLEET_NETPLAN_CONTENT,
+        )
 
 
-def test_the_content_ends_with_a_newline():
-    # Arrange — HostConfigSpec rejects a body without one, so this pins the
-    # renderer rather than the validator.
-    specs = provide_dhcp_specs()
-    # Act
-    endings = {spec.content.endswith("\n") for spec in specs}
-    # Assert
-    assert endings == {True}
+class TestScopingBranchesOnKind:
+    """Netplan runs on the compute machines and nowhere else in the fleet."""
 
+    def test_only_compute_hosts_are_targeted(self, registry_with_compute):
+        # Arrange
+        path = registry_with_compute
 
-def test_spec_names_are_unique():
-    # Arrange — `name` is the de-duplication key; a collision would drop a
-    # host from the declaration with only a logged warning.
-    specs = provide_dhcp_specs()
-    # Act
-    names = [spec.name for spec in specs]
-    # Assert
-    assert len(set(names)) == len(names)
+        # Act
+        hosts = provide_dhcp_specs(hosts_path=path)[0].hosts
 
+        # Assert — NAS appliances, laptops and Spartan do not run netplan.
+        assert hosts == ("scitex-compute-01", "scitex-compute-02")
 
-# EOF
+    def test_a_registry_with_no_compute_host_refuses(
+        self, registry_without_compute
+    ):
+        # Arrange
+        path = registry_without_compute
+
+        # Act
+        def generate():
+            return provide_dhcp_specs(hosts_path=path)
+
+        # Assert — REFUSING is the point. An empty `hosts` tuple means EVERY
+        # host to HostConfigSpec.applies_to, so returning () here would widen
+        # this spec to the whole fleet rather than narrowing it to none,
+        # writing a netplan file onto appliances that have no netplan.
+        with pytest.raises(HostRegistryError, match="no `kind: compute` host"):
+            generate()
+
+    def test_the_refusal_names_the_registry_it_read(
+        self, registry_without_compute
+    ):
+        # Arrange
+        path = registry_without_compute
+
+        # Act
+        try:
+            provide_dhcp_specs(hosts_path=path)
+            message = ""
+        except HostRegistryError as exc:
+            message = str(exc)
+
+        # Assert — the failure is a WRONG VANTAGE POINT, so the message is
+        # useless unless it says which file it actually read. Matching the
+        # distinctive phrase too: an earlier version of this test passed
+        # because a MALFORMED fixture made the PARSER raise the same
+        # exception type, which is a pass for the wrong reason.
+        assert "no `kind: compute` host" in message and path in message

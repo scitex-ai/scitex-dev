@@ -97,6 +97,8 @@ exactly the ``/run``-main-file, ``/etc``-drop-in arrangement here.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from scitex_dev.host_config import HostConfigSpec
 
 #: Per-host facts a networkd drop-in cannot be written without: the LAN
@@ -113,129 +115,150 @@ from scitex_dev.host_config import HostConfigSpec
 #: ``verify_command`` is here to catch -- it reports the address the
 #: interface actually holds, which stops tracking the declaration the
 #: moment the drop-in goes stale.
-_NETWORKD_HOSTS: dict[str, str] = {
-    "scitex-compute-01": "enp8s0",
-    "scitex-compute-02": "enp8s0",
-    "scitex-compute-03": "enp35s0f0",
-    "scitex-compute-04": "enp3s0f0",
-}
+#: The ONE network file every fleet host gets, byte-for-byte identical.
+#:
+#: There is no per-host content, and that is the whole point. The previous
+#: design keyed a networkd drop-in on a per-host INTERFACE NAME, and this
+#: module's own docstring predicted how that ends: "if an interface is ever
+#: renamed, netplan generates a differently-named unit and the drop-in stops
+#: applying while still being byte-correct on disk. check would keep saying
+#: ok." On 2026-09-02 a 10GbE card renumbered compute-01's PCI bus, the
+#: onboard NIC became enp9s0, /etc/netplan named enp8s0, netplan matched
+#: nothing, every port stayed admin-DOWN, and recovery needed a console.
+#:
+#: A glob cannot be renamed out of matching. `optional: true` means a port
+#: that is absent or unplugged does not hold up boot, so the floor degrades
+#: to "whichever ports exist get DHCP" rather than to no network at all.
+#:
+#: The ADDRESS is not pinned here on purpose. Pinning it would require
+#: naming a port, which is the fragility being removed. The pin lives in
+#: exactly one place -- the router's MAC-keyed DHCP reservation -- and
+#: `requested_address` in the host registry is the LEDGER of what those
+#: reservations should be, for the router and for humans, not a thing any
+#: host asks for itself. Measured 2026-09-02: every compute host's address
+#: is already `dynamic`, so this describes what is running, not a change.
+_FLEET_NETPLAN_PATH = "/etc/netplan/99-scitex-fleet.yaml"
+
+_FLEET_NETPLAN_CONTENT = """\
+# Managed by scitex-dev (scitex_dev.hosts._dhcp). Do not edit by hand.
+#
+# Name-independent DHCP floor. Matches every ethernet port by GLOB, so a
+# PCI renumber or a NIC swap cannot make this file match nothing -- the
+# failure that cost compute-01 two hours on 2026-09-02.
+#
+# No address is pinned here. Addresses come from the router's MAC-keyed
+# DHCP reservations; the host registry's `requested_address` is the ledger
+# of those reservations, not a request this machine makes.
+network:
+  version: 2
+  ethernets:
+    fleet-en:
+      match:
+        name: "en*"
+      dhcp4: true
+      optional: true
+"""
 
 #: Name of the drop-in file inside ``<unit>.network.d/``. The ``50-``
 #: prefix leaves room either side: netplan's own passthrough drop-ins (if
 #: it ever grows one) sort earlier, and a deliberate local override can be
 #: added as ``60-`` without editing a scitex-managed file.
-_DROP_IN_BASENAME = "50-scitex-requested-address.conf"
+def _netplan_managed_hosts(
+    *, hosts_path: str | Path | None = None
+) -> tuple[str, ...]:
+    """The hosts this floor applies to: the Linux machines netplan runs on.
 
-
-def _drop_in_body(host: str, iface: str, address: str) -> str:
-    """Render the networkd drop-in for one host.
-
-    The banner is long on purpose. This file is read by whoever is
-    debugging why a machine is not on the address they expected, and the
-    single most useful thing it can tell them is that the address was only
-    ever a request -- otherwise the obvious conclusion is that the config
-    is broken, and the obvious next move is to "fix" it by hand.
+    Branches on ``kind`` rather than on a hardcoded list, so a new compute
+    node converges by being in the registry. The other kinds are excluded
+    for measured reasons, not by omission: ``storage`` are NAS appliances
+    with their own web-configured networking, ``workstation`` covers a WSL
+    machine whose network Windows owns and a macOS laptop, and
+    ``hpc-login`` is Spartan, which we do not administer.
     """
-    return f"""\
-# Managed by scitex-dev. Do not edit by hand -- edits show up as DRIFT in
-# `scitex-dev ecosystem host-config check` and are deliberately NOT
-# auto-reverted, so a hand edit will sit there being reported until
-# someone decides which side is right.
-#
-# Declared by HostConfigSpec "dhcp.requested-address.{host}"
-# in scitex_dev/hosts/_dhcp.py. The ADDRESS is not declared there: it
-# comes from the fleet host registry (scitex_dev.hosts), which is the
-# single source of truth. To move this host, change the registry.
-#
-# THIS IS A REQUEST, NOT A RESERVATION. DHCP option 50 asks the server for
-# an address; the server may refuse, and WILL refuse if {address}
-# is already leased to another device. So this means "usually
-# {address}" and never "always". If this machine is on some other
-# address, that is not necessarily a fault -- compare
-# `ip -4 -o addr show {iface}` against this file rather than assuming
-# they agree. The gap between the two is the normal condition of a
-# request-based scheme, which is why it is declared here rather than
-# reserved in the router.
-#
-# IT ALSO DOES NOT TAKE EFFECT IMMEDIATELY. Option 50 rides on the initial
-# DHCPDISCOVER, and a lease RENEWAL keeps the current address. So applying
-# this file changes nothing until the next discover -- a reboot, or a lost
-# lease. `networkctl reload` makes networkd read the file; it deliberately
-# does not yank the address out from under whoever is logged in.
-#
-# WHY A DROP-IN: netplan regenerates /run/systemd/network on every apply,
-# so an edit to its unit is lost. systemd.network(5) states drop-ins under
-# /etc "take precedence over the main network file wherever located".
-[DHCPv4]
-RequestAddress={address}
-"""
+    from ._registry import (
+        HostRegistryError,
+        get_hosts_yaml_path,
+        list_hosts,
+    )
 
-
-def provide_dhcp_specs() -> list[HostConfigSpec]:
-    """Declare the requested-address drop-in for every host that can use one.
-
-    Reads the addresses from the host registry rather than repeating them,
-    so there is exactly one place to change when a machine moves.
-
-    Emits one spec PER HOST. Two of them (``-01`` and ``-02``) resolve to
-    the SAME path, because those machines happen to share an interface
-    name -- that is not a collision, it is disjoint ``hosts`` tuples
-    landing on one filename, and ``discover_host_config`` treats it as a
-    conflict only when two declarations could both apply to one machine.
-
-    A host in the registry map with no entry in :data:`_NETWORKD_HOSTS`
-    yields NO spec, deliberately. See the module docstring for the five
-    machines in that position and the measured reason for each.
-    """
-    from ._seed import packaged_default_requested_addresses
-
-    addresses = packaged_default_requested_addresses()
-    specs: list[HostConfigSpec] = []
-    for host in sorted(_NETWORKD_HOSTS):
-        address = addresses.get(host)
-        if not address:
-            # The registry stopped declaring an address for a host we know
-            # how to configure. Skip rather than invent one -- a guessed
-            # address is how a machine lands on top of another.
-            continue
-        iface = _NETWORKD_HOSTS[host]
-        specs.append(
-            HostConfigSpec(
-                name=f"dhcp.requested-address.{host}",
-                path=(
-                    f"/etc/systemd/network/10-netplan-{iface}.network.d/"
-                    f"{_DROP_IN_BASENAME}"
-                ),
-                content=_drop_in_body(host, iface, address),
-                purpose=(
-                    f"Ask DHCP for {address} so {host} keeps a predictable "
-                    f"LAN address without a router-side reservation that a "
-                    f"router swap would discard (a request, not a "
-                    f"guarantee -- the server may refuse it)."
-                ),
-                provider="scitex-dev",
-                hosts=(host,),
-                mode="0644",
-                # Makes networkd re-read the drop-in. Deliberately NOT
-                # `networkctl reconfigure`, which re-runs DHCP and would
-                # move the address -- and cut the ssh session doing the
-                # applying -- the instant this is applied.
-                apply_command="networkctl reload",
-                # OBSERVATION, not config. Reading the file back would be
-                # a tautology, and the interesting question is precisely
-                # the one the file cannot answer: what did the server
-                # actually grant? This is also the only thing that catches
-                # a drop-in gone stale after an interface rename, where
-                # the file is still byte-correct and applies to nothing.
-                verify_command=f"ip -4 -o addr show {iface}",
-                requires_root=True,
-                # Without networkd, a file under /etc/systemd/network is
-                # read by nothing -- present, correct, and inert, with
-                # `check` reporting ok forever.
-                requires_command="networkctl",
-            )
+    records = list_hosts(hosts_path=hosts_path)
+    names = tuple(
+        sorted(r.name for r in records if r.kind == "compute")
+    )
+    if not names:
+        # REFUSE rather than return (). An empty `hosts` tuple means EVERY
+        # host to HostConfigSpec.applies_to, so a registry that has drifted
+        # out of listing the compute nodes would not narrow this spec -- it
+        # would WIDEN it to every machine in the fleet, writing a netplan
+        # file onto NAS appliances and laptops that do not run netplan.
+        #
+        # MEASURED 2026-09-02 inside an agent container: the resolved
+        # registry held 6 records (2 workstation, 3 storage, 1 hpc-login),
+        # ZERO compute, and still named the retired `mba` and
+        # `ywata-note-win`. So this is the live state of a real vantage
+        # point, not a hypothetical.
+        raise HostRegistryError(
+            f"no `kind: compute` host in the registry at "
+            f"{get_hosts_yaml_path(hosts_path)} ({len(records)} record(s): "
+            f"{', '.join(sorted(r.name for r in records)) or 'none'}), so the "
+            f"network floor cannot be scoped.",
+            remediation=(
+                "This registry is stale or is the container-local copy. An "
+                "agent container resolves ~/.scitex/dev/hosts.yaml under "
+                "/home/agent, which is NOT the host registry and omits every "
+                "compute node. Point SCITEX_DIR (or hosts_path) at the host "
+                "registry before generating host config. Refusing is "
+                "deliberate: an empty host tuple would apply this spec to "
+                "EVERY machine rather than to none."
+            ),
         )
-    return specs
+    return names
+
+
+def provide_dhcp_specs(
+    *, hosts_path: str | Path | None = None
+) -> list[HostConfigSpec]:
+    """Declare the ONE name-independent network floor, identical everywhere.
+
+    Emits a single spec applying to every ``kind: compute`` host, with no
+    per-host content at all. That is a deliberate reversal of the previous
+    design, which emitted one drop-in PER HOST keyed on that host's
+    interface NAME and was wrong for two of the four machines on
+    2026-09-02 (both mapped to ``enp8s0``, which exists on no host).
+
+    A file with no per-host fields cannot drift per host, which is
+    stronger than a per-host file that happens to be correct today. It
+    also makes convergence a checksum compare, so the drift detector is
+    the same code path as the writer.
+    """
+    return [
+        HostConfigSpec(
+            name="network.fleet-floor",
+            path=_FLEET_NETPLAN_PATH,
+            content=_FLEET_NETPLAN_CONTENT,
+            purpose=(
+                "Guarantee every ethernet port asks for DHCP, by GLOB, so a "
+                "PCI renumber or NIC swap cannot leave a host with no network "
+                "-- the failure that took compute-01 offline for two hours on "
+                "2026-09-02 and needed a physical console to recover."
+            ),
+            provider="scitex-dev",
+            hosts=_netplan_managed_hosts(hosts_path=hosts_path),
+            mode="0600",
+            # `netplan apply` re-reads and re-applies. It does NOT tear the
+            # link down when the resulting config is unchanged, which is the
+            # normal case for a converged host.
+            apply_command="netplan apply",
+            # OBSERVATION, and deliberately not a read-back of the file --
+            # that would be a tautology. The question this file exists to
+            # answer is whether a port actually came up with an address, so
+            # ask that. It is also the only check that catches the floor
+            # matching nothing, which is exactly how the old design failed
+            # while remaining byte-correct on disk.
+            verify_command="ip -4 -o addr show | grep -v ' lo '",
+            requires_root=True,
+        )
+    ]
 
 
 __all__ = ["provide_dhcp_specs"]
