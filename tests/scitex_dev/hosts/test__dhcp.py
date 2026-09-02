@@ -22,9 +22,12 @@ from __future__ import annotations
 import pytest
 import yaml
 
+import hashlib
+
 from scitex_dev.hosts._dhcp import (
     _FLEET_NETPLAN_CONTENT,
     _FLEET_NETPLAN_PATH,
+    _FLEET_NETPLAN_SHA256,
     provide_dhcp_specs,
 )
 from scitex_dev.hosts._registry import HostRegistryError
@@ -211,3 +214,37 @@ class TestScopingBranchesOnKind:
         # because a MALFORMED fixture made the PARSER raise the same
         # exception type, which is a pass for the wrong reason.
         assert "no `kind: compute` host" in message and path in message
+
+
+class TestTheGeneratedBytesAreTheDeployedBytes:
+    """Byte-identity with the file sac hand-applied, as a test not a hope.
+
+    I could not read the deployed file to compare — it is mode 0600 root and
+    this agent is not root. Identity was established two other ways: its size
+    (466 bytes, from `ls -la` on compute-04) and its sha256, measured by sac
+    on the live file. Pinning the digest here means a change to the content
+    has to change this constant deliberately, and the first `host-config
+    apply` after this lands stays a no-op.
+    """
+
+    def test_the_content_hashes_to_the_deployed_digest(self):
+        # Arrange
+        content = _FLEET_NETPLAN_CONTENT
+
+        # Act
+        digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+        # Assert
+        assert digest == _FLEET_NETPLAN_SHA256
+
+    def test_the_content_is_the_size_measured_on_the_host(self):
+        # Arrange
+        content = _FLEET_NETPLAN_CONTENT
+
+        # Act
+        size = len(content.encode("utf-8"))
+
+        # Assert — `ls -la /etc/netplan/` on compute-04 reported 466 bytes.
+        # An independent witness to the digest above: two different
+        # properties of the same file, measured separately.
+        assert size == 466
