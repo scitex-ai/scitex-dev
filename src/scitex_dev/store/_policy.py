@@ -68,6 +68,23 @@ class FieldRole(str, Enum):
     #: The soft-delete marker. Nothing is ever deleted; this is how a row
     #: leaves the default view. At most one per schema.
     HIDE_FLAG = "hide_flag"
+    #: Computed from other fields rather than written by a caller, and
+    #: RECOMPUTED after a merge instead of being merged.
+    #:
+    #: This exists for the one shape that genuinely has no merge: a value
+    #: derived from the whole TABLE rather than from its own row. A rank or
+    #: position computed across every record is the example -- two isolated
+    #: replicas each produce a valid ordering, and no combination of the two
+    #: preserves both, because the orderings are answers to a question about
+    #: a set that differed on each side.
+    #:
+    #: Declaring the field DERIVED says so out loud: the store neither
+    #: replicates nor merges it, and the owning package recomputes it once
+    #: the merged rows are in place. The alternative -- leaving it to
+    #: LAST_WRITER_WINS -- silently keeps one replica's ordering of the
+    #: OTHER replica's rows, which is not wrong in any single field yet is
+    #: wrong as a whole and raises nothing.
+    DERIVED = "derived"
 
 
 class MergeRule(str, Enum):
@@ -101,6 +118,14 @@ class MergeRule(str, Enum):
     APPEND = "append"
     #: Set union. For edges and role assignments.
     UNION = "union"
+    #: Not merged at all -- recomputed by the owning package once the merged
+    #: rows are in place. The only rule permitted on (and required by)
+    #: :attr:`FieldRole.DERIVED`.
+    #:
+    #: A separate member rather than an absent rule, because every field must
+    #: state one: "no merge applies here" and "nobody filled this in" must not
+    #: look identical in a declaration.
+    RECOMPUTED = "recomputed"
 
 
 class WriterPolicy(str, Enum):
@@ -204,6 +229,21 @@ class FieldPolicy:
                     "hide permanent, turning the soft delete into the hard "
                     "one this store exists to prevent."
                 )
+        if (self.role is FieldRole.DERIVED) != (self.merge is MergeRule.RECOMPUTED):
+            raise FieldPolicyError(
+                f"role={self.role.value!r} and merge={self.merge.value!r} "
+                "disagree. FieldRole.DERIVED and MergeRule.RECOMPUTED are two "
+                "halves of one statement -- 'this value is computed, not "
+                "written, and is rebuilt after a merge' -- and a declaration "
+                "carrying only one half says two different things about the "
+                "same field."
+            )
+        if self.role is FieldRole.DERIVED and self.required:
+            raise FieldPolicyError(
+                "A DERIVED field must have required=False. It is absent until "
+                "something recomputes it, so requiring it would reject the "
+                "very rows the recomputation is meant to run over."
+            )
         if self.merge is MergeRule.MAX and self.kind not in _ORDERABLE_KINDS:
             raise FieldPolicyError(
                 f"merge=MergeRule.MAX needs an orderable kind "
@@ -447,6 +487,20 @@ class Schema:
         """Non-identity columns, in declaration order."""
         return tuple(
             n for n, p in self.fields.items() if p.role is not FieldRole.IDENTITY
+        )
+
+    @property
+    def derived_fields(self) -> tuple[str, ...]:
+        """Columns the owning package recomputes after a merge.
+
+        Callers use this to know what to rebuild once replay has settled. A
+        field listed here was deliberately excluded from merging, so a caller
+        that skips the rebuild is left with a stale value rather than a merged
+        one -- which is why this is a first-class view and not something to
+        rediscover by filtering roles at each call site.
+        """
+        return tuple(
+            n for n, p in self.fields.items() if p.role is FieldRole.DERIVED
         )
 
     @property
