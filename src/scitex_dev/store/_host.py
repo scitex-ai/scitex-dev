@@ -113,7 +113,29 @@ LEGACY_PGDATA_DIR: Final[Path] = Path("~/.scitex/pg")
 DEFAULT_SOCKET_DIR: Final[Path] = DEFAULT_PGDATA_DIR / "run"
 
 
-def resolve_pgdata_dir() -> Path:
+def _holds_a_cluster(directory: Path) -> bool:
+    """Whether ``directory`` contains a PostgreSQL cluster, not merely exists.
+
+    THE DISTINCTION IS LOAD-BEARING and this function exists because the
+    obvious version was wrong. An earlier draft asked ``directory.exists()``,
+    which breaks the moment anything creates the new path before the data
+    moves -- a config writer, a `mkdir -p` in a job, or someone preparing a
+    rehearsal. The resolver would then choose an EMPTY new directory over the
+    LIVE legacy one, and every client would connect to a cluster nobody is
+    writing to: the precise failure the derived socket dir was shaped to
+    prevent, reintroduced one function away. (Caught by scitex-agent-container
+    in review, 2026-09-02.)
+
+    ``PG_VERSION`` is the marker because PostgreSQL itself writes it into
+    PGDATA and refuses to start without it -- so it answers "is there a
+    cluster here" rather than "did someone make this folder".
+    """
+    return (directory.expanduser() / "PG_VERSION").exists()
+
+
+def resolve_pgdata_dir(
+    *, new: Path | None = None, legacy: Path | None = None
+) -> Path:
     """The PGDATA directory this host actually has, new location preferred.
 
     The fallback is WIRED, not merely declared. A constant naming the old
@@ -134,13 +156,18 @@ def resolve_pgdata_dir() -> Path:
 
     Note 3 is why this is not simply "prefer whichever exists": on a clean
     host both branches are absent, and the tie must break toward the future.
+
+    ``new`` / ``legacy`` are injectable so a test can point at real
+    directories it built, rather than rewriting this module's constants.
+    A test that patches production internals is testing the patch.
     """
-    new = DEFAULT_PGDATA_DIR.expanduser()
-    if new.exists():
-        return DEFAULT_PGDATA_DIR
-    if LEGACY_PGDATA_DIR.expanduser().exists():
-        return LEGACY_PGDATA_DIR
-    return DEFAULT_PGDATA_DIR
+    new = DEFAULT_PGDATA_DIR if new is None else new
+    legacy = LEGACY_PGDATA_DIR if legacy is None else legacy
+    if _holds_a_cluster(new):
+        return new
+    if _holds_a_cluster(legacy):
+        return legacy
+    return new
 
 #: The port this instance listens on. NOT only a TCP concern, which is what
 #: the previous comment here claimed: libpq names the socket FILE
