@@ -211,8 +211,21 @@ def register(ecosystem):
             "announced when used."
         ),
     )
+    @click.option(
+        "--repair-tail",
+        is_flag=True,
+        help=(
+            "Also rewrite a PS-140 full-path `importorskip` guard below the "
+            "closing sentinel into the root-split form. Off by default: the "
+            "hand-owned region is preserved byte-identically unless you ask "
+            "for this. Declines, loudly, on any tail whose shape cannot be "
+            "proven."
+        ),
+    )
     @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
-    def ecosystem_install_cross_package_gate(distribution, force, dry_run, path, yes):
+    def ecosystem_install_cross_package_gate(
+        distribution, force, dry_run, path, repair_tail, yes
+    ):
         # `install` is a MUTATING verb, so §2 of the CLI conventions requires a
         # --yes/-y flag on it regardless of how safe this particular
         # implementation is. Generation here is non-destructive without
@@ -303,9 +316,31 @@ def register(ecosystem):
                 err=True,
             )
 
-        content = render_cross_package_gate(
-            distribution, imports, tail=split.tail if split.has_sentinel else None
-        )
+        # PS-140's defect lives in the PRESERVED half, so the only way to fix
+        # an existing gate through this command is to opt into touching that
+        # half. Off by default and never silent in either direction: a repair
+        # that happens without being asked for is the thing the preservation
+        # policy exists to prevent, and a decline that is not printed leaves
+        # the caller believing the sweep covered a file it skipped.
+        tail = split.tail if split.has_sentinel else None
+        tail_repaired = False
+        if repair_tail and tail is not None:
+            from ._gate_tail_repair import repair_tail as _repair
+
+            outcome = _repair(tail)
+            tail = outcome.tail
+            tail_repaired = outcome.changed
+            verb = "repaired" if outcome.changed else "left the tail alone"
+            click.echo(f"repair-tail: {verb} — {outcome.reason}", err=True)
+        elif repair_tail:
+            click.echo(
+                "repair-tail: no delimited tail to repair (the file is absent "
+                "or carries no closing sentinel), so the generated body is "
+                "written fresh and is already correct.",
+                err=True,
+            )
+
+        content = render_cross_package_gate(distribution, imports, tail=tail)
         init = target.parent / "__init__.py"
 
         # Show WHAT was computed, not just where it will go. The reported
@@ -336,7 +371,18 @@ def register(ecosystem):
             # mechanism: the dist-info survives the source vanishing, so
             # version checks stay green while the import is broken (hpc
             # measured 20 days of exactly that in its own venv).
-            if split.has_sentinel:
+            if split.has_sentinel and tail_repaired:
+                # NOT "verbatim". Saying preserved-verbatim while the guard
+                # was rewritten would make the one line whose job is to prove
+                # the preservation policy held into the line that hides a
+                # change to it.
+                click.echo(
+                    f"# would REPAIR the {len(split.tail.splitlines())} line(s) "
+                    f"below '{END_SENTINEL}' — the guard is rewritten, "
+                    "everything else is preserved",
+                    err=True,
+                )
+            elif split.has_sentinel:
                 click.echo(
                     f"# would PRESERVE {len(split.tail.splitlines())} line(s) "
                     f"below '{END_SENTINEL}' verbatim",
@@ -363,12 +409,18 @@ def register(ecosystem):
 
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
-        preserved = (
-            f", preserved {len(split.tail.splitlines())} line(s) below the "
-            "closing sentinel"
-            if split.has_sentinel
-            else ""
-        )
+        if split.has_sentinel and tail_repaired:
+            preserved = (
+                f", REPAIRED the guard in the {len(split.tail.splitlines())} "
+                "line(s) below the closing sentinel"
+            )
+        elif split.has_sentinel:
+            preserved = (
+                f", preserved {len(split.tail.splitlines())} line(s) below the "
+                "closing sentinel"
+            )
+        else:
+            preserved = ""
         click.echo(
             f"wrote {target} ({len(imports)} cross-package import(s)"
             f"{preserved})"
