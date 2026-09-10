@@ -340,20 +340,19 @@ class PostgresDialect(Dialect):
 
     @contextmanager
     def schema_lock(self, connection: Any, schema: Schema) -> Iterator[None]:
-        """A session-level advisory lock keyed on the schema's oplog name.
+        """A transaction-scoped advisory lock around one schema's DDL.
 
-        Held only across the DDL in ``Store.__init__`` and released in
-        ``finally``, so a failing statement cannot leave it stuck. Session
-        level (not transaction level) because the connection is autocommit.
+        The transaction is required even though store connections otherwise
+        use autocommit.  A session advisory lock is unsafe through a
+        transaction-pooled PostgreSQL endpoint: acquisition and release can
+        execute on different server backends, stranding the lock in the pool.
         ``hashtext`` folds the name to the int4 the lock API takes; two
         schemas colliding on the hash merely serialise each other's DDL.
         """
         key = self.oplog_table(schema)
-        connection.execute("SELECT pg_advisory_lock(hashtext(%s))", (key,))
-        try:
+        with connection.transaction():
+            connection.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (key,))
             yield
-        finally:
-            connection.execute("SELECT pg_advisory_unlock(hashtext(%s))", (key,))
 
     def to_db_bool(self, value: bool) -> Any:
         return bool(value)
