@@ -37,7 +37,7 @@ from typing import Any, Iterator, Mapping, Sequence
 from ._apply import apply_entry
 from ._codec import RowCodec
 from ._dialect import Dialect, get_dialect
-from ._errors import SeqAllocationError, StoreError
+from ._errors import RevisionMismatchError, SeqAllocationError, StoreError
 from ._guards import (
     ANY_REVISION,
     NEW_RECORD,
@@ -235,10 +235,11 @@ class Store(PeerState, IdentityState, ReadDoor):
         :data:`~._guards.NEW_RECORD`, an ``int``, or
         :data:`~._guards.ANY_REVISION`.
         """
-        with self._lock:
+        with self._lock, self._atomic_write():
             record = record_key(self.schema, values)
             current = self._read(record, include_hidden=True)
-            check_revision(record, current, self._revision(record), expected_revision)
+            revision = self._revision(record)
+            check_revision(record, current, revision, expected_revision)
             if self.writer_policy is WriterPolicy.SINGLE_WRITER and current:
                 check_owner(self.schema, record, current, self.actor)
 
@@ -251,7 +252,13 @@ class Store(PeerState, IdentityState, ReadDoor):
             entry = self._append(
                 record, OpKind.UPSERT, {**identity, **payload}, actor
             )
-            return self._materialise(entry, current, owner=owner)
+            return self._materialise_atomic(
+                entry,
+                current,
+                expected_revision=expected_revision,
+                current_revision=revision,
+                owner=owner,
+            )
 
     def hide(
         self,
@@ -356,6 +363,31 @@ class Store(PeerState, IdentityState, ReadDoor):
             return self._materialise(entry, current, persist_op=False)
 
     # -- internals --------------------------------------------------------
+    @contextmanager
+    def _atomic_write(self) -> "Iterator[None]":
+        """Keep one guarded write and its oplog entry in one transaction.
+
+        A Python lock only protects one :class:`Store` instance.  The row
+        predicate below is what arbitrates separate processes; this scope is
+        what ensures a losing predicate does not leave an orphan oplog entry.
+        Inside an existing :meth:`batch`, a savepoint rolls back this write
+        without destroying the caller's earlier successful writes.
+        """
+        if self._batch_depth:
+            self._connection.execute("SAVEPOINT atomic_store_put")
+            try:
+                yield
+            except BaseException:
+                self._connection.execute("ROLLBACK TO SAVEPOINT atomic_store_put")
+                self._connection.execute("RELEASE SAVEPOINT atomic_store_put")
+                raise
+            else:
+                self._connection.execute("RELEASE SAVEPOINT atomic_store_put")
+            return
+
+        with self.batch():
+            yield
+
     def _new_entry(
         self,
         record: str,
@@ -467,6 +499,74 @@ class Store(PeerState, IdentityState, ReadDoor):
         self._connection.execute(
             sql, self.codec.row_payload(entry.record, result.row, revision)
         )
+        return PutResult(
+            row=result.row,
+            revision=revision,
+            op=entry,
+            created=current is None,
+            conflicts=tuple(result.conflicts),
+        )
+
+    def _materialise_atomic(
+        self,
+        entry: OpEntry,
+        current: "Row | None",
+        *,
+        expected_revision: Any,
+        current_revision: int,
+        owner: "str | None" = None,
+    ) -> PutResult:
+        """Materialise a local put only if its database predicate still holds."""
+        result = apply_entry(
+            self.schema,
+            entry,
+            current,
+            owner=owner,
+            default_owner=entry.actor or self.node,
+        )
+        revision = current_revision + 1 if current is not None else 1
+        table = self.dialect.quote(self.dialect.rows_table(self.schema))
+        columns = self.codec.row_columns()
+        payload = self.codec.row_payload(entry.record, result.row, revision)
+
+        if expected_revision is NEW_RECORD:
+            names = ", ".join(self.dialect.quote(name) for name in columns)
+            sql = (
+                f"INSERT INTO {table} ({names}) "
+                f"VALUES ({self.dialect.placeholders(len(columns))}) "
+                f"ON CONFLICT ({self.dialect.quote('_record')}) DO NOTHING "
+                f"RETURNING {self.dialect.quote('_revision')}"
+            )
+            written = self._connection.execute(sql, payload).fetchone()
+        elif expected_revision is ANY_REVISION:
+            sql = self.dialect.upsert_sql(
+                self.dialect.rows_table(self.schema), columns, "_record"
+            )
+            self._connection.execute(sql, payload)
+            written = {"_revision": revision}
+        else:
+            assignments = ", ".join(
+                f"{self.dialect.quote(name)} = {self.dialect.placeholder(index)}"
+                for index, name in enumerate(columns[1:])
+            )
+            sql = (
+                f"UPDATE {table} SET {assignments} "
+                f"WHERE {self.dialect.quote('_record')} = "
+                f"{self.dialect.placeholder(len(columns) - 1)} "
+                f"AND {self.dialect.quote('_revision')} = "
+                f"{self.dialect.placeholder(len(columns))} "
+                f"RETURNING {self.dialect.quote('_revision')}"
+            )
+            written = self._connection.execute(
+                sql, (*payload[1:], payload[0], expected_revision)
+            ).fetchone()
+
+        if written is None:
+            raise RevisionMismatchError(
+                f"Record {entry.record!r} changed after it was read; the "
+                f"atomic write expecting revision {expected_revision!r} was "
+                "not applied. Re-read, re-apply the intent, and retry."
+            )
         return PutResult(
             row=result.row,
             revision=revision,

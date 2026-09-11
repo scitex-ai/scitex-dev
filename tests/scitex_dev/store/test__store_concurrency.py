@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import os
 import socket
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Iterator
@@ -51,6 +52,7 @@ from scitex_dev.store import (
     FieldPolicy,
     FieldRole,
     MergeRule,
+    RevisionMismatchError,
     Schema,
     Store,
     WriterPolicy,
@@ -252,6 +254,142 @@ def test_eight_concurrent_batched_writes_all_land(pg_target):
     assert failures == []
 
 
+def _synchronise_same_record_reads(stores: tuple[Store, Store]) -> None:
+    """Make both real connections observe the same pre-write snapshot."""
+    barrier = threading.Barrier(2)
+    for store in stores:
+        original = store._read
+
+        def read_together(*args, _read=original, **kwargs):
+            row = _read(*args, **kwargs)
+            barrier.wait(timeout=5)
+            return row
+
+        store._read = read_together  # type: ignore[method-assign]
+
+
+def _atomic_outcomes(functions) -> list[str]:
+    def run(fn) -> str:
+        try:
+            fn()
+        except RevisionMismatchError:
+            return "lost"
+        return "won"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        return list(pool.map(run, functions))
+
+
+def test_two_new_record_writers_create_exactly_once(make_store):
+    # Arrange
+    first, second = make_store("shared"), make_store("shared")
+    _synchronise_same_record_reads((first, second))
+    try:
+        # Act
+        outcomes = _atomic_outcomes(
+            (
+                lambda: first.put(
+                    {"id": "same", "status": "first"},
+                    expected_revision=NEW_RECORD,
+                ),
+                lambda: second.put(
+                    {"id": "same", "status": "second"},
+                    expected_revision=NEW_RECORD,
+                ),
+            )
+        )
+        # Assert
+        assert sorted(outcomes) == ["lost", "won"]
+    finally:
+        first.close()
+        second.close()
+
+
+def test_lost_create_leaves_no_orphan_oplog_entry(make_store):
+    # Arrange
+    first, second = make_store("shared"), make_store("shared")
+    _synchronise_same_record_reads((first, second))
+    try:
+        # Act
+        _atomic_outcomes(
+            (
+                lambda: first.put(
+                    {"id": "same", "status": "first"},
+                    expected_revision=NEW_RECORD,
+                ),
+                lambda: second.put(
+                    {"id": "same", "status": "second"},
+                    expected_revision=NEW_RECORD,
+                ),
+            )
+        )
+        table = first.dialect.quote(first.dialect.oplog_table(first.schema))
+        count = first._connection.execute(
+            f"SELECT count(*) AS n FROM {table} WHERE record = %s", ("same",)
+        ).fetchone()["n"]
+        # Assert
+        assert count == 1
+    finally:
+        first.close()
+        second.close()
+
+
+def test_two_revision_writers_transition_exactly_once(make_store):
+    # Arrange
+    seed = make_store("shared")
+    seed.put({"id": "same", "status": "open"}, expected_revision=NEW_RECORD)
+    seed.close()
+    first, second = make_store("shared"), make_store("shared")
+    _synchronise_same_record_reads((first, second))
+    try:
+        # Act
+        outcomes = _atomic_outcomes(
+            (
+                lambda: first.put(
+                    {"id": "same", "status": "first"}, expected_revision=1
+                ),
+                lambda: second.put(
+                    {"id": "same", "status": "second"}, expected_revision=1
+                ),
+            )
+        )
+        # Assert
+        assert sorted(outcomes) == ["lost", "won"]
+    finally:
+        first.close()
+        second.close()
+
+
+def test_lost_transition_leaves_only_the_winning_op(make_store):
+    # Arrange
+    seed = make_store("shared")
+    seed.put({"id": "same", "status": "open"}, expected_revision=NEW_RECORD)
+    seed.close()
+    first, second = make_store("shared"), make_store("shared")
+    _synchronise_same_record_reads((first, second))
+    try:
+        # Act
+        _atomic_outcomes(
+            (
+                lambda: first.put(
+                    {"id": "same", "status": "first"}, expected_revision=1
+                ),
+                lambda: second.put(
+                    {"id": "same", "status": "second"}, expected_revision=1
+                ),
+            )
+        )
+        table = first.dialect.quote(first.dialect.oplog_table(first.schema))
+        count = first._connection.execute(
+            f"SELECT count(*) AS n FROM {table} WHERE record = %s", ("same",)
+        ).fetchone()["n"]
+        # Assert
+        assert count == 2
+    finally:
+        first.close()
+        second.close()
+
+
 # ---------------------------------------------------------------------------
 # the classification the retry keys on — no database needed
 # ---------------------------------------------------------------------------
@@ -274,5 +412,3 @@ def test_postgres_dialect_does_not_retry_other_errors():
     verdict = get_dialect(Backend.POSTGRES).is_unique_violation(exc)
     # Assert
     assert verdict is False
-
-
