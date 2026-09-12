@@ -135,27 +135,29 @@ class Store(SchemaEvolution, PeerState, IdentityState, ReadDoor):
         # concurrency-safe on Postgres, and neither is the additive ALTER —
         # see Dialect.schema_lock. Eight agents constructing a Store for one
         # schema at once is a normal relaunch, not an edge case.
-        with self.dialect.schema_lock(self._connection, schema):
-            rows_table = self.dialect.rows_table(schema)
-            rows_exist = bool(
-                self._first_column_values(self.dialect.columns_sql(rows_table))
-            )
-            # On a deployed store, package fields must precede index repair:
-            # create_sql may include an index for a newly declared field, and
-            # PostgreSQL cannot create that index before the column exists.
-            if rows_exist:
-                self.schema_evolution = self._ensure_declared_fields_locked()
-            # Only when something is actually absent: the DDL is idempotent by
-            # IF NOT EXISTS but NOT by privilege — PostgreSQL demands table
-            # ownership before that clause short-circuits, which locked every
-            # non-owning role out of stores it had full DML on. See
-            # PeerState._schema_objects_missing.
-            if self._schema_objects_missing(schema):
-                for statement in self.dialect.create_sql(schema):
-                    self._connection.execute(statement)
-            self._apply_additive_migrations(schema)
-            if not rows_exist:
-                self.schema_evolution = self._ensure_declared_fields_locked()
+        try:
+            with self.dialect.schema_lock(self._connection, schema):
+                rows_table = self.dialect.rows_table(schema)
+                rows_exist = bool(
+                    self._first_column_values(self.dialect.columns_sql(rows_table))
+                )
+                # On a deployed store, package fields precede index repair:
+                # create_sql may include an index for a newly declared field.
+                if rows_exist:
+                    self.schema_evolution = self._ensure_declared_fields_locked()
+                # IF NOT EXISTS still requires ownership on PostgreSQL. Probe
+                # first so a DML-only role can open a complete existing store.
+                if self._schema_objects_missing(schema):
+                    for statement in self.dialect.create_sql(schema):
+                        self._connection.execute(statement)
+                self._apply_additive_migrations(schema)
+                if not rows_exist:
+                    self.schema_evolution = self._ensure_declared_fields_locked()
+        except BaseException:
+            # An explicit schema refusal is a normal launch-gate result. It
+            # must not leave one server connection behind per retry.
+            self._connection.close()
+            raise
 
     def ensure_declared_fields(self) -> SchemaEvolutionResult:
         """Physically ensure every safely-additive field in ``schema`` exists.
