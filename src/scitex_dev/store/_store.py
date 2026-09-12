@@ -54,6 +54,7 @@ from ._peer_state import PeerState
 from ._policy import FieldRole, Schema, WriterPolicy
 from ._read_door import ReadDoor
 from ._row import Row
+from ._schema_evolution import SchemaEvolution, SchemaEvolutionResult
 from ._target import StoreTarget
 
 __all__ = ["ANY_REVISION", "NEW_RECORD", "PutResult", "Store"]
@@ -92,7 +93,7 @@ class PutResult:
     conflicts: tuple[MergeConflict, ...] = ()
 
 
-class Store(PeerState, IdentityState, ReadDoor):
+class Store(SchemaEvolution, PeerState, IdentityState, ReadDoor):
     """An open store: one schema, one backend, one node identity.
 
     Two identities, and they answer different questions. ``node`` is who is
@@ -135,6 +136,15 @@ class Store(PeerState, IdentityState, ReadDoor):
         # see Dialect.schema_lock. Eight agents constructing a Store for one
         # schema at once is a normal relaunch, not an edge case.
         with self.dialect.schema_lock(self._connection, schema):
+            rows_table = self.dialect.rows_table(schema)
+            rows_exist = bool(
+                self._first_column_values(self.dialect.columns_sql(rows_table))
+            )
+            # On a deployed store, package fields must precede index repair:
+            # create_sql may include an index for a newly declared field, and
+            # PostgreSQL cannot create that index before the column exists.
+            if rows_exist:
+                self.schema_evolution = self._ensure_declared_fields_locked()
             # Only when something is actually absent: the DDL is idempotent by
             # IF NOT EXISTS but NOT by privilege — PostgreSQL demands table
             # ownership before that clause short-circuits, which locked every
@@ -144,6 +154,28 @@ class Store(PeerState, IdentityState, ReadDoor):
                 for statement in self.dialect.create_sql(schema):
                     self._connection.execute(statement)
             self._apply_additive_migrations(schema)
+            if not rows_exist:
+                self.schema_evolution = self._ensure_declared_fields_locked()
+
+    def ensure_declared_fields(self) -> SchemaEvolutionResult:
+        """Physically ensure every safely-additive field in ``schema`` exists.
+
+        The declaration is the sole input: callers cannot pass table names,
+        SQL types or DDL. Missing optional DATA fields are added under the
+        backend's cross-process schema lock. Identity fields, required fields,
+        incompatible physical types and nullability drift raise
+        :class:`SchemaEvolutionError`. Success is based on a second physical
+        catalogue observation, not on the absence of a driver exception.
+
+        Construction performs this once and exposes that outcome as
+        :attr:`schema_evolution`; this public idempotent method exists for an
+        explicit readiness gate immediately before a dependent operation.
+        """
+        with self._lock:
+            with self.dialect.schema_lock(self._connection, self.schema):
+                result = self._ensure_declared_fields_locked()
+                self.schema_evolution = result
+                return result
 
     # -- lifecycle --------------------------------------------------------
     def close(self) -> None:

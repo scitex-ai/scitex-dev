@@ -186,3 +186,27 @@ unreviewable; a measurement in git is a lie the moment reality moves.
       refuses.
 - [ ] Table sync order pinned by a test.
 - [ ] ACL keyed on the id, stored as rows, absence ≠ unreachable.
+
+## §6. Evolving a package schema
+
+A leaf adds a field to its declared `Schema`; it does not reach through
+`Store._connection` and it does not issue `ALTER TABLE`. Opening `Store` checks
+the deployed rows table under the database schema lock. A missing field is
+added only when its policy says `role=DATA` and `required=False`, so existing
+rows have an honest SQL `NULL` rather than an invented backfill value.
+
+Construction records the physical outcome as `store.schema_evolution`. A
+caller that needs a readiness gate immediately before launching dependent work
+may repeat the same idempotent observation:
+
+```python
+result = store.ensure_declared_fields()
+assert set(schema.fields) <= set(result.observed)
+```
+
+Success means a post-DDL catalogue read observed every declared field with the
+declared type. Missing identity or required fields, incompatible types, and an
+optional data field found physically `NOT NULL` raise `SchemaEvolutionError`.
+Those shapes need a reviewed migration and explicit backfill; the startup path
+never guesses one. This API is deliberately additive-only: removing or
+retyping deployed state is unavailable.
