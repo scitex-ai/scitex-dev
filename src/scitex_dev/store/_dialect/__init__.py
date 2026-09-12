@@ -270,6 +270,32 @@ class Dialect(ABC):
             f"{self.quote(column)} {coltype} NOT NULL DEFAULT {default}"
         )
 
+    def add_nullable_column_sql(self, table: str, column: str, coltype: str) -> str:
+        """DDL adding one nullable column established absent by observation."""
+        return (
+            f"ALTER TABLE {self.quote(table)} ADD COLUMN "
+            f"{self.quote(column)} {coltype}"
+        )
+
+    def column_definitions_sql(self, table: str) -> str:
+        """A SELECT exposing name, kind and nullability for every column.
+
+        Declared-field evolution cannot safely infer compatibility from a
+        column name alone. A dialect that cannot physically observe all three
+        facts refuses the capability instead of certifying an ALTER blindly.
+        """
+        raise DialectUnavailableError(
+            f"The {self.backend.value} dialect cannot observe physical column "
+            "definitions, so declared fields cannot be evolved safely."
+        )
+
+    def physical_kind(self, definition: Any) -> "FieldKind | None":
+        """Map one row from :meth:`column_definitions_sql` to a FieldKind."""
+        raise DialectUnavailableError(
+            f"The {self.backend.value} dialect cannot classify physical column "
+            "types, so declared fields cannot be evolved safely."
+        )
+
     def additive_columns(self, schema: Schema) -> list[tuple[str, str, str, str]]:
         """``(table, column, type, default)`` for every column added since v1.
 
@@ -414,7 +440,9 @@ class Dialect(ABC):
         before the name check ever runs (measured 2026-08-24: 7 of 8
         concurrent constructors failed on ``pg_type_typname_nsp_index``).
         The additive ``ALTER TABLE ADD COLUMN`` migration races the same way.
-        The base implementation is a no-op; the Postgres dialect overrides it.
+        The base implementation is a no-op; the Postgres dialect overrides it
+        with a transaction-scoped lock so an interrupted client cannot strand
+        a session lock behind remote TCP failure detection.
         """
         return nullcontext()
 

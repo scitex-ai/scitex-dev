@@ -96,6 +96,7 @@ from ._errors import (
     RecordNotFoundError,
     RevisionMismatchError,
     SchemaError,
+    SchemaEvolutionError,
     StoreDivergedError,
     StoreError,
     StoreIdentityMismatchError,
@@ -164,6 +165,7 @@ from ._relay import (
 from ._relay_ssh import SshPsqlTransport, aliases_for, ring_argv
 from ._replication import ReplayResult, outstanding, pull, replay, sync
 from ._row import Row
+from ._schema_evolution import SchemaEvolutionResult
 from ._store import PutResult, Store
 from ._target import Backend, StoreTarget
 
@@ -209,6 +211,8 @@ __all__ = [
     "Row",
     "Schema",
     "SchemaError",
+    "SchemaEvolutionError",
+    "SchemaEvolutionResult",
     "SshPsqlTransport",
     "Store",
     "StoreDivergedError",

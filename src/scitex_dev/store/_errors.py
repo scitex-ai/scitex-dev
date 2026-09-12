@@ -22,6 +22,7 @@ __all__ = [
     "RecordNotFoundError",
     "RevisionMismatchError",
     "SchemaError",
+    "SchemaEvolutionError",
     "StoreDivergedError",
     "StoreError",
     "StoreIdentityMismatchError",
@@ -38,6 +39,16 @@ class StoreError(Exception):
 
 class SchemaError(StoreError):
     """A schema could not be constructed as declared."""
+
+
+class SchemaEvolutionError(SchemaError):
+    """A deployed store cannot be evolved to its declared schema safely.
+
+    Automatic evolution is intentionally narrower than arbitrary DDL: only a
+    missing, nullable DATA field may be added.  Identity, required, retyped or
+    unexpectedly non-null fields need a reviewed migration with an explicit
+    backfill rather than a guess in a process startup path.
+    """
 
 
 class FieldPolicyError(SchemaError):

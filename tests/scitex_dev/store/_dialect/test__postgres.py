@@ -166,6 +166,18 @@ def test_the_columns_probe_is_scoped_to_the_current_schema():
     assert "current_schema()" in sql
 
 
+def test_column_definitions_are_mapping_shaped_and_schema_scoped():
+    # Arrange
+    dialect = PostgresDialect()
+    # Act
+    sql = dialect.column_definitions_sql("comms_blocks_rows")
+    # Assert
+    assert (
+        "column_name, udt_name, is_nullable" in sql
+        and "current_schema()" in sql
+    )
+
+
 def test_the_indexes_probe_is_scoped_to_the_current_schema():
     # Arrange — `pg_indexes` carries no schema filter of its own, so this
     # half of the probe was unscoped even in principle.
