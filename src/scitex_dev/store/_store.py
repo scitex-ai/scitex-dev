@@ -141,13 +141,34 @@ class Store(SchemaEvolution, PeerState, IdentityState, ReadDoor):
                 rows_exist = bool(
                     self._first_column_values(self.dialect.columns_sql(rows_table))
                 )
+                schema_objects_missing = self._schema_objects_missing(schema)
+                if target.backend.value == "postgres":
+                    from ._provision import managed_store_needs_provisioning
+
+                    if managed_store_needs_provisioning(
+                        self._connection,
+                        self.dialect,
+                        schema,
+                        rows_exist=rows_exist,
+                        schema_objects_missing=schema_objects_missing,
+                    ):
+                        from ._errors import StoreProvisionError
+
+                        raise StoreProvisionError(
+                            f"Store {schema.name!r} needs PostgreSQL DDL, but this "
+                            "database declares the managed scitex_store_owner / "
+                            "scitex_rw contract. Application Store() calls must not "
+                            "create or repair shared tables under their login role. "
+                            "Run provision_store_acl(target, schema) through the "
+                            "authorized migration identity, then retry Store()."
+                        )
                 # On a deployed store, package fields precede index repair:
                 # create_sql may include an index for a newly declared field.
                 if rows_exist:
                     self.schema_evolution = self._ensure_declared_fields_locked()
                 # IF NOT EXISTS still requires ownership on PostgreSQL. Probe
                 # first so a DML-only role can open a complete existing store.
-                if self._schema_objects_missing(schema):
+                if schema_objects_missing:
                     for statement in self.dialect.create_sql(schema):
                         self._connection.execute(statement)
                 self._apply_additive_migrations(schema)
