@@ -27,6 +27,7 @@ __all__ = [
     "StoreError",
     "StoreIdentityMismatchError",
     "StoreIdentityUnknownError",
+    "StoreProvisionError",
     "StoreTargetError",
     "SupersededFenceError",
     "WriterConflictError",
@@ -35,6 +36,10 @@ __all__ = [
 
 class StoreError(Exception):
     """Base class for every :mod:`scitex_dev.store` failure."""
+
+
+class StoreProvisionError(StoreError):
+    """A privileged Store owner/default-ACL migration was refused or failed."""
 
 
 class SchemaError(StoreError):
@@ -278,5 +283,6 @@ class SupersededFenceError(StoreError):
     :meth:`~._peer_state.PeerState.rescind_fence` — never by accepting an op
     that failed this check.
     """
+
 
 # EOF
