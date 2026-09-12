@@ -167,8 +167,11 @@ def test_the_columns_probe_is_scoped_to_the_current_schema():
 
 
 def test_column_definitions_are_mapping_shaped_and_schema_scoped():
-    sql = PostgresDialect().column_definitions_sql("comms_blocks_rows")
-
+    # Arrange
+    dialect = PostgresDialect()
+    # Act
+    sql = dialect.column_definitions_sql("comms_blocks_rows")
+    # Assert
     assert (
         "column_name, udt_name, is_nullable" in sql
         and "current_schema()" in sql
