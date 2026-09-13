@@ -86,6 +86,44 @@ boundaries:
     codes: [AGENT_UNAVAILABLE]
     why: "There is no request to answer, so there is no response code to borrow."
 
+  - boundary: "sac Hermes bridge: POST /v1/turn admission"
+    package: scitex-agent-container
+    borrows: http
+    nested: errno
+    why: >-
+      The immediate answer is an HTTP admission result. A native filesystem or
+      socket failure such as ENOSPC remains the nested Check cause; HTTP 507 is
+      transport context, not a replacement for that cause.
+
+  # -- claude-code-telegrammer --------------------------------------------
+
+  - boundary: "cct wake: POST /v1/turn"
+    package: claude-code-telegrammer
+    borrows: http
+    nested: errno
+    why: >-
+      CCT calls SAC over HTTP and must return SAC's failing Check to the
+      originating Telegram path. Native transport and admission faults remain
+      nested errno causes instead of being flattened to an HTTP category.
+
+  - boundary: "cct Telegram reply delivery"
+    package: claude-code-telegrammer
+    borrows: http
+    nested: errno
+    why: >-
+      Telegram acknowledges sendMessage over HTTP. Success also requires CCT's
+      durable outbound receipt; a native store failure is returned as the
+      nested errno cause and the caller receives the accepted Telegram message
+      id for reconciliation rather than an unsafe blind retry.
+
+  - boundary: "cct outbound receipt persistence"
+    package: claude-code-telegrammer
+    borrows: errno
+    why: >-
+      Filesystem and store-transport failures surface here as native operating
+      system errors. ENOSPC, EDQUOT and EACCES name different operator actions
+      and must reach the tool caller verbatim.
+
   # -- scitex-cards --------------------------------------------------------
 
   - boundary: "board HTTP API (cards, DMs, notifications)"

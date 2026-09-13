@@ -178,6 +178,16 @@ def test_every_boundary_scitex_code_is_in_the_closed_enumeration():
     assert used <= declared
 
 
+def test_nested_boundary_kinds_are_registered_too():
+    """A nested native cause needs the same predictable vocabulary as its route."""
+    nested = {
+        entry["nested"]
+        for entry in load_boundaries()["boundaries"]
+        if "nested" in entry
+    }
+    assert nested <= _registry()
+
+
 def test_the_scitex_enumeration_stays_short():
     """A long list means the canonical vocabulary ADR-0007 rejected regrew."""
     # Arrange

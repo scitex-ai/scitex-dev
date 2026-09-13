@@ -252,6 +252,40 @@ def test_a_separate_verdict_key_is_refused_on_the_wire():
     assert isinstance(refusal, CheckError)
 
 
+def test_enospc_survives_inside_an_actionable_check_wire_record():
+    """A full disk is a native fact, not prose for each consumer to parse."""
+    check = Check.not_ok(
+        "reply_receipt_persisted",
+        "Telegram accepted message 812, but its durable receipt was not recorded",
+        "free space on the receipt store, then reconcile message 812; do not resend it",
+        cause=StatusCode(
+            kind="errno", code="ENOSPC", message="no space left on device"
+        ),
+    )
+
+    parsed = Check.from_dict(check.to_dict())
+
+    assert parsed == check
+
+
+def test_another_errno_uses_the_same_check_path_without_special_casing():
+    """The contract covers errno generally; ENOSPC is only one instance."""
+    check = Check.unknown(
+        "reply_receipt_observed",
+        "the receipt store could not be inspected",
+        "restore store access, then inspect the exchange before retrying",
+        cause=StatusCode(kind="errno", code="EACCES", message="permission denied"),
+    )
+
+    wire_cause = check.to_dict()["cause"]
+
+    assert wire_cause == {
+        "kind": "errno",
+        "code": "EACCES",
+        "message": "permission denied",
+    }
+
+
 # -- the native code is carried, not paraphrased ------------------------------
 
 
