@@ -1,5 +1,8 @@
 # Changelog
 
+- Add a checked, rollback-safe `ci runner relocate-storage` operation so local
+  Actions runner homes can live on `/scratch` instead of exhausting root.
+
 All notable changes to `scitex-dev` are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
