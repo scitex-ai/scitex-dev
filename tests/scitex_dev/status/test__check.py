@@ -254,6 +254,7 @@ def test_a_separate_verdict_key_is_refused_on_the_wire():
 
 def test_enospc_survives_inside_an_actionable_check_wire_record():
     """A full disk is a native fact, not prose for each consumer to parse."""
+    # Arrange
     check = Check.not_ok(
         "reply_receipt_persisted",
         "Telegram accepted message 812, but its durable receipt was not recorded",
@@ -263,13 +264,16 @@ def test_enospc_survives_inside_an_actionable_check_wire_record():
         ),
     )
 
+    # Act
     parsed = Check.from_dict(check.to_dict())
 
+    # Assert
     assert parsed == check
 
 
 def test_another_errno_uses_the_same_check_path_without_special_casing():
     """The contract covers errno generally; ENOSPC is only one instance."""
+    # Arrange
     check = Check.unknown(
         "reply_receipt_observed",
         "the receipt store could not be inspected",
@@ -277,8 +281,10 @@ def test_another_errno_uses_the_same_check_path_without_special_casing():
         cause=StatusCode(kind="errno", code="EACCES", message="permission denied"),
     )
 
+    # Act
     wire_cause = check.to_dict()["cause"]
 
+    # Assert
     assert wire_cause == {
         "kind": "errno",
         "code": "EACCES",

@@ -180,12 +180,16 @@ def test_every_boundary_scitex_code_is_in_the_closed_enumeration():
 
 def test_nested_boundary_kinds_are_registered_too():
     """A nested native cause needs the same predictable vocabulary as its route."""
+    # Arrange
+    registered = _registry()
+    # Act
     nested = {
         entry["nested"]
         for entry in load_boundaries()["boundaries"]
         if "nested" in entry
     }
-    assert nested <= _registry()
+    # Assert
+    assert nested <= registered
 
 
 def test_the_scitex_enumeration_stays_short():
