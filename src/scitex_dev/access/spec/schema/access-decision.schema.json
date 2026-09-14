@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scitex.ai/schemas/scitex-access/1/access-decision.schema.json",
+  "title": "scitex-access/1 AccessDecision",
+  "description": "One access answer. Wraps a scitex_dev.status Check; ok, HTTP status and exit code are derived from decision.kind and reason, never stored.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["spec", "exchange_id", "decision", "reason", "check", "request"],
+  "properties": {
+    "spec": {"const": "scitex-access/1"},
+    "exchange_id": {
+      "type": "string",
+      "pattern": "^xch_[0-9]{8}T[0-9]{6}Z_[A-Za-z0-9][A-Za-z0-9._-]*_[0-9a-f]{6}$"
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "role", "required_role"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "allowed",
+            "denied",
+            "denied-because-not-signed-in",
+            "denied-because-not-entitled",
+            "unresolved"
+          ]
+        },
+        "role": {"enum": ["read", "write", "admin", null]},
+        "required_role": {"enum": ["read", "write", "admin", null]}
+      }
+    },
+    "reason": {
+      "enum": [
+        "owner",
+        "grant",
+        "inherited",
+        "org",
+        "implied",
+        "public",
+        "not-visible",
+        "role-too-low",
+        "agent-ceiling",
+        "owner-has-no-role",
+        "token-scope",
+        "not-signed-in",
+        "not-entitled",
+        "enforcer-unreachable",
+        "identity-unresolved",
+        "kind-unregistered"
+      ]
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "ok", "detail", "hint"],
+      "properties": {
+        "name": {"const": "access"},
+        "ok": {"type": ["boolean", "null"]},
+        "detail": {"type": "string", "minLength": 1},
+        "hint": {"type": ["string", "null"]},
+        "cause": {"type": "object"}
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["principal", "action", "resource"],
+      "properties": {
+        "principal": {"type": "string"},
+        "action": {"type": "string"},
+        "resource": {"type": "string"}
+      }
+    }
+  }
+}

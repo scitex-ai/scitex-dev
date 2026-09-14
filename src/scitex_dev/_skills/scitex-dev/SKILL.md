@@ -54,6 +54,7 @@ interfaces:
 - [26_state-store-contract.md](26_state-store-contract.md) — the 55432 per-host Postgres contract: what makes a valid store (incl. protective timeouts), ACL, tombstone-and-explicit-per-column-merge sync, and state-in-db / design-in-git
 - [27_cross-host-identity.md](27_cross-host-identity.md) — what makes a row on host A the SAME row as one on host B: derive-or-allocate, the branch where no intrinsic attribute exists, why an allocated id is not a cardinality guarantee (lease + fence), and detector-vs-constraint
 - [28_identity-worked-examples.md](28_identity-worked-examples.md) — leaves that actually executed the contract, and what it did NOT predict; the ask-don't-grep / structural-before-code method, capability probes over version checks
+- [29_access-primitive.md](29_access-primitive.md) — `scitex_dev.access`: `check()` / `accessible()`, roles read<write<admin, the agent ceiling, the scitex-access/1 decision record (exit 0/10/11), kind registration, `<pkg> dev access`
 
 ### Architecture (30–39)
 - [30_agentic-test-overview.md](30_agentic-test-overview.md) — Four-layer testing model + shared newbie-docker substrate

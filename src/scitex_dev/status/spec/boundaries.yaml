@@ -168,4 +168,21 @@ boundaries:
       are different problems. Any status that folds them has discarded the
       answer.
 
+  - boundary: "scitex_dev.access: in-process check() / accessible()"
+    package: scitex-dev
+    borrows: grpc
+    why: >-
+      A function call, not a route, that still needs rich words:
+      PERMISSION_DENIED (denied), UNAUTHENTICATED (not signed in), UNAVAILABLE
+      and DEADLINE_EXCEEDED (unresolved). The AccessDecision record carries the
+      closed reason list from access/spec/reasons.yaml (ADR-0014).
+
+  - boundary: "<pkg> dev access check"
+    package: scitex-dev
+    borrows: process
+    why: >-
+      Exit 0 allowed, 10 denied / not signed in / not entitled, 11 unresolved,
+      the ci precedent. Never 1 or 2, which Click uses for a missing verb or a
+      bad option.
+
 # EOF
