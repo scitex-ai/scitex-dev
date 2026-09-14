@@ -35,6 +35,7 @@ from __future__ import annotations
 import click
 
 from ..._ecosystem.help_spec import CliHelp, Example, SpecGroup
+from ...access.cli import register_access_group
 from ...secret.cli import register_secret_group
 
 #: scitex-dev's own store. A leaf passes its own short name instead.
@@ -67,6 +68,7 @@ def register_dev_commands(main_group) -> click.Group:
             click.echo(ctx.get_help())
 
     register_secret_group(dev, pkg=_DEFAULT_PKG)
+    register_access_group(dev)
     return dev
 
 

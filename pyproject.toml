@@ -135,6 +135,9 @@ dev = [
     # Re-listed here so the dev venv resolves the lazy-import test path
     # (PS-210 dev-extras-completeness).
     "Pillow>=9.2.0",
+    # The access tests validate the scitex-access/1 record against its JSON
+    # schema. Arrives transitively via fastmcp, declared so a clean venv agrees.
+    "jsonschema>=4.0",
     # NOTE: do NOT add `scitex-dev>=X.Y` here — it creates an unresolvable
     # circular dependency in CI (the local editable install resolves to
     # `0.1.dev1+g<sha>` via setuptools-scm, which fails `>=0.11.5`). The
@@ -287,6 +290,15 @@ scitex-dev = "scitex_dev._hook_rules:provide"
 #   scitex-agent-container = "scitex_agent_container._store_plugin:provide"
 #   scitex-cards           = "scitex_cards._store_plugin:provide"
 
+# Federated ACCESS resource kinds live under the entry-point group
+# `scitex_dev.access.kinds`. Each entry point loads to a callable returning
+# `list[scitex_dev.access.KindSpec]` (name, path prefix, action -> role);
+# `scitex_dev.access.discover_kinds()` aggregates them and refuses one name
+# registered twice with different rules. A kind nobody registers is decided
+# `unresolved/kind-unregistered` (fail closed). scitex-dev registers none;
+# leaves register like so (see ADR-0014):
+#   scitex-cards = "scitex_cards._access_kinds:provide"
+
 [project.urls]
 Homepage = "https://github.com/scitex-ai/scitex-dev"
 Repository = "https://github.com/scitex-ai/scitex-dev"
@@ -320,6 +332,9 @@ scitex_dev = [
     "status/spec/*.md",
     "status/spec/*.yaml",
     "status/spec/schema/*.json",
+    # The access decision table is derived from its spec, same rule as status.
+    "access/spec/*.yaml",
+    "access/spec/schema/*.json",
 ]
 
 [tool.hatch.build.targets.wheel.force-include]
