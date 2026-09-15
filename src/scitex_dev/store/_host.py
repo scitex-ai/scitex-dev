@@ -64,6 +64,8 @@ __all__ = [
     "DEFAULT_CENTRAL_HOST",
     "DEFAULT_PGDATA_DIR",
     "DEFAULT_SOCKET_DIR",
+    "LEGACY_PGDATA_DIR",
+    "resolve_pgdata_dir",
     "DEFAULT_TCP_PORT",
     "STORE_DSN_ENV",
     "require_durable_pgdata",
@@ -78,7 +80,26 @@ STORE_DSN_ENV: Final[str] = "SCITEX_STORE_DSN"
 
 #: Where the per-host instance keeps PGDATA. Bind-mounted OUTSIDE any
 #: container, so rebuilding the container destroys no data.
-DEFAULT_PGDATA_DIR: Final[Path] = Path("~/.scitex/pg")
+#:
+#: MOVED 2026-09-02 from `~/.scitex/pg` by operator ruling: `~/.scitex/<name>/`
+#: means "state of the package scitex-<name>", and there is no package called
+#: scitex-pg — so that path advertised a package that does not exist. The store
+#: is ecosystem infrastructure, so it belongs under the root package every leaf
+#: depends on. The directory is named for the ROLE (`store`) and not the engine
+#: (`pg`), which is the same vocabulary rule that retired SQLite from the
+#: fleet's names: an engine in a path is a promise that outlives the engine.
+DEFAULT_PGDATA_DIR: Final[Path] = Path("~/.scitex/dev/store")
+
+#: The pre-2026-09-02 location, still READ so a half-moved fleet resolves.
+#:
+#: This is a MIGRATION, not a rename (§3): an on-disk location every host
+#: resolves is a published contract, so the old spelling is aliased first and
+#: removed second. It has a stated END rather than living forever — it is
+#: retired once the convergence job asserts the location, because at that point
+#: a host still carrying the old directory is REPORTED rather than silently
+#: tolerated. Without that end date this would be the compatibility window with
+#: no closing date the constitution names.
+LEGACY_PGDATA_DIR: Final[Path] = Path("~/.scitex/pg")
 
 #: Where that instance puts its UNIX socket — a SUBDIRECTORY of PGDATA,
 #: matching the live `unix_socket_directories` setting.
@@ -90,6 +111,77 @@ DEFAULT_PGDATA_DIR: Final[Path] = Path("~/.scitex/pg")
 #: named `~/.scitex/pg` while the only socket on disk was
 #: `~/.scitex/pg/run/.s.PGSQL.55432`.
 DEFAULT_SOCKET_DIR: Final[Path] = DEFAULT_PGDATA_DIR / "run"
+
+
+def _holds_a_cluster(directory: Path) -> bool:
+    """Whether ``directory`` contains a PostgreSQL cluster, not merely exists.
+
+    THE DISTINCTION IS LOAD-BEARING and this function exists because the
+    obvious version was wrong. An earlier draft asked ``directory.exists()``,
+    which breaks the moment anything creates the new path before the data
+    moves -- a config writer, a `mkdir -p` in a job, or someone preparing a
+    rehearsal. The resolver would then choose an EMPTY new directory over the
+    LIVE legacy one, and every client would connect to a cluster nobody is
+    writing to: the precise failure the derived socket dir was shaped to
+    prevent, reintroduced one function away. (Caught by scitex-agent-container
+    in review, 2026-09-02.)
+
+    ``PG_VERSION`` is the marker because PostgreSQL itself writes it into
+    PGDATA and refuses to start without it -- so it answers "is there a
+    cluster here" rather than "did someone make this folder".
+
+    IT IS LOOKED FOR UNDER ``<dir>/<version>/main/``, NOT AT THE TOP.
+    ``DEFAULT_PGDATA_DIR`` is misnamed: it is the store ROOT, and the
+    cluster lives one layout level down. Measured on compute-04 --
+    ``~/.scitex/pg/PG_VERSION`` does not exist while
+    ``~/.scitex/pg/18/main/PG_VERSION`` does, and the replica units set
+    ``DATADIR=~/.scitex/pg/18/main``. A first draft of this checked the top
+    level, found nothing under EITHER path, and so always fell through to
+    the new location -- making the legacy fallback inert, which is the exact
+    defect the fallback exists to avoid.
+
+    The version segment is globbed rather than pinned to ``18`` so a major
+    upgrade does not silently make this answer "no cluster".
+    """
+    root = directory.expanduser()
+    return any(root.glob("*/main/PG_VERSION"))
+
+
+def resolve_pgdata_dir(
+    *, new: Path | None = None, legacy: Path | None = None
+) -> Path:
+    """The PGDATA directory this host actually has, new location preferred.
+
+    The fallback is WIRED, not merely declared. A constant naming the old
+    path that nothing reads would be the "present, correct and inert" defect
+    this codebase keeps finding elsewhere -- the migration would then depend
+    on every host having been moved before the release lands, which is the
+    coordination this alias exists to avoid.
+
+    Order, and it is deliberate:
+
+    1. the new location if it EXISTS -- so a moved host never looks back;
+    2. the legacy location if THAT exists -- a not-yet-moved host keeps
+       working, which is what makes the fleet move-able one machine at a
+       time rather than all at once;
+    3. the new location otherwise -- a fresh host with neither present is
+       created in the right place, so the old path cannot be reintroduced
+       by a new machine.
+
+    Note 3 is why this is not simply "prefer whichever exists": on a clean
+    host both branches are absent, and the tie must break toward the future.
+
+    ``new`` / ``legacy`` are injectable so a test can point at real
+    directories it built, rather than rewriting this module's constants.
+    A test that patches production internals is testing the patch.
+    """
+    new = DEFAULT_PGDATA_DIR if new is None else new
+    legacy = LEGACY_PGDATA_DIR if legacy is None else legacy
+    if _holds_a_cluster(new):
+        return new
+    if _holds_a_cluster(legacy):
+        return legacy
+    return new
 
 #: The port this instance listens on. NOT only a TCP concern, which is what
 #: the previous comment here claimed: libpq names the socket FILE
@@ -239,7 +331,9 @@ def require_durable_pgdata(pgdata_dir: "Path | str | None" = None) -> None:
     "unsafe", and blocking every host whose mount table is unreadable would
     make the guard the outage.
     """
-    directory = Path(pgdata_dir) if pgdata_dir is not None else DEFAULT_PGDATA_DIR
+    directory = (
+        Path(pgdata_dir) if pgdata_dir is not None else resolve_pgdata_dir()
+    )
     resolved = directory.expanduser()
     fstype = _fstype_of(resolved)
     if fstype is None or fstype not in _EPHEMERAL_FSTYPES:
