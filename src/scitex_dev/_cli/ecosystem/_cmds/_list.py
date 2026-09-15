@@ -206,9 +206,18 @@ def register(ecosystem):
             wrap_as_cli(list_versions, as_json=as_json, packages=pkgs)
         elif as_json:
             items = [
+                # Emit the WHOLE registry record, not a hand-picked pair.
+                # ``name`` and ``github_repo`` keep their old positions and
+                # defaults, so existing consumers are unaffected; every other
+                # field the table carries (local_path, pypi_name, import_name,
+                # category, and anything added later) now travels with it.
+                # The two-field projection was actively misleading: --category
+                # already FILTERS on a field the JSON never showed, so a reader
+                # could not see what they were filtering on.
                 {
                     "name": pkg,
-                    "github_repo": ECOSYSTEM.get(pkg, {}).get("github_repo", ""),
+                    "github_repo": "",
+                    **ECOSYSTEM.get(pkg, {}),
                 }
                 for pkg in pkgs
             ]
