@@ -408,6 +408,17 @@ from .._check_naming_vocabulary import (  # noqa: E402
 for _c, _sec, _msg, _sev, _slug in _NAMING_VOCABULARY_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
+# PS-233 -- imported runtime distributions must be declared in the dependency
+# bucket dictated by their guard shape. Severity E: the reference incident
+# passed tests and failed only after a fresh installation reached the default
+# psutil-backed runtime path.
+from .._check_runtime_dependencies import (  # noqa: E402
+    RUNTIME_DEPENDENCY_RULES as _RUNTIME_DEPENDENCY_RULES,
+)
+
+for _c, _sec, _msg, _sev, _slug in _RUNTIME_DEPENDENCY_RULES:
+    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
 # hook-bypass: line-limit
 # PS-HOOK-010..012 — agent guardrails must be DECLARED through the
 # `scitex_dev.hooks` federation, not left implicit in shell (co-located rule
