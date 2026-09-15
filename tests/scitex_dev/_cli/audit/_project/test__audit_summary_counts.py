@@ -234,31 +234,29 @@ def test_warning_findings_report_both_counts_in_the_banner(warning_lines):
     # Arrange
     # Act
     # Assert
-    assert "0 error(s), 1 warning(s)" in _messages(warning_lines)
+    assert "1 error(s), 0 warning(s)" in _messages(warning_lines)
 
 
-def test_warning_findings_log_their_headline_at_warn_level(warning_lines):
+def test_default_findings_log_their_headline_at_error_level(warning_lines):
     # Arrange — a summary downgraded to info would be invisible in real use
     # Act
-    levels = [lvl for lvl, msg in warning_lines if "0 error(s), 1 warning(s)" in msg]
+    levels = [lvl for lvl, msg in warning_lines if "1 error(s), 0 warning(s)" in msg]
     # Assert
-    assert levels == ["WARN"]
+    assert levels == ["ERRO"]
 
 
-def test_below_floor_findings_name_how_to_list_them(warning_lines):
-    # Arrange — a count with no route to the detail would be a half-fix
+def test_default_error_finding_is_listed(warning_lines):
     # Act
     # Assert
-    assert "--severity warning" in _messages(warning_lines)
+    assert "PS-220" in _messages(warning_lines)
 
 
-def test_warning_findings_still_exit_zero(tmp_path):
-    # Arrange — the invariant the fix must NOT disturb: W never blocks
+def test_default_findings_exit_nonzero(tmp_path):
     _build(tmp_path, _SOURCE_WITH_BARE_PRINT)
     # Act
     code = _audit(tmp_path)
     # Assert
-    assert code == 0
+    assert code == 1
 
 
 # --- errors: reported and blocking, exactly as before -----------------------
@@ -268,13 +266,13 @@ def test_error_findings_report_both_counts_in_the_banner(error_lines):
     # Arrange — identical source; the opt-in promotes PS-220 W -> E
     # Act
     # Assert
-    assert "1 error(s), 0 warning(s)" in _messages(error_lines)
+    assert "2 error(s), 0 warning(s)" in _messages(error_lines)
 
 
 def test_error_findings_log_their_headline_at_erro_level(error_lines):
     # Arrange
     # Act
-    levels = [lvl for lvl, msg in error_lines if "1 error(s), 0 warning(s)" in msg]
+    levels = [lvl for lvl, msg in error_lines if "2 error(s), 0 warning(s)" in msg]
     # Assert
     assert levels == ["ERRO"]
 
@@ -298,25 +296,25 @@ def test_error_findings_exit_nonzero(tmp_path):
 # --- --json carries BOTH counts ---------------------------------------------
 
 
-def test_json_reports_the_warning_count_for_a_warning_only_tree(warning_payload):
+def test_json_reports_no_warnings_for_default_error_tree(warning_payload):
     # Arrange — a consumer reading only `errors` inherits the same blind spot
     # Act
     # Assert
-    assert warning_payload["warnings"] == 1
+    assert warning_payload["warnings"] == 0
 
 
-def test_json_reports_no_errors_for_a_warning_only_tree(warning_payload):
+def test_json_reports_one_error_for_default_tree(warning_payload):
     # Arrange
     # Act
     # Assert
-    assert warning_payload["errors"] == 0
+    assert warning_payload["errors"] == 1
 
 
-def test_json_exit_code_is_zero_for_a_warning_only_tree(warning_payload):
+def test_json_exit_code_is_one_for_default_tree(warning_payload):
     # Arrange
     # Act
     # Assert
-    assert warning_payload["exit_code"] == 0
+    assert warning_payload["exit_code"] == 1
 
 
 def test_json_reports_zero_warnings_for_a_clean_tree(clean_payload):
@@ -330,7 +328,7 @@ def test_json_reports_the_error_count_for_an_opted_in_package(error_payload):
     # Arrange
     # Act
     # Assert
-    assert error_payload["errors"] == 1
+    assert error_payload["errors"] == 2
 
 
 def test_json_exit_code_is_one_for_an_opted_in_package(error_payload):
@@ -343,7 +341,7 @@ def test_json_exit_code_is_one_for_an_opted_in_package(error_payload):
 # --- the mutation the old summary could not see -----------------------------
 
 
-def _warning_counts_before_and_after_planting_a_print(tmp_path, capfd):
+def _error_counts_before_and_after_planting_a_print(tmp_path, capfd):
     """Audit the SAME tree twice, mutating only the one source line."""
     _build(tmp_path, _CLEAN_SOURCE)
     _audit(tmp_path, json_out=True)
@@ -351,22 +349,22 @@ def _warning_counts_before_and_after_planting_a_print(tmp_path, capfd):
     _build(tmp_path, _SOURCE_WITH_BARE_PRINT)
     _audit(tmp_path, json_out=True)
     after = _payload(capfd.readouterr().out)
-    return before["warnings"], after["warnings"]
+    return before["errors"], after["errors"]
 
 
 def test_a_tree_without_a_bare_print_reports_no_warnings(tmp_path, capfd):
     # Arrange — the control arm of the mutation proof
-    counts = _warning_counts_before_and_after_planting_a_print
+    counts = _error_counts_before_and_after_planting_a_print
     # Act
     before, _after = counts(tmp_path, capfd)
     # Assert
     assert before == 0
 
 
-def test_planting_a_bare_print_increments_the_reported_warning_count(tmp_path, capfd):
+def test_planting_a_bare_print_increments_the_reported_error_count(tmp_path, capfd):
     # Arrange — pre-fix BOTH runs emitted the identical success banner,
     # which is why a CLI-driven mutation proof of a W rule could not fail.
-    counts = _warning_counts_before_and_after_planting_a_print
+    counts = _error_counts_before_and_after_planting_a_print
     # Act
     _before, after = counts(tmp_path, capfd)
     # Assert

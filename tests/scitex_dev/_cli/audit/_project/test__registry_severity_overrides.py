@@ -58,9 +58,9 @@ _LATE_RULE = "PS-220"
 
 # The severity injected by the behavioural test. It MUST differ from the
 # rule's own registered severity, or the test is a tautology that passes even
-# under the broken ordering. PS-220 is registered at "W" (its staged-rollout
-# default), so the injection promotes it to "E".
-_INJECTED_SEVERITY = "E"
+# under the broken ordering. PS-220 is registered at mandatory error tier, so
+# inject warning solely to exercise registry assembly ordering.
+_INJECTED_SEVERITY = "W"
 
 
 # --- structural: the apply must come after every merge ----------------------

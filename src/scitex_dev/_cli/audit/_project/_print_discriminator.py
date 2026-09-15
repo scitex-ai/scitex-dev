@@ -61,8 +61,10 @@ SERIALIZER_ATTRS = frozenset(
     }
 )
 
-# Destination classifications.
-STDOUT, STDERR, UNKNOWN = "stdout", "stderr", "unknown"
+# Destination classifications. ``INJECTED`` means a required function
+# parameter is passed directly as ``file=``: the caller, rather than library
+# code, owns that rendering stream.
+STDOUT, STDERR, INJECTED, UNKNOWN = "stdout", "stderr", "injected", "unknown"
 
 
 def _is_sys_stream(node: ast.AST) -> str | None:
@@ -101,6 +103,47 @@ def _enclosing_assignments(tree: ast.AST, target: ast.AST) -> list[ast.Assign]:
             best, best_span = node, span
     scope = best if best is not None else tree
     return [n for n in ast.walk(scope) if isinstance(n, ast.Assign)]
+
+
+def _enclosing_function(
+    tree: ast.AST, target: ast.AST
+) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    """Return the smallest function containing ``target`` (if any)."""
+    tline = getattr(target, "lineno", None)
+    if tline is None:
+        return None
+    candidates = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        start = getattr(node, "lineno", None)
+        end = getattr(node, "end_lineno", None)
+        if start is not None and end is not None and start <= tline <= end:
+            candidates.append(node)
+    if not candidates:
+        return None
+    return min(candidates, key=lambda node: node.end_lineno - node.lineno)
+
+
+def _required_parameters(function: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """Return parameters for which the caller must supply a value."""
+    positional = [*function.args.posonlyargs, *function.args.args]
+    optional_count = len(function.args.defaults)
+    required = positional[: len(positional) - optional_count]
+    required.extend(
+        arg
+        for arg, default in zip(function.args.kwonlyargs, function.args.kw_defaults)
+        if default is None
+    )
+    return {arg.arg for arg in required if arg.arg not in {"self", "cls"}}
+
+
+def _is_injected_stream(tree: ast.AST, call: ast.Call, node: ast.AST) -> bool:
+    """Whether ``node`` is a required, caller-owned stream parameter."""
+    if not isinstance(node, ast.Name):
+        return False
+    function = _enclosing_function(tree, call)
+    return function is not None and node.id in _required_parameters(function)
 
 
 def _assignments_to(tree: ast.AST, call: ast.Call, name: str) -> list[ast.expr]:
@@ -147,6 +190,8 @@ def destination(tree: ast.AST, call: ast.Call) -> str:
         if stream is not None:
             return stream
         if isinstance(kw.value, ast.Name):
+            if _is_injected_stream(tree, call, kw.value):
+                return INJECTED
             return _resolve_name_stream(tree, call, kw.value.id)
         if isinstance(kw.value, ast.Constant) and kw.value.value is None:
             return STDOUT  # `file=None` is stdout, per builtins
@@ -181,9 +226,9 @@ def is_serializer_call(node: ast.AST) -> bool:
 def payload_is_machine_readable(tree: ast.AST, call: ast.Call) -> bool:
     """True iff the sole positional arg is a rendered, machine-readable payload.
 
-    A serializer call qualifies directly. A bare variable qualifies UNLESS the
-    enclosing scope assigns prose to it — that closes the obvious hole where
-    `msg = f"..."` followed by `print(msg)` would launder prose past the check.
+    A serializer call qualifies directly. A variable qualifies only when its
+    nearest assignment is itself a serializer call. Merely naming an unknown
+    value ``payload`` is not proof that it is deterministic data transport.
     """
     if len(call.args) != 1 or any(isinstance(a, ast.Starred) for a in call.args):
         return False
@@ -191,10 +236,31 @@ def payload_is_machine_readable(tree: ast.AST, call: ast.Call) -> bool:
     if is_serializer_call(arg):
         return True
     if isinstance(arg, ast.Name):
-        return not any(
-            is_prose(value) for value in _assignments_to(tree, call, arg.id)
-        )
+        assigned = _assignments_to(tree, call, arg.id)
+        return len(assigned) == 1 and is_serializer_call(assigned[0])
     return False
+
+
+_CONTENT_FUNCTION_PREFIXES = ("emit_", "print_", "render_", "show_", "write_")
+_CONTENT_PARAMETER_NAMES = frozenset({"content", "document", "text"})
+
+
+def payload_is_explicitly_requested(tree: ast.AST, call: ast.Call) -> bool:
+    """Recognize the narrow ``render_content(content)`` transport contract.
+
+    This is deliberately not a generic "one argument was printed" escape.
+    The enclosing API must explicitly be an output operation and print its
+    caller-supplied content parameter verbatim.
+    """
+    if len(call.args) != 1 or call.keywords:
+        return False
+    arg = call.args[0]
+    if not isinstance(arg, ast.Name) or arg.id not in _CONTENT_PARAMETER_NAMES:
+        return False
+    function = _enclosing_function(tree, call)
+    if function is None or not function.name.startswith(_CONTENT_FUNCTION_PREFIXES):
+        return False
+    return arg.id in _required_parameters(function)
 
 
 def should_flag(tree: ast.AST, call: ast.Call) -> tuple[bool, str]:
@@ -211,7 +277,11 @@ def should_flag(tree: ast.AST, call: ast.Call) -> tuple[bool, str]:
             "stdout or stderr), so it cannot be shown to be machine-readable "
             "stdout"
         )
+    if dest == INJECTED:
+        return False, ""
     if payload_is_machine_readable(tree, call):
+        return False, ""
+    if payload_is_explicitly_requested(tree, call):
         return False, ""
     if len(call.args) == 1 and is_prose(call.args[0]):
         return True, (
@@ -230,6 +300,7 @@ def should_flag(tree: ast.AST, call: ast.Call) -> tuple[bool, str]:
 
 __all__ = [
     "SERIALIZER_ATTRS",
+    "INJECTED",
     "STDOUT",
     "STDERR",
     "UNKNOWN",
@@ -237,6 +308,7 @@ __all__ = [
     "is_prose",
     "is_serializer_call",
     "payload_is_machine_readable",
+    "payload_is_explicitly_requested",
     "should_flag",
 ]
 

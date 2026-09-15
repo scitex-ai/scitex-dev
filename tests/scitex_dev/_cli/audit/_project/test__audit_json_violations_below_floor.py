@@ -71,21 +71,17 @@ def _payload(captured: str) -> dict:
 
 
 def _audit_json(repo: Path, capfd, *, severity: str) -> dict:
-    audit_project(
-        _DIST, repo=repo, json_out=True, rules={"PS-220"}, severity=severity
-    )
+    audit_project(_DIST, repo=repo, json_out=True, rules={"PS-220"}, severity=severity)
     return _payload(capfd.readouterr().out)
 
 
 # --- premise guard ----------------------------------------------------------
 
 
-def test_ps220_default_severity_is_w():
-    # Arrange — the whole defect rests on PS-220 being a W rule that sits
-    # below the default `error` floor; fail loudly if that ever changes.
+def test_ps220_default_severity_is_error():
     # Act
     # Assert
-    assert _check_no_print._DEFAULT_SEVERITY == "W"
+    assert _check_no_print._DEFAULT_SEVERITY == "E"
 
 
 # --- the defect: below-floor findings must not be silently omitted ----------
@@ -116,12 +112,10 @@ def test_default_floor_total_list_carries_the_severity(tmp_path, capfd):
     # Act
     payload = _audit_json(repo, capfd, severity="error")
     # Assert
-    assert payload["violations_total"][0]["severity"] == "W"
+    assert payload["violations_total"][0]["severity"] == "E"
 
 
-def test_default_floor_total_list_is_consistent_with_the_warning_count(
-    tmp_path, capfd
-):
+def test_default_floor_total_list_is_consistent_with_the_warning_count(tmp_path, capfd):
     # Arrange — the invariant that ties the new list to #417's counts
     repo = _build(tmp_path)
     # Act
@@ -134,15 +128,12 @@ def test_default_floor_total_list_is_consistent_with_the_warning_count(
 # --- control arm: the floor still means something ---------------------------
 
 
-def test_default_floor_json_violations_list_respects_the_floor(tmp_path, capfd):
-    # Arrange — CONTROL ARM. Without this, "always emit everything" passes
-    # the disclosure test above while silently destroying `--severity`.
+def test_default_floor_json_lists_the_error(tmp_path, capfd):
     repo = _build(tmp_path)
     # Act
     payload = _audit_json(repo, capfd, severity="error")
-    # Assert — a W finding is BELOW the default `error` floor, so the
-    # floor-filtered list is empty; only `violations_total` carries it.
-    assert payload["violations"] == []
+    # Assert — PS-220 is now an error-tier rule and therefore visible.
+    assert [v["rule"] for v in payload["violations"]] == ["PS-220"]
 
 
 def test_warning_floor_json_lists_the_warning_finding(tmp_path, capfd):
@@ -158,14 +149,13 @@ def test_warning_floor_json_lists_the_warning_finding(tmp_path, capfd):
 # --- exit code is identical across floors -----------------------------------
 
 
-def test_exit_code_is_zero_and_identical_across_floors(tmp_path, capfd):
-    # Arrange — W never blocks; the floor changes what is LISTED, not the code
+def test_exit_code_is_one_and_identical_across_floors(tmp_path, capfd):
     repo = _build(tmp_path)
     # Act
     default_payload = _audit_json(repo, capfd, severity="error")
     warning_payload = _audit_json(repo, capfd, severity="warning")
     # Assert
-    assert default_payload["exit_code"] == warning_payload["exit_code"] == 0
+    assert default_payload["exit_code"] == warning_payload["exit_code"] == 1
 
 
 # EOF

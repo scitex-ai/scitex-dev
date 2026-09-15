@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""PS-220's STAGED gate: warning by default, error once a package opts in.
+"""PS-220 is an unconditional error-tier gate.
 
 `audit_project` computes `exit_code = 1 if n_errors > 0 else 0`, counting
 only "E" findings. PS-220 is now registered at "W", so it must NOT fail a
@@ -33,7 +33,9 @@ _OPT_IN = (
 )
 
 
-def _build(repo: Path, body: str, config_yaml: str = "project-type:\n  - pip\n") -> Path:
+def _build(
+    repo: Path, body: str, config_yaml: str = "project-type:\n  - pip\n"
+) -> Path:
     """Create a minimal src-layout package whose `_core.py` holds `body`."""
     pkg = repo / "src" / "scitex_ps220_demo"
     pkg.mkdir(parents=True, exist_ok=True)
@@ -56,12 +58,12 @@ def _audit(repo: Path) -> int:
 # --- the registered severity ------------------------------------------------
 
 
-def test_ps220_is_registered_at_warning_severity():
+def test_ps220_is_registered_at_error_severity():
     # Arrange
     # Act
     severity = RULES["PS-220"].severity
     # Assert
-    assert severity == "W"
+    assert severity == "E"
 
 
 def test_ps220_noqa_deprecated_rule_is_no_longer_registered():
@@ -75,13 +77,13 @@ def test_ps220_noqa_deprecated_rule_is_no_longer_registered():
 # --- staged default: a print does NOT fail the build -------------------------
 
 
-def test_print_in_package_source_does_not_fail_a_non_opted_in_package(tmp_path):
+def test_print_in_package_source_fails_without_an_opt_in(tmp_path):
     # Arrange — one bare print of human prose in shippable source
     _build(tmp_path, "def go():\n    print('hello')\n")
     # Act
     code = _audit(tmp_path)
     # Assert
-    assert code == 0
+    assert code == 1
 
 
 # --- opted-in package: the same print DOES fail the build --------------------
@@ -159,7 +161,7 @@ def test_machine_readable_stdout_payload_exits_zero(tmp_path):
     assert code == 0
 
 
-def test_exempted_site_with_a_reason_exits_zero_when_opted_in(tmp_path):
+def test_exempted_site_with_a_reason_still_fails(tmp_path):
     # Arrange — an opted-in package whose one site carries a written exemption
     _build(
         tmp_path,
@@ -181,7 +183,7 @@ def test_exempted_site_with_a_reason_exits_zero_when_opted_in(tmp_path):
     # Act
     code = _audit(tmp_path)
     # Assert
-    assert code == 0
+    assert code == 1
 
 
 def test_blank_reason_exemption_fails_the_build_even_without_opt_in(tmp_path):
@@ -207,7 +209,7 @@ def test_blank_reason_exemption_fails_the_build_even_without_opt_in(tmp_path):
     assert code == 1
 
 
-def test_research_hybrid_project_does_not_fail_the_build(tmp_path):
+def test_research_hybrid_project_still_fails_the_build(tmp_path):
     # Arrange
     _build(
         tmp_path,
@@ -217,7 +219,7 @@ def test_research_hybrid_project_does_not_fail_the_build(tmp_path):
     # Act
     code = _audit(tmp_path)
     # Assert
-    assert code == 0
+    assert code == 1
 
 
 def test_research_hybrid_with_a_reasoned_opt_in_fails_the_build(tmp_path):
