@@ -58,6 +58,7 @@ APPTAINER_VAR="${SCITEX_CI_APPTAINER:-}"
 APPTAINER_VAR="${APPTAINER_VAR/#\~/$HOME}"
 SIF="${SCITEX_CI_SIF:?SCITEX_CI_SIF not set (repo Actions Variable)}"
 SIF="${SIF/#\~/$HOME}"
+SIF_SHA256="${SCITEX_CI_SIF_SHA256:?SCITEX_CI_SIF_SHA256 not set (repo Actions Variable)}"
 
 # Apptainer resolution, in order:
 #   1. SCITEX_CI_APPTAINER when it names an executable  (Spartan's shim)
@@ -78,6 +79,12 @@ fi
     echo "::error::CI SIF missing at $SIF — rebuild it: scitex-container apptainer build ci-cpu"
     exit 1
 }
+
+ACTUAL_SIF_SHA256="$(sha256sum "$SIF" | awk '{print $1}')"
+if [ "$ACTUAL_SIF_SHA256" != "$SIF_SHA256" ]; then
+    echo "::error::CI SIF digest mismatch at $SIF: expected $SIF_SHA256, got $ACTUAL_SIF_SHA256. Synchronize the versioned image before accepting jobs; running an unverified image is forbidden."
+    exit 1
+fi
 
 # Apptainer scratch. On Spartan the GPFS project scratch (shared FS) keeps HOME
 # clean; everywhere else that path does not exist, and `mkdir -p` under it would
@@ -104,6 +111,7 @@ fi
 # question is which of the two profiles it took.
 echo "exec-in-sif: apptainer=$APPTAINER (via $APPTAINER_FROM)"
 echo "exec-in-sif: sif=$SIF"
+echo "exec-in-sif: sif_sha256=$ACTUAL_SIF_SHA256 (verified)"
 echo "exec-in-sif: $GPFS_PROJECT $GPFS_STATE"
 echo "exec-in-sif: APPTAINER_TMPDIR=$APPTAINER_TMPDIR"
 echo "exec-in-sif: + $APPTAINER ${APPTAINER_ARGV[*]} $SIF bash .github/ci/$INNER $*"
