@@ -74,10 +74,16 @@ New server connections may be created as needed. `WAIT_CLOSE` provides a bounded
 observable completion point for the retirement rather than treating command
 acceptance as proof that the old backend disappeared.
 
+Both commands and the `close_needed` observation field were added in PgBouncer
+1.9. Check `SHOW VERSION` first; on an older deployment, stop rather than
+improvising another disconnect command. See the official
+[process-control command reference](https://www.pgbouncer.org/usage#process-controlling-commands).
+
 ```
 # pgbouncer admin console: find its port (default 6432) and admin user (pgbouncer)
 # from the compose file's [pgbouncer] section.
 $ psql "host=127.0.0.1 port=<admin_port> user=pgbouncer dbname=pgbouncer" -w
+  SHOW VERSION;                 -- must be PgBouncer 1.9 or newer
   SHOW SERVERS;                 -- record database/user/remote_pid and state first
   RECONNECT <pgbouncer_db>;     -- retire connections after release
   WAIT_CLOSE <pgbouncer_db>;    -- wait until close_needed is clear
