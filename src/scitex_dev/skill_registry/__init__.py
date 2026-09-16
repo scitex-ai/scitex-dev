@@ -16,6 +16,7 @@ from ._projection import (
     build_projection_manifest,
     projection_manifest_json,
 )
+from ._write import write_projection_manifest
 
 __all__ = [
     "MANIFEST_NAME",
@@ -30,4 +31,5 @@ __all__ = [
     "discover_skills",
     "hash_skill_tree",
     "projection_manifest_json",
+    "write_projection_manifest",
 ]

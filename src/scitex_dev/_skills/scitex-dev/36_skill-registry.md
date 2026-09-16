@@ -30,7 +30,9 @@ must be a directory and contain a regular `SKILL.md`. Duplicate names remain
 findings instead of being resolved by arbitrary traversal order.
 
 Each generated projection carries `.scitex-skills.json` with
-`schema_version`, an aggregate `projection_sha256`, and per-source hashes.
+`schema_version`, an aggregate `projection_sha256`, and per-source and
+materialized-projection hashes. Separate hashes allow deterministic copied
+exports to add version frontmatter without concealing later source drift.
 `audit_projection` accepts symlinks or byte-identical copies and reports five
 finding classes: `missing`, `broken`, `duplicate`, `obsolete`, and `stale`.
 A malformed claimed manifest raises `ProjectionManifestError`.
@@ -42,7 +44,9 @@ minimal materialization format. They consume `SkillRecord` / `RegistryReport`
 or `to_dict()` and must validate after generation. Harness-specific discovery
 syntax does not enter the registry domain.
 
-The existing `skills install` command also rejects any output destination
+The `skills install` command atomically writes the manifest, audits the neutral
+store, and audits the optional top-level Claude symlink before reporting
+success. It also rejects any output destination
 whose resolved path lies inside a Git checkout. This includes a seemingly
 user-local `~/.scitex` symlink that resolves into tracked dotfiles. A generated
 cache must not dirty its authority checkout.

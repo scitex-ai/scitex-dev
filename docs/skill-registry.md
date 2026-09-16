@@ -20,17 +20,25 @@ audit = audit_projection(registry, Path("/configured/codex/skills/scitex"))
 ```
 
 Adapters own only destination selection and materialization. They must retain
-the registry names, create either symlinks or byte-identical copied trees, and
-write `.scitex-skills.json` from `projection_manifest_json`. The manifest has a
-`schema_version`, aggregate `projection_sha256`, and each source-tree hash.
-They must validate
-with `audit_projection` after generation. They must not search a home directory
+the registry names, create symlinks or deterministic copies, and write
+`.scitex-skills.json` from `projection_manifest_json`. Schema v2 carries both
+the canonical `source_hash` and materialized `projection_hash` because copied
+exports may add version frontmatter. Its aggregate `projection_sha256` covers
+both. Adapters must validate with `audit_projection` after generation. They
+must not search a home directory
 or fall back to another harness's cache when a configured source is absent.
 The existing installer resolves its default neutral store through
 `scitex_config._ecosystem.local_state.user_path("dev", "skills")` and rejects
 any destination whose real path is inside a Git checkout. This guard includes
 paths reached through a symlink such as `~/.scitex`; generated state must never
 dirty an authority checkout.
+
+`scitex-dev dev skills install` performs this finalization itself: it writes
+the manifest with an atomic replace, audits the neutral destination, then (if
+requested) installs and audits the top-level
+`~/.claude/skills/scitex -> <neutral-store>` symlink. JSON success contains
+`schema_version`, `projection_sha256`, `manifest`, and an empty `findings`
+array. Any finding makes the command fail.
 
 `RegistryReport.to_dict()` is the stable data boundary for CLI/MCP adapters.
 Findings have a `kind` of `missing`, `broken`, `duplicate`, `obsolete`, or

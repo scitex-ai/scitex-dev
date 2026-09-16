@@ -2,9 +2,13 @@
 # -*- coding: utf-8 -*-
 """`scitex-dev skills install` (+ hidden deprecated `export` / `collect`)."""
 
+import json
+
 import click
+import scitex_logging as slogging
 
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ....skill_registry import MANIFEST_NAME, SCHEMA, audit_projection
 from ._helpers import (
     _default_skills_destination,
     _ensure_symlink,
@@ -13,6 +17,14 @@ from ._helpers import (
     _require_external_destination,
     _require_symlink_slot,
 )
+from ._projection_finalize import (
+    finalize_projection,
+    install_result_dict,
+    registry_from_listing,
+    registry_from_projection,
+)
+
+_logger = slogging.getLogger(__name__)
 
 
 def register(skills):
@@ -89,7 +101,6 @@ def register(skills):
         dest, package, source, clean, link, claude_symlink, dry_run, as_json, yes
     ):
         del yes  # accepted for §2 compliance; install honours --dry-run for preview
-        import json as json_mod
         from pathlib import Path
 
         from ...._ecosystem._skills.skills import export_skills, list_skills
@@ -108,9 +119,23 @@ def register(skills):
             }
             if as_json:
                 click.echo(
-                    json_mod.dumps(
-                        {"dest": str(target), "source": source, "packages": result},
+                    json.dumps(
+                        {
+                            "schema_version": SCHEMA,
+                            "projection_sha256": None,
+                            "manifest": str(target / MANIFEST_NAME),
+                            "destination": str(target),
+                            "claude_projection": (
+                                str(claude_link) if claude_symlink else None
+                            ),
+                            "packages": result,
+                            "findings": [],
+                            "ok": True,
+                            "dry_run": True,
+                            "source": source,
+                        },
                         indent=2,
+                        sort_keys=True,
                     )
                 )
             else:
@@ -126,16 +151,48 @@ def register(skills):
             return
 
         target.mkdir(parents=True, exist_ok=True)
+        listed = list_skills(package=package) if source == "installed" else None
         exported = export_skills(
             target, package=package, clean=clean, source=source, link=link
         )
+        registry = (
+            registry_from_listing(listed)
+            if listed is not None
+            else registry_from_projection(exported, target)
+        )
+        finalized = finalize_projection(registry, target, adapter="scitex-dev")
+        extra_findings = ()
 
-        if claude_symlink:
+        if claude_symlink and finalized.audit.ok:
             claude_link.parent.mkdir(parents=True, exist_ok=True)
             _ensure_symlink(claude_link, target)
             _report_symlink(claude_link, target)
+            extra_findings = audit_projection(registry, claude_link).issues
 
-        _print_export_result(exported, target, as_json)
+        result = install_result_dict(
+            finalized,
+            exported,
+            target,
+            claude_projection=claude_link if claude_symlink else None,
+            additional_findings=extra_findings,
+        )
+        if as_json:
+            click.echo(json.dumps(result, indent=2, sort_keys=True))
+        elif result["ok"]:
+            _print_export_result(exported, target)
+        if not result["ok"]:
+            for finding in result["findings"]:
+                _logger.error(
+                    "%s %s %s: %s",
+                    finding["code"],
+                    finding["kind"],
+                    finding["path"],
+                    finding["message"],
+                )
+            raise click.ClickException(
+                f"skill projection validation failed with "
+                f"{len(result['findings'])} finding(s)"
+            )
 
     # ----- Deprecated `export` — same behaviour, default destination differs -----
     @skills.command("export", hidden=True)
@@ -168,7 +225,10 @@ def register(skills):
         import json as json_mod
         from pathlib import Path
 
-        from ...._ecosystem._skills.skills import _get_default_export_dest, export_skills
+        from ...._ecosystem._skills.skills import (
+            _get_default_export_dest,
+            export_skills,
+        )
 
         target = Path(dest) if dest else _get_default_export_dest()
         _require_external_destination(target)
