@@ -188,6 +188,7 @@ def test_the_indexes_probe_is_scoped_to_the_current_schema():
 
 
 def test_schema_lock_is_transaction_scoped_for_pooled_postgres():
+    # Arrange
     class Transaction:
         def __init__(self, events):
             self.events = events
@@ -211,9 +212,11 @@ def test_schema_lock_is_transaction_scoped_for_pooled_postgres():
     connection = Connection()
     schema = type("SchemaStub", (), {"name": "messages"})()
 
+    # Act
     with PostgresDialect().schema_lock(connection, schema):
         connection.events.append("ddl")
 
+    # Assert
     assert connection.events == [
         "begin",
         (
