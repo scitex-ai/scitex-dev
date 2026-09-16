@@ -187,6 +187,48 @@ def test_the_indexes_probe_is_scoped_to_the_current_schema():
     assert "current_schema()" in sql
 
 
+def test_schema_lock_is_transaction_scoped_for_pooled_postgres():
+    # Arrange
+    class Transaction:
+        def __init__(self, events):
+            self.events = events
+
+        def __enter__(self):
+            self.events.append("begin")
+
+        def __exit__(self, *_):
+            self.events.append("end")
+
+    class Connection:
+        def __init__(self):
+            self.events = []
+
+        def transaction(self):
+            return Transaction(self.events)
+
+        def execute(self, sql, params):
+            self.events.append((sql, params))
+
+    connection = Connection()
+    schema = type("SchemaStub", (), {"name": "messages"})()
+
+    # Act
+    with PostgresDialect().schema_lock(connection, schema):
+        connection.events.append("ddl")
+
+    # Assert
+    assert connection.events == [
+        "begin",
+        (
+            "SELECT pg_advisory_xact_lock("
+            "hashtext(current_schema() || ':' || %s))",
+            ("messages_oplog",),
+        ),
+        "ddl",
+        "end",
+    ]
+
+
 @pytest.fixture
 def two_schemas():
     """A decoy schema and an empty target schema on a real cluster.
