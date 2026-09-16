@@ -36,6 +36,15 @@ _TYPES: Final[dict[FieldKind, str]] = {
     FieldKind.BLOB: "BYTEA",
 }
 
+_UDT_KINDS: Final[dict[str, FieldKind]] = {
+    "text": FieldKind.TEXT,
+    "int8": FieldKind.INTEGER,
+    "float8": FieldKind.REAL,
+    "bool": FieldKind.BOOL,
+    "jsonb": FieldKind.JSON,
+    "bytea": FieldKind.BLOB,
+}
+
 
 class PostgresDialect(Dialect):
     """Speaks Postgres. Stateless."""
@@ -119,6 +128,20 @@ class PostgresDialect(Dialect):
             "SELECT column_name FROM information_schema.columns "
             f"WHERE table_name = '{escaped}' AND table_schema = current_schema()"
         )
+
+    def column_definitions_sql(self, table: str) -> str:
+        """Physical column definitions in the active PostgreSQL schema."""
+        escaped = table.replace("'", "''")
+        return (
+            "SELECT column_name, udt_name, is_nullable "
+            "FROM information_schema.columns "
+            f"WHERE table_name = '{escaped}' AND table_schema = current_schema() "
+            "ORDER BY ordinal_position"
+        )
+
+    def physical_kind(self, definition: Any) -> "FieldKind | None":
+        """Classify PostgreSQL's stable underlying type name."""
+        return _UDT_KINDS.get(str(definition["udt_name"]))
 
     def indexes_sql(self, table: str) -> str:
         """Existing index names from ``pg_indexes``, in THIS schema.
@@ -340,18 +363,27 @@ class PostgresDialect(Dialect):
 
     @contextmanager
     def schema_lock(self, connection: Any, schema: Schema) -> Iterator[None]:
-        """A transaction-scoped advisory lock around one schema's DDL.
+        """A transaction advisory lock for this physical schema and store.
 
-        The transaction is required even though store connections otherwise
-        use autocommit.  A session advisory lock is unsafe through a
-        transaction-pooled PostgreSQL endpoint: acquisition and release can
-        execute on different server backends, stranding the lock in the pool.
-        ``hashtext`` folds the name to the int4 the lock API takes; two
-        schemas colliding on the hash merely serialise each other's DDL.
+        Transaction scope matters even on an autocommit connection. A client
+        interrupted after a session lock is acquired can leave the server
+        session alive until TCP keepalive notices; every constructor then
+        waits behind work that no longer exists. Psycopg's explicit
+        transaction makes PostgreSQL release this lock on success, failure or
+        disconnect and makes the additive DDL atomic with its post-observation.
+
+        ``current_schema()`` is part of the key. Test stores and tenant stores
+        deliberately use the same table names in separate PostgreSQL schemas;
+        they do not touch the same physical objects and must not block each
+        other. Hash collisions merely serialize two harmless migrations.
         """
         key = self.oplog_table(schema)
         with connection.transaction():
-            connection.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (key,))
+            connection.execute(
+                "SELECT pg_advisory_xact_lock("
+                "hashtext(current_schema() || ':' || %s))",
+                (key,),
+            )
             yield
 
     def to_db_bool(self, value: bool) -> Any:

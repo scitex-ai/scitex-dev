@@ -54,6 +54,7 @@ from ._peer_state import PeerState
 from ._policy import FieldRole, Schema, WriterPolicy
 from ._read_door import ReadDoor
 from ._row import Row
+from ._schema_evolution import SchemaEvolution, SchemaEvolutionResult
 from ._target import StoreTarget
 
 __all__ = ["ANY_REVISION", "NEW_RECORD", "PutResult", "Store"]
@@ -92,7 +93,7 @@ class PutResult:
     conflicts: tuple[MergeConflict, ...] = ()
 
 
-class Store(PeerState, IdentityState, ReadDoor):
+class Store(SchemaEvolution, PeerState, IdentityState, ReadDoor):
     """An open store: one schema, one backend, one node identity.
 
     Two identities, and they answer different questions. ``node`` is who is
@@ -134,16 +135,70 @@ class Store(PeerState, IdentityState, ReadDoor):
         # concurrency-safe on Postgres, and neither is the additive ALTER —
         # see Dialect.schema_lock. Eight agents constructing a Store for one
         # schema at once is a normal relaunch, not an edge case.
-        with self.dialect.schema_lock(self._connection, schema):
-            # Only when something is actually absent: the DDL is idempotent by
-            # IF NOT EXISTS but NOT by privilege — PostgreSQL demands table
-            # ownership before that clause short-circuits, which locked every
-            # non-owning role out of stores it had full DML on. See
-            # PeerState._schema_objects_missing.
-            if self._schema_objects_missing(schema):
-                for statement in self.dialect.create_sql(schema):
-                    self._connection.execute(statement)
-            self._apply_additive_migrations(schema)
+        try:
+            with self.dialect.schema_lock(self._connection, schema):
+                rows_table = self.dialect.rows_table(schema)
+                rows_exist = bool(
+                    self._first_column_values(self.dialect.columns_sql(rows_table))
+                )
+                schema_objects_missing = self._schema_objects_missing(schema)
+                if target.backend.value == "postgres":
+                    from ._provision import managed_store_needs_provisioning
+
+                    if managed_store_needs_provisioning(
+                        self._connection,
+                        self.dialect,
+                        schema,
+                        rows_exist=rows_exist,
+                        schema_objects_missing=schema_objects_missing,
+                    ):
+                        from ._errors import StoreProvisionError
+
+                        raise StoreProvisionError(
+                            f"Store {schema.name!r} needs PostgreSQL DDL, but this "
+                            "database declares the managed scitex_store_owner / "
+                            "scitex_rw contract. Application Store() calls must not "
+                            "create or repair shared tables under their login role. "
+                            "Run provision_store_acl(target, schema) through the "
+                            "authorized migration identity, then retry Store()."
+                        )
+                # On a deployed store, package fields precede index repair:
+                # create_sql may include an index for a newly declared field.
+                if rows_exist:
+                    self.schema_evolution = self._ensure_declared_fields_locked()
+                # IF NOT EXISTS still requires ownership on PostgreSQL. Probe
+                # first so a DML-only role can open a complete existing store.
+                if schema_objects_missing:
+                    for statement in self.dialect.create_sql(schema):
+                        self._connection.execute(statement)
+                self._apply_additive_migrations(schema)
+                if not rows_exist:
+                    self.schema_evolution = self._ensure_declared_fields_locked()
+        except BaseException:
+            # An explicit schema refusal is a normal launch-gate result. It
+            # must not leave one server connection behind per retry.
+            self._connection.close()
+            raise
+
+    def ensure_declared_fields(self) -> SchemaEvolutionResult:
+        """Physically ensure every safely-additive field in ``schema`` exists.
+
+        The declaration is the sole input: callers cannot pass table names,
+        SQL types or DDL. Missing optional DATA fields are added under the
+        backend's cross-process schema lock. Identity fields, required fields,
+        incompatible physical types and nullability drift raise
+        :class:`SchemaEvolutionError`. Success is based on a second physical
+        catalogue observation, not on the absence of a driver exception.
+
+        Construction performs this once and exposes that outcome as
+        :attr:`schema_evolution`; this public idempotent method exists for an
+        explicit readiness gate immediately before a dependent operation.
+        """
+        with self._lock:
+            with self.dialect.schema_lock(self._connection, self.schema):
+                result = self._ensure_declared_fields_locked()
+                self.schema_evolution = result
+                return result
 
     # -- lifecycle --------------------------------------------------------
     def close(self) -> None:

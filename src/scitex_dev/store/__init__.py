@@ -96,43 +96,45 @@ from ._errors import (
     RecordNotFoundError,
     RevisionMismatchError,
     SchemaError,
+    SchemaEvolutionError,
     StoreDivergedError,
     StoreError,
     StoreIdentityMismatchError,
     StoreIdentityUnknownError,
+    StoreProvisionError,
     StoreTargetError,
     SupersededFenceError,
     WriterConflictError,
 )
-from .federation import (
-    ENTRY_POINT_GROUP,
-    StorePlugin,
-    StorePluginProvider,
-    discover_store_plugins,
-    plugin_for,
-    resolve_target,
-)
 from ._guards import ANY_REVISION, NEW_RECORD
+from ._hlc import HLC, HybridLogicalClock
+from ._host import host_store, socket_dsn
 from ._identity import (
+    UNKNOWN_SYSTEM,
     IdentityVerdict,
     StoreIdentity,
-    UNKNOWN_SYSTEM,
     assert_same_store,
     compare_identity,
 )
-from ._hlc import HLC, HybridLogicalClock
-from ._host import host_store, socket_dsn
 from ._merge import MergeConflict, MergeOutcome, merge_field
 from ._notify import Hint, channel_for, decode_hint, encode_hint
 from ._oplog import OpEntry, OpKind, assert_contiguous, assert_not_superseded
 from ._policy import (
+    RESERVED_COLUMNS,
     FieldKind,
     FieldPolicy,
     FieldRole,
     MergeRule,
-    RESERVED_COLUMNS,
     Schema,
     WriterPolicy,
+)
+from ._provision import (
+    DEFAULT_OWNER_ROLE,
+    DEFAULT_WRITER_ROLE,
+    REQUIRED_DML,
+    StoreAclStatus,
+    inspect_store_acl,
+    provision_store_acl,
 )
 from ._query import (
     Condition,
@@ -164,15 +166,26 @@ from ._relay import (
 from ._relay_ssh import SshPsqlTransport, aliases_for, ring_argv
 from ._replication import ReplayResult, outstanding, pull, replay, sync
 from ._row import Row
+from ._schema_evolution import SchemaEvolutionResult
 from ._store import PutResult, Store
 from ._target import Backend, StoreTarget
+from .federation import (
+    ENTRY_POINT_GROUP,
+    StorePlugin,
+    StorePluginProvider,
+    discover_store_plugins,
+    plugin_for,
+    resolve_target,
+)
 
-__all__ = [
+__all__ = [  # noqa: RUF022 - repository test requires Python's sorted() order
     "ANY_REVISION",
     "AdoptionRefusedError",
     "Backend",
     "ClockDriftError",
     "Condition",
+    "DEFAULT_OWNER_ROLE",
+    "DEFAULT_WRITER_ROLE",
     "DialectUnavailableError",
     "DivergenceReport",
     "ENTRY_POINT_GROUP",
@@ -199,6 +212,7 @@ __all__ = [
     "Order",
     "PutResult",
     "Query",
+    "REQUIRED_DML",
     "RESERVED_COLUMNS",
     "ReadDoor",
     "RecordNotFoundError",
@@ -209,8 +223,11 @@ __all__ = [
     "Row",
     "Schema",
     "SchemaError",
+    "SchemaEvolutionError",
+    "SchemaEvolutionResult",
     "SshPsqlTransport",
     "Store",
+    "StoreAclStatus",
     "StoreDivergedError",
     "StoreError",
     "StoreIdentity",
@@ -218,6 +235,7 @@ __all__ = [
     "StoreIdentityUnknownError",
     "StorePlugin",
     "StorePluginProvider",
+    "StoreProvisionError",
     "StoreTarget",
     "StoreTargetError",
     "SupersededFenceError",
@@ -246,6 +264,7 @@ __all__ = [
     "gt",
     "gte",
     "host_store",
+    "inspect_store_acl",
     "install_genesis",
     "is_in",
     "is_null",
@@ -256,6 +275,7 @@ __all__ = [
     "nonempty",
     "outstanding",
     "plugin_for",
+    "provision_store_acl",
     "pull",
     "replay",
     "resolve_target",

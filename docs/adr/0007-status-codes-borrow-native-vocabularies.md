@@ -119,6 +119,10 @@ Not one universal vocabulary. A **documented choice per boundary**, recorded in
 | a2a sidecar send / reply | `http` (ack `202`) |
 | agent binary / verb resolution | `scitex` (`NOT_RESOLVABLE`) |
 | registry lookup of a non-running agent | `scitex` (`AGENT_UNAVAILABLE`) |
+| SAC Hermes `POST /v1/turn` admission | `http`, nested `errno` |
+| CCT wake `POST /v1/turn` | `http`, nested `errno` |
+| CCT Telegram reply delivery | `http`, nested `errno` for receipt failure |
+| CCT outbound receipt persistence | `errno` |
 | scitex-cards board HTTP API | `http` |
 | scitex-cards store put w/ `expected_revision` | `http` (`409`) |
 | scitex-cards notification delivery | `http` (ack `202`) |

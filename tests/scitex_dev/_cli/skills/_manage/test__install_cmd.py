@@ -4,6 +4,131 @@ from __future__ import annotations
 
 import subprocess
 
+import click
+from click.testing import CliRunner
+
+from scitex_dev._cli.skills._manage._install_cmd import register
+
+
+def test_install_writes_manifest_and_returns_projection_envelope(tmp_path):
+    # Arrange
+    @click.group()
+    def skills():
+        pass
+
+    register(skills)
+    destination = tmp_path / "skills"
+
+    # Act
+    result = CliRunner().invoke(
+        skills,
+        [
+            "install",
+            "--dest",
+            str(destination),
+            "--package",
+            "scitex-dev",
+            "--link",
+            "--clean",
+            "--json",
+        ],
+    )
+
+    # Assert
+    import json
+
+    payload = json.loads(result.stdout)
+    assert (
+        result.exit_code,
+        payload["schema_version"],
+        payload["projection_sha256"].startswith("sha256:"),
+        payload["manifest"],
+        payload["findings"],
+        (destination / ".scitex-skills.json").is_file(),
+    ) == (
+        0,
+        "scitex-skills-projection/2",
+        True,
+        str(destination.resolve() / ".scitex-skills.json"),
+        [],
+        True,
+    )
+
+
+def test_install_fails_and_returns_findings_for_obsolete_projection(tmp_path):
+    # Arrange
+    @click.group()
+    def skills():
+        pass
+
+    register(skills)
+    destination = tmp_path / "skills"
+    obsolete = destination / "obsolete" / "SKILL.md"
+    obsolete.parent.mkdir(parents=True)
+    obsolete.write_text("# obsolete\n", encoding="utf-8")
+
+    # Act
+    result = CliRunner().invoke(
+        skills,
+        [
+            "install",
+            "--dest",
+            str(destination),
+            "--package",
+            "scitex-dev",
+            "--link",
+            "--clean",
+            "--json",
+        ],
+    )
+
+    # Assert
+    import json
+
+    payload = json.loads(result.stdout)
+    assert (
+        result.exit_code,
+        payload["ok"],
+        {(finding["code"], finding["kind"]) for finding in payload["findings"]},
+    ) == (1, False, {("SP-301", "obsolete")})
+
+
+def test_install_dry_run_uses_projection_envelope_without_writing(tmp_path):
+    # Arrange
+    @click.group()
+    def skills():
+        pass
+
+    register(skills)
+    destination = tmp_path / "skills"
+
+    # Act
+    result = CliRunner().invoke(
+        skills,
+        [
+            "install",
+            "--dest",
+            str(destination),
+            "--package",
+            "scitex-dev",
+            "--dry-run",
+            "--json",
+        ],
+    )
+
+    # Assert
+    import json
+
+    payload = json.loads(result.stdout)
+    assert (
+        result.exit_code,
+        payload["schema_version"],
+        payload["projection_sha256"],
+        payload["findings"],
+        payload["dry_run"],
+        destination.exists(),
+    ) == (0, "scitex-skills-projection/2", None, [], True, False)
+
 
 class TestSkillsCollectCLI:
     def test_destination_is_required_r_returncode_0(self):

@@ -24,6 +24,24 @@ test -x "$VENV/bin/python" || {
     exit 1
 }
 
+mapfile -t PG_INITDB_CANDIDATES < <(compgen -G '/usr/lib/postgresql/*/bin/initdb' | sort -V)
+[ "${#PG_INITDB_CANDIDATES[@]}" -gt 0 ] || {
+    echo "::error::CI image lacks PostgreSQL server binaries under /usr/lib/postgresql/*/bin. Rebuild and synchronize ci-cpu.sif; host binaries are not an allowed fallback."
+    exit 1
+}
+PGBIN="$(dirname "${PG_INITDB_CANDIDATES[-1]}")"
+for required in initdb pg_ctl postgres; do
+    [ -x "$PGBIN/$required" ] || {
+        echo "::error::CI image PostgreSQL capability is incomplete: $PGBIN/$required is not executable. Rebuild and synchronize ci-cpu.sif."
+        exit 1
+    }
+done
+PSQL="$(command -v psql 2>/dev/null || true)"
+[ -x "$PSQL" ] || {
+    echo "::error::CI image PostgreSQL capability is incomplete: psql is not executable. Rebuild and synchronize ci-cpu.sif."
+    exit 1
+}
+
 export LC_ALL=C.UTF-8 LANG=C.UTF-8
 
 # Real writable scratch. The runner profile exports TMPDIR=~/.cache/tmp, a host
@@ -81,16 +99,36 @@ export PATH="$VENV/bin:$PATH"
 
 echo "py=$("$VENV/bin/python" -V) target=$TMPDIR/site"
 
-# Install scitex-dev + its [all,dev] extras WITH deps into the writable target.
-# Fallback chain mirrors scitex-dev's historical bare-uv/pip workflow so a
-# packaging hiccup in an optional extra doesn't strand CI: [all,dev] → [dev] →
-# bare. uv first (fast resolver), pip as a final safety net.
-uv pip install --python "$VENV/bin/python" --target="$TMPDIR/site" -e ".[all,dev]" ||
-    uv pip install --python "$VENV/bin/python" --target="$TMPDIR/site" -e ".[dev]" ||
-    uv pip install --python "$VENV/bin/python" --target="$TMPDIR/site" -e "." ||
-    pip install --target="$TMPDIR/site" -e ".[dev]"
+# The full declared test environment is mandatory. A reduced-extra fallback can
+# make the same commit pass or fail depending on resolver timing, so it is not
+# a valid CI environment.
+uv pip install --python "$VENV/bin/python" --target="$TMPDIR/site" -e ".[all,dev]"
 
 export PYTHONPATH="$TMPDIR/site:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+
+PGDIR="$TMPDIR/postgres"
+mkdir -p "$PGDIR"
+cleanup_postgres() {
+    "$PGBIN/pg_ctl" -D "$PGDIR/data" -m immediate stop >/dev/null 2>&1 || true
+}
+trap cleanup_postgres EXIT
+"$PGBIN/initdb" -D "$PGDIR/data" -A trust --encoding=UTF8 -U postgres >"$PGDIR/initdb.log" 2>&1 || {
+    echo "::error::PostgreSQL initdb failed in the verified CI image"
+    tail -40 "$PGDIR/initdb.log"
+    exit 1
+}
+"$PGBIN/pg_ctl" -D "$PGDIR/data" -o "-k $PGDIR -h ''" -w -t 60 start >"$PGDIR/start.log" 2>&1 || {
+    echo "::error::throwaway PostgreSQL cluster failed to start"
+    tail -40 "$PGDIR/start.log"
+    exit 1
+}
+PGHOST_ENC="$(printf '%s' "$PGDIR" | sed 's|/|%2F|g')"
+export SCITEX_STORE_DSN="postgresql://postgres@${PGHOST_ENC}/postgres"
+"$PSQL" -h "$PGDIR" -U postgres -d postgres -Atqc 'select 1' | grep -qx 1 || {
+    echo "::error::throwaway PostgreSQL cluster failed its readiness query"
+    exit 1
+}
+echo "postgres=$($PGBIN/postgres --version) socket=$PGDIR readiness=verified"
 
 # Parallelise with pytest-xdist (baked in [dev]/[all,dev] as pytest-xdist>=3).
 # scitex-dev's suite is ~2460 tests; single-process it overran the job's old
@@ -138,10 +176,9 @@ fi
 # nice -n 19 ionice -c 3: run at the lowest CPU + idle I/O priority so that if
 # this node is ever shared with interactive/dev work, CI grabs otherwise-idle
 # cores but YIELDS the CPU and disk to any higher-priority process — "all
-# available CPUs, with priority handling". exec replaces the shell with nice,
-# which execs ionice, which execs python (still PID-traceable, signals/exit
-# code propagate to the runner step).
-exec nice -n 19 ionice -c 3 \
+# available CPUs, with priority handling". The shell remains alive so its EXIT
+# trap always stops the private PostgreSQL cluster.
+nice -n 19 ionice -c 3 \
     python -m pytest tests/ -n "$WORKERS" --dist load -q \
     --cov=src/scitex_dev --cov-report=xml --cov-report=term \
     -p no:cacheprovider

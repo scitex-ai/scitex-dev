@@ -1,0 +1,122 @@
+# scitex-access/1 — the closed, APPEND-ONLY set of access decisions and reasons.
+#
+# Source of truth. `scitex_dev.access` derives DecisionKind, Reason, the HTTP
+# status and the exit code from this file, and
+# tests/scitex_dev/access/test__reasons.py fails when the Python drifts from it.
+#
+# Append-only: a reason, once published, is never renamed or removed. Readers
+# (hub UI, CLI scripts, agents) key off these strings.
+#
+# Disclosure: `not-visible` renders exactly like a resource that does not
+# exist (HTTP 404), so a denial never confirms a private resource exists.
+
+spec: scitex-access/1
+spec_version: "1"
+
+decisions:
+  - kind: allowed
+    exit_code: 0
+    verdict: ok
+  - kind: denied
+    exit_code: 10
+    verdict: not-ok
+  - kind: denied-because-not-signed-in
+    exit_code: 10
+    verdict: not-ok
+  - kind: denied-because-not-entitled
+    exit_code: 10
+    verdict: not-ok
+  - kind: unresolved
+    exit_code: 11
+    verdict: unknown
+
+reasons:
+  # -- allowed -------------------------------------------------------------
+  - reason: owner
+    decision: allowed
+    http: 200
+    meaning: The principal owns the resource; an owner holds admin.
+  - reason: grant
+    decision: allowed
+    http: 200
+    meaning: An explicit grant to the principal on the resource.
+  - reason: inherited
+    decision: allowed
+    http: 200
+    meaning: A default grant on the resource's parent flows down to it.
+  - reason: org
+    decision: allowed
+    http: 200
+    meaning: >-
+      The principal is a member of an org that owns or holds a grant on the
+      resource, capped by the membership role.
+  - reason: implied
+    decision: allowed
+    http: 200
+    meaning: >-
+      Reserved for an adapter-level implication (e.g. a project role implying
+      a content role). check() v1 does not produce it.
+  - reason: public
+    decision: allowed
+    http: 200
+    meaning: The resource is public, which gives read to everyone, signed in or not.
+
+  # -- denied --------------------------------------------------------------
+  - reason: not-visible
+    decision: denied
+    http: 404
+    meaning: >-
+      The principal holds no role and the resource is private. Rendered
+      identically to a resource that does not exist.
+  - reason: role-too-low
+    decision: denied
+    http: 403
+    meaning: The principal can see the resource but its role is below the action's.
+  - reason: agent-ceiling
+    decision: denied
+    http: 403
+    meaning: >-
+      The agent's delegation grant would suffice, but its owner's role does
+      not; an agent never exceeds its owner.
+  - reason: owner-has-no-role
+    decision: denied
+    http: 403
+    meaning: The agent holds a delegation grant but its owner holds no role at all.
+  - reason: token-scope
+    decision: denied
+    http: 403
+    meaning: >-
+      The credential presented is scoped narrower than the action. Produced by
+      adapters that authenticate with scoped tokens.
+
+  # -- not signed in / not entitled ----------------------------------------
+  - reason: not-signed-in
+    decision: denied-because-not-signed-in
+    http: 401
+    meaning: An anonymous asker lacks access that signing in might give.
+  - reason: not-entitled
+    decision: denied-because-not-entitled
+    http: 403
+    meaning: Signed in, but the account lacks the plan or entitlement this action needs.
+
+  # -- unresolved ----------------------------------------------------------
+  - reason: enforcer-unreachable
+    decision: unresolved
+    http: 503
+    meaning: The system that holds grants or enforces them did not answer.
+  - reason: identity-unresolved
+    decision: unresolved
+    http: 503
+    meaning: Who is asking could not be established.
+  - reason: kind-unregistered
+    decision: unresolved
+    http: 500
+    meaning: >-
+      No installed package registers this resource kind, so no rule can be
+      applied. Fail closed, and fix the registration.
+
+audit_reasons:
+  - reason: drift
+    meaning: >-
+      An enforcer's copy (Gitea, OS ACL, a store mirror) disagrees with the
+      grants. Reported to the resource owner; never auto-converged.

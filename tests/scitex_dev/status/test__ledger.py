@@ -156,6 +156,24 @@ def test_a_record_preserves_a_string_code_verbatim():
     assert row["code"] == "NXDOMAIN"
 
 
+def test_an_enospc_exchange_is_terminal_and_keeps_the_native_name():
+    """errno failure completes this attempt and remains queryable by exchange id."""
+    # Arrange
+    status = StatusCode(
+        kind="errno", code="ENOSPC", message="no space left on device"
+    )
+
+    # Act
+    row = _record(status)
+
+    # Assert
+    assert (row["kind"], row["code"], row["final"]) == (
+        "errno",
+        "ENOSPC",
+        True,
+    )
+
+
 def test_a_record_carries_the_status_message_through():
     """The hint is the part a human reads; losing it loses the next action."""
     # Arrange

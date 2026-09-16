@@ -29,6 +29,7 @@ def register(ci_group: click.Group) -> click.Group:
                 "  register <repo>   — deploy the canonical org-reusable "
                 "ci.yml caller (alias of ecosystem ci-template apply)\n"
                 "  preflight         — fail-loud CI-readiness gate (for pre-push)\n"
+                "  relocate-storage  — move a local runner home off root safely\n"
                 "  validate-health   — tri-state health signal (up/wedged/unknown)"
             ),
         ),
@@ -47,6 +48,7 @@ def register(ci_group: click.Group) -> click.Group:
     from ._register import register as register_register
     from ._preflight import register as register_preflight
     from ._watchdog import register as register_watchdog
+    from ._storage import register as register_storage
 
     register_status(runner)
     register_use(runner)
@@ -57,6 +59,7 @@ def register(ci_group: click.Group) -> click.Group:
     register_register(runner)
     register_preflight(runner)
     register_watchdog(runner)
+    register_storage(runner)
 
     return runner
 
