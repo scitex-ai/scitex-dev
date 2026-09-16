@@ -21,8 +21,9 @@ data and without terminating backends for work.
 
 Only run this on the host that fronts the central primary (pgbouncer
 `listen_addr` includes the fleet address). The survey is read-only and safe.
-The recovery (`PAUSE`/`DISCARD ALL`/`RESUME`) is the one production-facing step —
-it reconnects idle pooled server connections fleet-wide for a few seconds. Read the
+The recovery (`RECONNECT` followed by `WAIT_CLOSE`) is the one
+production-facing step: it retires each pooled server connection after that
+connection is released according to the configured pooling mode. Read the
 "Rollback" section and get the go-ahead before running it.
 
 ## 1. Survey (read-only — run first, and again after recovery to prove it worked)
@@ -65,26 +66,30 @@ the recovery — that backend has work in flight and is not the leaked-lock shap
 
 ## 2. Recovery (production-facing; gated)
 
-`DISCARD ALL` on pgbouncer closes **idle** server connections and leaves any
-server connection with an active transaction intact — which is precisely the shape
-of the leaked lock (idle pooled backend) and precisely the shape we must NOT touch
-(a busy backend). Wrap it in `PAUSE`/`RESUME` so no new client transactions start in
-the discard window. This reconnects pool slots fleet-wide for a few seconds; it does
-not terminate postgres backends for work and does not change any data or schema.
+Use PgBouncer's administrative `RECONNECT` command. It marks each open server
+connection for closure after that connection is released according to the pool
+mode. The idle connection holding the stranded session lock can therefore close
+immediately, while a connection still serving a transaction is not interrupted.
+New server connections may be created as needed. `WAIT_CLOSE` provides a bounded,
+observable completion point for the retirement rather than treating command
+acceptance as proof that the old backend disappeared.
 
 ```
 # pgbouncer admin console: find its port (default 6432) and admin user (pgbouncer)
 # from the compose file's [pgbouncer] section.
 $ psql "host=127.0.0.1 port=<admin_port> user=pgbouncer dbname=pgbouncer" -w
-  PAUSE;            -- no new client connections enter the pool
-  DISCARD ALL;      -- close idle server connections (releases the stranded lock);
-                    -- idle-in-transaction / active connections are left alone
-  RESUME;           -- reopen the pool
+  SHOW SERVERS;                 -- record database/user/remote_pid and state first
+  RECONNECT <pgbouncer_db>;     -- retire connections after release
+  WAIT_CLOSE <pgbouncer_db>;    -- wait until close_needed is clear
 ```
 
-Confirm via `SHOW SERVERS` (admin console) that the server slot for `<holder_pid>`
-dropped, and re-run the §1 survey: the key's `held` count returns to 0 and the
-`waiting` count drains.
+`<pgbouncer_db>` is the database name shown by `SHOW SERVERS`, not necessarily
+PostgreSQL's physical database name. Confirm that the row whose `remote_pid`
+equals `<holder_pid>` disappeared, and re-run the §1 survey: the key's `held`
+count returns to 0 and the `waiting` count drains.
+
+Do **not** substitute SQL `DISCARD ALL`: it is a PostgreSQL session-reset query,
+not the PgBouncer administrative command that retires pooled server connections.
 
 ## 3. Verify end-to-end (no data change; just prove the pipeline moved)
 
@@ -98,11 +103,12 @@ dropped, and re-run the §1 survey: the key's `held` count returns to 0 and the
 
 ## Rollback
 
-- `PAUSE`/`RESUME` has no data effect; if anything looks wrong mid-window, run
-  `RESUME` immediately to reopen the pool. There is no partial state to unwind.
-- `DISCARD ALL` only closed idle server connections. No DDL or DML ran, so there is
-  nothing to roll back in the database — the "rollback" is simply that the pool
-  re-establishes connections on the next use.
+- `RECONNECT` changes no data or schema. Connections already marked for closure
+  cannot be unmarked; PgBouncer opens replacements as clients need them.
+- If `WAIT_CLOSE` does not return, inspect `SHOW SERVERS` rather than escalating
+  to `KILL`: a remaining `close_needed=1` connection has not yet been released.
+  `KILL` immediately drops client and server connections and is outside this
+  runbook's authorization.
 - If the stranded holder is NOT idle (step 1 showed a transaction), this procedure is
   the wrong tool and you must NOT run it; escalate to the operator, because the only
   other lever is terminating that specific backend, which this task forbids without
