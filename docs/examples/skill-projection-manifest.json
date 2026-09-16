@@ -1,0 +1,13 @@
+{
+  "adapter": "codex",
+  "projection_sha256": "sha256:8faeb9a8a880e226fa14e40d7d7b374c7660dc4ded173227635b14b4d9f73c2f",
+  "schema_version": "scitex-skills-projection/1",
+  "skills": [
+    {
+      "name": "scitex-example",
+      "owner": "scitex-example",
+      "source": "/opt/scitex-example/src/scitex_example/_skills/scitex-example",
+      "source_hash": "sha256:0123456789abcdef"
+    }
+  ]
+}
