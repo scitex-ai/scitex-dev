@@ -63,6 +63,7 @@ interfaces:
 - [33_handyman-delegation.md](33_handyman-delegation.md) — Delegating work to handymen (DRAFT: written from zero completed delegations)
 - [34_handyman-verification.md](34_handyman-verification.md) — Confirming a delegated task is actually being worked (DRAFT)
 - [35_handyman-briefs.md](35_handyman-briefs.md) — Writing the brief itself (DRAFT)
+- [36_skill-registry.md](36_skill-registry.md) — Harness-neutral skill discovery, hashes, and projection validation
 
 ### Distribution (40–49)
 - [40_distribution.md](40_distribution.md) — Skill cache update mechanics + drift detection

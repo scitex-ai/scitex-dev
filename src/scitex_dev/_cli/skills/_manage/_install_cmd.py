@@ -5,7 +5,14 @@
 import click
 
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
-from ._helpers import _print_export_result
+from ._helpers import (
+    _default_skills_destination,
+    _ensure_symlink,
+    _print_export_result,
+    _report_symlink,
+    _require_external_destination,
+    _require_symlink_slot,
+)
 
 
 def register(skills):
@@ -83,13 +90,16 @@ def register(skills):
     ):
         del yes  # accepted for §2 compliance; install honours --dry-run for preview
         import json as json_mod
-        import os as _os
         from pathlib import Path
 
         from ...._ecosystem._skills.skills import export_skills, list_skills
 
-        # Default to ~/.scitex/dev/skills/ (peer to other ~/.scitex/<pkg>/ stores)
-        target = Path(dest) if dest else Path.home() / ".scitex" / "dev" / "skills"
+        # DATA/STATE is user-canonical and never project-shadowed.
+        target = Path(dest) if dest else _default_skills_destination()
+        _require_external_destination(target)
+        claude_link = Path.home() / ".claude" / "skills" / "scitex"
+        if claude_symlink:
+            _require_symlink_slot(claude_link)
 
         if dry_run:
             result = {
@@ -121,20 +131,9 @@ def register(skills):
         )
 
         if claude_symlink:
-            claude_link = Path.home() / ".claude" / "skills" / "scitex"
             claude_link.parent.mkdir(parents=True, exist_ok=True)
-            # Idempotent: replace stale link, leave non-link contents alone.
-            if claude_link.is_symlink() or not claude_link.exists():
-                if claude_link.is_symlink():
-                    claude_link.unlink()
-                _os.symlink(target.resolve(), claude_link)
-                click.echo(f"linked: {claude_link} → {target}")
-            else:
-                click.echo(
-                    f"warning: {claude_link} exists and is not a symlink — "
-                    "skipping --claude-symlink (move it aside manually if needed).",
-                    err=True,
-                )
+            _ensure_symlink(claude_link, target)
+            _report_symlink(claude_link, target)
 
         _print_export_result(exported, target, as_json)
 
@@ -172,6 +171,7 @@ def register(skills):
         from ...._ecosystem._skills.skills import _get_default_export_dest, export_skills
 
         target = Path(dest) if dest else _get_default_export_dest()
+        _require_external_destination(target)
         if dry_run:
             from ...._ecosystem._skills.skills import list_skills
 
@@ -241,6 +241,7 @@ def register(skills):
         from ...._ecosystem._skills.skills import export_skills, list_skills
 
         target = Path(destination)
+        _require_external_destination(target)
         if dry_run:
             result = {
                 k: [e["name"] + ".md" for e in v]
