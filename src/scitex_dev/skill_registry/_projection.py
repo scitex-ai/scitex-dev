@@ -14,7 +14,7 @@ from ._model import RegistryIssue, RegistryReport, SkillRecord, sort_issues
 
 _logger = slogging.getLogger(__name__)
 MANIFEST_NAME = ".scitex-skills.json"
-SCHEMA = "scitex-skills-projection/1"
+SCHEMA = "scitex-skills-projection/2"
 _ADAPTER_FILES = {MANIFEST_NAME, "SKILL.md"}
 
 
@@ -28,23 +28,31 @@ def _projection_digest(skills: list[dict[str, str]]) -> str:
 
 
 def build_projection_manifest(
-    records: Iterable[SkillRecord], adapter: str
+    records: Iterable[SkillRecord],
+    adapter: str,
+    *,
+    projection_root: Path | None = None,
 ) -> dict[str, Any]:
     """Build deterministic data for a thin Claude, Codex, or Hermes adapter."""
 
     if not adapter.strip():
         raise ValueError("adapter must be a non-empty name")
-    skills = [
-        {
-            "name": item.name,
-            "owner": item.owner,
-            "source": str(item.path),
-            "source_hash": item.source_hash,
-        }
-        for item in sorted(
-            records, key=lambda value: (value.name, value.owner, str(value.path))
+    skills = []
+    for item in sorted(
+        records, key=lambda value: (value.name, value.owner, str(value.path))
+    ):
+        projection_hash = item.source_hash
+        if projection_root is not None:
+            projection_hash = hash_skill_tree(projection_root / item.name)
+        skills.append(
+            {
+                "name": item.name,
+                "owner": item.owner,
+                "source": str(item.path),
+                "source_hash": item.source_hash,
+                "projection_hash": projection_hash,
+            }
         )
-    ]
     names = [item["name"] for item in skills]
     if len(names) != len(set(names)):
         raise ProjectionManifestError("cannot project duplicate skill names")
@@ -56,10 +64,17 @@ def build_projection_manifest(
     }
 
 
-def projection_manifest_json(records: Iterable[SkillRecord], adapter: str) -> str:
+def projection_manifest_json(
+    records: Iterable[SkillRecord],
+    adapter: str,
+    *,
+    projection_root: Path | None = None,
+) -> str:
     """Serialize a manifest byte-for-byte deterministically."""
 
-    document = build_projection_manifest(records, adapter)
+    document = build_projection_manifest(
+        records, adapter, projection_root=projection_root
+    )
     return json.dumps(document, indent=2, sort_keys=True) + "\n"
 
 
@@ -88,7 +103,7 @@ def _load_manifest(path: Path) -> dict[str, dict[str, str]] | None:
     if not isinstance(skills, list):
         raise ProjectionManifestError(f"{manifest_path} skills must be a list")
     indexed: dict[str, dict[str, str]] = {}
-    required = {"name", "owner", "source", "source_hash"}
+    required = {"name", "owner", "source", "source_hash", "projection_hash"}
     for index, raw in enumerate(skills):
         if not isinstance(raw, dict) or set(raw) != required:
             raise ProjectionManifestError(
@@ -185,17 +200,20 @@ def audit_projection(registry: RegistryReport, projection_root: Path) -> Registr
             )
             continue
         projected_hash = hash_skill_tree(entry)
-        if projected_hash != source.source_hash:
+        stamp = manifest.get(name)
+        expected_projection_hash = (
+            stamp["projection_hash"] if stamp is not None else source.source_hash
+        )
+        if projected_hash != expected_projection_hash:
             issues.append(
                 RegistryIssue(
                     "SP-402",
                     "stale",
                     name,
                     entry,
-                    "projected content hash differs from the package-local source",
+                    "projected content hash differs from its manifest record",
                 )
             )
-        stamp = manifest.get(name)
         if stamp is None:
             issues.append(
                 RegistryIssue(

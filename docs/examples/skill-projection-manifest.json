@@ -1,11 +1,12 @@
 {
   "adapter": "codex",
-  "projection_sha256": "sha256:8faeb9a8a880e226fa14e40d7d7b374c7660dc4ded173227635b14b4d9f73c2f",
-  "schema_version": "scitex-skills-projection/1",
+  "projection_sha256": "sha256:8bab9460e3d1d3672a5489dc9da680ee8f9d8615a3f79db1f8e2a56dfe018106",
+  "schema_version": "scitex-skills-projection/2",
   "skills": [
     {
       "name": "scitex-example",
       "owner": "scitex-example",
+      "projection_hash": "sha256:0123456789abcdef",
       "source": "/opt/scitex-example/src/scitex_example/_skills/scitex-example",
       "source_hash": "sha256:0123456789abcdef"
     }
