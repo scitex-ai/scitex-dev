@@ -126,7 +126,7 @@ def docs_build(
                 "success": False,
                 "error": str(e),
                 "hints_on_error": [
-                    "Ensure Sphinx is installed: pip install scitex-dev[sphinx]",
+                    "Ensure Sphinx is installed: pip install scitex-dev[docs]",
                     "Check that the package has docs/sphinx/conf.py",
                 ],
             }
