@@ -100,12 +100,44 @@ From: ubuntu:24.04
     apt-get install -y --no-install-recommends \
         ca-certificates curl git locales \
         build-essential pkg-config libffi-dev libssl-dev libglib2.0-0 \
-        fd-find ripgrep cron systemd tmux openssh-client \
+        fd-find ripgrep cron systemd tmux openssh-client fontconfig \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
         postgresql
     locale-gen en_US.UTF-8
     # Debian ships fd as fdfind; the audit helper + muscle memory want `fd`.
     ln -sf "$(command -v fdfind)" /usr/local/bin/fd
     rm -rf /var/lib/apt/lists/*
+
+    # Minimal Japanese PDF-rendering face. Keep ONE static Regular font rather
+    # than Debian's full multi-language/multi-weight fonts-noto-cjk package.
+    # The upstream commit, font bytes and SIL OFL 1.1 license are all pinned so
+    # a rebuild cannot silently substitute a mutable download. Stats' PDF
+    # assertions use WeasyPrint/Pango/fontconfig and require both its native
+    # libraries above and the family name "Noto Sans CJK JP" to preserve
+    # Japanese group labels.
+    NOTO_CJK_COMMIT=523d033d6cb47f4a80c58a35753646f5c3608a78
+    NOTO_FONT=NotoSansCJKjp-Regular.otf
+    NOTO_FONT_SHA256=68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5
+    NOTO_LICENSE_SHA256=6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2
+    install -d -m 0755 /usr/local/share/fonts/opentype/noto-cjk-jp
+    install -d -m 0755 /usr/share/licenses/noto-cjk-jp
+    curl --proto '=https' --tlsv1.2 -fsSL --retry 3 \
+        "https://raw.githubusercontent.com/notofonts/noto-cjk/${NOTO_CJK_COMMIT}/Sans/OTF/Japanese/${NOTO_FONT}" \
+        -o "/usr/local/share/fonts/opentype/noto-cjk-jp/${NOTO_FONT}"
+    curl --proto '=https' --tlsv1.2 -fsSL --retry 3 \
+        "https://raw.githubusercontent.com/notofonts/noto-cjk/${NOTO_CJK_COMMIT}/LICENSE" \
+        -o /usr/share/licenses/noto-cjk-jp/OFL-1.1.txt
+    printf '%s  %s\n' "$NOTO_FONT_SHA256" \
+        "/usr/local/share/fonts/opentype/noto-cjk-jp/${NOTO_FONT}" | sha256sum -c -
+    printf '%s  %s\n' "$NOTO_LICENSE_SHA256" \
+        /usr/share/licenses/noto-cjk-jp/OFL-1.1.txt | sha256sum -c -
+    chmod 0644 "/usr/local/share/fonts/opentype/noto-cjk-jp/${NOTO_FONT}" \
+        /usr/share/licenses/noto-cjk-jp/OFL-1.1.txt
+    fc-cache -f
+    case "$(fc-match -f '%{family}\n' 'Noto Sans CJK JP:lang=ja')" in
+        *"Noto Sans CJK JP"*) ;;
+        *) echo "Noto Sans CJK JP did not register with fontconfig" >&2; exit 1 ;;
+    esac
 
     # uv (Astral): manages the Python toolchain + fast installs.
     # The installer lands uv in /root/.local/bin (root-only, 0700) — a SYMLINK
@@ -205,7 +237,7 @@ From: ubuntu:24.04
 %labels
     org.scitex.layer ci-cpu
     org.scitex.runtime apptainer
-    org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep cron systemd + numpy scipy pandas matplotlib xarray statsmodels pingouin scikit-learn torch[cpu] seaborn click mcp fastmcp nbconvert ipykernel openpyxl figrecipe mne ripple_detection tensorpac + scitex basics (io logging config dict decorators gen nn stats str dsp) + scitex-dev[all,dev] + pytest{,-cov,-xdist,-timeout}"
+    org.scitex.contains "python3.11 python3.12 python3.13 uv fd ripgrep cron systemd Noto Sans CJK JP Regular + numpy scipy pandas matplotlib xarray statsmodels pingouin scikit-learn torch[cpu] seaborn click mcp fastmcp nbconvert ipykernel openpyxl figrecipe mne ripple_detection tensorpac + scitex basics (io logging config dict decorators gen nn stats str dsp) + scitex-dev[all,dev] + pytest{,-cov,-xdist,-timeout}"
 
 %help
     scitex-dev CI runner image (CPU). Reused by the self-hosted Spartan
