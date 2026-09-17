@@ -25,6 +25,9 @@ def test_ci_cpu_pins_one_noto_cjk_jp_font_and_its_ofl_license() -> None:
         "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
         "/usr/share/licenses/noto-cjk-jp/OFL-1.1.txt",
         "fc-cache -f",
+        "libpango-1.0-0",
+        "libpangoft2-1.0-0",
+        "libharfbuzz-subset0",
     )
 
     # Assert

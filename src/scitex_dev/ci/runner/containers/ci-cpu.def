@@ -101,6 +101,7 @@ From: ubuntu:24.04
         ca-certificates curl git locales \
         build-essential pkg-config libffi-dev libssl-dev libglib2.0-0 \
         fd-find ripgrep cron systemd tmux openssh-client fontconfig \
+        libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
         postgresql
     locale-gen en_US.UTF-8
     # Debian ships fd as fdfind; the audit helper + muscle memory want `fd`.
@@ -111,8 +112,9 @@ From: ubuntu:24.04
     # than Debian's full multi-language/multi-weight fonts-noto-cjk package.
     # The upstream commit, font bytes and SIL OFL 1.1 license are all pinned so
     # a rebuild cannot silently substitute a mutable download. Stats' PDF
-    # assertions use WeasyPrint/Pango/fontconfig and require the family name
-    # "Noto Sans CJK JP" to preserve Japanese group labels.
+    # assertions use WeasyPrint/Pango/fontconfig and require both its native
+    # libraries above and the family name "Noto Sans CJK JP" to preserve
+    # Japanese group labels.
     NOTO_CJK_COMMIT=523d033d6cb47f4a80c58a35753646f5c3608a78
     NOTO_FONT=NotoSansCJKjp-Regular.otf
     NOTO_FONT_SHA256=68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5
