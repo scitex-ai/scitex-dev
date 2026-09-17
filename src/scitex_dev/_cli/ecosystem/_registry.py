@@ -25,6 +25,7 @@ from ._cmds import (
     _ci_template,
     _clean,
     _drift_report,
+    _freshness,
     _git,
     _gui,
     _host_config,
@@ -32,7 +33,6 @@ from ._cmds import (
     _install_gate,
     _list,
     _list_exemptions,
-    _pr,
     _up,
     _prune_branches,
     _prune_merged,
@@ -122,7 +122,7 @@ def register_ecosystem_commands(main_group):
     _prune_merged.register(ecosystem)
     _prune_branches.register(ecosystem)
     _branch_hygiene.register(ecosystem)
-    _pr.register(ecosystem)
+    _freshness.register(ecosystem)
     _branch_protection.register(ecosystem)
     _ci_template.register(ecosystem)
     _regen_umbrella.register(ecosystem)

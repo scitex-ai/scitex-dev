@@ -96,41 +96,51 @@ def test_drift_report_timer_cadence_is_conservative_six_hours():
     assert cadence == "6h"
 
 
-def test_provider_registers_the_pr_expire_cron():
-    """The fleet PR-expiry primitive is registered as a daily cron job."""
+def test_provider_registers_the_freshness_gc_cron():
+    """The organization freshness orchestrator is registered daily."""
     # Arrange
     cron_names = {job.name for job in provide_jobs() if job.kind == "cron"}
     # Act
-    registered = "scitex-dev-pr-expire" in cron_names
+    registered = "scitex-dev-freshness-gc" in cron_names
     # Assert
     assert registered
 
 
-def test_pr_expire_body_ships_in_dry_run_mode():
+def test_freshness_gc_body_ships_in_dry_run_mode():
     """SAFETY: the scheduled job runs in --dry-run — no auto-mass-close."""
     # Arrange
     # Act
-    body = JOB_SHELL_BODIES["scitex-dev-pr-expire"]
+    body = JOB_SHELL_BODIES["scitex-dev-freshness-gc"]
     # Assert
     assert "--dry-run" in body
 
 
-def test_pr_expire_body_does_not_apply():
+def test_freshness_gc_body_does_not_apply():
     """SAFETY: the scheduled job must NOT pass --apply on first fire."""
     # Arrange
     # Act
-    body = JOB_SHELL_BODIES["scitex-dev-pr-expire"]
+    body = JOB_SHELL_BODIES["scitex-dev-freshness-gc"]
     # Assert
     assert "--apply" not in body
 
 
-def test_pr_expire_body_runs_the_ecosystem_pr_expire_primitive():
-    """The cron drives `ecosystem pr expire --all` across the fleet."""
+def test_freshness_gc_body_runs_the_organization_orchestrator():
+    """The cron drives the one GitHub + Cards cutoff orchestrator."""
     # Arrange
     # Act
-    body = JOB_SHELL_BODIES["scitex-dev-pr-expire"]
+    body = JOB_SHELL_BODIES["scitex-dev-freshness-gc"]
     # Assert
-    assert "ecosystem pr expire --all" in body
+    assert "ecosystem apply-freshness-gc --dry-run --json" in body
+
+
+def test_freshness_gc_body_does_not_suppress_integration_failures():
+    """A requested-but-unavailable Cards integration must fail the job loud."""
+    # Arrange
+    body = JOB_SHELL_BODIES["scitex-dev-freshness-gc"]
+    # Act
+    suppresses_failure = "|| true" in body
+    # Assert
+    assert suppresses_failure is False
 
 
 # --------------------------------------------------------------------------- #

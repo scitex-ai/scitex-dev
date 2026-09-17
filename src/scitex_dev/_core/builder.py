@@ -70,7 +70,7 @@ def build_sphinx(
         )
     except FileNotFoundError:
         raise RuntimeError(
-            "sphinx-build not found. Install with: pip install scitex-dev[sphinx]"
+            "sphinx-build not found. Install with: pip install scitex-dev[docs]"
         )
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"Sphinx build timed out after {timeout}s")
