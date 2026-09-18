@@ -90,6 +90,14 @@ def run_checks(
     from ._check_optional_deps_guarded import check_ps148_optional_deps_guarded
 
     check_ps148_optional_deps_guarded(repo_root, distribution, Violation, violations)
+    # PS-233: every deterministically mapped runtime import in shippable
+    # source must be declared. Unguarded imports belong in core; imports that
+    # are demonstrably optional via try/except ImportError may live in a
+    # consumer runtime extra. Function-local imports are intentionally scanned:
+    # deferring an import moves a missing-dependency crash; it does not fix it.
+    from ._check_runtime_dependencies import check_ps233_runtime_dependencies
+
+    check_ps233_runtime_dependencies(repo_root, distribution, Violation, violations)
     # PS-214/215: all-or-nothing extras + dead install-remedy strings.
     # See scitex-writer PR #322 (reference incident: editor = [] extra +
     # "pip install scitex-writer[editor]" remedy that installs nothing).
