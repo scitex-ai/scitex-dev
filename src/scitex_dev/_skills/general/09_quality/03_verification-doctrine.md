@@ -138,9 +138,9 @@ inspect a file you believe in.*
 - A `--version` that lied while an editable install served an abandoned tree;
   a `.venv/bin/python` whose symlink chain read intact under `ls -la` and
   failed only at exec, its target `/usr/bin/python3.11` absent.
-- **A release is not done at the tag.** PS-220's `W` default had to be read out
-  of the downloaded wheel — the tag is what setuptools-scm reads; consumers
-  install from PyPI.
+- **A release is not done at the tag.** PS-220's severity had to be read out of
+  the downloaded wheel — the tag is what setuptools-scm reads; consumers
+  install from PyPI. PS-220 is now an unconditional error-tier rule.
 
 ## 6. Peer claims → corroboration must be independent in kind
 
