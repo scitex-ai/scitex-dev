@@ -339,7 +339,15 @@ def audit_all_for_package(
         # that goes missing exactly when the run is least scrutinised.
         warn_on_guessed_path()
     if os.environ.get(SKIP_ENV_VAR):
-        import pytest
+        # Guarded per PS-233: this branch is reached only under pytest, but a
+        # bare install must still fail with the install remedy named.
+        try:
+            import pytest
+        except ImportError as e:  # pragma: no cover - the caller is a test
+            raise ImportError(
+                "pytest is required to skip the audit gate; install with: "
+                "pip install 'scitex-dev[all]'"
+            ) from e
 
         pytest.skip(
             f"audit-all skipped via {SKIP_ENV_VAR}=1 (unset to re-enable the gate)"
