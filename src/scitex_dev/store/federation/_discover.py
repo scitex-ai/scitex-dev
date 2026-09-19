@@ -35,7 +35,7 @@ truthful empty answer about the wrong thing.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import sys
 
 from .._errors import StoreError
@@ -43,7 +43,7 @@ from ._spec import StorePlugin, StorePluginProvider
 
 __all__ = ["ENTRY_POINT_GROUP", "discover_store_plugins", "plugin_for"]
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 
 #: Entry-point group every leaf registers its store-semantics provider
 #: under. Named for the linter federation's precedent

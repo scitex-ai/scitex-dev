@@ -34,6 +34,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
+from ..._core.streams import write_stream
+
 
 # ---------------------------------------------------------------------------
 # Re-exports — the layers above were extracted for the 512-line limit.
@@ -272,11 +274,11 @@ def run_once(
         if only_agent and agent != only_agent:
             continue
         repo = table[agent]
-        print(f"=== {agent} <- {repo} ===", file=out)
+        write_stream(f"=== {agent} <- {repo} ===", out)
         try:
             reds = red_runs_for(repo, gh_runner=gh_runner)
         except RuntimeError as exc:
-            print(f"  error: {exc}", file=out)
+            write_stream(f"  error: {exc}", out)
             results.append(
                 AgentResult(
                     agent=agent,
@@ -292,7 +294,7 @@ def run_once(
         red_names = [r.workflow for r in reds]
 
         if not reds:
-            print("  all green", file=out)
+            write_stream("  all green", out)
             results.append(
                 AgentResult(
                     agent=agent,
@@ -304,9 +306,9 @@ def run_once(
             )
             continue
 
-        print("  red workflows:", file=out)
+        write_stream("  red workflows:", out)
         for r in reds:
-            print(f"    - {r.workflow}", file=out)
+            write_stream(f"    - {r.workflow}", out)
 
         # CI-fail → scitex-todo. Fail-open so a scitex-todo glitch never
         # blocks the sac dispatch / fix-forward turn below. We file the
@@ -327,25 +329,22 @@ def run_once(
                 # Surface a one-line diagnostic so the operator notices
                 # if scitex-todo starts rejecting every call, but keep
                 # the loop alive.
-                print(f"  todo-hook: {failing_run.workflow}: {exc}", file=out)
+                write_stream(f"  todo-hook: {failing_run.workflow}: {exc}", out)
                 continue
             task_id = _todo_task_id_for(
                 repo, failing_run.workflow, failing_run.head_sha
             )
             if created:
                 todos_filed.append(task_id)
-                print(f"  todo: filed {task_id}", file=out)
+                write_stream(f"  todo: filed {task_id}", out)
             else:
                 todos_already_open.append(task_id)
 
         if dry_run:
             prompt = build_fix_prompt(repo, red_names)
-            print(
-                f"  [dry-run] would dispatch to {agent}:",
-                file=out,
-            )
+            write_stream(f"  [dry-run] would dispatch to {agent}:", out)
             for line in prompt.splitlines():
-                print(f"    | {line}", file=out)
+                write_stream(f"    | {line}", out)
             results.append(
                 AgentResult(
                     agent=agent,
@@ -367,7 +366,7 @@ def run_once(
         if endpoint is not None:
             host, port = endpoint
             if _is_agent_busy(host, port, agent):
-                print(f"  skip: {agent} has active task(s)", file=out)
+                write_stream(f"  skip: {agent} has active task(s)", out)
                 results.append(
                     AgentResult(
                         agent=agent,
@@ -381,11 +380,11 @@ def run_once(
                 )
                 continue
 
-        print(f"  dispatching fix turn to {agent} ...", file=out)
+        write_stream(f"  dispatching fix turn to {agent} ...", out)
         try:
             output = dispatch_fix_turn(agent, repo, red_names, sac_runner=sac_runner)
         except RuntimeError as exc:
-            print(f"  error: {exc}", file=out)
+            write_stream(f"  error: {exc}", out)
             results.append(
                 AgentResult(
                     agent=agent,
@@ -401,7 +400,7 @@ def run_once(
             continue
 
         for line in output.splitlines()[-3:]:
-            print(f"    {line}", file=out)
+            write_stream(f"    {line}", out)
         results.append(
             AgentResult(
                 agent=agent,

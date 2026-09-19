@@ -100,11 +100,17 @@ if _should_fast_path_version(_sys.argv):
     from importlib.metadata import PackageNotFoundError
     from importlib.metadata import version as _version
 
+    from .._core.streams import render_content
+
     try:
         _v = _version("scitex-dev")
     except PackageNotFoundError:
         _v = "0.0.0-unknown"
-    print(f"scitex-dev {_v}")
+    # `--version` is a published, machine-parsed product line: exactly
+    # `scitex-dev <ver>` on stdout. It is emitted through the explicit
+    # content-rendering contract PS-220 recognises rather than the logger,
+    # because a level prefix or a hop to stderr would break the contract.
+    render_content(f"scitex-dev {_v}")
     raise SystemExit(0)
 
 from ._root import main

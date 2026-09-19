@@ -10,6 +10,8 @@ from .fixer import fix_source
 
 log = slogging.getLogger(__name__)
 
+console = slogging.getConsole(f"{__name__}.console")
+
 
 def register(subparsers) -> None:
     p = subparsers.add_parser(
@@ -58,17 +60,17 @@ def cmd_format(args) -> int:
                 sys.stdout.writelines(diff)
             if not args.check:
                 f.write_text(fixed, encoding="utf-8")
-                print(f"Fixed {f}")
+                console.info(f"Fixed {f}")
             else:
-                print(f"Would fix {f}")
+                console.info(f"Would fix {f}")
 
     if changed_count == 0:
-        print("All files clean")
+        console.info("All files clean")
         return 0
 
     if args.check:
-        print(f"\n{changed_count} file(s) would be changed")
+        console.info(f"\n{changed_count} file(s) would be changed")
         return 1
 
-    print(f"\n{changed_count} file(s) fixed")
+    console.info(f"\n{changed_count} file(s) fixed")
     return 0

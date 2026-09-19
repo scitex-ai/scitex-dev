@@ -45,6 +45,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from ..._core.streams import write_stream
+
 LOGIN_NODES = (
     "spartan-login1.hpc.unimelb.edu.au",
     "spartan-login2.hpc.unimelb.edu.au",
@@ -265,7 +267,7 @@ def run_once(
         _append_tsv(log_path, ts, reading)
         result.alerts.extend(_check_thresholds(reading))
 
-    print(f"spartan-conn-monitor [{ts}] " + " ".join(summary_bits), file=out)
+    write_stream(f"spartan-conn-monitor [{ts}] " + " ".join(summary_bits), out)
 
     if result.alerts:
         msg = (
@@ -275,7 +277,7 @@ def run_once(
         )
         notify(msg)
         call(msg)
-        print(f"spartan-conn-monitor: ALERT {' '.join(result.alerts)}", file=out)
+        write_stream(f"spartan-conn-monitor: ALERT {' '.join(result.alerts)}", out)
 
     return result
 

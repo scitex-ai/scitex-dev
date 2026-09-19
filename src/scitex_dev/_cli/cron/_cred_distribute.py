@@ -100,11 +100,15 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Mapping, Sequence
+
+import scitex_logging as slogging
+
+_logger = slogging.getLogger(__name__)
+console = slogging.getConsole(f"{__name__}.console")
 
 
 # Default location for the operator-tunable config. Honours
@@ -486,7 +490,7 @@ def run_once(
             _bootstrap_config(cfg)
         except OSError as exc:
             msg = f"failed to bootstrap config at {cfg}: {exc}"
-            print(f"[cred-distribute {timestamp}] ERROR: {msg}", file=sys.stderr)
+            _logger.error(f"[cred-distribute {timestamp}] ERROR: {msg}")
             _append_audit_line(log, f"[cred-distribute {timestamp}] ERROR: {msg}")
             return CredDistributeResult(
                 config_path=str(cfg),
@@ -498,7 +502,7 @@ def run_once(
             f"[cred-distribute {timestamp}] bootstrapped config at {cfg} "
             f"(empty `hosts:` list — operator to populate); nothing to do"
         )
-        print(line)
+        console.info(line)
         _append_audit_line(log, line)
         return CredDistributeResult(
             config_path=str(cfg), log_path=str(log), hosts_configured=0
@@ -508,7 +512,7 @@ def run_once(
         doc = _load_yaml(cfg)
     except Exception as exc:  # noqa: BLE001 — surface any parser error
         msg = f"failed to load {cfg}: {exc.__class__.__name__}: {exc}"
-        print(f"[cred-distribute {timestamp}] ERROR: {msg}", file=sys.stderr)
+        _logger.error(f"[cred-distribute {timestamp}] ERROR: {msg}")
         _append_audit_line(log, f"[cred-distribute {timestamp}] ERROR: {msg}")
         return CredDistributeResult(
             config_path=str(cfg),
@@ -521,7 +525,7 @@ def run_once(
         hosts, account = _parse_config(doc)
     except ValueError as exc:
         msg = f"config schema error in {cfg}: {exc}"
-        print(f"[cred-distribute {timestamp}] ERROR: {msg}", file=sys.stderr)
+        _logger.error(f"[cred-distribute {timestamp}] ERROR: {msg}")
         _append_audit_line(log, f"[cred-distribute {timestamp}] ERROR: {msg}")
         return CredDistributeResult(
             config_path=str(cfg),
@@ -536,7 +540,7 @@ def run_once(
             f"[cred-distribute {timestamp}] no hosts configured "
             f"(account={account}); skipping sweep"
         )
-        print(line)
+        console.info(line)
         _append_audit_line(log, line)
         return CredDistributeResult(
             config_path=str(cfg),
@@ -551,7 +555,7 @@ def run_once(
             f"(hosts={hosts!r}, account={account!r}); skipping sweep until "
             f"proj-scitex-agent-container ships the capability"
         )
-        print(line)
+        console.info(line)
         _append_audit_line(log, line)
         outcomes = tuple(
             HostOutcome(
@@ -593,7 +597,7 @@ def run_once(
             # log; the dispatcher still has the full string in outcome.stderr.
             first = outcome.stderr.splitlines()[0] if outcome.stderr else ""
             line += f" stderr={first!r}"
-        print(line)
+        console.info(line)
         _append_audit_line(log, line)
 
     return CredDistributeResult(

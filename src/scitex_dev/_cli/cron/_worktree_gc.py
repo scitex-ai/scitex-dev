@@ -73,6 +73,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable
 
+from ..._core.streams import write_stream
+
 
 # The mtime gate. Worktrees idle longer than this are candidates for
 # removal. 3 days is conservative for the fleet's typical agent
@@ -402,11 +404,11 @@ def _safe_prune(
     """
     if _has_container_worktree(repo):
         if out is not None:
-            print(
+            write_stream(
                 f"worktree-gc: skip prune {repo} — registry contains a "
                 f"container worktree (gitdir under /work/); host cannot "
                 f"judge its liveness. See lead-learnings/19.",
-                file=out,
+                out,
             )
         return False
     git_runner(["-C", repo, "worktree", "prune"])
@@ -462,7 +464,7 @@ def run_once(
     expanded = _expand_roots(roots)
     if not expanded:
         msg = f"no usable search roots in {list(roots)}"
-        print(f"worktree-gc: skip — {msg}", file=out)
+        write_stream(f"worktree-gc: skip — {msg}", out)
         return WorktreeGCResult(
             scanned=0,
             removed=0,
@@ -489,10 +491,10 @@ def run_once(
                 dry_run=dry_run,
             )
             per_worktree.append(outcome)
-            print(
+            write_stream(
                 f"worktree-gc: {outcome.action:<18} {outcome.path} "
                 f"({outcome.age_days:.1f}d) — {outcome.detail}",
-                file=out,
+                out,
             )
 
         # After any removals in this repo, prune the metadata so
@@ -509,11 +511,11 @@ def run_once(
     skipped_fresh = sum(1 for o in per_worktree if o.action == "skipped-fresh")
     skipped_refused = sum(1 for o in per_worktree if o.action == "skipped-refused")
     errored = sum(1 for o in per_worktree if o.action == "errored")
-    print(
+    write_stream(
         f"worktree-gc: pass complete — {removed} removed, "
         f"{skipped_fresh} fresh, {skipped_refused} refused, "
         f"{errored} errored across {len(repos)} repo(s)",
-        file=out,
+        out,
     )
 
     return WorktreeGCResult(

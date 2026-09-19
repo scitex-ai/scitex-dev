@@ -46,10 +46,10 @@ filesystem -- rather than for the reassurance it cannot give.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 from pathlib import PurePosixPath
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 
 #: Filesystems that are RAM-backed by definition, so anything written to
 #: them is gone at reboot. Deliberately SHORT and conservative: every

@@ -168,7 +168,13 @@ def test_ps220_default_severity_proves_the_worktree_build_was_imported():
     severity = _check_no_print._DEFAULT_SEVERITY
 
     # Assert
-    assert severity == "W"
+    # "E", not "W": this branch's whole purpose is the STRICT logging tier —
+    # commit b25a193d raised the default from warn to error — and this sentinel
+    # exists to prove the imported module is the branch's build rather than a
+    # stale installed copy. It was left asserting the pre-branch value, so it
+    # failed for the one reason it was written to detect, pointing at the wrong
+    # thing. It now pins the value this branch actually intends.
+    assert severity == "E"
 
 
 # --------------------------------------------------------------------- #

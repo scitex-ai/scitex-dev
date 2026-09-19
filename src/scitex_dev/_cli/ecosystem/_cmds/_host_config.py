@@ -28,6 +28,8 @@ import click
 
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
 
+from ...._core.streams import render_rich
+
 
 def _select(provider):
     """Discover + optionally filter to one declaring package."""
@@ -72,11 +74,10 @@ def is_actionable_drift(action: str) -> bool:
 
 def _render_records(records) -> tuple[int, int]:
     """Print one line per spec; return ``(actionable, blocked)`` counts."""
-    from rich.console import Console
-
-    console = Console()
     if not records:
-        console.print("[yellow]No host config declared by any provider.[/yellow]")
+        render_rich(
+            "[yellow]No host config declared by any provider.[/yellow]", __name__
+        )
         return 0, 0
 
     colors = {
@@ -98,9 +99,10 @@ def _render_records(records) -> tuple[int, int]:
             blocked += 1
         elif is_actionable_drift(action):
             pending += 1
-        console.print(
+        render_rich(
             f"[{color}]{action:<14}[/{color}] "
-            f"[bold]{rec['name']}[/bold]  {rec['detail']}"
+            f"[bold]{rec['name']}[/bold]  {rec['detail']}",
+            __name__,
         )
     return pending, blocked
 
@@ -372,12 +374,12 @@ def register(ecosystem):
             )
             return 0
 
-        from rich.console import Console
         from rich.table import Table
 
-        console = Console()
         if not specs:
-            console.print("[yellow]No host config declared by any provider.[/yellow]")
+            render_rich(
+                "[yellow]No host config declared by any provider.[/yellow]", __name__
+            )
             return 0
         table = Table(show_header=True, header_style="bold")
         table.add_column("name")
@@ -393,10 +395,11 @@ def register(ecosystem):
                 ", ".join(spec.hosts) if spec.hosts else "(all)",
                 spec.purpose,
             )
-        console.print(table)
-        console.print(
+        render_rich(table, __name__)
+        render_rich(
             f"[bold]{len(specs)}[/bold] host-config spec(s) across "
-            f"{len({s.provider for s in specs})} provider(s)."
+            f"{len({s.provider for s in specs})} provider(s).",
+            __name__,
         )
         return 0
 

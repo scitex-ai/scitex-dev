@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import scitex_logging as slogging
+
+console = slogging.getConsole(__name__)
+
 if TYPE_CHECKING:
     from flask import Flask
 
@@ -73,7 +77,7 @@ def _kill_process_on_port(port: int) -> None:
                         capture_output=True,
                         check=False,
                     )
-                    print(f"Killed process {pid} on port {port}")
+                    console.info(f"Killed process {pid} on port {port}")
         else:
             # Unix: use lsof
             result = subprocess.run(
@@ -88,9 +92,9 @@ def _kill_process_on_port(port: int) -> None:
                     subprocess.run(
                         ["kill", "-9", pid], capture_output=True, check=False
                     )
-                    print(f"Killed process {pid} on port {port}")
+                    console.info(f"Killed process {pid} on port {port}")
     except Exception as e:
-        print(f"Warning: Could not kill process on port {port}: {e}")
+        console.warning(f"Warning: Could not kill process on port {port}: {e}")
 
 
 def run_dashboard(
@@ -121,8 +125,8 @@ def run_dashboard(
     app = create_app()
 
     url = f"http://{host}:{port}"
-    print(f"Starting SciTeX Version Dashboard at {url}")
-    print("Press Ctrl+C to stop.")
+    console.info(f"Starting SciTeX Version Dashboard at {url}")
+    console.info("Press Ctrl+C to stop.")
 
     if open_browser:
         import threading
@@ -139,7 +143,7 @@ def run_dashboard(
     try:
         app.run(host=host, port=port, debug=debug, threaded=True)
     except KeyboardInterrupt:
-        print("\nDashboard stopped.")
+        console.info("\nDashboard stopped.")
 
 
 def run_background(
@@ -205,21 +209,23 @@ def stop_dashboard() -> bool:
     pid_path = Path.home() / ".cache" / "scitex" / "dashboard.pid"
 
     if not pid_path.exists():
-        print("No dashboard PID file found. Is the dashboard running in background?")
+        console.warning(
+            "No dashboard PID file found. Is the dashboard running in background?",
+        )
         return False
 
     try:
         pid = int(pid_path.read_text().strip())
         os.kill(pid, signal.SIGTERM)
         pid_path.unlink()
-        print(f"Dashboard (PID {pid}) stopped.")
+        console.info(f"Dashboard (PID {pid}) stopped.")
         return True
     except ProcessLookupError:
-        print("Process not found. Removing stale PID file.")
+        console.warning("Process not found. Removing stale PID file.")
         pid_path.unlink(missing_ok=True)
         return False
     except Exception as e:
-        print(f"Error stopping dashboard: {e}")
+        console.error(f"Error stopping dashboard: {e}")
         return False
 
 

@@ -14,13 +14,13 @@ leaf never wedges the gate.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import sys
 from typing import Callable
 
 from ._spec import GateCheck
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 
 #: Entry-point group every leaf registers its gate-check provider under.
 ENTRY_POINT_GROUP = "scitex_dev.gate.checks"

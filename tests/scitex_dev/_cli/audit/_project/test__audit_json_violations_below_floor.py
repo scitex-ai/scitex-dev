@@ -79,9 +79,12 @@ def _audit_json(repo: Path, capfd, *, severity: str) -> dict:
 
 
 def test_ps220_default_severity_is_error():
+    # Arrange
+    module = _check_no_print
     # Act
+    severity = module._DEFAULT_SEVERITY
     # Assert
-    assert _check_no_print._DEFAULT_SEVERITY == "E"
+    assert severity == "E"
 
 
 # --- the defect: below-floor findings must not be silently omitted ----------
@@ -129,6 +132,7 @@ def test_default_floor_total_list_is_consistent_with_the_warning_count(tmp_path,
 
 
 def test_default_floor_json_lists_the_error(tmp_path, capfd):
+    # Arrange — one bare print, audited at the DEFAULT `error` floor
     repo = _build(tmp_path)
     # Act
     payload = _audit_json(repo, capfd, severity="error")
@@ -150,6 +154,7 @@ def test_warning_floor_json_lists_the_warning_finding(tmp_path, capfd):
 
 
 def test_exit_code_is_one_and_identical_across_floors(tmp_path, capfd):
+    # Arrange — the same premise repo audited at both floors
     repo = _build(tmp_path)
     # Act
     default_payload = _audit_json(repo, capfd, severity="error")

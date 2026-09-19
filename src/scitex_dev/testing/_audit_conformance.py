@@ -50,6 +50,8 @@ import sys
 from typing import Sequence
 from pathlib import Path
 
+from .._core.streams import write_stream
+
 from ._auditor_identity import auditor_identity
 from ._audit_outcome import (
     VERDICT_FAIL,
@@ -100,7 +102,7 @@ def warn_on_guessed_path(cwd: Path | None = None, stream=None) -> str:
     tolerates it.
     """
     text = guessed_path_warning(cwd)
-    print(text, file=sys.stderr if stream is None else stream)
+    write_stream(text, sys.stderr if stream is None else stream)
     return text
 
 

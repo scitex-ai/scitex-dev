@@ -14,6 +14,8 @@ import click
 from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ._shared import render_remote, resolve_packages
 
+from ..._core.streams import render_rich
+
 __all__ = ["register"]
 
 
@@ -212,7 +214,7 @@ def register(gui: click.Group) -> None:
             # Final paint to ensure the last-completion delta lands.
             live.update(render_table(states_box, verbosity=verbosity))
 
-        console.print(render_table(states_box, verbosity=verbosity))
+        render_rich(render_table(states_box, verbosity=verbosity), __name__)
 
 
 # EOF

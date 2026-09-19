@@ -19,6 +19,8 @@ import scitex_logging as slogging
 
 log = slogging.getLogger(__name__)
 
+console = slogging.getConsole(f"{__name__}.console")
+
 
 def register_docs_subcommand(
     subparsers: argparse._SubParsersAction,
@@ -97,11 +99,11 @@ def register_docs_subcommand(
     def _default_handler(args):
         if getattr(args, "help_recursive", False):
             parser.print_help()
-            print()
+            console.info("")
             for sub_name, sub_p in [("list", list_p), ("get", get_p)]:
-                print(f"--- {sub_name} ---")
+                console.info(f"--- {sub_name} ---")
                 sub_p.print_help()
-                print()
+                console.info("")
             return
         if args.docs_command is None:
             parser.print_help()
@@ -135,7 +137,7 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
     """Execute the docs subcommand."""
     import logging
 
-    logging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
+    slogging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
     from ..._docs.docs import get_docs
 
     # --tldr: concise quick-start
@@ -144,7 +146,7 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
         if args.as_json:
             print(json.dumps({"package": package, "tldr": tldr}))
         else:
-            print(tldr)
+            console.info(tldr)
         return
 
     # Determine format. Note: page listings always use the rich manifest
@@ -176,9 +178,9 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
         print(json.dumps(result, indent=2, default=str))
     elif isinstance(result, Path) and result.is_file():
         # --page returns a file path — print its content
-        print(result.read_text(encoding="utf-8"))
+        console.info(result.read_text(encoding="utf-8"))
     else:
-        print(result)
+        console.info(result)
 
 
 def _print_page_list(result, as_json: bool = False) -> None:
@@ -190,14 +192,14 @@ def _print_page_list(result, as_json: bool = False) -> None:
         else:
             if isinstance(pages, list) and pages and isinstance(pages[0], dict):
                 for p in pages:
-                    print(f"  {p.get('name', '?'):20s} {p.get('title', '')}")
+                    console.info(f"  {p.get('name', '?'):20s} {p.get('title', '')}")
             elif isinstance(pages, list):
                 for name in pages:
-                    print(f"  {name}")
+                    console.info(f"  {name}")
             else:
-                print("  (no pages found)")
+                console.info("  (no pages found)")
     else:
-        print(result)
+        console.info(result)
 
 
 def _get_tldr(package: str) -> str:

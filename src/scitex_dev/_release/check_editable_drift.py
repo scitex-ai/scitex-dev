@@ -39,6 +39,8 @@ import sys
 import time
 from pathlib import Path
 
+from .._core.streams import write_stream
+
 
 _CACHE_DIR = Path.home() / ".cache" / "scitex" / "dev"
 _CACHE_FILE = _CACHE_DIR / "editable-drift.json"
@@ -218,7 +220,7 @@ def _log_stale(level: str, text: str, stream=None) -> None:
         return
     except Exception:  # noqa: BLE001 — fail-safe: a warning must never crash
         prefix = "ERROR" if level == "error" else "WARN"
-        print(f"{prefix}: {text}", file=stream if stream is not None else sys.stderr)
+        write_stream(f"{prefix}: {text}", stream if stream is not None else sys.stderr)
 
 
 def _react_to_drift(message: str | None, severity: str, stream=None) -> int:

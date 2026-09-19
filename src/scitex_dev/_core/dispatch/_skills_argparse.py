@@ -19,6 +19,8 @@ import scitex_logging as slogging
 
 log = slogging.getLogger(__name__)
 
+console = slogging.getConsole(f"{__name__}.console")
+
 
 def register_skills_subcommand(
     subparsers: argparse._SubParsersAction,
@@ -137,7 +139,7 @@ def register_skills_subcommand(
 def _skills_list(args: argparse.Namespace, package: str) -> None:
     import logging
 
-    logging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
+    slogging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
     from ..._ecosystem._skills.skills import list_skills
 
     result = list_skills(package=package)
@@ -146,22 +148,22 @@ def _skills_list(args: argparse.Namespace, package: str) -> None:
     else:
         items = result.get(package, [])
         if not items:
-            print(f"No skills found for {package}.")
+            console.info(f"No skills found for {package}.")
             return
-        print(f"Available skills for {package}:\n")
+        console.info(f"Available skills for {package}:\n")
         for s in items:
             desc = f"  {s['description']}" if s["description"] else ""
-            print(f"  {s['name']}")
+            console.info(f"  {s['name']}")
             if desc:
-                print(f"    {s['description']}")
+                console.info(f"    {s['description']}")
         prog = package.replace("_", "-")
-        print(f"\nUsage: {prog} skills get <name>")
+        console.info(f"\nUsage: {prog} skills get <name>")
 
 
 def _skills_export(args: argparse.Namespace, package: str) -> None:
     import logging
 
-    logging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
+    slogging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
     from ..._ecosystem._skills.skills import export_skills
 
     from ..._ecosystem._skills.skills import _get_default_export_dest
@@ -186,9 +188,9 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
                 )
             )
         else:
-            print(f"Would export {total} files to {dest}/ (source={source})")
+            console.info(f"Would export {total} files to {dest}/ (source={source})")
             for k, v in sorted(result.items()):
-                print(f"  {k}/: {len(v)} files")
+                console.info(f"  {k}/: {len(v)} files")
         return
     exported = export_skills(dest, package=package, clean=clean, source=source)
     if not exported:
@@ -200,15 +202,15 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
         )
     else:
         total = sum(len(v) for v in exported.values())
-        print(f"Exported {total} files across {len(exported)} packages")
+        console.info(f"Exported {total} files across {len(exported)} packages")
         for k, v in exported.items():
-            print(f"  {k}: {len(v)} files")
+            console.info(f"  {k}: {len(v)} files")
 
 
 def _skills_get(args: argparse.Namespace, package: str) -> None:
     import logging
 
-    logging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
+    slogging.getLogger("scitex_dev._core.discovery").setLevel(logging.ERROR)
 
     # No name given → show available names
     if args.name is None:
@@ -224,7 +226,7 @@ def _skills_get(args: argparse.Namespace, package: str) -> None:
                 json.dumps({"package": package, "name": args.name, "content": content})
             )
         else:
-            print(content)
+            console.info(content)
     else:
         log.error(
             f"Skill '{args.name}' not found in {package}. "

@@ -38,6 +38,8 @@ import os
 import random
 from typing import Awaitable, Callable, Iterable, Optional, Sequence
 
+import scitex_logging as slogging
+
 __all__ = ["PeriodicTask", "PeriodicTaskGroup"]
 
 # ``on_error`` policy tokens.
@@ -153,7 +155,7 @@ class PeriodicTask:
         self.on_error = on_error
         self.initial_delay = float(initial_delay)
         self.jitter = float(jitter)
-        self._log = logger or logging.getLogger(f"scitex_dev.runtime.periodic.{name}")
+        self._log = logger or slogging.getLogger(f"scitex_dev.runtime.periodic.{name}")
         self._clock = clock or __import__("time").monotonic
         self._sleep = sleep or asyncio.sleep
         self._to_thread = to_thread or asyncio.to_thread

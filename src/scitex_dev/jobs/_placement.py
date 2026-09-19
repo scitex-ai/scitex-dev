@@ -259,9 +259,9 @@ def discover_placement(
     records accumulate and :func:`decide` reads them all, so a job
     placed on 02 by one provider and on 03 by another runs on both.
     """
-    import logging
+    import scitex_logging as slogging
 
-    logger = logging.getLogger(__name__)
+    logger = slogging.getLogger(__name__)
     providers: list[Callable[[], list[PlacementRecord]]] = []
 
     for ep in _iter_entry_points(ENTRY_POINT_GROUP):

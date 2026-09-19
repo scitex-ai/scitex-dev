@@ -246,12 +246,16 @@ def test_default_findings_log_their_headline_at_error_level(warning_lines):
 
 
 def test_default_error_finding_is_listed(warning_lines):
+    # Arrange — collect the emitted headline messages
+    messages = _messages(warning_lines)
     # Act
+    listed = "PS-220" in messages
     # Assert
-    assert "PS-220" in _messages(warning_lines)
+    assert listed is True
 
 
 def test_default_findings_exit_nonzero(tmp_path):
+    # Arrange — a repo whose only finding is the error-tier bare print
     _build(tmp_path, _SOURCE_WITH_BARE_PRINT)
     # Act
     code = _audit(tmp_path)

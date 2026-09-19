@@ -45,7 +45,7 @@ restart, but PR-1 keeps it polling.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import os
 import signal
 import time
@@ -62,7 +62,7 @@ from ._state import (
     write_state_atomically,
 )
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 
 DEFAULT_TICK_INTERVAL_SEC = 1.0
 DEFAULT_STATE_WRITE_INTERVAL_SEC = 5.0

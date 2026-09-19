@@ -73,6 +73,8 @@ import scitex_logging as slogging
 
 log = slogging.getLogger(__name__)
 
+console = slogging.getConsole(f"{__name__}.console")
+
 
 # The store-resolution chain for ``tasks.yaml`` (highest precedence
 # first), mirroring scitex_todo._paths so the cron body picks the SAME
@@ -223,14 +225,11 @@ def run_once(
     # + Phase-2 dispatch fold into THIS log line so a single grep
     # against `$HOME/.scitex/dev/runtime/logs/cron-task-harvest.log` answers "how
     # are we trending?" across the whole history of the board.
-    print(
-        f"[task-harvest {timestamp}] "
+    console.info(f"[task-harvest {timestamp}] "
         f"path={resolved} N={len(tasks)} "
         f"blocked={by_status.get('blocked', 0)} "
         f"runnable={runnable} done={by_status.get('done', 0)} "
-        f"by_kind={dict(sorted(blocked_by_kind.items()))}",
-        flush=True,
-    )
+        f"by_kind={dict(sorted(blocked_by_kind.items()))}")
 
     return TaskHarvestResult(
         tasks_path=str(resolved),

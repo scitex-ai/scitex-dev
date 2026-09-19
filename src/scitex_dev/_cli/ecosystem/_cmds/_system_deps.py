@@ -25,6 +25,8 @@ import click
 from ...._ecosystem.click_compat import deprecated_alias
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
 
+from ...._core.streams import render_rich
+
 
 def _select(provider):
     """Discover + optionally filter to one provider."""
@@ -89,11 +91,12 @@ def _do_install(deps, *, dry_run: bool) -> int:
 
 def _render(deps) -> None:
     """Human-readable table of the aggregated declarations."""
-    from rich.console import Console
     from rich.table import Table
 
     if not deps:
-        Console().print("[yellow]No system deps declared by any provider.[/yellow]")
+        render_rich(
+            "[yellow]No system deps declared by any provider.[/yellow]", __name__
+        )
         return
     table = Table(show_header=True, header_style="bold")
     table.add_column("package")
@@ -102,10 +105,11 @@ def _render(deps) -> None:
     table.add_column("apt_repo")
     for dep in deps:
         table.add_row(dep.package, dep.provider, dep.purpose, dep.apt_repo or "-")
-    Console().print(table)
-    Console().print(
+    render_rich(table, __name__)
+    render_rich(
         f"[bold]{len(deps)}[/bold] system package(s) across "
-        f"{len({d.provider for d in deps})} provider(s)."
+        f"{len({d.provider for d in deps})} provider(s).",
+        __name__,
     )
 
 
