@@ -21,7 +21,13 @@ jobs:
     name: import-smoke-on-ubuntu-py3-12
     runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
     steps:
+      # fetch-depth: 0 is REQUIRED — the same defect as the pytest-matrix
+      # workflow: a shallow clone hides the tags setuptools-scm derives the
+      # version from, the install resolves to `0.1.dev1+g<sha>`, and that string
+      # cannot satisfy scitex-cards' `scitex-dev>=0.59.0` requirement.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
