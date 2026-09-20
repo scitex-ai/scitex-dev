@@ -46,16 +46,47 @@ export LC_ALL=C.UTF-8 LANG=C.UTF-8
 
 # Real writable scratch. The runner profile exports TMPDIR=~/.cache/tmp, a host
 # path that does NOT resolve inside the container; tests (tmp_path) and the
-# install target both need a working, writable tmp. Node-local /tmp is writable
-# + ephemeral and per-version-isolated so concurrent matrix legs don't collide.
-export TMPDIR="/tmp/ci-scitex_dev-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}-$V"
+# install target both need a working, writable tmp. Per-version-isolated so
+# concurrent matrix legs don't collide.
+#
+# SCRATCH-FIRST, NOT /tmp. This used to hardcode /tmp, and on the SciTeX compute
+# nodes /tmp lives on the SMALL root LV (compute-02: 98G, reached 99% full, 1.3G
+# free) while /scratch is a separate multi-terabyte LV with hundreds of GB free.
+# The cost was measured, not hypothetical: a release leg died with Errno 28
+# unpacking wheels into /tmp/ci-figrecipe-*, and an audit leg failed twice the
+# same way. This directory is the consumer - the wrapper's own temp, holding the
+# uv cache and the unpacked wheels - so pointing it at scratch fixes the pressure
+# at its source rather than by relocating the host's /tmp, which would be far
+# more dangerous (the live tmux server socket lives there, and sac's liveness
+# probe is tmux-based, so hiding it reads every agent on the host as dead).
+#
+# Falls back to /tmp when there is no scratch volume, so this stays correct on
+# hosts that only have the one filesystem.
+_CI_TMP_ROOT="/scratch/ywatanabe/ci/tmp"
+[ -d /scratch ] || _CI_TMP_ROOT="/tmp"
+mkdir -p "$_CI_TMP_ROOT"
+
+# Age-based sweep of superseded per-run trees. These are disposable by
+# construction (one per run x attempt x version), nothing cleans them today, and
+# on the scratch volume an unbounded accumulation would simply take longer to
+# hurt. +1 day so a run in flight can never be swept by a concurrent leg.
+find "$_CI_TMP_ROOT" -maxdepth 1 -name 'ci-*' -type d -mtime +1 -exec rm -rf {} + 2>/dev/null || true
+
+export TMPDIR="$_CI_TMP_ROOT/ci-scitex_dev-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}-$V"
 # `${TMPDIR:?}` AND NOT `$TMPDIR`.
 #
-# The line above cannot produce an empty value TODAY — the `/tmp/…` prefix is a
-# literal. The guard pins that. scitex-agent-container's wrappers started from
-# this exact shape and later moved the name into a helper function in another
-# file, at which point "always non-empty" stopped being visible from the
-# deletion site; nothing there would have noticed.
+# The line above cannot produce an empty value TODAY — `$_CI_TMP_ROOT` is
+# assigned from a LITERAL in both branches of the `[ -d /scratch ]` test above,
+# so it is always non-empty, and the rest is literal. The guard pins that.
+#
+# THAT INVARIANT IS NOW LESS VISIBLE THAN IT WAS, and it is worth saying so:
+# this line used to start with the literal `/tmp/`, so "always non-empty" could
+# be read off the deletion site. The prefix is a variable now. That is EXACTLY
+# the shape this comment was written to warn about — scitex-agent-container's
+# wrappers moved the name into a helper in another file and nothing there would
+# have noticed an empty value. So: if `_CI_TMP_ROOT` ever grows a code path that
+# can leave it unset, this guard becomes the only thing standing between an
+# empty TMPDIR and an `rm -rf ""` that exits 0 silently.
 #
 # And `rm -rf ""` IS NOT A SAFE NO-OP. Measured, GNU coreutils 9.4: `-f` treats
 # the empty operand as a nonexistent file, so it exits 0 SILENTLY — `set -euo
