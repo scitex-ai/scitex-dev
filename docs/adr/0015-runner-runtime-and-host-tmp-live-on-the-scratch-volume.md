@@ -47,6 +47,28 @@ relocated to the scratch volume, compute-02 went from 99% to 95% and the audit
 job passed in 80 seconds on re-run. The relocation is therefore not
 housekeeping: it is what let a finished PR land.
 
+One more property of these hosts matters more than it first appears: on every one
+of them `/` and `/scratch` are logical volumes in the SAME volume group on the
+SAME physical device (compute-03: `nvme0n1` 3.6T, `ubuntu--vg` holding a 400G `/`
+and a 3T `/scratch`). Moving data between them is a **capacity** separation, not
+a durability one — a disk failure takes both — and every host still has
+unallocated space in that group:
+
+| host | root LV | scratch LV | same device | VG free |
+|---|---|---|---|---|
+| compute-01 | 100G | 300G | `sda` 489G | 86G |
+| compute-02 | 100G | 300G | `nvme0n1` 476.9G | 74G |
+| compute-03 | 400G | 3T | `nvme0n1` 3.6T | 251G |
+| compute-04 | 500G | 3T | `nvme0n1` 3.6T | 151G |
+
+That column is recorded for completeness and not as a remedy. Extending the root
+LV online from that free space was considered and **rejected**, on the operator's
+reasoning: enlarging `/` addresses **capacity**, while the condition this ADR
+corrects is **placement** — and growth merely defers that problem, because the
+same state is met again eventually, only larger. The free space remains available
+for genuine growth; the disagreement is about what the fix should be, not about
+whether the space exists.
+
 The constraint that makes this hard: `/tmp` is where build tools write, and on
 all four hosts it shares the root LV with `/home`. A host can therefore be
 unable to run a `pip install` while a 295G–3.0T scratch volume sits at 12–39%
@@ -113,7 +135,32 @@ there.
    exactly one writer.** A bind mount does not survive reboot; a lost entry
    reverts silently to the small filesystem, and the condition returns with no
    signal. Two agents editing fstab on one host is the same interleaving hazard
-   as two agents mounting one directory.
+   as two agents mounting one directory. A symlink needs no entry at all — see
+   the mechanism below — which is one more reason to reach for it first.
+
+### Mechanism: a symlink first, a bind only when forced
+
+The default mechanism is a **symlink** at the original path, pointing into the
+scratch user space (`/scratch/ywatanabe/<thing>`). It keeps the path unchanged
+without the properties that made binds dangerous here:
+
+| | symlink | bind mount |
+|---|---|---|
+| can hide content | no — `ls -l` shows the target | yes, and that is exactly what broke twice |
+| survives reboot | yes, by construction | only with a single-writer fstab entry |
+| reversible | `rm` the link | `umount`, and only in the right order |
+
+Two exceptions are real, and both push the decision into the tool's own
+configuration rather than either mechanism: a tool that resolves the real path
+and then composes further paths from it, and a tool that insists on a real
+directory. containerd's `root` and Docker's `data-root` are configuration
+options, so for `/var/lib/containerd` the setting is the correct lever.
+
+**Durability is not part of what a relocation buys.** `/` and `/scratch` share a
+physical device on every host, so anything that must survive a disk failure needs
+a backup or a different host, not a different directory. This matters most for
+the rule that long-retention data also belongs on the scratch volume: that is a
+placement decision, and it confers no redundancy.
 
 ### The procedure, because the ordering *is* the decision
 
@@ -148,7 +195,12 @@ filesystem afterwards and finding the same content in two places.
   error.
 - **Per-host state that is not in git.** Every bind is an fstab entry on one
   machine. Nothing in the repository detects a host that has lost one, and the
-  only defence is the reminder in this ADR plus a check at boot.
+  only defence is the reminder in this ADR plus a check at boot. Symlinks remove
+  this class entirely, which is the main reason they are the preferred mechanism.
+- **Nothing here buys durability.** `/` and `/scratch` sit on the same physical
+  device, so a relocation is a capacity and tidiness change. Long-retention data
+  moved to the scratch volume is no safer than it was; its protection is a backup
+  policy, and this ADR does not provide one.
 - `/tmp` does not heal itself here: thirty-day aging against a writer that
   produces ~1.4G per CI run means the hourly sweep is a no-op, so this pressure
   has to be designed out — the writer puts its temp on scratch, and the `ci-*`
