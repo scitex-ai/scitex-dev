@@ -24,7 +24,17 @@ jobs:
       SCITEX_CI_SIF: ${{ vars.SCITEX_CI_SIF }}
       SCITEX_CI_SIF_SHA256: ${{ vars.SCITEX_CI_SIF_SHA256 }}
     steps:
+      # fetch-depth: 0 is REQUIRED here, not an optimisation. setuptools-scm
+      # derives the version from git tags; a shallow clone hides them, so the
+      # local editable install resolves to `0.1.dev1+g<sha>`. Published
+      # scitex-cards unconditionally requires `scitex-dev>=0.59.0`, which makes
+      # that string unsatisfiable — every matrix leg then fails BEFORE a test
+      # is collected, which reads as a test failure and is not one.
+      # The quality-audit workflow already checks out with fetch-depth: 0 and
+      # passes for exactly this reason; it is the control for this change.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Run tests
         # The wrapper verifies the immutable image digest before execution.
         # The inner runner then verifies its Python/PostgreSQL capabilities and
