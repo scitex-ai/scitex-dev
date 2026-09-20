@@ -23,7 +23,17 @@ from .test_execution import discover_recipe, guard_message
 
 def pytest_configure(config) -> None:
     """Fail-fast if this checkout mandates remote tests and we're running local."""
-    import pytest
+    # `pytest` is declared in the `[all]` extra rather than in core, so this
+    # import is guarded: the hook can only run under pytest, but a failure
+    # here should still name the extra that provides it instead of raising a
+    # bare ModuleNotFoundError (PS-233).
+    try:
+        import pytest
+    except ImportError as e:  # pragma: no cover - pytest invokes this hook
+        raise ImportError(
+            "pytest is required by the scitex-dev test-execution plugin; "
+            "install with: pip install 'scitex-dev[all]'"
+        ) from e
 
     recipe = discover_recipe()
     message = guard_message(recipe)

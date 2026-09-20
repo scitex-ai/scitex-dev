@@ -14,7 +14,12 @@ if TYPE_CHECKING:
 
 def register_routes(app: Flask) -> None:
     """Register dashboard routes with Flask app."""
-    from flask import jsonify, request
+    try:
+        from flask import jsonify, request
+    except ImportError as e:
+        raise ImportError(
+            "Flask is required for the dashboard. Install with: pip install flask"
+        ) from e
 
     from .templates import get_dashboard_html, get_error_html
 
