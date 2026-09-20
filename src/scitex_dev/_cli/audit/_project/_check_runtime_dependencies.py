@@ -11,8 +11,21 @@ distribution happens to be installed transitively.
 The rule scans Python shipped under ``src/`` without importing it.  It ignores
 stdlib, this repository's own top-level packages, relative imports,
 ``TYPE_CHECKING`` blocks, and imports protected by a ``try`` that catches
-``ImportError``.  Unguarded imports must resolve from ``project.dependencies``;
-guarded imports may instead resolve from a consumer runtime extra.
+``ImportError``.
+
+The guard shape decides the finding:
+
+* A GUARDED import is optional, so it needs no declaration: the guard is the
+  contract and the plugin form is legal metadata-free.  Declaring an optional
+  capability in an extra remains allowed -- that is what ``[all]`` is for --
+  EXCEPT for a distribution that itself requires this project, where the two
+  declarations form a dependency cycle no resolver can satisfy.  That is a
+  property of the dependency's own metadata, not of this project's import
+  shape, so this static scan does not decide it; it is enforced at review and
+  recorded in the packaging comments.
+* An UNGUARDED import is a hard requirement and must resolve from
+  ``project.dependencies`` -- not from an extra, which a minimal installation
+  does not install.
 
 Import-root to distribution mapping is intentionally closed and deterministic.
 Declared requirements contribute their known roots, while undeclared imports
@@ -274,16 +287,24 @@ def check_ps233_runtime_dependencies(
     project = meta.get("project", {}) or {}
     core_roots = _declared_roots(project.get("dependencies", []) or [])
     optional_roots: dict[str, tuple[str, str]] = {}
+    declared_roots: dict[str, tuple[str, str]] = {}
     extras = project.get("optional-dependencies", {}) or {}
     for extra in sorted(extras):
-        if extra in _NON_RUNTIME_EXTRAS:
-            continue
         for root, dist in _declared_roots(extras[extra] or []).items():
-            optional_roots.setdefault(root, (extra, dist))
+            declared_roots.setdefault(root, (f"optional extra `[{extra}]`", dist))
+            if extra not in _NON_RUNTIME_EXTRAS:
+                optional_roots.setdefault(root, (extra, dist))
+    for root, dist in core_roots.items():
+        declared_roots.setdefault(root, ("`[project.dependencies]`", dist))
 
     ignored = set(getattr(sys, "stdlib_module_names", ())) | {"__future__"}
     ignored |= _own_roots(src_root)
 
+    # Collect every relevant import before judging any of them: whether a root
+    # is guarded is a property of ALL its import sites, so one site cannot be
+    # classified until the others are known.
+    observations: list[tuple[Path, str, int, str, bool]] = []
+    guarded_only: dict[str, bool] = {}
     for source in _iter_source_files(src_root):
         try:
             tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
@@ -292,49 +313,66 @@ def check_ps233_runtime_dependencies(
         visitor = _RuntimeImportVisitor(tree)
         visitor.visit(tree)
         for root, lineno, statement, guarded in visitor.found:
-            if root in ignored or root in core_roots:
+            if root in ignored:
                 continue
-            optional = optional_roots.get(root)
             expected = _known_distribution(root)
-            if optional is None and expected is None:
+            if root not in declared_roots and expected is None:
                 continue  # ambiguous/unknown mapping: do not guess
-            if optional is not None and guarded:
-                continue
-
-            rel = source.relative_to(repo)
-            if optional is not None:
-                extra, dist = optional
-                remedy = (
-                    f"`{dist}` is declared only in optional extra `[{extra}]`, "
-                    "but this import is unguarded. Move it to "
-                    "`[project.dependencies]`, or guard the import with "
-                    "`try/except ImportError` if the capability is genuinely optional."
-                )
-            else:
-                dist = _norm_dist(expected or root)
-                target = (
-                    "a consumer runtime extra (with `try/except ImportError`)"
-                    if guarded
-                    else "`[project.dependencies]`"
-                )
-                remedy = f"`{dist}` is undeclared; add it to {target}."
-            out.append(
-                violation_cls(
-                    _RULE,
-                    f"{distribution}: {rel}:{lineno}",
-                    f"`{statement}` is a runtime import. {remedy} "
-                    "A developer/test environment may provide it transitively, "
-                    "which does not make a fresh installation complete.",
-                )
+            observations.append((source, root, lineno, statement, guarded))
+            previous = guarded_only.get(root)
+            guarded_only[root] = (
+                guarded if previous is None else previous and guarded
             )
+
+    for source, root, lineno, statement, guarded in observations:
+        rel = source.relative_to(repo)
+        optional = optional_roots.get(root)
+        declared = declared_roots.get(root)
+        if guarded_only.get(root, guarded):
+            # Optional capability: the guard is the contract, so no declaration
+            # is required and a declared one is not an error. The one shape the
+            # metadata forbids -- an optional distribution that itself requires
+            # this project -- is a property of that dependency's metadata, not
+            # of this import shape, so it is not decided here.
+            continue
+        if root in core_roots:
+            continue
+        if optional is not None:
+            extra, dist = optional
+            remedy = (
+                f"`{dist}` is declared only in optional extra `[{extra}]`, "
+                "but this import is unguarded. Move it to "
+                "`[project.dependencies]`, or guard the import with "
+                "`try/except ImportError` if the capability is genuinely optional."
+            )
+        elif declared is not None:
+            where, dist = declared
+            remedy = (
+                f"`{dist}` is declared only in {where}, but this import is "
+                "unguarded. Move it to `[project.dependencies]`."
+            )
+        else:
+            dist = _norm_dist(_known_distribution(root) or root)
+            remedy = f"`{dist}` is undeclared; add it to `[project.dependencies]`."
+        out.append(
+            violation_cls(
+                _RULE,
+                f"{distribution}: {rel}:{lineno}",
+                f"`{statement}` is a runtime import. {remedy} "
+                "A developer/test environment may provide it transitively, "
+                "which does not make a fresh installation complete.",
+            )
+        )
 
 
 RUNTIME_DEPENDENCY_RULES: list[tuple[str, str, str, str, str]] = [
     (
         _RULE,
         "§3",
-        "shippable source imports a deterministically mapped runtime distribution "
-        "that is missing from the dependency bucket required by its guard shape",
+        "shippable source has an unguarded import of a deterministically mapped "
+        "runtime distribution that does not resolve from "
+        "`[project.dependencies]`; a guarded import is optional and needs no "
+        "declaration",
         "E",
         "runtime-import-dependency-undeclared",
     )

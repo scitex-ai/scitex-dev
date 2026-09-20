@@ -152,7 +152,17 @@ dev = [
     # see, so the group listing is the remedy that applies. `flask` is
     # deliberately absent — the dashboard tests gate it with a literal
     # `pytest.importorskip("flask")`, which PS-210 does honour.
-    "scitex-cards>=0.53.0",
+    #
+    # scitex-cards is deliberately absent from BOTH this extra and `[all]`,
+    # and the reason is a cycle rather than a preference: published
+    # scitex-cards requires `scitex-dev>=0.59.0`, so declaring it here would
+    # make this project require a package that requires it right back. That
+    # holds only while both versions are truthful, and fails outright in
+    # scitex-dev's own CI, where setuptools-scm cannot see the tags and the
+    # build reports `0.1.dev1`. Every scitex-dev import of `scitex_cards` is
+    # guarded, so PS-233 requires no declaration at all; the capability
+    # degrades to absent, which is the documented plugin contract. Install
+    # `scitex-cards` explicitly to turn it on.
     "scitex-events>=0.1",
 ]
 docs = [
@@ -181,7 +191,10 @@ all = [
     # scitex-cards — ci-watch CI-fail todo filing, pr-expire intent cards,
     #   branch-GC active-ref lookup. Soft dep by design: every call site fails
     #   open (or falls back to the `scitex-todo` CLI) when it is absent.
-    "scitex-cards>=0.53.0",
+    #   Deliberately NOT declared here either: every import is guarded, so
+    #   PS-233 asks for no declaration, and declaring it would close the cycle
+    #   described above `[dev]` — published scitex-cards requires
+    #   `scitex-dev>=0.59.0`.
     # scitex-events — best-effort test-completion events from test_runner.
     "scitex-events>=0.1",
     # flask — the `gui serve` dashboard (`dashboard/app.py` / `routes.py`).

@@ -259,7 +259,12 @@ def test_try_around_function_definition_detail_says_unguarded(tmp_path) -> None:
     assert "import is unguarded" in out[0].detail
 
 
-def test_guarded_but_undeclared_import_reports_single_violation(tmp_path) -> None:
+def test_guarded_undeclared_import_is_the_plugin_form(tmp_path) -> None:
+    # The guard IS the contract: a capability wrapped in try/except ImportError
+    # is optional, so it needs no declaration. Requiring one forced the
+    # declaration that closed a dependency cycle with a package that requires
+    # this project -- which is why this expectation is the inverse of the
+    # original rule.
     # Arrange
     _make_package(
         tmp_path,
@@ -268,22 +273,12 @@ def test_guarded_but_undeclared_import_reports_single_violation(tmp_path) -> Non
     # Act
     out = _audit(tmp_path)
     # Assert
-    assert len(out) == 1
+    assert out == []
 
 
-def test_guarded_but_undeclared_import_names_consumer_runtime_extra(tmp_path) -> None:
-    # Arrange
-    _make_package(
-        tmp_path,
-        "try:\n    import psutil\nexcept ModuleNotFoundError:\n    psutil = None\n",
-    )
-    # Act
-    out = _audit(tmp_path)
-    # Assert
-    assert "consumer runtime extra" in out[0].detail
-
-
-def test_dev_extra_does_not_satisfy_guarded_runtime_import(tmp_path) -> None:
+def test_guarded_import_declared_in_dev_extra_is_allowed(tmp_path) -> None:
+    # Declaring an optional capability in an extra stays legal; only an
+    # unguarded import may not hide there.
     # Arrange
     _make_package(
         tmp_path,
@@ -293,7 +288,36 @@ def test_dev_extra_does_not_satisfy_guarded_runtime_import(tmp_path) -> None:
     # Act
     out = _audit(tmp_path)
     # Assert
+    assert out == []
+
+
+def test_unguarded_import_declared_only_in_dev_extra_still_reports(tmp_path) -> None:
+    # The relaxation must not let a hard requirement hide in [dev].
+    # Arrange
+    _make_package(
+        tmp_path,
+        "def collect():\n    import psutil\n    return psutil.cpu_count()\n",
+        extras={"dev": ("psutil",)},
+    )
+    # Act
+    out = _audit(tmp_path)
+    # Assert
     assert len(out) == 1
+
+
+def test_unguarded_import_declared_only_in_dev_extra_names_core_target(
+    tmp_path,
+) -> None:
+    # Arrange
+    _make_package(
+        tmp_path,
+        "def collect():\n    import psutil\n    return psutil.cpu_count()\n",
+        extras={"dev": ("psutil",)},
+    )
+    # Act
+    out = _audit(tmp_path)
+    # Assert
+    assert "Move it to `[project.dependencies]`" in out[0].detail
 
 
 def test_type_checking_only_import_is_ignored(tmp_path) -> None:
