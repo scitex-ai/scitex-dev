@@ -57,7 +57,7 @@ root) applies the declaration automatically.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import shutil
 import socket
 import sys
@@ -67,7 +67,7 @@ from typing import Callable
 
 from ._volatility import volatile_reason
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 
 #: Entry-point group every leaf registers its host-config provider under.
 ENTRY_POINT_GROUP = "scitex_dev.host_config"

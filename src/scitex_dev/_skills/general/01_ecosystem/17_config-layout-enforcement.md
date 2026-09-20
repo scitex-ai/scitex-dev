@@ -62,12 +62,11 @@ clean tree it was unable to evaluate.
 
 PS-222 ships at **warning**, for every project type.
 
-The precedent is PS-220: promoted to `E` ecosystem-wide in PR #406, which
-newly FAILED 44 repos on 1856 findings and was restaged to `W` the next
-day. A layout convention landing red across the fleet buys nothing that a
-visible warning does not, and costs every repo's green build. Shipping at
-`W` also means the first ecosystem-wide measurement happens while the fleet
-can still merge.
+The historical precedent was PS-220's 2026 staged rollout. That staging has
+since ended for logging: PS-220 is now an ecosystem-wide error because
+unleveled human diagnostics are an observability defect, not a layout
+preference. PS-222 remains a warning because a config-directory convention
+does not corrupt or hide runtime diagnostics.
 
 The severity lives in the rule tuple in `_check_config_layout.py`, **not**
 in `_registry._SEVERITY_OVERRIDES`. `_patch` (which applies that table) runs

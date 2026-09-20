@@ -26,6 +26,8 @@ from ._sync_helpers import (
     selected_packages,
 )
 
+from ...._core.streams import render_rich
+
 
 def _local_row(pkg: str, info: dict, *, fetch: bool) -> dict:
     """Gather branch + develop shas for one package's local checkout."""
@@ -231,7 +233,6 @@ def register(ecosystem):
         _render_table(rows, host_list)
 
     def _render_table(rows, host_list):
-        from rich.console import Console
         from rich.table import Table
 
         table = Table(show_header=True, header_style="bold")
@@ -260,7 +261,7 @@ def register(ecosystem):
             cells.append(f"[{color}]{label}[/{color}]")
             table.add_row(*cells)
 
-        Console().print(table)
+        render_rich(table, __name__)
 
     def _worst_status(host_statuses, local_status):
         # Severity ladder: diverged/missing (red) > drift (yellow) > synced.

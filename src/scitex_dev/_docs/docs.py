@@ -29,13 +29,13 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
+import scitex_logging as slogging
 from pathlib import Path
 from typing import Any, Optional
 
 from .._core.discovery import discover_packages, get_package_root, get_sphinx_source
 
-logger = logging.getLogger(__name__)
+logger = slogging.getLogger(__name__)
 
 
 def get_docs(

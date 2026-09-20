@@ -54,6 +54,7 @@ import os
 import sys
 
 from ...versioning import Currency, VersioningConfig, check_currency
+from ..._core.streams import write_stream
 
 __all__ = ["config", "warn_if_stale"]
 
@@ -109,5 +110,5 @@ def warn_if_stale(*, stream=sys.stderr, sources=None) -> bool:
             lines.append(f"      fix: {finding.remedy}")
         lines.append("      (silence: --no-version-check)")
         msg = "\033[33m" + "\n".join(lines) + "\033[0m"
-        print(msg, file=stream, flush=True)
+        write_stream(msg, stream, flush=True)
     return True

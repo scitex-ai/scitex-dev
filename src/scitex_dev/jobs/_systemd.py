@@ -26,7 +26,7 @@ under ``~/.config/systemd/user/``.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 from pathlib import Path
 
 from .. import jobs as _jobs
@@ -56,7 +56,7 @@ _SYSTEM_PATH_ENTRIES = (
     "/bin",
 )
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 
 
 def build_service_unit(job: _jobs.JobSpec) -> str:

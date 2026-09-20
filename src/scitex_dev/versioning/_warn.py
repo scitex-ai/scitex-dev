@@ -34,6 +34,8 @@ from __future__ import annotations
 import os
 import sys
 
+from .._core.streams import write_stream
+
 __all__ = ["EXIT_STALE", "SEVERITY_DEFAULT", "emit_once", "warn_if_stale", "warning_lines"]
 
 SEVERITY_DEFAULT = "warn"
@@ -110,30 +112,30 @@ def warn_if_stale(config, stream=None) -> int:
         report = read_cache(config)
         if report is None:
             if debug:
-                print(
+                write_stream(
                     f"{config.dist}-currency: no usable cache "
                     "(missing/expired/corrupt) -> UNKNOWN -> silent.",
-                    file=out,
+                    out,
                 )
             return 0
 
         stale = report.stale
         if not stale:
             if debug:
-                print(
+                write_stream(
                     f"{config.dist}-currency: cached state="
                     f"{report.state.value} -> nothing to warn about",
-                    file=out,
+                    out,
                 )
             return 0
 
         for line in warning_lines(config, stale):
-            print(line, file=out)
+            write_stream(line, out)
         return EXIT_STALE if level == "error" else 0
 
     except Exception as exc:  # noqa: BLE001 - rule 2: a warning must NEVER break the CLI; any failure degrades to silence
         if debug:
-            print(f"{config.dist}-currency: check failed ({exc!r}) -> silent", file=out)
+            write_stream(f"{config.dist}-currency: check failed ({exc!r}) -> silent", out)
         return 0
 
 

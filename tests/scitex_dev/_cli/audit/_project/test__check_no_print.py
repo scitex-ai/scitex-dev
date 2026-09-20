@@ -2,16 +2,13 @@
 """Tests for `_check_no_print.py` (PS-220).
 
 SciTeX code must emit human-facing messages through scitex-logging, never
-the builtin `print`. This check AST-scans the shippable `src/<pkg>/**.py`
-tree and flags each `print(...)` that is not provably machine-readable
-stdout. Each test builds a REAL temp package tree (no mocks) then asserts
-whether PS-220 fires.
+the builtin `print`, Rich Console output, or stdlib logging. This check
+AST-scans the shippable `src/<pkg>/**.py` tree. Each test builds a REAL temp
+package tree (no mocks) then asserts whether PS-220 fires.
 
 The discriminator itself is unit-tested in `test__print_discriminator.py`;
 these tests cover the file walk, the scope exclusions, the per-site
-`audit.exemptions` surface, the removal of the `# noqa` hatch, and the
-STAGED severity (warning by default; each package opts in to error via
-`audit.enforce-logging` with a mandatory written reason).
+removal of the old exemption hatches, and unconditional error severity.
 """
 
 from __future__ import annotations
@@ -191,14 +188,14 @@ _EXEMPT_YAML = (
 )
 
 
-def test_exemption_with_a_written_reason_silences_the_site(tmp_path):
+def test_exemption_with_a_written_reason_cannot_silence_the_site(tmp_path):
     # Arrange
     _write_src(tmp_path, "scitex_demo/_cli.py", "def go(x):\n    print(x.render())\n")
     _write_config(tmp_path, _EXEMPT_YAML.format(reason='"renders the --json payload"'))
     # Act
     out = _run(tmp_path)
     # Assert
-    assert out == []
+    assert _codes(out) == ["PS-220"]
 
 
 def test_exemption_with_blank_reason_does_not_silence_the_site(tmp_path):
@@ -291,24 +288,24 @@ def test_noqa_on_a_structurally_spared_print_still_reports_nothing(tmp_path):
 # --- staged default: WARNING for everyone ------------------------------------
 
 
-def test_pip_package_resolves_ps220_to_warning_by_default(tmp_path):
+def test_pip_package_resolves_ps220_to_error_by_default(tmp_path):
     # Arrange — the staged rollout defaults every package to warning
     _write_config(tmp_path, "project-type:\n  - pip\n")
     cfg = load_config(tmp_path)
     # Act
     severity = resolve_ps220_severity(cfg)
     # Assert
-    assert severity == "W"
+    assert severity == "E"
 
 
-def test_research_hybrid_resolves_ps220_to_warning_by_default(tmp_path):
+def test_research_hybrid_resolves_ps220_to_error_by_default(tmp_path):
     # Arrange
     _write_config(tmp_path, "project-type:\n  - pip\n  - research\n")
     cfg = load_config(tmp_path)
     # Act
     severity = resolve_ps220_severity(cfg)
     # Assert
-    assert severity == "W"
+    assert severity == "E"
 
 
 def test_default_findings_carry_no_severity_override(tmp_path):
@@ -366,7 +363,7 @@ def test_opt_in_with_blank_reason_does_not_reach_error_severity(tmp_path):
     # Act
     severity = resolve_ps220_severity(cfg)
     # Assert
-    assert severity == "W"
+    assert severity == "E"
 
 
 def test_opt_in_with_blank_reason_is_reported_as_a_rejected_declaration(tmp_path):
@@ -387,22 +384,26 @@ def test_rejected_declaration_is_reported_at_error_severity(tmp_path):
     out = _run(tmp_path)
     notices = [v for v in out if "REJECTED" in v.detail]
     # Assert
-    assert notices[0].severity_override == "E"
+    assert notices[0].severity_override is None
 
 
 def test_bare_error_shorthand_is_rejected_for_carrying_no_reason(tmp_path):
     # Arrange — the pre-staging spelling `enforce-logging: error` has no reason
-    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: error\n")
+    _write_config(
+        tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: error\n"
+    )
     cfg = load_config(tmp_path)
     # Act
     severity = resolve_ps220_severity(cfg)
     # Assert
-    assert severity == "W"
+    assert severity == "E"
 
 
 def test_bare_error_shorthand_records_a_rejection_notice(tmp_path):
     # Arrange
-    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: error\n")
+    _write_config(
+        tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: error\n"
+    )
     # Act
     cfg = load_config(tmp_path)
     # Assert
@@ -416,13 +417,13 @@ def test_yaml_boolean_true_shorthand_is_rejected_for_carrying_no_reason(tmp_path
     # Act
     severity = resolve_ps220_severity(cfg)
     # Assert
-    assert severity == "W"
+    assert severity == "E"
 
 
 # --- `off` also demands a reason ---------------------------------------------
 
 
-def test_off_with_a_written_reason_stops_the_rule_firing(tmp_path):
+def test_off_with_a_written_reason_cannot_stop_the_rule_firing(tmp_path):
     # Arrange
     _write_src(tmp_path, "scitex_demo/_core.py", "def go():\n    print('hello')\n")
     _write_config(
@@ -431,10 +432,10 @@ def test_off_with_a_written_reason_stops_the_rule_firing(tmp_path):
     # Act
     out = _run(tmp_path)
     # Assert
-    assert out == []
+    assert _codes(out) == ["PS-220", "PS-220"]
 
 
-def test_quoted_off_level_with_a_reason_behaves_like_the_bare_one(tmp_path):
+def test_quoted_off_level_with_a_reason_cannot_stop_the_rule(tmp_path):
     # Arrange — YAML 1.1 turns bare `off` into False; both spellings must match
     _write_src(tmp_path, "scitex_demo/_core.py", "def go():\n    print('hello')\n")
     _write_config(
@@ -444,7 +445,7 @@ def test_quoted_off_level_with_a_reason_behaves_like_the_bare_one(tmp_path):
     # Act
     out = _run(tmp_path)
     # Assert
-    assert out == []
+    assert _codes(out) == ["PS-220", "PS-220"]
 
 
 def test_bare_off_shorthand_is_rejected_and_the_rule_still_fires(tmp_path):
@@ -469,7 +470,7 @@ def test_bare_warning_shorthand_is_accepted_without_a_reason(tmp_path):
     # Act
     severity = resolve_ps220_severity(cfg)
     # Assert
-    assert severity == "W"
+    assert severity == "E"
 
 
 def test_bare_warning_shorthand_records_no_rejection_notice(tmp_path):
@@ -485,17 +486,21 @@ def test_bare_warning_shorthand_records_no_rejection_notice(tmp_path):
 
 def test_unrecognised_enforce_logging_value_falls_back_to_the_staged_default(tmp_path):
     # Arrange — a typo must not silently change the gate in either direction
-    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: maybe\n")
+    _write_config(
+        tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: maybe\n"
+    )
     cfg = load_config(tmp_path)
     # Act
     severity = resolve_ps220_severity(cfg)
     # Assert
-    assert severity == "W"
+    assert severity == "E"
 
 
 def test_unrecognised_enforce_logging_value_records_a_rejection_notice(tmp_path):
     # Arrange — falling back must be LOUD, not silent
-    _write_config(tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: maybe\n")
+    _write_config(
+        tmp_path, "project-type:\n  - pip\naudit:\n  enforce-logging: maybe\n"
+    )
     # Act
     cfg = load_config(tmp_path)
     # Assert
@@ -506,7 +511,7 @@ def test_mapping_without_a_level_is_rejected(tmp_path):
     # Arrange — a reason with no level declares nothing
     _write_config(
         tmp_path,
-        "project-type:\n  - pip\naudit:\n  enforce-logging:\n    reason: \"we tried\"\n",
+        'project-type:\n  - pip\naudit:\n  enforce-logging:\n    reason: "we tried"\n',
     )
     # Act
     cfg = load_config(tmp_path)

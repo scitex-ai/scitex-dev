@@ -8,6 +8,8 @@ import scitex_logging as slogging
 
 log = slogging.getLogger(__name__)
 
+console = slogging.getConsole(f"{__name__}.console")
+
 from ..._ecosystem._release.pyproject_lint import lint_pyproject
 from ..._release.publisher import publish_release
 from ..._release.rtd_onboard import onboard_rtd
@@ -45,11 +47,11 @@ def lint_pyproject_cli(repo_root: str | None = None, strict: bool = False) -> in
     repo = Path(repo_root or ".").resolve()
     rep = lint_pyproject(repo)
     if not rep.findings:
-        print(f"{rep.package}: clean")
+        console.info(f"{rep.package}: clean")
         return 0
-    print(f"{rep.package}  ({rep.pyproject})")
+    console.info(f"{rep.package}  ({rep.pyproject})")
     for f in rep.findings:
-        print(f"  {f.render()}")
+        console.info(f"  {f.render()}")
     if rep.has_high:
         return 1
     return 2 if strict else 0
@@ -59,7 +61,7 @@ def rtd_onboard_cli(repo_root: str | None = None, dry_run: bool = False) -> int:
     """Scaffold a minimal Read the Docs setup. Idempotent."""
     repo = Path(repo_root or ".").resolve()
     rep = onboard_rtd(repo, dry_run=dry_run)
-    print(rep.render())
+    console.info(rep.render())
     return 0 if not rep.failed else 1
 
 
@@ -89,7 +91,7 @@ def release_publish_cli(
         log.error("--version required (and pyproject.toml has none)")
         return 1
     rep = publish_release(repo, version, notes=notes, dry_run=dry_run)
-    print(rep.render())
+    console.info(rep.render())
     return 0 if not rep.failed else 1
 
 

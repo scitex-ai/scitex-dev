@@ -57,6 +57,8 @@ import os
 import sys
 from pathlib import Path
 
+from .._core.streams import write_stream
+
 #: The documented, shared opt-out. One name people learn once. A leaf that
 #: needs its own scope passes ``env_var=`` rather than forking this module.
 DEFAULT_ENV_VAR = "SCITEX_ALLOW_FOREIGN_IMPORT"
@@ -166,11 +168,11 @@ def assert_path_inside_tree(
         return resolved_pkg
 
     if os.environ.get(env_var):
-        print(
+        write_stream(
             f"\n{package} imported from {resolved_pkg}, OUTSIDE "
             f"{resolved_root} — allowed by {env_var}. THIS RUN DOES NOT "
             f"GRADE THE TREE UNDER TEST.\n",
-            file=stream if stream is not None else sys.stderr,
+            stream if stream is not None else sys.stderr,
         )
         return resolved_pkg
 

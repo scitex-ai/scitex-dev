@@ -31,12 +31,12 @@ Example provider (in a leaf package)::
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import sys
 from dataclasses import dataclass
 from typing import Callable
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 
 #: Entry-point group every leaf registers its system-dep provider under.
 ENTRY_POINT_GROUP = "scitex_dev.system_deps"

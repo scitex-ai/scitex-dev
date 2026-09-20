@@ -9,6 +9,7 @@ import sys
 from typing import Any, Callable
 
 from .._core.types import Result
+from .._core.streams import write_stream
 
 
 def handle_result(
@@ -41,14 +42,14 @@ def handle_result(
         if isinstance(data, (dict, list, tuple)):
             print(json.dumps(data, indent=2, default=str), file=out)
         else:
-            print(data, file=out)
+            write_stream(data, out)
     else:
         out = file or sys.stderr
-        print(f"Error: {result.error}", file=out)
+        write_stream(f"Error: {result.error}", out)
         if result.hints_on_error:
-            print("", file=out)
+            write_stream("", out)
             for hint in result.hints_on_error:
-                print(f"  - {hint}", file=out)
+                write_stream(f"  - {hint}", out)
 
     return result.exit_code
 

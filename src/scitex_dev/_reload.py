@@ -10,6 +10,10 @@ import threading
 import time
 from typing import Any, Optional
 
+import scitex_logging as slogging
+
+console = slogging.getConsole(__name__)
+
 _reload_thread: Optional[threading.Thread] = None
 _running: bool = False
 
@@ -52,7 +56,7 @@ def _auto_reload_loop(interval: int) -> None:
         try:
             reload()
         except Exception as e:
-            print(f"Reload failed: {e}")
+            console.warning(f"Reload failed: {e}")
         time.sleep(interval)
 
 

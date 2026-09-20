@@ -472,7 +472,7 @@ def lint_source(
             # circular-import in figrecipe's plugin module. Operator
             # policy: fail-loud / no-silent-fallback.
             _name = getattr(checker_cls, "__name__", repr(checker_cls))
-            import logging as _logging
+            import scitex_logging as slogging
             import os as _os
             import sys as _sys
 
@@ -484,7 +484,7 @@ def lint_source(
             # Gating only the explicit write left the logger leaking the
             # message past QUIET; gate both so the off-switch is honest.
             if not _os.environ.get("SCITEX_DEV_LINTER_QUIET"):
-                _logging.getLogger(__name__).warning(
+                slogging.getLogger(__name__).warning(
                     "linter: plugin checker %s raised on visit: %s",
                     _name,
                     exc,

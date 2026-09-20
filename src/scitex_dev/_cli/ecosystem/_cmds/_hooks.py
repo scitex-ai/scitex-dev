@@ -22,6 +22,8 @@ from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ....hooks import ALLOWED_EVENTS, discover_hooks
 from ....hooks.cli import rule_to_dict
 
+from ...._core.streams import render_rich
+
 
 def register(parent: click.Group) -> click.Command:
     """Mount ``hooks`` on the ``ecosystem dev`` group."""
@@ -83,7 +85,6 @@ def register(parent: click.Group) -> click.Command:
             return
 
         try:
-            from rich.console import Console
             from rich.table import Table
         except ImportError:  # pragma: no cover - rich is a hard dep in practice
             for rule in rules:
@@ -103,7 +104,7 @@ def register(parent: click.Group) -> click.Command:
                     rule.rule,
                     rule.provider,
                 )
-            Console().print(table)
+            render_rich(table, __name__)
 
         providers = sorted({r.provider for r in rules})
         click.echo(

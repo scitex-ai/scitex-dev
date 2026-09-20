@@ -53,6 +53,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from ..._core.streams import write_stream
+
 # The keepalive cadence. 150 minutes == 2.5 hours. The crontab line ticks
 # every 30 minutes (see _jobs.py); the body fires on the first tick at or
 # past this many minutes since the last fire.
@@ -194,7 +196,7 @@ def run_once(
             f"not due ({elapsed_min:.0f} min since last fire; "
             f"need {KEEPALIVE_INTERVAL_MIN})"
         )
-        print(f"quota-keepalive: skip — {reason}", file=out)
+        write_stream(f"quota-keepalive: skip — {reason}", out)
         return KeepaliveResult(fired=False, skipped_reason=reason)
 
     # Due. Fire the trivial turn. Any failure here is logged and returned
@@ -204,31 +206,25 @@ def run_once(
         r = runner(KEEPALIVE_PROMPT)
     except FileNotFoundError:
         msg = "`claude` not found on PATH"
-        print(f"quota-keepalive: error — {msg}", file=out)
+        write_stream(f"quota-keepalive: error — {msg}", out)
         return KeepaliveResult(fired=False, error=msg)
     except Exception as exc:  # stx-allow: fallback (reason: never crash cron)
         msg = f"claude invocation raised: {exc}"
-        print(f"quota-keepalive: error — {msg}", file=out)
+        write_stream(f"quota-keepalive: error — {msg}", out)
         return KeepaliveResult(fired=False, error=msg)
 
     output = (r.stdout or "") + (r.stderr or "")
     if r.returncode != 0:
         msg = f"claude exited rc={r.returncode}: {output.strip()[:200]}"
-        print(f"quota-keepalive: error — {msg}", file=out)
+        write_stream(f"quota-keepalive: error — {msg}", out)
         return KeepaliveResult(fired=False, error=msg, output=output)
 
     # Success: record the fire time so the next 30-min ticks gate until
     # the interval re-elapses.
     wrote = _write_last_fire(path, current)
     if not wrote:
-        print(
-            f"quota-keepalive: warn — fired but failed to write {path}",
-            file=out,
-        )
-    print(
-        f"quota-keepalive: fired keepalive turn (model={KEEPALIVE_MODEL})",
-        file=out,
-    )
+        write_stream(f"quota-keepalive: warn — fired but failed to write {path}", out)
+    write_stream(f"quota-keepalive: fired keepalive turn (model={KEEPALIVE_MODEL})", out)
     return KeepaliveResult(fired=True, output=output)
 
 

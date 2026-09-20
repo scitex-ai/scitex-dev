@@ -3,7 +3,11 @@
 import json
 import sys
 
+import scitex_logging as slogging
+
 from .rules import ALL_RULES
+
+console = slogging.getConsole(__name__)
 
 # =========================================================================
 # Subcommand: rule (built-in only, JSON-capable)
@@ -59,11 +63,11 @@ def _cmd_rule(args) -> int:
     for r in rules_list:
         if use_color:
             c = sev_color.get(r.severity, "")
-            print(f"  {c}{r.id}{reset}  [{r.severity}]  {r.message}")
+            console.info(f"  {c}{r.id}{reset}  [{r.severity}]  {r.message}")
         else:
-            print(f"  {r.id}  [{r.severity}]  {r.message}")
+            console.info(f"  {r.id}  [{r.severity}]  {r.message}")
 
-    print(f"\n  {len(rules_list)} rules")
+    console.info(f"\n  {len(rules_list)} rules")
     return 0
 
 
@@ -106,9 +110,11 @@ def _cmd_rules(args) -> int:
     for r in rules_list:
         if use_color:
             c = sev_color.get(r.severity, "")
-            print(f"  {c}{r.id}{reset}  [{r.severity}]  {r.category}: {r.message}")
+            console.info(
+                f"  {c}{r.id}{reset}  [{r.severity}]  {r.category}: {r.message}",
+            )
         else:
-            print(f"  {r.id}  [{r.severity}]  {r.category}: {r.message}")
+            console.info(f"  {r.id}  [{r.severity}]  {r.category}: {r.message}")
 
-    print(f"\n  {len(rules_list)} rules")
+    console.info(f"\n  {len(rules_list)} rules")
     return 0

@@ -7,9 +7,13 @@ import os
 import subprocess
 import sys
 
+import scitex_logging as slogging
+
 from .checker import lint_file
 from .formatter import format_issue, format_summary
 from .rules import SEVERITY_ORDER
+
+log = slogging.getLogger(__name__)
 
 
 def _is_git_root() -> bool:
@@ -29,9 +33,8 @@ def run_script(filepath: str, strict: bool = False, script_args: list = None) ->
     use_color = sys.stderr.isatty()
     if not _is_git_root():
         hint = "\033[94mInfo\033[0m" if use_color else "Info"
-        print(
+        log.warning(
             f"{hint}: not running from a git root directory (cwd: {os.getcwd()})",
-            file=sys.stderr,
         )
 
     # Lint
@@ -44,28 +47,28 @@ def run_script(filepath: str, strict: bool = False, script_args: list = None) ->
 
     if issues:
         header = "\033[1mSciTeX Lint\033[0m" if use_color else "SciTeX Lint"
-        print(f"\n{header}\n", file=sys.stderr)
+        log.warning(f"\n{header}\n")
 
         for issue in issues:
-            print(format_issue(issue, filepath, color=use_color), file=sys.stderr)
-        print(format_summary(issues, filepath, color=use_color), file=sys.stderr)
-        print(file=sys.stderr)
+            log.warning(format_issue(issue, filepath, color=use_color))
+        log.warning(format_summary(issues, filepath, color=use_color))
+        log.warning()
 
     if strict and has_errors:
         msg = "\033[91mAborted\033[0m" if use_color else "Aborted"
-        print(f"{msg}: errors found (--strict mode)\n", file=sys.stderr)
+        log.error(f"{msg}: errors found (--strict mode)\n")
         return 2
 
     if not has_errors and not has_warnings:
         ok = "\033[92mOK\033[0m" if use_color else "OK"
-        print(f"{ok} {filepath}", file=sys.stderr)
+        log.success(f"{ok} {filepath}")
 
     # Execute
     sep = "\u2500" * 60
     if use_color:
-        print(f"\n\033[90m{sep}\033[0m", file=sys.stderr)
+        log.warning(f"\n\033[90m{sep}\033[0m")
     else:
-        print(f"\n{sep}", file=sys.stderr)
+        log.warning(f"\n{sep}")
 
     cmd = [sys.executable, filepath] + script_args
     result = subprocess.run(cmd)
