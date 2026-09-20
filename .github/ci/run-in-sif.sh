@@ -63,8 +63,35 @@ export LC_ALL=C.UTF-8 LANG=C.UTF-8
 # Falls back to /tmp when there is no scratch volume, so this stays correct on
 # hosts that only have the one filesystem.
 _CI_TMP_ROOT="/scratch/ywatanabe/ci/tmp"
-[ -d /scratch ] || _CI_TMP_ROOT="/tmp"
-mkdir -p "$_CI_TMP_ROOT"
+# THE FALLBACK MUST BE LOUD, AND MUST DISTINGUISH TWO DIFFERENT THINGS.
+#
+# This was `[ -d /scratch ] || _CI_TMP_ROOT="/tmp"` - a silent fallback. It made
+# the whole change capable of becoming a NO-OP THAT LOOKS SUCCESSFUL: if the
+# scratch test failed for any reason at all, the wrapper quietly put the temp
+# back on the root LV, which is exactly where this change exists to keep it off.
+# The red legs on this branch showed the fallback winning - a failure path of
+# /tmp/ci-scitex_dev-<run>-..., the pre-change location - with nothing in the log
+# saying the scratch-first intent had been abandoned.
+#
+# There are two different situations and they deserve different answers:
+#   - this HOST has no scratch volume (one filesystem): /tmp is correct, and
+#     falling back is right. Say so.
+#   - scratch EXISTS but this run cannot see or write it (a container boundary,
+#     a mount or permission change): that is a MISCONFIGURATION, and silently
+#     using /tmp would recreate the pressure this change removes. FAIL, so it is
+#     noticed the first time rather than after the next ENOSPC.
+if [ -d /scratch ]; then
+  if ! mkdir -p "$_CI_TMP_ROOT" 2>/dev/null || [ ! -w "$_CI_TMP_ROOT" ]; then
+    printf 'ERROR: /scratch exists but %s is not writable from this run.\n' "$_CI_TMP_ROOT" >&2
+    printf '       Refusing to fall back to /tmp: that is the root LV this change\n' >&2
+    printf '       exists to keep the CI temp off, and a silent fallback here is\n' >&2
+    printf '       how the change becomes a no-op that reports success.\n' >&2
+    exit 1
+  fi
+else
+  _CI_TMP_ROOT="/tmp"
+  printf 'NOTICE: no /scratch on this host; CI temp stays on /tmp (single-filesystem host).\n' >&2
+fi
 
 # Age-based sweep of superseded per-run trees. These are disposable by
 # construction (one per run x attempt x version), nothing cleans them today, and
