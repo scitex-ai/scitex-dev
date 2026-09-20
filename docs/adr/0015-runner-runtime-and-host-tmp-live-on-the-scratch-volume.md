@@ -1,6 +1,6 @@
 # ADR-0015 — Runner runtime and host tmp live on the scratch volume
 
-**Status:** Accepted (2026-09-20)
+**Status:** Accepted (2026-09-20); the rule was generalised the same day at operator direction, before anything had relied on the narrower wording
 **Owner:** Infrastructure (host storage, fstab); the measurement came from Applications
 **Card:** `scitex-dev-801-802-audit-prs-20260919`
 **Triggered by:** PR801, whose audit leg failed twice on `[Errno 28] No space left on device`
@@ -54,8 +54,29 @@ utilisation on the same machine.
 
 ## Decision
 
-Split by *what can be regenerated*, and put only the regenerable half on the
-scratch volume. `/tmp` follows, because build tools write there.
+The rule, stated at the level it applies: **anything regenerable lives on the
+scratch volume, whatever it is.** The runner was the case that forced this into
+the open, not the scope of the rule — the root LV keeps what cannot be rebuilt,
+and every rebuildable thing is asked to live on `/scratch`.
+
+The members measured so far, and the list is expected to keep growing, which is
+precisely why the rule is a property ("can it be rebuilt?") rather than an
+enumeration:
+
+| member | measured | rebuilt by |
+|---|---|---|
+| runner `_work` / `_tool` / `externals*` | 15G + 3.3G + 1.8G per host | the next CI job |
+| `~/.scitex` overlays and runtime homes | 108G on compute-03 | re-creating the container |
+| `/var/lib/containerd` images and snapshots | 67G on compute-03 | re-pulling the image |
+| `~/.npm` and language caches | 6.1G on compute-03 | the next install |
+| git worktrees | part of 94G on compute-03 | `git worktree` |
+| the host's `/tmp` and `/var/tmp` | 2.7G on compute-03 | see item 3 — they are not swept at all |
+
+The table is also why "which host is tight?" is the wrong question. compute-03
+has the LARGEST root LV in the fleet and the least headroom, because it holds
+more *regenerable* data on the wrong filesystem: 294G of its 342G is `.scitex`
+(108G), `proj` (94G) and containerd (67G), and not one byte of that needed to be
+there.
 
 1. **The runner installation and its identity stay on the root filesystem** —
    `bin*`, `externals`' executables, `.runner`, `.credentials`. Roughly 240M per
@@ -64,9 +85,27 @@ scratch volume. `/tmp` follows, because build tools write there.
 2. **The runner runtime lives on the scratch volume** — `_work`, `_tool`,
    `externals*`. These are the gigabytes, and every one of them is rebuilt by
    the next job. `_diag` is deleted outright.
-3. **The host's `/tmp` and `/var/tmp` are bind-mounted from the scratch
-   volume.** Leaving `/tmp` on the root LV means every wheel unpacking competes
-   with `/home` for the same small filesystem.
+3. **The host's `/tmp` and `/var/tmp` move to the scratch volume — the backing
+   filesystem moves, the PATH does not.** `/tmp` must keep existing for every
+   application that uses it (sockets, lock files, editor and build scratch), so
+   nothing may delete it and a bind must never present an empty directory in its
+   place. Leaving it on the root LV means every wheel unpacking competes with
+   `/home` for the same small filesystem, and leaving it alone is not neutral
+   either, because on these hosts **`/tmp` is not tmpfs** — it is a plain
+   directory on the root LV, so it does not clear at reboot — and the
+   systemd-tmpfiles rule in force is `D /tmp 1777 root root 30d`. Thirty-day
+   aging against a workload that writes ~1.4G per CI run means the hourly
+   cleanup removes nothing: compute-01 was still holding a directory from four
+   days earlier. Age the `ci-*` pattern at about a day, and make the writer put
+   its temp on scratch, rather than relying on the sweep.
+
+   A bind over a LIVE `/tmp` also hides the sockets inside it. On compute-03
+   that includes the tmux server socket at `/tmp/tmux-1000/default`, and because
+   sac's liveness probe is tmux-based, hiding it makes every agent on that host
+   read as dead — the input to a restart decision. So this step is a
+   maintenance-window change with content preserved first, not an in-place
+   toggle, and of everything in this ADR it is the one that must not be done
+   casually.
 4. **One canonical layout:** `/scratch/ywatanabe/ci/<runner-name>/<runtime-dir>`,
    fleet-wide. A second layout for the same job is how a runner ends up bound to
    an empty directory while another directory holds its content.
@@ -110,8 +149,10 @@ filesystem afterwards and finding the same content in two places.
 - **Per-host state that is not in git.** Every bind is an fstab entry on one
   machine. Nothing in the repository detects a host that has lost one, and the
   only defence is the reminder in this ADR plus a check at boot.
-- `systemd-tmpfiles` must not be allowed to clean the bind targets, so the
-  `/tmp` bind cannot rely on `/tmp` being conventionally disposable.
+- `/tmp` does not heal itself here: thirty-day aging against a writer that
+  produces ~1.4G per CI run means the hourly sweep is a no-op, so this pressure
+  has to be designed out — the writer puts its temp on scratch, and the `ci-*`
+  pattern is aged at about a day — rather than waited out.
 - The pre-existing exceptions are not evidence against the rule: compute-04
   already carries `actions-runner-org` and the docker runners under
   `/scratch/ywatanabe/ci/`, and compute-01 and compute-04 carry
@@ -129,6 +170,21 @@ execution rail on 2026-09-20 and are reproducible with `findmnt`, `df -h` and
 Related: ADR-0006 (one store per host, consumed as a primitive) is the same
 instinct applied to state rather than to capacity — one canonical place, used as
 a primitive, with no per-consumer inventing.
+
+The rule was generalised on the day of acceptance, on operator direction, once
+the fleet breakdown showed the members outgrowing the original wording: the
+operator asked why compute-03 — the host with the largest root LV — was the
+tightest, and the answer was 294G of regenerable data on the small filesystem
+(`.scitex` 108G, `proj` 94G, containerd 67G). The title still names the runner
+because the runner was the forcing case, and a title summarises the trigger
+rather than the scope.
+
+Immediately available and independent of any relocation: the disposable CI temp
+under `/tmp` (`ci-<repo>-<runid>-*`), which was reclaimed fleet-wide on the same
+day — compute-01 81%→66%, compute-02 99%→56%, compute-04 63%→53%, roughly 74G
+total — by deleting only directories whose run the API reported as completed,
+never by directory age alone, and without touching `/tmp` itself or any path
+outside that pattern.
 
 Deliberately NOT decided here: whether the runner *installation* should also
 live on the scratch volume. It is possible — a fresh registration would repair
