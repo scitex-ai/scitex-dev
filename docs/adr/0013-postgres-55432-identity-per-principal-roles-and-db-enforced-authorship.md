@@ -17,6 +17,27 @@ to TCP-55432 this design implements; cards
 
 ---
 
+## Context
+
+The 55432 cluster runs a shared superuser role with self-declared,
+unenforced authorship strings — the ground truth in
+`0013-appendix-measured-baseline.md`. This ADR designs the replacement:
+per-principal roles with DB-enforced authorship over TCP-55432,
+reversing ADR-0006 D7. Design only — §5 leaves application ownership
+UNDECIDED, and this ADR grants no one permission to apply it.
+
+## Decision
+
+Identity per principal, authorship enforced by the database: user
+domains, per-agent roles, and authorship constraints (§3), applied in
+the migration order pinned in §4.
+
+## Consequences
+
+Adopters migrate per §4; §5 decides who may apply each step; what this
+design does not settle is listed in §6. The appendix stays the evidence
+and is replaced wholesale on re-measurement.
+
 ## 0. How to read the evidence
 
 business asked for this explicitly, and they were right to:

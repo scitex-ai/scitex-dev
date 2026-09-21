@@ -41,6 +41,25 @@ transitive_verbs:
   # one-line declaration.
   - registry-normalize
 verb_exceptions:
+  # `scitex-dev dev access check --principal ... --action ... --resource ...`
+  # — renders an authorization DECISION (allow/deny + reason, tri-state exit
+  # codes 0/10/11), not a config-validity verdict. `validate` would misdescribe
+  # it: there is nothing to declare valid, only a principal/action/resource to
+  # decide. Also a shared mountable surface (`register_access_group` mounts it
+  # on EVERY leaf's `<pkg> dev`), so a rename must happen fleet-wide, not here.
+  - check  # why: authorization-decision verb (renders a verdict), not config validation; shared mountable surface
+  # `scitex-dev dev secret set` — stores one caller-supplied secret read from
+  # stdin. That IS the doctrine's single-key-config-write sense of `set`, and
+  # it is a shared mountable surface (`register_secret_group` mounts it on
+  # EVERY leaf's `<pkg> dev secret`), so a rename must happen fleet-wide.
+  - set  # why: single-key write (the sanctioned `set` sense); shared mountable surface
+  # `scitex-dev ci verify <pr> --repo <owner/repo>` — a merge verdict a gating
+  # hook reads via exit codes 0/10/11. Deliberately NOT `mergeable` (an
+  # adjective parses as a claim, and the command's job is to REFUSE that claim)
+  # and NOT `validate` (exit code 2 from old venvs answering "No such command
+  # 'verify'" was already misread once as "NOT ready" — measured 2026-08-09 —
+  # so the name is a gating-hook contract now, not a style choice).
+  - verify  # why: gating-hook contract with documented exit-code history; renaming re-opens the exit-2 misread
   # `scitex-dev host resolve <name>` — DNS-style lookup ("resolve a
   # name to its record"), the standard meaning of "resolve" in
   # networking/registry contexts (cf. `dns resolve`, `pip resolve`).

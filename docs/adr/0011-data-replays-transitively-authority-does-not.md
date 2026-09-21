@@ -6,6 +6,15 @@
 **Consumers today:** none — that is the finding, not an omission
 **First consumer:** scitex-agent-container, then scitex-cards
 
+## Context
+
+`scitex_dev.store` shipped (0.47.0) with oplog, hybrid logical clock,
+and directed replay — and no production callers; connecting the applier
+as-built would be worse than leaving it disconnected. This ADR rules on
+what the replication fence may and may not do: data replays
+transitively, authority does not. The evidence is in the measured
+sections below.
+
 ## Why this exists
 
 The operator asked a direct question — *are the per-host databases that

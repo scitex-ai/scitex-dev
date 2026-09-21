@@ -7,6 +7,13 @@
 **Extends:** ADR-0007, which built the same package's other type
 **First consumer:** scitex-cards' `health` doctor
 
+## Context
+
+Relocation preflight exposed the defect: the shared health-check shape
+used a boolean `ok` with no way to say *I could not find out*. Check
+verdicts must be three-valued, and `unknown` must carry its reason. The
+measured cases are in `The measured cases` below.
+
 ## Why this exists
 
 The operator, 2026-08-11, on relocation preflight:

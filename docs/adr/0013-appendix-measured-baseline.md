@@ -14,6 +14,33 @@ Cluster: PostgreSQL **18.4 (Debian 18.4-1.pgdg13+1)** on port **55432**,
 `scitex_cards.resolve_store()` returns:
 `postgresql://scitex_cards@127.0.0.1:55432/scitex_cards`. **[M]**
 
+## Status
+
+Supporting appendix — no decision. This file holds the evidence; the
+decision lives in
+`0013-postgres-55432-identity-per-principal-roles-and-db-enforced-authorship.md`.
+A later re-measurement may replace this file wholesale without touching
+the design.
+
+## Context
+
+ADR-0013 needs a ground-truth baseline for the permission-model design:
+what roles exist, what authorship is enforced, what is auditable, and
+what the transport and test posture actually are. All of it read-only,
+taken 2026-08-23, tagged **[M]** measured / **[I]** inferred / **[U]**
+unknown.
+
+## Decision
+
+None in this file — measurements only. The design decisions are in the
+ADR; each `A.*` section below is evidence for them.
+
+## Consequences
+
+Re-measurement replaces this file; the ADR text is untouched. Any
+section whose tags change from **[U]** to **[M]** strengthens (or
+reopens) the design point that cites it.
+
 ## A.1 The shared role is a superuser, and it is the only login role
 
 ```

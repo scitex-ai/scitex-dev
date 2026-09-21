@@ -8,6 +8,15 @@
 **Authored by:** scitex-agent-container (sac). scitex-dev's own agent is stopped
 for a fleet migration, so authorship of its ADR fell to a peer.
 
+## Context
+
+Work crosses transports that each already name outcomes — ICMP, TCP,
+HTTP, gRPC, SSH, POSIX exit codes. SciTeX must standardise status
+reporting without inventing a competing code vocabulary: status codes
+BORROW the native vocabularies, and scitex-dev holds the primitive other
+packages reuse. The operator's motivation is quoted in `Why this exists`
+below.
+
 ## Why this exists
 
 SciTeX moves work across localhost, LAN, WireGuard, SSH, HTTP, WebSocket,

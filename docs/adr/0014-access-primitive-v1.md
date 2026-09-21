@@ -124,6 +124,14 @@ NOT NULL owner columns on content tables, a restricted grant-writer DB role,
 and a per-adopter zero-foreign-rows test. A separate per-organisation store
 remains a contractual option only.
 
+## Consequences
+
+v1 ships pure-core `check()` / `accessible()` with owner/grant
+evaluation, NOT NULL owner columns, a restricted grant-writer role, and
+a per-adopter zero-foreign-rows test. RLS stays rejected for v1. The
+per-adopter follow-ups are owned where they are listed — `Consequences
+and v2` below.
+
 ## Consequences and v2
 
 Left for v2, each owned by its adopter:

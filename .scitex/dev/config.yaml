@@ -69,3 +69,12 @@ audit:
           Same migration. Auto-merge is the mechanism that lands the migration
           PR itself, so it is converted LAST, after the others are verified
           green. Same card.
+      - path: .github/workflows/quality-audit-on-ubuntu-latest.yml
+        line: 0
+        reason: >-
+          Same migration (converting renames the required `quality / audit`
+          context on develop), PLUS this workflow is genuinely unique to the
+          leaf: scitex-dev audits ITSELF with its own editable checkout, so
+          the gate validates the auditor code on the very PR that changes it.
+          An org caller would pin a published scitex-dev and lose the
+          self-dogfood property. Same card.

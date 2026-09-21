@@ -9,14 +9,13 @@ coverage:
   status:
     project:
       default:
-        # `auto` while the coverage push (per-package follow-up session)
-        # is still ramping up. Bump to `target: 90%` once the package is
-        # ≥ 90 % — see _skills/general/05_development_08_coverage-push-playbook.md.
-        target: auto
+        # Visible bar per PS-161 — keep coverage ≥ 90% (coverage-push
+        # playbook: _skills/general/05_development_08_coverage-push-playbook.md).
+        target: 90%
         threshold: 1%
     patch:
       default:
-        target: 80%
+        target: 90%
 
 ignore:
   - "src/scitex_dev/_sphinx_html/**"

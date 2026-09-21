@@ -5,6 +5,15 @@
 **Owner:** scitex-dev, as DB primitive provider
 **Consumers:** scitex-cards, scitex-agent-container
 
+## Context
+
+ADR-0006 forbade exactly the topology this ADR adopts; the operator
+reversed that decision on 2026-08-25 — single writer primary,
+read-only replicas, quorum failover. The reversal is deliberate and is
+recorded here so the next reader does not re-derive the old design from
+the still-standing ADR-0006 text. The operator's words are quoted in
+`Why this exists` below.
+
 ## Why this exists
 
 ADR-0006 forbade exactly the topology this one adopts. That reversal is the
@@ -101,6 +110,14 @@ Not all of ADR-0006 is superseded, and the parts that survive are load-bearing:
   weakening it.
 
 Only §2's "per host", §3, and §4 are reversed.
+
+## Consequences
+
+ADR-0006 Decisions 2–4 are no longer in force; Decisions 1 and 5 and
+the PostgreSQL-over-SQLite reasoning stand and are restated above.
+Code and docstrings that still describe the old topology (listed in
+`What this ADR does NOT yet change` below) change when the behaviour
+changes, not before.
 
 ## What this ADR does NOT yet change
 
