@@ -1,4 +1,4 @@
-"""Tests for scitex_dev.system_deps (federated apt-dependency aggregation).
+"""Tests for scitex_dev.system_deps (federated system-dependency aggregation).
 
 Uses the real ``extra_providers`` injection seam (no mocks) to supply fake
 providers, mirroring how discover_jobs is tested.
@@ -223,3 +223,135 @@ def test_cli_validate_superset_json_reports_a_red_verdict(tmp_path):
     )
     # Assert
     assert json.loads(result.stdout)["verdict"] == "red"
+
+
+def _hermes_spec():
+    # Arrange helper: one script-kind dep shaped like the Hermes installer
+    # declaration (pinned https URL, non-interactive args, verify command).
+    return SystemDepSpec(
+        "hermes-agent",
+        "fleet hosts run the Hermes harness resident",
+        "scitex-agent-container",
+        kind="script",
+        install_url="https://hermes-agent.nousresearch.com/install.sh",
+        install_args=("--skip-setup", "--non-interactive"),
+        verify_command="hermes --version",
+    )
+
+
+def test_spec_defaults_to_apt_kind():
+    # Arrange
+    spec = SystemDepSpec("ffmpeg", "audio decode", "scitex-audio")
+    # Act
+    kind = spec.kind
+    # Assert — every pre-extension declaration behaves exactly as before.
+    assert kind == "apt"
+
+
+def test_spec_rejects_an_unknown_kind():
+    # Arrange
+    unknown = "brew"
+
+    # Act
+    def construct():
+        return SystemDepSpec("tool", "purpose", "leaf", kind=unknown)
+
+    # Assert
+    with pytest.raises(ValueError):
+        construct()
+
+
+def test_script_spec_requires_an_https_install_url():
+    # Arrange
+    plain_http = "http://example.com/install.sh"
+
+    # Act
+    def construct():
+        return SystemDepSpec(
+            "tool", "purpose", "leaf", kind="script", install_url=plain_http
+        )
+
+    # Assert — a fleet-wide install must not be downgradeable on the wire.
+    with pytest.raises(ValueError):
+        construct()
+
+
+def test_script_spec_requires_an_install_url():
+    # Arrange
+    # Act
+    def construct():
+        return SystemDepSpec("tool", "purpose", "leaf", kind="script")
+
+    # Assert
+    with pytest.raises(ValueError):
+        construct()
+
+
+def test_apt_spec_must_not_carry_an_install_url():
+    # Arrange
+    # Act
+    def construct():
+        return SystemDepSpec(
+            "ffmpeg",
+            "audio decode",
+            "scitex-audio",
+            install_url="https://example.com/install.sh",
+        )
+
+    # Assert — kinds do not mix; a URL means kind="script".
+    with pytest.raises(ValueError):
+        construct()
+
+
+def test_discover_aggregates_a_script_kind_dep():
+    # Arrange
+    def provide():
+        return [_hermes_spec()]
+
+    # Act
+    deps = discover_system_deps(
+        include_entry_points=False, extra_providers=[provide]
+    )
+    # Assert — one group carries both kinds.
+    assert [(d.package, d.kind) for d in deps] == [("hermes-agent", "script")]
+
+
+def test_cli_system_deps_list_stays_apt_only():
+    # Arrange
+    runner = CliRunner()
+    # Act — --json shares the code path; the real (installed) provider set
+    # has no script-kind deps yet, but the filter is what this pins.
+    result = runner.invoke(main, ["ecosystem", "system-deps", "list", "--json"])
+    # Assert
+    assert result.exit_code == 0
+    assert all(d["kind"] == "apt" for d in json.loads(result.stdout))
+
+
+def test_cli_install_script_previews_without_running():
+    # Arrange
+    runner = CliRunner()
+    # Act — dry-run is the default; no installer runs.
+    result = runner.invoke(main, ["ecosystem", "system-deps", "install-script"])
+    # Assert
+    assert result.exit_code == 0
+
+
+def test_do_install_script_dry_run_previews_the_pinned_command():
+    # Arrange
+    from scitex_dev._cli.ecosystem._cmds._system_deps import _do_install_script
+
+    # Act
+    rc = _do_install_script([_hermes_spec()], dry_run=True)
+    # Assert
+    assert rc == 0
+
+
+def test_do_install_refuses_a_script_kind_dep():
+    # Arrange — a direct caller passing a mixed set must fail loud, never
+    # silently apt-install a tool name.
+    from scitex_dev._cli.ecosystem._cmds._system_deps import _do_install
+
+    # Act
+    rc = _do_install([_hermes_spec()], dry_run=True)
+    # Assert
+    assert rc == 1
