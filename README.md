@@ -14,16 +14,15 @@
 
 <!-- scitex-badges:start -->
 <p align="center">
-  <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/v/scitex-dev?label=PyPI" alt="PyPI"></a>
-  <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/pyversions/scitex-dev?label=Python" alt="Python"></a>
-  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/rtd-sphinx-build-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/rtd-sphinx-build-on-ubuntu-latest.yml?branch=develop&label=RTD" alt="RTD"></a>
-  <a href="https://www.gnu.org/licenses/agpl-3.0"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg?label=License" alt="License"></a>
+  <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/v/scitex-dev?label=pypi" alt="pypi"></a>
+  <a href="https://pypi.org/project/scitex-dev/"><img src="https://img.shields.io/pypi/pyversions/scitex-dev?label=python" alt="python"></a>
+  <a href="https://scitex-dev.readthedocs.io/"><img src="https://img.shields.io/readthedocs/scitex-dev?label=docs" alt="docs"></a>
 </p>
 <p align="center">
-  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=Tests" alt="Tests"></a>
-  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=Install-Check" alt="Install-Check"></a>
-  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=Quality" alt="Quality"></a>
-  <a href="https://codecov.io/gh/scitex-ai/scitex-dev"><img src="https://img.shields.io/codecov/c/github/scitex-ai/scitex-dev/develop?label=CodeCov" alt="CodeCov"></a>
+  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests" alt="tests"></a>
+  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=install-check" alt="install-check"></a>
+  <a href="https://github.com/scitex-ai/scitex-dev/actions/workflows/quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/scitex-ai/scitex-dev/quality-audit-on-ubuntu-latest.yml?branch=develop&label=quality" alt="quality"></a>
+  <a href="https://codecov.io/gh/scitex-ai/scitex-dev"><img src="https://img.shields.io/codecov/c/github/scitex-ai/scitex-dev/develop?label=cov" alt="cov"></a>
 </p>
 <!-- scitex-badges:end -->
 
@@ -34,75 +33,10 @@
 | # | Problem | Solution |
 |---|---------|----------|
 | 1 | **~70 ecosystem packages drift apart** -- versions, READMEs, sphinx setups, CLI conventions diverge faster than humans can audit | **`scitex-dev ecosystem audit-*`** -- `audit-project`, `audit-cli`, `audit-mcp-tools`, `audit-python-apis`, `audit-skills`, `audit-summary` enforce ~130 numbered rules across the whole ecosystem |
-| 2 | **Skills scattered across ~70 source repos** -- AI agents can't discover them; humans can't review them | **`scitex-dev skills list / get / export`** -- aggregate every package's `_skills/` and symlink them into `~/.claude/skills/scitex/` for live-edit dev loops |
-| 3 | **Coordinated releases need ten manual steps** -- bump version, push tag, watch CI, verify PyPI, deploy — done per-package, multiplied by 70 | **`scitex-dev ecosystem sync` + `validate-versions` + `gui open`** -- one-shot install/sync across hosts, version-mismatch detection, and a web dashboard with the live state |
-| 4 | **Bulk renames across 70 repos break cross-references** -- import paths, doc references, symlinks — `sed -i` corrupts something every time | **`scitex-dev rename-symbols`** -- atomic rename with cross-reference updates, regex support, dry-run preview, git-safety guards |
-| 5 | **Lint rules drift from the API they enforce** -- a renamed function in figrecipe leaves the rule pointing at a nonexistent symbol, and the bug only shows up months later | **`scitex-dev linter`** (engine, formerly `scitex-linter`) -- aggregates per-package rule plugins via the `scitex_dev.linter.plugins` entry point. Rules ship in the package whose API they enforce, so rename + rule + test land in one PR. Doc-block linting for `.py` / `.ipynb` / `.md` / `.rst`. `scitex-dev linter sweep` walks every package's README + docs in one shot |
-
-## Installation
-
-There are exactly two installs. The CLI, the MCP server, icon rendering
-and skills all ship in the base install — there is no per-feature menu to
-assemble, and nothing to forget to add.
-
-```bash
-# Everything you need to USE scitex-dev:
-pip install scitex-dev
-
-# Plus the maintainer toolchain (pytest, sphinx, ...) — for working ON it:
-pip install scitex-dev[all]
-```
-
-`[all]` adds development and documentation tooling on top of the base
-install; it does not unlock features. Extra names are restricted to
-`{all, dev, docs}` by PS-225, because a per-feature extra is something
-somebody eventually pins — and a pin naming an extra that does not exist
-installs anyway, warns into a log nobody reads, and silently omits the
-capability.
-
-### Configuration
-
-Copy [`.env.example`](.env.example) to `.env` (gitignored) at your
-project root, then edit. CLI flags always override env vars. The full
-list (with inline comments) lives in `.env.example`.
-
-<details>
-<summary><strong>Local state directories</strong></summary>
-
-<br>
-
-scitex-dev reads optional config + cache from the canonical SciTeX
-local-state locations:
-
-| Path                          | Scope         | Purpose                              |
-|-------------------------------|---------------|--------------------------------------|
-| `~/.scitex/dev/`              | user-global   | per-user config, cache               |
-| `<proj-root>/.scitex/dev/`    | project-local | overrides for the current repo       |
-
-Project-local wins when both exist. Both are optional.
-
-</details>
-
-## Architecture
-
-```
-scitex_dev/
-├── _cli/
-│   ├── audit/                ← rule corpus (PA*, PS*, SK*, §*)
-│   │   ├── _api/             ← Python-API rules (PA-1xx)
-│   │   ├── _project/         ← project-structure rules (PS-1xx, PS-5xx)
-│   │   ├── _skills/          ← skill-file rules (SK-1xx)
-│   │   └── _summary/         ← CLI/MCP §-rules + audit-all wrapper
-│   ├── ecosystem/            ← cross-package commands (audit-all, list, …)
-│   └── _skills.py            ← `scitex-dev skills` group
-├── _ecosystem/               ← shared helpers (skill-quality, ECOSYSTEM map)
-├── _skills/                  ← canonical skill-file corpus shipped to agents
-└── testing/                  ← `audit_all_for_package` pytest helper
-```
-
-Audit rules live alongside the code they check. Each rule has a
-docstring, an entry in `RULES`, a severity in `_SEVERITY_OVERRIDES`,
-and at least one unit test under `tests/.../_audit/_project/`.
+| 2 | **Scattered skills** -- AI agents cannot discover them; humans cannot review them | **`scitex-dev skills list / get / export`** -- aggregate every package's `_skills/` and symlink them into `~/.claude/skills/scitex/` for live-edit dev loops |
+| 3 | **Coordinated releases need ten manual steps** -- bump version, push tag, watch CI, verify PyPI, deploy — done per-package, multiplied by 70 | **One shot** -- `ecosystem sync`, `validate-versions`, and `gui open` in one pass |
+| 4 | **Breaking renames** -- import paths, doc refs, and symlinks corrupt under sed | **`scitex-dev rename-symbols`** -- atomic rename with cross-reference updates, regex support, dry-run preview, git-safety guards |
+| 5 | **Lint rules drift from the API they enforce** -- a renamed function in figrecipe leaves the rule pointing at a nonexistent symbol, and the bug only shows up months later | **Co-located rules** -- rename + rule + test land in one PR, enforced by the linter |
 
 ## Demo
 
@@ -117,6 +51,8 @@ flowchart LR
     G -- "yes" --> H["exit 1<br/>(CI fails)"]
     G -- "no" --> I["exit 0<br/>(CI green)"]
 ```
+
+<sub><b>Figure 1.</b> `audit-all` fans out to five auditors; any error fails the run.</sub>
 
 `scitex-dev` is a CLI/audit tool — its "demo" is the audit running on a
 package. Sample output (run on `scitex-io`):
@@ -150,6 +86,77 @@ fail  scitex-dsp (/home/ywatanabe/proj/scitex-dsp): 2 error(s)
 See [`examples/`](examples/) for runnable demos that exercise
 `scitex-dev`'s own commands (search, version-management, docs
 aggregation).
+
+## Installation
+
+```bash
+uv pip install "scitex-dev[all]"
+```
+
+The CLI, the MCP server, icon rendering and skills all ship in the
+base install — there is no per-feature menu to assemble, and nothing
+to forget to add. `[all]` adds the maintainer toolchain (pytest,
+sphinx, ...) for working *on* scitex-dev; it does not unlock features.
+
+<details>
+<summary><strong>Extras matrix</strong></summary>
+
+| Extra | Contents | When to use |
+|-------|----------|-------------|
+| `all` | `dev` + `docs` | Working on scitex-dev itself |
+| `dev` | pytest, pytest-cov, pytest-xdist, jsonschema, scitex-events | Running the test suite |
+| `docs` | sphinx, sphinx-rtd-theme, myst-parser, sphinx-copybutton | Building the docs |
+
+Extra names are restricted to `{all, dev, docs}` by PS-225, because a
+per-feature extra is something somebody eventually pins — and a pin
+naming an extra that does not exist installs anyway, warns into a log
+nobody reads, and silently omits the capability.
+
+</details>
+
+### Configuration
+
+Copy [`.env.example`](.env.example) to `.env` (gitignored) at your
+project root, then edit. CLI flags always override env vars. The full
+list (with inline comments) lives in `.env.example`.
+
+<details>
+<summary><strong>Local state directories</strong></summary>
+
+<br>
+
+scitex-dev reads optional config + cache from the canonical SciTeX
+local-state locations:
+
+| Path                          | Scope         | Purpose                              |
+|-------------------------------|---------------|--------------------------------------|
+| `~/.scitex/dev/`              | user-global   | per-user config, cache               |
+| `<proj-root>/.scitex/dev/`    | project-local | overrides for the current repo       |
+
+Project-local wins when both exist. Both are optional.
+
+</details>
+
+## Architecture
+
+```mermaid
+flowchart TB
+    CLI["scitex-dev CLI"] --> AA["audit-all"]
+    AA --> C1["audit-cli"]
+    AA --> C2["audit-mcp-tools"]
+    AA --> C3["audit-skills"]
+    AA --> C4["audit-python-apis"]
+    AA --> C5["audit-project"]
+    C1 & C2 & C3 & C4 & C5 --> R["numbered rules<br/>(PA / PS / SK / §)"]
+    R --> T["tests per rule<br/>tests/.../_audit/"]
+    R --> S["rule doctrine<br/>_skills/"]
+```
+
+<sub><b>Figure 2.</b> Rules live alongside the code they check: doctrine in `_skills/`, checks in `_cli/audit/`, tests under `tests/`.</sub>
+
+Audit rules live alongside the code they check. Each rule has a
+docstring, an entry in `RULES`, a severity in `_SEVERITY_OVERRIDES`,
+and at least one unit test under `tests/.../_audit/_project/`.
 
 ## Four Interfaces
 

@@ -18,6 +18,15 @@
 **Consumers today:** scitex-cards, scitex-agent-container
 **Consumers next:** scitex-writer, figrecipe, scitex-scholar — via scitex-hub
 
+## Context
+
+Four operator instructions (2026-08-09) combine into one design: one
+database per host, synchronised across hosts, consumed by leaf packages
+as a single-source primitive. The instructions are quoted in `Why this
+exists` below. Note the banner above: the per-host topology itself was
+SUPERSEDED by ADR-0013 — this Context describes what was decided here,
+not what is in force today.
+
 ## Why this exists
 
 To make the rules explicit. Rules organise things smoothly and make behaviour

@@ -88,7 +88,7 @@ The badge block uses the **canonical SAC layout** (PS-167):
 <p align="center">
   <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests" alt="tests"></a>
   <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=install-check" alt="install-check"></a>
-  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=quality" alt="quality"></a>
+  <a href="https://github.com/ywatanabe1989/<PACKAGE>/actions/workflows/quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/ywatanabe1989/<PACKAGE>/quality-audit-on-ubuntu-latest.yml?branch=develop&label=quality" alt="quality"></a>
   <a href="https://codecov.io/gh/ywatanabe1989/<PACKAGE>"><img src="https://img.shields.io/codecov/c/github/ywatanabe1989/<PACKAGE>/develop?label=cov" alt="cov"></a>
 </p>
 <!-- scitex-badges:end -->

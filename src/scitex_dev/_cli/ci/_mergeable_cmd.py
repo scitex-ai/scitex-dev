@@ -31,13 +31,30 @@ import json as _json
 
 import click
 
-from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand, SpecGroup
 
 
 def register_ci_commands(main_group: click.Group) -> None:
     """Register ``scitex-dev ci ...`` on the given main group."""
 
-    @main_group.group("ci", cls=click.Group, help="CI verdicts and CI plumbing.")
+    @main_group.group(
+        "ci",
+        cls=SpecGroup,
+        help_spec=CliHelp(
+            summary="CI verdicts and CI plumbing.",
+            description=(
+                "Commands that answer questions about CI state — merge "
+                "verdicts a script can gate on, plus the runner plumbing "
+                "behind them.",
+            ),
+            examples=(
+                Example(
+                    "{prog} ci verify 521 --repo scitex-ai/scitex-dev",
+                    "Verdict for one pull request.",
+                ),
+            ),
+        ),
+    )
     def ci_group() -> None:
         """Commands that answer questions about CI state."""
 

@@ -407,6 +407,8 @@ timeout = 300
 markers = [
     "skill_quality: structural checklist tests (§1–§4)",
     "skill_trigger: trigger-rate tests (live claude -p, slow, non-deterministic)",
+    "smoke: fast CLI happy-path tests (<60s, runs on every PR)",
+    "e2e: end-to-end workflows (slow, gated by RUN_E2E=1)",
 ]
 
 # Subprocess coverage wiring: see

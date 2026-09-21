@@ -22,7 +22,7 @@ on:
       - "src/**"
       - "tests/**"
       - "pyproject.toml"
-      - ".github/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"
+      - ".github/workflows/quality-audit-on-ubuntu-latest.yml"
   pull_request:
     branches: [main, develop]
 

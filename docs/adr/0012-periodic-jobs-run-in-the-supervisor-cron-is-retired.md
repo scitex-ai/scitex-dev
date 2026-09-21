@@ -7,6 +7,14 @@
 **Supersedes:** the timer→cron lowering introduced under the 2026-06-14 supervisor policy
 **Related:** ADR-0008 (job declarations stay entry-point only)
 
+## Context
+
+Periodic jobs were split across supervisor timers and a crontab block
+installed by `ecosystem up`, with lossy timer-to-cron lowering in
+between. One clock, one process, one execution log — the operator
+unified all of it through the supervisor. The ruling is quoted in `The
+ruling` below; the old surface is described in `Why this exists`.
+
 ## The ruling
 
 > 「サイテクス系の定期ジョブは全てスーパーバイザー経由でサイテクスデブで一本化」
@@ -46,6 +54,14 @@ stopped it:
 The peer's action was reasonable and their reading of the command was right.
 The code path is what made a correct action wrong. A command that offers a
 retired deployment surface will be used to deploy on it.
+
+## Decision
+
+Periodic jobs run in the supervisor — timer-kind AND cron-kind. One
+clock, one process, one execution log. `ecosystem up` no longer installs
+a crontab block and reconciles the managed region to empty; the
+`--allow-lossy-timer-lowering` flag is removed, not deprecated. The
+numbered form is in `The decision` below.
 
 ## The decision
 

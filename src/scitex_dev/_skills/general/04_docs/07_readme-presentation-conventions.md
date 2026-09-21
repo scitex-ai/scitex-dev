@@ -100,7 +100,7 @@ line → badge block. PS-167 enforces four rules on the badge block:
 <p align="center">
 <a href="https://github.com/<owner>/<pkg>/actions/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"><img src="https://img.shields.io/github/actions/workflow/status/<owner>/<pkg>/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml?branch=develop&label=tests" alt="tests"></a>
 <a href="https://github.com/<owner>/<pkg>/actions/workflows/import-smoke-on-ubuntu-py3-12.yml"><img src="https://img.shields.io/github/actions/workflow/status/<owner>/<pkg>/import-smoke-on-ubuntu-py3-12.yml?branch=develop&label=install-check" alt="install-check"></a>
-<a href="https://github.com/<owner>/<pkg>/actions/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/<owner>/<pkg>/scitex-dev-quality-audit-on-ubuntu-latest.yml?branch=develop&label=quality" alt="quality"></a>
+<a href="https://github.com/<owner>/<pkg>/actions/workflows/quality-audit-on-ubuntu-latest.yml"><img src="https://img.shields.io/github/actions/workflow/status/<owner>/<pkg>/quality-audit-on-ubuntu-latest.yml?branch=develop&label=quality" alt="quality"></a>
 <a href="https://codecov.io/gh/<owner>/<pkg>"><img src="https://img.shields.io/codecov/c/github/<owner>/<pkg>/develop?label=cov" alt="cov"></a>
 </p>
 <!-- scitex-badges:end -->

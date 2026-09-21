@@ -5,6 +5,12 @@
 - **Deciders**: operator (directive), scitex-dev (owner), scitex-cards (first consumer)
 - **Supersedes**: nothing. **Amends**: the enforcement surface of PS-221.
 
+## Status
+
+Accepted. Extras are all-or-nothing — `[all]` is the dev-tooling
+bundle, and per-feature extras are forbidden fleet-wide (PS-225).
+Decided 2026-08-02, in force.
+
 ## Context
 
 On 2026-08-02 the fleet lost its card store. Container definitions pinned

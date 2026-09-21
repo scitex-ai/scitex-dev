@@ -316,14 +316,21 @@ def test_discover_aggregates_a_script_kind_dep():
     assert [(d.package, d.kind) for d in deps] == [("hermes-agent", "script")]
 
 
-def test_cli_system_deps_list_stays_apt_only():
+def test_cli_system_deps_list_json_exits_zero():
     # Arrange
     runner = CliRunner()
-    # Act — --json shares the code path; the real (installed) provider set
-    # has no script-kind deps yet, but the filter is what this pins.
+    # Act — --json shares the code path with the table renderer.
     result = runner.invoke(main, ["ecosystem", "system-deps", "list", "--json"])
     # Assert
     assert result.exit_code == 0
+
+
+def test_cli_system_deps_list_filters_to_apt_kind():
+    # Arrange
+    runner = CliRunner()
+    # Act
+    result = runner.invoke(main, ["ecosystem", "system-deps", "list", "--json"])
+    # Assert — the filter (not the provider set) is what this pins.
     assert all(d["kind"] == "apt" for d in json.loads(result.stdout))
 
 
