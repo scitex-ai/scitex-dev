@@ -99,9 +99,19 @@ rule).
 This scan intentionally covers scitex-dev's SECOND, local ``JobSpec``
 class in ``_cli/cron/_jobs.py`` too. Those names are adapted into
 canonical ``JobSpec`` objects by ``jobs.__init__._builtin_jobs()`` and
-become real crontab identities, so they are governed by the same
-convention. (The duplicate class itself is tracked separately as
+become real crontab identities, so the charset/description/kind rules
+(PS-226/228/229) govern them the same way. (The duplicate class itself
+is tracked separately as
 ``dev-two-jobspec-classes-ssot-violation-20260719``.)
+
+PS-227 alone does NOT apply to that surface: the cron slugs are
+crontab tag identities on the ADR-0012-retired surface (see
+``_retired_surfaces.is_retired_cron_surface``), and the
+package-qualification rename is a unit migration the maintainer has
+explicitly deferred — ``scitex_dev/jobs/__init__.py`` keeps "historical
+bare slugs for backward compatibility … renaming them is a UNIT
+MIGRATION, never an in-place edit". A repo PR cannot perform that
+cutover, so flagging it is noise, not signal.
 """
 
 from __future__ import annotations
@@ -258,6 +268,7 @@ def check_job_naming(
         Violations are appended in place (project-auditor convention).
     """
     from ._discovery import _src_pkg_dir
+    from ._retired_surfaces import is_retired_cron_surface
 
     src_pkg = _src_pkg_dir(repo, distribution)
     if src_pkg is None:
@@ -320,7 +331,15 @@ def check_job_naming(
             continue
         for call in _iter_job_calls(tree):
             where = f"{path}:{call.lineno}"
-            _check_one_call(call, where, prefix, accepted, violation_cls, out)
+            _check_one_call(
+                call,
+                where,
+                prefix,
+                accepted,
+                violation_cls,
+                out,
+                skip_ps227=is_retired_cron_surface(path, repo),
+            )
 
 
 def _check_one_call(
@@ -330,13 +349,15 @@ def _check_one_call(
     accepted: frozenset[str],
     violation_cls: type,
     out: list,
+    *,
+    skip_ps227: bool = False,
 ) -> None:
     literals = _literal_kwargs(call)
     present = _kwarg_names(call)
 
     name = literals.get("name")
     if isinstance(name, str) and name:
-        _check_name(name, where, prefix, violation_cls, out)
+        _check_name(name, where, prefix, violation_cls, out, skip_ps227=skip_ps227)
 
     _check_description(literals, present, name, where, violation_cls, out)
 
@@ -368,6 +389,8 @@ def _check_name(
     prefix: str,
     violation_cls: type,
     out: list,
+    *,
+    skip_ps227: bool = False,
 ) -> None:
     if not JOB_NAME_RE.match(name):
         suggestion = re.sub(r"[._]+", "-", name).lower()
@@ -397,6 +420,11 @@ def _check_name(
                 ),
             )
         )
+        return
+    if skip_ps227:
+        # ADR-0012-retired cron surface (see `_retired_surfaces`): the
+        # slug is a crontab tag identity, and the qualification rename
+        # is a deferred unit migration — flagging it is noise.
         return
     if not name.startswith(prefix):
         out.append(

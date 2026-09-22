@@ -8,6 +8,10 @@ Implements the rules from
            or `SCITEX_<OTHER>_*` env-var reads. If X needs to extend
            via Y's tree, expose a plugin-port env var slot.
 
+           Exempt surface: the ADR-0012-retired ``_cli/cron/`` tree
+           (see ``_retired_surfaces``) — the supervisor owner's own
+           host-level rsync orchestration, frozen pending removal.
+
   PS-146 — pip-install side-effect (§3.5 lazy mkdir, never via hooks).
            pyproject.toml must not declare a setuptools `cmdclass`
            or hatch build hook that creates `~/.scitex/<pkg>/` at
@@ -178,6 +182,8 @@ def check_ps145_cross_package_read(
     violation_cls: type,
     out: list,
 ) -> None:
+    from ._retired_surfaces import is_retired_cron_surface
+
     self_shorts = _self_shorts(distribution)
     # Also map the env-var form: scitex-agent-container → AGENT_CONTAINER.
     self_env_tokens = {
@@ -185,6 +191,12 @@ def check_ps145_cross_package_read(
     }
     findings: dict[Path, list[str]] = {}
     for py in _src_files(repo):
+        if is_retired_cron_surface(py, repo):
+            # ADR-0012-retired surface, frozen pending removal (see
+            # `_retired_surfaces`): the supervisor owner's own
+            # host-level sync orchestration, not a leaf depending on
+            # another leaf's internal state layout.
+            continue
         try:
             text = py.read_text(encoding="utf-8", errors="replace")
         except OSError:

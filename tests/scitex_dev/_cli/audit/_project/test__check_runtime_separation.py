@@ -11,8 +11,12 @@ test (PA-307 §3 STX-TQ007 — one observable per test).
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+
+import pytest
 
 from scitex_dev._cli.audit._project._check_runtime_separation import (
     check_runtime_separation,
@@ -182,8 +186,103 @@ class TestPS180NoRuntimeOnDisk:
         # Arrange — `runtime` exists as a file, not a directory.
         pkg = tmp_path / "src" / "demo_pkg"
         pkg.mkdir(parents=True)
-        (pkg / "runtime").write_text("# this is a file, not a dir\n")
+        (pkg / "runtime").write_text("# this is a file, not a dir\\n")
         # Act
         out = _findings(tmp_path)
         # Assert
         assert not any(v.rule == "PS-180" for v in out)
+
+
+# ===== tracked-source carve-out (git) =====
+
+_GIT = shutil.which("git")
+
+needs_git = pytest.mark.skipif(_GIT is None, reason="git binary required")
+
+
+def _git_tracked_repo(tmp_path: Path, pkg_name: str = "demo_pkg") -> Path:
+    """Init a git repo whose `src/<pkg>/runtime/` holds TRACKED sources."""
+    runtime = tmp_path / "src" / pkg_name / "runtime"
+    runtime.mkdir(parents=True)
+    (runtime / "__init__.py").write_text('"""Live source package."""\\n')
+    (runtime / "_periodic.py").write_text("TICK = 60\\n")
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    subprocess.run(
+        ["git", "add", f"src/{pkg_name}/runtime"], cwd=tmp_path, check=True
+    )
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-qm",
+            "track runtime sources",
+        ],
+        cwd=tmp_path,
+        check=True,
+    )
+    return tmp_path
+
+
+@needs_git
+class TestPS180TrackedSource:
+    def test_fully_tracked_runtime_package_no_fire(self, tmp_path: Path) -> None:
+        # Arrange — every file under runtime/ is git-tracked: a source
+        # package, not transient state.
+        repo = _git_tracked_repo(tmp_path)
+        # Act
+        out = _findings(repo)
+        # Assert
+        assert not any(v.rule == "PS-180" for v in out)
+
+    def test_untracked_pycache_alongside_tracked_sources_no_fire(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — bytecode caches are build artefacts: untracked
+        # `__pycache__/*.pyc` beside tracked sources must not flip the
+        # verdict back to firing.
+        repo = _git_tracked_repo(tmp_path)
+        cache = repo / "src" / "demo_pkg" / "runtime" / "__pycache__"
+        cache.mkdir()
+        (cache / "_periodic.cpython-312.pyc").write_text("fake bytecode")
+        # Act
+        out = _findings(repo)
+        # Assert
+        assert not any(v.rule == "PS-180" for v in out)
+
+    def test_partially_tracked_runtime_still_fires(self, tmp_path: Path) -> None:
+        # Arrange — one tracked source plus one untracked artefact: the
+        # directory still holds untracked state.
+        repo = _git_tracked_repo(tmp_path)
+        (repo / "src" / "demo_pkg" / "runtime" / "cache.jsonl").write_text(
+            "{}\\n"
+        )
+        # Act
+        out = _findings(repo)
+        # Assert
+        assert any(v.rule == "PS-180" for v in out)
+
+    def test_untracked_runtime_in_a_git_repo_still_fires(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — a git checkout, but runtime/ itself was never added.
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        repo = _make_pkg_with_runtime(tmp_path)
+        # Act
+        out = _findings(repo)
+        # Assert
+        assert any(v.rule == "PS-180" for v in out)
+
+    def test_runtime_in_a_non_git_tree_still_fires(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — no git metadata at all: "cannot tell" fails open
+        # toward the previous behaviour, never a silent pass.
+        repo = _make_pkg_with_runtime(tmp_path)
+        # Act
+        out = _findings(repo)
+        # Assert
+        assert any(v.rule == "PS-180" for v in out)

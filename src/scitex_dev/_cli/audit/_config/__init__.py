@@ -24,6 +24,10 @@ from ._exemptions import (
     format_exemption_notice,
     parse_exemptions,
 )
+from ._legacy_keys import (
+    EXEMPTION_ARMED_RULES,
+    legacy_audit_key_notices,
+)
 from ._loader import (
     CAPABILITY_RULES,
     KNOWN_CAPABILITIES,
@@ -39,6 +43,7 @@ __all__ = [
     "CAPABILITY_RULES",
     "ENFORCE_LOGGING_REASONED_LEVELS",
     "ENFORCE_LOGGING_VALUES",
+    "EXEMPTION_ARMED_RULES",
     "EXEMPTION_BLOCK_PREFIX",
     "KNOWN_CAPABILITIES",
     "PROJECT_TYPES",
@@ -48,6 +53,7 @@ __all__ = [
     "detect_project_types",
     "exemption_notice_applies",
     "format_exemption_notice",
+    "legacy_audit_key_notices",
     "load_config",
     "parse_enforce_logging",
     "parse_exemptions",
