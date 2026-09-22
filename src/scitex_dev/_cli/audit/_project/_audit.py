@@ -315,6 +315,20 @@ def audit_project(
 
     from .._emit import emit as _emit
 
+    def _emit_legacy_key_notices() -> None:
+        # Same routing as `_emit_capability_skips` (click.echo err=True):
+        # legacy `audit.skip` / dead `audit.exemptions` entries read as
+        # done while suppressing nothing, so the notice must be visible
+        # at the default log level. Notices, not findings — counts and
+        # exit codes are unchanged.
+        from .._config._legacy_keys import legacy_audit_key_notices
+
+        for notice in legacy_audit_key_notices(repo_root):
+            click.echo(
+                f"  [audit-config] {distribution}: {notice}",
+                err=True,
+            )
+
     def _emit_capability_skips() -> None:
         # Route via click.echo(err=True) — NOT _emit("info", ...) — so the
         # notice is ALWAYS visible: the audit logger's default level is
@@ -348,6 +362,7 @@ def audit_project(
             f"{distribution} ({repo_root}): no project-structure violations",
         )
         _emit_capability_skips()
+        _emit_legacy_key_notices()
         _emit_deferred_reminder()
         emit_disclaimer()
         return exit_code
@@ -389,6 +404,7 @@ def audit_project(
         )
         _emit(sev, v.format())
     _emit_capability_skips()
+    _emit_legacy_key_notices()
     _emit_deferred_reminder()
     emit_disclaimer()
     emit_skill_hints()

@@ -22,6 +22,16 @@ Note this is unrelated to two other, live classification channels:
 the auditor's loader) and the ``category`` field on
 ``scitex_dev._ecosystem.ECOSYSTEM`` (a hardcoded registry with its own
 ``umbrella`` / ``external-lib`` / ``dataset`` vocabulary).
+
+Tag-flow waiver: the ``sync-main`` requirement is waived when the repo
+publishes via tag-flow — a ``pypi-publish-*`` workflow triggered by
+pushed tags (``on: push: tags: ['v*']``). Such a repo cuts releases by
+tagging directly; syncing ``main`` into a release tag is then
+meaningless, and the release pipeline's own header says so
+("develop→main promotion is a DELIBERATE, separate PR; this pipeline
+never auto-syncs main"). Creating a ``sync-main`` shim to satisfy the
+rule would be a bogus workflow — exactly the hacking the audit exists
+to prevent.
 """
 
 from __future__ import annotations
@@ -114,6 +124,42 @@ def _workflow_filenames(repo: Path) -> list[str]:
     ]
 
 
+# A tag-triggered publish: `on: push: tags: [...]`. The `[...]` list
+# form is what every tag-flow publisher in the fleet writes; matching it
+# (rather than any line containing "tags:") keeps a shell `echo "tags:"`
+# from licensing the waiver.
+_RE_TAGS_TRIGGER = re.compile(r"^\s*tags\s*:\s*\[", re.MULTILINE)
+
+#: Filenames that mark a workflow as the tag-driven publisher. Mirrors
+#: the `pypi-publish` baseline requirement's pattern above, so the
+#: waiver keys on the same file the requirement names.
+_TAG_FLOW_PUBLISH_PATTERN = re.compile(r"^pypi-publish-.*\.ya?ml$")
+
+
+def _is_tag_flow_repo(repo: Path) -> bool:
+    """True iff the repo publishes by pushing tags (tag-flow).
+
+    A ``pypi-publish-*`` workflow carrying a ``tags: [...]`` trigger
+    means releases are cut by tagging directly — there is no
+    main→release-tag sync for a workflow to perform.
+    """
+    wf_dir = repo / ".github" / "workflows"
+    if not wf_dir.is_dir():
+        return False
+    for path in wf_dir.iterdir():
+        if not path.is_file() or path.suffix not in {".yml", ".yaml"}:
+            continue
+        if not _TAG_FLOW_PUBLISH_PATTERN.match(path.name.lower()):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if _RE_TAGS_TRIGGER.search(text):
+            return True
+    return False
+
+
 def _has_docs_dir(repo: Path) -> bool:
     """True if the repo ships a Sphinx-style docs/ tree."""
     docs = repo / "docs"
@@ -153,7 +199,12 @@ def check_ps165_workflow_presence(
     if _has_docs_dir(repo):
         requirements.append(_RTD_REQUIREMENT)
 
+    tag_flow = _is_tag_flow_repo(repo)
     for _key, pattern, label in requirements:
+        if _key == "sync-main" and tag_flow:
+            # Tag-flow releases cut tags directly; a sync-main shim
+            # would be a bogus workflow (see module docstring).
+            continue
         if not any(pattern.match(name) for name in filenames):
             out.append(
                 violation_cls(

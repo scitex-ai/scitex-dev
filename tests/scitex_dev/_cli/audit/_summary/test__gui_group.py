@@ -242,4 +242,74 @@ class TestNonGroupRoot:
         assert out == []
 
 
+def _launcher_gui_group(root, verbs=("list", "open", "audit")):
+    """Attach a fan-out launcher `gui` group: no server-lifecycle verb,
+    non-canonical verbs present."""
+
+    @root.group("gui")
+    def gui_group():
+        pass
+
+    for verb in verbs:
+        gui_group.command(verb)(lambda: None)
+    return gui_group
+
+
+class TestLauncherCarveOut:
+    def test_fan_out_launcher_gui_group_produces_no_finding(self):
+        # Arrange — `ecosystem gui {list,open,audit}`: a launcher for
+        # OTHER leaves' GUIs, served by their own packages.
+        @click.group()
+        def root():
+            pass
+
+        @root.group("ecosystem")
+        def ecosystem():
+            pass
+
+        _launcher_gui_group(ecosystem)
+        out: list[Violation] = []
+        # Act
+        check_gui_command_group(root, "demo", out)
+        # Assert
+        assert out == []
+
+    def test_open_only_gui_group_is_still_flagged(self):
+        # Arrange — negative control: a group that stays inside the
+        # canonical vocabulary but incompletely chose the server shape.
+        @click.group()
+        def root():
+            pass
+
+        @root.group("gui")
+        def gui_group():
+            pass
+
+        gui_group.command("open")(lambda: None)
+        out: list[Violation] = []
+        # Act
+        check_gui_command_group(root, "demo", out)
+        # Assert
+        assert any(v.command == "demo gui" and "serve" in v.message for v in out)
+
+    def test_partial_server_gui_group_is_still_flagged(self):
+        # Arrange — negative control: one server-lifecycle verb present
+        # means the full lifecycle must be.
+        @click.group()
+        def root():
+            pass
+
+        @root.group("gui")
+        def gui_group():
+            pass
+
+        gui_group.command("open")(lambda: None)
+        gui_group.command("serve")(lambda: None)
+        out: list[Violation] = []
+        # Act
+        check_gui_command_group(root, "demo", out)
+        # Assert
+        assert any(v.command == "demo gui" and "stop" in v.message for v in out)
+
+
 # EOF

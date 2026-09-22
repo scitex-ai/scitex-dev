@@ -617,4 +617,68 @@ def test_the_regex_rejects_punctuation_and_case(name):
     assert not matched
 
 
+# --------------------------------------------------------------------- #
+# PS-227 — ADR-0012-retired cron surface                               #
+# --------------------------------------------------------------------- #
+
+#: A bare slug in the retired `_cli/cron/` surface: hyphen-clean (no
+#: PS-226), described (no PS-228), but not package-qualified.
+CRON_BARE_SLUG = """
+JobSpec(
+    name="ci-watch",
+    schedule="*/10 * * * *",
+    command="scitex-dev cron run ci-watch",
+    description="Poll each agent's owned repo for CI red on develop.",
+)
+"""
+
+
+def _make_cron_repo(tmp_path: Path, distribution: str, body: str) -> Path:
+    """Materialise ``body`` as a module of the retired cron surface."""
+    pkg = distribution.replace("-", "_")
+    cron = tmp_path / "src" / pkg / "_cli" / "cron"
+    cron.mkdir(parents=True)
+    (cron / "_jobs.py").write_text(body, encoding="utf-8")
+    return tmp_path
+
+
+def test_a_bare_slug_on_the_retired_cron_surface_raises_no_ps227(tmp_path):
+    # Arrange — the exact shape `_cli/cron/_jobs.py` declares today.
+    repo = _make_cron_repo(tmp_path, "scitex-dev", CRON_BARE_SLUG)
+
+    # Act
+    out = _run(repo, "scitex-dev")
+
+    # Assert
+    assert "PS-227" not in _codes(out)
+
+
+def test_the_same_bare_slug_outside_the_retired_surface_still_raises_ps227(
+    tmp_path,
+):
+    # Arrange — negative control: the exemption is the SURFACE, not the
+    # slug. The identical declaration in a live provider module fires.
+    repo = _make_repo(tmp_path, DISTRIBUTION, CRON_BARE_SLUG)
+
+    # Act
+    out = _run(repo, DISTRIBUTION)
+
+    # Assert
+    assert "PS-227" in _codes(out)
+
+
+def test_a_dotted_name_on_the_retired_surface_still_raises_ps226(tmp_path):
+    # Arrange — the exemption covers PS-227 only; a charset defect in a
+    # frozen file is still worth one finding.
+    repo = _make_cron_repo(
+        tmp_path, "scitex-dev", CRON_BARE_SLUG.replace("ci-watch", "ci.watch")
+    )
+
+    # Act
+    out = _run(repo, "scitex-dev")
+
+    # Assert
+    assert _codes(out) == ["PS-226"]
+
+
 # EOF

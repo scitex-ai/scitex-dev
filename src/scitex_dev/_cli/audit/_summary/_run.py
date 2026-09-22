@@ -61,7 +61,7 @@ __all__ = [
 # forwarder are unchanged).
 
 
-def _no_entry_point_reason(package: str) -> str:
+def _no_entry_point_reason(package: str, repo_root=None) -> str:
     """Explain a `not-auditable` that the resolver left unattributed.
 
     The resolver records a reason for every failure it can SEE -- a load
@@ -78,11 +78,12 @@ def _no_entry_point_reason(package: str) -> str:
     and took that repo's develop red. The subject was never at fault -- the
     grading interpreter simply did not have it installed.
 
-    So this names the interpreter. "Not installed HERE" and "this CLI is
-    malformed" demand opposite actions from the reader, and `unknown` let
-    neither be chosen. Similar entry-point names are listed because the other
-    realistic cause is a console script whose name differs from the
-    distribution name, which is then visible at a glance.
+    So this names the interpreter AND the one to use instead. "Not installed
+    HERE" and "this CLI is malformed" demand opposite actions from the
+    reader, and `unknown` let neither be chosen. Similar entry-point names
+    are listed because the other realistic cause is a console script whose
+    name differs from the distribution name, which is then visible at a
+    glance.
     """
     try:
         import importlib.metadata as im
@@ -102,7 +103,48 @@ def _no_entry_point_reason(package: str) -> str:
     )
     if near:
         reason += f" (similar names present: {', '.join(near[:6])})"
+    remedy = _venv_remedy(package, repo_root)
+    if remedy:
+        reason += f" {remedy}"
     return reason
+
+
+def _venv_remedy(package: str, repo_root=None) -> str:
+    """Name the interpreter to use instead, when it can be seen.
+
+    When the audited tree (``--path``) ships its own ``.venv``, that
+    interpreter is overwhelmingly the right one: the entry point is
+    missing HERE but almost certainly installed THERE. Say so with the
+    exact PATH export — "install the package" is the wrong action when
+    the package is already installed one directory over.
+    """
+    if repo_root is None:
+        return (
+            " remedy: install the distribution into this interpreter "
+            f"(`pip install -e <tree>[all]` for {package}) or re-run the "
+            "audit from the package's own venv."
+        )
+    try:
+        root = Path(repo_root)
+    except (TypeError, ValueError):
+        return ""
+    venv_python = root / ".venv" / "bin" / "python"
+    try:
+        is_own_venv = venv_python.is_file()
+    except OSError:
+        return ""
+    if is_own_venv and str(venv_python) != sys.executable:
+        return (
+            f"remedy: the audited tree at {root} ships its own venv "
+            f"({venv_python}) — re-run with that interpreter first on "
+            f"PATH (`export PATH={root}/.venv/bin:$PATH`), which "
+            "usually has it installed."
+        )
+    return (
+        " remedy: install the distribution into this interpreter "
+        f"(`pip install -e {root}[all]`) or re-run the audit from the "
+        "package's own venv."
+    )
 
 
 def _audit_one(
@@ -160,7 +202,7 @@ def _audit_one(
         last_err = getattr(_resolve_entry_point, "_last_err", None)
         if hasattr(_resolve_entry_point, "_last_err"):
             delattr(_resolve_entry_point, "_last_err")
-        return f"not-auditable: {last_err or _no_entry_point_reason(package)}", []
+        return f"not-auditable: {last_err or _no_entry_point_reason(package, repo_root)}", []
 
     out: list = []
     # The DENOMINATOR, accumulated alongside `out` so a verdict can state how
