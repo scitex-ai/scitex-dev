@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import click
 
+from ..._core.streams import render_rich
+
 __all__ = ["render_remote", "resolve_packages", "shquote"]
 
 
@@ -130,10 +132,11 @@ def render_remote(
         transient=False,
         screen=True,
     ) as live:
-        live.console.print(
+        render_rich(
             f"[dim]streaming from {host} over ssh — first snapshot lands "
             f"after the cheap basic-gather batch (~1-2s); full enrichment "
-            f"~30-60s on a cold cache[/dim]"
+            f"~30-60s on a cold cache[/dim]",
+            __name__,
         )
         assert proc.stdout is not None
         for line in proc.stdout:
@@ -158,7 +161,7 @@ def render_remote(
             f"remote `gui list` on {host} exited {rc}:\n--- stderr ---\n{err}"
         )
 
-    console.print(render_table(_states(), verbosity=verbosity, host=host))
+    render_rich(render_table(_states(), verbosity=verbosity, host=host), __name__)
 
 
 # EOF

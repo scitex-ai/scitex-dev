@@ -22,10 +22,12 @@ __all__ = [
     "RecordNotFoundError",
     "RevisionMismatchError",
     "SchemaError",
+    "SchemaEvolutionError",
     "StoreDivergedError",
     "StoreError",
     "StoreIdentityMismatchError",
     "StoreIdentityUnknownError",
+    "StoreProvisionError",
     "StoreTargetError",
     "SupersededFenceError",
     "WriterConflictError",
@@ -36,8 +38,22 @@ class StoreError(Exception):
     """Base class for every :mod:`scitex_dev.store` failure."""
 
 
+class StoreProvisionError(StoreError):
+    """A privileged Store owner/default-ACL migration was refused or failed."""
+
+
 class SchemaError(StoreError):
     """A schema could not be constructed as declared."""
+
+
+class SchemaEvolutionError(SchemaError):
+    """A deployed store cannot be evolved to its declared schema safely.
+
+    Automatic evolution is intentionally narrower than arbitrary DDL: only a
+    missing, nullable DATA field may be added.  Identity, required, retyped or
+    unexpectedly non-null fields need a reviewed migration with an explicit
+    backfill rather than a guess in a process startup path.
+    """
 
 
 class FieldPolicyError(SchemaError):
@@ -267,5 +283,6 @@ class SupersededFenceError(StoreError):
     :meth:`~._peer_state.PeerState.rescind_fence` — never by accepting an op
     that failed this check.
     """
+
 
 # EOF

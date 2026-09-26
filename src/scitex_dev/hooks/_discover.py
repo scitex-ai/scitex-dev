@@ -40,14 +40,14 @@ warned about rather than silently resolved.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import sys
 from dataclasses import replace
 from typing import Callable
 
 from ._spec import HookRule
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 
 #: Entry-point group every leaf registers its hook-rule provider under.
 ENTRY_POINT_GROUP = "scitex_dev.hooks"

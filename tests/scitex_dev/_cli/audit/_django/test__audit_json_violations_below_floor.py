@@ -27,14 +27,12 @@ from pathlib import Path
 # Bind `_emit`'s SciTeXLogger before a stdlib getLogger can shadow it —
 # see test__audit_summary_counts.py for the full account.
 from scitex_dev._cli.audit import _emit as _emit_module  # noqa: F401
-from scitex_dev._cli.audit._project import _check_no_print
 from scitex_dev._cli.audit._django._audit import audit_django
 
 _DIST = "scitex-django-json-floor-demo"
 
 _MANAGE_PY = (
-    "import os\n"
-    'os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")\n'
+    'import os\nos.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")\n'
 )
 
 
@@ -64,21 +62,8 @@ def _payload(captured: str) -> dict:
 
 
 def _audit_json(repo: Path, capfd, *, severity: str) -> dict:
-    audit_django(
-        _DIST, repo=repo, json_out=True, rules={"DJ-107"}, severity=severity
-    )
+    audit_django(_DIST, repo=repo, json_out=True, rules={"DJ-107"}, severity=severity)
     return _payload(capfd.readouterr().out)
-
-
-# --- premise guard ----------------------------------------------------------
-
-
-def test_ps220_default_severity_is_w():
-    # Arrange — the class of defect rests on W sitting below the default
-    # `error` floor; fail loudly if the shared default ever changes.
-    # Act
-    # Assert
-    assert _check_no_print._DEFAULT_SEVERITY == "W"
 
 
 # --- the defect: below-floor findings must not be silently omitted ----------
@@ -102,9 +87,7 @@ def test_default_floor_json_total_list_is_not_empty(tmp_path, capfd):
     assert payload["violations_total"] != []
 
 
-def test_default_floor_total_list_is_consistent_with_the_warning_count(
-    tmp_path, capfd
-):
+def test_default_floor_total_list_is_consistent_with_the_warning_count(tmp_path, capfd):
     # Arrange
     repo = _build(tmp_path)
     # Act

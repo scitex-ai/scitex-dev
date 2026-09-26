@@ -8,7 +8,7 @@ and writes them to the target directory.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import subprocess
 import sys
 import tempfile
@@ -16,7 +16,7 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+logger = slogging.getLogger(__name__)
 
 
 def export_from_pypi(

@@ -23,14 +23,14 @@ Usage:
 from __future__ import annotations
 
 import difflib
-import logging
+import scitex_logging as slogging
 import re
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional
 
 from .._core.discovery import discover_packages, get_package_root
 
-logger = logging.getLogger(__name__)
+logger = slogging.getLogger(__name__)
 
 Scope = Literal["all", "api", "cli", "mcp", "docs"]
 

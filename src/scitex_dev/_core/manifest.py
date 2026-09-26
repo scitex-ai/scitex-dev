@@ -19,11 +19,11 @@ Each package can ship a _sphinx_html/manifest.json describing its documentation:
 from __future__ import annotations
 
 import json
-import logging
+import scitex_logging as slogging
 from pathlib import Path
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
+logger = slogging.getLogger(__name__)
 
 
 def read_manifest(docs_dir: Path) -> Optional[dict[str, Any]]:

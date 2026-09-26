@@ -19,111 +19,27 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
+    env:
+      SCITEX_CI_APPTAINER: ${{ vars.SCITEX_CI_APPTAINER }}
+      SCITEX_CI_SIF: ${{ vars.SCITEX_CI_SIF }}
+      SCITEX_CI_SIF_SHA256: ${{ vars.SCITEX_CI_SIF_SHA256 }}
     steps:
+      # fetch-depth: 0 is REQUIRED here, not an optimisation. setuptools-scm
+      # derives the version from git tags; a shallow clone hides them, so the
+      # local editable install resolves to `0.1.dev1+g<sha>`. Published
+      # scitex-cards unconditionally requires `scitex-dev>=0.59.0`, which makes
+      # that string unsatisfiable — every matrix leg then fails BEFORE a test
+      # is collected, which reads as a test failure and is not one.
+      # The quality-audit workflow already checks out with fetch-depth: 0 and
+      # passes for exactly this reason; it is the control for this change.
       - uses: actions/checkout@v4
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Create per-job venv (self-hosted shared-cache isolation)
-        # Self-hosted runners share one read-only tool-cache + home, so
-        # pip-installing into the base interpreter is blocked (PEP 668) and
-        # would race across repos. A per-job venv on the runner's local
-        # $RUNNER_TEMP isolates deps; GITHUB_PATH makes later steps use it.
-        run: |
-          python -m venv "$RUNNER_TEMP/venv"
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          # Fallback chain: prefer [all,dev] so optional-dep code paths
-          # (yaml, fastmcp, textual) get exercised. Falls back to [dev] then
-          # plain editable so a packaging hiccup doesn't strand CI.
-          pip install -e ".[all,dev]" || pip install -e ".[dev]" || pip install -e .
+          fetch-depth: 0
       - name: Run tests
-        # -n auto: parallelise across all runner cores (pytest-xdist, in [dev]).
-        # Each worker is a separate process, so matplotlib/global state stays
-        # isolated per worker — the safe way to parallelise the suite. Serial
-        # runs overran the old cap (~28 min); -n auto brings it to minutes.
-        # NO $SCITEX_STORE_DSN, AND ITS ABSENCE IS THE POINT.
-        #
-        # This step used to set
-        #     SCITEX_STORE_DSN: postgresql://ywatanabe__scitex-dev@scitex-primary:55432/scitex
-        # which pointed the store suite at the LIVE FLEET PRIMARY and the
-        # production `scitex` database, creating throwaway SCHEMAS there. That
-        # was not carelessness — the CI image shipped no PostgreSQL at all, so
-        # `writable_dsn()`'s throwaway-cluster route could never run and naming
-        # the primary was the only thing that worked.
-        #
-        # IT BROKE A RELEASE. On 2026-08-30 three xdist-parallel matrix legs
-        # exhausted the primary's connection slots (max_connections=100, ~24 in
-        # use at idle):
-        #     FATAL: remaining connection slots are reserved for roles with the
-        #            SUPERUSER attribute
-        #     FATAL: sorry, too many clients already
-        # v0.58.0's release job failed with 9 problems out of 7432 tests, every
-        # one a connection refusal rather than a defect, and re-running the
-        # failed leg ALONE still reproduced it. The blast radius is the fleet,
-        # not the build: CI competes with every agent's card write for the same
-        # 100 slots. A test suite must not be able to deny service to the
-        # production board.
-        #
-        # ONE THROWAWAY CLUSTER PER LEG, STARTED HERE AND POINTED AT BY
-        # $SCITEX_STORE_DSN — which is why the variable is still set, but now at
-        # a cluster this step owns rather than at the fleet primary.
-        #
-        # WHY NOT SIMPLY LEAVE IT UNSET. With no DSN, `writable_dsn()` falls
-        # through to `ephemeral_cluster_dsn()` — correct in principle, and it
-        # was tried here first. But the store conftest binds
-        # `BASE_DSN = _STACK.enter_context(writable_dsn())` at MODULE SCOPE, and
-        # every pytest-xdist worker is a SEPARATE PROCESS, so each worker starts
-        # its OWN cluster during collection. Measured on this pool: 12 cores ->
-        # `-n auto` = 12 workers, times three matrix legs in parallel = up to 36
-        # simultaneous initdb+pg_ctl on one 12-core box. They do not fail; they
-        # QUEUE, each waiting `-w -t 30`, until the outer 120 s guard fires:
-        #
-        #     subprocess.TimeoutExpired: pg_ctl ... start timed out after 120s
-        #     ERROR collecting tests/scitex_dev/store   (x32)
-        #
-        # That is the ORIGINAL BUG WEARING NEW CLOTHES — CI concurrency
-        # exhausting one PostgreSQL — moved off the shared fleet primary and
-        # onto the local machine. Starting one cluster for the whole leg and
-        # letting all workers share it removes the concurrency entirely.
-        #
-        # WHAT THIS IS NOT: a route back to production. The cluster lives in
-        # $RUNNER_TEMP, listens on a UNIX SOCKET ONLY (`-h ''` — no TCP port to
-        # collide with a sibling leg), uses trust auth because nothing else can
-        # reach it, and is destroyed on exit including on failure. No fleet host,
-        # no fleet credential, no shared database.
-        #
-        # PREREQUISITE: the PostgreSQL server binaries. Present on every runner
-        # in the `scitex-org-cpu` pool and in the ci-cpu image
-        # (src/scitex_dev/ci/runner/containers/ci-cpu.def).
-        run: |
-          set -euo pipefail
-          PGBIN=$(dirname "$(ls /usr/lib/postgresql/*/bin/initdb | head -1)")
-          PGDIR=$(mktemp -d "${RUNNER_TEMP:-/tmp}/pgci-${{ matrix.python-version }}.XXXXXX")
-          cleanup() {
-            "$PGBIN/pg_ctl" -D "$PGDIR/data" -m immediate stop >/dev/null 2>&1 || true
-            rm -rf "$PGDIR"
-          }
-          trap cleanup EXIT
-          "$PGBIN/initdb" -D "$PGDIR/data" -A trust --encoding=UTF8 -U postgres >"$PGDIR/initdb.log" 2>&1
-          # -h '' : unix socket only. Two legs on one runner must not race for a
-          # TCP port, and nothing outside this job has any business connecting.
-          "$PGBIN/pg_ctl" -D "$PGDIR/data" -o "-k $PGDIR -h ''" -w -t 60 start >"$PGDIR/start.log" 2>&1 \
-            || { echo "::error::throwaway cluster failed to start"; tail -20 "$PGDIR/start.log"; exit 1; }
-          # SOCKET DIRECTORY IN THE AUTHORITY, PERCENT-ENCODED — NOT `?host=`.
-          # The test harness APPENDS its own query string to whatever this
-          # names (`?options=-csearch_path=<per-test schema>`). A DSN that
-          # already carries `?host=...` then yields TWO `?` and libpq refuses
-          # the whole thing:
-          #     extra key/value separator "=" in URI query parameter: "host"
-          # Encoding the socket dir into the host position leaves the query
-          # string free for the harness, which is the only place it can go.
-          PGHOST_ENC=$(printf '%s' "$PGDIR" | sed 's|/|%2F|g')
-          export SCITEX_STORE_DSN="postgresql://postgres@${PGHOST_ENC}/postgres"
-          pytest tests/ -n auto --cov=src/scitex_dev --cov-report=xml --cov-report=term
+        # The wrapper verifies the immutable image digest before execution.
+        # The inner runner then verifies its Python/PostgreSQL capabilities and
+        # owns one socket-only throwaway cluster for this matrix leg.
+        run: bash .github/ci/exec-in-sif.sh run-in-sif.sh ${{ matrix.python-version }}
       - name: Upload coverage to Codecov
         if: always() && matrix.python-version == '3.12'
         uses: codecov/codecov-action@v5

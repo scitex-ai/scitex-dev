@@ -71,12 +71,12 @@ such verb.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import os
 from collections import defaultdict
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+logger = slogging.getLogger(__name__)
 
 _DIST_INFO_SUFFIX = ".dist-info"
 

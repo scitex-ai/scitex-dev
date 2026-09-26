@@ -1,10 +1,10 @@
 """Discover and load linter rule plugins via entry points."""
 
-import logging
+import scitex_logging as slogging
 import os
 import sys
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 _cache = None
 
 

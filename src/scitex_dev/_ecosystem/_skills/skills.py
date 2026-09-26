@@ -31,7 +31,7 @@ Usage::
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import os
 import shutil
 from pathlib import Path
@@ -40,7 +40,7 @@ from typing import Optional
 from ..._core.discovery import discover_packages, get_package_root
 from ._frontmatter import _parse_frontmatter, _stamp_frontmatter_field  # noqa: F811
 
-logger = logging.getLogger(__name__)
+logger = slogging.getLogger(__name__)
 
 _ENTRY_POINT_GROUP = "scitex_dev.skills"
 

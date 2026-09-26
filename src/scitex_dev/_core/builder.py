@@ -7,13 +7,13 @@ Builds HTML and/or JSON docs from a package's Sphinx source directory.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+logger = slogging.getLogger(__name__)
 
 
 def build_sphinx(

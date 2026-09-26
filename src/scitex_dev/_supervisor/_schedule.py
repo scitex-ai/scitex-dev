@@ -26,12 +26,12 @@ spread is ample.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 from typing import Iterable, Mapping, Sequence
 
 from ..jobs import JobSpec
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 
 #: Seconds between adjacent packages' offsets. With four packages that
 #: puts them at 0/20/40/60s — comfortably apart for jobs whose real work

@@ -3,6 +3,10 @@
 import json
 import sys
 
+import scitex_logging as slogging
+
+console = slogging.getConsole(__name__)
+
 # (module, kind, name, signature, docstring)
 # kind: F=Function, C=Class, V=Variable
 _PUBLIC_API = [
@@ -139,21 +143,21 @@ def _cmd_api(args) -> int:
 
     kind_color = {"F": green, "C": yellow, "V": blue}
 
-    print(f"API tree of scitex_linter ({len(_PUBLIC_API)} items):")
-    print("Legend: [M]=Module [C]=Class [F]=Function [V]=Variable")
+    console.info(f"API tree of scitex_linter ({len(_PUBLIC_API)} items):")
+    console.info("Legend: [M]=Module [C]=Class [F]=Function [V]=Variable")
 
     current_mod = None
     for mod, kind, name, sig, doc in _PUBLIC_API:
         if mod != current_mod:
-            print(f"{cyan}[M] {mod}{reset}")
+            console.info(f"{cyan}[M] {mod}{reset}")
             current_mod = mod
         kc = kind_color.get(kind, "")
         if v == 0:
-            print(f"  {kc}[{kind}]{reset} {name}")
+            console.info(f"  {kc}[{kind}]{reset} {name}")
         elif v >= 1:
             sep = "" if sig.startswith("(") else " "
-            print(f"  {kc}[{kind}]{reset} {name}{sep}{sig}")
+            console.info(f"  {kc}[{kind}]{reset} {name}{sep}{sig}")
             if v >= 2 and doc:
-                print(f"       {dim}{doc}{reset}")
+                console.info(f"       {dim}{doc}{reset}")
 
     return 0

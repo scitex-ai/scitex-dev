@@ -106,11 +106,11 @@ in-place edit.
 
 from __future__ import annotations
 
-import logging
+import scitex_logging as slogging
 import sys
 from typing import Callable
 
-_logger = logging.getLogger(__name__)
+_logger = slogging.getLogger(__name__)
 
 #: Entry-point group downstream packages register their job providers in.
 ENTRY_POINT_GROUP = "scitex_dev.jobs"

@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import importlib
 import inspect
-import logging
+import scitex_logging as slogging
 from typing import Any, Optional
 
-logger = logging.getLogger(__name__)
+logger = slogging.getLogger(__name__)
 
 
 def introspect_package(module_name: str) -> Optional[dict[str, Any]]:

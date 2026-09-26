@@ -6,6 +6,9 @@ import scitex_logging as slogging
 
 log = slogging.getLogger(__name__)
 
+from .._core.streams import render_content
+console = slogging.getConsole(f"{__name__}.console")
+
 
 def _generate_completion_script(shell: str) -> str:
     """Generate a static completion script for scitex-linter."""
@@ -134,7 +137,7 @@ def _cmd_default(parser, args) -> int:
 def _cmd_show(shell: str) -> int:
     script = _generate_completion_script(shell)
     if script:
-        print(script)
+        render_content(script)
         return 0
     log.error(f"Unsupported shell: {shell}")
     return 1
@@ -159,14 +162,14 @@ def _cmd_install(args) -> int:
     if os.path.exists(rc_file):
         with open(rc_file) as f:
             if "scitex-linter tab completion" in f.read():
-                print(f"Completion already installed in {rc_file}")
+                console.info(f"Completion already installed in {rc_file}")
                 return 0
 
     with open(rc_file, "a") as f:
         f.write(f"\n{script}\n")
 
-    print(f"Completion installed in {rc_file}")
-    print(f"Reload with: source {rc_file}")
+    console.info(f"Completion installed in {rc_file}")
+    console.info(f"Reload with: source {rc_file}")
     return 0
 
 
@@ -182,11 +185,11 @@ def _cmd_status(args) -> int:
                 installed = True
 
     status = "installed" if installed else "not installed"
-    print(f"Shell:  {shell}")
-    print(f"RC:     {rc_file}")
-    print(f"Status: {status}")
+    console.info(f"Shell:  {shell}")
+    console.info(f"RC:     {rc_file}")
+    console.info(f"Status: {status}")
 
     if not installed:
-        print("\nInstall with: scitex-linter completion install")
+        console.info("\nInstall with: scitex-linter completion install")
 
     return 0

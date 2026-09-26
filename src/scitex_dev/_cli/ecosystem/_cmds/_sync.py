@@ -26,6 +26,8 @@ import click
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ._sync_helpers import git, parse_package_filter, resolve_repo, selected_packages
 
+from ...._core.streams import render_rich
+
 
 def _is_dirty(repo) -> bool:
     """True if the checkout has uncommitted tracked changes (staged or not)."""
@@ -232,7 +234,6 @@ def register(ecosystem):
         _render(rows, dry_run)
 
     def _render(rows, dry_run):
-        from rich.console import Console
         from rich.table import Table
 
         table = Table(show_header=True, header_style="bold")
@@ -254,9 +255,10 @@ def register(ecosystem):
                 behind,
                 row["detail"] or "",
             )
-        Console().print(table)
+        render_rich(table, __name__)
         verb = "would pull" if dry_run else "pulled"
-        Console().print(
+        render_rich(
             f"[bold]{n_pulled}[/bold] {verb}, [bold]{n_skipped}[/bold] skipped "
-            f"(dirty/off-develop/diverged/missing)."
+            f"(dirty/off-develop/diverged/missing).",
+            __name__,
         )

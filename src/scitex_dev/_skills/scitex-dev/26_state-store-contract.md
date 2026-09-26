@@ -186,3 +186,13 @@ unreviewable; a measurement in git is a lie the moment reality moves.
       refuses.
 - [ ] Table sync order pinned by a test.
 - [ ] ACL keyed on the id, stored as rows, absence ≠ unreachable.
+
+## §6. Evolving a package schema
+
+A leaf adds fields to its declared `Schema`; it never uses `Store._connection`
+or raw DDL. Opening `Store` checks the deployed table under its database lock.
+Only missing `DATA`, `required=False` fields are added, leaving honest `NULL`s.
+Construction records `store.schema_evolution`; a launch gate may repeat
+`store.ensure_declared_fields()`. Success requires a post-DDL catalogue match.
+Missing identity/required fields, type drift, or optional fields physically
+`NOT NULL` raise `SchemaEvolutionError` and require a reviewed backfill.

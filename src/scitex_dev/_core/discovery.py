@@ -12,11 +12,11 @@ This module lazily discovers all registered packages and caches the result.
 from __future__ import annotations
 
 import importlib
-import logging
+import scitex_logging as slogging
 from pathlib import Path
 from typing import Optional
 
-logger = logging.getLogger(__name__)
+logger = slogging.getLogger(__name__)
 
 _ENTRY_POINT_GROUP = "scitex_dev.docs"
 

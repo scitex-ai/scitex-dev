@@ -45,9 +45,11 @@ from __future__ import annotations
 import logging
 import sys
 
+import scitex_logging as slogging
+
 __all__ = ["RETIRED_SSH_ALIASES", "successor_for", "retirement_warning"]
 
-logger = logging.getLogger(__name__)
+logger = slogging.getLogger(__name__)
 
 
 def _own_the_stderr_channel(log: logging.Logger) -> None:

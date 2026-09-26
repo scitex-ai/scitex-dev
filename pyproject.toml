@@ -135,6 +135,9 @@ dev = [
     # Re-listed here so the dev venv resolves the lazy-import test path
     # (PS-210 dev-extras-completeness).
     "Pillow>=9.2.0",
+    # The access tests validate the scitex-access/1 record against its JSON
+    # schema. Arrives transitively via fastmcp, declared so a clean venv agrees.
+    "jsonschema>=4.0",
     # NOTE: do NOT add `scitex-dev>=X.Y` here — it creates an unresolvable
     # circular dependency in CI (the local editable install resolves to
     # `0.1.dev1+g<sha>` via setuptools-scm, which fails `>=0.11.5`). The
@@ -142,6 +145,28 @@ dev = [
     # `pip install -e .[dev]` runs, so PS-150's `shutil.which` check still
     # works. If the meta-audit test must hard-fail (not skip) when the CLI
     # is absent, gate it explicitly rather than via this circular pin.
+    #
+    # Optional runtime capabilities (declared in `[all]` above and guarded at
+    # every `src/` import site). PS-210 dev-extras-completeness: a dep behind
+    # a consumer extra whose feature this suite imports must ALSO resolve here,
+    # or a fresh `pip install -e .[dev]` cannot collect the tests that cover
+    # it. The caller is `tests/integration/test_cross_package_imports.py`; its
+    # `importorskip` takes a COMPUTED root, which PS-210's literal scan cannot
+    # see, so the group listing is the remedy that applies. `flask` is
+    # deliberately absent — the dashboard tests gate it with a literal
+    # `pytest.importorskip("flask")`, which PS-210 does honour.
+    #
+    # scitex-cards is deliberately absent from BOTH this extra and `[all]`,
+    # and the reason is a cycle rather than a preference: published
+    # scitex-cards requires `scitex-dev>=0.59.0`, so declaring it here would
+    # make this project require a package that requires it right back. That
+    # holds only while both versions are truthful, and fails outright in
+    # scitex-dev's own CI, where setuptools-scm cannot see the tags and the
+    # build reports `0.1.dev1`. Every scitex-dev import of `scitex_cards` is
+    # guarded, so PS-233 requires no declaration at all; the capability
+    # degrades to absent, which is the documented plugin contract. Install
+    # `scitex-cards` explicitly to turn it on.
+    "scitex-events>=0.1",
 ]
 docs = [
     "sphinx>=7.0",
@@ -153,6 +178,39 @@ docs = [
 all = [
     "scitex-dev[dev]",
     "scitex-dev[docs]",
+    # --- Optional runtime capabilities, declared here and guarded at every
+    # import site (PS-233 runtime-import-dependency-undeclared) --------------
+    # Each of these is imported from a `src/` module that is NOT reachable
+    # from a bare `import scitex_dev`, and every one of those imports is
+    # wrapped in `try/except ImportError` whose message names this extra. So
+    # `pip install scitex-dev` stays complete without them, and
+    # `pip install scitex-dev[all]` is what turns the capability on.
+    #
+    # They are ALSO repeated in `[dev]` below (PS-210 dev-extras-completeness:
+    # the suite covers these features, so a fresh `pip install -e '.[dev]'`
+    # must resolve them). The duplication is deliberate — see
+    # `_skills/general/01_ecosystem/19_dev-extras-completeness.md`.
+    #
+    # scitex-cards — ci-watch CI-fail todo filing, pr-expire intent cards,
+    #   branch-GC active-ref lookup. Soft dep by design: every call site fails
+    #   open (or falls back to the `scitex-todo` CLI) when it is absent.
+    #   Deliberately NOT declared here either: every import is guarded, so
+    #   PS-233 asks for no declaration, and declaring it would close the cycle
+    #   described above `[dev]` — published scitex-cards requires
+    #   `scitex-dev>=0.59.0`.
+    # scitex-events — best-effort test-completion events from test_runner.
+    "scitex-events>=0.1",
+    # flask — the `gui serve` dashboard (`dashboard/app.py` / `routes.py`).
+    "flask>=2.2",
+    # numpy — the numpy-ABI diagnostic hint in `_core/imports.py`; degrades to
+    #   "unknown" when numpy is absent.
+    "numpy>=1.21",
+    # pytest — the pytest11 plugin, the skill-quality harness, and the
+    #   audit-conformance skip helper. Deliberately NOT in
+    #   `[project.dependencies]`: the minimality checklist in
+    #   01_ecosystem/02_dependency-and-version-pinning.md keeps dev-group
+    #   tooling out of core, so `[all]` is the bucket the guard requires.
+    "pytest>=7.0.0",
 ]
 
 [project.scripts]
@@ -287,6 +345,15 @@ scitex-dev = "scitex_dev._hook_rules:provide"
 #   scitex-agent-container = "scitex_agent_container._store_plugin:provide"
 #   scitex-cards           = "scitex_cards._store_plugin:provide"
 
+# Federated ACCESS resource kinds live under the entry-point group
+# `scitex_dev.access.kinds`. Each entry point loads to a callable returning
+# `list[scitex_dev.access.KindSpec]` (name, path prefix, action -> role);
+# `scitex_dev.access.discover_kinds()` aggregates them and refuses one name
+# registered twice with different rules. A kind nobody registers is decided
+# `unresolved/kind-unregistered` (fail closed). scitex-dev registers none;
+# leaves register like so (see ADR-0014):
+#   scitex-cards = "scitex_cards._access_kinds:provide"
+
 [project.urls]
 Homepage = "https://github.com/scitex-ai/scitex-dev"
 Repository = "https://github.com/scitex-ai/scitex-dev"
@@ -320,6 +387,9 @@ scitex_dev = [
     "status/spec/*.md",
     "status/spec/*.yaml",
     "status/spec/schema/*.json",
+    # The access decision table is derived from its spec, same rule as status.
+    "access/spec/*.yaml",
+    "access/spec/schema/*.json",
 ]
 
 [tool.hatch.build.targets.wheel.force-include]

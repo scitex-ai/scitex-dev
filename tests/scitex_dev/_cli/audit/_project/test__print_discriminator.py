@@ -19,6 +19,7 @@ import ast
 import pytest
 
 from scitex_dev._cli.audit._project._print_discriminator import (
+    INJECTED,
     STDERR,
     STDOUT,
     UNKNOWN,
@@ -59,7 +60,8 @@ def _flags(src: str) -> bool:
         ("import sys\nprint('x', file=sys.stderr)", STDERR),
         ("import sys\nprint('x', file=sys.__stderr__)", STDERR),
         ("print('x', file=None)", STDOUT),
-        ("def f(h):\n    print('x', file=h)", UNKNOWN),
+        ("def f(h):\n    print('x', file=h)", INJECTED),
+        ("def f(h=None):\n    print('x', file=h)", UNKNOWN),
         ("print('x', file=open('/tmp/f', 'w'))", UNKNOWN),
     ],
 )
@@ -124,8 +126,8 @@ def _print_on_line(src: str, line: int) -> tuple[ast.AST, ast.Call]:
 @pytest.mark.parametrize(
     "line, expected",
     [
-        (5, STDOUT),   # `out = file or sys.stdout` two lines above
-        (9, STDOUT),   # a different stdout branch
+        (5, STDOUT),  # `out = file or sys.stdout` two lines above
+        (9, STDOUT),  # a different stdout branch
         (12, STDERR),  # the stderr branch
     ],
 )
@@ -268,9 +270,13 @@ def test_prose_laundered_through_a_variable_flags():
 # --- UNDECIDABLE MUST FLAG ---------------------------------------------------
 
 
-def test_undecidable_destination_flags_despite_serializer():
+def test_optional_undecidable_destination_flags_despite_serializer():
     # Arrange — an unresolvable `file=` is NOT evidence of safety.
-    src = "import json\ndef emit(handle, x):\n    print(json.dumps(x), file=handle)\n"
+    src = (
+        "import json\n"
+        "def emit(x, handle=None):\n"
+        "    print(json.dumps(x), file=handle)\n"
+    )
     # Act
     actual = _flags(src)
     # Assert
@@ -339,8 +345,8 @@ def test_to_json_to_resolved_stdout_shape_of_cli_utils_is_spared():
     assert actual is False
 
 
-def test_rendered_payload_variable_shape_of_cli_utils_is_spared():
-    # Arrange — shape of src/scitex_dev/_cli/_utils.py:44
+def test_unknown_payload_variable_is_not_spared():
+    # Arrange — naming an arbitrary value `data` is not structural proof.
     src = (
         "import sys\n"
         "def emit(result, file=None):\n"
@@ -351,7 +357,48 @@ def test_rendered_payload_variable_shape_of_cli_utils_is_spared():
     # Act
     actual = _flags(src)
     # Assert
+    assert actual is True
+
+
+def test_variable_assigned_serializer_output_is_spared():
+    # Arrange
+    src = (
+        "import json\n"
+        "def emit(result):\n"
+        "    payload = json.dumps(result)\n"
+        "    print(payload)\n"
+    )
+    # Act
+    actual = _flags(src)
+    # Assert
     assert actual is False
+
+
+def test_required_injected_stream_is_spared():
+    # Arrange — the caller owns and can capture the rendering destination.
+    src = "def render(report, stream):\n    print(report.render(), file=stream)\n"
+    # Act
+    actual = _flags(src)
+    # Assert
+    assert actual is False
+
+
+def test_explicit_content_render_api_is_spared():
+    # Arrange — narrow explicit-content contract, not an arbitrary variable.
+    src = "def render_content(content):\n    print(content)\n"
+    # Act
+    actual = _flags(src)
+    # Assert
+    assert actual is False
+
+
+def test_arbitrary_function_printing_content_still_flags():
+    # Arrange — the content name alone is not an exemption.
+    src = "def restart(content):\n    print(content)\n"
+    # Act
+    actual = _flags(src)
+    # Assert
+    assert actual is True
 
 
 def test_explicit_stdout_serializer_call_is_spared():

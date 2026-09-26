@@ -28,6 +28,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
+from ..._core.streams import write_stream
+
 __all__ = ["BranchGcRunResult", "run_once"]
 
 
@@ -78,7 +80,7 @@ def run_once(*, dry_run: bool = False, out: TextIO | None = None) -> BranchGcRun
     sink = out or sys.stdout
     repos, error = _managed_repos()
     if error is not None:
-        print(f"branch-gc: skip — {error}", file=sink)
+        write_stream(f"branch-gc: skip — {error}", sink)
         return BranchGcRunResult(error=error)
 
     from ...hygiene import exit_code_for, gc_repos
@@ -86,8 +88,8 @@ def run_once(*, dry_run: bool = False, out: TextIO | None = None) -> BranchGcRun
     outcome = gc_repos(repos, apply=not dry_run)
     for result in outcome.results:
         _report(result, sink)
-    print(f"branch-gc: {outcome.summary_line()}", file=sink)
-    print(f"branch-gc: exit code would be {exit_code_for(outcome)}", file=sink)
+    write_stream(f"branch-gc: {outcome.summary_line()}", sink)
+    write_stream(f"branch-gc: exit code would be {exit_code_for(outcome)}", sink)
     return BranchGcRunResult(
         repos=len(outcome.results),
         deleted=outcome.deleted_count,

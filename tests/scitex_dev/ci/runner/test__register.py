@@ -24,6 +24,7 @@ RUNNER_SUBCOMMANDS = [
     "renew",
     "register",
     "preflight",
+    "relocate-storage",
 ]
 
 

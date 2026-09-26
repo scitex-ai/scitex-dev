@@ -39,6 +39,7 @@ absent from another store."**
 | `_apply.py` | the fold local writes and replay SHARE |
 | `_guards.py` | record keys, the optimistic lock, ownership checks |
 | `_store.py` | `Store` — the write door, the batch, the oplog append |
+| `_provision.py` | privileged owner/default-ACL migration and read-only validation |
 | `_read_door.py` | `ReadDoor` — `get` / `rows` / `search` / `count` / `tally` |
 | `_query.py` | `Query`, `eq`/`gte`/`contains`/… — the search vocabulary |
 | `_query_sql.py` | the only place a `Query` becomes SQL |
@@ -78,6 +79,22 @@ Postgres instances that both answered to one `store_uuid` on 2026-08-11 —
 scitex-dev is a leaf here too: its own store (the status exchange ledger)
 is merged through an INTERNAL provider, never an entry point, so discovery
 never walks this package's metadata to find this package.
+
+## PostgreSQL ownership is a deployment boundary
+
+Managed SciTeX databases declare `scitex_store_owner` and `scitex_rw`.
+Physical Store tables belong to the owner role; application logins inherit
+`SELECT`, `INSERT`, `UPDATE`, and `DELETE` through the writer role. Before a
+new or changed Store is launched, an authorized migration identity runs
+`provision_store_acl(target, schema)`. It transactionally normalizes existing
+owners, creates or safely evolves the schema as the owner, sets the owner's
+future-table default ACL, grants DML, and verifies the resulting catalogue.
+
+`inspect_store_acl(target, schema)` performs the same final owner, grant, and
+default-ACL checks without mutation. If managed roles exist and normal
+`Store(...)` construction observes a need for DDL, it raises
+`StoreProvisionError`; an application retry never creates shared tables under
+whichever login happened to start first.
 
 ## Two places with no default, on purpose
 
@@ -215,6 +232,8 @@ absence is what made the private index look reasonable.
 
 ## Related
 
-- `_skills/general/01_ecosystem/21_dot-scitex-roots-and-resolution.md` — where a
-  package's `.db` lives and why `runtime/` is the redirectable unit.
+- `_skills/general/01_ecosystem/21_dot-scitex-roots-and-resolution.md` — the two
+  `.scitex/<pkg-short>/` roots and how a path resolves. Note `runtime/` holds
+  regenerable local state only: state itself lives in PostgreSQL on 55432, and
+  a `.db` file there is a violation rather than a shard.
 - scitex-cards ADR-0016 — the wipes, the mechanism and the ruling.

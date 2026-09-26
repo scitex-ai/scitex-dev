@@ -90,6 +90,14 @@ def run_checks(
     from ._check_optional_deps_guarded import check_ps148_optional_deps_guarded
 
     check_ps148_optional_deps_guarded(repo_root, distribution, Violation, violations)
+    # PS-233: every deterministically mapped runtime import in shippable
+    # source must be declared. Unguarded imports belong in core; imports that
+    # are demonstrably optional via try/except ImportError may live in a
+    # consumer runtime extra. Function-local imports are intentionally scanned:
+    # deferring an import moves a missing-dependency crash; it does not fix it.
+    from ._check_runtime_dependencies import check_ps233_runtime_dependencies
+
+    check_ps233_runtime_dependencies(repo_root, distribution, Violation, violations)
     # PS-214/215: all-or-nothing extras + dead install-remedy strings.
     # See scitex-writer PR #322 (reference incident: editor = [] extra +
     # "pip install scitex-writer[editor]" remedy that installs nothing).
@@ -105,10 +113,9 @@ def run_checks(
     from ._check_no_url_deps import check_ps216_no_url_deps
 
     check_ps216_no_url_deps(repo_root, Violation, violations)
-    # PS-220: `print(...)` in package source. SciTeX code must emit messages
-    # through scitex-logging (aligned WARN:/ERRO:/SUCC: prefixes), never the
-    # builtin print. AST-scans src/<pkg>/**.py; tests/scripts/examples/docs
-    # excluded; `# noqa` opts a line out.
+    # PS-220: strict error-tier logging transport. Human status through
+    # builtin print, Rich Console.print, or stdlib logging.getLogger is
+    # forbidden; only mechanically proved data/content transport is spared.
     from ._check_no_print import check_ps220_no_print
 
     check_ps220_no_print(repo_root, Violation, violations)
