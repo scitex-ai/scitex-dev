@@ -132,3 +132,40 @@ def test_custom_commit_message_is_used(tmp_path):
     # Assert
     msg = _git(tmp_path / ".scitex", "log", "--format=%s", "-1")
     assert msg == "sac: adopt home specs"
+
+
+def test_nested_repo_with_unborn_head_inside_ignored_dir_does_not_fail(tmp_path):
+    # Arrange — an agent scratchpad: nested repo, never committed (add -A
+    # dies fatal on these when git descends into them).
+    import subprocess
+
+    _seed_home(tmp_path)
+    nest = tmp_path / ".scitex" / "agent-container" / "containers" / "ov" / "scratchpad" / "proj"
+    nest.mkdir(parents=True)
+    (nest / "notes.txt").write_text("work\n")
+    subprocess.run(["git", "init", "-q", str(nest)], check=True, timeout=60)
+    # Act — must not raise; the ignored subtree is pruned, never walked.
+    out = ensure_dotscitex_managed_by_git(
+        tmp_path, track=TRACK, extra_ignore=("agent-container/containers/",)
+    )
+    root = tmp_path / ".scitex"
+    # Assert — home commits; nothing under containers/ tracked.
+    assert out["committed"] is True
+    tracked = set(_git(root, "ls-files").split())
+    assert not any("containers" in t for t in tracked)
+    assert "agent-container/agents/demo/spec.yaml" in tracked
+
+
+def test_nested_repo_under_runtime_is_pruned(tmp_path):
+    # Arrange — nested repo directly under a <pkg>/runtime/ dir.
+    import subprocess
+
+    _seed_home(tmp_path)
+    nest = tmp_path / ".scitex" / "agent-container" / "runtime" / "sess" / "repo"
+    nest.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(nest)], check=True, timeout=60)
+    # Act / Assert — no failure, runtime content never tracked.
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    assert out["committed"] is True
+    tracked = set(_git(tmp_path / ".scitex", "ls-files").split())
+    assert not any("/runtime/" in t for t in tracked)

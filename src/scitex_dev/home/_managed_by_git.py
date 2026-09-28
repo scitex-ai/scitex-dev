@@ -83,10 +83,11 @@ def _run_git(root: Path, *args: str) -> str:
             f"{type(exc).__name__}: {exc}"
         ) from exc
     if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip()
         raise RuntimeError(
             f"ensure_dotscitex_managed_by_git: "
             f"git {' '.join(args)} failed in {root}: "
-            f"{(proc.stderr or proc.stdout).strip()[:300]}"
+            f"{detail[-800:]}"
         )
     return proc.stdout.strip()
 
@@ -116,6 +117,19 @@ def _managed_block(track: Iterable[str], extra_ignore: Iterable[str] = ()) -> st
     lines.append("!.gitignore")
     for pattern in sorted(set(track)):
         lines.append(f"!{pattern}")
+    # Final prune: `!*/` above re-includes EVERY directory so git can
+    # traverse into tracked subdirs — which also re-opens ignored subtrees
+    # to traversal, where nested agent repos (scratchpads, caches, often
+    # with unborn HEADs that make `git add -A` die fatal) get discovered.
+    # Re-excluding here with `/**` prunes those subtrees: an ignored
+    # directory is never descended into, so nested repos inside stay
+    # invisible. Directory ignores only — file patterns are unaffected
+    # by `!*/` and need no second entry.
+    lines.append("# Re-prune untraversable subtrees (see above).")
+    lines.append("**/runtime/**")
+    for pattern in sorted(set(extra_ignore)):
+        if pattern.endswith("/"):
+            lines.append(f"{pattern}**")
     lines.append(_BLOCK_END)
     return "\n".join(lines) + "\n"
 
