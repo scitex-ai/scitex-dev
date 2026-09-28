@@ -76,6 +76,12 @@ def _run_git(root: Path, *args: str) -> str:
             text=True,
             timeout=60,
             check=False,
+            # Fleet homes are capacity-split across mounts (e.g. the
+            # agent-container subtree lives on a scratch LV while the
+            # repo root sits on the container rootfs). Discovery must
+            # cross that boundary: it is one logical tree, and every
+            # call below already path-contains its target.
+            env={**os.environ, "GIT_DISCOVERY_ACROSS_FILESYSTEM": "1"},
         )
     except (FileNotFoundError, OSError, subprocess.SubprocessError) as exc:
         raise RuntimeError(
