@@ -13,6 +13,10 @@ from typing import Any
 
 from scitex_config._ecosystem import local_state
 
+from .._ecosystem.freshness_gc import (
+    DEFAULT_FRESHNESS_DAYS,
+    DEFAULT_ORGANIZATION,
+)
 from ._default_config import create_default_config as _write_default_config
 
 # Knob-state layer (skills / mcp / test-execution). Re-exported here so the
@@ -92,6 +96,21 @@ class PackageConfig:
 
 
 @dataclass
+class FreshnessConfig:
+    """Organization-wide forgetting policy."""
+
+    organization: str = DEFAULT_ORGANIZATION
+    freshness_days: int = DEFAULT_FRESHNESS_DAYS
+    cards: str = "auto"
+
+    def __post_init__(self) -> None:
+        if self.freshness_days < 0:
+            raise ValueError("freshness.freshness_days must be >= 0")
+        if self.cards not in {"auto", "required", "off"}:
+            raise ValueError("freshness.cards must be auto, required, or off")
+
+
+@dataclass
 class DevConfig:
     """Full developer configuration."""
 
@@ -100,6 +119,7 @@ class DevConfig:
     github_remotes: list[GitHubRemote] = field(default_factory=list)
     pypi_accounts: list[PyPIAccount] = field(default_factory=list)
     branches: list[str] = field(default_factory=lambda: ["main", "develop"])
+    freshness: FreshnessConfig = field(default_factory=FreshnessConfig)
 
 
 def _get_default_config_path() -> Path:
@@ -204,6 +224,15 @@ def _parse_pypi_account(data: dict[str, Any]) -> PyPIAccount:
     return PyPIAccount(
         name=data.get("name", ""),
         enabled=data.get("enabled", True),
+    )
+
+
+def _parse_freshness_config(data: dict[str, Any]) -> FreshnessConfig:
+    """Parse the organization freshness block with policy defaults."""
+    return FreshnessConfig(
+        organization=str(data.get("organization", DEFAULT_ORGANIZATION)),
+        freshness_days=int(data.get("freshness_days", DEFAULT_FRESHNESS_DAYS)),
+        cards=str(data.get("cards", "auto")),
     )
 
 
@@ -324,12 +353,18 @@ def load_config(config_path: str | Path | None = None) -> DevConfig:
     if not isinstance(branches, list):
         branches = ["main", "develop"]
 
+    freshness_data = data.get("freshness", {})
+    freshness = _parse_freshness_config(
+        freshness_data if isinstance(freshness_data, dict) else {}
+    )
+
     return DevConfig(
         packages=packages,
         hosts=hosts,
         github_remotes=github_remotes,
         pypi_accounts=pypi_accounts,
         branches=branches,
+        freshness=freshness,
     )
 
 
@@ -444,6 +479,11 @@ def config_to_dict(config: DevConfig, config_path: Path | None = None) -> dict:
             for r in config.github_remotes
         ],
         "branches": config.branches,
+        "freshness": {
+            "organization": config.freshness.organization,
+            "freshness_days": config.freshness.freshness_days,
+            "cards": config.freshness.cards,
+        },
     }
     if config_path is not None:
         result["config_path"] = str(config_path)

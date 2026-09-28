@@ -64,6 +64,7 @@ ECOSYSTEM_COMMAND_CATEGORIES = [
             # collection. Dry-run by default; `prune-branches` remains
             # the conservative, config-gated, local-only collector.
             "branch-hygiene",
+            "apply-freshness-gc",
             "ci-template",
             # Declared HOST state (journald persistence, sysctl drop-ins
             # ...) federated from every leaf's `scitex_dev.host_config`

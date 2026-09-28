@@ -16,6 +16,13 @@ _DEFAULT_CONFIG = """\
 # SciTeX Developer Configuration
 # Timestamp: 2026-02-02
 
+# Organization-wide forgetting policy. The exact cutoff is computed once and
+# forwarded unchanged to GitHub and scitex-cards.
+freshness:
+  organization: scitex-ai
+  freshness_days: 3
+  cards: auto
+
 # Ecosystem packages to track
 packages:
   - name: scitex
