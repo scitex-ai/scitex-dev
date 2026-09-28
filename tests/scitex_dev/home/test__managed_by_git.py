@@ -104,3 +104,31 @@ def test_user_gitignore_lines_are_preserved(tmp_path):
     text = (root / ".gitignore").read_text()
     assert "*.bak" in text
     assert "scitex-dev: managed block" in text
+
+
+def test_extra_ignore_keeps_package_runtime_dirs_untracked(tmp_path):
+    # Arrange — a package overlay dir that must never commit.
+    _seed_home(tmp_path)
+    overlay = tmp_path / ".scitex" / "agent-container" / "containers" / "overlays" / "demo"
+    overlay.mkdir(parents=True)
+    (overlay / "rootfs.img").write_text("BINARY\n")
+    # Act
+    out = ensure_dotscitex_managed_by_git(
+        tmp_path, track=TRACK, extra_ignore=("agent-container/containers/",)
+    )
+    root = tmp_path / ".scitex"
+    # Assert — overlay content never tracked, repo still commits specs.
+    assert out["committed"] is True
+    tracked = set(_git(root, "ls-files").split())
+    assert not any("overlays" in t for t in tracked)
+    assert "agent-container/agents/demo/spec.yaml" in tracked
+
+
+def test_custom_commit_message_is_used(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    # Act
+    ensure_dotscitex_managed_by_git(tmp_path, track=TRACK, commit_message="sac: adopt home specs")
+    # Assert
+    msg = _git(tmp_path / ".scitex", "log", "--format=%s", "-1")
+    assert msg == "sac: adopt home specs"

@@ -91,7 +91,7 @@ def _run_git(root: Path, *args: str) -> str:
     return proc.stdout.strip()
 
 
-def _managed_block(track: Iterable[str]) -> str:
+def _managed_block(track: Iterable[str], extra_ignore: Iterable[str] = ()) -> str:
     """Build the .gitignore block: runtime contract + track negations."""
     lines = [_BLOCK_BEGIN]
     lines.append("# Placement contract: <pkg>/runtime/ is NEVER tracked.")
@@ -108,6 +108,8 @@ def _managed_block(track: Iterable[str]) -> str:
     lines.append("*.log")
     lines.append("session.jsonl")
     lines.append("heartbeat.json")
+    for pattern in sorted(set(extra_ignore)):
+        lines.append(pattern)
     lines.append("# Default deny: only package-declared tracks commit.")
     lines.append("*")
     lines.append("!*/")
@@ -174,7 +176,9 @@ def ensure_dotscitex_managed_by_git(
     home: str | Path | None = None,
     *,
     track: Iterable[str] = (),
+    extra_ignore: Iterable[str] = (),
     commit: bool = True,
+    commit_message: str = "scitex-dev: manage .scitex (specs + config)",
     actor_name: str = "scitex-dev",
     actor_email: str = "scitex-dev@local",
 ) -> dict:
@@ -192,7 +196,9 @@ def ensure_dotscitex_managed_by_git(
         _run_git(root, "init", "-q")
 
     track_list = sorted(set(track))
-    gitignore_changed = _merge_gitignore(root / ".gitignore", _managed_block(track_list))
+    gitignore_changed = _merge_gitignore(
+        root / ".gitignore", _managed_block(track_list, extra_ignore)
+    )
     moved = _migrate_runtime_files(root)
 
     _run_git(root, "add", "-A")
@@ -200,7 +206,7 @@ def ensure_dotscitex_managed_by_git(
     committed = False
     if status and commit:
         _run_git(root, "-c", f"user.name={actor_name}", "-c", f"user.email={actor_email}",
-                 "commit", "-q", "-m", "scitex-dev: manage .scitex (specs + config)")
+                 "commit", "-q", "-m", commit_message)
         committed = True
     try:
         head = _run_git(root, "rev-parse", "HEAD")
