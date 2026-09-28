@@ -66,10 +66,18 @@ and unused groups.
    queued jobs created before a fix may never re-evaluate — always test
    with a NEW run. Cancel stale queues to reduce noise (re-runnable).
 
+## Group design (fleet convention 2026-09-28)
+
+- `Default`: GitHub-hosted runners only.
+- `Organization`: all fleet self-hosted runners (visibility all +
+  `allows_public_repositories: true`, required since fleet repos are public).
+- `ywatanabe1989`: personal experiments.
+- Workflows target the Organization group implicitly via labels today;
+  explicit `runs-on: {group: Organization}` is the follow-up.
+
 ## Hygiene after recovery
 
-- One runner group (Default) unless a real need exists; delete empties.
-- Unified names; no mystery registrations.
+- No stray registrations, no empty groups, unified names.
 - Debug: org variables `ACTIONS_RUNNER_DEBUG=true`
   + `ACTIONS_STEP_DEBUG=true` (org variables, visibility all).
 - Verify with a dispatched probe run to `in_progress` on a named runner
