@@ -10,6 +10,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.61.0] - 2026-09-28
+
+- New `scitex_dev.home` module: `ensure_dotscitex_managed_by_git` adopts an
+  existing `~/.scitex` (or initialises a missing one) into git management
+  with a managed `.gitignore` block encoding the cross-package placement
+  contract (`<pkg>/runtime/` plus large artefacts never tracked,
+  package-declared track globs with default-deny), idempotent
+  compatibility migration of stray runtime files under `<pkg>/runtime/`
+  with symlinks left behind, and `extra_ignore` / `commit_message`
+  options for package runtime dirs (e.g. container overlays).
+
 ## [0.59.0] - 2026-09-02
 
 > `0.58.1` was tagged on `develop` rather than on `main`, so `v0.58.1` was
