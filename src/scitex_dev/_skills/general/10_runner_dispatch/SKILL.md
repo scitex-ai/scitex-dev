@@ -72,6 +72,9 @@ and unused groups.
 - `Organization`: all fleet self-hosted runners (visibility all +
   `allows_public_repositories: true`, required since fleet repos are public).
 - `ywatanabe1989`: personal experiments.
+- NEW GROUPS DEFAULT TO `allows_public_repositories: false` — setting
+  this flag is part of creating ANY group, or the group silently serves
+  nothing (measured 2026-09-29: all runners idle again until flagged).
 - Workflows target the Organization group implicitly via labels today;
   explicit `runs-on: {group: Organization}` is the follow-up.
 
