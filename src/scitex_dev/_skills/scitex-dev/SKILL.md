@@ -64,6 +64,8 @@ interfaces:
 - [34_handyman-verification.md](34_handyman-verification.md) — Confirming a delegated task is actually being worked (DRAFT)
 - [35_handyman-briefs.md](35_handyman-briefs.md) — Writing the brief itself (DRAFT)
 - [36_skill-registry.md](36_skill-registry.md) — Harness-neutral skill discovery, hashes, and projection validation
+- [37_host-disk-placement.md](37_host-disk-placement.md) — Bulky runtime state on scratch, symlink at home
+- [38_ci-test-environment.md](38_ci-test-environment.md) — CI test environment three-point rule (fleet law)
 
 ### Distribution (40–49)
 - [40_distribution.md](40_distribution.md) — Skill cache update mechanics + drift detection
