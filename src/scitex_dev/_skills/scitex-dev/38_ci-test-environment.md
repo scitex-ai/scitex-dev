@@ -27,3 +27,7 @@ scale the test environment is standardised, not assumed.
 Red/green-by-host is therefore always one of: a rule-1 violation (fix
 the test), a rule-2 violation (run it in the SIF), or a rule-3
 violation (move the storage). Buying hardware answers only rule 3.
+
+**Preflight.** Check free space before starting and fail fast when
+below threshold — a slow death mid-job (02's diag-write crash) is
+strictly worse than an immediate refusal naming the full filesystem.
