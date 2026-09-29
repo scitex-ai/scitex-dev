@@ -47,3 +47,9 @@ bearing at its home path.
 `disk-full-is-reported-before-scratch-is-checked-20260919`): SIF
 generation pruning, dead-overlay reaping, and an 85%-full alert. Until
 those land, placement plus manual pruning is the control.
+
+**Strictness.** At fleet scale symmetry is load-bearing, not cosmetic:
+an undocumented exception is re-discovered as a defect every time.
+Placement deviations require a written reason next to the rule, and
+conformance is checked by audit, not by memory. Operator doctrine
+2026-09-29.
