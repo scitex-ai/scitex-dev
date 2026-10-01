@@ -21,28 +21,36 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Use a job-owned Python tool cache
+        run: |
+          tool_cache="$RUNNER_TEMP/scitex-dev-docs-python-tools-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          scitex_state="$RUNNER_TEMP/scitex-dev-docs-state-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$tool_cache" "$scitex_state"
+          printf '%s\n' "RUNNER_TOOL_CACHE=$tool_cache" \
+            "AGENT_TOOLSDIRECTORY=$tool_cache" \
+            "SCITEX_DIR=$scitex_state" >> "$GITHUB_ENV"
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Create per-job venv (self-hosted shared-cache isolation)
-        # Self-hosted runners share one read-only tool-cache + home, so
-        # pip-installing into the base interpreter is blocked (PEP 668) and
-        # would race across repos. A per-job venv on the runner's local
-        # $RUNNER_TEMP isolates deps; GITHUB_PATH makes later steps use it.
+        # Keep package dependencies separate from the owned base interpreter.
+        # GITHUB_PATH makes discovery use the job venv; explicit interpreter
+        # paths below keep install and Sphinx independent of later PATH edits.
         run: |
           python -m venv "$RUNNER_TEMP/venv"
           echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
 
       - name: Install package + docs deps
-        run: pip install -e ".[docs]"
+        run: '"$RUNNER_TEMP/venv/bin/python" -m pip install -e ".[docs]"'
 
       - name: Build Sphinx HTML (warnings fail PRs only)
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            sphinx-build -W -b html docs/sphinx docs/sphinx/_build/html
+            "$RUNNER_TEMP/venv/bin/python" -m sphinx -W -b html docs/sphinx docs/sphinx/_build/html
           else
-            sphinx-build -b html docs/sphinx docs/sphinx/_build/html
+            "$RUNNER_TEMP/venv/bin/python" -m sphinx -b html docs/sphinx docs/sphinx/_build/html
           fi
 
       - name: Refresh src/scitex_dev/_sphinx_html/ (develop push only)
