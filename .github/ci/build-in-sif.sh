@@ -42,27 +42,18 @@ mkdir -p "$TMPDIR/site" "$TMPDIR/uv-cache"
 # The compute-node $HOME is RO inside the container — point every cache the
 # installer might touch at the writable scratch (else uv/pip die creating
 # ~/.cache).
-export UV_CACHE_DIR="$TMPDIR/uv-cache"
-export XDG_CACHE_HOME="$TMPDIR"
-export PIP_CACHE_DIR="$TMPDIR/pip-cache"
-
-# A VIRTUAL_ENV leaked from the runner profile (~/.env-3.11) is a broken
-# symlink in here; unset it so no tool follows it.
-unset VIRTUAL_ENV || true
-
-export PATH="$VENV/bin:$PATH"
-echo "build: py=$("$PY" -V) target=$TMPDIR/site"
+source "$(dirname "${BASH_SOURCE[0]}")/release-context.sh"
+scitex_release_context "$TMPDIR" "$VENV"
+echo "build: py=$(scitex_release_run "$PY" -V) target=$TMPDIR/site"
 
 # Install the PEP 517 build frontend into the writable target (uv fast path,
 # pip safety net), then build with it. Clean dist/ first so only the freshly
 # built artifacts are uploaded.
-uv pip install --python "$PY" --target="$TMPDIR/site" build ||
-    "$PY" -m pip install --target="$TMPDIR/site" build
-
-export PYTHONPATH="$TMPDIR/site${PYTHONPATH:+:$PYTHONPATH}"
+scitex_release_run uv pip install --python "$PY" --target="$TMPDIR/site" build ||
+    scitex_release_run "$PY" -m pip install --target="$TMPDIR/site" build
 
 rm -rf dist
-"$PY" -m build --outdir dist
+scitex_release_run env PYTHONPATH="$TMPDIR/site" "$PY" -m build --outdir dist
 
 echo "=== built artifacts ==="
 ls -l dist
@@ -91,7 +82,7 @@ test -n "$WHEEL" || {
     echo "::error::no wheel in dist/ to audit"
     exit 1
 }
-PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" "$PY" - "$WHEEL" <<'PYGATE'
+scitex_release_run env PYTHONPATH="$PWD/src:$TMPDIR/site" "$PY" - "$WHEEL" <<'PYGATE'
 import sys
 
 from scitex_dev._release.entrypoint_imports import (

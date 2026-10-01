@@ -57,21 +57,18 @@ export TMPDIR
 # addressing paths off the filesystem root. `:?` aborts instead.
 rm -rf "${TMPDIR:?publish scratch path is empty — refusing to rm -rf it}"
 mkdir -p "$TMPDIR/site" "$TMPDIR/uv-cache"
-export UV_CACHE_DIR="$TMPDIR/uv-cache"
-export XDG_CACHE_HOME="$TMPDIR"
-export PIP_CACHE_DIR="$TMPDIR/pip-cache"
-unset VIRTUAL_ENV || true
-export PATH="$VENV/bin:$PATH"
+source "$(dirname "${BASH_SOURCE[0]}")/release-context.sh"
+scitex_release_context "$TMPDIR" "$VENV"
 
 # --- step 1: request the OIDC JWT (audience=pypi) from GitHub ---
 : "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:?ACTIONS_ID_TOKEN_REQUEST_TOKEN not set — the publish job needs 'permissions: id-token: write'}"
 : "${ACTIONS_ID_TOKEN_REQUEST_URL:?ACTIONS_ID_TOKEN_REQUEST_URL not set — the publish job needs 'permissions: id-token: write'}"
 
 echo "=== minting OIDC JWT (audience=pypi) ==="
-JWT="$(curl -fsS \
+JWT="$(scitex_release_run curl -fsS \
     -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
     "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=pypi" |
-    "$PY" -c 'import sys,json; print(json.load(sys.stdin)["value"])')"
+    scitex_release_run "$PY" -c 'import sys,json; print(json.load(sys.stdin)["value"])')"
 test -n "$JWT" || {
     echo "::error::OIDC JWT request returned an empty token"
     exit 1
@@ -80,34 +77,34 @@ echo "OIDC JWT obtained (length=${#JWT})"
 
 # --- step 2: exchange the JWT for a short-lived PyPI API token ---
 echo "=== exchanging JWT at PyPI mint-token endpoint ==="
-MINT_RESP="$(curl -sS -X POST https://pypi.org/_/oidc/mint-token \
+MINT_RESP="$(scitex_release_run curl -sS -X POST https://pypi.org/_/oidc/mint-token \
     -d "{\"token\":\"${JWT}\"}")"
 MINTED="$(printf '%s' "$MINT_RESP" |
-    "$PY" -c 'import sys,json; d=json.load(sys.stdin); print(d.get("token",""))')"
+    scitex_release_run "$PY" -c 'import sys,json; d=json.load(sys.stdin); print(d.get("token",""))')"
 if [ -z "$MINTED" ]; then
-    # Surface PyPI's error body VERBATIM (the JWT is NOT echoed) so a trust
-    # misconfiguration is diagnosable — this is the decisive failure mode for
-    # the fleet. Print the raw response unconditionally (most reliable on an
-    # error path); pretty-print is best-effort on top.
+    # Error codes identify trust/configuration failures without echoing an
+    # arbitrary provider response, which may contain credential fields.
     echo "::error::PyPI mint-token returned no token."
-    echo "--- PyPI mint-token response body (raw) ---"
-    printf '%s\n' "$MINT_RESP"
-    echo "--- (pretty, best-effort) ---"
     printf '%s' "$MINT_RESP" |
-        "$PY" -c 'import sys,json; print(json.dumps(json.load(sys.stdin), indent=2))' \
-            2>/dev/null || true
+        scitex_release_run "$PY" -c 'import sys,json,re
+d=json.load(sys.stdin)
+codes={e.get("code", "unknown") for e in d.get("errors", []) if isinstance(e, dict)}
+safe=sorted(c for c in codes if isinstance(c, str) and re.fullmatch(r"[a-zA-Z0-9_-]{1,80}", c))
+print("PyPI mint-token error codes: " + (", ".join(safe) or "unknown"))' \
+            2>/dev/null || echo "PyPI mint-token error codes: unreadable"
     exit 1
 fi
 echo "PyPI token minted (length=${#MINTED})"
 
 # --- step 3: install twine into the writable target, then upload ---
 echo "=== installing twine (--target) ==="
-uv pip install --python "$PY" --target="$TMPDIR/site" twine ||
-    "$PY" -m pip install --target="$TMPDIR/site" twine
-export PYTHONPATH="$TMPDIR/site${PYTHONPATH:+:$PYTHONPATH}"
+scitex_release_run uv pip install --python "$PY" --target="$TMPDIR/site" twine ||
+    scitex_release_run "$PY" -m pip install --target="$TMPDIR/site" twine
 
 echo "=== twine upload dist/* ==="
-TWINE_USERNAME="__token__" TWINE_PASSWORD="$MINTED" \
-    "$PY" -m twine upload --non-interactive --disable-progress-bar dist/*
+scitex_release_run env PYTHONPATH="$TMPDIR/site" \
+    TWINE_USERNAME="__token__" TWINE_PASSWORD="$MINTED" \
+    "$PY" -m twine upload --config-file /dev/null \
+    --non-interactive --disable-progress-bar dist/*
 
 echo "PUBLISH-OK: scitex-dev dist/* uploaded to PyPI via manual OIDC trusted publishing"

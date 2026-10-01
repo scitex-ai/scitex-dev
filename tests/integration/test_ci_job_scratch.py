@@ -1,7 +1,6 @@
 """Execute the shipped outer shell with owned argv/space/refusal controls."""
 import hashlib
 import json
-import os
 import re
 from pathlib import Path
 import subprocess
@@ -42,9 +41,10 @@ function [ {
  builtin [ "$@"
 }
 """)
-    env = {key: value for key, value in os.environ.items()
-           if not key.startswith(("SCITEX_", "PG", "APPTAINER_", "APPTAINERENV_", "SINGULARITY_", "SINGULARITYENV_"))
-           and key not in {"BASH_ENV", "DATABASE_URL"}}
+    private_home = tmp_path / "owned-home"
+    private_home.mkdir()
+    env = {"PATH": str(Path(sys.executable).parent) + ":/usr/local/bin:/usr/bin:/bin",
+           "HOME": str(private_home), "PYTHONDONTWRITEBYTECODE": "1"}
     env.update({"SCITEX_CI_APPTAINER": str(recorder), "SCITEX_CI_SIF": str(image),
                 "SCITEX_CI_SIF_SHA256": hashlib.sha256(image.read_bytes()).hexdigest(),
                 "RUNNER_TEMP": str(parent), "BASH_ENV": str(bootstrap)})
