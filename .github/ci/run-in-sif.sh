@@ -70,6 +70,10 @@ export TMPDIR="/tmp/ci-scitex_dev-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}-$
 rm -rf "${TMPDIR:?ci scratch path is empty — refusing to rm -rf it}"
 mkdir -p "$TMPDIR/site" "$TMPDIR/uv-cache"
 
+# Set owned state before the installer or any application/plugin import.
+source "$(dirname "${BASH_SOURCE[0]}")/release-context.sh"
+scitex_release_context "$TMPDIR" "$VENV"
+
 # The HPC compute-node $HOME is READ-ONLY inside the container, so uv/pip cannot
 # create their default caches under ~/.cache — point them at the writable
 # scratch instead (else `uv pip install` dies: "failed to create directory
@@ -102,38 +106,46 @@ unset VIRTUAL_ENV || true
 # writable target so imports + coverage use the freshly-installed checkout.
 export PATH="$VENV/bin:$PATH"
 
-echo "py=$("$VENV/bin/python" -V) target=$TMPDIR/site"
+echo "py=$(scitex_release_run "$VENV/bin/python" -V) target=$TMPDIR/site"
 
 # The full declared test environment is mandatory. A reduced-extra fallback can
 # make the same commit pass or fail depending on resolver timing, so it is not
 # a valid CI environment.
-uv pip install --python "$VENV/bin/python" --target="$TMPDIR/site" -e ".[all,dev]"
-
-export PYTHONPATH="$TMPDIR/site:$PWD/src${PYTHONPATH:+:$PYTHONPATH}"
+scitex_release_run uv pip install --python "$VENV/bin/python" --target="$TMPDIR/site" -e ".[all,dev]"
 
 PGDIR="$TMPDIR/postgres"
 mkdir -p "$PGDIR"
 cleanup_postgres() {
-    "$PGBIN/pg_ctl" -D "$PGDIR/data" -m immediate stop >/dev/null 2>&1 || true
+    scitex_release_run "$PGBIN/pg_ctl" -D "$PGDIR/data" -m immediate stop >/dev/null 2>&1 || true
 }
 trap cleanup_postgres EXIT
-"$PGBIN/initdb" -D "$PGDIR/data" -A trust --encoding=UTF8 -U postgres >"$PGDIR/initdb.log" 2>&1 || {
+scitex_release_run "$PGBIN/initdb" -D "$PGDIR/data" -A trust --encoding=UTF8 -U postgres >"$PGDIR/initdb.log" 2>&1 || {
     echo "::error::PostgreSQL initdb failed in the verified CI image"
     tail -40 "$PGDIR/initdb.log"
     exit 1
 }
-"$PGBIN/pg_ctl" -D "$PGDIR/data" -o "-k $PGDIR -h ''" -w -t 60 start >"$PGDIR/start.log" 2>&1 || {
+scitex_release_run "$PGBIN/pg_ctl" -D "$PGDIR/data" -o "-k $PGDIR -h '' -p 5432" -w -t 60 start >"$PGDIR/start.log" 2>&1 || {
     echo "::error::throwaway PostgreSQL cluster failed to start"
     tail -40 "$PGDIR/start.log"
     exit 1
 }
 PGHOST_ENC="$(printf '%s' "$PGDIR" | sed 's|/|%2F|g')"
 export SCITEX_STORE_DSN="postgresql://postgres@${PGHOST_ENC}/postgres"
-"$PSQL" -h "$PGDIR" -U postgres -d postgres -Atqc 'select 1' | grep -qx 1 || {
+scitex_release_run env "PGPASSFILE=$TMPDIR/refused-pgpass" "$PSQL" -X -h "$PGDIR" -p 5432 -U postgres -d postgres -Atqc 'select 1' | grep -qx 1 || {
     echo "::error::throwaway PostgreSQL cluster failed its readiness query"
     exit 1
 }
 echo "postgres=$($PGBIN/postgres --version) socket=$PGDIR readiness=verified"
+
+# Only this verified socket-only cluster replaces the refused import-time
+# endpoint. Keep every other application setting in the literal allowlist.
+scitex_test_run() {
+    scitex_release_run env \
+        "PYTHONPATH=$TMPDIR/site:$PWD/src" \
+        "MPLBACKEND=Agg" "MPLCONFIGDIR=$MPLCONFIGDIR" \
+        "PGHOST=$PGDIR" "PGPORT=5432" "PGUSER=postgres" "PGDATABASE=postgres" \
+        "PGPASSFILE=$TMPDIR/refused-pgpass" "SCITEX_STORE_DSN=$SCITEX_STORE_DSN" "$@"
+}
 
 # Parallelise with pytest-xdist (baked in [dev]/[all,dev] as pytest-xdist>=3).
 # scitex-dev's suite is ~2460 tests; single-process it overran the job's old
@@ -162,8 +174,8 @@ echo "xdist workers=$WORKERS (nproc=$NPROC)"
 # matplotlib may not be a dependency of this package; only warm the
 # font cache when it's importable (no-op otherwise — never fail the run
 # on an optional warm-up).
-if python -c "import matplotlib" 2>/dev/null; then
-  python -c "import matplotlib; matplotlib.use('Agg'); from matplotlib import font_manager; font_manager.fontManager; import matplotlib.pyplot as plt; f=plt.figure(); f.canvas.draw(); print('mpl font cache warmed at', matplotlib.get_cachedir())"
+if scitex_test_run python -c "import matplotlib" 2>/dev/null; then
+  scitex_test_run python -c "import matplotlib; matplotlib.use('Agg'); from matplotlib import font_manager; font_manager.fontManager; import matplotlib.pyplot as plt; f=plt.figure(); f.canvas.draw(); print('mpl font cache warmed at', matplotlib.get_cachedir())"
 else
   echo "matplotlib not importable — skipping font-cache warm-up (not a dep)"
 fi
@@ -183,7 +195,7 @@ fi
 # cores but YIELDS the CPU and disk to any higher-priority process — "all
 # available CPUs, with priority handling". The shell remains alive so its EXIT
 # trap always stops the private PostgreSQL cluster.
-nice -n 19 ionice -c 3 \
+scitex_test_run nice -n 19 ionice -c 3 \
     python -m pytest tests/ -n "$WORKERS" --dist load -q \
     --cov=src/scitex_dev --cov-report=xml --cov-report=term \
     -p no:cacheprovider

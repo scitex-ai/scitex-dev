@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""What a hand-built child environment still owes the dynamic loader.
+"""Preserve required loader paths and explicitly owned child state.
 
 Several suites run a REAL subprocess with an explicitly constructed
 ``env=`` instead of an inherited one, because the thing they measure —
@@ -32,6 +32,10 @@ that never happened — `SUBPROCESS_FAILED rc=127`, or an empty stdout
 compared against `'True'`. py3.12's build resolves its libpython without
 the variable, which is why this hid on two interpreters and not the
 third, and why it looked like an unrelated matrix flake.
+
+Application children also retain only the named state and store boundaries
+that the parent explicitly established. Caller overrides win; HOME and
+provider credentials are not forwarded.
 """
 
 from __future__ import annotations
@@ -43,9 +47,19 @@ import os
 #: execution, and a test that omits them measures nothing.
 _LOADER_VARS = ("LD_LIBRARY_PATH",)
 
+# A minimal application child still needs the owning session's explicit state
+# and store boundary. Copy only these named settings; caller overrides win.
+_OWNED_STATE_VARS = (
+    "SCITEX_DIR", "TMPDIR", "XDG_CACHE_HOME", "XDG_DATA_HOME",
+    "XDG_CONFIG_HOME", "XDG_RUNTIME_DIR", "SCITEX_LOGGING_FORMAT",
+    "PGHOST", "PGPORT", "PGUSER", "PGDATABASE", "PGPASSFILE",
+    "SCITEX_STORE_DSN",
+    "SCITEX_TESTMON_CACHE_ROOT",
+)
+
 
 def with_loader_path(env: dict) -> dict:
-    """Return ``env`` plus whatever the dynamic loader needs, when set.
+    """Return ``env`` with required loader paths and explicit owned state.
 
     Only variables the PARENT actually has are copied, so the child env
     stays exactly as minimal as the caller intended on hosts where
@@ -56,6 +70,10 @@ def with_loader_path(env: dict) -> dict:
     for name in _LOADER_VARS:
         value = os.environ.get(name)
         if value:
+            out[name] = value
+    for name in _OWNED_STATE_VARS:
+        value = os.environ.get(name)
+        if value and name not in out:
             out[name] = value
     return out
 

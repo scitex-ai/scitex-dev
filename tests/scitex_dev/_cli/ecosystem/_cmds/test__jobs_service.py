@@ -211,7 +211,7 @@ def test_dry_run_install_still_works_without_systemd(
 
 
 def test_status_answers_on_a_host_that_cannot_supervise(
-    runner, installed_job_provider, no_systemctl_on_path
+    runner, installed_job_provider, no_systemctl_on_path, temp_home
 ):
     # Arrange — "there is no unit and there never can be" is the most
     # useful answer a NAS can give; refusing would leave no way to ask.
@@ -222,7 +222,7 @@ def test_status_answers_on_a_host_that_cannot_supervise(
 
 
 def test_status_json_names_the_host_mechanism(
-    runner, installed_job_provider, no_systemctl_on_path
+    runner, installed_job_provider, no_systemctl_on_path, temp_home
 ):
     # Arrange — the caller branches on the mechanism NAME, never on prose.
     # Act

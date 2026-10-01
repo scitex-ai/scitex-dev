@@ -3,10 +3,8 @@
 # exec-in-sif.sh). Publishes ./dist/* to PyPI via MANUAL OIDC Trusted
 # Publishing, then twine upload.
 #
-# WHY manual OIDC (not pypa/gh-action-pypi-publish): that action is a Docker
-# container action. Self-hosted Spartan compute nodes have NO Docker, so the
-# action cannot run there. PyPI Trusted Publishing is just an OIDC token
-# exchange over plain HTTPS, so we do it by hand:
+# This CPU job uses the versioned SIF and a manual OIDC token exchange over
+# HTTPS. Separate Docker/service runners do not determine this job's route:
 #
 #   1. Ask the GitHub Actions OIDC provider for a JWT with audience=pypi,
 #      using the per-job ACTIONS_ID_TOKEN_REQUEST_{TOKEN,URL} env vars (present
@@ -16,11 +14,10 @@
 #      scope-limited PyPI API token.
 #   3. twine upload dist/* with TWINE_USERNAME=__token__ and that minted token.
 #
-# This requires a Trusted Publisher to be configured on PyPI for
-# (project=scitex-dev, owner=ywatanabe1989, repo=scitex-dev,
-#  workflow=pypi-publish-and-github-release-on-tag.yml). It already is — the
-# previous releases published via the Docker action under the same trusted
-# publisher; only the *client* changes here, not PyPI's trust config.
+# PyPI verifies the Trusted Publisher identity during token minting:
+# project=scitex-dev, owner=scitex-ai, repo=scitex-dev,
+# workflow=pypi-publish-and-github-release-on-tag.yml. Configuration or
+# identity mismatches fail the exchange; this header does not certify trust.
 #
 # curl, python and (after a --target install) twine all live in the SIF.
 #
