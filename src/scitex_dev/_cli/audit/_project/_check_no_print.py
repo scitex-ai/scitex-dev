@@ -36,6 +36,10 @@ serializer to stdout, a caller-owned required ``file=`` stream, or a direct
 content parameter in an explicitly named rendering API. Configuration cannot
 downgrade, disable, or manually exempt PS-220.
 
+The owning scitex-logging distribution's stdlib backend construction is
+recognized separately by exact wiring, module, scope and statement shapes.
+That proof never exempts diagnostics or other output in those modules.
+
 The legacy `# noqa` hatch is GONE (removed 2026-07-23). It was a blanket,
 reasonless flag that any unrelated `# noqa: E501` silenced by accident, and
 it left no auditable record of why. It was deprecated for one release with a
@@ -65,6 +69,7 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 
+from ._logging_backend import is_logging_backend_call, owns_logging_backend
 from ._print_discriminator import should_flag
 
 # Path components that mark a non-shippable subtree (an in-package copy of
@@ -331,6 +336,7 @@ def check_ps220_no_print(
     if config is not None:
         _report_config_errors(repo, config, violation_cls, out)
 
+    backend_owner = owns_logging_backend(repo)
     for py in _src_files(repo):
         try:
             text = py.read_text(encoding="utf-8", errors="replace")
@@ -351,6 +357,8 @@ def check_ps220_no_print(
                     "tier, so it has no ecosystem level or searchable record"
                 )
             else:
+                if backend_owner and is_logging_backend_call(repo, py, tree, node):
+                    continue
                 why = (
                     "constructs a stdlib logger; shippable SciTeX status and "
                     "diagnostic output must use `scitex_logging.getLogger`"
@@ -396,7 +404,10 @@ PRINT_FORBIDDEN_RULES: list[tuple[str, str, str, str, str]] = [
             "recognized serializer, an explicit content-rendering contract, "
             "or a caller-owned required stream does not fire, because routing "
             "protocol output through stderr would corrupt it. Everything else "
-            "fires; there is no staged opt-in or configuration bypass. Scope is "
+            "fires; there is no staged opt-in or configuration bypass. "
+            "The owning logger's backend construction is recognized only by "
+            "exact public wiring and scoped backend statements; diagnostics "
+            "in the same modules remain subject to this rule. Scope is "
             "the shippable `src/<pkg>/**.py` tree "
             "(tests/scripts/examples/docs excluded). Reported as an ERROR for "
             "every SciTeX package."
