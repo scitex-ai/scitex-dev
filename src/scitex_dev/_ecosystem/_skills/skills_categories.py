@@ -94,6 +94,7 @@ SCITEX_CATEGORIES: list[tuple[str, str, list[str]]] = [
             "scitex-audio",
             "scitex-notification",
             "scitex-browser",
+            "scitex-sdk",
             "scitex-ui",
             "scitex-app",
             "socialia",
