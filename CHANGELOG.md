@@ -10,6 +10,45 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.0] - 2026-10-02
+
+### Added
+
+- **Active-project selection in `scitex_dev.project` and the CLI.** Select
+  `owner/name` or `all` with `scitex-dev project use`, inspect it with
+  `project get --json`, and remove the persisted selection with `project
+  clear`. Python callers can validate, resolve, persist and clear the same
+  references. Resolution follows explicit argument, `SCITEX_PROJECT`, then
+  the selection file under `$SCITEX_DIR/scitex-dev/active_project` (default
+  `~/.scitex/scitex-dev/active_project`). Invalid references fail loudly.
+  This is the project-selector API required by `scitex-sdk[project]` and
+  `[all]`; selection does not establish store tenancy or authorize access.
+- Register `scitex-sdk` in the ecosystem package graph, import-to-distribution
+  map and skill categories while keeping the existing App/UI repositories
+  auditable during their migration.
+- Ship guidance for runner dispatch recovery, host disk placement and the
+  shared CI environment contract.
+
+### Changed
+
+- `project get` is the canonical introspection command. The compatible
+  `project current` spelling forwards its options and output and warns on
+  stderr in 0.62. The deprecation schedule moves it to an error in 0.63 and
+  removes it in 0.64.
+
+### Fixed
+
+- Managed SciTeX home adoption now discovers Git repositories across
+  filesystem boundaries and re-prunes ignored subtrees after package track
+  negations.
+- Self-hosted CI allocates SIF scratch, Python tool caches, virtual
+  environments and SciTeX state per job. Audit and documentation builds
+  invoke their own interpreter, preventing older host tools from selecting
+  another package installation; Sphinx warnings still fail pull requests.
+- Release jobs receive the mandatory approved SIF checksum variable while
+  retaining digest verification, isolated PostgreSQL test clusters, the
+  built-wheel entry-point import gate and trusted publishing.
+
 ## [0.61.0] - 2026-09-28
 
 - New `scitex_dev.home` module: `ensure_dotscitex_managed_by_git` adopts an

@@ -51,9 +51,9 @@ interfaces:
 - [23_drift-report.md](23_drift-report.md) — `ecosystem drift-report`: the unified per-package × per-layer version-drift matrix (all 8 layers), exit 1 on drift, federated 6h timer
 - [24_host-registry.md](24_host-registry.md) — `scitex_dev.hosts`: the SciTeX-wide "where is host X, and what's its ~/.scitex root?" port (`resolve`, `list_hosts`), `~/.scitex/dev/hosts.yaml`, `scitex-dev host list/show/resolve`
 - [25_naming-conventions.md](25_naming-conventions.md) — the fleet's one-pair-per-domain naming table (primary/replica, controller/worker, node/origin, service/timer/cron) and the synonyms each one replaces
-- [26_state-store-contract.md](26_state-store-contract.md) — the 55432 per-host Postgres contract: what makes a valid store (incl. protective timeouts), ACL, tombstone-and-explicit-per-column-merge sync, and state-in-db / design-in-git
-- [27_cross-host-identity.md](27_cross-host-identity.md) — what makes a row on host A the SAME row as one on host B: derive-or-allocate, the branch where no intrinsic attribute exists, why an allocated id is not a cardinality guarantee (lease + fence), and detector-vs-constraint
-- [28_identity-worked-examples.md](28_identity-worked-examples.md) — leaves that actually executed the contract, and what it did NOT predict; the ask-don't-grep / structural-before-code method, capability probes over version checks
+- [26_state-store-contract.md](26_state-store-contract.md) — Postgres 55432: protective timeouts, ACL, tombstones and explicit per-column merge; state in DB, design in Git
+- [27_cross-host-identity.md](27_cross-host-identity.md) — Cross-host row identity: derive or allocate without intrinsic identity; allocation is no cardinality guarantee (lease + fence); detectors vs constraints
+- [28_identity-worked-examples.md](28_identity-worked-examples.md) — Verified leaf examples and contract limits; ask before scanning, structure before code, capability probes before version checks
 - [29_access-primitive.md](29_access-primitive.md) — `scitex_dev.access`: `check()` / `accessible()`, roles read<write<admin, the agent ceiling, the scitex-access/1 decision record (exit 0/10/11), kind registration, `<pkg> dev access`
 
 ### Architecture (30–39)
@@ -61,9 +61,11 @@ interfaces:
 - [31_agentic-test-skills.md](31_agentic-test-skills.md) — Skill trigger-rate testing (Layer 2 for skills)
 - [32_agentic-test-mcp.md](32_agentic-test-mcp.md) — MCP tool-call evaluation (Layer 2+3 for MCP)
 - [33_handyman-delegation.md](33_handyman-delegation.md) — Delegating work to handymen (DRAFT: written from zero completed delegations)
-- [34_handyman-verification.md](34_handyman-verification.md) — Confirming a delegated task is actually being worked (DRAFT)
+- [34_handyman-verification.md](34_handyman-verification.md) — Confirm delegated work (DRAFT)
 - [35_handyman-briefs.md](35_handyman-briefs.md) — Writing the brief itself (DRAFT)
 - [36_skill-registry.md](36_skill-registry.md) — Harness-neutral skill discovery, hashes, and projection validation
+- [37_host-disk-placement.md](37_host-disk-placement.md) — Bulky runtime state on scratch, symlink at home
+- [38_ci-test-environment.md](38_ci-test-environment.md) — CI test environment three-point rule (fleet law)
 
 ### Distribution (40–49)
 - [40_distribution.md](40_distribution.md) — Skill cache update mechanics + drift detection
