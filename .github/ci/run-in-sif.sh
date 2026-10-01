@@ -44,6 +44,11 @@ PSQL="$(command -v psql 2>/dev/null || true)"
 
 export LC_ALL=C.UTF-8 LANG=C.UTF-8
 
+# The audit protocol uses canonical level prefixes. A supported debug logger
+# format adds bracketed source locations; those are deliberately not exempted
+# by the strict finding classifier. State the CI format before any imports.
+export SCITEX_LOGGING_FORMAT=default SCITEX_LOG_FORMAT=default
+
 # Real writable scratch. The runner profile exports TMPDIR=~/.cache/tmp, a host
 # path that does NOT resolve inside the container; tests (tmp_path) and the
 # install target both need a working, writable tmp. Node-local /tmp is writable

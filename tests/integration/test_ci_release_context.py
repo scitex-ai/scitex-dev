@@ -43,7 +43,7 @@ state_names=['TMPDIR','SCITEX_DIR','XDG_CACHE_HOME','XDG_DATA_HOME','XDG_CONFIG_
 report={'paths':{name:os.environ.get(name) for name in state_names},
         'ambient_present':any(name in os.environ for name in ['OWNED_PROVIDER_FIXTURE','DATABASE_URL','PYTHONPATH','VIRTUAL_ENV','HOME']),
         'port':os.environ.get('PGPORT')}
-if sys.argv[2]=='import':
+if sys.argv[2] in {'import','audit'}:
     sys.path.insert(0,sys.argv[3])
     import scitex_logging
     from scitex_dev._cli import main
@@ -54,6 +54,22 @@ if sys.argv[2]=='import':
     report['entrypoint_callable']=callable(main)
     state=Path(os.environ['SCITEX_DIR']).resolve()
     report['daily_log_owned']=any(state.rglob('scitex-*.log'))
+if sys.argv[2]=='audit':
+    import contextlib,io
+    from scitex_dev._cli.audit._project._audit import audit_project
+    from scitex_dev._cli.ecosystem._cmds._audit_masking import classify_output
+    project=owned/'synthetic-project'
+    project.mkdir()
+    (project/'pyproject.toml').write_text('[project]\\nname="scitex-release-fixture"\\nversion="0.0.0"\\n')
+    config=project/'.scitex/dev/config.yaml'
+    config.parent.mkdir(parents=True)
+    config.write_text('project-type: [pip, deferred]\\n')
+    (project/'owned_extra').mkdir()
+    stream=io.StringIO()
+    with contextlib.redirect_stderr(stream):
+        code=audit_project('scitex-release-fixture',repo=project,rules={'PS-103'})
+    classified=classify_output(stream.getvalue(),())
+    report['audit_result']=[code,classified.is_answerable(),classified.unmasked_count]
 sys.stdout.write(json.dumps(report)+'\\n')
 """
     )
@@ -194,3 +210,28 @@ MINT_RESP=$(cat "$5")
     # Assert
     assert (result.returncode, "invalid-publisher" in result.stdout,
             "owned-response-field-not-for-log" in result.stdout) == (1, True, False)
+
+
+def test_real_source_ci_format_handles_ambient_debug_without_findings(release_case):
+    # Arrange
+    scratch, private, probe, environment = release_case
+    runner = (ROOT / ".github/ci/run-in-sif.sh").read_text()
+    declarations = "\n".join(line for line in runner.splitlines()
+                             if line.startswith("export SCITEX_LOGGING_FORMAT="))
+    command = """set -euo pipefail
+source "$1"
+scitex_release_context "$2" "$3"
+SCITEX_LOGGING_FORMAT=debug
+""" + declarations + """
+scitex_release_run env SCITEX_LOGGING_FORMAT="$SCITEX_LOGGING_FORMAT" "$4" "$5" "$6" audit "$7"
+"""
+    # Act
+    result = subprocess.run(
+        ["bash", "-c", command, "source-audit", str(CONTEXT), str(scratch),
+         str(Path(sys.executable).parent.parent), sys.executable, str(probe),
+         str(private), str(ROOT / "src")],
+        env=environment, cwd=ROOT, capture_output=True, text=True,
+    )
+    report = json.loads(result.stdout) if result.returncode == 0 else {}
+    # Assert
+    assert (result.returncode, report.get("audit_result")) == (0, [0, True, 0]), result.stderr
