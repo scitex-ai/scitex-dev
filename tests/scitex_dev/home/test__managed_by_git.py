@@ -245,8 +245,38 @@ def test_dirty_spec_leaves_clean_repository(tmp_path):
     assert second["clean"] is True
 
 
-def test_adoption_preserves_user_ignore_pattern(tmp_path):
-    # Arrange
+def test_nested_repo_untracked_content_neither_blocks_nor_commits(tmp_path):
+    # Arrange — managed home containing a nested vcs repo with untracked
+    # debris (preserved snapshots, live overlay junk). Regression: porcelain
+    # noise used to trigger a commit attempt with an empty index, failing
+    # the whole launch preflight.
+    _seed_home(tmp_path)
+    first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    nested = tmp_path / ".scitex" / "agent-container" / ".old" / "preserved"
+    nested.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(nested)], check=True, timeout=60)
+    subprocess.run(["git", "-C", str(nested), "config", "user.email", "t@t"],
+                   check=True, timeout=60)
+    subprocess.run(["git", "-C", str(nested), "config", "user.name", "t"],
+                   check=True, timeout=60)
+    (nested / "kept.txt").write_text("kept\n")
+    subprocess.run(["git", "-C", str(nested), "add", "-A"], check=True, timeout=60)
+    subprocess.run(["git", "-C", str(nested), "commit", "-qm", "seed"],
+                   check=True, timeout=60)
+    # Settle the new gitlink first (legitimate commit of new content).
+    mid = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    assert mid["committed"] is True
+    # Now add untracked debris inside the nested repo (the launch-time noise).
+    (nested / "debris.tmp").write_text("junk\n")
+    # Act — must not raise, must not commit.
+    second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Assert — no commit (nothing stageable), HEAD unmoved.
+    assert second["committed"] is False
+    assert second["head"] == mid["head"]
+
+
+def test_user_gitignore_lines_are_preserved(tmp_path):
+    # Arrange — a pre-existing repo with the user's own ignore line.
     _seed_home(tmp_path)
     root = tmp_path / ".scitex"
     _git(root, "init", "-q") if False else subprocess.run(
