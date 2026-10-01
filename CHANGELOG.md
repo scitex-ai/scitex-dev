@@ -10,6 +10,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.1] - 2026-10-02
+
+### Fixed
+
+- Recognize the canonical scitex-logging backend's nine necessary stdlib
+  operations without requiring its public getter during initialization.
+  Recognition requires the actual distribution and public logger wiring,
+  exact package-root modules, lexical scopes and backend statements.
+  Additional prints, Rich output and caller diagnostics in those same
+  modules still fail PS-220; configuration cannot disable the rule.
+- Keep the source audit static: copied names, foreign symlinks, nested
+  scopes and altered calls do not gain an owning-backend allowance.
+
 ## [0.62.0] - 2026-10-02
 
 ### Added
