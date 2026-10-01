@@ -180,6 +180,9 @@ hosts:
     # it, at a moment when it was the ONLY pool still online.
     runner_labels:
       - [self-hosted, Linux, X64, scitex-org-cpu, sac-control-plane]
+    # Measured 2026-10-02 from the org Actions API: scitex-ci-04 serves
+    # these aliases together on one runner, not on separate pools.
+      - [self-hosted, Linux, X64, scitex-ci, scitex-org-cpu, scitex-local-cpu]
     # `scitex-04-dotfiles-01`, registered to `ywatanabe1989/.dotfiles`, is a
     # SECOND runner on this same machine. It is recorded because this field is
     # one entry PER RUNNER, and omitting a repo-scoped runner would make a
@@ -222,7 +225,8 @@ hosts:
     #   agentName scitex-02-org-cpu-01  (org scitex-ai)
     #     -> [self-hosted, Linux, X64, scitex-org-cpu]
     runner_labels:
-      - [self-hosted, Linux, X64, scitex-org-cpu]
+    # Measured 2026-10-02 from the org Actions API: scitex-ci-02.
+      - [self-hosted, Linux, X64, scitex-ci, scitex-org-cpu, scitex-local-cpu]
   scitex-compute-03:
     kind: compute
     ssh_alias: scitex-compute-03
@@ -232,7 +236,11 @@ hosts:
     #   agentName scitex-03-org-cpu-01  (org scitex-ai)
     #     -> [self-hosted, Linux, X64, scitex-org-cpu]
     runner_labels:
-      - [self-hosted, Linux, X64, scitex-org-cpu]
+    # Measured 2026-10-02 from the org Actions API: scitex-ci-03 and
+    # scitex-docker-03. Keep the distinct CPU and Docker runners separate:
+    # no single runner serves their combined label set.
+      - [self-hosted, Linux, X64, scitex-ci, scitex-org-cpu, scitex-local-cpu]
+      - [self-hosted, Linux, X64, scitex-docker]
   # RENAMED 2026-08-07. The old aliases `nas` / `nas1` / `nas2` are RETIRED:
   # they resolve to nothing on purpose, printing the successor name and
   # exiting 255. Serving them from here made this registry hand out routes

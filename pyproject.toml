@@ -121,6 +121,9 @@ dev = [
     # so a plain `pip install -e .[dev]` resolves the same parallel test path
     # (PS-210 dev-extras-completeness).
     "pytest-xdist>=3.0.0",
+    # Execute the automation workflow's real jq queries in synthetic gh
+    # controls without requiring an unrelated image-level jq executable.
+    "jq>=1.8.0",
     "fastmcp>=2.0.0",
     "textual>=0.50.0",
     # newb belongs to [skills] now. Re-listed here so the dev venv resolves
