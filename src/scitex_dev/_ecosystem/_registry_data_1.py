@@ -128,6 +128,15 @@ ECOSYSTEM_PART_1 = {
         "import_name": "scitex_vpn",
         "category": "library",
     },
+    # Canonical owner for the App/UI implementation and resources.
+    # Old repositories remain auditable until their actual public archive.
+    "scitex-sdk": {
+        "local_path": "~/proj/scitex-sdk",
+        "pypi_name": "scitex-sdk",
+        "github_repo": "scitex-ai/scitex-sdk",
+        "import_name": "scitex_sdk",
+        "category": "library",
+    },
     "scitex-ui": {
         "local_path": "~/proj/scitex-ui",
         "pypi_name": "scitex-ui",
