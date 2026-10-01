@@ -1,21 +1,8 @@
 #!/usr/bin/env bash
-# Runs INSIDE the reused scitex-ci SIF (apptainer exec — invoked via
-# exec-in-sif.sh). Builds scitex-dev's wheel + sdist into ./dist/.
-#
-# WHY build in the SIF: the self-hosted Spartan runner has no Python on the
-# bare node (the whole reason the old `actions/setup-python@v5` step failed:
-# "version 3.x not found for this OS"). The SIF bakes python 3.11/3.12/3.13 +
-# pip + uv at /opt/venv-<ver>, exactly like the working pytest-matrix CI.
-#
-# `python -m build` needs the `build` frontend, which is NOT baked in the SIF
-# (only scitex-dev[all,dev] deps are). Mirror run-in-sif.sh: install `build`
-# into a writable --target on node-local /tmp and put it on PYTHONPATH. The
-# SIF's /opt/venv-* are root-owned + RO and the compute-node HOME is RO inside
-# the container, so a normal install fails Permission denied — a --target on
-# writable scratch sidesteps both.
-#
-# Fail-loud (operator directive): a missing interpreter or a failed build is a
-# HARD error, never a silent fallback.
+# Runs INSIDE the approved, versioned CI SIF through exec-in-sif.sh.
+# Install the build frontend into job-owned writable scratch, then run the
+# normal isolated PEP517 build of this checkout's wheel and sdist.
+# Missing interpreters, failed builds or broken wheel entry points fail loud.
 set -euo pipefail
 
 V="${1:-3.12}"
