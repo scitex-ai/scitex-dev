@@ -2,11 +2,13 @@
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 WRAPPER = ROOT / ".github/ci/exec-in-sif.sh"
@@ -49,14 +51,14 @@ function [ {
     return {"root": tmp_path, "image": image, "parent": parent, "env": env}
 
 
-def execute(case, overrides=None, remove=(), label="one"):
+def execute(case, overrides=None, remove=(), label="one", inner="run-in-sif.sh"):
     env = dict(case["env"])
     env.update(overrides or {})
     for key in remove:
         env.pop(key, None)
     record = case["root"] / (label + ".json")
     env["SCITEX_FAKE_RECORD"] = str(record)
-    result = subprocess.run(["bash", str(WRAPPER), "run-in-sif.sh", "3.12", "one argument"],
+    result = subprocess.run(["bash", str(WRAPPER), inner, "3.12", "one argument"],
                             env=env, cwd=ROOT, capture_output=True, text=True)
     return result, record
 
@@ -255,3 +257,59 @@ def test_both_host_profiles_keep_scratch_under_owned_job_parent(shell_case, pres
     location = Path(json.loads(record.read_text())["environment"]["APPTAINER_TMPDIR"])
     # Assert
     assert case["parent"] in location.parents
+
+
+def _workflow_wrapper_calls():
+    calls = []
+    for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        workflow = yaml.safe_load(path.read_text())
+        for name, job in workflow.get("jobs", {}).items():
+            for index, step in enumerate(job.get("steps", [])):
+                command = step.get("run", "")
+                if "exec-in-sif.sh " not in command:
+                    continue
+                environment = dict(workflow.get("env", {}))
+                environment.update(job.get("env", {}))
+                environment.update(step.get("env", {}))
+                for inner in re.findall(
+                    r"(?m)^\s*bash\s+\.github/ci/exec-in-sif\.sh\s+(\S+)", command
+                ):
+                    calls.append((path.name + "/" + name + "/" + str(index), environment, inner))
+    return calls
+
+
+WORKFLOW_WRAPPER_CALLS = _workflow_wrapper_calls()
+
+
+def test_outer_wrapper_workflow_inventory_is_not_empty():
+    # Arrange
+    paths = ROOT / ".github/workflows"
+    # Act
+    calls = _workflow_wrapper_calls()
+    # Assert
+    assert calls, f"no executable outer-wrapper call found under {paths}"
+
+
+@pytest.mark.parametrize("call", WORKFLOW_WRAPPER_CALLS, ids=lambda call: call[0])
+def test_every_workflow_call_supplies_the_verified_image_digest(shell_case, call):
+    # Arrange
+    case = shell_case
+    _, environment, inner = call
+    digest = {"${{ vars.SCITEX_CI_SIF_SHA256 }}": case["env"]["SCITEX_CI_SIF_SHA256"]}.get(
+        environment.get("SCITEX_CI_SIF_SHA256"), ""
+    )
+    # Act
+    result, _ = execute(case, {"SCITEX_CI_SIF_SHA256": digest}, inner=inner)
+    # Assert
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("call", WORKFLOW_WRAPPER_CALLS, ids=lambda call: call[0])
+def test_absent_effective_digest_mapping_refuses_every_workflow_call(shell_case, call):
+    # Arrange
+    case = shell_case
+    _, _, inner = call
+    # Act
+    _, record = execute(case, remove=("SCITEX_CI_SIF_SHA256",), inner=inner)
+    # Assert
+    assert not record.exists()
