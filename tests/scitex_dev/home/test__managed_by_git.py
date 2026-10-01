@@ -32,95 +32,294 @@ def _seed_home(home: Path) -> None:
     (scitex / "cards" / "token.secret").write_text("SECRET\n")
 
 
-def test_adopt_existing_home_commits_specs_not_runtime(tmp_path):
-    # Arrange — a lived-in home with specs, runtime files and a secret.
+
+def test_adopt_home_initializes_git_repository(tmp_path):
+    # Arrange
     _seed_home(tmp_path)
     root = tmp_path / ".scitex"
     # Act
     out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
-    # Assert — specs committed; runtime + secret never tracked.
-    assert out["initialized"] is True
-    assert out["committed"] is True
-    assert len(str(out["head"])) == 40
     tracked = set(_git(root, "ls-files").split())
+    # Assert
+    assert out["initialized"] is True
+
+
+def test_adopt_home_commits_declared_specs(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
+    assert out["committed"] is True
+
+
+def test_adopt_home_returns_commit_hash(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
+    assert len(str(out["head"])) == 40
+
+
+def test_adopt_home_tracks_agent_spec(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
     assert "agent-container/agents/demo/spec.yaml" in tracked
+
+
+def test_adopt_home_tracks_package_config(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
     assert "agent-container/config.yaml" in tracked
+
+
+def test_adopt_home_tracks_gitignore_file(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
     assert ".gitignore" in tracked
+
+
+def test_adopt_home_excludes_session_and_logs(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
     assert not any("session.jsonl" in t or ".log" in t for t in tracked)
+
+
+def test_adopt_home_excludes_secret_files(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
     assert not any("secret" in t for t in tracked)
+
+
+def test_adopt_home_excludes_runtime_tree(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
     assert not any("/runtime/" in t for t in tracked)
 
 
-def test_runtime_files_migrated_with_symlink_left_behind(tmp_path):
+def test_migration_moves_session_into_runtime(tmp_path):
     # Arrange
     _seed_home(tmp_path)
     # Act
     out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
     demo = tmp_path / ".scitex" / "agent-container" / "agents" / "demo"
-    # Assert — moved under agent-container/runtime/, symlink at old path.
+    # Assert
     assert (tmp_path / ".scitex" / "agent-container" / "runtime" / "agents" / "demo" / "session.jsonl").is_file()
+
+
+def test_migration_leaves_legacy_session_symlink(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    demo = tmp_path / ".scitex" / "agent-container" / "agents" / "demo"
+    # Assert
     assert (demo / "session.jsonl").is_symlink()
+
+
+def test_migration_reports_session_move(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    demo = tmp_path / ".scitex" / "agent-container" / "agents" / "demo"
+    # Assert
     assert any("session.jsonl" in m for m in out["runtime_migrated"])
 
 
-def test_second_run_is_a_no_op(tmp_path):
-    # Arrange — managed once already.
+def test_second_run_keeps_existing_repository(tmp_path):
+    # Arrange
     _seed_home(tmp_path)
     first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
     # Act
     second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
-    # Assert — nothing new staged or committed.
+    # Assert
     assert second["initialized"] is False
+
+
+def test_second_run_creates_no_commit(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Act
+    second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Assert
     assert second["committed"] is False
+
+
+def test_second_run_preserves_commit_hash(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Act
+    second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Assert
     assert second["head"] == first["head"]
+
+
+def test_second_run_migrates_no_runtime(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Act
+    second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Assert
     assert second["runtime_migrated"] == []
+
+
+def test_second_run_leaves_clean_repository(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Act
+    second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Assert
     assert second["clean"] is True
 
 
-def test_dirty_spec_is_recommitted(tmp_path):
-    # Arrange — managed, then the spec changes.
+def test_dirty_spec_creates_new_commit(tmp_path):
+    # Arrange
     _seed_home(tmp_path)
     first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
     (tmp_path / ".scitex" / "agent-container" / "config.yaml").write_text("peers: {a: b}\n")
     # Act
     second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
-    # Assert — the spec change is committed, HEAD moves.
+    # Assert
     assert second["committed"] is True
+
+
+def test_dirty_spec_moves_commit_hash(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    (tmp_path / ".scitex" / "agent-container" / "config.yaml").write_text("peers: {a: b}\n")
+    # Act
+    second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Assert
     assert second["head"] != first["head"]
+
+
+def test_dirty_spec_leaves_clean_repository(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    (tmp_path / ".scitex" / "agent-container" / "config.yaml").write_text("peers: {a: b}\n")
+    # Act
+    second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Assert
     assert second["clean"] is True
 
 
-def test_user_gitignore_lines_are_preserved(tmp_path):
-    # Arrange — a pre-existing repo with the user's own ignore line.
+def test_adoption_preserves_user_ignore_pattern(tmp_path):
+    # Arrange
     _seed_home(tmp_path)
     root = tmp_path / ".scitex"
     _git(root, "init", "-q") if False else subprocess.run(
-        ["git", "init", "-q", str(root)], check=True, timeout=60
-    )
+            ["git", "init", "-q", str(root)], check=True, timeout=60
+        )
     (root / ".gitignore").write_text("# my own\n*.bak\n")
     # Act
     ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
-    # Assert — user lines survive alongside the managed block.
     text = (root / ".gitignore").read_text()
+    # Assert
     assert "*.bak" in text
+
+
+def test_adoption_adds_managed_ignore_block(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    _git(root, "init", "-q") if False else subprocess.run(
+            ["git", "init", "-q", str(root)], check=True, timeout=60
+        )
+    (root / ".gitignore").write_text("# my own\n*.bak\n")
+    # Act
+    ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    text = (root / ".gitignore").read_text()
+    # Assert
     assert "scitex-dev: managed block" in text
 
 
-def test_extra_ignore_keeps_package_runtime_dirs_untracked(tmp_path):
-    # Arrange — a package overlay dir that must never commit.
+def test_extra_ignore_still_commits_specs(tmp_path):
+    # Arrange
     _seed_home(tmp_path)
     overlay = tmp_path / ".scitex" / "agent-container" / "containers" / "overlays" / "demo"
     overlay.mkdir(parents=True)
     (overlay / "rootfs.img").write_text("BINARY\n")
     # Act
     out = ensure_dotscitex_managed_by_git(
-        tmp_path, track=TRACK, extra_ignore=("agent-container/containers/",)
-    )
+            tmp_path, track=TRACK, extra_ignore=("agent-container/containers/",)
+        )
     root = tmp_path / ".scitex"
-    # Assert — overlay content never tracked, repo still commits specs.
-    assert out["committed"] is True
     tracked = set(_git(root, "ls-files").split())
+    # Assert
+    assert out["committed"] is True
+
+
+def test_extra_ignore_excludes_overlay_files(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    overlay = tmp_path / ".scitex" / "agent-container" / "containers" / "overlays" / "demo"
+    overlay.mkdir(parents=True)
+    (overlay / "rootfs.img").write_text("BINARY\n")
+    # Act
+    out = ensure_dotscitex_managed_by_git(
+            tmp_path, track=TRACK, extra_ignore=("agent-container/containers/",)
+        )
+    root = tmp_path / ".scitex"
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
     assert not any("overlays" in t for t in tracked)
+
+
+def test_extra_ignore_keeps_agent_spec(tmp_path):
+    # Arrange
+    _seed_home(tmp_path)
+    overlay = tmp_path / ".scitex" / "agent-container" / "containers" / "overlays" / "demo"
+    overlay.mkdir(parents=True)
+    (overlay / "rootfs.img").write_text("BINARY\n")
+    # Act
+    out = ensure_dotscitex_managed_by_git(
+            tmp_path, track=TRACK, extra_ignore=("agent-container/containers/",)
+        )
+    root = tmp_path / ".scitex"
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
     assert "agent-container/agents/demo/spec.yaml" in tracked
 
 
@@ -129,43 +328,88 @@ def test_custom_commit_message_is_used(tmp_path):
     _seed_home(tmp_path)
     # Act
     ensure_dotscitex_managed_by_git(tmp_path, track=TRACK, commit_message="sac: adopt home specs")
-    # Assert
     msg = _git(tmp_path / ".scitex", "log", "--format=%s", "-1")
+    # Assert
     assert msg == "sac: adopt home specs"
 
 
-def test_nested_repo_with_unborn_head_inside_ignored_dir_does_not_fail(tmp_path):
-    # Arrange — an agent scratchpad: nested repo, never committed (add -A
-    # dies fatal on these when git descends into them).
+def test_nested_ignored_repo_allows_home_commit(tmp_path):
+    # Arrange
     import subprocess
-
     _seed_home(tmp_path)
     nest = tmp_path / ".scitex" / "agent-container" / "containers" / "ov" / "scratchpad" / "proj"
     nest.mkdir(parents=True)
     (nest / "notes.txt").write_text("work\n")
     subprocess.run(["git", "init", "-q", str(nest)], check=True, timeout=60)
-    # Act — must not raise; the ignored subtree is pruned, never walked.
+    # Act
     out = ensure_dotscitex_managed_by_git(
-        tmp_path, track=TRACK, extra_ignore=("agent-container/containers/",)
-    )
+            tmp_path, track=TRACK, extra_ignore=("agent-container/containers/",)
+        )
     root = tmp_path / ".scitex"
-    # Assert — home commits; nothing under containers/ tracked.
-    assert out["committed"] is True
     tracked = set(_git(root, "ls-files").split())
+    # Assert
+    assert out["committed"] is True
+
+
+def test_nested_ignored_repo_stays_untracked(tmp_path):
+    # Arrange
+    import subprocess
+    _seed_home(tmp_path)
+    nest = tmp_path / ".scitex" / "agent-container" / "containers" / "ov" / "scratchpad" / "proj"
+    nest.mkdir(parents=True)
+    (nest / "notes.txt").write_text("work\n")
+    subprocess.run(["git", "init", "-q", str(nest)], check=True, timeout=60)
+    # Act
+    out = ensure_dotscitex_managed_by_git(
+            tmp_path, track=TRACK, extra_ignore=("agent-container/containers/",)
+        )
+    root = tmp_path / ".scitex"
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
     assert not any("containers" in t for t in tracked)
+
+
+def test_nested_ignored_repo_keeps_agent_spec(tmp_path):
+    # Arrange
+    import subprocess
+    _seed_home(tmp_path)
+    nest = tmp_path / ".scitex" / "agent-container" / "containers" / "ov" / "scratchpad" / "proj"
+    nest.mkdir(parents=True)
+    (nest / "notes.txt").write_text("work\n")
+    subprocess.run(["git", "init", "-q", str(nest)], check=True, timeout=60)
+    # Act
+    out = ensure_dotscitex_managed_by_git(
+            tmp_path, track=TRACK, extra_ignore=("agent-container/containers/",)
+        )
+    root = tmp_path / ".scitex"
+    tracked = set(_git(root, "ls-files").split())
+    # Assert
     assert "agent-container/agents/demo/spec.yaml" in tracked
 
 
-def test_nested_repo_under_runtime_is_pruned(tmp_path):
-    # Arrange — nested repo directly under a <pkg>/runtime/ dir.
+def test_nested_runtime_repo_allows_home_commit(tmp_path):
+    # Arrange
     import subprocess
-
     _seed_home(tmp_path)
     nest = tmp_path / ".scitex" / "agent-container" / "runtime" / "sess" / "repo"
     nest.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(nest)], check=True, timeout=60)
-    # Act / Assert — no failure, runtime content never tracked.
+    # Act
     out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
-    assert out["committed"] is True
     tracked = set(_git(tmp_path / ".scitex", "ls-files").split())
+    # Assert
+    assert out["committed"] is True
+
+
+def test_nested_runtime_repo_stays_untracked(tmp_path):
+    # Arrange
+    import subprocess
+    _seed_home(tmp_path)
+    nest = tmp_path / ".scitex" / "agent-container" / "runtime" / "sess" / "repo"
+    nest.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(nest)], check=True, timeout=60)
+    # Act
+    out = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    tracked = set(_git(tmp_path / ".scitex", "ls-files").split())
+    # Assert
     assert not any("/runtime/" in t for t in tracked)
