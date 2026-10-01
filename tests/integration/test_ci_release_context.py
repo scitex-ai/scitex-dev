@@ -39,11 +39,13 @@ def refuse(event,args):
         if writing and path!=Path('/dev/null') and path!=owned and owned not in path.parents:
             raise RuntimeError('release probe refuses writes outside owned scratch')
 sys.addaudithook(refuse)
-state_names=['TMPDIR','SCITEX_DIR','XDG_CACHE_HOME','XDG_DATA_HOME','XDG_CONFIG_HOME','XDG_RUNTIME_DIR','UV_CACHE_DIR','PIP_CACHE_DIR','PGHOST']
+state_names=['TMPDIR','SCITEX_DIR','XDG_CACHE_HOME','XDG_DATA_HOME','XDG_CONFIG_HOME','XDG_RUNTIME_DIR','UV_CACHE_DIR','PIP_CACHE_DIR','SCITEX_TESTMON_CACHE_ROOT','PGHOST']
 report={'paths':{name:os.environ.get(name) for name in state_names},
         'ambient_present':any(name in os.environ for name in ['OWNED_PROVIDER_FIXTURE','DATABASE_URL','PYTHONPATH','VIRTUAL_ENV','HOME']),
+        'ambient_without_loader':any(name in os.environ for name in ['OWNED_PROVIDER_FIXTURE','DATABASE_URL','VIRTUAL_ENV','HOME']),
+        'loader_paths':os.environ.get('PYTHONPATH','').split(os.pathsep),
         'port':os.environ.get('PGPORT')}
-if sys.argv[2] in {'import','audit'}:
+if sys.argv[2] in {'import','audit','source'}:
     sys.path.insert(0,sys.argv[3])
     import scitex_logging
     from scitex_dev._cli import main
@@ -51,6 +53,8 @@ if sys.argv[2] in {'import','audit'}:
     from urllib.parse import parse_qs,urlparse
     dsn=host_store(pkg='qualification',name='release').dsn
     report['store_refused']=parse_qs(urlparse(dsn).query).get('host')==[os.environ['PGHOST']]
+    from urllib.parse import unquote
+    report['store_owned_socket']=unquote(urlparse(dsn).hostname or '')==os.environ.get('PGHOST')
     report['entrypoint_callable']=callable(main)
     state=Path(os.environ['SCITEX_DIR']).resolve()
     report['daily_log_owned']=any(state.rglob('scitex-*.log'))
@@ -235,3 +239,67 @@ scitex_release_run env SCITEX_LOGGING_FORMAT="$SCITEX_LOGGING_FORMAT" "$4" "$5" 
     report = json.loads(result.stdout) if result.returncode == 0 else {}
     # Assert
     assert (result.returncode, report.get("audit_result")) == (0, [0, True, 0]), result.stderr
+
+
+def execute_source_launcher(case, mode="environment"):
+    """Execute actual source-launcher declarations and application prefix."""
+    scratch, private, probe, environment = case
+    runner = (ROOT / ".github/ci/run-in-sif.sh").read_text()
+    launch = next(line for line in runner.splitlines()
+                  if line.startswith(("scitex_test_run nice ", "nice -n ")))
+    prefix = launch.rstrip().removesuffix("\\").rstrip()
+    function = ""
+    if "scitex_test_run() {" in runner:
+        function = "scitex_test_run() {" + runner.split("scitex_test_run() {", 1)[1].split("\n}", 1)[0] + "\n}\n"
+    initialize = ""
+    if 'scitex_release_context "$TMPDIR" "$VENV"' in runner:
+        initialize = 'source "$1"\nscitex_release_context "$TMPDIR" "$VENV"\n'
+    command = """set -euo pipefail
+TMPDIR="$2"
+VENV="$3"
+PGDIR="$TMPDIR/postgres"
+MPLCONFIGDIR="$TMPDIR/mpl"
+export SCITEX_STORE_DSN="$9"
+""" + initialize + function + prefix + ' "$4" "$5" "$6" "$7" "$8"\n'
+    from urllib.parse import quote
+    dsn = "postgresql://postgres@" + quote(str(scratch / "postgres"), safe="") + "/postgres"
+    return subprocess.run(
+        ["bash", "-c", command, "source-launcher-probe", str(CONTEXT), str(scratch),
+         str(Path(sys.executable).parent.parent), sys.executable, str(probe),
+         str(private), mode, str(ROOT / "src"), dsn],
+        env=environment, cwd=ROOT, capture_output=True, text=True,
+    )
+
+
+def test_source_launcher_imports_use_owned_daily_log_and_private_socket(release_case):
+    # Arrange
+    case = release_case
+    # Act
+    result = execute_source_launcher(case, mode="source")
+    report = json.loads(result.stdout) if result.returncode == 0 else {}
+    # Assert
+    assert (result.returncode, report.get("entrypoint_callable"),
+            report.get("daily_log_owned"), report.get("store_owned_socket")) == (0, True, True, True), result.stderr
+
+
+def test_source_launcher_rejects_ambient_provider_and_loader_overrides(release_case):
+    # Arrange
+    case = release_case
+    # Act
+    result = execute_source_launcher(case)
+    report = json.loads(result.stdout)
+    # Assert
+    assert (report["ambient_without_loader"], report["loader_paths"]) == (
+        False, [str(case[0] / "site"), str(ROOT / "src")])
+
+
+def test_source_launcher_state_paths_stay_in_job_scratch(release_case):
+    # Arrange
+    case = release_case
+    scratch = case[0]
+    # Act
+    result = execute_source_launcher(case)
+    report = json.loads(result.stdout)
+    # Assert
+    assert all(value and (Path(value) == scratch or scratch in Path(value).parents)
+               for value in report["paths"].values())

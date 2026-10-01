@@ -2,10 +2,12 @@
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
+import jq
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github/workflows/auto-merge-to-develop.yaml"
@@ -14,22 +16,22 @@ WORKFLOW = ROOT / ".github/workflows/auto-merge-to-develop.yaml"
 @pytest.fixture
 def merge_case(tmp_path):
     binary = tmp_path / "gh"
-    binary.write_text("""#!/usr/bin/env bash
-set -euo pipefail
-if [ "$1 $2" = 'pr merge' ]; then
-    printf '%s\\n' "$@" > "$RECORD"
-    exit "${MERGE_EXIT:-0}"
-fi
-if [ "$1 $2" = 'pr list' ]; then
-    printf '%s\\n' 1
-    exit 0
-fi
-query=''
-while [ "$#" -gt 0 ]; do
-    if [ "$1" = --jq ]; then query="$2"; shift; fi
-    shift
-done
-jq -r "$query" "$RESPONSE"
+    binary.write_text("#!" + sys.executable + "\n" + "import sys\n"
+                      + "sys.path.insert(0," + repr(str(Path(jq.__file__).parent)) + ")\n"
+                      + """import json,os
+from pathlib import Path
+import jq
+args=sys.argv[1:]
+if args[:2]==['pr','merge']:
+    Path(os.environ['RECORD']).write_text('\\n'.join(args)+'\\n')
+    raise SystemExit(int(os.environ.get('MERGE_EXIT','0')))
+if args[:2]==['pr','list']:
+    sys.stdout.write('1\\n')
+    raise SystemExit(0)
+query=args[args.index('--jq')+1]
+response=json.loads(Path(os.environ['RESPONSE']).read_text())
+for result in jq.compile(query).input_value(response).all():
+    sys.stdout.write((result if isinstance(result,str) else json.dumps(result))+'\\n')
 """)
     binary.chmod(0o700)
     response = tmp_path / "response.json"
