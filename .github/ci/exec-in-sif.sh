@@ -86,12 +86,23 @@ if [ "$ACTUAL_SIF_SHA256" != "$SIF_SHA256" ]; then
     exit 1
 fi
 
-# Apptainer scratch. On Spartan the GPFS project scratch (shared FS) keeps HOME
-# clean; everywhere else that path does not exist, and `mkdir -p` under it would
-# be a hard failure, so fall back to host-local scratch under $HOME.
+# Apptainer scratch. Three profiles now, in order of preference:
+#   Spartan   - the GPFS project scratch (shared FS) keeps HOME clean.
+#   compute   - /scratch, a SEPARATE multi-terabyte LV. Without this branch the
+#               temp fell to $HOME below, i.e. onto the SAME small root LV that
+#               this CI work exists to keep clear. That is not a theoretical
+#               cost: the figrecipe 0.35.0 release leg died with
+#               `OSError: [Errno 28] No space left on device` while writing
+#               libQt6WebEngineCore.so into the apptainer temp, and the audit
+#               leg failed twice the same way. $HOME on those hosts IS the root
+#               LV, so "host-local scratch under $HOME" was never host-local in
+#               the sense that mattered.
+#   otherwise - $HOME, for a host with neither.
 GPFS_PROJECT="/data/gpfs/projects/punim0264"
 if [ -d "$GPFS_PROJECT" ]; then
     export APPTAINER_TMPDIR="$GPFS_PROJECT/ywatanabe/ci/apptainer-tmp"
+elif [ -d /scratch ]; then
+    export APPTAINER_TMPDIR="/scratch/ywatanabe/ci/apptainer-tmp"
 else
     export APPTAINER_TMPDIR="$HOME/.cache/scitex-ci/apptainer-tmp"
 fi
@@ -104,7 +115,7 @@ if [ -d "$GPFS_PROJECT" ]; then
     APPTAINER_ARGV+=(--bind "$GPFS_PROJECT")
     GPFS_STATE="present (scratch on GPFS, punim0264 bound)"
 else
-    GPFS_STATE="absent (scratch under \$HOME, no GPFS bind)"
+    GPFS_STATE="absent (scratch on /scratch or \$HOME, no GPFS bind): APPTAINER_TMPDIR=$APPTAINER_TMPDIR"
 fi
 
 # Echo the resolved plan: when a run fails on an unfamiliar node, the FIRST
