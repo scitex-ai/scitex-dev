@@ -37,9 +37,9 @@ commands that never shipped in a release.
 ```
 
 - Shared helper:
-  `scitex_dev/_ecosystem/click_compat.py::deprecated_alias()` (slice 2
-  of the CLI-standardization plan — **not built yet**; until it ships,
-  implement inline following this contract). The helper registers the
+  `scitex_dev/_ecosystem/click_compat.py::deprecated_alias()`. Use the existing
+  helper rather than implementing the forwarding and warning logic again.
+  The helper registers the
   hidden alias, wires the once-per-shell warning, and sets
   `cmd._deprecated_alias` metadata so the auditor can verify the alias
   statically instead of probing behaviorally.
