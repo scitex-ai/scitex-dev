@@ -222,9 +222,13 @@ def ensure_dotscitex_managed_by_git(
     moved = _migrate_runtime_files(root)
 
     _run_git(root, "add", "-A")
-    status = _run_git(root, "status", "--porcelain")
+    try:
+        _run_git(root, "diff", "--cached", "--quiet")
+        staged = False
+    except RuntimeError:
+        staged = True  # diff exits 1 when staged changes exist
     committed = False
-    if status and commit:
+    if staged and commit:
         _run_git(root, "-c", f"user.name={actor_name}", "-c", f"user.email={actor_email}",
                  "commit", "-q", "-m", commit_message)
         committed = True
