@@ -1,20 +1,10 @@
 #!/usr/bin/env bash
-# Runs INSIDE the reused scitex-ci SIF (apptainer exec). $1 = python version.
-#
-# WHY a layered install (not the bare PYTHONPATH=src trick scitex-dev uses):
-# the shared ci-cpu.sif bakes scitex-dev[all,dev] DEPS, NOT scitex-dev's —
-# matplotlib / graphviz / seaborn / django / Pillow / networkx / playwright /
-# pytesseract / scitex-app / scitex-ui are absent from the SIF. So we install
-# THIS checkout + its [all,dev] extras (WITH dependency resolution) into a
-# writable --target dir and prepend that on PYTHONPATH. The SIF still supplies
-# the heavy shared base (pip/uv, the python interpreters, scitex-dev's deps),
-# so only scitex-dev's own thin dep set is fetched per run.
-#
-# --target (not a plain `-e .`): the SIF's /opt/venv-* are root-owned + RO and
-# the HPC compute-node HOME is RO inside the container, so a normal site install
-# fails Permission denied. A writable target on node-local /tmp sidesteps both.
-#
-# Fail-loud: a missing interpreter or a failed install is a hard error.
+# Runs INSIDE the approved, versioned CI SIF. $1 = Python3.11/3.12/3.13.
+# Resolve THIS checkout's complete [all,dev] requirements into job-owned
+# writable scratch. The target precedes the image's baked packages, so the
+# selected source and declared dependencies determine the test environment.
+# A --target install permits use of the image's read-only interpreter.
+# Missing interpreters or failed resolution are hard errors.
 set -euo pipefail
 
 V="${1:?python version arg required (3.11/3.12/3.13)}"
