@@ -32,6 +32,7 @@ scitex_release_context() {
     SCITEX_RELEASE_ENV=(
         "PATH=$venv/bin:/usr/local/bin:/usr/bin:/bin"
         "LANG=C.UTF-8" "LC_ALL=C.UTF-8"
+        "SCITEX_LOGGING_FORMAT=default"
         "TMPDIR=$scratch"
         "SCITEX_DIR=$scratch/scitex"
         "XDG_CACHE_HOME=$scratch/cache"
