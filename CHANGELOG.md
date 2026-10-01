@@ -10,6 +10,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.2] - 2026-10-02
+
+### Fixed
+
+- Audit mounted CLI commands with their owning distribution's packaged
+  dictionary. Ownership requires the loaded callback, declared entry point,
+  distribution RECORD membership and a contained resource snapshot; missing,
+  ambiguous or escaped resources remain findings. Owner context resets after
+  each lexical scope, including exceptions, without importing audited peers.
+- Describe deferred inventory as inventory while preserving strict finding
+  classification, rule severity and counts.
+- Establish explicit job-owned SciTeX state, caches and temporary paths before
+  CI application imports. Release probes refuse store access; full source
+  tests use their verified private PostgreSQL socket and explicit port.
+- Keep ordinary protected automerge pending while checks are unfinished and
+  remove protection-bypass arguments. Retain original test assertions while
+  making child process and release fixtures use explicit owned contexts.
+- Update the packaged runner seed to the verified CPU and Docker label sets.
+  Existing selectors and user registry data remain supported; mixed pools and
+  unknown labels still fail the runner-destination rule.
+
 ## [0.62.1] - 2026-10-02
 
 ### Fixed
