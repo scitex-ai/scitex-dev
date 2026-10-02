@@ -156,9 +156,9 @@ aggregation).
 <details>
 <summary><strong>Python API ⭐⭐</strong></summary>
 
-All public names are re-exported flat from the top-level package — import
-them directly from `scitex_dev` (internals live under `_release`, `_docs`,
-`_core`; don't import those paths).
+Version, CI, documentation and error-handling helpers are re-exported from
+`scitex_dev` (internals live under `_release`, `_docs`, `_core`; don't import
+those paths). The active-project selector lives in `scitex_dev.project`.
 
 ```python
 # Version management
@@ -183,6 +183,10 @@ deploy_scitex_hub(confirm=True)
 
 # LLM-friendly types
 from scitex_dev import Result, ErrorCode, supports_return_as
+
+# Active project (scitex-dev >=0.62.0)
+from scitex_dev.project import resolve_project
+resolve_project(explicit="synthetic/owned")
 ```
 
 > Skills are managed through the CLI (`scitex-dev skills list/get/export`),
@@ -200,6 +204,11 @@ scitex-dev ecosystem list --versions
 scitex-dev ecosystem fix-mismatches --dry-run
 scitex-dev ecosystem sync
 
+# Active project (scitex-dev >=0.62.0)
+scitex-dev project use synthetic/owned
+scitex-dev project get --json
+scitex-dev project clear
+
 # Documentation
 scitex-dev docs --package scitex-writer
 scitex-dev search-docs "save figure"
@@ -211,6 +220,14 @@ scitex-dev rename-symbols old_name new_name --dry-run
 scitex-dev --help
 scitex-dev --help-recursive
 ```
+
+Project references are `owner/name` or `all`. Resolution checks an explicit
+Python argument first, then `SCITEX_PROJECT`, then the persisted selection
+under `$SCITEX_DIR/scitex-dev/active_project` (default
+`~/.scitex/scitex-dev/active_project`). `project current` remains a deprecated
+alias for `project get`; its warning goes to stderr so JSON stays usable.
+Selecting a project does not authorize access to it or establish store
+tenancy.
 
 </details>
 
