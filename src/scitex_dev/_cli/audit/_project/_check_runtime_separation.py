@@ -33,11 +33,19 @@ Accepted ``.gitignore`` shapes (all evaluated against the
 Rule shape mirrors sibling ``_check_*.py`` modules — single public
 ``check_runtime_separation(repo, violation_cls, out)`` that appends a
 ``violation_cls("PS-180", where, detail)`` per offending package.
+
+Tracked-source carve-out: when every file under ``src/<pkg>/runtime/``
+is git-TRACKED, the directory is a source package (a public import
+path with its own tests), not transient state — a ``.gitignore`` entry
+would be a lie, and the rule must not demand one. Untracked trees, or
+trees where git cannot answer (no git binary, not a checkout), keep the
+previous behaviour: exist-on-disk without a gitignore entry fires.
 """
 
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -118,6 +126,49 @@ def _is_runtime_ignored(repo: Path, pkg_dir: Path) -> bool:
     return False
 
 
+def _is_tracked_source(runtime_dir: Path, repo: Path) -> bool:
+    """True iff ``runtime_dir`` is a git-tracked source package.
+
+    Returns True only when git answers AND at least one file under the
+    directory is tracked AND every file on disk is tracked. A
+    partially-tracked directory still holds untracked state, so it is
+    NOT a clean source package and the rule keeps firing.
+
+    Any git failure (no binary, not a checkout, timeout) returns False:
+    "cannot tell" must fail open toward the previous behaviour, never
+    toward a silent pass.
+    """
+    try:
+        rel = runtime_dir.relative_to(repo)
+    except ValueError:
+        return False
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(repo), "ls-files", "--", str(rel)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    if proc.returncode != 0:
+        return False
+    tracked = {line for line in proc.stdout.splitlines() if line.strip()}
+    if not tracked:
+        return False
+    on_disk = {
+        str(p.relative_to(repo))
+        for p in runtime_dir.rglob("*")
+        if p.is_file()
+        and ".git" not in p.parts
+        # Bytecode caches are build artefacts, not source and not state:
+        # their presence must not flip the verdict either way.
+        and "__pycache__" not in p.parts
+        and p.suffix != ".pyc"
+    }
+    return bool(on_disk) and on_disk <= tracked
+
+
 def check_runtime_separation(
     repo: Path,
     violation_cls: type,
@@ -136,6 +187,10 @@ def check_runtime_separation(
         if not runtime_dir.is_dir():
             continue
         if _is_runtime_ignored(repo, pkg_dir):
+            continue
+        if _is_tracked_source(runtime_dir, repo):
+            # A git-tracked source package (public import path + tests),
+            # not transient state — a .gitignore entry would be a lie.
             continue
         pkg_name = pkg_dir.name
         out.append(

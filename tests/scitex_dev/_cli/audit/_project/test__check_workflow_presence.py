@@ -89,3 +89,61 @@ class TestPS165WorkflowPresence:
         check_ps165_workflow_presence(tmp_path, _StubViolation, out)
         # Assert
         assert out == []
+
+
+_TAG_FLOW_PUBLISH = (
+    "name: release\n"
+    "on:\n"
+    "  push:\n"
+    "    tags: ['v*']\n"
+    "jobs:\n"
+    "  publish:\n"
+    "    runs-on: ubuntu-latest\n"
+    "    steps: []\n"
+)
+
+_BRANCH_FLOW_PUBLISH = (
+    "name: release\non:\n  push:\n    branches: [main]\njobs: {}\n"
+)
+
+
+def _write_publish_workflow(repo: Path, body: str) -> None:
+    wf = repo / ".github" / "workflows"
+    wf.mkdir(parents=True, exist_ok=True)
+    (wf / "pypi-publish-on-tag.yml").write_text(body)
+
+
+def _baseline_without(repo: Path, *missing_fragments: str) -> None:
+    present = tuple(
+        f
+        for f in _BASELINE_FILES
+        if not any(frag in f for frag in missing_fragments)
+    )
+    _write_workflows(repo, *present)
+
+
+class TestPS165TagFlowWaiver:
+    def test_tag_flow_repo_waives_sync_main_only(self, tmp_path: Path) -> None:
+        # Arrange — full baseline minus sync-main and minus the stub
+        # publisher, plus a tag-triggered publisher: releases are cut by
+        # tagging, so there is no main→release-tag sync to perform.
+        _baseline_without(tmp_path, "sync-main", "pypi-")
+        _write_publish_workflow(tmp_path, _TAG_FLOW_PUBLISH)
+        out: list = []
+        # Act
+        check_ps165_workflow_presence(tmp_path, _StubViolation, out)
+        # Assert
+        assert out == []
+
+    def test_branch_flow_repo_still_requires_sync_main(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — negative control: the publisher triggers on branches,
+        # not tags, so the waiver does not apply.
+        _baseline_without(tmp_path, "sync-main", "pypi-")
+        _write_publish_workflow(tmp_path, _BRANCH_FLOW_PUBLISH)
+        out: list = []
+        # Act
+        check_ps165_workflow_presence(tmp_path, _StubViolation, out)
+        # Assert
+        assert [v.rule for v in out] == ["PS-165"]

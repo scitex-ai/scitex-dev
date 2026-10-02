@@ -105,12 +105,19 @@ def _share_stem(job_ids: list[str], filename_stem: str = "") -> bool:
         if all(_tokenise(j) <= fname_tokens for j in job_ids):
             return True
         # (c') Release-pipeline shape: a "publish"/"release"-named file
-        # whose jobs are recognised pipeline steps (build → publish →
-        # release / github-release) is intentional. Allow this when the
-        # filename mentions publish/release AND every job is in the
-        # canonical pipeline-step vocabulary.
+        # whose jobs are recognised pipeline steps (test → build →
+        # publish → release / github-release) is intentional. Allow this
+        # when the filename mentions publish/release AND every job is in
+        # the canonical pipeline-step vocabulary.
+        #
+        # `test` belongs to that vocabulary: the tag-driven release
+        # pipeline runs the test matrix FIRST as the gate ("must pass or
+        # the pipeline halts; nothing is published until tests are green
+        # on the tagged commit") — splitting the gate into its own file
+        # would decouple the safety check from the release it guards.
         _PIPELINE_STEPS = {
             "build",
+            "test",
             "publish",
             "release",
             "tag",

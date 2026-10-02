@@ -110,3 +110,50 @@ class TestPS147EvalFormCompletion:
         check_ps147_eval_form_completion(tmp_path, _StubViolation, out)
         # Assert
         assert out == []
+
+
+# ===== PS-145 — ADR-0012-retired cron surface =====
+
+# The supervisor owner's own host-level sync orchestration: an rsync
+# command string naming another package's state dir. Real code from the
+# retired `_cli/cron/` surface, frozen pending removal.
+_CRON_SCHOLAR_SYNC = (
+    '_SCHOLAR_LIB = "$HOME/.scitex/scholar/library"\\n'
+    "def _scholar_library_sync_command():\\n"
+    '    return f"scitex-ssh sync {_SCHOLAR_LIB}/ remote:.scitex/scholar/library/"\\n'
+)
+
+
+def _write_cron_src(repo: Path, filename: str, body: str) -> None:
+    cron = repo / "src" / "scitex_demo" / "_cli" / "cron"
+    cron.mkdir(parents=True, exist_ok=True)
+    (cron / filename).write_text(body, encoding="utf-8")
+
+
+class TestPS145RetiredCronSurface:
+    def test_scholar_reference_in_retired_cron_produces_no_finding(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — orchestration strings the rule would otherwise flag.
+        _write_cron_src(tmp_path, "_job_commands.py", _CRON_SCHOLAR_SYNC)
+        out: list = []
+        # Act
+        check_ps145_cross_package_read(
+            tmp_path, "scitex-demo", _StubViolation, out
+        )
+        # Assert
+        assert out == []
+
+    def test_same_reference_outside_cron_is_still_flagged(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — negative control: the exemption is the SURFACE, not
+        # the string. The identical reference in a live module fires.
+        _write_src(tmp_path, "_sync.py", _CRON_SCHOLAR_SYNC)
+        out: list = []
+        # Act
+        check_ps145_cross_package_read(
+            tmp_path, "scitex-demo", _StubViolation, out
+        )
+        # Assert
+        assert [v.rule for v in out] == ["PS-145"]
