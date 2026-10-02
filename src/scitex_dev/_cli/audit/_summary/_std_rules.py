@@ -155,7 +155,9 @@ def load_verb_exceptions() -> tuple[set[str], list[tuple[str, Path]]]:
         if not path.is_file():
             continue
         try:
-            raw = path.read_text(encoding="utf-8")
+            from ._dict_root import read_dict_text
+
+            raw = read_dict_text(path)
             data = yaml.safe_load(raw) or {}
         except (OSError, yaml.YAMLError):
             continue
