@@ -68,7 +68,7 @@ _BLOCK_BEGIN = "# >>> scitex-dev: managed block (dotscitex_git) >>>"
 _BLOCK_END = "# <<< scitex-dev: managed block (dotscitex_git) <<<"
 
 
-def _run_git(root: Path, *args: str, ok_statuses: tuple[int, ...] = (0,)) -> str:
+def _run_git(root: Path, *args: str) -> str:
     try:
         proc = subprocess.run(
             ["git", "-C", str(root), *args],
@@ -88,7 +88,7 @@ def _run_git(root: Path, *args: str, ok_statuses: tuple[int, ...] = (0,)) -> str
             f"ensure_dotscitex_managed_by_git: git is unavailable: "
             f"{type(exc).__name__}: {exc}"
         ) from exc
-    if proc.returncode not in ok_statuses:
+    if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout).strip()
         raise RuntimeError(
             f"ensure_dotscitex_managed_by_git: "
@@ -195,13 +195,13 @@ def _migrate_runtime_files(root: Path) -> list[str]:
 def _index_has_staged_changes(root: Path) -> bool:
     """Whether the git index holds staged changes (name output decides).
 
-    Empty output = clean tree; nonempty = staged changes. Exit 1
-    (differences present) is an accepted answer, not an error; every other
-    nonzero status propagates through _run_git, whose message names the
-    actual command so a failure cannot pass vacuously.
+    ``git diff --cached --name-only -z`` exits 0 with empty output for a
+    clean tree and 0 with names listed when staged changes exist. Status 0
+    is the ONLY valid answer — 1/2/128/unavailable/timeout all propagate
+    through _run_git, whose message names the actual command so a failure
+    cannot pass vacuously.
     """
-    out = _run_git(root, "diff", "--cached", "--name-only", "-z",
-                   ok_statuses=(0, 1))
+    out = _run_git(root, "diff", "--cached", "--name-only", "-z")
     return bool(out)
 
 

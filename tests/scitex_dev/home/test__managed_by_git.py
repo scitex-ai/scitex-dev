@@ -120,29 +120,60 @@ def test_nested_repo_untracked_content_neither_blocks_nor_commits(tmp_path):
     assert second["head"] == mid["head"]
 
 
-def test_command_error_controls(tmp_path, monkeypatch):
-    # Arrange — managed home, then a spec change, but diff --cached --name-only
-    # fails with a real command error (exit 2): must raise, not commit.
+def _write_git_shim(path: Path, real_git: str) -> None:
+    # Forwarding executable: delegates every invocation to the real git
+    # except the staged probe, which fails with $FAKE_GIT_DIFF_CODE when set.
+    path.write_text(
+        "#!/bin/sh\n"
+        'case " $* " in\n'
+        '  *" diff --cached --name-only -z "*) code="${FAKE_GIT_DIFF_CODE:-}"\n'
+        '    if [ -n "$code" ]; then echo "${FAKE_GIT_DIFF_ERR:-fatal: injected}" >&2; exit "$code"; fi;;\n'
+        "esac\n"
+        f'exec "{real_git}" "$@"\n'
+    )
+    path.chmod(0o755)
+
+
+def test_staged_probe_real_empty_staged_whitespace(tmp_path, monkeypatch):
+    # Real git, real index: empty -> False; staged file (whitespace name) -> True.
     import scitex_dev.home._managed_by_git as m
     _seed_home(tmp_path)
-    first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
-    (tmp_path / ".scitex" / "agent-container" / "config.yaml").write_text("peers: {a: b}\n")
-    real_run = m.subprocess.run
-    def fake_run(*a, **k):
-        cmd = a[0] if a else k.get("args", [])
-        if (isinstance(cmd, list) and "diff" in cmd and "--name-only" in cmd):
-            class P: returncode = 2; stdout = ""; stderr = "fatal: bad revision"
-            return P()
-        return real_run(*a, **k)
-    monkeypatch.setattr(m.subprocess, "run", fake_run)
-    # Act/Assert — the real failure propagates (no masked success).
-    try:
-        ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
-    except RuntimeError as exc:
-        assert "--name-only" in str(exc)
-    else:
-        raise AssertionError("exit-2 diff must raise, not commit-or-skip")
-    assert first["head"] and True
+    root = tmp_path / ".scitex"
+    subprocess.run(["git", "-C", str(root), "init", "-q"], check=True, timeout=60)
+    assert m._index_has_staged_changes(root) is False
+    weird = root / "agent-container" / "agents" / "my agent"
+    weird.mkdir(parents=True)
+    (weird / "spec.yaml").write_text("name: weird\n")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, timeout=60)
+    assert m._index_has_staged_changes(root) is True
+
+
+def test_staged_probe_failure_codes_propagate(tmp_path, monkeypatch):
+    # Forwarding shim: exit 1/2/128 on the probe must all raise (no silent
+    # acceptance); passthrough forwards the real answer.
+    import os
+    import shutil
+    import scitex_dev.home._managed_by_git as m
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    subprocess.run(["git", "-C", str(root), "init", "-q"], check=True, timeout=60)
+    real_git = shutil.which("git")
+    assert real_git
+    shimdir = tmp_path / "shimbin"
+    shimdir.mkdir()
+    _write_git_shim(shimdir / "git", real_git)
+    monkeypatch.setenv("PATH", str(shimdir) + os.pathsep + os.environ["PATH"])
+    # Passthrough proves forwarding: real empty index -> False.
+    monkeypatch.delenv("FAKE_GIT_DIFF_CODE", raising=False)
+    assert m._index_has_staged_changes(root) is False
+    for code in (1, 2, 128):
+        monkeypatch.setenv("FAKE_GIT_DIFF_CODE", str(code))
+        try:
+            m._index_has_staged_changes(root)
+        except RuntimeError as exc:
+            assert "diff --cached --name-only" in str(exc)
+        else:
+            raise AssertionError(f"exit-{code} diff must raise")
 
 
 def test_user_gitignore_lines_are_preserved(tmp_path):
