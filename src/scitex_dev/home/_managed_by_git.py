@@ -192,6 +192,32 @@ def _migrate_runtime_files(root: Path) -> list[str]:
     return moved
 
 
+def _staged_diff_status(root: Path) -> int:
+    """Exit status of ``git diff --cached --quiet``; 0 = clean, 1 = staged.
+
+    Runs the command directly (not via _run_git) because only 0/1 are valid
+    diff answers — 2/128/unavailable/timeout are real failures that raise.
+    """
+    try:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "diff", "--cached", "--quiet"],
+            capture_output=True, text=True, timeout=60, check=False,
+            env={**os.environ, "GIT_DISCOVERY_ACROSS_FILESYSTEM": "1"},
+        )
+    except (FileNotFoundError, OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError(
+            "ensure_dotscitex_managed_by_git: git is unavailable: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+    if proc.returncode in (0, 1):
+        return proc.returncode
+    detail = (proc.stderr or proc.stdout).strip()
+    raise RuntimeError(
+        "ensure_dotscitex_managed_by_git: git diff --cached --quiet "
+        f"failed in {root}: {detail[-800:]}"
+    )
+
+
 def ensure_dotscitex_managed_by_git(
     home: str | Path | None = None,
     *,
@@ -222,13 +248,8 @@ def ensure_dotscitex_managed_by_git(
     moved = _migrate_runtime_files(root)
 
     _run_git(root, "add", "-A")
-    try:
-        _run_git(root, "diff", "--cached", "--quiet")
-        staged = False
-    except RuntimeError:
-        staged = True  # diff exits 1 when staged changes exist
     committed = False
-    if staged and commit:
+    if commit and _staged_diff_status(root) == 1:
         _run_git(root, "-c", f"user.name={actor_name}", "-c", f"user.email={actor_email}",
                  "commit", "-q", "-m", commit_message)
         committed = True
