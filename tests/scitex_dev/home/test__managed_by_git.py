@@ -275,37 +275,27 @@ def test_nested_repo_untracked_content_neither_blocks_nor_commits(tmp_path):
     assert second["head"] == mid["head"]
 
 
-def _write_git_shim(path: Path, real_git: str) -> None:
-    # Forwarding executable: delegates every invocation to the real git
-    # except the staged probe, which fails with $FAKE_GIT_DIFF_CODE when set.
+def _write_git_shim(path: Path, real_git: str, codedir: Path) -> None:
+    # Forwarding executable: delegates every invocation to the real git,
+    # except the staged probe, which fails with the code in <codedir>/code
+    # when that file exists. No environment control — file rendezvous only.
     path.write_text(
         "#!/bin/sh\n"
         'case " $* " in\n'
-        '  *" diff --cached --name-only -z "*) code="${FAKE_GIT_DIFF_CODE:-}"\n'
-        '    if [ -n "$code" ]; then echo "${FAKE_GIT_DIFF_ERR:-fatal: injected}" >&2; exit "$code"; fi;;\n'
+        '  *" diff --cached --name-only -z "*) codefile="'
+        + str(codedir / "code")
+        + '"\n'
+        '    if [ -f "$codefile" ]; then code=$(cat "$codefile");'
+        ' echo "fatal: injected" >&2; exit "$code"; fi;;\n'
         "esac\n"
         f'exec "{real_git}" "$@"\n'
     )
     path.chmod(0o755)
 
 
-def test_staged_probe_real_empty_staged_whitespace(tmp_path, monkeypatch):
-    # Real git, real index: empty -> False; staged file (whitespace name) -> True.
-    import scitex_dev.home._managed_by_git as m
-    _seed_home(tmp_path)
-    root = tmp_path / ".scitex"
-    subprocess.run(["git", "-C", str(root), "init", "-q"], check=True, timeout=60)
-    assert m._index_has_staged_changes(root) is False
-    weird = root / "agent-container" / "agents" / "my agent"
-    weird.mkdir(parents=True)
-    (weird / "spec.yaml").write_text("name: weird\n")
-    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, timeout=60)
-    assert m._index_has_staged_changes(root) is True
-
-
-def test_staged_probe_failure_codes_propagate(tmp_path, monkeypatch):
-    # Forwarding shim: exit 1/2/128 on the probe must all raise (no silent
-    # acceptance); passthrough forwards the real answer.
+def _shim_repo(tmp_path, monkeypatch):
+    # Arrange wrapper: real repo + forwarding shim first on PATH.
+    # Returns (module, root, set_code) where set_code(None) = passthrough.
     import os
     import shutil
     import scitex_dev.home._managed_by_git as m
@@ -316,19 +306,62 @@ def test_staged_probe_failure_codes_propagate(tmp_path, monkeypatch):
     assert real_git
     shimdir = tmp_path / "shimbin"
     shimdir.mkdir()
-    _write_git_shim(shimdir / "git", real_git)
+    _write_git_shim(shimdir / "git", real_git, shimdir)
     monkeypatch.setenv("PATH", str(shimdir) + os.pathsep + os.environ["PATH"])
-    # Passthrough proves forwarding: real empty index -> False.
-    monkeypatch.delenv("FAKE_GIT_DIFF_CODE", raising=False)
-    assert m._index_has_staged_changes(root) is False
-    for code in (1, 2, 128):
-        monkeypatch.setenv("FAKE_GIT_DIFF_CODE", str(code))
-        try:
-            m._index_has_staged_changes(root)
-        except RuntimeError as exc:
-            assert "diff --cached --name-only" in str(exc)
+    def set_code(code):
+        codefile = shimdir / "code"
+        if code is None:
+            codefile.unlink(missing_ok=True)
         else:
-            raise AssertionError(f"exit-{code} diff must raise")
+            codefile.write_text(str(code))
+    return m, root, set_code
+
+
+def test_staged_probe_empty_index_is_false(tmp_path, monkeypatch):
+    m, root, _ = _shim_repo(tmp_path, monkeypatch)
+    assert m._index_has_staged_changes(root) is False
+
+
+def test_staged_probe_whitespace_filename_is_true(tmp_path, monkeypatch):
+    m, root, _ = _shim_repo(tmp_path, monkeypatch)
+    weird = root / "agent-container" / "agents" / "my agent"
+    weird.mkdir(parents=True)
+    (weird / "spec.yaml").write_text("name: weird\n")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, timeout=60)
+    assert m._index_has_staged_changes(root) is True
+
+
+def test_staged_probe_exit_1_raises(tmp_path, monkeypatch):
+    m, root, set_code = _shim_repo(tmp_path, monkeypatch)
+    set_code(1)
+    try:
+        m._index_has_staged_changes(root)
+    except RuntimeError as exc:
+        assert "diff --cached --name-only" in str(exc)
+    else:
+        raise AssertionError("exit-1 diff must raise, not read as staged")
+
+
+def test_staged_probe_exit_2_raises(tmp_path, monkeypatch):
+    m, root, set_code = _shim_repo(tmp_path, monkeypatch)
+    set_code(2)
+    try:
+        m._index_has_staged_changes(root)
+    except RuntimeError as exc:
+        assert "diff --cached --name-only" in str(exc)
+    else:
+        raise AssertionError("exit-2 diff must raise, not read as staged")
+
+
+def test_staged_probe_exit_128_raises(tmp_path, monkeypatch):
+    m, root, set_code = _shim_repo(tmp_path, monkeypatch)
+    set_code(128)
+    try:
+        m._index_has_staged_changes(root)
+    except RuntimeError as exc:
+        assert "diff --cached --name-only" in str(exc)
+    else:
+        raise AssertionError("exit-128 diff must raise, not read as staged")
 
 
 def test_user_gitignore_lines_are_preserved(tmp_path):
