@@ -68,7 +68,7 @@ _BLOCK_BEGIN = "# >>> scitex-dev: managed block (dotscitex_git) >>>"
 _BLOCK_END = "# <<< scitex-dev: managed block (dotscitex_git) <<<"
 
 
-def _run_git(root: Path, *args: str) -> str:
+def _run_git(root: Path, *args: str, ok_statuses: tuple[int, ...] = (0,)) -> str:
     try:
         proc = subprocess.run(
             ["git", "-C", str(root), *args],
@@ -88,7 +88,7 @@ def _run_git(root: Path, *args: str) -> str:
             f"ensure_dotscitex_managed_by_git: git is unavailable: "
             f"{type(exc).__name__}: {exc}"
         ) from exc
-    if proc.returncode != 0:
+    if proc.returncode not in ok_statuses:
         detail = (proc.stderr or proc.stdout).strip()
         raise RuntimeError(
             f"ensure_dotscitex_managed_by_git: "
@@ -192,30 +192,17 @@ def _migrate_runtime_files(root: Path) -> list[str]:
     return moved
 
 
-def _staged_diff_status(root: Path) -> int:
-    """Exit status of ``git diff --cached --quiet``; 0 = clean, 1 = staged.
+def _index_has_staged_changes(root: Path) -> bool:
+    """Whether the git index holds staged changes (name output decides).
 
-    Runs the command directly (not via _run_git) because only 0/1 are valid
-    diff answers — 2/128/unavailable/timeout are real failures that raise.
+    Empty output = clean tree; nonempty = staged changes. Exit 1
+    (differences present) is an accepted answer, not an error; every other
+    nonzero status propagates through _run_git, whose message names the
+    actual command so a failure cannot pass vacuously.
     """
-    try:
-        proc = subprocess.run(
-            ["git", "-C", str(root), "diff", "--cached", "--quiet"],
-            capture_output=True, text=True, timeout=60, check=False,
-            env={**os.environ, "GIT_DISCOVERY_ACROSS_FILESYSTEM": "1"},
-        )
-    except (FileNotFoundError, OSError, subprocess.SubprocessError) as exc:
-        raise RuntimeError(
-            "ensure_dotscitex_managed_by_git: git is unavailable: "
-            f"{type(exc).__name__}: {exc}"
-        ) from exc
-    if proc.returncode in (0, 1):
-        return proc.returncode
-    detail = (proc.stderr or proc.stdout).strip()
-    raise RuntimeError(
-        "ensure_dotscitex_managed_by_git: git diff --cached --quiet "
-        f"failed in {root}: {detail[-800:]}"
-    )
+    out = _run_git(root, "diff", "--cached", "--name-only", "-z",
+                   ok_statuses=(0, 1))
+    return bool(out)
 
 
 def ensure_dotscitex_managed_by_git(
@@ -249,7 +236,7 @@ def ensure_dotscitex_managed_by_git(
 
     _run_git(root, "add", "-A")
     committed = False
-    if commit and _staged_diff_status(root) == 1:
+    if commit and _index_has_staged_changes(root):
         _run_git(root, "-c", f"user.name={actor_name}", "-c", f"user.email={actor_email}",
                  "commit", "-q", "-m", commit_message)
         committed = True
