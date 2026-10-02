@@ -120,6 +120,31 @@ def test_nested_repo_untracked_content_neither_blocks_nor_commits(tmp_path):
     assert second["head"] == mid["head"]
 
 
+def test_command_error_controls(tmp_path, monkeypatch):
+    # Arrange — managed home, then a spec change, but diff --cached --quiet
+    # fails with a real command error (exit 2): must raise, not commit.
+    import scitex_dev.home._managed_by_git as m
+    _seed_home(tmp_path)
+    first = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    (tmp_path / ".scitex" / "agent-container" / "config.yaml").write_text("peers: {a: b}\n")
+    real_run = m.subprocess.run
+    def fake_run(*a, **k):
+        cmd = a[0] if a else k.get("args", [])
+        if isinstance(cmd, list) and cmd[-3:] == ["diff", "--cached", "--quiet"]:
+            class P: returncode = 2; stdout = ""; stderr = "fatal: bad revision"
+            return P()
+        return real_run(*a, **k)
+    monkeypatch.setattr(m.subprocess, "run", fake_run)
+    # Act/Assert — the real failure propagates (no masked success).
+    try:
+        ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    except RuntimeError as exc:
+        assert "diff --cached --quiet" in str(exc)
+    else:
+        raise AssertionError("exit-2 diff must raise, not commit-or-skip")
+    assert first["head"] and True
+
+
 def test_user_gitignore_lines_are_preserved(tmp_path):
     # Arrange — a pre-existing repo with the user's own ignore line.
     _seed_home(tmp_path)
