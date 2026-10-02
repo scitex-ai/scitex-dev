@@ -401,6 +401,7 @@ def test_staged_probe_exit_128_raises(tmp_path):
         with pytest.raises(RuntimeError, match="diff --cached --name-only"):
             probe()
 
+
 def test_adoption_preserves_user_ignore_pattern(tmp_path):
     # Arrange
     _seed_home(tmp_path)
