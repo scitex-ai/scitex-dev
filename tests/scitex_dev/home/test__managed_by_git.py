@@ -401,9 +401,8 @@ def test_staged_probe_exit_128_raises(tmp_path):
         with pytest.raises(RuntimeError, match="diff --cached --name-only"):
             probe()
 
-
-def test_user_gitignore_lines_are_preserved(tmp_path):
-    # Arrange — a pre-existing repo with the user's own ignore line.
+def test_adoption_preserves_user_ignore_pattern(tmp_path):
+    # Arrange
     _seed_home(tmp_path)
     root = tmp_path / ".scitex"
     _git(root, "init", "-q") if False else subprocess.run(
