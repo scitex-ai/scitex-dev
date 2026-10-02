@@ -121,7 +121,7 @@ def test_nested_repo_untracked_content_neither_blocks_nor_commits(tmp_path):
 
 
 def test_command_error_controls(tmp_path, monkeypatch):
-    # Arrange — managed home, then a spec change, but diff --cached --quiet
+    # Arrange — managed home, then a spec change, but diff --cached --name-only
     # fails with a real command error (exit 2): must raise, not commit.
     import scitex_dev.home._managed_by_git as m
     _seed_home(tmp_path)
@@ -130,7 +130,7 @@ def test_command_error_controls(tmp_path, monkeypatch):
     real_run = m.subprocess.run
     def fake_run(*a, **k):
         cmd = a[0] if a else k.get("args", [])
-        if isinstance(cmd, list) and cmd[-3:] == ["diff", "--cached", "--quiet"]:
+        if (isinstance(cmd, list) and "diff" in cmd and "--name-only" in cmd):
             class P: returncode = 2; stdout = ""; stderr = "fatal: bad revision"
             return P()
         return real_run(*a, **k)
@@ -139,7 +139,7 @@ def test_command_error_controls(tmp_path, monkeypatch):
     try:
         ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
     except RuntimeError as exc:
-        assert "diff --cached --quiet" in str(exc)
+        assert "--name-only" in str(exc)
     else:
         raise AssertionError("exit-2 diff must raise, not commit-or-skip")
     assert first["head"] and True
