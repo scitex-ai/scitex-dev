@@ -23,10 +23,12 @@ and fail in CI).
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import sys
 import textwrap
 from pathlib import Path
+from importlib.metadata import distribution
 
 import pytest
 
@@ -323,7 +325,9 @@ def _run_ordering_arm(stdlib_first: bool) -> str:
         # see tests/_child_env.py for why it must come through anyway.
         env=with_loader_path(
             {
-                "PYTHONPATH": _SRC,
+                "PYTHONPATH": os.pathsep.join(
+                    [_SRC, str(distribution("scitex-logging").locate_file(""))]
+                ),
                 "PATH": "/usr/bin:/bin",
                 "SCITEX_DEV_LINTER_QUIET": "1",
             }

@@ -8,10 +8,9 @@ module for the same reason -- `_django/_checks.py`,
 `_api/_checks/__init__.py`, `_startup_speed.py` -- and this follows that
 precedent rather than inventing a layout.
 
-A PURE MOVE: `_walk` and `_has_required_positional` are byte-identical to
-what they were in `_audit.py`. No rule changed, no message changed, no
-behaviour changed. That matters because a refactor and a behaviour change
-landing together are indistinguishable in review.
+Initially a pure move from `_audit.py`. The walker now preserves mounted
+registration names and scopes custom dictionaries to verified installed
+owners while applying the same convention rules to every public node.
 
 `Violation` deliberately stays in `_audit.py`: 11 test files and
 `_startup_speed.py` import it from there. Everything this module needs from
@@ -39,6 +38,8 @@ from ._audit import (
 )
 
 from ._coverage import HIDDEN, SurfaceCoverage
+from ._dict_root import use_owner_dict
+from ._mounted_owner import MountedOwners
 
 __all__ = ["_has_required_positional", "_walk"]
 
@@ -65,6 +66,45 @@ def _walk(
     out: list[Violation],
     root_display: str,
     coverage: SurfaceCoverage | None = None,
+    *,
+    registered_name: str | None = None,
+    owners: MountedOwners | None = None,
+    parent_owner=None,
+) -> None:
+    """Walk registered names with each mounted owner's lexical dictionary."""
+    owners = owners if owners is not None else MountedOwners()
+    if getattr(cmd, "hidden", False):
+        _walk_node(cmd, path, out, root_display, coverage, registered_name, owners, parent_owner)
+        return
+    owner = owners.owner(cmd)
+    is_mount = bool(path) and owner is not None and (
+        parent_owner is None or owner.identity != parent_owner.identity
+    )
+    if is_mount:
+        full = " ".join([*path, registered_name or cmd.name or "<root>"])
+        owners.report(owner, full)
+        if owner.ambiguous:
+            out.append(Violation(full, "§1d", owner.reason + ": " + owner.distribution))
+        with use_owner_dict(owner.resource, owner.distribution, owner.reason, owner.payload):
+            from ._std_rules import check_verb_exception_comments
+
+            check_verb_exception_comments(full, out)
+            _walk_node(
+                cmd, path, out, root_display, coverage, registered_name, owners, owner
+            )
+    else:
+        _walk_node(cmd, path, out, root_display, coverage, registered_name, owners, owner or parent_owner)
+
+
+def _walk_node(
+    cmd,
+    path,
+    out,
+    root_display,
+    coverage,
+    registered_name,
+    owners,
+    owner,
 ) -> None:
     """Walk the command tree, appending violations AND recording coverage.
 
@@ -82,7 +122,7 @@ def _walk(
     # which is why hidden commands left no trace at all: not inspected, not
     # counted, and the audited surface silently shrank.
     is_root = not path
-    name = root_display if is_root else (cmd.name or "<root>")
+    name = root_display if is_root else (registered_name or cmd.name or "<root>")
     full = " ".join(path + [name]) if path else name
 
     # Skip hidden commands — not part of the public CLI surface
@@ -272,5 +312,8 @@ def _walk(
 
     if is_group:
         next_path = [name] if is_root else path + [name]
-        for sub in cmd.commands.values():
-            _walk(sub, next_path, out, root_display, coverage)
+        for registered, sub in cmd.commands.items():
+            _walk(
+                sub, next_path, out, root_display, coverage,
+                registered_name=registered, owners=owners, parent_owner=owner,
+            )

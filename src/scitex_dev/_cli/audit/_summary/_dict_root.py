@@ -53,6 +53,27 @@ DICT_RELPATH = (".scitex", "dev", "cli-audit-dict.yaml")
 _PINNED: ContextVar[tuple[Path, str] | None] = ContextVar(
     "scitex_dev_cli_audit_dict_root", default=None
 )
+_OWNER: ContextVar[tuple[Path | None, str, str, bytes | None] | None] = ContextVar(
+    "scitex_dev_cli_audit_dict_owner", default=None
+)
+
+
+@contextmanager
+def use_owner_dict(path: Path | None, distribution: str, reason: str, payload: bytes | None = None):
+    """Scope one verified mounted owner; absence excludes the parent layer."""
+    token = _OWNER.set((path, distribution, reason, payload))
+    try:
+        yield
+    finally:
+        _OWNER.reset(token)
+
+
+def read_dict_text(path: Path) -> str:
+    """Use the exact verified owner bytes; project/user reads stay unchanged."""
+    owner = _OWNER.get()
+    if owner is not None and path == owner[0] and owner[3] is not None:
+        return owner[3].decode("utf-8")
+    return path.read_text(encoding="utf-8")
 
 
 @contextmanager
@@ -96,10 +117,12 @@ def _layers() -> list[tuple[Path, str, str]]:
     once (a double read would double every missing-``# why`` finding).
     """
     root, via = resolved_dict_root()
-    candidates = [
-        (Path(root).joinpath(*DICT_RELPATH), "project", via),
-        (Path.home().joinpath(*DICT_RELPATH), "user", "home"),
-    ]
+    owner = _OWNER.get()
+    candidates = [(Path(root).joinpath(*DICT_RELPATH), "project", via)]
+    if owner is not None:
+        path, distribution, _reason, _payload = owner
+        candidates = [] if path is None else [(path, "owner", distribution)]
+    candidates.append((Path.home().joinpath(*DICT_RELPATH), "user", "home"))
     out: list[tuple[Path, str, str]] = []
     seen: set[str] = set()
     for path, layer, layer_via in candidates:
@@ -137,7 +160,7 @@ def load_custom_dict() -> dict[str, set[str]]:
         if not path.is_file():
             continue
         try:
-            data = yaml.safe_load(path.read_text()) or {}
+            data = yaml.safe_load(read_dict_text(path)) or {}
         except yaml.YAMLError:
             continue
         for tag, key in [
@@ -159,6 +182,9 @@ def dict_source_report(distribution: str) -> list[str]:
     auditor only reports what it did read.
     """
     lines: list[str] = []
+    owner = _OWNER.get()
+    if owner is not None and owner[0] is None:
+        lines.append(f"{distribution}: cli-audit owner {owner[1]} dictionary {owner[2]}")
     for path, layer, via in _layers():
         state = "read" if path.is_file() else "absent"
         lines.append(
@@ -185,6 +211,8 @@ __all__ = [
     "dict_source_report",
     "load_custom_dict",
     "resolved_dict_root",
+    "read_dict_text",
     "surface_dict_source",
     "use_dict_root",
+    "use_owner_dict",
 ]
