@@ -297,7 +297,7 @@ def audit_project(
         if not deferred_dropped:
             return
         click.echo(
-            f"  [defer] {distribution}: {len(deferred_dropped)} PS-103 "
+            f"  Deferred inventory for {distribution}: {len(deferred_dropped)} PS-103 "
             f"finding(s) suppressed by `project-type: deferred`. "
             f"Re-review when time permits — entries currently at root "
             f"that the strict baseline would flag:",

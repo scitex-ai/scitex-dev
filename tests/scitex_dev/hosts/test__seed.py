@@ -61,11 +61,15 @@ _COMPUTE_POOL_DESTINATIONS = [
     ),
     (
         "scitex-compute-02",
-        frozenset({"self-hosted", "Linux", "X64", "scitex-org-cpu"}),
+        frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-org-cpu", "scitex-local-cpu"}),
     ),
     (
         "scitex-compute-03",
-        frozenset({"self-hosted", "Linux", "X64", "scitex-org-cpu"}),
+        frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-org-cpu", "scitex-local-cpu"}),
+    ),
+    (
+        "scitex-compute-03",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-docker"}),
     ),
 ]
 
@@ -83,6 +87,10 @@ _DOTFILES_DESTINATION = (
 _SEED_DESTINATIONS = [
     *_COMPUTE_POOL_DESTINATIONS,
     _CONTROL_PLANE_DESTINATION,
+    (
+        "scitex-compute-04",
+        frozenset({"self-hosted", "Linux", "X64", "scitex-ci", "scitex-org-cpu", "scitex-local-cpu"}),
+    ),
     _DOTFILES_DESTINATION,
     *_SPARTAN_DESTINATIONS,
 ]
@@ -230,13 +238,13 @@ def test_packaged_floor_is_never_empty():
 
 def test_seed_label_sets_are_per_runner_not_a_flattened_union():
     # Arrange — a flattened union would green-light a combination no single
-    # runner offers, and such a job queues forever. Eight runners across five
-    # machines as of 2026-08-15; a flatten would collapse them to five.
+    # runner offers, and such a job queues forever. Ten independently recorded
+    # label sets across five machines; a flatten would collapse them to five.
     pass
     # Act
     found = packaged_default_runner_destinations()
     # Assert
-    assert len(found) == 8
+    assert len(found) == 10
 
 
 def test_control_plane_label_travels_with_the_rest_of_its_runners_set():
