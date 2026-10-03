@@ -56,15 +56,33 @@ def _read_state(path: Path) -> dict:
 
 def _save_state(path: Path, state: dict) -> None:
     temporary = path.with_name(".state-" + uuid.uuid4().hex)
-    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        with os.fdopen(fd, "w") as stream:
-            json.dump(state, stream, sort_keys=True)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
+        metadata = os.fstat(directory)
+        if metadata.st_uid != os.getuid() or stat.S_IMODE(metadata.st_mode) != 0o700:
+            raise PolicyObserverError("observer state directory ownership drift")
+        fd = os.open(
+            temporary.name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+            dir_fd=directory,
+        )
+        try:
+            with os.fdopen(fd, "w") as stream:
+                json.dump(state, stream, sort_keys=True)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(
+                temporary.name, path.name, src_dir_fd=directory, dst_dir_fd=directory
+            )
+            os.fsync(directory)
+        finally:
+            try:
+                os.unlink(temporary.name, dir_fd=directory)
+            except FileNotFoundError:
+                pass
     finally:
-        temporary.unlink(missing_ok=True)
+        os.close(directory)
 
 
 def _condition(report: dict) -> str:
@@ -115,8 +133,9 @@ def _card(api) -> dict | None:
         return None
     if (
         card.get("id") != TASK_ID
-        or (card.get("assignee") or card.get("agent")) != ASSIGNEE
-        or card.get("status") in {"cancelled", "completed"}
+        or card.get("assignee") != ASSIGNEE
+        or card.get("agent") != ASSIGNEE
+        or card.get("status") in {"done", "cancelled", "completed"}
     ):
         raise PolicyObserverError("policy observer Card owner/status drift")
     return card
@@ -257,6 +276,7 @@ def observe_once(
 
     report = (collector or collect_policy)()
     result = {
+        **report,
         "contract": CONTRACT,
         "observer_source_sha256": hashlib.sha256(
             Path(__file__).read_bytes()

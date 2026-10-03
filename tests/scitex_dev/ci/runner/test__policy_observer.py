@@ -5,13 +5,16 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import stat
 import subprocess
 import sys
 from copy import deepcopy
 from pathlib import Path
+from types import FunctionType, SimpleNamespace
 
 import pytest
 
+from scitex_dev.ci.runner import _policy_observer
 from scitex_dev.ci.runner._policy_observer import (
     ASSIGNEE,
     STORE_INSTANCE,
@@ -88,6 +91,7 @@ class _Cards:
         self.card = {
             "id": TASK_ID,
             "assignee": ASSIGNEE,
+            "agent": ASSIGNEE,
             "status": "in_progress",
             "comments": [],
         }
@@ -106,7 +110,7 @@ class _Cards:
 
     def add_task(self, **fields):
         self.writes.append(("create", fields))
-        self.card = dict(fields, comments=[])
+        self.card = dict(fields, agent=fields["assignee"], comments=[])
         return deepcopy(self.card)
 
     def comment_task(self, *, task_id, text, by, kind):
@@ -389,4 +393,65 @@ def test_wrong_existing_card_owner_refuses_delivery(tmp_path):
         1,
         [],
         "policy observer Card owner/status drift",
+    )
+
+
+@pytest.mark.parametrize("status", ["done", "cancelled", "completed"])
+def test_terminal_card_cannot_receive_observer_alert(tmp_path, status):
+    # Arrange
+    api = _Cards()
+    api.card["status"] = status
+    # Act
+    result = _pass(tmp_path, api)
+    # Assert
+    assert (result["exit_code"], api.writes, result["refusal_reason"]) == (
+        1,
+        [],
+        "policy observer Card owner/status drift",
+    )
+
+
+@pytest.mark.parametrize(
+    "assignee,agent",
+    [(ASSIGNEE, "foreign"), ("foreign", ASSIGNEE), (ASSIGNEE, None), (None, ASSIGNEE)],
+)
+def test_half_owned_or_conflicting_card_cannot_receive_alert(tmp_path, assignee, agent):
+    # Arrange
+    api = _Cards()
+    api.card.update(assignee=assignee, agent=agent)
+    # Act
+    result = _pass(tmp_path, api)
+    # Assert
+    assert (result["exit_code"], api.writes, result["refusal_reason"]) == (
+        1,
+        [],
+        "policy observer Card owner/status drift",
+    )
+
+
+def test_pending_nonce_file_and_parent_are_synced_before_delivery(tmp_path):
+    """Observe actual fsync calls while retaining real owned files and syscalls."""
+    # Arrange
+    path = tmp_path / "state.json"
+    pending = {"schema": 1, "pending": {"text": "unique-delivery-fixture"}}
+    events = []
+
+    def sync(fd):
+        metadata = os.fstat(fd)
+        os.fsync(fd)
+        if stat.S_ISDIR(metadata.st_mode):
+            events.append(("directory", json.loads(path.read_text())))
+        else:
+            events.append(("file", None))
+
+    real_save = _policy_observer._save_state
+    observed_os = SimpleNamespace(**{**vars(os), "fsync": sync})
+    save = FunctionType(real_save.__code__, {**real_save.__globals__, "os": observed_os})
+    # Act
+    save(path, pending)
+    # Assert
+    assert (events, json.loads(path.read_text()), stat.S_IMODE(path.stat().st_mode)) == (
+        [("file", None), ("directory", pending)],
+        pending,
+        0o600,
     )
