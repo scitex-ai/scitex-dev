@@ -17,10 +17,39 @@ on:
   workflow_dispatch:
 
 jobs:
+  runner-admission:
+    uses: scitex-ai/.github/.github/workflows/runner-admission.yml@d7d96c34d68cdfbb5503a933591f7748b5aa30ee
+    with:
+      runs_on: '["self-hosted","Linux","X64","scitex-org-cpu"]'
+
   install-check:
     name: import-smoke-on-ubuntu-py3-12
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
+    needs: runner-admission
+    runs-on: ${{ fromJSON(needs.runner-admission.outputs.runs_on) }}
     steps:
+      - name: Require company admission before native work
+        env:
+          RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          NATIVE_AUTHORIZED: ${{ needs.runner-admission.outputs.native_authorized }}
+          ADMISSION_REASON: ${{ needs.runner-admission.outputs.reason }}
+          ADMISSION_RUNS_ON: ${{ needs.runner-admission.outputs.runs_on }}
+        run: |
+          set -eu
+          case "$RUNNER_ENVIRONMENT" in
+            self-hosted)
+              test "$NATIVE_AUTHORIZED" = true
+              test "$ADMISSION_REASON" = confirmed-organization-members
+              test "$ADMISSION_RUNS_ON" = '{"group":"Organization","labels":["self-hosted","Linux","X64","scitex-org-cpu"]}'
+              ;;
+            github-hosted)
+              # Unconfirmed or external membership runs the full original checks.
+              ;;
+            *)
+              printf '%s\n' 'Unknown runner environment refused' >&2
+              exit 1
+              ;;
+          esac
+
       # fetch-depth: 0 is REQUIRED — the same defect as the pytest-matrix
       # workflow: a shallow clone hides the tags setuptools-scm derives the
       # version from, the install resolves to `0.1.dev1+g<sha>`, and that string
