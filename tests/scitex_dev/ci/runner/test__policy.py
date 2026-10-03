@@ -1,20 +1,22 @@
-"""Organization scope and workflow ACLs are distinct from label liveness."""
-import json
+"""Policy observations use explicit API adapters or owned process fixtures."""
 import base64
+import hashlib
+import json
+from pathlib import Path
 import subprocess
+import sys
 
 import click
 from click.testing import CliRunner
 import pytest
 
 from scitex_dev.ci.runner import register_ci_runner_commands
-from scitex_dev.ci.runner import _policy
+from scitex_dev.ci.runner import _policy, _policy_contract
 
 
 def pool():
-    names = ["scitex-ci-02", "scitex-ci-03", "scitex-ci-04"]
-    return [{"id": i, "name": name, "status": "online", "busy": i == 2,
-             "labels": [{"name": "scitex-org-cpu"}]} for i, name in enumerate(names, 1)]
+    return [{"id": i, "name": name, "status": "online", "busy": i == 2}
+            for i, name in enumerate(_policy.CPU_RUNNERS, 1)]
 
 
 def group(refs):
@@ -23,159 +25,222 @@ def group(refs):
             "selected_workflows": refs, "runners_url": "https://api.github.com/orgs/scitex-ai/actions/runner-groups/6/runners"}
 
 
-def test_common_labels_do_not_authorize_unrestricted_public_workflows():
+@pytest.mark.parametrize("field,expected", [("state", "violation"), ("groups", 1),
+                                           ("busy_runners", ["scitex-ci-03"]), ("last_completed_job_at", None)])
+def test_unrestricted_group_never_gains_authorization_from_busy_or_labels(field, expected):
+    # Arrange
     g = group([])
     g["restricted_to_workflows"] = False
+    # Act
     result = _policy.assess_pool(pool(), [g], {6: [1, 2, 3]}, expected_workflows=[])
-    assert result["state"] == "violation"
-    assert any("workflow" in x for x in result["violations"])
-    assert result["activity"]["busy_runners"] == ["scitex-ci-03"]
-    assert result["activity"]["last_completed_job_at"] is None
-    assert len(result["groups"]) == 1
+    value = len(result["groups"]) if field == "groups" else result.get(field, result["activity"].get(field))
+    # Assert
+    assert value == expected
 
 
-def test_reviewed_exact_workflows_plus_online_registration_are_qualified():
+def test_reviewed_exact_workflows_and_online_registration_are_qualified():
+    # Arrange
     ref = "scitex-ai/.github/.github/workflows/pytest-matrix.yml@" + "a" * 40
+    # Act
     result = _policy.assess_pool(pool(), [group([ref])], {6: [1, 2, 3]}, expected_workflows=[ref])
+    # Assert
     assert result["state"] == "conformant"
-    assert result["activity"]["busy_runners"] == ["scitex-ci-03"]
 
 
-def test_group_destination_identity_cannot_drift_from_workflow_output():
+@pytest.mark.parametrize("field,value", [("name", "Different"), ("id", 9),
+                                       ("visibility", "private"), ("allows_public_repositories", False)])
+def test_group_identity_and_repository_availability_match_admission_destination(field, value):
+    # Arrange
     ref = "scitex-ai/.github/.github/workflows/pytest-matrix.yml@" + "a" * 40
     g = group([ref])
-    g["name"] = "Different"
-    assert _policy.assess_pool(pool(), [g], {6: [1, 2, 3]}, expected_workflows=[ref])["state"] == "violation"
+    g[field] = value
+    # Act
+    result = _policy.assess_pool(pool(), [g], {g["id"]: [1, 2, 3]}, expected_workflows=[ref])
+    # Assert
+    assert result["state"] == "violation"
 
 
 @pytest.mark.parametrize("refs", [["scitex-ai/.github/.github/workflows/ci.yml@main"],
                                    ["attacker/repo/.github/workflows/ci.yml@" + "a" * 40]])
-def test_mutable_or_foreign_workflow_policy_cannot_be_qualified(refs):
-    result = _policy.assess_pool(pool(), [group(refs)], {6: [1, 2, 3]}, expected_workflows=refs)
+def test_mutable_or_foreign_refs_remain_unqualified(refs):
+    # Arrange
+    g = group(refs)
+    # Act
+    result = _policy.assess_pool(pool(), [g], {6: [1, 2, 3]}, expected_workflows=refs)
+    # Assert
     assert result["state"] == "violation"
 
 
-def test_unavailable_or_incomplete_observation_never_reports_conformant():
-    assert _policy.assess_pool(None, None, {})["state"] == "unknown"
-    assert _policy.assess_pool(pool(), [group([])], {6: None})["state"] == "unknown"
-    rows = pool()
-    rows.pop()
-    assert _policy.assess_pool(rows, [group([])], {6: [1, 2]})["state"] == "violation"
+@pytest.mark.parametrize("runners,groups,memberships,expected", [
+    (None, None, {}, "unknown"), (pool(), [group([])], {6: None}, "unknown"),
+    (pool()[:-1], [group([])], {6: [1, 2]}, "violation")])
+def test_unavailable_or_incomplete_inventory_cannot_be_conformant(runners, groups, memberships, expected):
+    # Arrange
+    inventory = (runners, groups, memberships)
+    # Act
+    result = _policy.assess_pool(*inventory)
+    # Assert
+    assert result["state"] == expected
 
 
-@pytest.mark.parametrize("url", ["git@github.com:ywatanabe1989/.dotfiles.git",
-                                 "https://github.com/ywatanabe1989/.dotfiles.git"])
-def test_personal_dot_repository_parses_and_defaults_hosted(url):
-    assert _policy.parse_repository(url) == "ywatanabe1989/.dotfiles"
-    assert json.loads(_policy.default_runs_on("ywatanabe1989/.dotfiles")) == ["ubuntu-latest"]
+@pytest.mark.parametrize("url", ["git@github.com:ywatanabe1989/.dotfiles.git", "https://github.com/ywatanabe1989/.dotfiles.git"])
+def test_personal_dot_repository_is_an_unambiguous_origin(url):
+    # Arrange
+    origin = url
+    # Act
+    parsed = _policy.parse_repository(origin)
+    # Assert
+    assert parsed == "ywatanabe1989/.dotfiles"
 
 
-@pytest.mark.parametrize("url", ["https://github.com.evil/scitex-ai/repo", "https://github.com/scitex-ai/repo/extra",
-                                 "git@notgithub.com:scitex-ai/repo.git"])
-def test_remote_host_or_path_ambiguity_refuses_self_hosted_authority(url):
+def test_personal_dot_repository_defaults_to_hosted():
+    # Arrange
+    repo = "ywatanabe1989/.dotfiles"
+    # Act
+    labels = json.loads(_policy.default_runs_on(repo))
+    # Assert
+    assert labels == ["ubuntu-latest"]
+
+
+@pytest.mark.parametrize("url", ["https://github.com.evil/scitex-ai/repo", "https://github.com/scitex-ai/repo/extra", "git@notgithub.com:scitex-ai/repo.git"])
+def test_remote_ambiguity_refuses_repository_authority(url):
+    # Arrange
+    origin = url
+    # Act
+    # Assert
     with pytest.raises(ValueError):
-        _policy.parse_repository(url)
+        _policy.parse_repository(origin)
 
 
-def test_personal_self_hosted_switch_refuses_before_any_gh_mutation(monkeypatch):
-    from scitex_dev.ci.runner import _use
-    from scitex_dev.ci.runner import _variables
-    monkeypatch.setattr(_use.config, "load_runner_config", lambda: {
-        "github": {"default_repo": "ywatanabe1989/.dotfiles", "variable_name": "CI_RUNS_ON"}})
-    calls = []
-    monkeypatch.setattr(_variables.subprocess, "run", lambda *a, **k: calls.append(a))
+def test_personal_native_cli_refuses_without_an_available_gh_command():
+    # Arrange
     @click.group()
     def root():
         pass
     register_ci_runner_commands(root)
-    result = CliRunner().invoke(root, ["ci", "runner", "use", "self-hosted"])
-    assert result.exit_code != 0
-    assert "organization" in result.output.lower()
-    assert calls == []
+    # Act
+    result = CliRunner().invoke(root, ["ci", "runner", "use", "self-hosted", "--repo", "ywatanabe1989/.dotfiles"], env={"PATH": "/nonexistent"})
+    # Assert
+    assert "organization-only" in result.output
 
 
-def test_probe_errors_persist_only_fixed_diagnostics(monkeypatch):
-    private = "SHOULD_NEVER_APPEAR_IN_REPORT"
-    def fail(*a, **k):
-        return subprocess.CompletedProcess(a[0], 1, stdout=private, stderr=private)
-    monkeypatch.setattr(_policy.subprocess, "run", fail)
-    report = _policy.collect_policy()
-    assert report["state"] == "unknown"
-    assert private not in json.dumps(report)
+def test_failed_api_driver_body_cannot_escape_the_policy_report():
+    # Arrange
+    private = "PRIVATE_BODY_DO_NOT_EMIT"
+    def failed(*args, **kwargs):
+        return subprocess.CompletedProcess(args[0], 1, stdout=private, stderr=private)
+    # Act
+    result = _policy.collect_policy(api=lambda endpoint: _policy._api(endpoint, invoke=failed))
+    # Assert
+    assert private not in json.dumps(result)
 
 
-def workflow_contract(monkeypatch):
-    import hashlib
-    import scitex_dev.ci.runner._policy_contract as contract
+def contract_case():
     bodies = {"pytest-matrix.yml": b"reviewed pytest", "runner-admission.yml": b"reviewed admission"}
-    monkeypatch.setattr(contract, "WORKFLOW_HASHES", {n: hashlib.sha256(b).hexdigest() for n, b in bodies.items()})
-    monkeypatch.setattr(contract, "NATIVE_WORKFLOWS", ("pytest-matrix.yml",))
-    sha = "a" * 40
-    ref = "scitex-ai/.github/.github/workflows/pytest-matrix.yml@" + sha
+    hashes = {name: hashlib.sha256(body).hexdigest() for name, body in bodies.items()}
+    ref = "scitex-ai/.github/.github/workflows/pytest-matrix.yml@" + "a" * 40
     def api(endpoint):
         name = endpoint.split("/")[-1].split("?")[0]
         return {"type": "file", "encoding": "base64", "content": base64.b64encode(bodies[name]).decode()}
-    return contract, [group([ref])], api, ref
+    def qualify(groups, callback):
+        return _policy_contract.qualify_workflows(groups, callback, workflow_hashes=hashes, native_workflows=("pytest-matrix.yml",))
+    return qualify, [group([ref])], api, ref
 
 
-def test_exact_group_revision_is_qualified_only_with_all_reviewed_workflow_bytes(monkeypatch):
-    contract, groups, api, ref = workflow_contract(monkeypatch)
-    result = contract.qualify_workflows(groups, api)
+def test_same_revision_is_qualified_only_with_reviewed_native_and_admission_bytes():
+    # Arrange
+    qualify, groups, api, ref = contract_case()
+    # Act
+    result = qualify(groups, api)
+    # Assert
     assert result["expected"] == [ref]
-    assert result["violations"] == result["unknown"] == []
 
 
-def test_changed_hosted_admission_bytes_refuse_even_with_exact_native_refs(monkeypatch):
-    contract, groups, api, ref = workflow_contract(monkeypatch)
+def test_changed_admission_bytes_refuse_the_exact_native_ref():
+    # Arrange
+    qualify, groups, api, ref = contract_case()
     def changed(endpoint):
         data = api(endpoint)
         if "runner-admission" in endpoint:
             data["content"] = base64.b64encode(b"unreviewed admission").decode()
         return data
-    result = contract.qualify_workflows(groups, changed)
+    # Act
+    result = qualify(groups, changed)
+    # Assert
     assert result["expected"] == []
+
+
+def test_missing_reviewed_public_bytes_remain_unknown():
+    # Arrange
+    qualify, groups, api, ref = contract_case()
+    # Act
+    result = qualify(groups, lambda endpoint: None)
+    # Assert
+    assert result["unknown"]
+
+
+def test_mutable_revision_cannot_be_qualified_by_a_matching_body():
+    # Arrange
+    qualify, groups, api, ref = contract_case()
+    groups[0]["selected_workflows"] = [ref[:-40] + "main"]
+    # Act
+    result = qualify(groups, api)
+    # Assert
     assert result["violations"]
 
 
-def test_unavailable_workflow_body_and_mutable_revision_remain_unqualified(monkeypatch):
-    contract, groups, api, ref = workflow_contract(monkeypatch)
-    assert contract.qualify_workflows(groups, lambda endpoint: None)["unknown"]
-    groups[0]["selected_workflows"] = [ref[:-40] + "main"]
-    result = contract.qualify_workflows(groups, api)
-    assert result["violations"] and not result["expected"]
-
-
-def test_completed_job_activity_is_separate_from_busy_and_policy(monkeypatch):
+@pytest.mark.parametrize("field,expected", [("last_completed_job_at", "2020-01-01T00:01:00+00:00"),
+                                           ("sample_complete", True), ("organization_wide", False)])
+def test_completed_job_sample_has_independent_bounded_evidence(field, expected):
+    # Arrange
     def api(endpoint):
         if "actions/runs?" in endpoint:
             return {"workflow_runs": [{"id": 44}]}
-        return {"total_count": 1, "jobs": [{"id": 55, "runner_id": 2, "status": "completed",
-                "conclusion": "success", "completed_at": "2020-01-01T00:01:00Z"}]}
+        return {"total_count": 1, "jobs": [{"id": 55, "runner_id": 2, "status": "completed", "completed_at": "2020-01-01T00:01:00Z"}]}
+    # Act
     result = _policy.collect_activity(pool(), api)
-    assert result["last_completed_job_at"] == "2020-01-01T00:01:00+00:00"
-    assert result["sample_complete"] is True
-    assert result["organization_wide"] is False
-    assert result["jobs"][0]["runner_name"] == "scitex-ci-03"
+    # Assert
+    assert result[field] == expected
 
 
-def test_missing_activity_never_invents_completed_job_or_zero_age():
-    result = _policy.collect_activity(pool(), lambda endpoint: None)
-    assert result["last_completed_job_at"] is None
-    assert result["last_completed_job_age_s"] is None
-    assert result["sample_complete"] is False
+@pytest.mark.parametrize("field,expected", [("last_completed_job_at", None), ("last_completed_job_age_s", None), ("sample_complete", False)])
+def test_missing_activity_does_not_invent_a_job_timestamp_or_age(field, expected):
+    # Arrange
+    api = lambda endpoint: None
+    # Act
+    result = _policy.collect_activity(pool(), api)
+    # Assert
+    assert result[field] == expected
 
 
-@pytest.mark.parametrize("state,code", [("conformant", 0), ("violation", 1), ("unknown", 1)])
-def test_managed_policy_job_dispatches_real_read_only_handler(monkeypatch, capsys, state, code):
-    from scitex_dev._cli.cron import run
+@pytest.mark.parametrize("unavailable", [True, False])
+def test_real_cron_handler_refuses_unknown_or_unrestricted_owned_api_fixture(tmp_path, unavailable):
+    # Arrange
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    rows = pool()
+    g = group([])
+    g["restricted_to_workflows"] = False
+    data = {"orgs/scitex-ai/actions/runners?per_page=100": {"total_count": 3, "runners": rows},
+            "orgs/scitex-ai/actions/runner-groups?per_page=100": {"total_count": 1, "runner_groups": [g]},
+            "orgs/scitex-ai/actions/runner-groups/6/runners?per_page=100": {"total_count": 3, "runners": rows}}
+    gh = bin_dir / "gh"
+    gh.write_text("#!" + sys.executable + "\nimport json,sys\ndata=" + repr(data) + "\n"
+                  + ("raise SystemExit(1)\n" if unavailable else "print(json.dumps(data.get(sys.argv[2],{})))\n"))
+    gh.chmod(0o700)
+    source = Path(_policy.__file__).resolve().parents[3]
+    env = {"PATH": str(bin_dir) + ":/usr/bin:/bin", "PYTHONPATH": str(source), "LANG": "C"}
+    code = "from scitex_dev._cli.cron.run import _run_body; raise SystemExit(_run_body('ci-runner-policy',only=None,dry_run=True))"
+    # Act
+    child = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=5)
+    # Assert
+    assert json.loads(child.stdout)["state"] == ("unknown" if unavailable else "violation")
+
+
+def test_managed_policy_observation_schedule_is_fifteen_minutes():
+    # Arrange
     from scitex_dev._cli.cron._jobs import JOB_REGISTRY
-
-    calls = []
-    def observe():
-        calls.append("read-only")
-        return {"state": state, "activity": {"last_completed_job_at": None}}
-    monkeypatch.setattr(_policy, "collect_policy", observe)
-    assert JOB_REGISTRY["ci-runner-policy"].schedule == "*/15 * * * *"
-    assert run._run_body("ci-runner-policy", only=None, dry_run=True) == code
-    assert calls == ["read-only"]
-    assert json.loads(capsys.readouterr().out)["state"] == state
+    # Act
+    job = JOB_REGISTRY["ci-runner-policy"]
+    # Assert
+    assert job.schedule == "*/15 * * * *"

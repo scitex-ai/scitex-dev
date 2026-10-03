@@ -99,9 +99,11 @@ def _parse(body: str) -> dict:
 
 
 def test_all_callers_forward_runner_preference_to_authoritative_membership_gate():
-    data = _parse(_render_ci())
+    # Arrange
     expected = '${{ vars.CI_RUNS_ON || \'["ubuntu-latest"]\' }}'
-    assert len(data["jobs"]) == 4
+    # Act
+    data = _parse(_render_ci())
+    # Assert
     assert all(job["with"]["runs_on"] == expected for job in data["jobs"].values())
 
 

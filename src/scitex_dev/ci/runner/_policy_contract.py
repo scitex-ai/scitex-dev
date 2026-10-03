@@ -26,7 +26,9 @@ WORKFLOW_HASHES = {'auto-merge-to-develop.yml': 'a28d9b92576590903290809643f21c9
  'runner-admission.yml': 'e4eb6c5cc5aedd8a460380f796047c2ea33a446846235001355697350d36c915'}
 
 
-def qualify_workflows(groups, api) -> dict:
+def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=None) -> dict:
+    hashes = WORKFLOW_HASHES if workflow_hashes is None else workflow_hashes
+    names_expected = NATIVE_WORKFLOWS if native_workflows is None else native_workflows
     result = {"expected": [], "violations": [], "unknown": [], "source": []}
     restricted = [g for g in groups if g.get("restricted_to_workflows") is True]
     if not restricted:
@@ -34,7 +36,7 @@ def qualify_workflows(groups, api) -> dict:
     revisions = set()
     for group in restricted:
         refs = group.get("selected_workflows")
-        if not isinstance(refs, list) or len(refs) != len(NATIVE_WORKFLOWS):
+        if not isinstance(refs, list) or len(refs) != len(names_expected):
             result["violations"].append("reviewed workflow selection must contain exactly seven definitions")
             continue
         names = set()
@@ -45,14 +47,14 @@ def qualify_workflows(groups, api) -> dict:
                 continue
             names.add(m[1])
             revisions.add(m[2])
-        if names != set(NATIVE_WORKFLOWS):
+        if names != set(names_expected):
             result["violations"].append("reviewed workflow definitions differ from the organization contract")
     if result["violations"] or len(revisions) != 1:
         if len(revisions) != 1:
             result["violations"].append("reviewed workflows must share one immutable revision")
         return result
     revision = next(iter(revisions))
-    for name, expected in WORKFLOW_HASHES.items():
+    for name, expected in hashes.items():
         payload = api(f"repos/scitex-ai/.github/contents/.github/workflows/{name}?ref={revision}")
         try:
             if payload.get("type") != "file" or payload.get("encoding") != "base64":
@@ -68,8 +70,8 @@ def qualify_workflows(groups, api) -> dict:
         result["source"].append({"workflow": name, "revision": revision, "sha256": actual})
         if actual != expected:
             result["violations"].append(f"reviewed workflow bytes changed: {name}")
-    if not WORKFLOW_HASHES:
+    if not hashes:
         result["unknown"].append("reviewed workflow byte contract absent")
     if not result["unknown"] and not result["violations"]:
-        result["expected"] = [f"scitex-ai/.github/.github/workflows/{name}@{revision}" for name in NATIVE_WORKFLOWS]
+        result["expected"] = [f"scitex-ai/.github/.github/workflows/{name}@{revision}" for name in names_expected]
     return result

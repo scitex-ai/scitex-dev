@@ -112,10 +112,11 @@ def assess_pool(runners, groups, group_runner_ids, *, expected_workflows=None) -
     return report
 
 
-def _api(endpoint: str):
+def _api(endpoint: str, *, invoke=None):
     """Capture credentials/error bodies privately; persist only fixed diagnostics."""
     try:
-        p = subprocess.run(["gh", "api", endpoint], capture_output=True, text=True, timeout=7)
+        call = subprocess.run if invoke is None else invoke
+        p = call(["gh", "api", endpoint], capture_output=True, text=True, timeout=7)
     except (OSError, subprocess.TimeoutExpired):
         return None
     if p.returncode:
@@ -187,27 +188,28 @@ def collect_activity(runners, api) -> dict:
     return result
 
 
-def collect_policy() -> dict:
+def collect_policy(*, api=None) -> dict:
     from ._policy_contract import qualify_workflows
-    runners = _rows(_api(f"orgs/{ORG}/actions/runners?per_page=100"), "runners")
-    groups = _rows(_api(f"orgs/{ORG}/actions/runner-groups?per_page=100"), "runner_groups")
+    api = _api if api is None else api
+    runners = _rows(api(f"orgs/{ORG}/actions/runners?per_page=100"), "runners")
+    groups = _rows(api(f"orgs/{ORG}/actions/runner-groups?per_page=100"), "runner_groups")
     memberships = {}
     for group in groups or []:
         if not isinstance(group, dict) or type(group.get("id")) is not int:
             groups = None
             break
-        rows = _rows(_api(f"orgs/{ORG}/actions/runner-groups/{group['id']}/runners?per_page=100"), "runners")
+        rows = _rows(api(f"orgs/{ORG}/actions/runner-groups/{group['id']}/runners?per_page=100"), "runners")
         memberships[group["id"]] = None if rows is None else [r.get("id") for r in rows if isinstance(r, dict)]
     cpu_ids = {r.get("id") for r in runners or [] if isinstance(r, dict) and r.get("name") in CPU_RUNNERS}
     selected_groups = [g for g in groups or [] if isinstance(memberships.get(g["id"]), list)
                        and cpu_ids.intersection(memberships[g["id"]])]
-    contract = qualify_workflows(selected_groups, _api)
+    contract = qualify_workflows(selected_groups, api)
     report = assess_pool(runners, groups, memberships, expected_workflows=contract["expected"])
     report["violations"].extend(contract["violations"])
     report["unknown"].extend(contract["unknown"])
     report["state"] = "violation" if report["violations"] else "unknown" if report["unknown"] else "conformant"
     report["workflow_source"] = contract["source"]
-    report["activity"].update(collect_activity(runners, _api))
+    report["activity"].update(collect_activity(runners, api))
     report["organization"] = ORG
     report["observed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
     report["registrations"] = [{k: r.get(k) for k in ("id", "name", "status", "busy")}
