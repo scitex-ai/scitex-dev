@@ -127,10 +127,9 @@ def test_identity_and_admission_gaps_fail(snapshot, boundary, field, value, code
     # Arrange
     snapshot["identity"][boundary][field] = value
     # Act
-    with pytest.raises(ObservationError) as error:
-        evaluate_snapshot(snapshot, now=NOW)
     # Assert
-    assert str(error.value) == code
+    with pytest.raises(ObservationError, match=rf"\A{code}\Z"):
+        evaluate_snapshot(snapshot, now=NOW)
 
 
 @pytest.mark.parametrize("stage,field,value,reason", [
@@ -154,10 +153,9 @@ def test_original_scope_cannot_disappear(snapshot):
     # Arrange
     snapshot["scope"][0]["original_scope"].pop(OPTIONAL_STAGES[-1])
     # Act
-    with pytest.raises(ObservationError) as error:
-        evaluate_snapshot(snapshot, now=NOW)
     # Assert
-    assert str(error.value) == "incomplete_original_scope"
+    with pytest.raises(ObservationError, match=r"\Aincomplete_original_scope\Z"):
+        evaluate_snapshot(snapshot, now=NOW)
 
 
 def test_author_cannot_supply_the_independent_review(snapshot):
@@ -174,20 +172,18 @@ def test_duplicate_card_rows_refuse_instead_of_last_row_winning(snapshot):
     # Arrange
     snapshot["cards"].append(copy.deepcopy(snapshot["cards"][0]))
     # Act
-    with pytest.raises(ObservationError) as error:
-        evaluate_snapshot(snapshot, now=NOW)
     # Assert
-    assert str(error.value) == "selected_card_census_mismatch"
+    with pytest.raises(ObservationError, match=r"\Aselected_card_census_mismatch\Z"):
+        evaluate_snapshot(snapshot, now=NOW)
 
 
 def test_selected_card_missing_is_not_an_empty_board(snapshot):
     # Arrange
     snapshot["cards"] = []
     # Act
-    with pytest.raises(ObservationError) as error:
-        evaluate_snapshot(snapshot, now=NOW)
     # Assert
-    assert str(error.value) == "missing_selected_cards"
+    with pytest.raises(ObservationError, match=r"\Amissing_selected_cards\Z"):
+        evaluate_snapshot(snapshot, now=NOW)
 
 
 @pytest.mark.parametrize("seconds", [-1, 301])
@@ -195,10 +191,9 @@ def test_expired_and_future_snapshots_fail(snapshot, seconds):
     # Arrange
     snapshot["last_observed_UTC"] = (NOW - timedelta(seconds=seconds)).isoformat()
     # Act
-    with pytest.raises(ObservationError) as error:
-        evaluate_snapshot(snapshot, now=NOW)
     # Assert
-    assert str(error.value) == "stale_or_future_snapshot"
+    with pytest.raises(ObservationError, match=r"\Astale_or_future_snapshot\Z"):
+        evaluate_snapshot(snapshot, now=NOW)
 
 
 def test_unknown_heartbeat_separates_fresh_actual_activity(snapshot):
@@ -237,10 +232,9 @@ def test_symlink_snapshot_is_refused_without_read(tmp_path):
     link = tmp_path / "link.json"
     link.symlink_to(target)
     # Act
-    with pytest.raises(OSError) as error:
-        read_snapshot(link)
     # Assert
-    assert error.value.errno == errno.ELOOP
+    with pytest.raises(OSError, match=rf"\[Errno {errno.ELOOP}\]"):
+        read_snapshot(link)
 
 
 def test_oversize_snapshot_refuses_before_JSON_decode(tmp_path):
@@ -250,10 +244,9 @@ def test_oversize_snapshot_refuses_before_JSON_decode(tmp_path):
     path = tmp_path / "oversize.json"
     path.write_bytes(b"not JSON" + b" " * MAX_BYTES)
     # Act
-    with pytest.raises(ObservationError) as error:
-        read_snapshot(path)
     # Assert
-    assert str(error.value) == "invalid_snapshot_file"
+    with pytest.raises(ObservationError, match=r"\Ainvalid_snapshot_file\Z"):
+        read_snapshot(path)
 
 
 def test_absent_snapshot_reports_controller_failure(tmp_path):
@@ -305,10 +298,9 @@ def test_canonical_identity_refusals_remain_explicit(snapshot, boundary, field, 
     # Arrange
     snapshot["identity"][boundary][field] = value
     # Act
-    with pytest.raises(ObservationError) as error:
-        evaluate_snapshot(snapshot, now=NOW)
     # Assert
-    assert str(error.value) == code
+    with pytest.raises(ObservationError, match=rf"\A{code}\Z"):
+        evaluate_snapshot(snapshot, now=NOW)
 
 
 @pytest.mark.parametrize("field,actual_field", [
@@ -324,10 +316,9 @@ def test_numeric_Git_identity_refuses_even_when_all_generations_match(snapshot, 
         proof[field] = value
     card["checkpoints"]["owned_checkout_sync"][actual_field] = value
     # Act
-    with pytest.raises(ObservationError) as error:
-        evaluate_snapshot(snapshot, now=NOW)
     # Assert
-    assert str(error.value) == "missing_full_source_identity"
+    with pytest.raises(ObservationError, match=r"\Amissing_full_source_identity\Z"):
+        evaluate_snapshot(snapshot, now=NOW)
 
 
 @pytest.mark.parametrize("field,actual_field", [

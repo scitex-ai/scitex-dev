@@ -145,25 +145,36 @@ def test_apps_delivery_dispatch_refuses_apply_before_read():
     from scitex_dev._cli.ecosystem._cmds._jobs_cron import _dispatch_federated_job
 
     # Act
-    with pytest.raises(ClickException) as error:
-        _dispatch_federated_job("scitex-dev-apps-delivery-observe", apply=True, all_jobs=[])
     # Assert
-    assert str(error.value) == "apps delivery observer is read-only; --apply is refused"
+    with pytest.raises(ClickException, match=r"\Aapps delivery observer is read-only; --apply is refused\Z"):
+        _dispatch_federated_job("scitex-dev-apps-delivery-observe", apply=True, all_jobs=[])
 
 
-def test_apps_delivery_dispatch_propagates_missing_input(missing_delivery_snapshot, capsys):
+def test_apps_delivery_dispatch_propagates_missing_input(missing_delivery_snapshot):
+    # Arrange
+    from click import ClickException
+    from scitex_dev._cli.ecosystem._cmds._jobs_cron import _dispatch_federated_job
+
+    # Act
+    # Assert
+    with pytest.raises(ClickException, match=r"\Aapps delivery observation failed: snapshot_read_or_format_failure\Z"):
+        _dispatch_federated_job("scitex-dev-apps-delivery-observe", apply=False, all_jobs=[])
+
+
+def test_apps_delivery_dispatch_emits_missing_input_schema(missing_delivery_snapshot, capsys):
     # Arrange
     import json
     from click import ClickException
     from scitex_dev._cli.ecosystem._cmds._jobs_cron import _dispatch_federated_job
 
     # Act
-    with pytest.raises(ClickException) as error:
+    try:
         _dispatch_federated_job("scitex-dev-apps-delivery-observe", apply=False, all_jobs=[])
+    except ClickException:
+        pass  # The separate propagation test checks the exact exception.
     output = json.loads(capsys.readouterr().out)
     # Assert
-    assert (str(error.value), output["exit_code"], output["errors"], output["findings"]) == (
-        "apps delivery observation failed: snapshot_read_or_format_failure",
+    assert (output["exit_code"], output["errors"], output["findings"]) == (
         2, ["snapshot_read_or_format_failure"], [],
     )
 
