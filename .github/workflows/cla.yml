@@ -73,7 +73,7 @@ permissions:
 
 jobs:
   call:
-    uses: scitex-ai/.github/.github/workflows/cla.yml@f5d19f5b7424fcf985137bb6acff54f5d0e11749 # main@2026-08-30
+    uses: scitex-ai/.github/.github/workflows/cla.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7 # reviewed main@2026-10-03
     # NON-DEFAULT ON PURPOSE. The reusable defaults to `bot*,ywatanabe1989`;
     # this repo's inline version also allowlisted `LLEmacs`. Taking the default
     # would silently start demanding a CLA signature from an already-allowlisted
