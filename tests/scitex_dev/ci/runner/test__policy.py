@@ -83,14 +83,14 @@ def test_default_or_unknown_group_cannot_authorize_company_resources(flag, state
     assert result["state"] == state
 
 
-def test_new_company_group_requires_all_five_registered_roles():
+def test_temporary_company_group_is_not_the_final_organization_pool():
     # Arrange
     refs = ["scitex-ai/.github/.github/workflows/runner-health.yml@refs/heads/main"]
     declared = {**group(refs), "id": 8, "name": "scitex-company-ci"}
     # Act
     result = _policy.assess_pool(pool(), [declared], {8: [1, 2, 3, 4, 5]}, expected_workflows=refs)
     # Assert
-    assert result["state"] == "conformant"
+    assert result["state"] == "violation"
 
 
 @pytest.mark.parametrize("runners,groups,memberships,expected", [
@@ -393,8 +393,8 @@ def undeclared_profile(change):
         refs[-1] = refs[0]
     elif change == "extra":
         refs.append(_policy_contract.PREFIX + "extra.yml@refs/heads/main")
-    elif change == "combined":
-        refs += list(_policy_contract.IMMUTABLE_SELECTION)
+    elif change == "partial-transition":
+        refs += list(_policy_contract.IMMUTABLE_SELECTION[:-1])
     else:
         refs[0] = {"foreign": refs[0].replace("scitex-ai/.github", "attacker/repo"),
                    "bare-main": refs[0].replace("refs/heads/main", "main"),
@@ -403,7 +403,7 @@ def undeclared_profile(change):
     return refs
 
 
-@pytest.mark.parametrize("change", ["duplicate", "extra", "foreign", "bare-main", "tag", "arbitrary-sha", "combined"])
+@pytest.mark.parametrize("change", ["duplicate", "extra", "foreign", "bare-main", "tag", "arbitrary-sha", "partial-transition"])
 def test_undeclared_literal_profile_refuses_without_source_requests(change):
     # Arrange
     refs = undeclared_profile(change)
@@ -414,7 +414,7 @@ def test_undeclared_literal_profile_refuses_without_source_requests(change):
     assert requests == []
 
 
-@pytest.mark.parametrize("change", ["duplicate", "extra", "foreign", "bare-main", "tag", "arbitrary-sha", "combined"])
+@pytest.mark.parametrize("change", ["duplicate", "extra", "foreign", "bare-main", "tag", "arbitrary-sha", "partial-transition"])
 def test_undeclared_literal_profile_reports_a_violation(change):
     # Arrange
     refs = undeclared_profile(change)
@@ -532,3 +532,70 @@ def test_immutable_profile_keeps_each_exact_reviewed_revision():
     # Assert
     assert set(requests) == {f"repos/scitex-ai/.github/contents/.github/workflows/{name}?ref={revision}"
                              for name, revision in _policy_contract.IMMUTABLE_REVISIONS.items()}
+
+
+
+def transition_case(*, corrupt=None, move_main=False):
+    """Feed exact public workflow bytes through the existing API adapter."""
+    import gzip
+    fixture = Path(__file__).parent / "fixtures" / "organization-workflow-source-contract.json.gz"
+    payload = json.loads(gzip.decompress(fixture.read_bytes()))
+    main = payload["main"]
+    requests = []
+    branch_reads = 0
+    def api(endpoint):
+        nonlocal branch_reads
+        requests.append(endpoint)
+        if endpoint.endswith("branches/main"):
+            branch_reads += 1
+            revision = "d" * 40 if move_main and branch_reads > 1 else main
+            return {"name": "main", "protected": True, "commit": {"sha": revision}}
+        if endpoint.endswith("/protection"):
+            return protected_main()
+        data = dict(payload["responses"].get(endpoint, {}))
+        if corrupt and endpoint.endswith("/" + corrupt[0] + "?ref=" + corrupt[1]):
+            data["content"] = base64.b64encode(
+                base64.b64decode(data["content"]) + b"# changed\n").decode()
+        return data
+    return list(_policy_contract.TRANSITION_SELECTION), api, requests, main
+
+
+@pytest.mark.parametrize("field,expected", [
+    ("selection", list(_policy_contract.TRANSITION_SELECTION)),
+    ("unknown", []), ("violations", []), ("source_count", 25),
+    ("protection_reads", 2)])
+def test_exact_transition_reads_both_complete_public_source_closures(field, expected):
+    # Arrange
+    refs, api, requests, _main = transition_case()
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], api)
+    observed = {"selection": result["expected"], "unknown": result["unknown"],
+                "violations": result["violations"], "source_count": len(result["source"]),
+                "protection_reads": requests.count("repos/scitex-ai/.github/branches/main/protection")}
+    # Assert
+    assert observed[field] == expected
+
+
+@pytest.mark.parametrize("name,revision", [
+    ("pytest-matrix.yml", "07c3cd6915508f8a84d1c5a9da4373f839f96416"),
+    ("runner-admission.yml", "07c3cd6915508f8a84d1c5a9da4373f839f96416"),
+    ("pytest-matrix.yml", _policy_contract.OLD_REVISION),
+    ("runner-admission.yml", _policy_contract.OLD_REVISION)])
+def test_transition_changed_current_or_immutable_bytes_never_authorize(name, revision):
+    # Arrange
+    refs, api, _requests, _main = transition_case(corrupt=(name, revision))
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], api)
+    # Assert
+    assert (result["expected"], result["violations"]) == (
+        [], ["reviewed workflow bytes changed: " + name])
+
+
+def test_transition_main_move_during_immutable_source_reads_remains_unknown():
+    # Arrange
+    refs, api, _requests, _main = transition_case(move_main=True)
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], api)
+    # Assert
+    assert (result["expected"], result["unknown"]) == (
+        [], ["central main revision changed during source qualification"])
