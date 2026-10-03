@@ -19,7 +19,7 @@ NATIVE_WORKFLOWS = (
 WORKFLOW_HASHES = {'auto-merge-to-develop.yml': 'a28d9b92576590903290809643f21c93f680a6b2a1a8913d6c6e2fed89993de0',
  'cla.yml': '55b422a674acb918d247b3a025bf413fe751de16b85f5f06f1251331c4d98c06',
  'import-smoke.yml': 'df8fb3d63e91612353b3fcbfcaf6f0e43d7c0102f799b48e82d8a47e32956f06',
- 'promote-develop-to-main-on-tag.yml': '2aa7262931ae869a0120a55658aed40bc75a5fe35229826cefcba5343282c9ac',
+ 'promote-develop-to-main-on-tag.yml': '1e3cec556f96612ff987f1bc2969dd145f85ebfff48297a3bf3adccd0b8c0c69',
  'pytest-matrix.yml': 'e822cffc869bde67a19b97755aa5844c2c83ee717c168540562ee0984a72f0ae',
  'quality-audit.yml': 'f44a2e6b5c479c2975d1cedf66738fdbf402a74cf1d8e26340bb9895524e7b4a',
  'rtd-sphinx-build.yml': '51be02f591beeeb5398b6447a7c26f0959e5487cad5b974bf62d2cf56fd51b5d',
