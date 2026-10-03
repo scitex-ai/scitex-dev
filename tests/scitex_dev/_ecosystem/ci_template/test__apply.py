@@ -1,7 +1,7 @@
 """Behavioural tests for ``scitex_dev._ecosystem.ci_template.apply``.
 
 Pins THE single canonical CI mechanism (operator decision, 2026-07-21):
-one thin ``ci.yml`` caller delegating to ``scitex-ai/.github@main``,
+one thin ``ci.yml`` caller delegating to a reviewed immutable org revision,
 runner selection through organization membership admission with a hosted
 default, and superseded/newb-docs workflow cleanup.
 
@@ -28,10 +28,10 @@ from scitex_dev._ecosystem.ci_template import (
 
 #: The four org-level reusable workflows the caller must delegate to.
 ORG_REUSABLE_USES = (
-    "scitex-ai/.github/.github/workflows/pytest-matrix.yml@main",
-    "scitex-ai/.github/.github/workflows/import-smoke.yml@main",
-    "scitex-ai/.github/.github/workflows/quality-audit.yml@main",
-    "scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@main",
+    "scitex-ai/.github/.github/workflows/pytest-matrix.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/import-smoke.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/quality-audit.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
 )
 
 #: Unknown membership/absent preference defaults to GitHub-hosted hardware.
@@ -152,9 +152,9 @@ def test_caller_delegates_to_all_four_org_reusable_workflows():
     # Arrange
     expected_uses = ORG_REUSABLE_USES
     # Act
-    body = _render_ci()
+    uses = tuple(job["uses"] for job in _parse(_render_ci())["jobs"].values())
     # Assert
-    assert all(u in body for u in expected_uses)
+    assert uses == expected_uses
 
 
 def test_caller_jobs_are_thin_delegations_with_no_second_body():
@@ -185,7 +185,7 @@ def test_caller_jobs_are_thin_delegations_with_no_second_body():
         set(job) <= allowed
         and not (set(job) & forbidden)
         and job["uses"].startswith("scitex-ai/.github/.github/workflows/")
-        and job["uses"].endswith("@main")
+        and job["uses"] in ORG_REUSABLE_USES
         for job in jobs
     )
 
@@ -769,7 +769,7 @@ def test_live_apply_overwrites_existing_ci_yml_with_canonical_shape(tmp_path):
     _apply_live(repo)
     # Assert
     content = (repo / ".github" / "workflows" / "ci.yml").read_text()
-    assert "scitex-ai/.github/.github/workflows/pytest-matrix.yml@main" in content
+    assert _parse(content)["jobs"]["pytest-matrix"]["uses"] == ORG_REUSABLE_USES[0]
 
 
 def test_written_ci_yml_is_parseable_yaml(tmp_path):

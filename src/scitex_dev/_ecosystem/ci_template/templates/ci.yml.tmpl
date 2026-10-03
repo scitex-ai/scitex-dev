@@ -4,10 +4,12 @@ name: ci
 # CANONICAL scitex CI — thin org-reusable caller (the ONE per-repo shape).
 # Rendered for <PKG_NAME> by `scitex-dev ecosystem ci-template apply`.
 #
-# Job bodies live ONCE, org-side, in scitex-ai/.github@main — a shared
+# Job bodies live ONCE, org-side, at one reviewed immutable revision — a shared
 # workflow cannot drift per-repo (operator decision, 2026-07-21, superseding
 # the retired consolidated pr-ci.yml/release-ci.yml pair). This file carries
 # only triggers, concurrency, and thin `uses:` calls.
+# Pin the actual production commit qualified after the ordinary source merge;
+# runner-group SHA admission must not assume branch/SHA alias equivalence.
 #
 # Runner policy (operator 2026-10-03): company compute02/03/04 runners are
 # organization-only and require confirmed original actor, triggering actor
@@ -55,23 +57,23 @@ concurrency:
 # workflows that between them want one optional token. Fixed on merit.
 jobs:
   pytest-matrix:
-    uses: scitex-ai/.github/.github/workflows/pytest-matrix.yml@main
+    uses: scitex-ai/.github/.github/workflows/pytest-matrix.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7
     with:
       runs_on: ${{ vars.CI_RUNS_ON || '["ubuntu-latest"]' }}
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   import-smoke:
-    uses: scitex-ai/.github/.github/workflows/import-smoke.yml@main
+    uses: scitex-ai/.github/.github/workflows/import-smoke.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7
     with:
       runs_on: ${{ vars.CI_RUNS_ON || '["ubuntu-latest"]' }}
 
   quality-audit:
-    uses: scitex-ai/.github/.github/workflows/quality-audit.yml@main
+    uses: scitex-ai/.github/.github/workflows/quality-audit.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7
     with:
       runs_on: ${{ vars.CI_RUNS_ON || '["ubuntu-latest"]' }}
 
   rtd-sphinx-build:
-    uses: scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@main
+    uses: scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7
     with:
       runs_on: ${{ vars.CI_RUNS_ON || '["ubuntu-latest"]' }}
