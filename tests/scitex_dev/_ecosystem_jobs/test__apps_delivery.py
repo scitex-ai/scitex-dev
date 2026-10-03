@@ -11,8 +11,13 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from scitex_dev._ecosystem_jobs._apps_delivery import (
-    CORE_STAGES, OPTIONAL_STAGES, SCHEMA, ObservationError,
-    evaluate_snapshot, read_snapshot, run_once,
+    CORE_STAGES,
+    OPTIONAL_STAGES,
+    SCHEMA,
+    ObservationError,
+    evaluate_snapshot,
+    read_snapshot,
+    run_once,
 )
 
 NOW = datetime(2026, 10, 3, 14, 0, tzinfo=timezone.utc)

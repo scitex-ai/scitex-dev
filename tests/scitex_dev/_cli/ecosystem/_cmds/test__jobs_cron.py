@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """CLI tests for ``scitex-dev ecosystem cron``.
 
 The ``list`` command runs against the real built-in jobs (no patching),
@@ -126,6 +125,7 @@ def test_cron_list_shows_provider_source_label(runner, installed_job_provider):
 def missing_delivery_snapshot(tmp_path):
     """Only this optional job's explicit input selector, restored at teardown."""
     import os
+
     from scitex_dev._ecosystem_jobs._apps_delivery import SNAPSHOT_ENV
 
     saved = os.environ.get(SNAPSHOT_ENV)
@@ -142,6 +142,7 @@ def missing_delivery_snapshot(tmp_path):
 def test_apps_delivery_dispatch_refuses_apply_before_read():
     # Arrange
     from click import ClickException
+
     from scitex_dev._cli.ecosystem._cmds._jobs_cron import _dispatch_federated_job
 
     # Act
@@ -153,6 +154,7 @@ def test_apps_delivery_dispatch_refuses_apply_before_read():
 def test_apps_delivery_dispatch_propagates_missing_input(missing_delivery_snapshot):
     # Arrange
     from click import ClickException
+
     from scitex_dev._cli.ecosystem._cmds._jobs_cron import _dispatch_federated_job
 
     # Act
@@ -164,7 +166,9 @@ def test_apps_delivery_dispatch_propagates_missing_input(missing_delivery_snapsh
 def test_apps_delivery_dispatch_emits_missing_input_schema(missing_delivery_snapshot, capsys):
     # Arrange
     import json
+
     from click import ClickException
+
     from scitex_dev._cli.ecosystem._cmds._jobs_cron import _dispatch_federated_job
 
     # Act
