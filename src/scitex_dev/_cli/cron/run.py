@@ -63,11 +63,12 @@ def _run_body(name: str, *, only: str | None, dry_run: bool) -> int:
 
     if name == "ci-runner-policy":
         import json
-        from ...ci.runner._policy import collect_policy
 
-        report = collect_policy()
+        from ...ci.runner._policy_observer import observe_once
+
+        report = observe_once(dry_run=dry_run)
         click.echo(json.dumps(report, sort_keys=True))
-        return 0 if report["state"] == "conformant" else 1
+        return report["exit_code"]
 
     if name == "ci-watch":
         results = _ci_watch.run_once(only_agent=only, dry_run=dry_run)
