@@ -1,7 +1,7 @@
 """Finite literal runner selections, reviewed bytes and fresh main protection.
 
 Branch and SHA selections retain their distinct literal spelling. Only the
-ten protected-main definitions or the explicit transitional SHA profile are
+eleven protected-main definitions or the explicit transitional SHA profile are
 qualified; local reusable dependencies are read at the defining commit.
 This observer never changes workflow access or infers actual job admission.
 """
@@ -17,7 +17,7 @@ NATIVE_WORKFLOWS = (
     "auto-merge-to-develop.yml", "cla.yml", "import-smoke.yml",
     "promote-develop-to-main-on-tag.yml", "pytest-matrix.yml",
     "quality-audit.yml", "rtd-sphinx-build.yml",
-    "ci-sif-matrix.yml", "writer-release-sif.yml", "fd-fclones-integration.yml",
+    "ci-sif-matrix.yml", "writer-release-sif.yml", "fd-fclones-integration.yml", "runner-health.yml",
 )
 # Exact hashes are generated from the reviewed organization source packet.
 WORKFLOW_HASHES = {'auto-merge-to-develop.yml': 'a28d9b92576590903290809643f21c93f680a6b2a1a8913d6c6e2fed89993de0',
@@ -27,10 +27,11 @@ WORKFLOW_HASHES = {'auto-merge-to-develop.yml': 'a28d9b92576590903290809643f21c9
  'pytest-matrix.yml': 'e822cffc869bde67a19b97755aa5844c2c83ee717c168540562ee0984a72f0ae',
  'quality-audit.yml': 'f44a2e6b5c479c2975d1cedf66738fdbf402a74cf1d8e26340bb9895524e7b4a',
  'rtd-sphinx-build.yml': '51be02f591beeeb5398b6447a7c26f0959e5487cad5b974bf62d2cf56fd51b5d',
- 'runner-admission.yml': 'e4eb6c5cc5aedd8a460380f796047c2ea33a446846235001355697350d36c915',
+ 'runner-admission.yml': '9740f196effef6185b4ea3743672a058de19e4833948ec25b6657436211219d3',
  'ci-sif-matrix.yml': 'f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1',
  'writer-release-sif.yml': '6ba940f2831159a4a3401746d29b8acdfc74fe89e336fe1dd7065bf21b85d1bb',
- 'fd-fclones-integration.yml': 'a183e685a397fad2fad66375b0a9a7a87df945d9048d1277d1a605a9ba3a36c5'}
+ 'fd-fclones-integration.yml': 'a183e685a397fad2fad66375b0a9a7a87df945d9048d1277d1a605a9ba3a36c5',
+ 'runner-health.yml': '71462e650c7da4509c5b73ad7d2783c68545567d2f5447074002f8e762dc0cc4'}
 
 PREFIX = "scitex-ai/.github/.github/workflows/"
 BRANCH = "refs/heads/main"
@@ -39,15 +40,19 @@ SIF_REVISION = "e09a4f6746c79c7cc64ca6503350a8096411b25d"
 NEW_REVISION = "442f4e5dcd938c0297e36a5f07461d809f9416ff"
 IMMUTABLE_REVISIONS = {
     name: OLD_REVISION if index < 7 else SIF_REVISION if index == 7 else NEW_REVISION
-    for index, name in enumerate(NATIVE_WORKFLOWS)
+    for index, name in enumerate(NATIVE_WORKFLOWS[:10])
 }
 BRANCH_SELECTION = tuple(PREFIX + name + "@" + BRANCH for name in NATIVE_WORKFLOWS)
-IMMUTABLE_SELECTION = tuple(PREFIX + name + "@" + IMMUTABLE_REVISIONS[name] for name in NATIVE_WORKFLOWS)
+IMMUTABLE_SELECTION = tuple(PREFIX + name + "@" + revision for name, revision in IMMUTABLE_REVISIONS.items())
+IMMUTABLE_ADMISSION_HASH = "e4eb6c5cc5aedd8a460380f796047c2ea33a446846235001355697350d36c915"
 IMMUTABLE_HASHES = {
     OLD_REVISION: {**{name: WORKFLOW_HASHES[name] for name in (*NATIVE_WORKFLOWS[:7], "runner-admission.yml")},
-                   "import-smoke.yml": "df8fb3d63e91612353b3fcbfcaf6f0e43d7c0102f799b48e82d8a47e32956f06"},
-    SIF_REVISION: {name: WORKFLOW_HASHES[name] for name in ("ci-sif-matrix.yml", "runner-admission.yml")},
-    NEW_REVISION: {name: WORKFLOW_HASHES[name] for name in (*NATIVE_WORKFLOWS[8:], "runner-admission.yml")},
+                   "import-smoke.yml": "df8fb3d63e91612353b3fcbfcaf6f0e43d7c0102f799b48e82d8a47e32956f06",
+                   "runner-admission.yml": IMMUTABLE_ADMISSION_HASH},
+    SIF_REVISION: {**{name: WORKFLOW_HASHES[name] for name in ("ci-sif-matrix.yml", "runner-admission.yml")},
+                   "runner-admission.yml": IMMUTABLE_ADMISSION_HASH},
+    NEW_REVISION: {**{name: WORKFLOW_HASHES[name] for name in (*NATIVE_WORKFLOWS[8:10], "runner-admission.yml")},
+                   "runner-admission.yml": IMMUTABLE_ADMISSION_HASH},
 }
 
 
@@ -229,7 +234,7 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
         expected = BRANCH_SELECTION
     else:
         for revision, hashes in IMMUTABLE_HASHES.items():
-            names = [name for name in NATIVE_WORKFLOWS if IMMUTABLE_REVISIONS[name] == revision]
+            names = [name for name, selected in IMMUTABLE_REVISIONS.items() if selected == revision]
             _source_closure(api, names, revision, hashes, result)
         expected = IMMUTABLE_SELECTION
     if not result["unknown"] and not result["violations"]:
