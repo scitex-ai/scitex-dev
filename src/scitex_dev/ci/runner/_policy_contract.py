@@ -1,8 +1,9 @@
 """Finite literal runner selections, reviewed bytes and fresh main protection.
 
 Branch and SHA selections retain their distinct literal spelling. Only the
-eleven protected-main definitions or the explicit transitional SHA profile are
-qualified; local reusable dependencies are read at the defining commit.
+eleven protected-main definitions, the explicit transitional SHA profile, or
+their exact union are qualified. Local reusable dependencies are read at the
+defining commit.
 This observer never changes workflow access or infers actual job admission.
 """
 from __future__ import annotations
@@ -27,7 +28,7 @@ WORKFLOW_HASHES = {'auto-merge-to-develop.yml': 'a28d9b92576590903290809643f21c9
  'pytest-matrix.yml': 'e822cffc869bde67a19b97755aa5844c2c83ee717c168540562ee0984a72f0ae',
  'quality-audit.yml': 'f44a2e6b5c479c2975d1cedf66738fdbf402a74cf1d8e26340bb9895524e7b4a',
  'rtd-sphinx-build.yml': '51be02f591beeeb5398b6447a7c26f0959e5487cad5b974bf62d2cf56fd51b5d',
- 'runner-admission.yml': '9740f196effef6185b4ea3743672a058de19e4833948ec25b6657436211219d3',
+ 'runner-admission.yml': 'e4eb6c5cc5aedd8a460380f796047c2ea33a446846235001355697350d36c915',
  'ci-sif-matrix.yml': 'f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1',
  'writer-release-sif.yml': '6ba940f2831159a4a3401746d29b8acdfc74fe89e336fe1dd7065bf21b85d1bb',
  'fd-fclones-integration.yml': 'a183e685a397fad2fad66375b0a9a7a87df945d9048d1277d1a605a9ba3a36c5',
@@ -44,6 +45,7 @@ IMMUTABLE_REVISIONS = {
 }
 BRANCH_SELECTION = tuple(PREFIX + name + "@" + BRANCH for name in NATIVE_WORKFLOWS)
 IMMUTABLE_SELECTION = tuple(PREFIX + name + "@" + revision for name, revision in IMMUTABLE_REVISIONS.items())
+TRANSITION_SELECTION = BRANCH_SELECTION + IMMUTABLE_SELECTION
 IMMUTABLE_ADMISSION_HASH = "e4eb6c5cc5aedd8a460380f796047c2ea33a446846235001355697350d36c915"
 IMMUTABLE_HASHES = {
     OLD_REVISION: {**{name: WORKFLOW_HASHES[name] for name in (*NATIVE_WORKFLOWS[:7], "runner-admission.yml")},
@@ -212,7 +214,7 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
         refs = group.get("selected_workflows")
         if (not isinstance(refs, list) or any(not isinstance(ref, str) for ref in refs)
                 or len(set(refs)) != len(refs)
-                or set(refs) not in (set(BRANCH_SELECTION), set(IMMUTABLE_SELECTION))):
+                or set(refs) not in (set(BRANCH_SELECTION), set(IMMUTABLE_SELECTION), set(TRANSITION_SELECTION))):
             result["violations"].append("selected workflows differ from the finite literal organization profiles")
             continue
         selections.append(set(refs))
@@ -221,22 +223,28 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
     if any(refs != selections[0] for refs in selections):
         result["violations"].append("organization groups select different reviewed profiles")
         return result
-    if selections[0] == set(BRANCH_SELECTION):
+    selected = selections[0]
+    branch_selected = bool(selected.intersection(BRANCH_SELECTION))
+    immutable_selected = bool(selected.intersection(IMMUTABLE_SELECTION))
+    revision = None
+    if branch_selected:
         revision = _main(api, result)
         _protection(api, result)
         if revision is None or result["unknown"] or result["violations"]:
             return result
         _source_closure(api, NATIVE_WORKFLOWS, revision, WORKFLOW_HASHES, result)
+    if immutable_selected:
+        for fixed_revision, hashes in IMMUTABLE_HASHES.items():
+            names = [name for name, selected_revision in IMMUTABLE_REVISIONS.items()
+                     if selected_revision == fixed_revision]
+            _source_closure(api, names, fixed_revision, hashes, result)
+    if branch_selected:
         _protection(api, result)
         after = _main(api, result)
         if after is not None and after != revision:
             result["unknown"].append("central main revision changed during source qualification")
-        expected = BRANCH_SELECTION
-    else:
-        for revision, hashes in IMMUTABLE_HASHES.items():
-            names = [name for name, selected in IMMUTABLE_REVISIONS.items() if selected == revision]
-            _source_closure(api, names, revision, hashes, result)
-        expected = IMMUTABLE_SELECTION
+    expected = (TRANSITION_SELECTION if branch_selected and immutable_selected
+                else BRANCH_SELECTION if branch_selected else IMMUTABLE_SELECTION)
     if not result["unknown"] and not result["violations"]:
         result["expected"] = list(expected)
     return result

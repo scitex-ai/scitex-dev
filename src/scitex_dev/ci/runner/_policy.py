@@ -19,7 +19,7 @@ from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
 ORG = "scitex-ai"
 CPU_RUNNERS = ("scitex-ci-02", "scitex-ci-03", "scitex-ci-04")
 COMPANY_RUNNERS = (*CPU_RUNNERS, "scitex-docker-03", "scitex-ci-04-02")
-REVIEWED_GROUPS = {6: "Organization", 8: "scitex-company-ci"}
+REVIEWED_GROUPS = {6: "Organization"}
 HOSTED_RUNS_ON = '["ubuntu-latest"]'
 
 
