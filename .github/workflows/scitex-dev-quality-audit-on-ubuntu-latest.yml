@@ -27,8 +27,10 @@ on:
     branches: [main, develop]
 
 jobs:
-  audit:
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
+  workspace-audit:
+    # Keep the full original self-audit and editable-source/interpreter fences.
+    # This hosted job cannot bypass the native reusable-workflow group boundary.
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -201,3 +203,21 @@ jobs:
           PYTHONFAULTHANDLER: "1"
           PYTHONUNBUFFERED: "1"
         run: '"$RUNNER_TEMP/venv/bin/python" -m scitex_dev ecosystem audit-all scitex-dev'
+
+      - name: Qualify the public CI adapter and status bridges
+        run: '"$RUNNER_TEMP/venv/bin/python" .github/tests/test_dev_ci_adapters.py -v'
+
+  audit:
+    # Original required name reflects only the genuine full own-code audit.
+    needs: [workspace-audit]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Propagate the full self-audit result
+        env:
+          WORKSPACE_AUDIT_RESULT: ${{ needs.workspace-audit.result }}
+        run: |
+          set -euo pipefail
+          test "$WORKSPACE_AUDIT_RESULT" = success

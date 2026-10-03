@@ -28,11 +28,11 @@ WORKFLOW_HASHES = {'auto-merge-to-develop.yml': 'a28d9b92576590903290809643f21c9
  'pytest-matrix.yml': 'e822cffc869bde67a19b97755aa5844c2c83ee717c168540562ee0984a72f0ae',
  'quality-audit.yml': 'f44a2e6b5c479c2975d1cedf66738fdbf402a74cf1d8e26340bb9895524e7b4a',
  'rtd-sphinx-build.yml': '51be02f591beeeb5398b6447a7c26f0959e5487cad5b974bf62d2cf56fd51b5d',
- 'runner-admission.yml': 'e4eb6c5cc5aedd8a460380f796047c2ea33a446846235001355697350d36c915',
+ 'runner-admission.yml': 'f2e92f6a50526c2133cd12ae7c5cbd98ce2922354bd85c628ca48aad4acc6d18',
  'ci-sif-matrix.yml': 'f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1',
  'writer-release-sif.yml': '6ba940f2831159a4a3401746d29b8acdfc74fe89e336fe1dd7065bf21b85d1bb',
  'fd-fclones-integration.yml': 'a183e685a397fad2fad66375b0a9a7a87df945d9048d1277d1a605a9ba3a36c5',
- 'runner-health.yml': '71462e650c7da4509c5b73ad7d2783c68545567d2f5447074002f8e762dc0cc4'}
+ 'runner-health.yml': 'e1bbd6cfa7f9c576898ffde263931f5d7ab6ab1c034197b5e03a0607897505d7'}
 
 PREFIX = "scitex-ai/.github/.github/workflows/"
 BRANCH = "refs/heads/main"

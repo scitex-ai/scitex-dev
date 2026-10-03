@@ -577,8 +577,8 @@ def test_exact_transition_reads_both_complete_public_source_closures(field, expe
 
 
 @pytest.mark.parametrize("name,revision", [
-    ("pytest-matrix.yml", "07c3cd6915508f8a84d1c5a9da4373f839f96416"),
-    ("runner-admission.yml", "07c3cd6915508f8a84d1c5a9da4373f839f96416"),
+    ("pytest-matrix.yml", "d7d96c34d68cdfbb5503a933591f7748b5aa30ee"),
+    ("runner-admission.yml", "d7d96c34d68cdfbb5503a933591f7748b5aa30ee"),
     ("pytest-matrix.yml", _policy_contract.OLD_REVISION),
     ("runner-admission.yml", _policy_contract.OLD_REVISION)])
 def test_transition_changed_current_or_immutable_bytes_never_authorize(name, revision):
