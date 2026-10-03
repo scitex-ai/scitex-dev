@@ -244,3 +244,269 @@ def test_managed_policy_observation_schedule_is_fifteen_minutes():
     job = JOB_REGISTRY["ci-runner-policy"]
     # Assert
     assert job.schedule == "*/15 * * * *"
+
+
+def protected_main():
+    return {"required_pull_request_reviews": {"required_approving_review_count": 0},
+            "required_status_checks": {"strict": True, "checks": [{"context": "pytest", "app_id": 15368}]},
+            "enforce_admins": {"enabled": True}, "allow_force_pushes": {"enabled": False},
+            "allow_deletions": {"enabled": False}}
+
+
+def empty_contract_report():
+    return {"expected": [], "source": [], "violations": [], "unknown": []}
+
+
+def test_zero_approval_count_retains_mandatory_PR_and_strict_pinned_check():
+    # Arrange
+    result = empty_contract_report()
+    # Act
+    _policy_contract._protection(lambda endpoint: protected_main(), result)
+    # Assert
+    assert result == empty_contract_report()
+
+
+@pytest.mark.parametrize("field,value", [("enforce_admins", False), ("allow_force_pushes", True), ("allow_deletions", True)])
+def test_known_weakened_protection_is_a_violation(field, value):
+    # Arrange
+    protection = protected_main()
+    protection[field]["enabled"] = value
+    result = empty_contract_report()
+    # Act
+    _policy_contract._protection(lambda endpoint: protection, result)
+    # Assert
+    assert result["violations"] == ["central main protection weakened: " + field]
+
+
+@pytest.mark.parametrize("changes", [{"strict": False}, {"checks": []}, {"checks": [{"context": "pytest", "app_id": None}]},
+                                     {"checks": [{"context": "pytest", "app_id": 99}]}])
+def test_known_absent_strict_GitHub_check_is_a_violation(changes):
+    # Arrange
+    protection = protected_main()
+    protection["required_status_checks"].update(changes)
+    result = empty_contract_report()
+    # Act
+    _policy_contract._protection(lambda endpoint: protection, result)
+    # Assert
+    assert result["violations"] == ["central main strict GitHub pytest protection weakened"]
+
+
+@pytest.mark.parametrize("payload", [None, {}, "PRIVATE_BODY_DO_NOT_EMIT", {"message": "PRIVATE_BODY_DO_NOT_EMIT"}])
+def test_unavailable_protection_remains_unknown_without_private_payload(payload):
+    # Arrange
+    result = empty_contract_report()
+    # Act
+    _policy_contract._protection(lambda endpoint: payload, result)
+    # Assert
+    assert result["unknown"]
+
+
+@pytest.mark.parametrize("field", ["required_pull_request_reviews", "required_status_checks"])
+def test_known_disabled_required_protection_is_a_violation(field):
+    # Arrange
+    protection = protected_main()
+    protection[field] = None
+    result = empty_contract_report()
+    # Act
+    _policy_contract._protection(lambda endpoint: protection, result)
+    # Assert
+    assert result["violations"]
+
+
+@pytest.mark.parametrize("field,value", [("required_pull_request_reviews", "malformed"),
+                                       ("required_status_checks", {"strict": "yes", "checks": []}),
+                                       ("required_status_checks", {"strict": True, "checks": [{"context": "pytest", "app_id": "15368"}]})])
+def test_malformed_protection_is_unknown(field, value):
+    # Arrange
+    protection = protected_main()
+    protection[field] = value
+    result = empty_contract_report()
+    # Act
+    _policy_contract._protection(lambda endpoint: protection, result)
+    # Assert
+    assert result["unknown"]
+
+
+@pytest.mark.parametrize("payload", [None, {}, {"name": "main", "protected": True, "commit": {"sha": "short"}},
+                                     {"name": "main", "protected": None, "commit": {"sha": "a" * 40}}])
+def test_branch_revision_and_protection_need_typed_complete_evidence(payload):
+    # Arrange
+    result = empty_contract_report()
+    # Act
+    _policy_contract._main(lambda endpoint: payload, result)
+    # Assert
+    assert result["unknown"] == ["central main revision/protection unavailable"]
+
+
+def test_known_unprotected_main_is_a_violation():
+    # Arrange
+    result = empty_contract_report()
+    # Act
+    _policy_contract._main(lambda endpoint: {"name": "main", "protected": False, "commit": {"sha": "a" * 40}}, result)
+    # Assert
+    assert result["violations"] == ["central main is not protected"]
+
+
+def test_protected_main_literal_is_accepted_only_with_an_explicit_contract():
+    # Arrange
+    refs = list(_policy_contract.BRANCH_SELECTION)
+    # Act
+    result = _policy.assess_pool(pool(), [group(refs)], {6: [1, 2, 3]}, expected_workflows=refs)
+    # Assert
+    assert result["state"] == "conformant"
+
+
+def test_duplicate_literal_ref_does_not_gain_pool_authorization():
+    # Arrange
+    refs = list(_policy_contract.BRANCH_SELECTION)
+    # Act
+    result = _policy.assess_pool(pool(), [group(refs + refs[:1])], {6: [1, 2, 3]}, expected_workflows=refs)
+    # Assert
+    assert result["state"] == "violation"
+
+
+def undeclared_profile(change):
+    refs = list(_policy_contract.BRANCH_SELECTION)
+    if change == "duplicate":
+        refs[-1] = refs[0]
+    elif change == "extra":
+        refs.append(_policy_contract.PREFIX + "extra.yml@refs/heads/main")
+    elif change == "combined":
+        refs += list(_policy_contract.IMMUTABLE_SELECTION)
+    else:
+        refs[0] = {"foreign": refs[0].replace("scitex-ai/.github", "attacker/repo"),
+                   "bare-main": refs[0].replace("refs/heads/main", "main"),
+                   "tag": refs[0].replace("refs/heads/main", "refs/tags/v1"),
+                   "arbitrary-sha": refs[0].replace("refs/heads/main", "a" * 40)}[change]
+    return refs
+
+
+@pytest.mark.parametrize("change", ["duplicate", "extra", "foreign", "bare-main", "tag", "arbitrary-sha", "combined"])
+def test_undeclared_literal_profile_refuses_without_source_requests(change):
+    # Arrange
+    refs = undeclared_profile(change)
+    requests = []
+    # Act
+    _policy_contract.qualify_workflows([group(refs)], lambda endpoint: requests.append(endpoint))
+    # Assert
+    assert requests == []
+
+
+@pytest.mark.parametrize("change", ["duplicate", "extra", "foreign", "bare-main", "tag", "arbitrary-sha", "combined"])
+def test_undeclared_literal_profile_reports_a_violation(change):
+    # Arrange
+    refs = undeclared_profile(change)
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], lambda endpoint: None)
+    # Assert
+    assert result["violations"] == ["selected workflows differ from the finite literal organization profiles"]
+
+
+def test_private_protection_error_body_is_never_part_of_the_report():
+    # Arrange
+    private = "PRIVATE_PROTECTION_BODY_DO_NOT_EMIT"
+    result = empty_contract_report()
+    # Act
+    _policy_contract._protection(lambda endpoint: {"message": private}, result)
+    # Assert
+    assert private not in json.dumps(result)
+
+
+def test_branch_revision_race_stays_unknown():
+    # Arrange
+    revisions = iter(("a" * 40, "b" * 40))
+    def api(endpoint):
+        if endpoint.endswith("branches/main"):
+            return {"name": "main", "protected": True, "commit": {"sha": next(revisions)}}
+        if endpoint.endswith("/protection"):
+            return protected_main()
+        return None
+    # Act
+    result = _policy_contract.qualify_workflows([group(list(_policy_contract.BRANCH_SELECTION))], api)
+    # Assert
+    assert "central main revision changed during source qualification" in result["unknown"]
+
+
+def test_protection_weakened_during_source_reads_is_a_violation():
+    # Arrange
+    changed = protected_main()
+    changed["allow_deletions"]["enabled"] = True
+    protections = iter((protected_main(), changed))
+    def api(endpoint):
+        if endpoint.endswith("branches/main"):
+            return {"name": "main", "protected": True, "commit": {"sha": "a" * 40}}
+        return next(protections) if endpoint.endswith("/protection") else None
+    # Act
+    result = _policy_contract.qualify_workflows([group(list(_policy_contract.BRANCH_SELECTION))], api)
+    # Assert
+    assert "central main protection weakened: allow_deletions" in result["violations"]
+
+
+def dependency_case():
+    bodies = {"pytest-matrix.yml": b"on:\n  workflow_call:\njobs:\n  admission:\n    uses: ./.github/workflows/runner-admission.yml\n",
+              "runner-admission.yml": b"on:\n  workflow_call:\njobs:\n  gate:\n    runs-on: ubuntu-latest\n"}
+    hashes = {name: hashlib.sha256(body).hexdigest() for name, body in bodies.items()}
+    def api(endpoint):
+        name = endpoint.split("/")[-1].split("?")[0]
+        return {"type": "file", "encoding": "base64", "content": base64.b64encode(bodies[name]).decode()}
+    return bodies, hashes, api
+
+
+def test_local_reusable_dependency_is_read_at_the_defining_commit():
+    # Arrange
+    _bodies, hashes, api = dependency_case()
+    requests = []
+    result = empty_contract_report()
+    def observed(endpoint):
+        requests.append(endpoint)
+        return api(endpoint)
+    # Act
+    _policy_contract._source_closure(observed, ["pytest-matrix.yml"], "a" * 40, hashes, result)
+    # Assert
+    assert requests == [f"repos/scitex-ai/.github/contents/.github/workflows/{name}?ref=" + "a" * 40
+                        for name in ("pytest-matrix.yml", "runner-admission.yml")]
+
+
+def test_changed_local_admission_bytes_are_a_violation():
+    # Arrange
+    bodies, hashes, api = dependency_case()
+    bodies["runner-admission.yml"] += b"# changed\n"
+    result = empty_contract_report()
+    # Act
+    _policy_contract._source_closure(api, ["pytest-matrix.yml"], "a" * 40, hashes, result)
+    # Assert
+    assert result["violations"] == ["reviewed workflow bytes changed: runner-admission.yml"]
+
+
+def test_unreviewed_local_dependency_cannot_add_authority():
+    # Arrange
+    _bodies, hashes, api = dependency_case()
+    hashes.pop("runner-admission.yml")
+    result = empty_contract_report()
+    # Act
+    _policy_contract._source_closure(api, ["pytest-matrix.yml"], "a" * 40, hashes, result)
+    # Assert
+    assert result["violations"] == ["local reusable dependency outside reviewed byte contract"]
+
+
+@pytest.mark.parametrize("payload", [None, {"type": "file", "encoding": "base64", "content": "!not-base64"},
+                                     {"type": "file", "encoding": "base64", "content": "A" * (256 * 1024 + 1)}])
+def test_missing_invalid_or_oversized_source_is_unknown(payload):
+    # Arrange
+    result = empty_contract_report()
+    # Act
+    _policy_contract._source_closure(lambda endpoint: payload, ["pytest-matrix.yml"], "a" * 40,
+                                   {"pytest-matrix.yml": "0" * 64}, result)
+    # Assert
+    assert result["unknown"] == ["reviewed workflow bytes unavailable: pytest-matrix.yml"]
+
+
+def test_immutable_profile_keeps_each_exact_reviewed_revision():
+    # Arrange
+    requests = []
+    # Act
+    _policy_contract.qualify_workflows([group(list(_policy_contract.IMMUTABLE_SELECTION))],
+                                     lambda endpoint: requests.append(endpoint))
+    # Assert
+    assert set(requests) == {f"repos/scitex-ai/.github/contents/.github/workflows/{name}?ref={revision}"
+                             for name, revision in _policy_contract.IMMUTABLE_REVISIONS.items()}

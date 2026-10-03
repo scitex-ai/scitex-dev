@@ -100,10 +100,12 @@ def assess_pool(runners, groups, group_runner_ids, *, expected_workflows=None) -
         if group.get("restricted_to_workflows") is not True or not isinstance(refs, list) or not refs:
             report["violations"].append(f"group {group['id']}: unrestricted workflow access")
             continue
+        if len({ref for ref in refs if isinstance(ref, str)}) != len(refs):
+            report["violations"].append(f"group {group['id']}: selected workflows contain duplicate or malformed refs")
         if any(not isinstance(ref, str) or not re.fullmatch(
-                rf"{ORG}/\.github/\.github/workflows/[A-Za-z0-9_-]+\.ya?ml@[a-f0-9]{{40}}", ref)
+                rf"{ORG}/\.github/\.github/workflows/[A-Za-z0-9_-]+\.ya?ml@(?:[a-f0-9]{{40}}|refs/heads/main)", ref)
                for ref in refs):
-            report["violations"].append(f"group {group['id']}: workflow access is not pinned to organization revisions")
+            report["violations"].append(f"group {group['id']}: workflow access has no qualified organization ref")
         if not expected:
             report["unknown"].append("reviewed membership-admission workflow contract absent")
         elif set(refs) != set(expected):
