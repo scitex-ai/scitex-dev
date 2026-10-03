@@ -1,9 +1,9 @@
 """Behavioural tests for ``scitex_dev._ecosystem.ci_template.apply``.
 
 Pins THE single canonical CI mechanism (operator decision, 2026-07-21):
-one thin ``ci.yml`` caller delegating to ``scitex-ai/.github@main``,
-runner selection via ``vars.CI_RUNS_ON`` with a self-hosted default,
-never ubuntu-latest, superseded/newb-docs workflow cleanup.
+one thin ``ci.yml`` caller delegating to a reviewed immutable org revision,
+runner selection through organization membership admission with a hosted
+default, and superseded/newb-docs workflow cleanup.
 
 Each test follows AAA + asserts ONE observable property (STX-TQ002 /
 STX-TQ007). No ``unittest.mock`` — the apply function exposes injection
@@ -28,14 +28,14 @@ from scitex_dev._ecosystem.ci_template import (
 
 #: The four org-level reusable workflows the caller must delegate to.
 ORG_REUSABLE_USES = (
-    "scitex-ai/.github/.github/workflows/pytest-matrix.yml@main",
-    "scitex-ai/.github/.github/workflows/import-smoke.yml@main",
-    "scitex-ai/.github/.github/workflows/quality-audit.yml@main",
-    "scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@main",
+    "scitex-ai/.github/.github/workflows/pytest-matrix.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/import-smoke.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/quality-audit.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
 )
 
-#: The one sanctioned self-hosted runner default.
-CI_RUNS_ON_DEFAULT = '["self-hosted","Linux","X64","scitex-ci"]'
+#: Unknown membership/absent preference defaults to GitHub-hosted hardware.
+HOSTED_DEFAULT = '["ubuntu-latest"]'
 
 
 # --------------------------------------------------------------------------- #
@@ -98,6 +98,15 @@ def _parse(body: str) -> dict:
     return yaml.safe_load(body)
 
 
+def test_all_callers_forward_runner_preference_to_authoritative_membership_gate():
+    # Arrange
+    expected = '${{ vars.CI_RUNS_ON || \'["ubuntu-latest"]\' }}'
+    # Act
+    data = _parse(_render_ci())
+    # Assert
+    assert all(job["with"]["runs_on"] == expected for job in data["jobs"].values())
+
+
 # --------------------------------------------------------------------------- #
 # Render — placeholder substitution
 # --------------------------------------------------------------------------- #
@@ -143,9 +152,9 @@ def test_caller_delegates_to_all_four_org_reusable_workflows():
     # Arrange
     expected_uses = ORG_REUSABLE_USES
     # Act
-    body = _render_ci()
+    uses = tuple(job["uses"] for job in _parse(_render_ci())["jobs"].values())
     # Assert
-    assert all(u in body for u in expected_uses)
+    assert uses == expected_uses
 
 
 def test_caller_jobs_are_thin_delegations_with_no_second_body():
@@ -176,7 +185,7 @@ def test_caller_jobs_are_thin_delegations_with_no_second_body():
         set(job) <= allowed
         and not (set(job) & forbidden)
         and job["uses"].startswith("scitex-ai/.github/.github/workflows/")
-        and job["uses"].endswith("@main")
+        and job["uses"] in ORG_REUSABLE_USES
         for job in jobs
     )
 
@@ -225,24 +234,23 @@ def test_caller_carries_ci_runs_on_runner_selection_contract():
     assert expected in body
 
 
-def test_caller_carries_self_hosted_default_label_set():
+def test_caller_carries_hosted_default_label_set():
     # Arrange
-    expected = CI_RUNS_ON_DEFAULT
+    expected = HOSTED_DEFAULT
     # Act
     body = _render_ci()
     # Assert
     assert expected in body
 
 
-def test_caller_never_mentions_ubuntu_latest():
-    # PS-169: GitHub-hosted runners are forbidden — the emitted body must
-    # not carry ubuntu-latest in any form, comment included.
+def test_caller_cannot_declare_native_job_outside_authoritative_reusables():
+    # Operator 2026-10-03 supersedes the old hosted-prohibition assertion.
     # Arrange
-    forbidden = "ubuntu-latest"
+    doc = _parse(_render_ci())
     # Act
-    body = _render_ci()
+    jobs = doc["jobs"].values()
     # Assert
-    assert forbidden not in body
+    assert all("runs-on" not in job and "uses" in job for job in jobs)
 
 
 def test_rendered_yaml_is_parseable_yaml():
@@ -565,13 +573,14 @@ def test_live_apply_substitutes_target_pkg_name_into_written_yaml(tmp_path):
     assert "scitex-fake" in content
 
 
-def test_live_apply_emits_no_ubuntu_latest_anywhere(tmp_path):
+def test_live_apply_retains_hosted_fallback_for_unqualified_contributors(tmp_path):
     # Arrange
     repo = _make_repo(tmp_path)
     # Act
     result = _apply_live(repo)
-    # Assert — across every emitted body, not just ci.yml.
-    assert all("ubuntu-latest" not in body for body in result.rendered.values())
+    # Assert — actual emitted caller jobs retain the declared safe default.
+    assert all("ubuntu-latest" in job["with"]["runs_on"]
+               for body in result.rendered.values() for job in _parse(body)["jobs"].values())
 
 
 def test_live_apply_deletes_superseded_pr_ci_workflow(tmp_path):
@@ -760,7 +769,7 @@ def test_live_apply_overwrites_existing_ci_yml_with_canonical_shape(tmp_path):
     _apply_live(repo)
     # Assert
     content = (repo / ".github" / "workflows" / "ci.yml").read_text()
-    assert "scitex-ai/.github/.github/workflows/pytest-matrix.yml@main" in content
+    assert _parse(content)["jobs"]["pytest-matrix"]["uses"] == ORG_REUSABLE_USES[0]
 
 
 def test_written_ci_yml_is_parseable_yaml(tmp_path):
