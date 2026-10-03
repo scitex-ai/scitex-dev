@@ -93,7 +93,7 @@ class DevCIAdapters(unittest.TestCase):
         self.assertEqual(caller["with"]["suite"], "matrix")
         self.assertEqual(
             caller["uses"],
-            "scitex-ai/.github/.github/workflows/ci-sif-matrix.yml@refs/heads/main",
+            "scitex-ai/.github/.github/workflows/ci-sif-matrix.yml@main",
         )
         self.assertNotIn("runs-on", caller)
         self.assertNotEqual(caller["secrets"], "inherit")
