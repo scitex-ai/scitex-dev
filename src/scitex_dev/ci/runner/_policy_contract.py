@@ -2,8 +2,9 @@
 
 Branch and SHA selections retain their distinct literal spelling. Only the
 eleven protected-main definitions, the explicit transitional SHA profile, or
-their exact union are qualified. Local reusable dependencies are read at the
-defining commit.
+their exact union are qualified, with an optional finite subset of registered
+immutable leaf callers. Local reusable dependencies are read at the defining
+commit.
 This observer never changes workflow access or infers actual job admission.
 """
 from __future__ import annotations
@@ -206,6 +207,7 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
             WORKFLOW_HASHES if workflow_hashes is None else workflow_hashes,
             NATIVE_WORKFLOWS if native_workflows is None else native_workflows)
     result = {"expected": [], "violations": [], "unknown": [], "source": []}
+    from ._policy_callers import REGISTERED_SELECTION, qualify_registered_callers
     restricted = [g for g in groups if g.get("restricted_to_workflows") is True]
     if not restricted:
         return result
@@ -214,7 +216,8 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
         refs = group.get("selected_workflows")
         if (not isinstance(refs, list) or any(not isinstance(ref, str) for ref in refs)
                 or len(set(refs)) != len(refs)
-                or set(refs) not in (set(BRANCH_SELECTION), set(IMMUTABLE_SELECTION), set(TRANSITION_SELECTION))):
+                or set(refs) - set(REGISTERED_SELECTION) not in
+                (set(BRANCH_SELECTION), set(IMMUTABLE_SELECTION), set(TRANSITION_SELECTION))):
             result["violations"].append("selected workflows differ from the finite literal organization profiles")
             continue
         selections.append(set(refs))
@@ -238,6 +241,7 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
             names = [name for name, selected_revision in IMMUTABLE_REVISIONS.items()
                      if selected_revision == fixed_revision]
             _source_closure(api, names, fixed_revision, hashes, result)
+    qualify_registered_callers(selected, api, result)
     if branch_selected:
         _protection(api, result)
         after = _main(api, result)
@@ -246,5 +250,5 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
     expected = (TRANSITION_SELECTION if branch_selected and immutable_selected
                 else BRANCH_SELECTION if branch_selected else IMMUTABLE_SELECTION)
     if not result["unknown"] and not result["violations"]:
-        result["expected"] = list(expected)
+        result["expected"] = list(expected) + [ref for ref in REGISTERED_SELECTION if ref in selected]
     return result
