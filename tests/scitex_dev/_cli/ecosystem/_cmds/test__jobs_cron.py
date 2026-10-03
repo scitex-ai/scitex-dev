@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """CLI tests for ``scitex-dev ecosystem cron``.
 
 The ``list`` command runs against the real built-in jobs (no patching),
@@ -120,6 +119,68 @@ def test_cron_list_shows_provider_source_label(runner, installed_job_provider):
     result = runner.invoke(main, ["ecosystem", "cron", "list", "--json"])
     # Assert
     assert "scitex-dev" in result.output
+
+
+@pytest.fixture
+def missing_delivery_snapshot(tmp_path):
+    """Only this optional job's explicit input selector, restored at teardown."""
+    import os
+
+    from scitex_dev._ecosystem_jobs._apps_delivery import SNAPSHOT_ENV
+
+    saved = os.environ.get(SNAPSHOT_ENV)
+    os.environ[SNAPSHOT_ENV] = str(tmp_path / "absent.json")
+    try:
+        yield
+    finally:
+        if saved is None:
+            os.environ.pop(SNAPSHOT_ENV, None)
+        else:
+            os.environ[SNAPSHOT_ENV] = saved
+
+
+def test_apps_delivery_dispatch_refuses_apply_before_read():
+    # Arrange
+    from click import ClickException
+
+    from scitex_dev._cli.ecosystem._cmds._jobs_cron import _dispatch_federated_job
+
+    # Act
+    # Assert
+    with pytest.raises(ClickException, match=r"\Aapps delivery observer is read-only; --apply is refused\Z"):
+        _dispatch_federated_job("scitex-dev-apps-delivery-observe", apply=True, all_jobs=[])
+
+
+def test_apps_delivery_dispatch_propagates_missing_input(missing_delivery_snapshot):
+    # Arrange
+    from click import ClickException
+
+    from scitex_dev._cli.ecosystem._cmds._jobs_cron import _dispatch_federated_job
+
+    # Act
+    # Assert
+    with pytest.raises(ClickException, match=r"\Aapps delivery observation failed: snapshot_read_or_format_failure\Z"):
+        _dispatch_federated_job("scitex-dev-apps-delivery-observe", apply=False, all_jobs=[])
+
+
+def test_apps_delivery_dispatch_emits_missing_input_schema(missing_delivery_snapshot, capsys):
+    # Arrange
+    import json
+
+    from click import ClickException
+
+    from scitex_dev._cli.ecosystem._cmds._jobs_cron import _dispatch_federated_job
+
+    # Act
+    try:
+        _dispatch_federated_job("scitex-dev-apps-delivery-observe", apply=False, all_jobs=[])
+    except ClickException:
+        pass  # The separate propagation test checks the exact exception.
+    output = json.loads(capsys.readouterr().out)
+    # Assert
+    assert (output["exit_code"], output["errors"], output["findings"]) == (
+        2, ["snapshot_read_or_format_failure"], [],
+    )
 
 
 # EOF

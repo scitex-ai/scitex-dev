@@ -4,7 +4,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
+
+import pytest
 from pathlib import Path
 
 from scitex_dev.home import ensure_dotscitex_managed_by_git
@@ -243,6 +246,160 @@ def test_dirty_spec_leaves_clean_repository(tmp_path):
     second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
     # Assert
     assert second["clean"] is True
+
+
+def _make_nested_repo_with_debris(tmp_path):
+    # Arrange wrapper: managed home + committed nested repo + untracked debris.
+    # Returns (mid_head,) after settling the legitimate gitlink commit.
+    _seed_home(tmp_path)
+    ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    nested = tmp_path / ".scitex" / "agent-container" / ".old" / "preserved"
+    nested.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(nested)], check=True, timeout=60)
+    subprocess.run(["git", "-C", str(nested), "config", "user.email", "t@t"],
+                   check=True, timeout=60)
+    subprocess.run(["git", "-C", str(nested), "config", "user.name", "t"],
+                   check=True, timeout=60)
+    (nested / "kept.txt").write_text("kept\n")
+    subprocess.run(["git", "-C", str(nested), "add", "-A"], check=True, timeout=60)
+    subprocess.run(["git", "-C", str(nested), "commit", "-qm", "seed"],
+                   check=True, timeout=60)
+    mid = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    assert mid["committed"] is True
+    (nested / "debris.tmp").write_text("junk\n")
+    return mid["head"]
+
+
+def test_nested_repo_noise_does_not_commit(tmp_path):
+    # Arrange
+    head_before = _make_nested_repo_with_debris(tmp_path)
+    # Act
+    second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Assert
+    assert second["committed"] is False
+
+
+def test_nested_repo_noise_keeps_head(tmp_path):
+    # Arrange
+    head_before = _make_nested_repo_with_debris(tmp_path)
+    # Act
+    second = ensure_dotscitex_managed_by_git(tmp_path, track=TRACK)
+    # Assert
+    assert second["head"] == head_before
+
+
+def _write_git_shim(path: Path, real_git: str, codedir: Path) -> None:
+    # Forwarding executable: delegates every invocation to the real git,
+    # except the staged probe, which fails with the code in <codedir>/code
+    # when that file exists. No environment control — file rendezvous only.
+    path.write_text(
+        "#!/bin/sh\n"
+        'case " $* " in\n'
+        '  *" diff --cached --name-only -z "*) codefile="'
+        + str(codedir / "code")
+        + '"\n'
+        '    if [ -f "$codefile" ]; then code=$(cat "$codefile");'
+        ' echo "fatal: injected" >&2; exit "$code"; fi;;\n'
+        "esac\n"
+        f'exec "{real_git}" "$@"\n'
+    )
+    path.chmod(0o755)
+
+
+def _shim_repo(tmp_path):
+    # Arrange wrapper: real repo + forwarding shim first on PATH via an
+    # explicit context (no pytest fixtures inside helpers).
+    # Returns (module, root, shimbits) where shimbits CM yields set_code.
+    import os
+    import shutil
+    import scitex_dev.home._managed_by_git as m
+    _seed_home(tmp_path)
+    root = tmp_path / ".scitex"
+    subprocess.run(["git", "-C", str(root), "init", "-q"], check=True, timeout=60)
+    real_git = shutil.which("git")
+    assert real_git
+
+    @contextlib.contextmanager
+    def shimbits():
+        shimdir = tmp_path / "shimbin"
+        shimdir.mkdir(exist_ok=True)
+        _write_git_shim(shimdir / "git", real_git, shimdir)
+        old_path = os.environ.get("PATH", "")
+        os.environ["PATH"] = str(shimdir) + os.pathsep + old_path
+        try:
+            yield shimdir
+        finally:
+            os.environ["PATH"] = old_path
+
+    return m, root, shimbits
+
+
+def _set_code(shimdir, code):
+    codefile = shimdir / "code"
+    if code is None:
+        codefile.unlink(missing_ok=True)
+    else:
+        codefile.write_text(str(code))
+
+
+def test_staged_probe_empty_index_is_false(tmp_path):
+    # Arrange
+    m, root, shimbits = _shim_repo(tmp_path)
+    # Act
+    with shimbits() as _:
+        got = m._index_has_staged_changes(root)
+    # Assert
+    assert got is False
+
+
+def test_staged_probe_whitespace_filename_is_true(tmp_path):
+    # Arrange
+    m, root, shimbits = _shim_repo(tmp_path)
+    weird = root / "agent-container" / "agents" / "my agent"
+    weird.mkdir(parents=True)
+    (weird / "spec.yaml").write_text("name: weird\n")
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, timeout=60)
+    # Act
+    with shimbits() as _:
+        got = m._index_has_staged_changes(root)
+    # Assert
+    assert got is True
+
+
+def test_staged_probe_exit_1_raises(tmp_path):
+    # Arrange
+    m, root, shimbits = _shim_repo(tmp_path)
+    # Act
+    with shimbits() as shimdir:
+        _set_code(shimdir, 1)
+        probe = lambda: m._index_has_staged_changes(root)
+        # Assert
+        with pytest.raises(RuntimeError, match="diff --cached --name-only"):
+            probe()
+
+
+def test_staged_probe_exit_2_raises(tmp_path):
+    # Arrange
+    m, root, shimbits = _shim_repo(tmp_path)
+    # Act
+    with shimbits() as shimdir:
+        _set_code(shimdir, 2)
+        probe = lambda: m._index_has_staged_changes(root)
+        # Assert
+        with pytest.raises(RuntimeError, match="diff --cached --name-only"):
+            probe()
+
+
+def test_staged_probe_exit_128_raises(tmp_path):
+    # Arrange
+    m, root, shimbits = _shim_repo(tmp_path)
+    # Act
+    with shimbits() as shimdir:
+        _set_code(shimdir, 128)
+        probe = lambda: m._index_has_staged_changes(root)
+        # Assert
+        with pytest.raises(RuntimeError, match="diff --cached --name-only"):
+            probe()
 
 
 def test_adoption_preserves_user_ignore_pattern(tmp_path):

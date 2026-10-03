@@ -1,0 +1,53 @@
+{
+  "provenance": {
+    "kind": "actual-normal-GitHub-before-once-cancellation",
+    "run": 37147579489,
+    "utc": "2026-10-03T19:45Z",
+    "source_sha256": {
+      "pr-current": "17ac00c0db1be1d798ca526067115c8cf2c34ad445b18925831637a3bc942431",
+      "run-before": "97d6b08b61aadcdc2efa3e526fe4d21ec38fa56c3a971970b31992ec3414c133",
+      "jobs-before": "3627abad37dc7d92e85c02e2d5f9fdecd294b48d8a183cd66bf5dbd00ddc083f"
+    }
+  },
+  "run": {
+    "id": 37147579489,
+    "event": "pull_request",
+    "status": "queued",
+    "head_sha": "943f2ed1f5899262b0852e1f5d3f2a7428aac8c1",
+    "pull_requests": [
+      {
+        "number": 436
+      }
+    ]
+  },
+  "pull": {
+    "number": 436,
+    "state": "open",
+    "head": {
+      "sha": "eea1f91dec377b8709bc326c305bee15b8426792"
+    }
+  },
+  "jobs": {
+    "total_count": 3,
+    "jobs": [
+      {
+        "id": 111274590060,
+        "status": "completed",
+        "conclusion": "failure",
+        "runner_id": 979
+      },
+      {
+        "id": 111274590211,
+        "status": "queued",
+        "conclusion": null,
+        "runner_id": 0
+      },
+      {
+        "id": 111274590223,
+        "status": "queued",
+        "conclusion": null,
+        "runner_id": 0
+      }
+    ]
+  }
+}
