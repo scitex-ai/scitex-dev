@@ -14,6 +14,15 @@ workflow admission check, which verifies the original actor, triggering
 actor, and same-repository PR author independently. Forks and unknown
 membership remain hosted.
 
+The canonical caller pins production revision
+`8c646081e9f1352077d3d8674052cce7ec75a1b7`, qualified after the ordinary
+organization source merge. It does not rely on a branch reference matching
+a runner-group SHA selection. Source and caller pinning alone do not permit
+a group policy switch: retained direct/custom jobs, required status names,
+portable hosted environments and naturally draining old jobs need separate
+qualification. In particular, a real immutable SIF/PostgreSQL test gate is
+preserved until its protected reusable adapter and hosted equivalent qualify.
+
 `ci runner validate-policy --json` is read-only. It verifies all three CPU
 registrations are online and assigned to group 6, Organization. That group
 must retain organization repository availability while restricting access

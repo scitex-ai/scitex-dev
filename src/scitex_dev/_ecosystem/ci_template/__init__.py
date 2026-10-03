@@ -2,7 +2,7 @@
 
 Renders/deploys the one per-repo workflow ``ci.yml``: a thin caller that
 delegates every job body to the org-level reusable workflows in
-``scitex-ai/.github@main`` (operator decision, 2026-07-21 — a shared
+one reviewed immutable ``scitex-ai/.github`` revision (operator policy — a shared
 workflow cannot drift per-repo). ``scitex-dev ci runner register`` is a
 thin alias over this module; no second template body exists to drift.
 
