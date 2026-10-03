@@ -895,6 +895,7 @@ def test_every_registered_job_has_a_body_or_a_shell_payload():
     from scitex_dev._cli.cron import run as run_mod
 
     python_bodied = {
+        "ci-runner-policy",
         "branch-gc",
         "ci-watch",
         "quota-keepalive",

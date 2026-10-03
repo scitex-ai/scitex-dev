@@ -2,8 +2,8 @@
 
 Pins THE single canonical CI mechanism (operator decision, 2026-07-21):
 one thin ``ci.yml`` caller delegating to ``scitex-ai/.github@main``,
-runner selection via ``vars.CI_RUNS_ON`` with a self-hosted default,
-never ubuntu-latest, superseded/newb-docs workflow cleanup.
+runner selection through organization membership admission with a hosted
+default, and superseded/newb-docs workflow cleanup.
 
 Each test follows AAA + asserts ONE observable property (STX-TQ002 /
 STX-TQ007). No ``unittest.mock`` — the apply function exposes injection
@@ -34,8 +34,8 @@ ORG_REUSABLE_USES = (
     "scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@main",
 )
 
-#: The one sanctioned self-hosted runner default.
-CI_RUNS_ON_DEFAULT = '["self-hosted","Linux","X64","scitex-ci"]'
+#: Unknown membership/absent preference defaults to GitHub-hosted hardware.
+HOSTED_DEFAULT = '["ubuntu-latest"]'
 
 
 # --------------------------------------------------------------------------- #
@@ -96,6 +96,15 @@ def _parse(body: str) -> dict:
     yaml = pytest.importorskip("yaml")
     # `on:` is the YAML boolean True key after safe_load — irrelevant here.
     return yaml.safe_load(body)
+
+
+def test_all_callers_forward_runner_preference_to_authoritative_membership_gate():
+    # Arrange
+    expected = '${{ vars.CI_RUNS_ON || \'["ubuntu-latest"]\' }}'
+    # Act
+    data = _parse(_render_ci())
+    # Assert
+    assert all(job["with"]["runs_on"] == expected for job in data["jobs"].values())
 
 
 # --------------------------------------------------------------------------- #
@@ -225,24 +234,23 @@ def test_caller_carries_ci_runs_on_runner_selection_contract():
     assert expected in body
 
 
-def test_caller_carries_self_hosted_default_label_set():
+def test_caller_carries_hosted_default_label_set():
     # Arrange
-    expected = CI_RUNS_ON_DEFAULT
+    expected = HOSTED_DEFAULT
     # Act
     body = _render_ci()
     # Assert
     assert expected in body
 
 
-def test_caller_never_mentions_ubuntu_latest():
-    # PS-169: GitHub-hosted runners are forbidden — the emitted body must
-    # not carry ubuntu-latest in any form, comment included.
+def test_caller_cannot_declare_native_job_outside_authoritative_reusables():
+    # Operator 2026-10-03 supersedes the old hosted-prohibition assertion.
     # Arrange
-    forbidden = "ubuntu-latest"
+    doc = _parse(_render_ci())
     # Act
-    body = _render_ci()
+    jobs = doc["jobs"].values()
     # Assert
-    assert forbidden not in body
+    assert all("runs-on" not in job and "uses" in job for job in jobs)
 
 
 def test_rendered_yaml_is_parseable_yaml():
@@ -565,13 +573,14 @@ def test_live_apply_substitutes_target_pkg_name_into_written_yaml(tmp_path):
     assert "scitex-fake" in content
 
 
-def test_live_apply_emits_no_ubuntu_latest_anywhere(tmp_path):
+def test_live_apply_retains_hosted_fallback_for_unqualified_contributors(tmp_path):
     # Arrange
     repo = _make_repo(tmp_path)
     # Act
     result = _apply_live(repo)
-    # Assert — across every emitted body, not just ci.yml.
-    assert all("ubuntu-latest" not in body for body in result.rendered.values())
+    # Assert — actual emitted caller jobs retain the declared safe default.
+    assert all("ubuntu-latest" in job["with"]["runs_on"]
+               for body in result.rendered.values() for job in _parse(body)["jobs"].values())
 
 
 def test_live_apply_deletes_superseded_pr_ci_workflow(tmp_path):
