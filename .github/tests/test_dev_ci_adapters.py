@@ -86,10 +86,17 @@ class DevCIAdapters(unittest.TestCase):
         # Act
         extra_inputs = set(caller["with"]) - set(declaration["inputs"])
         extra_secrets = set(caller["secrets"]) - set(declaration["secrets"])
+        requested = dict(callee["permissions"])
+        rank = {"none": 0, "read": 1, "write": 2}
+        for job in callee["jobs"].values():
+            for scope, level in job.get("permissions", {}).items():
+                if rank[level] > rank[requested.get(scope, "none")]:
+                    requested[scope] = level
 
         # Assert
         self.assertEqual(extra_inputs, set())
         self.assertEqual(extra_secrets, set())
+        self.assertEqual(caller["permissions"], requested)
         self.assertEqual(caller["with"]["suite"], "matrix")
         self.assertEqual(
             caller["uses"],

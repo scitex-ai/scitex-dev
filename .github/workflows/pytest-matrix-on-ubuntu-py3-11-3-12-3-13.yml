@@ -18,6 +18,11 @@ jobs:
     # Dev retains all three minors. Null image/profile registrations refuse.
     # The shared gate binds SCITEX_CI_SIF_SHA256 before the genuine full
     # exec-in-sif.sh run-in-sif.sh command, owned PostgreSQL and [all,dev].
+    # GitHub validates permission ceilings for every nested job, including
+    # the SAC coverage leg; keep this grant local to the actual shared call.
+    permissions:
+      contents: read
+      id-token: write
     uses: scitex-ai/.github/.github/workflows/ci-sif-matrix.yml@main
     with:
       suite: matrix
