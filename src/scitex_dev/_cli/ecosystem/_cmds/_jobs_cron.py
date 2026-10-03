@@ -286,6 +286,16 @@ def _dispatch_federated_job(name: str, *, apply: bool, all_jobs) -> None:
     Split out of the Click callback so the log-sink wrapper stays a single
     ``with`` block around ONE call (mirrors ``_cli.cron.run._run_body``).
     """
+    if name == "scitex-dev-apps-delivery-observe":
+        if apply:
+            raise click.ClickException("apps delivery observer is read-only; --apply is refused")
+        from ...._ecosystem_jobs import _apps_delivery
+
+        result = _apps_delivery.run_once()
+        if result["exit_code"] != 0:
+            raise click.ClickException("apps delivery observation failed: " + ", ".join(result["errors"]))
+        return
+
     if name == "scitex-dev-deploy-freshness":
         from ...._ecosystem_jobs import _deploy_freshness
 
