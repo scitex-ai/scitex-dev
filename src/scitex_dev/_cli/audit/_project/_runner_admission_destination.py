@@ -1,12 +1,13 @@
 """Resolve only the reviewed central admission output for PS-224.
 
 This static source door does not establish membership, runner access, image
-readiness or an actual job result. It resolves the declared native label set;
+readiness or an actual job result. It resolves the reviewed literal label set;
 the caller still checks it against the unchanged machine-registry floor.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 
@@ -39,9 +40,23 @@ _CAPACITY = frozenset(
     {"scitex-ci", "scitex-org-cpu", "scitex-local-cpu", "scitex-docker"}
 )
 _FALLBACK = re.compile(r"\$\{\{\s*vars\.CI_RUNS_ON\s*\|\|\s*'([^']+)'\s*\}\}")
+_FORK_REFUSAL_IF = (
+    "github.event_name == 'pull_request' && "
+    "github.event.pull_request.head.repo.full_name != github.repository && "
+    "runner.environment == 'self-hosted'"
+)
+# Complete reviewed original fork refusal, including its diagnostics. An
+# arbitrary preceding shell step cannot acquire authority from a later fence.
+_FORK_REFUSAL_RUN_SHA256 = (
+    "99ccc16c7446fcc6fca19c08d5d4d7dd1a18cf728c536923f85893f2c868df40"
+)
+_UNAUTHORIZED_NATIVE_IF = (
+    "runner.environment == 'self-hosted' && "
+    "needs.runner-admission.outputs.native_authorized != 'true'"
+)
 
 
-def _native_labels(value):
+def _declared_labels(value):
     if not isinstance(value, str):
         return None
     fallback = _FALLBACK.fullmatch(value)
@@ -50,6 +65,10 @@ def _native_labels(value):
         labels = json.loads(literal)
     except ValueError:
         return None
+    # The pinned callee really emits this hosted fallback when CI_RUNS_ON is
+    # absent. This resolves the literal; it does not infer a native override.
+    if labels == ["ubuntu-latest"]:
+        return labels
     if (
         not isinstance(labels, list)
         or not 1 <= len(labels) <= 12
@@ -79,6 +98,23 @@ def _guarded(job, labels):
     if not isinstance(steps, list) or not steps or not isinstance(steps[0], dict):
         return False
     first = steps[0]
+    if len(steps) >= 2 and isinstance(steps[1], dict):
+        second = steps[1]
+        if (
+            not set(first) - {"name", "if", "run"}
+            and first.get("if") == _FORK_REFUSAL_IF
+            and isinstance(first.get("run"), str)
+            and hashlib.sha256(first["run"].encode()).hexdigest()
+            == _FORK_REFUSAL_RUN_SHA256
+            and not set(second) - {"name", "if", "run"}
+            and second.get("if") == _UNAUTHORIZED_NATIVE_IF
+            and _lines(second.get("run"))
+            == [
+                "echo '::error::Organization membership admission was not confirmed.'",
+                "exit 1",
+            ]
+        ):
+            return True
     # No step condition, error continuation or alternate shell can bypass this
     # first action. GitHub's ordinary Bash run step supplies errexit.
     if set(first) - {"name", "env", "run"}:
@@ -161,5 +197,5 @@ def resolve_admission_destination(doc, job):
         or set(admission["with"]) != {"runs_on"}
     ):
         return None
-    labels = _native_labels(admission["with"]["runs_on"])
+    labels = _declared_labels(admission["with"]["runs_on"])
     return labels if labels is not None and _guarded(job, labels) else None
