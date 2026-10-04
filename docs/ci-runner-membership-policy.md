@@ -23,14 +23,27 @@ portable hosted environments and naturally draining old jobs need separate
 qualification. In particular, a real immutable SIF/PostgreSQL test gate is
 preserved until its protected reusable adapter and hosted equivalent qualify.
 
-`ci runner validate-policy --json` is read-only. It verifies all three CPU
-registrations are online and assigned to group 6, Organization. That group
-must retain organization repository availability while restricting access
-to exactly seven reviewed reusable workflows at one full commit revision.
-The validator fetches those seven definitions and their same-revision
-hosted admission workflow and checks all eight reviewed byte hashes.
-This permits normal source merges without accepting unreviewed workflow
-changes. Unknown or incomplete API/source observations exit nonzero.
+`ci runner validate-policy --json` is read-only. It observes the three CPU
+registrations, the existing compute03 Docker registration and the additional
+compute04 CPU registration. The final company pool is the existing nondefault group6
+`Organization`. The temporary group8 is retired after its idle registration
+moves and empty membership is verified. The final pool must retain organization
+repository availability and restrict workflow access. The current protected
+main profile contains eleven reviewed reusable definitions plus their same
+revision hosted admission. The historical ten-definition immutable profile
+retains its original admission bytes and literal revisions separately.
+Their exact 21-reference union is a finite transition profile: both complete
+source closures qualify, and main/protection are checked before and after all
+source reads. This keeps already pinned callers eligible while callers migrate.
+Partial unions, extra definitions, changed bytes and weaker protection refuse
+authorization. No branch reference is treated as a matching SHA selector. Unknown or incomplete API/source observations exit nonzero.
+
+The organization-owned `company-ci-pool-health` workflow also samples one
+admitted runner every fifteen minutes or by manual dispatch. It reads visible
+CPU counts, priority, memory, filesystem space and CPU pressure without a
+checkout, credentials or package installation. One completed sample does not
+qualify the entire pool or replace package CI. Its defining reusable must be
+included in the live restricted selection before native execution.
 
 The managed `ci-runner-policy` cron job runs this observation every fifteen
 minutes. Its report separates present busy state from completed-job

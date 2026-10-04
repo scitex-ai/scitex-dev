@@ -2,25 +2,24 @@
 import base64
 import hashlib
 import json
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import click
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 
-from scitex_dev.ci.runner import register_ci_runner_commands
-from scitex_dev.ci.runner import _policy, _policy_contract
+from scitex_dev.ci.runner import _policy, _policy_contract, register_ci_runner_commands
 
 
 def pool():
     return [{"id": i, "name": name, "status": "online", "busy": i == 2}
-            for i, name in enumerate(_policy.CPU_RUNNERS, 1)]
+            for i, name in enumerate(_policy.COMPANY_RUNNERS, 1)]
 
 
 def group(refs):
-    return {"id": 6, "name": "Organization", "visibility": "all",
+    return {"id": 6, "name": "Organization", "default": False, "visibility": "all",
             "allows_public_repositories": True, "restricted_to_workflows": True,
             "selected_workflows": refs, "runners_url": "https://api.github.com/orgs/scitex-ai/actions/runner-groups/6/runners"}
 
@@ -32,7 +31,7 @@ def test_unrestricted_group_never_gains_authorization_from_busy_or_labels(field,
     g = group([])
     g["restricted_to_workflows"] = False
     # Act
-    result = _policy.assess_pool(pool(), [g], {6: [1, 2, 3]}, expected_workflows=[])
+    result = _policy.assess_pool(pool(), [g], {6: [1, 2, 3, 4, 5]}, expected_workflows=[])
     value = len(result["groups"]) if field == "groups" else result.get(field, result["activity"].get(field))
     # Assert
     assert value == expected
@@ -42,7 +41,7 @@ def test_reviewed_exact_workflows_and_online_registration_are_qualified():
     # Arrange
     ref = "scitex-ai/.github/.github/workflows/pytest-matrix.yml@" + "a" * 40
     # Act
-    result = _policy.assess_pool(pool(), [group([ref])], {6: [1, 2, 3]}, expected_workflows=[ref])
+    result = _policy.assess_pool(pool(), [group([ref])], {6: [1, 2, 3, 4, 5]}, expected_workflows=[ref])
     # Assert
     assert result["state"] == "conformant"
 
@@ -55,7 +54,7 @@ def test_group_identity_and_repository_availability_match_admission_destination(
     g = group([ref])
     g[field] = value
     # Act
-    result = _policy.assess_pool(pool(), [g], {g["id"]: [1, 2, 3]}, expected_workflows=[ref])
+    result = _policy.assess_pool(pool(), [g], {g["id"]: [1, 2, 3, 4, 5]}, expected_workflows=[ref])
     # Assert
     assert result["state"] == "violation"
 
@@ -66,7 +65,29 @@ def test_mutable_or_foreign_refs_remain_unqualified(refs):
     # Arrange
     g = group(refs)
     # Act
-    result = _policy.assess_pool(pool(), [g], {6: [1, 2, 3]}, expected_workflows=refs)
+    result = _policy.assess_pool(pool(), [g], {6: [1, 2, 3, 4, 5]}, expected_workflows=refs)
+    # Assert
+    assert result["state"] == "violation"
+
+
+@pytest.mark.parametrize("flag,state", [(True, "violation"), (None, "unknown")])
+def test_default_or_unknown_group_cannot_authorize_company_resources(flag, state):
+    # Arrange
+    refs = ["scitex-ai/.github/.github/workflows/pytest-matrix.yml@" + "a" * 40]
+    declared = group(refs)
+    declared["default"] = flag
+    # Act
+    result = _policy.assess_pool(pool(), [declared], {6: [1, 2, 3, 4, 5]}, expected_workflows=refs)
+    # Assert
+    assert result["state"] == state
+
+
+def test_temporary_company_group_is_not_the_final_organization_pool():
+    # Arrange
+    refs = ["scitex-ai/.github/.github/workflows/runner-health.yml@refs/heads/main"]
+    declared = {**group(refs), "id": 8, "name": "scitex-company-ci"}
+    # Act
+    result = _policy.assess_pool(pool(), [declared], {8: [1, 2, 3, 4, 5]}, expected_workflows=refs)
     # Assert
     assert result["state"] == "violation"
 
@@ -158,7 +179,7 @@ def test_same_revision_is_qualified_only_with_reviewed_native_and_admission_byte
 
 def test_changed_admission_bytes_refuse_the_exact_native_ref():
     # Arrange
-    qualify, groups, api, ref = contract_case()
+    qualify, groups, api, _ref = contract_case()
     def changed(endpoint):
         data = api(endpoint)
         if "runner-admission" in endpoint:
@@ -172,7 +193,7 @@ def test_changed_admission_bytes_refuse_the_exact_native_ref():
 
 def test_missing_reviewed_public_bytes_remain_unknown():
     # Arrange
-    qualify, groups, api, ref = contract_case()
+    qualify, groups, _api, _ref = contract_case()
     # Act
     result = qualify(groups, lambda endpoint: None)
     # Assert
@@ -221,9 +242,9 @@ def test_real_cron_handler_refuses_unknown_or_unrestricted_owned_api_fixture(tmp
     rows = pool()
     g = group([])
     g["restricted_to_workflows"] = False
-    data = {"orgs/scitex-ai/actions/runners?per_page=100": {"total_count": 3, "runners": rows},
+    data = {"orgs/scitex-ai/actions/runners?per_page=100": {"total_count": len(rows), "runners": rows},
             "orgs/scitex-ai/actions/runner-groups?per_page=100": {"total_count": 1, "runner_groups": [g]},
-            "orgs/scitex-ai/actions/runner-groups/6/runners?per_page=100": {"total_count": 3, "runners": rows}}
+            "orgs/scitex-ai/actions/runner-groups/6/runners?per_page=100": {"total_count": len(rows), "runners": rows}}
     gh = bin_dir / "gh"
     gh.write_text("#!" + sys.executable + "\nimport json,sys\ndata=" + repr(data) + "\n"
                   + ("raise SystemExit(1)\n" if unavailable else "print(json.dumps(data.get(sys.argv[2],{})))\n"))
@@ -232,7 +253,9 @@ def test_real_cron_handler_refuses_unknown_or_unrestricted_owned_api_fixture(tmp
     env = {"PATH": str(bin_dir) + ":/usr/bin:/bin", "PYTHONPATH": str(source), "LANG": "C"}
     code = "from scitex_dev._cli.cron.run import _run_body; raise SystemExit(_run_body('ci-runner-policy',only=None,dry_run=True))"
     # Act
-    child = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=5)
+    # The full cron CLI starts a fresh interpreter under the parallel SIF suite.
+    # Bound startup and the owned API fixture without requiring a five-second cold start.
+    child = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=30, check=False)
     # Assert
     assert json.loads(child.stdout)["state"] == ("unknown" if unavailable else "violation")
 
@@ -351,7 +374,7 @@ def test_protected_main_literal_is_accepted_only_with_an_explicit_contract():
     # Arrange
     refs = list(_policy_contract.BRANCH_SELECTION)
     # Act
-    result = _policy.assess_pool(pool(), [group(refs)], {6: [1, 2, 3]}, expected_workflows=refs)
+    result = _policy.assess_pool(pool(), [group(refs)], {6: [1, 2, 3, 4, 5]}, expected_workflows=refs)
     # Assert
     assert result["state"] == "conformant"
 
@@ -360,7 +383,7 @@ def test_duplicate_literal_ref_does_not_gain_pool_authorization():
     # Arrange
     refs = list(_policy_contract.BRANCH_SELECTION)
     # Act
-    result = _policy.assess_pool(pool(), [group(refs + refs[:1])], {6: [1, 2, 3]}, expected_workflows=refs)
+    result = _policy.assess_pool(pool(), [group(refs + refs[:1])], {6: [1, 2, 3, 4, 5]}, expected_workflows=refs)
     # Assert
     assert result["state"] == "violation"
 
@@ -371,8 +394,8 @@ def undeclared_profile(change):
         refs[-1] = refs[0]
     elif change == "extra":
         refs.append(_policy_contract.PREFIX + "extra.yml@refs/heads/main")
-    elif change == "combined":
-        refs += list(_policy_contract.IMMUTABLE_SELECTION)
+    elif change == "partial-transition":
+        refs += list(_policy_contract.IMMUTABLE_SELECTION[:-1])
     else:
         refs[0] = {"foreign": refs[0].replace("scitex-ai/.github", "attacker/repo"),
                    "bare-main": refs[0].replace("refs/heads/main", "main"),
@@ -381,7 +404,7 @@ def undeclared_profile(change):
     return refs
 
 
-@pytest.mark.parametrize("change", ["duplicate", "extra", "foreign", "bare-main", "tag", "arbitrary-sha", "combined"])
+@pytest.mark.parametrize("change", ["duplicate", "extra", "foreign", "bare-main", "tag", "arbitrary-sha", "partial-transition"])
 def test_undeclared_literal_profile_refuses_without_source_requests(change):
     # Arrange
     refs = undeclared_profile(change)
@@ -392,7 +415,7 @@ def test_undeclared_literal_profile_refuses_without_source_requests(change):
     assert requests == []
 
 
-@pytest.mark.parametrize("change", ["duplicate", "extra", "foreign", "bare-main", "tag", "arbitrary-sha", "combined"])
+@pytest.mark.parametrize("change", ["duplicate", "extra", "foreign", "bare-main", "tag", "arbitrary-sha", "partial-transition"])
 def test_undeclared_literal_profile_reports_a_violation(change):
     # Arrange
     refs = undeclared_profile(change)
@@ -510,3 +533,120 @@ def test_immutable_profile_keeps_each_exact_reviewed_revision():
     # Assert
     assert set(requests) == {f"repos/scitex-ai/.github/contents/.github/workflows/{name}?ref={revision}"
                              for name, revision in _policy_contract.IMMUTABLE_REVISIONS.items()}
+
+
+
+def transition_case(*, corrupt=None, move_main=False):
+    """Feed exact public workflow bytes through the existing API adapter."""
+    import gzip
+    fixture = Path(__file__).parent / "fixtures" / "organization-workflow-source-contract.json.gz"
+    payload = json.loads(gzip.decompress(fixture.read_bytes()))
+    main = payload["main"]
+    requests = []
+    branch_reads = 0
+    def api(endpoint):
+        nonlocal branch_reads
+        requests.append(endpoint)
+        if endpoint.endswith("branches/main"):
+            branch_reads += 1
+            revision = "d" * 40 if move_main and branch_reads > 1 else main
+            return {"name": "main", "protected": True, "commit": {"sha": revision}}
+        if endpoint.endswith("/protection"):
+            return protected_main()
+        data = dict(payload["responses"].get(endpoint, {}))
+        if corrupt and endpoint.endswith("/" + corrupt[0] + "?ref=" + corrupt[1]):
+            data["content"] = base64.b64encode(
+                base64.b64decode(data["content"]) + b"# changed\n").decode()
+        return data
+    return list(_policy_contract.TRANSITION_SELECTION), api, requests, main
+
+
+@pytest.mark.parametrize("field,expected", [
+    ("selection", list(_policy_contract.TRANSITION_SELECTION)),
+    ("unknown", []), ("violations", []), ("source_count", 25),
+    ("protection_reads", 2)])
+def test_exact_transition_reads_both_complete_public_source_closures(field, expected):
+    # Arrange
+    refs, api, requests, _main = transition_case()
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], api)
+    observed = {"selection": result["expected"], "unknown": result["unknown"],
+                "violations": result["violations"], "source_count": len(result["source"]),
+                "protection_reads": requests.count("repos/scitex-ai/.github/branches/main/protection")}
+    # Assert
+    assert observed[field] == expected
+
+
+@pytest.mark.parametrize("name,revision", [
+    ("pytest-matrix.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
+    ("runner-admission.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
+    ("ci-sif-matrix.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
+    ("ci-sif-matrix.yml", _policy_contract.SIF_REVISION),
+    ("import-smoke.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
+    ("rtd-sphinx-build.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
+    ("rtd-sphinx-build.yml", _policy_contract.OLD_REVISION),
+    ("pytest-matrix.yml", _policy_contract.OLD_REVISION),
+    ("runner-admission.yml", _policy_contract.OLD_REVISION)])
+def test_transition_changed_current_or_immutable_bytes_never_authorize(name, revision):
+    # Arrange
+    refs, api, _requests, _main = transition_case(corrupt=(name, revision))
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], api)
+    # Assert
+    assert (result["expected"], result["violations"]) == (
+        [], ["reviewed workflow bytes changed: " + name])
+
+
+def test_transition_main_move_during_immutable_source_reads_remains_unknown():
+    # Arrange
+    refs, api, _requests, _main = transition_case(move_main=True)
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], api)
+    # Assert
+    assert (result["expected"], result["unknown"]) == (
+        [], ["central main revision changed during source qualification"])
+
+
+def test_current_and_immutable_sif_qualify_their_distinct_whole_bodies():
+    # Arrange
+    refs, api, _requests, current = transition_case()
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], api)
+    observed = {row["revision"]: row["sha256"] for row in result["source"]
+                if row["workflow"] == "ci-sif-matrix.yml"}
+    # Assert
+    assert (result["expected"], result["unknown"], result["violations"], observed) == (refs, [], [], {
+        current: "bba67919d4c8f82644a18e9e0ab9cea8b78cbdd241a8680b5dbda78e655bb6d4",
+        _policy_contract.SIF_REVISION: "f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1",
+    })
+
+
+@pytest.mark.parametrize("replace_current", [True, False])
+def test_current_and_immutable_sif_cannot_substitute_each_others_bytes(replace_current):
+    # Arrange
+    refs, api, _requests, current = transition_case()
+    prefix = "repos/scitex-ai/.github/contents/.github/workflows/ci-sif-matrix.yml?ref="
+    target = prefix + (current if replace_current else _policy_contract.SIF_REVISION)
+    replacement = api(prefix + (_policy_contract.SIF_REVISION if replace_current else current))
+    def substituted(endpoint):
+        return replacement if endpoint == target else api(endpoint)
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], substituted)
+    # Assert
+    assert (result["expected"], result["unknown"], result["violations"]) == (
+        [], [], ["reviewed workflow bytes changed: ci-sif-matrix.yml"])
+
+
+def test_current_docs_and_immutable_docs_keep_independent_whole_source_identities():
+    # Arrange
+    refs, api, _requests, current = transition_case()
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], api)
+    observed = {row["revision"]: row["sha256"] for row in result["source"]
+                if row["workflow"] == "rtd-sphinx-build.yml"}
+    # Assert
+    assert (result["expected"], result["unknown"], result["violations"], observed) == (
+        refs, [], [], {
+            current: "cc680b6ceecac73566b212a0db96ba016b3aa28766700e95b04691981ededaad",
+            _policy_contract.OLD_REVISION: "51be02f591beeeb5398b6447a7c26f0959e5487cad5b974bf62d2cf56fd51b5d",
+        })
