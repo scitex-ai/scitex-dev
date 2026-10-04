@@ -24,6 +24,8 @@ from pathlib import Path
 private=Path(sys.argv[1]).resolve()
 owned=private.parent
 base=Path(sys.base_prefix).resolve()
+environment=Path(sys.prefix).resolve()
+source=Path(sys.argv[3]).resolve() if len(sys.argv)>3 else None
 def refuse(event,args):
     if event in {'socket.connect','socket.bind','socket.getaddrinfo'}:
         raise RuntimeError('release probe refuses sockets')
@@ -33,8 +35,9 @@ def refuse(event,args):
         flags=args[2] if event=='open' and len(args)>2 else 0
         writing=event=='os.mkdir' or (isinstance(mode,str) and any(c in mode for c in 'wax+')) or (isinstance(flags,int) and flags & (os.O_WRONLY|os.O_RDWR|os.O_CREAT|os.O_TRUNC))
         personal=path==private or private in path.parents or str(path).startswith(('/home/','/root/'))
-        interpreter_read=not writing and (path==base or base in path.parents)
-        if personal and not interpreter_read:
+        interpreter_read=not writing and any(path==root or root in path.parents for root in (base,environment))
+        source_read=not writing and source is not None and (path==source or source in path.parents)
+        if (path==private or private in path.parents) or (personal and not (interpreter_read or source_read)):
             raise RuntimeError('release probe refuses personal state')
         if writing and path!=Path('/dev/null') and path!=owned and owned not in path.parents:
             raise RuntimeError('release probe refuses writes outside owned scratch')
@@ -45,6 +48,12 @@ report={'paths':{name:os.environ.get(name) for name in state_names},
         'ambient_without_loader':any(name in os.environ for name in ['OWNED_PROVIDER_FIXTURE','DATABASE_URL','VIRTUAL_ENV','HOME']),
         'loader_paths':os.environ.get('PYTHONPATH','').split(os.pathsep),
         'port':os.environ.get('PGPORT')}
+if sys.argv[2]=='source_read':
+    report['source_read']=bool((source/'scitex_dev/__init__.py').read_bytes())
+if sys.argv[2]=='private_read':
+    list(private.iterdir())
+if sys.argv[2]=='source_write':
+    (source/'qualification-refused-write').write_text('must-never-be-written')
 if sys.argv[2] in {'import','audit','source'}:
     sys.path.insert(0,sys.argv[3])
     import scitex_logging
@@ -100,7 +109,7 @@ scitex_release_run "$4" "$5" "$6" "$7" "$8"
         ["bash", "-c", command, "release-probe", str(context), str(scratch),
          str(Path(sys.executable).parent.parent), sys.executable, str(probe),
          str(private), mode, str(ROOT / "src")],
-        env=environment, cwd=ROOT, capture_output=True, text=True,
+        env=environment, cwd=ROOT, capture_output=True, text=True, check=False,
     )
 
 
@@ -172,7 +181,7 @@ def test_unisolated_real_logger_import_reaches_private_home_refusal(release_case
     # Act
     result = subprocess.run(
         [sys.executable, str(probe), str(private), "import", str(ROOT / "src")],
-        env=environment, cwd=ROOT, capture_output=True, text=True,
+        env=environment, cwd=ROOT, capture_output=True, text=True, check=False,
     )
     # Assert
     assert result.returncode != 0 and "release probe refuses personal state" in result.stderr
@@ -184,10 +193,41 @@ def test_unisolated_environment_exposes_synthetic_provider_control(release_case)
     # Act
     result = subprocess.run(
         [sys.executable, str(probe), str(private), "environment"],
-        env=environment, cwd=ROOT, capture_output=True, text=True,
+        env=environment, cwd=ROOT, capture_output=True, text=True, check=False,
     )
     # Assert
     assert json.loads(result.stdout)["ambient_present"] is True
+
+
+def test_exact_declared_source_remains_readable_in_home_checkout(release_case):
+    # Arrange
+    case = release_case
+    # Act
+    result = execute(case, mode="source_read")
+    # Assert
+    assert result.returncode == 0 and json.loads(result.stdout)["source_read"] is True
+
+
+def test_private_home_is_refused_despite_source_and_interpreter_read_allowance(release_case):
+    # Arrange
+    case = release_case
+    # Act
+    result = execute(case, mode="private_read")
+    # Assert
+    assert result.returncode != 0 and "release probe refuses personal state" in result.stderr
+
+
+def test_declared_source_allowance_never_permits_writing(release_case):
+    # Arrange
+    case = release_case
+    target = ROOT / "src/qualification-refused-write"
+    if target.exists():
+        raise RuntimeError("refused-write fixture target already exists")
+    # Act
+    result = execute(case, mode="source_write")
+    # Assert
+    assert (result.returncode != 0 and "release probe refuses" in result.stderr
+            and not target.exists())
 
 
 def test_actual_mint_failure_block_reports_only_error_codes(release_case):
@@ -209,7 +249,7 @@ MINT_RESP=$(cat "$5")
     result = subprocess.run(
         ["bash", "-c", command, "mint-failure", str(CONTEXT), str(scratch),
          str(Path(sys.executable).parent.parent), sys.executable, str(response)],
-        env=environment, cwd=ROOT, capture_output=True, text=True,
+        env=environment, cwd=ROOT, capture_output=True, text=True, check=False,
     )
     # Assert
     assert (result.returncode, "invalid-publisher" in result.stdout,
@@ -234,7 +274,7 @@ scitex_release_run env SCITEX_LOGGING_FORMAT="$SCITEX_LOGGING_FORMAT" "$4" "$5" 
         ["bash", "-c", command, "source-audit", str(CONTEXT), str(scratch),
          str(Path(sys.executable).parent.parent), sys.executable, str(probe),
          str(private), str(ROOT / "src")],
-        env=environment, cwd=ROOT, capture_output=True, text=True,
+        env=environment, cwd=ROOT, capture_output=True, text=True, check=False,
     )
     report = json.loads(result.stdout) if result.returncode == 0 else {}
     # Assert
@@ -267,7 +307,7 @@ export SCITEX_STORE_DSN="$9"
         ["bash", "-c", command, "source-launcher-probe", str(CONTEXT), str(scratch),
          str(Path(sys.executable).parent.parent), sys.executable, str(probe),
          str(private), mode, str(ROOT / "src"), dsn],
-        env=environment, cwd=ROOT, capture_output=True, text=True,
+        env=environment, cwd=ROOT, capture_output=True, text=True, check=False,
     )
 
 

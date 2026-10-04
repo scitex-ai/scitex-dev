@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 import click
 
 from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ._policy_dev_release import DEV_SELECTION
 
 ORG = "scitex-ai"
 CPU_RUNNERS = ("scitex-ci-02", "scitex-ci-03", "scitex-ci-04")
@@ -32,8 +33,7 @@ def parse_repository(remote: str) -> str:
         if url.scheme not in ("https", "ssh") or url.hostname != "github.com" or url.query or url.fragment:
             raise ValueError("origin is not an exact GitHub repository")
         path = url.path.lstrip("/")
-    if path.endswith(".git"):
-        path = path[:-4]
+    path = path.removesuffix(".git")
     if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9_.-]+", path) or path.split("/")[1] in (".", ".."):
         raise ValueError("origin has no unambiguous owner/repository")
     return path
@@ -108,8 +108,9 @@ def assess_pool(runners, groups, group_runner_ids, *, expected_workflows=None) -
             continue
         if len({ref for ref in refs if isinstance(ref, str)}) != len(refs):
             report["violations"].append(f"group {group['id']}: selected workflows contain duplicate or malformed refs")
-        if any(not isinstance(ref, str) or not re.fullmatch(
+        if any(not isinstance(ref, str) or not (re.fullmatch(
                 rf"{ORG}/\.github/\.github/workflows/[A-Za-z0-9_-]+\.ya?ml@(?:[a-f0-9]{{40}}|refs/heads/main)", ref)
+                or (ref == DEV_SELECTION and group.get("id") == 6 and group.get("name") == "Organization"))
                for ref in refs):
             report["violations"].append(f"group {group['id']}: workflow access has no qualified organization ref")
         if not expected:

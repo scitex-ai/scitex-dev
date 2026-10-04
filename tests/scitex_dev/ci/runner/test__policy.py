@@ -253,7 +253,9 @@ def test_real_cron_handler_refuses_unknown_or_unrestricted_owned_api_fixture(tmp
     env = {"PATH": str(bin_dir) + ":/usr/bin:/bin", "PYTHONPATH": str(source), "LANG": "C"}
     code = "from scitex_dev._cli.cron.run import _run_body; raise SystemExit(_run_body('ci-runner-policy',only=None,dry_run=True))"
     # Act
-    child = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=5, check=False)
+    # The full cron CLI starts a fresh interpreter under the parallel SIF suite.
+    # Bound startup and the owned API fixture without requiring a five-second cold start.
+    child = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=30, check=False)
     # Assert
     assert json.loads(child.stdout)["state"] == ("unknown" if unavailable else "violation")
 
@@ -576,12 +578,12 @@ def test_exact_transition_reads_both_complete_public_source_closures(field, expe
 
 
 @pytest.mark.parametrize("name,revision", [
-    ("pytest-matrix.yml", "1ad4e6e7acdab47d4a9675b1f825abc4848558a6"),
-    ("runner-admission.yml", "1ad4e6e7acdab47d4a9675b1f825abc4848558a6"),
-    ("ci-sif-matrix.yml", "1ad4e6e7acdab47d4a9675b1f825abc4848558a6"),
+    ("pytest-matrix.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
+    ("runner-admission.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
+    ("ci-sif-matrix.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
     ("ci-sif-matrix.yml", _policy_contract.SIF_REVISION),
-    ("import-smoke.yml", "1ad4e6e7acdab47d4a9675b1f825abc4848558a6"),
-    ("rtd-sphinx-build.yml", "1ad4e6e7acdab47d4a9675b1f825abc4848558a6"),
+    ("import-smoke.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
+    ("rtd-sphinx-build.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
     ("rtd-sphinx-build.yml", _policy_contract.OLD_REVISION),
     ("pytest-matrix.yml", _policy_contract.OLD_REVISION),
     ("runner-admission.yml", _policy_contract.OLD_REVISION)])
@@ -614,7 +616,7 @@ def test_current_and_immutable_sif_qualify_their_distinct_whole_bodies():
                 if row["workflow"] == "ci-sif-matrix.yml"}
     # Assert
     assert (result["expected"], result["unknown"], result["violations"], observed) == (refs, [], [], {
-        current: "84aa0118ee9b97b4e1ecd7a81c84ca6455609eebed6412b82873c056f1c88d69",
+        current: "bba67919d4c8f82644a18e9e0ab9cea8b78cbdd241a8680b5dbda78e655bb6d4",
         _policy_contract.SIF_REVISION: "f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1",
     })
 

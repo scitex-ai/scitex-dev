@@ -16,6 +16,8 @@ from types import MappingProxyType
 
 import yaml
 
+from ._policy_dev_release import DEV_SELECTION, DEV_SOURCE_ROWS
+
 
 @dataclass(frozen=True)
 class SourcePin:
@@ -96,7 +98,9 @@ PROVISIONAL_CALLERS = MappingProxyType(
 )
 # The proposed 1fd workflow checks out a requested tag before running helpers.
 # Its source closure is retained for review, but it is not admission authority.
-REGISTERED_CALLERS = MappingProxyType({})
+REGISTERED_CALLERS = MappingProxyType(
+    {DEV_SELECTION: Caller(DEV_SELECTION, tuple(SourcePin(*row) for row in DEV_SOURCE_ROWS))}
+)
 REGISTERED_SELECTION = tuple(REGISTERED_CALLERS)
 
 
@@ -299,6 +303,11 @@ def qualify_registered_callers(selections, api, result):
     """Read only an accepted registered subset; no repository/branch wildcard."""
     for selection in REGISTERED_SELECTION:
         if selection in selections:
+            if selection == DEV_SELECTION:
+                from ._policy_dev_release import qualify_dev_release
+
+                qualify_dev_release(REGISTERED_CALLERS[selection], api, result)
+                continue
             bodies = qualify_caller_sources(REGISTERED_CALLERS[selection], api, result)
             if bodies is None:
                 continue
