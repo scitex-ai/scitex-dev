@@ -140,10 +140,11 @@ def verify_oidc(jwt, commit):
         "repository": "scitex-ai/scitex-dev", "repository_owner": "scitex-ai",
         "sub": "repo:scitex-ai/scitex-dev:environment:pypi", "environment": "pypi",
         "ref": "refs/heads/main", "sha": commit, "event_name": "workflow_dispatch",
-        "workflow_ref": workflow, "job_workflow_ref": workflow,
+        "workflow_ref": workflow,
         "runner_environment": "self-hosted",
     }
-    require(all(claims.get(key) == value for key, value in expected.items()),
+    require(all(claims.get(key) == value for key, value in expected.items())
+            and ("job_workflow_ref" not in claims or claims["job_workflow_ref"] == workflow),
             "oidc-publisher-claims-mismatch")
 
 

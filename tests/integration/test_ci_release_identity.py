@@ -179,7 +179,7 @@ def claims():
             "repository": "scitex-ai/scitex-dev", "repository_owner": "scitex-ai",
             "sub": "repo:scitex-ai/scitex-dev:environment:pypi", "environment": "pypi",
             "ref": "refs/heads/main", "sha": "a" * 40, "event_name": "workflow_dispatch",
-            "workflow_ref": workflow, "job_workflow_ref": workflow,
+            "workflow_ref": workflow,
             "runner_environment": "self-hosted"}
 
 
@@ -188,13 +188,34 @@ def synthetic_token(fields):
     return "e30." + payload + ".b3duZWQtZml4dHVyZQ"
 
 
-def test_local_claim_projection_accepts_declared_native_caller_without_signature_claim():
+def test_inline_publisher_claims_without_reusable_job_claim_accept_without_signature_claim():
     # Arrange
     token = synthetic_token(claims())
     # Act
     result = identity.verify_oidc(token, "a" * 40)
     # Assert
     assert result is None
+
+
+def test_present_exact_original_job_workflow_ref_remains_accepted():
+    # Arrange
+    fields = claims()
+    fields["job_workflow_ref"] = fields["workflow_ref"]
+    # Act
+    result = identity.verify_oidc(synthetic_token(fields), "a" * 40)
+    # Assert
+    assert result is None
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_present_malformed_job_workflow_ref_refuses(value):
+    # Arrange
+    fields = claims()
+    fields["job_workflow_ref"] = value
+    # Act
+    # Assert
+    with pytest.raises(ValueError, match="^oidc-publisher-claims-mismatch$"):
+        identity.verify_oidc(synthetic_token(fields), "a" * 40)
 
 
 @pytest.mark.parametrize("field,value", [("runner_environment", "github-hosted"),
