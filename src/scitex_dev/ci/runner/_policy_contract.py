@@ -3,7 +3,7 @@
 Branch and SHA selections retain their distinct literal spelling. Only the
 eleven protected-main definitions, the explicit transitional SHA profile, or
 their exact union are qualified, with an optional finite subset of registered
-immutable leaf callers. Local reusable dependencies are read at the defining
+leaf callers, including the one protected-main Dev publisher. Local reusable dependencies are read at the defining
 commit.
 This observer never changes workflow access or infers actual job admission.
 """
@@ -30,7 +30,7 @@ WORKFLOW_HASHES = {'auto-merge-to-develop.yml': 'a28d9b92576590903290809643f21c9
  'quality-audit.yml': 'f44a2e6b5c479c2975d1cedf66738fdbf402a74cf1d8e26340bb9895524e7b4a',
  'rtd-sphinx-build.yml': 'cc680b6ceecac73566b212a0db96ba016b3aa28766700e95b04691981ededaad',
  'runner-admission.yml': 'f2e92f6a50526c2133cd12ae7c5cbd98ce2922354bd85c628ca48aad4acc6d18',
- 'ci-sif-matrix.yml': '84aa0118ee9b97b4e1ecd7a81c84ca6455609eebed6412b82873c056f1c88d69',
+ 'ci-sif-matrix.yml': 'bba67919d4c8f82644a18e9e0ab9cea8b78cbdd241a8680b5dbda78e655bb6d4',
  'writer-release-sif.yml': '6ba940f2831159a4a3401746d29b8acdfc74fe89e336fe1dd7065bf21b85d1bb',
  'fd-fclones-integration.yml': 'a183e685a397fad2fad66375b0a9a7a87df945d9048d1277d1a605a9ba3a36c5',
  'runner-health.yml': 'e1bbd6cfa7f9c576898ffde263931f5d7ab6ab1c034197b5e03a0607897505d7'}
@@ -221,8 +221,15 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
                 (set(BRANCH_SELECTION), set(IMMUTABLE_SELECTION), set(TRANSITION_SELECTION))):
             result["violations"].append("selected workflows differ from the finite literal organization profiles")
             continue
+        if set(refs).intersection(REGISTERED_SELECTION):
+            if type(group.get("id")) is not int or not isinstance(group.get("name"), str):
+                result["unknown"].append("registered publisher group identity unavailable")
+                continue
+            if group["id"] != 6 or group["name"] != "Organization":
+                result["violations"].append("registered publisher requires exact Organization group6")
+                continue
         selections.append(set(refs))
-    if result["violations"]:
+    if result["violations"] or result["unknown"]:
         return result
     if any(refs != selections[0] for refs in selections):
         result["violations"].append("organization groups select different reviewed profiles")

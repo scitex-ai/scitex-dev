@@ -1,0 +1,31 @@
+{
+  "provenance": "Exact safe fields transcribed from genuine gh API read in this session; not a policy write",
+  "id": 6,
+  "name": "Organization",
+  "visibility": "all",
+  "restricted_to_workflows": true,
+  "allows_public_repositories": true,
+  "selected_workflows": [
+    "scitex-ai/.github/.github/workflows/auto-merge-to-develop.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/auto-merge-to-develop.yml@refs/heads/main",
+    "scitex-ai/.github/.github/workflows/ci-sif-matrix.yml@e09a4f6746c79c7cc64ca6503350a8096411b25d",
+    "scitex-ai/.github/.github/workflows/ci-sif-matrix.yml@refs/heads/main",
+    "scitex-ai/.github/.github/workflows/cla.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/cla.yml@refs/heads/main",
+    "scitex-ai/.github/.github/workflows/fd-fclones-integration.yml@442f4e5dcd938c0297e36a5f07461d809f9416ff",
+    "scitex-ai/.github/.github/workflows/fd-fclones-integration.yml@refs/heads/main",
+    "scitex-ai/.github/.github/workflows/import-smoke.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/import-smoke.yml@refs/heads/main",
+    "scitex-ai/.github/.github/workflows/promote-develop-to-main-on-tag.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/promote-develop-to-main-on-tag.yml@refs/heads/main",
+    "scitex-ai/.github/.github/workflows/pytest-matrix.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/pytest-matrix.yml@refs/heads/main",
+    "scitex-ai/.github/.github/workflows/quality-audit.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/quality-audit.yml@refs/heads/main",
+    "scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@8c646081e9f1352077d3d8674052cce7ec75a1b7",
+    "scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@refs/heads/main",
+    "scitex-ai/.github/.github/workflows/runner-health.yml@refs/heads/main",
+    "scitex-ai/.github/.github/workflows/writer-release-sif.yml@442f4e5dcd938c0297e36a5f07461d809f9416ff",
+    "scitex-ai/.github/.github/workflows/writer-release-sif.yml@refs/heads/main"
+  ]
+}

@@ -87,11 +87,11 @@ def test_proposed_storage_revision_has_no_registered_selection():
     # Act
     observed = (
         proposal.selection,
-        tuple(callers.REGISTERED_CALLERS),
-        callers.REGISTERED_SELECTION,
+        callers.STORAGE_SELECTION in callers.REGISTERED_CALLERS,
+        callers.STORAGE_SELECTION in callers.REGISTERED_SELECTION,
     )
     # Assert
-    assert observed == (callers.STORAGE_SELECTION, (), ())
+    assert observed == (callers.STORAGE_SELECTION, False, False)
 
 
 def test_provisional_source_replay_reads_the_complete_pinned_closure():
@@ -379,7 +379,7 @@ def test_actual_r2_binds_all_four_native_checkouts_without_registering_it():
     # Act
     callers._storage_checkout_shape(body)
     # Assert
-    assert callers.REGISTERED_SELECTION == ()
+    assert not any("scitex-storage/" in ref for ref in callers.REGISTERED_SELECTION)
 
 
 @pytest.mark.parametrize("name", ["test", "build", "publish", "release"])
