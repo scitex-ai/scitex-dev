@@ -58,6 +58,31 @@ SDK_HASHES = {
         "312fcfa2e0078574ca9ab0c838103b17045c84e78dc96c26df8920a1b651bd09",
     "runner-admission.yml": WORKFLOW_HASHES["runner-admission.yml"],
 }
+# Hub source is one exact optional seven-definition bundle. Public callers
+# and arbitrary subsets do not acquire native defining-source authority.
+HUB_WORKFLOWS = (
+    "hub-pytest-matrix.yml", "hub-quality-audit.yml", "hub-command-v-guard.yml",
+    "hub-symlink-guard.yml", "hub-cli-import-smoke.yml", "hub-sphinx-build.yml",
+    "hub-custom-tests.yml",
+)
+HUB_SELECTION = tuple(PREFIX + name + "@" + BRANCH for name in HUB_WORKFLOWS)
+HUB_HASHES = {
+    "hub-pytest-matrix.yml":
+        "8017f280cc860fba9983835c8599284de44ecf3f094ca4446556e158c83980a8",
+    "hub-quality-audit.yml":
+        "89a8e8b79b6209dbca477b63316cdff4c619fa328c90ab476792a478625dd26e",
+    "hub-command-v-guard.yml":
+        "22e310f093cd15796b6f109a92c322162856f8d035700639d2f29623178b734f",
+    "hub-symlink-guard.yml":
+        "747e9b26448068ac6ade43405d56c065232932fc2b3b1ec2fc7a80070550bd4e",
+    "hub-cli-import-smoke.yml":
+        "42f3abdd3931cbcdb47554c92a05d3c34c860f19c9f65381508041aaef6b1765",
+    "hub-sphinx-build.yml":
+        "f61672078b0fc8a7a52a95db114a8f0d1cecc808213fc2a63e4fa4f4eb9b7969",
+    "hub-custom-tests.yml":
+        "80fecd20a5a46304e5d00ab25b5fff630bd99689e94dff364f548e5ad06a65e8",
+    "runner-admission.yml": WORKFLOW_HASHES["runner-admission.yml"],
+}
 CLA_HELPER_SOURCE = (
     "scitex-ai/.github", "10ee482c6f70a4cb10799c407cd88c64afc5458b",
     ".github/cla/baseline-transports.js", 10003,
@@ -241,7 +266,10 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
                 or len(set(refs)) != len(refs)
                 or set(refs).intersection(SDK_SELECTION) not in
                 (set(), set(SDK_SELECTION))
-                or set(refs) - set(REGISTERED_SELECTION) - set(SDK_SELECTION) not in
+                or set(refs).intersection(HUB_SELECTION) not in
+                (set(), set(HUB_SELECTION))
+                or set(refs) - set(REGISTERED_SELECTION) - set(SDK_SELECTION)
+                - set(HUB_SELECTION) not in
                 (set(BRANCH_SELECTION), set(IMMUTABLE_SELECTION), set(TRANSITION_SELECTION))):
             result["violations"].append("selected workflows differ from the finite literal organization profiles")
             continue
@@ -262,8 +290,9 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
     branch_selected = bool(selected.intersection(BRANCH_SELECTION))
     immutable_selected = bool(selected.intersection(IMMUTABLE_SELECTION))
     sdk_selected = bool(selected.intersection(SDK_SELECTION))
+    hub_selected = bool(selected.intersection(HUB_SELECTION))
     revision = None
-    if branch_selected or sdk_selected:
+    if branch_selected or sdk_selected or hub_selected:
         revision = _main(api, result)
         _protection(api, result)
         if revision is None or result["unknown"] or result["violations"]:
@@ -272,13 +301,15 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
             _source_closure(api, NATIVE_WORKFLOWS, revision, WORKFLOW_HASHES, result)
         if sdk_selected:
             _source_closure(api, SDK_WORKFLOWS, revision, SDK_HASHES, result)
+        if hub_selected:
+            _source_closure(api, HUB_WORKFLOWS, revision, HUB_HASHES, result)
     if immutable_selected:
         for fixed_revision, hashes in IMMUTABLE_HASHES.items():
             names = [name for name, selected_revision in IMMUTABLE_REVISIONS.items()
                      if selected_revision == fixed_revision]
             _source_closure(api, names, fixed_revision, hashes, result)
     qualify_registered_callers(selected, api, result)
-    if branch_selected or sdk_selected:
+    if branch_selected or sdk_selected or hub_selected:
         _protection(api, result)
         after = _main(api, result)
         if after is not None and after != revision:
@@ -289,5 +320,6 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
         registered = [ref for ref in REGISTERED_SELECTION if ref in selected]
         result["expected"] = (list(expected)
                               + [ref for ref in SDK_SELECTION if ref in selected]
+                              + [ref for ref in HUB_SELECTION if ref in selected]
                               + registered)
     return result

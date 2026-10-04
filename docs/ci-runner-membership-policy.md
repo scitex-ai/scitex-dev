@@ -50,6 +50,16 @@ not grant group access or qualify actual SDK jobs. The current CLA workflow
 also binds its immutable baseline-attribution helper; the historical immutable
 CLA keeps its original bytes.
 
+The seven fixed Hub definitions may be selected as one complete optional
+bundle, independently of the SDK pair. Each whole body and its same-revision
+admission is pinned to reviewed hashes from actual protected central main;
+main and protection are checked before and after all source reads. Partial
+Hub bundles, leaf callers, unknown definitions and alternative literal refs
+refuse before API queries. The original profiles, SDK pair, optional Dev
+publisher and current CLA helper retain their existing separate contracts.
+This finite source qualification does not alter group access or assert that
+Hub's full runtime tests have run.
+
 The organization-owned `company-ci-pool-health` workflow also samples one
 admitted runner every fifteen minutes or by manual dispatch. It reads visible
 CPU counts, priority, memory, filesystem space and CPU pressure without a
