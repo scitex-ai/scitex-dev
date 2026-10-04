@@ -6,51 +6,123 @@ on:
   pull_request:
     branches: [main, develop]
   schedule:
-    - cron: "0 17 * * *"  # nightly 17:00 UTC (~02:00 JST), off-peak
+    - cron: "0 17 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
+  immutable-matrix:
+    # Protected main observed at d7d96c34d68cdfbb5503a933591f7748b5aa30ee.
+    # Dev retains all three minors. Null image/profile registrations refuse.
+    # The shared gate binds SCITEX_CI_SIF_SHA256 before the genuine full
+    # exec-in-sif.sh run-in-sif.sh command, owned PostgreSQL and [all,dev].
+    # GitHub validates permission ceilings for every nested job, including
+    # the SAC coverage leg; keep this grant local to the actual shared call.
+    permissions:
+      contents: read
+      id-token: write
+    uses: scitex-ai/.github/.github/workflows/ci-sif-matrix.yml@main
+    with:
+      suite: matrix
+      runs_on: ${{ vars.CI_RUNS_ON || '["ubuntu-latest"]' }}
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  matrix-evidence:
+    needs: [immutable-matrix]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      actions: read
+    steps:
+      - name: Require the full matrix and all three actual child jobs
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          FULL_MATRIX_RESULT: ${{ needs.immutable-matrix.result }}
+          ATTEMPT: ${{ github.run_attempt }}
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        with:
+          script: |
+            // BEGIN DEV_MATRIX_EVIDENCE
+            function requireEvidence(value, reason) {
+              if (!value) throw new Error(reason);
+            }
+            function qualifyChildren(jobs, runId, headSha) {
+              requireEvidence(Array.isArray(jobs) && jobs.length <= 200, 'job-inventory-invalid');
+              const names = ['3.11', '3.12', '3.13'].map(version =>
+                `immutable-matrix / test-dev-py${version}`);
+              const witnesses = names.map(name => {
+                const matches = jobs.filter(job => job && job.name === name);
+                requireEvidence(matches.length === 1, 'required-child-missing-or-ambiguous');
+                const job = matches[0];
+                requireEvidence(job.run_id === runId && job.head_sha === headSha
+                  && Number.isSafeInteger(job.id) && job.id > 0, 'required-child-identity-mismatch');
+                requireEvidence(job.status === 'completed' && job.conclusion === 'success',
+                  'required-child-not-successful');
+                requireEvidence(Array.isArray(job.steps), 'required-child-steps-missing');
+                for (const name of ['Verify source/runtime and acquire whole images',
+                                   'Run the genuine full leaf SIF suite']) {
+                  const steps = job.steps.filter(step => step && step.name === name);
+                  requireEvidence(steps.length === 1 && steps[0].status === 'completed'
+                    && steps[0].conclusion === 'success'
+                    && Number.isFinite(Date.parse(steps[0].started_at))
+                    && Number.isFinite(Date.parse(steps[0].completed_at))
+                    && Date.parse(steps[0].completed_at) >= Date.parse(steps[0].started_at),
+                    'required-child-gate-unqualified');
+                }
+                return {id: job.id, name: job.name, run_id: job.run_id, head_sha: job.head_sha};
+              });
+              requireEvidence(new Set(witnesses.map(job => job.id)).size === 3,
+                'required-child-id-ambiguous');
+              return witnesses;
+            }
+            // END DEV_MATRIX_EVIDENCE
+            requireEvidence(process.env.FULL_MATRIX_RESULT === 'success', 'full-matrix-not-successful');
+            const attempt = Number(process.env.ATTEMPT);
+            requireEvidence(Number.isSafeInteger(attempt) && attempt > 0, 'run-attempt-invalid');
+            requireEvidence(/^[a-f0-9]{40}$/.test(process.env.EXPECTED_HEAD || ''), 'head-identity-invalid');
+            let total = null;
+            const jobs = [];
+            for (let page = 1; page <= 2; page++) {
+              const response = await github.request(
+                'GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs', {
+                  ...context.repo, run_id: context.runId, attempt_number: attempt,
+                  per_page: 100, page, request: {timeout: 10000},
+                });
+              const data = response.data;
+              requireEvidence(Number.isSafeInteger(data.total_count) && data.total_count >= 0
+                && data.total_count <= 200 && Array.isArray(data.jobs) && data.jobs.length <= 100,
+                'job-inventory-unqualified');
+              if (total === null) total = data.total_count;
+              requireEvidence(data.total_count === total, 'job-inventory-changed');
+              jobs.push(...data.jobs);
+              if (jobs.length === total) break;
+            }
+            requireEvidence(jobs.length === total && new Set(jobs.map(job => job.id)).size === total,
+              'job-inventory-incomplete');
+            core.info(JSON.stringify(qualifyChildren(jobs, context.runId, process.env.EXPECTED_HEAD)));
+
   test:
-    # Job name is a REQUIRED status check (branch protection):
-    # pytest-matrix-on-ubuntu-py3.11 / 3.12 / 3.13 — keep verbatim.
+    # Original required names reflect the full matrix AND its three actual legs.
     name: pytest-matrix-on-ubuntu-py${{ matrix.python-version }}
-    runs-on: ${{ fromJSON(vars.CI_RUNS_ON || '["self-hosted","Linux","X64","scitex-ci"]') }}
+    needs: [immutable-matrix, matrix-evidence]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
-    env:
-      SCITEX_CI_APPTAINER: ${{ vars.SCITEX_CI_APPTAINER }}
-      SCITEX_CI_SIF: ${{ vars.SCITEX_CI_SIF }}
-      SCITEX_CI_SIF_SHA256: ${{ vars.SCITEX_CI_SIF_SHA256 }}
     steps:
-      # fetch-depth: 0 is REQUIRED here, not an optimisation. setuptools-scm
-      # derives the version from git tags; a shallow clone hides them, so the
-      # local editable install resolves to `0.1.dev1+g<sha>`. Published
-      # scitex-cards unconditionally requires `scitex-dev>=0.59.0`, which makes
-      # that string unsatisfiable — every matrix leg then fails BEFORE a test
-      # is collected, which reads as a test failure and is not one.
-      # The quality-audit workflow already checks out with fetch-depth: 0 and
-      # passes for exactly this reason; it is the control for this change.
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Run tests
-        # The wrapper verifies the immutable image digest before execution.
-        # The inner runner then verifies its Python/PostgreSQL capabilities and
-        # owns one socket-only throwaway cluster for this matrix leg.
-        run: bash .github/ci/exec-in-sif.sh run-in-sif.sh ${{ matrix.python-version }}
-      - name: Upload coverage to Codecov
-        if: always() && matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v5
+      - name: Propagate the genuine full matrix and child evidence result
         env:
-          # Per-job isolated HOME so parallel matrix jobs don't race on the
-          # codecov uploader's state under $HOME, and so the uploader's
-          # internal `git` calls don't trip "dubious ownership" on the
-          # shared checkout. Paired with disable_safe_directory below.
-          HOME: ${{ runner.temp }}/codecov-home-${{ matrix.python-version }}
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml
-          fail_ci_if_error: false
-          disable_safe_directory: true
+          FULL_MATRIX_RESULT: ${{ needs.immutable-matrix.result }}
+          CHILD_EVIDENCE_RESULT: ${{ needs.matrix-evidence.result }}
+        run: |
+          set -euo pipefail
+          test "$FULL_MATRIX_RESULT" = success
+          test "$CHILD_EVIDENCE_RESULT" = success

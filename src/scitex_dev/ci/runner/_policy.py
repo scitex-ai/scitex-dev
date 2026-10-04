@@ -15,9 +15,12 @@ from urllib.parse import urlsplit
 import click
 
 from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
+from ._policy_dev_release import DEV_SELECTION
 
 ORG = "scitex-ai"
 CPU_RUNNERS = ("scitex-ci-02", "scitex-ci-03", "scitex-ci-04")
+COMPANY_RUNNERS = (*CPU_RUNNERS, "scitex-docker-03", "scitex-ci-04-02")
+REVIEWED_GROUPS = {6: "Organization"}
 HOSTED_RUNS_ON = '["ubuntu-latest"]'
 
 
@@ -30,8 +33,7 @@ def parse_repository(remote: str) -> str:
         if url.scheme not in ("https", "ssh") or url.hostname != "github.com" or url.query or url.fragment:
             raise ValueError("origin is not an exact GitHub repository")
         path = url.path.lstrip("/")
-    if path.endswith(".git"):
-        path = path[:-4]
+    path = path.removesuffix(".git")
     if not re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9_.-]+", path) or path.split("/")[1] in (".", ".."):
         raise ValueError("origin has no unambiguous owner/repository")
     return path
@@ -61,8 +63,8 @@ def assess_pool(runners, groups, group_runner_ids, *, expected_workflows=None) -
     if not isinstance(runners, list) or not isinstance(groups, list):
         report["unknown"].append("organization runner/group inventory unavailable")
         return report
-    selected = [r for r in runners if isinstance(r, dict) and r.get("name") in CPU_RUNNERS]
-    for name in CPU_RUNNERS:
+    selected = [r for r in runners if isinstance(r, dict) and r.get("name") in COMPANY_RUNNERS]
+    for name in COMPANY_RUNNERS:
         matches = [r for r in selected if r.get("name") == name]
         if len(matches) != 1 or type(matches[0].get("id")) is not int:
             report["violations"].append(f"{name}: exactly one organization registration required")
@@ -89,21 +91,26 @@ def assess_pool(runners, groups, group_runner_ids, *, expected_workflows=None) -
         group = next(g for g in groups if g["id"] == ids[0])
         if not any(g["id"] == group["id"] for g in report["groups"]):
             report["groups"].append({k: group.get(k) for k in (
-                "id", "name", "visibility", "allows_public_repositories",
+                "id", "name", "default", "visibility", "allows_public_repositories",
                 "restricted_to_workflows", "selected_workflows")})
     expected = tuple(expected_workflows or ())
     for group in report["groups"]:
-        if (group.get("id") != 6 or group.get("name") != "Organization"
+        if (group.get("id") not in REVIEWED_GROUPS or group.get("name") != REVIEWED_GROUPS.get(group.get("id"))
                 or group.get("visibility") != "all" or group.get("allows_public_repositories") is not True):
             report["violations"].append("organization group identity/repository availability differs from reviewed policy")
+        if group.get("default") is True:
+            report["violations"].append("company runners must not use the default group")
+        elif group.get("default") is not False:
+            report["unknown"].append("organization group default flag unavailable")
         refs = group.get("selected_workflows")
         if group.get("restricted_to_workflows") is not True or not isinstance(refs, list) or not refs:
             report["violations"].append(f"group {group['id']}: unrestricted workflow access")
             continue
         if len({ref for ref in refs if isinstance(ref, str)}) != len(refs):
             report["violations"].append(f"group {group['id']}: selected workflows contain duplicate or malformed refs")
-        if any(not isinstance(ref, str) or not re.fullmatch(
+        if any(not isinstance(ref, str) or not (re.fullmatch(
                 rf"{ORG}/\.github/\.github/workflows/[A-Za-z0-9_-]+\.ya?ml@(?:[a-f0-9]{{40}}|refs/heads/main)", ref)
+                or (ref == DEV_SELECTION and group.get("id") == 6 and group.get("name") == "Organization"))
                for ref in refs):
             report["violations"].append(f"group {group['id']}: workflow access has no qualified organization ref")
         if not expected:
@@ -153,7 +160,7 @@ def collect_activity(runners, api) -> dict:
     if not isinstance(runs, list) or len(runs) > 3:
         return result
     ids = {r["id"]: r["name"] for r in runners or []
-           if isinstance(r, dict) and type(r.get("id")) is int and r.get("name") in CPU_RUNNERS}
+           if isinstance(r, dict) and type(r.get("id")) is int and r.get("name") in COMPANY_RUNNERS}
     complete = True
     now = dt.datetime.now(dt.timezone.utc)
     latest = None
@@ -202,7 +209,7 @@ def collect_policy(*, api=None) -> dict:
             break
         rows = _rows(api(f"orgs/{ORG}/actions/runner-groups/{group['id']}/runners?per_page=100"), "runners")
         memberships[group["id"]] = None if rows is None else [r.get("id") for r in rows if isinstance(r, dict)]
-    cpu_ids = {r.get("id") for r in runners or [] if isinstance(r, dict) and r.get("name") in CPU_RUNNERS}
+    cpu_ids = {r.get("id") for r in runners or [] if isinstance(r, dict) and r.get("name") in COMPANY_RUNNERS}
     selected_groups = [g for g in groups or [] if isinstance(memberships.get(g["id"]), list)
                        and cpu_ids.intersection(memberships[g["id"]])]
     contract = qualify_workflows(selected_groups, api)
@@ -215,7 +222,7 @@ def collect_policy(*, api=None) -> dict:
     report["organization"] = ORG
     report["observed_at"] = dt.datetime.now(dt.timezone.utc).isoformat()
     report["registrations"] = [{k: r.get(k) for k in ("id", "name", "status", "busy")}
-                               for r in runners or [] if isinstance(r, dict) and r.get("name") in CPU_RUNNERS]
+                               for r in runners or [] if isinstance(r, dict) and r.get("name") in COMPANY_RUNNERS]
     return report
 
 

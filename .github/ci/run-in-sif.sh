@@ -14,23 +14,11 @@ test -x "$VENV/bin/python" || {
     exit 1
 }
 
-mapfile -t PG_INITDB_CANDIDATES < <(compgen -G '/usr/lib/postgresql/*/bin/initdb' | sort -V)
-[ "${#PG_INITDB_CANDIDATES[@]}" -gt 0 ] || {
-    echo "::error::CI image lacks PostgreSQL server binaries under /usr/lib/postgresql/*/bin. Rebuild and synchronize ci-cpu.sif; host binaries are not an allowed fallback."
-    exit 1
-}
-PGBIN="$(dirname "${PG_INITDB_CANDIDATES[-1]}")"
-for required in initdb pg_ctl postgres; do
-    [ -x "$PGBIN/$required" ] || {
-        echo "::error::CI image PostgreSQL capability is incomplete: $PGBIN/$required is not executable. Rebuild and synchronize ci-cpu.sif."
-        exit 1
-    }
-done
-PSQL="$(command -v psql 2>/dev/null || true)"
-[ -x "$PSQL" ] || {
-    echo "::error::CI image PostgreSQL capability is incomplete: psql is not executable. Rebuild and synchronize ci-cpu.sif."
-    exit 1
-}
+# The central registered image profile declares these exact capabilities.
+# No highest-version search, home binary or host fallback is accepted.
+PGBIN="${SCITEX_CI_PG_BIN:?registered image PostgreSQL directory is required}"
+PG_CAPABILITY_VERSION="${SCITEX_CI_PG_VERSION:?registered image PostgreSQL version is required}"
+PSQL="$PGBIN/psql"
 
 export LC_ALL=C.UTF-8 LANG=C.UTF-8
 
@@ -63,6 +51,12 @@ mkdir -p "$TMPDIR/site" "$TMPDIR/uv-cache"
 # Set owned state before the installer or any application/plugin import.
 source "$(dirname "${BASH_SOURCE[0]}")/release-context.sh"
 scitex_release_context "$TMPDIR" "$VENV"
+
+# Verify the declared image server/client closure in the neutral environment,
+# before dependency resolution or a test/plugin can run.
+scitex_release_run "$VENV/bin/python" -I -S -B \
+    "$(dirname "${BASH_SOURCE[0]}")/verify-postgres-capability.py" \
+    --bin-dir "$PGBIN" --expected-version "$PG_CAPABILITY_VERSION"
 
 # The HPC compute-node $HOME is READ-ONLY inside the container, so uv/pip cannot
 # create their default caches under ~/.cache — point them at the writable

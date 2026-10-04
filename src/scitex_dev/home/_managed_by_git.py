@@ -192,6 +192,19 @@ def _migrate_runtime_files(root: Path) -> list[str]:
     return moved
 
 
+def _index_has_staged_changes(root: Path) -> bool:
+    """Whether the git index holds staged changes (name output decides).
+
+    ``git diff --cached --name-only -z`` exits 0 with empty output for a
+    clean tree and 0 with names listed when staged changes exist. Status 0
+    is the ONLY valid answer — 1/2/128/unavailable/timeout all propagate
+    through _run_git, whose message names the actual command so a failure
+    cannot pass vacuously.
+    """
+    out = _run_git(root, "diff", "--cached", "--name-only", "-z")
+    return bool(out)
+
+
 def ensure_dotscitex_managed_by_git(
     home: str | Path | None = None,
     *,
@@ -222,9 +235,8 @@ def ensure_dotscitex_managed_by_git(
     moved = _migrate_runtime_files(root)
 
     _run_git(root, "add", "-A")
-    status = _run_git(root, "status", "--porcelain")
     committed = False
-    if status and commit:
+    if commit and _index_has_staged_changes(root):
         _run_git(root, "-c", f"user.name={actor_name}", "-c", f"user.email={actor_email}",
                  "commit", "-q", "-m", commit_message)
         committed = True

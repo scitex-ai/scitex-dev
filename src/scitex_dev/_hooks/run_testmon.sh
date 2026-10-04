@@ -154,7 +154,10 @@ fi
 # letting `set -e` abort before the write-back stage runs. `$PY` is the
 # absolute interpreter resolved up top — never a bare `python3` off $PATH.
 set +e
-"$PY" -m pytest --testmon "$@"
+# Cache/repository resolution above intentionally uses the hook's own context.
+# Only the test child must let foreign Git fixtures select their own repository.
+HOOK_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+bash "$HOOK_DIR/_git_local_env.sh" "$PY" -m pytest --testmon "$@"
 rc=$?
 set -e
 
