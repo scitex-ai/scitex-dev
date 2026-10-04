@@ -253,7 +253,9 @@ def test_real_cron_handler_refuses_unknown_or_unrestricted_owned_api_fixture(tmp
     env = {"PATH": str(bin_dir) + ":/usr/bin:/bin", "PYTHONPATH": str(source), "LANG": "C"}
     code = "from scitex_dev._cli.cron.run import _run_body; raise SystemExit(_run_body('ci-runner-policy',only=None,dry_run=True))"
     # Act
-    child = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=5, check=False)
+    # The full cron CLI starts a fresh interpreter under the parallel SIF suite.
+    # Bound startup and the owned API fixture without requiring a five-second cold start.
+    child = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=30, check=False)
     # Assert
     assert json.loads(child.stdout)["state"] == ("unknown" if unavailable else "violation")
 
