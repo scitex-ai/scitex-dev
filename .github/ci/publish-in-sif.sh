@@ -72,6 +72,11 @@ test -n "$JWT" || {
 }
 echo "OIDC JWT obtained (length=${#JWT})"
 
+# Only the existing protected-main caller may publish on the company runner.
+# The token remains RAM-only; this local claim check does not verify its signature.
+printf '%s' "$JWT" | scitex_release_run "$PY" .github/ci/release-identity.py oidc \
+    --commit "${GITHUB_SHA:?GITHUB_SHA must identify the dispatch workflow source}"
+
 # --- step 2: exchange the JWT for a short-lived PyPI API token ---
 echo "=== exchanging JWT at PyPI mint-token endpoint ==="
 MINT_RESP="$(scitex_release_run curl -sS -X POST https://pypi.org/_/oidc/mint-token \
@@ -95,8 +100,7 @@ echo "PyPI token minted (length=${#MINTED})"
 
 # --- step 3: install twine into the writable target, then upload ---
 echo "=== installing twine (--target) ==="
-scitex_release_run uv pip install --python "$PY" --target="$TMPDIR/site" twine ||
-    scitex_release_run "$PY" -m pip install --target="$TMPDIR/site" twine
+scitex_release_run uv pip install --python "$PY" --target="$TMPDIR/site" twine
 
 echo "=== twine upload dist/* ==="
 scitex_release_run env PYTHONPATH="$TMPDIR/site" \
