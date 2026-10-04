@@ -83,6 +83,17 @@ HUB_HASHES = {
         "80fecd20a5a46304e5d00ab25b5fff630bd99689e94dff364f548e5ad06a65e8",
     "runner-admission.yml": WORKFLOW_HASHES["runner-admission.yml"],
 }
+# CodeQL is independently optional; it never turns the seven Hub tests into
+# a partial eight-definition bundle or invalidates the admitted 31-profile.
+HUB_CODEQL_WORKFLOWS = ("hub-codeql-security-analysis.yml",)
+HUB_CODEQL_SELECTION = tuple(
+    PREFIX + name + "@" + BRANCH for name in HUB_CODEQL_WORKFLOWS
+)
+HUB_CODEQL_HASHES = {
+    "hub-codeql-security-analysis.yml":
+        "9e2d0d823ec528d2aae9c99a6b3858c367846970bd7b3f3b086fec8a7276c784",
+    "runner-admission.yml": WORKFLOW_HASHES["runner-admission.yml"],
+}
 CLA_HELPER_SOURCE = (
     "scitex-ai/.github", "10ee482c6f70a4cb10799c407cd88c64afc5458b",
     ".github/cla/baseline-transports.js", 10003,
@@ -269,7 +280,7 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
                 or set(refs).intersection(HUB_SELECTION) not in
                 (set(), set(HUB_SELECTION))
                 or set(refs) - set(REGISTERED_SELECTION) - set(SDK_SELECTION)
-                - set(HUB_SELECTION) not in
+                - set(HUB_SELECTION) - set(HUB_CODEQL_SELECTION) not in
                 (set(BRANCH_SELECTION), set(IMMUTABLE_SELECTION), set(TRANSITION_SELECTION))):
             result["violations"].append("selected workflows differ from the finite literal organization profiles")
             continue
@@ -291,8 +302,9 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
     immutable_selected = bool(selected.intersection(IMMUTABLE_SELECTION))
     sdk_selected = bool(selected.intersection(SDK_SELECTION))
     hub_selected = bool(selected.intersection(HUB_SELECTION))
+    codeql_selected = bool(selected.intersection(HUB_CODEQL_SELECTION))
     revision = None
-    if branch_selected or sdk_selected or hub_selected:
+    if branch_selected or sdk_selected or hub_selected or codeql_selected:
         revision = _main(api, result)
         _protection(api, result)
         if revision is None or result["unknown"] or result["violations"]:
@@ -303,13 +315,16 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
             _source_closure(api, SDK_WORKFLOWS, revision, SDK_HASHES, result)
         if hub_selected:
             _source_closure(api, HUB_WORKFLOWS, revision, HUB_HASHES, result)
+        if codeql_selected:
+            _source_closure(api, HUB_CODEQL_WORKFLOWS, revision,
+                            HUB_CODEQL_HASHES, result)
     if immutable_selected:
         for fixed_revision, hashes in IMMUTABLE_HASHES.items():
             names = [name for name, selected_revision in IMMUTABLE_REVISIONS.items()
                      if selected_revision == fixed_revision]
             _source_closure(api, names, fixed_revision, hashes, result)
     qualify_registered_callers(selected, api, result)
-    if branch_selected or sdk_selected or hub_selected:
+    if branch_selected or sdk_selected or hub_selected or codeql_selected:
         _protection(api, result)
         after = _main(api, result)
         if after is not None and after != revision:
@@ -321,5 +336,6 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
         result["expected"] = (list(expected)
                               + [ref for ref in SDK_SELECTION if ref in selected]
                               + [ref for ref in HUB_SELECTION if ref in selected]
+                              + [ref for ref in HUB_CODEQL_SELECTION if ref in selected]
                               + registered)
     return result
