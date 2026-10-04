@@ -78,3 +78,12 @@ registers, starts, stops, moves, or reconfigures runners.
 Source publication, group-policy readback, and actual job execution remain
 distinct qualification steps. Older generic HPC/per-repository ensure
 commands are not the deployment path for this organization-only pool.
+
+The separately reviewed `hub-codeql-security-analysis.yml@refs/heads/main`
+definition is independently optional. It qualifies its whole protected current
+source and the admission workflow at that same revision. Adding it preserves
+all original finite profiles, the zero-or-pair SDK bundle, the zero-or-seven Hub
+validation bundle and the optional original Dev publisher. Existing 31-definition
+selection remains valid without CodeQL; CodeQL cannot authorize partial Hub
+validation, a leaf caller, a foreign revision or any other workflow. This source
+observer does not change the runner group or prove live CodeQL job admission.
