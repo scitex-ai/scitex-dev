@@ -563,7 +563,7 @@ def transition_case(*, corrupt=None, move_main=False):
 
 @pytest.mark.parametrize("field,expected", [
     ("selection", list(_policy_contract.TRANSITION_SELECTION)),
-    ("unknown", []), ("violations", []), ("source_count", 25),
+    ("unknown", []), ("violations", []), ("source_count", 26),
     ("protection_reads", 2)])
 def test_exact_transition_reads_both_complete_public_source_closures(field, expected):
     # Arrange
@@ -578,12 +578,12 @@ def test_exact_transition_reads_both_complete_public_source_closures(field, expe
 
 
 @pytest.mark.parametrize("name,revision", [
-    ("pytest-matrix.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
-    ("runner-admission.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
-    ("ci-sif-matrix.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
+    ("pytest-matrix.yml", "7db48d94e2acf3645a1a8c5d95b14f9815281a1e"),
+    ("runner-admission.yml", "7db48d94e2acf3645a1a8c5d95b14f9815281a1e"),
+    ("ci-sif-matrix.yml", "7db48d94e2acf3645a1a8c5d95b14f9815281a1e"),
     ("ci-sif-matrix.yml", _policy_contract.SIF_REVISION),
-    ("import-smoke.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
-    ("rtd-sphinx-build.yml", "6b1c1aa56b2d8b5e82583e1c05ac69435f8c7278"),
+    ("import-smoke.yml", "7db48d94e2acf3645a1a8c5d95b14f9815281a1e"),
+    ("rtd-sphinx-build.yml", "7db48d94e2acf3645a1a8c5d95b14f9815281a1e"),
     ("rtd-sphinx-build.yml", _policy_contract.OLD_REVISION),
     ("pytest-matrix.yml", _policy_contract.OLD_REVISION),
     ("runner-admission.yml", _policy_contract.OLD_REVISION)])

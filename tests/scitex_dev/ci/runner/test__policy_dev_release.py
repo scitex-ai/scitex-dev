@@ -223,7 +223,7 @@ def test_original_exact21_plus_only_registered_publisher_has_complete_source_con
     result = contract.qualify_workflows([group], api)
     # Assert
     assert (set(result["expected"]) == set(contract.TRANSITION_SELECTION) | {release.DEV_SELECTION}
-            and len(result["expected"]) == 22 and len(result["source"]) == 36
+            and len(result["expected"]) == 22 and len(result["source"]) == 37
             and result["unknown"] == [] and result["violations"] == [])
 
 

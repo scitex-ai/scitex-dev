@@ -228,11 +228,11 @@ def test_existing_finite_profiles_keep_their_complete_original_source_closure(re
     # Arrange
     api, requests = central_case()
     expected_source_count = (
-        12
+        13
         if refs == contract.BRANCH_SELECTION
         else 13
         if refs == contract.IMMUTABLE_SELECTION
-        else 25
+        else 26
     )
     expected_protection_reads = 0 if refs == contract.IMMUTABLE_SELECTION else 2
     # Act

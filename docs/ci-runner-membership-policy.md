@@ -38,6 +38,18 @@ source reads. This keeps already pinned callers eligible while callers migrate.
 Partial unions, extra definitions, changed bytes and weaker protection refuse
 authorization. No branch reference is treated as a matching SHA selector. Unknown or incomplete API/source observations exit nonzero.
 
+Each complete profile may additionally select exactly the two organization
+SDK defining workflows, `sdk-python-package.yml` and `sdk-frontend.yml`, at
+`refs/heads/main`. A partial pair, a caller workflow title, a foreign ref or an
+extra definition refuses before source reads. Both complete SDK workflow
+bodies and their same-revision admission must match the reviewed source hashes;
+central main and its protection are checked before and after, including when
+the base profile is immutable. The original 21 refs and optional registered
+Dev publisher remain separate exact selections. This source observation does
+not grant group access or qualify actual SDK jobs. The current CLA workflow
+also binds its immutable baseline-attribution helper; the historical immutable
+CLA keeps its original bytes.
+
 The organization-owned `company-ci-pool-health` workflow also samples one
 admitted runner every fifteen minutes or by manual dispatch. It reads visible
 CPU counts, priority, memory, filesystem space and CPU pressure without a
