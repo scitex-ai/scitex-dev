@@ -30,7 +30,7 @@ WORKFLOW_HASHES = {'auto-merge-to-develop.yml': 'a28d9b92576590903290809643f21c9
  'quality-audit.yml': 'f44a2e6b5c479c2975d1cedf66738fdbf402a74cf1d8e26340bb9895524e7b4a',
  'rtd-sphinx-build.yml': '51be02f591beeeb5398b6447a7c26f0959e5487cad5b974bf62d2cf56fd51b5d',
  'runner-admission.yml': 'f2e92f6a50526c2133cd12ae7c5cbd98ce2922354bd85c628ca48aad4acc6d18',
- 'ci-sif-matrix.yml': 'f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1',
+ 'ci-sif-matrix.yml': '6fbed5d720b68435de5b4cc44ae19c3792e65fd5fd4a39693dfcb9b4963caede',
  'writer-release-sif.yml': '6ba940f2831159a4a3401746d29b8acdfc74fe89e336fe1dd7065bf21b85d1bb',
  'fd-fclones-integration.yml': 'a183e685a397fad2fad66375b0a9a7a87df945d9048d1277d1a605a9ba3a36c5',
  'runner-health.yml': 'e1bbd6cfa7f9c576898ffde263931f5d7ab6ab1c034197b5e03a0607897505d7'}
@@ -52,7 +52,7 @@ IMMUTABLE_HASHES = {
     OLD_REVISION: {**{name: WORKFLOW_HASHES[name] for name in (*NATIVE_WORKFLOWS[:7], "runner-admission.yml")},
                    "import-smoke.yml": "df8fb3d63e91612353b3fcbfcaf6f0e43d7c0102f799b48e82d8a47e32956f06",
                    "runner-admission.yml": IMMUTABLE_ADMISSION_HASH},
-    SIF_REVISION: {**{name: WORKFLOW_HASHES[name] for name in ("ci-sif-matrix.yml", "runner-admission.yml")},
+    SIF_REVISION: {"ci-sif-matrix.yml": "f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1",
                    "runner-admission.yml": IMMUTABLE_ADMISSION_HASH},
     NEW_REVISION: {**{name: WORKFLOW_HASHES[name] for name in (*NATIVE_WORKFLOWS[8:10], "runner-admission.yml")},
                    "runner-admission.yml": IMMUTABLE_ADMISSION_HASH},

@@ -2,16 +2,15 @@
 import base64
 import hashlib
 import json
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import click
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 
-from scitex_dev.ci.runner import register_ci_runner_commands
-from scitex_dev.ci.runner import _policy, _policy_contract
+from scitex_dev.ci.runner import _policy, _policy_contract, register_ci_runner_commands
 
 
 def pool():
@@ -180,7 +179,7 @@ def test_same_revision_is_qualified_only_with_reviewed_native_and_admission_byte
 
 def test_changed_admission_bytes_refuse_the_exact_native_ref():
     # Arrange
-    qualify, groups, api, ref = contract_case()
+    qualify, groups, api, _ref = contract_case()
     def changed(endpoint):
         data = api(endpoint)
         if "runner-admission" in endpoint:
@@ -194,7 +193,7 @@ def test_changed_admission_bytes_refuse_the_exact_native_ref():
 
 def test_missing_reviewed_public_bytes_remain_unknown():
     # Arrange
-    qualify, groups, api, ref = contract_case()
+    qualify, groups, _api, _ref = contract_case()
     # Act
     result = qualify(groups, lambda endpoint: None)
     # Assert
@@ -254,7 +253,7 @@ def test_real_cron_handler_refuses_unknown_or_unrestricted_owned_api_fixture(tmp
     env = {"PATH": str(bin_dir) + ":/usr/bin:/bin", "PYTHONPATH": str(source), "LANG": "C"}
     code = "from scitex_dev._cli.cron.run import _run_body; raise SystemExit(_run_body('ci-runner-policy',only=None,dry_run=True))"
     # Act
-    child = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=5)
+    child = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=5, check=False)
     # Assert
     assert json.loads(child.stdout)["state"] == ("unknown" if unavailable else "violation")
 
@@ -577,8 +576,10 @@ def test_exact_transition_reads_both_complete_public_source_closures(field, expe
 
 
 @pytest.mark.parametrize("name,revision", [
-    ("pytest-matrix.yml", "d7d96c34d68cdfbb5503a933591f7748b5aa30ee"),
-    ("runner-admission.yml", "d7d96c34d68cdfbb5503a933591f7748b5aa30ee"),
+    ("pytest-matrix.yml", "e7821bb86fdbd8279fe404770693a856dbf4c59a"),
+    ("runner-admission.yml", "e7821bb86fdbd8279fe404770693a856dbf4c59a"),
+    ("ci-sif-matrix.yml", "e7821bb86fdbd8279fe404770693a856dbf4c59a"),
+    ("ci-sif-matrix.yml", _policy_contract.SIF_REVISION),
     ("pytest-matrix.yml", _policy_contract.OLD_REVISION),
     ("runner-admission.yml", _policy_contract.OLD_REVISION)])
 def test_transition_changed_current_or_immutable_bytes_never_authorize(name, revision):
@@ -599,3 +600,33 @@ def test_transition_main_move_during_immutable_source_reads_remains_unknown():
     # Assert
     assert (result["expected"], result["unknown"]) == (
         [], ["central main revision changed during source qualification"])
+
+
+def test_current_and_immutable_sif_qualify_their_distinct_whole_bodies():
+    # Arrange
+    refs, api, _requests, current = transition_case()
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], api)
+    observed = {row["revision"]: row["sha256"] for row in result["source"]
+                if row["workflow"] == "ci-sif-matrix.yml"}
+    # Assert
+    assert (result["expected"], result["unknown"], result["violations"], observed) == (refs, [], [], {
+        current: "6fbed5d720b68435de5b4cc44ae19c3792e65fd5fd4a39693dfcb9b4963caede",
+        _policy_contract.SIF_REVISION: "f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1",
+    })
+
+
+@pytest.mark.parametrize("replace_current", [True, False])
+def test_current_and_immutable_sif_cannot_substitute_each_others_bytes(replace_current):
+    # Arrange
+    refs, api, _requests, current = transition_case()
+    prefix = "repos/scitex-ai/.github/contents/.github/workflows/ci-sif-matrix.yml?ref="
+    target = prefix + (current if replace_current else _policy_contract.SIF_REVISION)
+    replacement = api(prefix + (_policy_contract.SIF_REVISION if replace_current else current))
+    def substituted(endpoint):
+        return replacement if endpoint == target else api(endpoint)
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], substituted)
+    # Assert
+    assert (result["expected"], result["unknown"], result["violations"]) == (
+        [], [], ["reviewed workflow bytes changed: ci-sif-matrix.yml"])
