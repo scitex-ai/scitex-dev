@@ -39,7 +39,7 @@ class TestFullCentralProfileCallers(unittest.TestCase):
             observed.append((set(candidate['jobs']) == {bridge, full}, call['uses'], call['with'],
                              'runs-on' not in call, 'steps' not in call,
                              candidate['jobs'][bridge]['runs-on']))
-        self.assertEqual(observed, [(True, 'scitex-ai/.github/.github/workflows/' + central + '@refs/heads/main',
+        self.assertEqual(observed, [(True, 'scitex-ai/.github/.github/workflows/' + central + '@main',
              {'dev_original_commands': True, 'runs_on': '["self-hosted","Linux","X64","scitex-org-cpu"]'},
              True, True, 'ubuntu-latest') for central, _, _, _, _ in SPECS])
 

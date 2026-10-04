@@ -194,7 +194,7 @@ class DevDocsImportAdmission(unittest.TestCase):
         # Assert
         assert observed == {
             name: ("scitex-ai/.github/.github/workflows/" + PROFILE_SPECS[name][0]
-                   + "@refs/heads/main", "./.github/workflows/runner-admission.yml")
+                   + "@main", "./.github/workflows/runner-admission.yml")
             for name in names
         }
 

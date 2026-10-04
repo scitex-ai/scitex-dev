@@ -19,7 +19,7 @@ on:
 
 jobs:
   full-original-import:
-    uses: scitex-ai/.github/.github/workflows/import-smoke.yml@refs/heads/main
+    uses: scitex-ai/.github/.github/workflows/import-smoke.yml@main
     with:
       dev_original_commands: true
       runs_on: '["self-hosted","Linux","X64","scitex-org-cpu"]'
