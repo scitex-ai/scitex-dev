@@ -2,7 +2,9 @@
 
 Baselines are full Git bodies captured at the stated revision, so shallow public
 checkouts need no historical Git object. The admission body is the complete
-reviewed public d7 source. No repository install, image or membership API runs.
+reviewed public d7 source. The complete original jobs now live in two selected central definitions.
+Their full bodies are hash-bound source candidates, not invented commits.
+No repository install, image or membership API runs.
 """
 
 import hashlib
@@ -48,12 +50,35 @@ def original(name):
     return yaml.safe_load(BASELINES[name]["source"])
 
 
+PROFILE_SPECS = {
+    "rtd-sphinx-build-on-ubuntu-latest.yml": ("rtd-sphinx-build.yml", "sphinx", "full-original-docs"),
+    "import-smoke-on-ubuntu-py3-12.yml": ("import-smoke.yml", "install-check", "full-original-import"),
+}
+CENTRAL_BODY_PINS = {
+    "rtd-sphinx-build.yml": "cc680b6ceecac73566b212a0db96ba016b3aa28766700e95b04691981ededaad",
+    "import-smoke.yml": "3df1f4d4abd9da553b36484e37b8c5588e5684f6618d1b102c698893595fe8d6",
+}
+
+
+def central_workflow(name):
+    fixture = Path(__file__).parent / "fixtures/dev-original-docs-import-source.json"
+    sources = json.loads(fixture.read_text())
+    central_name = PROFILE_SPECS[name][0]
+    row = sources[central_name]["candidate"]
+    body = row["body"].encode()
+    assert hashlib.sha256(body).hexdigest() == CENTRAL_BODY_PINS[central_name]
+    assert len(body) == row["bytes"]
+    assert hashlib.sha1(b"blob " + str(len(body)).encode() + b"\0" + body).hexdigest() == row["git_blob"]
+    assert sources["runner_admission"]["body"] == ADMISSION_SOURCE
+    return yaml.safe_load(body)
+
+
 def guarded_jobs():
     for filename, job_id in (
         ("rtd-sphinx-build-on-ubuntu-latest.yml", "sphinx"),
         ("import-smoke-on-ubuntu-py3-12.yml", "install-check"),
     ):
-        yield filename, job_id, workflow(filename)["jobs"][job_id]
+        yield filename, job_id, central_workflow(filename)["jobs"]["dev-original-" + job_id]
 
 
 def run_guard(job, **changes):
@@ -157,17 +182,19 @@ class DevDocsImportAdmission(unittest.TestCase):
             "HEAD_REPOSITORY": "${{ github.event.pull_request.head.repo.full_name }}",
         }
 
-    def test_both_callers_bind_exact_immutable_public_admission(self):
+    def test_both_callers_bind_selected_central_definitions_and_local_admission(self):
         # Arrange
         names = BASELINES
         # Act
         observed = {
-            name: workflow(name)["jobs"]["runner-admission"]["uses"] for name in names
+            name: (workflow(name)["jobs"][PROFILE_SPECS[name][2]]["uses"],
+                   central_workflow(name)["jobs"]["runner-admission"]["uses"])
+            for name in names
         }
         # Assert
         assert observed == {
-            name: "scitex-ai/.github/.github/workflows/runner-admission.yml@"
-            + ADMISSION_REVISION
+            name: ("scitex-ai/.github/.github/workflows/" + PROFILE_SPECS[name][0]
+                   + "@refs/heads/main", "./.github/workflows/runner-admission.yml")
             for name in names
         }
 
@@ -177,22 +204,29 @@ class DevDocsImportAdmission(unittest.TestCase):
         # Act
         observed = {
             name: {
-                key: json.loads(value)
-                for key, value in workflow(name)["jobs"]["runner-admission"][
+                key: value
+                for key, value in central_workflow(name)["jobs"]["runner-admission"][
                     "with"
                 ].items()
             }
             for name in names
         }
         # Assert
-        assert observed == {name: {"runs_on": LABELS} for name in names}
+        assert observed == {name: {"runs_on": "${{ inputs.runs_on }}"} for name in names}
+        assert {
+            name: workflow(name)["jobs"][PROFILE_SPECS[name][2]]["with"]
+            for name in names
+        } == {
+            name: {"dev_original_commands": True, "runs_on": json.dumps(LABELS, separators=(",", ":"))}
+            for name in names
+        }
 
     def test_both_admission_callers_do_not_inherit_secrets(self):
         # Arrange
         names = BASELINES
         # Act
         observed = {
-            name: workflow(name)["jobs"]["runner-admission"].get("secrets")
+            name: central_workflow(name)["jobs"]["runner-admission"].get("secrets")
             for name in names
         }
         # Assert
@@ -217,7 +251,7 @@ class DevDocsImportAdmission(unittest.TestCase):
         # Arrange
         jobs = list(guarded_jobs())
         # Act
-        observed = {name: job["steps"][1:] for name, _, job in jobs}
+        observed = {name: job["steps"][4:] for name, _, job in jobs}
         expected = {
             name: original(name)["jobs"][job_id]["steps"] for name, job_id, _ in jobs
         }
@@ -230,14 +264,19 @@ class DevDocsImportAdmission(unittest.TestCase):
         # Arrange
         jobs = list(guarded_jobs())
         # Act
-        observed = {
-            name: {
-                key: value
-                for key, value in job.items()
-                if key not in {"needs", "runs-on", "steps"}
-            }
-            for name, _, job in jobs
-        }
+        observed = {}
+        for name, job_id, job in jobs:
+            value = {key: item for key, item in job.items()
+                     if key not in {"needs", "runs-on", "steps"}}
+            baseline = original(name)["jobs"][job_id]
+            expected_if = ("inputs.dev_original_commands && (" + baseline["if"] + ")"
+                           if "if" in baseline else "inputs.dev_original_commands")
+            assert value.pop("if") == expected_if
+            if "if" in baseline:
+                value["if"] = baseline["if"]
+            if "name" not in baseline:
+                assert value.pop("name") == job_id
+            observed[name] = value
         expected = {
             name: {
                 key: value
@@ -258,19 +297,23 @@ class DevDocsImportAdmission(unittest.TestCase):
         assert observed == {
             name: (
                 "runner-admission",
-                "${{ fromJSON(needs.runner-admission.outputs.runs_on) }}",
+                (
+                    "${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository)\n"
+                    "    && fromJSON('[\"ubuntu-latest\"]')\n"
+                    "    || fromJSON(needs.runner-admission.outputs.runs_on) }}"
+                ),
             )
             for name, _, _ in jobs
         }
 
-    def test_only_admission_and_the_original_job_are_declared(self):
+    def test_only_full_central_call_and_original_status_bridge_are_declared(self):
         # Arrange
         jobs = list(guarded_jobs())
         # Act
         observed = {name: set(workflow(name)["jobs"]) for name, _, _ in jobs}
         # Assert
         assert observed == {
-            name: {"runner-admission", job_id} for name, job_id, _ in jobs
+            name: {PROFILE_SPECS[name][2], job_id} for name, job_id, _ in jobs
         }
 
     def test_unconditional_first_guard_receives_authentic_runner_and_admission_outputs(

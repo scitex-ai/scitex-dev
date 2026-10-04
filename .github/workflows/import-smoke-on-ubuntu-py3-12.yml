@@ -16,60 +16,26 @@ on:
     - cron: "0 17 * * *"  # nightly 17:00 UTC (~02:00 JST), off-peak
   workflow_dispatch:
 
+
 jobs:
-  runner-admission:
-    uses: scitex-ai/.github/.github/workflows/runner-admission.yml@d7d96c34d68cdfbb5503a933591f7748b5aa30ee
+  full-original-import:
+    uses: scitex-ai/.github/.github/workflows/import-smoke.yml@refs/heads/main
     with:
+      dev_original_commands: true
       runs_on: '["self-hosted","Linux","X64","scitex-org-cpu"]'
 
   install-check:
     name: import-smoke-on-ubuntu-py3-12
-    needs: runner-admission
-    runs-on: ${{ fromJSON(needs.runner-admission.outputs.runs_on) }}
+    needs: full-original-import
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
     steps:
-      - name: Require company admission before native work
+      - name: Propagate the full original validation result
         env:
-          RUNNER_ENVIRONMENT: ${{ runner.environment }}
-          NATIVE_AUTHORIZED: ${{ needs.runner-admission.outputs.native_authorized }}
-          ADMISSION_REASON: ${{ needs.runner-admission.outputs.reason }}
-          ADMISSION_RUNS_ON: ${{ needs.runner-admission.outputs.runs_on }}
+          FULL_RESULT: ${{ needs.full-original-import.result }}
         run: |
-          set -eu
-          case "$RUNNER_ENVIRONMENT" in
-            self-hosted)
-              test "$NATIVE_AUTHORIZED" = true
-              test "$ADMISSION_REASON" = confirmed-organization-members
-              test "$ADMISSION_RUNS_ON" = '{"group":"Organization","labels":["self-hosted","Linux","X64","scitex-org-cpu"]}'
-              ;;
-            github-hosted)
-              # Unconfirmed or external membership runs the full original checks.
-              ;;
-            *)
-              printf '%s\n' 'Unknown runner environment refused' >&2
-              exit 1
-              ;;
+          case "$FULL_RESULT" in
+            success) ;;
+            *) printf '%s\n' "Full original validation result: $FULL_RESULT" >&2; exit 1 ;;
           esac
-
-      # fetch-depth: 0 is REQUIRED — the same defect as the pytest-matrix
-      # workflow: a shallow clone hides the tags setuptools-scm derives the
-      # version from, the install resolves to `0.1.dev1+g<sha>`, and that string
-      # cannot satisfy scitex-cards' `scitex-dev>=0.59.0` requirement.
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Use a job-owned Python tool cache
-        run: |
-          tool_cache="$RUNNER_TEMP/scitex-dev-import-python-tools-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          mkdir -p "$tool_cache"
-          printf '%s\n' "RUNNER_TOOL_CACHE=$tool_cache" \
-            "AGENT_TOOLSDIRECTORY=$tool_cache" >> "$GITHUB_ENV"
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Install (no extras)
-        run: |
-          python -m venv .venv
-          .venv/bin/pip install --upgrade pip
-          .venv/bin/pip install -e .
-      - name: Import smoke
-        run: .venv/bin/python -c "import scitex_dev; print(scitex_dev.__version__)"

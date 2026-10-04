@@ -576,10 +576,13 @@ def test_exact_transition_reads_both_complete_public_source_closures(field, expe
 
 
 @pytest.mark.parametrize("name,revision", [
-    ("pytest-matrix.yml", "e7821bb86fdbd8279fe404770693a856dbf4c59a"),
-    ("runner-admission.yml", "e7821bb86fdbd8279fe404770693a856dbf4c59a"),
-    ("ci-sif-matrix.yml", "e7821bb86fdbd8279fe404770693a856dbf4c59a"),
+    ("pytest-matrix.yml", "1ad4e6e7acdab47d4a9675b1f825abc4848558a6"),
+    ("runner-admission.yml", "1ad4e6e7acdab47d4a9675b1f825abc4848558a6"),
+    ("ci-sif-matrix.yml", "1ad4e6e7acdab47d4a9675b1f825abc4848558a6"),
     ("ci-sif-matrix.yml", _policy_contract.SIF_REVISION),
+    ("import-smoke.yml", "1ad4e6e7acdab47d4a9675b1f825abc4848558a6"),
+    ("rtd-sphinx-build.yml", "1ad4e6e7acdab47d4a9675b1f825abc4848558a6"),
+    ("rtd-sphinx-build.yml", _policy_contract.OLD_REVISION),
     ("pytest-matrix.yml", _policy_contract.OLD_REVISION),
     ("runner-admission.yml", _policy_contract.OLD_REVISION)])
 def test_transition_changed_current_or_immutable_bytes_never_authorize(name, revision):
@@ -611,7 +614,7 @@ def test_current_and_immutable_sif_qualify_their_distinct_whole_bodies():
                 if row["workflow"] == "ci-sif-matrix.yml"}
     # Assert
     assert (result["expected"], result["unknown"], result["violations"], observed) == (refs, [], [], {
-        current: "6fbed5d720b68435de5b4cc44ae19c3792e65fd5fd4a39693dfcb9b4963caede",
+        current: "84aa0118ee9b97b4e1ecd7a81c84ca6455609eebed6412b82873c056f1c88d69",
         _policy_contract.SIF_REVISION: "f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1",
     })
 
@@ -630,3 +633,18 @@ def test_current_and_immutable_sif_cannot_substitute_each_others_bytes(replace_c
     # Assert
     assert (result["expected"], result["unknown"], result["violations"]) == (
         [], [], ["reviewed workflow bytes changed: ci-sif-matrix.yml"])
+
+
+def test_current_docs_and_immutable_docs_keep_independent_whole_source_identities():
+    # Arrange
+    refs, api, _requests, current = transition_case()
+    # Act
+    result = _policy_contract.qualify_workflows([group(refs)], api)
+    observed = {row["revision"]: row["sha256"] for row in result["source"]
+                if row["workflow"] == "rtd-sphinx-build.yml"}
+    # Assert
+    assert (result["expected"], result["unknown"], result["violations"], observed) == (
+        refs, [], [], {
+            current: "cc680b6ceecac73566b212a0db96ba016b3aa28766700e95b04691981ededaad",
+            _policy_contract.OLD_REVISION: "51be02f591beeeb5398b6447a7c26f0959e5487cad5b974bf62d2cf56fd51b5d",
+        })

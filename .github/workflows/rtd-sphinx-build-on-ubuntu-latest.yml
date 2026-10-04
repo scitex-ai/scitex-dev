@@ -5,101 +5,29 @@ on:
     branches: [main, develop]
   pull_request:
 
-jobs:
-  runner-admission:
-    uses: scitex-ai/.github/.github/workflows/runner-admission.yml@d7d96c34d68cdfbb5503a933591f7748b5aa30ee
-    with:
-      runs_on: '["self-hosted","Linux","X64","scitex-org-cpu"]'
 
-  sphinx:
-    needs: runner-admission
-    # Skip when HEAD is the bot's own previous docs auto-commit — breaks
-    # the infinite loop without using `[skip ci]`, which would also
-    # suppress the tag-push and release workflows when the auto-commit
-    # is the most recent commit on develop at release time.
+jobs:
+  full-original-docs:
+    uses: scitex-ai/.github/.github/workflows/rtd-sphinx-build.yml@refs/heads/main
+    with:
+      dev_original_commands: true
+      runs_on: '["self-hosted","Linux","X64","scitex-org-cpu"]'
     if: "!contains(github.event.head_commit.message, 'docs(sphinx_html): refresh from CI build')"
-    runs-on: ${{ fromJSON(needs.runner-admission.outputs.runs_on) }}
     permissions:
       contents: write
+
+  sphinx:
+    name: sphinx
+    needs: full-original-docs
+    if: "always() && (!contains(github.event.head_commit.message, 'docs(sphinx_html): refresh from CI build'))"
+    runs-on: ubuntu-latest
+    permissions: {}
     steps:
-      - name: Require company admission before native work
+      - name: Propagate the full original validation result
         env:
-          RUNNER_ENVIRONMENT: ${{ runner.environment }}
-          NATIVE_AUTHORIZED: ${{ needs.runner-admission.outputs.native_authorized }}
-          ADMISSION_REASON: ${{ needs.runner-admission.outputs.reason }}
-          ADMISSION_RUNS_ON: ${{ needs.runner-admission.outputs.runs_on }}
+          FULL_RESULT: ${{ needs.full-original-docs.result }}
         run: |
-          set -eu
-          case "$RUNNER_ENVIRONMENT" in
-            self-hosted)
-              test "$NATIVE_AUTHORIZED" = true
-              test "$ADMISSION_REASON" = confirmed-organization-members
-              test "$ADMISSION_RUNS_ON" = '{"group":"Organization","labels":["self-hosted","Linux","X64","scitex-org-cpu"]}'
-              ;;
-            github-hosted)
-              # Unconfirmed or external membership runs the full original checks.
-              ;;
-            *)
-              printf '%s\n' 'Unknown runner environment refused' >&2
-              exit 1
-              ;;
+          case "$FULL_RESULT" in
+            success) ;;
+            *) printf '%s\n' "Full original validation result: $FULL_RESULT" >&2; exit 1 ;;
           esac
-
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Use a job-owned Python tool cache
-        run: |
-          tool_cache="$RUNNER_TEMP/scitex-dev-docs-python-tools-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          scitex_state="$RUNNER_TEMP/scitex-dev-docs-state-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          mkdir -p "$tool_cache" "$scitex_state"
-          printf '%s\n' "RUNNER_TOOL_CACHE=$tool_cache" \
-            "AGENT_TOOLSDIRECTORY=$tool_cache" \
-            "SCITEX_DIR=$scitex_state" >> "$GITHUB_ENV"
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Create per-job venv (self-hosted shared-cache isolation)
-        # Keep package dependencies separate from the owned base interpreter.
-        # GITHUB_PATH makes discovery use the job venv; explicit interpreter
-        # paths below keep install and Sphinx independent of later PATH edits.
-        run: |
-          python -m venv "$RUNNER_TEMP/venv"
-          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
-
-      - name: Install package + docs deps
-        run: '"$RUNNER_TEMP/venv/bin/python" -m pip install -e ".[docs]"'
-
-      - name: Build Sphinx HTML (warnings fail PRs only)
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            "$RUNNER_TEMP/venv/bin/python" -m sphinx -W -b html docs/sphinx docs/sphinx/_build/html
-          else
-            "$RUNNER_TEMP/venv/bin/python" -m sphinx -b html docs/sphinx docs/sphinx/_build/html
-          fi
-
-      - name: Refresh src/scitex_dev/_sphinx_html/ (develop push only)
-        # main is PR-only — its _sphinx_html/ bundle arrives via the
-        # develop -> main PR. Direct bot-pushes to main are inhibited
-        # so the branch history stays linear-via-PR.
-        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-        run: |
-          rm -rf src/scitex_dev/_sphinx_html
-          cp -rf docs/sphinx/_build/html src/scitex_dev/_sphinx_html
-          touch src/scitex_dev/_sphinx_html/.nojekyll
-
-      - name: Commit refreshed HTML if it changed (develop push only)
-        continue-on-error: true
-        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-        run: |
-          if [ -n "$(git status --porcelain src/scitex_dev/_sphinx_html)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add src/scitex_dev/_sphinx_html
-            git commit -m "docs(sphinx_html): refresh from CI build"
-            git push
-          fi
