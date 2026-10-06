@@ -93,6 +93,30 @@ Don't add `setup.py`, `requirements.txt`, or `MANIFEST.in`. All those concerns b
 
 > Moved to its own leaf: [01c_root-docs-adr-templates.md](01c_root-docs-adr-templates.md) — `./docs` layout, the production-served Sphinx HTML bundled in `src/<pkg>/_sphinx_html/`, Architecture Decision Records (location, template, PS-173), and the `./templates` wheel-vs-git payload separation.
 
+## Shared configuration and host-local runtime (PS-234)
+
+Keep shared package configuration tracked under `.scitex/<package>/`.
+Everything under `.scitex/<package>/runtime/` belongs to the current host:
+logs, caches, sockets, sessions, generated profiles, and other live state.
+Every existing runtime directory must contain a `.gitignore` with `*` and
+no later negation exceptions. This covers hidden files and nested directories,
+including the runtime `.gitignore` itself. A parent ignore rule alone does
+not replace the local policy.
+
+PS-234 is an error in the project auditor. It also detects runtime entries
+already present in the Git index, since ignore rules do not untrack files.
+Keep local data when removing those entries from the index. If `runtime` is
+a symlink, exclude the link in a parent `.gitignore` too: Git cannot read
+ignore rules through that link. Its target must have the same local policy.
+
+The check covers project `.scitex/`, dotfiles `src/.scitex/`, and a directly
+audited `.scitex` repository, across all package scopes. It reads ignore
+policies and index paths without reading runtime payloads or changing files.
+The rule is provided through the `scitex_dev.audit.project` plugin group.
+The host registry is checked separately by `ecosystem audit-registry-layout`;
+use `--scitex-dir` to select an explicit registry, including a custom name.
+Project audits do not scan the user's home registry implicitly.
+
 ## Hidden / scratch directories
 
 | Dir | Use |

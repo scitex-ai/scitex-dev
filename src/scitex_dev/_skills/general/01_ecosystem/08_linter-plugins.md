@@ -118,6 +118,39 @@ This is what catches READMEs that *teach* the wrong API — a class of bug nothi
 - **Plugins**: `figrecipe` ships the `P0xx` (plot) and `FM0xx` + `FIG001` (figure) families — a growing set, so read it live with `scitex-dev linter list-rules --json` instead of trusting an id range quoted here. Other packages with `_linter_plugin.py` declared: `scitex_io`, `scitex_stats`, `scitex_audio`, `scitex_clew`, `scitex_notification`. Engine-shipped (legacy) rules `S*`, `I*`, `IO*`, `PA*`, `ST*`, `EH*` will migrate into their owning packages over subsequent releases.
 - **Console scripts**: `scitex-dev linter <subcommand>` is the canonical path. `scitex-linter <subcommand>` aliases it.
 
+## Project-auditor plugins
+
+Repository checks use the separate `scitex_dev.audit.project` entry-point
+group. AST linter checkers keep their existing contract. A project provider
+returns rule metadata plus checks accepting `(repo, violation_class, out)`:
+
+```python
+def get_plugin():
+    return {
+        "rules": [("PS-234", "§4b", "Runtime state stays host-local.",
+                   "E", "runtime-state-gitignored")],
+        "checks": [check_runtime_gitignore],
+        "registry_checks": [check_runtime_registry_gitignore],
+    }
+```
+
+```toml
+[project.entry-points."scitex_dev.audit.project"]
+scitex-dev = "scitex_dev._runtime_gitignore_plugin:get_plugin"
+```
+
+The engine registers these rules in the normal project catalog and invokes
+their checks during `audit-project` and `audit-all`. Optional `registry_checks` accept
+`(scitex_dir, violation_class, out)` and run through
+`ecosystem audit-registry-layout` against its explicit registry root;
+project checks do not scan the host registry automatically. Providers receive
+the violation class from the engine; they must not import its registry, which
+is still being assembled at discovery time. Broken providers, duplicate
+rule IDs/checkers, and collisions with engine rules abort discovery rather
+than silently omit checks. Reinstall after changing entry-point metadata.
+PS-234 is owned by scitex-dev because it enforces the shared ecosystem
+configuration/runtime contract; its implementation lives in the provider.
+
 ## Related
 
 - [`02_package/08_quality.md`](../02_package/08_quality.md) — quality-checklist that calls into `scitex-dev linter` as one of the release gates.

@@ -431,6 +431,12 @@ from .._check_hook_rules import HOOK_RULES_RULES as _HOOK_RULES_RULES  # noqa: E
 for _c, _sec, _msg, _sev, _slug in _HOOK_RULES_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
+# Owner-provided project checks share the existing Rule and override rails.
+# Keep this registration before the single final severity/slug pass below.
+from .._plugins import register_plugin_rules as _register_plugin_rules  # noqa: E402
+
+_register_plugin_rules(RULES, Rule)
+
 
 # hook-bypass: line-limit
 # ---------------------------------------------------------------------------

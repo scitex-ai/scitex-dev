@@ -308,5 +308,10 @@ def run_checks(
         check_ps211_smoke_layer(repo_root, Violation, violations)
         check_ps212_e2e_layer(repo_root, Violation, violations)
 
+    from ._plugins import load_plugins
+
+    for check in load_plugins().checks:
+        check(repo_root, Violation, violations)
+
 
 __all__ = ["run_checks"]
