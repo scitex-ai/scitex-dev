@@ -167,14 +167,23 @@ def _migrate_runtime_files(root: Path) -> list[str]:
     the old path. Files already under any ``runtime/`` component, inside
     ``.git``, or that are dirs/symlinks are never touched. An existing
     target is never clobbered. Returns the moved paths (``old -> new``).
+
+    Fleet symlink migration (2026-10-06): the tree may contain symlinks to
+    per-host live state outside the repo. A candidate reached through such
+    a link must be skipped: renaming it into the repo fails cross-device.
     """
     moved: list[str] = []
+    root_real = root.resolve()
     pkgs = sorted(p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and p.name != ".git")
     for pkg in pkgs:
         runtime_base = pkg / "runtime"
         for child in sorted(pkg.rglob("*")):
             if child.is_dir() or child.is_symlink():
                 continue
+            try:
+                child.resolve().relative_to(root_real)
+            except (OSError, ValueError):
+                continue  # reached via external state symlink: not ours
             if "runtime" in child.relative_to(pkg).parts:
                 continue
             name = child.name
@@ -185,6 +194,10 @@ def _migrate_runtime_files(root: Path) -> list[str]:
             target = runtime_base / rel
             if target.exists() or target.is_symlink():
                 continue  # already migrated; never clobber
+            try:
+                target.parent.resolve().relative_to(root_real)
+            except (OSError, ValueError):
+                continue  # migration target outside the repo: never move out
             target.parent.mkdir(parents=True, exist_ok=True)
             child.rename(target)
             child.symlink_to(target)
