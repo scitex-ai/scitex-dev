@@ -573,8 +573,7 @@ def test_nested_runtime_repo_stays_untracked(tmp_path):
 
 
 def test_migrate_runtime_files_skips_external_state_symlinks(tmp_path):
-    # Fleet symlink migration (2026-10-06): live state symlinked back into
-    # the tree must never be renamed into the repo (cross-device failure).
+    # Arrange
     from scitex_dev.home._managed_by_git import _migrate_runtime_files
 
     root = tmp_path / "dotscitex"
