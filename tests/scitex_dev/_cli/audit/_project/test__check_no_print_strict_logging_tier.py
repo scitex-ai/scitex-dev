@@ -139,7 +139,7 @@ def test_legacy_staged_setting_is_rejected_even_for_clean_source(
     assert exit_code == 1
 
 
-def test_json_stdout_emitter_passes(tmp_path: Path) -> None:
+def test_json_stdout_raw_print_fails(tmp_path: Path) -> None:
     # Arrange
     repo = _package(
         tmp_path,
@@ -151,10 +151,10 @@ def test_json_stdout_emitter_passes(tmp_path: Path) -> None:
     # Act
     exit_code = _audit(repo, "scitex-protocol")
     # Assert
-    assert exit_code == 0
+    assert exit_code == 1
 
 
-def test_caller_owned_rendering_stream_passes(tmp_path: Path) -> None:
+def test_caller_owned_raw_print_fails(tmp_path: Path) -> None:
     # Arrange
     repo = _package(
         tmp_path,
@@ -164,10 +164,10 @@ def test_caller_owned_rendering_stream_passes(tmp_path: Path) -> None:
     # Act
     exit_code = _audit(repo, "scitex-writer")
     # Assert
-    assert exit_code == 0
+    assert exit_code == 1
 
 
-def test_explicit_content_api_passes(tmp_path: Path) -> None:
+def test_explicit_content_raw_print_fails(tmp_path: Path) -> None:
     # Arrange
     repo = _package(
         tmp_path,
@@ -177,7 +177,7 @@ def test_explicit_content_api_passes(tmp_path: Path) -> None:
     # Act
     exit_code = _audit(repo, "scitex-writer")
     # Assert
-    assert exit_code == 0
+    assert exit_code == 1
 
 
 def test_scitex_logging_passes(tmp_path: Path) -> None:
@@ -193,3 +193,24 @@ def test_scitex_logging_passes(tmp_path: Path) -> None:
     exit_code = _audit(repo, "scitex-infra")
     # Assert
     assert exit_code == 0
+
+
+def test_legacy_skip_cannot_remove_the_logging_source_gate(tmp_path: Path) -> None:
+    repo = _package(
+        tmp_path,
+        "scitex-infra",
+        'print("status")\n',
+        config="project-type:\n  - pip\naudit:\n  skip:\n    - PS-220\n",
+    )
+    assert _audit(repo, "scitex-infra") == 1
+
+
+def test_plain_console_json_is_valid_source(tmp_path: Path) -> None:
+    repo = _package(
+        tmp_path,
+        "scitex-protocol",
+        "import json\nimport scitex_logging as slogging\n"
+        "def emit_json(payload):\n"
+        "    slogging.getPlainConsole(__name__).emit(json.dumps(payload))\n",
+    )
+    assert _audit(repo, "scitex-protocol") == 0

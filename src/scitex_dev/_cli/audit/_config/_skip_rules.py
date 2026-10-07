@@ -117,6 +117,8 @@ def parse_skip_rules(raw: object) -> list[SkipRule]:
             rule_id = str(rule).strip()
             if not rule_id:
                 raise _fail("an entry has an empty rule id")
+            if rule_id == "PS-220":
+                raise _fail("PS-220 is mandatory and cannot be deferred")
             entries.append(SkipRule(rule_id, _clean_reason(reason, rule=rule_id)))
         return entries
 
@@ -135,7 +137,11 @@ def parse_skip_rules(raw: object) -> list[SkipRule]:
             rule_id = str(item.get("rule") or "").strip()
             if not rule_id:
                 raise _fail(f"position {idx} has no `rule` key")
-            entries.append(SkipRule(rule_id, _clean_reason(item.get("reason"), rule=rule_id)))
+            if rule_id == "PS-220":
+                raise _fail("PS-220 is mandatory and cannot be deferred")
+            entries.append(
+                SkipRule(rule_id, _clean_reason(item.get("reason"), rule=rule_id))
+            )
         return entries
 
     raise _fail(f"expected a mapping or list, got {type(raw).__name__}")

@@ -113,12 +113,7 @@ def run_checks(
     from ._check_no_url_deps import check_ps216_no_url_deps
 
     check_ps216_no_url_deps(repo_root, Violation, violations)
-    # PS-220: strict error-tier logging transport. Human status through
-    # builtin print, Rich Console.print, or stdlib logging.getLogger is
-    # forbidden; only mechanically proved data/content transport is spared.
-    from ._check_no_print import check_ps220_no_print
-
-    check_ps220_no_print(repo_root, Violation, violations)
+    # PS-220 runs through the mandatory logging-owned provider below.
     # PS-221: [all]-closure on public optional-dependency extras. A public
     # extra must be `[all]` or bare only — every public extra must be a
     # subset of `all`, so `pip install <pkg>[all]` pulls everything public.

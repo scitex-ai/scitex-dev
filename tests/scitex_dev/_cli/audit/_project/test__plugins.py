@@ -13,15 +13,36 @@ import pytest
 from scitex_dev._cli.audit._project import _rules
 from scitex_dev._cli.audit._project._plugins import (
     ProjectPluginError,
-    load_plugins,
+    load_plugins as _load_plugins,
     register_plugin_rules,
 )
 from scitex_dev._cli.audit._project._rules._rule import Rule
-from scitex_dev._runtime_gitignore_plugin import get_plugin
+from scitex_dev._runtime_gitignore_plugin import get_plugin as _runtime_plugin
+from scitex_logging._audit_plugin import get_plugin as _logging_plugin
 
 _GROUP = "scitex_dev.audit.project"
 _BUILTIN = "scitex_dev._runtime_gitignore_plugin:get_plugin"
+_LOGGING = "scitex_logging._audit_plugin:get_plugin"
 _RULE = ("PS-999", "§2", "External auditor rule", "E", "external-auditor")
+
+
+def load_plugins(*, entry_points_iter):
+    """Keep mandatory logging while isolating optional provider discovery."""
+    points = tuple(entry_points_iter())
+    if not any(point.value == _LOGGING for point in points):
+        points += (EntryPoint(name="scitex-logging", value=_LOGGING, group=_GROUP),)
+    return _load_plugins(entry_points_iter=lambda: points)
+
+
+def get_plugin():
+    """Expected mandatory logging and built-in runtime declarations."""
+    runtime = _runtime_plugin()
+    logging = _logging_plugin()
+    return {
+        "rules": [*logging["rules"], *runtime["rules"]],
+        "checks": [*logging["checks"], *runtime["checks"]],
+        "registry_checks": runtime.get("registry_checks", []),
+    }
 
 
 def check_external(repo, violation_class, out):
@@ -149,7 +170,7 @@ def _point(provider: str, *, name: str | None = None) -> EntryPoint:
     )
 
 
-def test_metadata_absence_still_loads_the_owner_rule():
+def test_runtime_metadata_absence_still_loads_the_owner_rule():
     # Arrange
     expected = get_plugin()
     # Act
@@ -162,6 +183,29 @@ def test_metadata_absence_still_loads_the_owner_rule():
     )
 
 
+def test_absent_logging_provider_cannot_report_success():
+    with pytest.raises(ProjectPluginError, match="mandatory scitex-logging.*absent"):
+        _load_plugins(entry_points_iter=lambda: ())
+
+
+def test_logging_metadata_registers_one_project_check():
+    bundle = _load_plugins()
+    assert [rule[0] for rule in bundle.rules].count("PS-220") == 1
+    assert (
+        sum(
+            check.__module__ == "scitex_logging._output_auditor"
+            for check in bundle.checks
+        )
+        == 1
+    )
+
+
+def test_repeated_logging_provider_is_rejected():
+    point = EntryPoint(name="scitex-logging", value=_LOGGING, group=_GROUP)
+    with pytest.raises(ProjectPluginError, match="duplicate provider"):
+        _load_plugins(entry_points_iter=lambda: (point, point))
+
+
 def test_real_self_entry_point_does_not_register_the_owner_twice():
     # Arrange
     point = EntryPoint(name="scitex-dev", value=_BUILTIN, group=_GROUP)
@@ -169,10 +213,10 @@ def test_real_self_entry_point_does_not_register_the_owner_twice():
     # Act
     bundle = load_plugins(entry_points_iter=lambda: (point,))
     # Assert
-    assert (bundle.rules, bundle.checks, bundle.registry_checks) == (
-        tuple(expected["rules"]),
-        tuple(expected["checks"]),
-        tuple(expected.get("registry_checks", ())),
+    assert (set(bundle.rules), set(bundle.checks), set(bundle.registry_checks)) == (
+        set(expected["rules"]),
+        set(expected["checks"]),
+        set(expected.get("registry_checks", ())),
     )
 
 

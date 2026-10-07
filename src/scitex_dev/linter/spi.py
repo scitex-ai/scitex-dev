@@ -1,6 +1,6 @@
 """Public re-export surface for the SciTeX linter's internal building blocks.
 
-Promotes three long-standing internal helpers — ``Rule``, ``FMChecker``, and
+Promotes the long-standing helpers — ``Rule``, ``Issue``, ``FMChecker``, and
 ``_is_allowed_by_comment`` — to a stable public import path so peer packages
 (and internal callers) can depend on ``scitex_dev.linter.spi`` instead of
 reaching into ``scitex_dev.linter._rules._base`` / ``_fm_checker`` /
@@ -28,7 +28,8 @@ the a2 boundary smell those documents describe.
 from __future__ import annotations
 
 from ._fm_checker import FMChecker
+from ._issue import Issue
 from ._rules._base import Rule
-from .checker import _is_allowed_by_comment
+from ._source_helpers import _is_allowed_by_comment
 
-__all__ = ["Rule", "FMChecker", "_is_allowed_by_comment"]
+__all__ = ["Rule", "Issue", "FMChecker", "_is_allowed_by_comment"]

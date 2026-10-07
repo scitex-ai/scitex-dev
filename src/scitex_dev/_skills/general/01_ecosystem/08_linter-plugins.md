@@ -156,3 +156,38 @@ configuration/runtime contract; its implementation lives in the provider.
 - [`02_package/08_quality.md`](../02_package/08_quality.md) — quality-checklist that calls into `scitex-dev linter` as one of the release gates.
 - [`05_development/02_periodic-audits.md`](../05_development/02_periodic-audits.md) — `scitex-dev ecosystem audit-*` is the **structural** auditor (project layout, CLI shape, skill conformance); `scitex-dev linter` is the **code-pattern** auditor (anti-patterns inside `.py`/`.ipynb`/`.md`/`.rst`). Run both periodically.
 - [`02_package/07_github-actions.md`](../02_package/07_github-actions.md) — wiring `scitex-dev linter sweep --strict` into CI.
+
+### Logging-owned source enforcement
+
+`scitex-logging` supplies PS-220 metadata and the detector shared by its
+`scitex_dev.audit.project` and `scitex_dev.linter.plugins` providers. Every
+builtin print under `src` is an error, including JSON, caller-owned streams,
+and nested `scripts`, `examples`, `docs`, or `tests`. Necessary logging backend
+construction has an exact statement-level proof; the owning package has no
+blanket output exemption. Use `getLogger()` for stderr diagnostics,
+`getConsole()` for formatted stdout, and `getPlainConsole().emit()` for exact
+stdout or explicitly supplied streams.
+
+Both entry-point groups require the installed `scitex-logging` provider.
+Missing, broken, malformed, or duplicated providers abort the audit instead
+of reporting reduced coverage as success. Quiet settings affect verbosity;
+they do not permit a missing checker or a checker exception. PS-220 cannot be
+disabled, deferred, or downgraded by project configuration or comments.
+Existing entry-point groups and consumer imports retain their names.
+
+Linter providers retain their existing `(source_lines, config)` checker
+constructor. A checker declaring `accepts_filepath = True` additionally gets
+`filepath=...`. `scitex_dev.linter.spi.Issue` is the same value as the historical
+`checker.Issue`; rule/checker imports no longer require a partially initialized
+checker module during discovery.
+
+Distinct owners can inspect one API pattern for different concerns: IO saving
+and figure dimensions both apply to `savefig`. The existing `call_rules` view
+retains the first provider in sorted entry-point order. The additive
+`call_rule_groups` maps each pattern to every distinct declared Rule. The
+engine runs eligible groups with existing category and availability gates,
+and reports each owning rule once per source site. Repeated rule IDs,
+contradictory mappings, providers, and identical checker objects fail visibly.
+Factory-bound checker classes sharing a lexical name remain separate objects.
+An environment carrying two competing UI rule providers must remove or update
+the obsolete distribution before using this stricter loader.

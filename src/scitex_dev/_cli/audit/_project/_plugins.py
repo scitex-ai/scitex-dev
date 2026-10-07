@@ -24,6 +24,7 @@ from typing import Any
 
 _GROUP = "scitex_dev.audit.project"
 _BUILTIN_VALUE = "scitex_dev._runtime_gitignore_plugin:get_plugin"
+_LOGGING_VALUE = "scitex_logging._audit_plugin:get_plugin"
 
 
 class ProjectPluginError(RuntimeError):
@@ -75,16 +76,33 @@ def _discover(points) -> _PluginBundle:
     }
     providers = []
     builtin_present = False
+    logging_present = False
+    provider_owners: dict[str, str] = {}
     for point in sorted(points, key=lambda ep: (ep.name, ep.value)):
         name = f"{point.name} ({point.value})"
+        if point.value in provider_owners:
+            raise ProjectPluginError(
+                f"{_GROUP}: duplicate provider {name!r}; "
+                f"already declared by {provider_owners[point.value]!r}"
+            )
+        provider_owners[point.value] = name
         try:
             provider = point.load()
         except Exception as exc:
             raise ProjectPluginError(
                 f"{_GROUP} provider {name!r} could not load: {exc}"
             ) from exc
-        providers.append((name, provider))
+        is_logging = point.name == "scitex-logging" and point.value == _LOGGING_VALUE
+        providers.append((name, provider, is_logging))
         builtin_present |= point.value == _BUILTIN_VALUE
+        logging_present |= is_logging
+    if not logging_present:
+        raise ProjectPluginError(
+            f"{_GROUP}: mandatory scitex-logging provider {_LOGGING_VALUE!r} "
+            "is absent. Install matching scitex-logging and scitex-dev builds "
+            "that declare the logging auditor entry point; auditing cannot "
+            "report success without PS-220 coverage."
+        )
     if not builtin_present:
         # An editable/source checkout may have older installed metadata. Use
         # the same owner provider, never a second copy of its rule/check logic.
@@ -94,9 +112,23 @@ def _discover(points) -> _PluginBundle:
             raise ProjectPluginError(
                 f"{_GROUP} built-in provider {_BUILTIN_VALUE!r} could not load: {exc}"
             ) from exc
-        providers.append((_BUILTIN_VALUE, provider))
-    for name, provider in providers:
+        providers.append((_BUILTIN_VALUE, provider, False))
+    for name, provider, is_logging in providers:
         payload = _payload(provider, name)
+        if is_logging and (
+            not any(
+                isinstance(rule, tuple)
+                and len(rule) == 5
+                and rule[0] == "PS-220"
+                and rule[3] == "E"
+                for rule in payload["rules"]
+            )
+            or not payload["checks"]
+        ):
+            raise ProjectPluginError(
+                f"{_GROUP} provider {name!r}: mandatory PS-220 error rule "
+                "and runnable project check are required"
+            )
         for rule in payload["rules"]:
             if (
                 not isinstance(rule, tuple)
@@ -109,6 +141,10 @@ def _discover(points) -> _PluginBundle:
                     f"{_GROUP} provider {name!r}: invalid five-field rule {rule!r}"
                 )
             code = rule[0]
+            if code == "PS-220" and not is_logging:
+                raise ProjectPluginError(
+                    f"{_GROUP}: PS-220 belongs to scitex-logging, not provider {name!r}"
+                )
             if code in rule_owners:
                 raise ProjectPluginError(
                     f"{_GROUP}: duplicate rule {code!r} from {name!r}; "
@@ -150,7 +186,8 @@ def load_plugins(*, entry_points_iter: Callable | None = None) -> _PluginBundle:
 
     ``entry_points_iter`` supplies real entry-point objects for an isolated
     test or embedding host. Injected discovery bypasses the process cache.
-    The owner's mandatory rule is present even when metadata predates it.
+    The runtime owner is present even when its metadata predates it.
+    Logging is a required installed provider; absent or stale metadata fails.
     """
     if entry_points_iter is not None:
         return _discover(entry_points_iter())

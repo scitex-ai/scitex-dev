@@ -152,13 +152,12 @@ def test_clean_source_exits_zero(tmp_path):
     assert code == 0
 
 
-def test_machine_readable_stdout_payload_exits_zero(tmp_path):
-    # Arrange — output IS the product; a logger would corrupt it
+def test_machine_readable_raw_print_still_fails(tmp_path):
     _build(tmp_path, "import json\ndef go(x):\n    print(json.dumps(x))\n")
     # Act
     code = _audit(tmp_path)
     # Assert
-    assert code == 0
+    assert code == 1
 
 
 def test_exempted_site_with_a_reason_still_fails(tmp_path):

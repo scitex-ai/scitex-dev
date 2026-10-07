@@ -103,37 +103,36 @@ def run_once(*, dry_run: bool = False, out: TextIO | None = None) -> BranchGcRun
 def _report(result, sink: TextIO) -> None:
     """One repo, one block. An UNREADABLE repo is never printed as clean."""
     if result.unreadable:
-        print(f"  UNKNOWN  {result.repo}: {result.error}", file=sink)
+        write_stream(f"  UNKNOWN  {result.repo}: {result.error}", sink)
         return
     if not result.enabled:
         # The expected steady state. Say so in one line with the reason, so
         # a log full of these is legible rather than mysterious.
-        print(
+        write_stream(
             f"  off      {result.repo}: {result.count_before} branch(es); "
             f"{result.config_error or 'cleanup.branches.enabled not set'}",
-            file=sink,
+            sink,
         )
         return
     if result.abort_reason:
-        print(f"  ABORTED  {result.repo}: {result.abort_reason}", file=sink)
+        write_stream(f"  ABORTED  {result.repo}: {result.abort_reason}", sink)
         return
     breakdown = ", ".join(
         f"{key}={value}" for key, value in result.keep_reason_breakdown.items()
     )
-    print(
+    write_stream(
         f"  swept    {result.repo}: {len(result.deleted)} deleted, "
         f"{len(result.kept)} kept ({breakdown or 'none'})",
-        file=sink,
+        sink,
     )
     for verdict in result.deleted:
-        print(f"      - {verdict.name} ({verdict.landed_source})", file=sink)
+        write_stream(f"      - {verdict.name} ({verdict.landed_source})", sink)
     if result.bundle_path:
-        print(f"      backup  {result.bundle_path}", file=sink)
-        print(f"      restore {result.restore_command}", file=sink)
+        write_stream(f"      backup  {result.bundle_path}", sink)
+        write_stream(f"      restore {result.restore_command}", sink)
     if result.exceeds_cap:
-        print(
-            f"      DEGRADED {result.count_after} branches over cap {result.cap}",
-            file=sink,
+        write_stream(
+            f"      DEGRADED {result.count_after} branches over cap {result.cap}", sink
         )
 
 
