@@ -44,7 +44,7 @@ keywords = ["scitex", "developer-tools", "documentation", "llm-friendly", "mcp"]
 #   textual        — the TUI dashboard (was [tui])
 dependencies = [
     "scitex-config>=0.3.0",
-    "scitex-logging>=0.1.0",
+    "scitex-logging>=0.2.3",
     "click>=8.0.0",
     "pyyaml>=6.0",
     'tomli>=2.0; python_version < "3.11"',
