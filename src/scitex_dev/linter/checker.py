@@ -1,5 +1,7 @@
 """AST-based checker that detects SciTeX anti-patterns."""
 
+from __future__ import annotations
+
 __all__ = ["Issue", "is_script", "lint_file", "lint_source"]
 
 import ast

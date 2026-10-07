@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from importlib.metadata import EntryPoint, entry_points
+from importlib.metadata import EntryPoint, distributions
 
 import pytest
 
@@ -91,9 +91,13 @@ class BrokenProvider:
 
 
 def test_installed_metadata_has_one_logging_owner():
-    points = entry_points(group=GROUP)
-    owned = [ep for ep in points if ep.value == LOGGING.value]
-    assert [(ep.name, ep.dist.metadata["Name"]) for ep in owned] == [
+    owned = [
+        (ep.name, dist.metadata["Name"])
+        for dist in distributions()
+        for ep in dist.entry_points
+        if ep.group == GROUP and ep.value == LOGGING.value
+    ]
+    assert owned == [
         ("scitex-logging", "scitex-logging")
     ]
 
