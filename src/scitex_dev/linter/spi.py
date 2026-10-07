@@ -30,6 +30,13 @@ from __future__ import annotations
 from ._fm_checker import FMChecker
 from ._issue import Issue
 from ._rules._base import Rule
+from ._provider_replacements import ProviderReplacement
 from ._source_helpers import _is_allowed_by_comment
 
-__all__ = ["Rule", "Issue", "FMChecker", "_is_allowed_by_comment"]
+__all__ = [
+    "Rule",
+    "Issue",
+    "ProviderReplacement",
+    "FMChecker",
+    "_is_allowed_by_comment",
+]

@@ -84,10 +84,27 @@ def _iter_entry_points(group):
 
         return entry_points(group=group)
     else:
-        from importlib.metadata import entry_points
+        from importlib.metadata import distributions
 
-        eps = entry_points()
-        return eps.get(group, [])
+        # Python 3.9's flattened entry_points() result loses distribution
+        # ownership. Keep it explicitly when proving replacement contracts.
+        return [
+            _OwnedEntryPoint(point, distribution)
+            for distribution in distributions()
+            for point in distribution.entry_points
+            if point.group == group
+        ]
+
+
+class _OwnedEntryPoint:
+    """Retain actual distribution ownership on Python 3.9 entry points."""
+
+    def __init__(self, point, distribution):
+        self._point = point
+        self.dist = distribution
+
+    def __getattr__(self, name):
+        return getattr(self._point, name)
 
 
 def _validate_payload(plugin, name):
@@ -105,11 +122,13 @@ def _validate_payload(plugin, name):
             raise LinterPluginError(
                 f"{_GROUP} provider {name!r}: {key} must be a mapping"
             )
+    seen_rule_ids = set()
     for rule in plugin.get("rules", ()):
         if (
             not isinstance(getattr(rule, "id", None), str)
             or not rule.id.strip()
-            or getattr(rule, "severity", None) not in {"error", "warning", "info"}
+            or not isinstance(getattr(rule, "severity", None), str)
+            or rule.severity not in {"error", "warning", "info"}
             or not isinstance(getattr(rule, "category", None), str)
             or not isinstance(getattr(rule, "message", None), str)
             or not isinstance(getattr(rule, "suggestion", None), str)
@@ -118,6 +137,11 @@ def _validate_payload(plugin, name):
             raise LinterPluginError(
                 f"{_GROUP} provider {name!r}: invalid Rule {rule!r}"
             )
+        if rule.id in seen_rule_ids:
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: duplicate rule {rule.id!r}"
+            )
+        seen_rule_ids.add(rule.id)
     for key, rule in plugin.get("call_rules", {}).items():
         if (
             not isinstance(key, tuple)
@@ -133,11 +157,26 @@ def _validate_payload(plugin, name):
             raise LinterPluginError(
                 f"{_GROUP} provider {name!r}: invalid axes hint {key!r}"
             )
+    own_rules = {rule.id: rule for rule in plugin.get("rules", ())}
+    for rule in (
+        *plugin.get("call_rules", {}).values(),
+        *plugin.get("axes_hints", {}).values(),
+    ):
+        if rule.id in own_rules and own_rules[rule.id] != rule:
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: mapping references contradictory rule {rule.id!r}"
+            )
+    seen_checkers = set()
     for checker in plugin.get("checkers", ()):
         if not callable(checker):
             raise LinterPluginError(
                 f"{_GROUP} provider {name!r}: checker must be callable"
             )
+        if id(checker) in seen_checkers:
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: duplicate checker {checker!r}"
+            )
+        seen_checkers.add(id(checker))
 
 
 def load_plugins(*, entry_points_iter=None):
@@ -158,11 +197,13 @@ def load_plugins(*, entry_points_iter=None):
         "axes_hints": {},
         "checkers": [],
         "call_rule_groups": {},
+        "provider_replacements": (),
     }
     owners = {"rules": {}, "call_rules": {}, "axes_hints": {}, "checkers": {}}
     provider_owners = {}
     plugin_payloads = []
     logging_present = False
+    providers = []
     points = entry_points_iter() if injected else _iter_entry_points(_GROUP)
     for ep in sorted(
         points, key=lambda point: (point.name, getattr(point, "value", ""))
@@ -201,6 +242,15 @@ def load_plugins(*, entry_points_iter=None):
             raise LinterPluginError(
                 f"{_GROUP} provider {name!r}: mandatory PS-220 error rule and filepath-aware checker are required"
             )
+        providers.append((ep, plugin, is_logging, name))
+    from ._provider_replacements import ProviderReplacementError, resolve_replacements
+
+    try:
+        providers, receipts = resolve_replacements(providers)
+    except ProviderReplacementError as exc:
+        raise LinterPluginError(f"{_GROUP}: {exc}") from exc
+    merged["provider_replacements"] = receipts
+    for ep, plugin, is_logging, name in providers:
         for rule in plugin.get("rules", ()):
             if rule.id == "PS-220" and not is_logging:
                 raise LinterPluginError(
@@ -276,6 +326,16 @@ def load_plugins(*, entry_points_iter=None):
     merged["call_rule_groups"] = {
         key: tuple(group) for key, group in merged["call_rule_groups"].items()
     }
+    if not _quiet():
+        for receipt in receipts:
+            _logger.info(
+                "linter: %s (%s) replaces %s (%s) for rules %s",
+                receipt["successor_distribution"],
+                receipt["successor_entry_point"],
+                receipt["predecessor_distribution"],
+                receipt["predecessor_entry_point"],
+                ", ".join(receipt["rule_ids"]),
+            )
     if injected:
         return merged
     try:

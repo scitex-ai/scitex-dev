@@ -189,5 +189,36 @@ engine runs eligible groups with existing category and availability gates,
 and reports each owning rule once per source site. Repeated rule IDs,
 contradictory mappings, providers, and identical checker objects fail visibly.
 Factory-bound checker classes sharing a lexical name remain separate objects.
-An environment carrying two competing UI rule providers must remove or update
-the obsolete distribution before using this stricter loader.
+
+### Declared provider ownership transitions
+
+A successor may add a `replaces` tuple to its existing four payload keys. Each
+`scitex_dev.linter.spi.ProviderReplacement` names the predecessor's exact
+distribution, entry-point name and value, and complete advertised rule IDs:
+
+```python
+ProviderReplacement(
+    distribution="scitex-ui",
+    entry_point="ui",
+    value="scitex_ui._linter_plugin:get_plugin",
+    rule_ids=tuple(f"STX-UI{number}" for number in range(101, 108)),
+)
+```
+
+The loader validates every discovered provider before selecting the declared
+successor, independent of discovery order. The predecessor's full rule corpus
+must exactly match the declaration, and the successor must offer every one of
+those IDs. Partial, unknown, ambiguous, repeated, competing, cyclic, or self
+replacements fail; mandatory logging ownership cannot be displaced. Ordinary
+ownership collisions still fail. The declaration is dormant when the named
+distribution has no advertised linter provider, so the archived package need
+not be installed. A named distribution advertising an unfamiliar entry point
+fails instead of being silently ignored. Discovery uses the supplied entry
+points and never consults unrelated installed metadata during injected tests.
+
+The selected payload keeps the four historical result keys, adding structured
+`provider_replacements` receipts. A cached discovery emits one levelled stderr
+notice per active replacement. Quiet settings suppress notices while retaining
+the receipts and every validation failure. This lets SDK UI and legacy UI
+coexist during the declared seven-rule transition without removing either
+package or changing consumer APIs.
