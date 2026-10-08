@@ -154,6 +154,7 @@ def _audit_one(
     ep_value_for=None,
     repo_root=None,
     coverage=None,
+    owner_sources=None,
 ) -> tuple[str, list]:
     """Audit a single package; return (status, violations).
 
@@ -214,7 +215,12 @@ def _audit_one(
 
     if coverage is None:
         coverage = SurfaceCoverage()
-    _walk(cmd, [], out, root_display=package, coverage=coverage)
+    from ._mounted_owner import MountedOwners
+
+    owners = MountedOwners()
+    _walk(cmd, [], out, root_display=package, coverage=coverage, owners=owners)
+    if owner_sources is not None:
+        owner_sources.extend(owners.sources)
     _check_introspection(cmd, package, out)
     _check_config_help(cmd, package, out)
     _scan_env_vars(package, out, repo_root=repo_root)
@@ -293,12 +299,14 @@ def run_audit(
     from ._coverage import SurfaceCoverage
 
     coverage = SurfaceCoverage()
+    owner_sources: list[str] = []
     status, violations = _audit_one(
         package,
         behavioral=behavioral,
         timeout=timeout,
         repo_root=repo_root,
         coverage=coverage,
+        owner_sources=owner_sources,
     )
     violations = _filter_violations(violations, rules, exclude, min_severity)
 
@@ -334,6 +342,7 @@ def run_audit(
             "status": status,
             "measured": vantage,
             "tree_alignment": tree_alignment,
+            "mounted_owner_dictionaries": owner_sources,
             "severity_counts": severity_counts(violations),
             "violations": [_violation_to_dict(v) for v in violations],
         }
@@ -341,6 +350,10 @@ def run_audit(
             rec["baseline_suppressed"] = len(suppressed)
         _emit_json([rec], registry_provenance or "single-package mode")
     else:
+        from .._emit import emit
+
+        for source in owner_sources:
+            emit("info", source)
         _emit_human(package, status, violations, coverage, category="CLI convention")
         # Printed with the findings, not behind a --verbose: a reader
         # disputing a finding needs the measured path in the same glance.
@@ -437,6 +450,7 @@ def run_audit_all(
         # Fresh per package — coverage is per-CLI, and reusing one accumulator
         # would make every package after the first report the union.
         coverage = SurfaceCoverage()
+        owner_sources: list[str] = []
         if hint == "not-found":
             status, violations = "not-found", []
         elif hint == "skip-mcp":
@@ -452,6 +466,7 @@ def run_audit_all(
                         behavioral=behavioral,
                         timeout=timeout,
                         coverage=coverage,
+                        owner_sources=owner_sources,
                     )
             except _PackageTimeout:
                 status, violations = (
@@ -467,6 +482,10 @@ def run_audit_all(
         if not violations and status == "warn":
             status = "ok"
         if not output_json:
+            from .._emit import emit
+
+            for source in owner_sources:
+                emit("info", source)
             _emit_human(name, status, violations, coverage, category="CLI convention")
             if suppressed:
                 _emit_baseline_suppressed(len(suppressed), bl_path)
@@ -475,6 +494,7 @@ def run_audit_all(
         rec = {
             "package": name,
             "status": status,
+            "mounted_owner_dictionaries": owner_sources,
             "severity_counts": severity_counts(violations),
             "violations": [_violation_to_dict(v) for v in violations],
         }

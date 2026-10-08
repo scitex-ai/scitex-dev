@@ -335,7 +335,6 @@ def _verb_token(name: str) -> str:
     return name.lower().split("-")[0]
 
 
-@lru_cache(maxsize=1)
 def _verb_exception_tokens() -> frozenset[str]:
     """Leaf names / verb tokens the repo has declared are not verbs.
 
@@ -344,6 +343,10 @@ def _verb_exception_tokens() -> frozenset[str]:
     honour it. Entries without an inline `# why` are still exempt, and the
     missing comment is itself reported by §1f — deliberately, so a silent
     opt-out is impossible while a documented one is cheap.
+
+    This read depends on the lexical project/mounted-owner context. It
+    must not be memoized without that context: one owner's exceptions
+    would otherwise apply to the next owner visited in the same walk.
     """
     try:
         from ._std_rules import load_verb_exceptions

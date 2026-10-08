@@ -53,8 +53,10 @@ from scitex_dev.jobs import JobSpec
 # ``JOB_LOG_TARGETS`` maps each job to ``(package, slug)``; the slug keeps
 # the pre-existing log basename so operator greps / dashboards keep working.
 JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
+    "scitex-dev-pr-queue-retire": ("dev", "timer-pr-queue-retire"),
+    "scitex-dev-apps-delivery-observe": ("dev", "timer-apps-delivery-observe"),
     "scitex-dev-deploy-freshness": ("dev", "cron-deploy-freshness"),
-    "scitex-dev-pr-expire": ("dev", "cron-pr-expire"),
+    "scitex-dev-freshness-gc": ("dev", "cron-freshness-gc"),
     "scitex-dev-ecosystem-self-pull": ("dev", "timer-ecosystem-self-pull"),
     "scitex-dev-drift-report": ("dev", "timer-drift-report"),
     "scitex-dev-local-state-audit": ("dev", "timer-local-state-audit"),
@@ -72,11 +74,11 @@ JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
 #: jobs keeps a drift FINDING from marking the unit failed (drift is data
 #: recorded in the log, not a unit failure — skill §4).
 JOB_SHELL_BODIES: dict[str, str] = {
-    "scitex-dev-pr-expire": (
-        "date -u +'== pr-expire %Y-%m-%dT%H:%MZ =='; "
+    "scitex-dev-freshness-gc": (
+        "date -u +'== freshness-gc %Y-%m-%dT%H:%MZ =='; "
         # flip to --apply after fleet-wide dry-run validation — constitution
-        # §2, do not auto-mass-close 12 repos on first fire.
-        "scitex-dev ecosystem pr expire --all --days 3 --dry-run || true"
+        # §2, do not auto-mass-close the organization on first fire.
+        "scitex-dev ecosystem apply-freshness-gc --dry-run --json"
     ),
     "scitex-dev-ecosystem-self-pull": "scitex-dev ecosystem sync --yes",
     "scitex-dev-drift-report": (
@@ -169,7 +171,7 @@ JOB_SHELL_BODIES: dict[str, str] = {
     # deleted.
     #
     # BOTH SHIP IN REPORT MODE, i.e. WITHOUT `--execute`, exactly as
-    # `pr-expire` does and for the same reason: constitution 2 forbids an
+    # `freshness-gc` does and for the same reason: constitution 2 forbids an
     # unattended first fire that mass-deletes. The measured scale of a
     # single manual pass on one host was 251 local + 155 remote
     # deletions; across seven hosts that is not a blast radius anybody
@@ -296,17 +298,17 @@ def _host_config_check_command() -> str:
     return _exec_command("scitex-dev-host-config-check")
 
 
-def _pr_expire_command() -> str:
-    """Command installed for the ``pr-expire`` daily cron job.
+def _freshness_gc_command() -> str:
+    """Command installed for the organization freshness daily cron job.
 
     SAFETY — SHIPS IN --dry-run (REPORT) MODE, NOT --apply (see
     ``JOB_SHELL_BODIES``). The operator wants eventual fleet-wide
-    auto-close, but a scheduled job that mass-closes 12 repos on its very
+    auto-close, but a scheduled job that mass-closes an organization on its
     first fire is exactly the kind of irreversible blast the constitution
     (§2) forbids. Flip ``--dry-run`` to ``--apply`` in ``JOB_SHELL_BODIES``
     ONLY after a fleet-wide dry-run has been validated by a human.
     """
-    return _exec_command("scitex-dev-pr-expire")
+    return _exec_command("scitex-dev-freshness-gc")
 
 
 def provide_jobs() -> list[JobSpec]:
@@ -317,6 +319,38 @@ def provide_jobs() -> list[JobSpec]:
     pyproject.toml declares this provider just like any other leaf.
     """
     return [
+        JobSpec(
+            name="scitex-dev-pr-queue-retire",
+            kind="timer",
+            schedule="",
+            command=_exec_command("scitex-dev-pr-queue-retire"),
+            description=(
+                "Observe superseded queued PR checks in Infra's five repositories. "
+                "Explicit --apply retires only obsolete queued checks through normal "
+                "GitHub cancellation. Completed job verdicts are rechecked and "
+                "recorded; a cancelled parent run may change its verdict. Requires "
+                "one owning host and SCITEX_DEV_PR_QUEUE_LOCK. "
+                "This does not establish source-to-live delivery closure."
+            ),
+            on_boot_sec="5min",
+            on_unit_active_sec="5min",
+            timeout_sec=60,
+        ),
+        JobSpec(
+            name="scitex-dev-apps-delivery-observe",
+            kind="timer",
+            schedule="",
+            command=_exec_command("scitex-dev-apps-delivery-observe"),
+            description=(
+                "Evaluate an explicitly supplied application delivery snapshot. "
+                "Read-only proposals; missing identity/admission/configuration "
+                "fails visibly. No Cards writes, wake, merge, deploy or restart. "
+                "Infra must qualify placement/adapters before timer enrollment."
+            ),
+            on_boot_sec="5min",
+            on_unit_active_sec="5min",
+            timeout_sec=20,
+        ),
         JobSpec(
             name="scitex-dev-deploy-freshness",
             kind="cron",
@@ -543,21 +577,19 @@ def provide_jobs() -> list[JobSpec]:
             ),
         ),
         JobSpec(
-            name="scitex-dev-pr-expire",
+            name="scitex-dev-freshness-gc",
             kind="cron",
             schedule="30 3 * * *",
-            command=_pr_expire_command(),
+            command=_freshness_gc_command(),
             description=(
-                "Fleet 3-day PR-expiry primitive. Runs `scitex-dev "
-                "ecosystem pr expire --all --days 3` daily (03:30). "
-                "SHIPS IN --dry-run (REPORT) MODE: it lists expiring PRs "
-                "fleet-wide to ~/.scitex/dev/runtime/logs/cron-pr-expire.log and "
+                "Organization 3-day freshness orchestrator. Runs `scitex-dev "
+                "ecosystem apply-freshness-gc` daily (03:30), using one exact cutoff "
+                "for GitHub issues, pull requests, and Cards. SHIPS IN --dry-run "
+                "(REPORT) MODE under "
+                "~/.scitex/dev/runtime/logs/cron-freshness-gc.log and "
                 "mutates NOTHING. Flip --dry-run to --apply ONLY after a "
                 "human-validated fleet-wide dry-run — constitution §2, do "
-                "NOT auto-mass-close 12 repos on first fire. --apply is "
-                "fail-closed: one intent-registry card (branch + head SHA "
-                "per PR) is written before any close. See "
-                "_ecosystem.pr_expire.run_expire."
+                "NOT auto-mass-close the organization on first fire."
             ),
         ),
     ]

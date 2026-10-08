@@ -1,21 +1,8 @@
 #!/usr/bin/env bash
-# Runs INSIDE the reused scitex-ci SIF (apptainer exec — invoked via
-# exec-in-sif.sh). Builds scitex-dev's wheel + sdist into ./dist/.
-#
-# WHY build in the SIF: the self-hosted Spartan runner has no Python on the
-# bare node (the whole reason the old `actions/setup-python@v5` step failed:
-# "version 3.x not found for this OS"). The SIF bakes python 3.11/3.12/3.13 +
-# pip + uv at /opt/venv-<ver>, exactly like the working pytest-matrix CI.
-#
-# `python -m build` needs the `build` frontend, which is NOT baked in the SIF
-# (only scitex-dev[all,dev] deps are). Mirror run-in-sif.sh: install `build`
-# into a writable --target on node-local /tmp and put it on PYTHONPATH. The
-# SIF's /opt/venv-* are root-owned + RO and the compute-node HOME is RO inside
-# the container, so a normal install fails Permission denied — a --target on
-# writable scratch sidesteps both.
-#
-# Fail-loud (operator directive): a missing interpreter or a failed build is a
-# HARD error, never a silent fallback.
+# Runs INSIDE the approved, versioned CI SIF through exec-in-sif.sh.
+# Install the build frontend into job-owned writable scratch, then run the
+# normal isolated PEP517 build of this checkout's wheel and sdist.
+# Missing interpreters, failed builds or broken wheel entry points fail loud.
 set -euo pipefail
 
 V="${1:-3.12}"
@@ -42,27 +29,17 @@ mkdir -p "$TMPDIR/site" "$TMPDIR/uv-cache"
 # The compute-node $HOME is RO inside the container — point every cache the
 # installer might touch at the writable scratch (else uv/pip die creating
 # ~/.cache).
-export UV_CACHE_DIR="$TMPDIR/uv-cache"
-export XDG_CACHE_HOME="$TMPDIR"
-export PIP_CACHE_DIR="$TMPDIR/pip-cache"
+source "$(dirname "${BASH_SOURCE[0]}")/release-context.sh"
+scitex_release_context "$TMPDIR" "$VENV"
+echo "build: py=$(scitex_release_run "$PY" -V) target=$TMPDIR/site"
 
-# A VIRTUAL_ENV leaked from the runner profile (~/.env-3.11) is a broken
-# symlink in here; unset it so no tool follows it.
-unset VIRTUAL_ENV || true
-
-export PATH="$VENV/bin:$PATH"
-echo "build: py=$("$PY" -V) target=$TMPDIR/site"
-
-# Install the PEP 517 build frontend into the writable target (uv fast path,
-# pip safety net), then build with it. Clean dist/ first so only the freshly
+# Install the PEP 517 build frontend into the writable target with UV, then
+# build with its UV installer. Clean dist/ first so only the freshly
 # built artifacts are uploaded.
-uv pip install --python "$PY" --target="$TMPDIR/site" build ||
-    "$PY" -m pip install --target="$TMPDIR/site" build
-
-export PYTHONPATH="$TMPDIR/site${PYTHONPATH:+:$PYTHONPATH}"
+scitex_release_run uv pip install --python "$PY" --target="$TMPDIR/site" build
 
 rm -rf dist
-"$PY" -m build --outdir dist
+scitex_release_run env PYTHONPATH="$TMPDIR/site" "$PY" -m build --installer uv --outdir dist
 
 echo "=== built artifacts ==="
 ls -l dist
@@ -91,7 +68,7 @@ test -n "$WHEEL" || {
     echo "::error::no wheel in dist/ to audit"
     exit 1
 }
-PYTHONPATH="$PWD/src${PYTHONPATH:+:$PYTHONPATH}" "$PY" - "$WHEEL" <<'PYGATE'
+scitex_release_run env PYTHONPATH="$PWD/src:$TMPDIR/site" "$PY" - "$WHEEL" <<'PYGATE'
 import sys
 
 from scitex_dev._release.entrypoint_imports import (
@@ -108,3 +85,8 @@ if not report.is_clean:
     )
     raise SystemExit(1)
 PYGATE
+
+# One immutable release identity accompanies the complete, checked wheel/sdist.
+scitex_release_run "$PY" .github/ci/release-identity.py write \
+    --tag "${RELEASE_TAG:?RELEASE_TAG must name the resolved release tag}" \
+    --commit "${RELEASE_COMMIT:?RELEASE_COMMIT must name the checked-out commit}"

@@ -70,6 +70,16 @@ from ._job_commands import (  # noqa: F401
 
 
 JOB_REGISTRY: Mapping[str, JobSpec] = {
+    "ci-runner-policy": JobSpec(
+        name="ci-runner-policy",
+        schedule="*/15 * * * *",
+        command="scitex-dev cron exec ci-runner-policy",
+        description=(
+            "Read-only organization CPU02/03/04 registration, workflow ACL "
+            "and independent processing evidence. Unknown/violation is nonzero; "
+            "never starts, registers, moves or changes runners."
+        ),
+    ),
     "ci-watch": JobSpec(
         name="ci-watch",
         schedule="*/10 * * * *",

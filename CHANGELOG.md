@@ -10,6 +10,90 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.2] - 2026-10-02
+
+### Fixed
+
+- Audit mounted CLI commands with their owning distribution's packaged
+  dictionary. Ownership requires the loaded callback, declared entry point,
+  distribution RECORD membership and a contained resource snapshot; missing,
+  ambiguous or escaped resources remain findings. Owner context resets after
+  each lexical scope, including exceptions, without importing audited peers.
+- Describe deferred inventory as inventory while preserving strict finding
+  classification, rule severity and counts.
+- Establish explicit job-owned SciTeX state, caches and temporary paths before
+  CI application imports. Release probes refuse store access; full source
+  tests use their verified private PostgreSQL socket and explicit port.
+- Keep ordinary protected automerge pending while checks are unfinished and
+  remove protection-bypass arguments. Retain original test assertions while
+  making child process and release fixtures use explicit owned contexts.
+- Update the packaged runner seed to the verified CPU and Docker label sets.
+  Existing selectors and user registry data remain supported; mixed pools and
+  unknown labels still fail the runner-destination rule.
+
+## [0.62.1] - 2026-10-02
+
+### Fixed
+
+- Recognize the canonical scitex-logging backend's nine necessary stdlib
+  operations without requiring its public getter during initialization.
+  Recognition requires the actual distribution and public logger wiring,
+  exact package-root modules, lexical scopes and backend statements.
+  Additional prints, Rich output and caller diagnostics in those same
+  modules still fail PS-220; configuration cannot disable the rule.
+- Keep the source audit static: copied names, foreign symlinks, nested
+  scopes and altered calls do not gain an owning-backend allowance.
+
+## [0.62.0] - 2026-10-02
+
+### Added
+
+- **Active-project selection in `scitex_dev.project` and the CLI.** Select
+  `owner/name` or `all` with `scitex-dev project use`, inspect it with
+  `project get --json`, and remove the persisted selection with `project
+  clear`. Python callers can validate, resolve, persist and clear the same
+  references. Resolution follows explicit argument, `SCITEX_PROJECT`, then
+  the selection file under `$SCITEX_DIR/scitex-dev/active_project` (default
+  `~/.scitex/scitex-dev/active_project`). Invalid references fail loudly.
+  This is the project-selector API required by `scitex-sdk[project]` and
+  `[all]`; selection does not establish store tenancy or authorize access.
+- Register `scitex-sdk` in the ecosystem package graph, import-to-distribution
+  map and skill categories while keeping the existing App/UI repositories
+  auditable during their migration.
+- Ship guidance for runner dispatch recovery, host disk placement and the
+  shared CI environment contract.
+
+### Changed
+
+- `project get` is the canonical introspection command. The compatible
+  `project current` spelling forwards its options and output and warns on
+  stderr in 0.62. The deprecation schedule moves it to an error in 0.63 and
+  removes it in 0.64.
+
+### Fixed
+
+- Managed SciTeX home adoption now discovers Git repositories across
+  filesystem boundaries and re-prunes ignored subtrees after package track
+  negations.
+- Self-hosted CI allocates SIF scratch, Python tool caches, virtual
+  environments and SciTeX state per job. Audit and documentation builds
+  invoke their own interpreter, preventing older host tools from selecting
+  another package installation; Sphinx warnings still fail pull requests.
+- Release jobs receive the mandatory approved SIF checksum variable while
+  retaining digest verification, isolated PostgreSQL test clusters, the
+  built-wheel entry-point import gate and trusted publishing.
+
+## [0.61.0] - 2026-09-28
+
+- New `scitex_dev.home` module: `ensure_dotscitex_managed_by_git` adopts an
+  existing `~/.scitex` (or initialises a missing one) into git management
+  with a managed `.gitignore` block encoding the cross-package placement
+  contract (`<pkg>/runtime/` plus large artefacts never tracked,
+  package-declared track globs with default-deny), idempotent
+  compatibility migration of stray runtime files under `<pkg>/runtime/`
+  with symlinks left behind, and `extra_ignore` / `commit_message`
+  options for package runtime dirs (e.g. container overlays).
+
 ## [0.59.0] - 2026-09-02
 
 > `0.58.1` was tagged on `develop` rather than on `main`, so `v0.58.1` was

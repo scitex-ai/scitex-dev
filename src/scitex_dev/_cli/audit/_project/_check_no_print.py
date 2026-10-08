@@ -36,6 +36,10 @@ serializer to stdout, a caller-owned required ``file=`` stream, or a direct
 content parameter in an explicitly named rendering API. Configuration cannot
 downgrade, disable, or manually exempt PS-220.
 
+The owning scitex-logging distribution's stdlib backend construction is
+recognized separately by exact wiring, module, scope and statement shapes.
+That proof never exempts diagnostics or other output in those modules.
+
 The legacy `# noqa` hatch is GONE (removed 2026-07-23). It was a blanket,
 reasonless flag that any unrelated `# noqa: E501` silenced by accident, and
 it left no auditable record of why. It was deprecated for one release with a
@@ -65,6 +69,7 @@ import ast
 from dataclasses import dataclass
 from pathlib import Path
 
+from ._logging_backend import is_logging_backend_call, owns_logging_backend
 from ._print_discriminator import should_flag
 
 # Path components that mark a non-shippable subtree (an in-package copy of
@@ -216,7 +221,11 @@ _FIX_HINT = (
     "Use scitex-logging: `import scitex_logging as slogging; "
     "log = slogging.getLogger(__name__)` then `log.info(...)` / "
     "`log.warning(...)` / `log.error(...)` / `log.success(...)` for aligned "
-    "`INFO:`/`WARN:`/`ERRO:`/`SUCC:` output. Data transport must use a "
+    "`INFO:`/`WARN:`/`ERRO:`/`SUCC:` output on stderr; "
+    "`console = slogging.getConsole(__name__)` for the same surface on "
+    "stdout; `plain = slogging.getPlainConsole(__name__)` + "
+    "`plain.emit(...)` for protocol frames (paths, verdicts) where a level "
+    "prefix would corrupt the payload. Data transport must use a "
     "mechanically recognized serializer, explicit content-rendering contract, "
     "or caller-owned required stream; PS-220 has no configuration bypass."
 )
@@ -327,6 +336,7 @@ def check_ps220_no_print(
     if config is not None:
         _report_config_errors(repo, config, violation_cls, out)
 
+    backend_owner = owns_logging_backend(repo)
     for py in _src_files(repo):
         try:
             text = py.read_text(encoding="utf-8", errors="replace")
@@ -347,6 +357,8 @@ def check_ps220_no_print(
                     "tier, so it has no ecosystem level or searchable record"
                 )
             else:
+                if backend_owner and is_logging_backend_call(repo, py, tree, node):
+                    continue
                 why = (
                     "constructs a stdlib logger; shippable SciTeX status and "
                     "diagnostic output must use `scitex_logging.getLogger`"
@@ -382,13 +394,20 @@ PRINT_FORBIDDEN_RULES: list[tuple[str, str, str, str, str]] = [
             "log = slogging.getLogger(__name__)` then `log.info(...)` / "
             "`log.warning(...)` / `log.error(...)` / `log.success(...)` for "
             "aligned, coloured, searchable `INFO:`/`WARN:`/`ERRO:`/`SUCC:` "
-            "output. A bare `print` has no level, no prefix, and cannot be "
-            "filtered by a downstream consumer. Machine-readable stdout (a "
+            "output on stderr; `slogging.getConsole(__name__)` for the same "
+            "surface on stdout; `slogging.getPlainConsole(__name__)` + "
+            "`.emit(...)` for protocol frames (paths, verdicts) where a "
+            "level prefix would corrupt the payload. A bare `print` has no "
+            "level, no prefix, and cannot be filtered by a downstream "
+            "consumer. Machine-readable stdout (a "
             "`--json` payload, piped data) is spared STRUCTURALLY when it is a "
             "recognized serializer, an explicit content-rendering contract, "
             "or a caller-owned required stream does not fire, because routing "
             "protocol output through stderr would corrupt it. Everything else "
-            "fires; there is no staged opt-in or configuration bypass. Scope is "
+            "fires; there is no staged opt-in or configuration bypass. "
+            "The owning logger's backend construction is recognized only by "
+            "exact public wiring and scoped backend statements; diagnostics "
+            "in the same modules remain subject to this rule. Scope is "
             "the shippable `src/<pkg>/**.py` tree "
             "(tests/scripts/examples/docs excluded). Reported as an ERROR for "
             "every SciTeX package."

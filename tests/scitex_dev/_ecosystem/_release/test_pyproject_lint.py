@@ -549,7 +549,7 @@ dependencies = ["scitex"]
 
 
 def test_e5l1_release_trigger_hint_for_release_workflow(tmp_path):
-    """When pyproject ≠ PyPI and workflow uses release:published, the
+    """When pyproject ≠ the latest tag and workflow uses release:published, the
     fix-hint must include `gh release create` — operators routinely
     forget this and tag-push alone never publishes."""
     # Arrange
@@ -565,6 +565,21 @@ version = "1.0.0"
     wf = repo / ".github" / "workflows" / "publish-pypi.yml"
     wf.parent.mkdir(parents=True)
     wf.write_text("name: Publish\non:\n  release:\n    types: [published]\n")
+    # A real owned Git tag provides the mismatch without relying on the
+    # independently published state of a package named demo.
+    import subprocess
+
+    for args in (
+        ["init", "--quiet", "-b", "main"],
+        ["-c", "user.name=Release fixture", "-c", "user.email=fixture@example.invalid",
+         "commit", "--allow-empty", "--quiet", "-m", "Synthetic release fixture"],
+        ["tag", "v0.9.0"],
+    ):
+        subprocess.run(
+            ["git", "-C", str(repo), *args], check=True, capture_output=True,
+            env={"PATH": "/usr/local/bin:/usr/bin:/bin", "LANG": "C.UTF-8",
+                 "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"},
+        )
     rep = lint_pyproject(repo, package_name="demo")
     e5l1 = [f for f in rep.findings if f.rule == "REL-21_dirty_release_state"]
     # Either the tag-mismatch or pypi-mismatch path: at least one finding

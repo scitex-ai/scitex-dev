@@ -316,15 +316,27 @@ def test_discover_aggregates_a_script_kind_dep():
     assert [(d.package, d.kind) for d in deps] == [("hermes-agent", "script")]
 
 
-def test_cli_system_deps_list_stays_apt_only():
+@pytest.fixture()
+def _system_deps_list_probe():
     # Arrange
     runner = CliRunner()
     # Act — --json shares the code path; the real (installed) provider set
-    # has no script-kind deps yet, but the filter is what this pins.
-    result = runner.invoke(main, ["ecosystem", "system-deps", "list", "--json"])
+    # has no script-kind deps yet, but the filter is what the tests pin.
+    return runner.invoke(main, ["ecosystem", "system-deps", "list", "--json"])
+
+
+def test_cli_system_deps_list_json_exits_zero(_system_deps_list_probe):
+    # Arrange — probe runs the shared code path once (see fixture).
+    # Act — see fixture.
     # Assert
-    assert result.exit_code == 0
-    assert all(d["kind"] == "apt" for d in json.loads(result.stdout))
+    assert _system_deps_list_probe.exit_code == 0
+
+
+def test_cli_system_deps_list_stays_apt_only(_system_deps_list_probe):
+    # Arrange — probe runs the shared code path once (see fixture).
+    # Act — see fixture.
+    # Assert
+    assert all(d["kind"] == "apt" for d in json.loads(_system_deps_list_probe.stdout))
 
 
 def test_cli_install_script_previews_without_running():

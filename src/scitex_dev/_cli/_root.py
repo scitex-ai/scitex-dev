@@ -27,6 +27,7 @@ COMMAND_CATEGORIES = [
             "creds",
             "rename-symbols",
             "trace-env-vars",
+            "project",
             "registry-normalize",
             "icons",
             "host",
@@ -359,8 +360,14 @@ _register_rename(main)
 # _cli/_trace_env.py; engine in scitex_dev/trace_env/ (mirrors the
 # rename-symbols CLI/engine split).
 from ._trace_env import register as _register_trace_env
-
 _register_trace_env(main)
+
+# project — active-project selection primitive. Thin CLI in
+# _cli/_project.py; engine in scitex_dev/project/ (CUI-level selector
+# every package resolves through; SDK re-exports it).
+from ._project import register as _register_project
+
+_register_project(main)
 
 # registry-normalize — mechanical fix for PS-181 (~/.scitex/<pkg>/
 # registry-layout drift). Thin CLI in _cli/_registry_normalize.py;
