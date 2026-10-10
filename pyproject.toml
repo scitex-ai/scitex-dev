@@ -375,6 +375,10 @@ Documentation = "https://scitex-dev.readthedocs.io/"
 # reachable from HEAD and unparseable by the default regex, are ignored instead
 # of breaking editable installs (ValueError: Can't parse version from tag).
 tag_regex = '^v(?P<version>\d+\.\d+\.\d+.*)$'
+# Make `git describe` itself ignore non-release tags (fleet archive/* retention
+# tags are nearer than the last v* tag on feature lines, so describe would
+# otherwise hand setuptools-scm the archive tag to parse).
+git_describe_command = 'git describe --dirty --tags --long --match "v*"'
 
 [tool.setuptools.packages.find]
 where = ["src"]
