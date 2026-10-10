@@ -5,7 +5,7 @@ The owning distribution supplies rule metadata and detection through
 the project runner invokes the discovered provider exactly once.
 """
 
-from scitex_logging._output.auditor import (
+from scitex_logging._output._auditor import (
     PRINT_FORBIDDEN_RULES,
     _DEFAULT_SEVERITY as _DEFAULT_SEVERITY,
     check_ps220_no_print,

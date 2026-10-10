@@ -225,7 +225,7 @@ def payload_is_explicitly_requested(tree: ast.AST, call: ast.Call) -> bool:
     return arg.id in _required_parameters(function)
 
 
-from scitex_logging._output.auditor import should_flag
+from scitex_logging._output._auditor import should_flag
 
 
 __all__ = [
