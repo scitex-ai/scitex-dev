@@ -44,7 +44,7 @@ keywords = ["scitex", "developer-tools", "documentation", "llm-friendly", "mcp"]
 #   textual        — the TUI dashboard (was [tui])
 dependencies = [
     "scitex-config>=0.3.0",
-    "scitex-logging>=0.1.0",
+    "scitex-logging>=0.2.3",
     "click>=8.0.0",
     "pyyaml>=6.0",
     'tomli>=2.0; python_version < "3.11"',
@@ -233,6 +233,11 @@ scitex-dev = "scitex_dev"
 [project.entry-points."scitex_dev.skills"]
 scitex-dev = "scitex_dev"
 
+# Project auditors operate on repository paths, independently of AST linters.
+# Each provider returns rule five-tuples and checks(repo, violation_cls, out).
+[project.entry-points."scitex_dev.audit.project"]
+scitex-dev = "scitex_dev._runtime_gitignore_plugin:get_plugin"
+
 # Federated scheduled-job providers. Each entry point loads to a callable
 # returning `list[scitex_dev.jobs.JobSpec]`; `scitex_dev.jobs.discover_jobs()`
 # aggregates them. scitex-dev's own built-ins are merged via an INTERNAL
@@ -363,8 +368,17 @@ Repository = "https://github.com/scitex-ai/scitex-dev"
 Documentation = "https://scitex-dev.readthedocs.io/"
 
 [tool.setuptools_scm]
-# Empty body: derive version from latest git tag (vX.Y.Z → X.Y.Z).
+# Derive version from latest vX.Y.Z release tag (vX.Y.Z → X.Y.Z).
 # Eliminates pyproject↔tag drift; release flow is `git tag vX.Y.Z && git push --tags`.
+# tag_regex restricts versioning to v* release tags so fleet archive/* retention
+# tags (slashed paths/dates, e.g. archive/three-days-rule/...), which are
+# reachable from HEAD and unparseable by the default regex, are ignored instead
+# of breaking editable installs (ValueError: Can't parse version from tag).
+tag_regex = '^v(?P<version>\d+\.\d+\.\d+.*)$'
+# Make `git describe` itself ignore non-release tags (fleet archive/* retention
+# tags are nearer than the last v* tag on feature lines, so describe would
+# otherwise hand setuptools-scm the archive tag to parse).
+git_describe_command = 'git describe --dirty --tags --long --match "v*"'
 
 [tool.setuptools.packages.find]
 where = ["src"]

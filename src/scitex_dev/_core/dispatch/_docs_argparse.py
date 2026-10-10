@@ -144,7 +144,9 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
     if args.tldr:
         tldr = _get_tldr(package)
         if args.as_json:
-            print(json.dumps({"package": package, "tldr": tldr}))
+            slogging.getPlainConsole(__name__).emit(
+                json.dumps({"package": package, "tldr": tldr}), flush=False
+            )
         else:
             console.info(tldr)
         return
@@ -173,9 +175,13 @@ def _run_docs_command(args: argparse.Namespace, package: str) -> None:
 
     # Default output
     if args.as_json:
-        print(json.dumps(result, indent=2, default=str))
+        slogging.getPlainConsole(__name__).emit(
+            json.dumps(result, indent=2, default=str), flush=False
+        )
     elif isinstance(result, dict):
-        print(json.dumps(result, indent=2, default=str))
+        slogging.getPlainConsole(__name__).emit(
+            json.dumps(result, indent=2, default=str), flush=False
+        )
     elif isinstance(result, Path) and result.is_file():
         # --page returns a file path — print its content
         console.info(result.read_text(encoding="utf-8"))
@@ -188,7 +194,9 @@ def _print_page_list(result, as_json: bool = False) -> None:
     if isinstance(result, dict):
         pages = result.get("pages", [])
         if as_json:
-            print(json.dumps({"pages": pages}))
+            slogging.getPlainConsole(__name__).emit(
+                json.dumps({"pages": pages}), flush=False
+            )
         else:
             if isinstance(pages, list) and pages and isinstance(pages[0], dict):
                 for p in pages:

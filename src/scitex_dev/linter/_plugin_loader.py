@@ -1,11 +1,19 @@
-"""Discover and load linter rule plugins via entry points."""
+"""Discover validated linter providers without dropping declared coverage."""
 
-import scitex_logging as slogging
+from collections.abc import Mapping
 import os
 import sys
 
+import scitex_logging as slogging
+
 _logger = slogging.getLogger(__name__)
 _cache = None
+_GROUP = "scitex_dev.linter.plugins"
+_LOGGING_VALUE = "scitex_logging._linter_plugin:get_plugin"
+
+
+class LinterPluginError(RuntimeError):
+    """A provider cannot safely contribute its declared linter coverage."""
 
 
 def _quiet() -> bool:
@@ -76,144 +84,277 @@ def _iter_entry_points(group):
 
         return entry_points(group=group)
     else:
-        from importlib.metadata import entry_points
+        from importlib.metadata import distributions
 
-        eps = entry_points()
-        return eps.get(group, [])
+        # Python 3.9's flattened entry_points() result loses distribution
+        # ownership. Keep it explicitly when proving replacement contracts.
+        return [
+            _OwnedEntryPoint(point, distribution)
+            for distribution in distributions()
+            for point in distribution.entry_points
+            if point.group == group
+        ]
+
+
+class _OwnedEntryPoint:
+    """Retain actual distribution ownership on Python 3.9 entry points."""
+
+    def __init__(self, point, distribution):
+        self._point = point
+        self.dist = distribution
+
+    def __getattr__(self, name):
+        return getattr(self._point, name)
+
+
+def _validate_payload(plugin, name):
+    if not isinstance(plugin, Mapping):
+        raise LinterPluginError(
+            f"{_GROUP} provider {name!r}: payload must be a mapping"
+        )
+    for key in ("rules", "checkers"):
+        if key in plugin and not isinstance(plugin[key], (list, tuple)):
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: {key} must be a list or tuple"
+            )
+    for key in ("call_rules", "axes_hints"):
+        if key in plugin and not isinstance(plugin[key], Mapping):
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: {key} must be a mapping"
+            )
+    seen_rule_ids = set()
+    for rule in plugin.get("rules", ()):
+        if (
+            not isinstance(getattr(rule, "id", None), str)
+            or not rule.id.strip()
+            or not isinstance(getattr(rule, "severity", None), str)
+            or rule.severity not in {"error", "warning", "info"}
+            or not isinstance(getattr(rule, "category", None), str)
+            or not isinstance(getattr(rule, "message", None), str)
+            or not isinstance(getattr(rule, "suggestion", None), str)
+            or not isinstance(getattr(rule, "requires", None), str)
+        ):
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: invalid Rule {rule!r}"
+            )
+        if rule.id in seen_rule_ids:
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: duplicate rule {rule.id!r}"
+            )
+        seen_rule_ids.add(rule.id)
+    for key, rule in plugin.get("call_rules", {}).items():
+        if (
+            not isinstance(key, tuple)
+            or len(key) != 2
+            or not all(value is None or isinstance(value, str) for value in key)
+            or not isinstance(getattr(rule, "id", None), str)
+        ):
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: invalid call rule {key!r}"
+            )
+    for key, rule in plugin.get("axes_hints", {}).items():
+        if not isinstance(key, str) or not isinstance(getattr(rule, "id", None), str):
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: invalid axes hint {key!r}"
+            )
+    own_rules = {rule.id: rule for rule in plugin.get("rules", ())}
+    for rule in (
+        *plugin.get("call_rules", {}).values(),
+        *plugin.get("axes_hints", {}).values(),
+    ):
+        if rule.id in own_rules and own_rules[rule.id] != rule:
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: mapping references contradictory rule {rule.id!r}"
+            )
+    seen_checkers = set()
+    for checker in plugin.get("checkers", ()):
+        if not callable(checker):
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: checker must be callable"
+            )
+        if id(checker) in seen_checkers:
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: duplicate checker {checker!r}"
+            )
+        seen_checkers.add(id(checker))
 
 
 def load_plugins(*, entry_points_iter=None):
-    """Load all registered linter plugins. Cached after first call.
+    """Load rule providers, requiring the installed logging owner.
 
-    Returns dict with keys: rules, call_rules, axes_hints, checkers.
-
-    ``entry_points_iter`` is a test-injection seam (mirrors
-    ``scitex_dev._core.discovery.discover_packages``'s ``entry_points_fn``):
-    a zero-arg callable returning an iterable of entry-point-shaped objects
-    (each with ``.name`` + ``.load()``). The default (``None``) reads the
-    real ``scitex_dev.linter.plugins`` group. When supplied, the result is
-    NOT cached — so a test can drive the fail-loud path with a real fake
-    entry point (one whose ``.load()`` raises ``ModuleNotFoundError``)
-    without monkeypatching ``importlib.metadata`` and without polluting the
-    process-lifetime cache. No mocks (PA-306).
-
-    Pillar-0 instrumentation (#TBD): after the entry-point scan we hand
-    the list of successfully-loaded plugin payloads to
-    :mod:`scitex_dev.linter._health` so it can emit an L1 stderr notice
-    if no IO/PA category rules registered AND scitex-io is missing.
-    That makes the silent-skip path visible to the agent feedback
-    surface (run_lint.sh hook) instead of going quiet.
+    The four existing payload keys and opt-in figure gating remain unchanged.
+    Declared providers cannot silently disappear: import, schema, ownership,
+    and duplicate failures abort loading regardless of diagnostic verbosity.
+    Injected entry points bypass the process cache and use the same validation.
     """
     global _cache
     injected = entry_points_iter is not None
     if _cache is not None and not injected:
         return _cache
-
     merged = {
         "rules": {},
         "call_rules": {},
         "axes_hints": {},
         "checkers": [],
+        "call_rule_groups": {},
+        "provider_replacements": (),
     }
-    plugin_payloads: list = []
-
-    # Canonical entry-point group. The legacy `scitex_linter.plugins`
-    # group is no longer read — all leaf packages now register under
-    # the new name (the dual-registration window has closed).
-    #
-    # NOTE on the two distinct silent paths (fail-loud doctrine):
-    #   * NO entry points declared (empty iterable below) is FINE — a venv
-    #     with no plugin-providing packages legitimately runs only the
-    #     engine rules. We do NOT warn for that case (the loop body never
-    #     runs), so "no plugins declared" stays silent by construction.
-    #   * An entry point that IS declared but fails to import is a real
-    #     misconfiguration (stale wheel / broken module) — that gets the
-    #     LOUD, actionable notice below. The two cases must never be
-    #     conflated.
-    if injected:
-        _eps = entry_points_iter()
-    else:
-        _eps = _iter_entry_points("scitex_dev.linter.plugins")
-    for ep in _eps:
-        try:
-            get_plugin = ep.load()
-            plugin = get_plugin()
-        except Exception as exc:
-            # Pillar 0: fail-loud on plugin-load failure. Previously
-            # this was a ``logger.debug`` (suppressed by default) which
-            # hid figrecipe's circular-import-induced load failures
-            # from operators for months — figure-style checkers were
-            # silently dropped, lint passed false-green. Per neurovista
-            # elevation 2026-06-14: surface load failures the same way
-            # the visit-time fail-loud in ``checker.lint_source`` does.
-            #
-            # SINGLE channel: emit ONE prominent stderr line (the
-            # run_lint.sh hook propagates stderr to the agent feedback
-            # surface). The previous code ALSO did `_logger.warning`,
-            # producing a DUPLICATE visible copy whenever logging was
-            # configured (neurovista saw the bare un-actionable
-            # `failed to load plugin scitex: ModuleNotFoundError ...`
-            # line). The logger now records at debug level only — a quiet
-            # breadcrumb for log-capture, not a second user-facing line.
-            hint = _remediation_hint(ep.name, exc)
-            _logger.debug(
-                "linter: failed to load plugin %s: %s: %s",
-                ep.name,
-                type(exc).__name__,
-                exc,
-                exc_info=True,
+    owners = {"rules": {}, "call_rules": {}, "axes_hints": {}, "checkers": {}}
+    provider_owners = {}
+    plugin_payloads = []
+    logging_present = False
+    providers = []
+    points = entry_points_iter() if injected else _iter_entry_points(_GROUP)
+    for ep in sorted(
+        points, key=lambda point: (point.name, getattr(point, "value", ""))
+    ):
+        value = getattr(ep, "value", None)
+        name = f"{ep.name} ({value})"
+        if value is not None and value in provider_owners:
+            raise LinterPluginError(
+                f"{_GROUP}: duplicate provider {name!r}; already declared by {provider_owners[value]!r}"
             )
-            if not _quiet():
-                sys.stderr.write(
-                    f"\033[33m[scitex-dev linter] WARNING: failed to load "
-                    f"plugin {ep.name!r}: {type(exc).__name__}: {exc}\n"
-                    f"  → {hint}\n"
-                    f"  (set SCITEX_DEV_LINTER_QUIET=1 to suppress this "
-                    f"notice.)\033[0m\n"
+        if value is not None:
+            provider_owners[value] = name
+        try:
+            factory = ep.load()
+            if not callable(factory):
+                raise TypeError("entry point must load a callable get_plugin")
+            plugin = factory()
+        except Exception as exc:
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r} could not load: {type(exc).__name__}: {exc}"
+            ) from exc
+        _validate_payload(plugin, name)
+        is_logging = ep.name == "scitex-logging" and value == _LOGGING_VALUE
+        logging_present |= is_logging
+        if is_logging and (
+            not any(
+                rule.id == "PS-220" and rule.severity == "error"
+                for rule in plugin.get("rules", ())
+            )
+            or not any(
+                getattr(checker, "mandatory", False)
+                and getattr(checker, "accepts_filepath", False)
+                for checker in plugin.get("checkers", ())
+            )
+        ):
+            raise LinterPluginError(
+                f"{_GROUP} provider {name!r}: mandatory PS-220 error rule and filepath-aware checker are required"
+            )
+        providers.append((ep, plugin, is_logging, name))
+    from ._provider_replacements import ProviderReplacementError, resolve_replacements
+
+    try:
+        providers, receipts = resolve_replacements(providers)
+    except ProviderReplacementError as exc:
+        raise LinterPluginError(f"{_GROUP}: {exc}") from exc
+    merged["provider_replacements"] = receipts
+    for ep, plugin, is_logging, name in providers:
+        for rule in plugin.get("rules", ()):
+            if rule.id == "PS-220" and not is_logging:
+                raise LinterPluginError(
+                    f"{_GROUP}: PS-220 belongs to scitex-logging, not {name!r}"
                 )
-            continue
-
-        plugin_payloads.append(plugin)
-        for rule in plugin.get("rules", []):
+            if rule.id in owners["rules"]:
+                raise LinterPluginError(
+                    f"{_GROUP}: duplicate rule {rule.id!r} from {name!r}; already declared by {owners['rules'][rule.id]!r}"
+                )
+            owners["rules"][rule.id] = name
             merged["rules"][rule.id] = rule
-        merged["call_rules"].update(plugin.get("call_rules", {}))
-        merged["axes_hints"].update(plugin.get("axes_hints", {}))
-        merged["checkers"].extend(plugin.get("checkers", []))
+        for key in ("call_rules", "axes_hints"):
+            for identifier, rule in plugin.get(key, {}).items():
+                if key == "call_rules":
+                    group = merged["call_rule_groups"].setdefault(identifier, [])
+                    if any(existing.id == rule.id for existing in group):
+                        raise LinterPluginError(
+                            f"{_GROUP}: duplicate call rule {rule.id!r} for {identifier!r} from {name!r}"
+                        )
+                    # Independent concerns can inspect the same API pattern.
+                    # Preserve the first provider's single-Rule view for old
+                    # consumers and expose every distinct owner to the engine.
+                    group.append(rule)
+                    merged["call_rules"].setdefault(identifier, rule)
+                    owners[key].setdefault(identifier, name)
+                    continue
+                if identifier in owners[key]:
+                    raise LinterPluginError(
+                        f"{_GROUP}: duplicate {key} {identifier!r} from {name!r}; already declared by {owners[key][identifier]!r}"
+                    )
+                owners[key][identifier] = name
+                merged[key][identifier] = rule
+        for checker in plugin.get("checkers", ()):
+            module = getattr(checker, "__module__", None)
+            qualname = getattr(checker, "__qualname__", None)
+            # Factories may produce several independently bound classes with
+            # the same lexical <locals> name (figrecipe does this). Those are
+            # distinct checkers; repeating the same object is still rejected.
+            identity = (
+                (module, qualname)
+                if module and qualname and "<locals>" not in qualname
+                else (id(checker),)
+            )
+            if identity in owners["checkers"]:
+                raise LinterPluginError(
+                    f"{_GROUP}: duplicate checker {identity!r} from {name!r}; already declared by {owners['checkers'][identity]!r}"
+                )
+            owners["checkers"][identity] = name
+            merged["checkers"].append(checker)
+        plugin_payloads.append(plugin)
+    if not logging_present:
+        raise LinterPluginError(
+            f"{_GROUP}: mandatory scitex-logging provider {_LOGGING_VALUE!r} is absent. "
+            "Install matching scitex-logging and scitex-dev builds that declare the logging linter entry point; "
+            "linting cannot report success without PS-220 coverage."
+        )
+    from ._rules import ALL_RULES
 
-    # Injected (test) runs bypass BOTH the process cache and the L1/L2
-    # health tally — the seam exists to exercise the load-failure branch in
-    # isolation, not to drive the IO-plugin-missing notice (that has its own
-    # dedicated tests). Return the freshly-merged payload without touching
-    # module state.
+    collisions = set(ALL_RULES).intersection(merged["rules"])
+    if collisions:
+        raise LinterPluginError(
+            f"{_GROUP}: rules already registered by the engine: {sorted(collisions)!r}"
+        )
+    declared_rules = {**ALL_RULES, **merged["rules"]}
+    referenced = [
+        rule for group in merged["call_rule_groups"].values() for rule in group
+    ] + list(merged["axes_hints"].values())
+    for rule in referenced:
+        if declared_rules.get(rule.id) != rule:
+            raise LinterPluginError(
+                f"{_GROUP}: call/axes mapping references undeclared or contradictory rule {rule.id!r}"
+            )
+    merged["call_rule_groups"] = {
+        key: tuple(group) for key, group in merged["call_rule_groups"].items()
+    }
+    if not _quiet():
+        for receipt in receipts:
+            _logger.info(
+                "linter: %s (%s) replaces %s (%s) for rules %s",
+                receipt["successor_distribution"],
+                receipt["successor_entry_point"],
+                receipt["predecessor_distribution"],
+                receipt["predecessor_entry_point"],
+                ", ".join(receipt["rule_ids"]),
+            )
     if injected:
         return merged
-
-    # Fail-loud — emits L1 notice on stderr if no IO/PA plugins registered
-    # and scitex-io is absent from the env. See _health.record_plugin_load
-    # for the exact predicate and the SCITEX_DEV_LINTER_QUIET escape.
     try:
-        from . import _health as _h
+        from . import _health
 
-        _h.record_plugin_load(plugin_payloads)
-    except Exception:  # pragma: no cover - health module must NEVER break loading
+        _health.record_plugin_load(plugin_payloads)
+    except Exception:
         _logger.debug("plugin-load health record failed", exc_info=True)
-
     _cache = merged
-    return _cache
+    return merged
 
 
 def reset():
-    """Reset cache (for testing).
-
-    Also resets :mod:`scitex_dev.linter._health` state so a test can
-    re-trigger the L1/L2 notices in the same process. Production callers
-    never invoke this — the cache is process-lifetime by design.
-    """
+    """Drop the process cache and health tally for isolated tests."""
     global _cache
     _cache = None
     try:
-        from . import _health as _h
+        from . import _health
 
-        _h.reset()
-    except Exception:  # pragma: no cover
+        _health.reset()
+    except Exception:
         pass

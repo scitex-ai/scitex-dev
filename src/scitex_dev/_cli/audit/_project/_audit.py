@@ -24,36 +24,36 @@ import click
 # `from scitex_dev._cli.audit._project._audit import X` keep working
 # after the split.
 from ._checks import (
-    _check_docs_structure,
-    _check_empty_test_dirs,
-    _check_loose_top_level_tests,
-    _check_mirror,
-    _check_placeholder_tests,
-    _check_tests_subdir_convention,
-    _check_top_level,
-    _suggest_test_location,
-    _test_has_src_match,
-    check_codecov_target,
+    _check_docs_structure as _check_docs_structure,
+    _check_empty_test_dirs as _check_empty_test_dirs,
+    _check_loose_top_level_tests as _check_loose_top_level_tests,
+    _check_mirror as _check_mirror,
+    _check_placeholder_tests as _check_placeholder_tests,
+    _check_tests_subdir_convention as _check_tests_subdir_convention,
+    _check_top_level as _check_top_level,
+    _suggest_test_location as _suggest_test_location,
+    _test_has_src_match as _test_has_src_match,
+    check_codecov_target as check_codecov_target,
 )
 from ._constants import (
-    _FORBIDDEN_TOP_DIRS,
-    _JUNK_FILE_RE,
-    _KNOWN_TEST_SUBDIRS,
-    _META_TESTS_AT_ROOT,
-    _MIRROR_EXEMPT_CATEGORIES,
-    _PRIVATE_TEST_RE,
-    _PUBLIC_TEST_RE,
-    _WALK_BLACKLIST_RE,
-    _is_blacklisted,
+    _FORBIDDEN_TOP_DIRS as _FORBIDDEN_TOP_DIRS,
+    _JUNK_FILE_RE as _JUNK_FILE_RE,
+    _KNOWN_TEST_SUBDIRS as _KNOWN_TEST_SUBDIRS,
+    _META_TESTS_AT_ROOT as _META_TESTS_AT_ROOT,
+    _MIRROR_EXEMPT_CATEGORIES as _MIRROR_EXEMPT_CATEGORIES,
+    _PRIVATE_TEST_RE as _PRIVATE_TEST_RE,
+    _PUBLIC_TEST_RE as _PUBLIC_TEST_RE,
+    _WALK_BLACKLIST_RE as _WALK_BLACKLIST_RE,
+    _is_blacklisted as _is_blacklisted,
 )
 from ._discovery import (
-    _has_py,
-    _import_name,
-    _is_git_ignored,
-    _resolve_repo_root,
-    _resolve_repo_root_with_rule,
-    _src_pkg_dir,
-    _tests_root,
+    _has_py as _has_py,
+    _import_name as _import_name,
+    _is_git_ignored as _is_git_ignored,
+    _resolve_repo_root as _resolve_repo_root,
+    _resolve_repo_root_with_rule as _resolve_repo_root_with_rule,
+    _src_pkg_dir as _src_pkg_dir,
+    _tests_root as _tests_root,
 )
 from ._registry import RULES, Rule
 from ._violation import Violation
@@ -118,6 +118,7 @@ def audit_project(
     violations: list[Violation] = []
 
     from ._resolved_tree import resolved_context, surface_resolved_tree
+
     resolved_ctx = resolved_context(repo_root)
     if repo_root is None:
         if json_out:
@@ -212,7 +213,9 @@ def audit_project(
         violations = kept
 
     violations = [
-        v for v in violations if cfg.applies(v.rule) and v.rule not in cfg.skip
+        v
+        for v in violations
+        if v.rule == "PS-220" or (cfg.applies(v.rule) and v.rule not in cfg.skip)
     ]
 
     # Severity filtering: print everything ≥ the requested floor.

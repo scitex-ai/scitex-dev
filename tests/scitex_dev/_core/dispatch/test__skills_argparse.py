@@ -66,7 +66,8 @@ def _make_real_package_parser():
     return root
 
 
-def test_skills_list_executes_real_dispatch_path(capsys):
+def test_skills_list_executes_real_dispatch_path(capsys, caplog):
+    caplog.set_level(20)  # Explicit human-output threshold; pytest defaults to WARNING.
     # Arrange
     parser = _make_real_package_parser()
     args = parser.parse_args(["skills", "list"])
@@ -76,7 +77,8 @@ def test_skills_list_executes_real_dispatch_path(capsys):
     assert capsys.readouterr().out.strip()
 
 
-def test_skills_get_without_name_executes_and_lists(capsys):
+def test_skills_get_without_name_executes_and_lists(capsys, caplog):
+    caplog.set_level(20)  # Explicit human-output threshold; pytest defaults to WARNING.
     # Arrange
     parser = _make_real_package_parser()
     args = parser.parse_args(["skills", "get"])
@@ -86,7 +88,8 @@ def test_skills_get_without_name_executes_and_lists(capsys):
     assert capsys.readouterr().out.strip()
 
 
-def test_skills_export_dry_run_executes(capsys):
+def test_skills_export_dry_run_executes(capsys, caplog):
+    caplog.set_level(20)  # Explicit human-output threshold; pytest defaults to WARNING.
     # Arrange — --dry-run reaches the import sites but writes nothing.
     parser = _make_real_package_parser()
     args = parser.parse_args(["skills", "export", "--dry-run"])

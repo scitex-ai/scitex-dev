@@ -8,7 +8,7 @@ import ast
 
 from . import rules
 from ._packages import detect as _detect_pkgs
-from .checker import Issue
+from ._issue import Issue
 
 
 def _is_exempt_call(node):
@@ -157,9 +157,7 @@ class FMChecker(ast.NodeVisitor):
             # override (e.g. research project-type flips figure/plot from
             # warning→error). Per-rule override (above) still WINS; the
             # category map is the floor, not the ceiling. See LinterConfig.
-            cat_override = (
-                getattr(self.config, "category_severity_override", {}) or {}
-            )
+            cat_override = getattr(self.config, "category_severity_override", {}) or {}
             sev = cat_override.get(rule.category)
         if sev:
             rule = _replace(rule, severity=sev)

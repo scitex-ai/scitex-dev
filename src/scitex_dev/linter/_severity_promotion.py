@@ -57,6 +57,11 @@ def promote_category_severity(issues, config):
     out = []
     for issue in issues:
         rule = issue.rule
+        # Logging's strict source rule has a fixed error floor. Generic
+        # category/per-rule preferences cannot weaken mandatory enforcement.
+        if rule.id == "PS-220":
+            out.append(replace(issue, rule=replace(rule, severity="error")))
+            continue
         # Per-rule pin wins over the category floor — leave it as emitted.
         if rule.id in per_rule:
             out.append(issue)
@@ -93,6 +98,19 @@ def finalize_issues(issues, config):
     from .rules import SEVERITY_ORDER
 
     issues = promote_category_severity(issues, config)
+    # A visitor and its call mapping may identify the same owning rule at
+    # one site. Keep one finding, retaining the strongest severity emitted.
+    unique = {}
+    for issue in issues:
+        key = (issue.rule.id, issue.line, issue.col)
+        previous = unique.get(key)
+        if (
+            previous is None
+            or SEVERITY_ORDER[issue.rule.severity]
+            > SEVERITY_ORDER[previous.rule.severity]
+        ):
+            unique[key] = issue
+    issues = list(unique.values())
     issues.sort(key=lambda i: (-SEVERITY_ORDER[i.rule.severity], i.line))
     return issues
 

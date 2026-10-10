@@ -1,48 +1,26 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""Tests for scitex_dev.linter._plugin_loader + the plugin-pipeline smoke.
-
-Per neurovista elevation 2026-06-14: the figrecipe figure-style checkers
-(FM P006-P011) were silently dead in every project because two
-silent-degradation spots in scitex-dev's linter swallowed both the
-load-time (circular-import) and the visit-time exceptions. Lint passed
-false-green for months.
-
-This module is the operator's "green support pipe under each red edge"
-for the enforcement layer: it asserts the entry-point plugin loader
-returns the schema downstream code destructures, every registered checker
-constructs + visits a trivial AST without raising, and the fail-loud path
-in ``lint_source`` surfaces (or, under the opt-out env flag, silences) a
-dropped checker.
-
-Real fakes only (PA-306 / STX-NM): the plugin payload is injected via
-``lint_source``'s ``plugins=`` seam and env via a snapshot/restore
-fixture — no monkeypatch.
-"""
+"""Installed and injected linter providers preserve mandatory coverage."""
 
 from __future__ import annotations
 
-import ast
 import os
+from dataclasses import dataclass
+from importlib.metadata import EntryPoint, distributions
 
 import pytest
 
 from scitex_dev.linter import _plugin_loader
-from scitex_dev.linter.checker import lint_source
+from scitex_dev.linter.checker import Issue, lint_source
+from scitex_dev.linter.config import LinterConfig
+from scitex_dev.linter.spi import Rule
 
-
-# --------------------------------------------------------------------------- #
-# Fixtures + real fakes                                                        #
-# --------------------------------------------------------------------------- #
+GROUP = "scitex_dev.linter.plugins"
+LOGGING = EntryPoint(
+    name="scitex-logging", value="scitex_logging._linter_plugin:get_plugin", group=GROUP
+)
 
 
 @pytest.fixture(autouse=True)
-def _reset_plugin_cache():
-    """Reset the plugin-loader cache around each test.
-
-    ``load_plugins()`` is process-lifetime cached in production; tests need
-    a fresh load each time so injection / env tweaks bite.
-    """
+def reset_cache():
     _plugin_loader.reset()
     yield
     _plugin_loader.reset()
@@ -50,388 +28,262 @@ def _reset_plugin_cache():
 
 @pytest.fixture
 def restore_environ():
-    """Snapshot + restore ``os.environ`` around a test.
-
-    Real env manipulation (no mocks) — replaces ``monkeypatch.setenv`` /
-    ``delenv`` per PA-306.
-    """
     saved = dict(os.environ)
-    try:
-        yield os.environ
-    finally:
-        os.environ.clear()
-        os.environ.update(saved)
+    yield os.environ
+    os.environ.clear()
+    os.environ.update(saved)
 
 
-@pytest.fixture
-def _trivial_tree():
-    """An empty AST node — the cheapest visitable input."""
-    return ast.parse("", filename="<test>")
+@dataclass
+class Provider:
+    name: str
+    payload: object
+
+    @property
+    def value(self):
+        return f"test_{self.name}:get_plugin"
+
+    def load(self):
+        return lambda: self.payload
 
 
-class _BoomChecker:
-    """Plugin-checker fake that always raises on visit (drives fail-loud).
+def discover(*providers):
+    return _plugin_loader.load_plugins(entry_points_iter=lambda: (*providers, LOGGING))
 
-    A real class, not a mock: ``lint_source`` constructs and visits it
-    exactly as it would a registered plugin checker.
-    """
 
-    category = "stx-test"
+def rule(identifier="TEST-1", category="io"):
+    return Rule(identifier, "error", category, "Test rule", "Fix test rule")
+
+
+class LegacyChecker:
+    category = "test"
 
     def __init__(self, lines, config):
         self.issues = []
-
-    def visit(self, _tree):
-        raise RuntimeError("synthetic-failure-for-pillar0-test")
-
-
-class _ConfigReadingChecker:
-    """Plugin-checker fake mirroring figrecipe's StyleKwarg checker: it
-    dereferences ``self.config.disable`` on visit.
-
-    The scitex-io self-hosted-runner crash (routed via scitex-hpc): on the
-    ``lint_source(config=None)`` path the plugin loop handed the raw ``None``
-    to this constructor, so ``self.config.disable`` raised AttributeError and
-    the checker was silently dropped. ``lint_source`` must pass the RESOLVED
-    config (never None), exactly as the core SciTeXChecker receives.
-    """
-
-    category = "stx-test"
-
-    def __init__(self, lines, config):
         self.config = config
-        self.issues = []
 
-    def visit(self, _tree):
-        # The exact deref that crashed on a None config.
-        if "STX-NEVER-DISABLED" in self.config.disable:  # pragma: no cover
-            self.issues.append("unreachable")
+    def visit(self, tree):
+        assert self.config is not None
 
 
-def _payload_with(checker_cls):
-    """A minimal ``load_plugins()``-shaped payload carrying one checker."""
-    return {
-        "rules": {},
-        "call_rules": {},
-        "axes_hints": {},
-        "checkers": [checker_cls],
-    }
+class ContextChecker(LegacyChecker):
+    accepts_filepath = True
+
+    def __init__(self, lines, config, *, filepath):
+        super().__init__(lines, config)
+        self.filepath = filepath
+
+    def visit(self, tree):
+        self.issues.append(Issue(rule(), 1, 0, self.filepath))
 
 
-# --------------------------------------------------------------------------- #
-# load_plugins() smoke                                                         #
-# --------------------------------------------------------------------------- #
+class BrokenChecker(LegacyChecker):
+    def visit(self, tree):
+        raise ValueError("checker coverage unavailable")
 
 
-def test_load_plugins_returns_dict_with_required_keys():
-    # Arrange
-    # Act
-    payload = _plugin_loader.load_plugins()
-    # Assert — schema invariant; downstream lint_source destructures these.
-    assert {"rules", "call_rules", "axes_hints", "checkers"}.issubset(payload)
+class BrokenProvider:
+    name = "broken-owner"
+    value = "broken_owner:get_plugin"
+
+    def load(self):
+        raise ModuleNotFoundError("missing owner backend")
 
 
-def test_load_plugins_cache_returns_same_object_on_second_call():
-    # Arrange
+def test_installed_metadata_has_one_logging_owner():
+    owned = [
+        (ep.name, dist.metadata["Name"])
+        for dist in distributions()
+        for ep in dist.entry_points
+        if ep.group == GROUP and ep.value == LOGGING.value
+    ]
+    assert owned == [
+        ("scitex-logging", "scitex-logging")
+    ]
+
+
+def test_payload_preserves_existing_keys_and_cached_identity():
     first = _plugin_loader.load_plugins()
-    # Act
-    second = _plugin_loader.load_plugins()
-    # Assert
-    assert first is second
+    assert {"rules", "call_rules", "axes_hints", "checkers"}.issubset(first)
+    assert first is _plugin_loader.load_plugins()
+    assert first["rules"]["PS-220"].severity == "error"
 
 
-# --------------------------------------------------------------------------- #
-# Per-checker smoke                                                            #
-# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize("quiet", ["", "1"])
+def test_missing_provider_is_a_failure_even_when_quiet(restore_environ, quiet):
+    restore_environ["SCITEX_DEV_LINTER_QUIET"] = quiet
+    with pytest.raises(
+        _plugin_loader.LinterPluginError, match="mandatory scitex-logging.*absent"
+    ):
+        _plugin_loader.load_plugins(entry_points_iter=lambda: ())
 
 
-def test_every_registered_checker_constructs_without_raising(_trivial_tree):
-    # Arrange — an empty venv (no plugins) makes this vacuously true; a real
-    # checker that raises on construct/visit is what we want to catch.
-    checkers = _plugin_loader.load_plugins()["checkers"]
-    # Act — construct + visit each; collect any failures.
-    failures: list[str] = []
-    for cls in checkers:
-        name = getattr(cls, "__name__", repr(cls))
-        try:
-            instance = cls([], None)
-            instance.visit(_trivial_tree)
-        except Exception as exc:  # noqa: BLE001 — we want the type+msg
-            failures.append(f"{name}: {type(exc).__name__}: {exc}")
-    # Assert — a raise here means the checker would be silently dropped.
-    assert failures == []
-
-
-# --------------------------------------------------------------------------- #
-# fail-loud path — lint_source plugins= seam (real fake, no monkeypatch)       #
-# --------------------------------------------------------------------------- #
-
-
-@pytest.fixture
-def broken_checker_stderr(capsys, restore_environ):
-    """Run ``lint_source`` with an injected always-raising checker and the
-    opt-out env unset; return ``(issues, stderr)``.
-
-    The broken checker is supplied through the real ``plugins=`` seam — no
-    loader patching.
-    """
-    restore_environ.pop("SCITEX_DEV_LINTER_QUIET", None)
-    issues = lint_source(
-        "x = 1\n", filepath="<test>", plugins=_payload_with(_BoomChecker)
-    )
-    captured = capsys.readouterr()
-    return issues, captured.err
-
-
-def test_lint_source_returns_list_despite_broken_checker(broken_checker_stderr):
-    # Arrange
-    issues, _err = broken_checker_stderr
-    # Act
-    # Assert — lint_source returns normally; other checkers' issues still flow.
-    assert isinstance(issues, list)
-
-
-def test_lint_source_warning_names_the_dropped_checker(broken_checker_stderr):
-    # Arrange
-    _issues, err = broken_checker_stderr
-    # Act
-    # Assert
-    assert "_BoomChecker" in err
-
-
-def test_lint_source_warning_includes_the_exception_message(broken_checker_stderr):
-    # Arrange
-    _issues, err = broken_checker_stderr
-    # Act
-    # Assert
-    assert "synthetic-failure-for-pillar0-test" in err
-
-
-def test_lint_source_silenced_by_env_flag(capsys, restore_environ):
-    # Arrange — opt-out env set; same broken checker injected.
-    restore_environ["SCITEX_DEV_LINTER_QUIET"] = "1"
-    # Act
-    lint_source("x = 1\n", filepath="<test>", plugins=_payload_with(_BoomChecker))
-    captured = capsys.readouterr()
-    # Assert — no stderr WARNING surfaces (operator opt-out respected).
-    assert "synthetic-failure-for-pillar0-test" not in captured.err
-
-
-def test_plugin_checker_receives_resolved_config_when_none(capsys, restore_environ):
-    # Arrange — lint_source's documented config=None path. A plugin checker
-    # that reads self.config.disable must get the RESOLVED config (loaded via
-    # load_config), not a raw None — else it AttributeErrors and is dropped
-    # (the scitex-io StyleKwarg crash on test__pdf*.py).
-    restore_environ.pop("SCITEX_DEV_LINTER_QUIET", None)
-    # Act
-    lint_source(
-        "x = 1\n",
-        filepath="<test>",
-        config=None,
-        plugins=_payload_with(_ConfigReadingChecker),
-    )
-    err = capsys.readouterr().err
-    # Assert — not dropped: no fail-loud WARNING names the config-reading checker.
-    assert "_ConfigReadingChecker" not in err
-
-
-# --------------------------------------------------------------------------- #
-# LOAD-time fail-loud — entry_points_iter seam (real fake entry points)        #
-#                                                                              #
-# Ask 2 (neurovista 2026-06-14): a plugin advertised via the                   #
-# `scitex_dev.linter.plugins` entry-point group but unimportable must FAIL     #
-# LOUD + ACTIONABLE — not a swallowed/duplicated noisy line. The              #
-# `scitex` symptom is a STALE wheel whose entry point points at a dropped      #
-# `scitex._linter_plugin` module. We drive that branch with a real fake        #
-# entry point (a real class whose `.load()` raises), through the               #
-# `entry_points_iter` seam — no monkeypatch of importlib.metadata.             #
-# --------------------------------------------------------------------------- #
-
-
-class _StaleScitexEP:
-    """Real fake of the dangling `scitex` entry point neurovista hit.
-
-    Its ``.load()`` raises the exact ``ModuleNotFoundError`` an OLD scitex
-    wheel produces — the entry point outlived the module it points at.
-    """
-
-    name = "scitex"
-
-    def load(self):
-        raise ModuleNotFoundError(
-            "No module named 'scitex._linter_plugin'",
-            name="scitex._linter_plugin",
-        )
-
-
-class _CircularImportEP:
-    """Real fake of a plugin module that raises a circular ImportError."""
-
-    name = "figrecipe"
-
-    def load(self):
-        raise ImportError("cannot import name 'X' (most likely a circular import)")
-
-
-def _one_stale_ep():
-    return [_StaleScitexEP()]
-
-
-def _no_eps():
-    return []
-
-
-@pytest.fixture
-def stale_plugin_stderr(capsys, restore_environ):
-    """Load plugins with one stale entry point + opt-out unset; return stderr."""
-    restore_environ.pop("SCITEX_DEV_LINTER_QUIET", None)
-    restore_environ.pop("SCITEX_DEV_NO_AUDIT_DISCLAIMER", None)
-    _plugin_loader.load_plugins(entry_points_iter=_one_stale_ep)
-    return capsys.readouterr().err
-
-
-def test_load_failure_warning_names_the_plugin(stale_plugin_stderr):
-    # Arrange
-    err = stale_plugin_stderr
-    # Act
-    # Assert
-    assert "'scitex'" in err
-
-
-def test_load_failure_warning_names_the_missing_module(stale_plugin_stderr):
-    # Arrange
-    err = stale_plugin_stderr
-    # Act
-    # Assert — the actual dangling module is named so the operator can act.
-    assert "scitex._linter_plugin" in err
-
-
-def test_load_failure_warning_is_actionable_with_reinstall_hint(stale_plugin_stderr):
-    # Arrange
-    err = stale_plugin_stderr
-    # Act
-    # Assert — a concrete next step, not just the bare exception.
-    assert "pip install" in err
-
-
-def test_load_failure_warning_diagnoses_stale_entry_point(stale_plugin_stderr):
-    # Arrange
-    err = stale_plugin_stderr
-    # Act
-    # Assert — distinguishes "stale wheel" from "broken module".
-    assert "STALE" in err
-
-
-def test_load_failure_warning_mentions_quiet_escape(stale_plugin_stderr):
-    # Arrange
-    err = stale_plugin_stderr
-    # Act
-    # Assert
-    assert "SCITEX_DEV_LINTER_QUIET" in err
-
-
-def test_load_failure_does_not_duplicate_the_bare_exception_line(stale_plugin_stderr):
-    # Arrange — the old code emitted the same `failed to load plugin` text
-    # TWICE (logger.warning + stderr.write). Exactly one copy must reach
-    # stderr now; the logger breadcrumb is debug-level (not captured here).
-    err = stale_plugin_stderr
-    # Act
-    occurrences = err.count("failed to load plugin")
-    # Assert
-    assert occurrences == 1
-
-
-def test_load_failure_payload_is_still_well_formed():
-    # Arrange — a failed plugin must not corrupt the merged payload shape.
-    payload = _plugin_loader.load_plugins(entry_points_iter=_one_stale_ep)
-    # Act
-    # Assert
-    assert {"rules", "call_rules", "axes_hints", "checkers"}.issubset(payload)
-
-
-def test_load_failure_drops_only_the_broken_plugins_rules():
-    # Arrange
-    payload = _plugin_loader.load_plugins(entry_points_iter=_one_stale_ep)
-    # Act
-    # Assert — the broken plugin contributed nothing (no partial registration).
-    assert payload["rules"] == {}
-
-
-def test_no_declared_plugins_is_silent(capsys, restore_environ):
-    # Arrange — an empty entry-point group is FINE (engine-only venv) and
-    # must NOT emit the load-failure warning. This is the "no plugins
-    # declared" case that must stay distinct from "declared-but-broken".
-    restore_environ.pop("SCITEX_DEV_LINTER_QUIET", None)
-    restore_environ.pop("SCITEX_DEV_NO_AUDIT_DISCLAIMER", None)
-    # Act
-    _plugin_loader.load_plugins(entry_points_iter=_no_eps)
-    err = capsys.readouterr().err
-    # Assert
-    assert "failed to load plugin" not in err
-
-
-def test_load_failure_silenced_by_quiet_env(capsys, restore_environ):
-    # Arrange — opt-out env set; same stale entry point.
-    restore_environ["SCITEX_DEV_LINTER_QUIET"] = "1"
-    # Act
-    _plugin_loader.load_plugins(entry_points_iter=_one_stale_ep)
-    err = capsys.readouterr().err
-    # Assert — operator opt-out silences the load-failure notice too.
-    assert "failed to load plugin" not in err
-
-
-def test_injected_entry_points_do_not_pollute_the_process_cache():
-    # Arrange — the seam exists for tests; it must never write the
-    # process-lifetime cache (production load stays authoritative).
-    _plugin_loader.reset()
-    # Act
-    _plugin_loader.load_plugins(entry_points_iter=_one_stale_ep)
-    # Assert
+@pytest.mark.parametrize("quiet", ["", "1"])
+def test_broken_provider_is_a_failure_even_when_quiet(restore_environ, quiet):
+    restore_environ["SCITEX_DEV_LINTER_QUIET"] = quiet
+    with pytest.raises(
+        _plugin_loader.LinterPluginError, match="broken-owner.*missing owner backend"
+    ):
+        discover(BrokenProvider())
     assert _plugin_loader._cache is None
 
 
-# --------------------------------------------------------------------------- #
-# _remediation_hint — pure function, both failure shapes                       #
-# --------------------------------------------------------------------------- #
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {"rules": {}},
+        {"checkers": [7]},
+        {"axes_hints": []},
+        {"call_rules": []},
+        {"rules": [object()]},
+    ],
+)
+def test_malformed_payload_aborts_loading(payload):
+    with pytest.raises(_plugin_loader.LinterPluginError, match="bad-owner"):
+        discover(Provider("bad-owner", payload))
 
 
-def test_remediation_hint_for_missing_linter_plugin_module_says_stale():
-    # Arrange
-    exc = ModuleNotFoundError(
-        "No module named 'scitex._linter_plugin'", name="scitex._linter_plugin"
+def test_duplicate_provider_is_rejected():
+    provider = Provider("owner", {"rules": [rule()]})
+    with pytest.raises(_plugin_loader.LinterPluginError, match="duplicate provider"):
+        discover(provider, provider)
+
+
+def test_duplicate_rule_ids_are_rejected():
+    with pytest.raises(
+        _plugin_loader.LinterPluginError, match="duplicate rule 'TEST-1'"
+    ):
+        discover(
+            Provider("first", {"rules": [rule()]}),
+            Provider("second", {"rules": [rule()]}),
+        )
+
+
+def test_foreign_logging_rule_ownership_is_rejected():
+    with pytest.raises(
+        _plugin_loader.LinterPluginError, match="PS-220 belongs to scitex-logging"
+    ):
+        discover(Provider("foreign", {"rules": [rule("PS-220")]}))
+
+
+def test_duplicate_checker_objects_are_rejected():
+    with pytest.raises(_plugin_loader.LinterPluginError, match="duplicate checker"):
+        discover(Provider("first", {"checkers": [LegacyChecker, LegacyChecker]}))
+
+
+def test_distinct_factory_bound_classes_can_share_a_lexical_name():
+    def factory():
+        class Bound(LegacyChecker):
+            pass
+
+        return Bound
+
+    classes = [factory(), factory()]
+    payload = discover(Provider("factory", {"checkers": classes}))
+    assert all(checker in payload["checkers"] for checker in classes)
+
+
+def test_parallel_call_concerns_are_grouped_without_overwriting_compatibility_view():
+    first, second = rule("TEST-1"), rule("TEST-2", "figure")
+    payload = discover(
+        Provider(
+            "a-first", {"rules": [first], "call_rules": {(None, "savefig"): first}}
+        ),
+        Provider(
+            "b-second", {"rules": [second], "call_rules": {(None, "savefig"): second}}
+        ),
     )
-    # Act
-    hint = _plugin_loader._remediation_hint("scitex", exc)
-    # Assert
-    assert "STALE" in hint
+    assert payload["call_rules"][(None, "savefig")] is first
+    assert payload["call_rule_groups"][(None, "savefig")] == (first, second)
 
 
-def test_remediation_hint_for_missing_module_names_the_distribution():
-    # Arrange
-    exc = ModuleNotFoundError(
-        "No module named 'scitex._linter_plugin'", name="scitex._linter_plugin"
+def test_contradictory_mapping_metadata_is_rejected():
+    declared = rule()
+    incompatible = Rule(declared.id, "warning", "io", "Different", "Different")
+    with pytest.raises(
+        _plugin_loader.LinterPluginError, match="contradictory rule 'TEST-1'"
+    ):
+        discover(
+            Provider(
+                "owner",
+                {"rules": [declared], "call_rules": {(None, "savefig"): incompatible}},
+            )
+        )
+
+
+def test_existing_two_argument_checker_and_opted_filepath_checker_both_run():
+    issues = lint_source(
+        "x = 1\n",
+        filepath="src/demo/core.py",
+        plugins={"checkers": [LegacyChecker, ContextChecker]},
     )
-    # Act
-    hint = _plugin_loader._remediation_hint("scitex", exc)
-    # Assert — the reinstall target is the distribution, not the submodule.
-    assert "scitex" in hint
+    selected = [issue for issue in issues if issue.rule.id == "TEST-1"]
+    assert [issue.source_line for issue in selected] == ["src/demo/core.py"]
 
 
-def test_remediation_hint_for_circular_import_names_circular():
-    # Arrange
-    exc = ImportError("cannot import name 'X' (most likely a circular import)")
-    # Act
-    hint = _plugin_loader._remediation_hint("figrecipe", exc)
-    # Assert — the broken-module branch points at the circular import.
-    assert "circular import" in hint
+@pytest.mark.parametrize("quiet", ["", "1"])
+def test_checker_crash_cannot_report_success(restore_environ, quiet):
+    restore_environ["SCITEX_DEV_LINTER_QUIET"] = quiet
+    with pytest.raises(
+        _plugin_loader.LinterPluginError, match="BrokenChecker.*coverage unavailable"
+    ):
+        lint_source(
+            "x = 1\n",
+            filepath="src/demo/core.py",
+            plugins={"checkers": [BrokenChecker]},
+        )
 
 
-def test_circular_import_plugin_failure_is_actionable(capsys, restore_environ):
-    # Arrange — a plugin whose module exists but raises on import.
-    restore_environ.pop("SCITEX_DEV_LINTER_QUIET", None)
-    restore_environ.pop("SCITEX_DEV_NO_AUDIT_DISCLAIMER", None)
-    # Act
-    _plugin_loader.load_plugins(entry_points_iter=lambda: [_CircularImportEP()])
-    err = capsys.readouterr().err
-    # Assert
-    assert "circular import" in err
+@pytest.mark.parametrize(
+    "source",
+    [
+        'print("status")\n',
+        "import json\nprint(json.dumps({}))\n",
+        'def render(stream):\n    print("payload", file=stream)\n',
+        "def render_content(content):\n    print(content)\n",
+    ],
+)
+def test_injected_optional_payload_does_not_remove_mandatory_logging(source):
+    issues = lint_source(
+        source, filepath="src/demo/examples/core.py", plugins={"checkers": []}
+    )
+    assert len([issue for issue in issues if issue.rule.id == "PS-220"]) == 1
+
+
+def test_disable_comments_and_severity_preferences_cannot_weaken_source_rule():
+    config = LinterConfig(
+        disable=["PS-220"],
+        per_rule_severity={"PS-220": "info"},
+        category_severity_override={"logging": "warning"},
+    )
+    issues = lint_source(
+        'print("status") # stx-allow: PS-220\n',
+        filepath="src/demo/core.py",
+        config=config,
+    )
+    assert [issue.rule.severity for issue in issues if issue.rule.id == "PS-220"] == [
+        "error"
+    ]
+
+
+def test_session_print_has_one_source_finding():
+    issues = lint_source(
+        'import scitex as stx\n@stx.session\ndef run():\n    print("status")\n',
+        filepath="src/demo/core.py",
+    )
+    assert [
+        issue.rule.id for issue in issues if issue.rule.id in {"PS-220", "STX-P005"}
+    ] == ["PS-220"]
+
+
+def test_real_io_and_figure_owners_both_run_once_with_existing_opt_in():
+    source = 'fig.savefig("out.png", dpi=300)\n'
+    ordinary = lint_source(source, filepath="src/demo/core.py", config=LinterConfig())
+    opted = lint_source(
+        source, filepath="src/demo/core.py", config=LinterConfig(enable=["FM"])
+    )
+    assert [issue.rule.id for issue in ordinary].count("STX-IO007") == 1
+    assert "STX-FM006" not in [issue.rule.id for issue in ordinary]
+    codes = [issue.rule.id for issue in opted]
+    assert codes.count("STX-IO007") == codes.count("STX-FM006") == 1

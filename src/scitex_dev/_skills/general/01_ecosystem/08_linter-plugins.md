@@ -118,8 +118,107 @@ This is what catches READMEs that *teach* the wrong API — a class of bug nothi
 - **Plugins**: `figrecipe` ships the `P0xx` (plot) and `FM0xx` + `FIG001` (figure) families — a growing set, so read it live with `scitex-dev linter list-rules --json` instead of trusting an id range quoted here. Other packages with `_linter_plugin.py` declared: `scitex_io`, `scitex_stats`, `scitex_audio`, `scitex_clew`, `scitex_notification`. Engine-shipped (legacy) rules `S*`, `I*`, `IO*`, `PA*`, `ST*`, `EH*` will migrate into their owning packages over subsequent releases.
 - **Console scripts**: `scitex-dev linter <subcommand>` is the canonical path. `scitex-linter <subcommand>` aliases it.
 
+## Project-auditor plugins
+
+Repository checks use the separate `scitex_dev.audit.project` entry-point
+group. AST linter checkers keep their existing contract. A project provider
+returns rule metadata plus checks accepting `(repo, violation_class, out)`:
+
+```python
+def get_plugin():
+    return {
+        "rules": [("PS-234", "§4b", "Runtime state stays host-local.",
+                   "E", "runtime-state-gitignored")],
+        "checks": [check_runtime_gitignore],
+        "registry_checks": [check_runtime_registry_gitignore],
+    }
+```
+
+```toml
+[project.entry-points."scitex_dev.audit.project"]
+scitex-dev = "scitex_dev._runtime_gitignore_plugin:get_plugin"
+```
+
+The engine registers these rules in the normal project catalog and invokes
+their checks during `audit-project` and `audit-all`. Optional `registry_checks` accept
+`(scitex_dir, violation_class, out)` and run through
+`ecosystem audit-registry-layout` against its explicit registry root;
+project checks do not scan the host registry automatically. Providers receive
+the violation class from the engine; they must not import its registry, which
+is still being assembled at discovery time. Broken providers, duplicate
+rule IDs/checkers, and collisions with engine rules abort discovery rather
+than silently omit checks. Reinstall after changing entry-point metadata.
+PS-234 is owned by scitex-dev because it enforces the shared ecosystem
+configuration/runtime contract; its implementation lives in the provider.
+
 ## Related
 
 - [`02_package/08_quality.md`](../02_package/08_quality.md) — quality-checklist that calls into `scitex-dev linter` as one of the release gates.
 - [`05_development/02_periodic-audits.md`](../05_development/02_periodic-audits.md) — `scitex-dev ecosystem audit-*` is the **structural** auditor (project layout, CLI shape, skill conformance); `scitex-dev linter` is the **code-pattern** auditor (anti-patterns inside `.py`/`.ipynb`/`.md`/`.rst`). Run both periodically.
 - [`02_package/07_github-actions.md`](../02_package/07_github-actions.md) — wiring `scitex-dev linter sweep --strict` into CI.
+
+### Logging-owned source enforcement
+
+`scitex-logging` supplies PS-220 metadata and the detector shared by its
+`scitex_dev.audit.project` and `scitex_dev.linter.plugins` providers. Every
+builtin print under `src` is an error, including JSON, caller-owned streams,
+and nested `scripts`, `examples`, `docs`, or `tests`. Necessary logging backend
+construction has an exact statement-level proof; the owning package has no
+blanket output exemption. Use `getLogger()` for stderr diagnostics,
+`getConsole()` for formatted stdout, and `getPlainConsole().emit()` for exact
+stdout or explicitly supplied streams.
+
+Both entry-point groups require the installed `scitex-logging` provider.
+Missing, broken, malformed, or duplicated providers abort the audit instead
+of reporting reduced coverage as success. Quiet settings affect verbosity;
+they do not permit a missing checker or a checker exception. PS-220 cannot be
+disabled, deferred, or downgraded by project configuration or comments.
+Existing entry-point groups and consumer imports retain their names.
+
+Linter providers retain their existing `(source_lines, config)` checker
+constructor. A checker declaring `accepts_filepath = True` additionally gets
+`filepath=...`. `scitex_dev.linter.spi.Issue` is the same value as the historical
+`checker.Issue`; rule/checker imports no longer require a partially initialized
+checker module during discovery.
+
+Distinct owners can inspect one API pattern for different concerns: IO saving
+and figure dimensions both apply to `savefig`. The existing `call_rules` view
+retains the first provider in sorted entry-point order. The additive
+`call_rule_groups` maps each pattern to every distinct declared Rule. The
+engine runs eligible groups with existing category and availability gates,
+and reports each owning rule once per source site. Repeated rule IDs,
+contradictory mappings, providers, and identical checker objects fail visibly.
+Factory-bound checker classes sharing a lexical name remain separate objects.
+
+### Declared provider ownership transitions
+
+A successor may add a `replaces` tuple to its existing four payload keys. Each
+`scitex_dev.linter.spi.ProviderReplacement` names the predecessor's exact
+distribution, entry-point name and value, and complete advertised rule IDs:
+
+```python
+ProviderReplacement(
+    distribution="scitex-ui",
+    entry_point="ui",
+    value="scitex_ui._linter_plugin:get_plugin",
+    rule_ids=tuple(f"STX-UI{number}" for number in range(101, 108)),
+)
+```
+
+The loader validates every discovered provider before selecting the declared
+successor, independent of discovery order. The predecessor's full rule corpus
+must exactly match the declaration, and the successor must offer every one of
+those IDs. Partial, unknown, ambiguous, repeated, competing, cyclic, or self
+replacements fail; mandatory logging ownership cannot be displaced. Ordinary
+ownership collisions still fail. The declaration is dormant when the named
+distribution has no advertised linter provider, so the archived package need
+not be installed. A named distribution advertising an unfamiliar entry point
+fails instead of being silently ignored. Discovery uses the supplied entry
+points and never consults unrelated installed metadata during injected tests.
+
+The selected payload keeps the four historical result keys, adding structured
+`provider_replacements` receipts. A cached discovery emits one levelled stderr
+notice per active replacement. Quiet settings suppress notices while retaining
+the receipts and every validation failure. This lets SDK UI and legacy UI
+coexist during the declared seven-rule transition without removing either
+package or changing consumer APIs.

@@ -1,47 +1,9 @@
 # -*- coding: utf-8 -*-
-"""The PS-220 bucket-five discriminator — is this `print(...)` a MESSAGE?
+"""Legacy output-shape introspection and logging-owned strict enforcement.
 
-Split out of `_check_no_print.py` (which owns the file walk, the exemption
-handling and the rule tuple) so the classification logic is one cohesive,
-separately-testable responsibility.
-
-A blanket ban on `print` would be wrong, and would get worked around rather
-than followed. Where output IS the product — a `--json` payload, piped data,
-a value a shell consumes — routing it through a logger would CORRUPT it,
-because scitex-logging writes every console record to STDERR. So the
-carve-out is a design constraint, not a concession, and it is decided
-STRUCTURALLY (from the AST) rather than by an honour-system comment:
-
-* ALWAYS FLAG — `print(..., file=sys.stderr)`. scitex-logging owns stderr; a
-  hand-rolled stderr write is exactly the unstructured, unfilterable output
-  the mandate removes.
-* ALWAYS FLAG — a stdout `print` whose payload is a string literal or an
-  f-string. That is human prose by construction — but prose is the DETECTOR,
-  not the hazard, and stating it as the hazard loses the argument. THE HAZARD
-  IS THAT LIBRARY CODE WRITES UNCONDITIONALLY TO STDOUT: a caller who imports
-  the module cannot silence, redirect or capture it — no flag, no handler, no
-  level. `log.info(...)` keeps the output for everyone who wants it and hands
-  control to the caller.
-
-  Worth stating explicitly because the weaker framing was in the finding
-  message and it lost. scitex-db objected (2026-08-10) that `_inspect.py`'s
-  whole job is rendering a table for a human, so "this is prose, therefore a
-  message" reads as the rule firing where no hazard exists. On that framing
-  they were right and the rule could not defend itself. They then supplied
-  the argument above — against their own position — and converted. A rule
-  whose stated reason can be beaten by a competent maintainer is one people
-  route around, which is the same "gets ignored" failure as too-low a
-  severity arriving by a different door.
-* SPARE — a stdout `print` (no `file=`, or `file=sys.stdout`) whose sole
-  positional argument is a serializer call (`json.dumps(...)`, `.to_json()`,
-  `.model_dump_json()`) or a variable holding an already-rendered payload.
-* FLAG EVERYTHING ELSE. An undecidable destination or an undecidable payload
-  is NOT evidence of safety. Unknown must never read as safe.
-
-Destinations and payload variables are resolved within the ENCLOSING FUNCTION
-when they are plain local names, so the common real-world shape
-``out = file or sys.stdout; print(payload, file=out)`` classifies correctly
-instead of falling into "undecidable".
+Destination, prose, and serializer helpers remain available to existing
+callers. They do not exempt any builtin print. ``should_flag`` is a direct
+compatibility alias to the owning logging distribution's strict rule.
 """
 
 from __future__ import annotations
@@ -263,39 +225,7 @@ def payload_is_explicitly_requested(tree: ast.AST, call: ast.Call) -> bool:
     return arg.id in _required_parameters(function)
 
 
-def should_flag(tree: ast.AST, call: ast.Call) -> tuple[bool, str]:
-    """Apply the bucket-five discriminator. Returns `(flag, why)`."""
-    dest = destination(tree, call)
-    if dest == STDERR:
-        return True, (
-            "writes to stderr, which scitex-logging owns — use "
-            "`log.warning(...)` / `log.error(...)` instead"
-        )
-    if dest == UNKNOWN:
-        return True, (
-            "writes to an undecidable destination (`file=` is not resolvably "
-            "stdout or stderr), so it cannot be shown to be machine-readable "
-            "stdout"
-        )
-    if dest == INJECTED:
-        return False, ""
-    if payload_is_machine_readable(tree, call):
-        return False, ""
-    if payload_is_explicitly_requested(tree, call):
-        return False, ""
-    if len(call.args) == 1 and is_prose(call.args[0]):
-        return True, (
-            "writes unconditionally to stdout from library code, so a caller "
-            "importing this module cannot silence, redirect or capture it — "
-            "there is no flag, no handler and no level. `log.info(...)` keeps "
-            "the output for everyone who wants it and hands control to the "
-            "caller"
-        )
-    return True, (
-        "prints an undecidable payload to stdout; only a serializer call "
-        "(`json.dumps(...)`, `.to_json()`, `.model_dump_json()`) or a variable "
-        "holding a rendered payload is treated as machine-readable output"
-    )
+from scitex_logging._output_auditor import should_flag
 
 
 __all__ = [

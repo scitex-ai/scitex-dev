@@ -144,7 +144,9 @@ def _skills_list(args: argparse.Namespace, package: str) -> None:
 
     result = list_skills(package=package)
     if args.as_json:
-        print(json.dumps(result, indent=2))
+        slogging.getPlainConsole(__name__).emit(
+            json.dumps(result, indent=2), flush=False
+        )
     else:
         items = result.get(package, [])
         if not items:
@@ -182,10 +184,11 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
         }
         total = sum(len(v) for v in result.values())
         if getattr(args, "as_json", False):
-            print(
+            slogging.getPlainConsole(__name__).emit(
                 json.dumps(
                     {"dest": str(dest), "source": source, "packages": result}, indent=2
-                )
+                ),
+                flush=False,
             )
         else:
             console.info(f"Would export {total} files to {dest}/ (source={source})")
@@ -197,8 +200,9 @@ def _skills_export(args: argparse.Namespace, package: str) -> None:
         log.error(f"No skills found for {package}.")
         sys.exit(2)
     if getattr(args, "as_json", False):
-        print(
-            json.dumps({k: [str(f) for f in v] for k, v in exported.items()}, indent=2)
+        slogging.getPlainConsole(__name__).emit(
+            json.dumps({k: [str(f) for f in v] for k, v in exported.items()}, indent=2),
+            flush=False,
         )
     else:
         total = sum(len(v) for v in exported.values())
@@ -222,15 +226,15 @@ def _skills_get(args: argparse.Namespace, package: str) -> None:
     content = get_skill(package=package, name=args.name)
     if content:
         if args.as_json:
-            print(
-                json.dumps({"package": package, "name": args.name, "content": content})
+            slogging.getPlainConsole(__name__).emit(
+                json.dumps({"package": package, "name": args.name, "content": content}),
+                flush=False,
             )
         else:
             console.info(content)
     else:
         log.error(
-            f"Skill '{args.name}' not found in {package}. "
-            f"Run: {package} skills list"
+            f"Skill '{args.name}' not found in {package}. Run: {package} skills list"
         )
         sys.exit(2)
 
