@@ -368,8 +368,13 @@ Repository = "https://github.com/scitex-ai/scitex-dev"
 Documentation = "https://scitex-dev.readthedocs.io/"
 
 [tool.setuptools_scm]
-# Empty body: derive version from latest git tag (vX.Y.Z → X.Y.Z).
+# Derive version from latest vX.Y.Z release tag (vX.Y.Z → X.Y.Z).
 # Eliminates pyproject↔tag drift; release flow is `git tag vX.Y.Z && git push --tags`.
+# tag_regex restricts versioning to v* release tags so fleet archive/* retention
+# tags (slashed paths/dates, e.g. archive/three-days-rule/...), which are
+# reachable from HEAD and unparseable by the default regex, are ignored instead
+# of breaking editable installs (ValueError: Can't parse version from tag).
+tag_regex = '^v(?P<version>\d+\.\d+\.\d+.*)$'
 
 [tool.setuptools.packages.find]
 where = ["src"]
