@@ -241,12 +241,13 @@ _SLUGS: dict[str, str] = {
 
 # Apply the overrides — replace each tagged Rule with a promoted copy that
 # carries both the (optional) severity override and the (optional) slug.
+# PS-220 has NO special case here: its mandatory error tier comes from the
+# merged rule itself (logging provider declares error), and the table owns
+# any change. A hardcoded `"E" if rule.code == "PS-220"` would make an
+# injected/test override a silent no-op — the exact failure class this
+# module's ordering tests pin (see test__registry_severity_overrides.py).
 def _patch(rule: Rule) -> Rule:
-    sev = (
-        "E"
-        if rule.code == "PS-220"
-        else _SEVERITY_OVERRIDES.get(rule.code, rule.severity)
-    )
+    sev = _SEVERITY_OVERRIDES.get(rule.code, rule.severity)
     slug = rule.slug or _SLUGS.get(rule.code, "")
     if sev == rule.severity and slug == rule.slug:
         return rule
