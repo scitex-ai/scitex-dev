@@ -119,12 +119,15 @@ for (const event of ['push', 'pull_request', 'schedule', 'workflow_dispatch']) {
   const actual = profileSelection('scitex-ai/scitex-dev', event, 'matrix');
   if (JSON.stringify(actual.versions) !== '["3.11","3.12","3.13"]')
     throw new Error('Dev-minors-changed');
-  for (const native of [false, true]) {
-    let reason = null;
-    try { planFor('scitex-ai/scitex-dev', event, native); }
-    catch (error) { reason = error.message; }
-    if (reason !== 'image-unqualified') throw new Error('null-registration-not-refused');
-  }
+  // Non-native: no public image is registered for scitex-dev, so planning
+  // still refuses. Native: the retained-private-ci image qualifies.
+  let reason = null;
+  try { planFor('scitex-ai/scitex-dev', event, false); }
+  catch (error) { reason = error.message; }
+  if (reason !== 'image-unqualified') throw new Error('null-registration-not-refused');
+  const plan = planFor('scitex-ai/scitex-dev', event, true);
+  if (!plan.image || plan.image.authority_kind !== 'retained-private-ci')
+    throw new Error('native-image-unqualified');
 }
 console.log('all-four-events-three-minors-null-image-refused');
 """
