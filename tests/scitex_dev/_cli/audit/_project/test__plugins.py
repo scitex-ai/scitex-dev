@@ -186,9 +186,9 @@ def test_runtime_metadata_absence_still_loads_the_owner_rule():
 def test_absent_logging_provider_cannot_report_success():
     # Arrange
     # Act
+    # Assert
     with pytest.raises(ProjectPluginError, match="mandatory scitex-logging.*absent"):
         _load_plugins(entry_points_iter=lambda: ())
-    # Assert: the expected raise above is the assertion
 
 
 def test_logging_metadata_registers_one_project_rule():
@@ -217,9 +217,9 @@ def test_repeated_logging_provider_is_rejected():
     # Arrange
     point = EntryPoint(name="scitex-logging", value=_LOGGING, group=_GROUP)
     # Act
+    # Assert
     with pytest.raises(ProjectPluginError, match="duplicate provider"):
         _load_plugins(entry_points_iter=lambda: (point, point))
-    # Assert: the expected raise above is the assertion
 
 
 def test_real_self_entry_point_does_not_register_the_owner_twice():

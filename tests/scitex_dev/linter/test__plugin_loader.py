@@ -134,21 +134,21 @@ def test_missing_provider_is_a_failure_even_when_quiet(restore_environ, quiet):
     # Arrange
     restore_environ["SCITEX_DEV_LINTER_QUIET"] = quiet
     # Act
+    # Assert
     with pytest.raises(
         _plugin_loader.LinterPluginError, match="mandatory scitex-logging.*absent"
     ):
         _plugin_loader.load_plugins(entry_points_iter=lambda: ())
-    # Assert: the expected raise above is the assertion
 @pytest.mark.parametrize("quiet", ["", "1"])
 def test_broken_provider_is_a_failure_even_when_quiet(restore_environ, quiet):
     # Arrange
     restore_environ["SCITEX_DEV_LINTER_QUIET"] = quiet
     # Act
+    # Assert
     with pytest.raises(
         _plugin_loader.LinterPluginError, match="broken-owner.*missing owner backend"
     ):
         discover(BrokenProvider())
-    # Assert: the expected raise above is the assertion
 
 
 @pytest.mark.parametrize("quiet", ["", "1"])
@@ -180,19 +180,20 @@ def test_broken_provider_failure_leaves_no_cached_payload(restore_environ, quiet
 def test_malformed_payload_aborts_loading(payload):
     # Arrange
     # Act
+    # Assert
     with pytest.raises(_plugin_loader.LinterPluginError, match="bad-owner"):
         discover(Provider("bad-owner", payload))
-    # Assert: the expected raise above is the assertion
 def test_duplicate_provider_is_rejected():
     # Arrange
     provider = Provider("owner", {"rules": [rule()]})
     # Act
+    # Assert
     with pytest.raises(_plugin_loader.LinterPluginError, match="duplicate provider"):
         discover(provider, provider)
-    # Assert: the expected raise above is the assertion
 def test_duplicate_rule_ids_are_rejected():
     # Arrange
     # Act
+    # Assert
     with pytest.raises(
         _plugin_loader.LinterPluginError, match="duplicate rule 'TEST-1'"
     ):
@@ -200,21 +201,20 @@ def test_duplicate_rule_ids_are_rejected():
             Provider("first", {"rules": [rule()]}),
             Provider("second", {"rules": [rule()]}),
         )
-    # Assert: the expected raise above is the assertion
 def test_foreign_logging_rule_ownership_is_rejected():
     # Arrange
     # Act
+    # Assert
     with pytest.raises(
         _plugin_loader.LinterPluginError, match="PS-220 belongs to scitex-logging"
     ):
         discover(Provider("foreign", {"rules": [rule("PS-220")]}))
-    # Assert: the expected raise above is the assertion
 def test_duplicate_checker_objects_are_rejected():
     # Arrange
     # Act
+    # Assert
     with pytest.raises(_plugin_loader.LinterPluginError, match="duplicate checker"):
         discover(Provider("first", {"checkers": [LegacyChecker, LegacyChecker]}))
-    # Assert: the expected raise above is the assertion
 def test_distinct_factory_bound_classes_can_share_a_lexical_name():
     # Arrange
     def factory():
@@ -267,6 +267,7 @@ def test_contradictory_mapping_metadata_is_rejected():
     declared = rule()
     incompatible = Rule(declared.id, "warning", "io", "Different", "Different")
     # Act
+    # Assert
     with pytest.raises(
         _plugin_loader.LinterPluginError, match="contradictory rule 'TEST-1'"
     ):
@@ -276,7 +277,6 @@ def test_contradictory_mapping_metadata_is_rejected():
                 {"rules": [declared], "call_rules": {(None, "savefig"): incompatible}},
             )
         )
-    # Assert: the expected raise above is the assertion
 def test_existing_two_argument_checker_and_opted_filepath_checker_both_run():
     # Arrange
     # Act
@@ -295,6 +295,7 @@ def test_checker_crash_cannot_report_success(restore_environ, quiet):
     # Arrange
     restore_environ["SCITEX_DEV_LINTER_QUIET"] = quiet
     # Act
+    # Assert
     with pytest.raises(
         _plugin_loader.LinterPluginError, match="BrokenChecker.*coverage unavailable"
     ):
@@ -303,7 +304,6 @@ def test_checker_crash_cannot_report_success(restore_environ, quiet):
             filepath="src/demo/core.py",
             plugins={"checkers": [BrokenChecker]},
         )
-    # Assert: the expected raise above is the assertion
 @pytest.mark.parametrize(
     "source",
     [

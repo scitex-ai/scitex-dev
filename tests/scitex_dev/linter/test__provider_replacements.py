@@ -231,19 +231,19 @@ def test_distribution_names_follow_standard_metadata_normalization():
 def test_predecessor_complete_rule_corpus_must_match_declared_ids(actual):
     # Arrange
     # Act
+    # Assert
     with pytest.raises(
         _plugin_loader.LinterPluginError, match="complete advertised rule IDs"
     ):
         discover(predecessor(actual), successor())
-    # Assert: the expected raise above is the assertion
 
 
 def test_successor_must_itself_offer_every_replaced_rule_even_if_predecessor_absent():
     # Arrange
     # Act
+    # Assert
     with pytest.raises(_plugin_loader.LinterPluginError, match="does not offer all"):
         discover(successor(ids=IDS[:-1]))
-    # Assert: the expected raise above is the assertion
 
 
 def test_successor_may_offer_additional_independently_owned_rules():
@@ -300,9 +300,9 @@ def test_self_replacement_is_rejected():
 def test_repeated_replacement_is_rejected():
     # Arrange
     # Act
+    # Assert
     with pytest.raises(_plugin_loader.LinterPluginError, match="multiple or repeated"):
         discover(predecessor(), successor((replacement(), replacement())))
-    # Assert: the expected raise above is the assertion
 
 
 def test_competing_successors_are_rejected():
@@ -345,9 +345,9 @@ def test_mandatory_logging_rule_cannot_be_displaced():
 def test_ordinary_collisions_without_replacement_remain_errors():
     # Arrange
     # Act
+    # Assert
     with pytest.raises(_plugin_loader.LinterPluginError, match="duplicate rule"):
         discover(predecessor(), successor(()))
-    # Assert: the expected raise above is the assertion
 
 
 def test_duplicate_ids_inside_replaced_payload_are_not_hidden():
