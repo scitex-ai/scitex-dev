@@ -77,9 +77,14 @@ def _remediation_hint(ep_name: str, exc: Exception) -> str:
     )
 
 
-def _iter_entry_points(group):
-    """Yield entry points, compatible with Python 3.9+."""
-    if sys.version_info >= (3, 10):
+def _iter_entry_points(group, _version_info=None):
+    """Yield entry points, compatible with Python 3.9+.
+
+    ``_version_info`` overrides ``sys.version_info`` for tests: the legacy
+    branch is pinned by data, never by patching the interpreter.
+    """
+    version = sys.version_info if _version_info is None else _version_info
+    if version >= (3, 10):
         from importlib.metadata import entry_points
 
         return entry_points(group=group)

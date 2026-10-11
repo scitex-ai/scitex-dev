@@ -9,12 +9,26 @@ def rule():
 
 
 def test_spi_issue_is_existing_checker_value():
-    assert SpiIssue is Issue
+    # Arrange
+    # Act
+    same = SpiIssue is Issue
+    # Assert
+    assert same
 
 
 def test_issue_pickle_retains_existing_import_identity():
+    # Arrange
+    # Act
+    value = SpiIssue(rule(), 3, 2, "source")
+    # Assert
+    assert value.__class__.__module__ == "scitex_dev.linter.checker"
+
+
+def test_issue_pickle_round_trip_preserves_equality():
+    # Arrange
     import pickle
 
+    # Act
     value = SpiIssue(rule(), 3, 2, "source")
-    assert value.__class__.__module__ == "scitex_dev.linter.checker"
+    # Assert
     assert pickle.loads(pickle.dumps(value)) == value

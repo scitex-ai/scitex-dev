@@ -153,9 +153,11 @@ def test_clean_source_exits_zero(tmp_path):
 
 
 def test_machine_readable_raw_print_still_fails(tmp_path):
+    # Arrange
     _build(tmp_path, "import json\ndef go(x):\n    print(json.dumps(x))\n")
     # Act
     code = _audit(tmp_path)
+    # Assert
     # Assert
     assert code == 1
 

@@ -184,16 +184,29 @@ def test_runtime_metadata_absence_still_loads_the_owner_rule():
 
 
 def test_absent_logging_provider_cannot_report_success():
+    # Arrange
+    # Act
     with pytest.raises(ProjectPluginError, match="mandatory scitex-logging.*absent"):
         _load_plugins(entry_points_iter=lambda: ())
+    # Assert: the expected raise above is the assertion
+
+
+def test_logging_metadata_registers_one_project_rule():
+    # Arrange
+    # Act
+    bundle = _load_plugins()
+    # Assert
+    assert [rule[0] for rule in bundle.rules].count("PS-220") == 1
 
 
 def test_logging_metadata_registers_one_project_check():
+    # Arrange
+    # Act
     bundle = _load_plugins()
-    assert [rule[0] for rule in bundle.rules].count("PS-220") == 1
+    # Assert
     assert (
         sum(
-            check.__module__ == "scitex_logging._output_auditor"
+            check.__module__ == "scitex_logging._output._auditor"
             for check in bundle.checks
         )
         == 1
@@ -201,9 +214,12 @@ def test_logging_metadata_registers_one_project_check():
 
 
 def test_repeated_logging_provider_is_rejected():
+    # Arrange
     point = EntryPoint(name="scitex-logging", value=_LOGGING, group=_GROUP)
+    # Act
     with pytest.raises(ProjectPluginError, match="duplicate provider"):
         _load_plugins(entry_points_iter=lambda: (point, point))
+    # Assert: the expected raise above is the assertion
 
 
 def test_real_self_entry_point_does_not_register_the_owner_twice():

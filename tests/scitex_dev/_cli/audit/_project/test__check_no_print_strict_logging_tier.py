@@ -196,16 +196,21 @@ def test_scitex_logging_passes(tmp_path: Path) -> None:
 
 
 def test_legacy_skip_cannot_remove_the_logging_source_gate(tmp_path: Path) -> None:
+    # Arrange
+    # Act
     repo = _package(
         tmp_path,
         "scitex-infra",
         'print("status")\n',
         config="project-type:\n  - pip\naudit:\n  skip:\n    - PS-220\n",
     )
+    # Assert
     assert _audit(repo, "scitex-infra") == 1
 
 
 def test_plain_console_json_is_valid_source(tmp_path: Path) -> None:
+    # Arrange
+    # Act
     repo = _package(
         tmp_path,
         "scitex-protocol",
@@ -213,4 +218,5 @@ def test_plain_console_json_is_valid_source(tmp_path: Path) -> None:
         "def emit_json(payload):\n"
         "    slogging.getPlainConsole(__name__).emit(json.dumps(payload))\n",
     )
+    # Assert
     assert _audit(repo, "scitex-protocol") == 0
