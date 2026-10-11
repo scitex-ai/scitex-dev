@@ -256,8 +256,13 @@ def test_real_cron_handler_refuses_unknown_or_unrestricted_owned_api_fixture(tmp
     # The full cron CLI starts a fresh interpreter under the parallel SIF suite.
     # Bound startup and the owned API fixture without requiring a five-second cold start.
     child = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=30, check=False)
-    # Assert
-    assert json.loads(child.stdout)["state"] == ("unknown" if unavailable else "violation")
+    # Assert — parse defensively so a child crash reports its stderr
+    # instead of a bare JSONDecodeError with no evidence.
+    try:
+        state = json.loads(child.stdout)["state"]
+    except (ValueError, KeyError, TypeError):
+        state = None
+    assert state == ("unknown" if unavailable else "violation"), child.stderr[-2000:]
 
 
 def test_managed_policy_observation_schedule_is_fifteen_minutes():
