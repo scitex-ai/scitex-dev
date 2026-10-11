@@ -1,7 +1,9 @@
 """Policy observations use explicit API adapters or owned process fixtures."""
 import base64
 import hashlib
+import importlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +18,24 @@ from scitex_dev.ci.runner import _policy, _policy_contract, register_ci_runner_c
 def pool():
     return [{"id": i, "name": name, "status": "online", "busy": i == 2}
             for i, name in enumerate(_policy.COMPANY_RUNNERS, 1)]
+
+
+def _installed_site(package: str):
+    """Site directory holding this process's installed ``package`` build.
+
+    Subprocess children run under scrubbed environments (and `-I` drops
+    PYTHONPATH entirely), so hand them the exact installed location instead
+    of letting the import resolve a stale interpreter-baked copy. Returns
+    None when unresolvable (namespace/editable layouts); callers skip it.
+    """
+    try:
+        module = importlib.import_module(package)
+        path = Path(getattr(module, "__file__", "") or "")
+    except ImportError:
+        return None
+    if path.suffix in {".py", ".pyc"} and path.parent.name == package:
+        return path.parent.parent
+    return None
 
 
 def group(refs):
@@ -250,7 +270,17 @@ def test_real_cron_handler_refuses_unknown_or_unrestricted_owned_api_fixture(tmp
                   + ("raise SystemExit(1)\n" if unavailable else "print(json.dumps(data.get(sys.argv[2],{})))\n"))
     gh.chmod(0o700)
     source = Path(_policy.__file__).resolve().parents[3]
-    env = {"PATH": str(bin_dir) + ":/usr/bin:/bin", "PYTHONPATH": str(source), "LANG": "C"}
+    # The child runs under a scrubbed environment: give it the installed
+    # site holding scitex-logging explicitly. Otherwise `import
+    # scitex_logging` resolves whatever stale copy the interpreter bakes
+    # in, whose entry points predate the mandatory auditor provider and
+    # fail the run for environmental reasons.
+    providers = [source, _installed_site("scitex_logging")]
+    env = {
+        "PATH": str(bin_dir) + ":/usr/bin:/bin",
+        "PYTHONPATH": os.pathsep.join(str(p) for p in providers if p),
+        "LANG": "C",
+    }
     code = "from scitex_dev._cli.cron.run import _run_body; raise SystemExit(_run_body('ci-runner-policy',only=None,dry_run=True))"
     # Act
     # The full cron CLI starts a fresh interpreter under the parallel SIF suite.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import subprocess
 import sys
@@ -23,6 +24,23 @@ from scitex_logging._audit_plugin import get_plugin as _logging_plugin
 _GROUP = "scitex_dev.audit.project"
 _BUILTIN = "scitex_dev._runtime_gitignore_plugin:get_plugin"
 _LOGGING = "scitex_logging._audit_plugin:get_plugin"
+
+
+def _installed_site(package: str) -> str:
+    """Site directory holding this process's installed ``package`` build.
+
+    `-I` probes drop PYTHONPATH, so hand them the exact installed location
+    instead of letting the import resolve a stale interpreter-baked copy.
+    Returns "" when unresolvable; the probe skips empty entries.
+    """
+    try:
+        module = importlib.import_module(package)
+        path = Path(getattr(module, "__file__", "") or "")
+    except ImportError:
+        return ""
+    if path.suffix in {".py", ".pyc"} and path.parent.name == package:
+        return str(path.parent.parent)
+    return ""
 _RULE = ("PS-999", "§2", "External auditor rule", "E", "external-auditor")
 
 
@@ -423,6 +441,8 @@ def test_installed_metadata_registers_and_invokes_an_external_check(tmp_path):
         "import json, sys\n"
         "from pathlib import Path\n"
         "sys.path[:0] = [sys.argv[1], sys.argv[2]]\n"
+        "if len(sys.argv) > 4 and sys.argv[4]:\n"
+        "    sys.path.insert(0, sys.argv[4])\n"
         "from scitex_dev._cli.audit._project import RULES\n"
         "from scitex_dev._cli.audit._project._run_checks import run_checks\n"
         "import click\n"
@@ -442,9 +462,11 @@ def test_installed_metadata_registers_and_invokes_an_external_check(tmp_path):
         "    'registry_findings': json.loads(result.output)['violations'],\n"
         "}))\n"
     )
-    # Act
+    # Act — hand the probe the installed site explicitly: `-I` drops
+    # PYTHONPATH, so without it the probe resolves a stale baked copy.
     result = subprocess.run(
-        [sys.executable, "-I", "-c", script, str(src), str(tmp_path), str(repo)],
+        [sys.executable, "-I", "-c", script, str(src), str(tmp_path), str(repo),
+         _installed_site("scitex_logging")],
         capture_output=True,
         text=True,
         check=True,
