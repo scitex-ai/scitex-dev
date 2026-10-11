@@ -2,8 +2,7 @@
 
 `lookup(rule_id)` returns the most authoritative `Rule` object for an id.
 Resolution order:
-1. plugin-loaded rules (entry-point group `scitex_dev.linter.plugins`
-   and the legacy `scitex_linter.plugins`)
+1. plugin-loaded rules (entry-point group `scitex_dev.linter.plugins`)
 2. engine-defined rules (this package's `_rules/*.py`)
 
 This indirection lets leaf packages own their rules without the engine
@@ -25,16 +24,13 @@ _cache: dict | None = None
 
 
 def _build_cache() -> dict:
-    """Merge engine ALL_RULES with plugin rules. Plugin wins on id collision."""
+    """Merge validated engine and owner rules, preserving load failures."""
     from . import ALL_RULES
 
     merged: dict = dict(ALL_RULES)
-    try:
-        from .._plugin_loader import load_plugins
+    from .._plugin_loader import load_plugins
 
-        plugin_rules = load_plugins().get("rules", {})
-    except Exception:
-        plugin_rules = {}
+    plugin_rules = load_plugins().get("rules", {})
     merged.update(plugin_rules)
     return merged
 

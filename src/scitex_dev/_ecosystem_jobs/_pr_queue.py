@@ -11,6 +11,8 @@ import stat
 import subprocess
 import time
 
+from .._core.streams import write_stream
+
 REPOSITORIES = (
     "scitex-ai/scitex-agent-container",
     "scitex-ai/scitex-cards",
@@ -239,11 +241,11 @@ def run_once(*, apply=False, out=None):
                 # Persist the attempted normal action before the network call;
                 # a timeout is not success. GitHub's cancel API has no CAS, so a
                 # scheduling race remains explicit and no force path is used.
-                print(
+                write_stream(
                     json.dumps(
                         {"cancel_attempt": row, "scheduler_CAS_available": False}
                     ),
-                    file=out,
+                    out,
                     flush=True,
                 )
                 _github(f"{prefix}/actions/runs/{run_id}/cancel", deadline, cancel=True)
@@ -283,6 +285,6 @@ def run_once(*, apply=False, out=None):
         record["errors"].append(f"{type(error).__name__}: {error}")
     finally:
         os.close(fd)
-        print(json.dumps(record, sort_keys=True), file=out, flush=True)
+        write_stream(json.dumps(record, sort_keys=True), out, flush=True)
     record["exit_code"] = int(bool(record["errors"]))
     return record

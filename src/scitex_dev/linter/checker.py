@@ -1,11 +1,14 @@
 """AST-based checker that detects SciTeX anti-patterns."""
 
+from __future__ import annotations
+
 __all__ = ["Issue", "is_script", "lint_file", "lint_source"]
 
 import ast
-from dataclasses import dataclass, replace
+from dataclasses import replace
 
 from . import rules
+from ._issue import Issue
 from ._checks import (
     CallChecksMixin,
     ErrorHandlingMixin,
@@ -16,14 +19,6 @@ from ._checks import (
 from ._rules import lookup as _lk
 from ._source_helpers import _is_allowed_by_comment, is_script
 from .rules import Rule
-
-
-@dataclass
-class Issue:
-    rule: Rule
-    line: int
-    col: int
-    source_line: str = ""
 
 
 class SciTeXChecker(
@@ -73,6 +68,16 @@ class SciTeXChecker(
             k: r
             for k, r in _plugins["call_rules"].items()
             if r.category not in _CAT_ENABLE or _CAT_ENABLE[r.category] in _enabled
+        }
+        groups = _plugins.get("call_rule_groups", {})
+        self._plugin_call_rule_groups = {
+            key: tuple(
+                rule
+                for rule in group
+                if rule.category not in _CAT_ENABLE
+                or _CAT_ENABLE[rule.category] in _enabled
+            )
+            for key, group in groups.items()
         }
         self._plugin_checkers = _plugins["checkers"]
 
@@ -449,9 +454,19 @@ def lint_source(
     # Plugin-contributed checkers (respect opt-in gating)
     from ._plugin_loader import load_plugins
 
-    payload = plugins if plugins is not None else load_plugins()
+    payload = load_plugins()
+    plugin_checkers = list(payload["checkers"])
+    if plugins is not None:
+        # The injection seam may select optional checkers, but cannot remove
+        # mandatory source coverage from the actual installed owner.
+        plugin_checkers = [
+            cls for cls in plugin_checkers if getattr(cls, "mandatory", False)
+        ]
+        plugin_checkers.extend(
+            cls for cls in plugins["checkers"] if cls not in plugin_checkers
+        )
     _enabled = set(config.enable) if config else set()
-    for checker_cls in payload["checkers"]:
+    for checker_cls in plugin_checkers:
         # Gate FM-category checkers behind config.enable=["FM"]
         cat = getattr(checker_cls, "category", None)
         if cat == "figure" and "FM" not in _enabled:
@@ -460,40 +475,20 @@ def lint_source(
             # Pass the RESOLVED config (never None): SciTeXChecker defaults a
             # None config via load_config(), but plugin checkers deref
             # self.config.disable directly — a raw None here crashes them.
-            extra = checker_cls(lines, checker.config)
+            if getattr(checker_cls, "accepts_filepath", False):
+                extra = checker_cls(lines, checker.config, filepath=filepath)
+            else:
+                extra = checker_cls(lines, checker.config)
             extra.visit(tree)
             checker.issues.extend(extra.issues)
         except Exception as exc:
-            # Pillar 0: NEVER swallow. Surface to stderr so a dropped
-            # plugin checker is visible in CI logs + interactive sessions.
-            # Per neurovista elevation 2026-06-14: a silent except-pass
-            # here hid figrecipe's figure-style checkers (FM P006..P011)
-            # being dropped at load-time for months because of a
-            # circular-import in figrecipe's plugin module. Operator
-            # policy: fail-loud / no-silent-fallback.
             _name = getattr(checker_cls, "__name__", repr(checker_cls))
-            import scitex_logging as slogging
-            import os as _os
-            import sys as _sys
+            from ._plugin_loader import LinterPluginError
 
-            # Operator opt-out: SCITEX_DEV_LINTER_QUIET silences the WHOLE
-            # fail-loud surface. Both paths can reach stderr — the logger
-            # falls back to stderr (logging.lastResort / scitex-dev's own
-            # "WARN:" handler) when emitting, and the explicit write feeds
-            # the agent feedback hook (run_lint.sh) + interactive use.
-            # Gating only the explicit write left the logger leaking the
-            # message past QUIET; gate both so the off-switch is honest.
-            if not _os.environ.get("SCITEX_DEV_LINTER_QUIET"):
-                slogging.getLogger(__name__).warning(
-                    "linter: plugin checker %s raised on visit: %s",
-                    _name,
-                    exc,
-                )
-                _sys.stderr.write(
-                    f"[scitex-dev linter] WARNING: plugin checker "
-                    f"{_name} raised on visit of {filepath}: "
-                    f"{type(exc).__name__}: {exc}\n"
-                )
+            raise LinterPluginError(
+                f"linter checker {_name} failed for {filepath}: "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
 
     return checker.get_issues()
 

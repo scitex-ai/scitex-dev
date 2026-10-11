@@ -1,24 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Caller-owned stream writes — the PS-220 content-transport primitive.
+"""Stable developer-tooling wrappers around logging-owned output transport.
 
-PS-220 forbids a bare ``print`` in shippable SciTeX source because a caller
-importing the module cannot silence, redirect or capture it: there is no flag,
-no handler and no level. The rule spares exactly three *mechanically provable*
-transports, and one of them is a **caller-owned required stream** — a ``print``
-whose ``file=`` is a REQUIRED parameter of the enclosing function, so the
-CALLER, not this module, owns the destination.
-
-``write_stream`` is that transport, factored out so the call sites that must
-honour a caller-supplied stream (a captured ``io.StringIO`` in tests, a
-redirected CLI stream, a cron job's own log sink) do not each re-derive it.
-The stream is a REQUIRED parameter: this module never chooses a destination, so
-nothing here is "library code writing unconditionally to stdout".
-
-This is deliberately NOT a general ``print`` escape hatch. Routing a
-caller-directed payload through a logger would be wrong, not merely noisy:
-scitex-logging writes every console record to STDERR, which would corrupt a
-machine-readable payload the caller asked to receive on its own stream.
+Diagnostics use stderr loggers, human output uses formatted stdout consoles,
+and exact payloads use ``getPlainConsole().emit``. These wrappers retain their
+caller-stream and newline contracts while transport remains with logging.
 """
 
 from __future__ import annotations
@@ -31,8 +17,7 @@ __all__ = ["render_content", "render_rich", "write_stream"]
 def render_content(content: str) -> None:
     """Print caller-supplied, already-rendered content verbatim to stdout.
 
-    This is the *explicit content-rendering contract* PS-220 recognises
-    structurally: the enclosing API is an output operation that emits its
+    This output operation delegates to logging's plain console and emits
     caller-supplied content unchanged. It exists for the handful of product
     outputs whose exact bytes are a published contract — ``scitex-dev
     --version`` (pinned by tests and parsed by the fleet), a shell completion
@@ -44,7 +29,9 @@ def render_content(content: str) -> None:
     level, the aligned prefix and the searchable record the mandate exists
     for.
     """
-    print(content)
+    import scitex_logging as slogging
+
+    slogging.getPlainConsole(__name__).emit(content, flush=False)
 
 
 def render_rich(renderable, name: str, *, level: str = "info") -> None:
@@ -95,4 +82,6 @@ def write_stream(text: str, stream: TextIO, *, flush: bool = False) -> None:
     -------
     None
     """
-    print(text, file=stream, flush=flush)
+    import scitex_logging as slogging
+
+    slogging.getPlainConsole(__name__).emit(text, stream=stream, flush=flush)

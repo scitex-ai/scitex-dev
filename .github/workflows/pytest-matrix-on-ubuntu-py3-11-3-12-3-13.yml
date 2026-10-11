@@ -20,9 +20,12 @@ jobs:
     # exec-in-sif.sh run-in-sif.sh command, owned PostgreSQL and [all,dev].
     # GitHub validates permission ceilings for every nested job, including
     # the SAC coverage leg; keep this grant local to the actual shared call.
+    # The shared evidence leg also needs actions:read (job inventory); without
+    # it the whole workflow fails at startup with zero jobs.
     permissions:
       contents: read
       id-token: write
+      actions: read
     uses: scitex-ai/.github/.github/workflows/ci-sif-matrix.yml@main
     with:
       suite: matrix

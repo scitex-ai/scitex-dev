@@ -130,7 +130,7 @@ def _cmd_api(args) -> int:
             {"module": m, "kind": k, "name": n, "signature": s, "doc": d}
             for m, k, n, s, d in _PUBLIC_API
         ]
-        print(json.dumps(data, indent=2))
+        slogging.getPlainConsole(__name__).emit(json.dumps(data, indent=2), flush=False)
         return 0
 
     use_color = sys.stdout.isatty()

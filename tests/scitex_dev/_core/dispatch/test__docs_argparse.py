@@ -64,7 +64,8 @@ def _make_real_package_parser():
     return root
 
 
-def test_docs_list_executes_real_dispatch_path(capsys):
+def test_docs_list_executes_real_dispatch_path(capsys, caplog):
+    caplog.set_level(20)  # Explicit human-output threshold; pytest defaults to WARNING.
     # Arrange
     parser = _make_real_package_parser()
     args = parser.parse_args(["docs", "list"])

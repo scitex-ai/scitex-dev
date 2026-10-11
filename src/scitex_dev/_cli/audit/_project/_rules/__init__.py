@@ -241,6 +241,11 @@ _SLUGS: dict[str, str] = {
 
 # Apply the overrides — replace each tagged Rule with a promoted copy that
 # carries both the (optional) severity override and the (optional) slug.
+# PS-220 has NO special case here: its mandatory error tier comes from the
+# merged rule itself (logging provider declares error), and the table owns
+# any change. A hardcoded `"E" if rule.code == "PS-220"` would make an
+# injected/test override a silent no-op — the exact failure class this
+# module's ordering tests pin (see test__registry_severity_overrides.py).
 def _patch(rule: Rule) -> Rule:
     sev = _SEVERITY_OVERRIDES.get(rule.code, rule.severity)
     slug = rule.slug or _SLUGS.get(rule.code, "")
@@ -305,13 +310,7 @@ for _c, _sec, _msg, _sev, _slug in (
 ):
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
 
-# hook-bypass: line-limit
-# PS-220 — `print(...)` in scitex source (enforce scitex-logging). Co-located
-# rule, merged on the same terms as HOOK_RULES / URL_DEP_RULES / VERSION_FLAG.
-from .._check_no_print import PRINT_FORBIDDEN_RULES as _PRINT_FORBIDDEN_RULES  # noqa: E402
-
-for _c, _sec, _msg, _sev, _slug in _PRINT_FORBIDDEN_RULES:
-    RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+# PS-220 metadata is registered by the mandatory logging-owned provider.
 
 # PS-221 — [all]-closure on public optional-dependency extras (co-located
 # rule, merged on the same terms as URL_DEP_RULES / HOOK_RULES).
@@ -430,6 +429,12 @@ from .._check_hook_rules import HOOK_RULES_RULES as _HOOK_RULES_RULES  # noqa: E
 
 for _c, _sec, _msg, _sev, _slug in _HOOK_RULES_RULES:
     RULES[_c] = Rule(_c, _sec, _msg, _sev, _slug)
+
+# Owner-provided project checks share the existing Rule and override rails.
+# Keep this registration before the single final severity/slug pass below.
+from .._plugins import register_plugin_rules as _register_plugin_rules  # noqa: E402
+
+_register_plugin_rules(RULES, Rule)
 
 
 # hook-bypass: line-limit
