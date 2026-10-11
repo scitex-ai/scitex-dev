@@ -28,6 +28,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      actions: read
     uses: scitex-ai/.github/.github/workflows/ci-sif-matrix.yml@main
     with:
       suite: dev-release
