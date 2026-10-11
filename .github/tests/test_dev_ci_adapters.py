@@ -19,11 +19,11 @@ MATRIX = ROOT / ".github/workflows/pytest-matrix-on-ubuntu-py3-11-3-12-3-13.yml"
 AUDIT = ROOT / ".github/workflows/scitex-dev-quality-audit-on-ubuntu-latest.yml"
 FIXTURE = Path(__file__).parent / "fixtures/dev-shared-ci-public-source.json.gz"
 BASE = "f8de4d18dbfdda0d2a6df164d222b08b68454b16"
-REVISION = "d7d96c34d68cdfbb5503a933591f7748b5aa30ee"
+REVISION = "4cb16ac91db4b2eb6257d27e3b72e286d99d98b4"
 PINS = {
-    "ci-sif-matrix.yml": "f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1",
+    "ci-sif-matrix.yml": "67c6df104be81adcb22247e1c2e5663f51642536961f3a64b0515b8ab15ce3bb",
     "quality-audit.yml": "f44a2e6b5c479c2975d1cedf66738fdbf402a74cf1d8e26340bb9895524e7b4a",
-    "runner-admission.yml": "f2e92f6a50526c2133cd12ae7c5cbd98ce2922354bd85c628ca48aad4acc6d18",
+    "runner-admission.yml": "406b82aae0183da8bf35b3fcfa424f22231e3b132ba3e002f72e09c713828205",
 }
 
 
@@ -119,12 +119,15 @@ for (const event of ['push', 'pull_request', 'schedule', 'workflow_dispatch']) {
   const actual = profileSelection('scitex-ai/scitex-dev', event, 'matrix');
   if (JSON.stringify(actual.versions) !== '["3.11","3.12","3.13"]')
     throw new Error('Dev-minors-changed');
-  for (const native of [false, true]) {
-    let reason = null;
-    try { planFor('scitex-ai/scitex-dev', event, native); }
-    catch (error) { reason = error.message; }
-    if (reason !== 'image-unqualified') throw new Error('null-registration-not-refused');
-  }
+  // Non-native: no public image is registered for scitex-dev, so planning
+  // still refuses. Native: the retained-private-ci image qualifies.
+  let reason = null;
+  try { planFor('scitex-ai/scitex-dev', event, false); }
+  catch (error) { reason = error.message; }
+  if (reason !== 'image-unqualified') throw new Error('null-registration-not-refused');
+  const plan = planFor('scitex-ai/scitex-dev', event, true);
+  if (!plan.image || plan.image.authority_kind !== 'retained-private-ci')
+    throw new Error('native-image-unqualified');
 }
 console.log('all-four-events-three-minors-null-image-refused');
 """

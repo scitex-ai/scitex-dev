@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""``scitex-dev ecosystem audit-registry-layout`` — PS-181.
+"""``scitex-dev ecosystem audit-registry-layout`` — PS-181 and PS-234.
 
 This command is the actual entry point for PS-181 (see
 ``_cli/audit/_project/_check_registry_layout.py`` for the full "why a
@@ -10,6 +10,9 @@ rationale). It scans every ``~/.scitex/<pkg>/`` state directory under
 single distribution/repo — and reports drift using the same
 ``RULES``/``Violation`` formatting machinery as ``audit-project`` for
 consistent output.
+Federated ``registry_checks`` also inspect this explicit root once, including
+PS-234's runtime Git-exclusion policy across every package. Configurations
+remain outside ``runtime/`` so Git can share them between hosts.
 """
 
 from __future__ import annotations
@@ -24,16 +27,23 @@ def register(ecosystem) -> None:
         "audit-registry-layout",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Check every ~/.scitex/<pkg>/ state dir against the canonical layout.",
+            summary="Check package registry layout and host runtime Git exclusions.",
             description=(
-                "PS-181 — scoped to the user's entire $SCITEX_DIR tree "
-                "(every installed package's local-state dir), NOT a "
-                "single repo — unlike every other PS-1xx rule. See "
-                "`registry-normalize <pkg>` to fix mechanically "
-                "(dry-run by default).",
+                "PS-181 checks layout across the entire $SCITEX_DIR tree; "
+                "PS-234 checks that every package's runtime/ state is "
+                "gitignored and absent from the Git index. Shared "
+                "configuration stays outside runtime/. Registered host "
+                "checks run once for this root, separately from project audits. "
+                "Use `registry-normalize <pkg>` for layout changes "
+                "(dry-run by default). For PS-234, add a catch-all "
+                "runtime/.gitignore and remove runtime entries from the "
+                "Git index while retaining local files.",
             ),
             examples=(
-                Example("{prog} ecosystem audit-registry-layout", "Scan the default $SCITEX_DIR."),
+                Example(
+                    "{prog} ecosystem audit-registry-layout",
+                    "Scan the default $SCITEX_DIR.",
+                ),
                 Example(
                     "{prog} ecosystem audit-registry-layout --json",
                     "Structured JSON output.",
@@ -60,7 +70,8 @@ def register(ecosystem) -> None:
         show_default=True,
         help=(
             "Minimum severity floor. PS-181 defaults to W (warn) during "
-            "ecosystem adoption, so 'warning' is the useful default here "
+            "ecosystem adoption; PS-234 runtime-policy violations are E "
+            "(errors). 'warning' reports both and is the default here "
             "(unlike audit-project's 'error' default)."
         ),
     )
@@ -68,6 +79,7 @@ def register(ecosystem) -> None:
         from pathlib import Path
 
         from ...audit._project._check_registry_layout import check_registry_layout
+        from ...audit._project._plugins import load_plugins
         from ...audit._project._violation import Violation
 
         if scitex_dir_opt:
@@ -79,6 +91,8 @@ def register(ecosystem) -> None:
 
         violations: list[Violation] = []
         check_registry_layout(scitex_dir, Violation, violations)
+        for check in load_plugins().registry_checks:
+            check(scitex_dir, Violation, violations)
 
         floor = {"error": {"E"}, "warning": {"E", "W"}, "info": {"E", "W", "I"}}
         visible_set = floor.get(severity, floor["warning"])
@@ -111,7 +125,9 @@ def register(ecosystem) -> None:
             raise SystemExit(exit_code)
 
         if not visible:
-            click.echo(f"registry-layout: no PS-181 findings under {scitex_dir}")
+            click.echo(
+                f"registry-layout: no PS-181 or PS-234 findings under {scitex_dir}"
+            )
             raise SystemExit(exit_code)
 
         click.echo(f"registry-layout ({scitex_dir}): {len(visible)} finding(s)")

@@ -35,12 +35,12 @@ def handle_result(
     """
     if as_json:
         out = file or sys.stdout
-        print(result.to_json(), file=out)
+        write_stream(result.to_json(), out)
     elif result.success:
         out = file or sys.stdout
         data = result.data
         if isinstance(data, (dict, list, tuple)):
-            print(json.dumps(data, indent=2, default=str), file=out)
+            write_stream(json.dumps(data, indent=2, default=str), out)
         else:
             write_stream(data, out)
     else:

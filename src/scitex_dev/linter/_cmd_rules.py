@@ -53,7 +53,7 @@ def _cmd_rule(args) -> int:
             }
             for r in rules_list
         ]
-        print(json.dumps(data, indent=2))
+        slogging.getPlainConsole(__name__).emit(json.dumps(data, indent=2), flush=False)
         return 0
 
     use_color = sys.stdout.isatty()

@@ -40,6 +40,8 @@ CROSS_PACKAGE_IMPORTS = [
     "scitex_config._ecosystem",
     "scitex_events",
     "scitex_logging",
+    "scitex_logging._output._auditor",
+    "scitex_logging._output._backend",
 ]
 # ===== END AUTO-GENERATED =====
 

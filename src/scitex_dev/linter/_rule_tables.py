@@ -13,6 +13,8 @@ This indirection is what lets the engine drop its `_rules/_io.py`,
 rules with the same id, so removing engine duplicates is safe.
 """
 
+from __future__ import annotations
+
 from . import rules  # noqa: F401  (kept for legacy attribute access)
 
 # Note: previously this module re-exported S001-S008 / I001-I007 as

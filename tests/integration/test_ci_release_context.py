@@ -1,5 +1,6 @@
 """Execute release isolation with real imports and owned refusal controls."""
 
+import importlib
 import json
 import subprocess
 import sys
@@ -55,7 +56,10 @@ if sys.argv[2]=='private_read':
 if sys.argv[2]=='source_write':
     (source/'qualification-refused-write').write_text('must-never-be-written')
 if sys.argv[2] in {'import','audit','source'}:
-    sys.path.insert(0,sys.argv[3])
+    from pathlib import Path as _Path
+    for _arg in sys.argv[3:]:
+        if _arg and _Path(_arg).is_dir():
+            sys.path.insert(0,_arg)
     import scitex_logging
     from scitex_dev._cli import main
     from scitex_dev.store import host_store
@@ -98,17 +102,37 @@ sys.stdout.write(json.dumps(report)+'\\n')
     return scratch, private, probe, environment
 
 
+def _installed_site(package: str):
+    """Site directory holding this process's installed ``package`` build.
+
+    Release probes run under scrubbed environments (and `-I` drops
+    PYTHONPATH entirely); the SIF matrix exposes its fresh installs only
+    through such ambient paths. Hand children the exact installed location
+    instead of letting the import resolve a stale interpreter-baked copy
+    whose entry points predate the mandatory providers.
+    """
+    try:
+        module = importlib.import_module(package)
+        path = Path(getattr(module, "__file__", "") or "")
+    except ImportError:
+        return None
+    if path.suffix in {".py", ".pyc"} and path.parent.name == package:
+        return str(path.parent.parent)
+    return None
+
+
 def execute(case, mode="environment", context=CONTEXT):
     scratch, private, probe, environment = case
+    site = _installed_site("scitex_logging")
     command = """set -euo pipefail
 source "$1"
 scitex_release_context "$2" "$3"
-scitex_release_run "$4" "$5" "$6" "$7" "$8"
+scitex_release_run "$4" "$5" "$6" "$7" "$8" "$9"
 """
     return subprocess.run(
         ["bash", "-c", command, "release-probe", str(context), str(scratch),
          str(Path(sys.executable).parent.parent), sys.executable, str(probe),
-         str(private), mode, str(ROOT / "src")],
+         str(private), mode, str(ROOT / "src"), site or ""],
         env=environment, cwd=ROOT, capture_output=True, text=True, check=False,
     )
 
@@ -267,13 +291,13 @@ source "$1"
 scitex_release_context "$2" "$3"
 SCITEX_LOGGING_FORMAT=debug
 """ + declarations + """
-scitex_release_run env SCITEX_LOGGING_FORMAT="$SCITEX_LOGGING_FORMAT" "$4" "$5" "$6" audit "$7"
+scitex_release_run env SCITEX_LOGGING_FORMAT="$SCITEX_LOGGING_FORMAT" "$4" "$5" "$6" audit "$7" "$8"
 """
     # Act
     result = subprocess.run(
         ["bash", "-c", command, "source-audit", str(CONTEXT), str(scratch),
          str(Path(sys.executable).parent.parent), sys.executable, str(probe),
-         str(private), str(ROOT / "src")],
+         str(private), str(ROOT / "src"), _installed_site("scitex_logging") or ""],
         env=environment, cwd=ROOT, capture_output=True, text=True, check=False,
     )
     report = json.loads(result.stdout) if result.returncode == 0 else {}
@@ -300,13 +324,13 @@ VENV="$3"
 PGDIR="$TMPDIR/postgres"
 MPLCONFIGDIR="$TMPDIR/mpl"
 export SCITEX_STORE_DSN="$9"
-""" + initialize + function + prefix + ' "$4" "$5" "$6" "$7" "$8"\n'
+""" + initialize + function + prefix + ' "$4" "$5" "$6" "$7" "$8" "${10}"\n'
     from urllib.parse import quote
     dsn = "postgresql://postgres@" + quote(str(scratch / "postgres"), safe="") + "/postgres"
     return subprocess.run(
         ["bash", "-c", command, "source-launcher-probe", str(CONTEXT), str(scratch),
          str(Path(sys.executable).parent.parent), sys.executable, str(probe),
-         str(private), mode, str(ROOT / "src"), dsn],
+         str(private), mode, str(ROOT / "src"), dsn, _installed_site("scitex_logging") or ""],
         env=environment, cwd=ROOT, capture_output=True, text=True, check=False,
     )
 
