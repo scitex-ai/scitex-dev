@@ -23,7 +23,7 @@ NATIVE_WORKFLOWS = (
 )
 # Exact hashes are generated from the reviewed organization source packet.
 WORKFLOW_HASHES = {'auto-merge-to-develop.yml': 'a28d9b92576590903290809643f21c93f680a6b2a1a8913d6c6e2fed89993de0',
- 'cla.yml': '55b422a674acb918d247b3a025bf413fe751de16b85f5f06f1251331c4d98c06',
+ 'cla.yml': 'd39672edd41d5689c4d3f203bd94b7fb7ecfd1dce589e07f40ccff8b494d1732',
  'import-smoke.yml': '3df1f4d4abd9da553b36484e37b8c5588e5684f6618d1b102c698893595fe8d6',
  'promote-develop-to-main-on-tag.yml': '1e3cec556f96612ff987f1bc2969dd145f85ebfff48297a3bf3adccd0b8c0c69',
  'pytest-matrix.yml': 'e822cffc869bde67a19b97755aa5844c2c83ee717c168540562ee0984a72f0ae',
@@ -47,9 +47,64 @@ IMMUTABLE_REVISIONS = {
 BRANCH_SELECTION = tuple(PREFIX + name + "@" + BRANCH for name in NATIVE_WORKFLOWS)
 IMMUTABLE_SELECTION = tuple(PREFIX + name + "@" + revision for name, revision in IMMUTABLE_REVISIONS.items())
 TRANSITION_SELECTION = BRANCH_SELECTION + IMMUTABLE_SELECTION
+# Additive defining-source selection; neither SDK caller titles nor arbitrary
+# central workflows gain authority. The existing three profiles stay exact.
+SDK_WORKFLOWS = ("sdk-python-package.yml", "sdk-frontend.yml")
+SDK_SELECTION = tuple(PREFIX + name + "@" + BRANCH for name in SDK_WORKFLOWS)
+SDK_HASHES = {
+    "sdk-python-package.yml":
+        "d1ba783f1bb54f7a9fc54f9c363e114d1bc9aa885955a0cd733dabe3089e3c94",
+    "sdk-frontend.yml":
+        "312fcfa2e0078574ca9ab0c838103b17045c84e78dc96c26df8920a1b651bd09",
+    "runner-admission.yml": WORKFLOW_HASHES["runner-admission.yml"],
+}
+# Hub source is one exact optional seven-definition bundle. Public callers
+# and arbitrary subsets do not acquire native defining-source authority.
+HUB_WORKFLOWS = (
+    "hub-pytest-matrix.yml", "hub-quality-audit.yml", "hub-command-v-guard.yml",
+    "hub-symlink-guard.yml", "hub-cli-import-smoke.yml", "hub-sphinx-build.yml",
+    "hub-custom-tests.yml",
+)
+HUB_SELECTION = tuple(PREFIX + name + "@" + BRANCH for name in HUB_WORKFLOWS)
+HUB_HASHES = {
+    "hub-pytest-matrix.yml":
+        "8017f280cc860fba9983835c8599284de44ecf3f094ca4446556e158c83980a8",
+    "hub-quality-audit.yml":
+        "89a8e8b79b6209dbca477b63316cdff4c619fa328c90ab476792a478625dd26e",
+    "hub-command-v-guard.yml":
+        "22e310f093cd15796b6f109a92c322162856f8d035700639d2f29623178b734f",
+    "hub-symlink-guard.yml":
+        "747e9b26448068ac6ade43405d56c065232932fc2b3b1ec2fc7a80070550bd4e",
+    "hub-cli-import-smoke.yml":
+        "42f3abdd3931cbcdb47554c92a05d3c34c860f19c9f65381508041aaef6b1765",
+    "hub-sphinx-build.yml":
+        "f61672078b0fc8a7a52a95db114a8f0d1cecc808213fc2a63e4fa4f4eb9b7969",
+    "hub-custom-tests.yml":
+        "80fecd20a5a46304e5d00ab25b5fff630bd99689e94dff364f548e5ad06a65e8",
+    "runner-admission.yml": WORKFLOW_HASHES["runner-admission.yml"],
+}
+# CodeQL is independently optional; it never turns the seven Hub tests into
+# a partial eight-definition bundle or invalidates the admitted 31-profile.
+HUB_CODEQL_WORKFLOWS = ("hub-codeql-security-analysis.yml",)
+HUB_CODEQL_SELECTION = tuple(
+    PREFIX + name + "@" + BRANCH for name in HUB_CODEQL_WORKFLOWS
+)
+HUB_CODEQL_HASHES = {
+    "hub-codeql-security-analysis.yml":
+        "9e2d0d823ec528d2aae9c99a6b3858c367846970bd7b3f3b086fec8a7276c784",
+    "runner-admission.yml": WORKFLOW_HASHES["runner-admission.yml"],
+}
+CLA_HELPER_SOURCE = (
+    "scitex-ai/.github", "10ee482c6f70a4cb10799c407cd88c64afc5458b",
+    ".github/cla/baseline-transports.js", 10003,
+    "01d63df199614ff1ee63a116c21f964daf8534424a560427793a90ac1b6bc340",
+    "e09aa444b4a0f2e6fef062d8ba85bdb3758f060b",
+)
 IMMUTABLE_ADMISSION_HASH = "e4eb6c5cc5aedd8a460380f796047c2ea33a446846235001355697350d36c915"
 IMMUTABLE_HASHES = {
     OLD_REVISION: {**{name: WORKFLOW_HASHES[name] for name in (*NATIVE_WORKFLOWS[:7], "runner-admission.yml")},
+                   "cla.yml":
+                   "55b422a674acb918d247b3a025bf413fe751de16b85f5f06f1251331c4d98c06",
                    "import-smoke.yml": "df8fb3d63e91612353b3fcbfcaf6f0e43d7c0102f799b48e82d8a47e32956f06",
                    "rtd-sphinx-build.yml": "51be02f591beeeb5398b6447a7c26f0959e5487cad5b974bf62d2cf56fd51b5d",
                    "runner-admission.yml": IMMUTABLE_ADMISSION_HASH},
@@ -142,6 +197,9 @@ def _source_closure(api, names, revision, hashes, result):
         if actual != hashes[name]:
             result["violations"].append(f"reviewed workflow bytes changed: {name}")
             continue
+        if name == "cla.yml" and actual == WORKFLOW_HASHES["cla.yml"]:
+            from ._policy_callers import SourcePin, _source
+            _source(SourcePin(*CLA_HELPER_SOURCE), api, result)
         try:
             workflow = yaml.safe_load(body)
             events = workflow.get("on", workflow.get(True))
@@ -217,7 +275,12 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
         refs = group.get("selected_workflows")
         if (not isinstance(refs, list) or any(not isinstance(ref, str) for ref in refs)
                 or len(set(refs)) != len(refs)
-                or set(refs) - set(REGISTERED_SELECTION) not in
+                or set(refs).intersection(SDK_SELECTION) not in
+                (set(), set(SDK_SELECTION))
+                or set(refs).intersection(HUB_SELECTION) not in
+                (set(), set(HUB_SELECTION))
+                or set(refs) - set(REGISTERED_SELECTION) - set(SDK_SELECTION)
+                - set(HUB_SELECTION) - set(HUB_CODEQL_SELECTION) not in
                 (set(BRANCH_SELECTION), set(IMMUTABLE_SELECTION), set(TRANSITION_SELECTION))):
             result["violations"].append("selected workflows differ from the finite literal organization profiles")
             continue
@@ -237,20 +300,31 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
     selected = selections[0]
     branch_selected = bool(selected.intersection(BRANCH_SELECTION))
     immutable_selected = bool(selected.intersection(IMMUTABLE_SELECTION))
+    sdk_selected = bool(selected.intersection(SDK_SELECTION))
+    hub_selected = bool(selected.intersection(HUB_SELECTION))
+    codeql_selected = bool(selected.intersection(HUB_CODEQL_SELECTION))
     revision = None
-    if branch_selected:
+    if branch_selected or sdk_selected or hub_selected or codeql_selected:
         revision = _main(api, result)
         _protection(api, result)
         if revision is None or result["unknown"] or result["violations"]:
             return result
-        _source_closure(api, NATIVE_WORKFLOWS, revision, WORKFLOW_HASHES, result)
+        if branch_selected:
+            _source_closure(api, NATIVE_WORKFLOWS, revision, WORKFLOW_HASHES, result)
+        if sdk_selected:
+            _source_closure(api, SDK_WORKFLOWS, revision, SDK_HASHES, result)
+        if hub_selected:
+            _source_closure(api, HUB_WORKFLOWS, revision, HUB_HASHES, result)
+        if codeql_selected:
+            _source_closure(api, HUB_CODEQL_WORKFLOWS, revision,
+                            HUB_CODEQL_HASHES, result)
     if immutable_selected:
         for fixed_revision, hashes in IMMUTABLE_HASHES.items():
             names = [name for name, selected_revision in IMMUTABLE_REVISIONS.items()
                      if selected_revision == fixed_revision]
             _source_closure(api, names, fixed_revision, hashes, result)
     qualify_registered_callers(selected, api, result)
-    if branch_selected:
+    if branch_selected or sdk_selected or hub_selected or codeql_selected:
         _protection(api, result)
         after = _main(api, result)
         if after is not None and after != revision:
@@ -258,5 +332,10 @@ def qualify_workflows(groups, api, *, workflow_hashes=None, native_workflows=Non
     expected = (TRANSITION_SELECTION if branch_selected and immutable_selected
                 else BRANCH_SELECTION if branch_selected else IMMUTABLE_SELECTION)
     if not result["unknown"] and not result["violations"]:
-        result["expected"] = list(expected) + [ref for ref in REGISTERED_SELECTION if ref in selected]
+        registered = [ref for ref in REGISTERED_SELECTION if ref in selected]
+        result["expected"] = (list(expected)
+                              + [ref for ref in SDK_SELECTION if ref in selected]
+                              + [ref for ref in HUB_SELECTION if ref in selected]
+                              + [ref for ref in HUB_CODEQL_SELECTION if ref in selected]
+                              + registered)
     return result
