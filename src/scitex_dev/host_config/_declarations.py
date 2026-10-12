@@ -139,7 +139,7 @@ def provide() -> list[HostConfigSpec]:
     # package root would extend the `host_*` prefix cluster PS-108
     # already reports here, and push the flat-file count past PS-108b's
     # threshold.
-    from ..hosts._dhcp import provide_dhcp_specs
+    from ..hosts._dhcp import provide_dhcp_specs, provide_request_address_specs
 
     return [
         HostConfigSpec(
@@ -211,6 +211,12 @@ def provide() -> list[HostConfigSpec]:
             requires_command="auditctl",
         ),
         *provide_dhcp_specs(),
+        # Per-host DHCP option-50 requests beside the floor above. One spec
+        # per compute host, each asking for its declared fleet address
+        # (compute-04 outage, 2026-10-12: the floor glob alone cannot express
+        # "ask for THIS address", and the fast port's client never
+        # transacted). Host-scoped, so each machine converges only its own.
+        *provide_request_address_specs(),
     ]
 
 

@@ -248,3 +248,54 @@ class TestTheGeneratedBytesAreTheDeployedBytes:
         # An independent witness to the digest above: two different
         # properties of the same file, measured separately.
         assert size == 466
+
+
+class TestRequestAddressSpecs:
+    """Per-host DHCP option-50 requests beside the floor (2026-10-12).
+
+    The floor glob guarantees *an* address; it cannot express *this*
+    address. Compute-04's fast port proved it: DHCP client never
+    transacted, host sat unaddressed while the floor was byte-correct.
+    These specs ask explicitly per host. One assert per test (STX-TQ007).
+    """
+
+    def test_one_spec_per_compute_host(self, registry_with_compute):
+        from scitex_dev.hosts._dhcp import provide_request_address_specs
+
+        specs = provide_request_address_specs(hosts_path=registry_with_compute)
+
+        # The fixture registry names only -01/-02 as compute, and specs
+        # follow the registry (not the packaged map alone) — so this
+        # fixture yields exactly those two. The real fleet registry names
+        # all four; -03/-04 coverage is asserted by the docstring contract
+        # on _request_address_hosts, not by this fixture.
+        assert {s.hosts[0] for s in specs} == {
+            "scitex-compute-01",
+            "scitex-compute-02",
+        }
+
+    def test_each_spec_asks_for_the_registry_address(self, registry_with_compute):
+        from scitex_dev.hosts._dhcp import provide_request_address_specs
+
+        specs = {
+            s.hosts[0]: s
+            for s in provide_request_address_specs(hosts_path=registry_with_compute)
+        }
+
+        assert "RequestAddress=" in specs["scitex-compute-01"].content
+
+    def test_dropin_sits_beside_the_floor_unit(self, registry_with_compute):
+        from scitex_dev.hosts._dhcp import provide_request_address_specs
+
+        spec = provide_request_address_specs(hosts_path=registry_with_compute)[0]
+
+        assert spec.path.endswith(
+            "10-netplan-fleet-en.network.d/50-request-address.conf"
+        )
+
+    def test_verify_reports_the_held_address(self, registry_with_compute):
+        from scitex_dev.hosts._dhcp import provide_request_address_specs
+
+        spec = provide_request_address_specs(hosts_path=registry_with_compute)[0]
+
+        assert "ip " in spec.verify_command and "addr" in spec.verify_command
