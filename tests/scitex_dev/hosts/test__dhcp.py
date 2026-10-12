@@ -260,42 +260,53 @@ class TestRequestAddressSpecs:
     """
 
     def test_one_spec_per_compute_host(self, registry_with_compute):
+        # Arrange
         from scitex_dev.hosts._dhcp import provide_request_address_specs
 
+        # Act
         specs = provide_request_address_specs(hosts_path=registry_with_compute)
 
-        # The fixture registry names only -01/-02 as compute, and specs
-        # follow the registry (not the packaged map alone) — so this
+        # Assert — the fixture registry names only -01/-02 as compute, and
+        # specs follow the registry (not the packaged map alone), so this
         # fixture yields exactly those two. The real fleet registry names
-        # all four; -03/-04 coverage is asserted by the docstring contract
-        # on _request_address_hosts, not by this fixture.
+        # all four; -03/-04 coverage is the docstring contract on
+        # _request_address_hosts, not this fixture.
         assert {s.hosts[0] for s in specs} == {
             "scitex-compute-01",
             "scitex-compute-02",
         }
 
     def test_each_spec_asks_for_the_registry_address(self, registry_with_compute):
+        # Arrange
         from scitex_dev.hosts._dhcp import provide_request_address_specs
 
+        # Act
         specs = {
             s.hosts[0]: s
             for s in provide_request_address_specs(hosts_path=registry_with_compute)
         }
 
+        # Assert
         assert "RequestAddress=" in specs["scitex-compute-01"].content
 
     def test_dropin_sits_beside_the_floor_unit(self, registry_with_compute):
+        # Arrange
         from scitex_dev.hosts._dhcp import provide_request_address_specs
 
+        # Act
         spec = provide_request_address_specs(hosts_path=registry_with_compute)[0]
 
+        # Assert
         assert spec.path.endswith(
             "10-netplan-fleet-en.network.d/50-request-address.conf"
         )
 
     def test_verify_reports_the_held_address(self, registry_with_compute):
+        # Arrange
         from scitex_dev.hosts._dhcp import provide_request_address_specs
 
+        # Act
         spec = provide_request_address_specs(hosts_path=registry_with_compute)[0]
 
+        # Assert
         assert "ip " in spec.verify_command and "addr" in spec.verify_command
