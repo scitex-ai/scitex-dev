@@ -110,8 +110,8 @@ def register(ecosystem) -> None:
         "-y", "--yes", is_flag=True, default=False, help="Confirm the crontab write."
     )
     def cron_install(name, dry_run, yes):
-        from ....jobs import jobs_of_kind
         from ....jobs import _cron_block as cb
+        from ....jobs import jobs_of_kind
         from ...cron import _crontab
 
         jobs = jobs_of_kind("cron")
@@ -286,6 +286,30 @@ def _dispatch_federated_job(name: str, *, apply: bool, all_jobs) -> None:
     Split out of the Click callback so the log-sink wrapper stays a single
     ``with`` block around ONE call (mirrors ``_cli.cron.run._run_body``).
     """
+    if name == "scitex-dev-pr-queue-retire":
+        from ...._ecosystem_jobs import _pr_queue
+
+        result = _pr_queue.run_once(apply=apply)
+        if result["exit_code"] != 0:
+            raise click.ClickException(
+                "PR queue retirement failed: " + ", ".join(result["errors"])
+            )
+        return
+
+    if name == "scitex-dev-apps-delivery-observe":
+        if apply:
+            raise click.ClickException(
+                "apps delivery observer is read-only; --apply is refused"
+            )
+        from ...._ecosystem_jobs import _apps_delivery
+
+        result = _apps_delivery.run_once()
+        if result["exit_code"] != 0:
+            raise click.ClickException(
+                "apps delivery observation failed: " + ", ".join(result["errors"])
+            )
+        return
+
     if name == "scitex-dev-deploy-freshness":
         from ...._ecosystem_jobs import _deploy_freshness
 

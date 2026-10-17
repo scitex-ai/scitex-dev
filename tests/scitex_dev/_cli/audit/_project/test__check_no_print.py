@@ -122,17 +122,20 @@ def test_ps220_silent_on_scitex_logging_source(tmp_path):
     assert out == []
 
 
-def test_ps220_silent_on_json_payload_to_stdout(tmp_path):
-    # Arrange — output IS the product; a logger would corrupt it (stderr)
+def test_ps220_rejects_raw_json_print_to_stdout(tmp_path):
+    # Arrange
+    # Exact payloads use PlainConsole; serialization does not exempt print.
     _write_src(
         tmp_path,
         "scitex_demo/_cli.py",
         "import json\ndef report(results):\n    print(json.dumps(results))\n",
     )
     # Act
+    # Act
     out = _run(tmp_path)
     # Assert
-    assert out == []
+    # Assert
+    assert _codes(out) == ["PS-220"]
 
 
 def test_ps220_silent_on_attribute_print(tmp_path):
@@ -148,16 +151,19 @@ def test_ps220_silent_on_attribute_print(tmp_path):
     assert out == []
 
 
-def test_ps220_excludes_in_package_scripts_examples_docs(tmp_path):
-    # Arrange — prints living in non-shippable in-package subtrees
+def test_ps220_includes_all_nested_src_directories(tmp_path):
+    # Arrange
+    # Every Python module under src remains subject to the source rule.
     _write_src(tmp_path, "scitex_demo/scripts/run.py", "print('script')\n")
     _write_src(tmp_path, "scitex_demo/examples/demo.py", "print('example')\n")
     _write_src(tmp_path, "scitex_demo/docs/gen.py", "print('docs')\n")
     _write_src(tmp_path, "scitex_demo/tests/helper.py", "print('test')\n")
     # Act
+    # Act
     out = _run(tmp_path)
     # Assert
-    assert out == []
+    # Assert
+    assert _codes(out) == ["PS-220"] * 4
 
 
 def test_ps220_still_scans_when_repo_path_contains_excluded_name(tmp_path):
@@ -272,17 +278,19 @@ def test_noqa_no_longer_emits_the_retired_deprecation_code(tmp_path):
     assert "PS-220-noqa-deprecated" not in _codes(out)
 
 
-def test_noqa_on_a_structurally_spared_print_still_reports_nothing(tmp_path):
-    # Arrange — the discriminator spares this site regardless of the comment
+def test_noqa_cannot_exempt_serialized_raw_print(tmp_path):
+    # Arrange
     _write_src(
         tmp_path,
         "scitex_demo/_cli.py",
         "import json\ndef render(x):\n    print(json.dumps(x))  # noqa: legacy\n",
     )
     # Act
+    # Act
     out = _run(tmp_path)
     # Assert
-    assert out == []
+    # Assert
+    assert _codes(out) == ["PS-220"]
 
 
 # --- staged default: WARNING for everyone ------------------------------------

@@ -570,3 +570,23 @@ def test_nested_runtime_repo_stays_untracked(tmp_path):
     tracked = set(_git(tmp_path / ".scitex", "ls-files").split())
     # Assert
     assert not any("/runtime/" in t for t in tracked)
+
+
+def test_migrate_runtime_files_skips_external_state_symlinks(tmp_path):
+    # Arrange
+    from scitex_dev.home._managed_by_git import _migrate_runtime_files
+
+    root = tmp_path / "dotscitex"
+    pkg = root / "agent-container"
+    (pkg / "agents").mkdir(parents=True)
+    outside = tmp_path / "state"
+    (outside / "agent-container").mkdir(parents=True)
+    probe = outside / "agent-container" / "heartbeat.json"
+    probe.write_text("{}")
+    (pkg / "runtime").symlink_to(
+        outside / "agent-container", target_is_directory=True
+    )
+    # Act
+    moved = _migrate_runtime_files(root)
+    # Assert
+    assert moved == []

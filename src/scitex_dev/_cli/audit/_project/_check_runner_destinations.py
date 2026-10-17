@@ -167,6 +167,7 @@ import yaml
 from ._runs_on_parsing import describe_destinations as _describe
 from ._runs_on_parsing import resolve_destination as _resolve_destination
 from ._runs_on_parsing import workflow_files as _workflow_files
+from ._runner_admission_destination import resolve_admission_destination
 from . import _workflow_exposure as _wx
 
 _RULE = "PS-224"
@@ -455,6 +456,8 @@ def check_ps224_runner_destinations(
             site = _site(rel, str(job_id))
             runs_on = job["runs-on"]
             labels = _resolve_destination(runs_on)
+            if labels is None:
+                labels = resolve_admission_destination(doc, job)
 
             if labels is None:
                 if _exempt(site):

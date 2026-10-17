@@ -31,6 +31,7 @@ def register(ci_group: click.Group) -> click.Group:
                 "  preflight         — fail-loud CI-readiness gate (for pre-push)\n"
                 "  relocate-storage  — move a local runner home off root safely\n"
                 "  validate-health   — tri-state health signal (up/wedged/unknown)"
+                "\n  validate-policy   — organization identity, workflow ACL and activity evidence"
             ),
         ),
     )
@@ -49,6 +50,7 @@ def register(ci_group: click.Group) -> click.Group:
     from ._preflight import register as register_preflight
     from ._watchdog import register as register_watchdog
     from ._storage import register as register_storage
+    from ._policy import register as register_policy
 
     register_status(runner)
     register_use(runner)
@@ -60,6 +62,7 @@ def register(ci_group: click.Group) -> click.Group:
     register_preflight(runner)
     register_watchdog(runner)
     register_storage(runner)
+    register_policy(runner)
 
     return runner
 

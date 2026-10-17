@@ -53,6 +53,8 @@ from scitex_dev.jobs import JobSpec
 # ``JOB_LOG_TARGETS`` maps each job to ``(package, slug)``; the slug keeps
 # the pre-existing log basename so operator greps / dashboards keep working.
 JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
+    "scitex-dev-pr-queue-retire": ("dev", "timer-pr-queue-retire"),
+    "scitex-dev-apps-delivery-observe": ("dev", "timer-apps-delivery-observe"),
     "scitex-dev-deploy-freshness": ("dev", "cron-deploy-freshness"),
     "scitex-dev-freshness-gc": ("dev", "cron-freshness-gc"),
     "scitex-dev-ecosystem-self-pull": ("dev", "timer-ecosystem-self-pull"),
@@ -317,6 +319,38 @@ def provide_jobs() -> list[JobSpec]:
     pyproject.toml declares this provider just like any other leaf.
     """
     return [
+        JobSpec(
+            name="scitex-dev-pr-queue-retire",
+            kind="timer",
+            schedule="",
+            command=_exec_command("scitex-dev-pr-queue-retire"),
+            description=(
+                "Observe superseded queued PR checks in Infra's five repositories. "
+                "Explicit --apply retires only obsolete queued checks through normal "
+                "GitHub cancellation. Completed job verdicts are rechecked and "
+                "recorded; a cancelled parent run may change its verdict. Requires "
+                "one owning host and SCITEX_DEV_PR_QUEUE_LOCK. "
+                "This does not establish source-to-live delivery closure."
+            ),
+            on_boot_sec="5min",
+            on_unit_active_sec="5min",
+            timeout_sec=60,
+        ),
+        JobSpec(
+            name="scitex-dev-apps-delivery-observe",
+            kind="timer",
+            schedule="",
+            command=_exec_command("scitex-dev-apps-delivery-observe"),
+            description=(
+                "Evaluate an explicitly supplied application delivery snapshot. "
+                "Read-only proposals; missing identity/admission/configuration "
+                "fails visibly. No Cards writes, wake, merge, deploy or restart. "
+                "Infra must qualify placement/adapters before timer enrollment."
+            ),
+            on_boot_sec="5min",
+            on_unit_active_sec="5min",
+            timeout_sec=20,
+        ),
         JobSpec(
             name="scitex-dev-deploy-freshness",
             kind="cron",

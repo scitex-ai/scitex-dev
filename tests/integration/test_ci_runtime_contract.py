@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -29,7 +28,7 @@ def test_inner_runner_requires_postgres_and_full_extras():
 
     # Act
     conditions = (
-        "host binaries are not an allowed fallback" in runner,
+        '"$(dirname "${BASH_SOURCE[0]}")/verify-postgres-capability.py"' in runner,
         'target="$TMPDIR/site" -e ".[all,dev]"' in runner,
         'SCITEX_STORE_DSN="postgresql://postgres@${PGHOST_ENC}/postgres"' in runner,
         "readiness query" in runner,

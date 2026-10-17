@@ -61,6 +61,15 @@ def _run_body(name: str, *, only: str | None, dry_run: bool) -> int:
         completed = subprocess.run(JOB_SHELL_BODIES[name], shell=True, check=False)
         return completed.returncode
 
+    if name == "ci-runner-policy":
+        import json
+
+        from ...ci.runner._policy_observer import observe_once
+
+        report = observe_once(dry_run=dry_run)
+        click.echo(json.dumps(report, sort_keys=True))
+        return report["exit_code"]
+
     if name == "ci-watch":
         results = _ci_watch.run_once(only_agent=only, dry_run=dry_run)
         # Don't crash the cron loop on a transient gh hiccup — just exit

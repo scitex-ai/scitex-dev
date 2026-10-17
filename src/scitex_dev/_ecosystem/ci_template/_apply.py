@@ -4,7 +4,7 @@
 
 THE single canonical CI mechanism for the scitex fleet (operator decision,
 2026-07-21): every repo ships ONE thin ``ci.yml`` that delegates its job
-bodies to the org-level reusable workflows in ``scitex-ai/.github@main``.
+bodies to the org-level reusable workflows at one reviewed immutable revision.
 A shared workflow cannot drift per-repo — the dual-canonical era
 (consolidated ``pr-ci.yml``/``release-ci.yml`` templates here vs. the
 ``ci runner register`` in-SIF ``ci.yml.template``) is over; both losers
@@ -177,7 +177,7 @@ def emitted_job_names(
 
     Under ``workflow_call`` GitHub renders each check-run context as
     ``"<caller-job-id> / <reusable job name>"`` — the caller-job ids in
-    ``ci.yml.tmpl`` and the job names inside ``scitex-ai/.github@main``
+   ``ci.yml.tmpl`` and the job names inside the pinned org workflow revision
     MUST stay in lock-step with this list; tests pin the caller side.
 
     When ``include_preserved`` is True (default), also include the

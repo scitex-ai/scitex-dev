@@ -272,6 +272,91 @@ def provide_dhcp_specs(
     ]
 
 
-__all__ = ["provide_dhcp_specs"]
+#: The networkd unit netplan generates for the fleet floor. The drop-in
+#: below must sit beside THIS unit name; if an interface is ever renamed,
+#: netplan generates a differently-named unit and the drop-in stops applying
+#: while still byte-correct on disk. That failure is silent by construction,
+#: so every emitted spec carries a `verify_command` that reports the address
+#: the interface actually holds.
+_FLEET_UNIT_NAME = "10-netplan-fleet-en.network"
+
+
+def _request_address_hosts(
+    *, hosts_path: str | Path | None = None
+) -> tuple[tuple[str, str], ...]:
+    """Compute hosts with a declared address: (name, ipv4) pairs.
+
+    Reads the packaged requested-address map (the fleet's declared intent,
+    not any on-disk registry copy) and keeps only ``kind: compute`` hosts,
+    so a stale local registry can neither widen nor silently narrow this.
+    """
+    from . import _seed
+    from ._registry import list_hosts
+
+    wanted = _seed.packaged_default_requested_addresses()
+    try:
+        records = {r.name: r for r in list_hosts(hosts_path=hosts_path)}
+    except Exception:
+        records = {}
+    out: list[tuple[str, str]] = []
+    for name in sorted(wanted):
+        addr = wanted[name]
+        rec = records.get(name)
+        if rec is None or rec.kind != "compute":
+            # No record, or a record of another kind (workstation, storage,
+            # hpc-login): skip. The packaged map is fleet-wide intent, but
+            # these drop-ins are DHCP-client mechanics that only exist on
+            # the compute hosts — emitting them elsewhere would be files
+            # that are present, correct, and read by nothing.
+            continue
+        out.append((name, addr))
+    return tuple(out)
+
+
+def provide_request_address_specs(
+    *, hosts_path: str | Path | None = None
+) -> list[HostConfigSpec]:
+    """One networkd drop-in per compute host asking for its declared address.
+
+    Uses DHCP option 50 (``DHCPv4.RequestAddress``): the host ASKS, the
+    server grants if free — an operator ruling (2026-08-12), never a
+    guarantee. Each drop-in sits beside the netplan-generated unit, so a
+    rename strands it byte-correct-but-inert; the `verify_command` on each
+    spec reports the address actually held, which is the only signal that
+    catches that staleness.
+
+    Added 2026-10-12 (compute-04 outage): the fast port's DHCP client never
+    transacted, so the host sat unaddressed while the floor file was
+    byte-correct. Asking explicitly per host is the reproducible fix that
+    the floor glob alone cannot express.
+    """
+    specs: list[HostConfigSpec] = []
+    for name, addr in _request_address_hosts(hosts_path=hosts_path):
+        specs.append(
+            HostConfigSpec(
+                name=f"network.request-address-{name}",
+                path=f"/etc/systemd/network/{_FLEET_UNIT_NAME}.d/50-request-address.conf",
+                content=(
+                    "[DHCPv4]\n"
+                    f"RequestAddress={addr}\n"
+                ),
+                purpose=(
+                    f"Ask DHCP for {addr} (declared fleet address) via "
+                    "option 50; the server grants if free."
+                ),
+                provider="scitex-dev",
+                hosts=(name,),
+                mode="0644",
+                apply_command="networkctl reload",
+                verify_command=(
+                    "ip -4 -o addr show | grep -v ' lo '"
+                ),
+                requires_root=True,
+            )
+        )
+    return specs
+
+
+__all__ = ["provide_dhcp_specs", "provide_request_address_specs"]
 
 # EOF

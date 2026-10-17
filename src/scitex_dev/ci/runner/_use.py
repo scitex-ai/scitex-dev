@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
-
 import click
 
 from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
@@ -16,6 +14,8 @@ from . import config
 # Both were written to be the same value and drifted because nothing made
 # them the same value. One definition cannot disagree with itself.
 from ._register import CI_RUNS_ON_DEFAULT
+from ._policy import HOSTED_RUNS_ON, collect_policy, organization_repository
+from ._variables import set_runs_on
 
 
 def register(group: click.Group) -> None:
@@ -25,10 +25,10 @@ def register(group: click.Group) -> None:
         help_spec=CliHelp(
             summary="Flip CI_RUNS_ON between hosted and self-hosted.",
             description=(
-                "Sends a PATCH to the repo Actions Variable CI_RUNS_ON.\n"
+                "Creates or updates the repo Actions Variable CI_RUNS_ON and confirms readback.\n"
                 "\n"
-                "NOTE: requires a CLASSIC PAT with actions:variables:write. "
-                "Set the SCITEX_DEV_GH_PAT environment variable."
+                "Uses the existing normal gh account with repository Actions-variable write authority. "
+                "No new credential authority is created."
             ),
             examples=(
                 Example("{prog} ci runner use github", "Route CI to ubuntu-latest."),
@@ -40,40 +40,41 @@ def register(group: click.Group) -> None:
         ),
     )
     @click.argument("target", type=click.Choice(["github", "self-hosted"], case_sensitive=False))
-    def use_cmd(target: str) -> None:
-        cfg = config.load_runner_config()
-        var_name = cfg["github"]["variable_name"]
-        repo = cfg["github"]["default_repo"]
+    @click.option("--repo", "owner_repo", default=None, help="Explicit owner/repository; avoids HPC configuration for repository routing.")
+    def use_cmd(target: str, owner_repo: str | None) -> None:
+        if owner_repo:
+            var_name, repo = "CI_RUNS_ON", owner_repo
+        else:
+            cfg = config.load_runner_config()
+            var_name = cfg["github"]["variable_name"]
+            repo = cfg["github"]["default_repo"]
 
         if target == "github":
-            value = '"ubuntu-latest"'
+            value = HOSTED_RUNS_ON
             label = "hosted"
         else:
+            if not organization_repository(repo):
+                raise click.ClickException(
+                    "Self-hosted company runners are organization-only; "
+                    "use github for personal/external repositories."
+                )
+            report = collect_policy()
+            if report["state"] != "conformant":
+                raise click.ClickException(
+                    "Organization membership/workflow policy is not qualified; "
+                    "run ci runner validate-policy --json and retain hosted CI."
+                )
             value = CI_RUNS_ON_DEFAULT
             label = "self-hosted"
 
-        result = subprocess.run(
-            [
-                "gh",
-                "api",
-                f"repos/{repo}/actions/variables/{var_name}",
-                "-X",
-                "PATCH",
-                "-f",
-                f"value={value}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if result.returncode != 0:
-            raise click.ClickException(
-                f"Failed to flip CI_RUNS_ON to {label}: {result.stderr.strip()}"
-            )
+        try:
+            set_runs_on(repo, var_name, value)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from None
 
         click.echo(f"CI_RUNS_ON → {value} ({label})")
         click.secho(
-            "NOTE: requires a CLASSIC PAT with actions:variables:write. "
-            "Set SCITEX_DEV_GH_PAT environment variable.",
+            "Uses the existing normal gh account with repository Actions-variable write authority. "
+            "Native access additionally requires reviewed organization workflow admission.",
             fg="yellow",
         )

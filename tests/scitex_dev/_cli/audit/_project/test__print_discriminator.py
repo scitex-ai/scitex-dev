@@ -140,8 +140,8 @@ def test_branch_chain_resolves_each_destination_independently(line, expected):
     assert actual == expected
 
 
-@pytest.mark.parametrize("line, expected", [(5, False), (9, False), (12, True)])
-def test_branch_chain_spares_only_the_payload_writers(line, expected):
+@pytest.mark.parametrize("line, expected", [(5, True), (9, True), (12, True)])
+def test_branch_chain_rejects_all_builtin_prints(line, expected):
     # Arrange
     tree, call = _print_on_line(_BRANCH_CHAIN, line)
     # Act
@@ -310,28 +310,28 @@ def test_arbitrary_expression_payload_is_not_spared():
     assert actual is True
 
 
-# --- SPARE (machine-readable stdout) -----------------------------------------
+# --- Strict raw-print rejection (including machine-readable stdout) -----------------------------------------
 
 
-def test_json_dumps_to_stdout_shape_of_ssh_is_spared():
+def test_json_dumps_to_stdout_shape_of_ssh_is_rejected():
     # Arrange — shape of src/scitex_dev/ssh.py:255
     src = "import json\nprint(json.dumps(results))"
     # Act
     actual = _flags(src)
     # Assert
-    assert actual is False
+    assert actual is True
 
 
-def test_json_dumps_with_kwargs_shape_of_cmd_rules_is_spared():
+def test_json_dumps_with_kwargs_shape_of_cmd_rules_is_rejected():
     # Arrange — shape of src/scitex_dev/linter/_cmd_rules.py:52
     src = "import json\nprint(json.dumps(data, indent=2))"
     # Act
     actual = _flags(src)
     # Assert
-    assert actual is False
+    assert actual is True
 
 
-def test_to_json_to_resolved_stdout_shape_of_cli_utils_is_spared():
+def test_to_json_to_resolved_stdout_shape_of_cli_utils_is_rejected():
     # Arrange — shape of src/scitex_dev/_cli/_utils.py:37
     src = (
         "import sys\n"
@@ -342,7 +342,7 @@ def test_to_json_to_resolved_stdout_shape_of_cli_utils_is_spared():
     # Act
     actual = _flags(src)
     # Assert
-    assert actual is False
+    assert actual is True
 
 
 def test_unknown_payload_variable_is_not_spared():
@@ -360,7 +360,7 @@ def test_unknown_payload_variable_is_not_spared():
     assert actual is True
 
 
-def test_variable_assigned_serializer_output_is_spared():
+def test_variable_assigned_serializer_output_is_rejected():
     # Arrange
     src = (
         "import json\n"
@@ -371,25 +371,25 @@ def test_variable_assigned_serializer_output_is_spared():
     # Act
     actual = _flags(src)
     # Assert
-    assert actual is False
+    assert actual is True
 
 
-def test_required_injected_stream_is_spared():
+def test_required_injected_stream_is_rejected():
     # Arrange — the caller owns and can capture the rendering destination.
     src = "def render(report, stream):\n    print(report.render(), file=stream)\n"
     # Act
     actual = _flags(src)
     # Assert
-    assert actual is False
+    assert actual is True
 
 
-def test_explicit_content_render_api_is_spared():
+def test_explicit_content_render_api_is_rejected():
     # Arrange — narrow explicit-content contract, not an arbitrary variable.
     src = "def render_content(content):\n    print(content)\n"
     # Act
     actual = _flags(src)
     # Assert
-    assert actual is False
+    assert actual is True
 
 
 def test_arbitrary_function_printing_content_still_flags():
@@ -401,13 +401,13 @@ def test_arbitrary_function_printing_content_still_flags():
     assert actual is True
 
 
-def test_explicit_stdout_serializer_call_is_spared():
+def test_explicit_stdout_serializer_call_is_rejected():
     # Arrange
     src = "import sys, json\nprint(json.dumps(x), file=sys.stdout)"
     # Act
     actual = _flags(src)
     # Assert
-    assert actual is False
+    assert actual is True
 
 
 # EOF

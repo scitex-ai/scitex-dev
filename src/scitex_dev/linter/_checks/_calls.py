@@ -6,10 +6,8 @@ import ast
 from pathlib import Path
 
 from .. import rules
-from .._rule_tables import AXES_HINTS as _AXES_HINTS
+from .. import _rule_tables
 from .._rule_tables import AXES_SKIP as _AXES_SKIP
-from .._rule_tables import CALL_RULES as _CALL_RULES
-from .._rule_tables import PRINT_RULE as _PRINT_RULE
 
 # STX-NET001 — outbound network HTTP-ish verb methods. `session.get(...)` /
 # `httpx_client.request(...)` etc. all take `timeout=` as a keyword; the value
@@ -170,60 +168,69 @@ class CallChecksMixin:
                 self._figrecipe_usages.append((node.lineno, node.col_offset, line))
 
             # Check (module, func) against rule table
-            rule = _CALL_RULES.get((mod_name, func_name))
+            rule = _rule_tables.CALL_RULES.get((mod_name, func_name))
             if rule is None and resolved != mod_name:
-                rule = _CALL_RULES.get((resolved, func_name))
+                rule = _rule_tables.CALL_RULES.get((resolved, func_name))
             if rule is None:
-                rule = _CALL_RULES.get((None, func_name))
+                rule = _rule_tables.CALL_RULES.get((None, func_name))
 
-            # Fallback to plugin-contributed rules
-            if rule is None:
-                rule = self._plugin_call_rules.get((mod_name, func_name))
-            if rule is None and resolved != mod_name:
-                rule = self._plugin_call_rules.get((resolved, func_name))
-            if rule is None:
-                rule = self._plugin_call_rules.get((None, func_name))
+            candidates = {} if rule is None else {rule.id: rule}
+            for key in (
+                (mod_name, func_name),
+                (resolved, func_name),
+                (None, func_name),
+            ):
+                group = self._plugin_call_rule_groups.get(key)
+                if group is None:
+                    legacy = self._plugin_call_rules.get(key)
+                    group = () if legacy is None else (legacy,)
+                for candidate in group:
+                    candidates.setdefault(candidate.id, candidate)
 
             # Special cases
-            if rule is not None:
+            for rule in candidates.values():
                 # plt.show() -- only flag if mod resolves to matplotlib
                 if rule is rules.P004:
                     if mod_name not in ("plt", "pyplot") and resolved not in (
                         "matplotlib.pyplot",
                     ):
-                        return
+                        continue
 
                 # to_csv / savefig -- skip on non-data/figure objects
                 if rule in (rules.IO004, rules.IO007):
                     if mod_name in ("stx", "scitex", "scitex_io", "os", "sys", "Path"):
-                        return
+                        continue
 
                 # FM rules: exempt stx.*/fr.*/figrecipe.* calls
                 if rule.category == "figure":
                     _exempt = ("stx", "scitex", "scitex_io", "fr", "figrecipe")
                     if mod_name in _exempt:
-                        return
+                        continue
                     # Check root of chained call: fr.fig.set_size_inches()
                     if (
                         isinstance(func.value, ast.Attribute)
                         and isinstance(func.value.value, ast.Name)
                         and func.value.value.id in _exempt
                     ):
-                        return
+                        continue
 
                 line = self._get_source(node.lineno)
                 self._add(rule, node.lineno, node.col_offset, line)
+            if candidates:
                 return
 
             # Axes hints: ax.plot(), ax.scatter(), ax.bar()
-            if func_name in _AXES_HINTS and mod_name not in _AXES_SKIP:
+            if func_name in _rule_tables.AXES_HINTS and mod_name not in _AXES_SKIP:
                 # Heuristic: if variable name looks like axes
                 if mod_name and (
                     mod_name.startswith("ax") or mod_name in ("axes", "subplot")
                 ):
                     line = self._get_source(node.lineno)
                     self._add(
-                        _AXES_HINTS[func_name], node.lineno, node.col_offset, line
+                        _rule_tables.AXES_HINTS[func_name],
+                        node.lineno,
+                        node.col_offset,
+                        line,
                     )
                 return
 
@@ -243,9 +250,13 @@ class CallChecksMixin:
 
         # bare func() pattern -- e.g., print(), open()
         elif isinstance(func, ast.Name):
-            if func.id == "print" and self._has_session_decorator:
+            if (
+                func.id == "print"
+                and self._has_session_decorator
+                and "src" not in Path(self.filepath).parts
+            ):
                 line = self._get_source(node.lineno)
-                self._add(_PRINT_RULE, node.lineno, node.col_offset, line)
+                self._add(_rule_tables.PRINT_RULE, node.lineno, node.col_offset, line)
             elif func.id == "open" and self._has_session_decorator:
                 line = self._get_source(node.lineno)
                 self._add(rules.PA002, node.lineno, node.col_offset, line)

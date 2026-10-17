@@ -72,6 +72,7 @@ JOB_LOG_TARGETS: dict[str, tuple[str, str]] = {
     "creds-rotate-all": (DEFAULT_LOG_PACKAGE, "creds-rotate"),
     "ci-runner-ensure": (DEFAULT_LOG_PACKAGE, "ci-runner-ensure"),
     "ci-runner-workgc": (DEFAULT_LOG_PACKAGE, "ci-runner-workgc"),
+    "ci-runner-policy": (DEFAULT_LOG_PACKAGE, "ci-runner-policy"),
     # The scholar library sync moves SCHOLAR state, so its log lives in
     # the scholar leaf's runtime tree (2026-07-01 operator directive).
     "scholar-library-sync": ("scholar", "cron-library-sync"),

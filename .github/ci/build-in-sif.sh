@@ -33,14 +33,13 @@ source "$(dirname "${BASH_SOURCE[0]}")/release-context.sh"
 scitex_release_context "$TMPDIR" "$VENV"
 echo "build: py=$(scitex_release_run "$PY" -V) target=$TMPDIR/site"
 
-# Install the PEP 517 build frontend into the writable target (uv fast path,
-# pip safety net), then build with it. Clean dist/ first so only the freshly
+# Install the PEP 517 build frontend into the writable target with UV, then
+# build with its UV installer. Clean dist/ first so only the freshly
 # built artifacts are uploaded.
-scitex_release_run uv pip install --python "$PY" --target="$TMPDIR/site" build ||
-    scitex_release_run "$PY" -m pip install --target="$TMPDIR/site" build
+scitex_release_run uv pip install --python "$PY" --target="$TMPDIR/site" build
 
 rm -rf dist
-scitex_release_run env PYTHONPATH="$TMPDIR/site" "$PY" -m build --outdir dist
+scitex_release_run env PYTHONPATH="$TMPDIR/site" "$PY" -m build --installer uv --outdir dist
 
 echo "=== built artifacts ==="
 ls -l dist
@@ -86,3 +85,8 @@ if not report.is_clean:
     )
     raise SystemExit(1)
 PYGATE
+
+# One immutable release identity accompanies the complete, checked wheel/sdist.
+scitex_release_run "$PY" .github/ci/release-identity.py write \
+    --tag "${RELEASE_TAG:?RELEASE_TAG must name the resolved release tag}" \
+    --commit "${RELEASE_COMMIT:?RELEASE_COMMIT must name the checked-out commit}"

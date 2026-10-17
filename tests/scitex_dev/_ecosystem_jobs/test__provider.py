@@ -313,3 +313,30 @@ def test_branch_hygiene_remote_leg_does_not_also_sweep_local_branches():
     scoped = "--no-local" in body
     # Assert
     assert scoped
+
+
+def test_apps_delivery_observer_declares_bounded_timer():
+    # Arrange
+    specs = provide_jobs()
+    # Act
+    job = next(j for j in specs if j.name == "scitex-dev-apps-delivery-observe")
+    # Assert
+    assert (
+        job.kind, job.schedule, job.command, job.on_boot_sec,
+        cadence_sec(job), job.timeout_sec,
+    ) == (
+        "timer", "", "scitex-dev ecosystem cron exec scitex-dev-apps-delivery-observe",
+        "5min", 300.0, 20,
+    )
+
+
+def test_apps_delivery_observer_uses_existing_runtime_log_sink():
+    # Arrange
+    name = "scitex-dev-apps-delivery-observe"
+    # Act
+    path = log_path_for(name)
+    # Assert
+    assert (
+        path.as_posix().endswith(".scitex/dev/runtime/logs/timer-apps-delivery-observe.log"),
+        name in JOB_SHELL_BODIES,
+    ) == (True, False)

@@ -2,9 +2,9 @@
 import hashlib
 import json
 import re
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 import yaml
@@ -59,7 +59,7 @@ def execute(case, overrides=None, remove=(), label="one", inner="run-in-sif.sh")
     record = case["root"] / (label + ".json")
     env["SCITEX_FAKE_RECORD"] = str(record)
     result = subprocess.run(["bash", str(WRAPPER), inner, "3.12", "one argument"],
-                            env=env, cwd=ROOT, capture_output=True, text=True)
+                            env=env, cwd=ROOT, capture_output=True, text=True, check=False)
     return result, record
 
 
@@ -281,6 +281,31 @@ def _workflow_wrapper_calls():
 WORKFLOW_WRAPPER_CALLS = _workflow_wrapper_calls()
 
 
+def _fixture_digest(call, digest):
+    name, environment, _ = call
+    expression = environment.get("SCITEX_CI_SIF_SHA256")
+    if expression == "${{ vars.SCITEX_CI_SIF_SHA256 }}":
+        return digest
+    if expression != "${{ fromJSON(needs.test-and-build.outputs.release_plan).image.sha256 }}":
+        return ""
+    if not name.startswith("pypi-publish-and-github-release-on-tag.yml/publish/"):
+        return ""
+    workflow = yaml.safe_load(
+        (ROOT / ".github/workflows/pypi-publish-and-github-release-on-tag.yml").read_text()
+    )
+    build = workflow["jobs"]["test-and-build"]
+    if build.get("uses") != "scitex-ai/.github/.github/workflows/ci-sif-matrix.yml@main":
+        return ""
+    if build.get("with") != {
+        "suite": "dev-release",
+        "release_tag": "${{ inputs.version || '' }}",
+        "runs_on": '["self-hosted","Linux","X64","scitex-org-cpu"]',
+    }:
+        return ""
+    plan = json.loads(json.dumps({"image": {"sha256": digest}}))
+    return plan["image"]["sha256"]
+
+
 def test_outer_wrapper_workflow_inventory_is_not_empty():
     # Arrange
     paths = ROOT / ".github/workflows"
@@ -294,14 +319,38 @@ def test_outer_wrapper_workflow_inventory_is_not_empty():
 def test_every_workflow_call_supplies_the_verified_image_digest(shell_case, call):
     # Arrange
     case = shell_case
-    _, environment, inner = call
-    digest = {"${{ vars.SCITEX_CI_SIF_SHA256 }}": case["env"]["SCITEX_CI_SIF_SHA256"]}.get(
-        environment.get("SCITEX_CI_SIF_SHA256"), ""
-    )
+    _, _, inner = call
+    digest = _fixture_digest(call, case["env"]["SCITEX_CI_SIF_SHA256"])
     # Act
     result, _ = execute(case, {"SCITEX_CI_SIF_SHA256": digest}, inner=inner)
     # Assert
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("expression", ["", "${{ needs.unreviewed.outputs.sha256 }}"])
+def test_unknown_workflow_digest_expression_refuses_execution(shell_case, expression):
+    # Arrange
+    case = shell_case
+    call = ("pypi-publish-and-github-release-on-tag.yml/publish/8",
+            {"SCITEX_CI_SIF_SHA256": expression}, "publish-in-sif.sh")
+    # Act
+    _, record = execute(case, {"SCITEX_CI_SIF_SHA256": _fixture_digest(
+        call, case["env"]["SCITEX_CI_SIF_SHA256"])}, inner=call[2])
+    # Assert
+    assert not record.exists()
+
+
+def test_release_plan_digest_cannot_authorize_an_unrelated_caller(shell_case):
+    # Arrange
+    case = shell_case
+    call = ("unreviewed.yml/publish/8", {"SCITEX_CI_SIF_SHA256":
+            "${{ fromJSON(needs.test-and-build.outputs.release_plan).image.sha256 }}"},
+            "publish-in-sif.sh")
+    # Act
+    _, record = execute(case, {"SCITEX_CI_SIF_SHA256": _fixture_digest(
+        call, case["env"]["SCITEX_CI_SIF_SHA256"])}, inner=call[2])
+    # Assert
+    assert not record.exists()
 
 
 @pytest.mark.parametrize("call", WORKFLOW_WRAPPER_CALLS, ids=lambda call: call[0])

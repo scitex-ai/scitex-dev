@@ -22,7 +22,8 @@ from ..._ecosystem.ci_template import (
     apply as _ci_template_apply,
 )
 from ..._ecosystem.help_spec import CliHelp, Example, SpecCommand
-from . import config
+from ._policy import default_runs_on, parse_repository
+from ._variables import set_runs_on
 
 #: The one sanctioned CI_RUNS_ON default, and the ONLY definition of it —
 #: ``_use.py`` imports this rather than carrying a second literal.
@@ -70,7 +71,8 @@ def register(group: click.Group) -> None:
                 "  1. Deploy .github/workflows/ci.yml via the canonical "
                 "ci-template mechanism (thin caller delegating to "
                 "scitex-ai/.github@main; deletes superseded workflows).\n"
-                f"  2. Set Actions Variable CI_RUNS_ON to '{CI_RUNS_ON_DEFAULT}'.\n"
+                "  2. Set Actions Variable CI_RUNS_ON to GitHub-hosted by default.\n"
+                "     Organization self-hosted use is an explicit policy-qualified opt-in.\n"
                 "  3. Print the fork-PR approval reminder (no repo settings "
                 "are mutated)."
             ),
@@ -113,9 +115,6 @@ def register(group: click.Group) -> None:
     def register_cmd(
         repo_path: str, dry_run: bool, yes: bool, skip_required_check_gate: bool
     ) -> None:
-        cfg = config.load_runner_config()
-        config.get_gh_token(cfg)
-
         # Determine the repo owner/name from the local git remote
         repo_result = subprocess.run(
             ["git", "-C", repo_path, "remote", "get-url", "origin"],
@@ -129,16 +128,12 @@ def register(group: click.Group) -> None:
             )
 
         remote_url = repo_result.stdout.strip()
-        # Parse owner/repo from git URL
-        # (SSH: git@github.com:owner/repo.git, HTTPS: https://github.com/owner/repo.git)
-        import re as _re
-
-        m = _re.search(r"github\.com[:/]([^/]+)/([^/.]+)", remote_url)
-        if not m:
-            raise click.ClickException(
-                f"Could not parse owner/repo from remote: {remote_url}"
-            )
-        owner, repo = m.group(1), m.group(2)
+        try:
+            owner_repo = parse_repository(remote_url)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from None
+        owner, repo = owner_repo.split("/")
+        runs_on = default_runs_on(owner_repo)
 
         # Mutating from here on — refuse without --yes (no interactive prompt).
         if not dry_run and not yes:
@@ -175,27 +170,15 @@ def register(group: click.Group) -> None:
 
         if dry_run:
             click.echo(f"[dry-run] Would set Actions Variable on {owner}/{repo}:")
-            click.echo(f"  CI_RUNS_ON = '{CI_RUNS_ON_DEFAULT}'")
+            click.echo(f"  CI_RUNS_ON = '{runs_on}'")
             return
 
         # Step 2: Set the runner-selection Actions Variable via gh api.
         click.echo(f"Setting Actions Variable CI_RUNS_ON on {owner}/{repo}...")
-        var_result = subprocess.run(
-            [
-                "gh",
-                "api",
-                f"repos/{owner}/{repo}/actions/variables/CI_RUNS_ON",
-                "-X",
-                "POST",
-                "-f",
-                f"value={CI_RUNS_ON_DEFAULT}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if var_result.returncode != 0:
-            click.echo(f"  Warning: {var_result.stderr.strip()[:100]}")
+        try:
+            set_runs_on(owner_repo, "CI_RUNS_ON", runs_on)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from None
 
         # Step 3: Fork-PR approval is a manual repo setting — do NOT mutate
         # the repo's settings here.
@@ -206,7 +189,7 @@ def register(group: click.Group) -> None:
 
         click.echo(f"\n✓ {owner}/{repo} registered with the canonical scitex CI.")
         click.echo("  Workflow: .github/workflows/ci.yml (org-reusable caller)")
-        click.echo(f"  Variable: CI_RUNS_ON = '{CI_RUNS_ON_DEFAULT}'")
+        click.echo(f"  Variable: CI_RUNS_ON = '{runs_on}'")
 
 
 # EOF
