@@ -28,6 +28,30 @@ spec_version: "1"
 
 boundaries:
 
+  # -- scitex-genai ------------------------------------------------------
+
+  - boundary: "scitex_genai.availability: provider inference credential probe"
+    package: scitex-genai
+    borrows: http
+    why: >-
+      The provider's actual HTTP response code is retained verbatim. A
+      timeout or failed connection has no HTTP response: report its POSIX
+      errno name when observed, or borrowed grpc UNAVAILABLE when the
+      transport exposes no native errno. Check's UNKNOWN verdict preserves
+      the distinction between a rejected credential and unavailable evidence.
+
+  - boundary: "scitex_genai.availability: observed provider probe transport errno"
+    package: scitex-genai
+    borrows: errno
+    why: "An observed timeout or connection errno is retained by name; no HTTP response was received."
+
+  - boundary: "scitex_genai.availability: transport failure without an exposed errno"
+    package: scitex-genai
+    borrows: grpc
+    why: >-
+      Borrow UNAVAILABLE only when the transport exposes neither an HTTP
+      response nor a POSIX errno. The Check verdict remains UNKNOWN.
+
   # -- scitex-agent-container ---------------------------------------------
 
   - boundary: "sac listen: POST /agents (spawn)"
