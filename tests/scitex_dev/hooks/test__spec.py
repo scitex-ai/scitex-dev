@@ -230,9 +230,13 @@ def test_hermes_map_covers_every_claude_event():
 
 
 def test_hermes_map_values_are_measured_against_valid_hooks():
-    # Arrange: the shell-hook allow-list measured 2026-10-18 from
-    # /opt/hermes-agent/hermes_cli/plugins.py VALID_HOOKS minus
-    # SHELL_UNSUPPORTED_HOOKS (transform_api_error_classification).
+    """Every mapped value is a real Hermes shell-hook event.
+
+    Measured 2026-10-18 from /opt/hermes-agent/hermes_cli/plugins.py
+    VALID_HOOKS minus SHELL_UNSUPPORTED_HOOKS
+    (transform_api_error_classification).
+    """
+    # Arrange
     allow = {
         "pre_tool_call", "post_tool_call", "transform_terminal_output",
         "transform_tool_result", "transform_llm_output", "pre_llm_call",
@@ -257,24 +261,36 @@ def test_hermes_map_values_are_measured_against_valid_hooks():
     assert mapped <= allow
 
 
-def test_tool_use_events_map_to_their_exact_counterparts():
-    # Arrange / Act
-    pre = hermes_event_for("pre-tool-use")
-    post = hermes_event_for("post-tool-use")
+def test_pre_tool_use_maps_to_its_exact_counterpart():
+    # Arrange
+    # Act
+    mapped = hermes_event_for("pre-tool-use")
     # Assert
-    assert pre == "pre_tool_call"
-    assert post == "post_tool_call"
+    assert mapped == "pre_tool_call"
 
 
-def test_stop_and_notification_are_honest_gaps_not_projections():
-    # Arrange / Act
-    stop = hermes_event_for("stop")
-    notification = hermes_event_for("notification")
-    # Assert: pre_verify fires only after code edits and
-    # gateway_platform_event is observer-only -- mapping onto either
-    # would enforce the rule where it was never reviewed.
-    assert stop is None
-    assert notification is None
+def test_post_tool_use_maps_to_its_exact_counterpart():
+    # Arrange
+    # Act
+    mapped = hermes_event_for("post-tool-use")
+    # Assert
+    assert mapped == "post_tool_call"
+
+
+def test_stop_is_an_honest_gap_not_a_projection():
+    # Arrange
+    # Act
+    mapped = hermes_event_for("stop")
+    # Assert
+    assert mapped is None
+
+
+def test_notification_is_an_honest_gap_not_a_projection():
+    # Arrange
+    # Act
+    mapped = hermes_event_for("notification")
+    # Assert
+    assert mapped is None
 
 
 def test_unknown_event_raises_instead_of_shipping_a_silent_gap():
