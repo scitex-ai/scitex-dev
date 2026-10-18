@@ -9,7 +9,13 @@ import dataclasses
 
 import pytest
 
-from scitex_dev.hooks import ALLOWED_EVENTS, ALLOWED_SEVERITIES, HookRule
+from scitex_dev.hooks import (
+    ALLOWED_EVENTS,
+    ALLOWED_SEVERITIES,
+    HERMES_EVENT_MAP,
+    HookRule,
+    hermes_event_for,
+)
 
 
 def _kw(**over):
@@ -209,3 +215,71 @@ def test_a_well_formed_rule_constructs():
     rule = HookRule(**kwargs)
     # Assert
     assert rule.id == "dev.some-rule"
+
+
+# --- Hermes event map (operator CCT 399/401) --------------------------------
+
+
+def test_hermes_map_covers_every_claude_event():
+    # Arrange
+    events = ALLOWED_EVENTS
+    # Act
+    missing = [e for e in events if e not in HERMES_EVENT_MAP]
+    # Assert
+    assert missing == []
+
+
+def test_hermes_map_values_are_measured_against_valid_hooks():
+    # Arrange: the shell-hook allow-list measured 2026-10-18 from
+    # /opt/hermes-agent/hermes_cli/plugins.py VALID_HOOKS minus
+    # SHELL_UNSUPPORTED_HOOKS (transform_api_error_classification).
+    allow = {
+        "pre_tool_call", "post_tool_call", "transform_terminal_output",
+        "transform_tool_result", "transform_llm_output", "pre_llm_call",
+        "post_llm_call", "on_stream_start", "on_stream_delta",
+        "on_stream_end", "on_interim_message", "pre_verify",
+        "pre_api_request", "post_api_request", "api_request_error",
+        "pre_auxiliary_call", "post_auxiliary_call", "on_session_start",
+        "on_session_end", "on_session_finalize", "on_session_reset",
+        "on_skill_lifecycle", "subagent_start", "subagent_stop",
+        "pre_gateway_dispatch", "agent_loop_stopped",
+        "pre_approval_request", "post_approval_response",
+        "on_room_member_activity", "pre_transcription",
+        "kanban_task_claimed", "kanban_task_completed",
+        "kanban_task_blocked", "on_kanban_worker_spawned",
+        "on_kanban_worker_exited", "on_kanban_worker_stale_claim",
+        "on_kanban_task_updated", "on_kanban_dispatch_tick",
+        "gateway_platform_event", "pre_command",
+    }
+    # Act
+    mapped = {v for v in HERMES_EVENT_MAP.values() if v is not None}
+    # Assert
+    assert mapped <= allow
+
+
+def test_tool_use_events_map_to_their_exact_counterparts():
+    # Arrange / Act
+    pre = hermes_event_for("pre-tool-use")
+    post = hermes_event_for("post-tool-use")
+    # Assert
+    assert pre == "pre_tool_call"
+    assert post == "post_tool_call"
+
+
+def test_stop_and_notification_are_honest_gaps_not_projections():
+    # Arrange / Act
+    stop = hermes_event_for("stop")
+    notification = hermes_event_for("notification")
+    # Assert: pre_verify fires only after code edits and
+    # gateway_platform_event is observer-only -- mapping onto either
+    # would enforce the rule where it was never reviewed.
+    assert stop is None
+    assert notification is None
+
+
+def test_unknown_event_raises_instead_of_shipping_a_silent_gap():
+    # Arrange
+    event = "pre-commit"
+    # Act / Assert
+    with pytest.raises(ValueError, match="not a Claude-Code hook event"):
+        hermes_event_for(event)
