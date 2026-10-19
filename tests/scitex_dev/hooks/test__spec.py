@@ -296,6 +296,8 @@ def test_notification_is_an_honest_gap_not_a_projection():
 def test_unknown_event_raises_instead_of_shipping_a_silent_gap():
     # Arrange
     event = "pre-commit"
-    # Act / Assert
+    # Act
+    outcome = event
+    # Assert
     with pytest.raises(ValueError, match="not a Claude-Code hook event"):
-        hermes_event_for(event)
+        hermes_event_for(outcome)
