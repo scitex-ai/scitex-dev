@@ -45,16 +45,20 @@ from ._discover import ENTRY_POINT_GROUP, discover_hooks, rules_of_provider
 from ._spec import (
     ALLOWED_EVENTS,
     ALLOWED_SEVERITIES,
+    HERMES_EVENT_MAP,
     HookRule,
     HookRuleProvider,
+    hermes_event_for,
     resolve_asset,
 )
 
 __all__ = [
     "ALLOWED_EVENTS",
     "ALLOWED_SEVERITIES",
+    "HERMES_EVENT_MAP",
     "HookRule",
     "HookRuleProvider",
+    "hermes_event_for",
     "resolve_asset",
     "ENTRY_POINT_GROUP",
     "discover_hooks",
