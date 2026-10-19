@@ -92,6 +92,8 @@ class TestPS165WorkflowPresence:
         assert out == []
 
 
+
+
 class TestPS165ExactPublishFilename:
     """The publish-workflow filename is OIDC load-bearing: PyPI trusted
     publishing matches the `workflow_ref` claim
@@ -102,15 +104,29 @@ class TestPS165ExactPublishFilename:
     short forms, no `.yaml` spelling.
     """
 
-    def test_canonical_constant_is_the_exact_42_char_name(self) -> None:
-        # Tripwire against the log-truncation rendering (middle replaced
-        # with `...`) ever being persisted as the required name: the
-        # truncated rendering is 17 chars, the real name is 42.
-        assert _CANONICAL_PYPI_PUBLISH_WORKFLOW == (
-            "pypi-publish-and-github-release-on-tag.yml"
-        )
-        assert len(_CANONICAL_PYPI_PUBLISH_WORKFLOW) == 42
-        assert "..." not in _CANONICAL_PYPI_PUBLISH_WORKFLOW
+    def test_canonical_constant_equals_exact_publish_filename(self) -> None:
+        # Arrange
+        expected = "pypi-publish-and-github-release-on-tag.yml"
+        # Act
+        actual = _CANONICAL_PYPI_PUBLISH_WORKFLOW
+        # Assert
+        assert actual == expected
+
+    def test_canonical_constant_has_full_42_char_length(self) -> None:
+        # Arrange — the log-truncation rendering (`...` in the middle) is
+        # only 17 chars; persisting it would pin the wrong name.
+        # Act
+        actual_length = len(_CANONICAL_PYPI_PUBLISH_WORKFLOW)
+        # Assert
+        assert actual_length == 42
+
+    def test_canonical_constant_contains_no_truncation_ellipsis(self) -> None:
+        # Arrange
+        ellipsis = "..."
+        # Act
+        present = ellipsis in _CANONICAL_PYPI_PUBLISH_WORKFLOW
+        # Assert
+        assert not present
 
     def test_exact_canonical_filename_satisfies_requirement(
         self, tmp_path: Path
@@ -123,9 +139,9 @@ class TestPS165ExactPublishFilename:
         # Assert
         assert out == []
 
-    def test_near_miss_variants_are_flagged(self, tmp_path: Path) -> None:
+    def test_each_near_miss_variant_is_flagged(self, tmp_path: Path) -> None:
         # Arrange — every baseline file EXCEPT the canonical publish
-        # workflow, plus one near-miss lookalike per case.
+        # workflow, plus one near-miss lookalike per case directory.
         variants = [
             "pypi-publish.yml",
             "publish-pypi.yml",
@@ -133,17 +149,18 @@ class TestPS165ExactPublishFilename:
             _CANONICAL_PYPI_PUBLISH_WORKFLOW[:-4] + ".yaml",
             _CANONICAL_PYPI_PUBLISH_WORKFLOW + ".bak",
         ]
-        for variant in variants:
-            for f in (tmp_path / ".github" / "workflows").glob("*"):
-                f.unlink()
-            present = tuple(
-                f for f in _BASELINE_FILES
-                if f != _CANONICAL_PYPI_PUBLISH_WORKFLOW
-            )
-            _write_workflows(tmp_path, *present, variant)
+        present = tuple(
+            f for f in _BASELINE_FILES if f != _CANONICAL_PYPI_PUBLISH_WORKFLOW
+        )
+        # Act
+        outcomes = []
+        for index, variant in enumerate(variants):
+            repo = tmp_path / f"case{index}"
+            _write_workflows(repo, *present, variant)
             out: list = []
-            # Act
-            check_ps165_workflow_presence(tmp_path, _StubViolation, out)
-            # Assert — exactly one PS-165, naming the PyPI publish workflow
-            assert [v.rule for v in out] == ["PS-165"], variant
-            assert "PyPI publish" in out[0].detail, variant
+            check_ps165_workflow_presence(repo, _StubViolation, out)
+            outcomes.append(
+                [(v.rule, "PyPI publish" in v.detail) for v in out]
+            )
+        # Assert
+        assert outcomes == [[("PS-165", True)]] * len(variants)
