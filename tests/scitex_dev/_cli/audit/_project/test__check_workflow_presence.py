@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from scitex_dev._cli.audit._project._check_workflow_presence import (
+    _CANONICAL_PYPI_PUBLISH_WORKFLOW,
     check_ps165_workflow_presence,
 )
 
@@ -31,7 +32,7 @@ _BASELINE_FILES = (
     "cla.yml",
     "pytest-matrix-on-ubuntu-py3-12.yml",
     "import-smoke-on-ubuntu-py3-12.yml",
-    "pypi-publish-on-tag.yml",
+    _CANONICAL_PYPI_PUBLISH_WORKFLOW,
     # NEUTRAL, not `scitex-dev-quality-audit-*`. The old fixture encoded a
     # pattern that ZERO packages in the fleet satisfied, so this suite was
     # green against a requirement nothing met — the fixture agreed with the
@@ -89,3 +90,60 @@ class TestPS165WorkflowPresence:
         check_ps165_workflow_presence(tmp_path, _StubViolation, out)
         # Assert
         assert out == []
+
+
+class TestPS165ExactPublishFilename:
+    """The publish-workflow filename is OIDC load-bearing: PyPI trusted
+    publishing matches the `workflow_ref` claim
+    (`<owner>/<repo>/.github/workflows/<name>@<ref>`) against the
+    registered publisher byte-for-byte, so any rename — including a
+    shortened form — breaks every release with `invalid-publisher`.
+    PS-165 must therefore demand the exact name: no prefix globs, no
+    short forms, no `.yaml` spelling.
+    """
+
+    def test_canonical_constant_is_the_exact_42_char_name(self) -> None:
+        # Tripwire against the log-truncation rendering (middle replaced
+        # with `...`) ever being persisted as the required name: the
+        # truncated rendering is 17 chars, the real name is 42.
+        assert _CANONICAL_PYPI_PUBLISH_WORKFLOW == (
+            "pypi-publish-and-github-release-on-tag.yml"
+        )
+        assert len(_CANONICAL_PYPI_PUBLISH_WORKFLOW) == 42
+        assert "..." not in _CANONICAL_PYPI_PUBLISH_WORKFLOW
+
+    def test_exact_canonical_filename_satisfies_requirement(
+        self, tmp_path: Path
+    ) -> None:
+        # Arrange — full baseline (which ships the constant)
+        _write_workflows(tmp_path, *_BASELINE_FILES)
+        out: list = []
+        # Act
+        check_ps165_workflow_presence(tmp_path, _StubViolation, out)
+        # Assert
+        assert out == []
+
+    def test_near_miss_variants_are_flagged(self, tmp_path: Path) -> None:
+        # Arrange — every baseline file EXCEPT the canonical publish
+        # workflow, plus one near-miss lookalike per case.
+        variants = [
+            "pypi-publish.yml",
+            "publish-pypi.yml",
+            "pypi-publish-on-tag.yml",
+            _CANONICAL_PYPI_PUBLISH_WORKFLOW[:-4] + ".yaml",
+            _CANONICAL_PYPI_PUBLISH_WORKFLOW + ".bak",
+        ]
+        for variant in variants:
+            for f in (tmp_path / ".github" / "workflows").glob("*"):
+                f.unlink()
+            present = tuple(
+                f for f in _BASELINE_FILES
+                if f != _CANONICAL_PYPI_PUBLISH_WORKFLOW
+            )
+            _write_workflows(tmp_path, *present, variant)
+            out: list = []
+            # Act
+            check_ps165_workflow_presence(tmp_path, _StubViolation, out)
+            # Assert — exactly one PS-165, naming the PyPI publish workflow
+            assert [v.rule for v in out] == ["PS-165"], variant
+            assert "PyPI publish" in out[0].detail, variant
