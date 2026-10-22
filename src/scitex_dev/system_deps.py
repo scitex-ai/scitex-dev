@@ -9,7 +9,7 @@ callable under the ``scitex_dev.system_deps`` entry-point group;
 install lists in container definitions -- the same entry-point federation
 used by ``scitex_dev.jobs`` / ``discover_jobs``.
 
-Two install kinds share the one group:
+Three install kinds share the one group:
 
 * ``kind="apt"`` (the original): a distro package installed with root at
   IMAGE-BUILD time (container ``%post`` / Dockerfile), NEVER at agent
@@ -20,6 +20,14 @@ Two install kinds share the one group:
   runs at HOST-CONFIGURE time, e.g. the Hermes agent installer). The
   declaration pins the URL plus the non-interactive args and a verify
   command, so a host install is a reviewed string, not a pasted one-liner.
+* ``kind="binary"``: a prebuilt release binary installed with root at
+  IMAGE-BUILD time (direct download + install, no apt repo involved --
+  e.g. a pinned ``.deb`` or tarball URL like ``fclones``, which Debian
+  does not package). The declaration pins the https:// artifact URL, the
+  install method (``deb`` or ``tarball``), an optional ``strip_components``
+  / binary name, and a verify command, so the image build stays a
+  reviewed string. ``list`` emits apt names only; ``list --kind binary``
+  emits the binary set for the image recipe to fetch.
 
 Example provider (in a leaf package)::
 
@@ -64,9 +72,10 @@ _logger = slogging.getLogger(__name__)
 ENTRY_POINT_GROUP = "scitex_dev.system_deps"
 
 #: Accepted ``SystemDepSpec.kind`` values: ``"apt"`` (root, image-build
-#: time) or ``"script"`` (user-space ``curl | bash`` installer,
-#: host-configure time).
-INSTALL_KINDS = ("apt", "script")
+#: time), ``"script"`` (user-space ``curl | bash`` installer,
+#: host-configure time), or ``"binary"`` (root, image-build time --
+#: pinned release artifact, no apt repo involved).
+INSTALL_KINDS = ("apt", "script", "binary")
 
 
 @dataclass(frozen=True)
@@ -90,15 +99,25 @@ class SystemDepSpec:
         ``"ppa:apptainer/ppa"``. ``None`` when the package is in the
         default repos.
     kind
-        ``"apt"`` or ``"script"`` (see ``INSTALL_KINDS``).
+        ``"apt"``, ``"script"``, or ``"binary"`` (see ``INSTALL_KINDS``).
     install_url
         ``kind="script"`` only, required: the pinned installer URL.
         Plain http is refused -- a fleet-wide install must not be
         downgradeable on the wire.
+        ``kind="binary"`` only, required: the pinned artifact URL
+        (``.deb`` package or tarball). Same https:// rule.
     install_args
         ``kind="script"`` only: extra argv passed after the installer
         (``bash -s -- ...``). Must keep the install non-interactive --
         a fleet install that stops to ask is not an install.
+        ``kind="binary"``: ``("deb",)`` installs via ``dpkg -i``;
+        ``("tarball", <binary-name>)`` (optionally ``("<n>",)`` strip
+        level, default 1) extracts and links ``<binary-name>`` from the
+        tarball root into ``/usr/local/bin``.
+    verify_command
+        Command proving the install took (e.g. ``"fclones --version"``).
+        Observation is the only accepted proof: an installer that
+        "succeeded" without a verifiable artifact is not done.
     verify_command
         Command proving the install took (e.g. ``"hermes --version"``).
         Observation is the only accepted proof: an installer that
@@ -143,7 +162,7 @@ class SystemDepSpec:
                     f"SystemDepSpec({self.package!r}): kind='apt' must not "
                     f"carry install_args; declare kind='script' instead"
                 )
-        else:  # kind == "script"
+        elif self.kind == "script":
             if self.apt_repo is not None:
                 raise ValueError(
                     f"SystemDepSpec({self.package!r}): kind='script' must "
@@ -164,6 +183,37 @@ class SystemDepSpec:
                         f"SystemDepSpec({self.package!r}): install_args "
                         f"must be non-empty strings; got {arg!r}"
                     )
+        else:  # kind == "binary"
+            if self.apt_repo is not None:
+                raise ValueError(
+                    f"SystemDepSpec({self.package!r}): kind='binary' must "
+                    f"not carry apt_repo (no apt involved)"
+                )
+            if (
+                not isinstance(self.install_url, str)
+                or not self.install_url.startswith("https://")
+            ):
+                raise ValueError(
+                    f"SystemDepSpec({self.package!r}): kind='binary' "
+                    f"requires a pinned https:// artifact url (deb or "
+                    f"tarball); got {self.install_url!r}"
+                )
+            if not self.install_args or self.install_args[0] not in (
+                "deb",
+                "tarball",
+            ):
+                raise ValueError(
+                    f"SystemDepSpec({self.package!r}): kind='binary' "
+                    f"install_args must start with 'deb' or 'tarball' "
+                    f"(method, then tarball binary name / strip level); "
+                    f"got {self.install_args!r}"
+                )
+            if self.install_args[0] == "tarball" and len(self.install_args) < 2:
+                raise ValueError(
+                    f"SystemDepSpec({self.package!r}): kind='binary' "
+                    f"tarball method needs the binary name as second arg; "
+                    f"got {self.install_args!r}"
+                )
         if self.verify_command is not None and not self.verify_command.strip():
             raise ValueError(
                 f"SystemDepSpec({self.package!r}): verify_command must be "

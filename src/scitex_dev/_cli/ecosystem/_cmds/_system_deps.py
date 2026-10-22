@@ -7,7 +7,7 @@ Each scitex leaf declares its SYSTEM dependencies via a
 (deduped by name) so container builds install ONE federated set instead of
 hardcoding/duplicating install lists across container definitions.
 
-Two install kinds share the one group:
+Three install kinds share the one group:
 
 * ``kind="apt"``: distro packages. apt needs root, so ``install`` is
   BUILD-TIME only (run in a container ``%post`` / Dockerfile). ``list``
@@ -16,8 +16,12 @@ Two install kinds share the one group:
     apt-get install -y --no-install-recommends \\
         $(scitex-dev ecosystem system-deps list)
 
-  ``list`` emits ``kind="apt"`` names ONLY, so a script-kind entry never
-  lands on an apt command line.
+  ``list`` emits ``kind="apt"`` names ONLY, so a script/binary-kind entry
+  never lands on an apt command line.
+* ``kind="binary"``: pinned release artifacts (deb/tarball, root,
+  IMAGE-BUILD time). ``install-binary [--provider <leaf>]`` previews
+  (dry-run) or fetches + installs them, then proves each with its own
+  ``verify_command``. Same mutating-verb convention as ``install``.
 * ``kind="script"``: user-space ``curl | bash`` installers (no root; run
   at HOST-CONFIGURE time). ``install-script --provider <leaf>`` previews
   (dry-run) or runs the pinned installer, then proves the install with
@@ -220,6 +224,110 @@ def _do_install_script(deps, *, dry_run: bool) -> int:
     return rc
 
 
+def _do_install_binary(deps, *, dry_run: bool) -> int:
+    """Fetch pinned release artifacts for binary-kind deps (IMAGE-build time).
+
+    Root: deb via ``dpkg -i``, tarball extracted with the declared strip
+    level and its binary linked into ``/usr/local/bin``. Each dep is proven
+    afterwards with its own ``verify_command``. Non-binary deps are refused
+    loudly (same doctrine as ``_do_install``). ``dry_run`` previews the
+    exact shell commands; default when ``--yes`` is omitted.
+    """
+    import os
+    import subprocess
+    import tempfile
+
+    non_binary = sorted({d.package for d in deps if d.kind != "binary"})
+    if non_binary:
+        click.echo(
+            "ERROR: install-binary handles kind='binary' only; "
+            f"{', '.join(non_binary)} need `install` (apt) or "
+            "`install-script` (user-space).",
+            err=True,
+        )
+        return 1
+    if not deps:
+        click.echo("No binary-kind system deps selected; nothing to install.")
+        return 0
+    if hasattr(os, "geteuid") and os.geteuid() != 0:
+        click.echo(
+            "ERROR: install-binary --yes needs root and runs at IMAGE-BUILD "
+            "time only. Use it inside a container %post / Dockerfile, or "
+            "preview with dry-run.",
+            err=True,
+        )
+        return 1
+    rc = 0
+    for dep in deps:
+        method = dep.install_args[0] if dep.install_args else ""
+        if dry_run:
+            if method == "deb":
+                click.echo(f"+ wget {dep.install_url} -O /tmp/{dep.package}.deb")
+                click.echo(f"+ dpkg -i /tmp/{dep.package}.deb && rm /tmp/{dep.package}.deb")
+            else:  # tarball: method, binary, [strip]
+                binary = dep.install_args[1]
+                strip = dep.install_args[2] if len(dep.install_args) > 2 else "1"
+                click.echo(f"+ wget {dep.install_url} -O /tmp/{dep.package}.tgz")
+                click.echo(
+                    f"+ tar -xzf /tmp/{dep.package}.tgz -C /tmp --strip-components={strip} "
+                    f"&& install -m0755 /tmp/{binary} /usr/local/bin/{binary} "
+                    f"&& rm /tmp/{dep.package}.tgz"
+                )
+            if dep.verify_command:
+                click.echo(f"+ {dep.verify_command}  (verify)")
+            click.echo("(dry-run — pass --yes to execute; root, image-build time)")
+            continue
+        with tempfile.TemporaryDirectory(prefix=f"sysdep-{dep.package}-") as td:
+            if method == "deb":
+                artifact = f"{td}/{dep.package}.deb"
+                click.echo(f"+ wget {dep.install_url} -O {artifact}")
+                if subprocess.run(["wget", "-q", dep.install_url, "-O", artifact]).returncode != 0:
+                    click.echo(f"ERROR: download failed for {dep.package!r}", err=True)
+                    rc = 1
+                    continue
+                click.echo(f"+ dpkg -i {artifact}")
+                if subprocess.run(["dpkg", "-i", artifact]).returncode != 0:
+                    click.echo(f"ERROR: dpkg failed for {dep.package!r}", err=True)
+                    rc = 1
+                    continue
+            else:  # tarball
+                binary = dep.install_args[1]
+                strip = dep.install_args[2] if len(dep.install_args) > 2 else "1"
+                artifact = f"{td}/{dep.package}.tgz"
+                click.echo(f"+ wget {dep.install_url} -O {artifact}")
+                if subprocess.run(["wget", "-q", dep.install_url, "-O", artifact]).returncode != 0:
+                    click.echo(f"ERROR: download failed for {dep.package!r}", err=True)
+                    rc = 1
+                    continue
+                click.echo(f"+ tar extract + install {binary} -> /usr/local/bin/{binary}")
+                if subprocess.run(["tar", "-xzf", artifact, "-C", td, f"--strip-components={strip}"]).returncode != 0:
+                    click.echo(f"ERROR: extract failed for {dep.package!r}", err=True)
+                    rc = 1
+                    continue
+                found = None
+                for root, _, files in os.walk(td):
+                    if binary in files:
+                        found = os.path.join(root, binary)
+                        break
+                if found is None:
+                    click.echo(f"ERROR: {binary!r} not found in {dep.package!r} tarball", err=True)
+                    rc = 1
+                    continue
+                subprocess.run(["install", "-m0755", found, f"/usr/local/bin/{binary}"])
+        if dep.verify_command:
+            click.echo(f"+ {dep.verify_command}  (verify)")
+            if subprocess.run(["bash", "-c", dep.verify_command]).returncode != 0:
+                click.echo(
+                    f"ERROR: installed {dep.package!r} but the verify "
+                    f"command failed: {dep.verify_command!r}",
+                    err=True,
+                )
+                rc = 1
+                continue
+        click.echo(f"ok: {dep.package}")
+    return rc
+
+
 def _read_baseline(path):
     """Apt names from a baseline file (one per line; ``#`` comments + blanks skipped)."""
     names = set()
@@ -253,11 +361,12 @@ def register(ecosystem):
             description=(
                 "Walks every `scitex_dev.system_deps` provider and "
                 "dedups by name. With no subcommand, "
-                "prints a human table (both install kinds); `list` is "
+                "prints a human table (all three install kinds); `list` is "
                 "pipe-friendly (apt names only); "
                 "`install` applies the apt set at image-build time; "
-                "`install-script` runs pinned curl|bash installers at "
-                "host-configure time. "
+                "`install-binary` fetches pinned release artifacts at "
+                "image-build time; `install-script` runs pinned curl|bash "
+                "installers at host-configure time. "
                 "Declarations live in each leaf (scitex_dev.system_deps "
                 "entry point). APT INSTALL IS BUILD-TIME ONLY (apt needs "
                 "root; agents run rootless --userns).",
@@ -389,6 +498,52 @@ def register(ecosystem):
     def system_deps_install_script(provider, dry_run, yes):
         return _do_install_script(
             _select(provider, kind="script"), dry_run=dry_run or not yes
+        )
+
+    @system_deps.command(
+        "install-binary",
+        cls=SpecCommand,
+        help_spec=CliHelp(
+            summary="Fetch pinned release artifacts (IMAGE-build time; needs root).",
+            description=(
+                "Mutating verb: previews (dry-run) unless --yes is given. "
+                "Each binary-kind dep fetches its pinned artifact URL "
+                "(deb via dpkg, tarball extracted + linked) at IMAGE-BUILD "
+                "time, then is proven with its own verify_command.",
+            ),
+            examples=(
+                Example(
+                    "{prog} ecosystem system-deps install-binary --provider scitex-storage",
+                    "Preview the fclones fetch.",
+                ),
+                Example(
+                    "{prog} ecosystem system-deps install-binary --provider scitex-storage --yes",
+                    "Install fclones in this image.",
+                ),
+            ),
+        ),
+    )
+    @click.option(
+        "--provider",
+        default=None,
+        help="Filter to one declaring package (e.g. scitex-storage).",
+    )
+    @click.option(
+        "--dry-run",
+        is_flag=True,
+        help="Print the fetch commands without running them (default when --yes "
+        "is omitted).",
+    )
+    @click.option(
+        "--yes",
+        "-y",
+        "yes",
+        is_flag=True,
+        help="Actually fetch + install (root; image-build time).",
+    )
+    def system_deps_install_binary(provider, dry_run, yes):
+        return _do_install_binary(
+            _select(provider, kind="binary"), dry_run=dry_run or not yes
         )
 
     @system_deps.command(
