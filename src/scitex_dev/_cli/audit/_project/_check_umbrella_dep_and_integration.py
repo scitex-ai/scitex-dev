@@ -195,6 +195,13 @@ def _collect_cross_package_imports(src_root: Path, own_import: str) -> set[str]:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
+                if node.level:
+                    # Relative import (from .x / from ..x): resolves inside
+                    # the file's own package, never cross-package. Skipped
+                    # before the prefix test — node.module carries the BARE
+                    # name (e.g. 'scitex_static'), which would otherwise fake
+                    # a cross-package hit (SDK PS-140 FP 2026-10-22).
+                    continue
                 mod = node.module or ""
                 if (
                     mod == "scitex"
