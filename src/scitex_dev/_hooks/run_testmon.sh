@@ -70,6 +70,42 @@ if [[ -z "$PY" ]]; then
     exit 127
 fi
 
+# STALE-TREE GUARD (measured 2026-10-24: figrecipe's pre-push gate ran
+# 3860 tests against a STALE worktree because /uvwork/venv-agent's
+# editable install pointed at a different worktree than the push source —
+# green but meaningless, while the new test failed with a KeyError the
+# working tree does not produce). Before running, ask the interpreter
+# where it resolves EACH top-level package under test; any resolution
+# outside the invoking repo root (or its linked worktrees) fails LOUD
+# with the offending path, so the gate never validates foreign code.
+# Bypass: SCITEX_DEV_TESTMON_ALLOW_FOREIGN=1 (records the reason, runs).
+# The guard is SKIPPED for --self-test (no pytest runs, nothing validated).
+_STALE_GUARD_FAIL=""
+if [[ -z "${SCITEX_DEV_TESTMON_ALLOW_FOREIGN:-}" && "${1:-}" != "--self-test" ]]; then
+    _REPO_TOP="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    _REPO_TOP="$(dirname "$_REPO_TOP")"
+    for _PKG in $(git -C "$_REPO_TOP" ls-files 'src/*/__init__.py' 2>/dev/null | cut -d/ -f2 | sort -u); do
+        _RESOLVED="$("$PY" -c "import ${_PKG}, os; print(os.path.dirname(${_PKG}.__file__))" 2>/dev/null || true)"
+        case "$_RESOLVED" in
+            "$_REPO_TOP"/*) ;;
+            "")
+                echo "run_testmon.sh: cannot resolve package ${_PKG} with $PY — refusing to validate unknown code." >&2
+                _STALE_GUARD_FAIL=1
+                ;;
+            *)
+                echo "run_testmon.sh: ${_PKG} resolves to ${_RESOLVED}, outside push source ${_REPO_TOP} — stale tree, refusing." >&2
+                _STALE_GUARD_FAIL=1
+                ;;
+        esac
+    done
+    unset _PKG _RESOLVED _REPO_TOP
+    if [[ -n "$_STALE_GUARD_FAIL" ]]; then
+        echo "run_testmon.sh: set SCITEX_DEV_TESTMON_ALLOW_FOREIGN=1 to run anyway." >&2
+        exit 3
+    fi
+    unset _STALE_GUARD_FAIL
+fi
+
 # --self-test: verify the cache-path resolution logic runs without a real
 # pytest by short-circuiting before the RUN stage. Mirrors run_lint.sh.
 if [[ "${1:-}" == "--self-test" ]]; then
