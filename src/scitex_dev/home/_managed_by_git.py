@@ -178,7 +178,10 @@ def _migrate_runtime_files(root: Path) -> list[str]:
     for pkg in pkgs:
         runtime_base = pkg / "runtime"
         for child in sorted(pkg.rglob("*")):
-            if child.is_dir() or child.is_symlink():
+            # lstat first: is_dir() stats the target and raises when it is
+            # unstatable (e.g. overlay symlink into /root); a symlink is
+            # never a migration candidate, so skip without touching it.
+            if child.is_symlink() or child.is_dir():
                 continue
             try:
                 child.resolve().relative_to(root_real)
