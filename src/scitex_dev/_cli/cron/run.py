@@ -34,6 +34,7 @@ from . import (
     _branch_gc,
     _ci_watch,
     _cred_distribute,
+    _disk_guard,
     _quota_keepalive,
     _spartan_conn_monitor,
     _task_harvest,
@@ -100,6 +101,12 @@ def _run_body(name: str, *, only: str | None, dry_run: bool) -> int:
         # `--dry-run` flag forces report-only even for armed repos so an
         # operator can preview a pass by hand.
         return 1 if _branch_gc.run_once(dry_run=dry_run).failed else 0
+
+    if name == "disk-guard":
+        # Config-gated (DEFAULT OFF) host disk hygiene. Same exit-code
+        # policy as branch-gc: only a whole-pass failure is non-zero; an
+        # unarmed host or an aborted pass is reported, not failed.
+        return 1 if _disk_guard.run_once(dry_run=dry_run).failed else 0
 
     if name == "task-harvest":
         # Best-effort classification + audit log of the shared

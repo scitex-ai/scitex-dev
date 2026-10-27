@@ -902,6 +902,7 @@ def test_every_registered_job_has_a_body_or_a_shell_payload():
         "worktree-gc",
         "task-harvest",
         "cred-distribute",
+        "disk-guard",
         "spartan-conn-monitor",
     }
     # Act
