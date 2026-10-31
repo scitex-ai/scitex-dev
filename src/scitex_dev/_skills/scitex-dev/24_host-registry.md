@@ -36,7 +36,7 @@ from scitex_dev.hosts import resolve, list_hosts
 spartan = resolve("spartan")
 spartan.name           # "spartan"
 spartan.kind           # "hpc-login"
-spartan.ssh_alias      # "spartan" (None means local — no SSH hop)
+spartan.ssh_alias      # "spartan" (None means no alias is recorded)
 spartan.scitex_root    # raw string, may contain ~
 spartan.scitex_root_path  # expanded Path (expands on THIS process —
                           # see the property docstring for the
@@ -47,7 +47,9 @@ for host in list_hosts():
 ```
 
 `HostRecord.kind` is one of `HOST_KINDS`: `workstation`, `hpc-login`,
-`storage`. `resolve()` raises `UnknownHostError` (fail loud, no silent
+`compute`, `storage`. A missing SSH alias does not establish that a host is
+local; use the registry's locality API rather than assuming local execution.
+`resolve()` raises `UnknownHostError` (fail loud, no silent
 fallback) with the full list of registered hosts and a remediation
 pointing at the file to edit. `HostRegistryError` covers a malformed
 `hosts.yaml` (bad shape, invalid `kind`, YAML parse error).
@@ -56,9 +58,10 @@ pointing at the file to edit. `HostRegistryError` covers a malformed
 
 A DATA/STATE store (see
 `01_ecosystem/12_local-state-resolution.md`), resolved via
-`local_state.user_path()` so it is never project-shadowed. Seeded with
-the operator's known hosts (`ywata-note-win`, `spartan`, `nas`,
-`nas1`, `nas2`, `mba`) on first use if it doesn't already exist.
+`local_state.user_path()` so it is never project-shadowed. Seeded on first use
+if the registry does not already exist.
+The seed inventory is maintained in `hosts/_seed.py`; enumerate the live
+registry rather than copying an inventory into a consumer skill.
 Precedence (highest first): explicit `hosts_path=`/`--hosts-file` →
 `$SCITEX_DEV_HOSTS_YAML` → the canonical user-scope file.
 
@@ -78,9 +81,23 @@ message when the host isn't found — never a silent empty string.
 
 ## Scope note
 
-This module ships only the registry. Migrating `sac` / `scitex-hub` /
-`scitex-storage`'s own code to consume it is separate follow-up work
-in each of those packages.
+This module owns registry records and path/locality resolution, not whether
+a remote SAC installation is healthy. SAC consumes these records through
+`_state/_peer_resolve.py`: registry hosts with an SSH alias join explicit SAC
+peers, and an explicit SAC peer wins a collision. A registered host that cannot
+answer must be reported as unreachable or missing SAC, not treated as empty.
+
+Consumers should link this leaf or load it with
+`scitex-dev dev skills get scitex-dev 24_host-registry`; keep the inventory and
+host semantics here instead of maintaining a second SAC-specific host list.
+
+## Source evidence and checks
+
+The authoritative implementations are `hosts/_registry.py` (`HOST_KINDS`,
+`HostRecord`, `resolve`, `list_hosts` and locality), `hosts/_seed.py` (defaults),
+and `hosts/_parse.py` (validation). Tests under `tests/scitex_dev/hosts/`
+exercise these APIs. Review this skill when those implementations change;
+an exported Hermes/Codex/Claude copy is a projection, not an authority.
 
 ## Related
 

@@ -572,6 +572,23 @@ def test_nested_runtime_repo_stays_untracked(tmp_path):
     assert not any("/runtime/" in t for t in tracked)
 
 
+def test_explicitly_excluded_live_state_is_not_migrated(tmp_path):
+    from scitex_dev.home._managed_by_git import _migrate_runtime_files
+
+    root = tmp_path / ".scitex"
+    overlay = root / "agent-container/containers/overlay/upper"
+    overlay.mkdir(parents=True)
+    live_pid = overlay / "worker.pid"
+    live_pid.write_text("123\n")
+    stray = root / "agent-container/stray.pid"
+    stray.write_text("456\n")
+
+    moved = _migrate_runtime_files(root, extra_ignore=("agent-container/containers/",))
+
+    assert live_pid.read_text() == "123\n" and not live_pid.is_symlink()
+    assert stray.is_symlink() and len(moved) == 1
+
+
 def test_migrate_runtime_files_skips_external_state_symlinks(tmp_path):
     # Arrange
     from scitex_dev.home._managed_by_git import _migrate_runtime_files
