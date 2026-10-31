@@ -590,3 +590,25 @@ def test_migrate_runtime_files_skips_external_state_symlinks(tmp_path):
     moved = _migrate_runtime_files(root)
     # Assert
     assert moved == []
+
+
+def test_migrate_runtime_files_skips_unstatable_symlink_targets(tmp_path):
+    # Arrange
+    from scitex_dev.home._managed_by_git import _migrate_runtime_files
+
+    root = tmp_path / "dotscitex"
+    leaf = root / "agent-container" / "containers" / "overlays" / "x" / "upper" / "bin"
+    leaf.mkdir(parents=True)
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    probe = vault / "python"
+    probe.write_text("x")
+    vault.chmod(0)
+    (leaf / "python").symlink_to(probe)
+    try:
+        # Act
+        moved = _migrate_runtime_files(root)
+    finally:
+        vault.chmod(0o755)
+    # Assert
+    assert moved == []

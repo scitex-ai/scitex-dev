@@ -17,7 +17,7 @@ tags: [scitex-general-package-workflow-presence]
 | CLA Assistant                                          | `cla.yml`                                          | Pinned by the CLA bot.                    |
 | pytest matrix                                          | `pytest-*-on-*.yml`                                | The unit-test gate.                       |
 | Import smoke                                           | `import-smoke-*-on-*.yml`                          | `pip install` + `python -c "import X"`.   |
-| PyPI publish on tag                                    | `pypi-publish-*-on-tag.yml`                        | Trusted-publisher OIDC release.           |
+| PyPI publish on tag (EXACT filename — OIDC load-bearing) | `pypi-publish-and-github-release-on-tag.yml` | Trusted-publisher OIDC release; any rename breaks `invalid-publisher`. |
 | scitex-dev quality audit                               | `scitex-dev-quality-audit-on-*.yml`                | Ecosystem-wide audit-all gate.            |
 | Sync main → release tag                                | `sync-main-to-release-tag-on-push.yml`             | Branch-protection-friendly release shim.  |
 | RTD Sphinx build *(only when `docs/` ships)*           | `rtd-sphinx-build-on-*.yml`                        | RTD docs build sanity.                    |
