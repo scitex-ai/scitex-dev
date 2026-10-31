@@ -16,6 +16,28 @@ from pathlib import Path
 from scitex_dev._cli.audit._project._checks import _check_placeholder_tests
 
 
+def test_empty_mirror_audit_ignores_unreadable_test_results(tmp_path):
+    # Arrange
+    from scitex_dev._cli.audit._project._checks import _check_empty_test_dirs
+
+    source = tmp_path / "src/scitex_demo/feature"
+    source.mkdir(parents=True)
+    (source / "implementation.py").write_text("VALUE = 1\n")
+    mirror = tmp_path / "tests/scitex_demo/feature"
+    mirror.mkdir(parents=True)
+    results = tmp_path / "tests/results"
+    results.mkdir()
+    results.chmod(0)
+    violations = []
+    # Act
+    try:
+        _check_empty_test_dirs(tmp_path, "scitex-demo", violations)
+    finally:
+        results.chmod(0o755)
+    # Assert
+    assert [(v.rule, v.where) for v in violations] == [("PS-207", str(mirror))]
+
+
 def _write_test_file(repo: Path, body: str) -> None:
     d = repo / "tests" / "scitex_demo"
     d.mkdir(parents=True, exist_ok=True)

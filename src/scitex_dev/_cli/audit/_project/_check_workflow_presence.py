@@ -30,6 +30,13 @@ import re
 from pathlib import Path
 from typing import Any
 
+
+# The ONE publish-workflow filename the fleet may ship (PS-165).
+# (The middle of this name is routinely rendered as `...` by log
+# truncation; the length assertion in test__check_workflow_presence.py
+# guards against persisting that truncated rendering anywhere.)
+_CANONICAL_PYPI_PUBLISH_WORKFLOW = "pypi-publish-and-github-release-on-tag.yml"
+
 # ---------------------------------------------------------------------------
 # Required workflow patterns (filename stem regex → human description)
 # ---------------------------------------------------------------------------
@@ -56,10 +63,15 @@ _BASELINE_REQUIREMENTS: list[tuple[str, re.Pattern[str], str]] = [
         re.compile(r"^import-smoke-.*\.ya?ml$"),
         "import smoke (`import-smoke-*-on-*.yml`)",
     ),
+    # NOTE: exact filename, NOT a prefix glob. The name is load-bearing:
+    # PyPI trusted publishing matches the OIDC `workflow_ref` claim
+    # (`<owner>/<repo>/.github/workflows/<name>@<ref>`) against the
+    # registered publisher byte-for-byte, so any rename — including a
+    # shortened form — breaks every release with `invalid-publisher`.
     (
         "pypi-publish",
-        re.compile(r"^pypi-publish-.*\.ya?ml$"),
-        "PyPI publish on tag (`pypi-publish-*-on-tag.yml`)",
+        re.compile(r"^" + re.escape(_CANONICAL_PYPI_PUBLISH_WORKFLOW) + r"$"),
+        "PyPI publish on tag (`pypi-publish-and-github-release-on-tag.yml` — exact; OIDC load-bearing)",
     ),
     # NEUTRAL NAME, NOT A PACKAGE NAME. The pattern used to demand
     # `scitex-dev-(quality-audit|audit-all)-*`, which NOTHING matched: a census

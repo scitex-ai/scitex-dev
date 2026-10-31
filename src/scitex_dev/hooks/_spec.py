@@ -72,6 +72,52 @@ ALLOWED_EVENTS: tuple[str, ...] = (
 #: ``advise`` -- permits silently-ish; guidance only, no obstruction.
 ALLOWED_SEVERITIES: tuple[str, ...] = ("deny", "warn", "advise")
 
+#: Claude-Code event -> Hermes shell-hook event (operator CCT 399/401: hooks
+#: MUST apply to Hermes agents too; where event names differ, neutral names
+#: are defined in SAC and each harness maps them. This table is scitex-dev's
+#: Claude leg of that mapping, measured against Hermes's ``VALID_HOOKS``
+#: (``hermes_cli/plugins.py``; the shell-hook allow-list is VALID_HOOKS minus
+#: ``transform_api_error_classification``).
+#:
+#: A ``None`` value is an HONEST GAP, not an omission: Hermes has no
+#: equivalent fire-site, so the rule stays Claude-only until one lands with
+#: a real payload contract. Projecting it onto the nearest-but-different
+#: event would enforce the rule where it was never reviewed.
+HERMES_EVENT_MAP: dict[str, str | None] = {
+    # Exact counterparts: Hermes parses the block directive on both.
+    "pre-tool-use": "pre_tool_call",
+    "post-tool-use": "post_tool_call",
+    # The user message is in and the model call is next; the closest
+    # pre-generation interception Hermes fires.
+    "user-prompt-submit": "pre_llm_call",
+    "session-start": "on_session_start",
+    # Claude "stop" lets a hook keep a finished turn going. Hermes's closest
+    # blocking end-of-turn hook is ``pre_verify`` -- but it fires ONLY when
+    # the agent edited code, so a stop-rule ported there would silently skip
+    # every text-only turn. Gap until Hermes ships an unconditional
+    # end-of-turn blocking event.
+    "stop": None,
+    # Hermes's ``gateway_platform_event`` is observer-only (returns ignored)
+    # and covers platform message edits, not agent notifications. Gap.
+    "notification": None,
+}
+
+
+def hermes_event_for(event: str) -> str | None:
+    """Return the Hermes shell-hook event for a Claude-Code ``event``.
+
+    ``None`` means Hermes has no equivalent fire-site (see
+    :data:`HERMES_EVENT_MAP`); the caller must NOT fall back to a
+    nearest-neighbor. Raises :class:`ValueError` for an event that is not
+    even a Claude event -- a typo must fail here, not ship as a silent gap.
+    """
+    if event not in ALLOWED_EVENTS:
+        raise ValueError(
+            f"hermes_event_for: {event!r} is not a Claude-Code hook event; "
+            f"expected one of {ALLOWED_EVENTS}"
+        )
+    return HERMES_EVENT_MAP[event]
+
 
 @dataclass(frozen=True)
 class HookRule:

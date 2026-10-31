@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Iterable, Mapping
 
@@ -158,7 +159,7 @@ def _merge_gitignore(path: Path, block: str) -> bool:
     return True
 
 
-def _migrate_runtime_files(root: Path) -> list[str]:
+def _migrate_runtime_files(root: Path, *, extra_ignore: Iterable[str] = ()) -> list[str]:
     """Move stray runtime files under ``<pkg>/runtime/``, leaving symlinks.
 
     The placement contract is per top-level package dir: a runtime file at
@@ -174,11 +175,28 @@ def _migrate_runtime_files(root: Path) -> list[str]:
     """
     moved: list[str] = []
     root_real = root.resolve()
+    ignored_dirs = tuple(pattern for pattern in extra_ignore if pattern.endswith("/"))
     pkgs = sorted(p for p in root.iterdir() if p.is_dir() and not p.is_symlink() and p.name != ".git")
     for pkg in pkgs:
         runtime_base = pkg / "runtime"
-        for child in sorted(pkg.rglob("*")):
-            if child.is_dir() or child.is_symlink():
+        # Prune before traversal: collecting rglob() first walks whole live
+        # overlays/runtime trees and can consume gigabytes before filtering.
+        candidates = []
+        for directory, dirs, files in os.walk(pkg, followlinks=False):
+            parent = Path(directory)
+            dirs[:] = [
+                name for name in dirs
+                if name not in {"runtime", ".git"}
+                and not (parent / name).is_symlink()
+                and not any(fnmatchcase((parent / name).relative_to(root).as_posix() + "/", pattern)
+                            for pattern in ignored_dirs)
+            ]
+            candidates.extend(parent / name for name in files)
+        for child in sorted(candidates):
+            # lstat first: is_dir() stats the target and raises when it is
+            # unstatable (e.g. overlay symlink into /root); a symlink is
+            # never a migration candidate, so skip without touching it.
+            if child.is_symlink() or child.is_dir():
                 continue
             try:
                 child.resolve().relative_to(root_real)
@@ -242,10 +260,11 @@ def ensure_dotscitex_managed_by_git(
         _run_git(root, "init", "-q")
 
     track_list = sorted(set(track))
+    extra_ignore = tuple(extra_ignore)
     gitignore_changed = _merge_gitignore(
         root / ".gitignore", _managed_block(track_list, extra_ignore)
     )
-    moved = _migrate_runtime_files(root)
+    moved = _migrate_runtime_files(root, extra_ignore=extra_ignore)
 
     _run_git(root, "add", "-A")
     committed = False
