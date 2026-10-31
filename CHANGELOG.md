@@ -10,6 +10,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.62.5] - 2026-10-31
+
+### Fixed
+- Prune excluded runtime directories and symlinks before managed-home migration
+  traverses package trees, keeping live SAC overlays out of the migration walk.
+- Restrict empty-test-directory auditing to the matching source namespace so
+  concurrent temporary test outputs cannot interrupt the audit.
+
+### Documentation
+- Clarify host-registry discovery, missing SSH aliases, and SAC peer precedence
+  through the owning dispatcher skill.
+
 ## [0.62.2] - 2026-10-02
 
 ### Fixed
