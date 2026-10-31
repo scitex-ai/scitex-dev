@@ -564,8 +564,14 @@ def _check_empty_test_dirs(repo: Path, distribution: str, out: list[Violation]) 
     if src_pkg is None:
         return  # no src to mirror against
 
+    # Only this namespace can mirror src_pkg. Runtime fixtures under
+    # tests/results are unrelated and may disappear while pytest runs.
+    mirror_root = tests_root / src_pkg.name
+    if not mirror_root.is_dir():
+        return
+
     skip = {"__pycache__", "coverage", "htmlcov", ".pytest_cache"}
-    for sub in tests_root.rglob("*"):
+    for sub in mirror_root.rglob("*"):
         if not sub.is_dir():
             continue
         if any(part in skip for part in sub.parts):
