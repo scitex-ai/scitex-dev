@@ -42,57 +42,12 @@ deprecations, once the fleet's registries have been refreshed.
 
 from __future__ import annotations
 
-import logging
-import sys
-
 import scitex_logging as slogging
 
 __all__ = ["RETIRED_SSH_ALIASES", "successor_for", "retirement_warning"]
 
-logger = slogging.getLogger(__name__)
-
-
-def _own_the_stderr_channel(log: logging.Logger) -> None:
-    """Pin this warning to stderr, whatever the CONSUMER configured.
-
-    MEASURED FAILURE, reproduced 2026-08-11 against this worktree::
-
-        logging.basicConfig(stream=sys.stdout, ...)   # the consumer
-        list_hosts(hosts_path=<registry with a retired alias>)
-        -> "WARN: host registry: 'demo-nas' routes through ..."  ON STDOUT
-
-    which lands in the middle of ``host list --json`` and makes the payload
-    unparseable. A sibling measured the same class of leak turning 7 tests
-    red across three unrelated PRs.
-
-    The mechanism is ordinary propagation: a record handed to the root
-    logger goes wherever the ROOT's handlers point, and here that is a
-    package which knows nothing about this warning. So the destination of a
-    scitex-dev diagnostic ends up decided by scitex-dev's caller.
-
-    These records are not application logs. They are a runtime integrity
-    warning about the caller's own hosts.yaml, with exactly one audience
-    (the operator at a terminal) and exactly one correct destination
-    (stderr). ``propagate = False`` plus this module's own stderr handler
-    is the standard idiom for "this module owns its diagnostic channel",
-    and it is the ONLY arrangement under which stdout purity does not
-    depend on a consumer we do not control.
-
-    A consumer that WANTS the structured record still gets it — attach a
-    handler to ``logging.getLogger("scitex_dev.hosts._retired")``. That is
-    an opt-in, which is the right shape: silence is not imposed, only the
-    stream is.
-    """
-    if any(getattr(h, "_scitex_retired_stderr", False) for h in log.handlers):
-        return
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter("WARN: %(message)s"))
-    handler._scitex_retired_stderr = True  # idempotence marker
-    log.addHandler(handler)
-    log.propagate = False
-
-
-_own_the_stderr_channel(logger)
+# Diagnostics must stay on stderr even when an embedding caller logs to stdout.
+logger = slogging.getDiagnostic(__name__)
 
 #: ``retired alias -> successor``, read from the retirement mechanism itself.
 #:

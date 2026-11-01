@@ -332,3 +332,25 @@ SciTeX follows the Four Freedoms for Research below, inspired by
     <img src="docs/scitex-icon-navy-inverted.png" alt="SciTeX" width="40">
   </a>
 </p>
+
+
+### Federated executable hooks
+
+Leaves register `scitex_dev.hooks` providers and own their `HookRule.check`
+implementations. scitex-dev discovers and dispatches these checks without
+embedding a package's output, container, or credential policy.
+
+```bash
+scitex-dev dev hooks install --provider scitex-logging --harness claude --config .claude/settings.local.json --dry-run
+```
+
+Omit `--dry-run` to merge the provider's bindings into native configuration.
+Hermes uses `--harness hermes --config <profile>/config.yaml` and its own atomic
+writer, so run installation where Hermes is available. Use `--python` when the
+target's interpreter differs from the installer. Other settings/providers are
+preserved; repeating installation does not duplicate bindings. Native commands
+call `python -m scitex_dev.hooks.dispatch --provider <distribution>` with the
+harness JSON payload on stdin. A missing provider or failing check refuses
+verification with exit code 2. Post-tool checks report after the operation;
+only pre-tool events can prevent that operation. Harness approval is separate
+from installation and is never silently granted by this installer.

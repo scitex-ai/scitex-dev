@@ -177,3 +177,16 @@ scitex-dev ecosystem audit-registry-layout --severity info
 - Full per-subcommand help: `scitex-dev --help-recursive`
 - Test runner CLI: [17_test-runner.md](17_test-runner.md)
 - Release pipeline: [18_full-update.md](18_full-update.md), [19_release-deploy.md](19_release-deploy.md)
+
+
+### Executable leaf hook providers
+
+`dev hooks install --provider <distribution> --harness claude --config <settings>`
+merges native bindings from `scitex_dev.hooks` entries; `--dry-run` leaves files
+untouched. Hermes uses `--harness hermes --config <profile>/config.yaml` where
+its atomic writer is available. Use `--python` to choose the target environment's
+interpreter. Policy lives in the leaf's `HookRule.check`; the generic dispatcher
+refuses missing providers and failed checks. Discovery is not activation, and
+harness command approval remains separate. Post-tool checks cannot reverse
+an operation that already ran. Source: `hooks/_dispatch.py`,
+`hooks/_install_provider.py`, `_cli/_hooks_cli/_install.py`.
