@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """ecosystem `install-cross-package-gate` — materialise the PS-140 gate.
 
 PS-140 requires any package with cross-package imports to ship
@@ -26,8 +25,7 @@ the way to nonexistence. Generator and gate now cannot disagree,
 because there is only one of them.
 """
 
-import subprocess
-from pathlib import Path
+from __future__ import annotations
 
 import click
 
@@ -38,7 +36,6 @@ from ...audit._project._check_umbrella_dep_and_integration import (
 )
 from ._gate_sentinel import BEGIN_SENTINEL, END_SENTINEL, split_at_sentinel
 from ._write_target import assert_target_is_distribution, resolve_write_target
-
 
 #: What sits below the closing sentinel when there is no existing tail to
 #: preserve. The parametrized test lives HERE, not in the generated head,
@@ -174,7 +171,10 @@ def register(ecosystem):
                 "construction. Also creates `tests/integration/__init__.py` "
                 "if missing. Re-run with `--force` after adding or "
                 "removing a cross-package import — PS-140 fails on drift "
-                "in either direction, so a stale entry is a violation too."
+                "in either direction, so a stale entry is a violation too. "
+                "Unregistered distributions are supported from their own "
+                "Git checkout or with --path; the target's project.name "
+                "must match DISTRIBUTION before any file is written."
             ),
             examples=(
                 Example(
@@ -233,12 +233,12 @@ def register(ecosystem):
         # the published shape of a mutating verb, and `install-audit-gate`
         # carries it for the same reason.
         del yes
-        from ...._ecosystem import ECOSYSTEM, get_local_path
+        from ...._ecosystem import ECOSYSTEM
 
-        if distribution not in ECOSYSTEM:
-            click.echo(f"error: '{distribution}' not in ECOSYSTEM", err=True)
-            raise SystemExit(2)
-        info = ECOSYSTEM[distribution]
+        # Registry membership supplies fleet metadata, not permission to
+        # maintain a package's own gate. New leaves can be verified by
+        # their checkout's project.name before any write below.
+        info = ECOSYSTEM.get(distribution, {})
         if info.get("archived"):
             click.echo(f"skip  {distribution}: archived", err=True)
             raise SystemExit(0)
