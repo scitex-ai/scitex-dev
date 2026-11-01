@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # File: tests/scitex_dev/_cli/ecosystem/_cmds/test__install_cross_package_gate.py
 
 """Tests for the PS-140 cross-package gate generator.
@@ -23,17 +22,23 @@ break silently:
 from __future__ import annotations
 
 import ast
+import os
+import subprocess
 
+import click
+from click.testing import CliRunner
+
+from scitex_dev._cli.audit._project._gate_skip_scope import (
+    find_full_path_skips,
+)
 from scitex_dev._cli.ecosystem._cmds._gate_sentinel import (
     BEGIN_SENTINEL,
     END_SENTINEL,
     split_at_sentinel,
 )
-from scitex_dev._cli.audit._project._gate_skip_scope import (
-    find_full_path_skips,
-)
 from scitex_dev._cli.ecosystem._cmds._install_cross_package_gate import (
     DEFAULT_GATE_TAIL,
+    register,
     render_cross_package_gate,
 )
 
@@ -232,9 +237,7 @@ def test_preserved_tail_keeps_a_deliberately_strengthened_assertion():
     as a successful refresh.
     """
     # Arrange
-    strengthened = (
-        END_SENTINEL + "\n\n\ndef test_x(m):\n    assert m.__name__ == m\n"
-    )
+    strengthened = END_SENTINEL + "\n\n\ndef test_x(m):\n    assert m.__name__ == m\n"
     # Act
     source = render_cross_package_gate(DIST, IMPORTS, tail=strengthened)
     # Assert
@@ -306,3 +309,80 @@ def test_split_of_a_rendered_gate_round_trips():
 
 
 # EOF
+
+
+def _package(tmp_path):
+    repo = tmp_path / "unregistered-leaf"
+    repo.mkdir()
+    (repo / "pyproject.toml").write_text(
+        '[project]\nname = "scitex-unregistered-demo"\n'
+    )
+    src = repo / "src" / "scitex_unregistered_demo"
+    src.mkdir(parents=True)
+    (src / "__init__.py").write_text("import scitex_sdk.app\n")
+    subprocess.run(["git", "init", "--quiet", str(repo)], check=True)
+    return repo
+
+
+def _cli():
+    group = click.Group()
+    register(group)
+    return group
+
+
+def test_unregistered_checkout_generates_real_collected_imports(tmp_path):
+    # Arrange
+    repo = _package(tmp_path)
+    previous = os.getcwd()
+    # Act
+    try:
+        os.chdir(repo / "src")
+        result = CliRunner().invoke(
+            _cli(), ["install-cross-package-gate", "scitex-unregistered-demo"]
+        )
+    finally:
+        os.chdir(previous)
+    gate = repo / "tests/integration/test_cross_package_imports.py"
+    # Assert
+    assert (
+        result.exit_code,
+        "'scitex_sdk.app'" in gate.read_text(),
+        "cwd repository" in result.output,
+    ) == (0, True, True), result.output
+
+
+def test_explicit_unregistered_target_still_refuses_identity_mismatch(tmp_path):
+    # Arrange
+    repo = _package(tmp_path)
+    # Act
+    result = CliRunner().invoke(
+        _cli(), ["install-cross-package-gate", "scitex-wrong-demo", "--path", str(repo)]
+    )
+    # Assert
+    assert (
+        result.exit_code,
+        "target tree is NOT" in result.output,
+        (repo / "tests").exists(),
+    ) == (2, True, False), result.output
+
+
+def test_explicit_unregistered_target_dry_run_does_not_write(tmp_path):
+    # Arrange
+    repo = _package(tmp_path)
+    # Act
+    result = CliRunner().invoke(
+        _cli(),
+        [
+            "install-cross-package-gate",
+            "scitex-unregistered-demo",
+            "--path",
+            str(repo),
+            "--dry-run",
+        ],
+    )
+    # Assert
+    assert (
+        result.exit_code,
+        "'scitex_sdk.app'" in result.output,
+        (repo / "tests").exists(),
+    ) == (0, True, False), result.output
