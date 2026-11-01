@@ -22,10 +22,10 @@ This command is NEW in PR-1 of the supervisor migration; no prior
 
 from __future__ import annotations
 
-import logging
 import sys
 
 import click
+import scitex_logging as slogging
 
 from ...._ecosystem.help_spec import CliHelp, Example, SpecCommand
 from ...._supervisor import run_supervisor
@@ -80,15 +80,8 @@ def register(ecosystem):
         ),
     )
     def ecosystem_run(max_ticks, verbose):
-        # Configure logging on the way in. systemd Type=simple captures
-        # stdout + stderr into the journal, so logging.basicConfig with
-        # the default stderr handler is correct here — no journal-specific
-        # handler needed.
-        logging.basicConfig(
-            level=logging.DEBUG if verbose else logging.WARNING,
-            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-            stream=sys.stderr,
-        )
+        # The CLI owns process logging; use the shared format and handlers.
+        slogging.configure(level="debug" if verbose else "warning", capture_prints=False)
         rc = run_supervisor(max_ticks=max_ticks)
         sys.exit(rc)
 
