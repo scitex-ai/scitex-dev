@@ -19,13 +19,16 @@ Verbs:
 
 from __future__ import annotations
 
-import click
+from typing import TYPE_CHECKING
 
-from ..._ecosystem.help_spec import CliHelp, SpecGroup
+if TYPE_CHECKING:
+    import click
 
 
 def register_ci_runner_commands(main_group: click.Group) -> click.Group:
     """Register ``scitex-dev ci`` group on the given main group."""
+    import click
+    from ..._ecosystem.help_spec import CliHelp, SpecGroup
 
     @main_group.group(
         "ci",
@@ -34,9 +37,7 @@ def register_ci_runner_commands(main_group: click.Group) -> click.Group:
         help_spec=CliHelp(
             summary="CI infrastructure — runner management and reusable workflows.",
             description=(
-                "\b\n"
-                "Verbs:\n"
-                "  runner   — self-hosted GitHub Actions runner lifecycle"
+                "\b\nVerbs:\n  runner   — self-hosted GitHub Actions runner lifecycle"
             ),
         ),
     )

@@ -272,9 +272,11 @@ def observe_once(
     clock: Callable[[], float] = time.time,
 ) -> dict:
     """One bounded policy pass; writes only owned state and admitted Cards."""
-    from ._policy import collect_policy
+    if collector is None:
+        from ._policy import collect_policy
 
-    report = (collector or collect_policy)()
+        collector = collect_policy
+    report = collector()
     result = {
         **report,
         "contract": CONTRACT,

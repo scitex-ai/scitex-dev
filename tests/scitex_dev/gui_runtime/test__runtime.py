@@ -42,7 +42,7 @@ def zombie_pid():
     """
     if not Path("/proc").is_dir():
         pytest.skip("zombie detection requires /proc (Linux only)")
-    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child = subprocess.Popen([sys.executable, "-I", "-S", "-c", "pass"])
     stat_path = Path(f"/proc/{child.pid}/stat")
     deadline = time.monotonic() + 5.0
     state = ""
@@ -88,7 +88,7 @@ def test_pid_alive_returns_false_for_non_positive_pid():
 
 def test_pid_alive_returns_false_for_a_reaped_child_process():
     # Arrange
-    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child = subprocess.Popen([sys.executable, "-I", "-S", "-c", "pass"])
     child.wait(timeout=5)
     # Act
     alive = pid_alive(child.pid)
@@ -242,7 +242,7 @@ def test_status_reports_running_with_url_for_a_live_pid(state_file):
 
 def test_status_self_heals_stale_state_for_a_dead_pid(state_file):
     # Arrange
-    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child = subprocess.Popen([sys.executable, "-I", "-S", "-c", "pass"])
     child.wait(timeout=5)
     runtime = GuiRuntime(state_file)
     runtime.write_state(child.pid, 5050, "127.0.0.1")
