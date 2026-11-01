@@ -190,3 +190,6 @@ refuses missing providers and failed checks. Discovery is not activation, and
 harness command approval remains separate. Post-tool checks cannot reverse
 an operation that already ran. Source: `hooks/_dispatch.py`,
 `hooks/_install_provider.py`, `_cli/_hooks_cli/_install.py`.
+
+
+See `41_native-hook-enforcement.md` for native activation verification and limits.

@@ -1,7 +1,7 @@
 ---
 name: scitex-dev
 description: |
-  [WHAT] Developer utilities for maintaining the whole SciTeX ecosystem across ~15 packages — version audit and mismatch fixing, editable-install sync, per-host git pull/commit/diff via SSH, bulk rename across files + contents + directories + symlinks (with git-safety guards), aggregated docs search across all packages, a Result/ErrorCode envelope shared by CLI + MCP, DevConfig/HostConfig, a local +…
+  [WHAT] Shared SciTeX developer tools: ecosystem version/CI audits, hosts and SSH, skills, release workflows, access/store APIs, and native provider hook installation.
   [WHEN] Use whenever the user asks to "list scitex versions", "check for version mismatches", "fix version drift", "rename old_name → new_name across all files", "sync my changes to the HPC / laptop / servers", "run tests on the HPC via Slurm", "poll my sbatch job", "fetch HPC test output", "search the docs for save_fig", "commit remote changes on gpu01", "pull all repos", "audit the ecosystem before a…
   [HOW] See sub-skills index for entry points.
 tags: [scitex-dev]
@@ -69,6 +69,7 @@ interfaces:
 
 ### Distribution (40–49)
 - [40_distribution.md](40_distribution.md) — Skill cache update mechanics + drift detection
+- [41_native-hook-enforcement.md](41_native-hook-enforcement.md) — Verify provider activation, opt-outs, and native blocking limits
 
 ## Quick Reference
 

@@ -28,17 +28,13 @@ def test_absent_optional_cards_refuses_durable_alert_in_fresh_process(tmp_path):
     """Bare Dev may omit Cards; cron must expose that delivery is unavailable."""
     # Arrange
     source_root = Path(__file__).resolve().parents[4] / "src"
+    # No-site mode makes Cards genuinely absent and excludes unrelated site
+    # startup hooks. This observer lane uses only stdlib plus its source tree.
     child = r"""
 from pathlib import Path
-import importlib.abc
 import json
 import sys
 sys.path.insert(0, sys.argv[1])
-class AbsentCards(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname == "scitex_cards" or fullname.startswith("scitex_cards."):
-            raise ModuleNotFoundError("synthetic absent optional Cards", name=fullname)
-sys.meta_path.insert(0, AbsentCards())
 from scitex_dev.ci.runner._policy_observer import observe_once
 result = observe_once(
     state_dir=Path(sys.argv[2]),
@@ -49,7 +45,7 @@ print(json.dumps(result))
     state = tmp_path / "state"
     # Act
     result = subprocess.run(
-        [sys.executable, "-I", "-c", child, str(source_root), str(state)],
+        [sys.executable, "-I", "-S", "-c", child, str(source_root), str(state)],
         env={"HOME": str(tmp_path), "PATH": os.defpath},
         capture_output=True,
         text=True,
@@ -446,11 +442,17 @@ def test_pending_nonce_file_and_parent_are_synced_before_delivery(tmp_path):
 
     real_save = _policy_observer._save_state
     observed_os = SimpleNamespace(**{**vars(os), "fsync": sync})
-    save = FunctionType(real_save.__code__, {**real_save.__globals__, "os": observed_os})
+    save = FunctionType(
+        real_save.__code__, {**real_save.__globals__, "os": observed_os}
+    )
     # Act
     save(path, pending)
     # Assert
-    assert (events, json.loads(path.read_text()), stat.S_IMODE(path.stat().st_mode)) == (
+    assert (
+        events,
+        json.loads(path.read_text()),
+        stat.S_IMODE(path.stat().st_mode),
+    ) == (
         [("file", None), ("directory", pending)],
         pending,
         0o600,
