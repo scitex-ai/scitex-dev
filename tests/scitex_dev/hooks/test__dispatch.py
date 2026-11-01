@@ -66,6 +66,7 @@ def test_real_discovered_provider_controls_native_hook_exit(
             provider_name,
         ],
         input=json.dumps(payload),
+        check=False,
         env=provider,
         capture_output=True,
         text=True,
@@ -146,6 +147,7 @@ def test_warning_rule_reports_without_blocking_the_tool(provider):
             "fixture-hooks",
         ],
         input=json.dumps(payload),
+        check=False,
         env=env,
         capture_output=True,
         text=True,
@@ -208,3 +210,97 @@ def test_install_preserves_configuration_symlink(provider, tmp_path):
     )
     # Assert
     assert link.is_symlink() and "PreToolUse" in json.loads(target.read_text())["hooks"]
+
+
+@pytest.mark.parametrize("payload", [[], {"tool_name": None}, {"tool_name": ""}])
+def test_malformed_native_payload_cannot_pass_as_unmatched_tool(provider, payload):
+    # Arrange
+    command = [
+        sys.executable,
+        "-m",
+        "scitex_dev.hooks.dispatch",
+        "--provider",
+        "fixture-hooks",
+    ]
+    # Act
+    result = subprocess.run(
+        command,
+        input=json.dumps(payload),
+        env=provider,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    # Assert
+    assert result.returncode == 2
+
+
+def test_missing_declared_script_cannot_claim_executable_coverage(provider, tmp_path):
+    # Arrange
+    module = tmp_path / "fixture_hooks.py"
+    source = module.read_text().replace(
+        "check='fixture_hooks:check'",
+        "check='fixture_hooks:check', owner_module='fixture_hooks', script='missing.sh'",
+    )
+    module.write_text(source)
+    payload = {
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Write",
+        "tool_input": {"content": "allow"},
+    }
+    # Act
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "scitex_dev.hooks.dispatch",
+            "--provider",
+            "fixture-hooks",
+        ],
+        input=json.dumps(payload),
+        env=provider,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    # Assert
+    assert result.returncode == 2 and "unavailable script asset" in result.stderr
+
+
+def test_explicit_native_hook_opt_out_is_not_overridden(provider, tmp_path):
+    # Arrange
+    settings = tmp_path / "settings.json"
+    original = json.dumps({"disableAllHooks": True})
+    settings.write_text(original)
+    code = "from scitex_dev.hooks._install_provider import install_provider; import sys; install_provider(sys.argv[1],provider='fixture-hooks')"
+    # Act
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(settings)],
+        env=provider,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    # Assert
+    assert result.returncode != 0 and settings.read_text() == original
+
+
+def test_configuration_receipt_never_claims_running_client_activation(
+    provider, tmp_path
+):
+    # Arrange
+    settings = tmp_path / "settings.json"
+    code = "from scitex_dev.hooks._install_provider import install_provider; import json,sys; sys.stdout.write(json.dumps(install_provider(sys.argv[1],provider='fixture-hooks')))"
+    # Act
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(settings)],
+        env=provider,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    receipt = json.loads(result.stdout)
+    # Assert
+    assert receipt["runtime_verified"] is False and receipt["blocking_events"] == [
+        "pre-tool-use"
+    ]

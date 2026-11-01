@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 
 from ._discover import discover_hooks
-from ._spec import hermes_event_for
+from ._spec import hermes_event_for, resolve_asset
 
 
 def install_provider(
@@ -22,6 +22,8 @@ def install_provider(
     rules = [r for r in discover_hooks() if r.provider == provider]
     if not rules or any(not r.check for r in rules):
         raise ValueError(f"Provider {provider!r} must expose executable check bindings")
+    if any(rule.script and resolve_asset(rule) is None for rule in rules):
+        raise ValueError(f"Provider {provider!r} declares an unavailable script asset")
     command = shlex.join(
         [
             str(python or sys.executable),
@@ -41,10 +43,14 @@ def install_provider(
     else:
         raise ValueError("harness must be claude or hermes")
     if not isinstance(config, dict):
-        raise ValueError("Native hook configuration must be a mapping")
+        raise TypeError("Native hook configuration must be a mapping")
+    if config.get("disableAllHooks"):
+        raise ValueError(
+            "Native hooks are explicitly disabled; configuration preserved"
+        )
     hooks = config.setdefault("hooks", {})
     if not isinstance(hooks, dict):
-        raise ValueError("Native hooks must be a mapping")
+        raise TypeError("Native hooks must be a mapping")
     events = sorted({r.event for r in rules})
     for event in events:
         if event not in ("pre-tool-use", "post-tool-use"):
@@ -137,4 +143,18 @@ def install_provider(
         "config": str(path),
         "events": events,
         "dry_run": dry_run,
+        "runtime_verified": False,
+        "blocking_events": [
+            event for event in events if harness == "claude" or event == "pre-tool-use"
+        ],
+        "observer_events": [
+            event
+            for event in events
+            if harness == "hermes" and event == "post-tool-use"
+        ],
+        "activation": (
+            "Native consent and startup/plugin reload required; post_tool_call cannot block."
+            if harness == "hermes"
+            else "Native client must load the settings; verify an actual tool refusal."
+        ),
     }

@@ -84,7 +84,9 @@ ALLOWED_SEVERITIES: tuple[str, ...] = ("deny", "warn", "advise")
 #: a real payload contract. Projecting it onto the nearest-but-different
 #: event would enforce the rule where it was never reviewed.
 HERMES_EVENT_MAP: dict[str, str | None] = {
-    # Exact counterparts: Hermes parses the block directive on both.
+    # Pre-tool hooks can veto. Post-tool hooks are observers: Hermes
+    # shell_hooks._BLOCKING_EVENTS contains pre_tool_call only. An event
+    # correspondence does not promise equivalent blocking capability.
     "pre-tool-use": "pre_tool_call",
     "post-tool-use": "post_tool_call",
     # The user message is in and the model call is next; the closest

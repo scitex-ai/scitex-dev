@@ -119,7 +119,7 @@ def register_install(hooks_group) -> None:
                     dry_run=dry_run,
                     python=python_path,
                 )
-            except (ValueError, OSError, ImportError) as exc:
+            except (ValueError, OSError, ImportError, TypeError) as exc:
                 raise click.ClickException(str(exc)) from exc
             import scitex_logging as slogging
 
@@ -129,7 +129,7 @@ def register_install(hooks_group) -> None:
                 else slogging.getConsole(__name__).success
             )
             emit(
-                "%s %s hooks for %s at %s",
+                "%s %s hook configuration for %s at %s (native activation unverified)",
                 "Would install" if dry_run else "Installed",
                 harness,
                 provider,
