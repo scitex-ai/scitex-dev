@@ -12,16 +12,22 @@ import pytest
 from scitex_dev.ci.runner import _policy_contract as contract
 from scitex_dev.ci.runner import _policy_dev_release as release
 
+from ._publisher_replay import compose_candidate_dev_publisher
+
 FIXTURE = (
     Path(__file__).parent / "fixtures/hub-defining-workflow-source-contract.json.gz"
 )
 MAIN = "a44b774412b1210288b944f036319e0995df4161"
 
 
-def source_case(*, mutate=None, drift=False, weaken=False, unprotected=False):
+def source_case(*, mutate=None, drift=False, weaken=False, unprotected=False,
+                candidate_publisher=True, candidate_matrix=True):
     """Deterministic whole real-source replay, without any real API request."""
     fixture = json.loads(gzip.decompress(FIXTURE.read_bytes()))
-    responses = fixture["responses"]
+    responses = compose_candidate_dev_publisher(
+        fixture["responses"], include_dev=candidate_publisher,
+        include_matrix=candidate_matrix,
+    )
     if mutate:
         endpoint = (
             "repos/scitex-ai/.github/contents/.github/workflows/"
@@ -287,3 +293,28 @@ def test_all_public_fixture_bodies_bind_actual_protected_merge_and_exact_git_obj
         fixture["central_branch_after"]["commit"]["sha"],
         fixture["central_branch_after"]["protected"],
     ) == (expected, 32, MAIN, MAIN, MAIN, True)
+
+
+def test_historical_dev_driver_bytes_remain_refused_by_candidate_policy():
+    # Arrange: retain the complete historical public bodies without projection.
+    _fixture, api, _requests = source_case(candidate_publisher=False)
+    refs = list(contract.TRANSITION_SELECTION) + [release.DEV_SELECTION]
+    # Act
+    observed = contract.qualify_workflows([group(refs)], api)
+    # Assert
+    assert (observed["expected"], observed["violations"]) == (
+        [], ["registered caller source changed: "
+             "scitex-ai/scitex-dev/.github/ci/run-in-sif.sh"],
+    )
+
+
+def test_historical_central_matrix_body_remains_refused_by_candidate_policy():
+    # Arrange: candidate Dev bytes cannot authorize an older current-main matrix.
+    _fixture, api, _requests = source_case(candidate_matrix=False)
+    refs = list(contract.TRANSITION_SELECTION) + [release.DEV_SELECTION]
+    # Act
+    observed = contract.qualify_workflows([group(refs)], api)
+    # Assert
+    assert (observed["expected"], observed["violations"]) == (
+        [], ["reviewed workflow bytes changed: ci-sif-matrix.yml"],
+    )

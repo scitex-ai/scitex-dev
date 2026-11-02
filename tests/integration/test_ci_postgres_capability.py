@@ -279,13 +279,16 @@ CAPABILITY_PREFLIGHT = (
     'verify-postgres-capability.py" \\\n    --bin-dir "$PGBIN"'
     ' --expected-version "$PG_CAPABILITY_VERSION"\n\n'
 )
-ORIGINAL_RUN_SHA256 = "a6a650ca320465884e42f9f1bc1699e46f9121caeb2c57a54c5e788eb04482ff"
+# Whole reviewed body after reversing ONLY the two PostgreSQL capability seams.
+# This successor explicitly includes the bounded shared-runner worker policy;
+# all original installer, test/coverage flags and cleanup remain in the digest.
+REVIEWED_WORKER_BUDGET_RUN_SHA256 = "3d054a092770bc3773f025a5a5f59fc2daa4b9fb8adcb42005fdc59a81140043"
 
 
 class SourceCompositionTests(unittest.TestCase):
-    """Preserve the full consumer body and the neutral pre-install boundary."""
+    """Preserve the reviewed four-worker body and neutral PG pre-install seams."""
 
-    def test_only_reviewed_pg_seams_change_original_full_body(self):
+    def test_only_reviewed_pg_seams_change_worker_budget_full_body(self):
         # Arrange
         text = (ROOT / ".github/ci/run-in-sif.sh").read_text()
         # Act
@@ -298,7 +301,7 @@ class SourceCompositionTests(unittest.TestCase):
             text.count(DECLARED_PG_SELECTION),
             text.count(CAPABILITY_PREFLIGHT),
             observed,
-        ) == (1, 1, ORIGINAL_RUN_SHA256)
+        ) == (1, 1, REVIEWED_WORKER_BUDGET_RUN_SHA256)
 
     def test_neutral_capability_check_precedes_full_installer_and_server(self):
         # Arrange

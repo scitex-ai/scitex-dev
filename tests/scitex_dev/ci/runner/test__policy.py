@@ -577,6 +577,10 @@ def transition_case(*, corrupt=None, move_main=False):
     fixture = Path(__file__).parent / "fixtures" / "organization-workflow-source-contract.json.gz"
     payload = json.loads(gzip.decompress(fixture.read_bytes()))
     main = payload["main"]
+    from ._publisher_replay import compose_candidate_central_matrix
+    payload["responses"] = compose_candidate_central_matrix(
+        payload["responses"], main_revision=main,
+    )
     requests = []
     branch_reads = 0
     def api(endpoint):
@@ -651,7 +655,7 @@ def test_current_and_immutable_sif_qualify_their_distinct_whole_bodies():
                 if row["workflow"] == "ci-sif-matrix.yml"}
     # Assert
     assert (result["expected"], result["unknown"], result["violations"], observed) == (refs, [], [], {
-        current: "bba67919d4c8f82644a18e9e0ab9cea8b78cbdd241a8680b5dbda78e655bb6d4",
+        current: "6dc8d2393b67bf534fdfb3d1085301fc0f28e6a0313547fcb794002b77801bf5",
         _policy_contract.SIF_REVISION: "f2abf8459abf711beb25355061df43572e506ae1461ffaf62cdaab2b05abcce1",
     })
 

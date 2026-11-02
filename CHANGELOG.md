@@ -8,6 +8,38 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.62.8] - 2026-11-02
+
+### Fixed
+
+- Bound this package's native CI to at most four pytest workers per job, with
+  `CI_XDIST_WORKERS=1..4` and lower limits from actual CPU affinity or visible
+  CPU quota. Preserve the complete dependency install, private PostgreSQL,
+  pytest/coverage flags and cleanup requirements on shared runner hosts.
+- Bind the runner observer's proposed current-main matrix to its exact reviewed
+  source bytes. Compose only that current-main dependency in historical policy
+  replays; retain immutable historical bodies and old-byte rejection controls.
+
+- Capture lazy Click console entry points with the actual command method owner,
+  including Click 8.5, without executing command callbacks. Restore intercepted
+  Click and argparse methods after failures.
+- Discover lazy command groups through Click's public context/list/get protocol
+  once per audit. Preserve callback and distribution ownership, and report
+  unresolved names or bounded discovery failures explicitly.
+- Grant the documentation caller the permission required by its shared bundle
+  publisher, so GitHub can admit the unchanged documentation validation jobs.
+- Count declared core dependencies when checking development dependency coverage,
+  so dependencies shared by core and optional extras do not require duplicate
+  declarations in the development extra. Honor core dependency markers so
+  requirements for other platforms or extras cannot hide missing test imports.
+
+## [0.62.7] - 2026-11-02
+
+### Fixed
+
+- Exclude parameterized typing aliases from callable API auditing while retaining
+  checks for real public callables.
+
 ## [0.62.6] - 2026-11-01
 
 - Discover and execute leaf-owned tool-hook checks through a generic stdin-JSON dispatcher; required missing or failed providers refuse verification.

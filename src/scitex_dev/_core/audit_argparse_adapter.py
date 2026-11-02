@@ -13,7 +13,7 @@ Public surface (imported by ``scitex_dev._cli.audit._summary._audit``):
 - ``wrap_argparse(parser, name)`` — recursively wrap a parser as a Click tree.
 - ``intercept_parse_calls(captured)`` — context manager that patches
   ``argparse.ArgumentParser.parse_args/parse_known_args`` and
-  ``click.BaseCommand.main`` to capture the receiver and abort with
+  the actual Click ``Command.main`` method owner to capture the receiver and abort with
   ``StopBeforeParse``.
 - ``StopBeforeParse`` — sentinel raised by the patched methods.
 """
@@ -81,7 +81,7 @@ def argparse_flag_params(parser) -> list[SyntheticOption]:
     return params
 
 
-def wrap_argparse(parser, name: str | None = None) -> click.BaseCommand:
+def wrap_argparse(parser, name: str | None = None) -> click.Command:
     name = name or getattr(parser, "prog", None) or "<root>"
     name = name.split()[0] if isinstance(name, str) else "<root>"
     help_text = (getattr(parser, "description", "") or "").strip()
@@ -101,16 +101,22 @@ class StopBeforeParse(Exception):
 @contextlib.contextmanager
 def intercept_parse_calls(captured: list[object]):
     """Patch `argparse.ArgumentParser.parse_args/parse_known_args` and
-    `click.BaseCommand.main` to capture the receiver and raise
+    the actual Click `Command.main` owner to capture the receiver and raise
     `StopBeforeParse` instead of actually executing the CLI.
 
     Any list passed in receives one append per intercepted call.
 
-    Restores all three patched methods on exit, even if the wrapped block raises.
+    Restores every patched method on exit, even if the wrapped block raises.
     """
     real_pa = argparse.ArgumentParser.parse_args
     real_pka = argparse.ArgumentParser.parse_known_args
-    real_click_main = click.BaseCommand.main
+    # Click 8.5 removed BaseCommand from Command's MRO. Resolve the defining
+    # class instead of assuming the deprecated alias still owns this method.
+    owners = {
+        next(base for base in command.__mro__ if "main" in base.__dict__)
+        for command in (click.Command, click.Group)
+    }
+    real_click_mains = {owner: owner.__dict__["main"] for owner in owners}
 
     def _fake_pa(self, *a, **kw):
         captured.append(self)
@@ -126,10 +132,12 @@ def intercept_parse_calls(captured: list[object]):
 
     argparse.ArgumentParser.parse_args = _fake_pa  # type: ignore[assignment]
     argparse.ArgumentParser.parse_known_args = _fake_pka  # type: ignore[assignment]
-    click.BaseCommand.main = _fake_click_main  # type: ignore[assignment]
+    for owner in owners:
+        owner.main = _fake_click_main  # type: ignore[assignment]
     try:
         yield
     finally:
         argparse.ArgumentParser.parse_args = real_pa  # type: ignore[assignment]
         argparse.ArgumentParser.parse_known_args = real_pka  # type: ignore[assignment]
-        click.BaseCommand.main = real_click_main  # type: ignore[assignment]
+        for owner, original in real_click_mains.items():
+            owner.main = original  # type: ignore[assignment]

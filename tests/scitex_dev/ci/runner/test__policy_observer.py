@@ -5,6 +5,7 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -12,7 +13,9 @@ from copy import deepcopy
 from pathlib import Path
 from types import FunctionType, SimpleNamespace
 
+import click
 import pytest
+import yaml
 
 from scitex_dev.ci.runner import _policy_observer
 from scitex_dev.ci.runner._policy_observer import (
@@ -28,17 +31,24 @@ def test_absent_optional_cards_refuses_durable_alert_in_fresh_process(tmp_path):
     """Bare Dev may omit Cards; cron must expose that delivery is unavailable."""
     # Arrange
     source_root = Path(__file__).resolve().parents[4] / "src"
+    # Supply real Click/PyYAML packages, with no site startup hooks or
+    # optional Cards distribution. This tests actual absence, not an import fake.
+    dependencies = tmp_path / "dependencies"
+    dependencies.mkdir()
+    for package in (click, yaml):
+        package_root = Path(package.__file__).resolve().parent
+        shutil.copytree(
+            package_root, dependencies / package_root.name,
+            ignore=shutil.ignore_patterns("__pycache__"),
+        )
     child = r"""
 from pathlib import Path
-import importlib.abc
+import importlib.util
 import json
 import sys
-sys.path.insert(0, sys.argv[1])
-class AbsentCards(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname == "scitex_cards" or fullname.startswith("scitex_cards."):
-            raise ModuleNotFoundError("synthetic absent optional Cards", name=fullname)
-sys.meta_path.insert(0, AbsentCards())
+sys.path[:0] = [sys.argv[1], sys.argv[3]]
+if importlib.util.find_spec("scitex_cards") is not None:
+    raise RuntimeError("Optional Cards unexpectedly present in owned context")
 from scitex_dev.ci.runner._policy_observer import observe_once
 result = observe_once(
     state_dir=Path(sys.argv[2]),
@@ -49,8 +59,11 @@ print(json.dumps(result))
     state = tmp_path / "state"
     # Act
     result = subprocess.run(
-        [sys.executable, "-I", "-c", child, str(source_root), str(state)],
-        env={"HOME": str(tmp_path), "PATH": os.defpath},
+        [sys.executable, "-I", "-S", "-c", child, str(source_root),
+         str(state), str(dependencies)],
+        env={"PATH": os.defpath, "SCITEX_DIR": str(tmp_path / "scitex"),
+             "XDG_CONFIG_HOME": str(tmp_path / "config"),
+             "XDG_CACHE_HOME": str(tmp_path / "cache")},
         capture_output=True,
         text=True,
         timeout=5,

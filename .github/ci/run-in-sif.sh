@@ -72,7 +72,7 @@ export MPLBACKEND=Agg
 
 # Dedicated, stable matplotlib config/cache dir for this matrix leg. Without
 # pinning it, MPLCONFIGDIR defaults to $XDG_CACHE_HOME/matplotlib which is COLD
-# every CI run; the xdist workers (one per core, see below) then each cold-start
+# every CI run; the bounded xdist workers (see below) then each cold-start
 # matplotlib and RACE to build fontList.json in that shared dir.
 # A partial/contended cache makes some renders fall back to a different font, so
 # scitex-dev's reproducibility tests (validate_recipe renders the SAME recipe
@@ -131,24 +131,37 @@ scitex_test_run() {
         "PGPASSFILE=$TMPDIR/refused-pgpass" "SCITEX_STORE_DSN=$SCITEX_STORE_DSN" "$@"
 }
 
-# Parallelise with pytest-xdist (baked in [dev]/[all,dev] as pytest-xdist>=3).
-# scitex-dev's suite is ~2460 tests; single-process it overran the job's old
-# 30-min cap (2300 passed in ~28 min, cancelled at 96%). Each xdist worker is
-# a SEPARATE PROCESS, so matplotlib's global rcParams / pyplot state and the
-# scitex-dev style-stack are naturally isolated per worker — the safe way to
-# parallelise a matplotlib-heavy suite.
-#
-# Worker count: use ALL cores. Each matrix leg now runs on its own dedicated
-# self-hosted node (one runner per node: scitex-dev-01/02/03), so there is no
-# co-tenant to yield half the box to — the old nproc//2 cap left 2x the cores
-# idle. nice/ionice (below) handles the "yield to higher-priority work if the
-# node is ever shared" concern instead of statically reserving half the CPUs.
-# Floor 4. pyproject addopts carries `-v`; override to `-q` here — 2460 verbose
-# lines x workers bloats the CI log and adds measurable overhead.
-NPROC="$(nproc 2>/dev/null || echo 4)"
-WORKERS=$NPROC
-[ "$WORKERS" -lt 4 ] && WORKERS=4
-echo "xdist workers=$WORKERS (nproc=$NPROC)"
+# Parallelise with pytest-xdist within this shared runner job's budget.
+# Company hosts run several independent runner services; nproc describes their
+# shared allocation, not an exclusive allocation for this matrix leg. Keep a
+# reviewed maximum of four workers and respect narrower affinity/CPU quotas.
+WORKERS=$("$VENV/bin/python" -I -S - <<'PYWORKERS'
+import os
+from pathlib import Path
+
+raw = os.environ.get("CI_XDIST_WORKERS") or "4"
+if not raw.isascii() or not raw.isdecimal() or not 1 <= int(raw) <= 4:
+    raise SystemExit("CI_XDIST_WORKERS must be an integer between 1 and 4")
+limits = [int(raw), os.cpu_count() or 1]
+if hasattr(os, "sched_getaffinity"):
+    limits.append(len(os.sched_getaffinity(0)))
+try:
+    quota, period = Path("/sys/fs/cgroup/cpu.max").read_text().split()
+    if quota != "max":
+        limits.append(max(1, int(quota) // int(period)))
+except FileNotFoundError:
+    try:
+        root = Path("/sys/fs/cgroup/cpu")
+        quota = int((root / "cpu.cfs_quota_us").read_text())
+        period = int((root / "cpu.cfs_period_us").read_text())
+        if quota > 0:
+            limits.append(max(1, quota // period))
+    except FileNotFoundError:
+        pass
+print(max(1, min(limits)))
+PYWORKERS
+)
+echo "xdist workers=$WORKERS (shared-job maximum=4)"
 
 # Warm the matplotlib font cache ONCE, single-process, before xdist forks the
 # workers. This builds $MPLCONFIGDIR/fontlist-*.json a single time so every
@@ -176,9 +189,9 @@ fi
 #
 # nice -n 19 ionice -c 3: run at the lowest CPU + idle I/O priority so that if
 # this node is ever shared with interactive/dev work, CI grabs otherwise-idle
-# cores but YIELDS the CPU and disk to any higher-priority process — "all
-# available CPUs, with priority handling". The shell remains alive so its EXIT
-# trap always stops the private PostgreSQL cluster.
+# CPU within its worker budget and yields to higher-priority processes.
+# The shell remains alive so its EXIT trap always stops the private PostgreSQL
+# cluster.
 scitex_test_run nice -n 19 ionice -c 3 \
     python -m pytest tests/ -n "$WORKERS" --dist load -q \
     --cov=src/scitex_dev --cov-report=xml --cov-report=term \

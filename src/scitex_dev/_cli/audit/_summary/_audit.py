@@ -384,7 +384,7 @@ def _group_head_labels(name: str) -> set[str]:
     return _classify(head)
 
 
-def _flag_names(cmd: click.BaseCommand) -> set[str]:
+def _flag_names(cmd: click.Command) -> set[str]:
     """All flag spellings declared on a command (`--foo`, `-f`)."""
     out: set[str] = set()
     for p in getattr(cmd, "params", []) or []:
@@ -395,7 +395,7 @@ def _flag_names(cmd: click.BaseCommand) -> set[str]:
     return out
 
 
-def _has_example(cmd: click.BaseCommand) -> bool:
+def _has_example(cmd: click.Command) -> bool:
     """§4 — concrete example detection.
 
     Stricter than a substring sniff: requires either
@@ -423,7 +423,7 @@ def _has_example(cmd: click.BaseCommand) -> bool:
     return False
 
 
-def _is_pass_through(cmd: click.BaseCommand) -> bool:
+def _is_pass_through(cmd: click.Command) -> bool:
     """§1c — verbatim-forwarding entry point detection.
 
     Two signals:
@@ -437,7 +437,7 @@ def _is_pass_through(cmd: click.BaseCommand) -> bool:
     return bool(cs.get("ignore_unknown_options")) and bool(cs.get("allow_extra_args"))
 
 
-def _check_help_format(cmd: click.BaseCommand, full: str, out: list[Violation]) -> None:
+def _check_help_format(cmd: click.Command, full: str, out: list[Violation]) -> None:
     """§4 — help must include Usage synopsis (Click adds automatically) + an example.
 
     Click guarantees the Usage line, so we only check for an example marker.
@@ -472,7 +472,7 @@ _VERSION_IN_HELP_RE = re.compile(
 
 
 def _check_root_help_has_version(
-    cmd: click.BaseCommand, full: str, out: list[Violation]
+    cmd: click.Command, full: str, out: list[Violation]
 ) -> None:
     """§4 — the root command's --help MUST include the package version.
 
@@ -522,7 +522,7 @@ _CONVENTION_SYNONYMS: dict[str, str] = {
 
 
 def _check_convention_flags(
-    cmd: click.BaseCommand, full: str, out: list[Violation]
+    cmd: click.Command, full: str, out: list[Violation]
 ) -> None:
     """§2 convention flags — non-canonical synonyms for capabilities that
     have a standardized spelling per 08_universal-flags.md (Convention flags).
@@ -540,7 +540,7 @@ def _check_convention_flags(
 
 
 def _check_universal_flags(
-    cmd: click.BaseCommand, full: str, is_root: bool, out: list[Violation]
+    cmd: click.Command, full: str, is_root: bool, out: list[Violation]
 ) -> None:
     """§2 — universal flag presence."""
     flags = _flag_names(cmd)
@@ -642,8 +642,6 @@ def _check_universal_flags(
                     f"mutating verb '{verb}' missing --yes/-y flag",
                 )
             )
-
-
 
 
 # --------------------------------------------------------------------- #
@@ -750,7 +748,7 @@ def _isolated_streams():
 
 def _capture_root(callable_obj):
     """Invoke `callable_obj` with parse calls intercepted; return the captured
-    root command — either an `argparse.ArgumentParser` or a `click.BaseCommand`.
+    root command — either an `argparse.ArgumentParser` or a `click.Command`.
 
     Catches the common patterns:
       - `def main(argv): parser=...; parser.parse_args(argv)`  (argparse)
@@ -762,9 +760,9 @@ def _capture_root(callable_obj):
     The patching contract (assumed by every checker that calls this):
       1. argparse.ArgumentParser.parse_args / parse_known_args raise _StopBeforeParse
          after appending `self` to the captured list.
-      2. click.BaseCommand.main does the same.
+      2. click.Command.main does the same.
       3. sys.argv is set to a single-element list to avoid leaking real args.
-      4. All three originals are restored even on exception.
+      4. All patched originals are restored even on exception.
 
     Limitation — multi-parser CLIs:
       Only the **first** parser whose `parse_args` is invoked is captured.
@@ -801,13 +799,13 @@ def _capture_root(callable_obj):
     return captured[0] if captured else None
 
 
-def _resolve_entry_point(package: str) -> click.BaseCommand | None:
+def _resolve_entry_point(package: str) -> click.Command | None:
     """Find the root command for an entry-point name.
 
     Tries, in order:
-      1. Entry point itself is a click.BaseCommand.
+      1. Entry point itself is a click.Command.
       2. Entry point is a wrapper `def main(): app()` — scan its module for
-         a module-level click.BaseCommand.
+         a module-level click.Command.
       3. Entry point is a `def main(argv): parser=...; parser.parse_args(argv)`
          (argparse) — capture the parser and wrap it as a Click-shaped tree.
       4. Otherwise → not auditable.
@@ -829,7 +827,7 @@ def _resolve_entry_point(package: str) -> click.BaseCommand | None:
         except Exception as e:
             last_err = f"{type(e).__name__}: {e}"
             continue
-        if isinstance(obj, click.BaseCommand):
+        if isinstance(obj, click.Command):
             return obj
 
         # Wrapper function — scan its module for a click root.
@@ -842,17 +840,17 @@ def _resolve_entry_point(package: str) -> click.BaseCommand | None:
             if mod is not None:
                 for attr in ("cli", "app", "main_cli", "root", "main"):
                     val = getattr(mod, attr, None)
-                    if isinstance(val, click.BaseCommand):
+                    if isinstance(val, click.Command):
                         return val
                 for val in vars(mod).values():
-                    if isinstance(val, click.BaseCommand):
+                    if isinstance(val, click.Command):
                         return val
 
         # Invoke-and-capture fallback — handles both lazy-imported click roots
         # and argparse parsers built inside main().
         if callable(obj):
             root = _capture_root(obj)
-            if isinstance(root, click.BaseCommand):
+            if isinstance(root, click.Command):
                 return root
             if root is not None:
                 return _wrap_argparse(root, name=package)
@@ -864,7 +862,7 @@ def _resolve_entry_point(package: str) -> click.BaseCommand | None:
 
 
 def _check_introspection(
-    cmd: click.BaseCommand, package: str, out: list[Violation]
+    cmd: click.Command, package: str, out: list[Violation]
 ) -> None:
     """§1a — `list-python-apis` (top-level) and `mcp list-tools` must exist.
 
@@ -1354,9 +1352,7 @@ def _scan_env_vars(
         )
 
 
-def _check_config_help(
-    cmd: click.BaseCommand, package: str, out: list[Violation]
-) -> None:
+def _check_config_help(cmd: click.Command, package: str, out: list[Violation]) -> None:
     """§6b — root --help must document the config-path fallback order."""
     expected = _expected_env_prefix(package)
     if expected is None:
@@ -1380,7 +1376,7 @@ def _check_config_help(
 
 
 def _check_option_positional_ordering(
-    package: str, root: click.BaseCommand, out: list[Violation]
+    package: str, root: click.Command, out: list[Violation]
 ) -> None:
     """§10 — options on either side of the SOURCE positional must work.
 
@@ -1429,7 +1425,7 @@ def _check_option_positional_ordering(
     # If the entry-point IS the click group (or one of its standard
     # decorated forms), there's no chance to rewrite argv.
     if ep_obj is root or (
-        isinstance(ep_obj, click.BaseCommand) and ep_obj.name == root.name
+        isinstance(ep_obj, click.Command) and ep_obj.name == root.name
     ):
         out.append(
             Violation(
