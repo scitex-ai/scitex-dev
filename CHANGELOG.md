@@ -12,6 +12,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Bound this package's native CI to at most four pytest workers per job, with
+  `CI_XDIST_WORKERS=1..4` and lower limits from actual CPU affinity or visible
+  CPU quota. Preserve the complete dependency install, private PostgreSQL,
+  pytest/coverage flags and cleanup requirements on shared runner hosts.
+
 - Capture lazy Click console entry points with the actual command method owner,
   including Click 8.5, without executing command callbacks. Restore intercepted
   Click and argparse methods after failures.
