@@ -34,10 +34,10 @@ from __future__ import annotations
 import importlib
 import re
 from pathlib import Path
+from typing import get_origin
 
 from ._audit import Violation
 from ._mcp_names import _import_name, _short_name
-
 
 # --------------------------------------------------------------------- #
 # §6 exemption — per-package opt-out                                    #
@@ -206,12 +206,14 @@ def mcp_tools_allowlist(package: str, repo: Path | None) -> set[str] | None:
 
 
 def _python_api_names(package: str) -> set[str]:
-    """Return the set of public *function* names exported by `scitex_<pkg>`.
+    """Return public function/callable-operation names exported by `scitex_<pkg>`.
 
     Best-effort: imports the top-level module, reads `__all__` (or non-private
-    attributes), and keeps only callables that are NOT classes/types. Classes
-    are exposed as API but are rarely wrapped as MCP tools — including them
-    in the parity check produces false positives.
+    attributes), and keeps callables that are neither classes/types nor typing
+    aliases with a public ``typing.get_origin``. Callable/Literal aliases and
+    parameterized containers describe values rather than executable operations;
+    counting them produces false missing-tool findings. Ordinary functions and
+    callable instances remain operations in both flat and nested layouts.
 
     Two layouts are accepted, matching the two patterns in the
     SciTeX ecosystem:
@@ -240,7 +242,7 @@ def _python_api_names(package: str) -> set[str]:
         if not isinstance(n, str):
             continue
         val = getattr(mod, n, None)
-        if val is None or _inspect.isclass(val):
+        if val is None or _inspect.isclass(val) or get_origin(val) is not None:
             continue
         if _inspect.ismodule(val):
             # Nested-form noun submodule. Walk its public verbs and
@@ -258,6 +260,7 @@ def _python_api_names(package: str) -> set[str]:
                 if (
                     sub_val is None
                     or _inspect.isclass(sub_val)
+                    or get_origin(sub_val) is not None
                     or _inspect.ismodule(sub_val)
                     or not callable(sub_val)
                 ):

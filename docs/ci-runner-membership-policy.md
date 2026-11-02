@@ -38,6 +38,28 @@ source reads. This keeps already pinned callers eligible while callers migrate.
 Partial unions, extra definitions, changed bytes and weaker protection refuse
 authorization. No branch reference is treated as a matching SHA selector. Unknown or incomplete API/source observations exit nonzero.
 
+Each complete profile may additionally select exactly the two organization
+SDK defining workflows, `sdk-python-package.yml` and `sdk-frontend.yml`, at
+`refs/heads/main`. A partial pair, a caller workflow title, a foreign ref or an
+extra definition refuses before source reads. Both complete SDK workflow
+bodies and their same-revision admission must match the reviewed source hashes;
+central main and its protection are checked before and after, including when
+the base profile is immutable. The original 21 refs and optional registered
+Dev publisher remain separate exact selections. This source observation does
+not grant group access or qualify actual SDK jobs. The current CLA workflow
+also binds its immutable baseline-attribution helper; the historical immutable
+CLA keeps its original bytes.
+
+The seven fixed Hub definitions may be selected as one complete optional
+bundle, independently of the SDK pair. Each whole body and its same-revision
+admission is pinned to reviewed hashes from actual protected central main;
+main and protection are checked before and after all source reads. Partial
+Hub bundles, leaf callers, unknown definitions and alternative literal refs
+refuse before API queries. The original profiles, SDK pair, optional Dev
+publisher and current CLA helper retain their existing separate contracts.
+This finite source qualification does not alter group access or assert that
+Hub's full runtime tests have run.
+
 The organization-owned `company-ci-pool-health` workflow also samples one
 admitted runner every fifteen minutes or by manual dispatch. It reads visible
 CPU counts, priority, memory, filesystem space and CPU pressure without a
@@ -56,3 +78,12 @@ registers, starts, stops, moves, or reconfigures runners.
 Source publication, group-policy readback, and actual job execution remain
 distinct qualification steps. Older generic HPC/per-repository ensure
 commands are not the deployment path for this organization-only pool.
+
+The separately reviewed `hub-codeql-security-analysis.yml@refs/heads/main`
+definition is independently optional. It qualifies its whole protected current
+source and the admission workflow at that same revision. Adding it preserves
+all original finite profiles, the zero-or-pair SDK bundle, the zero-or-seven Hub
+validation bundle and the optional original Dev publisher. Existing 31-definition
+selection remains valid without CodeQL; CodeQL cannot authorize partial Hub
+validation, a leaf caller, a foreign revision or any other workflow. This source
+observer does not change the runner group or prove live CodeQL job admission.

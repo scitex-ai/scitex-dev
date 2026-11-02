@@ -38,6 +38,14 @@ echo "build: py=$(scitex_release_run "$PY" -V) target=$TMPDIR/site"
 # built artifacts are uploaded.
 scitex_release_run uv pip install --python "$PY" --target="$TMPDIR/site" build
 
+# The entry-point gate below imports the wheel against $TMPDIR/site ahead of
+# the SIF-baked site, so seed it with the declared runtime floor. The SIF
+# image predates any release cut after it was built (e.g. scitex-logging
+# 0.2.3, which provides the mandatory auditor provider); without this the
+# gate audits the new wheel against the image's stale deps and refuses a
+# correct artifact for environmental reasons. UV only (no pip fallback).
+scitex_release_run uv pip install --python "$PY" --target="$TMPDIR/site" "scitex-logging>=0.2.3"
+
 rm -rf dist
 scitex_release_run env PYTHONPATH="$TMPDIR/site" "$PY" -m build --installer uv --outdir dist
 

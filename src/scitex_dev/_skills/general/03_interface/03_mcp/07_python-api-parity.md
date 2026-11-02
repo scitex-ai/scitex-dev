@@ -56,18 +56,25 @@ io_save(obj=data, path="./out.csv")
 ## Why parity matters
 
 - An agent that ran `scitex-io save data.csv ./out.csv --json` learns the output shape; calling `io_save` next should not surprise it.
-- The audit linter ([08_audit-mcp-tools.md](08_audit-mcp-tools.md)) cross-checks `list-python-apis --json` and `mcp list-tools --json` to flag drift.
+- The MCP auditor ([08_audit-mcp-tools.md](08_audit-mcp-tools.md)) compares registered tool names with public Python operations to flag drift.
 
 ## Auditor hook
 
-A future check (see [08_audit-mcp-tools.md](08_audit-mcp-tools.md)):
+`scitex-dev ecosystem audit-mcp-tools` implements the §6 name comparison in
+`_cli/audit/_summary/_mcp_parity.py`. It reads public package exports and
+explicitly exported noun submodules. Classes and typing aliases for which
+`typing.get_origin(value)` is non-`None` are not operations: for example,
+`Callable[[str], str]`, `Literal["draft", "published"]`, and `list[str]` do not
+need fake MCP tools. Real functions and callable instances remain in the check.
+Nested operations flatten to `<noun>_<verb>`.
 
-```bash
-# For every public Python API in <pkg>:
-#   assert there is an MCP tool with matching name + args
-# For every MCP tool in <pkg>:
-#   assert it wraps a public Python API (no orphan MCP-only logic)
-```
+The current unscoped comparison reports missing-tool drift when more than half
+of discovered operations lack matching tools, and orphan-tool drift when more
+than three non-skill tools lack Python operations. Matching accepts a bare API
+name or a `verb_<api>` suffix. This name check does not by itself prove argument
+or output equivalence; those contracts still need executable tests. Excluding
+a typing alias must never suppress a missing real operation or create a
+package-specific exemption.
 
 ## The orphan count is two different jobs, not one
 

@@ -8,7 +8,26 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.62.6] - 2026-11-01
+
+- Discover and execute leaf-owned tool-hook checks through a generic stdin-JSON dispatcher; required missing or failed providers refuse verification.
+- Add provider installation for Claude and Hermes, preserving foreign settings/hooks and using Hermes' own writer for its profiles.
+- Support explicit target interpreters, dry runs, and idempotent provider updates without breaking configuration symlinks.
+- Use canonical scitex-logging diagnostics for retired-host warnings and supervisor logging; require scitex-logging 0.2.4.
+
 ## [Unreleased]
+
+## [0.62.5] - 2026-10-31
+
+### Fixed
+- Prune excluded runtime directories and symlinks before managed-home migration
+  traverses package trees, keeping live SAC overlays out of the migration walk.
+- Restrict empty-test-directory auditing to the matching source namespace so
+  concurrent temporary test outputs cannot interrupt the audit.
+
+### Documentation
+- Clarify host-registry discovery, missing SSH aliases, and SAC peer precedence
+  through the owning dispatcher skill.
 
 ## [0.62.2] - 2026-10-02
 

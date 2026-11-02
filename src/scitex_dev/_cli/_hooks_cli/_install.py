@@ -23,20 +23,43 @@ def register_install(hooks_group) -> None:
         "install",
         cls=SpecCommand,
         help_spec=CliHelp(
-            summary="Install bundled hooks as symlinks into the target project.",
+            summary="Install bundled scripts or leaf checks into native hook configuration.",
             examples=(
                 Example(
-                    "{prog} hooks install --target ~/proj/my-research",
+                    "{prog} dev hooks install --target ~/proj/my-research",
                     "installed run_lint -> .../docs/to_claude/hooks/post-tool-use/run_lint.sh",
                 ),
             ),
         ),
     )
     @click.option(
+        "--python",
+        "python_path",
+        default=None,
+        help="Interpreter path in the target environment for provider hooks.",
+    )
+    @click.option(
+        "--provider",
+        default=None,
+        help="Install an executable provider discovered through scitex_dev.hooks.",
+    )
+    @click.option(
+        "--harness", type=click.Choice(["claude", "hermes"]), default="claude"
+    )
+    @click.option(
+        "--config",
+        "config_path",
+        type=click.Path(path_type=Path),
+        default=None,
+        help="Explicit native hook configuration path for --provider.",
+    )
+    @click.option(
         "--target",
         "target",
-        required=True,
-        type=click.Path(file_okay=False, dir_okay=True, exists=False, resolve_path=True),
+        required=False,
+        type=click.Path(
+            file_okay=False, dir_okay=True, exists=False, resolve_path=True
+        ),
         help="Project root to install hooks into (created if missing).",
     )
     @click.option(
@@ -45,8 +68,7 @@ def register_install(hooks_group) -> None:
         multiple=True,
         type=click.Choice(sorted(KNOWN_HOOKS), case_sensitive=False),
         help=(
-            "Limit installation to specific hook names. Defaults to all "
-            "known hooks."
+            "Limit installation to specific hook names. Defaults to all known hooks."
         ),
     )
     @click.option(
@@ -77,9 +99,49 @@ def register_install(hooks_group) -> None:
             "logic."
         ),
     )
-    def hooks_install(target, names, force, dry_run, yes):
+    def hooks_install(
+        target, names, force, dry_run, yes, provider, harness, config_path, python_path
+    ):
         del yes  # --yes is reserved for audit-cli §2 conformance; no
-                 # confirmation prompts are issued today.
+        # confirmation prompts are issued today.
+        if provider:
+            if config_path is None:
+                raise click.UsageError(
+                    "--provider requires --config with the native configuration path"
+                )
+            from ...hooks._install_provider import install_provider
+
+            try:
+                result = install_provider(
+                    config_path,
+                    provider=provider,
+                    harness=harness,
+                    dry_run=dry_run,
+                    python=python_path,
+                )
+            except (ValueError, OSError, ImportError) as exc:
+                raise click.ClickException(str(exc)) from exc
+            import scitex_logging as slogging
+
+            emit = (
+                slogging.getConsole(__name__).info
+                if dry_run
+                else slogging.getConsole(__name__).success
+            )
+            emit(
+                "%s %s hooks for %s at %s",
+                "Would install" if dry_run else "Installed",
+                harness,
+                provider,
+                result["config"],
+            )
+            return
+        if config_path is not None:
+            raise click.UsageError("--config requires --provider")
+        if target is None:
+            raise click.UsageError(
+                "pass --target for bundled hooks or --provider with --config"
+            )
         project = Path(target)
         if not dry_run:
             project.mkdir(parents=True, exist_ok=True)
