@@ -12,14 +12,18 @@ import pytest
 from scitex_dev.ci.runner import _policy_contract as contract
 from scitex_dev.ci.runner import _policy_dev_release as release
 
+from ._publisher_replay import compose_candidate_dev_publisher
+
 FIXTURE = Path(__file__).parent / "fixtures/hub-codeql-source-contract.json.gz"
 MAIN = "9bc2493eca5d804f2d0a979dcef8ab7152f8d840"
 CODEQL = "hub-codeql-security-analysis.yml"
 
 
-def source_case(*, mutate=None, drift=False, weaken=False, unprotected=False):
+def source_case(*, mutate=None, drift=False, weaken=False, unprotected=False,
+                candidate_publisher=True):
     fixture = json.loads(gzip.decompress(FIXTURE.read_bytes()))
-    responses = fixture["responses"]
+    responses = (compose_candidate_dev_publisher(fixture["responses"])
+                 if candidate_publisher else fixture["responses"])
     if mutate:
         endpoint = (
             "repos/scitex-ai/.github/contents/.github/workflows/"
@@ -317,3 +321,16 @@ def test_all_whole_public_bodies_bind_protected_actual_merge_and_git_objects():
         fixture["central_branch_after"]["commit"]["sha"],
         fixture["central_branch_after"]["protected"],
     ) == (expected, 33, MAIN, MAIN, MAIN, True)
+
+
+def test_historical_dev_driver_bytes_remain_refused_by_candidate_policy():
+    # Arrange: retain the complete historical public bodies without projection.
+    _fixture, api, _requests = source_case(candidate_publisher=False)
+    refs = list(contract.TRANSITION_SELECTION) + [release.DEV_SELECTION]
+    # Act
+    observed = contract.qualify_workflows([group(refs)], api)
+    # Assert
+    assert (observed["expected"], observed["violations"]) == (
+        [], ["registered caller source changed: "
+             "scitex-ai/scitex-dev/.github/ci/run-in-sif.sh"],
+    )
