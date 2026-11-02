@@ -2,8 +2,9 @@
 
 Group.commands is an implementation cache, not the command surface. Resolve
 list_commands/get_command using real contexts before the existing rule walkers
-run. Copies preserve command classes, callbacks and owner metadata; production
-objects are never changed, and command/parameter callbacks are never invoked.
+run. Copies preserve command classes, callbacks and owner metadata. The audit
+does not rewrite original mappings; public discovery may populate an owner's
+legitimate lazy cache. Command/parameter callbacks are never invoked.
 """
 
 from __future__ import annotations

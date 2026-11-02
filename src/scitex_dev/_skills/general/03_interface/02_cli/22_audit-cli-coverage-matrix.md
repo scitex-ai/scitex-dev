@@ -16,7 +16,8 @@ Each audit builds one bounded snapshot through Click's public
 This includes virtual groups whose children are created lazily. Discovery uses
 real contexts without parsing parameters or invoking command callbacks. Private
 views retain the original command classes, callback identities and mounted
-provider ownership metadata; the production groups remain unchanged.
+provider ownership metadata. The audit does not rewrite original command mappings;
+calling public discovery may legitimately populate an owner's lazy cache.
 
 All command walkers, required-capability checks and alias-target checks consume
 that same snapshot. An advertised name that does not resolve, a discovery
