@@ -38,10 +38,14 @@ async def dev_ecosystem_list(packages: list[str] | None = None) -> str:
 
 @mcp.tool()
 async def dev_ecosystem_fix_mismatches(dry_run: bool = True) -> str:
-    """Detect and fix version mismatches across ecosystem."""
+    """Preview version mismatch repairs; set dry_run=False to apply them.
+
+    The default previews local and configured remote repairs without applying
+    changes. Explicit dry_run=False confirms the canonical repair operation.
+    """
     from ..dev_mcp.handlers import fix_mismatches_handler
 
-    return await fix_mismatches_handler(dry_run=dry_run)
+    return await fix_mismatches_handler(confirm=not dry_run)
 
 
 @mcp.tool()

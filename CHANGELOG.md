@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Fix the registered ecosystem-repair MCP tool to translate its existing
+  `dry_run=True` argument to the canonical handler's `confirm=False`; explicit
+  `dry_run=False` confirms repairs without changing the transport signature.
+
 - Report PS-233 at genuinely unguarded import locations without relabeling guarded optional sites when another module imports the same dependency unguarded.
 
 - Parse documentation dependency floors as requirements and versions, accepting

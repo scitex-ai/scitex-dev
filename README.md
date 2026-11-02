@@ -246,6 +246,10 @@ scitex-dev mcp list-tools
 scitex-dev mcp installation
 ```
 
+The MCP tool `dev_ecosystem_fix_mismatches()` previews repairs by default.
+Its existing `dry_run=False` argument explicitly confirms local and configured
+remote repairs; it maps to the canonical handler's `confirm=True`.
+
 **Claude Code Setup** — add `.mcp.json` to your project root. Use `SCITEX_DEV_ENV_SRC` to load configuration from a `.src` file:
 
 ```json

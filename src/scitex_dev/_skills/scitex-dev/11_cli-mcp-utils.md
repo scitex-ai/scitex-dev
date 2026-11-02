@@ -190,3 +190,10 @@ def my_handler(path: str) -> dict:
 def my_tool(path: str) -> str:
     return run_as_mcp(my_handler, path=path)
 ```
+
+## Ecosystem repair confirmation
+
+The registered `dev_ecosystem_fix_mismatches(dry_run=True)` tool previews
+repairs by forwarding `confirm=False` to the canonical repair handler.
+Explicit `dry_run=False` forwards `confirm=True`, permitting local and
+configured remote repairs. The tool keeps its existing Boolean argument.
