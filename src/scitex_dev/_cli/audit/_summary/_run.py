@@ -164,6 +164,16 @@ def _audit_one(
         return f"not-auditable: {last_err or _no_entry_point_reason(package)}", []
 
     out: list = []
+    # One public Click inventory feeds ALL existing rule/capability walkers.
+    # Keep original callbacks and ownership metadata, without mutating the CLI.
+    from ._command_snapshot import discovery_violations, snapshot_commands
+
+    with _isolated_streams():
+        snapshot = snapshot_commands(cmd, package)
+    out.extend(discovery_violations(snapshot))
+    if snapshot.root is None:
+        return "not-auditable: public command discovery failed", out
+    cmd = snapshot.root
     # The DENOMINATOR, accumulated alongside `out` so a verdict can state how
     # many commands it actually inspected instead of leaving a reader unable
     # to tell forty from zero. A caller that wants the figure passes one in
@@ -199,6 +209,11 @@ def _audit_one(
     check_gui_command_group(cmd, package, out)
     # §13 — self-maintenance commands must nest under a `dev` group.
     check_dev_command_group(cmd, package, out)
+    if snapshot.issues:
+        return (
+            "not-auditable: public command discovery incomplete "
+            f"({len(snapshot.issues)} explicit discovery issue(s))", out,
+        )
     if behavioral:
         _check_behavioral(package, out, cmd, timeout=timeout)
     # REFUSE rather than pass. Zero inspected commands is not a clean CLI, it
