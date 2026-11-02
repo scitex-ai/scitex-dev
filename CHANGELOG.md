@@ -15,6 +15,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Capture lazy Click console entry points with the actual command method owner,
   including Click 8.5, without executing command callbacks. Restore intercepted
   Click and argparse methods after failures.
+- Grant the documentation caller the permission required by its shared bundle
+  publisher, so GitHub can admit the unchanged documentation validation jobs.
 - Count declared core dependencies when checking development dependency coverage,
   so dependencies shared by core and optional extras do not require duplicate
   declarations in the development extra.
