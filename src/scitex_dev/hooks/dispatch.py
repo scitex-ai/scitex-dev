@@ -12,9 +12,18 @@ from ._dispatch import dispatch
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--provider", required=True)
+    parser.add_argument(
+        "--rule",
+        dest="rule_ids",
+        action="append",
+        default=None,
+        help="Select exact executable rule IDs of the provider (repeatable).",
+    )
     args = parser.parse_args()
     try:
-        findings = dispatch(json.load(sys.stdin), provider=args.provider)
+        findings = dispatch(
+            json.load(sys.stdin), provider=args.provider, rule_ids=args.rule_ids
+        )
     except (ValueError, OSError, TypeError) as exc:
         findings = [f"Cannot verify hook payload ({type(exc).__name__})"]
     for finding in findings:

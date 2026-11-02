@@ -11,26 +11,35 @@ import tempfile
 from pathlib import Path
 
 from ._discover import discover_hooks
+from ._selection import select_rules
 from ._spec import hermes_event_for
 
 
 def install_provider(
-    config_path, *, provider, harness="claude", dry_run=False, python=None
+    config_path,
+    *,
+    provider,
+    harness="claude",
+    dry_run=False,
+    python=None,
+    rule_ids=None,
 ):
     """Merge one provider's bindings; preserve unrelated settings and hooks."""
     path = Path(config_path).expanduser().resolve()
-    rules = [r for r in discover_hooks() if r.provider == provider]
+    rules = select_rules(discover_hooks(), provider=provider, rule_ids=rule_ids)
     if not rules or any(not r.check for r in rules):
         raise ValueError(f"Provider {provider!r} must expose executable check bindings")
-    command = shlex.join(
-        [
-            str(python or sys.executable),
-            "-m",
-            "scitex_dev.hooks.dispatch",
-            "--provider",
-            provider,
-        ]
-    )
+    command_args = [
+        str(python or sys.executable),
+        "-m",
+        "scitex_dev.hooks.dispatch",
+        "--provider",
+        provider,
+    ]
+    selected_ids = sorted(rule.id for rule in rules) if rule_ids is not None else None
+    for rule_id in selected_ids or ():
+        command_args.extend(("--rule", rule_id))
+    command = shlex.join(command_args)
     text = path.read_text() if path.exists() else ""
     if harness == "hermes":
         import hermes_yaml as yaml
@@ -90,12 +99,7 @@ def install_provider(
                 words = shlex.split(value)
             except ValueError:
                 return False
-            return words[1:] == [
-                "-m",
-                "scitex_dev.hooks.dispatch",
-                "--provider",
-                provider,
-            ]
+            return words[1:] == command_args[1:]
 
         kept = []
         for entry in entries:
@@ -137,4 +141,5 @@ def install_provider(
         "config": str(path),
         "events": events,
         "dry_run": dry_run,
+        "rule_ids": selected_ids,
     }

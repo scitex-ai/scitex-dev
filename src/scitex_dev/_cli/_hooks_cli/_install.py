@@ -44,6 +44,12 @@ def register_install(hooks_group) -> None:
         help="Install an executable provider discovered through scitex_dev.hooks.",
     )
     @click.option(
+        "--rule",
+        "rule_ids",
+        multiple=True,
+        help="Select exact executable rule IDs of --provider (repeatable); leaves all other native bindings unchanged.",
+    )
+    @click.option(
         "--harness", type=click.Choice(["claude", "hermes"]), default="claude"
     )
     @click.option(
@@ -100,10 +106,21 @@ def register_install(hooks_group) -> None:
         ),
     )
     def hooks_install(
-        target, names, force, dry_run, yes, provider, harness, config_path, python_path
+        target,
+        names,
+        force,
+        dry_run,
+        yes,
+        provider,
+        harness,
+        config_path,
+        python_path,
+        rule_ids,
     ):
         del yes  # --yes is reserved for audit-cli §2 conformance; no
         # confirmation prompts are issued today.
+        if rule_ids and not provider:
+            raise click.UsageError("--rule requires --provider")
         if provider:
             if config_path is None:
                 raise click.UsageError(
@@ -118,6 +135,7 @@ def register_install(hooks_group) -> None:
                     harness=harness,
                     dry_run=dry_run,
                     python=python_path,
+                    rule_ids=list(rule_ids) if rule_ids else None,
                 )
             except (ValueError, OSError, ImportError) as exc:
                 raise click.ClickException(str(exc)) from exc

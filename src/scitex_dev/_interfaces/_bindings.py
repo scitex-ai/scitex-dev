@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 
+from ._components import component_modules
 from ._conventions import MCP_MODULE_SUFFIXES
 from ._source import SourceTree, UnprovenBinding, meaningful
 
@@ -79,7 +80,28 @@ def cli_binding(source: SourceTree, project: dict):
 def _mcp_evidence(source: SourceTree, module: str):
     _path, tree = source.module(module)
     factories = set()
-    for node in tree.body:
+    imports = list(tree.body)
+    for guarded in tree.body:
+        if (
+            not isinstance(guarded, ast.Try)
+            or guarded.orelse
+            or guarded.finalbody
+            or len(guarded.handlers) != 1
+        ):
+            continue
+        handler = guarded.handlers[0]
+        if (
+            isinstance(handler.type, ast.Name)
+            and handler.type.id == "ImportError"
+            and len(handler.body) == 1
+            and isinstance(handler.body[0], ast.Raise)
+            and all(
+                isinstance(node, ast.ImportFrom) and node.module == "fastmcp"
+                for node in guarded.body
+            )
+        ):
+            imports.extend(guarded.body)
+    for node in imports:
         if (
             isinstance(node, ast.ImportFrom)
             and node.module
@@ -92,12 +114,12 @@ def _mcp_evidence(source: SourceTree, module: str):
             )
     servers = {
         name
-        for name, value in source.assignments(tree)
+        for name, value in dict(source.assignments(tree)).items()
         if isinstance(value, ast.Call)
         and isinstance(value.func, ast.Name)
         and value.func.id in factories
     }
-    for node in ast.walk(tree):
+    for node in tree.body:
         if not isinstance(
             node, (ast.FunctionDef, ast.AsyncFunctionDef)
         ) or not meaningful(node):
@@ -112,7 +134,8 @@ def _mcp_evidence(source: SourceTree, module: str):
             ):
                 return True
     # mcp.tool()(owned_handler) is the other normal FastMCP binding.
-    for node in ast.walk(tree):
+    for statement in tree.body:
+        node = statement.value if isinstance(statement, ast.Expr) else None
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Call):
             continue
         target = node.func.func
@@ -133,7 +156,14 @@ def _mcp_evidence(source: SourceTree, module: str):
 
 
 def mcp_binding(source: SourceTree, modules: list[str]):
+    roots = list(modules)
     for module in modules:
+        try:
+            roots.extend(component_modules(source, module))
+        except UnprovenBinding as exc:
+            if "exceeds" in str(exc):
+                return f"MCP component binding is unproven: {exc}"
+    for module in dict.fromkeys(roots):
         for suffix in MCP_MODULE_SUFFIXES:
             try:
                 if _mcp_evidence(source, f"{module}.{suffix}"):

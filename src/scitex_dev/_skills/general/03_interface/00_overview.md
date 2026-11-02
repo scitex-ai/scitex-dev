@@ -29,10 +29,39 @@ checks: a static binding is not proof that every advertised operation works.
 
 The executable `dev.five-interface-commit` and
 `dev.five-interface-changed-source` hooks use the same checker. The commit gate
-checks ordinary `git commit` invocations; the post-tool gate checks actual
+checks the Git index for ordinary `git commit` invocations, so unstaged fixes
+cannot conceal bad staged bindings; the post-tool gate checks actual
 relevant changed interface source/metadata. Neither executes a package's code.
 These are installed through the existing Dev hooks provider; a declaration in
 a package is not proof that a particular agent has enabled the dispatcher.
+Dev's legacy `implemented_in`-only guardrails are not executable bindings. The
+full-provider default continues to refuse native installation when any selected
+rule lacks a check. Explicitly select the two executable rules instead:
+
+```bash
+scitex-dev hooks install --provider scitex-dev \
+  --rule dev.five-interface-commit \
+  --rule dev.five-interface-changed-source \
+  --harness claude --config ./owned-native-settings.json --dry-run
+```
+
+Review the preview, then install into the intended configuration without
+`--dry-run`. `--harness hermes` uses the same exact rule selection. This command
+is an installation example, not evidence of activation on any host.
+
+Both the installer and runtime dispatcher reject empty, duplicate, unknown,
+foreign or non-executable selections. Generated commands carry the exact
+canonical IDs. Reinstalling one exact selection updates only its bindings;
+unrelated settings and other selections remain. Keep a selected pair together
+when updating it; a different overlapping selection is a distinct installation,
+not authorization to rewrite another binding. No legacy rules are silently
+activated or claimed to be enforced.
+
+MCP source discovery uses the shared module conventions at the package root
+or bounded owned component namespaces (depth four, at most 512 directories).
+Examples, templates, vendor/assets trees and directory links cannot supply a
+missing runtime interface. This source presence check does not aggregate or
+certify multiple component servers' operation parity or live availability.
 
 ## Narrow exceptions
 

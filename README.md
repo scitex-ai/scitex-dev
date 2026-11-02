@@ -154,10 +154,12 @@ aggregation).
 ## Five Interfaces
 
 The five-interface source contract is enabled by default through Dev's existing
-project-auditor provider: Python API, CLI, MCP, Web API and skills. Missing or
+project-auditor provider: Python API, CLI, MCP, Web API and skills. Commit hooks inspect staged source; relevant post-tool hooks inspect the working tree. Missing or
 unproven bindings are `PS-IF-001`–`PS-IF-005` errors; specific justified omissions
 use the existing per-rule/site exemptions. SDK owns Web API descriptor/schema
-quality. The same source checker backs relevant-edit and commit hooks. See
+quality. Executable hook subsets are installed with repeatable `hooks install
+--provider scitex-dev --rule <exact-id>` options; the full-provider default still
+refuses legacy declarations without executable checks. The same source checker backs relevant-edit and commit hooks. See
 [the contract](src/scitex_dev/_skills/general/03_interface/00_overview.md).
 
 The optional Web binding declares `GET ecosystem/packages` through

@@ -10,6 +10,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Permit exact executable hook-rule selections in the existing installer and
+  stdin dispatcher. Keep the full-provider default strict, reject invalid or
+  unbound selections, and preserve unrelated/native bindings.
+- Recognize real MCP servers in bounded owned component namespaces without
+  counting examples, vendor trees, symlinks or fallback stand-ins.
+
 - Require five owned interface bindings by default through the existing
   project-auditor and hook providers; report missing/dynamic bindings and
   preserve visible narrow reasoned exceptions. Keep source presence separate

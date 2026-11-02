@@ -1,4 +1,4 @@
-"""Thin optional Django adapter; no configuration, imports or fleet probing."""
+"""Thin optional Django adapter; no config changes, leaf imports or fleet probes."""
 
 
 def curated_packages(request):
