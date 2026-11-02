@@ -9,15 +9,20 @@ from pathlib import Path
 
 import pytest
 
+from tests.scitex_dev._child_runtime import child_runtime_paths
+
 
 def _child(code):
     root = Path(__file__).resolve().parents[3] / "src"
+    paths = child_runtime_paths(
+        root, required_distributions=("scitex-dev", "scitex-sdk", "Django")
+    )
     result = subprocess.run(
         [
             sys.executable,
             "-I",
             "-c",
-            "import sys\nsys.path.insert(0, " + repr(str(root)) + ")\n" + code,
+            "import sys\nsys.path[:0] = " + repr(paths) + "\n" + code,
         ],
         capture_output=True,
         text=True,

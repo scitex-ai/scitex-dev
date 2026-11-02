@@ -13,13 +13,19 @@ import pytest
 
 from scitex_dev.hooks._dispatch import dispatch
 from scitex_dev.hooks._install_provider import install_provider
+from tests.scitex_dev._child_runtime import child_runtime_paths
 
 _RULES = ["dev.five-interface-commit", "dev.five-interface-changed-source"]
 
 
 def _run(args, *, payload=None):
     env = dict(os.environ)
-    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[3] / "src")
+    paths = child_runtime_paths(
+        Path(__file__).resolve().parents[3] / "src",
+        required_distributions=("scitex-dev", "scitex-logging", "click"),
+    )
+    env["PYTHONPATH"] = os.pathsep.join(paths)
+    env["PYTHONNOUSERSITE"] = "1"
     env["SCITEX_DEV_NO_DRIFT_WARN"] = "1"
     env["SCITEX_LOGGING_FORCE_COLOR"] = "0"
     return subprocess.run(
