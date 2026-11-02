@@ -166,7 +166,8 @@ The optional Web binding declares `GET ecosystem/packages` through
 `scitex.apis`. It delegates to the real public `get_all_packages()` operation and
 returns `{"catalog": "curated", "packages": [...]}` with sorted package names.
 This is the curated registry, not an installed/live/complete fleet census; no
-host paths or other registry metadata are returned. The CLI/MCP ecosystem
+host paths or other registry metadata are returned. Unsupported methods return
+the declared `method_not_allowed` JSON error with status 405 and `Allow: GET`. The CLI/MCP ecosystem
 listings enrich this same registry with other information and use different
 envelopes. Install `scitex-dev[all]` on Python >=3.10 for the optional SDK/Django
 adapter; hosts must explicitly admit and mount it. No server or route is enabled

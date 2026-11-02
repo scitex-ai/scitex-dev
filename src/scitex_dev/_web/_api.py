@@ -2,6 +2,7 @@
 
 try:
     from scitex_sdk.app.api_plugin import (
+        ApiError,
         ApiField,
         ApiPlugin,
         ApiRoute,
@@ -36,6 +37,13 @@ plugin = ApiPlugin(
                         type="array",
                         description="Sorted unique package-name strings; not installed, live, or complete fleet membership.",
                     ),
+                ),
+            ),
+            errors=(
+                ApiError(
+                    code="method_not_allowed",
+                    status=405,
+                    message="Use GET for the curated package catalog.",
                 ),
             ),
             rate=RateLimit(rate_class="interactive", compute_cost="low"),

@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 def _child(code):
     root = Path(__file__).resolve().parents[3] / "src"
@@ -157,3 +159,39 @@ def test_web_extras_are_optional_and_entrypoint_declares_real_object():
         "core_web": [],
         "optional": {"all": (True, True), "dev": (True, True)},
     }
+
+
+@pytest.mark.parametrize("method", ["POST", "PUT", "DELETE", "HEAD", "OPTIONS"])
+def test_method_refusal_matches_sdk_declared_json_error(method):
+    """Each rejected method has the declared machine-readable error and Allow header."""
+    # Arrange
+    script = """import json
+from django.conf import settings
+settings.configure(DEFAULT_CHARSET="utf-8")
+from django.test import RequestFactory
+from scitex_dev._web._views import curated_packages
+from scitex_dev._web._api import plugin
+response = curated_packages(RequestFactory().generic(METHOD, "/ecosystem/packages"))
+error = next(item for item in plugin.routes[0].errors if item.status == response.status_code)
+body = json.loads(response.content)
+json.dump({"status": response.status_code, "allow": response.headers.get("Allow"), "content_type": response.headers.get("Content-Type"), "error": body.get("error"), "declared": {"code": error.code, "message": error.message}, "declared_status": error.status}, sys.stdout)
+""".replace("METHOD", repr(method))
+    # Act
+    result = _child(script)
+    observed = (
+        result["status"],
+        result["allow"],
+        result["content_type"],
+        result["error"],
+        result["declared_status"],
+        result["declared"]["code"],
+    )
+    # Assert
+    assert observed == (
+        405,
+        "GET",
+        "application/json",
+        result["declared"],
+        405,
+        "method_not_allowed",
+    )

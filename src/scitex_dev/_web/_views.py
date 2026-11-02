@@ -10,14 +10,24 @@ def curated_packages(request):
     cross the boundary.
     """
     try:
-        from django.http import HttpResponseNotAllowed, JsonResponse
+        from django.http import JsonResponse
     except ImportError as exc:
         raise ImportError(
             "The optional Dev Web adapter requires scitex-dev[all]."
         ) from exc
 
     if request.method != "GET":
-        return HttpResponseNotAllowed(("GET",))
+        response = JsonResponse(
+            {
+                "error": {
+                    "code": "method_not_allowed",
+                    "message": "Use GET for the curated package catalog.",
+                }
+            },
+            status=405,
+        )
+        response["Allow"] = "GET"
+        return response
     from scitex_dev import get_all_packages
 
     return JsonResponse(

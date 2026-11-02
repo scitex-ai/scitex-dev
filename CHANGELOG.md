@@ -10,6 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Return the SDK-declared `method_not_allowed` JSON error and `Allow: GET`
+  for unsupported methods on the optional curated-package Web adapter.
+
 - Permit exact executable hook-rule selections in the existing installer and
   stdin dispatcher. Keep the full-provider default strict, reject invalid or
   unbound selections, and preserve unrelated/native bindings.
