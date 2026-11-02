@@ -323,3 +323,31 @@ def test_verified_payload_cannot_be_replaced_after_owner_resolution(
         _walk(root, [], out, "umbrella", owners=owners)
     # Assert
     assert _unknown(out) == ["umbrella control blorptify-result"]
+
+
+def test_public_snapshot_preserves_recorded_owner_under_callback_free_mount(
+    installation, tmp_path
+):
+    # Arrange — real metadata, source and hashed dictionary, not owner overrides.
+    from scitex_dev._cli.audit._summary._command_snapshot import snapshot_commands
+
+    peer = _install(installation, "scitex-owner-control", "owned_cli_control")
+    parent, root = _parent(tmp_path)
+    root.add_command(peer, "control")
+    snapshot = snapshot_commands(root, "umbrella")
+    mounted = snapshot.root.commands["control"]
+    owners = MountedOwners()
+    out = []
+    # Act
+    with use_dict_root(parent):
+        _walk(snapshot.root, [], out, "umbrella", owners=owners)
+    # Assert
+    assert (
+        snapshot.issues,
+        snapshot.root.callback,
+        mounted.callback is peer.callback,
+        owners.owner(mounted) == owners.owner(peer),
+        owners.owner(mounted).reason,
+        _unknown(out),
+        "scitex-owner-control" in owners.sources[0],
+    ) == ([], None, True, True, "verified", [], True)
