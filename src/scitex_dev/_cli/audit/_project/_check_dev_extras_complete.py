@@ -13,7 +13,7 @@ test-collection time with ``ModuleNotFoundError``.
 Decision rule the auditor enforces:
 
   if a project distribution name imported anywhere in ``tests/``
-  is declared in some ``[X]`` extra and NOT in ``[dev]``,
+  is declared in some ``[X]`` extra and NOT in core or ``[dev]``,
   AND the test imports it WITHOUT a guarding ``pytest.importorskip``,
   emit PS-210 (warn).
 
@@ -39,6 +39,8 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+
+from packaging.requirements import InvalidRequirement, Requirement
 
 try:
     import tomllib  # 3.11+
@@ -88,7 +90,12 @@ def _parse_pyproject(repo: Path) -> dict | None:
 
 def _strip_version(spec: str) -> str:
     """``fastmcp>=2.0`` → ``fastmcp``; ``scitex-clew[mcp]>=0.2`` → ``scitex_clew``."""
-    name = re.split(r"[<>=!\s\[]", spec, maxsplit=1)[0].strip()
+    try:
+        name = Requirement(spec).name
+    except InvalidRequirement:
+        # Invalid declarations are graded by metadata checks; preserve this
+        # check's conservative handling without importing the target package.
+        name = re.split(r"[<>=!\s\[;]", spec, maxsplit=1)[0].strip()
     return name.replace("-", "_").lower()
 
 
@@ -132,7 +139,7 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
     """Append PS-210 violations.
 
     Fires when a dep is declared in some `[X]` extra, used unguarded in
-    tests, but absent from `[dev]`. The fix is to add the dep to `[dev]`
+    tests, but absent from both core and `[dev]`. The fix is to add the dep to `[dev]`
     or guard the tests with ``pytest.importorskip``.
     """
     meta = _parse_pyproject(repo)
@@ -140,6 +147,13 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
         return
 
     dev, extras, self_name = _extras_index(meta)
+    project = meta.get("project", {}) or {}
+    core_specs = project.get("dependencies", [])
+    if not isinstance(core_specs, list):
+        core_specs = []  # malformed metadata is reported by its owning check
+    covered = dev | {
+        _strip_version(spec) for spec in core_specs if isinstance(spec, str)
+    }
     if not extras:
         return
 
@@ -161,8 +175,8 @@ def check_dev_extras_complete(repo: Path, violation_cls: type, out: list) -> Non
                 continue
             if dep == self_name:
                 continue  # `[all] = ["pkg[mcp]"]` recursion is benign
-            if dep in dev:
-                continue  # already in [dev] — not an issue
+            if dep in covered:
+                continue  # core is installed with every extra, including [dev]
             direct = dep in test_imports
             transitive = (
                 dep in src_imports and self_name in test_imports and self_name != ""

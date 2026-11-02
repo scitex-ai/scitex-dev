@@ -8,6 +8,24 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.62.8] - 2026-11-02
+
+### Fixed
+
+- Capture lazy Click console entry points with the actual command method owner,
+  including Click 8.5, without executing command callbacks. Restore intercepted
+  Click and argparse methods after failures.
+- Count declared core dependencies when checking development dependency coverage,
+  so dependencies shared by core and optional extras do not require duplicate
+  declarations in the development extra.
+
+## [0.62.7] - 2026-11-02
+
+### Fixed
+
+- Exclude parameterized typing aliases from callable API auditing while retaining
+  checks for real public callables.
+
 ## [0.62.6] - 2026-11-01
 
 - Discover and execute leaf-owned tool-hook checks through a generic stdin-JSON dispatcher; required missing or failed providers refuse verification.
