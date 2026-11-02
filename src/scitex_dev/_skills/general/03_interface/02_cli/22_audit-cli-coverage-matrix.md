@@ -24,8 +24,9 @@ that same snapshot. An advertised name that does not resolve, a discovery
 exception, an ancestor cycle or a discovery bound produces an explicit error
 and an overall `not-auditable` result. Rule filters cannot turn an incomplete
 inventory into a successful verdict. Limits are 32 path components, 5,000
-command bindings and 1,000 children per group; the existing audit subprocess
-budget also bounds blocked discovery implementations.
+command bindings and 1,000 children per group. The `audit-all` per-package
+wall-time budget also bounds blocked discovery implementations. Direct single
+audits do not currently provide that overall wall-time bound.
 
 The implementation is in
 [`_command_snapshot.py`](../../../../_cli/audit/_summary/_command_snapshot.py).
