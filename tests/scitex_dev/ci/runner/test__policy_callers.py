@@ -55,6 +55,10 @@ def central_case(*, move_main=False, weaken_protection=False):
             (FIXTURES / "organization-workflow-source-contract.json.gz").read_bytes()
         )
     )
+    from ._publisher_replay import compose_candidate_central_matrix
+    fixture["responses"] = compose_candidate_central_matrix(
+        fixture["responses"], main_revision=fixture["main"],
+    )
     requests = []
     main_reads = 0
     protection_reads = 0

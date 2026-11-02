@@ -37,6 +37,8 @@ def source_case(*, publisher=False, mutate=None, move=False, weaken=False):
             responses.setdefault(
                 endpoint.removesuffix(old_main) + fixture["main"], body
             )
+    from ._publisher_replay import compose_candidate_central_matrix
+    responses = compose_candidate_central_matrix(responses, main_revision=fixture["main"])
     if mutate:
         endpoint = (
             "repos/scitex-ai/.github/contents/.github/workflows/"
