@@ -10,6 +10,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Report PS-233 at genuinely unguarded import locations without relabeling guarded optional sites when another module imports the same dependency unguarded.
+
 - Parse documentation dependency floors as requirements and versions, accepting
   stronger/exact/compatible bounds while refusing weaker or unproven minima.
 

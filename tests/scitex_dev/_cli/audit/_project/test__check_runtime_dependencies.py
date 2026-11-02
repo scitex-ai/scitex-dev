@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+import pytest
+
 from scitex_dev._cli.audit._project._check_runtime_dependencies import (
     check_ps233_runtime_dependencies,
 )
@@ -79,9 +81,7 @@ def _make_reference_incident_repo(repo: Path) -> None:
     _make_package(repo, _REFERENCE_INCIDENT_SOURCE)
     tests = repo / "tests"
     tests.mkdir()
-    (tests / "test_reconcile.py").write_text(
-        _REFERENCE_INCIDENT_TEST, encoding="utf-8"
-    )
+    (tests / "test_reconcile.py").write_text(_REFERENCE_INCIDENT_TEST, encoding="utf-8")
 
 
 def test_ps233_is_registered_as_an_error() -> None:
@@ -324,9 +324,7 @@ def test_type_checking_only_import_is_ignored(tmp_path) -> None:
     # Arrange
     _make_package(
         tmp_path,
-        "from typing import TYPE_CHECKING as TC\n"
-        "if TC:\n"
-        "    import psutil\n",
+        "from typing import TYPE_CHECKING as TC\nif TC:\n    import psutil\n",
     )
     # Act
     out = _audit(tmp_path)
@@ -350,9 +348,7 @@ def test_stdlib_relative_and_own_package_imports_are_ignored(tmp_path) -> None:
     # Arrange
     _make_package(
         tmp_path,
-        "import json\n"
-        "import scitex_agent_container\n"
-        "from . import sibling\n",
+        "import json\nimport scitex_agent_container\nfrom . import sibling\n",
     )
     # Act
     out = _audit(tmp_path)
@@ -415,3 +411,56 @@ def test_false_branch_import_is_not_runtime(tmp_path) -> None:
     out = _audit(tmp_path)
     # Assert
     assert out == []
+
+
+@pytest.mark.parametrize(
+    ("source", "optional_lines"),
+    [
+        ("try:\n    import django\nexcept ImportError:\n    raise\n", ()),
+        (
+            "def load():\n    try:\n        import django\n    except ImportError:\n        raise\n",
+            (),
+        ),
+        (
+            "try:\n    try:\n        import django\n    except ValueError:\n        pass\nexcept ImportError:\n    raise\n",
+            (),
+        ),
+        (
+            "try:\n    import django\nexcept (ImportError, ModuleNotFoundError):\n    raise\n",
+            (),
+        ),
+        ("try:\n    import django\nexcept ValueError:\n    raise\n", (2,)),
+        (
+            "try:\n    def deferred():\n        import django\nexcept ImportError:\n    raise\n",
+            (3,),
+        ),
+        ("try:\n    import django\nexcept ImportError:\n    import django\n", (4,)),
+        (
+            "try:\n    import django\nexcept ImportError:\n    raise\nelse:\n    import django\n",
+            (6,),
+        ),
+        (
+            "try:\n    import django\nexcept ImportError:\n    raise\nfinally:\n    import django\n",
+            (6,),
+        ),
+    ],
+)
+def test_mixed_dependency_sites_report_only_actual_unguarded_locations(
+    tmp_path, source, optional_lines
+):
+    # Arrange
+    _make_package(tmp_path, source, extras={"gui": ("django>=4.2",)})
+    package = tmp_path / "src/scitex_agent_container"
+    (package / "unguarded.py").write_text("import django\n")
+    expected = sorted(
+        [("_inbox_sidecar_reconcile.py", n) for n in optional_lines]
+        + [("unguarded.py", 1)]
+    )
+    # Act
+    findings = _audit(tmp_path)
+    observed = sorted(
+        (Path(v.where.rsplit(":", 1)[0]).name, int(v.where.rsplit(":", 1)[1]))
+        for v in findings
+    )
+    # Assert
+    assert observed == expected
