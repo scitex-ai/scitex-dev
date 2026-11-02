@@ -10,6 +10,14 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Require five owned interface bindings by default through the existing
+  project-auditor and hook providers; report missing/dynamic bindings and
+  preserve visible narrow reasoned exceptions. Keep source presence separate
+  from runtime availability and interface parity.
+- Add an optional SDK Web declaration and read-only Django adapter projecting
+  the existing curated package-name registry, with explicit host admission and
+  no host-path, installed-package or live-fleet claims.
+
 - Parse documentation dependency floors as requirements and versions, accepting
   stronger/exact/compatible bounds while refusing weaker or unproven minima.
 

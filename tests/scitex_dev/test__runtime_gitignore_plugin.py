@@ -77,14 +77,20 @@ def test_plugin_registers_blocking_runtime_rule() -> None:
     rule_id = "PS-234"
     # Act
     registered = get_plugin()["rules"]
-    metadata = [(rule[0], rule[1], rule[3], rule[4]) for rule in registered]
+    metadata = [
+        (rule[0], rule[1], rule[3], rule[4])
+        for rule in registered
+        if rule[0] == rule_id
+    ]
     # Assert
     assert metadata == [(rule_id, "§4b", "E", "runtime-state-gitignored")]
 
 
 def test_plugin_exposes_runtime_state_checker() -> None:
     # Arrange
-    expected = [check_runtime_gitignore]
+    from scitex_dev._interfaces._project import check_interfaces
+
+    expected = [check_runtime_gitignore, check_interfaces]
     # Act
     checks = get_plugin()["checks"]
     # Assert

@@ -109,6 +109,9 @@ dependencies = [
 # complied. PS-214 has been reporting both all along, into a `--new-only`
 # gate where a pre-existing finding is invisible by construction.
 dev = [
+    # Optional Web contracts/adapter; SDK core has no Dev dependency.
+    'scitex-sdk>=0.3.18; python_version >= "3.10"',
+    "django>=4.2",
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
     # pytest-timeout: per-test wall-clock cap (see [tool.pytest.ini_options]
@@ -179,6 +182,9 @@ docs = [
     "sphinx-autodoc-typehints>=1.25",
 ]
 all = [
+    # Optional Web contracts/adapter; SDK core has no Dev dependency.
+    'scitex-sdk>=0.3.18; python_version >= "3.10"',
+    "django>=4.2",
     "scitex-dev[dev]",
     "scitex-dev[docs]",
     # --- Optional runtime capabilities, declared here and guarded at every
@@ -226,6 +232,10 @@ scitex-dev-testmon = "scitex_dev._hooks.run_testmon_cli:main"
 # affects scitex-dev's own CI or any package that has not opted in.
 [project.entry-points."pytest11"]
 scitex_dev_test_execution = "scitex_dev._core._test_execution_plugin"
+
+# Optional inert declaration. Discovery does not import it or enable a route.
+[project.entry-points."scitex.apis"]
+scitex-dev = "scitex_dev._web._api:plugin"
 
 [project.entry-points."scitex_dev.docs"]
 scitex-dev = "scitex_dev"

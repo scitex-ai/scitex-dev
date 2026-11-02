@@ -1,15 +1,17 @@
 ---
 description: |
   [TOPIC] Interface Http Api Overview
-  [DETAILS] When a SciTeX package warrants an HTTP API, the delegation rule (no original logic — endpoints wrap Python API), and the three transport shapes (REST, WebSocket, specialty protocols). Most packages do not need this interface.
+  [DETAILS] When a SciTeX package warrants an HTTP API, the delegation rule (no original logic — endpoints wrap Python API), and the three transport shapes (REST, WebSocket, specialty protocols). Default implementation is separate from explicit host/server enablement.
 tags: [scitex-general-interface-http-api-overview]
 ---
 
 # Overview
 
-## When to add an HTTP API
+## Implement a capability; enable serving explicitly
 
-Add one only when you have a real reason. Real reasons (in roughly increasing weight):
+The default is a real leaf-owned SDK Web API binding, with narrow reasoned
+exceptions when inapplicable. Host admission and server deployment remain
+explicit. Common reasons to enable serving include:
 
 1. **Local-machine relay** — you need a process to be reachable from another process on the same machine, and IPC / Unix sockets are inconvenient. (scitex-audio: TTS relay listening on `localhost:31293`.)
 2. **Internal dashboard** — a small web UI for ops/debugging that team members open in a browser. (scitex-dev's version dashboard.)
@@ -18,7 +20,7 @@ Add one only when you have a real reason. Real reasons (in roughly increasing we
 5. **Inbound webhooks** — a third party (Telegram, Slack, Stripe) needs to POST to a URL you own. (scitex-orochi's `/webhook/telegram`.)
 6. **Specialty agent protocols** — your package is an agent and other agents must talk to it. (scitex-agent-container's A2A.)
 
-If none of those fit, **don't** add an HTTP server. Python API + CLI + MCP cover most use cases. Adding HTTP increases attack surface, deployment complexity, and skill cost.
+Providing an SDK descriptor does not require starting an HTTP server. Enable reviewed routes through host configuration when needed; report implementation, enablement and live reachability separately.
 
 ## The delegation rule
 

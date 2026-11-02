@@ -20,8 +20,11 @@ _CATCH_ALL = frozenset({"*", "**", "/*", "/**", "**/*", "/**/*"})
 
 def get_plugin() -> dict:
     """Provide the ecosystem-wide runtime-state rule and its checker."""
+    from ._interfaces._project import RULES, check_interfaces
+
     return {
         "rules": [
+            *RULES,
             (
                 _CODE,
                 "§4b",
@@ -34,7 +37,7 @@ def get_plugin() -> dict:
                 "runtime-state-gitignored",
             )
         ],
-        "checks": [check_runtime_gitignore],
+        "checks": [check_runtime_gitignore, check_interfaces],
         "registry_checks": [check_runtime_registry_gitignore],
     }
 
