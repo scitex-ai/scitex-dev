@@ -178,7 +178,6 @@ scitex-dev ecosystem audit-registry-layout --severity info
 - Test runner CLI: [17_test-runner.md](17_test-runner.md)
 - Release pipeline: [18_full-update.md](18_full-update.md), [19_release-deploy.md](19_release-deploy.md)
 
-
 ### Executable leaf hook providers
 
 `dev hooks install --provider <distribution> --harness claude --config <settings>`
@@ -190,3 +189,12 @@ refuses missing providers and failed checks. Discovery is not activation, and
 harness command approval remains separate. Post-tool checks cannot reverse
 an operation that already ran. Source: `hooks/_dispatch.py`,
 `hooks/_install_provider.py`, `_cli/_hooks_cli/_install.py`.
+
+### Interpreting MCP parity
+
+`scitex-dev ecosystem audit-mcp-tools scitex-dev --json` reports `parity_basis`.
+Names remain candidates, not callable/DTO equivalence. Bounded owned-source
+traversal stops at the first public boundary and vetoes a suffix only when it
+proves a different boundary. Conditional, foreign, dynamic and cyclic paths
+remain unproven; this source check invokes no tools. Keep real missing/orphan
+findings visible. Behavioral checks are separate and explicitly requested.

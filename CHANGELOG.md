@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Veto MCP suffix coverage only when bounded owned-source traversal proves a
+  different first public Python boundary. Preserve legitimate prefix wrappers
+  and label uncertain matches as name-based, not runtime/schema equivalence.
+
 - Return the SDK-declared `method_not_allowed` JSON error and `Allow: GET`
   for unsupported methods on the optional curated-package Web adapter.
 

@@ -139,6 +139,7 @@ def _audit_one_mcp(
     behavioral: bool = False,
     timeout: float = 30.0,
     repo: Path | None = None,
+    binding_notes: dict | None = None,
 ) -> tuple[str, list[Violation]]:
     """Audit a single package's MCP surface; return (status, violations).
 
@@ -183,7 +184,9 @@ def _audit_one_mcp(
     _check_tool_naming(package, tool_names, out)
     _check_skills_pair(package, tool_set, out)
     _check_bridge_pattern(package, out)
-    _check_api_parity(package, tool_set, out, repo=repo)
+    _check_api_parity(
+        package, tool_set, out, repo=repo, tools=tools, binding_notes=binding_notes
+    )
 
     # Behavioral checks (§4 ladder + §3 subcommand presence) reuse the CLI
     # auditor's subprocess machinery to avoid duplicating it.
@@ -306,8 +309,13 @@ def run_audit_mcp(
         surface_resolved_tree(
             package, resolved_context(repo), output_json, via=resolved_via
         )
+    binding_notes = {}
     status, violations = _audit_one_mcp(
-        package, behavioral=behavioral, timeout=timeout, repo=repo
+        package,
+        behavioral=behavioral,
+        timeout=timeout,
+        repo=repo,
+        binding_notes=binding_notes,
     )
     violations = _filter_violations(violations, rules, exclude, min_severity)
     if not violations and status == "warn":
@@ -317,6 +325,7 @@ def run_audit_mcp(
             "package": package,
             "status": status,
             "violations": [_violation_to_dict(v) for v in violations],
+            "parity_basis": binding_notes,
         }
         _emit_json([rec], "single-package mode (mcp)")
     else:
@@ -329,6 +338,11 @@ def run_audit_mcp(
             )
         else:
             _emit_human(package, status, violations, category="MCP tool")
+            if binding_notes.get("unproven_suffix_matches"):
+                _emit(
+                    "warning",
+                    f"{package}: §6 unproven suffix matches remain name-based; see JSON parity_basis, not a callable/schema equivalence claim.",
+                )
     if status.startswith("not-auditable"):
         return 2
     return 1 if _max_severity(violations) == "error" else 0
@@ -392,11 +406,15 @@ def run_audit_mcp_all(
     }
     any_error = False
     for name in targets:
+        binding_notes = {}
         wall_budget = max(timeout + 5.0, 10.0)
         try:
             with _watchdog(wall_budget):
                 status, violations = _audit_one_mcp(
-                    name, behavioral=behavioral, timeout=timeout
+                    name,
+                    behavioral=behavioral,
+                    timeout=timeout,
+                    binding_notes=binding_notes,
                 )
         except _PackageTimeout:
             status, violations = (
@@ -412,6 +430,13 @@ def run_audit_mcp_all(
             # Don't spam the human report with one line per non-MCP package.
             if status not in ("no-mcp-server", "skip-not-standalone"):
                 _emit_human(name, status, violations, category="MCP tool")
+                if binding_notes.get("unproven_suffix_matches"):
+                    from .._emit import emit as _emit
+
+                    _emit(
+                        "warning",
+                        f"{name}: §6 unproven suffix matches remain name-based; see JSON parity_basis.",
+                    )
 
         if _max_severity(violations) == "error" or status.startswith("not-auditable"):
             any_error = True
@@ -421,6 +446,7 @@ def run_audit_mcp_all(
                 "package": name,
                 "status": status,
                 "violations": [_violation_to_dict(v) for v in violations],
+                "parity_basis": binding_notes,
             }
         )
         bucket = "not-auditable" if status.startswith("not-auditable") else status
