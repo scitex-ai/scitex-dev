@@ -138,6 +138,11 @@ ok  scitex-io: no Python API violations
 ok  scitex-io: no project-structure violations
 ```
 
+MCP §6 suffix matches remain name-based unless bounded owned source proves
+the first public boundary. A proven different boundary vetoes that match;
+`parity_basis` in JSON records contradictions and unproven candidates. This
+does not establish transport DTO equivalence or invoke MCP operations.
+
 Failure mode (sample, scitex-dsp before the Hilbert fix):
 
 ```
