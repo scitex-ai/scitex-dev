@@ -10,6 +10,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+- Preserve the exact declared dependency site in isolated Web and hook test
+  children when the native driver uses an owned `--target` installation.
+  Refuse foreign/ambient sites without changing product imports or store shields.
+
 - Return the SDK-declared `method_not_allowed` JSON error and `Allow: GET`
   for unsupported methods on the optional curated-package Web adapter.
 
