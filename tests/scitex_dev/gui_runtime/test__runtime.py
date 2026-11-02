@@ -88,7 +88,8 @@ def test_pid_alive_returns_false_for_non_positive_pid():
 
 def test_pid_alive_returns_false_for_a_reaped_child_process():
     # Arrange
-    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    # Only the kernel PID is under test; no application/site hooks are needed.
+    child = subprocess.Popen([sys.executable, "-I", "-S", "-c", "pass"])
     child.wait(timeout=5)
     # Act
     alive = pid_alive(child.pid)

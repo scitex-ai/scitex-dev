@@ -77,7 +77,8 @@ def repository(tmp_path):
 
 def execute(case, operation="write", commit=None, tag="v0.62.3"):
     root, environment, head = case
-    return subprocess.run([sys.executable, "-I", "-B", str(SCRIPT), operation,
+    # The actual validator is stdlib-only; unrelated site hooks are not inputs.
+    return subprocess.run([sys.executable, "-I", "-S", "-B", str(SCRIPT), operation,
                            "--tag", tag, "--commit", commit or head],
                           cwd=root, env=environment, text=True, capture_output=True, timeout=5,
                           check=False)
