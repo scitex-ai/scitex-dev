@@ -20,10 +20,12 @@ CODEQL = "hub-codeql-security-analysis.yml"
 
 
 def source_case(*, mutate=None, drift=False, weaken=False, unprotected=False,
-                candidate_publisher=True):
+                candidate_publisher=True, candidate_matrix=True):
     fixture = json.loads(gzip.decompress(FIXTURE.read_bytes()))
-    responses = (compose_candidate_dev_publisher(fixture["responses"])
-                 if candidate_publisher else fixture["responses"])
+    responses = compose_candidate_dev_publisher(
+        fixture["responses"], include_dev=candidate_publisher,
+        include_matrix=candidate_matrix,
+    )
     if mutate:
         endpoint = (
             "repos/scitex-ai/.github/contents/.github/workflows/"
@@ -333,4 +335,16 @@ def test_historical_dev_driver_bytes_remain_refused_by_candidate_policy():
     assert (observed["expected"], observed["violations"]) == (
         [], ["registered caller source changed: "
              "scitex-ai/scitex-dev/.github/ci/run-in-sif.sh"],
+    )
+
+
+def test_historical_central_matrix_body_remains_refused_by_candidate_policy():
+    # Arrange: candidate Dev bytes cannot authorize an older current-main matrix.
+    _fixture, api, _requests = source_case(candidate_matrix=False)
+    refs = list(contract.TRANSITION_SELECTION) + [release.DEV_SELECTION]
+    # Act
+    observed = contract.qualify_workflows([group(refs)], api)
+    # Assert
+    assert (observed["expected"], observed["violations"]) == (
+        [], ["reviewed workflow bytes changed: ci-sif-matrix.yml"],
     )

@@ -13,6 +13,13 @@ from scitex_dev.ci.runner import _policy_callers as callers
 from scitex_dev.ci.runner import _policy_contract as contract
 from scitex_dev.ci.runner import _policy_dev_release as release
 
+from ._publisher_replay import (
+    CENTRAL, MATRIX, compose_candidate_central_matrix,
+    compose_candidate_dev_publisher,
+)
+
+_REPLAY_FIXTURES = Path(__file__).parent / "fixtures"
+
 
 def report():
     return {"expected": [], "unknown": [], "violations": [], "source": []}
@@ -284,3 +291,48 @@ def test_real_pool_projection_never_accepts_other_leaf_title_or_repo():
                                  expected_workflows=group["selected_workflows"])
     # Assert
     assert result["state"] == "violation"
+
+
+@pytest.mark.parametrize("name", [
+    "hub-defining-workflow-source-contract.json.gz",
+    "hub-codeql-source-contract.json.gz",
+    "organization-workflow-source-contract.json.gz",
+])
+def test_matrix_projection_changes_only_the_explicit_current_main_body(name):
+    # Arrange
+    fixture = json.loads(gzip.decompress((_REPLAY_FIXTURES / name).read_bytes()))
+    before = fixture["responses"]
+    # Act
+    after = compose_candidate_central_matrix(before, main_revision=fixture["main"])
+    changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
+    # Assert
+    assert changed == {CENTRAL + MATRIX + fixture["main"]}
+
+
+def test_candidate_main_cannot_overwrite_an_immutable_source_revision():
+    # Arrange
+    fixture = json.loads(gzip.decompress((
+        _REPLAY_FIXTURES / "organization-workflow-source-contract.json.gz"
+    ).read_bytes()))
+    # Act
+    # Assert
+    with pytest.raises(ValueError, match="immutable"):
+        compose_candidate_central_matrix(
+            fixture["responses"], main_revision=contract.SIF_REVISION,
+        )
+
+
+def test_dev_projection_preserves_other_central_authorities_and_branch_evidence():
+    # Arrange
+    fixture = json.loads(gzip.decompress((
+        _REPLAY_FIXTURES / "hub-codeql-source-contract.json.gz"
+    ).read_bytes()))
+    before = fixture["responses"]
+    # Act
+    after = compose_candidate_dev_publisher(before)
+    foreign_changes = {
+        key for key in before.keys() | after.keys()
+        if not key.startswith("repos/scitex-ai/scitex-dev/") and before.get(key) != after.get(key)
+    }
+    # Assert
+    assert foreign_changes == {CENTRAL + MATRIX + fixture["main"]}
