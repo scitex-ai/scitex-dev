@@ -157,9 +157,7 @@ def _type_checking_aliases(tree: ast.Module) -> tuple[set[str], set[str]]:
     return names, modules
 
 
-def _is_type_checking_test(
-    node: ast.AST, names: set[str], modules: set[str]
-) -> bool:
+def _is_type_checking_test(node: ast.AST, names: set[str], modules: set[str]) -> bool:
     if isinstance(node, ast.Name):
         return node.id in names
     return (
@@ -300,11 +298,9 @@ def check_ps233_runtime_dependencies(
     ignored = set(getattr(sys, "stdlib_module_names", ())) | {"__future__"}
     ignored |= _own_roots(src_root)
 
-    # Collect every relevant import before judging any of them: whether a root
-    # is guarded is a property of ALL its import sites, so one site cannot be
-    # classified until the others are known.
+    # Retain each import's own guard state. An unguarded site still requires
+    # a core dependency, but must not relabel a different guarded site.
     observations: list[tuple[Path, str, int, str, bool]] = []
-    guarded_only: dict[str, bool] = {}
     for source in _iter_source_files(src_root):
         try:
             tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
@@ -319,16 +315,12 @@ def check_ps233_runtime_dependencies(
             if root not in declared_roots and expected is None:
                 continue  # ambiguous/unknown mapping: do not guess
             observations.append((source, root, lineno, statement, guarded))
-            previous = guarded_only.get(root)
-            guarded_only[root] = (
-                guarded if previous is None else previous and guarded
-            )
 
     for source, root, lineno, statement, guarded in observations:
         rel = source.relative_to(repo)
         optional = optional_roots.get(root)
         declared = declared_roots.get(root)
-        if guarded_only.get(root, guarded):
+        if guarded:
             # Optional capability: the guard is the contract, so no declaration
             # is required and a declared one is not an error. The one shape the
             # metadata forbids -- an optional distribution that itself requires

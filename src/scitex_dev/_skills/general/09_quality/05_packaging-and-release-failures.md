@@ -180,3 +180,20 @@ scitex-io, scitex-logging, scitex-notification, scitex-orochi,
 scitex-parallel, scitex-path, scitex-plt, scitex-repro, scitex-scholar,
 scitex-stats, scitex-str, scitex-template, scitex-types, scitex-writer,
 socialia, scitex-python.
+
+
+## Runtime import locations (PS-233)
+
+PS-233 examines each source import without executing the package. An import
+inside a `try` whose handler catches `ImportError` is an optional capability;
+an unrelated unguarded import of the same distribution still requires a core
+dependency and remains an error at its own location. The guarded location must
+not be reported as unguarded merely because another file needs that package.
+
+A `try` around a function definition does not protect imports executed later
+inside that function. Imports in a handler, `else` or `finally` are likewise not
+protected by that same `try`; an enclosing actual ImportError guard can still
+protect them. This is source-contract evidence, not proof that an installed
+wheel resolves its declared dependency graph. Preserve normal full-resolution
+and fresh-wheel qualification; do not move a truly required dependency into an
+extra or silence the remaining unguarded finding.
