@@ -114,9 +114,18 @@ enforces the canonical setup:
 | PS-122 | `.github/workflows/docs.yml` exists (auto-refreshes the bundle on push)           |
 | PS-124 | `.readthedocs.yaml` (or `.yml`) exists at repo root                               |
 | PS-125 | `.readthedocs.yaml` matches the canonical shape (version 2, ubuntu-22.04, py3.11) |
-| PS-126 | `docs/sphinx/requirements.txt` pins the canonical doc deps                        |
+| PS-126 | `docs/sphinx/requirements.txt` proves unconditional canonical dependency floors or stronger |
 | PS-127 | `pyproject.toml [project.urls]` has `Documentation = "https://<pkg>.readthedocs.io"` |
 | PS-128 | If the package ships a click CLI (`scitex_<pkg>._cli:main` resolves), `docs/sphinx/conf.py` MUST exist, list `sphinx_click` in `extensions`, and contain a `.. click::` directive in `cli_reference.rst` (or any RST under `docs/sphinx/`). Hand-written prose subcommand trees under a `Commands` heading without a sibling `.. click::` directive are flagged. |
+
+PS-126 parses PEP508 requirements and PEP440 versions. The minima are Sphinx
+7.0, RTD theme2.0, MyST2.0, copybutton0.5 and autodoc-typehints1.25. Stronger
+`>=`/`>` bounds, compatible releases and sufficiently high exact pins are valid;
+for example, `sphinx>=7.2.5` and `myst-parser>=3.0` are accepted. A weaker or
+unbounded requirement, a conditional-only declaration or an unversioned direct
+URL cannot prove this always-installed minimum. Wildcard pins include their
+prerelease range when proving the lower bound. Normal dependency resolution
+still owns availability and contradictory constraints.
 
 ## GitHub language stats — mark `_sphinx_html/` as generated
 

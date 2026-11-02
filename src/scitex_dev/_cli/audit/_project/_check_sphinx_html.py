@@ -22,14 +22,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-# Canonical pinned deps from `_skills/general/04_docs/02_sphinx.md`.
-_CANONICAL_DOCS_DEPS = [
-    re.compile(r"^\s*sphinx\s*>=\s*7", re.MULTILINE),
-    re.compile(r"^\s*sphinx-rtd-theme\s*>=\s*2", re.MULTILINE),
-    re.compile(r"^\s*myst-parser\s*>=\s*2", re.MULTILINE),
-    re.compile(r"^\s*sphinx-copybutton\s*>=\s*0\.5", re.MULTILINE),
-    re.compile(r"^\s*sphinx-autodoc-typehints\s*>=\s*1", re.MULTILINE),
-]
+from ._docs_dependency_floors import missing_docs_floors
 
 
 def _has_sphinx_source(repo: Path) -> bool:
@@ -272,14 +265,16 @@ def check_sphinx_html(repo: Path, violation_cls: type, out: list) -> None:
             req_text = docs_req.read_text(encoding="utf-8", errors="replace")
         except OSError:
             req_text = ""
-        if not all(pat.search(req_text) for pat in _CANONICAL_DOCS_DEPS):
+        missing = missing_docs_floors(req_text)
+        if missing:
             out.append(
                 violation_cls(
                     "PS-126",
                     str(docs_req),
                     (
                         "docs/sphinx/requirements.txt is missing one or more "
-                        "canonical pinned deps. Required floor: sphinx>=7.0, "
+                        "unconditional canonical dependency floors (missing proof: "
+                        + ", ".join(missing) + "). Required minima: sphinx>=7.0, "
                         "sphinx-rtd-theme>=2.0, myst-parser>=2.0, "
                         "sphinx-copybutton>=0.5, sphinx-autodoc-typehints>=1.25."
                     ),
