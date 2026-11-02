@@ -8,6 +8,11 @@ All notable changes to `scitex-dev` are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+- Parse documentation dependency floors as requirements and versions, accepting
+  stronger/exact/compatible bounds while refusing weaker or unproven minima.
+
 ## [0.62.8] - 2026-11-02
 
 ### Fixed
